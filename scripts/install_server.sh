@@ -49,13 +49,26 @@ if [ "$(uci -q get xray.enabled.enabled 2>/dev/null)" != "1" ]; then
 fi
 
 DEFAULT_PORT=8443
-printf "Enter external port for XRAY [%s]: " "$DEFAULT_PORT"
-read -r XRAY_PORT
+
+if [ -n "$XRAY_PORT" ]; then
+    echo "Using XRAY_PORT=$XRAY_PORT from environment"
+else
+    printf "Enter external port for XRAY [%s]: " "$DEFAULT_PORT"
+    if [ -t 0 ]; then
+        IFS= read -r XRAY_PORT
+    elif [ -r /dev/tty ]; then
+        IFS= read -r XRAY_PORT </dev/tty
+    else
+        echo "No interactive terminal available. Set XRAY_PORT environment variable." >&2
+        exit 1
+    fi
+fi
+
 if [ -z "$XRAY_PORT" ]; then
     XRAY_PORT="$DEFAULT_PORT"
 fi
 
-if ! echo "$XRAY_PORT" | grep -Eq '^[0-9]+$'; then
+if ! echo "$XRAY_PORT" | grep -Eq "^[0-9]+$"; then
     echo "Port must be numeric" >&2
     exit 1
 fi
@@ -65,18 +78,35 @@ if [ "$XRAY_PORT" -le 0 ] || [ "$XRAY_PORT" -gt 65535 ]; then
     exit 1
 fi
 
-XRAY_CERT_NAME=""
-while [ -z "$XRAY_CERT_NAME" ]; do
-    printf "Enter server name for TLS certificate (e.g. vpn.example.com): "
-    read -r XRAY_CERT_NAME
-    if [ -z "$XRAY_CERT_NAME" ]; then
-        echo "Server name cannot be empty." >&2
-    fi
-    if [ -n "$XRAY_CERT_NAME" ] && ! echo "$XRAY_CERT_NAME" | grep -Eq '^[A-Za-z0-9.-]+$'; then
-        echo "Server name must contain only letters, digits, dots or hyphens." >&2
-        XRAY_CERT_NAME=""
-    fi
-done
+if [ -n "$XRAY_SERVER_NAME" ]; then
+    XRAY_CERT_NAME="$XRAY_SERVER_NAME"
+    echo "Using XRAY_SERVER_NAME=$XRAY_CERT_NAME from environment"
+else
+    XRAY_CERT_NAME=""
+    while [ -z "$XRAY_CERT_NAME" ]; do
+        printf "Enter server name for TLS certificate (e.g. vpn.example.com): "
+        if [ -t 0 ]; then
+            IFS= read -r XRAY_CERT_NAME
+        elif [ -r /dev/tty ]; then
+            IFS= read -r XRAY_CERT_NAME </dev/tty
+        else
+            echo "No interactive terminal available. Set XRAY_SERVER_NAME environment variable." >&2
+            exit 1
+        fi
+
+        if [ -z "$XRAY_CERT_NAME" ]; then
+            echo "Server name cannot be empty." >&2
+        elif ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
+            echo "Server name must contain only letters, digits, dots or hyphens." >&2
+            XRAY_CERT_NAME=""
+        fi
+    done
+fi
+
+if ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
+    echo "Server name must contain only letters, digits, dots or hyphens." >&2
+    exit 1
+fi
 
 tmp_inbound="${INBOUND_FILE}.tmp"
 awk -v port="$XRAY_PORT" '
