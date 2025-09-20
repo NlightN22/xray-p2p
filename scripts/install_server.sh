@@ -25,8 +25,27 @@ if [ ! -f "$INBOUND_FILE" ]; then
     exit 1
 fi
 
+missing_deps=""
+
+append_missing() {
+    if [ -z "$missing_deps" ]; then
+        missing_deps="$1"
+    else
+        missing_deps="$missing_deps\n$1"
+    fi
+}
+
 if ! command -v uci >/dev/null 2>&1; then
-    echo "uci command is required but not available. Are you running on OpenWrt?" >&2
+    append_missing "- uci (required; ensure you are running this on OpenWrt)"
+fi
+
+if ! command -v openssl >/dev/null 2>&1; then
+    append_missing "- openssl (install with: opkg update && opkg install openssl-util)"
+fi
+
+if [ -n "$missing_deps" ]; then
+    echo "Missing required dependencies before continuing:" >&2
+    printf '%b\n' "$missing_deps" >&2
     exit 1
 fi
 
@@ -133,11 +152,6 @@ CERT_DIR=$(dirname "$CERT_FILE")
 KEY_DIR=$(dirname "$KEY_FILE")
 mkdir -p "$CERT_DIR" "$KEY_DIR"
 
-if ! command -v openssl >/dev/null 2>&1; then
-    echo "openssl binary is required to generate certificates (install package openssl-util)." >&2
-    exit 1
-fi
-
 BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
 if [ -f "$CERT_FILE" ]; then
     echo "Backing up existing certificate to ${CERT_FILE}.${BACKUP_SUFFIX}.bak"
@@ -185,17 +199,36 @@ fi
 
 sleep 2
 
+PORT_CHECK_CMD=""
+if command -v ss >/dev/null 2>&1; then
+    PORT_CHECK_CMD="ss"
+elif command -v netstat >/dev/null 2>&1; then
+    PORT_CHECK_CMD="netstat"
+fi
+
 check_port() {
-    if command -v ss >/dev/null 2>&1; then
-        ss -ltn 2>/dev/null | grep -q ":$XRAY_PORT " && return 0
-    elif command -v netstat >/dev/null 2>&1; then
-        netstat -tln 2>/dev/null | grep -q ":$XRAY_PORT " && return 0
-    fi
-    return 1
+    case "$PORT_CHECK_CMD" in
+        ss)
+            ss -ltn 2>/dev/null | grep -q ":$XRAY_PORT "
+            return $?
+            ;;
+        netstat)
+            netstat -tln 2>/dev/null | grep -q ":$XRAY_PORT "
+            return $?
+            ;;
+        *)
+            return 2
+            ;;
+    esac
 }
 
-if check_port; then
+check_port
+port_check_status=$?
+if [ "$port_check_status" -eq 0 ]; then
     echo "XRAY service is listening on port $XRAY_PORT"
+elif [ "$port_check_status" -eq 2 ]; then
+    echo "XRAY service restarted. Skipping port verification because neither 'ss' nor 'netstat' is available."
+    echo "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
 else
     echo "XRAY service does not appear to be listening on port $XRAY_PORT" >&2
     exit 1
