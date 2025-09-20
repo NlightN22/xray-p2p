@@ -1,21 +1,21 @@
+#!/bin/sh
 # Install XRAY server
 curl -s https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh | sh
-
-# Check if XRAY is not installed and exit with error
-# Configure XRAY
-# download simple config files for trojan server
-# define at config file:
-# - server public ip for connecting
-# - serverName for tls certificates
-# - trojan port
-
-# Create certificates at /etc/xray/
-
-XRAY_CONF_SRV=xray-server.trojan.conf.json
-XRAY_CONF_CL=xray-client.trojan.conf.json
-
-cp $XRAY_CONF /etc/xray/
-uci set xray.enabled.enabled='1'
-uci set xray.config.conffiles="/etc/xray/$XRAY_CONF"
-uci commit xray
-service xray restart
+# Ensure configuration directory exists
+XRAY_CONFIG_DIR="/etc/xray"
+if [ ! -d "$XRAY_CONFIG_DIR" ]; then
+    echo "Creating XRAY configuration directory at $XRAY_CONFIG_DIR"
+    mkdir -p "$XRAY_CONFIG_DIR"
+fi
+# Download configuration templates from GitHub repository
+CONFIG_BASE_URL="https://raw.githubusercontent.com/NlightN22/xray-p2p/main/config_templates/server"
+CONFIG_FILES="inbounds.json logs.json outbounds.json"
+for file in $CONFIG_FILES; do
+    echo "Downloading $file to $XRAY_CONFIG_DIR"
+    if ! curl -fsSL "$CONFIG_BASE_URL/$file" -o "$XRAY_CONFIG_DIR/$file"; then
+        echo "Failed to download $file" >&2
+        exit 1
+    fi
+    chmod 600 "$XRAY_CONFIG_DIR/$file"
+done
+# Additional XRAY configuration steps can be added below
