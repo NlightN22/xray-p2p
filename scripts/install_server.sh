@@ -16,6 +16,6 @@ for file in $CONFIG_FILES; do
         echo "Failed to download $file" >&2
         exit 1
     fi
-    chmod 600 "$XRAY_CONFIG_DIR/$file"
+    chmod 644 "$XRAY_CONFIG_DIR/$file"
 done
 # Additional XRAY configuration steps can be added below
