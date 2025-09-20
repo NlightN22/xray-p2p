@@ -1,0 +1,51 @@
+{
+    "outbounds": [
+        {
+            "protocol": "trojan",
+            "settings": {
+                "servers": [
+                    {
+                        "address": "10.0.0.1",
+                        "port": 8443,
+                        "password": "strong_password_here"
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls",
+                "tlsSettings": {
+                    "allowInsecure": true,
+                    "serverName": "domain.tld"
+                },
+                "tcpSettings": {
+                    "header": {
+                        "type": "http",
+                        "request": {
+                            "version": "1.1",
+                            "method": "GET",
+                            "path": [
+                                "/"
+                            ],
+                            "headers": {
+                                "Host": [
+                                    "www.bing.com",
+                                    "www.apple.com"
+                                ],
+                                "User-Agent": [
+                                    "Mozilla/5.0"
+                                ],
+                                "Accept-Encoding": [
+                                    "gzip, deflate"
+                                ],
+                                "Connection": [
+                                    "keep-alive"
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
