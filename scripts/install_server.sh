@@ -11,12 +11,51 @@ fi
 CONFIG_BASE_URL="https://raw.githubusercontent.com/NlightN22/xray-p2p/main/config_templates/server"
 CONFIG_FILES="inbounds.json logs.json outbounds.json"
 for file in $CONFIG_FILES; do
+    target="$XRAY_CONFIG_DIR/$file"
+    url="$CONFIG_BASE_URL/$file"
+    replace_file=1
+
+    if [ -f "$target" ]; then
+        case "${XRAY_FORCE_CONFIG:-}" in
+            1)
+                echo "Replacing $target (forced by XRAY_FORCE_CONFIG=1)"
+                ;;
+            0)
+                echo "Keeping existing $target (XRAY_FORCE_CONFIG=0)"
+                replace_file=0
+                ;;
+            *)
+                while :; do
+                    printf "File %s exists. Replace with repository version? [y/N]: " "$target"
+                    if [ -t 0 ]; then
+                        IFS= read -r answer
+                    elif [ -r /dev/tty ]; then
+                        IFS= read -r answer </dev/tty
+                    else
+                        echo "No interactive terminal available. Set XRAY_FORCE_CONFIG=1 to overwrite or 0 to keep existing files." >&2
+                        exit 1
+                    fi
+                    case "$answer" in
+                        [Yy]) replace_file=1; break ;;
+                        [Nn]|"") replace_file=0; break ;;
+                        *) echo "Please answer y or n." ;;
+                    esac
+                done
+                ;;
+        esac
+    fi
+
+    if [ "$replace_file" -eq 0 ]; then
+        echo "Keeping existing $target"
+        continue
+    fi
+
     echo "Downloading $file to $XRAY_CONFIG_DIR"
-    if ! curl -fsSL "$CONFIG_BASE_URL/$file" -o "$XRAY_CONFIG_DIR/$file"; then
+    if ! curl -fsSL "$url" -o "$target"; then
         echo "Failed to download $file" >&2
         exit 1
     fi
-    chmod 644 "$XRAY_CONFIG_DIR/$file"
+    chmod 644 "$target"
 done
 
 INBOUND_FILE="$XRAY_CONFIG_DIR/inbounds.json"
@@ -39,7 +78,12 @@ if ! command -v uci >/dev/null 2>&1; then
     append_missing "- uci (required; ensure you are running this on OpenWrt)"
 fi
 
-if ! command -v openssl >/dev/null 2>&1; then
+require_openssl=1
+if [ "${XRAY_REISSUE_CERT:-1}" = "0" ]; then
+    require_openssl=0
+fi
+
+if [ "$require_openssl" -eq 1 ] && ! command -v openssl >/dev/null 2>&1; then
     append_missing "- openssl (install with: opkg update && opkg install openssl-util)"
 fi
 
@@ -70,8 +114,7 @@ if [ "$(uci -q get xray.enabled.enabled 2>/dev/null)" != "1" ]; then
 fi
 
 desired_conffiles="/etc/xray/inbounds.json /etc/xray/logs.json /etc/xray/outbounds.json"
-existing_conffiles=$(uci -q show xray.config 2>/dev/null | awk -F= '/^xray.config.conffiles=/ {print $2}' | tr '
-' ' ' | sed 's/[[:space:]]*$//')
+existing_conffiles=$(uci -q show xray.config 2>/dev/null | awk -F= '/^xray.config.conffiles=/ {print $2}' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
 
 if [ "$existing_conffiles" != "$desired_conffiles" ]; then
     echo "Aligning xray.config.conffiles with managed templates"
@@ -171,18 +214,52 @@ CERT_DIR=$(dirname "$CERT_FILE")
 KEY_DIR=$(dirname "$KEY_FILE")
 mkdir -p "$CERT_DIR" "$KEY_DIR"
 
-BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
-if [ -f "$CERT_FILE" ]; then
-    echo "Backing up existing certificate to ${CERT_FILE}.${BACKUP_SUFFIX}.bak"
-    mv "$CERT_FILE" "${CERT_FILE}.${BACKUP_SUFFIX}.bak"
-fi
-if [ -f "$KEY_FILE" ]; then
-    echo "Backing up existing key to ${KEY_FILE}.${BACKUP_SUFFIX}.bak"
-    mv "$KEY_FILE" "${KEY_FILE}.${BACKUP_SUFFIX}.bak"
+reissue_cert=1
+if [ -f "$CERT_FILE" ] || [ -f "$KEY_FILE" ]; then
+    case "${XRAY_REISSUE_CERT:-}" in
+        1)
+            echo "Regenerating certificate and key (forced by XRAY_REISSUE_CERT=1)"
+            ;;
+        0)
+            echo "Keeping existing certificate and key (XRAY_REISSUE_CERT=0)"
+            reissue_cert=0
+            ;;
+        *)
+            while :; do
+                printf "Certificate or key already exists. Regenerate them now? [y/N]: "
+                if [ -t 0 ]; then
+                    IFS= read -r cert_answer
+                elif [ -r /dev/tty ]; then
+                    IFS= read -r cert_answer </dev/tty
+                else
+                    echo "No interactive terminal available. Set XRAY_REISSUE_CERT=1 to regenerate or 0 to keep existing material." >&2
+                    exit 1
+                fi
+                case "$cert_answer" in
+                    [Yy]) reissue_cert=1; break ;;
+                    [Nn]|"") reissue_cert=0; break ;;
+                    *) echo "Please answer y or n." ;;
+                esac
+            done
+            ;;
+    esac
+elif [ "${XRAY_REISSUE_CERT:-}" = "0" ]; then
+    echo "Certificate files are missing; generating new ones despite XRAY_REISSUE_CERT=0."
 fi
 
-OPENSSL_CNF=$(mktemp)
-cat > "$OPENSSL_CNF" <<EOF
+if [ "$reissue_cert" -eq 1 ]; then
+    BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
+    if [ -f "$CERT_FILE" ]; then
+        echo "Backing up existing certificate to ${CERT_FILE}.${BACKUP_SUFFIX}.bak"
+        mv "$CERT_FILE" "${CERT_FILE}.${BACKUP_SUFFIX}.bak"
+    fi
+    if [ -f "$KEY_FILE" ]; then
+        echo "Backing up existing key to ${KEY_FILE}.${BACKUP_SUFFIX}.bak"
+        mv "$KEY_FILE" "${KEY_FILE}.${BACKUP_SUFFIX}.bak"
+    fi
+
+    OPENSSL_CNF=$(mktemp)
+    cat > "$OPENSSL_CNF" <<EOF
 [req]
 prompt = no
 default_bits = 2048
@@ -200,15 +277,18 @@ subjectAltName = @alt_names
 DNS.1 = $XRAY_CERT_NAME
 EOF
 
-if ! openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout "$KEY_FILE" -out "$CERT_FILE" -config "$OPENSSL_CNF" >/dev/null 2>&1; then
+    if ! openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout "$KEY_FILE" -out "$CERT_FILE" -config "$OPENSSL_CNF" >/dev/null 2>&1; then
+        rm -f "$OPENSSL_CNF"
+        echo "Failed to generate certificate for $XRAY_CERT_NAME" >&2
+        exit 1
+    fi
     rm -f "$OPENSSL_CNF"
-    echo "Failed to generate certificate for $XRAY_CERT_NAME" >&2
-    exit 1
-fi
-rm -f "$OPENSSL_CNF"
 
-chmod 600 "$KEY_FILE"
-chmod 644 "$CERT_FILE"
+    chmod 600 "$KEY_FILE"
+    chmod 644 "$CERT_FILE"
+else
+    echo "Skipping certificate regeneration; keeping existing files in place."
+fi
 
 echo "Restarting xray service"
 if ! /etc/init.d/xray restart; then
