@@ -61,9 +61,28 @@ if [ "$XRAY_CONF_DIR_UCI" != "$XRAY_CONFIG_DIR" ]; then
     exit 1
 fi
 
+uci_changes=0
+
 if [ "$(uci -q get xray.enabled.enabled 2>/dev/null)" != "1" ]; then
     echo "Enabling xray service to start on boot"
     uci set xray.enabled.enabled='1'
+    uci_changes=1
+fi
+
+desired_conffiles="/etc/xray/inbounds.json /etc/xray/logs.json /etc/xray/outbounds.json"
+existing_conffiles=$(uci -q show xray.config 2>/dev/null | awk -F= '/^xray.config.conffiles=/ {print $2}' | tr '
+' ' ' | sed 's/[[:space:]]*$//')
+
+if [ "$existing_conffiles" != "$desired_conffiles" ]; then
+    echo "Aligning xray.config.conffiles with managed templates"
+    uci -q delete xray.config.conffiles
+    for file in $desired_conffiles; do
+        uci add_list xray.config.conffiles="$file"
+    done
+    uci_changes=1
+fi
+
+if [ "$uci_changes" -eq 1 ]; then
     uci commit xray
 fi
 
