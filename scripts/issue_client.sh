@@ -92,6 +92,17 @@ generate_password() {
     die "Unable to generate password; install openssl or ensure /dev/urandom is available."
 }
 
+generate_client_email() {
+    prefix="${XRAY_EMAIL_PREFIX:-client}"
+    domain="${XRAY_EMAIL_DOMAIN:-auto.local}"
+    uuid_comp="$(generate_uuid | tr -d '-' | cut -c1-12)"
+    # Fall back to timestamp if UUID generation failed for any reason
+    if [ -z "$uuid_comp" ]; then
+        uuid_comp="$(date -u '+%Y%m%d%H%M%S' 2>/dev/null || date '+%Y%m%d%H%M%S')"
+    fi
+    printf '%s-%s@%s' "$prefix" "$uuid_comp" "$domain"
+}
+
 backup_file() {
     file_path="$1"
     [ -f "$file_path" ] || return 0
@@ -134,8 +145,24 @@ if [ -z "$EMAIL" ] && [ -n "${XRAY_CLIENT_EMAIL:-}" ]; then
     EMAIL="$XRAY_CLIENT_EMAIL"
 fi
 
+AUTO_EMAIL="${XRAY_GENERATED_EMAIL:-$(generate_client_email)}"
+
 if [ -z "$EMAIL" ]; then
-    EMAIL="$(prompt_value 'Enter client email (identifier)' '')"
+    if [ "${XRAY_AUTO_EMAIL:-0}" = "1" ]; then
+        EMAIL="$AUTO_EMAIL"
+    else
+        if [ -t 0 ] || [ -r /dev/tty ]; then
+            printf 'Enter client email (identifier, leave empty to auto-generate): ' >&2
+            if [ -t 0 ]; then
+                IFS= read -r EMAIL
+            else
+                IFS= read -r EMAIL </dev/tty
+            fi
+            [ -n "$EMAIL" ] || EMAIL="$AUTO_EMAIL"
+        else
+            EMAIL="$AUTO_EMAIL"
+        fi
+    fi
 fi
 
 EMAIL="$(printf '%s' "$EMAIL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
