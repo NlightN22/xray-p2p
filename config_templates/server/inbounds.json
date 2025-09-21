@@ -1,15 +1,12 @@
 {
     "inbounds": [
         {
+
             "port": 8443,
             "listen": "0.0.0.0",
             "protocol": "trojan",
             "settings": {
                 "clients": [
-                    {
-                        "password": "strong_password_here",
-                        "email": "client1"
-                    }
                 ]
             },
             "streamSettings": {
