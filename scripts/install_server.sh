@@ -64,6 +64,21 @@ if [ ! -f "$INBOUND_FILE" ]; then
     exit 1
 fi
 
+CERT_FILE=$(awk -F'"' '/"certificateFile"/ {print $4; exit}' "$INBOUND_FILE")
+KEY_FILE=$(awk -F'"' '/"keyFile"/ {print $4; exit}' "$INBOUND_FILE")
+
+[ -z "$CERT_FILE" ] && CERT_FILE="$XRAY_CONFIG_DIR/cert.pem"
+[ -z "$KEY_FILE" ] && KEY_FILE="$XRAY_CONFIG_DIR/key.pem"
+
+CERT_DIR=$(dirname "$CERT_FILE")
+KEY_DIR=$(dirname "$KEY_FILE")
+
+CERT_EXISTS=0
+[ -f "$CERT_FILE" ] && CERT_EXISTS=1
+
+KEY_EXISTS=0
+[ -f "$KEY_FILE" ] && KEY_EXISTS=1
+
 missing_deps=""
 
 append_missing() {
@@ -78,10 +93,22 @@ if ! command -v uci >/dev/null 2>&1; then
     append_missing "- uci (required; ensure you are running this on OpenWrt)"
 fi
 
-require_openssl=1
-if [ "${XRAY_REISSUE_CERT:-1}" = "0" ]; then
-    require_openssl=0
-fi
+require_openssl=0
+case "${XRAY_REISSUE_CERT:-}" in
+    1)
+        require_openssl=1
+        ;;
+    0)
+        if [ "$CERT_EXISTS" -eq 0 ] || [ "$KEY_EXISTS" -eq 0 ]; then
+            require_openssl=1
+        fi
+        ;;
+    *)
+        if [ "$CERT_EXISTS" -eq 0 ] || [ "$KEY_EXISTS" -eq 0 ]; then
+            require_openssl=1
+        fi
+        ;;
+esac
 
 if [ "$require_openssl" -eq 1 ] && ! command -v openssl >/dev/null 2>&1; then
     append_missing "- openssl (install with: opkg update && opkg install openssl-util)"
@@ -159,36 +186,6 @@ if [ "$XRAY_PORT" -le 0 ] || [ "$XRAY_PORT" -gt 65535 ]; then
     exit 1
 fi
 
-if [ -n "$XRAY_SERVER_NAME" ]; then
-    XRAY_CERT_NAME="$XRAY_SERVER_NAME"
-    echo "Using XRAY_SERVER_NAME=$XRAY_CERT_NAME from environment"
-else
-    XRAY_CERT_NAME=""
-    while [ -z "$XRAY_CERT_NAME" ]; do
-        printf "Enter server name for TLS certificate (e.g. vpn.example.com): "
-        if [ -t 0 ]; then
-            IFS= read -r XRAY_CERT_NAME
-        elif [ -r /dev/tty ]; then
-            IFS= read -r XRAY_CERT_NAME </dev/tty
-        else
-            echo "No interactive terminal available. Set XRAY_SERVER_NAME environment variable." >&2
-            exit 1
-        fi
-
-        if [ -z "$XRAY_CERT_NAME" ]; then
-            echo "Server name cannot be empty." >&2
-        elif ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
-            echo "Server name must contain only letters, digits, dots or hyphens." >&2
-            XRAY_CERT_NAME=""
-        fi
-    done
-fi
-
-if ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
-    echo "Server name must contain only letters, digits, dots or hyphens." >&2
-    exit 1
-fi
-
 tmp_inbound="${INBOUND_FILE}.tmp"
 awk -v port="$XRAY_PORT" '
     BEGIN {replaced=0}
@@ -203,16 +200,6 @@ if ! grep -q "\"port\": $XRAY_PORT" "$INBOUND_FILE"; then
     echo "Failed to update port in $INBOUND_FILE" >&2
     exit 1
 fi
-
-CERT_FILE=$(awk -F'"' '/"certificateFile"/ {print $4; exit}' "$INBOUND_FILE")
-KEY_FILE=$(awk -F'"' '/"keyFile"/ {print $4; exit}' "$INBOUND_FILE")
-
-[ -z "$CERT_FILE" ] && CERT_FILE="$XRAY_CONFIG_DIR/cert.pem"
-[ -z "$KEY_FILE" ] && KEY_FILE="$XRAY_CONFIG_DIR/key.pem"
-
-CERT_DIR=$(dirname "$CERT_FILE")
-KEY_DIR=$(dirname "$KEY_FILE")
-mkdir -p "$CERT_DIR" "$KEY_DIR"
 
 reissue_cert=1
 if [ -f "$CERT_FILE" ] || [ -f "$KEY_FILE" ]; then
@@ -248,6 +235,57 @@ elif [ "${XRAY_REISSUE_CERT:-}" = "0" ]; then
 fi
 
 if [ "$reissue_cert" -eq 1 ]; then
+    if ! command -v openssl >/dev/null 2>&1; then
+        echo "openssl binary is required to generate certificates (install package openssl-util)." >&2
+        exit 1
+    fi
+
+    if [ -n "$XRAY_SERVER_NAME" ]; then
+        XRAY_CERT_NAME="$XRAY_SERVER_NAME"
+        echo "Using XRAY_SERVER_NAME=$XRAY_CERT_NAME from environment"
+    else
+        EXISTING_CERT_CN=""
+        if [ "$CERT_EXISTS" -eq 1 ] && command -v openssl >/dev/null 2>&1; then
+            EXISTING_CERT_CN=$(openssl x509 -noout -subject -nameopt RFC2253 -in "$CERT_FILE" 2>/dev/null | awk -F'CN=' 'NF>1 {print $2}' | cut -d',' -f1 | sed 's/^ *//;s/ *$//')
+        fi
+
+        XRAY_CERT_NAME=""
+        while [ -z "$XRAY_CERT_NAME" ]; do
+            if [ -n "$EXISTING_CERT_CN" ]; then
+                printf "Enter server name for TLS certificate [%s]: " "$EXISTING_CERT_CN"
+            else
+                printf "Enter server name for TLS certificate (e.g. vpn.example.com): "
+            fi
+
+            if [ -t 0 ]; then
+                IFS= read -r XRAY_CERT_NAME
+            elif [ -r /dev/tty ]; then
+                IFS= read -r XRAY_CERT_NAME </dev/tty
+            else
+                echo "No interactive terminal available. Set XRAY_SERVER_NAME environment variable." >&2
+                exit 1
+            fi
+
+            if [ -z "$XRAY_CERT_NAME" ] && [ -n "$EXISTING_CERT_CN" ]; then
+                XRAY_CERT_NAME="$EXISTING_CERT_CN"
+            fi
+
+            if [ -z "$XRAY_CERT_NAME" ]; then
+                echo "Server name cannot be empty." >&2
+            elif ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
+                echo "Server name must contain only letters, digits, dots or hyphens." >&2
+                XRAY_CERT_NAME=""
+            fi
+        done
+    fi
+
+    if ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
+        echo "Server name must contain only letters, digits, dots or hyphens." >&2
+        exit 1
+    fi
+
+    mkdir -p "$CERT_DIR" "$KEY_DIR"
+
     BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
     if [ -f "$CERT_FILE" ]; then
         echo "Backing up existing certificate to ${CERT_FILE}.${BACKUP_SUFFIX}.bak"
