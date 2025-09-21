@@ -4,6 +4,27 @@
     },
     "api": {
         "tag": "api",
-        "listen": "127.0.0.1:8080"
+        "listen": "127.0.0.1:8080",
+        "services": [
+            "HandlerService",
+            "LoggerService",
+            "StatsService"
+        ]
+    },
+    "stats": {},
+    "policy": {
+        "levels": {
+            "0": {
+                "statsUserDownlink": true,
+                "statsUserUplink": true,
+                "statsUserOnline": true
+            }
+        },
+        "system": {
+            "statsInboundDownlink": true,
+            "statsInboundUplink": true,
+            "statsOutboundDownlink": true,
+            "statsOutboundUplink": true
+        }
     }
 }
