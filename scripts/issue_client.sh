@@ -339,17 +339,28 @@ CONNECTION_HOST="$(printf '%s' "$CONNECTION_HOST" | sed 's/^[[:space:]]*//;s/[[:
 printf '%s' "$CONNECTION_HOST" | grep -Eq '^[^[:space:]]+$' || die "Connection address must not contain whitespace."
 
 TLS_ALLOW_INSECURE="$(jq -r '
+    def truthy:
+        if . == null then false
+        elif type == "boolean" then .
+        elif type == "number" then . != 0
+        elif type == "string" then
+            (gsub(\"\\s\"; "") | ascii_downcase) as $s
+            | ($s == "1" or $s == "true" or $s == "yes" or $s == "on")
+        else false end;
+
     ( .inbounds // [] )
-    | map(select((.protocol // "") == "trojan") | (
-        (
-            [ .streamSettings.tlsSettings.allowInsecure ]
-            + ((.streamSettings.tlsSettings.certificates // []) | map(.allowInsecure))
-        )
-        | map(select(. != null and . != "" and . != "null"))
-        | if length == 0 then empty else .[0] end
-    ))
-    | map(select(. != null and . != "" and . != "null"))
-    | if length == 0 then empty else .[0] end
+    | map(select((.protocol // "") == "trojan"))
+    | map(
+        ((.streamSettings // {}) | (.tlsSettings // {})) as $tls
+        | [
+            $tls.allowInsecure,
+            (($tls.certificates // [])[]? | .allowInsecure)
+        ]
+        | map(truthy)
+        | any
+    )
+    | any
+    | if . then "1" else "0" end
 ' "$INBOUNDS_FILE" 2>/dev/null)"
 TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
 case "$TLS_ALLOW_INSECURE" in
