@@ -91,6 +91,13 @@ ensure_section() {
 
 ensure_redirect_lan() {
     ensure_section "$LAN_SECTION" redirect
+    # remove optional matches that could interfere with full redirect
+    uci -q delete "firewall.$LAN_SECTION.src_ip"
+    uci -q delete "firewall.$LAN_SECTION.src_port"
+    uci -q delete "firewall.$LAN_SECTION.dest"
+    uci -q delete "firewall.$LAN_SECTION.dest_port_start"
+    uci -q delete "firewall.$LAN_SECTION.dest_port_end"
+
     uci set "firewall.$LAN_SECTION.name=XRAY transparent proxy (LAN)"
     uci set "firewall.$LAN_SECTION.enabled=1"
     uci set "firewall.$LAN_SECTION.family=ipv4"
@@ -98,14 +105,7 @@ ensure_redirect_lan() {
     uci set "firewall.$LAN_SECTION.proto=tcp"
     uci set "firewall.$LAN_SECTION.target=redirect"
     uci set "firewall.$LAN_SECTION.dest_port=$PORT"
-    uci set "firewall.$LAN_SECTION.dest_ip=$SUBNET"
-    # remove optional matches that could interfere with full redirect
-    uci -q delete "firewall.$LAN_SECTION.src_ip"
-    uci -q delete "firewall.$LAN_SECTION.src_dip"
-    uci -q delete "firewall.$LAN_SECTION.src_port"
-    uci -q delete "firewall.$LAN_SECTION.dest"
-    uci -q delete "firewall.$LAN_SECTION.dest_port_start"
-    uci -q delete "firewall.$LAN_SECTION.dest_port_end"
+    uci set "firewall.$LAN_SECTION.src_dip=$SUBNET"
 }
 
 ensure_redirect_local() {
