@@ -80,131 +80,133 @@ require_cmd jq
 
 check_repo_access
 
-if [ -f "$CLIENTS_FILE" ]; then
-    if ! jq empty "$CLIENTS_FILE" >/dev/null 2>&1; then
-        die "Clients registry $CLIENTS_FILE contains invalid JSON."
-    fi
+if [ ! -f "$CLIENTS_FILE" ]; then
+    die "Clients registry not found: $CLIENTS_FILE"
 fi
 
-if [ -f "$INBOUNDS_FILE" ]; then
-    if ! jq empty "$INBOUNDS_FILE" >/dev/null 2>&1; then
-        die "Inbound configuration $INBOUNDS_FILE contains invalid JSON."
-    fi
+if [ ! -f "$INBOUNDS_FILE" ]; then
+    die "Inbound configuration not found: $INBOUNDS_FILE"
 fi
 
-print_clients_registry() {
-    if [ ! -f "$CLIENTS_FILE" ]; then
-        log "Clients registry file not found: $CLIENTS_FILE"
-        return 1
-    fi
+if ! jq empty "$CLIENTS_FILE" >/dev/null 2>&1; then
+    die "Clients registry $CLIENTS_FILE contains invalid JSON."
+fi
 
-    total_clients=$(jq 'length' "$CLIENTS_FILE")
-    printf 'Clients registry (%s): %s entries\n' "$CLIENTS_FILE" "$total_clients"
+if ! jq empty "$INBOUNDS_FILE" >/dev/null 2>&1; then
+    die "Inbound configuration $INBOUNDS_FILE contains invalid JSON."
+fi
 
-    if [ "$total_clients" -eq 0 ]; then
-        printf '  (no clients)\n'
-        return 0
-    fi
+CLIENTS_TMP=$(mktemp)
+INBOUND_TMP=$(mktemp)
+MISMATCH_TMP=$(mktemp)
+ACTIVE_TMP=$(mktemp)
 
-    jq -r '
-        sort_by(.email // "") |
-        map(
-            "- "
-            + (.email // "<unknown>")
-            + " | status=" + (.status // "unknown")
-            + (if (.id // "") != "" then " | id=" + (.id // "") else "" end)
-            + (if (.issued_at // "") != "" then " | issued=" + (.issued_at // "") else "" end)
-            + (if (.activated_at // "") != "" then " | activated=" + (.activated_at // "") else "" end)
-            + (if (.issued_by // "") != "" then " | issued_by=" + (.issued_by // "") else "" end)
-            + (if (.notes // "") != "" then " | notes=" + ((.notes // "") | gsub("\\s+"; " ")) else "" end)
-        )[]
-    ' "$CLIENTS_FILE"
-
-    if jq -e 'map(select((.link // "") != "")) | length > 0' "$CLIENTS_FILE" >/dev/null 2>&1; then
-        printf '\n'
-        printf 'Links available for clients with non-empty link field. Use jq to extract full URLs if needed.\n'
-    fi
+cleanup() {
+    rm -f "$CLIENTS_TMP" "$INBOUND_TMP" "$MISMATCH_TMP" "$ACTIVE_TMP"
 }
+trap cleanup EXIT INT TERM
 
-print_trojan_inbounds() {
-    if [ ! -f "$INBOUNDS_FILE" ]; then
-        log "Inbound configuration file not found: $INBOUNDS_FILE"
-        return 1
-    fi
+jq -r '
+    map({
+        email: (.email // ""),
+        password: (.password // ""),
+        status: (.status // "")
+    })
+    | map(select(.email != ""))
+    | map([.email, .password, .status] | @tsv)
+    | .[]
+' "$CLIENTS_FILE" > "$CLIENTS_TMP"
 
-    trojan_output=$(jq -r '
-        ( .inbounds // [] )
-        | map(select((.protocol // "") == "trojan")
-            | ( .streamSettings // {} ) as $stream
-            | ( $stream.tlsSettings // {} ) as $tls
-            | {
-                port: (if (.port? == null) then "unknown" else (.port | tostring) end),
-                sni: ($tls.serverName // ""),
-                clients: (.settings.clients // [])
-            }
-        )
-        | if length == 0 then empty else
-            map(
-                "Port " + .port
-                + (if (.sni // "") != "" then " (sni=" + .sni + ")" else "" end)
-                + ":\n"
-                + (if (.clients | length) == 0 then "  (no clients)"
-                   else (.clients
-                        | map("  - " + (.email // "<unknown>") + " | password=" + (.password // "<missing>"))
-                        | join("\n"))
-                   end)
-            )
-            | join("\n")
-        end
-    ' "$INBOUNDS_FILE")
+jq -r '
+    ( .inbounds // [] )
+    | map(select((.protocol // "") == "trojan") | (.settings.clients // []))
+    | add // []
+    | map({
+        email: (.email // ""),
+        password: (.password // "")
+    })
+    | map(select(.email != ""))
+    | map([.email, .password] | @tsv)
+    | .[]
+' "$INBOUNDS_FILE" > "$INBOUND_TMP"
 
-    if [ -z "$trojan_output" ]; then
-        printf 'No trojan inbounds found in %s.\n' "$INBOUNDS_FILE"
-    else
-        printf 'Trojan inbound clients (%s):\n' "$INBOUNDS_FILE"
-        printf '%s\n' "$trojan_output"
-    fi
-}
+awk_status=0
 
-print_mismatches() {
-    [ ! -f "$CLIENTS_FILE" ] && return 0
-    [ ! -f "$INBOUNDS_FILE" ] && return 0
+if ! awk -F '\t' \
+    -v mismatch_file="$MISMATCH_TMP" \
+    -v active_file="$ACTIVE_TMP" \
+    'NR==FNR {
+        inbound[$1] = $2
+        next
+    }
+    {
+        email = $1
+        pass = $2
+        status = $3
+        if (!(email in inbound)) {
+            printf "missing_in_inbounds\t%s\n", email >> mismatch_file
+            mismatch = 1
+            next
+        }
+        if (inbound[email] != pass) {
+            printf "password_mismatch\t%s\t%s\t%s\n", email, pass, inbound[email] >> mismatch_file
+            mismatch = 1
+            delete inbound[email]
+            next
+        }
+        status_lc = tolower(status)
+        if (status_lc != "revoked") {
+            printf "%s\t%s\t%s\n", email, pass, status >> active_file
+        }
+        delete inbound[email]
+    }
+    END {
+        for (email in inbound) {
+            printf "missing_in_clients\t%s\t%s\n", email, inbound[email] >> mismatch_file
+            mismatch = 1
+        }
+        if (mismatch) {
+            exit 1
+        }
+    }
+' "$INBOUND_TMP" "$CLIENTS_TMP"; then
+    awk_status=$?
+fi
 
-    mismatch_json=$(jq -n \
-        --argfile registry "$CLIENTS_FILE" \
-        --argfile inbound "$INBOUNDS_FILE" '
-            {
-                registry: ($registry // [] | map(.email // "") | map(select(length > 0)) | unique),
-                inbound: ($inbound.inbounds // []
-                    | map(select((.protocol // "") == "trojan") | (.settings.clients // []))
-                    | add // []
-                    | map(.email // "")
-                    | map(select(length > 0))
-                    | unique)
-            }
-            | {
-                only_registry: (.registry - .inbound),
-                only_inbound: (.inbound - .registry)
-            }
-        ')
+TAB_CHAR=$(printf '\t')
 
-    only_registry=$(printf '%s' "$mismatch_json" | jq -r '.only_registry[]?' 2>/dev/null || true)
-    only_inbound=$(printf '%s' "$mismatch_json" | jq -r '.only_inbound[]?' 2>/dev/null || true)
+if [ -s "$MISMATCH_TMP" ]; then
+    printf 'Error: Clients registry and trojan inbound configuration differ.\n' >&2
+    while IFS="$TAB_CHAR" read -r type email val1 val2; do
+        case "$type" in
+            missing_in_inbounds)
+                printf ' - %s exists in %s but is absent from trojan inbound list.\n' "$email" "$CLIENTS_FILE" >&2
+                ;;
+            missing_in_clients)
+                printf ' - %s exists in %s but is absent from %s.\n' "$email" "$INBOUNDS_FILE" "$CLIENTS_FILE" >&2
+                ;;
+            password_mismatch)
+                printf ' - %s password mismatch: %s contains %s, %s contains %s.\n' \
+                    "$email" "$CLIENTS_FILE" "$val1" "$INBOUNDS_FILE" "$val2" >&2
+                ;;
+            *)
+                printf ' - %s %s %s %s\n' "$type" "$email" "$val1" "$val2" >&2
+                ;;
+        esac
+    done < "$MISMATCH_TMP"
+    exit 1
+fi
 
-    if [ -n "$only_registry" ] || [ -n "$only_inbound" ]; then
-        printf '\nMismatches between registry and inbounds:\n'
-        if [ -n "$only_registry" ]; then
-            printf '  Present only in %s:\n' "$CLIENTS_FILE"
-            printf '%s\n' "$only_registry" | sed 's/^/    - /'
-        fi
-        if [ -n "$only_inbound" ]; then
-            printf '  Present only in trojan inbound configuration:\n'
-            printf '%s\n' "$only_inbound" | sed 's/^/    - /'
-        fi
-    fi
-}
+if [ "$awk_status" -ne 0 ]; then
+    die "Failed to compare client registry with inbound configuration."
+fi
 
-print_clients_registry
-printf '\n'
-print_trojan_inbounds
-print_mismatches
+if ! [ -s "$ACTIVE_TMP" ]; then
+    printf 'No active clients found (status not equal to revoked).\n'
+    exit 0
+fi
+
+sort -t "$TAB_CHAR" -k1,1 "$ACTIVE_TMP" |
+while IFS="$TAB_CHAR" read -r email password status; do
+    printf '%s %s %s\n' "$email" "$password" "$status"
+done
