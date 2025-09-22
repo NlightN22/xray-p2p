@@ -8,6 +8,17 @@
             "settings": {
                 "udp": true
             }
+        },
+        {
+            "remark": "local-input",
+            "tag": "in-48044",
+            "listen": "127.0.0.1",
+            "port": 48044,
+            "protocol": "dokodemo-door",
+            "settings": {
+                "network": "tcp",
+                "followRedirect": true
+            }
         }
     ]
 }
