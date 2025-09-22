@@ -351,7 +351,7 @@ TLS_ALLOW_INSECURE="$(jq -r '
     | map(select(. != null and . != "" and . != "null"))
     | if length == 0 then empty else .[0] end
 ' "$INBOUNDS_FILE" 2>/dev/null)"
-TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr '[:upper:]' '[:lower:]')"
+TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
 case "$TLS_ALLOW_INSECURE" in
     1|true|yes|on)
         TLS_ALLOW_INSECURE=1
@@ -364,7 +364,7 @@ esac
 if [ -n "${XRAY_ALLOW_INSECURE:-}" ]; then
     TLS_ALLOW_INSECURE="${XRAY_ALLOW_INSECURE}"
 fi
-TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr '[:upper:]' '[:lower:]')"
+TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
 case "$TLS_ALLOW_INSECURE" in
     1|true|yes|on)
         TLS_ALLOW_INSECURE=1
