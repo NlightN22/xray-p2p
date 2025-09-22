@@ -338,13 +338,13 @@ printf '%s' "$TLS_SNI_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || die "TLS SNI hostna
 
 CONNECTION_HOST="${XRAY_SERVER_ADDRESS:-}"
 [ -n "$CONNECTION_HOST" ] || CONNECTION_HOST="${XRAY_SERVER_HOST:-}"
-[ -n "$CONNECTION_HOST" ] || CONNECTION_HOST="$TLS_SNI_HOST"
 
 if [ -z "$CONNECTION_HOST" ]; then
+    DEFAULT_CONNECTION_HOST="$TLS_SNI_HOST"
     if [ -t 0 ] || [ -r /dev/tty ]; then
-        CONNECTION_HOST="$(prompt_value 'Enter connection address for clients (IP or domain)' "$TLS_SNI_HOST")"
+        CONNECTION_HOST="$(prompt_value 'Enter connection address for clients (IP or domain)' "$DEFAULT_CONNECTION_HOST")"
     else
-        CONNECTION_HOST="$TLS_SNI_HOST"
+        CONNECTION_HOST="$DEFAULT_CONNECTION_HOST"
     fi
 fi
 
@@ -447,3 +447,4 @@ log "Client '$EMAIL' issued with id $CLIENT_ID."
 log "Configuration files updated: $CLIENTS_FILE, $INBOUNDS_FILE"
 
 printf '%s\n' "$CLIENT_LINK"
+
