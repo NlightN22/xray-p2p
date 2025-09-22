@@ -46,7 +46,14 @@ prompt_value() {
 require_cmd() {
     cmd="$1"
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        die "Required command '$cmd' not found. Install it before running this script."
+        case "$cmd" in
+            jq)
+                die "Required command 'jq' not found. Install it before running this script. For OpenWrt run: opkg update && opkg install jq"
+                ;;
+            *)
+                die "Required command '$cmd' not found. Install it before running this script."
+                ;;
+        esac
     fi
 }
 generate_uuid() {
@@ -103,6 +110,62 @@ generate_client_email() {
     printf '%s-%s@%s' "$prefix" "$uuid_comp" "$domain"
 }
 
+format_link_host() {
+    host="$1"
+    if printf '%s' "$host" | grep -q ':'; then
+        case "$host" in
+            [[]*[]])
+                printf '%s' "$host"
+                ;;
+            *)
+                printf '[%s]' "$host"
+                ;;
+        esac
+    else
+        printf '%s' "$host"
+    fi
+}
+
+check_repo_access() {
+    [ "${XRAY_SKIP_REPO_CHECK:-0}" = "1" ] && return
+
+    base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    check_path="${XRAY_REPO_CHECK_PATH:-scripts/issue_client.sh}"
+    timeout="${XRAY_REPO_CHECK_TIMEOUT:-5}"
+
+    case "$base_url" in
+        */) repo_url="${base_url}${check_path}" ;;
+        *) repo_url="${base_url}/${check_path}" ;;
+    esac
+
+    last_tool=""
+    for tool in curl wget; do
+        case "$tool" in
+            curl)
+                command -v curl >/dev/null 2>&1 || continue
+                if curl -fsSL --max-time "$timeout" "$repo_url" >/dev/null 2>&1; then
+                    return
+                fi
+                last_tool="curl"
+                ;;
+            wget)
+                command -v wget >/dev/null 2>&1 || continue
+                if wget -q -T "$timeout" -O /dev/null "$repo_url"; then
+                    return
+                fi
+                last_tool="wget"
+                ;;
+        esac
+    done
+
+    if [ -z "$last_tool" ]; then
+        log "Neither curl nor wget is available to verify repository accessibility; skipping check."
+        return
+    fi
+
+    die "Unable to access repository resource $repo_url (last attempt via $last_tool). Set XRAY_SKIP_REPO_CHECK=1 to bypass."
+}
+
 backup_file() {
     file_path="$1"
     [ -f "$file_path" ] || return 0
@@ -126,6 +189,8 @@ SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 [ -f "$INBOUNDS_FILE" ] || die "Inbound configuration not found: $INBOUNDS_FILE"
 
 require_cmd jq
+
+check_repo_access
 
 mkdir -p "$CLIENTS_DIR"
 
@@ -209,27 +274,84 @@ CERT_FILE="$(jq -r '
 
 [ -n "$CERT_FILE" ] || CERT_FILE="$CONFIG_DIR/cert.pem"
 
-SERVER_HOST="${XRAY_SERVER_NAME:-}"
-[ -n "$SERVER_HOST" ] || SERVER_HOST="${XRAY_DOMAIN:-}"
-[ -n "$SERVER_HOST" ] || SERVER_HOST="${XRAY_CERT_NAME:-}"
+TLS_SNI_HOST="${XRAY_SERVER_NAME:-}"
+[ -n "$TLS_SNI_HOST" ] || TLS_SNI_HOST="${XRAY_DOMAIN:-}"
+[ -n "$TLS_SNI_HOST" ] || TLS_SNI_HOST="${XRAY_CERT_NAME:-}"
 
-if [ -z "$SERVER_HOST" ] && [ -f "$CERT_FILE" ] && command -v openssl >/dev/null 2>&1; then
-    SERVER_HOST="$(openssl x509 -noout -subject -nameopt RFC2253 -in "$CERT_FILE" 2>/dev/null | awk -F'CN=' 'NF>1 {print $2}' | cut -d',' -f1 | sed 's/^ *//;s/ *$//')"
+if [ -z "$TLS_SNI_HOST" ] && [ -f "$CERT_FILE" ] && command -v openssl >/dev/null 2>&1; then
+    TLS_SNI_HOST="$(openssl x509 -noout -subject -nameopt RFC2253 -in "$CERT_FILE" 2>/dev/null | awk -F'CN=' 'NF>1 {print $2}' | cut -d',' -f1 | sed 's/^ *//;s/ *$//')"
 fi
 
-if [ -z "$SERVER_HOST" ]; then
-    SERVER_HOST="$(prompt_value 'Enter server hostname (public domain)' '')"
+TLS_SNI_HOST="$(printf '%s' "$TLS_SNI_HOST" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+if [ -z "$TLS_SNI_HOST" ]; then
+    if [ -t 0 ] || [ -r /dev/tty ]; then
+        TLS_SNI_HOST="$(prompt_value 'Enter TLS SNI hostname (domain in certificate)' '')"
+    else
+        die "TLS SNI hostname not specified. Set XRAY_SERVER_NAME or run interactively."
+    fi
 fi
 
-[ -n "$SERVER_HOST" ] || die "Server hostname cannot be empty."
-printf '%s' "$SERVER_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || die "Server hostname must contain only letters, digits, dots or hyphens."
+[ -n "$TLS_SNI_HOST" ] || die "TLS SNI hostname cannot be empty."
+printf '%s' "$TLS_SNI_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || die "TLS SNI hostname must contain only letters, digits, dots or hyphens."
+
+CONNECTION_HOST="${XRAY_SERVER_ADDRESS:-}"
+[ -n "$CONNECTION_HOST" ] || CONNECTION_HOST="${XRAY_SERVER_HOST:-}"
+[ -n "$CONNECTION_HOST" ] || CONNECTION_HOST="$TLS_SNI_HOST"
+
+if [ -z "$CONNECTION_HOST" ]; then
+    if [ -t 0 ] || [ -r /dev/tty ]; then
+        CONNECTION_HOST="$(prompt_value 'Enter connection address for clients (IP or domain)' "$TLS_SNI_HOST")"
+    else
+        CONNECTION_HOST="$TLS_SNI_HOST"
+    fi
+fi
+
+CONNECTION_HOST="$(printf '%s' "$CONNECTION_HOST" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+[ -n "$CONNECTION_HOST" ] || die "Connection address cannot be empty."
+printf '%s' "$CONNECTION_HOST" | grep -Eq '^[^[:space:]]+$' || die "Connection address must not contain whitespace."
+
+TLS_ALLOW_INSECURE="$(jq -r '
+    ( .inbounds // [] )
+    | map(select((.protocol // "") == "trojan") | .streamSettings.tlsSettings.allowInsecure)
+    | map(select(. != null))
+    | if length == 0 then empty else .[0] end
+' "$INBOUNDS_FILE" 2>/dev/null)"
+TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr '[:upper:]' '[:lower:]')"
+case "$TLS_ALLOW_INSECURE" in
+    1|true|yes|on)
+        TLS_ALLOW_INSECURE=1
+        ;;
+    *)
+        TLS_ALLOW_INSECURE=0
+        ;;
+esac
+
+if [ -n "${XRAY_ALLOW_INSECURE:-}" ]; then
+    TLS_ALLOW_INSECURE="${XRAY_ALLOW_INSECURE}"
+fi
+TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr '[:upper:]' '[:lower:]')"
+case "$TLS_ALLOW_INSECURE" in
+    1|true|yes|on)
+        TLS_ALLOW_INSECURE=1
+        ;;
+    0|false|no|off|'')
+        TLS_ALLOW_INSECURE=0
+        ;;
+    *)
+        log "Unrecognised XRAY_ALLOW_INSECURE value '$TLS_ALLOW_INSECURE'; defaulting to 0"
+        TLS_ALLOW_INSECURE=0
+        ;;
+esac
+
 CLIENT_ID="$(generate_uuid)"
 PASSWORD="$(generate_password)"
 ISSUED_AT="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')"
 ISSUED_BY_DEFAULT="$(id -un 2>/dev/null || echo unknown)"
 ISSUED_BY="${XRAY_ISSUED_BY:-$ISSUED_BY_DEFAULT}"
 CLIENT_LABEL="$(printf '%s' "$EMAIL" | jq -Rr @uri)"
-CLIENT_LINK="trojan://${PASSWORD}@${SERVER_HOST}:${XRAY_PORT}?security=tls&type=tcp&sni=${SERVER_HOST}#${CLIENT_LABEL}"
+LINK_HOST="$(format_link_host "$CONNECTION_HOST")"
+CLIENT_LINK="trojan://${PASSWORD}@${LINK_HOST}:${XRAY_PORT}?security=tls&type=tcp&allowInsecure=${TLS_ALLOW_INSECURE}&sni=${TLS_SNI_HOST}#${CLIENT_LABEL}"
 
 if [ "${XRAY_SKIP_BACKUP:-0}" != "1" ]; then
     [ -f "$CLIENTS_FILE" ] && backup_file "$CLIENTS_FILE"
