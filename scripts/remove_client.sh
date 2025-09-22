@@ -57,20 +57,6 @@ require_cmd() {
     fi
 }
 
-backup_file() {
-    file_path="$1"
-    [ -f "$file_path" ] || return 0
-
-    stamp="$(date +%Y%m%d%H%M%S)"
-    backup_path="${file_path}.${stamp}.bak"
-
-    if cp "$file_path" "$backup_path"; then
-        log "Backup created: $backup_path"
-    else
-        die "Failed to create backup for $file_path"
-    fi
-}
-
 check_repo_access() {
     [ "${XRAY_SKIP_REPO_CHECK:-0}" = "1" ] && return
 
@@ -216,11 +202,6 @@ INBOUND_MATCHES=$(jq -r --arg email "$EMAIL" '
 
 if [ "$CLIENTS_MATCHES" -eq 0 ] && [ "$INBOUND_MATCHES" -eq 0 ]; then
     die "Client '$EMAIL' not found in $CLIENTS_FILE or $INBOUNDS_FILE"
-fi
-
-if [ "${XRAY_SKIP_BACKUP:-0}" != "1" ]; then
-    [ "$CLIENTS_PRESENT" -eq 1 ] && [ "$CLIENTS_MATCHES" -gt 0 ] && backup_file "$CLIENTS_FILE"
-    [ "$INBOUND_MATCHES" -gt 0 ] && backup_file "$INBOUNDS_FILE"
 fi
 
 if [ "$CLIENTS_PRESENT" -eq 1 ] && [ "$CLIENTS_MATCHES" -gt 0 ]; then

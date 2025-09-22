@@ -204,20 +204,6 @@ show_existing_clients() {
     printf '\n'
 }
 
-backup_file() {
-    file_path="$1"
-    [ -f "$file_path" ] || return 0
-
-    stamp="$(date +%Y%m%d%H%M%S)"
-    backup_path="${file_path}.${stamp}.bak"
-
-    if cp "$file_path" "$backup_path"; then
-        log "Backup created: $backup_path"
-    else
-        die "Failed to create backup for $file_path"
-    fi
-}
-
 CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
 INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
 CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
@@ -354,8 +340,15 @@ printf '%s' "$CONNECTION_HOST" | grep -Eq '^[^[:space:]]+$' || die "Connection a
 
 TLS_ALLOW_INSECURE="$(jq -r '
     ( .inbounds // [] )
-    | map(select((.protocol // "") == "trojan") | .streamSettings.tlsSettings.allowInsecure)
-    | map(select(. != null))
+    | map(select((.protocol // "") == "trojan") | (
+        (
+            [ .streamSettings.tlsSettings.allowInsecure ]
+            + ((.streamSettings.tlsSettings.certificates // []) | map(.allowInsecure))
+        )
+        | map(select(. != null and . != "" and . != "null"))
+        | if length == 0 then empty else .[0] end
+    ))
+    | map(select(. != null and . != "" and . != "null"))
     | if length == 0 then empty else .[0] end
 ' "$INBOUNDS_FILE" 2>/dev/null)"
 TLS_ALLOW_INSECURE="$(printf '%s' "$TLS_ALLOW_INSECURE" | tr '[:upper:]' '[:lower:]')"
@@ -398,11 +391,6 @@ if [ "$TLS_ALLOW_INSECURE" = 1 ]; then
 fi
 TLS_QUERY="${TLS_QUERY}&sni=${TLS_SNI_HOST}"
 CLIENT_LINK="trojan://${PASSWORD}@${LINK_HOST}:${XRAY_PORT}?${TLS_QUERY}#${CLIENT_LABEL}"
-
-if [ "${XRAY_SKIP_BACKUP:-0}" != "1" ]; then
-    [ -f "$CLIENTS_FILE" ] && backup_file "$CLIENTS_FILE"
-    backup_file "$INBOUNDS_FILE"
-fi
 
 TMP_CLIENTS="$(mktemp)"
 jq   --arg id "$CLIENT_ID"   --arg password "$PASSWORD"   --arg email "$EMAIL"   --arg status "issued"   --arg issued_at "$ISSUED_AT"   --arg issued_by "$ISSUED_BY"   --arg link "$CLIENT_LINK"   '(. // []) + [{
