@@ -111,6 +111,44 @@ check_repo_access() {
     die "Unable to access repository resource $repo_url (last attempt via $last_tool). Set XRAY_SKIP_REPO_CHECK=1 to bypass."
 }
 
+show_existing_clients() {
+    if [ "${XRAY_SHOW_CLIENTS:-1}" != "1" ]; then
+        return
+    fi
+
+    log "Current clients (email password status):"
+
+    base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    list_path="${XRAY_LIST_SCRIPT_PATH:-scripts/list_clients.sh}"
+    base_trimmed="${base_url%/}"
+    case "$list_path" in
+        /*) list_url="${base_trimmed}${list_path}" ;;
+        *) list_url="${base_trimmed}/${list_path}" ;;
+    esac
+
+    tmp_list="$(mktemp 2>/dev/null)" || tmp_list=""
+    if [ -z "$tmp_list" ]; then
+        log "Unable to create temporary file for list script"
+        printf '\n'
+        return
+    fi
+
+    if curl -fsSL "$list_url" -o "$tmp_list"; then
+        if ! env \
+            XRAY_CONFIG_DIR="$CONFIG_DIR" \
+            XRAY_INBOUNDS_FILE="$INBOUNDS_FILE" \
+            XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
+            XRAY_SKIP_REPO_CHECK=1 \
+            sh "$tmp_list"; then
+            log "List script returned an error"
+        fi
+    else
+        log "Failed to download $list_url"
+    fi
+    rm -f "$tmp_list"
+    printf '\n'
+}
+
 CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
 INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
 CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
@@ -120,8 +158,11 @@ SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 [ -f "$INBOUNDS_FILE" ] || die "Inbound configuration not found: $INBOUNDS_FILE"
 
 require_cmd jq
+require_cmd curl
 
 check_repo_access
+
+show_existing_clients
 
 EMAIL="${1:-}"
 if [ -z "$EMAIL" ] && [ -n "${XRAY_CLIENT_EMAIL:-}" ]; then
