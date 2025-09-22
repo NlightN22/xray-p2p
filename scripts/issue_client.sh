@@ -392,7 +392,12 @@ ISSUED_BY_DEFAULT="$(id -un 2>/dev/null || echo unknown)"
 ISSUED_BY="${XRAY_ISSUED_BY:-$ISSUED_BY_DEFAULT}"
 CLIENT_LABEL="$(printf '%s' "$EMAIL" | jq -Rr @uri)"
 LINK_HOST="$(format_link_host "$CONNECTION_HOST")"
-CLIENT_LINK="trojan://${PASSWORD}@${LINK_HOST}:${XRAY_PORT}?security=tls&type=tcp&allowInsecure=${TLS_ALLOW_INSECURE}&sni=${TLS_SNI_HOST}#${CLIENT_LABEL}"
+TLS_QUERY="security=tls&type=tcp"
+if [ "$TLS_ALLOW_INSECURE" = 1 ]; then
+    TLS_QUERY="${TLS_QUERY}&allowInsecure=1"
+fi
+TLS_QUERY="${TLS_QUERY}&sni=${TLS_SNI_HOST}"
+CLIENT_LINK="trojan://${PASSWORD}@${LINK_HOST}:${XRAY_PORT}?${TLS_QUERY}#${CLIENT_LABEL}"
 
 if [ "${XRAY_SKIP_BACKUP:-0}" != "1" ]; then
     [ -f "$CLIENTS_FILE" ] && backup_file "$CLIENTS_FILE"
