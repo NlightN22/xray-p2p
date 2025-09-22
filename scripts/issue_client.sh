@@ -226,9 +226,15 @@ TMP_INBOUNDS=""
 TMP_BASE_CLIENTS=""
 
 cleanup() {
-    [ -n "$TMP_CLIENTS" ] && [ -f "$TMP_CLIENTS" ] && rm -f "$TMP_CLIENTS"
-    [ -n "$TMP_INBOUNDS" ] && [ -f "$TMP_INBOUNDS" ] && rm -f "$TMP_INBOUNDS"
-    [ -n "$TMP_BASE_CLIENTS" ] && [ -f "$TMP_BASE_CLIENTS" ] && rm -f "$TMP_BASE_CLIENTS"
+    if [ -n "$TMP_CLIENTS" ] && [ -f "$TMP_CLIENTS" ]; then
+        rm -f "$TMP_CLIENTS"
+    fi
+    if [ -n "$TMP_INBOUNDS" ] && [ -f "$TMP_INBOUNDS" ]; then
+        rm -f "$TMP_INBOUNDS"
+    fi
+    if [ -n "$TMP_BASE_CLIENTS" ] && [ -f "$TMP_BASE_CLIENTS" ]; then
+        rm -f "$TMP_BASE_CLIENTS"
+    fi
 }
 trap cleanup EXIT INT TERM
 
@@ -344,7 +350,7 @@ TLS_ALLOW_INSECURE="$(jq -r '
         elif type == "boolean" then .
         elif type == "number" then . != 0
         elif type == "string" then
-            (gsub(\"\\s\"; "") | ascii_downcase) as $s
+            (gsub("[[:space:]]"; "") | ascii_downcase) as $s
             | ($s == "1" or $s == "true" or $s == "yes" or $s == "on")
         else false end;
 
@@ -450,5 +456,6 @@ fi
 log "Client '$EMAIL' issued with id $CLIENT_ID."
 log "Configuration files updated: $CLIENTS_FILE, $INBOUNDS_FILE"
 
-printf '%s\n' "$CLIENT_LINK"
+log "Client link: $CLIENT_LINK"
 
+printf '%s\n' "$CLIENT_LINK"
