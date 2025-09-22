@@ -1,10 +1,20 @@
 #!/bin/sh
 # Install XRAY server
+
+log() {
+    printf '%s\n' "$*" >&2
+}
+
+die() {
+    printf 'Error: %s\n' "$*" >&2
+    exit 1
+}
+
 curl -s https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh | sh
 
 XRAY_CONFIG_DIR="/etc/xray"
 if [ ! -d "$XRAY_CONFIG_DIR" ]; then
-    echo "Creating XRAY configuration directory at $XRAY_CONFIG_DIR"
+    log "Creating XRAY configuration directory at $XRAY_CONFIG_DIR"
     mkdir -p "$XRAY_CONFIG_DIR"
 fi
 
@@ -18,27 +28,26 @@ for file in $CONFIG_FILES; do
     if [ -f "$target" ]; then
         case "${XRAY_FORCE_CONFIG:-}" in
             1)
-                echo "Replacing $target (forced by XRAY_FORCE_CONFIG=1)"
+                log "Replacing $target (forced by XRAY_FORCE_CONFIG=1)"
                 ;;
             0)
-                echo "Keeping existing $target (XRAY_FORCE_CONFIG=0)"
+                log "Keeping existing $target (XRAY_FORCE_CONFIG=0)"
                 replace_file=0
                 ;;
             *)
                 while :; do
-                    printf "File %s exists. Replace with repository version? [y/N]: " "$target"
+                    printf "File %s exists. Replace with repository version? [y/N]: " "$target" >&2
                     if [ -t 0 ]; then
                         IFS= read -r answer
                     elif [ -r /dev/tty ]; then
                         IFS= read -r answer </dev/tty
                     else
-                        echo "No interactive terminal available. Set XRAY_FORCE_CONFIG=1 to overwrite or 0 to keep existing files." >&2
-                        exit 1
+                        die "No interactive terminal available. Set XRAY_FORCE_CONFIG=1 to overwrite or 0 to keep existing files."
                     fi
                     case "$answer" in
                         [Yy]) replace_file=1; break ;;
                         [Nn]|"") replace_file=0; break ;;
-                        *) echo "Please answer y or n." ;;
+                        *) log "Please answer y or n." ;;
                     esac
                 done
                 ;;
@@ -46,22 +55,20 @@ for file in $CONFIG_FILES; do
     fi
 
     if [ "$replace_file" -eq 0 ]; then
-        echo "Keeping existing $target"
+        log "Keeping existing $target"
         continue
     fi
 
-    echo "Downloading $file to $XRAY_CONFIG_DIR"
+    log "Downloading $file to $XRAY_CONFIG_DIR"
     if ! curl -fsSL "$url" -o "$target"; then
-        echo "Failed to download $file" >&2
-        exit 1
+        die "Failed to download $file"
     fi
     chmod 644 "$target"
 done
 
 INBOUND_FILE="$XRAY_CONFIG_DIR/inbounds.json"
 if [ ! -f "$INBOUND_FILE" ]; then
-    echo "Inbound configuration $INBOUND_FILE is missing" >&2
-    exit 1
+    die "Inbound configuration $INBOUND_FILE is missing"
 fi
 
 CERT_FILE=$(awk -F'"' '/"certificateFile"/ {print $4; exit}' "$INBOUND_FILE")
@@ -115,27 +122,25 @@ if [ "$require_openssl" -eq 1 ] && ! command -v openssl >/dev/null 2>&1; then
 fi
 
 if [ -n "$missing_deps" ]; then
-    echo "Missing required dependencies before continuing:" >&2
+    log "Missing required dependencies before continuing:"
     printf '%b\n' "$missing_deps" >&2
-    exit 1
+    die "Resolve missing dependencies and rerun the installer."
 fi
 
 XRAY_CONF_DIR_UCI="$(uci -q get xray.config.confdir 2>/dev/null)"
 if [ -z "$XRAY_CONF_DIR_UCI" ]; then
-    echo "Unable to read xray.config.confdir via uci" >&2
-    exit 1
+    die "Unable to read xray.config.confdir via uci"
 fi
 
 if [ "$XRAY_CONF_DIR_UCI" != "$XRAY_CONFIG_DIR" ]; then
-    echo "UCI confdir ($XRAY_CONF_DIR_UCI) does not match expected path $XRAY_CONFIG_DIR" >&2
-    echo "Update it with: uci set xray.config.confdir='$XRAY_CONFIG_DIR'; uci commit xray" >&2
-    exit 1
+    log "UCI confdir ($XRAY_CONF_DIR_UCI) does not match expected path $XRAY_CONFIG_DIR"
+    die "Update it with: uci set xray.config.confdir='$XRAY_CONFIG_DIR'; uci commit xray"
 fi
 
 uci_changes=0
 
 if [ "$(uci -q get xray.enabled.enabled 2>/dev/null)" != "1" ]; then
-    echo "Enabling xray service to start on boot"
+    log "Enabling xray service to start on boot"
     uci set xray.enabled.enabled='1'
     uci_changes=1
 fi
@@ -144,7 +149,7 @@ desired_conffiles="/etc/xray/inbounds.json /etc/xray/logs.json /etc/xray/outboun
 existing_conffiles=$(uci -q show xray.config 2>/dev/null | awk -F= '/^xray.config.conffiles=/ {print $2}' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
 
 if [ "$existing_conffiles" != "$desired_conffiles" ]; then
-    echo "Aligning xray.config.conffiles with managed templates"
+    log "Aligning xray.config.conffiles with managed templates"
     uci -q delete xray.config.conffiles
     for file in $desired_conffiles; do
         uci add_list xray.config.conffiles="$file"
@@ -159,16 +164,15 @@ fi
 DEFAULT_PORT=8443
 
 if [ -n "$XRAY_PORT" ]; then
-    echo "Using XRAY_PORT=$XRAY_PORT from environment"
+    log "Using XRAY_PORT=$XRAY_PORT from environment"
 else
-    printf "Enter external port for XRAY [%s]: " "$DEFAULT_PORT"
+    printf "Enter external port for XRAY [%s]: " "$DEFAULT_PORT" >&2
     if [ -t 0 ]; then
         IFS= read -r XRAY_PORT
     elif [ -r /dev/tty ]; then
         IFS= read -r XRAY_PORT </dev/tty
     else
-        echo "No interactive terminal available. Set XRAY_PORT environment variable." >&2
-        exit 1
+        die "No interactive terminal available. Set XRAY_PORT environment variable."
     fi
 fi
 
@@ -177,13 +181,11 @@ if [ -z "$XRAY_PORT" ]; then
 fi
 
 if ! echo "$XRAY_PORT" | grep -Eq "^[0-9]+$"; then
-    echo "Port must be numeric" >&2
-    exit 1
+    die "Port must be numeric"
 fi
 
 if [ "$XRAY_PORT" -le 0 ] || [ "$XRAY_PORT" -gt 65535 ]; then
-    echo "Port must be between 1 and 65535" >&2
-    exit 1
+    die "Port must be between 1 and 65535"
 fi
 
 tmp_inbound="${INBOUND_FILE}.tmp"
@@ -197,52 +199,49 @@ awk -v port="$XRAY_PORT" '
 ' "$INBOUND_FILE" > "$tmp_inbound" && mv "$tmp_inbound" "$INBOUND_FILE"
 
 if ! grep -q "\"port\": $XRAY_PORT" "$INBOUND_FILE"; then
-    echo "Failed to update port in $INBOUND_FILE" >&2
-    exit 1
+    die "Failed to update port in $INBOUND_FILE"
 fi
 
 reissue_cert=1
 if [ -f "$CERT_FILE" ] || [ -f "$KEY_FILE" ]; then
     case "${XRAY_REISSUE_CERT:-}" in
         1)
-            echo "Regenerating certificate and key (forced by XRAY_REISSUE_CERT=1)"
+            log "Regenerating certificate and key (forced by XRAY_REISSUE_CERT=1)"
             ;;
         0)
-            echo "Keeping existing certificate and key (XRAY_REISSUE_CERT=0)"
+            log "Keeping existing certificate and key (XRAY_REISSUE_CERT=0)"
             reissue_cert=0
             ;;
         *)
             while :; do
-                printf "Certificate or key already exists. Regenerate them now? [y/N]: "
+                printf "Certificate or key already exists. Regenerate them now? [y/N]: " >&2
                 if [ -t 0 ]; then
                     IFS= read -r cert_answer
                 elif [ -r /dev/tty ]; then
                     IFS= read -r cert_answer </dev/tty
                 else
-                    echo "No interactive terminal available. Set XRAY_REISSUE_CERT=1 to regenerate or 0 to keep existing material." >&2
-                    exit 1
+                    die "No interactive terminal available. Set XRAY_REISSUE_CERT=1 to regenerate or 0 to keep existing material."
                 fi
                 case "$cert_answer" in
                     [Yy]) reissue_cert=1; break ;;
                     [Nn]|"") reissue_cert=0; break ;;
-                    *) echo "Please answer y or n." ;;
+                    *) log "Please answer y or n." ;;
                 esac
             done
             ;;
     esac
 elif [ "${XRAY_REISSUE_CERT:-}" = "0" ]; then
-    echo "Certificate files are missing; generating new ones despite XRAY_REISSUE_CERT=0."
+    log "Certificate files are missing; generating new ones despite XRAY_REISSUE_CERT=0."
 fi
 
 if [ "$reissue_cert" -eq 1 ]; then
     if ! command -v openssl >/dev/null 2>&1; then
-        echo "openssl binary is required to generate certificates (install package openssl-util)." >&2
-        exit 1
+        die "openssl binary is required to generate certificates (install package openssl-util)."
     fi
 
     if [ -n "$XRAY_SERVER_NAME" ]; then
         XRAY_CERT_NAME="$XRAY_SERVER_NAME"
-        echo "Using XRAY_SERVER_NAME=$XRAY_CERT_NAME from environment"
+        log "Using XRAY_SERVER_NAME=$XRAY_CERT_NAME from environment"
     else
         EXISTING_CERT_CN=""
         if [ "$CERT_EXISTS" -eq 1 ] && command -v openssl >/dev/null 2>&1; then
@@ -252,9 +251,9 @@ if [ "$reissue_cert" -eq 1 ]; then
         XRAY_CERT_NAME=""
         while [ -z "$XRAY_CERT_NAME" ]; do
             if [ -n "$EXISTING_CERT_CN" ]; then
-                printf "Enter server name for TLS certificate [%s]: " "$EXISTING_CERT_CN"
+                printf "Enter server name for TLS certificate [%s]: " "$EXISTING_CERT_CN" >&2
             else
-                printf "Enter server name for TLS certificate (e.g. vpn.example.com): "
+                printf "Enter server name for TLS certificate (e.g. vpn.example.com): " >&2
             fi
 
             if [ -t 0 ]; then
@@ -262,8 +261,7 @@ if [ "$reissue_cert" -eq 1 ]; then
             elif [ -r /dev/tty ]; then
                 IFS= read -r XRAY_CERT_NAME </dev/tty
             else
-                echo "No interactive terminal available. Set XRAY_SERVER_NAME environment variable." >&2
-                exit 1
+                die "No interactive terminal available. Set XRAY_SERVER_NAME environment variable."
             fi
 
             if [ -z "$XRAY_CERT_NAME" ] && [ -n "$EXISTING_CERT_CN" ]; then
@@ -271,28 +269,27 @@ if [ "$reissue_cert" -eq 1 ]; then
             fi
 
             if [ -z "$XRAY_CERT_NAME" ]; then
-                echo "Server name cannot be empty." >&2
+                log "Server name cannot be empty."
             elif ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
-                echo "Server name must contain only letters, digits, dots or hyphens." >&2
+                log "Server name must contain only letters, digits, dots or hyphens."
                 XRAY_CERT_NAME=""
             fi
         done
     fi
 
     if ! echo "$XRAY_CERT_NAME" | grep -Eq "^[A-Za-z0-9.-]+$"; then
-        echo "Server name must contain only letters, digits, dots or hyphens." >&2
-        exit 1
+        die "Server name must contain only letters, digits, dots or hyphens."
     fi
 
     mkdir -p "$CERT_DIR" "$KEY_DIR"
 
     BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
     if [ -f "$CERT_FILE" ]; then
-        echo "Backing up existing certificate to ${CERT_FILE}.${BACKUP_SUFFIX}.bak"
+        log "Backing up existing certificate to ${CERT_FILE}.${BACKUP_SUFFIX}.bak"
         mv "$CERT_FILE" "${CERT_FILE}.${BACKUP_SUFFIX}.bak"
     fi
     if [ -f "$KEY_FILE" ]; then
-        echo "Backing up existing key to ${KEY_FILE}.${BACKUP_SUFFIX}.bak"
+        log "Backing up existing key to ${KEY_FILE}.${BACKUP_SUFFIX}.bak"
         mv "$KEY_FILE" "${KEY_FILE}.${BACKUP_SUFFIX}.bak"
     fi
 
@@ -317,21 +314,19 @@ EOF
 
     if ! openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout "$KEY_FILE" -out "$CERT_FILE" -config "$OPENSSL_CNF" >/dev/null 2>&1; then
         rm -f "$OPENSSL_CNF"
-        echo "Failed to generate certificate for $XRAY_CERT_NAME" >&2
-        exit 1
+        die "Failed to generate certificate for $XRAY_CERT_NAME"
     fi
     rm -f "$OPENSSL_CNF"
 
     chmod 600 "$KEY_FILE"
     chmod 644 "$CERT_FILE"
 else
-    echo "Skipping certificate regeneration; keeping existing files in place."
+    log "Skipping certificate regeneration; keeping existing files in place."
 fi
 
-echo "Restarting xray service"
+log "Restarting xray service"
 if ! /etc/init.d/xray restart; then
-    echo "Failed to restart xray service" >&2
-    exit 1
+    die "Failed to restart xray service"
 fi
 
 sleep 2
@@ -362,11 +357,10 @@ check_port() {
 check_port
 port_check_status=$?
 if [ "$port_check_status" -eq 0 ]; then
-    echo "XRAY service is listening on port $XRAY_PORT"
+    log "XRAY service is listening on port $XRAY_PORT"
 elif [ "$port_check_status" -eq 2 ]; then
-    echo "XRAY service restarted. Skipping port verification because neither 'ss' nor 'netstat' is available."
-    echo "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
+    log "XRAY service restarted. Skipping port verification because neither 'ss' nor 'netstat' is available."
+    log "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
 else
-    echo "XRAY service does not appear to be listening on port $XRAY_PORT" >&2
-    exit 1
+    die "XRAY service does not appear to be listening on port $XRAY_PORT"
 fi

@@ -456,6 +456,4 @@ fi
 log "Client '$EMAIL' issued with id $CLIENT_ID."
 log "Configuration files updated: $CLIENTS_FILE, $INBOUNDS_FILE"
 
-log "Client link: $CLIENT_LINK"
-
 printf '%s\n' "$CLIENT_LINK"
