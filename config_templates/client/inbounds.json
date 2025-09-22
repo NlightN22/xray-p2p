@@ -1,55 +1,12 @@
 {
     "inbounds": [
         {
-            "port": 8443,
-            "listen": "0.0.0.0",
-            "protocol": "trojan",
+            "tag": "socks-in",
+            "protocol": "socks",
+            "listen": "127.0.0.1",
+            "port": 1080,
             "settings": {
-                "clients": [
-                    {
-                        "password": "strong_password_here",
-                        "email": "client1"
-                    }
-                ]
-            },
-            "streamSettings": {
-                "network": "tcp",
-                "security": "tls",
-                "tlsSettings": {
-                    "certificates": [
-                        {
-                            "certificateFile": "/etc/xray/cert.pem",
-                            "keyFile": "/etc/xray/key.pem"
-                        }
-                    ]
-                },
-                "tcpSettings": {
-                    "header": {
-                        "type": "http",
-                        "request": {
-                            "version": "1.1",
-                            "method": "GET",
-                            "path": [
-                                "/"
-                            ],
-                            "headers": {
-                                "Host": [
-                                    "www.bing.com",
-                                    "www.apple.com"
-                                ],
-                                "User-Agent": [
-                                    "Mozilla/5.0"
-                                ],
-                                "Accept-Encoding": [
-                                    "gzip, deflate"
-                                ],
-                                "Connection": [
-                                    "keep-alive"
-                                ]
-                            }
-                        }
-                    }
-                }
+                "udp": true
             }
         }
     ]
