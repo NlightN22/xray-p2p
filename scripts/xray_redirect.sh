@@ -2,11 +2,10 @@
 
 set -eu
 
-DEFAULT_PORT="48044"
 DEFAULT_ZONE="lan"
 LAN_SECTION="xray_transparent_lan"
-INCLUDE_SECTION="xray_transparent_local"
-NFT_INCLUDE_PATH="/etc/nftables.d/xray-transparent.nft"
+NFT_SNIPPET="/etc/nftables.d/xray-transparent.nft"
+XRAY_INBOUND_FILE="/etc/xray/inbounds.json"
 
 log() {
     printf '%s\n' "$*"
@@ -19,19 +18,13 @@ die() {
 
 usage() {
     cat <<'USAGE'
-Usage: xray_redirect.sh [SUBNET] [PORT] [ZONE]
+Usage: xray_redirect.sh SUBNET [ZONE]
 
 SUBNET  Destination subnet to divert (CIDR notation, e.g. 10.0.101.0/24).
-PORT    Local XRAY dokodemo-door port to forward to (default 48044).
 ZONE    OpenWrt firewall zone whose traffic should be intercepted (default lan).
 
-The script ensures two firewall adjustments:
-  * Redirect traffic from the specified zone towards SUBNET into the local XRAY port.
-  * Inject an nftables output-chain rule so router-originated traffic to SUBNET is
-    redirected as well.
-
-Existing sections named 'xray_transparent_lan' and 'xray_transparent_local' are
-updated in-place; the nftables include is rewritten on each run.
+The script reads dokodemo-door inbound(s) from /etc/xray/inbounds.json and
+redirects matching traffic to the selected port.
 USAGE
 }
 
@@ -40,127 +33,141 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     exit 0
 fi
 
-SUBNET="${1:-}"
-PORT="${2:-$DEFAULT_PORT}"
-ZONE="${3:-$DEFAULT_ZONE}"
-
-if [ -z "$SUBNET" ]; then
-    if [ -t 0 ]; then
-        printf 'Enter destination subnet (CIDR, e.g. 10.0.101.0/24): '
-        IFS= read -r SUBNET
-    elif [ -r /dev/tty ]; then
-        printf 'Enter destination subnet (CIDR, e.g. 10.0.101.0/24): '
-        IFS= read -r SUBNET </dev/tty
-    else
-        die "Subnet argument is required"
-    fi
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+    usage
+    exit 1
 fi
 
-if [ -z "$SUBNET" ]; then
-    die "Subnet cannot be empty"
-fi
+SUBNET="$1"
+ZONE="${2:-$DEFAULT_ZONE}"
 
 case "$SUBNET" in
-    *'/'*) ;;
+    */*) ;;
     *) die "Subnet must be in CIDR notation (example: 10.0.101.0/24)" ;;
 esac
 
-case "$PORT" in
-    ''|*[!0-9]*) die "Port must be numeric" ;;
-    *)
-        if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
-            die "Port must be between 1 and 65535"
-        fi
-        ;;
-esac
-
-if ! command -v uci >/dev/null 2>&1; then
-    die "uci command not available (is this OpenWrt?)"
+if [ ! -f "$XRAY_INBOUND_FILE" ]; then
+    die "XRAY inbound file $XRAY_INBOUND_FILE not found"
 fi
 
-log "Configuring transparent proxy for subnet $SUBNET (zone: $ZONE, port: $PORT)"
+select_dokodemo_port() {
+    awk '
+        BEGIN { section=0 }
+        /"protocol"[[:space:]]*:[[:space:]]*"dokodemo-door"/ { section=1; next }
+        section && /"port"[[:space:]]*:/ {
+            match($0, /[0-9]+/, m)
+            if (m[0] != "") {
+                print m[0]
+                section=0
+            }
+        }
+        section && /}/ { section=0 }
+    ' "$XRAY_INBOUND_FILE"
+}
 
-ensure_section() {
-    local section="$1"
-    local type="$2"
-    if uci -q get "firewall.$section" >/dev/null 2>&1; then
-        uci set "firewall.$section=$type"
+ports=$(select_dokodemo_port)
+if [ -z "$ports" ]; then
+    die "No dokodemo-door inbounds found in $XRAY_INBOUND_FILE"
+fi
+
+count=$(printf '%s\n' "$ports" | wc -l)
+if [ "$count" -eq 1 ]; then
+    PORT="$ports"
+else
+    log "Multiple dokodemo-door ports detected:"
+    idx=1
+    chosen=""
+    printf '%s\n' "$ports" | while IFS= read -r port; do
+        printf ' [%d] %s\n' "$idx" "$port"
+        idx=$((idx + 1))
+    done
+    if [ -t 0 ]; then
+        printf 'Select port number: '
+        read -r answer
+    elif [ -r /dev/tty ]; then
+        printf 'Select port number: '
+        read -r answer </dev/tty
+    else
+        die "Multiple dokodemo-door ports found but no interactive input available"
+    fi
+
+    case "$answer" in
+        *[!0-9]*) die "Invalid selection" ;;
+    esac
+    if [ "$answer" -lt 1 ] || [ "$answer" -gt "$count" ]; then
+        die "Selection out of range"
+    fi
+    PORT=$(printf '%s\n' "$ports" | sed -n "${answer}p")
+fi
+
+log "Configuring transparent redirect: zone=$ZONE subnet=$SUBNET port=$PORT"
+
+ensure_redirect_section() {
+    if uci -q get "firewall.$LAN_SECTION" >/dev/null 2>&1; then
+        uci set "firewall.$LAN_SECTION=redirect"
     else
         local newsec
-        if ! newsec=$(uci add firewall "$type"); then
-            die "Failed to add firewall section of type '$type'"
-        fi
-        uci rename "firewall.$newsec=$section"
+        newsec=$(uci add firewall redirect)
+        uci rename "firewall.$newsec=$LAN_SECTION"
     fi
 }
 
-ensure_redirect_lan() {
-    ensure_section "$LAN_SECTION" redirect
+ensure_redirect_section
 
-    # remove optional matches that could interfere with full redirect
-    uci -q delete "firewall.$LAN_SECTION.src_ip"
-    uci -q delete "firewall.$LAN_SECTION.src_port"
-    uci -q delete "firewall.$LAN_SECTION.dest"
-    uci -q delete "firewall.$LAN_SECTION.dest_port_start"
-    uci -q delete "firewall.$LAN_SECTION.dest_port_end"
+uci -q delete "firewall.$LAN_SECTION.src_ip"
+uci -q delete "firewall.$LAN_SECTION.src_port"
+uci -q delete "firewall.$LAN_SECTION.dest"
+uci -q delete "firewall.$LAN_SECTION.dest_port_start"
+uci -q delete "firewall.$LAN_SECTION.dest_port_end"
+uci -q delete "firewall.$LAN_SECTION.extra"
+uci -q delete "firewall.$LAN_SECTION.mark"
+uci -q delete "firewall.$LAN_SECTION.limit"
+uci -q delete "firewall.$LAN_SECTION.limit_burst"
 
-    uci set "firewall.$LAN_SECTION.name=XRAY transparent proxy (LAN)"
-    uci set "firewall.$LAN_SECTION.enabled=1"
-    uci set "firewall.$LAN_SECTION.family=ipv4"
-    uci set "firewall.$LAN_SECTION.src=$ZONE"
-    uci set "firewall.$LAN_SECTION.proto=tcp"
-    uci set "firewall.$LAN_SECTION.target=redirect"
-    uci set "firewall.$LAN_SECTION.dest_port=$PORT"
-    uci set "firewall.$LAN_SECTION.src_dip=$SUBNET"
-}
+uci set "firewall.$LAN_SECTION.name=XRAY transparent proxy (LAN)"
+uci set "firewall.$LAN_SECTION.enabled=1"
+uci set "firewall.$LAN_SECTION.family=ipv4"
+uci set "firewall.$LAN_SECTION.src=$ZONE"
+uci set "firewall.$LAN_SECTION.proto=tcp"
+uci set "firewall.$LAN_SECTION.target=DNAT"
+uci set "firewall.$LAN_SECTION.src_dip=$SUBNET"
+uci set "firewall.$LAN_SECTION.dest_port=$PORT"
 
-ensure_include_section() {
-    ensure_section "$INCLUDE_SECTION" include
-    uci set "firewall.$INCLUDE_SECTION.type=nftables"
-    uci set "firewall.$INCLUDE_SECTION.path=$NFT_INCLUDE_PATH"
-    uci set "firewall.$INCLUDE_SECTION.position=table-append"
-    uci set "firewall.$INCLUDE_SECTION.fw4_compatible=1"
-}
-
-write_nft_include() {
-    local dir
-    dir=$(dirname "$NFT_INCLUDE_PATH")
+write_nft_snippet() {
+    local dir tmp
+    dir=$(dirname "$NFT_SNIPPET")
     if [ ! -d "$dir" ]; then
         mkdir -p "$dir"
     fi
 
-    local tmp
     tmp=$(mktemp)
-    cat <<EOF_NFT > "$tmp"
-# Autogenerated by xray_redirect.sh - do not edit manually.
-# Redirect router-originated TCP traffic to $SUBNET into local port $PORT.
+    cat <<'NFT' > "$tmp"
+# Autogenerated by xray_redirect.sh - router-originated transparent proxy
 chain xray_transparent_output {
     type nat hook output priority dstnat + 5; policy accept;
-    ip daddr $SUBNET tcp redirect to :$PORT
+    ip daddr __SUBNET__ tcp redirect to :__PORT__
 }
-EOF_NFT
+NFT
+    sed -i "s#__SUBNET__#$SUBNET#g" "$tmp"
+    sed -i "s#__PORT__#$PORT#g" "$tmp"
     chmod 0644 "$tmp"
-    mv "$tmp" "$NFT_INCLUDE_PATH"
+    mv "$tmp" "$NFT_SNIPPET"
 }
 
-ensure_redirect_lan
-ensure_include_section
-write_nft_include
+write_nft_snippet
 
 uci commit firewall
 
 if command -v fw4 >/dev/null 2>&1; then
-    log "Reloading firewall via fw4"
     if ! fw4 reload; then
         die "fw4 reload failed"
     fi
 else
-    log "Reloading firewall service"
     if ! /etc/init.d/firewall reload; then
         die "Firewall reload failed"
     fi
 fi
 
-log "Firewall updated. TCP traffic for $SUBNET redirects to local port $PORT"
-log "Zone handled: $ZONE"
-log "Include file: $NFT_INCLUDE_PATH"
+log "Firewall updated. LAN traffic and router-originated TCP to $SUBNET now go to port $PORT"
+log "Redirect section: firewall.$LAN_SECTION"
+log "NFT snippet: $NFT_SNIPPET"
