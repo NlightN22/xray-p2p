@@ -1,5 +1,4 @@
 #!/bin/sh
-#########################################
 
 set -eu
 
@@ -70,16 +69,23 @@ fi
 
 select_dokodemo_port() {
     awk '
-        BEGIN { section=0 }
-        /"protocol"[[:space:]]*:[[:space:]]*"dokodemo-door"/ { section=1; next }
-        section && /"port"[[:space:]]*:/ {
+        BEGIN { port=""; want_port=0 }
+        /\{/ { port=""; want_port=0 }
+        /"port"[[:space:]]*:/ {
             match($0, /[0-9]+/, m)
-            if (m[0] != "") {
-                print m[0]
-                section=0
+            port=m[0]
+            if (want_port) {
+                print port
+                want_port=0
             }
         }
-        section && /}/ { section=0 }
+        /"protocol"[[:space:]]*:[[:space:]]*"dokodemo-door"/ {
+            if (port != "")
+                print port
+            else
+                want_port=1
+        }
+        /\}/ { port=""; want_port=0 }
     ' "$XRAY_INBOUND_FILE"
 }
 
