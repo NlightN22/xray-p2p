@@ -18,11 +18,12 @@ die() {
 
 usage() {
     cat <<'USAGE'
-Usage: xray_redirect.sh SUBNET [ZONE]
+Usage: xray_redirect.sh [SUBNET] [ZONE]
 
 SUBNET  Destination subnet to divert (CIDR notation, e.g. 10.0.101.0/24).
 ZONE    OpenWrt firewall zone whose traffic should be intercepted (default lan).
 
+If SUBNET is omitted, the script prompts for it interactively.
 The script reads dokodemo-door inbound(s) from /etc/xray/inbounds.json and
 redirects matching traffic to the selected port.
 USAGE
@@ -33,13 +34,29 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     exit 0
 fi
 
-if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+if [ "$#" -gt 2 ]; then
     usage
     exit 1
 fi
 
-SUBNET="$1"
+SUBNET="${1:-}"
 ZONE="${2:-$DEFAULT_ZONE}"
+
+if [ -z "$SUBNET" ]; then
+    if [ -t 0 ]; then
+        printf 'Enter destination subnet (CIDR, e.g. 10.0.101.0/24): '
+        IFS= read -r SUBNET
+    elif [ -r /dev/tty ]; then
+        printf 'Enter destination subnet (CIDR, e.g. 10.0.101.0/24): '
+        IFS= read -r SUBNET </dev/tty
+    else
+        die "Subnet argument is required"
+    fi
+fi
+
+if [ -z "$SUBNET" ]; then
+    die "Subnet cannot be empty"
+fi
 
 case "$SUBNET" in
     */*) ;;
@@ -76,7 +93,6 @@ if [ "$count" -eq 1 ]; then
 else
     log "Multiple dokodemo-door ports detected:"
     idx=1
-    chosen=""
     printf '%s\n' "$ports" | while IFS= read -r port; do
         printf ' [%d] %s\n' "$idx" "$port"
         idx=$((idx + 1))
