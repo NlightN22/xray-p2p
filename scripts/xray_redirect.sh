@@ -192,10 +192,16 @@ write_nft_snippet
 uci commit firewall
 
 if command -v fw4 >/dev/null 2>&1; then
-    if ! fw4 reload; then
-        die "fw4 reload failed"
+    if fw4 reload; then
+        log "fw4 reload ok"
+    else
+        log "fw4 reload failed; falling back to /etc/init.d/firewall reload"
+        if ! /etc/init.d/firewall reload; then
+            die "Firewall reload failed"
+        fi
     fi
 else
+    log "fw4 binary not found; using /etc/init.d/firewall reload"
     if ! /etc/init.d/firewall reload; then
         die "Firewall reload failed"
     fi
