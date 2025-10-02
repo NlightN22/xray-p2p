@@ -69,7 +69,12 @@ fi
 
 select_dokodemo_port() {
     if command -v jq >/dev/null 2>&1; then
-        jq -r '.inbounds[] | select(.protocol == "dokodemo-door") | .port' "$XRAY_INBOUND_FILE" 2>/dev/null
+        jq -r '.inbounds[] | select(.protocol == "dokodemo-door") | .port' "$XRAY_INBOUND_FILE" 2>/dev/null | grep -E '^[0-9]+$'
+        return
+    fi
+
+    if command -v jsonfilter >/dev/null 2>&1; then
+        jsonfilter -i "$XRAY_INBOUND_FILE" -e '@.inbounds[@.protocol="dokodemo-door"].port' 2>/dev/null | grep -E '^[0-9]+$'
         return
     fi
 
@@ -94,7 +99,7 @@ select_dokodemo_port() {
     ' "$XRAY_INBOUND_FILE"
 }
 
-ports=$(select_dokodemo_port)
+ports=$(select_dokodemo_port || true)
 if [ -z "$ports" ]; then
     die "No dokodemo-door inbounds found in $XRAY_INBOUND_FILE"
 fi
