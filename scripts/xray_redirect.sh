@@ -167,7 +167,8 @@ uci set "firewall.$LAN_SECTION.src=$ZONE"
 uci set "firewall.$LAN_SECTION.proto=tcp"
 uci set "firewall.$LAN_SECTION.src_dip=$SUBNET"
 uci set "firewall.$LAN_SECTION.src_dport=0-65535"
-uci set "firewall.$LAN_SECTION.target=redirect"
+uci set "firewall.$LAN_SECTION.target=DNAT"
+uci set "firewall.$LAN_SECTION.dest_ip=127.0.0.1"
 uci set "firewall.$LAN_SECTION.dest_port=$PORT"
 
 write_nft_snippet() {
