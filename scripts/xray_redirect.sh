@@ -1,5 +1,5 @@
 #!/bin/sh
-#########################
+
 set -eu
 
 DEFAULT_ZONE="lan"
@@ -27,6 +27,10 @@ If SUBNET is omitted, the script prompts for it interactively.
 The script reads dokodemo-door inbound(s) from /etc/xray/inbounds.json and
 redirects matching traffic to the selected port.
 USAGE
+}
+
+uci_delete() {
+    uci -q delete "$1" >/dev/null 2>&1 || true
 }
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
@@ -147,15 +151,15 @@ ensure_redirect_section() {
 
 ensure_redirect_section
 
-uci -q delete "firewall.$LAN_SECTION.src_ip"
-uci -q delete "firewall.$LAN_SECTION.src_port"
-uci -q delete "firewall.$LAN_SECTION.dest"
-uci -q delete "firewall.$LAN_SECTION.dest_port_start"
-uci -q delete "firewall.$LAN_SECTION.dest_port_end"
-uci -q delete "firewall.$LAN_SECTION.extra"
-uci -q delete "firewall.$LAN_SECTION.mark"
-uci -q delete "firewall.$LAN_SECTION.limit"
-uci -q delete "firewall.$LAN_SECTION.limit_burst"
+uci_delete "firewall.$LAN_SECTION.src_ip"
+uci_delete "firewall.$LAN_SECTION.src_port"
+uci_delete "firewall.$LAN_SECTION.dest"
+uci_delete "firewall.$LAN_SECTION.dest_port_start"
+uci_delete "firewall.$LAN_SECTION.dest_port_end"
+uci_delete "firewall.$LAN_SECTION.extra"
+uci_delete "firewall.$LAN_SECTION.mark"
+uci_delete "firewall.$LAN_SECTION.limit"
+uci_delete "firewall.$LAN_SECTION.limit_burst"
 
 uci set "firewall.$LAN_SECTION.name=XRAY transparent proxy (LAN)"
 uci set "firewall.$LAN_SECTION.enabled=1"
@@ -189,20 +193,20 @@ NFT
 
 write_nft_snippet
 
-uci commit firewall
+uci commit firewall >/dev/null
 
 if command -v fw4 >/dev/null 2>&1; then
-    if fw4 reload; then
+    if fw4 reload >/dev/null; then
         log "fw4 reload ok"
     else
         log "fw4 reload failed; falling back to /etc/init.d/firewall reload"
-        if ! /etc/init.d/firewall reload; then
+        if ! /etc/init.d/firewall reload >/dev/null; then
             die "Firewall reload failed"
         fi
     fi
 else
     log "fw4 binary not found; using /etc/init.d/firewall reload"
-    if ! /etc/init.d/firewall reload; then
+    if ! /etc/init.d/firewall reload >/dev/null; then
         die "Firewall reload failed"
     fi
 fi
