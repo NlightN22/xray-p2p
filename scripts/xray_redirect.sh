@@ -68,6 +68,11 @@ if [ ! -f "$XRAY_INBOUND_FILE" ]; then
 fi
 
 select_dokodemo_port() {
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '.inbounds[] | select(.protocol == "dokodemo-door") | .port' "$XRAY_INBOUND_FILE" 2>/dev/null
+        return
+    fi
+
     awk '
         BEGIN { port=""; want_port=0 }
         /\{/ { port=""; want_port=0 }
