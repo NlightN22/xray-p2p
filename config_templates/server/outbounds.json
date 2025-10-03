@@ -3,10 +3,6 @@
         {
             "protocol": "freedom",
             "tag": "direct"
-        },
-        {
-            "tag": "dns-out",
-            "protocol": "dns"
         }
     ]
 }
