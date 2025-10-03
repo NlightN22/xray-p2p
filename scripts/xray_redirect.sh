@@ -30,6 +30,59 @@ require_cmd() {
     esac
 }
 
+validate_ipv4() {
+    addr="$1"
+    IFS_SAVE="$IFS"
+    IFS='.' read -r o1 o2 o3 o4 <<EOF
+$addr
+EOF
+    IFS="$IFS_SAVE"
+
+    if [ -z "${o4:-}" ]; then
+        return 1
+    fi
+
+    for octet in "$o1" "$o2" "$o3" "$o4"; do
+        case "$octet" in
+            ''|*[!0-9]*) return 1 ;;
+        esac
+        if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+validate_subnet() {
+    subnet="$1"
+    case "$subnet" in
+        */*) ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    addr="${subnet%/*}"
+    prefix="${subnet#*/}"
+
+    if ! validate_ipv4 "$addr"; then
+        return 1
+    fi
+
+    case "$prefix" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    if [ "$prefix" -lt 0 ] || [ "$prefix" -gt 32 ]; then
+        return 1
+    fi
+
+    return 0
+}
+
 usage() {
     cat <<'USAGE'
 Usage: xray_redirect.sh [SUBNET]
@@ -70,10 +123,9 @@ if [ -z "$SUBNET" ]; then
     die "Subnet cannot be empty"
 fi
 
-case "$SUBNET" in
-    */*) ;;
-    *) die "Subnet must be in CIDR notation (example: 10.0.101.0/24)" ;;
-esac
+if ! validate_subnet "$SUBNET"; then
+    die "Subnet must be a valid IPv4 CIDR (example: 10.0.101.0/24 with prefix between 0 and 32)"
+fi
 
 if [ ! -f "$XRAY_INBOUND_FILE" ]; then
     die "XRAY inbound file $XRAY_INBOUND_FILE not found"
