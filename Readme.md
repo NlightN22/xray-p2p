@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/iss
 ```
 Save client connection URL and paste it when install client
 
-TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/REPO/BRANCH/script.sh`
+TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/REPO/BRANCH/script.sh | sh`
 ---
 
 ## Client quick start
@@ -43,7 +43,7 @@ opkg update && opkg install jq openssl-util
 # on the client router: install, then paste the URL when prompted
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_client.sh | sh
 # setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- $YOR_CIDR_SUBNET
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh
 ```
 You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- $YOR_CIDR_SUBNET`
 

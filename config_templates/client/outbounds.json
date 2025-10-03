@@ -46,6 +46,10 @@
                     }
                 }
             }
+        },
+        {
+            "tag": "dns-out",
+            "protocol": "dns"
         }
     ]
 }

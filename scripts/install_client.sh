@@ -400,8 +400,8 @@ if [ ! -f "$INBOUND_FILE" ]; then
     die "Inbound configuration $INBOUND_FILE is missing"
 fi
 
-log "dokodemo-door inbound will listen on all IPv4 addresses (0.0.0.0)"
-log "Restrict exposure with firewall rules if WAN access must be blocked"
+log "WARNING: dokodemo-door inbound will listen on all IPv4 addresses (0.0.0.0)"
+log "WARNING: Restrict exposure with firewall rules if WAN access must be blocked"
 
 SOCKS_PORT=$(awk 'match($0, /"port"[[:space:]]*:[[:space:]]*([0-9]+)/, m) {print m[1]; exit}' "$INBOUND_FILE")
 if [ -z "$SOCKS_PORT" ]; then

@@ -2,7 +2,11 @@
     "outbounds": [
         {
             "protocol": "freedom",
-            "settings": {}
+            "tag": "direct"
+        },
+        {
+            "tag": "dns-out",
+            "protocol": "dns"
         }
     ]
 }

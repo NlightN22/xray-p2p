@@ -19,6 +19,15 @@
                 "network": "tcp",
                 "followRedirect": true
             }
+        },
+        {
+            "tag": "dns-in",
+            "port": 5353,
+            "listen": "127.0.0.1",
+            "protocol": "dokodemo-door",
+            "settings": {
+                "network": "tcp,udp"
+            }
         }
     ]
 }
