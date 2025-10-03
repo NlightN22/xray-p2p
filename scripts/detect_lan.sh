@@ -6,6 +6,10 @@ log() {
     printf '%s\n' "$*"
 }
 
+warn() {
+    printf 'Warning: %s\n' "$*" >&2
+}
+
 die() {
     printf 'Error: %s\n' "$*" >&2
     exit 1
@@ -90,35 +94,59 @@ LAN_IFACE=""
 LAN_IP=""
 
 if command -v uci >/dev/null 2>&1; then
-    val=$(uci -q get network.lan.device 2>/dev/null || true)
-    [ -z "$val" ] && val=$(uci -q get network.lan.ifname 2>/dev/null || true)
+    val=$(uci -q get network.lan.device 2>/dev/null || printf '')
+    if [ -z "$val" ]; then
+        alt=$(uci -q get network.lan.ifname 2>/dev/null || printf '')
+        if [ -n "$alt" ]; then
+            val="$alt"
+        else
+            warn "UCI options network.lan.device/ifname are not set"
+        fi
+    fi
     if [ -n "$val" ]; then
         LAN_IFACE=$(first_ipv4_from_list "$val" || true)
     fi
 
-    val_ip=$(uci -q get network.lan.ipaddr 2>/dev/null || true)
+    val_ip=$(uci -q get network.lan.ipaddr 2>/dev/null || printf '')
     if [ -n "$val_ip" ]; then
         LAN_IP=$(first_ipv4_from_list "$val_ip" || true)
+    else
+        warn "UCI option network.lan.ipaddr is not set"
     fi
+else
+    warn "uci command not found; skipping UCI hints"
 fi
 
 if [ -z "$LAN_IFACE" ] || [ -z "$LAN_IP" ]; then
     if command -v ubus >/dev/null 2>&1 && command -v jsonfilter >/dev/null 2>&1; then
-        status=$(ubus call network.interface.lan status 2>/dev/null || true)
+        status=$(ubus call network.interface.lan status 2>/dev/null || printf '')
         if [ -n "$status" ]; then
             if [ -z "$LAN_IFACE" ]; then
                 iface=$(printf '%s\n' "$status" | jsonfilter -e '@.l3_device' 2>/dev/null || true)
                 [ -z "$iface" ] && iface=$(printf '%s\n' "$status" | jsonfilter -e '@.device' 2>/dev/null || true)
                 if [ -n "$iface" ]; then
                     LAN_IFACE="$iface"
+                else
+                    warn "ubus status missing l3_device/device"
                 fi
             fi
             if [ -z "$LAN_IP" ]; then
                 addr=$(printf '%s\n' "$status" | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null || true)
                 if [ -n "$addr" ]; then
                     LAN_IP="$addr"
+                else
+                    warn "ubus status missing IPv4 address"
                 fi
             fi
+        else
+            warn "ubus returned no data for network.interface.lan"
+        fi
+    else
+        if ! command -v ubus >/dev/null 2>&1; then
+            warn "ubus command not found; skipping runtime interface status"
+        fi
+        if ! command -v jsonfilter >/dev/null 2>&1; then
+            warn "jsonfilter command not found; cannot parse ubus output"
         fi
     fi
 fi
@@ -140,6 +168,8 @@ if [ -z "$LAN_IFACE" ] || [ -z "$LAN_IP" ]; then
         if [ -z "$LAN_IP" ] && [ -n "${3:-}" ]; then
             LAN_IP="$3"
         fi
+    else
+        warn "Failed to infer LAN candidate from ip address list"
     fi
 fi
 
