@@ -77,7 +77,7 @@ The client installer parses the connection string, writes the templates from `co
 ## Administration helpers
 
 - `scripts/create.ssl.cert.sh` — minimal helper to issue a self-signed certificate with OpenSSL.
-- `scripts/getip.sh` — queries multiple sources to determine the server’s public IPv4 address.
+- `scripts/pub_ip.sh` — queries multiple sources to determine the server’s public IPv4 address.
 - `scripts/install_client.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
 - `scripts/list_clients.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
 - `scripts/remove_client.sh` — revokes a client, updates configs, and restarts XRAY.
