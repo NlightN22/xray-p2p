@@ -7,15 +7,9 @@
             {
                 "address": "10.0.101.106",
                 "disableCache": true,
-                "domains": [
-                    "domain:corp.test.com"
-                ],
-                "expectIPs": [],
                 "finalQuery": false,
                 "port": 53,
-                "queryStrategy": "UseSystem",
-                "skipFallback": true,
-                "unexpectedIPs": []
+                "skipFallback": true
             }
         ],
         "tag": "dns_inbound"
