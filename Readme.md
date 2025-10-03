@@ -24,22 +24,27 @@
 ## Fast start
 ``` bash
 # install dependencies
-opkg update && opkg install xray jq openssl
+opkg update && opkg install jq openssl-util
 # install server
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_server.sh | sh
 # add client
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/issue_client.sh | sh
 ```
-
+Save client connection URL and paste it when install client
 ---
 
 ## Client quick start
 ``` bash
-# on the server: mint a client and copy the printed Trojan URL
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/issue_client.sh | sh
+# install dependencies
+opkg update && opkg install jq openssl-util
 # on the client router: install, then paste the URL when prompted
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_client.sh | sh
+# setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- 10.0.101.0/24
 ```
+
+To remove a redirect later, run `scripts/xray_redirect_remove.sh` on the client
+with either a CIDR (e.g. `10.0.101.0/24`) or `--all` to drop every subnet at once.
 
 The client installer parses the connection string, writes the templates from `config_templates/client` into `/etc/xray`, marks the client entry as used on the server, and restarts XRAY to apply the configuration.
 
@@ -76,8 +81,8 @@ The client installer parses the connection string, writes the templates from `co
 - `scripts/install_client.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
 - `scripts/list_clients.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
 - `scripts/remove_client.sh` — revokes a client, updates configs, and restarts XRAY.
-- `scripts/xray_redirect.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound.
-- `scripts/xray_redirect_remove.sh` — removes the nftables snippet deployed by the redirect helper.
+- `scripts/xray_redirect.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
+- `scripts/xray_redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
 
 ---
 
