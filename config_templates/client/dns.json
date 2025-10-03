@@ -7,7 +7,6 @@
             {
                 "address": "10.0.101.106",
                 "disableCache": true,
-                "finalQuery": false,
                 "port": 53,
                 "skipFallback": true
             }
