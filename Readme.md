@@ -28,10 +28,10 @@
 opkg update && opkg install jq openssl-util
 # install server
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_server.sh | sh
-# add client
+# add user
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/issue_client.sh | sh
 ```
-Save client connection URL and paste it when install client
+Save user connection URL and paste it when install client
 
 TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/REPO/BRANCH/script.sh | sh`
 ---
@@ -39,7 +39,7 @@ TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/
 ## Client quick start
 ``` bash
 # install dependencies
-opkg update && opkg install jq openssl-util
+opkg update && opkg install jq
 # on the client router: install, then paste the URL when prompted
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_client.sh | sh
 # setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
