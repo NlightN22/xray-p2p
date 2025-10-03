@@ -28,19 +28,24 @@ USAGE
 set_dokodemo_listen() {
     file="$1"
     new_listen="$2"
+    protocol_line=$(awk '/"protocol"[[:space:]]*:[[:space:]]*"dokodemo-door"/ { print NR; exit }' "$file")
+    if [ -z "$protocol_line" ]; then
+        warn "Could not locate dokodemo-door protocol entry in $file"
+        return 1
+    fi
+
+    listen_line=$(awk -v limit="$protocol_line" 'NR <= limit && /"listen"[[:space:]]*:/ { line = NR } END { if (line) print line }' "$file")
+    if [ -z "$listen_line" ]; then
+        warn "Could not locate listen directive preceding dokodemo-door in $file"
+        return 1
+    fi
+
     tmp_file=$(mktemp)
-    if awk -v new_listen="$new_listen" '
-        BEGIN {in_block=0}
-        /\"protocol\"[[:space:]]*:[[:space:]]*\"dokodemo-door\"/ {
-            in_block=1
+    if awk -v target="$listen_line" -v new_listen="$new_listen" '
+        NR == target {
+            sub(/"listen"[[:space:]]*:[[:space:]]*"[^"]*"/, "\"listen\": \"" new_listen "\"")
         }
-        {
-            if (in_block && $0 ~ /\"listen\"[[:space:]]*:/) {
-                sub(/\"listen\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/, "\"listen\": \"" new_listen "\"")
-                in_block=0
-            }
-            print
-        }
+        { print }
     ' "$file" >"$tmp_file"; then
         mv "$tmp_file" "$file"
         return 0

@@ -43,8 +43,9 @@ opkg update && opkg install jq openssl-util
 # on the client router: install, then paste the URL when prompted
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_client.sh | sh
 # setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- 10.0.101.0/24
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- $YOR_CIDR_SUBNET
 ```
+You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- $YOR_CIDR_SUBNET`
 
 To remove a redirect later, run `scripts/xray_redirect_remove.sh` on the client
 with either a CIDR (e.g. `10.0.101.0/24`) or `--all` to drop every subnet at once.
