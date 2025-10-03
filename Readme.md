@@ -44,6 +44,8 @@ opkg update && opkg install jq openssl-util
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_client.sh | sh
 # setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
 curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh
+# forward a wildcard domain to a specific upstream DNS server (ports auto-increment from 53331)
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_dns_forward.sh | sh
 ```
 You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- $YOR_CIDR_SUBNET`
 
@@ -86,6 +88,7 @@ The client installer parses the connection string, writes the templates from `co
 - `scripts/list_clients.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
 - `scripts/remove_client.sh` — revokes a client, updates configs, and restarts XRAY.
 - `scripts/xray_redirect.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
+- `scripts/xray_dns_forward.sh` — adds per-domain dokodemo-door DNS inbounds, auto-allocates ports from 53331, and syncs dnsmasq forwarding.
 - `scripts/xray_redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
 
 ---
