@@ -5,6 +5,10 @@ log() {
     printf '%s\n' "$*" >&2
 }
 
+warn() {
+    printf 'Warning: %s\n' "$*" >&2
+}
+
 die() {
     printf 'Error: %s\n' "$*" >&2
     exit 1
@@ -19,6 +23,71 @@ provided as the first argument, via one of the XRAY_TROJAN_URL,
 XRAY_CLIENT_URL, XRAY_CONNECTION_URL or XRAY_CONNECTION_STRING environment
 variables, or interactively when a terminal is available.
 USAGE
+}
+
+set_dokodemo_listen() {
+    file="$1"
+    new_listen="$2"
+    tmp_file=$(mktemp)
+    if awk -v new_listen="$new_listen" '
+        BEGIN {in_block=0}
+        /\"protocol\"[[:space:]]*:[[:space:]]*\"dokodemo-door\"/ {
+            in_block=1
+        }
+        {
+            if (in_block && $0 ~ /\"listen\"[[:space:]]*:/) {
+                sub(/\"listen\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/, "\"listen\": \"" new_listen "\"")
+                in_block=0
+            }
+            print
+        }
+    ' "$file" >"$tmp_file"; then
+        mv "$tmp_file" "$file"
+        return 0
+    fi
+    rm -f "$tmp_file"
+    return 1
+}
+
+detect_lan_via_script() {
+    DETECTED_LAN_IFACE=""
+    DETECTED_LAN_IP=""
+
+    DETECT_URL="https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/detect_lan.sh"
+    tmp_script=$(mktemp)
+    if ! curl -fsSL "$DETECT_URL" -o "$tmp_script"; then
+        warn "Failed to download detect_lan.sh from repository"
+        rm -f "$tmp_script"
+        return 1
+    fi
+    chmod +x "$tmp_script"
+
+    output=$("$tmp_script" 2>&1)
+    status=$?
+    rm -f "$tmp_script"
+
+    if [ -n "$output" ]; then
+        printf '%s\n' "$output" >&2
+    fi
+
+    if [ "$status" -ne 0 ]; then
+        warn "detect_lan.sh exited with status $status"
+        return 1
+    fi
+
+    DETECTED_LAN_IFACE=$(printf '%s\n' "$output" | awk -F': ' '/LAN interface:/ {print $2; exit}')
+    DETECTED_LAN_IP=$(printf '%s\n' "$output" | awk -F': ' '/LAN IPv4:/ {print $2; exit}')
+
+    if [ -z "$DETECTED_LAN_IP" ]; then
+        warn "detect_lan.sh did not report LAN IPv4"
+        return 1
+    fi
+
+    if [ -z "$DETECTED_LAN_IFACE" ]; then
+        warn "detect_lan.sh did not report LAN interface"
+    fi
+
+    return 0
 }
 
 CONNECTION_STRING=""
@@ -398,6 +467,21 @@ fi
 INBOUND_FILE="$XRAY_CONFIG_DIR/inbounds.json"
 if [ ! -f "$INBOUND_FILE" ]; then
     die "Inbound configuration $INBOUND_FILE is missing"
+fi
+
+if detect_lan_via_script; then
+    if [ -n "$DETECTED_LAN_IFACE" ]; then
+        log "Detected LAN interface $DETECTED_LAN_IFACE with IPv4 $DETECTED_LAN_IP"
+    else
+        log "Detected LAN IPv4 $DETECTED_LAN_IP"
+    fi
+    if set_dokodemo_listen "$INBOUND_FILE" "$DETECTED_LAN_IP"; then
+        log "Set dokodemo-door listen address to $DETECTED_LAN_IP"
+    else
+        warn "Failed to update dokodemo-door listen address in $INBOUND_FILE"
+    fi
+else
+    warn "Unable to determine LAN interface; dokodemo-door will listen on all interfaces (0.0.0.0)"
 fi
 
 SOCKS_PORT=$(awk 'match($0, /"port"[[:space:]]*:[[:space:]]*([0-9]+)/, m) {print m[1]; exit}' "$INBOUND_FILE")
