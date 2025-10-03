@@ -51,6 +51,7 @@ You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xra
 
 To remove a redirect later, run `scripts/xray_redirect_remove.sh` on the client
 with either a CIDR (e.g. `10.0.101.0/24`) or `--all` to drop every subnet at once.
+To list or remove DNS forwardings, call `scripts/xray_dns_forward_remove.sh` with a mask, `--all`, or `--list` to inspect what's configured.
 
 The client installer parses the connection string, writes the templates from `config_templates/client` into `/etc/xray`, marks the client entry as used on the server, and restarts XRAY to apply the configuration.
 
@@ -89,6 +90,7 @@ The client installer parses the connection string, writes the templates from `co
 - `scripts/remove_client.sh` — revokes a client, updates configs, and restarts XRAY.
 - `scripts/xray_redirect.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
 - `scripts/xray_dns_forward.sh` — adds per-domain dokodemo-door DNS inbounds, auto-allocates ports from 53331, and syncs dnsmasq forwarding.
+- `scripts/xray_dns_forward_remove.sh` — lists (`--list`) or removes domain forwardings (single mask or `--all`) and cleans dnsmasq/xray state.
 - `scripts/xray_redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
 
 ---
