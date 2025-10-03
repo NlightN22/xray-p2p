@@ -46,17 +46,6 @@
                     }
                 }
             }
-        },
-        {
-            "tag": "dns-out",
-            "protocol": "dns"
         }
-    ],
-    "rules": {
-        "type": "field",
-        "inboundTag": [
-            "dns-in"
-        ],
-        "outboundTag": "dns-out"
-    }
+    ]
 }
