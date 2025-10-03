@@ -1,88 +1,90 @@
 # XRAY-p2p Trojan Tunnel
 
-**Краткое:** Этот проект поднимает простую серверную и клиентскую часть на базе **xray-core** в среде OpenWrt и настраивает минимальный туннель по протоколу **trojan**. Включены шаблоны конфигураций и скрипты для облегчения установки.
+**At a glance:** This repository delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. It ships with configuration templates and shell scripts that speed up both server and client provisioning.
 
 ---
 
-## Что делает проект
+## What the project provides
 
-* Автоматизирует установку и настройку XRAY (сервер + клиент) на OpenWrt.
-* Генерирует/устанавливает TLS-сертификаты.
-* Настраивает учетные записи trojan (пароли/емейлы) и сохраняет метаданные подключений на сервере, чтобы избежать повторного использования.
-* Проверяет валидность конфигураций и перезапускает сервис.
-
----
-
-## Зависимости
-
-* `xray-core` (server & client)
-* `jq` (обработка JSON в скриптах)
-* `openssl` или `acme.sh`
-
-## Быстрый старт — Сервер (основная последовательность)
-
-1. Скопировать репозиторий на сервер OpenWrt.
-2. Установить зависимости: `opkg update && opkg install xray jq openssl`.
-3. Запустить `scripts/install_server.sh` и ввести интерактивно параметры:
-
-   * Public IP сервера
-   * serverName (для TLS)
-   * trojan port
-   * trojan email (или сгенерировать случайный)
-   * trojan password
-   * ssh connection `user@ip:port`
-4. Скрипт:
-
-   * Подставит переменные в шаблон `templates/xray-server.json.tpl`.
-   * Создаст сертификаты (в `data/certs/`).
-   * Проверит конфигурацию.
-   * Запустит/перезапустит xray.
-5. Проверить статус `logread` / `ps` / `ubus` (в зависимости от версии OpenWrt).
+- Automates XRAY server and client installation on OpenWrt.
+- Generates or installs TLS certificates for inbound listeners.
+- Manages Trojan accounts (email/password pairs) and tracks their usage server-side.
+- Validates generated configs and restarts the XRAY service as needed.
 
 ---
 
-## Быстрый старт — Клиент (основная последовательность)
+## Requirements
 
-1. На сервере добавить запись о новом клиенте (скрипт может запрашивать список ещё не подключённых клиентов).
-2. На клиенте запустить `scripts/install_client.sh` и указать строку соединения, полученную от сервера.
-3. Скрипт:
-
-   * Получит параметры от сервера (ip, port, password, serverName).
-   * Подставит их в `templates/xray-client.json.tpl`.
-   * Запишет метаданные на сервер (через ssh/scp или api) чтобы пометить клиента как "используется".
-   * Запустит xray клиента и проверит подключение.
+- `xray-core` (server and client binaries)
+- `jq` for JSON processing inside scripts
+- `openssl` or `acme.sh` for certificate handling
 
 ---
 
-## Как сервер и клиент обмениваются данными
-
-* Сервер хранит `data/clients.json` с метаданными: `[{"id":"uuid","password":"...","used":false,"created":"..."}]`.
-* Клиент запрашивает (scp/ssh/API) у сервера следующую незанятую запись и помечает её как `used:true`.
-* Для автоматизации можно использовать `ssh user@server 'cat /path/to/data/next_client.json'`.
-
----
-
-## Проверки и отладка
-
-* Проверить конфиг: `xray -test -c /etc/xray/config.json`.
-* Логи: `/var/log/xray/*` или `logread | grep xray`.
-* Проверка соединения с клиента: `curl --socks5 127.0.0.1:1080 https://ifconfig.me` (или `nc`/`telnet` для порта trojan).
+## Fast start
+``` bash
+# install dependencies
+opkg update && opkg install xray jq openssl
+# install server
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_server.sh | sh
+# add client
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/issue_client.sh | sh
+```
 
 ---
 
-## Безопасность и замечания
+## Client quick start
+``` bash
+# on the server: mint a client and copy the printed Trojan URL
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/issue_client.sh | sh
+# on the client router: install, then paste the URL when prompted
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_client.sh | sh
+```
 
-* Сервер должен иметь публичный IP и открытый SSH (как вы просили). Ограничьте SSH ключами и брандмауэром по IP по возможности.
-* Храните пароли клиентов в защищённом месте (права 600 на `data/clients.json`).
-* По возможности используйте реальные ACME сертификаты вместо self-signed.
-
----
-
-## Дальше (идеи для улучшения)
-
-* Добавить API на сервер (HTTP+authentication) для выдачи клиентов и пометки их как используемые.
-* Интеграция `acme.sh` для автоматического получения и обновления сертификатов.
-* Управление через UCI/Netifd для стартапа в OpenWrt стиле.
+The client installer parses the connection string, writes the templates from `config_templates/client` into `/etc/xray`, marks the client entry as used on the server, and restarts XRAY to apply the configuration.
 
 ---
 
+## State exchange between server and client
+
+- The server keeps `clients.json` with records such as `{ "id": "uuid", "password": "…", "status": "active" }`.
+- A client requests the next unused record, marks it as in use, and writes its details to the outbound config.
+- Automations can pull data via `ssh`/`scp` (for example: `ssh root@server 'scripts/list_clients.sh'`).
+
+---
+
+## Checks and troubleshooting
+
+- Validate a config: `xray -test -c /etc/xray/config.json`.
+- Inspect logs: `/var/log/xray/*` or `logread | grep xray`.
+- From the client, verify egress: `curl --socks5 127.0.0.1:1080 https://ifconfig.me` (replace port if you customized it).
+
+---
+
+## Security notes
+
+- Expose the server only over hardened SSH (keys + firewall rules). Keep the Trojan port open on the WAN side.
+- Restrict access to `clients.json` (`chmod 600`) and rotate credentials if you suspect leaks.
+- Prefer ACME-issued certificates over self-signed ones whenever possible.
+
+---
+
+## Administration helpers
+
+- `scripts/create.ssl.cert.sh` — minimal helper to issue a self-signed certificate with OpenSSL.
+- `scripts/getip.sh` — queries multiple sources to determine the server’s public IPv4 address.
+- `scripts/install_client.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
+- `scripts/list_clients.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
+- `scripts/remove_client.sh` — revokes a client, updates configs, and restarts XRAY.
+- `scripts/xray_redirect.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound.
+- `scripts/xray_redirect_remove.sh` — removes the nftables snippet deployed by the redirect helper.
+
+---
+
+## Ideas for improvement
+
+- Provide an authenticated HTTP API for issuing and revoking clients remotely.
+- Integrate `acme.sh` for automated certificate issuance and renewal.
+- Add UCI/Netifd glue for first-class OpenWrt service management.
+
+---
