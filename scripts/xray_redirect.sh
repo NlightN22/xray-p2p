@@ -14,6 +14,22 @@ die() {
     exit 1
 }
 
+require_cmd() {
+    cmd="$1"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return
+    fi
+
+    case "$cmd" in
+        nft)
+            die "Required command 'nft' not found. Install nftables (e.g. opkg update && opkg install nftables)."
+            ;;
+        *)
+            die "Required command '$cmd' not found. Install it before running this script."
+            ;;
+    esac
+}
+
 usage() {
     cat <<'USAGE'
 Usage: xray_redirect.sh [SUBNET]
@@ -62,6 +78,8 @@ esac
 if [ ! -f "$XRAY_INBOUND_FILE" ]; then
     die "XRAY inbound file $XRAY_INBOUND_FILE not found"
 fi
+
+require_cmd nft
 
 select_dokodemo_port() {
     if command -v jq >/dev/null 2>&1; then

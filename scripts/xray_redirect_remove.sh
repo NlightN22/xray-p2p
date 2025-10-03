@@ -13,6 +13,22 @@ die() {
     exit 1
 }
 
+require_cmd() {
+    cmd="$1"
+    if command -v "$cmd" >/dev/null 2>&1; then
+        return
+    fi
+
+    case "$cmd" in
+        nft)
+            die "Required command 'nft' not found. Install nftables (e.g. opkg update && opkg install nftables)."
+            ;;
+        *)
+            die "Required command '$cmd' not found. Install it before running this script."
+            ;;
+    esac
+}
+
 usage() {
     cat <<'USAGE'
 Usage: xray_redirect_remove.sh
@@ -54,26 +70,22 @@ else
 fi
 
 if [ "$fw4_ok" -eq 0 ]; then
-    if command -v nft >/dev/null 2>&1; then
-        delete_chain() {
-            chain_name="$1"
-            if nft list chain inet fw4 "$chain_name" >/dev/null 2>&1; then
-                nft flush chain inet fw4 "$chain_name" >/dev/null 2>&1 || true
-                if nft delete chain inet fw4 "$chain_name" >/dev/null 2>&1; then
-                    log "Removed chain inet fw4 $chain_name"
-                else
-                    log "Failed to delete chain inet fw4 $chain_name"
-                fi
+    require_cmd nft
+
+    delete_chain() {
+        chain_name="$1"
+        if nft list chain inet fw4 "$chain_name" >/dev/null 2>&1; then
+            nft flush chain inet fw4 "$chain_name" >/dev/null 2>&1 || true
+            if nft delete chain inet fw4 "$chain_name" >/dev/null 2>&1; then
+                log "Removed chain inet fw4 $chain_name"
+            else
+                log "Failed to delete chain inet fw4 $chain_name"
             fi
-        }
-        delete_chain xray_transparent_prerouting
-        delete_chain xray_transparent_output
-    else
-        log "nft binary not found; unable to remove runtime chains"
-        if [ "$removed_snippet" -eq 0 ]; then
-            die "No cleanup method available"
         fi
-    fi
+    }
+
+    delete_chain xray_transparent_prerouting
+    delete_chain xray_transparent_output
 fi
 
 log "Transparent redirect rules removed"
