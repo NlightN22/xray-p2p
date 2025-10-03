@@ -22,6 +22,7 @@
 ---
 
 ## Fast start
+
 ``` bash
 # install dependencies
 opkg update && opkg install jq openssl-util
@@ -31,6 +32,8 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/ins
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/issue_client.sh | sh
 ```
 Save client connection URL and paste it when install client
+
+TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/REPO/BRANCH/script.sh`
 ---
 
 ## Client quick start
