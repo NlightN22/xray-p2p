@@ -12,7 +12,7 @@ die() {
 
 usage() {
     cat <<'USAGE'
-Usage: install_client.sh [TROJAN_URL]
+Usage: client_install.sh [TROJAN_URL]
 
 Installs XRAY client configuration. The Trojan connection string can be
 provided as the first argument, via one of the XRAY_TROJAN_URL,

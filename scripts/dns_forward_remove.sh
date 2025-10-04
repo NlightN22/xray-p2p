@@ -71,9 +71,9 @@ fi
 
 usage() {
     cat <<'USAGE'
-Usage: xray_dns_forward_remove.sh [--list] [DOMAIN_MASK | --all]
+Usage: dns_forward_remove.sh [--list] [DOMAIN_MASK | --all]
 
-Removes dokodemo-door DNS forwardings created by xray_dns_forward.sh.
+Removes dokodemo-door DNS forwardings created by dns_forward_add.sh.
 
   --list         Show currently configured masks and exit.
   DOMAIN_MASK    Remove only the specified mask.

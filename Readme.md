@@ -27,9 +27,9 @@
 # install dependencies
 opkg update && opkg install jq openssl-util
 # install server
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_server.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_install.sh | sh
 # add user
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/issue_client.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/user_issue.sh | sh
 ```
 Save user connection URL and paste it when install client
 
@@ -41,17 +41,17 @@ TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/
 # install dependencies
 opkg update && opkg install jq
 # on the client router: install, then paste the URL when prompted
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/install_client.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client_install.sh | sh
 # setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect_add.sh | sh
 # forward a wildcard domain to a specific upstream DNS server (ports auto-increment from 53331)
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_dns_forward.sh | sh
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/dns_forward_add.sh | sh
 ```
-You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xray_redirect.sh | sh -s -- $YOR_CIDR_SUBNET`
+You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect_add.sh | sh -s -- $YOR_CIDR_SUBNET`
 
-To remove a redirect later, run `scripts/xray_redirect_remove.sh` on the client
+To remove a redirect later, run `scripts/redirect_remove.sh` on the client
 with either a CIDR (e.g. `10.0.101.0/24`) or `--all` to drop every subnet at once.
-To list or remove DNS forwardings, call `scripts/xray_dns_forward_remove.sh` with a mask, `--all`, or `--list` to inspect what's configured.
+To list or remove DNS forwardings, call `scripts/dns_forward_remove.sh` with a mask, `--all`, or `--list` to inspect what's configured.
 
 The client installer parses the connection string, writes the templates from `config_templates/client` into `/etc/xray`, marks the client entry as used on the server, and restarts XRAY to apply the configuration.
 
@@ -61,7 +61,7 @@ The client installer parses the connection string, writes the templates from `co
 
 - The server keeps `clients.json` with records such as `{ "id": "uuid", "password": "…", "status": "active" }`.
 - A client requests the next unused record, marks it as in use, and writes its details to the outbound config.
-- Automations can pull data via `ssh`/`scp` (for example: `ssh root@server 'scripts/list_clients.sh'`).
+- Automations can pull data via `ssh`/`scp` (for example: `ssh root@server 'scripts/user_list.sh'`).
 
 ---
 
@@ -83,15 +83,15 @@ The client installer parses the connection string, writes the templates from `co
 
 ## Administration helpers
 
-- `scripts/create.ssl.cert.sh` — minimal helper to issue a self-signed certificate with OpenSSL.
-- `scripts/pub_ip.sh` — queries multiple sources to determine the server’s public IPv4 address.
-- `scripts/install_client.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
-- `scripts/list_clients.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
-- `scripts/remove_client.sh` — revokes a client, updates configs, and restarts XRAY.
-- `scripts/xray_redirect.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
-- `scripts/xray_dns_forward.sh` — adds per-domain dokodemo-door DNS inbounds, auto-allocates ports from 53331, and syncs dnsmasq forwarding.
-- `scripts/xray_dns_forward_remove.sh` — lists (`--list`) or removes domain forwardings (single mask or `--all`) and cleans dnsmasq/xray state.
-- `scripts/xray_redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
+- `scripts/ssl_cert_create.sh` — minimal helper to issue a self-signed certificate with OpenSSL.
+- `scripts/ip_show.sh` — queries multiple sources to determine the server’s public IPv4 address.
+- `scripts/client_install.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
+- `scripts/user_list.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
+- `scripts/user_remove.sh` — revokes a client, updates configs, and restarts XRAY.
+- `scripts/redirect_add.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
+- `scripts/dns_forward_add.sh` — adds per-domain dokodemo-door DNS inbounds, auto-allocates ports from 53331, and syncs dnsmasq forwarding.
+- `scripts/dns_forward_remove.sh` — lists (`--list`) or removes domain forwardings (single mask or `--all`) and cleans dnsmasq/xray state.
+- `scripts/redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
 
 ---
 

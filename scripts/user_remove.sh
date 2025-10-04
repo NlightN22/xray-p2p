@@ -61,7 +61,7 @@ check_repo_access() {
     [ "${XRAY_SKIP_REPO_CHECK:-0}" = "1" ] && return
 
     base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    check_path="${XRAY_REPO_CHECK_PATH:-scripts/remove_client.sh}"
+    check_path="${XRAY_REPO_CHECK_PATH:-scripts/user_remove.sh}"
     timeout="${XRAY_REPO_CHECK_TIMEOUT:-5}"
 
     case "$base_url" in
@@ -105,7 +105,7 @@ show_existing_clients() {
     log "Current clients (email password status):"
 
     base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    list_path="${XRAY_LIST_SCRIPT_PATH:-scripts/list_clients.sh}"
+    list_path="${XRAY_LIST_SCRIPT_PATH:-scripts/user_list.sh}"
     base_trimmed="${base_url%/}"
     case "$list_path" in
         /*) list_url="${base_trimmed}${list_path}" ;;

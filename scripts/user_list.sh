@@ -30,7 +30,7 @@ check_repo_access() {
     [ "${XRAY_SKIP_REPO_CHECK:-0}" = "1" ] && return
 
     base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    check_path="${XRAY_REPO_CHECK_PATH:-scripts/list_clients.sh}"
+    check_path="${XRAY_REPO_CHECK_PATH:-scripts/user_list.sh}"
     timeout="${XRAY_REPO_CHECK_TIMEOUT:-5}"
 
     base_trimmed="${base_url%/}"

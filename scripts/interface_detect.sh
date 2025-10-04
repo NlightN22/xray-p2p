@@ -13,7 +13,7 @@ die() {
 
 usage() {
     cat <<'USAGE'
-Usage: detect_interface.sh TARGET
+Usage: interface_detect.sh TARGET
 
 TARGET  IPv4 address or CIDR (e.g. 10.0.101.0/24) to test against.
 

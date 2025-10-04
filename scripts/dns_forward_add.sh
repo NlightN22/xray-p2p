@@ -80,7 +80,7 @@ if [ ! -f "$XRAY_INBOUND_FILE" ]; then
 fi
 
 if [ "$#" -gt 2 ]; then
-    die "Usage: xray_dns_forward.sh [DOMAIN_MASK] [DNS_IP]"
+    die "Usage: dns_forward_add.sh [DOMAIN_MASK] [DNS_IP]"
 fi
 
 domain_mask="${1:-}"
