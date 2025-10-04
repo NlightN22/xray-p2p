@@ -1,6 +1,8 @@
 #!/bin/sh
 # Install XRAY server
 
+SCRIPT_NAME=${0##*/}
+
 log() {
     printf '%s\n' "$*" >&2
 }
@@ -9,6 +11,61 @@ die() {
     printf 'Error: %s\n' "$*" >&2
     exit 1
 }
+
+usage() {
+    cat <<EOF
+Usage: $SCRIPT_NAME [options] [SERVER_NAME]
+
+Install and configure the XRAY server on OpenWrt.
+
+Options:
+  -h, --help        Show this help message and exit.
+
+Arguments:
+  SERVER_NAME      Optional TLS certificate Common Name; overrides env/prompt.
+
+Environment variables:
+  XRAY_FORCE_CONFIG     Set to 1 to overwrite config files, 0 to keep them.
+  XRAY_PORT             Port to expose externally; prompts if unset.
+  XRAY_REISSUE_CERT     Set to 1 to regenerate TLS material, 0 to keep it.
+  XRAY_SERVER_NAME      Common Name for generated TLS certificate.
+EOF
+    exit "${1:-0}"
+}
+
+server_name_assigned=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            log "Unknown option: $1"
+            usage 1
+            ;;
+        *)
+            if [ "${server_name_assigned:-0}" -eq 1 ]; then
+                log "Unexpected argument: $1"
+                usage 1
+            fi
+            XRAY_SERVER_NAME="$1"
+            server_name_assigned=1
+            shift
+            continue
+            ;;
+    esac
+    shift
+done
+
+if [ "$#" -gt 0 ]; then
+    log "Unexpected argument: $1"
+    usage 1
+fi
 
 curl -s https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh | sh
 

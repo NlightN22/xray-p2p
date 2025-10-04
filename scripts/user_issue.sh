@@ -1,16 +1,137 @@
 #!/bin/sh
 set -eu
 
+SCRIPT_NAME=${0##*/}
+
+usage() {
+    cat <<EOF
+Usage: $SCRIPT_NAME [options] [EMAIL] [SERVER_ADDRESS]
+
+Create a new XRAY client and emit the connection details.
+
+Options:
+  -h, --help        Show this help message and exit.
+
+Arguments:
+  EMAIL            Optional client identifier; auto-generated when omitted.
+  SERVER_ADDRESS   Optional connection host; overrides env/prompt.
+
+Environment variables:
+  XRAY_CLIENT_EMAIL   Preseed client email when no positional argument is given.
+  XRAY_AUTO_EMAIL     Set to 1 to accept an auto-generated client email.
+  XRAY_SERVER_NAME    TLS SNI hostname fallback when certificates lack CN.
+  XRAY_SERVER_ADDRESS Connection address advertised to clients.
+EOF
+    exit "${1:-0}"
+}
+
+email_arg=""
+connection_arg=""
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            printf 'Unknown option: %s\n' "$1" >&2
+            usage 1
+            ;;
+        *)
+            if [ -z "$email_arg" ]; then
+                email_arg="$1"
+            elif [ -z "$connection_arg" ]; then
+                connection_arg="$1"
+            else
+                printf 'Unexpected argument: %s\n' "$1" >&2
+                usage 1
+            fi
+            ;;
+    esac
+    shift
+done
+
+while [ "$#" -gt 0 ]; do
+    if [ -z "$email_arg" ]; then
+        email_arg="$1"
+    elif [ -z "$connection_arg" ]; then
+        connection_arg="$1"
+    else
+        printf 'Unexpected argument: %s\n' "$1" >&2
+        usage 1
+    fi
+    shift
+done
+
+if [ -z "${XRAY_SELF_DIR:-}" ]; then
+    case "$0" in
+        */*)
+            XRAY_SELF_DIR=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+            export XRAY_SELF_DIR
+            ;;
+    esac
+fi
+
 umask 077
 
-log() {
-    printf '%s\n' "$*" >&2
+XRAY_COMMON_LIB_PATH_DEFAULT="lib/common.sh"
+XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT="scripts/lib/common.sh"
+
+load_common_lib() {
+    lib_local="${XRAY_COMMON_LIB_PATH:-$XRAY_COMMON_LIB_PATH_DEFAULT}"
+    lib_remote="${XRAY_COMMON_LIB_REMOTE_PATH:-$XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT}"
+
+    if [ -n "${XRAY_SELF_DIR:-}" ]; then
+        candidate="${XRAY_SELF_DIR%/}/$lib_local"
+        if [ -r "$candidate" ]; then
+            # shellcheck disable=SC1090
+            . "$candidate"
+            return 0
+        fi
+    fi
+
+    if [ -r "$lib_local" ]; then
+        # shellcheck disable=SC1090
+        . "$lib_local"
+        return 0
+    fi
+
+    base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    base_trimmed="${base%/}"
+    case "$lib_remote" in
+        /*)
+            lib_url="${base_trimmed}${lib_remote}"
+            ;;
+        *)
+            lib_url="${base_trimmed}/${lib_remote}"
+            ;;
+    esac
+
+    tmp="$(mktemp 2>/dev/null)" || return 1
+    if command -v curl >/dev/null 2>&1 && curl -fsSL "$lib_url" -o "$tmp"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+    if command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$lib_url"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
 }
 
-die() {
-    printf 'Error: %s\n' "$*" >&2
+if ! load_common_lib; then
+    printf 'Error: Unable to load XRAY common library.\n' >&2
     exit 1
-}
+fi
 
 prompt_value() {
     prompt="$1"
@@ -43,19 +164,6 @@ prompt_value() {
     printf '%s' "$value"
 }
 
-require_cmd() {
-    cmd="$1"
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        case "$cmd" in
-            jq)
-                die "Required command 'jq' not found. Install it before running this script. For OpenWrt run: opkg update && opkg install jq"
-                ;;
-            *)
-                die "Required command '$cmd' not found. Install it before running this script."
-                ;;
-        esac
-    fi
-}
 generate_uuid() {
     if command -v uuidgen >/dev/null 2>&1; then
         uuidgen | tr '[:upper:]' '[:lower:]'
@@ -126,46 +234,6 @@ format_link_host() {
     fi
 }
 
-check_repo_access() {
-    [ "${XRAY_SKIP_REPO_CHECK:-0}" = "1" ] && return
-
-    base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    check_path="${XRAY_REPO_CHECK_PATH:-scripts/user_issue.sh}"
-    timeout="${XRAY_REPO_CHECK_TIMEOUT:-5}"
-
-    case "$base_url" in
-        */) repo_url="${base_url}${check_path}" ;;
-        *) repo_url="${base_url}/${check_path}" ;;
-    esac
-
-    last_tool=""
-    for tool in curl wget; do
-        case "$tool" in
-            curl)
-                command -v curl >/dev/null 2>&1 || continue
-                if curl -fsSL --max-time "$timeout" "$repo_url" >/dev/null 2>&1; then
-                    return
-                fi
-                last_tool="curl"
-                ;;
-            wget)
-                command -v wget >/dev/null 2>&1 || continue
-                if wget -q -T "$timeout" -O /dev/null "$repo_url"; then
-                    return
-                fi
-                last_tool="wget"
-                ;;
-        esac
-    done
-
-    if [ -z "$last_tool" ]; then
-        log "Neither curl nor wget is available to verify repository accessibility; skipping check."
-        return
-    fi
-
-    die "Unable to access repository resource $repo_url (last attempt via $last_tool). Set XRAY_SKIP_REPO_CHECK=1 to bypass."
-}
-
 show_existing_clients() {
     if [ "${XRAY_SHOW_CLIENTS:-1}" != "1" ]; then
         return
@@ -173,35 +241,33 @@ show_existing_clients() {
 
     log "Current clients (email password status):"
 
-    base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    list_path="${XRAY_LIST_SCRIPT_PATH:-scripts/user_list.sh}"
-    base_trimmed="${base_url%/}"
-    case "$list_path" in
-        /*) list_url="${base_trimmed}${list_path}" ;;
-        *) list_url="${base_trimmed}/${list_path}" ;;
-    esac
+    list_remote_default="${XRAY_LIST_SCRIPT_PATH:-scripts/user_list.sh}"
+    list_remote="${XRAY_LIST_SCRIPT_REMOTE_PATH:-$list_remote_default}"
+    list_local="${XRAY_LIST_SCRIPT_LOCAL_PATH:-$(basename "$list_remote")}"
 
-    tmp_list="$(mktemp 2>/dev/null)" || tmp_list=""
-    if [ -z "$tmp_list" ]; then
-        log "Unable to create temporary file for list script"
+    if XRAY_CONFIG_DIR="$CONFIG_DIR" \
+        XRAY_INBOUNDS_FILE="$INBOUNDS_FILE" \
+        XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
+        XRAY_SKIP_REPO_CHECK=1 \
+        xray_run_repo_script optional "$list_local" "$list_remote"; then
         printf '\n'
         return
     fi
 
-    if curl -fsSL "$list_url" -o "$tmp_list"; then
-        if ! env \
-            XRAY_CONFIG_DIR="$CONFIG_DIR" \
-            XRAY_INBOUNDS_FILE="$INBOUNDS_FILE" \
-            XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
-            XRAY_SKIP_REPO_CHECK=1 \
-            sh "$tmp_list"; then
-            log "List script returned an error"
-        fi
-    else
-        log "Failed to download $list_url"
-    fi
-    rm -f "$tmp_list"
     printf '\n'
+}
+
+run_network_interfaces_helper() {
+    if [ "${XRAY_SHOW_INTERFACES:-1}" != "1" ]; then
+        return
+    fi
+
+    helper_local="${XRAY_INTERFACES_SCRIPT_PATH:-network_interfaces.sh}"
+    helper_remote="${XRAY_INTERFACES_REMOTE_PATH:-scripts/network_interfaces.sh}"
+
+    if xray_run_repo_script optional "$helper_local" "$helper_remote" >&2; then
+        printf '\n' >&2
+    fi
 }
 
 CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
@@ -215,7 +281,7 @@ SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 require_cmd jq
 require_cmd curl
 
-check_repo_access
+xray_check_repo_access 'scripts/user_issue.sh'
 
 show_existing_clients
 
@@ -238,7 +304,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-EMAIL="${1:-}"
+EMAIL="$email_arg"
 if [ -z "$EMAIL" ] && [ -n "${XRAY_CLIENT_EMAIL:-}" ]; then
     EMAIL="$XRAY_CLIENT_EMAIL"
 fi
@@ -328,12 +394,14 @@ fi
 [ -n "$TLS_SNI_HOST" ] || die "TLS SNI hostname cannot be empty."
 printf '%s' "$TLS_SNI_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || die "TLS SNI hostname must contain only letters, digits, dots or hyphens."
 
-CONNECTION_HOST="${XRAY_SERVER_ADDRESS:-}"
+CONNECTION_HOST="$connection_arg"
+[ -n "$CONNECTION_HOST" ] || CONNECTION_HOST="${XRAY_SERVER_ADDRESS:-}"
 [ -n "$CONNECTION_HOST" ] || CONNECTION_HOST="${XRAY_SERVER_HOST:-}"
 
 if [ -z "$CONNECTION_HOST" ]; then
     DEFAULT_CONNECTION_HOST="$TLS_SNI_HOST"
     if [ -t 0 ] || [ -r /dev/tty ]; then
+        run_network_interfaces_helper
         CONNECTION_HOST="$(prompt_value 'Enter connection address for clients (IP or domain)' "$DEFAULT_CONNECTION_HOST")"
     else
         CONNECTION_HOST="$DEFAULT_CONNECTION_HOST"

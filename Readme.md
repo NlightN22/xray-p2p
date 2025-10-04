@@ -68,7 +68,7 @@ The client installer parses the connection string, writes the templates from `co
 ## Checks and troubleshooting
 
 - Validate a config: `xray -test -c /etc/xray/config.json`.
-- Inspect logs: `/var/log/xray/*` or `logread | grep xray`.
+- Inspect logs: `logread -e xray`.
 - From the client, verify egress: `curl --socks5 127.0.0.1:1080 https://ifconfig.me` (replace port if you customized it).
 
 ---

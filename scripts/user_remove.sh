@@ -1,16 +1,131 @@
 #!/bin/sh
 set -eu
 
+SCRIPT_NAME=${0##*/}
+
+usage() {
+    cat <<EOF
+Usage: $SCRIPT_NAME [options] [EMAIL]
+
+Remove an XRAY client from both the registry and inbound configuration.
+
+Options:
+  -h, --help        Show this help message and exit.
+
+Arguments:
+  EMAIL            Optional client identifier; prompts when omitted.
+
+Environment variables:
+  XRAY_CLIENT_EMAIL   Client email fallback when no argument is provided.
+EOF
+    exit "${1:-0}"
+}
+
+email_arg=""
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            printf 'Unknown option: %s\n' "$1" >&2
+            usage 1
+            ;;
+        *)
+            if [ -n "$email_arg" ]; then
+                printf 'Unexpected argument: %s\n' "$1" >&2
+                usage 1
+            fi
+            email_arg="$1"
+            ;;
+    esac
+    shift
+done
+
+if [ "$#" -gt 0 ]; then
+    if [ -n "$email_arg" ]; then
+        printf 'Unexpected argument: %s\n' "$1" >&2
+        usage 1
+    fi
+    email_arg="$1"
+    shift
+fi
+
+if [ "$#" -gt 0 ]; then
+    printf 'Unexpected argument: %s\n' "$1" >&2
+    usage 1
+fi
+
+if [ -z "${XRAY_SELF_DIR:-}" ]; then
+    case "$0" in
+        */*)
+            XRAY_SELF_DIR=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+            export XRAY_SELF_DIR
+            ;;
+    esac
+fi
+
 umask 077
 
-log() {
-    printf '%s\n' "$*" >&2
+XRAY_COMMON_LIB_PATH_DEFAULT="lib/common.sh"
+XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT="scripts/lib/common.sh"
+
+load_common_lib() {
+    lib_local="${XRAY_COMMON_LIB_PATH:-$XRAY_COMMON_LIB_PATH_DEFAULT}"
+    lib_remote="${XRAY_COMMON_LIB_REMOTE_PATH:-$XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT}"
+
+    if [ -n "${XRAY_SELF_DIR:-}" ]; then
+        candidate="${XRAY_SELF_DIR%/}/$lib_local"
+        if [ -r "$candidate" ]; then
+            # shellcheck disable=SC1090
+            . "$candidate"
+            return 0
+        fi
+    fi
+
+    if [ -r "$lib_local" ]; then
+        # shellcheck disable=SC1090
+        . "$lib_local"
+        return 0
+    fi
+
+    base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    base_trimmed="${base%/}"
+    case "$lib_remote" in
+        /*)
+            lib_url="${base_trimmed}${lib_remote}"
+            ;;
+        *)
+            lib_url="${base_trimmed}/${lib_remote}"
+            ;;
+    esac
+
+    tmp="$(mktemp 2>/dev/null)" || return 1
+    if command -v curl >/dev/null 2>&1 && curl -fsSL "$lib_url" -o "$tmp"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+    if command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$lib_url"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
 }
 
-die() {
-    printf 'Error: %s\n' "$*" >&2
+if ! load_common_lib; then
+    printf 'Error: Unable to load XRAY common library.\n' >&2
     exit 1
-}
+fi
 
 prompt_value() {
     prompt="$1"
@@ -43,95 +158,27 @@ prompt_value() {
     printf '%s' "$value"
 }
 
-require_cmd() {
-    cmd="$1"
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        case "$cmd" in
-            jq)
-                die "Required command 'jq' not found. Install it before running this script. For OpenWrt run: opkg update && opkg install jq"
-                ;;
-            *)
-                die "Required command '$cmd' not found. Install it before running this script."
-                ;;
-        esac
-    fi
-}
-
-check_repo_access() {
-    [ "${XRAY_SKIP_REPO_CHECK:-0}" = "1" ] && return
-
-    base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    check_path="${XRAY_REPO_CHECK_PATH:-scripts/user_remove.sh}"
-    timeout="${XRAY_REPO_CHECK_TIMEOUT:-5}"
-
-    case "$base_url" in
-        */) repo_url="${base_url}${check_path}" ;;
-        *) repo_url="${base_url}/${check_path}" ;;
-    esac
-
-    last_tool=""
-    for tool in curl wget; do
-        case "$tool" in
-            curl)
-                command -v curl >/dev/null 2>&1 || continue
-                if curl -fsSL --max-time "$timeout" "$repo_url" >/dev/null 2>&1; then
-                    return
-                fi
-                last_tool="curl"
-                ;;
-            wget)
-                command -v wget >/dev/null 2>&1 || continue
-                if wget -q -T "$timeout" -O /dev/null "$repo_url"; then
-                    return
-                fi
-                last_tool="wget"
-                ;;
-        esac
-    done
-
-    if [ -z "$last_tool" ]; then
-        log "Neither curl nor wget is available to verify repository accessibility; skipping check."
-        return
-    fi
-
-    die "Unable to access repository resource $repo_url (last attempt via $last_tool). Set XRAY_SKIP_REPO_CHECK=1 to bypass."
-}
-
 show_existing_clients() {
-    if [ "${XRAY_SHOW_CLIENTS:-1}" != "1" ]; then
-        return
-    fi
+    list_remote_default="${XRAY_LIST_SCRIPT_PATH:-scripts/user_list.sh}"
+    list_remote="${XRAY_LIST_SCRIPT_REMOTE_PATH:-$list_remote_default}"
+    list_local="${XRAY_LIST_SCRIPT_LOCAL_PATH:-$(basename "$list_remote")}"
 
-    log "Current clients (email password status):"
-
-    base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    list_path="${XRAY_LIST_SCRIPT_PATH:-scripts/user_list.sh}"
-    base_trimmed="${base_url%/}"
-    case "$list_path" in
-        /*) list_url="${base_trimmed}${list_path}" ;;
-        *) list_url="${base_trimmed}/${list_path}" ;;
-    esac
-
-    tmp_list="$(mktemp 2>/dev/null)" || tmp_list=""
-    if [ -z "$tmp_list" ]; then
-        log "Unable to create temporary file for list script"
+    if clients_output=$(XRAY_CONFIG_DIR="$CONFIG_DIR" \
+            XRAY_INBOUNDS_FILE="$INBOUNDS_FILE" \
+            XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
+            XRAY_SKIP_REPO_CHECK=1 \
+            xray_run_repo_script optional "$list_local" "$list_remote" 2>&1); then
+        if [ -n "$clients_output" ]; then
+            log "Current clients (email password status):"
+            printf '%s\n' "$clients_output"
+        fi
         printf '\n'
         return
     fi
 
-    if curl -fsSL "$list_url" -o "$tmp_list"; then
-        if ! env \
-            XRAY_CONFIG_DIR="$CONFIG_DIR" \
-            XRAY_INBOUNDS_FILE="$INBOUNDS_FILE" \
-            XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
-            XRAY_SKIP_REPO_CHECK=1 \
-            sh "$tmp_list"; then
-            log "List script returned an error"
-        fi
-    else
-        log "Failed to download $list_url"
+    if [ -n "$clients_output" ]; then
+        printf '%s\n' "$clients_output" >&2
     fi
-    rm -f "$tmp_list"
     printf '\n'
 }
 
@@ -146,11 +193,11 @@ SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 require_cmd jq
 require_cmd curl
 
-check_repo_access
+xray_check_repo_access 'scripts/user_remove.sh'
 
 show_existing_clients
 
-EMAIL="${1:-}"
+EMAIL="$email_arg"
 if [ -z "$EMAIL" ] && [ -n "${XRAY_CLIENT_EMAIL:-}" ]; then
     EMAIL="$XRAY_CLIENT_EMAIL"
 fi

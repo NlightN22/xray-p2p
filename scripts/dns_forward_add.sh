@@ -2,6 +2,8 @@
 
 set -eu
 
+SCRIPT_NAME=${0##*/}
+
 XRAY_INBOUND_FILE="/etc/xray/inbounds.json"
 LISTEN_ADDRESS="127.0.0.1"
 BASE_LOCAL_PORT=53331
@@ -18,6 +20,22 @@ log() {
 die() {
     printf 'Error: %s\n' "$*" >&2
     exit 1
+}
+
+usage() {
+    cat <<EOF
+Usage: $SCRIPT_NAME [options] [DOMAIN_MASK] [DNS_IP]
+
+Add or update XRAY-managed DNS forwarding rules backed by dnsmasq.
+
+Options:
+  -h, --help        Show this help message and exit.
+
+Arguments:
+  DOMAIN_MASK       Domain mask to forward (for example: *.corp.test.com).
+  DNS_IP            Upstream DNS server IPv4 address.
+EOF
+    exit "${1:-0}"
 }
 
 require_cmd() {
@@ -79,12 +97,43 @@ if [ ! -f "$XRAY_INBOUND_FILE" ]; then
     die "XRAY inbound file $XRAY_INBOUND_FILE not found"
 fi
 
-if [ "$#" -gt 2 ]; then
-    die "Usage: dns_forward_add.sh [DOMAIN_MASK] [DNS_IP]"
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            log "Unknown option: $1"
+            usage 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+    shift
+done
+
+domain_mask=""
+dns_ip=""
+
+if [ "$#" -gt 0 ]; then
+    domain_mask="$1"
+    shift
 fi
 
-domain_mask="${1:-}"
-dns_ip="${2:-}"
+if [ "$#" -gt 0 ]; then
+    dns_ip="$1"
+    shift
+fi
+
+if [ "$#" -gt 0 ]; then
+    log "Unexpected argument: $1"
+    usage 1
+fi
 
 if [ -z "$domain_mask" ]; then
     if [ -t 0 ]; then

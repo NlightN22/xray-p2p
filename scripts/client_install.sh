@@ -1,6 +1,8 @@
 #!/bin/sh
 # Install XRAY client
 
+SCRIPT_NAME=${0##*/}
+
 log() {
     printf '%s\n' "$*" >&2
 }
@@ -11,27 +13,63 @@ die() {
 }
 
 usage() {
-    cat <<'USAGE'
-Usage: client_install.sh [TROJAN_URL]
+    cat <<EOF
+Usage: $SCRIPT_NAME [options] [TROJAN_URL]
 
-Installs XRAY client configuration. The Trojan connection string can be
-provided as the first argument, via one of the XRAY_TROJAN_URL,
-XRAY_CLIENT_URL, XRAY_CONNECTION_URL or XRAY_CONNECTION_STRING environment
-variables, or interactively when a terminal is available.
-USAGE
+Install and configure the XRAY client. The optional TROJAN_URL argument
+overrides environment variables and interactive input when provided.
+
+Options:
+  -h, --help        Show this help message and exit.
+
+Arguments:
+  TROJAN_URL        Optional connection string; overrides env/prompt input.
+
+Environment variables:
+  XRAY_TROJAN_URL         Preferred Trojan/VLESS connection string.
+  XRAY_CLIENT_URL         Alternative variable for compatibility.
+  XRAY_CONNECTION_URL     Alternative variable for compatibility.
+  XRAY_CONNECTION_STRING  Alternative variable for compatibility.
+EOF
+    exit "${1:-0}"
 }
 
 CONNECTION_STRING=""
-if [ "$#" -gt 0 ]; then
+
+while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help)
-            usage
-            exit 0
+            usage 0
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            log "Unknown option: $1"
+            usage 1
             ;;
         *)
+            if [ -n "$CONNECTION_STRING" ]; then
+                log "Unexpected argument: $1"
+                usage 1
+            fi
             CONNECTION_STRING="$1"
+            shift
+            continue
             ;;
     esac
+    shift
+done
+
+if [ -z "$CONNECTION_STRING" ] && [ "$#" -gt 0 ]; then
+    CONNECTION_STRING="$1"
+    shift
+fi
+
+if [ "$#" -gt 0 ]; then
+    log "Unexpected argument: $1"
+    usage 1
 fi
 
 if [ -z "$CONNECTION_STRING" ]; then

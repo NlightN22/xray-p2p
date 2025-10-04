@@ -1,75 +1,71 @@
 #!/bin/sh
 set -eu
 
+if [ -z "${XRAY_SELF_DIR:-}" ]; then
+    case "$0" in
+        */*)
+            XRAY_SELF_DIR=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+            export XRAY_SELF_DIR
+            ;;
+    esac
+fi
+
 umask 077
 
-log() {
-    printf '%s\n' "$*" >&2
-}
+XRAY_COMMON_LIB_PATH_DEFAULT="lib/common.sh"
+XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT="scripts/lib/common.sh"
 
-die() {
-    printf 'Error: %s\n' "$*" >&2
-    exit 1
-}
+load_common_lib() {
+    lib_local="${XRAY_COMMON_LIB_PATH:-$XRAY_COMMON_LIB_PATH_DEFAULT}"
+    lib_remote="${XRAY_COMMON_LIB_REMOTE_PATH:-$XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT}"
 
-require_cmd() {
-    cmd="$1"
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        case "$cmd" in
-            jq)
-                die "Required command 'jq' not found. Install it before running this script. For OpenWrt run: opkg update && opkg install jq"
-                ;;
-            *)
-                die "Required command '$cmd' not found. Install it before running this script."
-                ;;
-        esac
+    if [ -n "${XRAY_SELF_DIR:-}" ]; then
+        candidate="${XRAY_SELF_DIR%/}/$lib_local"
+        if [ -r "$candidate" ]; then
+            # shellcheck disable=SC1090
+            . "$candidate"
+            return 0
+        fi
     fi
-}
 
-check_repo_access() {
-    [ "${XRAY_SKIP_REPO_CHECK:-0}" = "1" ] && return
+    if [ -r "$lib_local" ]; then
+        # shellcheck disable=SC1090
+        . "$lib_local"
+        return 0
+    fi
 
-    base_url="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    check_path="${XRAY_REPO_CHECK_PATH:-scripts/user_list.sh}"
-    timeout="${XRAY_REPO_CHECK_TIMEOUT:-5}"
-
-    base_trimmed="${base_url%/}"
-    case "$check_path" in
+    base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    base_trimmed="${base%/}"
+    case "$lib_remote" in
         /*)
-            repo_url="${base_trimmed}${check_path}"
+            lib_url="${base_trimmed}${lib_remote}"
             ;;
         *)
-            repo_url="${base_trimmed}/${check_path}"
+            lib_url="${base_trimmed}/${lib_remote}"
             ;;
     esac
 
-    last_tool=""
-    for tool in curl wget; do
-        case "$tool" in
-            curl)
-                command -v curl >/dev/null 2>&1 || continue
-                if curl -fsSL --max-time "$timeout" "$repo_url" >/dev/null 2>&1; then
-                    return
-                fi
-                last_tool="curl"
-                ;;
-            wget)
-                command -v wget >/dev/null 2>&1 || continue
-                if wget -q -T "$timeout" -O /dev/null "$repo_url"; then
-                    return
-                fi
-                last_tool="wget"
-                ;;
-        esac
-    done
-
-    if [ -z "$last_tool" ]; then
-        log "Neither curl nor wget is available to verify repository accessibility; skipping check."
-        return
+    tmp="$(mktemp 2>/dev/null)" || return 1
+    if command -v curl >/dev/null 2>&1 && curl -fsSL "$lib_url" -o "$tmp"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
     fi
-
-    die "Unable to access repository resource $repo_url (last attempt via $last_tool). Set XRAY_SKIP_REPO_CHECK=1 to bypass."
+    if command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$lib_url"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
 }
+
+if ! load_common_lib; then
+    printf 'Error: Unable to load XRAY common library.\n' >&2
+    exit 1
+fi
 
 CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
 INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
@@ -78,7 +74,7 @@ CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
 
 require_cmd jq
 
-check_repo_access
+xray_check_repo_access 'scripts/user_list.sh'
 
 if [ ! -f "$CLIENTS_FILE" ]; then
     die "Clients registry not found: $CLIENTS_FILE"
