@@ -165,7 +165,7 @@ fi
 
 if [ "$MODE" = "single" ]; then
     if ! validate_subnet "$TARGET_SUBNET"; then
-        die "Subnet must be a valid IPv4 CIDR (example: 10.0.101.0/24 with prefix between 0 and 32)"
+        xray_die "Subnet must be a valid IPv4 CIDR (example: 10.0.101.0/24 with prefix between 0 and 32)"
     fi
 fi
 
@@ -294,23 +294,23 @@ case "$MODE" in
         if [ -d "$NFT_SNIPPET_DIR" ]; then
             find "$NFT_SNIPPET_DIR" -maxdepth 1 -type f -name '*.entry' -print 2>/dev/null | while IFS= read -r file; do
                 rm -f "$file"
-                log "Removed entry $file"
+                xray_log "Removed entry $file"
             done
         fi
         if [ -f "$NFT_SNIPPET" ]; then
             rm -f "$NFT_SNIPPET"
-            log "Removed nftables snippet $NFT_SNIPPET"
+            xray_log "Removed nftables snippet $NFT_SNIPPET"
         else
-            log "Snippet $NFT_SNIPPET not present"
+            xray_log "Snippet $NFT_SNIPPET not present"
         fi
         ;;
     single)
         target_entry=$(entry_path_for_subnet "$TARGET_SUBNET")
         if [ -f "$target_entry" ]; then
             rm -f "$target_entry"
-            log "Removed entry $target_entry"
+            xray_log "Removed entry $target_entry"
         else
-            log "Entry for subnet $TARGET_SUBNET not present"
+            xray_log "Entry for subnet $TARGET_SUBNET not present"
         fi
         ;;
 esac
@@ -321,25 +321,25 @@ fw4_ok=0
 if command -v fw4 >/dev/null 2>&1; then
     if fw4 reload >/dev/null 2>&1; then
         fw4_ok=1
-        log "fw4 reload ok"
+        xray_log "fw4 reload ok"
     else
-        log "fw4 reload failed; attempting direct nft cleanup"
+        xray_log "fw4 reload failed; attempting direct nft cleanup"
     fi
 else
-    log "fw4 binary not found; attempting direct nft cleanup"
+    xray_log "fw4 binary not found; attempting direct nft cleanup"
 fi
 
 if [ "$fw4_ok" -eq 0 ]; then
-    require_cmd nft
+    xray_require_cmd nft
 
     delete_chain() {
         chain_name="$1"
         if nft list chain inet fw4 "$chain_name" >/dev/null 2>&1; then
             nft flush chain inet fw4 "$chain_name" >/dev/null 2>&1 || true
             if nft delete chain inet fw4 "$chain_name" >/dev/null 2>&1; then
-                log "Removed chain inet fw4 $chain_name"
+                xray_log "Removed chain inet fw4 $chain_name"
             else
-                log "Failed to delete chain inet fw4 $chain_name"
+                xray_log "Failed to delete chain inet fw4 $chain_name"
             fi
         fi
     }
@@ -348,4 +348,4 @@ if [ "$fw4_ok" -eq 0 ]; then
     delete_chain xray_transparent_output
 fi
 
-log "Transparent redirect rules removed"
+xray_log "Transparent redirect rules removed"

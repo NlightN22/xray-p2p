@@ -122,7 +122,7 @@ ROUTING_FILE="${XRAY_ROUTING_FILE:-$CONFIG_DIR/routing.json}"
 ROUTING_TEMPLATE_LOCAL="${XRAY_ROUTING_TEMPLATE:-config_templates/server/routing.json}"
 ROUTING_TEMPLATE_REMOTE="${XRAY_ROUTING_TEMPLATE_REMOTE:-config_templates/server/routing.json}"
 
-require_cmd jq
+xray_require_cmd jq
 
 ensure_routing_file() {
     if [ ! -f "$ROUTING_FILE" ]; then
@@ -131,9 +131,9 @@ ensure_routing_file() {
 }
 
 run_user_list() {
-    log "Existing XRAY users (user_list.sh):"
+    xray_log "Existing XRAY users (user_list.sh):"
     if ! xray_run_repo_script optional "lib/user_list.sh" "scripts/lib/user_list.sh"; then
-        log "Unable to execute user_list.sh; continuing without user listing."
+        xray_log "Unable to execute user_list.sh; continuing without user listing."
     fi
 }
 
@@ -155,7 +155,7 @@ read_username() {
             exec 3</dev/tty
             read_fd=3
         else
-            die "Username argument required; no interactive terminal available"
+            xray_die "Username argument required; no interactive terminal available"
         fi
     fi
 
@@ -170,7 +170,7 @@ read_username() {
             printf '%s' "$input"
             return
         fi
-        log "Username cannot be empty."
+        xray_log "Username cannot be empty."
     done
 }
 
@@ -178,7 +178,7 @@ validate_username() {
     candidate="$1"
     case "$candidate" in
         ''|*[!A-Za-z0-9._-]*)
-            die "Username must contain only letters, digits, dot, underscore, or dash"
+            xray_die "Username must contain only letters, digits, dot, underscore, or dash"
             ;;
     esac
 }
@@ -189,7 +189,7 @@ update_routing() {
     domain="$username$suffix"
     tag="$domain"
 
-    tmp="$(mktemp 2>/dev/null)" || die "Unable to create temporary file"
+    tmp="$(mktemp 2>/dev/null)" || xray_die "Unable to create temporary file"
 
     if ! jq \
         --arg user "$username" \
@@ -220,13 +220,13 @@ update_routing() {
         )
         ' "$ROUTING_FILE" >"$tmp"; then
         rm -f "$tmp"
-        die "Failed to update $ROUTING_FILE"
+        xray_die "Failed to update $ROUTING_FILE"
     fi
 
     chmod 0644 "$tmp"
     mv "$tmp" "$ROUTING_FILE"
 
-    log "Updated $ROUTING_FILE with reverse proxy entry for $username (tag: $tag)"
+    xray_log "Updated $ROUTING_FILE with reverse proxy entry for $username (tag: $tag)"
 }
 
 ensure_routing_file
@@ -236,4 +236,4 @@ USERNAME=$(read_username "$username_arg")
 validate_username "$USERNAME"
 update_routing "$USERNAME"
 
-log "Reverse proxy server install complete."
+xray_log "Reverse proxy server install complete."

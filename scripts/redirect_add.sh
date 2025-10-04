@@ -228,23 +228,23 @@ if [ -z "$SUBNET" ]; then
         printf 'Enter destination subnet (CIDR, e.g. 10.0.101.0/24): '
         IFS= read -r SUBNET </dev/tty
     else
-        die "Subnet argument is required"
+        xray_die "Subnet argument is required"
     fi
 fi
 
 if [ -z "$SUBNET" ]; then
-    die "Subnet cannot be empty"
+    xray_die "Subnet cannot be empty"
 fi
 
 if ! validate_subnet "$SUBNET"; then
-    die "Subnet must be a valid IPv4 CIDR (example: 10.0.101.0/24 with prefix between 0 and 32)"
+    xray_die "Subnet must be a valid IPv4 CIDR (example: 10.0.101.0/24 with prefix between 0 and 32)"
 fi
 
 if [ ! -f "$XRAY_INBOUND_FILE" ]; then
-    die "XRAY inbound file $XRAY_INBOUND_FILE not found"
+    xray_die "XRAY inbound file $XRAY_INBOUND_FILE not found"
 fi
 
-require_cmd nft
+xray_require_cmd nft
 
 select_dokodemo_port() {
     if command -v jq >/dev/null 2>&1; then
@@ -280,14 +280,14 @@ select_dokodemo_port() {
 
 ports=$(select_dokodemo_port || true)
 if [ -z "$ports" ]; then
-    die "No dokodemo-door inbounds found in $XRAY_INBOUND_FILE"
+    xray_die "No dokodemo-door inbounds found in $XRAY_INBOUND_FILE"
 fi
 
 count=$(printf '%s\n' "$ports" | wc -l)
 if [ "$count" -eq 1 ]; then
     PORT="$ports"
 else
-    log "Multiple dokodemo-door ports detected:"
+    xray_log "Multiple dokodemo-door ports detected:"
     idx=1
     printf '%s\n' "$ports" | while IFS= read -r port; do
         printf ' [%d] %s\n' "$idx" "$port"
@@ -300,19 +300,19 @@ else
         printf 'Select port number: '
         read -r answer </dev/tty
     else
-        die "Multiple dokodemo-door ports found but no interactive input available"
+        xray_die "Multiple dokodemo-door ports found but no interactive input available"
     fi
 
     case "$answer" in
-        *[!0-9]*) die "Invalid selection" ;;
+        *[!0-9]*) xray_die "Invalid selection" ;;
     esac
     if [ "$answer" -lt 1 ] || [ "$answer" -gt "$count" ]; then
-        die "Selection out of range"
+        xray_die "Selection out of range"
     fi
     PORT=$(printf '%s\n' "$ports" | sed -n "${answer}p")
 fi
 
-log "Configuring transparent redirect via nftables: subnet=$SUBNET port=$PORT"
+xray_log "Configuring transparent redirect via nftables: subnet=$SUBNET port=$PORT"
 
 write_nft_snippet() {
     local dir tmp entries entry
@@ -379,21 +379,21 @@ write_nft_snippet
 
 if command -v fw4 >/dev/null 2>&1; then
     if fw4 reload >/dev/null; then
-        log "fw4 reload ok"
+        xray_log "fw4 reload ok"
     else
-        log "fw4 reload failed; falling back to direct nft"
+        xray_log "fw4 reload failed; falling back to direct nft"
         if ! nft -f "$NFT_SNIPPET"; then
-            die "Failed to load nft rules"
+            xray_die "Failed to load nft rules"
         fi
     fi
 else
-    log "fw4 binary not found; applying nft snippet directly"
+    xray_log "fw4 binary not found; applying nft snippet directly"
     if ! nft -f "$NFT_SNIPPET"; then
-        die "Failed to load nft rules"
+        xray_die "Failed to load nft rules"
     fi
 fi
 
-log "Transparent redirect active for subnet $SUBNET"
-log "Dokodemo-door port: $PORT"
-log "Snippet file: $NFT_SNIPPET"
-log "Entry file: $entry_file"
+xray_log "Transparent redirect active for subnet $SUBNET"
+xray_log "Dokodemo-door port: $PORT"
+xray_log "Snippet file: $NFT_SNIPPET"
+xray_log "Entry file: $entry_file"

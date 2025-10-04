@@ -153,7 +153,7 @@ prompt_value() {
         elif [ -r /dev/tty ]; then
             IFS= read -r value </dev/tty
         else
-            die "No interactive terminal available. Set required environment variables."
+            xray_die "No interactive terminal available. Set required environment variables."
         fi
 
         if [ -z "$value" ] && [ -n "$default_value" ]; then
@@ -161,7 +161,7 @@ prompt_value() {
         fi
 
         if [ -z "$value" ]; then
-            log "Value cannot be empty."
+            xray_log "Value cannot be empty."
         fi
     done
 
@@ -189,7 +189,7 @@ generate_uuid() {
         return
     fi
 
-    die "Unable to generate UUID; install uuidgen or ensure /proc/sys/kernel/random/uuid is available."
+    xray_die "Unable to generate UUID; install uuidgen or ensure /proc/sys/kernel/random/uuid is available."
 }
 
 generate_password() {
@@ -208,7 +208,7 @@ generate_password() {
         return
     fi
 
-    die "Unable to generate password; install openssl or ensure /dev/urandom is available."
+    xray_die "Unable to generate password; install openssl or ensure /dev/urandom is available."
 }
 
 generate_client_email() {
@@ -257,9 +257,9 @@ CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
 CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
 SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 
-[ -f "$INBOUNDS_FILE" ] || die "Inbound configuration not found: $INBOUNDS_FILE"
+[ -f "$INBOUNDS_FILE" ] || xray_die "Inbound configuration not found: $INBOUNDS_FILE"
 
-require_cmd jq
+xray_require_cmd jq
 
 xray_check_repo_access 'scripts/user_issue.sh'
 
@@ -269,7 +269,7 @@ if [ "${XRAY_SHOW_CLIENTS:-1}" = "1" ]; then
             XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
             xray_run_repo_script optional "lib/user_list.sh" "scripts/lib/user_list.sh" 2>&1); then
         if [ -n "$clients_output" ]; then
-            log "Current clients (email password status):"
+            xray_log "Current clients (email password status):"
             printf '%s\n' "$clients_output"
         fi
     elif [ -n "$clients_output" ]; then
@@ -324,12 +324,12 @@ fi
 
 EMAIL="$(printf '%s' "$EMAIL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
-[ -n "$EMAIL" ] || die "Client email cannot be empty."
-printf '%s' "$EMAIL" | grep -Eq '^[^[:space:]]+$' || die "Client email must not contain whitespace."
+[ -n "$EMAIL" ] || xray_die "Client email cannot be empty."
+printf '%s' "$EMAIL" | grep -Eq '^[^[:space:]]+$' || xray_die "Client email must not contain whitespace."
 CLIENTS_INPUT="$CLIENTS_FILE"
 if [ -f "$CLIENTS_FILE" ]; then
     if ! jq empty "$CLIENTS_FILE" >/dev/null 2>&1; then
-        die "Existing $CLIENTS_FILE contains invalid JSON."
+        xray_die "Existing $CLIENTS_FILE contains invalid JSON."
     fi
 else
     TMP_BASE_CLIENTS="$(mktemp)"
@@ -340,13 +340,13 @@ fi
 if jq -e --arg email "$EMAIL" '
     ([ .[]? | select((.email // "") == $email) ] | length) > 0
 ' "$CLIENTS_INPUT" >/dev/null 2>&1; then
-    die "Client '$EMAIL' already exists in $CLIENTS_FILE"
+    xray_die "Client '$EMAIL' already exists in $CLIENTS_FILE"
 fi
 
 if jq -e --arg email "$EMAIL" '
     ([ .inbounds[]? | .settings.clients[]? | select((.email // "") == $email) ] | length) > 0
 ' "$INBOUNDS_FILE" >/dev/null 2>&1; then
-    die "Client '$EMAIL' already exists in $INBOUNDS_FILE"
+    xray_die "Client '$EMAIL' already exists in $INBOUNDS_FILE"
 fi
 
 XRAY_PORT="$(jq -r '
@@ -355,7 +355,7 @@ XRAY_PORT="$(jq -r '
     | if length == 0 then empty else .[0].port end
 ' "$INBOUNDS_FILE")"
 
-[ -n "$XRAY_PORT" ] && [ "$XRAY_PORT" != "null" ] || die "Unable to determine trojan inbound port from $INBOUNDS_FILE"
+[ -n "$XRAY_PORT" ] && [ "$XRAY_PORT" != "null" ] || xray_die "Unable to determine trojan inbound port from $INBOUNDS_FILE"
 
 CERT_FILE="$(jq -r '
     ( .inbounds // [] )
@@ -380,12 +380,12 @@ if [ -z "$TLS_SNI_HOST" ]; then
     if [ -t 0 ] || [ -r /dev/tty ]; then
         TLS_SNI_HOST="$(prompt_value 'Enter TLS SNI hostname (domain in certificate)' '')"
     else
-        die "TLS SNI hostname not specified. Set XRAY_SERVER_NAME or run interactively."
+        xray_die "TLS SNI hostname not specified. Set XRAY_SERVER_NAME or run interactively."
     fi
 fi
 
-[ -n "$TLS_SNI_HOST" ] || die "TLS SNI hostname cannot be empty."
-printf '%s' "$TLS_SNI_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || die "TLS SNI hostname must contain only letters, digits, dots or hyphens."
+[ -n "$TLS_SNI_HOST" ] || xray_die "TLS SNI hostname cannot be empty."
+printf '%s' "$TLS_SNI_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || xray_die "TLS SNI hostname must contain only letters, digits, dots or hyphens."
 
 CONNECTION_HOST="$connection_arg"
 [ -n "$CONNECTION_HOST" ] || CONNECTION_HOST="${XRAY_SERVER_ADDRESS:-}"
@@ -402,8 +402,8 @@ if [ -z "$CONNECTION_HOST" ]; then
 fi
 
 CONNECTION_HOST="$(printf '%s' "$CONNECTION_HOST" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-[ -n "$CONNECTION_HOST" ] || die "Connection address cannot be empty."
-printf '%s' "$CONNECTION_HOST" | grep -Eq '^[^[:space:]]+$' || die "Connection address must not contain whitespace."
+[ -n "$CONNECTION_HOST" ] || xray_die "Connection address cannot be empty."
+printf '%s' "$CONNECTION_HOST" | grep -Eq '^[^[:space:]]+$' || xray_die "Connection address must not contain whitespace."
 
 TLS_ALLOW_INSECURE="$(jq -r '
     def truthy:
@@ -451,7 +451,7 @@ case "$TLS_ALLOW_INSECURE" in
         TLS_ALLOW_INSECURE=0
         ;;
     *)
-        log "Unrecognised XRAY_ALLOW_INSECURE value '$TLS_ALLOW_INSECURE'; defaulting to 0"
+        xray_log "Unrecognised XRAY_ALLOW_INSECURE value '$TLS_ALLOW_INSECURE'; defaulting to 0"
         TLS_ALLOW_INSECURE=0
         ;;
 esac
@@ -506,15 +506,15 @@ chmod 644 "$INBOUNDS_FILE"
 TMP_INBOUNDS=""
 
 if [ "${XRAY_SKIP_RESTART:-0}" = "1" ]; then
-    log "Skipping ${SERVICE_NAME} restart (XRAY_SKIP_RESTART=1)."
+    xray_log "Skipping ${SERVICE_NAME} restart (XRAY_SKIP_RESTART=1)."
 else
     SERVICE_SCRIPT="/etc/init.d/$SERVICE_NAME"
-    [ -x "$SERVICE_SCRIPT" ] || die "Service script not found or not executable: $SERVICE_SCRIPT"
-    log "Restarting $SERVICE_NAME service"
-    "$SERVICE_SCRIPT" restart || die "Failed to restart $SERVICE_NAME service."
+    [ -x "$SERVICE_SCRIPT" ] || xray_die "Service script not found or not executable: $SERVICE_SCRIPT"
+    xray_log "Restarting $SERVICE_NAME service"
+    "$SERVICE_SCRIPT" restart || xray_die "Failed to restart $SERVICE_NAME service."
 fi
 
-log "Client '$EMAIL' issued with id $CLIENT_ID."
-log "Configuration files updated: $CLIENTS_FILE, $INBOUNDS_FILE"
+xray_log "Client '$EMAIL' issued with id $CLIENT_ID."
+xray_log "Configuration files updated: $CLIENTS_FILE, $INBOUNDS_FILE"
 
 printf '%s\n' "$CLIENT_LINK"

@@ -74,7 +74,7 @@ xray_lan_pick_private_iface() {
 }
 
 xray_lan_detect_main() {
-    require_cmd ip
+    xray_require_cmd ip
 
     LAN_IFACE=""
     LAN_IP=""
@@ -176,19 +176,19 @@ xray_lan_detect_main() {
     fi
 
     if [ -z "$LAN_IFACE" ] && [ -z "$LAN_IP" ]; then
-        die "Unable to detect LAN interface and IP"
+        xray_die "Unable to detect LAN interface and IP"
     fi
 
     if [ -z "$LAN_IP" ]; then
-        die "Detected LAN interface '$LAN_IFACE' but no IPv4 address is configured"
+        xray_die "Detected LAN interface '$LAN_IFACE' but no IPv4 address is configured"
     fi
 
     if ! xray_lan_is_private_ipv4 "$LAN_IP"; then
-        log "Warning: detected LAN IPv4 $LAN_IP is not in a private range"
+        xray_log "Warning: detected LAN IPv4 $LAN_IP is not in a private range"
     fi
 
-    log "LAN interface: $LAN_IFACE"
-    log "LAN IPv4: $LAN_IP"
+    xray_log "LAN interface: $LAN_IFACE"
+    xray_log "LAN IPv4: $LAN_IP"
 }
 
 if [ "${0##*/}" = "lan_detect.sh" ]; then

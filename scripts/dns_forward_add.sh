@@ -128,15 +128,15 @@ sanitize_for_tag() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
 }
 
-require_cmd jq
-require_cmd uci
-require_cmd sed
-require_cmd cmp
-require_cmd sort
-require_cmd grep
+xray_require_cmd jq
+xray_require_cmd uci
+xray_require_cmd sed
+xray_require_cmd cmp
+xray_require_cmd sort
+xray_require_cmd grep
 
 if [ ! -f "$XRAY_INBOUND_FILE" ]; then
-    die "XRAY inbound file $XRAY_INBOUND_FILE not found"
+    xray_die "XRAY inbound file $XRAY_INBOUND_FILE not found"
 fi
 
 while [ "$#" -gt 0 ]; do
@@ -149,7 +149,7 @@ while [ "$#" -gt 0 ]; do
             break
             ;;
         -*)
-            log "Unknown option: $1"
+            xray_log "Unknown option: $1"
             usage 1
             ;;
         *)
@@ -173,7 +173,7 @@ if [ "$#" -gt 0 ]; then
 fi
 
 if [ "$#" -gt 0 ]; then
-    log "Unexpected argument: $1"
+    xray_log "Unexpected argument: $1"
     usage 1
 fi
 
@@ -185,13 +185,13 @@ if [ -z "$domain_mask" ]; then
         printf 'Enter domain mask (e.g. *.corp.test.com): '
         IFS= read -r domain_mask </dev/tty
     else
-        die "Domain mask argument is required"
+        xray_die "Domain mask argument is required"
     fi
 fi
 
 domain_mask=$(trim "$domain_mask")
 if ! validate_domain_mask "$domain_mask"; then
-    die "Domain mask must contain only letters, digits, dots, dashes, or asterisks (example: *.corp.test.com)"
+    xray_die "Domain mask must contain only letters, digits, dots, dashes, or asterisks (example: *.corp.test.com)"
 fi
 
 if [ -z "$dns_ip" ]; then
@@ -202,13 +202,13 @@ if [ -z "$dns_ip" ]; then
         printf 'Enter upstream DNS IP: '
         IFS= read -r dns_ip </dev/tty
     else
-        die "Upstream DNS IP argument is required"
+        xray_die "Upstream DNS IP argument is required"
     fi
 fi
 
 dns_ip=$(trim "$dns_ip")
 if ! validate_ipv4 "$dns_ip"; then
-    die "Upstream DNS IP must be a valid IPv4 address"
+    xray_die "Upstream DNS IP must be a valid IPv4 address"
 fi
 
 case "$domain_mask" in
@@ -220,7 +220,7 @@ esac
 base_domain=${base_domain#.}
 case "$base_domain" in
     ''|*'*'*)
-        die "Cannot derive base domain from mask '$domain_mask'"
+        xray_die "Cannot derive base domain from mask '$domain_mask'"
         ;;
 esac
 
@@ -249,7 +249,7 @@ else
     while echo "$all_ports" | grep -qx "$candidate"; do
         candidate=$((candidate + 1))
         if [ "$candidate" -gt 65535 ]; then
-            die "No free ports available from $BASE_LOCAL_PORT to 65535"
+            xray_die "No free ports available from $BASE_LOCAL_PORT to 65535"
         fi
     done
     local_port="$candidate"
@@ -270,12 +270,12 @@ else
 fi
 
 if [ -n "$existing_port" ]; then
-    log "Updating DNS forwarding for $domain_mask (port $local_port)"
+    xray_log "Updating DNS forwarding for $domain_mask (port $local_port)"
 else
-    log "Adding DNS forwarding for $domain_mask on port $local_port"
+    xray_log "Adding DNS forwarding for $domain_mask on port $local_port"
 fi
 
-log "Upstream DNS IP: $dns_ip"
+xray_log "Upstream DNS IP: $dns_ip"
 
 tmp_inbound=$(mktemp)
 trap 'rm -f "$tmp_inbound"' EXIT
@@ -321,7 +321,7 @@ if ! jq --arg listen "$LISTEN_ADDRESS" \
           end
     end
 ' "$XRAY_INBOUND_FILE" >"$tmp_inbound"; then
-    die "Failed to update $XRAY_INBOUND_FILE"
+    xray_die "Failed to update $XRAY_INBOUND_FILE"
 fi
 
 inbound_changed=0
@@ -330,11 +330,11 @@ if ! cmp -s "$tmp_inbound" "$XRAY_INBOUND_FILE"; then
     mv "$tmp_inbound" "$XRAY_INBOUND_FILE"
     trap - EXIT
     inbound_changed=1
-    log "Updated $XRAY_INBOUND_FILE"
+    xray_log "Updated $XRAY_INBOUND_FILE"
 else
     rm -f "$tmp_inbound"
     trap - EXIT
-    log "No changes required in $XRAY_INBOUND_FILE"
+    xray_log "No changes required in $XRAY_INBOUND_FILE"
 fi
 
 uci_changed=0
@@ -371,9 +371,9 @@ fi
 if [ "$server_present" -eq 0 ]; then
     uci add_list "$DNSMASQ_SECTION.server"="$server_value"
     uci_changed=1
-    log "Set dnsmasq server entry: $server_value"
+    xray_log "Set dnsmasq server entry: $server_value"
 else
-    log "dnsmasq server entry already set"
+    xray_log "dnsmasq server entry already set"
 fi
 
 rebind_output=$(uci -q show "$DNSMASQ_SECTION.rebind_domain" 2>/dev/null || true)
@@ -402,38 +402,38 @@ fi
 if [ "$rebind_present" -eq 0 ]; then
     uci add_list "$DNSMASQ_SECTION.rebind_domain"="$rebind_value"
     uci_changed=1
-    log "Set dnsmasq rebind_domain entry: $rebind_value"
+    xray_log "Set dnsmasq rebind_domain entry: $rebind_value"
 else
-    log "dnsmasq rebind_domain entry already set"
+    xray_log "dnsmasq rebind_domain entry already set"
 fi
 
 if [ "$uci_changed" -eq 1 ]; then
     uci commit dhcp
     if [ -x "$DNSMASQ_SERVICE" ]; then
         if "$DNSMASQ_SERVICE" restart >/dev/null 2>&1; then
-            log "dnsmasq restarted"
+            xray_log "dnsmasq restarted"
         else
-            log "dnsmasq restart failed; please restart manually"
+            xray_log "dnsmasq restart failed; please restart manually"
         fi
     else
-        log "dnsmasq service script not found at $DNSMASQ_SERVICE"
+        xray_log "dnsmasq service script not found at $DNSMASQ_SERVICE"
     fi
 else
-    log "dnsmasq configuration already up to date"
+    xray_log "dnsmasq configuration already up to date"
 fi
 
 if [ "$inbound_changed" -eq 1 ]; then
     if [ -x "$XRAY_SERVICE" ]; then
         if "$XRAY_SERVICE" restart >/dev/null 2>&1; then
-            log "xray restarted"
+            xray_log "xray restarted"
         else
-            log "xray restart failed; please restart manually"
+            xray_log "xray restart failed; please restart manually"
         fi
     else
-        log "xray service script not found at $XRAY_SERVICE"
+        xray_log "xray service script not found at $XRAY_SERVICE"
     fi
 else
-    log "xray configuration already up to date"
+    xray_log "xray configuration already up to date"
 fi
 
-log "Forwarding ready: $domain_mask -> $dns_ip via 127.0.0.1#$local_port"
+xray_log "Forwarding ready: $domain_mask -> $dns_ip via 127.0.0.1#$local_port"

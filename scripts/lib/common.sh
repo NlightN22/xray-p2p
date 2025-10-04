@@ -31,23 +31,16 @@ xray_require_cmd() {
         jq)
             xray_die "Required command 'jq' not found. Install it before running this script. For OpenWrt run: opkg update && opkg install jq"
             ;;
+        uci)
+            xray_die "Required command 'uci' not found. Ensure you are running this on OpenWrt."
+            ;;
+        openssl)
+            xray_die "Required command 'openssl' not found. Install it before running this script (e.g. opkg update && opkg install openssl-util)."
+            ;;
         *)
             xray_die "Required command '$cmd' not found. Install it before running this script."
             ;;
     esac
-}
-
-# Allow scripts to keep using legacy names without redefining everywhere.
-log() {
-    xray_log "$@"
-}
-
-die() {
-    xray_die "$@"
-}
-
-require_cmd() {
-    xray_require_cmd "$@"
 }
 
 xray_repo_base_url() {

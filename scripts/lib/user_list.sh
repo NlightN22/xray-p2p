@@ -9,30 +9,30 @@ xray_user_list_main() {
     CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
     CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
 
-    require_cmd jq
+    xray_require_cmd jq
 
     xray_check_repo_access 'scripts/lib/user_list.sh'
 
     if [ ! -f "$CLIENTS_FILE" ]; then
-        die "Clients registry not found: $CLIENTS_FILE"
+        xray_die "Clients registry not found: $CLIENTS_FILE"
     fi
 
     if [ ! -f "$INBOUNDS_FILE" ]; then
-        die "Inbound configuration not found: $INBOUNDS_FILE"
+        xray_die "Inbound configuration not found: $INBOUNDS_FILE"
     fi
 
     if ! jq empty "$CLIENTS_FILE" >/dev/null 2>&1; then
-        die "Clients registry $CLIENTS_FILE contains invalid JSON."
+        xray_die "Clients registry $CLIENTS_FILE contains invalid JSON."
     fi
 
     if ! jq empty "$INBOUNDS_FILE" >/dev/null 2>&1; then
-        die "Inbound configuration $INBOUNDS_FILE contains invalid JSON."
+        xray_die "Inbound configuration $INBOUNDS_FILE contains invalid JSON."
     fi
 
-    CLIENTS_TMP=$(mktemp) || die "Unable to create temporary file"
-    INBOUND_TMP=$(mktemp) || die "Unable to create temporary file"
-    MISMATCH_TMP=$(mktemp) || die "Unable to create temporary file"
-    ACTIVE_TMP=$(mktemp) || die "Unable to create temporary file"
+    CLIENTS_TMP=$(mktemp) || xray_die "Unable to create temporary file"
+    INBOUND_TMP=$(mktemp) || xray_die "Unable to create temporary file"
+    MISMATCH_TMP=$(mktemp) || xray_die "Unable to create temporary file"
+    ACTIVE_TMP=$(mktemp) || xray_die "Unable to create temporary file"
 
     trap 'rm -f "$CLIENTS_TMP" "$INBOUND_TMP" "$MISMATCH_TMP" "$ACTIVE_TMP"' EXIT INT TERM
 
@@ -128,7 +128,7 @@ xray_user_list_main() {
     fi
 
     if [ "$awk_status" -ne 0 ]; then
-        die "Failed to compare client registry with inbound configuration."
+        xray_die "Failed to compare client registry with inbound configuration."
     fi
 
     if ! [ -s "$ACTIVE_TMP" ]; then

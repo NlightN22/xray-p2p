@@ -100,15 +100,15 @@ collect_forwardings() {
     ' "$XRAY_INBOUND_FILE" 2>/dev/null
 }
 
-require_cmd jq
-require_cmd uci
-require_cmd sed
-require_cmd cmp
-require_cmd sort
-require_cmd grep
+xray_require_cmd jq
+xray_require_cmd uci
+xray_require_cmd sed
+xray_require_cmd cmp
+xray_require_cmd sort
+xray_require_cmd grep
 
 if [ ! -f "$XRAY_INBOUND_FILE" ]; then
-    die "XRAY inbound file $XRAY_INBOUND_FILE not found"
+    xray_die "XRAY inbound file $XRAY_INBOUND_FILE not found"
 fi
 
 usage() {
@@ -143,11 +143,11 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --*)
-            die "Unknown option: $1"
+            xray_die "Unknown option: $1"
             ;;
         *)
             if [ -n "$TARGET_MASK" ]; then
-                die "Only one DOMAIN_MASK may be specified"
+                xray_die "Only one DOMAIN_MASK may be specified"
             fi
             MODE="single"
             TARGET_MASK="$1"
@@ -160,7 +160,7 @@ forwardings=$(collect_forwardings || true)
 
 if [ "$LIST_ONLY" -eq 1 ]; then
     if [ -z "$forwardings" ]; then
-        log "No DNS forwardings configured"
+        xray_log "No DNS forwardings configured"
     else
         printf '%s\n' "$forwardings" | while IFS="\t" read -r mask addr port; do
             if [ -n "$port" ]; then
@@ -176,12 +176,12 @@ fi
 if [ "$MODE" = "single" ]; then
     TARGET_MASK=$(trim "$TARGET_MASK")
     if ! validate_domain_mask "$TARGET_MASK"; then
-        die "Domain mask must look like '*.corp.test.com' or 'corp.test.com'"
+        xray_die "Domain mask must look like '*.corp.test.com' or 'corp.test.com'"
     fi
 fi
 
 if [ -z "$forwardings" ]; then
-    log "No DNS forwardings configured"
+    xray_log "No DNS forwardings configured"
     exit 0
 fi
 
@@ -191,7 +191,7 @@ if [ "$MODE" = "single" ]; then
     if printf '%s\n' "$forwardings" | cut -f1 | grep -Fx "$TARGET_MASK" >/dev/null 2>&1; then
         selected_masks="$TARGET_MASK"
     else
-        die "No forwarding found for mask $TARGET_MASK"
+        xray_die "No forwarding found for mask $TARGET_MASK"
     fi
 else
     selected_masks=$(printf '%s\n' "$forwardings" | cut -f1 | sort -u)
@@ -200,7 +200,7 @@ fi
 remarks_json=$(printf '%s\n' "$selected_masks" | jq -Rn --arg prefix "$DNS_REMARK_PREFIX" '[inputs | select(length > 0) | $prefix + .]')
 
 if [ "$remarks_json" = "[]" ]; then
-    log "Nothing to remove"
+    xray_log "Nothing to remove"
     exit 0
 fi
 
@@ -218,7 +218,7 @@ if ! jq --argjson remarks "$remarks_json" '
         ]
     end
 ' "$XRAY_INBOUND_FILE" >"$tmp_inbound"; then
-    die "Failed to update $XRAY_INBOUND_FILE"
+    xray_die "Failed to update $XRAY_INBOUND_FILE"
 fi
 
 inbound_changed=0
@@ -227,11 +227,11 @@ if ! cmp -s "$tmp_inbound" "$XRAY_INBOUND_FILE"; then
     mv "$tmp_inbound" "$XRAY_INBOUND_FILE"
     trap - EXIT
     inbound_changed=1
-    log "Updated $XRAY_INBOUND_FILE"
+    xray_log "Updated $XRAY_INBOUND_FILE"
 else
     rm -f "$tmp_inbound"
     trap - EXIT
-    log "No changes required in $XRAY_INBOUND_FILE"
+    xray_log "No changes required in $XRAY_INBOUND_FILE"
 fi
 
 remaining_forwardings=$(collect_forwardings || true)
@@ -300,29 +300,29 @@ if [ "$uci_changed" -eq 1 ]; then
     uci commit dhcp
     if [ -x "$DNSMASQ_SERVICE" ]; then
         if "$DNSMASQ_SERVICE" restart >/dev/null 2>&1; then
-            log "dnsmasq restarted"
+            xray_log "dnsmasq restarted"
         else
-            log "dnsmasq restart failed; please restart manually"
+            xray_log "dnsmasq restart failed; please restart manually"
         fi
     else
-        log "dnsmasq service script not found at $DNSMASQ_SERVICE"
+        xray_log "dnsmasq service script not found at $DNSMASQ_SERVICE"
     fi
 else
-    log "dnsmasq configuration already up to date"
+    xray_log "dnsmasq configuration already up to date"
 fi
 
 if [ "$inbound_changed" -eq 1 ]; then
     if [ -x "$XRAY_SERVICE" ]; then
         if "$XRAY_SERVICE" restart >/dev/null 2>&1; then
-            log "xray restarted"
+            xray_log "xray restarted"
         else
-            log "xray restart failed; please restart manually"
+            xray_log "xray restart failed; please restart manually"
         fi
     else
-        log "xray service script not found at $XRAY_SERVICE"
+        xray_log "xray service script not found at $XRAY_SERVICE"
     fi
 else
-    log "xray configuration already up to date"
+    xray_log "xray configuration already up to date"
 fi
 
-log "Removed masks: $(printf '%s' "$selected_masks" | tr '\n' ' ')"
+xray_log "Removed masks: $(printf '%s' "$selected_masks" | tr '\n' ' ')"

@@ -147,7 +147,7 @@ prompt_value() {
         elif [ -r /dev/tty ]; then
             IFS= read -r value </dev/tty
         else
-            die "No interactive terminal available. Provide the required value via arguments or environment."
+            xray_die "No interactive terminal available. Provide the required value via arguments or environment."
         fi
 
         if [ -z "$value" ] && [ -n "$default_value" ]; then
@@ -155,7 +155,7 @@ prompt_value() {
         fi
 
         if [ -z "$value" ]; then
-            log "Value cannot be empty."
+            xray_log "Value cannot be empty."
         fi
     done
 
@@ -168,9 +168,9 @@ CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
 CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
 SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 
-[ -f "$INBOUNDS_FILE" ] || die "Inbound configuration not found: $INBOUNDS_FILE"
+[ -f "$INBOUNDS_FILE" ] || xray_die "Inbound configuration not found: $INBOUNDS_FILE"
 
-require_cmd jq
+xray_require_cmd jq
 
 xray_check_repo_access 'scripts/user_remove.sh'
 
@@ -179,7 +179,7 @@ if clients_output=$(XRAY_CONFIG_DIR="$CONFIG_DIR" \
         XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
         xray_run_repo_script optional "lib/user_list.sh" "scripts/lib/user_list.sh" 2>&1); then
     if [ -n "$clients_output" ]; then
-        log "Current clients (email password status):"
+        xray_log "Current clients (email password status):"
         printf '%s\n' "$clients_output"
     fi
 elif [ -n "$clients_output" ]; then
@@ -196,14 +196,14 @@ if [ -z "$EMAIL" ]; then
     if [ -t 0 ] || [ -r /dev/tty ]; then
         EMAIL="$(prompt_value 'Enter client email to remove' '')"
     else
-        die "Client email not provided. Pass as an argument or set XRAY_CLIENT_EMAIL."
+        xray_die "Client email not provided. Pass as an argument or set XRAY_CLIENT_EMAIL."
     fi
 fi
 
 EMAIL="$(printf '%s' "$EMAIL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 
-[ -n "$EMAIL" ] || die "Client email cannot be empty."
-printf '%s' "$EMAIL" | grep -Eq '^[^[:space:]]+$' || die "Client email must not contain whitespace."
+[ -n "$EMAIL" ] || xray_die "Client email cannot be empty."
+printf '%s' "$EMAIL" | grep -Eq '^[^[:space:]]+$' || xray_die "Client email must not contain whitespace."
 
 CLIENTS_MATCHES=0
 CLIENT_ID=""
@@ -212,7 +212,7 @@ CLIENTS_PRESENT=0
 if [ -f "$CLIENTS_FILE" ]; then
     CLIENTS_PRESENT=1
     if ! jq empty "$CLIENTS_FILE" >/dev/null 2>&1; then
-        die "Existing $CLIENTS_FILE contains invalid JSON."
+        xray_die "Existing $CLIENTS_FILE contains invalid JSON."
     fi
     CLIENTS_MATCHES=$(jq -r --arg email "$EMAIL" '
         ([ .[]? | select((.email // "") == $email) ] | length)
@@ -226,7 +226,7 @@ if [ -f "$CLIENTS_FILE" ]; then
         ' "$CLIENTS_FILE")
     fi
 else
-    log "Clients registry file $CLIENTS_FILE not found; will update inbound configuration only."
+    xray_log "Clients registry file $CLIENTS_FILE not found; will update inbound configuration only."
 fi
 
 INBOUND_MATCHES=$(jq -r --arg email "$EMAIL" '
@@ -238,7 +238,7 @@ INBOUND_MATCHES=$(jq -r --arg email "$EMAIL" '
 ' "$INBOUNDS_FILE")
 
 if [ "$CLIENTS_MATCHES" -eq 0 ] && [ "$INBOUND_MATCHES" -eq 0 ]; then
-    die "Client '$EMAIL' not found in $CLIENTS_FILE or $INBOUNDS_FILE"
+    xray_die "Client '$EMAIL' not found in $CLIENTS_FILE or $INBOUNDS_FILE"
 fi
 
 if [ "$CLIENTS_PRESENT" -eq 1 ] && [ "$CLIENTS_MATCHES" -gt 0 ]; then
@@ -267,16 +267,16 @@ if [ "$INBOUND_MATCHES" -gt 0 ]; then
 fi
 
 if [ "${XRAY_SKIP_RESTART:-0}" = "1" ]; then
-    log "Skipping ${SERVICE_NAME} restart (XRAY_SKIP_RESTART=1)."
+    xray_log "Skipping ${SERVICE_NAME} restart (XRAY_SKIP_RESTART=1)."
 else
     SERVICE_SCRIPT="/etc/init.d/$SERVICE_NAME"
-    [ -x "$SERVICE_SCRIPT" ] || die "Service script not found or not executable: $SERVICE_SCRIPT"
-    log "Restarting $SERVICE_NAME service"
-    "$SERVICE_SCRIPT" restart || die "Failed to restart $SERVICE_NAME service."
+    [ -x "$SERVICE_SCRIPT" ] || xray_die "Service script not found or not executable: $SERVICE_SCRIPT"
+    xray_log "Restarting $SERVICE_NAME service"
+    "$SERVICE_SCRIPT" restart || xray_die "Failed to restart $SERVICE_NAME service."
 fi
 
 if [ -n "$CLIENT_ID" ]; then
-    log "Client '$EMAIL' (id $CLIENT_ID${CLIENT_STATUS:+, status $CLIENT_STATUS}) removed."
+    xray_log "Client '$EMAIL' (id $CLIENT_ID${CLIENT_STATUS:+, status $CLIENT_STATUS}) removed."
 else
-    log "Client '$EMAIL' removed from inbound configuration."
+    xray_log "Client '$EMAIL' removed from inbound configuration."
 fi

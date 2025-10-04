@@ -38,7 +38,7 @@ xray_interface_detect_main() {
         return 1
     fi
 
-    require_cmd ip
+    xray_require_cmd ip
 
     TARGET="$1"
     MODE="address"
@@ -60,20 +60,20 @@ xray_interface_detect_main() {
     esac
 
     if [ -z "$route_line" ]; then
-        die "Unable to determine route for $TARGET"
+        xray_die "Unable to determine route for $TARGET"
     fi
 
     iface=$(printf '%s\n' "$route_line" | xray_interface_extract_field dev || true)
     if [ -z "$iface" ]; then
-        die "Unable to extract interface from route information: $route_line"
+        xray_die "Unable to extract interface from route information: $route_line"
     fi
 
     src_addr=$(printf '%s\n' "$route_line" | xray_interface_extract_field src || true)
 
-    log "Target: $TARGET"
-    log "Interface: $iface"
+    xray_log "Target: $TARGET"
+    xray_log "Interface: $iface"
     if [ -n "$src_addr" ]; then
-        log "Source address: $src_addr"
+        xray_log "Source address: $src_addr"
     fi
 }
 
