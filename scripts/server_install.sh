@@ -150,6 +150,7 @@ if [ ! -f "$INBOUND_FILE" ]; then
 fi
 
 xray_require_cmd jq
+xray_require_cmd uci
 
 CERT_FILE=$(jq -r 'first(.inbounds[]? | .streamSettings? | .tlsSettings? | .certificates[]? | .certificateFile) // empty' "$INBOUND_FILE" 2>/dev/null)
 KEY_FILE=$(jq -r 'first(.inbounds[]? | .streamSettings? | .tlsSettings? | .certificates[]? | .keyFile) // empty' "$INBOUND_FILE" 2>/dev/null)
@@ -165,8 +166,6 @@ CERT_EXISTS=0
 
 KEY_EXISTS=0
 [ -f "$KEY_FILE" ] && KEY_EXISTS=1
-
-xray_require_cmd uci
 
 require_openssl=0
 case "${XRAY_REISSUE_CERT:-}" in

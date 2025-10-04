@@ -48,29 +48,29 @@ xray_repo_base_url() {
 }
 
 xray_download_file() {
-    url="$1"
-    destination="$2"
-    description="${3:-resource}"
+    download_url="$1"
+    download_destination="$2"
+    download_description="${3:-resource}"
 
-    if [ -z "$url" ] || [ -z "$destination" ]; then
+    if [ -z "$download_url" ] || [ -z "$download_destination" ]; then
         printf 'Error: xray_download_file requires URL and destination path.\n' >&2
         return 1
     fi
 
     if command -v curl >/dev/null 2>&1; then
-        if curl -fsSL "$url" -o "$destination"; then
+        if curl -fsSL "$download_url" -o "$download_destination"; then
             return 0
         fi
     fi
 
     if command -v wget >/dev/null 2>&1; then
-        if wget -q -O "$destination" "$url"; then
+        if wget -q -O "$download_destination" "$download_url"; then
             return 0
         fi
     fi
 
-    printf 'Error: Unable to download %s from %s.\n' "$description" "$url" >&2
-    rm -f "$destination"
+    printf 'Error: Unable to download %s from %s.\n' "$download_description" "$download_url" >&2
+    rm -f "$download_destination"
     return 1
 }
 
