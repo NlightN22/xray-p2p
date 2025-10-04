@@ -14,7 +14,7 @@ die() {
 
 usage() {
     cat <<EOF
-Usage: $SCRIPT_NAME [options] [SERVER_NAME]
+Usage: $SCRIPT_NAME [options] [SERVER_NAME] [PORT]
 
 Install and configure the XRAY server on OpenWrt.
 
@@ -23,6 +23,7 @@ Options:
 
 Arguments:
   SERVER_NAME      Optional TLS certificate Common Name; overrides env/prompt.
+  PORT             Optional external port; overrides env/prompt (defaults 8443).
 
 Environment variables:
   XRAY_FORCE_CONFIG     Set to 1 to overwrite config files, 0 to keep them.
@@ -34,6 +35,7 @@ EOF
 }
 
 server_name_assigned=0
+port_arg=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -49,14 +51,15 @@ while [ "$#" -gt 0 ]; do
             usage 1
             ;;
         *)
-            if [ "${server_name_assigned:-0}" -eq 1 ]; then
+            if [ "${server_name_assigned:-0}" -eq 0 ]; then
+                XRAY_SERVER_NAME="$1"
+                server_name_assigned=1
+            elif [ -z "$port_arg" ]; then
+                port_arg="$1"
+            else
                 log "Unexpected argument: $1"
                 usage 1
             fi
-            XRAY_SERVER_NAME="$1"
-            server_name_assigned=1
-            shift
-            continue
             ;;
     esac
     shift
@@ -220,7 +223,9 @@ fi
 
 DEFAULT_PORT=8443
 
-if [ -n "$XRAY_PORT" ]; then
+if [ -n "$port_arg" ]; then
+    XRAY_PORT="$port_arg"
+elif [ -n "$XRAY_PORT" ]; then
     log "Using XRAY_PORT=$XRAY_PORT from environment"
 else
     printf "Enter external port for XRAY [%s]: " "$DEFAULT_PORT" >&2
@@ -229,7 +234,7 @@ else
     elif [ -r /dev/tty ]; then
         IFS= read -r XRAY_PORT </dev/tty
     else
-        die "No interactive terminal available. Set XRAY_PORT environment variable."
+        die "No interactive terminal available. Provide port as argument or set XRAY_PORT."
     fi
 fi
 
