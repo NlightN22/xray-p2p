@@ -61,7 +61,7 @@ The client installer parses the connection string, writes the templates from `co
 
 - The server keeps `clients.json` with records such as `{ "id": "uuid", "password": "…", "status": "active" }`.
 - A client requests the next unused record, marks it as in use, and writes its details to the outbound config.
-- Automations can pull data via `ssh`/`scp` (for example: `ssh root@server 'scripts/user_list.sh'`).
+- Automations can pull data via `ssh`/`scp` (for example: `ssh root@server 'scripts/lib/user_list.sh'`).
 
 ---
 
@@ -84,9 +84,9 @@ The client installer parses the connection string, writes the templates from `co
 ## Administration helpers
 
 - `scripts/ssl_cert_create.sh` — minimal helper to issue a self-signed certificate with OpenSSL.
-- `scripts/ip_show.sh` — queries multiple sources to determine the server’s public IPv4 address.
+- `scripts/lib/ip_show.sh` — queries multiple sources to determine the server’s public IPv4 address.
 - `scripts/client_install.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
-- `scripts/user_list.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
+- `scripts/lib/user_list.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
 - `scripts/user_remove.sh` — revokes a client, updates configs, and restarts XRAY.
 - `scripts/redirect_add.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
 - `scripts/dns_forward_add.sh` — adds per-domain dokodemo-door DNS inbounds, auto-allocates ports from 53331, and syncs dnsmasq forwarding.

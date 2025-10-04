@@ -3,14 +3,64 @@
 
 SCRIPT_NAME=${0##*/}
 
-log() {
-    printf '%s\n' "$*" >&2
+if [ -z "${XRAY_SELF_DIR:-}" ]; then
+    case "$0" in
+        */*)
+            XRAY_SELF_DIR=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+            export XRAY_SELF_DIR
+            ;;
+    esac
+fi
+
+COMMON_LIB_REMOTE_PATH="scripts/lib/common.sh"
+
+load_common_lib() {
+    for candidate in \
+        "${XRAY_SELF_DIR%/}/$COMMON_LIB_REMOTE_PATH" \
+        "$COMMON_LIB_REMOTE_PATH" \
+        "lib/common.sh"; do
+        if [ -n "$candidate" ] && [ -r "$candidate" ]; then
+            # shellcheck disable=SC1090
+            . "$candidate"
+            return 0
+        fi
+    done
+
+    base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    url="${base%/}/$COMMON_LIB_REMOTE_PATH"
+    tmp="$(mktemp 2>/dev/null)" || {
+        printf 'Error: Unable to create temporary file for common library.\n' >&2
+        return 1
+    }
+
+    if command -v xray_download_file >/dev/null 2>&1; then
+        if ! xray_download_file "$url" "$tmp" "common library"; then
+            return 1
+        fi
+    else
+        if command -v curl >/dev/null 2>&1 && curl -fsSL "$url" -o "$tmp"; then
+            :
+        elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$url"; then
+            :
+        else
+            printf 'Error: Unable to download common library from %s.\n' "$url" >&2
+            rm -f "$tmp"
+            return 1
+        fi
+    fi
+
+    # shellcheck disable=SC1090
+    . "$tmp"
+    rm -f "$tmp"
+    return 0
 }
 
-die() {
-    printf 'Error: %s\n' "$*" >&2
+if ! load_common_lib; then
+    printf 'Error: Unable to load XRAY common library.\n' >&2
     exit 1
-}
+fi
+
+umask 077
 
 usage() {
     cat <<EOF
@@ -70,7 +120,16 @@ if [ "$#" -gt 0 ]; then
     usage 1
 fi
 
-curl -s https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh | sh
+INSTALL_SCRIPT_URL="https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh"
+TMP_INSTALL_SCRIPT=$(mktemp 2>/dev/null) || die "Unable to create temporary file for installer"
+if ! xray_download_file "$INSTALL_SCRIPT_URL" "$TMP_INSTALL_SCRIPT" "XRAY installer script"; then
+    die "Failed to download XRAY installer script"
+fi
+if ! sh "$TMP_INSTALL_SCRIPT"; then
+    rm -f "$TMP_INSTALL_SCRIPT"
+    die "XRAY installer script execution failed"
+fi
+rm -f "$TMP_INSTALL_SCRIPT"
 
 XRAY_CONFIG_DIR="/etc/xray"
 if [ ! -d "$XRAY_CONFIG_DIR" ]; then
@@ -78,52 +137,11 @@ if [ ! -d "$XRAY_CONFIG_DIR" ]; then
     mkdir -p "$XRAY_CONFIG_DIR"
 fi
 
-CONFIG_BASE_URL="https://raw.githubusercontent.com/NlightN22/xray-p2p/main/config_templates/server"
 CONFIG_FILES="inbounds.json logs.json outbounds.json"
 for file in $CONFIG_FILES; do
     target="$XRAY_CONFIG_DIR/$file"
-    url="$CONFIG_BASE_URL/$file"
-    replace_file=1
-
-    if [ -f "$target" ]; then
-        case "${XRAY_FORCE_CONFIG:-}" in
-            1)
-                log "Replacing $target (forced by XRAY_FORCE_CONFIG=1)"
-                ;;
-            0)
-                log "Keeping existing $target (XRAY_FORCE_CONFIG=0)"
-                replace_file=0
-                ;;
-            *)
-                while :; do
-                    printf "File %s exists. Replace with repository version? [y/N]: " "$target" >&2
-                    if [ -t 0 ]; then
-                        IFS= read -r answer
-                    elif [ -r /dev/tty ]; then
-                        IFS= read -r answer </dev/tty
-                    else
-                        die "No interactive terminal available. Set XRAY_FORCE_CONFIG=1 to overwrite or 0 to keep existing files."
-                    fi
-                    case "$answer" in
-                        [Yy]) replace_file=1; break ;;
-                        [Nn]|"") replace_file=0; break ;;
-                        *) log "Please answer y or n." ;;
-                    esac
-                done
-                ;;
-        esac
-    fi
-
-    if [ "$replace_file" -eq 0 ]; then
-        log "Keeping existing $target"
-        continue
-    fi
-
-    log "Downloading $file to $XRAY_CONFIG_DIR"
-    if ! curl -fsSL "$url" -o "$target"; then
-        die "Failed to download $file"
-    fi
-    chmod 644 "$target"
+    template_path="config_templates/server/$file"
+    xray_seed_file_from_template "$target" "$template_path"
 done
 
 INBOUND_FILE="$XRAY_CONFIG_DIR/inbounds.json"

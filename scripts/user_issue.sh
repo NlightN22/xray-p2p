@@ -112,20 +112,24 @@ load_common_lib() {
     esac
 
     tmp="$(mktemp 2>/dev/null)" || return 1
-    if command -v curl >/dev/null 2>&1 && curl -fsSL "$lib_url" -o "$tmp"; then
-        # shellcheck disable=SC1090
-        . "$tmp"
-        rm -f "$tmp"
-        return 0
+    if command -v xray_download_file >/dev/null 2>&1; then
+        if ! xray_download_file "$lib_url" "$tmp" "common library"; then
+            return 1
+        fi
+    else
+        if command -v curl >/dev/null 2>&1 && curl -fsSL "$lib_url" -o "$tmp"; then
+            :
+        elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$lib_url"; then
+            :
+        else
+            rm -f "$tmp"
+            return 1
+        fi
     fi
-    if command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$lib_url"; then
-        # shellcheck disable=SC1090
-        . "$tmp"
-        rm -f "$tmp"
-        return 0
-    fi
+    # shellcheck disable=SC1090
+    . "$tmp"
     rm -f "$tmp"
-    return 1
+    return 0
 }
 
 if ! load_common_lib; then
@@ -234,36 +238,13 @@ format_link_host() {
     fi
 }
 
-show_existing_clients() {
-    if [ "${XRAY_SHOW_CLIENTS:-1}" != "1" ]; then
-        return
-    fi
-
-    log "Current clients (email password status):"
-
-    list_remote_default="${XRAY_LIST_SCRIPT_PATH:-scripts/user_list.sh}"
-    list_remote="${XRAY_LIST_SCRIPT_REMOTE_PATH:-$list_remote_default}"
-    list_local="${XRAY_LIST_SCRIPT_LOCAL_PATH:-$(basename "$list_remote")}"
-
-    if XRAY_CONFIG_DIR="$CONFIG_DIR" \
-        XRAY_INBOUNDS_FILE="$INBOUNDS_FILE" \
-        XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
-        XRAY_SKIP_REPO_CHECK=1 \
-        xray_run_repo_script optional "$list_local" "$list_remote"; then
-        printf '\n'
-        return
-    fi
-
-    printf '\n'
-}
-
 run_network_interfaces_helper() {
     if [ "${XRAY_SHOW_INTERFACES:-1}" != "1" ]; then
         return
     fi
 
-    helper_local="${XRAY_INTERFACES_SCRIPT_PATH:-network_interfaces.sh}"
-    helper_remote="${XRAY_INTERFACES_REMOTE_PATH:-scripts/network_interfaces.sh}"
+    helper_local="${XRAY_INTERFACES_SCRIPT_PATH:-lib/network_interfaces.sh}"
+    helper_remote="${XRAY_INTERFACES_REMOTE_PATH:-scripts/lib/network_interfaces.sh}"
 
     if xray_run_repo_script optional "$helper_local" "$helper_remote" >&2; then
         printf '\n' >&2
@@ -279,11 +260,23 @@ SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 [ -f "$INBOUNDS_FILE" ] || die "Inbound configuration not found: $INBOUNDS_FILE"
 
 require_cmd jq
-require_cmd curl
 
 xray_check_repo_access 'scripts/user_issue.sh'
 
-show_existing_clients
+if [ "${XRAY_SHOW_CLIENTS:-1}" = "1" ]; then
+    if clients_output=$(XRAY_CONFIG_DIR="$CONFIG_DIR" \
+            XRAY_INBOUNDS_FILE="$INBOUNDS_FILE" \
+            XRAY_CLIENTS_FILE="$CLIENTS_FILE" \
+            xray_run_repo_script optional "lib/user_list.sh" "scripts/lib/user_list.sh" 2>&1); then
+        if [ -n "$clients_output" ]; then
+            log "Current clients (email password status):"
+            printf '%s\n' "$clients_output"
+        fi
+    elif [ -n "$clients_output" ]; then
+        printf '%s\n' "$clients_output" >&2
+    fi
+    printf '\n'
+fi
 
 mkdir -p "$CLIENTS_DIR"
 

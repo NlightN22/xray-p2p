@@ -1,0 +1,32 @@
+{
+    "reverse": {
+        "portals": [
+            {
+                "domain": "test1.rev",
+                "tag": "test1.rev"
+            }
+        ]
+    },
+    "routing": {
+        "domainStrategy": "AsIs",
+        "rules": [
+            {
+                "domain": [
+                    "full:test1.rev"
+                ],
+                "outboundTag": "test1.rev",
+                "type": "field",
+                "user": [
+                    "test1"
+                ]
+            },
+            {
+                "ip": [
+                    "10.0.102.0/24"
+                ],
+                "outboundTag": "test1.rev",
+                "type": "field"
+            }
+        ]
+    }
+}

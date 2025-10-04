@@ -1,7 +1,8 @@
 #!/bin/sh
-set -eu
 
-show_with_ip() {
+# Library module to present active network interfaces and addresses.
+
+xray_network_interfaces_show_with_ip() {
     ip -o addr show up 2>/dev/null | awk '
         {
             iface=$2
@@ -27,7 +28,7 @@ show_with_ip() {
     '
 }
 
-show_with_ifconfig() {
+xray_network_interfaces_show_with_ifconfig() {
     ifconfig 2>/dev/null | awk '
         /^[[:space:]]*$/ { next }
         /^[[:alnum:]]/ {
@@ -44,27 +45,41 @@ show_with_ifconfig() {
     '
 }
 
-main() {
+xray_network_interfaces_main() {
     if command -v ip >/dev/null 2>&1; then
-        addresses="$(show_with_ip)"
+        addresses="$(xray_network_interfaces_show_with_ip)"
         if [ -n "$addresses" ]; then
             printf 'Detected network interfaces and addresses:\n'
             printf '%s\n' "$addresses"
-            exit 0
+            return 0
         fi
     fi
 
     if command -v ifconfig >/dev/null 2>&1; then
-        addresses="$(show_with_ifconfig)"
+        addresses="$(xray_network_interfaces_show_with_ifconfig)"
         if [ -n "$addresses" ]; then
             printf 'Detected network interfaces and addresses:\n'
             printf '%s\n' "$addresses"
-            exit 0
+            return 0
         fi
     fi
 
     printf 'No active non-loopback interface addresses detected.\n' >&2
-    exit 1
+    return 1
 }
 
-main "$@"
+if [ "${0##*/}" = "network_interfaces.sh" ]; then
+    script_dir=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+    if [ -z "$script_dir" ]; then
+        printf 'Error: Unable to determine script directory.\n' >&2
+        exit 1
+    fi
+    bootstrap="$script_dir/bootstrap.sh"
+    if [ ! -r "$bootstrap" ]; then
+        printf 'Error: Unable to locate XRAY bootstrap helpers.\n' >&2
+        exit 1
+    fi
+    # shellcheck disable=SC1090
+    . "$bootstrap"
+    xray_bootstrap_run_main "network_interfaces.sh" xray_network_interfaces_main "$@"
+fi

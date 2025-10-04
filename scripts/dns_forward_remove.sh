@@ -8,20 +8,62 @@ DNSMASQ_SERVICE="/etc/init.d/dnsmasq"
 XRAY_SERVICE="/etc/init.d/xray"
 DNS_REMARK_PREFIX="dns-forward:"
 
-log() {
-    printf '%s\n' "$*"
-}
+if [ -z "${XRAY_SELF_DIR:-}" ]; then
+    case "$0" in
+        */*)
+            XRAY_SELF_DIR=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+            export XRAY_SELF_DIR
+            ;;
+    esac
+fi
 
-die() {
-    printf 'Error: %s\n' "$*" >&2
-    exit 1
-}
+COMMON_LIB_REMOTE_PATH="scripts/lib/common.sh"
 
-require_cmd() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        die "Required command '$1' not found. Install it before running this script."
+load_common_lib() {
+    for candidate in \
+        "${XRAY_SELF_DIR%/}/$COMMON_LIB_REMOTE_PATH" \
+        "$COMMON_LIB_REMOTE_PATH" \
+        "lib/common.sh"; do
+        if [ -n "$candidate" ] && [ -r "$candidate" ]; then
+            # shellcheck disable=SC1090
+            . "$candidate"
+            return 0
+        fi
+    done
+
+    base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    url="${base%/}/$COMMON_LIB_REMOTE_PATH"
+    tmp="$(mktemp 2>/dev/null)" || {
+        printf 'Error: Unable to create temporary file for common library.\n' >&2
+        return 1
+    }
+
+    if command -v xray_download_file >/dev/null 2>&1; then
+        if ! xray_download_file "$url" "$tmp" "common library"; then
+            return 1
+        fi
+    else
+        if command -v curl >/dev/null 2>&1 && curl -fsSL "$url" -o "$tmp"; then
+            :
+        elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$url"; then
+            :
+        else
+            printf 'Error: Unable to download common library from %s.\n' "$url" >&2
+            rm -f "$tmp"
+            return 1
+        fi
     fi
+
+    # shellcheck disable=SC1090
+    . "$tmp"
+    rm -f "$tmp"
+    return 0
 }
+
+if ! load_common_lib; then
+    printf 'Error: Unable to load XRAY common library.\n' >&2
+    exit 1
+fi
 
 trim() {
     printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'

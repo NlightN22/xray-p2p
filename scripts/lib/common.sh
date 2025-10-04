@@ -25,6 +25,9 @@ xray_require_cmd() {
         return 0
     fi
     case "$cmd" in
+        nft)
+            xray_die "Required command 'nft' not found. Install nftables (e.g. opkg update && opkg install nftables)."
+            ;;
         jq)
             xray_die "Required command 'jq' not found. Install it before running this script. For OpenWrt run: opkg update && opkg install jq"
             ;;
@@ -49,6 +52,33 @@ require_cmd() {
 
 xray_repo_base_url() {
     printf '%s' "${XRAY_REPO_BASE_URL:-$XRAY_DEFAULT_REPO_BASE_URL}"
+}
+
+xray_download_file() {
+    url="$1"
+    destination="$2"
+    description="${3:-resource}"
+
+    if [ -z "$url" ] || [ -z "$destination" ]; then
+        printf 'Error: xray_download_file requires URL and destination path.\n' >&2
+        return 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        if curl -fsSL "$url" -o "$destination"; then
+            return 0
+        fi
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        if wget -q -O "$destination" "$url"; then
+            return 0
+        fi
+    fi
+
+    printf 'Error: Unable to download %s from %s.\n' "$description" "$url" >&2
+    rm -f "$destination"
+    return 1
 }
 
 xray_repo_build_url() {
@@ -103,17 +133,9 @@ xray_fetch_repo_script() {
     path="$1"
     tmp="$(mktemp 2>/dev/null)" || return 1
     url="$(xray_repo_build_url "$path")"
-    if command -v curl >/dev/null 2>&1; then
-        if curl -fsSL "$url" -o "$tmp"; then
-            printf '%s' "$tmp"
-            return 0
-        fi
-    fi
-    if command -v wget >/dev/null 2>&1; then
-        if wget -q -O "$tmp" "$url"; then
-            printf '%s' "$tmp"
-            return 0
-        fi
+    if xray_download_file "$url" "$tmp" "repository script $path"; then
+        printf '%s' "$tmp"
+        return 0
     fi
     rm -f "$tmp"
     return 1
@@ -152,6 +174,128 @@ xray_run_repo_script() {
         xray_die "Script '$remote_spec' exited with status $status."
     fi
     return 0
+}
+
+xray_prompt_yes_no() {
+    prompt="$1"
+    default_answer="${2:-N}"
+
+    while :; do
+        printf '%s' "$prompt" >&2
+        if [ -t 0 ]; then
+            IFS= read -r answer || answer=""
+        elif [ -r /dev/tty ]; then
+            IFS= read -r answer </dev/tty || answer=""
+        else
+            return 2
+        fi
+
+        if [ -z "$answer" ]; then
+            answer="$default_answer"
+        fi
+
+        case "$answer" in
+            [Yy])
+                return 0
+                ;;
+            [Nn])
+                return 1
+                ;;
+            *)
+                xray_log "Please answer y or n."
+                ;;
+        esac
+    done
+}
+
+xray_should_replace_file() {
+    target="$1"
+    force_var="${2:-XRAY_FORCE_CONFIG}"
+
+    if [ ! -f "$target" ]; then
+        return 0
+    fi
+
+    force_value=""
+    if [ -n "$force_var" ]; then
+        force_value=$(eval "printf '%s' \"\${$force_var:-}\"")
+    fi
+
+    case "$force_value" in
+        1)
+            xray_log "Replacing $target (forced by ${force_var}=1)"
+            return 0
+            ;;
+        0)
+            xray_log "Keeping existing $target (${force_var}=0)"
+            return 1
+            ;;
+    esac
+
+    if xray_prompt_yes_no "File $target exists. Replace with repository version? [y/N]: " "N"; then
+        return 0
+    fi
+
+    response=$?
+    if [ "$response" -eq 1 ]; then
+        xray_log "Keeping existing $target"
+        return 1
+    fi
+
+    xray_die "No interactive terminal available. Set ${force_var}=1 to overwrite or 0 to keep existing files."
+}
+
+xray_seed_file_from_template() {
+    destination="$1"
+    remote_path="$2"
+    local_spec="${3:-$remote_path}"
+    force_var="${4:-XRAY_FORCE_CONFIG}"
+
+    if [ -z "$destination" ] || [ -z "$remote_path" ]; then
+        xray_die "xray_seed_file_from_template requires destination and remote template paths"
+    fi
+
+    dest_dir=$(dirname "$destination")
+    if [ ! -d "$dest_dir" ]; then
+        mkdir -p "$dest_dir" || xray_die "Unable to create directory $dest_dir"
+    fi
+
+    if ! xray_should_replace_file "$destination" "$force_var"; then
+        return 0
+    fi
+
+    if [ -n "$local_spec" ]; then
+        if resolved_path=$(xray_resolve_local_path "$local_spec"); then
+            candidate="$resolved_path"
+        else
+            candidate="$resolved_path"
+        fi
+
+        if [ -n "$candidate" ] && [ -r "$candidate" ]; then
+            xray_log "Seeding $destination from local template $candidate"
+            if ! cp "$candidate" "$destination"; then
+                xray_die "Failed to copy template from $candidate"
+            fi
+            chmod 0644 "$destination" 2>/dev/null || true
+            return 0
+        fi
+    fi
+
+    url=$(xray_repo_build_url "$remote_path")
+    tmp=$(mktemp 2>/dev/null) || xray_die "Unable to create temporary file"
+
+    if ! xray_download_file "$url" "$tmp" "template $remote_path"; then
+        rm -f "$tmp"
+        xray_die "Unable to download template from $url"
+    fi
+
+    chmod 0644 "$tmp" 2>/dev/null || true
+    if ! mv "$tmp" "$destination"; then
+        rm -f "$tmp"
+        xray_die "Failed to install template into $destination"
+    fi
+
+    xray_log "Downloaded $remote_path to $destination"
 }
 
 xray_check_repo_access() {
