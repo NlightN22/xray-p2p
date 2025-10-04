@@ -15,6 +15,9 @@ if [ -z "${XRAY_SELF_DIR:-}" ]; then
     esac
 fi
 
+# Guarantee XRAY_SELF_DIR is defined even when executed via stdin piping.
+: "${XRAY_SELF_DIR:=}"
+
 COMMON_LIB_REMOTE_PATH="scripts/lib/common.sh"
 
 load_common_lib() {
