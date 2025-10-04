@@ -178,6 +178,7 @@ for file in $CONFIG_FILES; do
 done
 
 xray_require_cmd uci
+xray_require_cmd jq
 
 XRAY_CONF_DIR_UCI="$(uci -q get xray.config.confdir 2>/dev/null)"
 if [ -z "$XRAY_CONF_DIR_UCI" ]; then
@@ -213,59 +214,56 @@ if [ "$uci_changes" -eq 1 ]; then
     uci commit xray
 fi
 
-json_escape() {
-    printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
-replace_json_string() {
+update_trojan_outbound() {
     file="$1"
-    key="$2"
-    value="$3"
-    tmp_file=$(mktemp)
-    awk -v key="$key" -v value="$value" '
-        BEGIN {replaced=0}
-        {
-            if (!replaced && $0 ~ "\"" key "\"[[:space:]]*:") {
-                sub("\"" key "\"[[:space:]]*:[[:space:]]*\"[^\"]*\"", "\"" key "\": \"" value "\"")
-                replaced=1
-            }
-            print
-        }
-    ' "$file" > "$tmp_file" && mv "$tmp_file" "$file"
-}
+    password="$2"
+    address="$3"
+    port="$4"
+    server_name="$5"
+    network="$6"
+    security="$7"
+    allow_insecure="$8"
 
-replace_json_number() {
-    file="$1"
-    key="$2"
-    value="$3"
-    tmp_file=$(mktemp)
-    awk -v key="$key" -v value="$value" '
-        BEGIN {replaced=0}
-        {
-            if (!replaced && $0 ~ "\"" key "\"[[:space:]]*:") {
-                sub("\"" key "\"[[:space:]]*:[[:space:]]*[0-9]+", "\"" key "\": " value)
-                replaced=1
-            }
-            print
-        }
-    ' "$file" > "$tmp_file" && mv "$tmp_file" "$file"
-}
+    case "$allow_insecure" in
+        true|false) : ;;
+        *)
+            allow_insecure="false"
+            ;;
+    esac
 
-replace_json_bool() {
-    file="$1"
-    key="$2"
-    value="$3"
-    tmp_file=$(mktemp)
-    awk -v key="$key" -v value="$value" '
-        BEGIN {replaced=0}
-        {
-            if (!replaced && $0 ~ "\"" key "\"[[:space:]]*:") {
-                sub("\"" key "\"[[:space:]]*:[[:space:]]*(true|false)", "\"" key "\": " value)
-                replaced=1
-            }
-            print
-        }
-    ' "$file" > "$tmp_file" && mv "$tmp_file" "$file"
+    tmp_file=$(mktemp) || return 1
+
+    if ! jq \
+        --arg password "$password" \
+        --arg address "$address" \
+        --arg serverName "$server_name" \
+        --arg network "$network" \
+        --arg security "$security" \
+        --argjson port "$port" \
+        --argjson allowInsecure "$allow_insecure" \
+        '
+        .outbounds |= (map(
+            if (.protocol // "") == "trojan" then
+                (.settings //= {})
+                | (.settings.servers //= [{}])
+                | (.settings.servers[0].address = $address)
+                | (.settings.servers[0].port = $port)
+                | (.settings.servers[0].password = $password)
+                | (.streamSettings //= {})
+                | (.streamSettings.network = $network)
+                | (.streamSettings.security = $security)
+                | (.streamSettings.tlsSettings //= {})
+                | (.streamSettings.tlsSettings.serverName = $serverName)
+                | (.streamSettings.tlsSettings.allowInsecure = $allowInsecure)
+            else .
+            end
+        ))
+        ' "$file" >"$tmp_file"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+
+    mv "$tmp_file" "$file"
 }
 
 OUTBOUND_FILE="$XRAY_CONFIG_DIR/outbounds.json"
@@ -404,19 +402,9 @@ update_outbounds_from_connection() {
         esac
     done
 
-    escaped_password=$(json_escape "$password_part")
-    escaped_host=$(json_escape "$host")
-    escaped_server_name=$(json_escape "$server_name")
-    escaped_network=$(json_escape "$network_type")
-    escaped_security=$(json_escape "$security_type")
-
-    replace_json_string "$OUTBOUND_FILE" "password" "$escaped_password"
-    replace_json_string "$OUTBOUND_FILE" "address" "$escaped_host"
-    replace_json_number "$OUTBOUND_FILE" "port" "$port_num"
-    replace_json_string "$OUTBOUND_FILE" "serverName" "$escaped_server_name"
-    replace_json_string "$OUTBOUND_FILE" "network" "$escaped_network"
-    replace_json_string "$OUTBOUND_FILE" "security" "$escaped_security"
-    replace_json_bool "$OUTBOUND_FILE" "allowInsecure" "$allow_insecure_value"
+    if ! update_trojan_outbound "$OUTBOUND_FILE" "$password_part" "$host" "$port_num" "$server_name" "$network_type" "$security_type" "$allow_insecure_value"; then
+        xray_die "Failed to update $OUTBOUND_FILE with provided connection settings"
+    fi
 
     xray_log "Updated $OUTBOUND_FILE with provided connection settings"
 }
@@ -433,7 +421,7 @@ fi
 xray_log "WARNING: dokodemo-door inbound will listen on all IPv4 addresses (0.0.0.0)"
 xray_log "WARNING: Restrict exposure with firewall rules if WAN access must be blocked"
 
-SOCKS_PORT=$(awk 'match($0, /"port"[[:space:]]*:[[:space:]]*([0-9]+)/, m) {print m[1]; exit}' "$INBOUND_FILE")
+SOCKS_PORT=$(jq -r 'first(.inbounds[]? | select((.protocol // "") == "dokodemo-door") | .port) // empty' "$INBOUND_FILE" 2>/dev/null)
 if [ -z "$SOCKS_PORT" ]; then
     SOCKS_PORT=1080
 fi

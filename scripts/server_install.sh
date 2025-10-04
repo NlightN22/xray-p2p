@@ -149,8 +149,10 @@ if [ ! -f "$INBOUND_FILE" ]; then
     xray_die "Inbound configuration $INBOUND_FILE is missing"
 fi
 
-CERT_FILE=$(awk -F'"' '/"certificateFile"/ {print $4; exit}' "$INBOUND_FILE")
-KEY_FILE=$(awk -F'"' '/"keyFile"/ {print $4; exit}' "$INBOUND_FILE")
+xray_require_cmd jq
+
+CERT_FILE=$(jq -r 'first(.inbounds[]? | .streamSettings? | .tlsSettings? | .certificates[]? | .certificateFile) // empty' "$INBOUND_FILE" 2>/dev/null)
+KEY_FILE=$(jq -r 'first(.inbounds[]? | .streamSettings? | .tlsSettings? | .certificates[]? | .keyFile) // empty' "$INBOUND_FILE" 2>/dev/null)
 
 [ -z "$CERT_FILE" ] && CERT_FILE="$XRAY_CONFIG_DIR/cert.pem"
 [ -z "$KEY_FILE" ] && KEY_FILE="$XRAY_CONFIG_DIR/key.pem"
@@ -250,17 +252,22 @@ if [ "$XRAY_PORT" -le 0 ] || [ "$XRAY_PORT" -gt 65535 ]; then
     xray_die "Port must be between 1 and 65535"
 fi
 
-tmp_inbound="${INBOUND_FILE}.tmp"
-awk -v port="$XRAY_PORT" '
-    BEGIN {replaced=0}
-    /"port"[[:space:]]*:/ && !replaced {
-        sub(/"port"[[:space:]]*:[[:space:]]*[0-9]+/, "\"port\": " port)
-        replaced=1
-    }
-    {print}
-' "$INBOUND_FILE" > "$tmp_inbound" && mv "$tmp_inbound" "$INBOUND_FILE"
+tmp_inbound=$(mktemp) || xray_die "Unable to create temporary file for inbound update"
+if ! jq --argjson port "$XRAY_PORT" '
+    .inbounds |= (map(
+        if (.protocol // "") == "trojan" then
+            .port = $port
+        else .
+        end
+    ))
+' "$INBOUND_FILE" >"$tmp_inbound"; then
+    rm -f "$tmp_inbound"
+    xray_die "Failed to update inbound port"
+fi
 
-if ! grep -q "\"port\": $XRAY_PORT" "$INBOUND_FILE"; then
+mv "$tmp_inbound" "$INBOUND_FILE"
+
+if ! jq -e --argjson port "$XRAY_PORT" 'any(.inbounds[]?; (.protocol // "") == "trojan" and (.port // 0) == $port)' "$INBOUND_FILE" >/dev/null 2>&1; then
     xray_die "Failed to update port in $INBOUND_FILE"
 fi
 
