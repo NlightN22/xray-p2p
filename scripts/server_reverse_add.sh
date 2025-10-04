@@ -74,46 +74,44 @@ umask 077
 
 COMMON_LIB_REMOTE_PATH="scripts/lib/common.sh"
 
-load_common_lib() {
+if ! command -v load_common_lib >/dev/null 2>&1; then
     for candidate in \
-        "${XRAY_SELF_DIR%/}/$COMMON_LIB_REMOTE_PATH" \
-        "$COMMON_LIB_REMOTE_PATH" \
-        "lib/common.sh"; do
+        "${XRAY_SELF_DIR%/}/scripts/lib/common_loader.sh" \
+        "scripts/lib/common_loader.sh" \
+        "lib/common_loader.sh"; do
         if [ -n "$candidate" ] && [ -r "$candidate" ]; then
             # shellcheck disable=SC1090
             . "$candidate"
-            return 0
+            break
         fi
     done
+fi
 
+if ! command -v load_common_lib >/dev/null 2>&1; then
     base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    url="${base%/}/$COMMON_LIB_REMOTE_PATH"
+    loader_url="${base%/}/scripts/lib/common_loader.sh"
     tmp="$(mktemp 2>/dev/null)" || {
-        printf 'Error: Unable to create temporary file for common library.\n' >&2
-        return 1
+        printf 'Error: Unable to create temporary loader script.\n' >&2
+        exit 1
     }
-
-    if command -v xray_download_file >/dev/null 2>&1; then
-        if ! xray_download_file "$url" "$tmp" "common library"; then
-            return 1
-        fi
+    if command -v curl >/dev/null 2>&1 && curl -fsSL "$loader_url" -o "$tmp"; then
+        :
+    elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$loader_url"; then
+        :
     else
-        if command -v curl >/dev/null 2>&1 && curl -fsSL "$url" -o "$tmp"; then
-            :
-        elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$url"; then
-            :
-        else
-            printf 'Error: Unable to download common library from %s.\n' "$url" >&2
-            rm -f "$tmp"
-            return 1
-        fi
+        printf 'Error: Unable to download common loader from %s.\n' "$loader_url" >&2
+        rm -f "$tmp"
+        exit 1
     fi
-
     # shellcheck disable=SC1090
     . "$tmp"
     rm -f "$tmp"
-    return 0
-}
+fi
+
+if ! command -v load_common_lib >/dev/null 2>&1; then
+    printf 'Error: Unable to initialize XRAY common loader.\n' >&2
+    exit 1
+fi
 
 if ! load_common_lib; then
     printf 'Error: Unable to load XRAY common library.\n' >&2

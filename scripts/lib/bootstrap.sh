@@ -26,61 +26,48 @@ xray_bootstrap_load_common() {
     XRAY_COMMON_LIB_PATH_DEFAULT="lib/common.sh"
     XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT="scripts/lib/common.sh"
 
-    lib_local="${XRAY_COMMON_LIB_PATH:-$XRAY_COMMON_LIB_PATH_DEFAULT}"
-    lib_remote="${XRAY_COMMON_LIB_REMOTE_PATH:-$XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT}"
-
-    if [ -n "${XRAY_SELF_DIR:-}" ]; then
-        candidate="${XRAY_SELF_DIR%/}/$lib_local"
-        if [ -r "$candidate" ]; then
-            # shellcheck disable=SC1090
-            . "$candidate"
-            return 0
-        fi
+    if ! command -v load_common_lib >/dev/null 2>&1; then
+        for candidate in \
+            "${XRAY_SELF_DIR%/}/scripts/lib/common_loader.sh" \
+            "scripts/lib/common_loader.sh" \
+            "lib/common_loader.sh"; do
+            if [ -n "$candidate" ] && [ -r "$candidate" ]; then
+                # shellcheck disable=SC1090
+                . "$candidate"
+                break
+            fi
+        done
     fi
 
-    if [ -r "$lib_local" ]; then
-        # shellcheck disable=SC1090
-        . "$lib_local"
-        return 0
-    fi
-
-    base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
-    base_trimmed="${base%/}"
-    case "$lib_remote" in
-        /*)
-            lib_url="${base_trimmed}${lib_remote}"
-            ;;
-        *)
-            lib_url="${base_trimmed}/${lib_remote}"
-            ;;
-    esac
-
-    tmp="$(mktemp 2>/dev/null)" || return 1
-    trap 'rm -f "$tmp"' INT TERM HUP
-
-    if command -v xray_download_file >/dev/null 2>&1; then
-        if ! xray_download_file "$lib_url" "$tmp" "common library"; then
-            rm -f "$tmp"
-            trap - INT TERM HUP
+    if ! command -v load_common_lib >/dev/null 2>&1; then
+        base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+        loader_url="${base%/}/scripts/lib/common_loader.sh"
+        tmp="$(mktemp 2>/dev/null)" || {
+            printf 'Error: Unable to create temporary loader script.\n' >&2
             return 1
-        fi
-    else
-        if command -v curl >/dev/null 2>&1 && curl -fsSL "$lib_url" -o "$tmp"; then
+        }
+        if command -v curl >/dev/null 2>&1 && curl -fsSL "$loader_url" -o "$tmp"; then
             :
-        elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$lib_url"; then
+        elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$loader_url"; then
             :
         else
+            printf 'Error: Unable to download common loader from %s.\n' "$loader_url" >&2
             rm -f "$tmp"
-            trap - INT TERM HUP
             return 1
         fi
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
     fi
 
-    trap - INT TERM HUP
-    # shellcheck disable=SC1090
-    . "$tmp"
-    rm -f "$tmp"
-    return 0
+    if ! command -v load_common_lib >/dev/null 2>&1; then
+        return 1
+    fi
+
+    COMMON_LIB_REMOTE_PATH="${XRAY_COMMON_LIB_REMOTE_PATH:-$XRAY_COMMON_LIB_REMOTE_PATH_DEFAULT}"
+    COMMON_LIB_LOCAL_PATH="${XRAY_COMMON_LIB_PATH:-$XRAY_COMMON_LIB_PATH_DEFAULT}"
+
+    load_common_lib
 }
 
 xray_bootstrap_source_library() {
