@@ -70,6 +70,9 @@ if [ -z "${XRAY_SELF_DIR:-}" ]; then
     esac
 fi
 
+# Ensure XRAY_SELF_DIR exists when invoked via stdin piping.
+: "${XRAY_SELF_DIR:=}"
+
 umask 077
 
 XRAY_COMMON_LIB_PATH_DEFAULT="lib/common.sh"
