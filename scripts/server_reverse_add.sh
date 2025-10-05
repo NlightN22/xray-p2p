@@ -7,31 +7,55 @@ usage() {
     cat <<EOF_USAGE
 Usage: $SCRIPT_NAME [options] [USERNAME]
 
-Ensure the server reverse proxy routing is configured for USERNAME.
+Ensure the reverse proxy routing is configured for USERNAME.
 
 Options:
   -h, --help        Show this help message and exit.
+  -t, --target ROLE Configure reverse proxy for ROLE (server or client).
+      --server      Shortcut for --target server.
+      --client      Shortcut for --target client.
 
 Arguments:
   USERNAME          Optional XRAY client identifier; overrides env/prompt.
 
 Environment variables:
   XRAY_REVERSE_USER         Preseed USERNAME when positional argument omitted.
+  XRAY_REVERSE_TARGET       Default target role when --target omitted (server/client).
   XRAY_REVERSE_SUFFIX       Override domain/tag suffix (default: .rev).
   XRAY_CONFIG_DIR           Path to XRAY configuration directory (default: /etc/xray).
   XRAY_ROUTING_FILE         Path to routing.json (defaults to ${XRAY_CONFIG_DIR:-/etc/xray}/routing.json).
-  XRAY_ROUTING_TEMPLATE     Local template path for routing.json (default: config_templates/server/routing.json).
-  XRAY_ROUTING_TEMPLATE_REMOTE  Remote template path relative to repo root (default: config_templates/server/routing.json).
+  XRAY_ROUTING_TEMPLATE     Local template path for routing.json (default: config_templates/<target>/routing.json).
+  XRAY_ROUTING_TEMPLATE_REMOTE  Remote template path relative to repo root (default: config_templates/<target>/routing.json).
 EOF_USAGE
     exit "${1:-0}"
 }
 
 username_arg=""
+reverse_target="${XRAY_REVERSE_TARGET:-server}"
+reverse_target=$(printf '%s' "$reverse_target" | tr 'A-Z' 'a-z')
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help)
             usage 0
+            ;;
+        --client)
+            reverse_target="client"
+            ;;
+        --server)
+            reverse_target="server"
+            ;;
+        -t|--target)
+            if [ -n "${2:-}" ]; then
+                reverse_target=$(printf '%s' "$2" | tr 'A-Z' 'a-z')
+                shift
+            else
+                printf 'Option %s requires an argument.\n' "$1" >&2
+                usage 1
+            fi
+            ;;
+        --target=*)
+            reverse_target=$(printf '%s' "${1#*=}" | tr 'A-Z' 'a-z')
             ;;
         --)
             shift
@@ -57,6 +81,15 @@ if [ "$#" -gt 0 ]; then
     printf 'Unexpected argument: %s\n' "$1" >&2
     usage 1
 fi
+
+case "$reverse_target" in
+    server|client)
+        ;;
+    *)
+        printf 'Unknown target role: %s\n' "$reverse_target" >&2
+        usage 1
+        ;;
+esac
 
 if [ -z "${XRAY_SELF_DIR:-}" ]; then
     case "$0" in
@@ -120,8 +153,18 @@ fi
 
 CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
 ROUTING_FILE="${XRAY_ROUTING_FILE:-$CONFIG_DIR/routing.json}"
-ROUTING_TEMPLATE_LOCAL="${XRAY_ROUTING_TEMPLATE:-config_templates/server/routing.json}"
-ROUTING_TEMPLATE_REMOTE="${XRAY_ROUTING_TEMPLATE_REMOTE:-config_templates/server/routing.json}"
+
+case "$reverse_target" in
+    server)
+        default_routing_template_remote="config_templates/server/routing.json"
+        ;;
+    client)
+        default_routing_template_remote="config_templates/client/routing.json"
+        ;;
+esac
+
+ROUTING_TEMPLATE_REMOTE="${XRAY_ROUTING_TEMPLATE_REMOTE:-$default_routing_template_remote}"
+ROUTING_TEMPLATE_LOCAL="${XRAY_ROUTING_TEMPLATE:-$ROUTING_TEMPLATE_REMOTE}"
 
 xray_require_cmd jq
 
@@ -184,7 +227,7 @@ validate_username() {
     esac
 }
 
-update_routing() {
+update_routing_server() {
     username="$1"
     suffix="${XRAY_REVERSE_SUFFIX:-.rev}"
     domain="$username$suffix"
@@ -197,6 +240,11 @@ update_routing() {
         --arg domain "$domain" \
         --arg tag "$tag" \
         '
+        def ensure_array:
+            if . == null then []
+            elif type == "array" then .
+            else [.] end;
+
         .reverse = (.reverse // {}) |
         .reverse.portals = (
             (.reverse.portals // [])
@@ -207,7 +255,7 @@ update_routing() {
         (.routing.rules // []) as $rules |
         .routing.rules = (
             reduce $rules[] as $rule ([];
-                if ($rule.outboundTag == $tag and ((($rule.domain // []) | index("full:" + $domain)) != null))
+                if ($rule.outboundTag == $tag and (($rule.domain | ensure_array | index("full:" + $domain)) != null))
                 then .
                 else . + [$rule]
                 end
@@ -230,12 +278,90 @@ update_routing() {
     xray_log "Updated $ROUTING_FILE with reverse proxy entry for $username (tag: $tag)"
 }
 
+update_routing_client() {
+    username="$1"
+    suffix="${XRAY_REVERSE_SUFFIX:-.rev}"
+    domain="$username$suffix"
+    tag="$domain"
+
+    tmp="$(mktemp 2>/dev/null)" || xray_die "Unable to create temporary file"
+
+    if ! jq \
+        --arg domain "$domain" \
+        --arg tag "$tag" \
+        '
+        def ensure_array:
+            if . == null then []
+            elif type == "array" then .
+            else [.] end;
+
+        .reverse = (.reverse // {}) |
+        .reverse.bridges = (
+            (.reverse.bridges // [])
+            | [ .[] | select(.domain != $domain) ]
+            + [{ domain: $domain, tag: $tag }]
+        ) |
+        .routing = (.routing // {}) |
+        (.routing.rules // []) as $rules |
+        .routing.rules = (
+            [ $rules[] | select(
+                (
+                    (.type == "field" and (.outboundTag == "proxy") and ((.inboundTag | ensure_array | index($tag)) != null) and ((.domain | ensure_array | index("full:" + $domain)) != null))
+                    or (.type == "field" and (.outboundTag == "direct") and ((.inboundTag | ensure_array | index($tag)) != null))
+                ) | not
+            ) ]
+            + [
+                {
+                    type: "field",
+                    domain: ["full:" + $domain],
+                    inboundTag: [$tag],
+                    outboundTag: "proxy"
+                },
+                {
+                    type: "field",
+                    inboundTag: [$tag],
+                    outboundTag: "direct"
+                }
+            ]
+        )
+        ' "$ROUTING_FILE" >"$tmp"; then
+        rm -f "$tmp"
+        xray_die "Failed to update $ROUTING_FILE"
+    fi
+
+    chmod 0644 "$tmp"
+    mv "$tmp" "$ROUTING_FILE"
+
+    xray_log "Updated $ROUTING_FILE with reverse proxy entry for $username (tag: $tag)"
+}
+
+update_routing() {
+    case "$reverse_target" in
+        server)
+            update_routing_server "$1"
+            ;;
+        client)
+            update_routing_client "$1"
+            ;;
+    esac
+}
+
 ensure_routing_file
 run_user_list
 
 USERNAME=$(read_username "$username_arg")
 validate_username "$USERNAME"
 update_routing "$USERNAME"
-xray_restart_service
+xray_restart_service "" "" ""
 
-xray_log "Reverse proxy server install complete."
+completion_target="$reverse_target"
+case "$reverse_target" in
+    server)
+        completion_target="server"
+        ;;
+    client)
+        completion_target="client"
+        ;;
+esac
+
+xray_log "Reverse proxy $completion_target install complete."

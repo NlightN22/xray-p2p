@@ -174,9 +174,9 @@ xray_run_repo_script() {
 }
 
 xray_restart_service() {
-    service_name="$1"
-    service_script="$2"
-    skip_var="$3"
+    service_name="${1:-}"
+    service_script="${2:-}"
+    skip_var="${3:-}"
 
     [ -n "$service_name" ] || service_name="${XRAY_SERVICE_NAME:-xray}"
     [ -n "$service_script" ] || service_script="/etc/init.d/$service_name"
