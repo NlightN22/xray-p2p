@@ -1,13 +1,20 @@
 {
     "inbounds": [
         {
-
+            "tag": "socks-in",
+            "protocol": "socks",
+            "listen": "127.0.0.1",
+            "port": 1080,
+            "settings": {
+                "udp": true
+            }
+        },
+        {
             "port": 8443,
             "listen": "0.0.0.0",
             "protocol": "trojan",
             "settings": {
-                "clients": [
-                ]
+                "clients": []
             },
             "streamSettings": {
                 "network": "tcp",
