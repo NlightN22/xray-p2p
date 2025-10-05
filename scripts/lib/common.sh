@@ -173,6 +173,37 @@ xray_run_repo_script() {
     return 0
 }
 
+xray_restart_service() {
+    service_name="$1"
+    service_script="$2"
+    skip_var="$3"
+
+    [ -n "$service_name" ] || service_name="${XRAY_SERVICE_NAME:-xray}"
+    [ -n "$service_script" ] || service_script="/etc/init.d/$service_name"
+    [ -n "$skip_var" ] || skip_var="XRAY_SKIP_RESTART"
+
+    skip_value=""
+    if [ -n "$skip_var" ]; then
+        skip_value=$(eval "printf '%s' \"\${$skip_var:-}\"")
+    fi
+
+    if [ "$skip_value" = "1" ]; then
+        xray_log "Skipping ${service_name} restart (${skip_var}=1)."
+        return 0
+    fi
+
+    if [ ! -x "$service_script" ]; then
+        xray_die "Service script not found or not executable: $service_script"
+    fi
+
+    xray_log "Restarting ${service_name} service"
+    if ! "$service_script" restart; then
+        xray_die "Failed to restart ${service_name} service."
+    fi
+
+    return 0
+}
+
 xray_prompt_yes_no() {
     prompt="$1"
     default_answer="${2:-N}"

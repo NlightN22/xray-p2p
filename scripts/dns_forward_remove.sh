@@ -314,10 +314,9 @@ fi
 
 if [ "$inbound_changed" -eq 1 ]; then
     if [ -x "$XRAY_SERVICE" ]; then
-        if "$XRAY_SERVICE" restart >/dev/null 2>&1; then
+        xray_restart_service "" "$XRAY_SERVICE"
+        if [ "${XRAY_SKIP_RESTART:-0}" != "1" ]; then
             xray_log "xray restarted"
-        else
-            xray_log "xray restart failed; please restart manually"
         fi
     else
         xray_log "xray service script not found at $XRAY_SERVICE"

@@ -249,7 +249,6 @@ CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
 INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
 CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
 CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
-SERVICE_NAME="${XRAY_SERVICE_NAME:-xray}"
 
 [ -f "$INBOUNDS_FILE" ] || xray_die "Inbound configuration not found: $INBOUNDS_FILE"
 
@@ -499,14 +498,7 @@ mv "$TMP_INBOUNDS" "$INBOUNDS_FILE"
 chmod 644 "$INBOUNDS_FILE"
 TMP_INBOUNDS=""
 
-if [ "${XRAY_SKIP_RESTART:-0}" = "1" ]; then
-    xray_log "Skipping ${SERVICE_NAME} restart (XRAY_SKIP_RESTART=1)."
-else
-    SERVICE_SCRIPT="/etc/init.d/$SERVICE_NAME"
-    [ -x "$SERVICE_SCRIPT" ] || xray_die "Service script not found or not executable: $SERVICE_SCRIPT"
-    xray_log "Restarting $SERVICE_NAME service"
-    "$SERVICE_SCRIPT" restart || xray_die "Failed to restart $SERVICE_NAME service."
-fi
+xray_restart_service
 
 xray_log "Client '$EMAIL' issued with id $CLIENT_ID."
 xray_log "Configuration files updated: $CLIENTS_FILE, $INBOUNDS_FILE"

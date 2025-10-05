@@ -427,10 +427,7 @@ if [ -z "$SOCKS_PORT" ]; then
     SOCKS_PORT=1080
 fi
 
-xray_log "Restarting xray service"
-if ! /etc/init.d/xray restart; then
-    xray_die "Failed to restart xray service"
-fi
+xray_restart_service
 
 sleep 2
 

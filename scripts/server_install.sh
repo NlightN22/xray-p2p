@@ -393,10 +393,7 @@ else
     xray_log "Skipping certificate regeneration; keeping existing files in place."
 fi
 
-xray_log "Restarting xray service"
-if ! /etc/init.d/xray restart; then
-    xray_die "Failed to restart xray service"
-fi
+xray_restart_service
 
 sleep 2
 

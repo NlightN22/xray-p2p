@@ -10,6 +10,17 @@
             }
         },
         {
+            "remark": "local-input",
+            "tag": "in-48044",
+            "listen": "0.0.0.0",
+            "port": 48044,
+            "protocol": "dokodemo-door",
+            "settings": {
+                "network": "tcp",
+                "followRedirect": true
+            }
+        },
+        {
             "port": 8443,
             "listen": "0.0.0.0",
             "protocol": "trojan",

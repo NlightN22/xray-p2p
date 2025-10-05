@@ -4,7 +4,7 @@
         "rules": [
             {
                 "domain": [
-                    "full:rev.test1"
+                    "full:test1.rev"
                 ],
                 "inboundTag": [
                     "test1.rev"

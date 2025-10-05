@@ -132,7 +132,7 @@ ensure_routing_file() {
 }
 
 run_user_list() {
-    xray_log "Existing XRAY users (user_list.sh):"
+    xray_log "Existing XRAY users (user_list.sh, email password status):"
     if ! xray_run_repo_script optional "lib/user_list.sh" "scripts/lib/user_list.sh"; then
         xray_log "Unable to execute user_list.sh; continuing without user listing."
     fi
@@ -236,5 +236,6 @@ run_user_list
 USERNAME=$(read_username "$username_arg")
 validate_username "$USERNAME"
 update_routing "$USERNAME"
+xray_restart_service
 
 xray_log "Reverse proxy server install complete."
