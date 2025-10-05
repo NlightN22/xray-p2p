@@ -2,9 +2,11 @@
 
 set -eu
 
-NFT_SNIPPET="/etc/nftables.d/xray-transparent.nft"
-NFT_SNIPPET_DIR="/etc/nftables.d/xray-transparent.d"
-XRAY_INBOUND_FILE="/etc/xray/inbounds.json"
+SCRIPT_NAME=${0##*/}
+
+NFT_SNIPPET="${NFT_SNIPPET:-/etc/nftables.d/xray-transparent.nft}"
+NFT_SNIPPET_DIR="${NFT_SNIPPET_DIR:-/etc/nftables.d/xray-transparent.d}"
+XRAY_INBOUND_FILE="${XRAY_INBOUND_FILE:-/etc/xray/inbounds.json}"
 
 if [ -z "${XRAY_SELF_DIR:-}" ]; then
     case "$0" in
@@ -198,25 +200,34 @@ EOF
 }
 
 usage() {
-    cat <<'USAGE'
-Usage: redirect_add.sh [SUBNET]
+    cat <<EOF
+Usage: $SCRIPT_NAME [options] [SUBNET]
 
-SUBNET  Destination subnet to divert (CIDR notation, e.g. 10.0.101.0/24).
+Configure nftables redirect entries for XRAY transparent proxy routing.
 
-If SUBNET is omitted, the script prompts for it interactively.
-The script reads dokodemo-door inbound(s) from /etc/xray/inbounds.json and
-installs nftables rules that redirect matching traffic to the selected port.
-USAGE
+Options:
+  -h, --help        Show this help message and exit.
+
+Arguments:
+  SUBNET            Optional destination subnet in CIDR notation (e.g. 10.0.101.0/24).
+                    When omitted, the script prompts for the subnet interactively.
+
+Environment variables:
+  NFT_SNIPPET           Override the nftables snippet file path (default: /etc/nftables.d/xray-transparent.nft).
+  NFT_SNIPPET_DIR       Override the directory storing per-subnet entries (default: /etc/nftables.d/xray-transparent.d).
+  XRAY_INBOUND_FILE     Path to the XRAY inbounds definition used to detect dokodemo-door ports
+                        (default: /etc/xray/inbounds.json).
+  XRAY_REPO_BASE_URL    Custom base URL to fetch the common loader when not running inside the repo.
+EOF
+    exit "${1:-0}"
 }
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-    usage
-    exit 0
+    usage 0
 fi
 
 if [ "$#" -gt 1 ]; then
-    usage
-    exit 1
+    usage 1
 fi
 
 SUBNET="${1:-}"
