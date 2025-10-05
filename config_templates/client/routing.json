@@ -1,32 +1,9 @@
 {
     "routing": {
         "domainStrategy": "IPOnDemand",
-        "rules": [
-            {
-                "domain": [
-                    "full:test1.rev"
-                ],
-                "inboundTag": [
-                    "test1.rev"
-                ],
-                "type": "field",
-                "outboundTag": "proxy"
-            },
-            {
-                "type": "field",
-                "inboundTag": [
-                    "test1.rev"
-                ],
-                "outboundTag": "direct"
-            }
-        ]
+        "rules": []
     },
     "reverse": {
-        "bridges": [
-            {
-                "domain": "test1.rev",
-                "tag": "test1.rev"
-            }
-        ]
+        "bridges": []
     }
 }

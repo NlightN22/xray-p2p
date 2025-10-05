@@ -125,9 +125,61 @@ ROUTING_TEMPLATE_LOCAL="${XRAY_ROUTING_TEMPLATE:-$ROUTING_TEMPLATE_REMOTE}"
 xray_require_cmd jq
 
 ensure_routing_file() {
-    if [ ! -f "$ROUTING_FILE" ]; then
-        xray_seed_file_from_template "$ROUTING_FILE" "$ROUTING_TEMPLATE_REMOTE" "$ROUTING_TEMPLATE_LOCAL"
+    if [ -f "$ROUTING_FILE" ]; then
+        return
     fi
+
+    if [ -n "$ROUTING_TEMPLATE_REMOTE" ]; then
+        xray_seed_file_from_template "$ROUTING_FILE" "$ROUTING_TEMPLATE_REMOTE" "${ROUTING_TEMPLATE_LOCAL:-$ROUTING_TEMPLATE_REMOTE}"
+        return
+    fi
+
+    if [ -n "$ROUTING_TEMPLATE_LOCAL" ]; then
+        if resolved_template=$(xray_resolve_local_path "$ROUTING_TEMPLATE_LOCAL"); then
+            template_path="$resolved_template"
+        else
+            template_path="$resolved_template"
+        fi
+
+        if [ -n "$template_path" ] && [ -r "$template_path" ]; then
+            if ! xray_should_replace_file "$ROUTING_FILE" "XRAY_FORCE_CONFIG"; then
+                return
+            fi
+            dest_dir=$(dirname "$ROUTING_FILE")
+            if [ ! -d "$dest_dir" ]; then
+                mkdir -p "$dest_dir" || xray_die "Unable to create directory $dest_dir"
+            fi
+            if ! cp "$template_path" "$ROUTING_FILE"; then
+                xray_die "Failed to copy template from $template_path"
+            fi
+            chmod 0644 "$ROUTING_FILE" 2>/dev/null || true
+            xray_log "Seeded $ROUTING_FILE from local template $template_path"
+            return
+        fi
+    fi
+
+    tmp="$(mktemp 2>/dev/null)" || xray_die "Unable to create temporary file"
+    cat >"$tmp" <<'EOF'
+{
+    "routing": {
+        "domainStrategy": "IPOnDemand",
+        "rules": []
+    },
+    "reverse": {
+        "bridges": []
+    }
+}
+EOF
+    chmod 0644 "$tmp"
+    dest_dir=$(dirname "$ROUTING_FILE")
+    if [ ! -d "$dest_dir" ]; then
+        mkdir -p "$dest_dir" || {
+            rm -f "$tmp"
+            xray_die "Unable to create directory $dest_dir"
+        }
+    fi
+    mv "$tmp" "$ROUTING_FILE"
+    xray_log "Generated default routing config at $ROUTING_FILE"
 }
 
 read_username() {
