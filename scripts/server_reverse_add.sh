@@ -1,4 +1,5 @@
 #!/bin/sh
+################### upd
 set -eu
 
 SCRIPT_NAME=${0##*/}
