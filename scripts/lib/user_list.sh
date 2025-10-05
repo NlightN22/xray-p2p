@@ -70,7 +70,8 @@ xray_user_list_main() {
     xray_check_repo_access 'scripts/lib/user_list.sh'
 
     if [ ! -f "$CLIENTS_FILE" ]; then
-        xray_die "Clients registry not found: $CLIENTS_FILE"
+        xray_warn "Clients registry not found: $CLIENTS_FILE"
+        return 0
     fi
 
     if [ ! -f "$INBOUNDS_FILE" ]; then

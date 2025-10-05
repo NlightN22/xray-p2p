@@ -19,6 +19,10 @@ xray_die() {
     exit 1
 }
 
+xray_warn() {
+    printf 'Warning: %s\n' "$*" >&2
+}
+
 xray_require_cmd() {
     cmd="$1"
     if command -v "$cmd" >/dev/null 2>&1; then
