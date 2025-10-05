@@ -91,26 +91,6 @@ trim() {
     printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
 }
 
-validate_ipv4() {
-    local addr="$1" octet old_ifs
-    old_ifs=$IFS
-    IFS=.
-    set -- $addr
-    IFS=$old_ifs
-    if [ "$#" -ne 4 ]; then
-        return 1
-    fi
-    for octet in "$@"; do
-        case "$octet" in
-            ''|*[!0-9]*) return 1 ;;
-        esac
-        if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
-            return 1
-        fi
-    done
-    return 0
-}
-
 validate_domain_mask() {
     case "$1" in
         ''|*[!A-Za-z0-9.*-]*)

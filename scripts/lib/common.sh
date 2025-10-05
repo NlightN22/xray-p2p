@@ -8,6 +8,57 @@ if [ "${XRAY_COMMON_LIB_LOADED:-0}" = "1" ]; then
 fi
 XRAY_COMMON_LIB_LOADED=1
 
+xray_common_try_source() {
+    for path in "$@"; do
+        [ -n "$path" ] || continue
+        case "$path" in
+            /*)
+                if [ -r "$path" ]; then
+                    # shellcheck disable=SC1090
+                    . "$path"
+                    return 0
+                fi
+                ;;
+            *)
+                if [ -n "${XRAY_SELF_DIR:-}" ]; then
+                    candidate="${XRAY_SELF_DIR%/}/$path"
+                    if [ -r "$candidate" ]; then
+                        # shellcheck disable=SC1090
+                        . "$candidate"
+                        return 0
+                    fi
+                fi
+
+                if [ -n "${XRAY_SCRIPT_ROOT:-}" ]; then
+                    candidate="${XRAY_SCRIPT_ROOT%/}/$path"
+                    if [ -r "$candidate" ]; then
+                        # shellcheck disable=SC1090
+                        . "$candidate"
+                        return 0
+                    fi
+                fi
+
+                if [ -r "$path" ]; then
+                    # shellcheck disable=SC1090
+                    . "$path"
+                    return 0
+                fi
+                ;;
+        esac
+    done
+
+    return 1
+}
+
+if [ "${XRAY_NETWORK_VALIDATION_LOADED:-0}" != "1" ]; then
+    xray_common_try_source \
+        "${XRAY_NETWORK_VALIDATION_LIB:-}" \
+        "scripts/lib/network_validation.sh" \
+        "lib/network_validation.sh" \
+        "network_validation.sh" \
+        || true
+fi
+
 XRAY_DEFAULT_REPO_BASE_URL="https://raw.githubusercontent.com/NlightN22/xray-p2p/main"
 
 xray_log() {

@@ -63,59 +63,6 @@ if ! load_common_lib; then
     exit 1
 fi
 
-validate_ipv4() {
-    addr="$1"
-    IFS_SAVE="$IFS"
-    IFS='.' read -r o1 o2 o3 o4 <<EOF
-$addr
-EOF
-    IFS="$IFS_SAVE"
-
-    if [ -z "${o4:-}" ]; then
-        return 1
-    fi
-
-    for octet in "$o1" "$o2" "$o3" "$o4"; do
-        case "$octet" in
-            ''|*[!0-9]*) return 1 ;;
-        esac
-        if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
-            return 1
-        fi
-    done
-
-    return 0
-}
-
-validate_subnet() {
-    subnet="$1"
-    case "$subnet" in
-        */*) ;;
-        *)
-            return 1
-            ;;
-    esac
-
-    addr="${subnet%/*}"
-    prefix="${subnet#*/}"
-
-    if ! validate_ipv4 "$addr"; then
-        return 1
-    fi
-
-    case "$prefix" in
-        ''|*[!0-9]*)
-            return 1
-            ;;
-    esac
-
-    if [ "$prefix" -lt 0 ] || [ "$prefix" -gt 32 ]; then
-        return 1
-    fi
-
-    return 0
-}
-
 sanitize_subnet_for_filename() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
 }
