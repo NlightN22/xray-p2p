@@ -413,8 +413,7 @@ update_routing_server() {
             + [{
                 type: "field",
                 domain: ["full:" + $domain],
-                outboundTag: $tag,
-                user: [$user]
+                outboundTag: $tag
             }]
             + (if ($subnets | length) > 0 then [
                 {
