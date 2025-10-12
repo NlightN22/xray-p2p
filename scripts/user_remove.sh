@@ -156,7 +156,7 @@ prompt_value() {
     printf '%s' "$value"
 }
 
-CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
+CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray-p2p}"
 INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
 CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
 CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
@@ -259,7 +259,7 @@ if [ "$INBOUND_MATCHES" -gt 0 ]; then
     chmod 644 "$INBOUNDS_FILE"
 fi
 
-xray_restart_service
+xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p"
 
 if [ -n "$CLIENT_ID" ]; then
     xray_log "Client '$EMAIL' (id $CLIENT_ID${CLIENT_STATUS:+, status $CLIENT_STATUS}) removed."

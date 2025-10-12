@@ -9,7 +9,7 @@
 - Automates XRAY server and client installation on OpenWrt.
 - Generates or installs TLS certificates for inbound listeners.
 - Manages Trojan accounts (email/password pairs) and tracks their usage server-side.
-- Validates generated configs and restarts the XRAY service as needed.
+- Validates generated configs and restarts the xray-p2p service as needed.
 
 ---
 
@@ -53,7 +53,7 @@ To remove a redirect later, run `scripts/redirect_remove.sh` on the client
 with either a CIDR (e.g. `10.0.101.0/24`) or `--all` to drop every subnet at once.
 To list or remove DNS forwardings, call `scripts/dns_forward_remove.sh` with a mask, `--all`, or `--list` to inspect what's configured.
 
-The client installer parses the connection string, writes the templates from `config_templates/client` into `/etc/xray`, marks the client entry as used on the server, and restarts XRAY to apply the configuration.
+The client installer parses the connection string, writes the templates from `config_templates/client` into `/etc/xray-p2p`, marks the client entry as used on the server, and restarts the xray-p2p service to apply the configuration.
 
 ---
 
@@ -67,7 +67,7 @@ The client installer parses the connection string, writes the templates from `co
 
 ## Checks and troubleshooting
 
-- Validate a config: `xray -test -c /etc/xray/config.json`.
+- Validate a config: `xray -test -confdir /etc/xray-p2p -format json`.
 - Inspect logs: `logread -e xray`.
 - From the client, verify egress: `curl --socks5 127.0.0.1:1080 https://ifconfig.me` (replace port if you customized it).
 
@@ -87,10 +87,10 @@ The client installer parses the connection string, writes the templates from `co
 - `scripts/lib/ip_show.sh` — queries multiple sources to determine the server’s public IPv4 address.
 - `scripts/client_install.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
 - `scripts/lib/user_list.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
-- `scripts/user_remove.sh` — revokes a client, updates configs, and restarts XRAY.
+- `scripts/user_remove.sh` — revokes a client, updates configs, and restarts xray-p2p.
 - `scripts/redirect_add.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
 - `scripts/dns_forward_add.sh` — adds per-domain dokodemo-door DNS inbounds, auto-allocates ports from 53331, and syncs dnsmasq forwarding.
-- `scripts/dns_forward_remove.sh` — lists (`--list`) or removes domain forwardings (single mask or `--all`) and cleans dnsmasq/xray state.
+- `scripts/dns_forward_remove.sh` — lists (`--list`) or removes domain forwardings (single mask or `--all`) and cleans dnsmasq/xray-p2p state.
 - `scripts/redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
 
 ---

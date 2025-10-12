@@ -245,7 +245,7 @@ run_network_interfaces_helper() {
     fi
 }
 
-CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
+CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray-p2p}"
 INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
 CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
 CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
@@ -498,7 +498,7 @@ mv "$TMP_INBOUNDS" "$INBOUNDS_FILE"
 chmod 644 "$INBOUNDS_FILE"
 TMP_INBOUNDS=""
 
-xray_restart_service
+xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p"
 
 xray_log "Client '$EMAIL' issued with id $CLIENT_ID."
 xray_log "Configuration files updated: $CLIENTS_FILE, $INBOUNDS_FILE"
