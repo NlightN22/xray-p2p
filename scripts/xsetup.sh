@@ -67,6 +67,16 @@ require_cmd() {
     fi
 }
 
+sanitize_subnet_for_entry() {
+    printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
+}
+
+redirect_entry_path_for_subnet() {
+    local subnet_clean
+    subnet_clean=$(sanitize_subnet_for_entry "$1")
+    printf '/etc/nftables.d/xray-transparent.d/xray_redirect_%s.entry' "$subnet_clean"
+}
+
 SSH_USER=${XRAY_SERVER_SSH_USER:-root}
 SSH_PORT=${XRAY_SERVER_SSH_PORT:-22}
 
@@ -257,22 +267,76 @@ if ! command -v openssl >/dev/null 2>&1; then
     exit 1
 fi
 
-log "Issuing user $USER_NAME..."
-issue_output=$(curl -fsSL "$BASE_URL/scripts/user_issue.sh" | sh -s -- "$USER_NAME" "$SERVER_ADDR")
-printf '%s\n' "$issue_output"
+CLIENTS_FILE="/etc/xray-p2p/config/clients.json"
+existing_link=""
+if [ -f "$CLIENTS_FILE" ]; then
+    if jq -e . "$CLIENTS_FILE" >/dev/null 2>&1; then
+        existing_link=$(jq -r --arg email "$USER_NAME" '
+            def find_link($arr):
+                ($arr // [])
+                | map(select((.email // "") == $email) | .link)
+                | map(select(type == "string" and . != ""))
+                | if length == 0 then empty else .[0] end;
 
-trojan_link=$(printf '%s\n' "$issue_output" | awk '/^trojan:\/\// {link=$0} END {print link}')
-if [ -z "$trojan_link" ]; then
-    log "Unable to detect trojan link in user_issue output"
-    exit 1
+            if type == "array" then
+                find_link(.)
+            elif type == "object" and has("clients") then
+                find_link(.clients)
+            else
+                empty
+            end
+        ' "$CLIENTS_FILE" 2>/dev/null || true)
+        existing_link=$(printf '%s' "$existing_link" | tr -d '\n')
+        if [ "$existing_link" = "null" ]; then
+            existing_link=""
+        fi
+    else
+        log "Warning: clients registry contains invalid JSON; ignoring existing entries."
+    fi
+fi
+
+trojan_link=""
+if [ -n "$existing_link" ]; then
+    log "Client $USER_NAME already exists; reusing issued credentials."
+    trojan_link="$existing_link"
+else
+    log "Issuing user $USER_NAME..."
+    issue_output=$(curl -fsSL "$BASE_URL/scripts/user_issue.sh" | sh -s -- "$USER_NAME" "$SERVER_ADDR")
+    printf '%s\n' "$issue_output"
+
+    trojan_link=$(printf '%s\n' "$issue_output" | awk '/^trojan:\/\// {link=$0} END {print link}')
+    if [ -z "$trojan_link" ]; then
+        log "Unable to detect trojan link in user_issue output"
+        exit 1
+    fi
 fi
 printf '__TROJAN_LINK__=%s\n' "$trojan_link"
 
 log "Adding server reverse proxy..."
-curl -fsSL "$BASE_URL/scripts/server_reverse_add.sh" | sh -s -- "$USER_NAME"
+curl -fsSL "$BASE_URL/scripts/server_reverse_add.sh" | sh -s -- --subnet "$CLIENT_LAN" "$USER_NAME"
 
-log "Adding redirect for client LAN $CLIENT_LAN..."
-curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$CLIENT_LAN"
+sanitize_subnet_for_entry() {
+    printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
+}
+
+redirect_entry_path_for_subnet() {
+    local subnet_clean
+    subnet_clean=$(sanitize_subnet_for_entry "$1")
+    printf '/etc/nftables.d/xray-transparent.d/xray_redirect_%s.entry' "$subnet_clean"
+}
+
+redirect_entry_path=$(redirect_entry_path_for_subnet "$CLIENT_LAN")
+if [ -f "$redirect_entry_path" ]; then
+    existing_redirect_port=$(sed -n 's/^PORT="\(.*\)"/\1/p' "$redirect_entry_path" 2>/dev/null | head -n 1)
+    if [ -n "$existing_redirect_port" ]; then
+        log "Redirect for $CLIENT_LAN already present (port $existing_redirect_port); skipping."
+    else
+        log "Redirect for $CLIENT_LAN already present; skipping."
+    fi
+else
+    log "Adding redirect for client LAN $CLIENT_LAN..."
+    curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$CLIENT_LAN"
+fi
 EOS
     status=$?
     set -e
@@ -304,8 +368,18 @@ opkg install jq
 printf '[local] Running client_install.sh...\n' >&2
 curl -fsSL "$BASE_URL/scripts/client_install.sh" | sh -s -- "$trojan_url"
 
-printf '[local] Adding redirect for server LAN %s...\n' "$SERVER_LAN" >&2
-curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$SERVER_LAN"
+server_redirect_entry=$(redirect_entry_path_for_subnet "$SERVER_LAN")
+if [ -f "$server_redirect_entry" ]; then
+    existing_redirect_port=$(sed -n 's/^PORT="\(.*\)"/\1/p' "$server_redirect_entry" 2>/dev/null | head -n 1)
+    if [ -n "$existing_redirect_port" ]; then
+        printf '[local] Redirect for %s already present (port %s); skipping.\n' "$SERVER_LAN" "$existing_redirect_port" >&2
+    else
+        printf '[local] Redirect for %s already present; skipping.\n' "$SERVER_LAN" >&2
+    fi
+else
+    printf '[local] Adding redirect for server LAN %s...\n' "$SERVER_LAN" >&2
+    curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$SERVER_LAN"
+fi
 
 printf '[local] Adding client reverse proxy...\n' >&2
 curl -fsSL "$BASE_URL/scripts/client_reverse_add.sh" | sh -s -- "$USER_NAME"
