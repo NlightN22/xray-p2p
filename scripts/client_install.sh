@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install XRAY client
+# Install XRAY-P2P client (OpenWrt)
 
 SCRIPT_NAME=${0##*/}
 
@@ -67,7 +67,7 @@ usage() {
     cat <<EOF
 Usage: $SCRIPT_NAME [options] [TROJAN_URL]
 
-Install and configure the XRAY client. The optional TROJAN_URL argument
+Install and configure XRAY binary and xray-p2p client config/service. The optional TROJAN_URL argument
 overrides environment variables and interactive input when provided.
 
 Options:
@@ -165,55 +165,38 @@ if ! sh "$TMP_INSTALL_SCRIPT"; then
 fi
 rm -f "$TMP_INSTALL_SCRIPT"
 
-XRAY_CONFIG_DIR="/etc/xray"
-if [ ! -d "$XRAY_CONFIG_DIR" ]; then
-    xray_log "Creating XRAY configuration directory at $XRAY_CONFIG_DIR"
-    mkdir -p "$XRAY_CONFIG_DIR"
+# Our dedicated config directory and service
+XRAYP2P_CONFIG_DIR="/etc/xray-p2p"
+XRAYP2P_DATA_DIR="/usr/share/xray-p2p"
+XRAYP2P_SERVICE="/etc/init.d/xray-p2p"
+
+# Ensure config and data dirs
+if [ ! -d "$XRAYP2P_CONFIG_DIR" ]; then
+    xray_log "Creating xray-p2p configuration directory at $XRAYP2P_CONFIG_DIR"
+    mkdir -p "$XRAYP2P_CONFIG_DIR"
+fi
+if [ ! -e "$XRAYP2P_DATA_DIR" ]; then
+    if [ -d "/usr/share/xray" ]; then
+        ln -s "/usr/share/xray" "$XRAYP2P_DATA_DIR" 2>/dev/null || mkdir -p "$XRAYP2P_DATA_DIR"
+    else
+        mkdir -p "$XRAYP2P_DATA_DIR"
+    fi
 fi
 
+# Seed our init script and UCI config
+xray_seed_file_from_template "$XRAYP2P_SERVICE" "config_templates/xray-p2p.init"
+chmod 0755 "$XRAYP2P_SERVICE" 2>/dev/null || true
+xray_seed_file_from_template "/etc/config/xray-p2p" "config_templates/xray-p2p.config"
+
+# Seed client JSONs into our directory
 CONFIG_FILES="inbounds.json logs.json outbounds.json"
 for file in $CONFIG_FILES; do
-    target="$XRAY_CONFIG_DIR/$file"
+    target="$XRAYP2P_CONFIG_DIR/$file"
     template_path="config_templates/client/$file"
     xray_seed_file_from_template "$target" "$template_path"
 done
 
-xray_require_cmd uci
 xray_require_cmd jq
-
-XRAY_CONF_DIR_UCI="$(uci -q get xray.config.confdir 2>/dev/null)"
-if [ -z "$XRAY_CONF_DIR_UCI" ]; then
-    xray_die "Unable to read xray.config.confdir via uci"
-fi
-
-if [ "$XRAY_CONF_DIR_UCI" != "$XRAY_CONFIG_DIR" ]; then
-    xray_log "UCI confdir ($XRAY_CONF_DIR_UCI) does not match expected path $XRAY_CONFIG_DIR"
-    xray_die "Update it with: uci set xray.config.confdir='$XRAY_CONFIG_DIR'; uci commit xray"
-fi
-
-uci_changes=0
-
-if [ "$(uci -q get xray.enabled.enabled 2>/dev/null)" != "1" ]; then
-    xray_log "Enabling xray service to start on boot"
-    uci set xray.enabled.enabled='1'
-    uci_changes=1
-fi
-
-desired_conffiles="/etc/xray/inbounds.json /etc/xray/logs.json /etc/xray/outbounds.json"
-existing_conffiles=$(uci -q show xray.config 2>/dev/null | awk -F= '/^xray.config.conffiles=/ {print $2}' | tr '\n' ' ' | sed 's/[[:space:]]*$//')
-
-if [ "$existing_conffiles" != "$desired_conffiles" ]; then
-    xray_log "Aligning xray.config.conffiles with managed templates"
-    uci -q delete xray.config.conffiles
-    for file in $desired_conffiles; do
-        uci add_list xray.config.conffiles="$file"
-    done
-    uci_changes=1
-fi
-
-if [ "$uci_changes" -eq 1 ]; then
-    uci commit xray
-fi
 
 update_trojan_outbound() {
     file="$1"
@@ -267,7 +250,7 @@ update_trojan_outbound() {
     mv "$tmp_file" "$file"
 }
 
-OUTBOUND_FILE="$XRAY_CONFIG_DIR/outbounds.json"
+OUTBOUND_FILE="$XRAYP2P_CONFIG_DIR/outbounds.json"
 if [ ! -f "$OUTBOUND_FILE" ]; then
     xray_die "Outbound configuration $OUTBOUND_FILE is missing"
 fi
@@ -414,7 +397,7 @@ if [ -n "$CONNECTION_STRING" ]; then
     update_outbounds_from_connection "$CONNECTION_STRING"
 fi
 
-INBOUND_FILE="$XRAY_CONFIG_DIR/inbounds.json"
+INBOUND_FILE="$XRAYP2P_CONFIG_DIR/inbounds.json"
 if [ ! -f "$INBOUND_FILE" ]; then
     xray_die "Inbound configuration $INBOUND_FILE is missing"
 fi
@@ -427,7 +410,8 @@ if [ -z "$SOCKS_PORT" ]; then
     SOCKS_PORT=1080
 fi
 
-xray_restart_service
+"$XRAYP2P_SERVICE" enable >/dev/null 2>&1 || true
+xray_restart_service "xray-p2p" "$XRAYP2P_SERVICE"
 
 sleep 2
 
@@ -457,10 +441,10 @@ check_port() {
 check_port
 port_check_status=$?
 if [ "$port_check_status" -eq 0 ]; then
-    xray_log "XRAY client is listening on local port $SOCKS_PORT"
+    xray_log "xray-p2p client is listening on local port $SOCKS_PORT"
 elif [ "$port_check_status" -eq 2 ]; then
-    xray_log "XRAY service restarted. Skipping port verification because neither 'ss' nor 'netstat' is available."
+    xray_log "xray-p2p restarted. Skipping port verification because neither 'ss' nor 'netstat' is available."
     xray_log "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
 else
-    xray_die "XRAY service does not appear to be listening on local port $SOCKS_PORT"
+    xray_die "xray-p2p service does not appear to be listening on local port $SOCKS_PORT"
 fi
