@@ -1,0 +1,263 @@
+#!/bin/sh
+set -eu
+
+SCRIPT_NAME=${0##*/}
+
+usage() {
+    cat <<USAGE
+Usage: $SCRIPT_NAME [options] [SERVER_ADDR] [USER_NAME] [SERVER_LAN] [CLIENT_LAN]
+
+Automate server and client setup for xray-p2p from the client router.
+
+Options:
+  -h, --help          Show this help message and exit.
+  -u, --ssh-user USER SSH user for the remote server (default: root).
+  -p, --ssh-port PORT SSH port for the remote server (default: 22).
+
+Environment variables:
+  XRAY_REPO_BASE_URL       Override repository base (default GitHub).
+  XRAY_SERVER_SSH_USER     Default SSH user.
+  XRAY_SERVER_SSH_PORT     Default SSH port.
+USAGE
+    exit "${1:-0}"
+}
+
+trim() {
+    printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+prompt_required() {
+    label="$1"
+    default_value="$2"
+    response=""
+    while [ -z "$response" ]; do
+        if [ -t 0 ]; then
+            if [ -n "$default_value" ]; then
+                printf '%s [%s]: ' "$label" "$default_value" >&2
+            else
+                printf '%s: ' "$label" >&2
+            fi
+            IFS= read -r response
+        elif [ -r /dev/tty ]; then
+            if [ -n "$default_value" ]; then
+                printf '%s [%s]: ' "$label" "$default_value" >&2
+            else
+                printf '%s: ' "$label" >&2
+            fi
+            IFS= read -r response </dev/tty
+        else
+            if [ -n "$default_value" ]; then
+                response="$default_value"
+                break
+            fi
+            printf 'Error: %s is required and no interactive terminal is available.\n' "$label" >&2
+            exit 1
+        fi
+        if [ -z "$response" ] && [ -n "$default_value" ]; then
+            response="$default_value"
+        fi
+    done
+    printf '%s' "$response"
+}
+
+require_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        printf 'Error: required command not found: %s\n' "$1" >&2
+        exit 1
+    fi
+}
+
+SSH_USER=${XRAY_SERVER_SSH_USER:-root}
+SSH_PORT=${XRAY_SERVER_SSH_PORT:-22}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage 0
+            ;;
+        -u|--ssh-user)
+            if [ "$#" -lt 2 ]; then
+                printf 'Error: %s requires an argument.\n' "$1" >&2
+                usage 1
+            fi
+            SSH_USER="$2"
+            shift 2
+            ;;
+        -p|--ssh-port)
+            if [ "$#" -lt 2 ]; then
+                printf 'Error: %s requires an argument.\n' "$1" >&2
+                usage 1
+            fi
+            SSH_PORT="$2"
+            shift 2
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            printf 'Error: unknown option %s\n' "$1" >&2
+            usage 1
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+SERVER_ADDR="${1:-}"
+if [ "$#" -gt 0 ]; then shift; fi
+USER_NAME="${1:-}"
+if [ "$#" -gt 0 ]; then shift; fi
+SERVER_LAN="${1:-}"
+if [ "$#" -gt 0 ]; then shift; fi
+CLIENT_LAN="${1:-}"
+if [ "$#" -gt 0 ]; then shift; fi
+
+if [ "$#" -gt 0 ]; then
+    printf 'Error: unexpected arguments: %s\n' "$*" >&2
+    usage 1
+fi
+
+SERVER_ADDR="$(trim "$SERVER_ADDR")"
+USER_NAME="$(trim "$USER_NAME")"
+SERVER_LAN="$(trim "$SERVER_LAN")"
+CLIENT_LAN="$(trim "$CLIENT_LAN")"
+
+case "$SSH_PORT" in
+    ''|*[!0-9]*)
+        printf 'Error: SSH port must be numeric. Got: %s\n' "$SSH_PORT" >&2
+        exit 1
+        ;;
+    *)
+        :
+        ;;
+esac
+
+if [ -z "$SERVER_ADDR" ]; then
+    SERVER_ADDR="$(prompt_required 'Enter server address (IP or hostname)' '')"
+fi
+if [ -z "$USER_NAME" ]; then
+    USER_NAME="$(prompt_required 'Enter XRAY client username to create on server' '')"
+fi
+if [ -z "$SERVER_LAN" ]; then
+    SERVER_LAN="$(prompt_required 'Enter server LAN subnet (e.g. 10.0.0.0/24)' '')"
+fi
+if [ -z "$CLIENT_LAN" ]; then
+    CLIENT_LAN="$(prompt_required 'Enter client LAN subnet (e.g. 10.0.1.0/24)' '')"
+fi
+
+BASE_URL_DEFAULT="https://raw.githubusercontent.com/NlightN22/xray-p2p/main"
+BASE_URL="${XRAY_REPO_BASE_URL:-$BASE_URL_DEFAULT}"
+BASE_URL="${BASE_URL%/}"
+
+require_cmd ssh
+require_cmd curl
+require_cmd opkg
+require_cmd sed
+require_cmd grep
+require_cmd mktemp
+require_cmd tee
+
+REMOTE_LOG="$(mktemp)"
+STATUS_FILE="$(mktemp)"
+cleanup() {
+    [ -f "$REMOTE_LOG" ] && rm -f "$REMOTE_LOG"
+    [ -f "$STATUS_FILE" ] && rm -f "$STATUS_FILE"
+}
+trap cleanup EXIT INT TERM
+
+printf '[local] Using repository base: %s\n' "$BASE_URL" >&2
+printf '[local] Server: %s@%s:%s\n' "$SSH_USER" "$SERVER_ADDR" "$SSH_PORT" >&2
+printf '[local] User to issue: %s\n' "$USER_NAME" >&2
+printf '[local] Server LAN: %s\n' "$SERVER_LAN" >&2
+printf '[local] Client LAN: %s\n' "$CLIENT_LAN" >&2
+
+(
+    set +e
+    ssh -p "$SSH_PORT" "$SSH_USER@$SERVER_ADDR" \
+        BASE_URL="$BASE_URL" \
+        SERVER_ADDR="$SERVER_ADDR" \
+        USER_NAME="$USER_NAME" \
+        CLIENT_LAN="$CLIENT_LAN" \
+        sh <<'EOS'
+set -eu
+
+log() {
+    printf '[server] %s\n' "$1" >&2
+}
+
+require_cmd() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        log "Required command not found: $1"
+        exit 1
+    fi
+}
+
+require_cmd opkg
+require_cmd curl
+require_cmd awk
+
+log "Updating package lists (opkg update)..."
+opkg update
+
+log "Installing dependencies (jq openssl-util)..."
+opkg install jq openssl-util
+
+log "Running server_install.sh..."
+curl -fsSL "$BASE_URL/scripts/server_install.sh" | sh -s -- "$SERVER_ADDR"
+
+log "Issuing user $USER_NAME..."
+issue_output=$(curl -fsSL "$BASE_URL/scripts/user_issue.sh" | sh -s -- "$USER_NAME" "$SERVER_ADDR")
+printf '%s\n' "$issue_output"
+
+trojan_link=$(printf '%s\n' "$issue_output" | awk '/^trojan:\/\// {link=$0} END {print link}')
+if [ -z "$trojan_link" ]; then
+    log "Unable to detect trojan link in user_issue output"
+    exit 1
+fi
+printf '__TROJAN_LINK__=%s\n' "$trojan_link"
+
+log "Adding server reverse proxy..."
+curl -fsSL "$BASE_URL/scripts/server_reverse_add.sh" | sh -s -- "$USER_NAME"
+
+log "Adding redirect for client LAN $CLIENT_LAN..."
+curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$CLIENT_LAN"
+EOS
+    status=$?
+    set -e
+    printf '%s\n' "$status" >"$STATUS_FILE"
+    exit "$status"
+) | tee "$REMOTE_LOG"
+
+ssh_status=$(cat "$STATUS_FILE")
+if [ "$ssh_status" -ne 0 ]; then
+    printf 'Error: remote server setup failed (exit %s).\n' "$ssh_status" >&2
+    exit "$ssh_status"
+fi
+
+trojan_url=$(grep '__TROJAN_LINK__=' "$REMOTE_LOG" | tail -n 1 | sed 's/^.*__TROJAN_LINK__=//')
+trojan_url="$(trim "$trojan_url")"
+if [ -z "$trojan_url" ]; then
+    printf 'Error: unable to extract trojan URL from remote output.\n' >&2
+    exit 1
+fi
+
+printf '[local] Trojan URL captured: %s\n' "$trojan_url" >&2
+
+printf '[local] Updating package lists (opkg update)...\n' >&2
+opkg update
+
+printf '[local] Installing client dependencies (jq)...\n' >&2
+opkg install jq
+
+printf '[local] Running client_install.sh...\n' >&2
+curl -fsSL "$BASE_URL/scripts/client_install.sh" | sh -s -- "$trojan_url"
+
+printf '[local] Adding redirect for server LAN %s...\n' "$SERVER_LAN" >&2
+curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$SERVER_LAN"
+
+printf '[local] Adding client reverse proxy...\n' >&2
+curl -fsSL "$BASE_URL/scripts/client_reverse_add.sh" | sh -s -- "$USER_NAME"
+
+printf '\nAll steps completed successfully.\n' >&2
