@@ -60,7 +60,7 @@ if ! command -v load_common_lib >/dev/null 2>&1; then
 fi
 
 xray_user_list_main() {
-    CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
+    CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray-p2p}"
     INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
     CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
     CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"

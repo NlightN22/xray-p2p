@@ -33,8 +33,8 @@
                 "tlsSettings": {
                     "certificates": [
                         {
-                            "certificateFile": "/etc/xray/cert.pem",
-                            "keyFile": "/etc/xray/key.pem"
+                            "certificateFile": "/etc/xray-p2p/cert.pem",
+                            "keyFile": "/etc/xray-p2p/key.pem"
                         }
                     ]
                 },

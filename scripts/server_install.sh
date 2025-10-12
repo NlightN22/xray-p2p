@@ -239,23 +239,20 @@ if [ "$XRAY_PORT" -le 0 ] || [ "$XRAY_PORT" -gt 65535 ]; then
 fi
 
 tmp_inbound=$(mktemp) || xray_die "Unable to create temporary file for inbound update"
-if ! jq --argjson port "$XRAY_PORT" --arg cert "$CERT_FILE" --arg key "$KEY_FILE" '
+if ! jq --argjson port "$XRAY_PORT" '
     .inbounds |= (map(
         if (.protocol // "") == "trojan" then
             .port = $port
-            | .streamSettings.tlsSettings.certificates |= (map(
-                .certificateFile = $cert | .keyFile = $key
-            ))
         else .
         end
     ))
 ' "$INBOUND_FILE" >"$tmp_inbound"; then
     rm -f "$tmp_inbound"
-    xray_die "Failed to update inbound settings"
+    xray_die "Failed to update inbound port"
 fi
 mv "$tmp_inbound" "$INBOUND_FILE"
-if ! jq -e --argjson port "$XRAY_PORT" --arg cert "$CERT_FILE" --arg key "$KEY_FILE" 'any(.inbounds[]?; (.protocol // "") == "trojan" and (.port // 0) == $port) and any(.inbounds[]?; (.streamSettings? // {} | .tlsSettings? // {} | .certificates[]? // {} | (.certificateFile? == $cert and .keyFile? == $key)))' "$INBOUND_FILE" >/dev/null 2>&1; then
-    xray_die "Failed to update port/cert in $INBOUND_FILE"
+if ! jq -e --argjson port "$XRAY_PORT" 'any(.inbounds[]?; (.protocol // "") == "trojan" and (.port // 0) == $port)' "$INBOUND_FILE" >/dev/null 2>&1; then
+    xray_die "Failed to update port in $INBOUND_FILE"
 fi
 
 reissue_cert=1

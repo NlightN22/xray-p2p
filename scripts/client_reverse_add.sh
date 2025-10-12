@@ -15,8 +15,8 @@ Options:
 Environment variables:
   XRAY_REVERSE_USER         Preseed USERNAME when positional argument omitted.
   XRAY_REVERSE_SUFFIX       Override domain/tag suffix (default: .rev).
-  XRAY_CONFIG_DIR           Path to XRAY configuration directory (default: /etc/xray).
-  XRAY_ROUTING_FILE         Path to routing.json (defaults to ${XRAY_CONFIG_DIR:-/etc/xray}/routing.json).
+  XRAY_CONFIG_DIR           Path to XRAY configuration directory (default: /etc/xray-p2p).
+  XRAY_ROUTING_FILE         Path to routing.json (defaults to ${XRAY_CONFIG_DIR:-/etc/xray-p2p}/routing.json).
   XRAY_ROUTING_TEMPLATE     Local template path for routing.json (default: config_templates/client/routing.json).
   XRAY_ROUTING_TEMPLATE_REMOTE  Remote template path relative to repo root (default: config_templates/client/routing.json).
 EOF_USAGE
@@ -114,7 +114,7 @@ if ! load_common_lib; then
     exit 1
 fi
 
-CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
+CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray-p2p}"
 ROUTING_FILE="${XRAY_ROUTING_FILE:-$CONFIG_DIR/routing.json}"
 
 default_routing_template_remote="config_templates/client/routing.json"
@@ -290,6 +290,6 @@ ensure_routing_file
 USERNAME=$(read_username "$username_arg")
 validate_username "$USERNAME"
 update_routing_client "$USERNAME"
-xray_restart_service "" "" ""
+xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p" ""
 
 xray_log "Reverse proxy client install complete."

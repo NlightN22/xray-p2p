@@ -4,12 +4,12 @@ set -eu
 
 SCRIPT_NAME=${0##*/}
 
-XRAY_INBOUND_FILE="/etc/xray/inbounds.json"
+XRAY_INBOUND_FILE="/etc/xray-p2p/inbounds.json"
 LISTEN_ADDRESS="127.0.0.1"
 BASE_LOCAL_PORT=53331
 DNSMASQ_SECTION="dhcp.@dnsmasq[0]"
 DNSMASQ_SERVICE="/etc/init.d/dnsmasq"
-XRAY_SERVICE="/etc/init.d/xray"
+XRAY_SERVICE="/etc/init.d/xray-p2p"
 DNS_REMARK_PREFIX="dns-forward:"
 DNS_TAG_PREFIX="in_dns_"
 
@@ -405,15 +405,15 @@ fi
 
 if [ "$inbound_changed" -eq 1 ]; then
     if [ -x "$XRAY_SERVICE" ]; then
-        xray_restart_service "" "$XRAY_SERVICE"
+        xray_restart_service "xray-p2p" "$XRAY_SERVICE"
         if [ "${XRAY_SKIP_RESTART:-0}" != "1" ]; then
-            xray_log "xray restarted"
+            xray_log "xray-p2p restarted"
         fi
     else
-        xray_log "xray service script not found at $XRAY_SERVICE"
+    xray_log "xray-p2p service script not found at $XRAY_SERVICE"
     fi
 else
-    xray_log "xray configuration already up to date"
+    xray_log "xray-p2p configuration already up to date"
 fi
 
 xray_log "Forwarding ready: $domain_mask -> $dns_ip via 127.0.0.1#$local_port"

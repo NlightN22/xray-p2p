@@ -21,8 +21,8 @@ Environment variables:
   XRAY_REVERSE_SUFFIX       Override domain/tag suffix (default: .rev).
   XRAY_REVERSE_SUBNETS      Default comma/space separated subnets for server target.
   XRAY_REVERSE_SUBNET       Single default subnet (alias for XRAY_REVERSE_SUBNETS).
-  XRAY_CONFIG_DIR           Path to XRAY configuration directory (default: /etc/xray).
-  XRAY_ROUTING_FILE         Path to routing.json (defaults to ${XRAY_CONFIG_DIR:-/etc/xray}/routing.json).
+  XRAY_CONFIG_DIR           Path to XRAY configuration directory (default: /etc/xray-p2p).
+  XRAY_ROUTING_FILE         Path to routing.json (defaults to ${XRAY_CONFIG_DIR:-/etc/xray-p2p}/routing.json).
   XRAY_ROUTING_TEMPLATE     Optional local template path for routing.json.
   XRAY_ROUTING_TEMPLATE_REMOTE  Optional remote template path relative to repo root.
 EOF_USAGE
@@ -198,7 +198,7 @@ if ! load_common_lib; then
     exit 1
 fi
 
-CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray}"
+CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray-p2p}"
 ROUTING_FILE="${XRAY_ROUTING_FILE:-$CONFIG_DIR/routing.json}"
 
 ROUTING_TEMPLATE_REMOTE="${XRAY_ROUTING_TEMPLATE_REMOTE:-}"
@@ -442,6 +442,6 @@ USERNAME=$(read_username "$username_arg")
 validate_username "$USERNAME"
 prompt_subnets_if_needed
 update_routing_server "$USERNAME"
-xray_restart_service "" "" ""
+xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p" ""
 
 xray_log "Reverse proxy server install complete."
