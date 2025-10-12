@@ -194,18 +194,68 @@ require_cmd() {
     fi
 }
 
-require_cmd opkg
 require_cmd curl
 require_cmd awk
 
-log "Updating package lists (opkg update)..."
-opkg update
+if command -v opkg >/dev/null 2>&1; then
+    have_opkg=1
+else
+    have_opkg=0
+fi
 
-log "Installing dependencies (jq openssl-util)..."
-opkg install jq openssl-util
+SERVER_INSTALLED=0
+if [ -x /etc/init.d/xray-p2p ] && [ -f /etc/xray-p2p/inbounds.json ]; then
+    SERVER_INSTALLED=1
+fi
 
-log "Running server_install.sh..."
-curl -fsSL "$BASE_URL/scripts/server_install.sh" | sh -s -- "$SERVER_ADDR"
+if [ "$SERVER_INSTALLED" -eq 1 ]; then
+    log "Detected existing xray-p2p deployment."
+
+    if [ "$have_opkg" -eq 1 ]; then
+        missing_pkgs=""
+        if ! command -v jq >/dev/null 2>&1; then
+            missing_pkgs="${missing_pkgs:+$missing_pkgs }jq"
+        fi
+        if ! command -v openssl >/dev/null 2>&1; then
+            missing_pkgs="${missing_pkgs:+$missing_pkgs }openssl-util"
+        fi
+        if [ -n "$missing_pkgs" ]; then
+            log "Installing missing dependencies: $missing_pkgs"
+            opkg update
+            # shellcheck disable=SC2086
+            opkg install $missing_pkgs
+        fi
+    else
+        log "Warning: opkg not available; cannot auto-install dependencies."
+    fi
+
+    if [ -x /etc/init.d/xray-p2p ]; then
+        if ! /etc/init.d/xray-p2p status >/dev/null 2>&1; then
+            log "Warning: xray-p2p service status check failed."
+        else
+            log "xray-p2p service appears to be running."
+        fi
+    fi
+else
+    if [ "$have_opkg" -ne 1 ]; then
+        log "Error: opkg package manager is required to provision the server."
+        exit 1
+    fi
+
+    log "xray-p2p not detected; provisioning server."
+    opkg update
+    opkg install jq openssl-util
+    curl -fsSL "$BASE_URL/scripts/server_install.sh" | sh -s -- "$SERVER_ADDR"
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+    log "Error: jq command not available on server."
+    exit 1
+fi
+if ! command -v openssl >/dev/null 2>&1; then
+    log "Error: openssl command not available on server."
+    exit 1
+fi
 
 log "Issuing user $USER_NAME..."
 issue_output=$(curl -fsSL "$BASE_URL/scripts/user_issue.sh" | sh -s -- "$USER_NAME" "$SERVER_ADDR")
