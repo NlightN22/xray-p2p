@@ -1,0 +1,17 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "openwrt-gw"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.allow_fstab_modification = false
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = 512
+    vb.cpus = 2
+  end
+
+  load File.expand_path("routers.rb", __dir__)
+  define_routers(config)
+
+  load File.expand_path("clients.rb", __dir__)
+  define_clients(config)
+
+end

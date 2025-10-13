@@ -1,5 +1,1 @@
-tests\*
-tests\
-tests/*
-tests/
-test-env/
+.idea
