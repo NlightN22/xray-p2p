@@ -69,6 +69,15 @@ def define_routers(config)
         /etc/init.d/iperf3 stop >/dev/null 2>&1 || true
         /etc/init.d/iperf3 start
       SHELL
+
+      r.vm.provision "shell", name: "Install hping3", privileged: false, inline: <<-SHELL
+        set -ex
+        if command -v hping3 >/dev/null 2>&1; then
+            echo "hping3 is already installed at $(command -v hping3)"
+            exit 0
+        fi
+        opkg install hping3
+      SHELL
     end
   end
 end

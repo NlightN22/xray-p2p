@@ -60,6 +60,16 @@ def define_clients(config)
             rc-service iperf3 restart || rc-service iperf3 start
         SHELL
 
+
+        c.vm.provision "shell", name: "Install hping3", inline: <<-SHELL
+            set -ex
+            if command -v hping3 >/dev/null 2>&1; then
+                echo "hping3 is already installed at $(command -v hping3)"
+                exit 0
+            fi
+            apk add --no-cache hping3
+        SHELL
+
         c.vm.provision "shell", name: "Delete root password and allow ssh", inline: <<-SHELL
             set -ex
             passwd -d root
