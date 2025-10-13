@@ -10,14 +10,17 @@ Usage: $SCRIPT_NAME [options] [SERVER_ADDR] [USER_NAME] [SERVER_LAN] [CLIENT_LAN
 Automate server and client setup for xray-p2p from the client router.
 
 Options:
-  -h, --help          Show this help message and exit.
-  -u, --ssh-user USER SSH user for the remote server (default: root).
-  -p, --ssh-port PORT SSH port for the remote server (default: 22).
+  -h, --help            Show this help message and exit.
+  -u, --ssh-user USER   SSH user for the remote server (default: root).
+  -p, --ssh-port PORT   SSH port for the remote server (default: 22).
+      --server-port PORT
+                        External port exposed on the server (default: 8443).
 
 Environment variables:
   XRAY_REPO_BASE_URL       Override repository base (default GitHub).
   XRAY_SERVER_SSH_USER     Default SSH user.
   XRAY_SERVER_SSH_PORT     Default SSH port.
+  XRAY_SERVER_PORT         External port to expose on the server (fallback 8443).
 USAGE
     exit "${1:-0}"
 }
@@ -79,6 +82,7 @@ redirect_entry_path_for_subnet() {
 
 SSH_USER=${XRAY_SERVER_SSH_USER:-root}
 SSH_PORT=${XRAY_SERVER_SSH_PORT:-22}
+SERVER_PORT=${XRAY_SERVER_PORT:-8443}
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -99,6 +103,14 @@ while [ "$#" -gt 0 ]; do
                 usage 1
             fi
             SSH_PORT="$2"
+            shift 2
+            ;;
+        --server-port)
+            if [ "$#" -lt 2 ]; then
+                printf 'Error: %s requires an argument.\n' "$1" >&2
+                usage 1
+            fi
+            SERVER_PORT="$2"
             shift 2
             ;;
         --)
@@ -144,6 +156,19 @@ case "$SSH_PORT" in
         ;;
 esac
 
+case "$SERVER_PORT" in
+    ''|*[!0-9]*)
+        printf 'Error: Server port must be numeric. Got: %s\n' "$SERVER_PORT" >&2
+        exit 1
+        ;;
+    *)
+        if [ "$SERVER_PORT" -le 0 ] || [ "$SERVER_PORT" -gt 65535 ]; then
+            printf 'Error: Server port must be between 1 and 65535.\n' >&2
+            exit 1
+        fi
+        ;;
+esac
+
 if [ -z "$SERVER_ADDR" ]; then
     SERVER_ADDR="$(prompt_required 'Enter server address (IP or hostname)' '')"
 fi
@@ -182,6 +207,7 @@ printf '[local] Server: %s@%s:%s\n' "$SSH_USER" "$SERVER_ADDR" "$SSH_PORT" >&2
 printf '[local] User to issue: %s\n' "$USER_NAME" >&2
 printf '[local] Server LAN: %s\n' "$SERVER_LAN" >&2
 printf '[local] Client LAN: %s\n' "$CLIENT_LAN" >&2
+printf '[local] Server external port: %s\n' "$SERVER_PORT" >&2
 
 (
     set +e
@@ -190,6 +216,7 @@ printf '[local] Client LAN: %s\n' "$CLIENT_LAN" >&2
         SERVER_ADDR="$SERVER_ADDR" \
         USER_NAME="$USER_NAME" \
         CLIENT_LAN="$CLIENT_LAN" \
+        SERVER_PORT="$SERVER_PORT" \
         sh <<'EOS'
 set -eu
 
@@ -255,7 +282,8 @@ else
     log "xray-p2p not detected; provisioning server."
     opkg update
     opkg install jq openssl-util
-    curl -fsSL "$BASE_URL/scripts/server_install.sh" | sh -s -- "$SERVER_ADDR"
+    env XRAY_PORT="$SERVER_PORT" \
+        curl -fsSL "$BASE_URL/scripts/server_install.sh" | sh -s -- "$SERVER_ADDR" "$SERVER_PORT"
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
