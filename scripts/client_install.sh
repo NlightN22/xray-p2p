@@ -479,3 +479,4 @@ elif [ "$port_check_status" -eq 2 ]; then
     xray_log "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
 else
     xray_die "xray-p2p service does not appear to be listening on local port $SOCKS_PORT"
+fi
