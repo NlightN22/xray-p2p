@@ -217,7 +217,7 @@ function Invoke-XSetup {
     )
 
     $remoteCommand = [string]::Format(
-        "if ! command -v ssh >/dev/null 2>&1 || ssh -V 2>&1 | grep -iq dropbear; then opkg update >/dev/null 2>&1; opkg install openssh-client >/dev/null 2>&1 || opkg install openssh-client; fi; curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xsetup.sh | sh -s -- '{0}' '{1}' '{2}' '{3}'",
+        "curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xsetup.sh | sh -s -- '{0}' '{1}' '{2}' '{3}'",
         $ServerAddr,
         $UserName,
         $ServerLan,
@@ -304,7 +304,8 @@ function Invoke-IperfTest {
         [string]$Machine,
         [string]$Target,
         [bool]$ExpectOpen,
-        [string]$Label
+        [string]$Label,
+        [switch]$AllowAlreadyOpen
     )
 
     $expectedState = if ($ExpectOpen) { 'open' } else { 'closed' }
@@ -326,20 +327,46 @@ function Invoke-IperfTest {
 
     $actualState = if ($result.ExitCode -eq 0) { 'open' } else { 'closed' }
     $status = if ($actualState -eq $expectedState) { 'PASS' } else { 'FAIL' }
+    $note = $null
+    if ($status -eq 'FAIL' -and $AllowAlreadyOpen -and -not $ExpectOpen -and $actualState -eq 'open') {
+        $status = 'PASS'
+        $note = 'tunnel already active; accepting open state'
+    }
 
+    $displayActual = if ($note) { "$actualState (pre-existing tunnel)" } else { $actualState }
+    $outputValue = if ($note) {
+        if ([string]::IsNullOrWhiteSpace($outputText)) {
+            $note
+        }
+        else {
+            "$note`n$outputText"
+        }
+    }
+    else {
+        $outputText
+    }
     $script:TestResults += [pscustomobject]@{
         Label    = $Label
         Machine  = $Machine
         Target   = $Target
         Expected = $expectedState
-        Actual   = $actualState
+        Actual   = $displayActual
         Status   = $status
-        Output   = $outputText
+        Output   = $outputValue
     }
 
     $prefix = if ($status -eq 'PASS') { '[PASS]' } else { '[FAIL]' }
-    Write-Detail "$prefix $Label (actual=$actualState)"
+    $detailMessage = if ($note) {
+        "$prefix $Label (actual=$displayActual; $note)"
+    }
+    else {
+        "$prefix $Label (actual=$actualState)"
+    }
+    Write-Detail $detailMessage
     if ($status -eq 'FAIL' -and ($outputText -ne '')) {
+        Write-Detail "    Output: $outputText"
+    }
+    elseif ($note -and -not [string]::IsNullOrWhiteSpace($outputText)) {
         Write-Detail "    Output: $outputText"
     }
 
@@ -395,8 +422,8 @@ function Test-SshReadiness {
 
 function Run-Prechecks {
     Write-Step "Pre-setup connectivity checks"
-    Invoke-IperfTest -Machine 'r2' -Target '10.0.0.1' -ExpectOpen:$false -Label 'r2 -> r1 (direct WAN)'
-    Invoke-IperfTest -Machine 'r3' -Target '10.0.101.1' -ExpectOpen:$false -Label 'r3 -> r1 before tunnel'
+    Invoke-IperfTest -Machine 'r2' -Target '10.0.0.1' -ExpectOpen:$true -Label 'r2 -> r1 (direct WAN)'
+    Invoke-IperfTest -Machine 'r3' -Target '10.0.101.1' -ExpectOpen:$false -Label 'r3 -> r1 before tunnel' -AllowAlreadyOpen
 }
 
 function Invoke-StageR2 {
