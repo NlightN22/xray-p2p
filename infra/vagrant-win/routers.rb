@@ -25,13 +25,10 @@ def define_routers(config)
       r.ssh.username = "root"
       r.ssh.shell    = "/bin/ash"
 
-      r.vm.provision "file",
-        source:      "router-provision.sh",
-        destination: "/tmp/router-provision.sh"
-      r.vm.provision "shell", privileged: false, inline: <<-SHELL
-        chmod +x /tmp/router-provision.sh
-        /tmp/router-provision.sh "#{ip}" "#{suffix}"
-      SHELL
+      r.vm.provision "shell",
+        path: "./router-provision.sh",
+        args: [ip, suffix],
+        privileged: false
 
       r.vm.provision "shell", name: "Check tunnel.ipaddr", privileged: false, inline: <<-SHELL
         TARGET=#{ip}
@@ -58,7 +55,35 @@ def define_routers(config)
         opkg install iperf3
       SHELL
 
-      r.vm.provision "file", source: "iperf3.openwrt.init", destination: "/tmp/iperf3.init"
+      r.vm.provision "shell", name: "Install OpenSSH client", privileged: false, inline: <<-SHELL
+        set -ex
+        if command -v ssh >/dev/null 2>&1 && ! ssh -V 2>&1 | grep -iq dropbear; then
+            echo "OpenSSH client already installed"
+            exit 0
+        fi
+        opkg update
+        opkg install openssh-client >/dev/null 2>&1 || opkg install openssh-client
+      SHELL
+
+      r.vm.provision "shell", name: "Configure SSH host exceptions", privileged: false, inline: <<-SHELL
+        set -ex
+        CONFIG_DIR="/root/.ssh"
+        CONFIG_FILE="$CONFIG_DIR/config"
+        mkdir -p "$CONFIG_DIR"
+        touch "$CONFIG_FILE"
+        if ! grep -q '^Host 10\\.0\\.0\\.\\*$' "$CONFIG_FILE"; then
+          cat <<'EOF' >> "$CONFIG_FILE"
+Host 10.0.0.*
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+EOF
+          chmod 600 "$CONFIG_FILE"
+        fi
+      SHELL
+
+      r.vm.provision "file",
+        source: "./iperf3.openwrt.init",
+        destination: "/tmp/iperf3.init"
 
       r.vm.provision "shell", name: "Ensure iperf3 service", privileged: false, inline: <<-SHELL
         set -ex
@@ -70,14 +95,6 @@ def define_routers(config)
         /etc/init.d/iperf3 start
       SHELL
 
-      r.vm.provision "shell", name: "Install hping3", privileged: false, inline: <<-SHELL
-        set -ex
-        if command -v hping3 >/dev/null 2>&1; then
-            echo "hping3 is already installed at $(command -v hping3)"
-            exit 0
-        fi
-        opkg install hping3
-      SHELL
     end
   end
 end

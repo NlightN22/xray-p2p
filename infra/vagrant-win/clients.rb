@@ -51,23 +51,15 @@ def define_clients(config)
             apk add --no-cache iperf3
         SHELL
 
-        c.vm.provision "file", source: "iperf3.init", destination: "/tmp/iperf3.init"
+        c.vm.provision "file",
+            source: "./iperf3.init",
+            destination: "/tmp/iperf3.init"
 
         c.vm.provision "shell", name: "Ensure iperf3 service", inline: <<-SHELL
             set -ex
             install -m 755 -o root -g root /tmp/iperf3.init /etc/init.d/iperf3
             rc-update add iperf3 default
             rc-service iperf3 restart || rc-service iperf3 start
-        SHELL
-
-
-        c.vm.provision "shell", name: "Install hping3", inline: <<-SHELL
-            set -ex
-            if command -v hping3 >/dev/null 2>&1; then
-                echo "hping3 is already installed at $(command -v hping3)"
-                exit 0
-            fi
-            apk add --no-cache hping3
         SHELL
 
         c.vm.provision "shell", name: "Delete root password and allow ssh", inline: <<-SHELL
