@@ -111,7 +111,7 @@ try {
         Write-Step "Skipping reverse tunnel validation (StartFrom=$StartFrom)."
     }
     $results = Get-TestResults
-    $testsPassed = ($results | Where-Object { $_.Status -eq 'FAIL' }).Count -eq 0
+    $testsPassed = (@($results | Where-Object { $_.Status -eq 'FAIL' })).Count -eq 0
     if ($testsPassed) {
         Write-Step "All connectivity checks succeeded"
     }

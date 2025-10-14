@@ -409,11 +409,11 @@ function Invoke-StageR2 {
 
     Write-Step "Provisioning tunnel on r2"
     Invoke-XSetup -Machine 'r2' -ServerAddr $ServerAddr -UserName $UserName -ServerLan $ServerLan -ClientLan $ClientLan | Out-Null
-    Invoke-IperfTest -Machine 'r2' -Target '10.0.101.1' -ExpectOpen:$true -Label 'r2 -> r1 after tunnel'
+    [void](Invoke-IperfTest -Machine 'r2' -Target '10.0.101.1' -ExpectOpen:$true -Label 'r2 -> r1 after tunnel')
 
     $c1Ip = Get-InterfaceIpv4 -Machine 'c1' -Interface 'eth1'
     Write-Detail "Detected c1 eth1 address: $c1Ip"
-    Invoke-IperfTest -Machine 'r2' -Target $c1Ip -ExpectOpen:$true -Label 'r2 -> c1 through tunnel'
+    [void](Invoke-IperfTest -Machine 'r2' -Target $c1Ip -ExpectOpen:$true -Label 'r2 -> c1 through tunnel')
 
     [pscustomobject]@{
         C1Ip = $c1Ip
@@ -436,15 +436,15 @@ function Invoke-StageR3 {
     }
 
     Invoke-XSetup -Machine 'r3' -ServerAddr $ServerAddr -UserName $UserName -ServerLan $ServerLan -ClientLan $ClientLan | Out-Null
-    Invoke-IperfTest -Machine 'r3' -Target '10.0.101.1' -ExpectOpen:$true -Label 'r3 -> r1 after tunnel'
-    Invoke-IperfTest -Machine 'r3' -Target $C1Ip -ExpectOpen:$true -Label 'r3 -> c1 through tunnel'
+    [void](Invoke-IperfTest -Machine 'r3' -Target '10.0.101.1' -ExpectOpen:$true -Label 'r3 -> r1 after tunnel')
+    [void](Invoke-IperfTest -Machine 'r3' -Target $C1Ip -ExpectOpen:$true -Label 'r3 -> c1 through tunnel')
 
     $c2Ip = Get-InterfaceIpv4 -Machine 'c2' -Interface 'eth1'
     $c3Ip = Get-InterfaceIpv4 -Machine 'c3' -Interface 'eth1'
     Write-Detail "Detected c2 eth1 address: $c2Ip"
     Write-Detail "Detected c3 eth1 address: $c3Ip"
 
-    Invoke-IperfTest -Machine 'c3' -Target $C1Ip -ExpectOpen:$true -Label 'c3 -> c1 client reachability'
+    [void](Invoke-IperfTest -Machine 'c3' -Target $C1Ip -ExpectOpen:$true -Label 'c3 -> c1 client reachability')
 
     [pscustomobject]@{
         C1Ip = $C1Ip
@@ -461,10 +461,10 @@ function Test-ReverseTunnels {
     )
 
     Write-Step "Reverse tunnel validation"
-    Invoke-IperfTest -Machine 'r1' -Target $C2Ip -ExpectOpen:$true -Label 'r1 -> c2 reverse tunnel'
-    Invoke-IperfTest -Machine 'r1' -Target $C3Ip -ExpectOpen:$true -Label 'r1 -> c3 reverse tunnel'
-    Invoke-IperfTest -Machine 'c1' -Target $C2Ip -ExpectOpen:$true -Label 'c1 -> c2 reverse tunnel'
-    Invoke-IperfTest -Machine 'c1' -Target $C3Ip -ExpectOpen:$true -Label 'c1 -> c3 reverse tunnel'
+    [void](Invoke-IperfTest -Machine 'r1' -Target $C2Ip -ExpectOpen:$true -Label 'r1 -> c2 reverse tunnel')
+    [void](Invoke-IperfTest -Machine 'r1' -Target $C3Ip -ExpectOpen:$true -Label 'r1 -> c3 reverse tunnel')
+    [void](Invoke-IperfTest -Machine 'c1' -Target $C2Ip -ExpectOpen:$true -Label 'c1 -> c2 reverse tunnel')
+    [void](Invoke-IperfTest -Machine 'c1' -Target $C3Ip -ExpectOpen:$true -Label 'c1 -> c3 reverse tunnel')
 }
 
 
