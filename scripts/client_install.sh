@@ -72,6 +72,7 @@ overrides environment variables and interactive input when provided.
 
 Options:
   -h, --help        Show this help message and exit.
+  -r, --reinstall   Force reinstall of XRAY binary and xray-p2p assets.
 
 Arguments:
   TROJAN_URL        Optional connection string; overrides env/prompt input.
@@ -85,12 +86,16 @@ EOF
     exit "${1:-0}"
 }
 
+REINSTALL=0
 CONNECTION_STRING=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
         -h|--help)
             usage 0
+            ;;
+        -r|--reinstall)
+            REINSTALL=1
             ;;
         --)
             shift
@@ -154,47 +159,74 @@ if [ -z "$CONNECTION_STRING" ]; then
     xray_log 'No connection string provided; default outbound configuration will remain in place.'
 fi
 
-INSTALL_SCRIPT_URL="https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh"
-TMP_INSTALL_SCRIPT=$(mktemp 2>/dev/null) || xray_die "Unable to create temporary file for installer"
-if ! xray_download_file "$INSTALL_SCRIPT_URL" "$TMP_INSTALL_SCRIPT" "XRAY installer script"; then
-    xray_die "Failed to download XRAY installer script"
+XRAY_ALREADY_INSTALLED=0
+if command -v xray >/dev/null 2>&1; then
+    XRAY_ALREADY_INSTALLED=1
 fi
-if ! sh "$TMP_INSTALL_SCRIPT"; then
+
+if [ "$REINSTALL" -eq 1 ] || [ "$XRAY_ALREADY_INSTALLED" -eq 0 ]; then
+    INSTALL_SCRIPT_URL="https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh"
+    TMP_INSTALL_SCRIPT=$(mktemp 2>/dev/null) || xray_die "Unable to create temporary file for installer"
+    if ! xray_download_file "$INSTALL_SCRIPT_URL" "$TMP_INSTALL_SCRIPT" "XRAY installer script"; then
+        xray_die "Failed to download XRAY installer script"
+    fi
+    if ! sh "$TMP_INSTALL_SCRIPT"; then
+        rm -f "$TMP_INSTALL_SCRIPT"
+        xray_die "XRAY installer script execution failed"
+    fi
     rm -f "$TMP_INSTALL_SCRIPT"
-    xray_die "XRAY installer script execution failed"
+else
+    xray_log "XRAY binary already detected; skipping installation (use --reinstall to force)."
 fi
-rm -f "$TMP_INSTALL_SCRIPT"
 
 # Our dedicated config directory and service
 XRAYP2P_CONFIG_DIR="/etc/xray-p2p"
 XRAYP2P_DATA_DIR="/usr/share/xray-p2p"
 XRAYP2P_SERVICE="/etc/init.d/xray-p2p"
 
-# Ensure config and data dirs
-if [ ! -d "$XRAYP2P_CONFIG_DIR" ]; then
-    xray_log "Creating xray-p2p configuration directory at $XRAYP2P_CONFIG_DIR"
-    mkdir -p "$XRAYP2P_CONFIG_DIR"
-fi
-if [ ! -e "$XRAYP2P_DATA_DIR" ]; then
-    if [ -d "/usr/share/xray" ]; then
-        ln -s "/usr/share/xray" "$XRAYP2P_DATA_DIR" 2>/dev/null || mkdir -p "$XRAYP2P_DATA_DIR"
-    else
-        mkdir -p "$XRAYP2P_DATA_DIR"
-    fi
-fi
-
-# Seed our init script and UCI config
-xray_seed_file_from_template "$XRAYP2P_SERVICE" "config_templates/xray-p2p.init"
-chmod 0755 "$XRAYP2P_SERVICE" 2>/dev/null || true
-xray_seed_file_from_template "/etc/config/xray-p2p" "config_templates/xray-p2p.config"
-
-# Seed client JSONs into our directory
 CONFIG_FILES="inbounds.json logs.json outbounds.json"
-for file in $CONFIG_FILES; do
-    target="$XRAYP2P_CONFIG_DIR/$file"
-    template_path="config_templates/client/$file"
-    xray_seed_file_from_template "$target" "$template_path"
-done
+XRAYP2P_NEEDS_SETUP=1
+if [ -d "$XRAYP2P_CONFIG_DIR" ] && [ -f "$XRAYP2P_SERVICE" ] && [ -e "$XRAYP2P_DATA_DIR" ]; then
+    XRAYP2P_NEEDS_SETUP=0
+    for file in $CONFIG_FILES; do
+        if [ ! -f "$XRAYP2P_CONFIG_DIR/$file" ]; then
+            XRAYP2P_NEEDS_SETUP=1
+            break
+        fi
+    done
+fi
+if [ "$REINSTALL" -eq 1 ]; then
+    XRAYP2P_NEEDS_SETUP=1
+fi
+
+if [ "$XRAYP2P_NEEDS_SETUP" -eq 1 ]; then
+    # Ensure config and data dirs
+    if [ ! -d "$XRAYP2P_CONFIG_DIR" ]; then
+        xray_log "Creating xray-p2p configuration directory at $XRAYP2P_CONFIG_DIR"
+        mkdir -p "$XRAYP2P_CONFIG_DIR"
+    fi
+    if [ ! -e "$XRAYP2P_DATA_DIR" ]; then
+        if [ -d "/usr/share/xray" ]; then
+            ln -s "/usr/share/xray" "$XRAYP2P_DATA_DIR" 2>/dev/null || mkdir -p "$XRAYP2P_DATA_DIR"
+        else
+            mkdir -p "$XRAYP2P_DATA_DIR"
+        fi
+    fi
+
+    # Seed our init script and UCI config
+    xray_seed_file_from_template "$XRAYP2P_SERVICE" "config_templates/xray-p2p.init"
+    chmod 0755 "$XRAYP2P_SERVICE" 2>/dev/null || true
+    xray_seed_file_from_template "/etc/config/xray-p2p" "config_templates/xray-p2p.config"
+
+    # Seed client JSONs into our directory
+    for file in $CONFIG_FILES; do
+        target="$XRAYP2P_CONFIG_DIR/$file"
+        template_path="config_templates/client/$file"
+        xray_seed_file_from_template "$target" "$template_path"
+    done
+else
+    xray_log "xray-p2p service assets already detected; skipping template installation (use --reinstall to force)."
+fi
 
 xray_require_cmd jq
 
@@ -447,4 +479,3 @@ elif [ "$port_check_status" -eq 2 ]; then
     xray_log "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
 else
     xray_die "xray-p2p service does not appear to be listening on local port $SOCKS_PORT"
-fi
