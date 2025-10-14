@@ -388,11 +388,19 @@ fi
 
 printf '[local] Trojan URL captured: %s\n' "$trojan_url" >&2
 
-printf '[local] Updating package lists (opkg update)...\n' >&2
-opkg update
+if command -v jq >/dev/null 2>&1; then
+    printf '[local] jq already present; skipping opkg update/install.\n' >&2
+else
+    if ! command -v opkg >/dev/null 2>&1; then
+        printf '[local] Error: opkg package manager not found; cannot install jq.\n' >&2
+        exit 1
+    fi
+    printf '[local] Updating package lists (opkg update)...\n' >&2
+    opkg update
 
-printf '[local] Installing client dependencies (jq)...\n' >&2
-opkg install jq
+    printf '[local] Installing client dependencies (jq)...\n' >&2
+    opkg install jq
+fi
 
 printf '[local] Running client_install.sh...\n' >&2
 curl -fsSL "$BASE_URL/scripts/client_install.sh" | sh -s -- "$trojan_url"
