@@ -341,8 +341,8 @@ fi
 printf '__TROJAN_LINK__=%s\n' "$trojan_link"
 
 log "Adding server reverse proxy..."
-curl -fsSL "$BASE_URL/scripts/server_reverse_add.sh" | \
-    env XRAY_REVERSE_SUBNET="$CLIENT_LAN" sh -s -- "$USER_NAME"
+curl -fsSL "$BASE_URL/scripts/server_reverse.sh" | \
+    env XRAY_REVERSE_SUBNET="$CLIENT_LAN" sh -s -- add "$USER_NAME"
 
 sanitize_subnet_for_entry() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
