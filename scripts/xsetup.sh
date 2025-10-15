@@ -419,6 +419,6 @@ else
 fi
 
 printf '[local] Adding client reverse proxy...\n' >&2
-curl -fsSL "$BASE_URL/scripts/client_reverse_add.sh" | sh -s -- "$USER_NAME"
+curl -fsSL "$BASE_URL/scripts/client_reverse.sh" | sh -s -- add "$USER_NAME"
 
 printf '\nAll steps completed successfully.\n' >&2
