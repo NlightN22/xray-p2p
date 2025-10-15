@@ -90,26 +90,47 @@ if ! load_common_lib; then
     exit 1
 fi
 
-SERVER_REVERSE_INPUTS_LIB="${XRAY_SERVER_REVERSE_INPUTS_LIB:-$XRAY_SELF_DIR/scripts/lib/server_reverse_inputs.sh}"
-if [ ! -r "$SERVER_REVERSE_INPUTS_LIB" ]; then
-    xray_die "Server reverse inputs library not found: $SERVER_REVERSE_INPUTS_LIB"
-fi
-# shellcheck disable=SC1090
-. "$SERVER_REVERSE_INPUTS_LIB"
+SERVER_REVERSE_LIB_TMP=""
 
-SERVER_REVERSE_ROUTING_LIB="${XRAY_SERVER_REVERSE_ROUTING_LIB:-$XRAY_SELF_DIR/scripts/lib/server_reverse_routing.sh}"
-if [ ! -r "$SERVER_REVERSE_ROUTING_LIB" ]; then
-    xray_die "Server reverse routing library not found: $SERVER_REVERSE_ROUTING_LIB"
-fi
-# shellcheck disable=SC1090
-. "$SERVER_REVERSE_ROUTING_LIB"
+cleanup_repo_libs() {
+    for tmp in $SERVER_REVERSE_LIB_TMP; do
+        if [ -n "$tmp" ] && [ -f "$tmp" ]; then
+            rm -f "$tmp"
+        fi
+    done
+}
 
-SERVER_REVERSE_STORE_LIB="${XRAY_SERVER_REVERSE_STORE_LIB:-$XRAY_SELF_DIR/scripts/lib/server_reverse_store.sh}"
-if [ ! -r "$SERVER_REVERSE_STORE_LIB" ]; then
-    xray_die "Server reverse store library not found: $SERVER_REVERSE_STORE_LIB"
-fi
-# shellcheck disable=SC1090
-. "$SERVER_REVERSE_STORE_LIB"
+trap cleanup_repo_libs EXIT
+trap 'cleanup_repo_libs; exit 1' INT TERM HUP
+
+load_repo_lib() {
+    local local_spec="$1"
+    local remote_spec="$2"
+    local resolved=""
+    local tmp=""
+
+    if resolved=$(xray_resolve_local_path "$local_spec" 2>/dev/null) && [ -r "$resolved" ]; then
+        # shellcheck disable=SC1090
+        . "$resolved"
+        return 0
+    fi
+
+    tmp="$(xray_fetch_repo_script "$remote_spec")" || xray_die "Required library not available: $remote_spec"
+    SERVER_REVERSE_LIB_TMP="${SERVER_REVERSE_LIB_TMP} $tmp"
+    # shellcheck disable=SC1090
+    . "$tmp"
+}
+
+SERVER_REVERSE_INPUTS_LOCAL="${XRAY_SERVER_REVERSE_INPUTS_LIB:-lib/server_reverse_inputs.sh}"
+SERVER_REVERSE_INPUTS_REMOTE="${XRAY_SERVER_REVERSE_INPUTS_REMOTE:-scripts/lib/server_reverse_inputs.sh}"
+SERVER_REVERSE_ROUTING_LOCAL="${XRAY_SERVER_REVERSE_ROUTING_LIB:-lib/server_reverse_routing.sh}"
+SERVER_REVERSE_ROUTING_REMOTE="${XRAY_SERVER_REVERSE_ROUTING_REMOTE:-scripts/lib/server_reverse_routing.sh}"
+SERVER_REVERSE_STORE_LOCAL="${XRAY_SERVER_REVERSE_STORE_LIB:-lib/server_reverse_store.sh}"
+SERVER_REVERSE_STORE_REMOTE="${XRAY_SERVER_REVERSE_STORE_REMOTE:-scripts/lib/server_reverse_store.sh}"
+
+load_repo_lib "$SERVER_REVERSE_INPUTS_LOCAL" "$SERVER_REVERSE_INPUTS_REMOTE"
+load_repo_lib "$SERVER_REVERSE_ROUTING_LOCAL" "$SERVER_REVERSE_ROUTING_REMOTE"
+load_repo_lib "$SERVER_REVERSE_STORE_LOCAL" "$SERVER_REVERSE_STORE_REMOTE"
 
 CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray-p2p}"
 ROUTING_FILE="${XRAY_ROUTING_FILE:-$CONFIG_DIR/routing.json}"
