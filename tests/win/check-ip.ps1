@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+  [string]$vagrantVM = 'c1',
   [string]$Interface = 'eth1'
 )
 
@@ -26,7 +27,7 @@ Assert-Command -Name 'vagrant'
 
 Push-Location $vagrantDir
 try {
-  $args = @('ssh','c1','-c',"ip -o -4 addr show dev $Interface")
+  $args = @('ssh',"$vagrantVM",'-c',"ip -o -4 addr show dev $Interface")
   $prev = $ErrorActionPreference
   $ErrorActionPreference = 'Continue'
   try {
@@ -54,11 +55,11 @@ try {
   }
 
   if ($ip) {
-    Write-Host "c1 $Interface IPv4: $ip"
+    Write-Host "$vagrantVM $Interface IPv4: $ip"
     exit 0
   }
   else {
-    Write-Error "IPv4 not found on c1:$Interface"
+    Write-Error "IPv4 not found on $vagrantVM : $Interface"
     $output | ForEach-Object { Write-Host $_ }
     exit 1
   }
