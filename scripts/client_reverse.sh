@@ -195,7 +195,8 @@ cmd_add() {
     tag="$domain"
 
     if [ -f "$CLIENT_REVERSE_FILE" ] && client_reverse_store_has "$CLIENT_REVERSE_FILE" "$USERNAME"; then
-        xray_die "Client reverse '$USERNAME' already exists in $CLIENT_REVERSE_FILE"
+        xray_log "Client reverse '$USERNAME' already configured; skipping."
+        return 0
     fi
 
     client_reverse_update_routing "$ROUTING_FILE" "$USERNAME" "$suffix"

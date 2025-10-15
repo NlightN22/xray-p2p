@@ -60,7 +60,7 @@ server_reverse_store_add() {
     server_reverse_store_ensure "$store_file" "$store_dir"
 
     if server_reverse_store_has "$store_file" "$username"; then
-        xray_die "Tunnel '$username' already exists in $store_file"
+        return 0
     fi
 
     created_at=$(server_reverse_store_now_iso)

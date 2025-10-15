@@ -229,6 +229,11 @@ cmd_add() {
     tag="$domain"
     subnet_json=$(server_reverse_subnet_json)
 
+    if [ -f "$TUNNELS_FILE" ] && server_reverse_store_has "$TUNNELS_FILE" "$USERNAME"; then
+        xray_log "Reverse tunnel '$USERNAME' already configured; skipping."
+        return 0
+    fi
+
     server_reverse_update_routing "$ROUTING_FILE" "$USERNAME" "$suffix" "$subnet_json"
     server_reverse_store_add "$TUNNELS_FILE" "$TUNNELS_DIR" "$USERNAME" "$domain" "$tag" "$subnet_json"
 
