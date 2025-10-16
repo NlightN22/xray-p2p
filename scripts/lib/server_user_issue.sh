@@ -1,4 +1,3 @@
-##########################
 server_user_issue_usage() {
     cat <<EOF
 Usage: $SCRIPT_NAME issue [options] [EMAIL] [SERVER_ADDRESS]
