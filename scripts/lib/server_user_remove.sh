@@ -60,7 +60,7 @@ server_user_cmd_remove() {
     server_user_require_inbounds
     server_user_init_paths
 
-    xray_check_repo_access 'scripts/server_user.sh remove'
+    xray_check_repo_access 'scripts/server_user.sh'
 
     server_user_show_clients
     printf '\n'

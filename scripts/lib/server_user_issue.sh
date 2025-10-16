@@ -60,7 +60,7 @@ server_user_cmd_issue() {
 
     server_user_require_inbounds
     server_user_init_paths
-    xray_check_repo_access 'scripts/server_user.sh issue'
+    xray_check_repo_access 'scripts/server_user.sh'
 
     if [ "${XRAY_SHOW_CLIENTS:-1}" = "1" ]; then
         server_user_show_clients
