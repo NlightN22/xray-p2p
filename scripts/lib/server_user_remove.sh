@@ -1,3 +1,4 @@
+################
 server_user_remove_usage() {
     cat <<EOF
 Usage: $SCRIPT_NAME remove [options] [EMAIL]
