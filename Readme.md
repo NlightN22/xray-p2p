@@ -1,3 +1,11 @@
+# Quick Install
+
+The easiest way to bring up both server and client is to run `scripts/xsetup.sh` from your OpenWrt client router. It guides you through the required addresses, provisions the remote server over SSH, issues a Trojan user, installs the local client, and wires up redirects/reverse proxies for both sides in one pass. Grab the script directly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xsetup.sh | sh
+```
+
 # XRAY-p2p Trojan Tunnel
 
 **At a glance:** This repository delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. It ships with configuration templates and shell scripts that speed up both server and client provisioning.
