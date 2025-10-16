@@ -329,7 +329,7 @@ if [ -n "$existing_link" ]; then
     trojan_link="$existing_link"
 else
     log "Issuing user $USER_NAME..."
-    issue_output=$(curl -fsSL "$BASE_URL/scripts/user_issue.sh" | sh -s -- "$USER_NAME" "$SERVER_ADDR")
+    issue_output=$(curl -fsSL "$BASE_URL/scripts/server_user.sh" | sh -s -- issue "$USER_NAME" "$SERVER_ADDR")
     printf '%s\n' "$issue_output"
 
     trojan_link=$(printf '%s\n' "$issue_output" | awk '/^trojan:\/\// {link=$0} END {print link}')

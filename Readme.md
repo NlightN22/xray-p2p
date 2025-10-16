@@ -29,7 +29,7 @@ opkg update && opkg install jq openssl-util
 # install server
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_install.sh | sh
 # add user
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/user_issue.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh | sh -s -- issue
 ```
 Save user connection URL and paste it when install client
 
@@ -87,7 +87,7 @@ The client installer parses the connection string, writes the templates from `co
 - `scripts/lib/ip_show.sh` — queries multiple sources to determine the server’s public IPv4 address.
 - `scripts/client_install.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
 - `scripts/lib/user_list.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
-- `scripts/user_remove.sh` — revokes a client, updates configs, and restarts xray-p2p.
+- `scripts/server_user.sh` — lists, issues, or removes clients (`list`, `issue`, `remove` commands) and keeps configs in sync.
 - `scripts/redirect_add.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
 - `scripts/dns_forward.sh` — manages per-domain dokodemo-door DNS inbounds: `add`, `list`, and `remove` while syncing dnsmasq and xray-p2p state.
 - `scripts/redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
