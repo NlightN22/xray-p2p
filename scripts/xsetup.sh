@@ -283,7 +283,7 @@ else
     opkg update
     opkg install jq openssl-util
     env XRAY_PORT="$SERVER_PORT" \
-        curl -fsSL "$BASE_URL/scripts/server_install.sh" | sh -s -- "$SERVER_ADDR" "$SERVER_PORT"
+        curl -fsSL "$BASE_URL/scripts/server.sh" | sh -s -- install "$SERVER_ADDR" "$SERVER_PORT"
 fi
 
 if ! command -v jq >/dev/null 2>&1; then

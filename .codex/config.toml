@@ -1,0 +1,21 @@
+description = "This repository delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. It ships with configuration templates and shell scripts that accelerate both server and client provisioning."
+model = "gpt-5-codex"
+name = "xray-p2p"
+
+[instructions]
+language = "en"
+code_language = "sh"
+coding_style = "minimalistic, concise, without excess"
+rules = [
+    "all code and comments inside the code must be written in English",
+    "try to keep file size under 300 lines; if longer, decompose into the lib folder",
+    "code comments should be minimal, only if necessary for understanding",
+    "this is a new project, file and folder names can be changed without backward compatibility control",
+    "when renaming files or folders, check dependencies between them",
+    "when changing functions inside the lib folder, check dependencies in all files that use them",
+    "all new files must use LF line endings",
+    "all scripts must be compatible with OpenWrt and the ash shell",
+    "functions duplicated across multiple files must be moved to a separate file in the lib folder and sourced from there",
+    "for testing scripts, you can use Vagrant; the test environment is located in the infra/vagrant-win folder",
+    "the Vagrant environment scheme is located in infra/vagrant-win/scheme.drawio",
+]

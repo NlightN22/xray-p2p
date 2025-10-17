@@ -8,7 +8,7 @@ fi
 XRAY_COMMON_LOADER_LOADED=1
 
 XRAY_COMMON_LOADER_DEFAULT_REMOTE="scripts/lib/common.sh"
-XRAY_COMMON_LOADER_DEFAULT_BUNDLE="scripts/lib/bootstrap.sh scripts/lib/common.sh scripts/lib/network_validation.sh scripts/lib/interface_detect.sh scripts/lib/ip_show.sh scripts/lib/lan_detect.sh scripts/lib/network_interfaces.sh scripts/lib/user_list.sh scripts/lib/common_loader.sh"
+XRAY_COMMON_LOADER_DEFAULT_BUNDLE="scripts/lib/bootstrap.sh scripts/lib/common.sh scripts/lib/network_validation.sh scripts/lib/interface_detect.sh scripts/lib/ip_show.sh scripts/lib/lan_detect.sh scripts/lib/network_interfaces.sh scripts/lib/user_list.sh scripts/lib/common_loader.sh scripts/lib/server_install.sh scripts/lib/server_install_port.sh scripts/lib/server_install_cert.sh scripts/lib/server_remove.sh"
 
 xray_common_loader_repo_base() {
     printf '%s' "${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"

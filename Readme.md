@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xse
 # install dependencies
 opkg update && opkg install jq openssl-util
 # install server
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server.sh | sh -s -- install
 # add user
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh | sh -s -- issue
 ```
