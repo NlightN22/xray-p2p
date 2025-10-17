@@ -78,10 +78,11 @@ Usage: $SCRIPT_NAME <command> [options]
 
 Commands:
   install [SERVER_NAME] [PORT]   Install XRAY core and configure xray-p2p.
-  remove                         Remove xray-p2p service, configuration, and binaries.
+  remove [--purge-core]          Remove xray-p2p service/config; optional purge removes xray-core package.
 
 Options:
   -h, --help                     Show this help message.
+  remove --purge-core            Also uninstall xray-core package during cleanup.
 EOF
     exit "${1:-0}"
 }

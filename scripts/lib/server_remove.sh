@@ -10,10 +10,27 @@ XRAYP2P_SERVICE="/etc/init.d/xray-p2p"
 XRAYP2P_UCI_CONFIG="/etc/config/xray-p2p"
 
 server_remove_run() {
-    if [ "$#" -gt 0 ]; then
-        xray_log "remove command does not accept additional arguments."
-        exit 1
-    fi
+    purge_core=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --purge-core)
+                purge_core=1
+                ;;
+            -h|--help)
+                cat <<EOF
+Usage: ${SCRIPT_NAME:-server.sh} remove [--purge-core]
+
+Remove xray-p2p service, configuration, and data. Optional --purge-core removes the xray-core package.
+EOF
+                exit 0
+                ;;
+            *)
+                xray_log "Unknown option: $1"
+                exit 1
+                ;;
+        esac
+        shift
+    done
 
     if [ -x "$XRAYP2P_SERVICE" ]; then
         xray_log "Stopping xray-p2p service"
@@ -41,13 +58,15 @@ server_remove_run() {
         rm -rf "$XRAYP2P_DATA_DIR" || xray_warn "Unable to remove $XRAYP2P_DATA_DIR"
     fi
 
-    if command -v opkg >/dev/null 2>&1; then
+    if [ "$purge_core" -eq 1 ] && command -v opkg >/dev/null 2>&1; then
         if opkg list-installed xray-core 2>/dev/null | grep -q '^xray-core '; then
             xray_log "Removing xray-core package via opkg"
             if ! opkg remove xray-core >/dev/null 2>&1; then
                 xray_warn "Failed to remove xray-core package; please remove it manually."
             fi
         fi
+    else
+        xray_log "Keeping xray-core package; pass --purge-core to remove it."
     fi
 
     xray_log "xray-p2p server installation removed."

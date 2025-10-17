@@ -1,5 +1,4 @@
 description = "This repository delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. It ships with configuration templates and shell scripts that accelerate both server and client provisioning."
-model = "gpt-5-codex"
 name = "xray-p2p"
 
 [instructions]
