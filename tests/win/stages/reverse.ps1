@@ -16,7 +16,14 @@ Set-VerboseLogs -Enabled:$VerboseLogs.IsPresent
 Reset-TestResults
 
 Test-ReverseTunnels -C1Ip $C1Ip -C2Ip $C2Ip -C3Ip $C3Ip
-$results = Publish-TestResults
-if (($results | Where-Object { $_.Status -eq 'FAIL' }).Count -gt 0) {
+$results = @(Publish-TestResults)
+$hasFail = $false
+foreach ($res in $results) {
+    if ($res.Status -eq 'FAIL') {
+        $hasFail = $true
+        break
+    }
+}
+if ($hasFail) {
     exit 1
 }

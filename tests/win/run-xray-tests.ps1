@@ -3,7 +3,13 @@ param(
     [switch]$KeepEnvironment,
     [ValidateSet('start','ssh','prechecks','r2','r3','reverse')]
     [string]$StartFrom = 'start',
-    [switch]$VerboseLogs
+    [switch]$VerboseLogs,
+    [string]$RepoBaseUrl,
+    [string]$SshUser,
+    [int]$SshPort,
+    [int]$ServerPort,
+    [string]$CertFile,
+    [string]$KeyFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,7 +63,7 @@ try {
     }
 
     if (ShouldRunStage 'r2') {
-        $stageR2 = Invoke-StageR2
+        $stageR2 = Invoke-StageR2 -RepoBaseUrl $RepoBaseUrl -SshUser $SshUser -SshPort $SshPort -ServerPort $ServerPort -CertFile $CertFile -KeyFile $KeyFile
         $c1Ip = $stageR2.C1Ip
     }
     else {
@@ -69,7 +75,7 @@ try {
     }
 
     if (ShouldRunStage 'r3') {
-        $stageR3 = Invoke-StageR3 -C1Ip $c1Ip
+        $stageR3 = Invoke-StageR3 -C1Ip $c1Ip -RepoBaseUrl $RepoBaseUrl -SshUser $SshUser -SshPort $SshPort -ServerPort $ServerPort -CertFile $CertFile -KeyFile $KeyFile
         $c1Ip = $stageR3.C1Ip
         $c2Ip = $stageR3.C2Ip
         $c3Ip = $stageR3.C3Ip
@@ -110,8 +116,14 @@ try {
     else {
         Write-Step "Skipping reverse tunnel validation (StartFrom=$StartFrom)."
     }
-    $results = Get-TestResults
-    $testsPassed = (@($results | Where-Object { $_.Status -eq 'FAIL' })).Count -eq 0
+    $results = @(Get-TestResults)
+    $testsPassed = $true
+    foreach ($res in $results) {
+        if ($res.Status -eq 'FAIL') {
+            $testsPassed = $false
+            break
+        }
+    }
     if ($testsPassed) {
         Write-Step "All connectivity checks succeeded"
     }
@@ -134,7 +146,7 @@ finally {
     }
 }
 
-Publish-TestResults | Out-Null
+$null = Publish-TestResults
 
 if (-not $testsPassed) {
     throw "One or more connectivity checks failed."

@@ -16,7 +16,14 @@ Reset-TestResults
 
 $destroy = -not $NoDestroyBetweenAttempts
 Start-VagrantEnvironment -MaxAttempts $MaxAttempts -DestroyBetweenAttempts:$destroy
-$results = Publish-TestResults
-if (($results | Where-Object { $_.Status -eq 'FAIL' }).Count -gt 0) {
+$results = @(Publish-TestResults)
+$hasFail = $false
+foreach ($res in $results) {
+    if ($res.Status -eq 'FAIL') {
+        $hasFail = $true
+        break
+    }
+}
+if ($hasFail) {
     exit 1
 }
