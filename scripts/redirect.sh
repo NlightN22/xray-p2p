@@ -113,7 +113,7 @@ redirect_prompt_subnet() {
 
 cmd_list() {
     local entries
-    redirect_migrate_legacy_snippet
+    redirect_migrate_legacy_snippet || true
     entries="$(redirect_find_entries || true)"
     if [ -z "${entries:-}" ]; then
         printf 'No transparent redirect entries found.\n'
@@ -188,7 +188,7 @@ cmd_add() {
             port=$(printf '%s\n' "$ports" | sed -n "${answer}p")
         fi
     fi
-    redirect_migrate_legacy_snippet
+    redirect_migrate_legacy_snippet || true
     entry_file=$(redirect_write_entry "$subnet" "$port")
     redirect_generate_snippet || true
     redirect_apply_rules
@@ -212,7 +212,7 @@ cmd_remove() {
             xray_die "Subnet must be a valid IPv4 CIDR (example: 10.0.101.0/24 with prefix between 0 and 32)"
         fi
     fi
-    redirect_migrate_legacy_snippet
+    redirect_migrate_legacy_snippet || true
     if [ "$mode" = "all" ]; then
         if [ -d "$NFT_SNIPPET_DIR" ]; then
             find "$NFT_SNIPPET_DIR" -maxdepth 1 -type f -name '*.entry' -print 2>/dev/null | while IFS= read -r file; do
