@@ -1,5 +1,4 @@
 #!/bin/sh
-# shellcheck shell=sh
 
 [ "${REDIRECT_LIB_LOADED:-0}" -eq 1 ] && return 0
 REDIRECT_LIB_LOADED=1
