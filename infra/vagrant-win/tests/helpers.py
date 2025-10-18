@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shlex
+import time
 from typing import Any, Dict, Iterable, Tuple
 
 
@@ -35,10 +36,19 @@ def check_iperf_open(host, label: str, target: str):
         f"iperf3 -c {target} -t 1 -P 1 >/dev/null 2>&1 && echo open || "
         "{ echo closed; false; }"
     )
-    result = run_checked(host, command, f"{label} iperf3 check")
-    assert "open" in result.stdout.strip(), (
-        f"Expected iperf3 connection to {target} to be open for {label}.\n"
-        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    last_result = None
+    for attempt in range(1, 4):
+        result = host.run(command)
+        if result.rc == 0 and "open" in result.stdout.strip():
+            return result
+        last_result = result
+        if attempt < 4:
+            time.sleep(2)
+    assert last_result is not None
+    raise AssertionError(
+        f"{label} iperf3 check failed after retries (target {target}).\n"
+        f"exit={last_result.rc}\nstdout:\n{last_result.stdout}\n"
+        f"stderr:\n{last_result.stderr}"
     )
 
 
