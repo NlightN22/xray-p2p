@@ -409,7 +409,7 @@ if [ -f "$redirect_entry_path" ]; then
     fi
 else
     log "Adding redirect for client LAN $CLIENT_LAN..."
-    curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$CLIENT_LAN"
+    curl -fsSL "$BASE_URL/scripts/redirect.sh" | sh -s -- add "$CLIENT_LAN"
 fi
 EOS
     status=$?
@@ -460,7 +460,7 @@ if [ -f "$server_redirect_entry" ]; then
     fi
 else
     printf '[local] Adding redirect for server LAN %s...\n' "$SERVER_LAN" >&2
-    curl -fsSL "$BASE_URL/scripts/redirect_add.sh" | sh -s -- "$SERVER_LAN"
+    curl -fsSL "$BASE_URL/scripts/redirect.sh" | sh -s -- add "$SERVER_LAN"
 fi
 
 printf '[local] Adding client reverse proxy...\n' >&2

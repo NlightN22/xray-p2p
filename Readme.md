@@ -51,14 +51,14 @@ opkg update && opkg install jq
 # on the client router: install, then paste the URL when prompted
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client.sh | sh -s -- install
 # setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect_add.sh | sh
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect.sh | sh -s -- add
 # forward a wildcard domain to a specific upstream DNS server (ports auto-increment from 53331)
 curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/dns_forward.sh | sh -s -- add
 ```
-You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect_add.sh | sh -s -- $YOR_CIDR_SUBNET`
+You can use arguments - `curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect.sh | sh -s -- add $YOUR_CIDR_SUBNET`
 
-To remove a redirect later, run `scripts/redirect_remove.sh` on the client
-with either a CIDR (e.g. `10.0.101.0/24`) or `--all` to drop every subnet at once.
+To remove a redirect later, run `scripts/redirect.sh remove SUBNET` on the client
+or `scripts/redirect.sh remove --all` to drop every subnet at once.
 Use `scripts/dns_forward.sh list` to inspect metadata, `scripts/dns_forward.sh add` to create entries, and `scripts/dns_forward.sh remove DOMAIN_MASK` to delete them.
 
 The client installer parses the connection string, writes the templates from `config_templates/client` into `/etc/xray-p2p`, marks the client entry as used on the server, and restarts the xray-p2p service to apply the configuration.
@@ -96,10 +96,8 @@ The client installer parses the connection string, writes the templates from `co
 - `scripts/client.sh` — manages XRAY client install/remove lifecycle on OpenWrt routers.
 - `scripts/lib/user_list.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
 - `scripts/server_user.sh` — lists, issues, or removes clients (`list`, `issue`, `remove` commands) and keeps configs in sync.
-- `scripts/redirect_add.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.
+- `scripts/redirect.sh` — manages nftables redirects (`list`, `add SUBNET [PORT]`, `remove SUBNET|--all`).
 - `scripts/dns_forward.sh` — manages per-domain dokodemo-door DNS inbounds: `add`, `list`, and `remove` while syncing dnsmasq and xray-p2p state.
-- `scripts/redirect_remove.sh` — removes redirect entries (`--all` for everything, or pass a CIDR to delete just one).
-
 ---
 
 ## Ideas for improvement
