@@ -147,9 +147,9 @@ redirect_migrate_legacy_snippet() {
     local entries legacy line entry_port entry_subnet tmp
     if [ -d "$NFT_SNIPPET_DIR" ]; then
         entries=$(find "$NFT_SNIPPET_DIR" -maxdepth 1 -type f -name '*.entry' 2>/dev/null | head -n 1 || true)
-        [ -n "$entries" ] && return
+        [ -n "$entries" ] && return 0
     fi
-    [ -s "$NFT_SNIPPET" ] || return
+    [ -s "$NFT_SNIPPET" ] || return 0
     legacy=$(awk '
         /meta l4proto tcp tcp dport !=/ {
             port=""
@@ -165,7 +165,7 @@ redirect_migrate_legacy_snippet() {
                 print port " " subnet
         }
     ' "$NFT_SNIPPET")
-    [ -n "$legacy" ] || return
+    [ -n "$legacy" ] || return 0
     mkdir -p "$NFT_SNIPPET_DIR"
     while IFS= read -r line; do
         entry_port=${line%% *}
@@ -182,4 +182,6 @@ redirect_migrate_legacy_snippet() {
     done <<EOF
 $legacy
 EOF
+
+    return 0
 }
