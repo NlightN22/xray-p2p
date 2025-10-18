@@ -145,6 +145,11 @@ EOF
     rm -f "$openssl_cnf"
     chmod 600 "$server_install_key_file"
     chmod 644 "$server_install_cert_file"
+    if [ "${SERVER_INSTALL_CERT_FALLBACK_NOTICE:-0}" = "1" ]; then
+        xray_warn "Self-signed certificate generated at cert=$server_install_cert_file key=$server_install_key_file"
+    else
+        xray_log "Self-signed certificate generated at cert=$server_install_cert_file key=$server_install_key_file"
+    fi
 }
 
 server_install_handle_certificates() {

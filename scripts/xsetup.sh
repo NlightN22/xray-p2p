@@ -13,8 +13,10 @@ Options:
   -h, --help            Show this help message and exit.
   -u, --ssh-user USER   SSH user for the remote server (default: root).
   -p, --ssh-port PORT   SSH port for the remote server (default: 22).
-      --server-port PORT
+  -s, --server-port PORT
                         External port exposed on the server (default: 8443).
+  -C, --cert FILE       Path to existing certificate file for the server.
+  -K, --key  FILE       Path to existing private key file for the server.
 
 Environment variables:
   XRAY_REPO_BASE_URL       Override repository base (default GitHub).
@@ -83,6 +85,8 @@ redirect_entry_path_for_subnet() {
 SSH_USER=${XRAY_SERVER_SSH_USER:-root}
 SSH_PORT=${XRAY_SERVER_SSH_PORT:-22}
 SERVER_PORT=${XRAY_SERVER_PORT:-8443}
+CERT_FILE=""
+KEY_FILE=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -105,12 +109,28 @@ while [ "$#" -gt 0 ]; do
             SSH_PORT="$2"
             shift 2
             ;;
-        --server-port)
+        -s|--server-port)
             if [ "$#" -lt 2 ]; then
                 printf 'Error: %s requires an argument.\n' "$1" >&2
                 usage 1
             fi
             SERVER_PORT="$2"
+            shift 2
+            ;;
+        -C|--cert)
+            if [ "$#" -lt 2 ]; then
+                printf 'Error: %s requires an argument.\n' "$1" >&2
+                usage 1
+            fi
+            CERT_FILE="$2"
+            shift 2
+            ;;
+        -K|--key)
+            if [ "$#" -lt 2 ]; then
+                printf 'Error: %s requires an argument.\n' "$1" >&2
+                usage 1
+            fi
+            KEY_FILE="$2"
             shift 2
             ;;
         --)
@@ -171,6 +191,21 @@ esac
 
 if [ -z "$SERVER_ADDR" ]; then
     SERVER_ADDR="$(prompt_required 'Enter server address (IP or hostname)' '')"
+    # Ask also for server port if address was not preset
+    SERVER_PORT_INPUT="$(prompt_required 'Enter server external port' "$SERVER_PORT")"
+    case "$SERVER_PORT_INPUT" in
+        ''|*[!0-9]*)
+            printf 'Error: Server port must be numeric. Got: %s\n' "$SERVER_PORT_INPUT" >&2
+            exit 1
+            ;;
+        *)
+            if [ "$SERVER_PORT_INPUT" -le 0 ] || [ "$SERVER_PORT_INPUT" -gt 65535 ]; then
+                printf 'Error: Server port must be between 1 and 65535.\n' >&2
+                exit 1
+            fi
+            SERVER_PORT="$SERVER_PORT_INPUT"
+            ;;
+    esac
 fi
 if [ -z "$USER_NAME" ]; then
     USER_NAME="$(prompt_required 'Enter XRAY client username to create on server' '')"
@@ -208,6 +243,15 @@ printf '[local] User to issue: %s\n' "$USER_NAME" >&2
 printf '[local] Server LAN: %s\n' "$SERVER_LAN" >&2
 printf '[local] Client LAN: %s\n' "$CLIENT_LAN" >&2
 printf '[local] Server external port: %s\n' "$SERVER_PORT" >&2
+if [ -n "$CERT_FILE" ] || [ -n "$KEY_FILE" ]; then
+    if [ -n "$CERT_FILE" ] && [ -n "$KEY_FILE" ]; then
+        printf '[local] Using provided certificate paths.\n' >&2
+    else
+        printf '[local] Warning: both --cert and --key must be provided; ignoring provided path(s).\n' >&2
+        CERT_FILE=""
+        KEY_FILE=""
+    fi
+fi
 
 (
     set +e
@@ -283,7 +327,8 @@ else
     opkg update
     opkg install jq openssl-util
     env XRAY_PORT="$SERVER_PORT" \
-        curl -fsSL "$BASE_URL/scripts/server.sh" | sh -s -- install "$SERVER_ADDR" "$SERVER_PORT"
+        curl -fsSL "$BASE_URL/scripts/server.sh" | sh -s -- install "$SERVER_ADDR" "$SERVER_PORT" \
+        ${CERT_FILE:+--cert "$CERT_FILE"} ${KEY_FILE:+--key "$KEY_FILE"}
 fi
 
 if ! command -v jq >/dev/null 2>&1; then

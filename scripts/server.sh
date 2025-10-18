@@ -77,7 +77,12 @@ usage() {
 Usage: $SCRIPT_NAME <command> [options]
 
 Commands:
-  install [SERVER_NAME] [PORT]   Install XRAY core and configure xray-p2p.
+  install [SERVER_NAME] [PORT] [--cert CERT_FILE --key KEY_FILE]
+                                 Install XRAY core and configure xray-p2p.
+                                 Optional --cert/--key attempt to set TLS
+                                 certificate/key paths; on failure, continue
+                                 and generate a self-signed certificate in the
+                                 default location.
   remove [--purge-core]          Remove xray-p2p service/config; optional purge removes xray-core package.
 
 Options:
@@ -95,7 +100,52 @@ main() {
 
     case "$subcommand" in
         install)
-            server_install_run "$@"
+            cert_path=""
+            key_path=""
+            # collect remaining args to pass into server_install_run
+            pass_args=""
+            while [ "$#" -gt 0 ]; do
+                case "$1" in
+                    --cert)
+                        shift
+                        cert_path="$1"
+                        ;;
+                    --key)
+                        shift
+                        key_path="$1"
+                        ;;
+                    -h|--help)
+                        # let install lib print detailed help; pass through
+                        pass_args="$pass_args $1"
+                        ;;
+                    --)
+                        shift
+                        # append the rest verbatim and break
+                        while [ "$#" -gt 0 ]; do
+                            pass_args="$pass_args $1"
+                            shift
+                        done
+                        break
+                        ;;
+                    *)
+                        pass_args="$pass_args $1"
+                        ;;
+                esac
+                shift || true
+            done
+
+            if [ -n "$cert_path" ] || [ -n "$key_path" ]; then
+                if [ -z "$cert_path" ] || [ -z "$key_path" ]; then
+                    xray_warn "Both --cert and --key must be provided; ignoring provided path(s)."
+                    unset XRAY_CERT_FILE XRAY_KEY_FILE
+                else
+                    export XRAY_CERT_FILE="$cert_path"
+                    export XRAY_KEY_FILE="$key_path"
+                fi
+            fi
+
+            # shellcheck disable=SC2086
+            server_install_run $pass_args
             ;;
         remove)
             server_remove_run "$@"

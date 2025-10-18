@@ -30,6 +30,60 @@ if ! xray_common_try_source \
     xray_die "Unable to load server install certificate helpers."
 fi
 
+# Optional helper for applying provided certificate paths
+server_install_try_apply_cert_paths() {
+    [ -n "${XRAY_CERT_FILE:-}" ] || [ -n "${XRAY_KEY_FILE:-}" ] || return 0
+    if [ -z "${XRAY_CERT_FILE:-}" ] || [ -z "${XRAY_KEY_FILE:-}" ]; then
+        xray_warn "Incomplete certificate paths provided; both --cert and --key are required."
+        return 0
+    fi
+    # Validate readability first
+    if [ ! -r "$XRAY_CERT_FILE" ] || [ ! -r "$XRAY_KEY_FILE" ]; then
+        xray_warn "Provided certificate/key file is not readable; will generate self-signed in default location."
+        SERVER_INSTALL_CERT_FALLBACK_NOTICE=1
+        return 0
+    fi
+
+    # Validate with openssl if available; otherwise, be conservative and fallback
+    if ! command -v openssl >/dev/null 2>&1; then
+        xray_warn "OpenSSL is not available to validate provided certificate; skipping provided paths. A self-signed certificate will be generated in the default location."
+        SERVER_INSTALL_CERT_FALLBACK_NOTICE=1
+        return 0
+    fi
+
+    cert_ok=0
+    key_ok=0
+    if openssl x509 -in "$XRAY_CERT_FILE" -noout >/dev/null 2>&1; then
+        cert_ok=1
+    fi
+    if openssl pkey -in "$XRAY_KEY_FILE" -noout >/dev/null 2>&1 || \
+       openssl rsa -in "$XRAY_KEY_FILE" -check -noout >/dev/null 2>&1 || \
+       openssl ec -in "$XRAY_KEY_FILE" -check -noout >/dev/null 2>&1; then
+        key_ok=1
+    fi
+
+    if [ "$cert_ok" -ne 1 ] || [ "$key_ok" -ne 1 ]; then
+        xray_warn "Provided certificate/key appears invalid; will generate self-signed in default location."
+        SERVER_INSTALL_CERT_FALLBACK_NOTICE=1
+        return 0
+    fi
+
+    # Try to load helper; warn on failure and continue
+    if ! xray_common_try_source \
+        "${XRAY_SERVER_CERT_PATHS_LIB:-scripts/lib/server_cert_paths.sh}" \
+        "scripts/lib/server_cert_paths.sh" \
+        "lib/server_cert_paths.sh"; then
+        xray_warn "Unable to load certificate paths helper; continuing with self-signed certificate."
+        return 0
+    fi
+    if ! server_cert_paths_update "$server_install_inbound" "$XRAY_CERT_FILE" "$XRAY_KEY_FILE"; then
+        xray_warn "Failed to set provided certificate paths; continuing with self-signed certificate."
+        SERVER_INSTALL_CERT_FALLBACK_NOTICE=1
+    else
+        xray_log "Applied provided certificate and key paths."
+    fi
+}
+
 server_install_cleanup() {
     [ -n "$server_install_tmp" ] && rm -f "$server_install_tmp"
     server_install_tmp=""
@@ -189,6 +243,8 @@ server_install_run() {
     server_install_determine_port "$server_install_port_arg"
     server_install_update_inbound "$server_install_inbound" "$XRAY_PORT"
     server_install_preflight_ports "$server_install_inbound"
+    # If user provided certificate paths, try to apply them; ignore failures
+    server_install_try_apply_cert_paths
     server_install_handle_certificates "$server_install_inbound"
     server_install_enable_service
     server_install_verify_service
