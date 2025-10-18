@@ -247,9 +247,29 @@ xray_restart_service() {
         xray_die "Service script not found or not executable: $service_script"
     fi
 
+    local restart_output=""
+
     xray_log "Restarting ${service_name} service"
-    if ! "$service_script" restart; then
+    if ! restart_output=$("$service_script" restart 2>&1); then
+        if [ -n "$restart_output" ]; then
+            printf '%s\n' "$restart_output" >&2
+        fi
         xray_die "Failed to restart ${service_name} service."
+    fi
+
+    if [ -n "$restart_output" ]; then
+        printf '%s\n' "$restart_output" | while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                *"Command failed: Not found"*)
+                    xray_log "service was not running. Starting..."
+                    ;;
+                "")
+                    ;;
+                *)
+                    printf '%s\n' "$line"
+                    ;;
+            esac
+        done
     fi
 
     return 0
