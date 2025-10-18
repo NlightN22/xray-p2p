@@ -310,7 +310,9 @@ NFT
 }
 
 chain xray_transparent_output {
-    type nat hook output priority dstnat + 5; policy accept;
+    # nft does not accept the symbolic dstnat priority on the output hook;
+    # use the equivalent numeric value instead.
+    type nat hook output priority -95; policy accept;
 NFT
         printf '%s\n' "$entries" | while IFS= read -r entry; do
             SUBNET=''
