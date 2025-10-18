@@ -49,7 +49,7 @@ TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/
 # install dependencies
 opkg update && opkg install jq
 # on the client router: install, then paste the URL when prompted
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client_install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client.sh | sh -s -- install
 # setup redirect to XRAY local dokodemo port for a subnet (rerun for more)
 curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect_add.sh | sh
 # forward a wildcard domain to a specific upstream DNS server (ports auto-increment from 53331)
@@ -93,7 +93,7 @@ The client installer parses the connection string, writes the templates from `co
 
 - `scripts/ssl_cert_create.sh` — minimal helper to issue a self-signed certificate with OpenSSL.
 - `scripts/lib/ip_show.sh` — queries multiple sources to determine the server’s public IPv4 address.
-- `scripts/client_install.sh` — installs XRAY on an OpenWrt client and applies the provided Trojan URL.
+- `scripts/client.sh` — manages XRAY client install/remove lifecycle on OpenWrt routers.
 - `scripts/lib/user_list.sh` — compares `clients.json` with Trojan inbounds and prints active accounts.
 - `scripts/server_user.sh` — lists, issues, or removes clients (`list`, `issue`, `remove` commands) and keeps configs in sync.
 - `scripts/redirect_add.sh` — sets up nftables redirection for a subnet to the local dokodemo-door inbound; repeated runs add more subnets.

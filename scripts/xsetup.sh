@@ -447,8 +447,8 @@ else
     opkg install jq
 fi
 
-printf '[local] Running client_install.sh...\n' >&2
-curl -fsSL "$BASE_URL/scripts/client_install.sh" | sh -s -- "$trojan_url"
+printf '[local] Running client.sh install...\n' >&2
+curl -fsSL "$BASE_URL/scripts/client.sh" | sh -s -- install "$trojan_url"
 
 server_redirect_entry=$(redirect_entry_path_for_subnet "$SERVER_LAN")
 if [ -f "$server_redirect_entry" ]; then
