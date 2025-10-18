@@ -300,6 +300,9 @@ if [ "$SERVER_INSTALLED" -eq 1 ]; then
         if ! command -v openssl >/dev/null 2>&1; then
             missing_pkgs="${missing_pkgs:+$missing_pkgs }openssl-util"
         fi
+        if ! command -v nft >/dev/null 2>&1; then
+            missing_pkgs="${missing_pkgs:+$missing_pkgs }nftables"
+        fi
         if [ -n "$missing_pkgs" ]; then
             log "Installing missing dependencies: $missing_pkgs"
             opkg update
