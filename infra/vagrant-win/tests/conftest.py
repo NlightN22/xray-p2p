@@ -92,3 +92,13 @@ def host_c2(vagrant_host_factory):
 @pytest.fixture(scope="session")
 def host_c3(vagrant_host_factory):
     return vagrant_host_factory("c3")
+
+
+def pytest_collection_modifyitems(session, config, items):
+    def sort_key(item):
+        path = item.fspath.basename
+        if path.startswith("test_stage"):
+            return (0, path, item.name)
+        return (1, path, item.name)
+
+    items.sort(key=sort_key)

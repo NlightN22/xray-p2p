@@ -91,14 +91,10 @@ if ! xray_common_try_source \
     "${XRAY_REDIRECT_LIB:-}" \
     "scripts/lib/redirect.sh" \
     "lib/redirect.sh"; then
-    tmp_lib="$(mktemp 2>/dev/null)" || xray_die "Unable to create temporary redirect library"
-    if xray_fetch_repo_script "scripts/lib/redirect.sh" "$tmp_lib"; then
-        . "$tmp_lib"
-        rm -f "$tmp_lib"
-    else
-        rm -f "$tmp_lib"
-        xray_die "Unable to load redirect library"
-    fi
+    tmp_lib="$(xray_fetch_repo_script "scripts/lib/redirect.sh")" || xray_die "Unable to load redirect library"
+    # shellcheck disable=SC1090
+    . "$tmp_lib"
+    rm -f "$tmp_lib"
 fi
 
 redirect_prompt_subnet() {
