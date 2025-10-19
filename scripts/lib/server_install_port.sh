@@ -66,25 +66,11 @@ server_install_port_in_use() {
     port="$2"
     case "$tool" in
         ss)
-            ss -ltn 2>/dev/null | awk -v port="$port" '
-                NR <= 1 { next }
-                {
-                    c = split($4, addr, ":")
-                    if (c > 0 && addr[c] == port) exit 0
-                }
-                END { exit 1 }
-            '
+            ss -ltn 2>/dev/null | grep -E "[.:]${port}([^0-9]|$)" >/dev/null 2>&1
             return $?
             ;;
         netstat)
-            netstat -tln 2>/dev/null | awk -v port="$port" '
-                NR <= 2 { next }
-                {
-                    c = split($4, addr, ":")
-                    if (c > 0 && addr[c] == port) exit 0
-                }
-                END { exit 1 }
-            '
+            netstat -tln 2>/dev/null | grep -E "[.:]${port}([^0-9]|$)" >/dev/null 2>&1
             return $?
             ;;
         *)
