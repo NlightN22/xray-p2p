@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterable, Tuple
 
 
 SETUP_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xsetup.sh"
+SERVER_SCRIPT_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server.sh"
 SERVER_USER_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh"
 SERVER_REVERSE_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_reverse.sh"
 SERVER_CONFIG_DIR = "/etc/xray-p2p"
@@ -15,8 +16,10 @@ SERVER_INBOUNDS_PATH = f"{SERVER_CONFIG_DIR}/inbounds.json"
 SERVER_ROUTING_PATH = f"{SERVER_CONFIG_DIR}/routing.json"
 SERVER_TUNNELS_PATH = f"{SERVER_CONFIG_DIR}/config/tunnels.json"
 _PROVISIONED: Dict[Tuple[str, str], object] = {}
+_SERVER_SCRIPT: str | None = None
 _SERVER_USER_SCRIPT: str | None = None
 _SERVER_REVERSE_SCRIPT: str | None = None
+SERVER_SERVICE_PATH = "/etc/init.d/xray-p2p"
 
 
 def run_checked(host, command: str, description: str):
@@ -88,6 +91,79 @@ def _download_script(host, path: str, url: str):
             f"chmod +x {shlex.quote(path)}"
         )
         run_checked(host, download_cmd, f"download script {url}")
+
+
+def _server_script_path(host) -> str:
+    global _SERVER_SCRIPT
+    if _SERVER_SCRIPT:
+        return _SERVER_SCRIPT
+    script_path = "/tmp/server.sh"
+    _download_script(host, script_path, SERVER_SCRIPT_URL)
+    _SERVER_SCRIPT = script_path
+    return script_path
+
+
+def server_script_run(
+    host,
+    subcommand: str,
+    *args: str,
+    env: Dict[str, str] | None = None,
+    check: bool = True,
+    description: str | None = None,
+):
+    script = shlex.quote(_server_script_path(host))
+    cmd = f"{script} {shlex.quote(subcommand)}"
+    if args:
+        arg_str = " ".join(shlex.quote(arg) for arg in args)
+        cmd = f"{cmd} {arg_str}"
+    if env:
+        exports = " ".join(
+            f"{key}={shlex.quote(str(value))}"
+            for key, value in env.items()
+            if value is not None
+        )
+        if exports:
+            cmd = f"{exports} {cmd}"
+    if check:
+        return run_checked(host, cmd, description or f"server {subcommand}")
+    return host.run(cmd)
+
+
+def server_install(
+    host,
+    *args: str,
+    env: Dict[str, str] | None = None,
+    check: bool = True,
+    description: str | None = None,
+):
+    return server_script_run(
+        host,
+        "install",
+        *args,
+        env=env,
+        check=check,
+        description=description or "install server",
+    )
+
+
+def server_remove(host, purge_core: bool = False, check: bool = True):
+    remove_args = ["--purge-core"] if purge_core else []
+    return server_script_run(
+        host,
+        "remove",
+        *remove_args,
+        env=None,
+        check=check,
+        description="remove server",
+    )
+
+
+def server_is_installed(host) -> bool:
+    inbound_path = shlex.quote(f"{SERVER_CONFIG_DIR}/inbounds.json")
+    service_path = shlex.quote(SERVER_SERVICE_PATH)
+    config_result = host.run(f"test -f {inbound_path}")
+    service_result = host.run(f"test -x {service_path}")
+    return config_result.rc == 0 and service_result.rc == 0
 
 
 def _read_json_file(host, path: str, default: Any):

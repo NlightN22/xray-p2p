@@ -159,7 +159,17 @@ server_install_preflight_ports() {
     fi
 
     collisions=""
+    if [ -n "$XRAY_PORT" ] && server_install_port_in_use "$tool" "$XRAY_PORT"; then
+        collisions="$XRAY_PORT"
+    fi
+
     for port in $required_ports; do
+        [ -n "$port" ] || continue
+        case " $collisions " in
+            *" $port "*)
+                continue
+                ;;
+        esac
         if server_install_port_in_use "$tool" "$port"; then
             collisions="${collisions:+$collisions }$port"
         fi

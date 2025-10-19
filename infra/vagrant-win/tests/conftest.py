@@ -97,8 +97,10 @@ def host_c3(vagrant_host_factory):
 def pytest_collection_modifyitems(session, config, items):
     def sort_key(item):
         path = item.fspath.basename
-        if path.startswith("test_stage"):
-            return (0, path, item.name)
-        return (1, path, item.name)
+        precedence = ["test_server", "test_client", "test_wizard"]
+        for index, prefix in enumerate(precedence):
+            if path.startswith(prefix):
+                return (index, path, item.name)
+        return (len(precedence), path, item.name)
 
     items.sort(key=sort_key)

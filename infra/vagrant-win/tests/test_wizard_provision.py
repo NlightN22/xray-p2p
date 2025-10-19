@@ -11,7 +11,7 @@ from .helpers import check_iperf_open, ensure_stage_one
     ],
     ids=["router-r2-client", "router-r3-client"],
 )
-def test_stage_one_provisions_tunnel(host_fixture, user, client_lan, request):
+def test_wizard_provisions_tunnel(host_fixture, user, client_lan, request):
     router = request.getfixturevalue(host_fixture)
 
     # Pre-check: routers must reach r1 directly before provisioning the tunnel.
