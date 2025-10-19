@@ -79,4 +79,29 @@ client_remove_run() {
     fi
 
     xray_log "xray-p2p client installation removed."
+
+    client_remove_cleanup_cache
+}
+
+client_remove_cleanup_cache() {
+    seen=""
+    for var in XRAY_LIB_CACHE_DIR XRAY_SCRIPT_ROOT XRAY_SELF_DIR; do
+        eval "candidate=\${$var:-}"
+        [ -n "$candidate" ] || continue
+        case " $seen " in
+            *" $candidate "*)
+                continue
+                ;;
+        esac
+        case "$candidate" in
+            /tmp/*|/var/tmp/*)
+                if [ -e "$candidate" ]; then
+                    xray_log "Removing loader cache directory $candidate"
+                    rm -rf "$candidate" || xray_warn "Unable to remove $candidate"
+                fi
+                ;;
+        esac
+        seen="$seen $candidate"
+    done
+    unset XRAY_LIB_CACHE_DIR XRAY_SCRIPT_ROOT XRAY_SELF_DIR
 }
