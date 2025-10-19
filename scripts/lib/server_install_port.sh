@@ -1,5 +1,4 @@
 #!/bin/sh
-# shellcheck shell=ash
 
 [ "${SERVER_INSTALL_PORT_LIB_LOADED:-0}" = "1" ] && return 0
 SERVER_INSTALL_PORT_LIB_LOADED=1
