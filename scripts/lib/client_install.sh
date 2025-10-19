@@ -262,6 +262,43 @@ client_install_check_port() {
     esac
 }
 
+client_install_collect_ports() {
+    local inbound_path="$1"
+    jq -r '
+        [.inbounds[]? | .port? | select((type == "number") or (type == "string" and test("^[0-9]+$"))) | tonumber]
+        | unique
+        | .[]
+    ' "$inbound_path" 2>/dev/null
+}
+
+client_install_preflight_ports() {
+    local inbound_path="$1"
+    [ "${XRAY_SKIP_PORT_CHECK:-0}" = "1" ] && return 0
+
+    local ports
+    ports=$(client_install_collect_ports "$inbound_path")
+    [ -n "$ports" ] || return 0
+
+    local checker=""
+    if command -v ss >/dev/null 2>&1; then
+        checker="ss"
+    elif command -v netstat >/dev/null 2>&1; then
+        checker="netstat"
+    else
+        xray_log "Skipping preflight port check because neither 'ss' nor 'netstat' is available."
+        return 0
+    fi
+
+    local collisions=""
+    for port in $ports; do
+        if client_install_check_port "$port" "$checker"; then
+            collisions="${collisions:+$collisions }$port"
+        fi
+    done
+
+    [ -z "$collisions" ] || xray_die "Required port(s) already in use: $collisions. Free these ports or set XRAY_SKIP_PORT_CHECK=1 to override."
+}
+
 client_install_run() {
     umask 077
 
@@ -410,6 +447,8 @@ client_install_run() {
         CLIENT_INSTALL_SOCKS_PORT=1080
     fi
 
+    client_install_preflight_ports "$CLIENT_INSTALL_INBOUND_FILE"
+
     "$XRAYP2P_SERVICE" enable >/dev/null 2>&1 || true
     xray_restart_service "xray-p2p" "$XRAYP2P_SERVICE"
 
@@ -422,14 +461,18 @@ client_install_run() {
         CLIENT_INSTALL_PORT_CHECKER="netstat"
     fi
 
-    client_install_check_port "$CLIENT_INSTALL_SOCKS_PORT" "$CLIENT_INSTALL_PORT_CHECKER"
-    client_install_port_status=$?
-    if [ "$client_install_port_status" -eq 0 ]; then
-        xray_log "xray-p2p client is listening on local port $CLIENT_INSTALL_SOCKS_PORT"
-    elif [ "$client_install_port_status" -eq 2 ]; then
-        xray_log "xray-p2p restarted. Skipping port verification because neither 'ss' nor 'netstat' is available."
-        xray_log "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
+    if [ "${XRAY_SKIP_PORT_CHECK:-0}" = "1" ]; then
+        xray_log "Skipping client port verification because XRAY_SKIP_PORT_CHECK=1."
     else
-        xray_die "xray-p2p service does not appear to be listening on local port $CLIENT_INSTALL_SOCKS_PORT"
+        client_install_check_port "$CLIENT_INSTALL_SOCKS_PORT" "$CLIENT_INSTALL_PORT_CHECKER"
+        client_install_port_status=$?
+        if [ "$client_install_port_status" -eq 0 ]; then
+            xray_log "xray-p2p client is listening on local port $CLIENT_INSTALL_SOCKS_PORT"
+        elif [ "$client_install_port_status" -eq 2 ]; then
+            xray_log "xray-p2p restarted. Skipping port verification because neither 'ss' nor 'netstat' is available."
+            xray_log "Install ip-full (ss) or net-tools-netstat to enable automatic checks."
+        else
+            xray_die "xray-p2p service does not appear to be listening on local port $CLIENT_INSTALL_SOCKS_PORT"
+        fi
     fi
 }
