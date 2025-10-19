@@ -74,7 +74,7 @@ def ensure_stage_one(router_host, user: str, client_lan: str):
         return status
 
     command = (
-        f"curl -fsSL {SETUP_URL} | sh -s -- 10.0.0.1 {user} 10.0.101.0/24 {client_lan}"
+        f"curl -fsSL {SETUP_URL} | XRAY_SKIP_PORT_CHECK=1 sh -s -- 10.0.0.1 {user} 10.0.101.0/24 {client_lan}"
     )
     result = run_checked(router_host, command, f"xsetup for {user}")
     combined_output = f"{result.stdout}\n{result.stderr}"

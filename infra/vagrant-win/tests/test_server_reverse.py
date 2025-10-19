@@ -4,14 +4,18 @@ from uuid import uuid4
 import pytest
 
 from .helpers import (
+    SERVER_CONFIG_DIR,
     ensure_stage_one,
     get_reverse_portals,
     get_routing_rules,
     load_reverse_tunnels,
     load_routing_config,
+    server_install,
+    server_is_installed,
     server_reverse_add,
     server_reverse_remove,
     server_reverse_remove_raw,
+    server_remove,
 )
 
 
@@ -30,51 +34,84 @@ def _unique_subnet() -> str:
     return f"10.200.{suffix}.0/24"
 
 
-def test_server_reverse_add_records_tunnel(host_r1):
+@pytest.mark.serial
+def test_server_reverse_full_flow(host_r1):
     username = _unique_username()
     subnet = _unique_subnet()
 
-    routing_before = load_routing_config(host_r1)
-    tunnels_before = load_reverse_tunnels(host_r1)
+    server_remove(host_r1, purge_core=True, check=False)
+    assert not server_is_installed(host_r1), "Server must be absent before provisioning"
+    assert not host_r1.file(SERVER_CONFIG_DIR).exists, "Server config directory should be removed"
+    assert load_reverse_tunnels(host_r1) == [], "Reverse tunnels must not persist after server removal"
 
-    added = False
+    install_env = {
+        "XRAY_REISSUE_CERT": "1",
+        "XRAY_SKIP_PORT_CHECK": "1",
+    }
     try:
-        add_result = server_reverse_add(host_r1, username, [subnet])
-        added = True
-        combined_output = f"{add_result.stdout}\n{add_result.stderr}".lower()
-        assert "recorded" in combined_output, "Add command did not confirm recording"
+        server_install(host_r1, "pytest-reverse", "9555", "--force", env=install_env)
+        assert server_is_installed(host_r1), "Server should report as installed after provisioning"
 
-        tunnels_after = load_reverse_tunnels(host_r1)
-        assert len(tunnels_after) == len(tunnels_before) + 1, "Tunnel count not increased"
-        tunnel_entry = next(
-            (item for item in tunnels_after if item.get("username") == username),
-            None,
-        )
-        assert tunnel_entry, "Tunnel entry missing in tunnels.json"
-        assert subnet in tunnel_entry.get("subnets", []), "Subnet not recorded"
+        routing_before = load_routing_config(host_r1)
+        tunnels_before = load_reverse_tunnels(host_r1)
 
-        routing_after = load_routing_config(host_r1)
-        domain = f"{username}.rev"
-        portals = get_reverse_portals(routing_after)
-        assert any(portal.get("domain") == domain for portal in portals), "Portal not registered"
+        added = False
+        try:
+            add_result = server_reverse_add(host_r1, username, [subnet])
+            added = True
+            combined_output = f"{add_result.stdout}\n{add_result.stderr}".lower()
+            assert "recorded" in combined_output, "Add command did not confirm recording"
 
-        rules = get_routing_rules(routing_after)
-        assert any(
-            any(entry.endswith(domain) for entry in (rule.get("domain") or []))
-            for rule in rules
-        ), "Routing rules missing domain entry"
+            tunnels_after = load_reverse_tunnels(host_r1)
+            assert len(tunnels_after) == len(tunnels_before) + 1, "Tunnel count not increased"
+            tunnel_entry = next(
+                (item for item in tunnels_after if item.get("username") == username),
+                None,
+            )
+            assert tunnel_entry, "Tunnel entry missing in tunnels.json"
+            assert subnet in tunnel_entry.get("subnets", []), "Subnet not recorded"
+
+            routing_after = load_routing_config(host_r1)
+            domain = f"{username}.rev"
+            portals = get_reverse_portals(routing_after)
+            assert any(portal.get("domain") == domain for portal in portals), "Portal not registered"
+
+            rules = get_routing_rules(routing_after)
+            assert any(
+                any(entry.endswith(domain) for entry in (rule.get("domain") or []))
+                for rule in rules
+            ), "Routing rules missing domain entry"
+        finally:
+            if added:
+                server_reverse_remove(host_r1, username)
+
+        routing_final = load_routing_config(host_r1)
+        tunnels_final = load_reverse_tunnels(host_r1)
+        assert json.dumps(tunnels_final, sort_keys=True) == json.dumps(
+            tunnels_before, sort_keys=True
+        ), "Tunnels config did not revert to original state"
+        assert get_reverse_portals(routing_final) == get_reverse_portals(
+            routing_before
+        ), "Reverse portals were not restored after tunnel removal"
+        assert get_routing_rules(routing_final) == get_routing_rules(
+            routing_before
+        ), "Routing rules were not restored after tunnel removal"
+        final_strategy = routing_final.get("routing", {}).get("domainStrategy")
+        initial_strategy = routing_before.get("routing", {}).get("domainStrategy")
+        if initial_strategy is None:
+            assert final_strategy in (
+                None,
+                "AsIs",
+            ), "Domain strategy should revert to default state"
+        else:
+            assert (
+                final_strategy == initial_strategy
+            ), "Domain strategy changed unexpectedly"
     finally:
-        if added:
-            server_reverse_remove(host_r1, username)
+        server_remove(host_r1, purge_core=True, check=False)
 
-    routing_final = load_routing_config(host_r1)
-    tunnels_final = load_reverse_tunnels(host_r1)
-    assert json.dumps(routing_final, sort_keys=True) == json.dumps(
-        routing_before, sort_keys=True
-    ), "Routing config did not revert to original state"
-    assert json.dumps(tunnels_final, sort_keys=True) == json.dumps(
-        tunnels_before, sort_keys=True
-    ), "Tunnels config did not revert to original state"
+    assert not server_is_installed(host_r1), "Server should be removed after cleanup"
+    assert not host_r1.file(SERVER_CONFIG_DIR).exists, "Cleanup should remove server config directory"
 
 
 def test_server_reverse_remove_missing_tunnel(host_r1):
