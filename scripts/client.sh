@@ -78,6 +78,7 @@ Usage: $SCRIPT_NAME <command> [options]
 
 Commands:
   install [TROJAN_URL] [options]  Install XRAY core and configure xray-p2p client.
+                                  Pass --force to overwrite existing files without prompts.
   remove [--purge-core]           Remove xray-p2p client assets; optional purge removes xray-core package.
 
 Options:
@@ -95,6 +96,34 @@ main() {
     case "$subcommand" in
         install)
             CLIENT_INSTALL_USAGE_PREFIX=" install"
+            force_mode=0
+            filtered_args=""
+            sep=""
+            for arg in "$@"; do
+                case "$arg" in
+                    --force)
+                        force_mode=1
+                        ;;
+                    *)
+                        filtered_args="${filtered_args}${sep}${arg}"
+                        sep='
+'
+                        ;;
+                esac
+            done
+            if [ "$force_mode" -eq 1 ]; then
+                export XRAY_FORCE_CONFIG=1
+            fi
+            if [ -n "$filtered_args" ]; then
+                OLD_IFS=$IFS
+                IFS='
+'
+                # shellcheck disable=SC2086
+                set -- $filtered_args
+                IFS=$OLD_IFS
+            else
+                set --
+            fi
             client_install_run "$@"
             ;;
         remove)

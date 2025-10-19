@@ -77,12 +77,13 @@ usage() {
 Usage: $SCRIPT_NAME <command> [options]
 
 Commands:
-  install [SERVER_NAME] [PORT] [--cert CERT_FILE --key KEY_FILE]
+  install [SERVER_NAME] [PORT] [--cert CERT_FILE --key KEY_FILE] [--force]
                                  Install XRAY core and configure xray-p2p.
                                  Optional --cert/--key attempt to set TLS
                                  certificate/key paths; on failure, continue
                                  and generate a self-signed certificate in the
-                                 default location.
+                                 default location. --force overwrites existing
+                                 files without prompting.
   remove [--purge-core]          Remove xray-p2p service/config; optional purge removes xray-core package.
 
 Options:
@@ -102,6 +103,7 @@ main() {
         install)
             cert_path=""
             key_path=""
+            force_mode=0
             # collect remaining args to pass into server_install_run
             pass_args=""
             while [ "$#" -gt 0 ]; do
@@ -113,6 +115,9 @@ main() {
                     --key)
                         shift
                         key_path="$1"
+                        ;;
+                    --force)
+                        force_mode=1
                         ;;
                     -h|--help)
                         # let install lib print detailed help; pass through
@@ -142,6 +147,10 @@ main() {
                     export XRAY_CERT_FILE="$cert_path"
                     export XRAY_KEY_FILE="$key_path"
                 fi
+            fi
+
+            if [ "${force_mode:-0}" -eq 1 ]; then
+                export XRAY_FORCE_CONFIG=1
             fi
 
             # shellcheck disable=SC2086
