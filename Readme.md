@@ -1,10 +1,52 @@
 # Quick Install
 
-The easiest way to bring up both server and client is to run `scripts/xsetup.sh` from your OpenWrt client router. It guides you through the required addresses, provisions the remote server over SSH, issues a Trojan user, installs the local client, and wires up redirects/reverse proxies for both sides in one pass. Grab the script directly:
+## Requirements
+
+- SSH port opened on the target server (default `22` or your custom port).
+- Internet access for both the server and the OpenWrt client routers.
+- At least 30 MB of free storage on the OpenWrt device for xray binaries/configs.
+
+## Step 1. Prepare the server
+
+Run the server bootstrap script on your server (Debian/Ubuntu/CentOS or similar):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server.sh | sh -s -- install
+```
+
+The script installs xray-core, writes the Trojan inbound configs, and enables the xray-p2p service.
+
+## Step 2. Issue a client credential
+
+Still on the server, generate a Trojan user URL and keep it handy:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh | sh -s -- issue
+```
+
+You can re-run the command later with `list` or `remove` to manage clients.
+
+## Step 3. Install the client
+
+On the OpenWrt router, run the client installer and paste the URL from the previous step when prompted:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client.sh | sh -s -- install
+```
+
+This installs xray-core, applies the templates, fetches the server-side state, and restarts the xray-p2p service.
+
+---
+
+## One-command bootstrap (optional)
+
+If you prefer a single guided flow that provisions both sides in one run, execute the helper from the client router:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xsetup.sh | sh
 ```
+
+The script walks through address prompts, connects over SSH to the server, installs everything, and wires up redirects/reverse proxies automatically.
 
 # XRAY-p2p Trojan Tunnel
 
@@ -29,7 +71,9 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xse
 
 ---
 
-## Fast start
+## Manual server commands
+
+Use these snippets when you need to repeat specific tasks or customize parts of the deployment without re-running the full install scripts.
 
 ``` bash
 # install dependencies
@@ -45,6 +89,8 @@ TIPS: if curl not working use `wget -qO- https://raw.githubusercontent.com/USER/
 ---
 
 ## Client quick start
+
+Useful when you want to add redirects or DNS helpers after the main client install.
 ``` bash
 # install dependencies
 opkg update && opkg install jq
@@ -101,9 +147,6 @@ The client installer parses the connection string, writes the templates from `co
 ---
 
 ## Ideas for improvement
-
 - Provide an authenticated HTTP API for issuing and revoking clients remotely.
-- Integrate `acme.sh` for automated certificate issuance and renewal.
 - Add UCI/Netifd glue for first-class OpenWrt service management.
-
 ---
