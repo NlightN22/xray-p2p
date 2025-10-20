@@ -1,20 +1,15 @@
-*** Update File: infra-vagrant-win/tests/helpers/scripts.py
+*** Update File: infra-vagrant-win/tests/helpers/cert.py
 @@
--def _ensure_script(host, key: str) -> str:
--    if key in _SCRIPT_CACHE:
--        return _SCRIPT_CACHE[key]
--    path, url = _SCRIPT_SPECS[key]
--    _ensure_download(host, path, url)
--    _SCRIPT_CACHE[key] = path
--    return path
-+def _ensure_script(host, key: str) -> str:
-+    cached = _SCRIPT_CACHE.get(key)
-+    if cached:
-+        check = host.run(f"test -f {shlex.quote(cached)}")
-+        if check.rc == 0:
-+            return cached
-+    path, url = _SCRIPT_SPECS[key]
-+    _ensure_download(host, path, url)
-+    _SCRIPT_CACHE[key] = path
-+    return path
+-    script_path = server_cert_apply_script_path(host)
+-    paths_path = server_cert_paths_script_path(host)
+-    loader_path = common_loader_script_path(host)
+-    common_path = common_script_path(host)
++    host.run(
++        "rm -f /tmp/server_install_cert_apply.sh /tmp/server_cert_paths.sh /tmp/common_loader.sh /tmp/common.sh",
++    )
++
++    script_path = server_cert_apply_script_path(host)
++    paths_path = server_cert_paths_script_path(host)
++    loader_path = common_loader_script_path(host)
++    common_path = common_script_path(host)
 *** End Patch

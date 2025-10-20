@@ -22,6 +22,8 @@ _SCRIPT_SPECS: Dict[str, Tuple[str, str]] = {
     "client": ("/tmp/client.sh", CLIENT_SCRIPT_URL),
     "server_user": ("/tmp/server_user.sh", SERVER_USER_URL),
     "server_reverse": ("/tmp/server_reverse.sh", SERVER_REVERSE_URL),
+    "common_loader": ("/tmp/common_loader.sh", "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/common_loader.sh"),
+    "common": ("/tmp/common.sh", "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/common.sh"),
     "cert_apply": ("/tmp/server_install_cert_apply.sh", SERVER_CERT_APPLY_URL),
     "cert_selfsigned": ("/tmp/server_install_cert_selfsigned.sh", SERVER_CERT_SELFSIGNED_URL),
     "cert_paths": ("/tmp/server_cert_paths.sh", SERVER_CERT_PATHS_URL),
@@ -90,6 +92,14 @@ def server_cert_selfsigned_script_path(host) -> str:
 
 def server_cert_paths_script_path(host) -> str:
     return _ensure_script(host, "cert_paths")
+
+
+def common_loader_script_path(host) -> str:
+    return _ensure_script(host, "common_loader")
+
+
+def common_script_path(host) -> str:
+    return _ensure_script(host, "common")
 
 
 __all__ = [
