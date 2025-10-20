@@ -94,6 +94,54 @@ To remove redirects later, run `scripts/redirect.sh remove SUBNET` or `scripts/r
 
 ---
 
+## DNS forwarding
+
+Use DNS forwarding when specific domains must resolve through the tunneled server (for example, to bypass ISP DNS filtering or ensure split-tunnel services use the remote DNS).
+
+```bash
+curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/dns_forward.sh | sh -s -- add *.example.com 1.1.1.1
+```
+
+The script reserves a dokodemo-door inbound, updates dnsmasq to hand out port-specific servers, and restarts xray-p2p/dnsmasq. Each domain mask gets its own listener so you can mix upstream resolvers domain-by-domain.
+
+- `list` shows every forwarded domain and its assigned port.
+- `remove DOMAIN_MASK` deletes the listener and dnsmasq entries.
+
+---
+
+## TLS certificates
+
+For production use you should install a trusted certificate instead of relying on the self-signed fallback. A simple path is to issue via `acme.sh` on the server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/acmesh-official/acme.sh/refs/heads/master/acme.sh | sh
+~/.acme.sh/acme.sh --issue --standalone -d vpn.example.com
+~/.acme.sh/acme.sh --install-cert -d vpn.example.com \
+  --cert-file      /etc/xray-p2p/cert.pem \
+  --key-file       /etc/xray-p2p/key.pem \
+  --fullchain-file /etc/xray-p2p/fullchain.pem
+```
+
+Once the certificate and key are in place, wire them into the XRAY config using the helper:
+
+```bash
+scripts/lib/server_install_cert_apply.sh \
+  --cert /etc/xray-p2p/cert.pem \
+  --key  /etc/xray-p2p/key.pem \
+  --inbounds /etc/xray-p2p/inbounds.json
+```
+
+The script updates the Trojan inbound with the supplied paths without touching the files themselves, so rerun it after each renewal. If you need to fall back to a local self-signed pair, invoke `scripts/lib/server_install_cert_selfsigned.sh`.
+
+During fresh installs the same paths can be supplied in one go:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server.sh \
+  | sh -s -- install --cert /etc/xray-p2p/cert.pem --key /etc/xray-p2p/key.pem
+```
+
+---
+
 ## Manual operations
 
 ### Server maintenance
@@ -153,6 +201,8 @@ To remove redirects later, run `scripts/redirect.sh remove SUBNET` or `scripts/r
 - `scripts/client.sh` - manages XRAY client install/remove lifecycle on OpenWrt routers.
 - `scripts/lib/user_list.sh` - compares `clients.json` with Trojan inbounds and prints active accounts.
 - `scripts/server_user.sh` - lists, issues, or removes clients and keeps configs in sync.
+- `scripts/lib/server_install_cert_apply.sh` - applies existing certificate/key paths to trojan inbounds.
+- `scripts/lib/server_install_cert_selfsigned.sh` - generates or refreshes a self-signed certificate.
 - `scripts/redirect.sh` - manages nftables redirects (`list`, `add SUBNET [PORT]`, `remove SUBNET|--all`).
 - `scripts/dns_forward.sh` - manages per-domain dokodemo-door DNS inbounds (`add`, `list`, `remove`).
 
