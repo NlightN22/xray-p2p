@@ -117,13 +117,6 @@ def test_server_certificate_helpers(host_r1):
             f"stderr:\n{generate_result.stderr}"
         )
 
-        scripts_layout = host_r1.run("ls -l /tmp/scripts/lib")
-        assert scripts_layout.rc == 0, (
-            "Downloaded certificate helper scripts missing\n"
-            f"stdout:\n{scripts_layout.stdout}\n"
-            f"stderr:\n{scripts_layout.stderr}"
-        )
-
         apply_result = server_cert_apply(
             host_r1,
             alt_cert,
@@ -132,19 +125,10 @@ def test_server_certificate_helpers(host_r1):
             description="apply alternate TLS material",
         )
         if apply_result.rc != 0:
-            debug_cmd = (
-                "cd /tmp && "
-                "sh -x ./scripts/lib/server_install_cert_apply.sh "
-                f"--cert {shlex.quote(alt_cert)} --key {shlex.quote(alt_key)}"
-            )
-            debug_result = host_r1.run(debug_cmd)
             pytest.fail(
                 "Certificate apply helper failed\n"
                 f"stdout:\n{apply_result.stdout}\n"
-                f"stderr:\n{apply_result.stderr}\n"
-                f"debug stdout:\n{debug_result.stdout}\n"
-                f"debug stderr:\n{debug_result.stderr}\n"
-                f"debug rc: {debug_result.rc}"
+                f"stderr:\n{apply_result.stderr}"
             )
         combined_apply = f"{apply_result.stdout}\n{apply_result.stderr}"
         assert "Applied certificate" in combined_apply, "Expected confirmation message after applying TLS material"

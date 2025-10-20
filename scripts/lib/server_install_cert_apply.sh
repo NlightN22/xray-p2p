@@ -75,6 +75,14 @@ server_install_cert_apply_require_helpers() {
         xray_cert_apply_warn "Unable to load XRAY common helpers; continuing without advanced logging."
     fi
 
+    if [ -n "${XRAY_SERVER_CERT_PATHS_LIB:-}" ] && [ -r "${XRAY_SERVER_CERT_PATHS_LIB}" ]; then
+        # shellcheck disable=SC1090
+        . "${XRAY_SERVER_CERT_PATHS_LIB}"
+        if command -v server_cert_paths_update >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
     if command -v server_cert_paths_update >/dev/null 2>&1; then
         return 0
     fi

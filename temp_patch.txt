@@ -1,0 +1,20 @@
+*** Update File: infra-vagrant-win/tests/helpers/scripts.py
+@@
+-def _ensure_script(host, key: str) -> str:
+-    if key in _SCRIPT_CACHE:
+-        return _SCRIPT_CACHE[key]
+-    path, url = _SCRIPT_SPECS[key]
+-    _ensure_download(host, path, url)
+-    _SCRIPT_CACHE[key] = path
+-    return path
++def _ensure_script(host, key: str) -> str:
++    cached = _SCRIPT_CACHE.get(key)
++    if cached:
++        check = host.run(f"test -f {shlex.quote(cached)}")
++        if check.rc == 0:
++            return cached
++    path, url = _SCRIPT_SPECS[key]
++    _ensure_download(host, path, url)
++    _SCRIPT_CACHE[key] = path
++    return path
+*** End Patch
