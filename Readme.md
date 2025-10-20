@@ -13,28 +13,6 @@ XRAY-p2p delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. Th
 
 ## Connection topology
 
-```mermaid
-flowchart LR
-    subgraph ServerSite["Server LAN"]
-        SR["Server router\n(xray-core inbound)"]
-        SHosts["Services / hosts\n(192.0.2.0/24)"]
-    end
-    subgraph WAN["Internet"]
-        T["Trojan tunnel\n(TLS over TCP)"]
-    end
-    subgraph ClientSite["Client LAN"]
-        CR["OpenWrt router\n(xray-core client)"]
-        CRedirects["Redirects / socks"]
-        CHosts["Workstations, TVs...\n(10.0.0.0/24)"]
-    end
-
-    SHosts --> SR
-    SR --> T
-    T --> CR
-    CR --> CRedirects
-    CRedirects --> CHosts
-```
-
 ```text
       Server LAN                     Internet                    Client LAN
    +---------------+          +-----------------+         +--------------------+
