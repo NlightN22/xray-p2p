@@ -24,7 +24,30 @@ def define_clients(config)
             ip link set eth1 up
             udhcpc -i eth1 -t 5 -T 5 -n
             apk add --no-cache curl
-            sudo ip route del default dev eth0 || true
+            if ! ip route del default dev eth0 2>/dev/null; then
+                if command -v sudo >/dev/null 2>&1; then
+                    sudo ip route del default dev eth0 || true
+                fi
+            fi
+        SHELL
+
+        c.vm.provision "shell", name: "Persist eth0 route removal", run: "always", inline: <<-SHELL
+            set -ex
+            mkdir -p /etc/network/interfaces.d
+            cat <<'EOF' >/etc/network/interfaces.d/eth0-xray
+auto eth0
+iface eth0 inet dhcp
+    udhcpc_opts -o
+    post-up ip route del default dev $IFACE 2>/dev/null || true
+    post-down ip route del default dev $IFACE 2>/dev/null || true
+EOF
+            if command -v rc-service >/dev/null 2>&1; then
+                if rc-service networking status >/dev/null 2>&1; then
+                    ifdown eth0 || true
+                    ifup eth0 || true
+                fi
+            fi
+            ip route del default dev eth0 2>/dev/null || true
         SHELL
 
         c.vm.provision "shell", name: "Check default route", run: "always", inline: <<-SHELL
