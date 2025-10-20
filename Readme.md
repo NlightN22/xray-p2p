@@ -15,30 +15,37 @@ XRAY-p2p delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. Th
 
 ```mermaid
 flowchart LR
-    subgraph Remote["Public VPS / Server"]
-        S[Server OS]
-        X[xray-core (Trojan inbound)]
+    subgraph ServerSite["Server LAN"]
+        SR["Server router\n(xray-core inbound)"]
+        SHosts["Services / hosts\n(192.0.2.0/24)"]
     end
-    subgraph Transport["Encrypted tunnel"]
-        T[Trojan / TLS]
+    subgraph WAN["Internet"]
+        T["Trojan tunnel\n(TLS over TCP)"]
     end
-    subgraph Edge["OpenWrt router"]
-        C[xray-core client]
-        R[nftables redirects / socks port]
-    end
-    subgraph LAN["Client LAN (other devices)"]
-        L1[Workstation]
-        L2[Smart TV]
-        L3[...] 
+    subgraph ClientSite["Client LAN"]
+        CR["OpenWrt router\n(xray-core client)"]
+        CRedirects["Redirects / socks"]
+        CHosts["Workstations, TVs...\n(10.0.0.0/24)"]
     end
 
-    S --> X
-    X --> T
-    T --> C
-    C --> R
-    R --> L1
-    R --> L2
-    R --> L3
+    SHosts --> SR
+    SR --> T
+    T --> CR
+    CR --> CRedirects
+    CRedirects --> CHosts
+```
+
+```text
+      Server LAN                     Internet                    Client LAN
+   +---------------+          +-----------------+         +--------------------+
+   | Server router |==========| Trojan tunnel   |=========| OpenWrt router     |
+   | (xray inbound)|   TLS    | (TLS over TCP)  |   TLS   | (xray client)      |
+   +-------+-------+          +-----------------+         +-----+--------------+
+           |                                                   |
+   +-------+--------+                                   +------+-------+
+   | Internal hosts |                                   | LAN devices |
+   | (servers etc.) |                                   | PCs / TVs   |
+   +----------------+                                   +--------------+
 ```
 
 - The server hosts the public Trojan inbound and manages user credentials.
