@@ -174,6 +174,25 @@ cmd_apply() {
         xray_die "Both --cert and --key must be provided."
     fi
 
+    stage_dir="/tmp/scripts/lib"
+    cert_paths_cached="$stage_dir/server_cert_paths.sh"
+    if [ ! -r "$cert_paths_cached" ]; then
+        mkdir -p "$stage_dir" || xray_die "Unable to create directory $stage_dir"
+        base_url="https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/server_cert_paths.sh"
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL "$base_url" -o "$cert_paths_cached" || xray_die "Unable to download server_cert_paths helper"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -q -O "$cert_paths_cached" "$base_url" || xray_die "Unable to download server_cert_paths helper"
+        else
+            xray_die "Neither curl nor wget available to fetch server_cert_paths helper"
+        fi
+        chmod +x "$cert_paths_cached" 2>/dev/null || true
+    fi
+
+    export XRAY_SERVER_CERT_PATHS_LIB="$cert_paths_cached"
+    export XRAY_SELF_DIR="/tmp"
+    export XRAY_SCRIPT_ROOT="/tmp"
+
     server_install_cert_apply_paths "$inbounds" "$cert" "$key"
 }
 
