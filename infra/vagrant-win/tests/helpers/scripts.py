@@ -18,7 +18,6 @@ from .utils import run_checked
 _SCRIPT_CACHE: Dict[str, str] = {}
 
 _SCRIPT_SPECS: Dict[str, Tuple[str, str]] = {
-    "server": ("/tmp/server.sh", SERVER_SCRIPT_URL),
     "client": ("/tmp/client.sh", CLIENT_SCRIPT_URL),
     "server_user": ("/tmp/server_user.sh", SERVER_USER_URL),
     "server_reverse": ("/tmp/server_reverse.sh", SERVER_REVERSE_URL),
@@ -66,10 +65,6 @@ def _ensure_script(host, key: str) -> str:
     return path
 
 
-def server_script_path(host) -> str:
-    return _ensure_script(host, "server")
-
-
 def client_script_path(host) -> str:
     return _ensure_script(host, "client")
 
@@ -103,11 +98,12 @@ def common_script_path(host) -> str:
 
 
 __all__ = [
-    "server_script_path",
     "client_script_path",
     "server_user_script_path",
     "server_reverse_script_path",
     "server_cert_apply_script_path",
     "server_cert_selfsigned_script_path",
     "server_cert_paths_script_path",
+    "common_loader_script_path",
+    "common_script_path",
 ]

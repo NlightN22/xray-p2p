@@ -5,11 +5,8 @@ from typing import Dict
 
 import pytest
 
-from .constants import SERVER_CONFIG_DIR, SERVER_SERVICE_PATH
-from .scripts import (
-    server_script_path,
-    server_user_script_path,
-)
+from .constants import SERVER_CONFIG_DIR, SERVER_SERVICE_PATH, SERVER_SCRIPT_URL
+from .scripts import server_user_script_path
 from .utils import run_checked
 
 
@@ -21,11 +18,11 @@ def server_script_run(
     check: bool = True,
     description: str | None = None,
 ):
-    script = shlex.quote(server_script_path(host))
-    cmd = f"{script} {shlex.quote(subcommand)}"
+    curl_cmd = f"curl -fsSL {shlex.quote(SERVER_SCRIPT_URL)}"
+    tokens = [shlex.quote(subcommand)]
     if args:
-        arg_str = " ".join(shlex.quote(arg) for arg in args)
-        cmd = f"{cmd} {arg_str}"
+        tokens.extend(shlex.quote(arg) for arg in args)
+    pipeline = f"{curl_cmd} | sh -s -- {' '.join(tokens)}"
     if env:
         exports = " ".join(
             f"{key}={shlex.quote(str(value))}"
@@ -33,10 +30,10 @@ def server_script_run(
             if value is not None
         )
         if exports:
-            cmd = f"{exports} {cmd}"
+            pipeline = f"{exports} {pipeline}"
     if check:
-        return run_checked(host, cmd, description or f"server {subcommand}")
-    return host.run(cmd)
+        return run_checked(host, pipeline, description or f"server {subcommand}")
+    return host.run(pipeline)
 
 
 def server_install(
