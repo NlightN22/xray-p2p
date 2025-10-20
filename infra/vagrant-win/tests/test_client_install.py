@@ -34,9 +34,10 @@ def test_client_install_basic(host_r2):
     client_remove(host_r2, purge_core=True, check=False)
     assert not client_is_installed(host_r2), "Client should be absent before installation"
 
-    install_env = {
+    base_env = {
         "XRAY_REISSUE_CERT": "1",
     }
+    install_env = {**base_env, "XRAY_SKIP_PORT_CHECK": "1"}
 
     client_install(host_r2, DUMMY_TROJAN_URL, "--force", env=install_env)
     assert client_is_installed(host_r2), "Client should report as installed"
@@ -71,9 +72,10 @@ def test_client_install_port_collisions(host_r2):
     client_remove(host_r2, purge_core=True, check=False)
     assert not client_is_installed(host_r2)
 
-    install_env = {
+    base_env = {
         "XRAY_REISSUE_CERT": "1",
     }
+    install_env = {**base_env, "XRAY_SKIP_PORT_CHECK": "1"}
 
     client_install(host_r2, DUMMY_TROJAN_URL, "--force", env=install_env)
     assert client_is_installed(host_r2), "Client should be installed for port discovery"
@@ -92,7 +94,7 @@ def test_client_install_port_collisions(host_r2):
                 host_r2,
                 DUMMY_TROJAN_URL,
                 "--force",
-                env=install_env,
+                env=base_env,
                 check=False,
                 description=f"install client with occupied port {port}",
             )

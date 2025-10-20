@@ -18,22 +18,21 @@ def server_script_run(
     check: bool = True,
     description: str | None = None,
 ):
-    curl_cmd = f"curl -fsSL {shlex.quote(SERVER_SCRIPT_URL)}"
-    tokens = [shlex.quote(subcommand)]
-    if args:
-        tokens.extend(shlex.quote(arg) for arg in args)
-    pipeline = f"{curl_cmd} | sh -s -- {' '.join(tokens)}"
+    tokens = [shlex.quote(subcommand), *(shlex.quote(arg) for arg in args)]
+    script_parts = []
     if env:
-        exports = " ".join(
-            f"{key}={shlex.quote(str(value))}"
+        script_parts.extend(
+            f"export {key}={shlex.quote(str(value))}"
             for key, value in env.items()
             if value is not None
         )
-        if exports:
-            pipeline = f"{exports} {pipeline}"
+    script_parts.append(
+        f"curl -fsSL {shlex.quote(SERVER_SCRIPT_URL)} | sh -s -- {' '.join(tokens)}"
+    )
+    command = "sh -c " + shlex.quote("; ".join(script_parts))
     if check:
-        return run_checked(host, pipeline, description or f"server {subcommand}")
-    return host.run(pipeline)
+        return run_checked(host, command, description or f"server {subcommand}")
+    return host.run(command)
 
 
 def server_install(

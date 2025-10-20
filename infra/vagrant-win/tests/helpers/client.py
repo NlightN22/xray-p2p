@@ -3,7 +3,7 @@ from __future__ import annotations
 import shlex
 from typing import Dict
 
-from .scripts import client_script_path
+from .constants import CLIENT_SCRIPT_URL
 from .utils import run_checked
 
 
@@ -15,22 +15,21 @@ def client_script_run(
     check: bool = True,
     description: str | None = None,
 ):
-    script = shlex.quote(client_script_path(host))
-    cmd = f"{script} {shlex.quote(subcommand)}"
-    if args:
-        arg_str = " ".join(shlex.quote(arg) for arg in args)
-        cmd = f"{cmd} {arg_str}"
+    tokens = [shlex.quote(subcommand), *(shlex.quote(arg) for arg in args)]
+    script_parts = []
     if env:
-        exports = " ".join(
-            f"{key}={shlex.quote(str(value))}"
+        script_parts.extend(
+            f"export {key}={shlex.quote(str(value))}"
             for key, value in env.items()
             if value is not None
         )
-        if exports:
-            cmd = f"{exports} {cmd}"
+    script_parts.append(
+        f"curl -fsSL {shlex.quote(CLIENT_SCRIPT_URL)} | sh -s -- {' '.join(tokens)}"
+    )
+    command = "sh -c " + shlex.quote("; ".join(script_parts))
     if check:
-        return run_checked(host, cmd, description or f"client {subcommand}")
-    return host.run(cmd)
+        return run_checked(host, command, description or f"client {subcommand}")
+    return host.run(command)
 
 
 def client_install(
@@ -63,8 +62,8 @@ def client_remove(host, purge_core: bool = False, check: bool = True):
 
 
 def client_is_installed(host) -> bool:
-    config_path = shlex.quote("/etc/xray-p2p-client/config.json")
-    service_path = shlex.quote("/etc/init.d/xray-p2p-client")
+    config_path = shlex.quote("/etc/xray-p2p/outbounds.json")
+    service_path = shlex.quote("/etc/init.d/xray-p2p")
     config_result = host.run(f"test -f {config_path}")
     service_result = host.run(f"test -x {service_path}")
     return config_result.rc == 0 and service_result.rc == 0
