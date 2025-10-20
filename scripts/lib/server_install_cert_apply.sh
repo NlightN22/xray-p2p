@@ -6,19 +6,48 @@ SERVER_INSTALL_CERT_APPLY_LIB_LOADED=1
 
 XRAYP2P_DEFAULT_INBOUNDS="/etc/xray-p2p/inbounds.json"
 
+# When executed directly ensure XRAY_SELF_DIR points to script location
+if [ -z "${XRAY_SELF_DIR:-}" ]; then
+    case "$0" in
+        */*)
+            XRAY_SELF_DIR=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+            export XRAY_SELF_DIR
+            ;;
+    esac
+fi
+: "${XRAY_SELF_DIR:=}"
+
 # Ensure common helpers are available when sourced standalone
 xray_cert_apply_try_load_common() {
     command -v xray_common_try_source >/dev/null 2>&1 && return 0
 
     for candidate in \
+        "${XRAY_SELF_DIR%/}/scripts/lib/common_loader.sh" \
         "scripts/lib/common_loader.sh" \
         "lib/common_loader.sh"; do
-        if [ -r "$candidate" ]; then
+        if [ -n "$candidate" ] && [ -r "$candidate" ]; then
             # shellcheck disable=SC1090
             . "$candidate"
             break
         fi
     done
+
+    if ! command -v load_common_lib >/dev/null 2>&1; then
+        base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+        loader_url="${base%/}/scripts/lib/common_loader.sh"
+        tmp="$(mktemp 2>/dev/null)" || return 1
+        if command -v curl >/dev/null 2>&1 && curl -fsSL "$loader_url" -o "$tmp"; then
+            :
+        elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$loader_url"; then
+            :
+        else
+            rm -f "$tmp"
+            return 1
+        fi
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+    fi
 
     command -v xray_common_try_source >/dev/null 2>&1 || return 1
     load_common_lib >/dev/null 2>&1 || true

@@ -4,15 +4,71 @@
 [ "${SERVER_CERT_PATHS_LIB_LOADED:-0}" = "1" ] && return 0
 SERVER_CERT_PATHS_LIB_LOADED=1
 
-# Try to load common helpers if available
-if ! command -v xray_log >/dev/null 2>&1 || ! command -v xray_warn >/dev/null 2>&1; then
-    if command -v . >/dev/null 2>&1; then
-        # shellcheck disable=SC1091
-        . "scripts/lib/common.sh" 2>/dev/null || true
-        # shellcheck disable=SC1091
-        . "lib/common.sh" 2>/dev/null || true
-    fi
+# Determine XRAY_SELF_DIR when invoked directly
+if [ -z "${XRAY_SELF_DIR:-}" ]; then
+    case "$0" in
+        */*)
+            XRAY_SELF_DIR=$(CDPATH= cd -- "$(dirname "$0")" 2>/dev/null && pwd)
+            export XRAY_SELF_DIR
+            ;;
+    esac
 fi
+: "${XRAY_SELF_DIR:=}"
+
+server_cert_paths_bootstrap_common() {
+    if command -v xray_log >/dev/null 2>&1 && command -v xray_warn >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if ! command -v xray_common_try_source >/dev/null 2>&1; then
+        for candidate in \
+            "${XRAY_SELF_DIR%/}/scripts/lib/common_loader.sh" \
+            "scripts/lib/common_loader.sh" \
+            "lib/common_loader.sh"; do
+            if [ -n "$candidate" ] && [ -r "$candidate" ]; then
+                # shellcheck disable=SC1090
+                . "$candidate"
+                break
+            fi
+        done
+
+        if ! command -v load_common_lib >/dev/null 2>&1; then
+            base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+            loader_url="${base%/}/scripts/lib/common_loader.sh"
+            tmp="$(mktemp 2>/dev/null)" || return 1
+            if command -v curl >/dev/null 2>&1 && curl -fsSL "$loader_url" -o "$tmp"; then
+                :
+            elif command -v wget >/dev/null 2>&1 && wget -q -O "$tmp" "$loader_url"; then
+                :
+            else
+                rm -f "$tmp"
+                return 1
+            fi
+            # shellcheck disable=SC1090
+            . "$tmp"
+            rm -f "$tmp"
+        fi
+    fi
+
+    if command -v load_common_lib >/dev/null 2>&1; then
+        load_common_lib >/dev/null 2>&1 || true
+    fi
+
+    if ! command -v xray_log >/dev/null 2>&1 || ! command -v xray_warn >/dev/null 2>&1; then
+        for candidate in \
+            "${XRAY_SELF_DIR%/}/scripts/lib/common.sh" \
+            "scripts/lib/common.sh" \
+            "lib/common.sh"; do
+            if [ -n "$candidate" ] && [ -r "$candidate" ]; then
+                # shellcheck disable=SC1090
+                . "$candidate"
+                break
+            fi
+        done
+    fi
+}
+
+server_cert_paths_bootstrap_common
 
 server_cert_paths_usage() {
     cat <<EOF

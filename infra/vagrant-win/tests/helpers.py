@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import time
 from typing import Any, Dict, Iterable, Tuple
@@ -13,6 +14,10 @@ SERVER_SCRIPT_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/s
 CLIENT_SCRIPT_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client.sh"
 SERVER_USER_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh"
 SERVER_REVERSE_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_reverse.sh"
+SERVER_CERT_APPLY_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/server_install_cert_apply.sh"
+SERVER_CERT_SELFSIGNED_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/server_install_cert_selfsigned.sh"
+SERVER_CERT_PATHS_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/server_cert_paths.sh"
+SERVER_COMMON_URL = "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/common.sh"
 SERVER_CONFIG_DIR = "/etc/xray-p2p"
 SERVER_CLIENTS_PATH = f"{SERVER_CONFIG_DIR}/config/clients.json"
 SERVER_INBOUNDS_PATH = f"{SERVER_CONFIG_DIR}/inbounds.json"
@@ -23,6 +28,10 @@ _SERVER_SCRIPT: str | None = None
 _CLIENT_SCRIPT: str | None = None
 _SERVER_USER_SCRIPT: str | None = None
 _SERVER_REVERSE_SCRIPT: str | None = None
+_SERVER_CERT_APPLY_SCRIPT: str | None = None
+_SERVER_CERT_SELFSIGNED_SCRIPT: str | None = None
+_SERVER_CERT_PATHS_SCRIPT: str | None = None
+_SERVER_COMMON_SCRIPT: str | None = None
 SERVER_SERVICE_PATH = "/etc/init.d/xray-p2p"
 
 
@@ -100,6 +109,13 @@ def ensure_stage_one(router_host, user: str, client_lan: str):
 
 
 def _download_script(host, path: str, url: str):
+    directory = os.path.dirname(path)
+    if directory:
+        run_checked(
+            host,
+            f"mkdir -p {shlex.quote(directory)}",
+            f"ensure directory {directory}",
+        )
     result = host.run(f"test -x {shlex.quote(path)}")
     if result.rc != 0:
         download_cmd = (
@@ -345,6 +361,46 @@ def _server_user_script_path(host) -> str:
     return script_path
 
 
+def _server_cert_apply_script_path(host) -> str:
+    global _SERVER_CERT_APPLY_SCRIPT
+    if _SERVER_CERT_APPLY_SCRIPT:
+        return _SERVER_CERT_APPLY_SCRIPT
+    script_path = "/tmp/scripts/lib/server_install_cert_apply.sh"
+    _download_script(host, script_path, SERVER_CERT_APPLY_URL)
+    _SERVER_CERT_APPLY_SCRIPT = script_path
+    return script_path
+
+
+def _server_cert_selfsigned_script_path(host) -> str:
+    global _SERVER_CERT_SELFSIGNED_SCRIPT
+    if _SERVER_CERT_SELFSIGNED_SCRIPT:
+        return _SERVER_CERT_SELFSIGNED_SCRIPT
+    script_path = "/tmp/server_install_cert_selfsigned.sh"
+    _download_script(host, script_path, SERVER_CERT_SELFSIGNED_URL)
+    _SERVER_CERT_SELFSIGNED_SCRIPT = script_path
+    return script_path
+
+
+def _server_cert_paths_script_path(host) -> str:
+    global _SERVER_CERT_PATHS_SCRIPT
+    if _SERVER_CERT_PATHS_SCRIPT:
+        return _SERVER_CERT_PATHS_SCRIPT
+    script_path = "/tmp/scripts/lib/server_cert_paths.sh"
+    _download_script(host, script_path, SERVER_CERT_PATHS_URL)
+    _SERVER_CERT_PATHS_SCRIPT = script_path
+    return script_path
+
+
+def _server_common_script_path(host) -> str:
+    global _SERVER_COMMON_SCRIPT
+    if _SERVER_COMMON_SCRIPT:
+        return _SERVER_COMMON_SCRIPT
+    script_path = "/tmp/scripts/lib/common.sh"
+    _download_script(host, script_path, SERVER_COMMON_URL)
+    _SERVER_COMMON_SCRIPT = script_path
+    return script_path
+
+
 def server_user_issue(host, email: str, connection_host: str):
     script = shlex.quote(_server_user_script_path(host))
     env = " ".join(
@@ -372,6 +428,74 @@ def server_user_remove(host, email: str):
     )
     command = f"{env} {script} remove {shlex.quote(email)}"
     return run_checked(host, command, f"remove client {email}")
+
+
+def server_cert_apply(
+    host,
+    cert_path: str,
+    key_path: str,
+    *,
+    inbounds_path: str | None = None,
+    env: Dict[str, str] | None = None,
+    check: bool = True,
+    description: str | None = None,
+):
+    _server_cert_apply_script_path(host)
+    _server_cert_paths_script_path(host)
+    _server_common_script_path(host)
+    script_dir = "/tmp"
+    script_invocation = shlex.quote("./scripts/lib/server_install_cert_apply.sh")
+    effective_env: Dict[str, str] = dict(env or {})
+    effective_env.setdefault("XRAY_SERVER_CERT_PATHS_LIB", "./scripts/lib/server_cert_paths.sh")
+    tokens = [
+        script_invocation,
+        "--cert",
+        shlex.quote(cert_path),
+        "--key",
+        shlex.quote(key_path),
+    ]
+    if inbounds_path:
+        tokens.extend(["--inbounds", shlex.quote(inbounds_path)])
+    cmd_body = " ".join(tokens)
+    prefix = ""
+    if effective_env:
+        exports = " ".join(
+            f"{key}={shlex.quote(str(value))}"
+            for key, value in effective_env.items()
+            if value is not None
+        )
+        if exports:
+            prefix = f"{exports} "
+    cmd = f"cd {shlex.quote(script_dir)} && {prefix}{cmd_body}"
+    if check:
+        return run_checked(host, cmd, description or "apply server certificate")
+    return host.run(cmd)
+
+
+def server_cert_selfsigned(
+    host,
+    *,
+    inbounds_path: str | None = None,
+    env: Dict[str, str] | None = None,
+    check: bool = True,
+    description: str | None = None,
+):
+    script = shlex.quote(_server_cert_selfsigned_script_path(host))
+    tokens = [script]
+    if inbounds_path:
+        tokens.extend(["--inbounds", shlex.quote(inbounds_path)])
+    cmd = " ".join(tokens)
+    if env:
+        exports = " ".join(
+            f"{key}={shlex.quote(str(value))}"
+            for key, value in env.items()
+            if value is not None
+        )
+        if exports:
+            cmd = f"{exports} {cmd}"
+    if check:
+        return run_checked(host, cmd, description or "generate self-signed certificate")
+    return host.run(cmd)
 
 
 def load_routing_config(host) -> Dict[str, Any]:
