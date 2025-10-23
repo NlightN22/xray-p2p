@@ -297,26 +297,29 @@ cmd_add() {
 
     if [ -n "$servers_output" ]; then
         while IFS= read -r line; do
-            value=${line#*=}
-            value=${value%\'}
-            value=${value#\'}
-            value=${value%\"}
-            value=${value#\"}
-            case "$value" in
-                "/$domain_mask/"*)
-                    if [ "$value" = "$server_value" ]; then
-                        if [ "$server_present" -eq 0 ]; then
-                            server_present=1
+            entries=${line#*=}
+            for raw in $entries; do
+                value=${raw%\'}
+                value=${value#\'}
+                value=${value%\"}
+                value=${value#\"}
+                [ -z "$value" ] && continue
+                case "$value" in
+                    "/$domain_mask/"*)
+                        if [ "$value" = "$server_value" ]; then
+                            if [ "$server_present" -eq 0 ]; then
+                                server_present=1
+                            else
+                                uci del_list "$DNSMASQ_SECTION.server=$value"
+                                uci_changed=1
+                            fi
                         else
                             uci del_list "$DNSMASQ_SECTION.server=$value"
                             uci_changed=1
                         fi
-                    else
-                        uci del_list "$DNSMASQ_SECTION.server=$value"
-                        uci_changed=1
-                    fi
-                    ;;
-            esac
+                        ;;
+                esac
+            done
         done <<EOF
 $servers_output
 EOF
@@ -335,19 +338,22 @@ EOF
 
     if [ -n "$rebind_output" ]; then
         while IFS= read -r line; do
-            value=${line#*=}
-            value=${value%\'}
-            value=${value#\'}
-            value=${value%\"}
-            value=${value#\"}
-            if [ "$value" = "$rebind_value" ]; then
-                if [ "$rebind_present" -eq 0 ]; then
-                    rebind_present=1
-                else
-                    uci del_list "$DNSMASQ_SECTION.rebind_domain=$value"
-                    uci_changed=1
+            entries=${line#*=}
+            for raw in $entries; do
+                value=${raw%\'}
+                value=${value#\'}
+                value=${value%\"}
+                value=${value#\"}
+                [ -z "$value" ] && continue
+                if [ "$value" = "$rebind_value" ]; then
+                    if [ "$rebind_present" -eq 0 ]; then
+                        rebind_present=1
+                    else
+                        uci del_list "$DNSMASQ_SECTION.rebind_domain=$value"
+                        uci_changed=1
+                    fi
                 fi
-            fi
+            done
         done <<EOF
 $rebind_output
 EOF
@@ -472,15 +478,18 @@ cmd_remove() {
     servers_output=$(uci -q show "$DNSMASQ_SECTION.server" 2>/dev/null || true)
     if [ -n "$servers_output" ]; then
         while IFS= read -r line; do
-            value=${line#*=}
-            value=${value%\'}
-            value=${value#\'}
-            value=${value%\"}
-            value=${value#\"}
-            if [ "$value" = "$server_value" ]; then
-                uci del_list "$DNSMASQ_SECTION.server=$value"
-                uci_changed=1
-            fi
+            entries=${line#*=}
+            for raw in $entries; do
+                value=${raw%\'}
+                value=${value#\'}
+                value=${value%\"}
+                value=${value#\"}
+                [ -z "$value" ] && continue
+                if [ "$value" = "$server_value" ]; then
+                    uci del_list "$DNSMASQ_SECTION.server=$value"
+                    uci_changed=1
+                fi
+            done
         done <<EOF
 $servers_output
 EOF
@@ -494,15 +503,18 @@ EOF
         rebind_output=$(uci -q show "$DNSMASQ_SECTION.rebind_domain" 2>/dev/null || true)
         if [ -n "$rebind_output" ]; then
             while IFS= read -r line; do
-                value=${line#*=}
-                value=${value%\'}
-                value=${value#\'}
-                value=${value%\"}
-                value=${value#\"}
-                if [ "$value" = "$rebind_value" ]; then
-                    uci del_list "$DNSMASQ_SECTION.rebind_domain=$value"
-                    uci_changed=1
-                fi
+                entries=${line#*=}
+                for raw in $entries; do
+                    value=${raw%\'}
+                    value=${value#\'}
+                    value=${value%\"}
+                    value=${value#\"}
+                    [ -z "$value" ] && continue
+                    if [ "$value" = "$rebind_value" ]; then
+                        uci del_list "$DNSMASQ_SECTION.rebind_domain=$value"
+                        uci_changed=1
+                    fi
+                done
             done <<EOF
 $rebind_output
 EOF

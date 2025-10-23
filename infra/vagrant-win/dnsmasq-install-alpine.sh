@@ -8,12 +8,18 @@ set -eu  # -x optional for debug
 
 # --- Adjust these if needed ---
 ZONE="corp.test.com"            # local authoritative zone
-HOST_FQDN="srv1.corp.test.com"  # FQDN to define (A only)
 ETH_IFACE="${ETH_IFACE:-eth1}"  # Interface to detect IPv4 from
 LOGFILE="/var/log/dnsmasq.log"
 # ------------------------------
 
-# 0) Determine privilege escalation helper
+# 0) Require HOST_FQDN as first argument
+if [ "$#" -lt 1 ] || [ -z "$1" ]; then
+  echo "Usage: $0 HOST_FQDN" >&2
+  exit 1
+fi
+HOST_FQDN=$1
+
+# 1) Determine privilege escalation helper
 if [ "$(id -u)" -eq 0 ]; then
   AS_ROOT=""
 elif command -v sudo >/dev/null 2>&1; then
@@ -33,13 +39,13 @@ run_root() {
   fi
 }
 
-# 1) Verify Alpine
+# 2) Verify Alpine
 if ! grep -qi "alpine" /etc/os-release 2>/dev/null; then
   echo "This script is intended for Alpine Linux." >&2
   exit 1
 fi
 
-# 2) Detect IPv4 on the target interface (used for A record + listen address)
+# 3) Detect IPv4 on the target interface (used for A record + listen address)
 A_IP=${A_IP:-}
 LISTEN_IPS=${LISTEN_IPS:-}
 IFACE_IP=$(ip -4 -o addr show dev "$ETH_IFACE" scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)
@@ -58,16 +64,16 @@ if [ -z "$LISTEN_IPS" ]; then
   LISTEN_IPS="127.0.0.1,$IFACE_IP"
 fi
 
-# 3) Install dnsmasq
+# 4) Install dnsmasq
 run_root apk update
 run_root apk add --no-cache dnsmasq
 
-# 4) Backup existing config if present
+# 5) Backup existing config if present
 if run_root test -f /etc/dnsmasq.conf; then
   run_root cp -a /etc/dnsmasq.conf "/etc/dnsmasq.conf.bak.$(date +%Y%m%d-%H%M%S)"
 fi
 
-# 5) Write new config (authoritative zone; AAAA -> NOERROR/NODATA)
+# 6) Write new config (authoritative zone; AAAA -> NOERROR/NODATA)
 cat <<EOF | run_root tee /etc/dnsmasq.conf >/dev/null
 # /etc/dnsmasq.conf (managed by script)
 no-resolv
@@ -89,11 +95,11 @@ log-queries
 log-facility=${LOGFILE}
 EOF
 
-# 6) Prepare log file
+# 7) Prepare log file
 run_root mkdir -p "$(dirname "$LOGFILE")"
 run_root install -m 0644 /dev/null "$LOGFILE"
 
-# 7) Enable and restart service
+# 8) Enable and restart service
 run_root rc-update add dnsmasq default >/dev/null 2>&1 || true
 run_root rc-service dnsmasq restart
 

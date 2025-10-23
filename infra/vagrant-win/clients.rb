@@ -75,6 +75,10 @@ EOF
         SHELL
 
         c.vm.provision "file",
+            source: "./dnsmasq-install-alpine.sh",
+            destination: "/tmp/dnsmasq-install-alpine.sh"
+
+        c.vm.provision "file",
             source: "./iperf3.init",
             destination: "/tmp/iperf3.init"
 
