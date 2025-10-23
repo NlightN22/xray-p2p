@@ -307,6 +307,28 @@ xray_prompt_yes_no() {
     done
 }
 
+xray_prompt_line() {
+    prompt="$1"
+    default_value="${2:-}"
+    response=""
+
+    if [ -t 0 ]; then
+        printf '%s' "$prompt" >&2
+        IFS= read -r response || response=""
+    elif [ -r /dev/tty ]; then
+        printf '%s' "$prompt" >&2
+        IFS= read -r response </dev/tty || response=""
+    else
+        xray_die "No interactive terminal available. Provide required values via arguments or environment variables."
+    fi
+
+    if [ -z "$response" ]; then
+        printf '%s' "$default_value"
+    else
+        printf '%s' "$response"
+    fi
+}
+
 xray_should_replace_file() {
     target="$1"
     force_var="${2:-XRAY_FORCE_CONFIG}"
