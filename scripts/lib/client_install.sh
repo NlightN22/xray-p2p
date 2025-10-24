@@ -10,6 +10,13 @@ XRAYP2P_SERVICE="/etc/init.d/xray-p2p"
 XRAYP2P_UCI_CONFIG="/etc/config/xray-p2p"
 CLIENT_INSTALLER_URL="https://gist.githubusercontent.com/NlightN22/d410a3f9dd674308999f13f3aeb558ff/raw/da2634081050deefd504504d5ecb86406381e366/install_xray_openwrt.sh"
 
+if ! xray_common_try_source \
+    "${XRAY_CLIENT_CONNECTION_LIB:-scripts/lib/client_connection.sh}" \
+    "scripts/lib/client_connection.sh" \
+    "lib/client_connection.sh"; then
+    xray_die "Unable to load client connection library."
+fi
+
 client_install_usage() {
     cat <<EOF
 Usage: ${SCRIPT_NAME:-client.sh}${CLIENT_INSTALL_USAGE_PREFIX:-} [options] [TROJAN_URL]
@@ -101,142 +108,18 @@ client_install_update_trojan_outbound() {
 client_install_update_outbounds_from_connection() {
     local file="$1"
     local url="$2"
-    local without_proto=""
-    local main_part=""
-    local query=""
-    local base_part=""
-    local password_part=""
-    local server_part=""
-    local host=""
-    local port=""
-    local remain=""
-    local pair=""
-    local key=""
-    local value=""
-    local network_type="tcp"
-    local security_type="tls"
-    local allow_insecure_value="true"
-    local server_name=""
-    local port_num=""
 
-    case "$url" in
-        trojan://*) ;;
-        *)
-            xray_die "Unsupported protocol in connection string. Expected trojan://"
-            ;;
-    esac
+    client_connection_parse "$url"
 
-    without_proto="${url#trojan://}"
-
-    main_part="$without_proto"
-    case "$main_part" in
-        *'#'*)
-            main_part="${main_part%%#*}"
-            ;;
-    esac
-
-    query=""
-    base_part="$main_part"
-    case "$main_part" in
-        *'?'*)
-            query="${main_part#*\?}"
-            base_part="${main_part%%\?*}"
-            ;;
-    esac
-
-    if [ "${base_part#*@}" = "$base_part" ]; then
-        xray_die "Connection string is missing password (expected password@host:port)"
-    fi
-
-    password_part="${base_part%%@*}"
-    server_part="${base_part#*@}"
-
-    if [ -z "$password_part" ]; then
-        xray_die "Password part of the connection string is empty"
-    fi
-
-    case "$server_part" in
-        \[*\]*)
-            host="${server_part%%]*}"
-            host="${host#[}"
-            remain="${server_part#*]}"
-            remain="${remain#*:}"
-            port="$remain"
-            ;;
-        *)
-            if [ "${server_part##*:}" = "$server_part" ]; then
-                xray_die "Connection string is missing port"
-            fi
-            port="${server_part##*:}"
-            host="${server_part%:*}"
-            ;;
-    esac
-
-    if [ -z "$host" ]; then
-        xray_die "Host portion of the connection string is empty"
-    fi
-
-    if [ -z "$port" ]; then
-        xray_die "Port portion of the connection string is empty"
-    fi
-
-    case "$port" in
-        ''|*[!0-9]*)
-            xray_die "Port must be numeric"
-            ;;
-    esac
-
-    port_num=$port
-    if [ "$port_num" -le 0 ] || [ "$port_num" -gt 65535 ]; then
-        xray_die "Port must be between 1 and 65535"
-    fi
-
-    server_name="$host"
-
-    remain="$query"
-    while [ -n "$remain" ]; do
-        case "$remain" in
-            *'&'*)
-                pair="${remain%%&*}"
-                remain="${remain#*&}"
-                ;;
-            *)
-                pair="$remain"
-                remain=""
-                ;;
-        esac
-        [ -z "$pair" ] && continue
-        key="${pair%%=*}"
-        value="${pair#*=}"
-        if [ "$key" = "$pair" ]; then
-            value=""
-        fi
-        case "$key" in
-            type|network)
-                [ -n "$value" ] && network_type="$value"
-                ;;
-            security)
-                [ -n "$value" ] && security_type="$value"
-                ;;
-            allowInsecure)
-                case "$value" in
-                    1|true|TRUE|yes|on|enable|enabled)
-                        allow_insecure_value="true"
-                        ;;
-                    0|false|FALSE|no|off|disable|disabled)
-                        allow_insecure_value="false"
-                        ;;
-                esac
-                ;;
-            sni|peer)
-                if [ -n "$value" ]; then
-                    server_name="$value"
-                fi
-                ;;
-        esac
-    done
-
-    if ! client_install_update_trojan_outbound "$file" "$password_part" "$host" "$port_num" "$server_name" "$network_type" "$security_type" "$allow_insecure_value"; then
+    if ! client_install_update_trojan_outbound \
+        "$file" \
+        "$CLIENT_CONNECTION_PASSWORD" \
+        "$CLIENT_CONNECTION_HOST" \
+        "$CLIENT_CONNECTION_PORT" \
+        "$CLIENT_CONNECTION_SERVER_NAME" \
+        "$CLIENT_CONNECTION_NETWORK" \
+        "$CLIENT_CONNECTION_SECURITY" \
+        "$CLIENT_CONNECTION_ALLOW_INSECURE"; then
         xray_die "Failed to update $file with provided connection settings"
     fi
 
