@@ -520,6 +520,9 @@ if [ -n "$skip_port_check_env" ]; then
             first(.inbounds[]? | select((.protocol // "") == "dokodemo-door") | .port) // empty
         ' /etc/xray-p2p/inbounds.json 2>/dev/null || true)
     fi
+    if [ -n "$redirect_port" ]; then
+        redirect_port=$(printf '%s' "$redirect_port" | tr -d ' \t\r\n')
+    fi
     client_user_invoke() {
         set -- add "$trojan_url"
         if [ -n "$SERVER_LAN" ]; then
