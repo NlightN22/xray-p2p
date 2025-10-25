@@ -8,8 +8,12 @@ usage() {
 Usage:
   $SCRIPT_NAME                 List configured client outbounds.
   $SCRIPT_NAME list            Same as default list action.
-  $SCRIPT_NAME add TROJAN_URL [SUBNET]
+  $SCRIPT_NAME add TROJAN_URL [SUBNET] [PORT]
+      TROJAN_URL  Trojan connection string (trojan://...). Tag is derived from host:port.
+      SUBNET      Optional CIDR (e.g. 10.0.0.0/24) to route through the new outbound.
+      PORT        Optional dokodemo-door port for redirect.sh; auto-detected when omitted.
   $SCRIPT_NAME remove TAG
+      TAG         Outbound tag to remove (e.g. host-port constructed during add).
 
 Environment:
   XRAY_CONFIG_DIR       Override XRAY configuration directory (default: /etc/xray-p2p).
@@ -169,7 +173,19 @@ client_user_add() {
 
     local connection="$1"
     shift
-    local subnet="${1:-}"
+    local subnet=""
+    local redirect_port=""
+    if [ "$#" -gt 0 ]; then
+        subnet="$1"
+        shift
+    fi
+    if [ "$#" -gt 0 ]; then
+        redirect_port="$1"
+        shift
+    fi
+    if [ "$#" -gt 0 ]; then
+        xray_die "Too many arguments for add command."
+    fi
 
     client_user_prepare_config
     client_user_require_jq
@@ -243,6 +259,14 @@ client_user_add() {
             xray_die "Routing configuration not found: $CLIENT_USER_ROUTING_FILE"
         fi
 
+        if [ -n "$redirect_port" ]; then
+            case "$redirect_port" in
+                ''|*[!0-9]*)
+                    xray_die "Redirect port must be a positive integer"
+                    ;;
+            esac
+        fi
+
         if jq -e \
             --arg tag "$tag" \
             --arg subnet "$subnet" \
@@ -274,7 +298,11 @@ client_user_add() {
         mv "$tmp_route" "$CLIENT_USER_ROUTING_FILE"
         xray_log "Added routing rule for subnet $subnet -> $tag"
 
-        client_user_run_redirect add "$subnet"
+        if [ -n "$redirect_port" ]; then
+            client_user_run_redirect add "$subnet" "$redirect_port"
+        else
+            client_user_run_redirect add "$subnet"
+        fi
     fi
 }
 

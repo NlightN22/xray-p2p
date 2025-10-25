@@ -510,9 +510,29 @@ if [ -n "$skip_port_check_env" ]; then
     else
         printf '[local] Outbound registry missing; continuing with client_user add.\n' >&2
     fi
-    if ! curl -fsSL "$BASE_URL/scripts/client_user.sh" | sh -s -- add "$trojan_url" "$SERVER_LAN"; then
-        printf '[local] Error: unable to add outbound via client_user.sh. Falling back to client.sh install with XRAY_SKIP_PORT_CHECK=1.\n' >&2
-        curl -fsSL "$BASE_URL/scripts/client.sh" | env XRAY_SKIP_PORT_CHECK=1 sh -s -- install "$trojan_url"
+    redirect_port=""
+    redirect_entry=$(redirect_entry_path_for_subnet "$SERVER_LAN")
+    if [ -f "$redirect_entry" ]; then
+        redirect_port=$(sed -n 's/^PORT="\(.*\)"/\1/p' "$redirect_entry" 2>/dev/null | head -n 1 || true)
+    fi
+    if [ -z "$redirect_port" ] && [ -f "/etc/xray-p2p/inbounds.json" ] && command -v jq >/dev/null 2>&1; then
+        redirect_port=$(jq -r '
+            first(.inbounds[]? | select((.protocol // "") == "dokodemo-door") | .port) // empty
+        ' /etc/xray-p2p/inbounds.json 2>/dev/null || true)
+    fi
+    client_user_invoke() {
+        set -- add "$trojan_url"
+        if [ -n "$SERVER_LAN" ]; then
+            set -- "$@" "$SERVER_LAN"
+            if [ -n "$redirect_port" ]; then
+                set -- "$@" "$redirect_port"
+            fi
+        fi
+        curl -fsSL "$BASE_URL/scripts/client_user.sh" | sh -s -- "$@"
+    }
+    if ! client_user_invoke; then
+        printf '[local] Error: unable to add outbound via client_user.sh; aborting to preserve existing configuration.\n' >&2
+        exit 1
     fi
 else
     printf '[local] Running client.sh install...\n' >&2
