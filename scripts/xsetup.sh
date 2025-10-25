@@ -82,6 +82,41 @@ redirect_entry_path_for_subnet() {
     printf '/etc/nftables.d/xray-transparent.d/xray_redirect_%s.entry' "$subnet_clean"
 }
 
+CLIENT_CONN_TMP_FILES=""
+
+load_client_connection_lib() {
+    if command -v client_connection_tag_from_url >/dev/null 2>&1; then
+        return 0
+    fi
+
+    for candidate in \
+        "scripts/lib/client_connection.sh" \
+        "./scripts/lib/client_connection.sh" \
+        "lib/client_connection.sh"; do
+        if [ -r "$candidate" ]; then
+            # shellcheck disable=SC1090
+            . "$candidate"
+            return 0
+        fi
+    done
+
+    tmp="$(mktemp)" || {
+        printf 'Error: unable to create temporary file for client connection library.\n' >&2
+        return 1
+    }
+
+    if curl -fsSL "${BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}/scripts/lib/client_connection.sh" -o "$tmp"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        CLIENT_CONN_TMP_FILES="${CLIENT_CONN_TMP_FILES} $tmp"
+        return 0
+    fi
+
+    printf 'Error: unable to download client connection library.\n' >&2
+    rm -f "$tmp"
+    return 1
+}
+
 SSH_USER=${XRAY_SERVER_SSH_USER:-root}
 SSH_PORT=${XRAY_SERVER_SSH_PORT:-22}
 SERVER_PORT=${XRAY_SERVER_PORT:-8443}
@@ -234,6 +269,9 @@ STATUS_FILE="$(mktemp)"
 cleanup() {
     [ -f "$REMOTE_LOG" ] && rm -f "$REMOTE_LOG"
     [ -f "$STATUS_FILE" ] && rm -f "$STATUS_FILE"
+    for tmp in $CLIENT_CONN_TMP_FILES; do
+        [ -n "$tmp" ] && [ -f "$tmp" ] && rm -f "$tmp"
+    done
 }
 trap cleanup EXIT INT TERM
 
@@ -450,8 +488,36 @@ else
     opkg install jq
 fi
 
-printf '[local] Running client.sh install...\n' >&2
-curl -fsSL "$BASE_URL/scripts/client.sh" | sh -s -- install "$trojan_url"
+skip_port_check_env=""
+if [ -d "/etc/xray-p2p" ] || [ -f "/etc/init.d/xray-p2p" ]; then
+    skip_port_check_env="1"
+    printf '[local] Existing xray-p2p assets detected; switching to incremental tunnel management.\n' >&2
+fi
+if [ -n "$skip_port_check_env" ]; then
+    if ! load_client_connection_lib; then
+        printf '[local] Error: unable to load client connection library.\n' >&2
+        exit 1
+    fi
+    client_tag="$(client_connection_tag_from_url "$trojan_url")" || exit 1
+    client_outbounds="/etc/xray-p2p/outbounds.json"
+    if [ -f "$client_outbounds" ] && command -v jq >/dev/null 2>&1; then
+        if jq -e --arg tag "$client_tag" '(.outbounds // []) | any(.[]?; (.tag // "") == $tag)' "$client_outbounds" >/dev/null 2>&1; then
+            printf '[local] Existing outbound %s detected; refreshing via client_user remove/add.\n' "$client_tag" >&2
+            curl -fsSL "$BASE_URL/scripts/client_user.sh" | sh -s -- remove "$client_tag" || true
+        else
+            printf '[local] Creating new outbound %s via client_user add.\n' "$client_tag" >&2
+        fi
+    else
+        printf '[local] Outbound registry missing; continuing with client_user add.\n' >&2
+    fi
+    if ! curl -fsSL "$BASE_URL/scripts/client_user.sh" | sh -s -- add "$trojan_url" "$SERVER_LAN"; then
+        printf '[local] Error: unable to add outbound via client_user.sh. Falling back to client.sh install with XRAY_SKIP_PORT_CHECK=1.\n' >&2
+        curl -fsSL "$BASE_URL/scripts/client.sh" | env XRAY_SKIP_PORT_CHECK=1 sh -s -- install "$trojan_url"
+    fi
+else
+    printf '[local] Running client.sh install...\n' >&2
+    curl -fsSL "$BASE_URL/scripts/client.sh" | sh -s -- install "$trojan_url"
+fi
 
 server_redirect_entry=$(redirect_entry_path_for_subnet "$SERVER_LAN")
 if [ -f "$server_redirect_entry" ]; then

@@ -3,6 +3,13 @@
 [ "${CLIENT_CONNECTION_LIB_LOADED:-0}" = "1" ] && return 0
 CLIENT_CONNECTION_LIB_LOADED=1
 
+if ! command -v xray_die >/dev/null 2>&1; then
+    xray_die() {
+        printf 'Error: %s\n' "$*" >&2
+        exit 1
+    }
+fi
+
 client_connection_reset() {
     CLIENT_CONNECTION_URL=""
     CLIENT_CONNECTION_PASSWORD=""
@@ -200,4 +207,9 @@ client_connection_parse() {
     CLIENT_CONNECTION_TAG=$(client_connection_generate_tag "$host" "$port_num")
 
     return 0
+}
+
+client_connection_tag_from_url() {
+    client_connection_parse "$1"
+    printf '%s' "$CLIENT_CONNECTION_TAG"
 }
