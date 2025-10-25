@@ -20,22 +20,23 @@ client_connection_reset
 
 client_connection_sanitize_tag() {
     local source="$1"
-    local fallback="$2"
     local sanitized=""
 
     sanitized=$(printf '%s' "$source" | tr '[:upper:]' '[:lower:]')
     sanitized=$(printf '%s' "$sanitized" | sed 's/[^0-9a-z._-]/-/g; s/--*/-/g; s/^-*//; s/-*$//')
 
-    if [ -z "$sanitized" ] && [ -n "$fallback" ]; then
-        sanitized=$(printf '%s' "$fallback" | tr '[:upper:]' '[:lower:]')
-        sanitized=$(printf '%s' "$sanitized" | sed 's/[^0-9a-z._-]/-/g; s/--*/-/g; s/^-*//; s/-*$//')
-    fi
-
-    if [ -z "$sanitized" ]; then
-        sanitized="proxy"
-    fi
-
     printf '%s' "$sanitized"
+}
+
+client_connection_generate_tag() {
+    local host="$1"
+    local port="$2"
+    local base
+
+    base=$(client_connection_sanitize_tag "$host")
+    [ -n "$base" ] || base="proxy"
+
+    printf '%s-%s' "$base" "$port"
 }
 
 client_connection_parse() {
@@ -196,7 +197,7 @@ client_connection_parse() {
     CLIENT_CONNECTION_SECURITY="$security_type"
     CLIENT_CONNECTION_ALLOW_INSECURE="$allow_insecure_value"
     CLIENT_CONNECTION_LABEL="$fragment"
-    CLIENT_CONNECTION_TAG=$(client_connection_sanitize_tag "${fragment:-$server_name}" "$server_name")
+    CLIENT_CONNECTION_TAG=$(client_connection_generate_tag "$host" "$port_num")
 
     return 0
 }

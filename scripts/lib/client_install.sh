@@ -61,6 +61,7 @@ client_install_update_trojan_outbound() {
     local network="$6"
     local security="$7"
     local allow_insecure="$8"
+    local tag="${9:-}"
     local tmp_file=""
 
     case "$allow_insecure" in
@@ -78,6 +79,7 @@ client_install_update_trojan_outbound() {
         --arg serverName "$server_name" \
         --arg network "$network" \
         --arg security "$security" \
+        --arg tag "${tag:-}" \
         --argjson port "$port" \
         --argjson allowInsecure "$allow_insecure" \
         '
@@ -94,6 +96,7 @@ client_install_update_trojan_outbound() {
                 | (.streamSettings.tlsSettings //= {})
                 | (.streamSettings.tlsSettings.serverName = $serverName)
                 | (.streamSettings.tlsSettings.allowInsecure = $allowInsecure)
+                | (.tag = $tag)
             else .
             end
         ))
@@ -119,7 +122,8 @@ client_install_update_outbounds_from_connection() {
         "$CLIENT_CONNECTION_SERVER_NAME" \
         "$CLIENT_CONNECTION_NETWORK" \
         "$CLIENT_CONNECTION_SECURITY" \
-        "$CLIENT_CONNECTION_ALLOW_INSECURE"; then
+        "$CLIENT_CONNECTION_ALLOW_INSECURE" \
+        "$CLIENT_CONNECTION_TAG"; then
         xray_die "Failed to update $file with provided connection settings"
     fi
 
