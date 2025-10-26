@@ -35,7 +35,8 @@ reverse_resolve_tunnel_id() {
     local sanitised=""
 
     if [ -n "$override" ]; then
-        sanitised=$(reverse_normalize_component "$override")
+        sanitised=$(printf '%s' "$override" | tr '[:upper:]' '[:lower:]')
+        sanitised=$(printf '%s' "$sanitised" | sed 's/[^0-9a-z-]/-/g; s/^-//; s/-$//')
         reverse_validate_component "$sanitised" "$override"
         printf '%s' "$sanitised"
         return 0
