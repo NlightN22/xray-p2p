@@ -8,18 +8,19 @@ usage() {
 Usage:
   $SCRIPT_NAME                 List recorded client reverse tunnels.
   $SCRIPT_NAME list            Same as default list action.
-  $SCRIPT_NAME add [USERNAME]
-  $SCRIPT_NAME remove USERNAME
+  $SCRIPT_NAME add [--subnet CIDR] [--server HOST] [--id SLUG]
+  $SCRIPT_NAME remove [--id SLUG] [--server HOST]
 
 Environment:
-  XRAY_REVERSE_USER           Default username when omitted.
-  XRAY_REVERSE_SUFFIX         Domain/tag suffix (default: .rev).
+  XRAY_REVERSE_SUFFIX          Domain/tag suffix (default: .rev).
+  XRAY_REVERSE_TUNNEL_ID       Override tunnel identifier slug (subnet--server).
+  XRAY_REVERSE_SERVER_ID       External server identifier used for slug defaults.
   XRAY_CONFIG_DIR             XRAY configuration directory (default: /etc/xray-p2p).
-  XRAY_ROUTING_FILE           Routing file path (default: \$XRAY_CONFIG_DIR/routing.json).
+  XRAY_ROUTING_FILE           Routing file path (default: $XRAY_CONFIG_DIR/routing.json).
   XRAY_ROUTING_TEMPLATE       Local routing template (default: config_templates/client/routing.json).
   XRAY_ROUTING_TEMPLATE_REMOTE Remote template location relative to repo root.
-  XRAY_CLIENT_REVERSE_DIR     Directory for metadata (default: \$XRAY_CONFIG_DIR/config).
-  XRAY_CLIENT_REVERSE_FILE    Metadata file path (default: \$XRAY_CLIENT_REVERSE_DIR/client_reverse.json).
+  XRAY_CLIENT_REVERSE_DIR     Directory for metadata (default: $XRAY_CONFIG_DIR/config).
+  XRAY_CLIENT_REVERSE_FILE    Metadata file path (default: $XRAY_CLIENT_REVERSE_DIR/client_reverse.json).
 EOF
     exit "${1:-0}"
 }
@@ -124,59 +125,182 @@ load_repo_lib "$CLIENT_REVERSE_INPUTS_LOCAL" "$CLIENT_REVERSE_INPUTS_REMOTE"
 load_repo_lib "$CLIENT_REVERSE_ROUTING_LOCAL" "$CLIENT_REVERSE_ROUTING_REMOTE"
 load_repo_lib "$CLIENT_REVERSE_STORE_LOCAL" "$CLIENT_REVERSE_STORE_REMOTE"
 
-CONFIG_DIR="${XRAY_CONFIG_DIR:-/etc/xray-p2p}"
-ROUTING_FILE="${XRAY_ROUTING_FILE:-$CONFIG_DIR/routing.json}"
+XRAY_CONFIG_DIR=${XRAY_CONFIG_DIR:-/etc/xray-p2p}
+ROUTING_FILE=${XRAY_ROUTING_FILE:-$XRAY_CONFIG_DIR/routing.json}
+ROUTING_TEMPLATE_LOCAL=${XRAY_ROUTING_TEMPLATE:-config_templates/client/routing.json}
+ROUTING_TEMPLATE_REMOTE=${XRAY_ROUTING_TEMPLATE_REMOTE:-scripts/config_templates/client/routing.json}
+CLIENT_REVERSE_DIR=${XRAY_CLIENT_REVERSE_DIR:-$XRAY_CONFIG_DIR/config}
+CLIENT_REVERSE_FILE=${XRAY_CLIENT_REVERSE_FILE:-$CLIENT_REVERSE_DIR/client_reverse.json}
 
-DEFAULT_ROUTING_TEMPLATE_REMOTE="config_templates/client/routing.json"
-ROUTING_TEMPLATE_REMOTE="${XRAY_ROUTING_TEMPLATE_REMOTE:-$DEFAULT_ROUTING_TEMPLATE_REMOTE}"
-ROUTING_TEMPLATE_LOCAL="${XRAY_ROUTING_TEMPLATE:-$ROUTING_TEMPLATE_REMOTE}"
+client_reverse_matches() {
+    server_filter="$1"
+    jq -r \
+        --arg server "$server_filter" \
+        '(. // [])
+        | map(select($server == "" or (.server_id // "") == $server))
+        | .[]
+        | [(.tunnel_id // ""), (.server_id // ""), (.domain // ""), (.created_at // "" )]
+        | @tsv' "$CLIENT_REVERSE_FILE"
+}
 
-CLIENT_REVERSE_DIR="${XRAY_CLIENT_REVERSE_DIR:-$CONFIG_DIR/config}"
-CLIENT_REVERSE_FILE="${XRAY_CLIENT_REVERSE_FILE:-$CLIENT_REVERSE_DIR/client_reverse.json}"
+client_reverse_choose_tunnel() {
+    server_filter="$1"
 
-xray_require_cmd jq
-
-client_reverse_ensure_routing_file "$ROUTING_FILE" "$ROUTING_TEMPLATE_LOCAL" "$ROUTING_TEMPLATE_REMOTE"
-
-cmd_list() {
     if [ ! -f "$CLIENT_REVERSE_FILE" ]; then
-        printf 'No client reverse tunnels recorded.\n'
-        return
+        xray_die "Client reverse metadata file not found: $CLIENT_REVERSE_FILE"
     fi
 
     client_reverse_store_require "$CLIENT_REVERSE_FILE"
 
-    if [ "$(jq 'length' "$CLIENT_REVERSE_FILE")" -eq 0 ]; then
-        printf 'No client reverse tunnels recorded.\n'
+    matches=$(client_reverse_matches "$server_filter")
+    if [ -z "$matches" ]; then
+        xray_die "No client reverse tunnels match the requested filters."
+    fi
+
+    tmp="$(mktemp 2>/dev/null)" || xray_die "Unable to create temporary file"
+    printf '%s\n' "$matches" >"$tmp"
+    count=$(wc -l <"$tmp" | tr -d ' \t\r')
+    if [ "$count" -eq 0 ]; then
+        rm -f "$tmp"
+        xray_die "No client reverse tunnels match the requested filters."
+    fi
+
+    if [ "$count" -eq 1 ]; then
+        IFS='\t' read -r tunnel_id _rest <"$tmp"
+        rm -f "$tmp"
+        printf '%s' "$tunnel_id"
         return
     fi
 
+    if [ ! -t 0 ] && [ ! -r /dev/tty ]; then
+        rm -f "$tmp"
+        xray_die "Multiple client reverse tunnels match; specify --id or --server to disambiguate."
+    fi
+
+    printf 'Select client reverse tunnel:\n' >&2
+    i=1
+    while IFS='\t' read -r tunnel_id match_server match_domain match_created; do
+        [ -n "$match_server" ] || match_server="-"
+        [ -n "$match_domain" ] || match_domain="-"
+        [ -n "$match_created" ] || match_created="-"
+        printf '  [%d] %s (server: %s, domain: %s, created: %s)\n' "$i" "$tunnel_id" "$match_server" "$match_domain" "$match_created" >&2
+        i=$((i + 1))
+    done <"$tmp"
+
+    read_fd=0
+    if [ -r /dev/tty ]; then
+        exec 7</dev/tty
+        read_fd=7
+    fi
+
+    while :; do
+        printf 'Enter selection [1-%s]: ' "$count" >&2
+        if [ "$read_fd" -eq 7 ]; then
+            IFS= read -r choice <&7 || choice=""
+        else
+            IFS= read -r choice || choice=""
+        fi
+        case "$choice" in
+            *[!0-9]*|"")
+                printf 'Invalid selection.\n' >&2
+                ;;
+            *)
+                if [ "$choice" -ge 1 ] && [ "$choice" -le "$count" ]; then
+                    selected=$(sed -n "${choice}p" "$tmp")
+                    IFS='\t' read -r tunnel_id _rest <<EOF
+$selected
+EOF
+                    [ "$read_fd" -eq 7 ] && exec 7<&-
+                    rm -f "$tmp"
+                    printf '%s' "$tunnel_id"
+                    return
+                fi
+                printf 'Selection out of range.\n' >&2
+                ;;
+        esac
+    done
+}
+
+client_reverse_fetch_entry() {
+    key="$1"
+    jq -r --arg key "$key" '
+        (. // [])
+        | map(select((.tunnel_id // "") == $key))
+        | .[0]
+        | [(.tunnel_id // ""), (.server_id // ""), (.domain // "")]
+        | @tsv
+    ' "$CLIENT_REVERSE_FILE"
+}
+
+cmd_list() {
+    if [ ! -f "$CLIENT_REVERSE_FILE" ]; then
+        printf 'No client reverse tunnels recorded.\n'
+        return 0
+    fi
+    client_reverse_store_require "$CLIENT_REVERSE_FILE"
     client_reverse_store_print_table "$CLIENT_REVERSE_FILE"
 }
 
 cmd_add() {
-    username_arg=""
+    subnet_arg=""
+    server_arg=""
+    tunnel_override=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
             -h|--help)
                 usage 0
                 ;;
+            --subnet)
+                if [ "$#" -lt 2 ]; then
+                    printf 'Option %s requires an argument.\n' "$1" >&2
+                    usage 1
+                fi
+                subnet_arg=$(client_reverse_trim_spaces "$2")
+                if [ -n "$subnet_arg" ] && ! validate_subnet "$subnet_arg"; then
+                    xray_die "Invalid subnet: $subnet_arg"
+                fi
+                shift
+                ;;
+            --subnet=*)
+                subnet_arg=$(client_reverse_trim_spaces "${1#*=}")
+                if [ -n "$subnet_arg" ] && ! validate_subnet "$subnet_arg"; then
+                    xray_die "Invalid subnet: $subnet_arg"
+                fi
+                ;;
+            --server)
+                if [ "$#" -lt 2 ]; then
+                    printf 'Option %s requires an argument.\n' "$1" >&2
+                    usage 1
+                fi
+                server_arg=$(client_reverse_trim_spaces "$2")
+                shift
+                ;;
+            --server=*)
+                server_arg=$(client_reverse_trim_spaces "${1#*=}")
+                ;;
+            --id)
+                if [ "$#" -lt 2 ]; then
+                    printf 'Option %s requires an argument.\n' "$1" >&2
+                    usage 1
+                fi
+                tunnel_override=$(client_reverse_trim_spaces "$2")
+                shift
+                ;;
+            --id=*)
+                tunnel_override=$(client_reverse_trim_spaces "${1#*=}")
+                ;;
             --)
                 shift
                 break
                 ;;
-            -*)
+            -* )
                 printf 'Unknown option: %s\n' "$1" >&2
                 usage 1
                 ;;
             *)
-                if [ -z "$username_arg" ]; then
-                    username_arg="$1"
-                else
-                    printf 'Unexpected argument: %s\n' "$1" >&2
-                    usage 1
-                fi
+                printf 'Unexpected argument: %s\n' "$1" >&2
+                usage 1
                 ;;
         esac
         shift
@@ -187,52 +311,121 @@ cmd_add() {
         usage 1
     fi
 
-    USERNAME=$(client_reverse_read_username "$username_arg")
-    client_reverse_validate_username "$USERNAME"
+    server_id=$(client_reverse_read_server "$server_arg")
+    client_reverse_validate_server "$server_id"
+
+    if [ -n "$tunnel_override" ]; then
+        tunnel_id=$(client_reverse_sanitize_component "$tunnel_override")
+    else
+        tunnel_id=$(client_reverse_resolve_tunnel_id "$subnet_arg" "$server_id")
+    fi
+
+    if [ -z "$tunnel_id" ]; then
+        xray_die 'Unable to derive tunnel identifier.'
+    fi
 
     suffix="${XRAY_REVERSE_SUFFIX:-.rev}"
-    domain="$USERNAME$suffix"
+    domain="$tunnel_id$suffix"
     tag="$domain"
 
-    if [ -f "$CLIENT_REVERSE_FILE" ] && client_reverse_store_has "$CLIENT_REVERSE_FILE" "$USERNAME"; then
-        xray_log "Client reverse '$USERNAME' already configured; skipping."
+    if [ -f "$CLIENT_REVERSE_FILE" ] && client_reverse_store_has "$CLIENT_REVERSE_FILE" "$tunnel_id"; then
+        xray_log "Client reverse '$tunnel_id' already configured; skipping."
         return 0
     fi
 
-    client_reverse_update_routing "$ROUTING_FILE" "$USERNAME" "$suffix"
-    client_reverse_store_add "$CLIENT_REVERSE_FILE" "$CLIENT_REVERSE_DIR" "$USERNAME" "$domain" "$tag"
+    client_reverse_ensure_routing_file "$ROUTING_FILE" "$ROUTING_TEMPLATE_LOCAL" "$ROUTING_TEMPLATE_REMOTE"
+    client_reverse_update_routing "$ROUTING_FILE" "$tunnel_id" "$suffix"
+    client_reverse_store_add "$CLIENT_REVERSE_FILE" "$CLIENT_REVERSE_DIR" "$tunnel_id" "$domain" "$tag" "$server_id"
 
     xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p" ""
-    xray_log "Client reverse '$USERNAME' recorded with domain $domain."
+    xray_log "Client reverse '$tunnel_id' recorded (server $server_id, domain $domain)."
 }
 
 cmd_remove() {
-    if [ "$#" -ne 1 ]; then
-        printf 'remove command expects exactly one USERNAME argument.\n' >&2
+    id_arg=""
+    server_arg=""
+
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                usage 0
+                ;;
+            --id)
+                if [ "$#" -lt 2 ]; then
+                    printf 'Option %s requires an argument.\n' "$1" >&2
+                    usage 1
+                fi
+                id_arg=$(client_reverse_trim_spaces "$2")
+                shift
+                ;;
+            --id=*)
+                id_arg=$(client_reverse_trim_spaces "${1#*=}")
+                ;;
+            --server)
+                if [ "$#" -lt 2 ]; then
+                    printf 'Option %s requires an argument.\n' "$1" >&2
+                    usage 1
+                fi
+                server_arg=$(client_reverse_trim_spaces "$2")
+                shift
+                ;;
+            --server=*)
+                server_arg=$(client_reverse_trim_spaces "${1#*=}")
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -* )
+                printf 'Unknown option: %s\n' "$1" >&2
+                usage 1
+                ;;
+            *)
+                printf 'Unexpected argument: %s\n' "$1" >&2
+                usage 1
+                ;;
+        esac
+        shift
+    done
+
+    if [ "$#" -gt 0 ]; then
+        printf 'Unexpected argument: %s\n' "$1" >&2
         usage 1
     fi
 
-    USERNAME=$(client_reverse_trim_spaces "$1" 2>/dev/null || printf '%s' "$1")
-    USERNAME=$(client_reverse_trim_spaces "$USERNAME")
-    if [ -z "$USERNAME" ]; then
-        xray_die "Username cannot be empty."
+    if [ -n "$server_arg" ]; then
+        client_reverse_validate_server "$server_arg"
     fi
 
     client_reverse_store_require "$CLIENT_REVERSE_FILE"
 
-    if ! client_reverse_store_has "$CLIENT_REVERSE_FILE" "$USERNAME"; then
-        xray_die "Client reverse '$USERNAME' not found in $CLIENT_REVERSE_FILE"
+    if [ -n "$id_arg" ]; then
+        tunnel_id=$(client_reverse_sanitize_component "$id_arg")
+        if [ -z "$tunnel_id" ]; then
+            xray_die 'Invalid tunnel identifier specified.'
+        fi
+        if ! client_reverse_store_has "$CLIENT_REVERSE_FILE" "$tunnel_id"; then
+            xray_die "Client reverse '$tunnel_id' not found in $CLIENT_REVERSE_FILE"
+        fi
+    else
+        tunnel_id=$(client_reverse_choose_tunnel "$server_arg")
     fi
 
-    suffix="${XRAY_REVERSE_SUFFIX:-.rev}"
-    domain="$USERNAME$suffix"
-    tag="$domain"
+    entry=$(client_reverse_fetch_entry "$tunnel_id")
+    if [ -z "$entry" ]; then
+        xray_die "Client reverse '$tunnel_id' not found in $CLIENT_REVERSE_FILE"
+    fi
 
-    client_reverse_store_remove "$CLIENT_REVERSE_FILE" "$USERNAME"
-    client_reverse_remove_routing "$ROUTING_FILE" "$USERNAME" "$suffix"
+    IFS='\t' read -r entry_id entry_server entry_domain <<EOF
+$entry
+EOF
+
+    suffix="${XRAY_REVERSE_SUFFIX:-.rev}"
+    client_reverse_store_remove "$CLIENT_REVERSE_FILE" "$tunnel_id"
+    client_reverse_remove_routing "$ROUTING_FILE" "$tunnel_id" "$suffix"
 
     xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p" ""
-    xray_log "Client reverse '$USERNAME' (domain $domain) removed."
+    xray_log "Client reverse '$entry_id' removed (server ${entry_server:-"-"}, domain ${entry_domain:-"-"})."
 }
 
 main() {

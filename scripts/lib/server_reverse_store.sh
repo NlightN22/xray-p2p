@@ -42,24 +42,25 @@ server_reverse_store_now_iso() {
 
 server_reverse_store_has() {
     store_file="$1"
-    username="$2"
+    key="$2"
 
-    jq -e --arg username "$username" '
-        any(.[]?; (.username // "") == $username)
+    jq -e --arg key "$key" '
+        any(.[]?; (.tunnel_id // "") == $key)
     ' "$store_file" >/dev/null 2>&1
 }
 
 server_reverse_store_add() {
     store_file="$1"
     store_dir="$2"
-    username="$3"
+    tunnel_id="$3"
     domain="$4"
     tag="$5"
     subnet_json="$6"
+    server_id="$7"
 
     server_reverse_store_ensure "$store_file" "$store_dir"
 
-    if server_reverse_store_has "$store_file" "$username"; then
+    if server_reverse_store_has "$store_file" "$tunnel_id"; then
         return 0
     fi
 
@@ -69,16 +70,18 @@ server_reverse_store_add() {
         xray_die "Unable to create temporary file"
     fi
     if ! jq \
-        --arg username "$username" \
+        --arg tunnel_id "$tunnel_id" \
         --arg domain "$domain" \
         --arg tag "$tag" \
         --arg created_at "$created_at" \
+        --arg server_id "$server_id" \
         --argjson subnets "$subnet_json" \
         '
         (. // []) + [{
-            username: $username,
+            tunnel_id: $tunnel_id,
             domain: $domain,
             tag: $tag,
+            server_id: $server_id,
             subnets: $subnets,
             created_at: $created_at,
             updated_at: $created_at,
@@ -95,18 +98,18 @@ server_reverse_store_add() {
 
 server_reverse_store_remove() {
     store_file="$1"
-    username="$2"
+    key="$2"
 
     tmp="$(mktemp 2>/dev/null)"
     if [ -z "$tmp" ]; then
         xray_die "Unable to create temporary file"
     fi
 
-    if ! jq --arg username "$username" '
-        ( . // [] ) | [ .[] | select((.username // "") != $username) ]
+    if ! jq --arg key "$key" '
+        ( . // [] ) | [ .[] | select((.tunnel_id // "") != $key) ]
     ' "$store_file" >"$tmp"; then
         rm -f "$tmp"
-        xray_die "Failed to update $store_file while removing $username"
+        xray_die "Failed to update $store_file while removing $key"
     fi
 
     chmod 0600 "$tmp" 2>/dev/null || true
@@ -117,8 +120,8 @@ server_reverse_store_print_table() {
     store_file="$1"
 
     output=$(jq -r '
-        (["username","domain","subnets","created_at"] | @tsv),
-        (.[] | [(.username // "-"), (.domain // "-"), ((.subnets // []) | join(",")), (.created_at // "-")] | @tsv)
+        (["tunnel_id","domain","server_id","subnets","created_at"] | @tsv),
+        (.[] | [(.tunnel_id // "-"), (.domain // "-"), (.server_id // "-"), ((.subnets // []) | join(",")), (.created_at // "-")] | @tsv)
     ' "$store_file")
 
     if command -v column >/dev/null 2>&1; then

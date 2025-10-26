@@ -107,58 +107,86 @@ server_reverse_subnet_json() {
     fi
 }
 
-server_reverse_run_user_list() {
-    xray_log "Existing XRAY users (user_list.sh, email password status):"
-    if ! xray_run_repo_script optional "lib/user_list.sh" "scripts/lib/user_list.sh"; then
-        xray_log "Unable to execute user_list.sh; continuing without user listing."
+server_reverse_subnet_primary() {
+    if [ -z "$SERVER_REVERSE_SUBNETS" ]; then
+        return 1
     fi
+
+    printf '%s\n' "$SERVER_REVERSE_SUBNETS" | sed -n '1p'
 }
 
-server_reverse_read_username() {
+server_reverse_read_server() {
     supplied="$1"
     if [ -n "$supplied" ]; then
         printf '%s' "$supplied"
         return
     fi
 
-    if [ -n "${XRAY_REVERSE_USER:-}" ]; then
-        printf '%s' "$XRAY_REVERSE_USER"
+    if [ -n "${XRAY_REVERSE_SERVER_ID:-}" ]; then
+        printf '%s' "$XRAY_REVERSE_SERVER_ID"
         return
     fi
 
-    read_fd=0
     if [ ! -t 0 ]; then
         if [ -r /dev/tty ]; then
-            exec 3</dev/tty
-            read_fd=3
+            exec 5</dev/tty
+            read_fd=5
         else
-            xray_die "Username argument required; no interactive terminal available"
+            xray_die "Server identifier argument required; no interactive terminal available"
         fi
+    else
+        read_fd=0
     fi
 
     while :; do
-        printf 'Enter XRAY username: ' >&2
-        if [ "$read_fd" -eq 3 ]; then
-            IFS= read -r input <&3 || input=""
+        printf 'Enter external server identifier: ' >&2
+        if [ "${read_fd:-0}" -eq 5 ]; then
+            IFS= read -r input <&5 || input=""
         else
             IFS= read -r input || input=""
         fi
-        if [ -n "$input" ]; then
-            if [ "$read_fd" -eq 3 ]; then
-                exec 3<&-
+        trimmed=$(server_reverse_trim_spaces "$input")
+        if [ -n "$trimmed" ]; then
+            if [ "${read_fd:-0}" -eq 5 ]; then
+                exec 5<&-
             fi
-            printf '%s' "$input"
+            printf '%s' "$trimmed"
             return
         fi
-        xray_log "Username cannot be empty."
+        xray_log "Server identifier cannot be empty."
     done
 }
 
-server_reverse_validate_username() {
+server_reverse_validate_server() {
     candidate="$1"
     case "$candidate" in
         ''|*[!A-Za-z0-9._-]*)
-            xray_die "Username must contain only letters, digits, dot, underscore, or dash"
+            xray_die "Server identifier must contain only letters, digits, dot, underscore, or dash"
             ;;
     esac
+}
+
+server_reverse_sanitize_component() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^0-9a-z]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//'
+}
+
+server_reverse_resolve_tunnel_id() {
+    primary_subnet="$1"
+    server_id="$2"
+    candidate="${XRAY_REVERSE_TUNNEL_ID:-}"
+    sanitized=""
+
+    if [ -n "$candidate" ]; then
+        sanitized=$(server_reverse_sanitize_component "$candidate")
+    fi
+    if [ -n "$sanitized" ]; then
+        printf '%s' "$sanitized"
+        return
+    fi
+
+    subnet_part=$(server_reverse_sanitize_component "$primary_subnet")
+    server_part=$(server_reverse_sanitize_component "$server_id")
+    [ -n "$subnet_part" ] || subnet_part="nosubnet"
+    [ -n "$server_part" ] || server_part="server"
+    printf '%s--%s' "$subnet_part" "$server_part"
 }

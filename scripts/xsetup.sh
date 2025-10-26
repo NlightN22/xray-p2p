@@ -82,6 +82,24 @@ redirect_entry_path_for_subnet() {
     printf '/etc/nftables.d/xray-transparent.d/xray_redirect_%s.entry' "$subnet_clean"
 }
 
+normalize_identifier_component() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^0-9a-z]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//'
+}
+
+build_reverse_tunnel_id() {
+    local subnet="$1"
+    local server_addr="$2"
+    local subnet_part server_part
+
+    subnet_part=$(normalize_identifier_component "$subnet")
+    server_part=$(normalize_identifier_component "$server_addr")
+
+    [ -n "$subnet_part" ] || subnet_part="nosubnet"
+    [ -n "$server_part" ] || server_part="server"
+
+    printf '%s--%s' "$subnet_part" "$server_part"
+}
+
 CLIENT_CONN_TMP_FILES=""
 
 load_client_connection_lib() {
@@ -252,6 +270,9 @@ if [ -z "$CLIENT_LAN" ]; then
     CLIENT_LAN="$(prompt_required 'Enter client LAN subnet (e.g. 10.0.1.0/24)' '')"
 fi
 
+REVERSE_TUNNEL_ID=$(build_reverse_tunnel_id "$CLIENT_LAN" "$SERVER_ADDR")
+printf '[local] Reverse tunnel id: %s\n' "$REVERSE_TUNNEL_ID" >&2
+
 BASE_URL_DEFAULT="https://raw.githubusercontent.com/NlightN22/xray-p2p/main"
 BASE_URL="${XRAY_REPO_BASE_URL:-$BASE_URL_DEFAULT}"
 BASE_URL="${BASE_URL%/}"
@@ -299,6 +320,8 @@ fi
         USER_NAME="$USER_NAME" \
         CLIENT_LAN="$CLIENT_LAN" \
         SERVER_PORT="$SERVER_PORT" \
+        XRAY_REVERSE_TUNNEL_ID="$REVERSE_TUNNEL_ID" \
+        XRAY_REVERSE_SERVER_ID="$SERVER_ADDR" \
         sh <<'EOS'
 set -eu
 
@@ -428,7 +451,10 @@ printf '__TROJAN_LINK__=%s\n' "$trojan_link"
 
 log "Adding server reverse proxy..."
 curl -fsSL "$BASE_URL/scripts/server_reverse.sh" | \
-    env XRAY_REVERSE_SUBNET="$CLIENT_LAN" sh -s -- add "$USER_NAME"
+    env XRAY_REVERSE_SUBNET="$CLIENT_LAN" \
+        XRAY_REVERSE_TUNNEL_ID="$REVERSE_TUNNEL_ID" \
+        XRAY_REVERSE_SERVER_ID="$SERVER_ADDR" \
+        sh -s -- add --subnet "$CLIENT_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
 
 sanitize_subnet_for_entry() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
@@ -560,6 +586,9 @@ else
 fi
 
 printf '[local] Adding client reverse proxy...\n' >&2
-curl -fsSL "$BASE_URL/scripts/client_reverse.sh" | sh -s -- add "$USER_NAME"
+curl -fsSL "$BASE_URL/scripts/client_reverse.sh" | \
+    env XRAY_REVERSE_TUNNEL_ID="$REVERSE_TUNNEL_ID" \
+        XRAY_REVERSE_SERVER_ID="$SERVER_ADDR" \
+        sh -s -- add --subnet "$SERVER_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
 
 printf '\nAll steps completed successfully.\n' >&2

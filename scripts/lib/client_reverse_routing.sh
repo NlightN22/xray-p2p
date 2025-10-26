@@ -68,10 +68,10 @@ EOF
 
 client_reverse_update_routing() {
     routing_file="$1"
-    username="$2"
+    tunnel_id="$2"
     suffix="$3"
 
-    domain="$username$suffix"
+    domain="$tunnel_id$suffix"
     tag="$domain"
 
     tmp="$(mktemp 2>/dev/null)"
@@ -124,20 +124,20 @@ client_reverse_update_routing() {
 
     chmod 0644 "$tmp"
     mv "$tmp" "$routing_file"
-    xray_log "Updated $routing_file with reverse proxy entry for $username (tag: $tag)"
+    xray_log "Updated $routing_file with reverse proxy entry for $tunnel_id (tag: $tag)"
 }
 
 client_reverse_remove_routing() {
     routing_file="$1"
-    username="$2"
+    tunnel_id="$2"
     suffix="$3"
 
     if [ ! -f "$routing_file" ]; then
-        xray_log "Routing file $routing_file not found; skipping removal for $username."
+        xray_log "Routing file $routing_file not found; skipping removal for tunnel $tunnel_id."
         return
     fi
 
-    domain="$username$suffix"
+    domain="$tunnel_id$suffix"
     tag="$domain"
 
     tmp="$(mktemp 2>/dev/null)"
@@ -174,10 +174,10 @@ client_reverse_remove_routing() {
         )
         ' "$routing_file" >"$tmp"; then
         rm -f "$tmp"
-        xray_die "Failed to update $routing_file while removing $username"
+        xray_die "Failed to update $routing_file while removing tunnel $tunnel_id"
     fi
 
     chmod 0644 "$tmp"
     mv "$tmp" "$routing_file"
-    xray_log "Removed reverse proxy entry for $username (tag: $tag) from $routing_file"
+    xray_log "Removed reverse proxy entry for $tunnel_id (tag: $tag) from $routing_file"
 }
