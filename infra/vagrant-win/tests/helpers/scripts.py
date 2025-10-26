@@ -10,7 +10,6 @@ from .constants import (
     SERVER_CERT_PATHS_URL,
     SERVER_CERT_SELFSIGNED_URL,
     SERVER_REVERSE_URL,
-    SERVER_SCRIPT_URL,
     SERVER_USER_URL,
 )
 from .utils import run_checked
@@ -21,10 +20,19 @@ _SCRIPT_SPECS: Dict[str, Tuple[str, str]] = {
     "client": ("/tmp/client.sh", CLIENT_SCRIPT_URL),
     "server_user": ("/tmp/server_user.sh", SERVER_USER_URL),
     "server_reverse": ("/tmp/server_reverse.sh", SERVER_REVERSE_URL),
-    "common_loader": ("/tmp/common_loader.sh", "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/common_loader.sh"),
-    "common": ("/tmp/common.sh", "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/common.sh"),
+    "common_loader": (
+        "/tmp/common_loader.sh",
+        "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/common_loader.sh",
+    ),
+    "common": (
+        "/tmp/common.sh",
+        "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/lib/common.sh",
+    ),
     "cert_apply": ("/tmp/server_install_cert_apply.sh", SERVER_CERT_APPLY_URL),
-    "cert_selfsigned": ("/tmp/server_install_cert_selfsigned.sh", SERVER_CERT_SELFSIGNED_URL),
+    "cert_selfsigned": (
+        "/tmp/server_install_cert_selfsigned.sh",
+        SERVER_CERT_SELFSIGNED_URL,
+    ),
     "cert_paths": ("/tmp/server_cert_paths.sh", SERVER_CERT_PATHS_URL),
 }
 
@@ -32,7 +40,11 @@ _SCRIPT_SPECS: Dict[str, Tuple[str, str]] = {
 def _ensure_download(host, path: str, url: str):
     directory = os.path.dirname(path)
     if directory:
-        run_checked(host, f"mkdir -p {shlex.quote(directory)}", f"ensure directory {directory}")
+        run_checked(
+            host,
+            f"mkdir -p {shlex.quote(directory)}",
+            f"ensure directory {directory}",
+        )
     result = host.run(f"test -x {shlex.quote(path)}")
     if result.rc == 0:
         return
@@ -51,7 +63,11 @@ def _ensure_download(host, path: str, url: str):
         "fi"
     )
     run_checked(host, download_cmd, f"download script {url}")
-    run_checked(host, f"chmod +x {quoted_path}", f"mark script executable {url}")
+    run_checked(
+        host,
+        f"chmod +x {quoted_path}",
+        f"mark script executable {url}",
+    )
 
 
 def _ensure_script(host, key: str) -> str:
