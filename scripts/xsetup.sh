@@ -537,6 +537,10 @@ if [ -n "$skip_port_check_env" ]; then
         printf '[local] Error: unable to add outbound via client_user.sh; aborting to preserve existing configuration.\n' >&2
         exit 1
     fi
+    if [ -x "/etc/init.d/xray-p2p" ]; then
+        printf '[local] Restarting xray-p2p service...\n' >&2
+        /etc/init.d/xray-p2p restart >/dev/null 2>&1 || /etc/init.d/xray-p2p restart
+    fi
 else
     printf '[local] Running client.sh install...\n' >&2
     curl -fsSL "$BASE_URL/scripts/client.sh" | sh -s -- install "$trojan_url"
