@@ -35,8 +35,25 @@ reverse_resolve_tunnel_id() {
     local sanitised=""
 
     if [ -n "$override" ]; then
-        sanitised=$(printf '%s' "$override" | tr '[:upper:]' '[:lower:]')
-        sanitised=$(printf '%s' "$sanitised" | sed 's/[^0-9a-z-]/-/g; s/^-//; s/-$//')
+        override=$(reverse_trim_spaces "$override")
+        override=${override%%[[:space:]]*}
+        override=$(printf '%s' "$override" | tr '[:upper:]' '[:lower:]')
+
+        if printf '%s' "$override" | grep -q -- '--'; then
+            local prefix=${override%%--*}
+            local suffix=${override#*--}
+
+            prefix=$(reverse_normalize_component "$prefix")
+            prefix=$(reverse_validate_component "$prefix" "$override")
+
+            suffix=$(reverse_normalize_component "$suffix")
+            suffix=$(reverse_validate_component "$suffix" "$override")
+
+            printf '%s--%s' "$prefix" "$suffix"
+            return 0
+        fi
+
+        sanitised=$(printf '%s' "$override" | sed 's/[^0-9a-z-]/-/g; s/^-//; s/-$//')
         reverse_validate_component "$sanitised" "$override"
         printf '%s' "$sanitised"
         return 0
