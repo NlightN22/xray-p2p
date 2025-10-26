@@ -114,6 +114,8 @@ load_repo_lib() {
     . "$tmp"
 }
 
+REVERSE_COMMON_LOCAL="${XRAY_REVERSE_COMMON_LIB:-lib/reverse_common.sh}"
+REVERSE_COMMON_REMOTE="${XRAY_REVERSE_COMMON_REMOTE:-scripts/lib/reverse_common.sh}"
 CLIENT_REVERSE_INPUTS_LOCAL="${XRAY_CLIENT_REVERSE_INPUTS_LIB:-lib/client_reverse_inputs.sh}"
 CLIENT_REVERSE_INPUTS_REMOTE="${XRAY_CLIENT_REVERSE_INPUTS_REMOTE:-scripts/lib/client_reverse_inputs.sh}"
 CLIENT_REVERSE_ROUTING_LOCAL="${XRAY_CLIENT_REVERSE_ROUTING_LIB:-lib/client_reverse_routing.sh}"
@@ -121,6 +123,7 @@ CLIENT_REVERSE_ROUTING_REMOTE="${XRAY_CLIENT_REVERSE_ROUTING_REMOTE:-scripts/lib
 CLIENT_REVERSE_STORE_LOCAL="${XRAY_CLIENT_REVERSE_STORE_LIB:-lib/client_reverse_store.sh}"
 CLIENT_REVERSE_STORE_REMOTE="${XRAY_CLIENT_REVERSE_STORE_REMOTE:-scripts/lib/client_reverse_store.sh}"
 
+load_repo_lib "$REVERSE_COMMON_LOCAL" "$REVERSE_COMMON_REMOTE"
 load_repo_lib "$CLIENT_REVERSE_INPUTS_LOCAL" "$CLIENT_REVERSE_INPUTS_REMOTE"
 load_repo_lib "$CLIENT_REVERSE_ROUTING_LOCAL" "$CLIENT_REVERSE_ROUTING_REMOTE"
 load_repo_lib "$CLIENT_REVERSE_STORE_LOCAL" "$CLIENT_REVERSE_STORE_REMOTE"
@@ -314,15 +317,7 @@ cmd_add() {
     server_id=$(client_reverse_read_server "$server_arg")
     client_reverse_validate_server "$server_id"
 
-    if [ -n "$tunnel_override" ]; then
-        tunnel_id=$(client_reverse_sanitize_component "$tunnel_override")
-    else
-        tunnel_id=$(client_reverse_resolve_tunnel_id "$subnet_arg" "$server_id")
-    fi
-
-    if [ -z "$tunnel_id" ]; then
-        xray_die 'Unable to derive tunnel identifier.'
-    fi
+    tunnel_id=$(reverse_resolve_tunnel_id "$subnet_arg" "$server_id" "$tunnel_override")
 
     suffix="${XRAY_REVERSE_SUFFIX:-.rev}"
     domain="$tunnel_id$suffix"
@@ -400,10 +395,7 @@ cmd_remove() {
     client_reverse_store_require "$CLIENT_REVERSE_FILE"
 
     if [ -n "$id_arg" ]; then
-        tunnel_id=$(client_reverse_sanitize_component "$id_arg")
-        if [ -z "$tunnel_id" ]; then
-            xray_die 'Invalid tunnel identifier specified.'
-        fi
+        tunnel_id=$(reverse_resolve_tunnel_id "" "" "$id_arg")
         if ! client_reverse_store_has "$CLIENT_REVERSE_FILE" "$tunnel_id"; then
             xray_die "Client reverse '$tunnel_id' not found in $CLIENT_REVERSE_FILE"
         fi

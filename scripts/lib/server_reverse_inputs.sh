@@ -165,28 +165,3 @@ server_reverse_validate_server() {
             ;;
     esac
 }
-
-server_reverse_sanitize_component() {
-    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^0-9a-z]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//'
-}
-
-server_reverse_resolve_tunnel_id() {
-    primary_subnet="$1"
-    server_id="$2"
-    candidate="${XRAY_REVERSE_TUNNEL_ID:-}"
-    sanitized=""
-
-    if [ -n "$candidate" ]; then
-        sanitized=$(server_reverse_sanitize_component "$candidate")
-    fi
-    if [ -n "$sanitized" ]; then
-        printf '%s' "$sanitized"
-        return
-    fi
-
-    subnet_part=$(server_reverse_sanitize_component "$primary_subnet")
-    server_part=$(server_reverse_sanitize_component "$server_id")
-    [ -n "$subnet_part" ] || subnet_part="nosubnet"
-    [ -n "$server_part" ] || server_part="server"
-    printf '%s--%s' "$subnet_part" "$server_part"
-}

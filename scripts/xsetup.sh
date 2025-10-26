@@ -72,6 +72,63 @@ require_cmd() {
     fi
 }
 
+validate_ipv4() {
+    addr="${1:-}"
+    old_ifs=$IFS
+    IFS='.'
+    # shellcheck disable=SC2086
+    set -- $addr
+    IFS=$old_ifs
+
+    if [ "$#" -ne 4 ]; then
+        return 1
+    fi
+
+    for octet in "$@"; do
+        case "$octet" in
+            ''|*[!0-9]*)
+                return 1
+                ;;
+        esac
+        if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+validate_subnet() {
+    subnet="${1:-}"
+    case "$subnet" in
+        */*)
+            :
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    addr="${subnet%/*}"
+    prefix="${subnet#*/}"
+
+    if ! validate_ipv4 "$addr"; then
+        return 1
+    fi
+
+    case "$prefix" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+
+    if [ "$prefix" -lt 0 ] || [ "$prefix" -gt 32 ]; then
+        return 1
+    fi
+
+    return 0
+}
+
 sanitize_subnet_for_entry() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
 }
@@ -94,8 +151,12 @@ build_reverse_tunnel_id() {
     subnet_part=$(normalize_identifier_component "$subnet")
     server_part=$(normalize_identifier_component "$server_addr")
 
-    [ -n "$subnet_part" ] || subnet_part="nosubnet"
-    [ -n "$server_part" ] || server_part="server"
+    if [ -z "$subnet_part" ]; then
+        xray_die "Unable to derive reverse tunnel id: subnet '$subnet' is empty or contains no usable characters."
+    fi
+    if [ -z "$server_part" ]; then
+        xray_die "Unable to derive reverse tunnel id: server '$server_addr' is empty or contains no usable characters."
+    fi
 
     printf '%s--%s' "$subnet_part" "$server_part"
 }
@@ -268,6 +329,15 @@ if [ -z "$SERVER_LAN" ]; then
 fi
 if [ -z "$CLIENT_LAN" ]; then
     CLIENT_LAN="$(prompt_required 'Enter client LAN subnet (e.g. 10.0.1.0/24)' '')"
+fi
+
+if ! validate_subnet "$SERVER_LAN"; then
+    printf 'Error: invalid server LAN subnet: %s\n' "$SERVER_LAN" >&2
+    exit 1
+fi
+if ! validate_subnet "$CLIENT_LAN"; then
+    printf 'Error: invalid client LAN subnet: %s\n' "$CLIENT_LAN" >&2
+    exit 1
 fi
 
 REVERSE_TUNNEL_ID=$(build_reverse_tunnel_id "$CLIENT_LAN" "$SERVER_ADDR")

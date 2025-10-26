@@ -123,6 +123,10 @@ SERVER_REVERSE_ROUTING_REMOTE="${XRAY_SERVER_REVERSE_ROUTING_REMOTE:-scripts/lib
 SERVER_REVERSE_STORE_LOCAL="${XRAY_SERVER_REVERSE_STORE_LIB:-lib/server_reverse_store.sh}"
 SERVER_REVERSE_STORE_REMOTE="${XRAY_SERVER_REVERSE_STORE_REMOTE:-scripts/lib/server_reverse_store.sh}"
 
+REVERSE_COMMON_LOCAL="${XRAY_REVERSE_COMMON_LIB:-lib/reverse_common.sh}"
+REVERSE_COMMON_REMOTE="${XRAY_REVERSE_COMMON_REMOTE:-scripts/lib/reverse_common.sh}"
+
+load_repo_lib "$REVERSE_COMMON_LOCAL" "$REVERSE_COMMON_REMOTE"
 load_repo_lib "$SERVER_REVERSE_INPUTS_LOCAL" "$SERVER_REVERSE_INPUTS_REMOTE"
 load_repo_lib "$SERVER_REVERSE_ROUTING_LOCAL" "$SERVER_REVERSE_ROUTING_REMOTE"
 load_repo_lib "$SERVER_REVERSE_STORE_LOCAL" "$SERVER_REVERSE_STORE_REMOTE"
@@ -338,15 +342,7 @@ cmd_add() {
     server_reverse_prompt_subnets
 
     primary_subnet=$(server_reverse_subnet_primary || printf '')
-    if [ -n "$tunnel_override" ]; then
-        tunnel_id=$(server_reverse_sanitize_component "$tunnel_override")
-    else
-        tunnel_id=$(server_reverse_resolve_tunnel_id "$primary_subnet" "$server_id")
-    fi
-
-    if [ -z "$tunnel_id" ]; then
-        xray_die 'Unable to derive tunnel identifier.'
-    fi
+    tunnel_id=$(reverse_resolve_tunnel_id "$primary_subnet" "$server_id" "$tunnel_override")
 
     suffix="${XRAY_REVERSE_SUFFIX:-.rev}"
     domain="$tunnel_id$suffix"
@@ -442,10 +438,7 @@ cmd_remove() {
     server_reverse_store_require "$TUNNELS_FILE"
 
     if [ -n "$id_arg" ]; then
-        tunnel_id=$(server_reverse_sanitize_component "$id_arg")
-        if [ -z "$tunnel_id" ]; then
-            xray_die 'Invalid tunnel identifier specified.'
-        fi
+        tunnel_id=$(reverse_resolve_tunnel_id "" "" "$id_arg")
         if ! server_reverse_store_has "$TUNNELS_FILE" "$tunnel_id"; then
             xray_die "Tunnel '$tunnel_id' not found in $TUNNELS_FILE"
         fi
