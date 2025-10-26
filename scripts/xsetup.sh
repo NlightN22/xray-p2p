@@ -129,6 +129,42 @@ validate_subnet() {
     return 0
 }
 
+load_reverse_common_lib() {
+    if command -v reverse_resolve_tunnel_id >/dev/null 2>&1; then
+        return 0
+    fi
+
+    for candidate in \
+        "scripts/lib/reverse_common.sh" \
+        "./scripts/lib/reverse_common.sh" \
+        "lib/reverse_common.sh"; do
+        if [ -r "$candidate" ]; then
+            # shellcheck disable=SC1090
+            . "$candidate"
+            return 0
+        fi
+    done
+
+    tmp="$(mktemp 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        printf 'Error: unable to create temporary file for reverse tunnel helpers.\n' >&2
+        exit 1
+    fi
+
+    base="${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}"
+    helper_url="${base%/}/scripts/lib/reverse_common.sh"
+    if curl -fsSL "$helper_url" -o "$tmp"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+
+    rm -f "$tmp"
+    printf 'Error: unable to load reverse tunnel helper library from %s.\n' "$helper_url" >&2
+    exit 1
+}
+
 sanitize_subnet_for_entry() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
 }
@@ -137,28 +173,6 @@ redirect_entry_path_for_subnet() {
     local subnet_clean
     subnet_clean=$(sanitize_subnet_for_entry "$1")
     printf '/etc/nftables.d/xray-transparent.d/xray_redirect_%s.entry' "$subnet_clean"
-}
-
-normalize_identifier_component() {
-    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^0-9a-z]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//'
-}
-
-build_reverse_tunnel_id() {
-    local subnet="$1"
-    local server_addr="$2"
-    local subnet_part server_part
-
-    subnet_part=$(normalize_identifier_component "$subnet")
-    server_part=$(normalize_identifier_component "$server_addr")
-
-    if [ -z "$subnet_part" ]; then
-        xray_die "Unable to derive reverse tunnel id: subnet '$subnet' is empty or contains no usable characters."
-    fi
-    if [ -z "$server_part" ]; then
-        xray_die "Unable to derive reverse tunnel id: server '$server_addr' is empty or contains no usable characters."
-    fi
-
-    printf '%s--%s' "$subnet_part" "$server_part"
 }
 
 CLIENT_CONN_TMP_FILES=""
@@ -331,6 +345,8 @@ if [ -z "$CLIENT_LAN" ]; then
     CLIENT_LAN="$(prompt_required 'Enter client LAN subnet (e.g. 10.0.1.0/24)' '')"
 fi
 
+load_reverse_common_lib
+
 if ! validate_subnet "$SERVER_LAN"; then
     printf 'Error: invalid server LAN subnet: %s\n' "$SERVER_LAN" >&2
     exit 1
@@ -340,7 +356,7 @@ if ! validate_subnet "$CLIENT_LAN"; then
     exit 1
 fi
 
-REVERSE_TUNNEL_ID=$(build_reverse_tunnel_id "$CLIENT_LAN" "$SERVER_ADDR")
+REVERSE_TUNNEL_ID=$(reverse_resolve_tunnel_id "$CLIENT_LAN" "$SERVER_ADDR" "${XRAY_REVERSE_TUNNEL_ID:-}")
 printf '[local] Reverse tunnel id: %s\n' "$REVERSE_TUNNEL_ID" >&2
 
 BASE_URL_DEFAULT="https://raw.githubusercontent.com/NlightN22/xray-p2p/main"
@@ -406,6 +422,30 @@ require_cmd() {
 
 require_cmd curl
 require_cmd awk
+
+load_reverse_common_remote() {
+    if command -v reverse_resolve_tunnel_id >/dev/null 2>&1; then
+        return 0
+    fi
+
+    tmp="$(mktemp 2>/dev/null)"
+    if [ -z "$tmp" ]; then
+        log "Error: unable to create temporary file for reverse tunnel helpers."
+        exit 1
+    fi
+
+    helper_url="${BASE_URL%/}/scripts/lib/reverse_common.sh"
+    if curl -fsSL "$helper_url" -o "$tmp"; then
+        # shellcheck disable=SC1090
+        . "$tmp"
+        rm -f "$tmp"
+        return 0
+    fi
+
+    rm -f "$tmp"
+    log "Error: unable to load reverse tunnel helper library from $helper_url."
+    exit 1
+}
 
 if command -v opkg >/dev/null 2>&1; then
     have_opkg=1
@@ -516,6 +556,9 @@ else
     fi
 fi
 printf '__TROJAN_LINK__=%s\n' "$trojan_link"
+
+load_reverse_common_remote
+REVERSE_TUNNEL_ID=$(reverse_resolve_tunnel_id "$CLIENT_LAN" "$SERVER_ADDR" "${XRAY_REVERSE_TUNNEL_ID:-}")
 
 log "Adding server reverse proxy..."
 curl -fsSL "$BASE_URL/scripts/server_reverse.sh" | \
