@@ -140,6 +140,7 @@ resolve_client_outbound_tag() {
     local server_id="$1"
     local provided="$2"
     local candidate=""
+    local attempt=0
 
     if [ -n "$provided" ]; then
         printf '%s' "$provided"
@@ -151,27 +152,34 @@ resolve_client_outbound_tag() {
         return 0
     fi
 
-    if [ -f "$OUTBOUNDS_FILE" ] && command -v jq >/dev/null 2>&1; then
-        candidate=$(jq -r --arg server "$server_id" '
-            (.outbounds // [])
-            | map({
-                tag: (.tag // ""),
-                address_match: any((.settings.servers // [])[]?; (.address // "") == $server)
-            })
-            | [
-                .[] | select(.address_match and ((.tag // "") | length > 0)) | .tag,
-                .[] | select((.tag // "") | contains($server))
-                    | .tag
-            ]
-            | map(select(length > 0))
-            | first // empty
-        ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+    while [ "$attempt" -lt 3 ]; do
+        if [ -f "$OUTBOUNDS_FILE" ] && command -v jq >/dev/null 2>&1; then
+            candidate=$(jq -r --arg server "$server_id" '
+                def matches_server:
+                    any((.settings.servers // [])[]?; (.address // "") == $server);
 
-        if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
-            printf '%s' "$candidate"
-            return 0
+                def nonempty_tag:
+                    (.tag // "") | select(length > 0);
+
+                [ (.outbounds // [])[]? ] as $outs
+                | (
+                    ($outs[] | select(matches_server) | nonempty_tag),
+                    ($outs[] | select((.tag // "") | contains($server)) | nonempty_tag),
+                    ($outs[] | nonempty_tag)
+                )
+                | map(select(length > 0))
+                | first // empty
+            ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+
+            if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
+                printf '%s' "$candidate"
+                return 0
+            fi
         fi
-    fi
+
+        attempt=$((attempt + 1))
+        sleep 1
+    done
 
     xray_die "Unable to determine outbound tag for server $server_id. Provide --outbound or set XRAY_REVERSE_OUTBOUND_TAG."
 }
@@ -271,7 +279,7 @@ client_reverse_fetch_entry() {
         (. // [])
         | map(select((.tunnel_id // "") == $key))
         | .[0]
-        | [(.tunnel_id // ""), (.server_id // ""), (.domain // "")]
+        | [(.tunnel_id // ""), (.server_id // ""), (.outbound_tag // ""), (.domain // "")]
         | @tsv
     ' "$CLIENT_REVERSE_FILE"
 }
@@ -463,7 +471,7 @@ cmd_remove() {
         xray_die "Client reverse '$tunnel_id' not found in $CLIENT_REVERSE_FILE"
     fi
 
-    IFS='\t' read -r entry_id entry_server entry_domain <<EOF
+    IFS='\t' read -r entry_id entry_server entry_outbound entry_domain <<EOF
 $entry
 EOF
 
@@ -472,7 +480,7 @@ EOF
     client_reverse_remove_routing "$ROUTING_FILE" "$tunnel_id" "$suffix"
 
     xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p" ""
-    xray_log "Client reverse '$entry_id' removed (server ${entry_server:-"-"}, domain ${entry_domain:-"-"})."
+    xray_log "Client reverse '$entry_id' removed (server ${entry_server:-"-"}, outbound ${entry_outbound:-"-"}, domain ${entry_domain:-"-"})."
 }
 
 main() {

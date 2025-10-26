@@ -31,11 +31,12 @@ reverse_validate_component() {
 reverse_resolve_tunnel_id() {
     local primary_subnet="$1"
     local server_id="$2"
-    local override="${3:-${XRAY_REVERSE_TUNNEL_ID:-}}"
+    local override="${3:-${XRAY_REVERSE_TUNNEL_ID:-${XRAY_REVERSE_TAG:-}}}"
     local sanitised=""
 
     if [ -n "$override" ]; then
         override=$(reverse_trim_spaces "$override")
+        override=${override%%"${XRAY_REVERSE_SUFFIX:-.rev}"}
         override=${override%%[[:space:]]*}
         override=$(printf '%s' "$override" | tr '[:upper:]' '[:lower:]')
 

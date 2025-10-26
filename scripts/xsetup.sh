@@ -627,12 +627,13 @@ if [ -d "/etc/xray-p2p" ] || [ -f "/etc/init.d/xray-p2p" ]; then
     skip_port_check_env="1"
     printf '[local] Existing xray-p2p assets detected; switching to incremental tunnel management.\n' >&2
 fi
+client_tag=""
 if [ -n "$skip_port_check_env" ]; then
     if ! load_client_connection_lib; then
         printf '[local] Error: unable to load client connection library.\n' >&2
         exit 1
     fi
-    client_tag="$(client_connection_tag_from_url "$trojan_url")" || exit 1
+    client_tag="$(client_connection_tag_from_url "$trojan_url")" || client_tag=""
     client_outbounds="/etc/xray-p2p/outbounds.json"
     if [ -f "$client_outbounds" ] && command -v jq >/dev/null 2>&1; then
         if jq -e --arg tag "$client_tag" '(.outbounds // []) | any(.[]?; (.tag // "") == $tag)' "$client_outbounds" >/dev/null 2>&1; then
@@ -695,7 +696,6 @@ fi
 
 printf '[local] Adding client reverse proxy...\n' >&2
 curl -fsSL "$BASE_URL/scripts/client_reverse.sh" | \
-    env XRAY_REVERSE_OUTBOUND_TAG="${client_tag:-}" \
-        sh -s -- add --subnet "$SERVER_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
+    sh -s -- add --subnet "$SERVER_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
 
 printf '\nAll steps completed successfully.\n' >&2
