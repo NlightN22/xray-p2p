@@ -56,6 +56,7 @@ client_reverse_store_add() {
     domain="$4"
     tag="$5"
     server_id="$6"
+    outbound_tag="$7"
 
     client_reverse_store_ensure "$store_file" "$store_dir"
 
@@ -74,6 +75,7 @@ client_reverse_store_add() {
         --arg domain "$domain" \
         --arg tag "$tag" \
         --arg server_id "$server_id" \
+        --arg outbound "$outbound_tag" \
         --arg created_at "$created_at" \
         '
         (. // []) + [{
@@ -81,6 +83,7 @@ client_reverse_store_add() {
             domain: $domain,
             tag: $tag,
             server_id: $server_id,
+            outbound_tag: $outbound,
             created_at: $created_at,
             updated_at: $created_at,
             notes: ""
@@ -118,8 +121,8 @@ client_reverse_store_print_table() {
     store_file="$1"
 
     output=$(jq -r '
-        (["tunnel_id","domain","server_id","created_at"] | @tsv),
-        (.[] | [(.tunnel_id // "-"), (.domain // "-"), (.server_id // "-"), (.created_at // "-")] | @tsv)
+        (["tunnel_id","domain","server_id","outbound_tag","created_at"] | @tsv),
+        (.[] | [(.tunnel_id // "-"), (.domain // "-"), (.server_id // "-"), (.outbound_tag // "-"), (.created_at // "-")] | @tsv)
     ' "$store_file")
 
     if command -v column >/dev/null 2>&1; then

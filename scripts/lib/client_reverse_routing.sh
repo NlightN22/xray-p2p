@@ -70,6 +70,7 @@ client_reverse_update_routing() {
     routing_file="$1"
     tunnel_id="$2"
     suffix="$3"
+    outbound_tag="$4"
 
     domain="$tunnel_id$suffix"
     tag="$domain"
@@ -82,6 +83,7 @@ client_reverse_update_routing() {
     if ! jq \
         --arg domain "$domain" \
         --arg tag "$tag" \
+        --arg outbound "$outbound_tag" \
         '
         def ensure_array:
             if . == null then []
@@ -108,7 +110,7 @@ client_reverse_update_routing() {
                     type: "field",
                     domain: ["full:" + $domain],
                     inboundTag: [$tag],
-                    outboundTag: "proxy"
+                    outboundTag: $outbound
                 },
                 {
                     type: "field",

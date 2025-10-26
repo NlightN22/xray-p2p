@@ -8,7 +8,7 @@ usage() {
 Usage:
   $SCRIPT_NAME                 List recorded client reverse tunnels.
   $SCRIPT_NAME list            Same as default list action.
-  $SCRIPT_NAME add [--subnet CIDR] [--server HOST] [--id SLUG]
+  $SCRIPT_NAME add [--subnet CIDR] [--server HOST] [--id SLUG] [--outbound TAG]
   $SCRIPT_NAME remove [--id SLUG] [--server HOST]
 
 Environment:
@@ -134,6 +134,47 @@ ROUTING_TEMPLATE_LOCAL=${XRAY_ROUTING_TEMPLATE:-config_templates/client/routing.
 ROUTING_TEMPLATE_REMOTE=${XRAY_ROUTING_TEMPLATE_REMOTE:-config_templates/client/routing.json}
 CLIENT_REVERSE_DIR=${XRAY_CLIENT_REVERSE_DIR:-$XRAY_CONFIG_DIR/config}
 CLIENT_REVERSE_FILE=${XRAY_CLIENT_REVERSE_FILE:-$CLIENT_REVERSE_DIR/client_reverse.json}
+OUTBOUNDS_FILE=${XRAY_OUTBOUNDS_FILE:-$XRAY_CONFIG_DIR/outbounds.json}
+
+resolve_client_outbound_tag() {
+    local server_id="$1"
+    local provided="$2"
+    local candidate=""
+
+    if [ -n "$provided" ]; then
+        printf '%s' "$provided"
+        return 0
+    fi
+
+    if [ -n "${XRAY_REVERSE_OUTBOUND_TAG:-}" ]; then
+        printf '%s' "$XRAY_REVERSE_OUTBOUND_TAG"
+        return 0
+    fi
+
+    if [ -f "$OUTBOUNDS_FILE" ] && command -v jq >/dev/null 2>&1; then
+        candidate=$(jq -r --arg server "$server_id" '
+            (.outbounds // [])
+            | map({
+                tag: (.tag // ""),
+                address_match: any((.settings.servers // [])[]?; (.address // "") == $server)
+            })
+            | [
+                .[] | select(.address_match and ((.tag // "") | length > 0)) | .tag,
+                .[] | select((.tag // "") | contains($server))
+                    | .tag
+            ]
+            | map(select(length > 0))
+            | first // empty
+        ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+
+        if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    fi
+
+    xray_die "Unable to determine outbound tag for server $server_id. Provide --outbound or set XRAY_REVERSE_OUTBOUND_TAG."
+}
 
 client_reverse_matches() {
     server_filter="$1"
@@ -248,6 +289,7 @@ cmd_add() {
     subnet_arg=""
     server_arg=""
     tunnel_override=""
+    outbound_arg=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -293,6 +335,17 @@ cmd_add() {
             --id=*)
                 tunnel_override=$(client_reverse_trim_spaces "${1#*=}")
                 ;;
+            --outbound)
+                if [ "$#" -lt 2 ]; then
+                    printf 'Option %s requires an argument.\n' "$1" >&2
+                    usage 1
+                fi
+                outbound_arg=$(client_reverse_trim_spaces "$2")
+                shift
+                ;;
+            --outbound=*)
+                outbound_arg=$(client_reverse_trim_spaces "${1#*=}")
+                ;;
             --)
                 shift
                 break
@@ -328,9 +381,11 @@ cmd_add() {
         return 0
     fi
 
+    outbound_tag=$(resolve_client_outbound_tag "$server_id" "$outbound_arg")
+
     client_reverse_ensure_routing_file "$ROUTING_FILE" "$ROUTING_TEMPLATE_LOCAL" "$ROUTING_TEMPLATE_REMOTE"
-    client_reverse_update_routing "$ROUTING_FILE" "$tunnel_id" "$suffix"
-    client_reverse_store_add "$CLIENT_REVERSE_FILE" "$CLIENT_REVERSE_DIR" "$tunnel_id" "$domain" "$tag" "$server_id"
+    client_reverse_update_routing "$ROUTING_FILE" "$tunnel_id" "$suffix" "$outbound_tag"
+    client_reverse_store_add "$CLIENT_REVERSE_FILE" "$CLIENT_REVERSE_DIR" "$tunnel_id" "$domain" "$tag" "$server_id" "$outbound_tag"
 
     xray_restart_service "xray-p2p" "/etc/init.d/xray-p2p" ""
     xray_log "Client reverse '$tunnel_id' recorded (server $server_id, domain $domain)."

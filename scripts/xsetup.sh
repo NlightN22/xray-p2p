@@ -695,6 +695,7 @@ fi
 
 printf '[local] Adding client reverse proxy...\n' >&2
 curl -fsSL "$BASE_URL/scripts/client_reverse.sh" | \
-    sh -s -- add --subnet "$SERVER_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
+    env XRAY_REVERSE_OUTBOUND_TAG="${client_tag:-}" \
+        sh -s -- add --subnet "$SERVER_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
 
 printf '\nAll steps completed successfully.\n' >&2
