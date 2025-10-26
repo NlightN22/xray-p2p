@@ -136,6 +136,243 @@ CLIENT_REVERSE_DIR=${XRAY_CLIENT_REVERSE_DIR:-$XRAY_CONFIG_DIR/config}
 CLIENT_REVERSE_FILE=${XRAY_CLIENT_REVERSE_FILE:-$CLIENT_REVERSE_DIR/client_reverse.json}
 OUTBOUNDS_FILE=${XRAY_OUTBOUNDS_FILE:-$XRAY_CONFIG_DIR/outbounds.json}
 
+client_reverse_is_integer() {
+    case "$1" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+client_reverse_split_server_identifier() {
+    local identifier="$1"
+    local host="$identifier"
+    local port=""
+
+    case "$identifier" in
+        \[*\]:*)
+            local candidate="${identifier##*:}"
+            if client_reverse_is_integer "$candidate"; then
+                port="$candidate"
+                host="${identifier%:*}"
+                host="${host#[}"
+                host="${host%]}"
+            fi
+            ;;
+        *:*:*)
+            # Likely IPv6 without brackets; leave as-is to avoid mis-parsing.
+            ;;
+        *:*)
+            local candidate="${identifier##*:}"
+            if client_reverse_is_integer "$candidate"; then
+                port="$candidate"
+                host="${identifier%:*}"
+            fi
+            ;;
+        *)
+            ;;
+    esac
+
+    printf '%s\t%s\n' "$host" "$port"
+}
+
+client_reverse_sanitize_host() {
+    printf '%s' "$1" \
+        | tr '[:upper:]' '[:lower:]' \
+        | sed 's/[^0-9a-z._-]/-/g; s/-\{2,\}/-/g; s/^-//; s/-$//'
+}
+
+client_reverse_try_jq_outbound_tag() {
+    local server_host="$1"
+    local expected_port="$2"
+    local expected_tag="$3"
+    local sanitized_host="$4"
+    local candidate=""
+
+    if ! command -v jq >/dev/null 2>&1; then
+        return 1
+    fi
+
+    candidate=$(jq -r \
+        --arg server "$server_host" \
+        --arg server_port "$expected_port" \
+        --arg expected_tag "$expected_tag" \
+        --arg sanitized "$sanitized_host" '
+        def tag_value:
+            (.tag // "") | select(length > 0);
+
+        def normalize_port($value):
+            if $value == null then ""
+            elif ($value | type) == "number" then ($value | tostring)
+            else ($value // "") | tostring
+            end;
+
+        def has_server($want):
+            any((.settings.servers // [])[]?;
+                ((.address // .server // "") == $want)
+            );
+
+        def has_server_with_port($want_addr; $want_port):
+            if $want_port == "" then has_server($want_addr)
+            else
+                any((.settings.servers // [])[]?;
+                    ((.address // .server // "") == $want_addr)
+                    and (normalize_port(.port) == $want_port)
+                )
+            end;
+
+        def contains_sanitized($fragment):
+            $fragment != "" and ((.tag // "") | contains($fragment));
+
+        [
+            (.outbounds // [])[]? | select(tag_value) | select($expected_tag != "" and (.tag // "") == $expected_tag) | .tag,
+            (.outbounds // [])[]? | select(tag_value) | select(has_server_with_port($server; $server_port)) | .tag,
+            (.outbounds // [])[]? | select(tag_value) | select(has_server($server)) | .tag,
+            (.outbounds // [])[]? | select(tag_value) | select(contains_sanitized($sanitized)) | .tag,
+            (.outbounds // [])[]? | select(tag_value) | .tag
+        ]
+        | map(select(length > 0))
+        | first // empty
+        ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+
+    if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
+        printf '%s' "$candidate"
+        return 0
+    fi
+
+    return 1
+}
+
+client_reverse_try_awk_outbound_tag() {
+    local server_host="$1"
+    local expected_port="$2"
+    local expected_tag="$3"
+    local sanitized_host="$4"
+    local file_path="$5"
+    local candidate=""
+
+    if ! command -v awk >/dev/null 2>&1; then
+        return 1
+    fi
+
+    candidate=$(awk \
+        -v host="$server_host" \
+        -v expect_port="$expected_port" \
+        -v expect_tag="$expected_tag" \
+        -v sanitized="$sanitized_host" '
+        function reset_servers(   idx) {
+            for (idx in addresses) {
+                delete addresses[idx]
+            }
+            for (idx in ports) {
+                delete ports[idx]
+            }
+            server_count = 0
+            pending_address = ""
+            pending_port = ""
+        }
+
+        function track_server(addr, port) {
+            if (addr == "")
+                return
+            server_count++
+            addresses[server_count] = addr
+            ports[server_count] = port
+        }
+
+        function flush_pending() {
+            if (pending_address != "") {
+                track_server(pending_address, pending_port)
+                pending_address = ""
+                pending_port = ""
+            }
+        }
+
+        BEGIN {
+            reset_servers()
+            best_host = ""
+            best_contains = ""
+            fallback = ""
+        }
+
+        {
+            line = $0
+            gsub("\r", "", line)
+
+            if (line ~ /"protocol"[[:space:]]*:/) {
+                reset_servers()
+            }
+
+            if (match(line, /"address"[[:space:]]*:[[:space:]]*"([^"]+)"/, match_holder)) {
+                pending_address = match_holder[1]
+                pending_port = ""
+            } else if (match(line, /"port"[[:space:]]*:[[:space:]]*([0-9]+)/, match_holder)) {
+                pending_port = match_holder[1]
+                if (pending_address != "") {
+                    track_server(pending_address, pending_port)
+                    pending_address = ""
+                    pending_port = ""
+                }
+            } else if (line ~ /\]/) {
+                flush_pending()
+            }
+
+            if (match(line, /"tag"[[:space:]]*:[[:space:]]*"([^"]+)"/, match_holder)) {
+                flush_pending()
+                current_tag = match_holder[1]
+                if (current_tag == "")
+                    next
+
+                if (expect_tag != "" && current_tag == expect_tag) {
+                    print current_tag
+                    exit
+                }
+
+                host_candidate = ""
+                for (i = 1; i <= server_count; i++) {
+                    if (addresses[i] == host) {
+                        host_candidate = current_tag
+                        if (expect_port != "" && ports[i] == expect_port) {
+                            print current_tag
+                            exit
+                        }
+                    }
+                }
+
+                if (best_host == "" && host_candidate != "") {
+                    best_host = host_candidate
+                }
+
+                if (best_contains == "" && sanitized != "" && index(current_tag, sanitized) > 0) {
+                    best_contains = current_tag
+                }
+
+                if (fallback == "" && current_tag != "") {
+                    fallback = current_tag
+                }
+            }
+        }
+
+        END {
+            if (best_host != "") {
+                print best_host
+            } else if (best_contains != "") {
+                print best_contains
+            } else if (fallback != "") {
+                print fallback
+            }
+        }
+        ' "$file_path" 2>/dev/null | head -n 1)
+
+    if [ -n "$candidate" ]; then
+        printf '%s' "$candidate"
+        return 0
+    fi
+
+    return 1
+}
+
 resolve_client_outbound_tag() {
     local server_id="$1"
     local provided="$2"
@@ -153,25 +390,35 @@ resolve_client_outbound_tag() {
     fi
 
     while [ "$attempt" -lt 3 ]; do
-        if [ -f "$OUTBOUNDS_FILE" ] && command -v jq >/dev/null 2>&1; then
-            candidate=$(jq -r --arg server "$server_id" '
-                def valid_tag:
-                    (.tag // "") | select(length > 0);
+        if [ -f "$OUTBOUNDS_FILE" ]; then
+            local split host_part port_hint expected_port sanitized expected_tag
+            host_part="$server_id"
+            port_hint=""
 
-                def server_matches:
-                    [(.settings.servers // [])[]? | (.address // "")] | index($server);
+            if split=$(client_reverse_split_server_identifier "$server_id"); then
+                IFS='	' read -r host_part port_hint <<EOF
+$split
+EOF
+            fi
 
-                [
-                    (.outbounds // [])[]? | select(server_matches) | valid_tag,
-                    (.outbounds // [])[]? | select((.tag // "") | contains($server)) | valid_tag,
-                    (.outbounds // [])[]? | valid_tag
-                ]
-                | map(select(length > 0))
-                | first // empty
-            ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+            expected_port="$port_hint"
+            if client_reverse_is_integer "${XRAY_REVERSE_SERVER_PORT:-}"; then
+                expected_port="$XRAY_REVERSE_SERVER_PORT"
+            elif client_reverse_is_integer "${XRAY_SERVER_PORT:-}"; then
+                expected_port="$XRAY_SERVER_PORT"
+            fi
 
-            if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
-                printf '%s' "$candidate"
+            sanitized=$(client_reverse_sanitize_host "$host_part")
+            expected_tag=""
+            if [ -n "$sanitized" ] && [ -n "$expected_port" ]; then
+                expected_tag="${sanitized}-${expected_port}"
+            fi
+
+            if client_reverse_try_jq_outbound_tag "$host_part" "$expected_port" "$expected_tag" "$sanitized"; then
+                return 0
+            fi
+
+            if client_reverse_try_awk_outbound_tag "$host_part" "$expected_port" "$expected_tag" "$sanitized" "$OUTBOUNDS_FILE"; then
                 return 0
             fi
         fi

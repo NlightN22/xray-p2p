@@ -49,8 +49,8 @@ client_reverse_read_server() {
 client_reverse_validate_server() {
     candidate="$1"
     case "$candidate" in
-        ''|*[!A-Za-z0-9._-]*)
-            xray_die "Server identifier must contain only letters, digits, dot, underscore, or dash"
+        ''|*[!A-Za-z0-9._:\[\]-]*)
+            xray_die "Server identifier must contain only letters, digits, dot, underscore, dash, colon, or brackets"
             ;;
     esac
 }
