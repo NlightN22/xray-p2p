@@ -246,22 +246,38 @@ client_user_add() {
         xray_die "Failed to update $CLIENT_USER_OUTBOUNDS_FILE"
     fi
 
-    mv "$tmp_out" "$CLIENT_USER_OUTBOUNDS_FILE"
+    local backup_out=""
+    if [ -f "$CLIENT_USER_OUTBOUNDS_FILE" ]; then
+        backup_out="$(mktemp 2>/dev/null)" || {
+            rm -f "$tmp_out"
+            xray_die "Unable to create outbound backup"
+        }
+        if ! cp "$CLIENT_USER_OUTBOUNDS_FILE" "$backup_out"; then
+            rm -f "$tmp_out" "$backup_out"
+            xray_die "Unable to create outbound backup"
+        fi
+    fi
 
-    xray_log "Added outbound '$tag' -> ${CLIENT_CONNECTION_HOST}:${CLIENT_CONNECTION_PORT}"
+    local tmp_route=""
+    local backup_route=""
+    local redirect_added=0
 
     if [ -n "$subnet" ]; then
         if ! validate_subnet "$subnet"; then
+            rm -f "$tmp_out" "$backup_out"
             xray_die "Subnet must be a valid IPv4 CIDR (example: 10.0.101.0/24)"
         fi
 
         if [ ! -f "$CLIENT_USER_ROUTING_FILE" ]; then
+            rm -f "$tmp_out" "$backup_out"
             xray_die "Routing configuration not found: $CLIENT_USER_ROUTING_FILE"
         fi
 
         if [ -n "$redirect_port" ]; then
+            redirect_port=$(printf '%s' "$redirect_port" | tr -d ' \t\r\n')
             case "$redirect_port" in
                 ''|*[!0-9]*)
+                    rm -f "$tmp_out" "$backup_out"
                     xray_die "Redirect port must be a positive integer"
                     ;;
             esac
@@ -273,11 +289,14 @@ client_user_add() {
             '
             (.routing.rules // []) | any(.[]?; (.outboundTag // "") == $tag and (.ip // []) | index($subnet))
             ' "$CLIENT_USER_ROUTING_FILE" >/dev/null 2>&1; then
+            rm -f "$tmp_out" "$backup_out"
             xray_die "Routing rule for subnet $subnet and tag $tag already exists."
         fi
 
-        local tmp_route
-        tmp_route="$(mktemp 2>/dev/null)" || xray_die "Unable to create temporary file for routing update"
+        tmp_route="$(mktemp 2>/dev/null)" || {
+            rm -f "$tmp_out" "$backup_out"
+            xray_die "Unable to create temporary file for routing update"
+        }
 
         if ! jq \
             --arg tag "$tag" \
@@ -291,18 +310,75 @@ client_user_add() {
                 outboundTag: $tag
             }]
             ' "$CLIENT_USER_ROUTING_FILE" >"$tmp_route"; then
-            rm -f "$tmp_route"
+            rm -f "$tmp_out" "$tmp_route" "$backup_out"
             xray_die "Failed to update $CLIENT_USER_ROUTING_FILE"
         fi
 
-        mv "$tmp_route" "$CLIENT_USER_ROUTING_FILE"
-        xray_log "Added routing rule for subnet $subnet -> $tag"
+        if [ -f "$CLIENT_USER_ROUTING_FILE" ]; then
+            backup_route="$(mktemp 2>/dev/null)" || {
+                rm -f "$tmp_out" "$tmp_route" "$backup_out"
+                xray_die "Unable to create routing backup"
+            }
+            if ! cp "$CLIENT_USER_ROUTING_FILE" "$backup_route"; then
+                rm -f "$tmp_out" "$tmp_route" "$backup_out" "$backup_route"
+                xray_die "Unable to create routing backup"
+            fi
+        fi
+
+        client_user_run_redirect remove "$subnet" || true
 
         if [ -n "$redirect_port" ]; then
-            client_user_run_redirect add "$subnet" "$redirect_port"
+            if ! client_user_run_redirect add "$subnet" "$redirect_port"; then
+                rm -f "$tmp_out" "$tmp_route" "$backup_out" "$backup_route"
+                xray_die "Failed to configure transparent redirect for $subnet"
+            fi
         else
-            client_user_run_redirect add "$subnet"
+            if ! client_user_run_redirect add "$subnet"; then
+                rm -f "$tmp_out" "$tmp_route" "$backup_out" "$backup_route"
+                xray_die "Failed to configure transparent redirect for $subnet"
+            fi
         fi
+        redirect_added=1
+
+        if ! mv "$tmp_route" "$CLIENT_USER_ROUTING_FILE"; then
+            rm -f "$tmp_route"
+            if [ -n "$backup_route" ]; then
+                cp "$backup_route" "$CLIENT_USER_ROUTING_FILE" 2>/dev/null || true
+            fi
+            if [ "$redirect_added" -eq 1 ]; then
+                client_user_run_redirect remove "$subnet" || true
+            fi
+            rm -f "$tmp_out"
+            if [ -n "$backup_out" ]; then
+                cp "$backup_out" "$CLIENT_USER_OUTBOUNDS_FILE" 2>/dev/null || true
+            fi
+            xray_die "Failed to write routing configuration"
+        fi
+        chmod 0644 "$CLIENT_USER_ROUTING_FILE" 2>/dev/null || true
+        xray_log "Added routing rule for subnet $subnet -> $tag"
+    fi
+
+    if ! mv "$tmp_out" "$CLIENT_USER_OUTBOUNDS_FILE"; then
+        rm -f "$tmp_out"
+        if [ -n "$backup_out" ]; then
+            cp "$backup_out" "$CLIENT_USER_OUTBOUNDS_FILE" 2>/dev/null || true
+        fi
+        if [ "$redirect_added" -eq 1 ]; then
+            client_user_run_redirect remove "$subnet" || true
+            if [ -n "$backup_route" ]; then
+                cp "$backup_route" "$CLIENT_USER_ROUTING_FILE" 2>/dev/null || true
+            fi
+        fi
+        xray_die "Failed to write outbound configuration"
+    fi
+    chmod 0644 "$CLIENT_USER_OUTBOUNDS_FILE" 2>/dev/null || true
+    xray_log "Added outbound '$tag' -> ${CLIENT_CONNECTION_HOST}:${CLIENT_CONNECTION_PORT}"
+
+    if [ -n "$backup_out" ]; then
+        rm -f "$backup_out"
+    fi
+    if [ -n "$backup_route" ]; then
+        rm -f "$backup_route"
     fi
 }
 
