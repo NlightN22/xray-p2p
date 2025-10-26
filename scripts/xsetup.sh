@@ -390,8 +390,6 @@ fi
         USER_NAME="$USER_NAME" \
         CLIENT_LAN="$CLIENT_LAN" \
         SERVER_PORT="$SERVER_PORT" \
-        XRAY_REVERSE_TUNNEL_ID="$REVERSE_TUNNEL_ID" \
-        XRAY_REVERSE_SERVER_ID="$SERVER_ADDR" \
         sh <<'EOS'
 set -eu
 
@@ -521,10 +519,7 @@ printf '__TROJAN_LINK__=%s\n' "$trojan_link"
 
 log "Adding server reverse proxy..."
 curl -fsSL "$BASE_URL/scripts/server_reverse.sh" | \
-    env XRAY_REVERSE_SUBNET="$CLIENT_LAN" \
-        XRAY_REVERSE_TUNNEL_ID="$REVERSE_TUNNEL_ID" \
-        XRAY_REVERSE_SERVER_ID="$SERVER_ADDR" \
-        sh -s -- add --subnet "$CLIENT_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
+    sh -s -- add --subnet "$CLIENT_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
 
 sanitize_subnet_for_entry() {
     printf '%s' "$1" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g'
@@ -657,8 +652,6 @@ fi
 
 printf '[local] Adding client reverse proxy...\n' >&2
 curl -fsSL "$BASE_URL/scripts/client_reverse.sh" | \
-    env XRAY_REVERSE_TUNNEL_ID="$REVERSE_TUNNEL_ID" \
-        XRAY_REVERSE_SERVER_ID="$SERVER_ADDR" \
-        sh -s -- add --subnet "$SERVER_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
+    sh -s -- add --subnet "$SERVER_LAN" --server "$SERVER_ADDR" --id "$REVERSE_TUNNEL_ID"
 
 printf '\nAll steps completed successfully.\n' >&2
