@@ -155,18 +155,17 @@ resolve_client_outbound_tag() {
     while [ "$attempt" -lt 3 ]; do
         if [ -f "$OUTBOUNDS_FILE" ] && command -v jq >/dev/null 2>&1; then
             candidate=$(jq -r --arg server "$server_id" '
-                def matches_server:
-                    any((.settings.servers // [])[]?; (.address // "") == $server);
-
-                def nonempty_tag:
+                def valid_tag:
                     (.tag // "") | select(length > 0);
 
-                [ (.outbounds // [])[]? ] as $outs
-                | (
-                    ($outs[] | select(matches_server) | nonempty_tag),
-                    ($outs[] | select((.tag // "") | contains($server)) | nonempty_tag),
-                    ($outs[] | nonempty_tag)
-                )
+                def server_matches:
+                    [(.settings.servers // [])[]? | (.address // "")] | index($server);
+
+                [
+                    (.outbounds // [])[]? | select(server_matches) | valid_tag,
+                    (.outbounds // [])[]? | select((.tag // "") | contains($server)) | valid_tag,
+                    (.outbounds // [])[]? | valid_tag
+                ]
                 | map(select(length > 0))
                 | first // empty
             ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
