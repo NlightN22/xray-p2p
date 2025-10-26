@@ -194,178 +194,76 @@ client_reverse_try_jq_outbound_tag() {
         return 1
     fi
 
+    if [ -n "$expected_tag" ]; then
+        candidate=$(jq -r \
+            --arg tag "$expected_tag" '
+            first(.outbounds[]? | select((.tag // "") == $tag) | (.tag // "")) // empty
+            ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+        if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    fi
+
     candidate=$(jq -r \
         --arg server "$server_host" \
-        --arg server_port "$expected_port" \
-        --arg expected_tag "$expected_tag" \
-        --arg sanitized "$sanitized_host" '
-        def tag_value:
-            (.tag // "") | select(length > 0);
-
-        def normalize_port($value):
-            if $value == null then ""
-            elif ($value | type) == "number" then ($value | tostring)
-            else ($value // "") | tostring
-            end;
-
-        def has_server($want):
-            any((.settings.servers // [])[]?;
-                ((.address // .server // "") == $want)
-            );
-
-        def has_server_with_port($want_addr; $want_port):
-            if $want_port == "" then has_server($want_addr)
-            else
-                any((.settings.servers // [])[]?;
-                    ((.address // .server // "") == $want_addr)
-                    and (normalize_port(.port) == $want_port)
+        --arg port "$expected_port" '
+        first(
+            .outbounds[]? as $o
+            | [($o.settings.servers // [])[]?
+                | select(
+                    ((.address // .server // "") == $server)
+                    and ($port == "" or ((.port // "") | tostring) == $port)
                 )
-            end;
-
-        def contains_sanitized($fragment):
-            $fragment != "" and ((.tag // "") | contains($fragment));
-
-        [
-            (.outbounds // [])[]? | select(tag_value) | select($expected_tag != "" and (.tag // "") == $expected_tag) | .tag,
-            (.outbounds // [])[]? | select(tag_value) | select(has_server_with_port($server; $server_port)) | .tag,
-            (.outbounds // [])[]? | select(tag_value) | select(has_server($server)) | .tag,
-            (.outbounds // [])[]? | select(tag_value) | select(contains_sanitized($sanitized)) | .tag,
-            (.outbounds // [])[]? | select(tag_value) | .tag
-        ]
-        | map(select(length > 0))
-        | first // empty
+              ]
+            | if length > 0 then ($o.tag // "") else empty end
+        ) // empty
         ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
-
     if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
         printf '%s' "$candidate"
         return 0
     fi
 
-    return 1
-}
-
-client_reverse_try_awk_outbound_tag() {
-    local server_host="$1"
-    local expected_port="$2"
-    local expected_tag="$3"
-    local sanitized_host="$4"
-    local file_path="$5"
-    local candidate=""
-
-    if ! command -v awk >/dev/null 2>&1; then
-        return 1
+    candidate=$(jq -r \
+        --arg server "$server_host" '
+        first(
+            .outbounds[]? as $o
+            | [($o.settings.servers // [])[]?
+                | select((.address // .server // "") == $server)
+              ]
+            | if length > 0 then ($o.tag // "") else empty end
+        ) // empty
+        ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+    if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
+        printf '%s' "$candidate"
+        return 0
     fi
 
-    candidate=$(awk \
-        -v host="$server_host" \
-        -v expect_port="$expected_port" \
-        -v expect_tag="$expected_tag" \
-        -v sanitized="$sanitized_host" '
-        function reset_servers(   idx) {
-            for (idx in addresses) {
-                delete addresses[idx]
-            }
-            for (idx in ports) {
-                delete ports[idx]
-            }
-            server_count = 0
-            pending_address = ""
-            pending_port = ""
-        }
+    if [ -n "$sanitized_host" ]; then
+        candidate=$(jq -r \
+            --arg fragment "$sanitized_host" '
+            first(
+                .outbounds[]?
+                | (.tag // "")
+                | select(length > 0)
+                | select(index($fragment) != null)
+            ) // empty
+            ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
+        if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
+            printf '%s' "$candidate"
+            return 0
+        fi
+    fi
 
-        function track_server(addr, port) {
-            if (addr == "")
-                return
-            server_count++
-            addresses[server_count] = addr
-            ports[server_count] = port
-        }
+    candidate=$(jq -r '
+        first(
+            .outbounds[]?
+            | (.tag // "")
+            | select(length > 0)
+        ) // empty
+        ' "$OUTBOUNDS_FILE" 2>/dev/null | tr -d '\r')
 
-        function flush_pending() {
-            if (pending_address != "") {
-                track_server(pending_address, pending_port)
-                pending_address = ""
-                pending_port = ""
-            }
-        }
-
-        BEGIN {
-            reset_servers()
-            best_host = ""
-            best_contains = ""
-            fallback = ""
-        }
-
-        {
-            line = $0
-            gsub("\r", "", line)
-
-            if (line ~ /"protocol"[[:space:]]*:/) {
-                reset_servers()
-            }
-
-            if (match(line, /"address"[[:space:]]*:[[:space:]]*"([^"]+)"/, match_holder)) {
-                pending_address = match_holder[1]
-                pending_port = ""
-            } else if (match(line, /"port"[[:space:]]*:[[:space:]]*([0-9]+)/, match_holder)) {
-                pending_port = match_holder[1]
-                if (pending_address != "") {
-                    track_server(pending_address, pending_port)
-                    pending_address = ""
-                    pending_port = ""
-                }
-            } else if (line ~ /\]/) {
-                flush_pending()
-            }
-
-            if (match(line, /"tag"[[:space:]]*:[[:space:]]*"([^"]+)"/, match_holder)) {
-                flush_pending()
-                current_tag = match_holder[1]
-                if (current_tag == "")
-                    next
-
-                if (expect_tag != "" && current_tag == expect_tag) {
-                    print current_tag
-                    exit
-                }
-
-                host_candidate = ""
-                for (i = 1; i <= server_count; i++) {
-                    if (addresses[i] == host) {
-                        host_candidate = current_tag
-                        if (expect_port != "" && ports[i] == expect_port) {
-                            print current_tag
-                            exit
-                        }
-                    }
-                }
-
-                if (best_host == "" && host_candidate != "") {
-                    best_host = host_candidate
-                }
-
-                if (best_contains == "" && sanitized != "" && index(current_tag, sanitized) > 0) {
-                    best_contains = current_tag
-                }
-
-                if (fallback == "" && current_tag != "") {
-                    fallback = current_tag
-                }
-            }
-        }
-
-        END {
-            if (best_host != "") {
-                print best_host
-            } else if (best_contains != "") {
-                print best_contains
-            } else if (fallback != "") {
-                print fallback
-            }
-        }
-        ' "$file_path" 2>/dev/null | head -n 1)
-
-    if [ -n "$candidate" ]; then
+    if [ -n "$candidate" ] && [ "$candidate" != "null" ]; then
         printf '%s' "$candidate"
         return 0
     fi
@@ -415,10 +313,6 @@ EOF
             fi
 
             if client_reverse_try_jq_outbound_tag "$host_part" "$expected_port" "$expected_tag" "$sanitized"; then
-                return 0
-            fi
-
-            if client_reverse_try_awk_outbound_tag "$host_part" "$expected_port" "$expected_tag" "$sanitized" "$OUTBOUNDS_FILE"; then
                 return 0
             fi
         fi
