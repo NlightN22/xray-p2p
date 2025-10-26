@@ -237,6 +237,22 @@ client_user_add() {
                 tlsSettings: {
                     allowInsecure: $allowInsecure,
                     serverName: $serverName
+                },
+                tcpSettings: {
+                    header: {
+                        type: "http",
+                        request: {
+                            version: "1.1",
+                            method: "GET",
+                            path: ["/"],
+                            headers: {
+                                Host: ["www.bing.com", "www.apple.com"],
+                                "User-Agent": ["Mozilla/5.0"],
+                                "Accept-Encoding": ["gzip, deflate"],
+                                Connection: ["keep-alive"]
+                            }
+                        }
+                    }
                 }
             },
             tag: $tag
