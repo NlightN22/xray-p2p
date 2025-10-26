@@ -82,8 +82,6 @@ server_reverse_update_routing() {
     fi
 
     if ! jq \
-        --arg tunnel "$tunnel_id" \
-        --arg server "$server_id" \
         --arg domain "$domain" \
         --arg tag "$tag" \
         --argjson subnets "$subnet_json" \
@@ -119,9 +117,7 @@ server_reverse_update_routing() {
             + [{
                 type: "field",
                 domain: ["full:" + $domain],
-                outboundTag: $tag,
-                user: [$tunnel],
-                server: [$server]
+                outboundTag: $tag
             }]
             + (if ($subnets | length) > 0 then [
                 {
