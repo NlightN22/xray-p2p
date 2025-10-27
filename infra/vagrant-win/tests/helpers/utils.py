@@ -24,8 +24,8 @@ def run_checked(host, command: str, description: str):
 def check_iperf_open(host, label: str, target: str):
     """Verify that iperf3 can reach the target address."""
     command = (
-        f"iperf3 -c {target} -t 1 -P 1 >/dev/null 2>&1 && echo open || "
-        "{ echo closed; false; }"
+        f"timeout 10 iperf3 -c {target} -t 1 -P 1 --connect-timeout 3000 "
+        ">/dev/null 2>&1 && echo open || { echo closed; false; }"
     )
     last_result = None
     for attempt in range(1, 4):

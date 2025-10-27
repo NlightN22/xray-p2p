@@ -14,8 +14,26 @@ from .helpers import (
 )
 
 
+def _ensure_iperf_server(host):
+    command = (
+        "if command -v rc-service >/dev/null 2>&1; then "
+        "rc-service iperf3 restart >/dev/null 2>&1 || rc-service iperf3 start >/dev/null 2>&1; "
+        "elif [ -x /etc/init.d/iperf3 ]; then "
+        "/etc/init.d/iperf3 restart >/dev/null 2>&1 || /etc/init.d/iperf3 start >/dev/null 2>&1; "
+        "elif pgrep -f 'iperf3 -s' >/dev/null 2>&1; then "
+        "true; "
+        "else "
+        "(iperf3 -s >/dev/null 2>&1 &) && sleep 1; "
+        "fi"
+    )
+    host.run(command)
+
+
 @pytest.fixture(scope="class")
 def wizard_context(host_r1, host_r2, host_r3, host_c1, host_c2, host_c3):
+    for iperf_host in (host_r1, host_c1, host_c2, host_c3):
+        _ensure_iperf_server(iperf_host)
+
     routers = {
         "r2-client": (host_r2, "10.0.102.0/24"),
         "r3-client": (host_r3, "10.0.103.0/24"),
@@ -35,7 +53,7 @@ class TestWizardTwoClientsToR1:
         _reset_wizard_state(wizard_context["server"], wizard_context["routers"])
 
     def test_stage_02_preflight(self, wizard_context):
-        _preflight_checks(wizard_context["routers"])
+        _preflight_checks(wizard_context["server"], wizard_context["routers"])
 
     def test_stage_03_provision(self, wizard_context):
         _provision_clients(wizard_context["server"], wizard_context["routers"])
@@ -73,7 +91,8 @@ def _reset_wizard_state(server_host, routers):
         assert not client_is_installed(router_host), f"{user} client should be absent after cleanup"
 
 
-def _preflight_checks(routers):
+def _preflight_checks(server_host, routers):
+    _ensure_iperf_server(server_host)
     for user, (router_host, _) in routers.items():
         check_iperf_open(router_host, f"{user} preflight", "10.0.0.1")
 
@@ -100,6 +119,8 @@ def _validate_server_state(server_host, expected_users):
 def _check_direct_tunnels(host_c1, host_r2, host_r3, host_c2, host_c3):
     c1_ip = get_interface_ipv4(host_c1, "eth1")
     assert c1_ip, "Unable to determine c1 LAN IP"
+
+    _ensure_iperf_server(host_c1)
 
     scenarios = [
         (host_r2, "router r2 direct tunnel"),
@@ -129,4 +150,8 @@ def _check_reverse_tunnels(host_r1, host_c1, host_c2, host_c3):
     ]
 
     for host, label, target_key in scenarios:
+        if target_key == "c2":
+            _ensure_iperf_server(host_c2)
+        elif target_key == "c3":
+            _ensure_iperf_server(host_c3)
         check_iperf_open(host, label, reverse_targets[target_key])
