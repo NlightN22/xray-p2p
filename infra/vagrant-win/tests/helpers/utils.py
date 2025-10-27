@@ -57,8 +57,13 @@ def ensure_stage_one(router_host, user: str, client_lan: str):
     Returns the cached CommandResult when the script has already been run.
     """
     key = (user, client_lan)
-    if key in _PROVISIONED:
-        return _PROVISIONED[key]
+    cached = _PROVISIONED.get(key)
+    if cached is not None:
+        cached_status = router_host.run("x2 status")
+        if cached_status.rc == 0 and "tunnel" in cached_status.stdout.lower():
+            _PROVISIONED[key] = cached_status
+            return cached_status
+        _PROVISIONED.pop(key, None)
 
     status = router_host.run("x2 status")
     if status.rc == 0 and "tunnel" in status.stdout.lower():
