@@ -9,6 +9,18 @@ XRAYP2P_DATA_DIR="/usr/share/xray-p2p"
 XRAYP2P_SERVICE="/etc/init.d/xray-p2p"
 XRAYP2P_UCI_CONFIG="/etc/config/xray-p2p"
 
+client_remove_clear_redirects() {
+    if ! command -v xray_run_repo_script >/dev/null 2>&1; then
+        return
+    fi
+
+    if (XRAY_SKIP_REPO_CHECK=1 XRAY_FORCE_CONFIG=1 \
+        xray_run_repo_script optional \
+            "scripts/redirect.sh" "scripts/redirect.sh" remove --all >/dev/null 2>&1); then
+        xray_log "Cleared transparent redirect entries."
+    fi
+}
+
 client_remove_usage() {
     cat <<EOF
 Usage: ${SCRIPT_NAME:-client.sh} remove [--purge-core]
@@ -46,6 +58,8 @@ client_remove_run() {
         "$XRAYP2P_SERVICE" stop >/dev/null 2>&1 || true
         "$XRAYP2P_SERVICE" disable >/dev/null 2>&1 || true
     fi
+
+    client_remove_clear_redirects
 
     if [ -e "$XRAYP2P_SERVICE" ]; then
         xray_log "Removing service script $XRAYP2P_SERVICE"
