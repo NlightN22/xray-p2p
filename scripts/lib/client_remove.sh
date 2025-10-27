@@ -10,6 +10,7 @@ XRAYP2P_SERVICE="/etc/init.d/xray-p2p"
 XRAYP2P_UCI_CONFIG="/etc/config/xray-p2p"
 
 client_remove_clear_redirects() {
+    # Wipe nftables redirect entries so subsequent installs start clean.
     if ! command -v xray_run_repo_script >/dev/null 2>&1; then
         return
     fi
