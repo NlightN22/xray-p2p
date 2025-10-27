@@ -1,0 +1,80 @@
+{
+  "inbounds": [
+    {
+      "tag": "socks-in",
+      "protocol": "socks",
+      "listen": "127.0.0.1",
+      "port": 51080,
+      "settings": {
+        "udp": true
+      }
+    },
+    {
+      "remark": "local-input",
+      "tag": "in-48044",
+      "listen": "0.0.0.0",
+      "port": 48044,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "network": "tcp",
+        "followRedirect": true
+      }
+    },
+    {
+      "port": 8443,
+      "listen": "0.0.0.0",
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "06fd2fd38940230a2a72b8878c23c2c7",
+            "email": "r2-client"
+          },
+          {
+            "password": "6d87655a453b7218cb1cb1052a38d50c",
+            "email": "r3-client"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/xray-p2p/cert.pem",
+              "keyFile": "/etc/xray-p2p/key.pem"
+            }
+          ]
+        },
+        "tcpSettings": {
+          "header": {
+            "type": "http",
+            "request": {
+              "version": "1.1",
+              "method": "GET",
+              "path": [
+                "/"
+              ],
+              "headers": {
+                "Host": [
+                  "www.bing.com",
+                  "www.apple.com"
+                ],
+                "User-Agent": [
+                  "Mozilla/5.0"
+                ],
+                "Accept-Encoding": [
+                  "gzip, deflate"
+                ],
+                "Connection": [
+                  "keep-alive"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

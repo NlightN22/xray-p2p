@@ -1,7 +1,7 @@
 import re
 import shlex
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import Dict, Iterator, List, Optional, Set
 from urllib.parse import urlsplit
 
 import pytest
@@ -209,7 +209,7 @@ def _redirect_subnet_set(host) -> Set[str]:
 
 
 @pytest.fixture(scope="module")
-def client_user_state(host_r2) -> ClientUserState:
+def client_user_state(host_r2) -> Iterator[ClientUserState]:
     server_remove(host_r2, purge_core=True, check=False)
     client_remove(host_r2, purge_core=True, check=False)
 
