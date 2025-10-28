@@ -98,10 +98,17 @@ if [ -n "${XRAY_INBOUND_FILE:-}" ]; then
 elif [ -n "${XRAY_DNS_INBOUND_FILE:-}" ]; then
     CLIENT_USER_INBOUND_FILE="$XRAY_DNS_INBOUND_FILE"
 else
-    CLIENT_USER_INBOUND_FILE="$CLIENT_USER_CONFIG_DIR/inbounds.json"
+CLIENT_USER_INBOUND_FILE="$CLIENT_USER_CONFIG_DIR/inbounds.json"
 fi
 
 CLIENT_USER_REDIRECT_SCRIPT="${XRAY_REDIRECT_SCRIPT:-scripts/redirect.sh}"
+
+client_user_redirect_entry_path() {
+    local subnet="$1"
+    local cleaned
+    cleaned=$(printf '%s' "$subnet" | tr 'A-Z' 'a-z' | sed 's/[^0-9a-z]/_/g')
+    printf '%s/xray_redirect_%s.entry' "${NFT_SNIPPET_DIR:-/etc/nftables.d/xray-transparent.d}" "$cleaned"
+}
 
 client_user_prepare_config() {
     if [ ! -f "$CLIENT_USER_OUTBOUNDS_FILE" ]; then
@@ -469,7 +476,18 @@ client_user_remove() {
     if [ -n "${subnets:-}" ]; then
         printf '%s\n' "$subnets" | while IFS= read -r subnet; do
             [ -n "$subnet" ] || continue
-            client_user_run_redirect remove "$subnet"
+            client_user_run_redirect remove "$subnet" || true
+            local entry_path
+            entry_path=$(client_user_redirect_entry_path "$subnet")
+            if [ -f "$entry_path" ]; then
+                rm -f "$entry_path"
+                if command -v fw4 >/dev/null 2>&1; then
+                    fw4 reload >/dev/null 2>&1 || true
+                elif command -v nft >/dev/null 2>&1; then
+                    local snippet="${NFT_SNIPPET:-/etc/nftables.d/xray-transparent.nft}"
+                    [ -f "$snippet" ] && nft -f "$snippet" >/dev/null 2>&1 || true
+                fi
+            fi
         done
     fi
 }
