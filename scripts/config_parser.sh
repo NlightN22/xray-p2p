@@ -82,10 +82,11 @@ jq \
     | (($inb.stream.security // "tls") | ascii_downcase) as $security
     | ($inb.stream.tlsSettings // {}) as $tls
     | ($tls.serverName // "") as $sni
+    | ($inb.listen // "") as $listen
     | (
         if $sni != "" then $sni
-        elif ($inb.listen // "") | test("^(0\\.0\\.0\\.0|::)$") then ""
-        elif ($inb.listen // "") != "" then ($inb.listen // "")
+        elif $listen == "0.0.0.0" or $listen == "::" then ""
+        elif $listen != "" then $listen
         else ""
         end
       ) as $host
