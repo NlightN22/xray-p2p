@@ -23,6 +23,10 @@ die() {
     exit 1
 }
 
+warn() {
+    printf 'Warning: %s\n' "$*" >&2
+}
+
 CONFIG_PATH=""
 HOST_OVERRIDE=""
 
@@ -66,7 +70,72 @@ if ! command -v jq >/dev/null 2>&1; then
     die "jq is required but not installed"
 fi
 
+detect_ip_with_ip() {
+    if ! command -v ip >/dev/null 2>&1; then
+        return 1
+    fi
+    ip -o -4 addr show scope global 2>/dev/null \
+        | awk '!/127\.0\.0\.1/ {split($4, a, "/"); if (a[1] != "") {print a[1]; exit}}'
+}
+
+detect_ip_with_ubus() {
+    if ! command -v ubus >/dev/null 2>&1 || ! command -v jsonfilter >/dev/null 2>&1; then
+        return 1
+    fi
+    ubus call network.interface.wan status 2>/dev/null \
+        | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null
+}
+
+detect_ip_with_hostname() {
+    if ! command -v hostname >/dev/null 2>&1; then
+        return 1
+    fi
+    hostname -I 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {print $i; exit}}'
+}
+
+detect_public_ip_simple() {
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsS https://ifconfig.me 2>/dev/null | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print; exit}'
+    elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://ifconfig.me 2>/dev/null | awk '/^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {print; exit}'
+    else
+        return 1
+    fi
+}
+
+autodetect_host() {
+    detected=""
+
+    detected=$(detect_ip_with_ip || true)
+    if [ -z "$detected" ]; then
+        detected=$(detect_ip_with_ubus || true)
+    fi
+    if [ -z "$detected" ]; then
+        detected=$(detect_ip_with_hostname || true)
+    fi
+    if [ -z "$detected" ]; then
+        detected=$(detect_public_ip_simple || true)
+    fi
+
+    if [ -n "$detected" ]; then
+        DEFAULT_HOST="$detected"
+        return 0
+    fi
+
+    return 1
+}
+
 DEFAULT_HOST=${HOST_OVERRIDE:-${XRAY_TROJAN_HOST:-}}
+
+if [ -z "$DEFAULT_HOST" ]; then
+    if autodetect_host; then
+        warn "Host not provided; using auto-detected value $DEFAULT_HOST"
+    fi
+fi
+
+if [ -z "$DEFAULT_HOST" ]; then
+    warn "Unable to infer host automatically. Pass --host or set XRAY_TROJAN_HOST for fully qualified URLs."
+fi
 
 jq \
     --arg default_host "$DEFAULT_HOST" \
