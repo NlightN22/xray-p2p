@@ -58,8 +58,10 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$CONFIG_PATH" ]; then
-    print_usage >&2
-    exit 1
+    if [ -t 0 ]; then
+        warn "No config file provided; reading configuration from stdin. Finish input with Ctrl+D."
+    fi
+    CONFIG_PATH="-"
 fi
 
 if [ "$CONFIG_PATH" != "-" ] && [ ! -r "$CONFIG_PATH" ]; then
