@@ -191,4 +191,5 @@ jq \
       + (if .sni != "" then "&sni=" + (.sni|@uri) else "" end)
       + (if .label != "" then "#" + (.label|@uri) else "" end)
     ' \
-    "$CONFIG_PATH"
+    "$CONFIG_PATH" |
+    awk 'BEGIN{found=0} {print; found=1} END{if (found==0) print "Warning: No trojan users found." >"/dev/stderr"}'
