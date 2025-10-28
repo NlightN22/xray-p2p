@@ -7,7 +7,7 @@ import pytest
 
 from .constants import SETUP_URL
 
-_PROVISIONED: Dict[Tuple[str, str], object] = {}
+_PROVISIONED: Dict[Tuple[str, str, str, str], object] = {}
 
 
 def run_checked(host, command: str, description: str):
@@ -51,28 +51,37 @@ def check_iperf_open(host, label: str, target: str):
     )
 
 
-def ensure_stage_one(router_host, user: str, client_lan: str):
+def ensure_stage_one(
+    router_host,
+    user: str,
+    client_lan: str,
+    server_addr: str = "10.0.0.1",
+    server_lan: str = "10.0.101.0/24",
+    skip_if_active: bool = True,
+):
     """
-    Execute the stage-one provisioning script exactly once per (user, client LAN).
-    Returns the cached CommandResult when the script has already been run.
+    Execute the stage-one provisioning script for a specific server/client pair.
+    Returns the cached CommandResult when the script has already been run for the
+    same (server, user, LAN) combination and the tunnel reports as active.
     """
-    key = (user, client_lan)
+    key = (server_addr, server_lan, user, client_lan)
     cached = _PROVISIONED.get(key)
-    if cached is not None:
+    if cached is not None and skip_if_active:
         cached_status = router_host.run("x2 status")
         if cached_status.rc == 0 and "tunnel" in cached_status.stdout.lower():
             _PROVISIONED[key] = cached_status
             return cached_status
         _PROVISIONED.pop(key, None)
 
-    status = router_host.run("x2 status")
-    if status.rc == 0 and "tunnel" in status.stdout.lower():
-        _PROVISIONED[key] = status
-        return status
+    if skip_if_active:
+        status = router_host.run("x2 status")
+        if status.rc == 0 and "tunnel" in status.stdout.lower():
+            _PROVISIONED[key] = status
+            return status
 
     command = (
         f"curl -fsSL {SETUP_URL} | XRAY_SKIP_PORT_CHECK=1 sh -s -- "
-        f"10.0.0.1 {user} 10.0.101.0/24 {client_lan}"
+        f"{server_addr} {user} {server_lan} {client_lan}"
     )
     result = router_host.run(command)
     combined_output = f"{result.stdout}\n{result.stderr}"
