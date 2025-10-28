@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=ash
+#################
 
 set -eu
 
