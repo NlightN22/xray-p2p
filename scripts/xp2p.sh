@@ -126,6 +126,16 @@ xp2p_print_available() {
     xp2p_print_available_dir "$XP2P_SCRIPTS_DIR"
 }
 
+xp2p_post_install_summary() {
+    dir="$1"
+    printf 'Run: %s/xp2p.sh <command> ...\n' "$dir"
+    printf '\nAvailable targets:\n'
+    xp2p_print_available_dir "$dir"
+    printf '\nNext steps:\n'
+    printf '  sh %s/xp2p.sh --help\n' "$dir"
+    printf '  sh %s/xp2p.sh <group> ...\n' "$dir"
+}
+
 xp2p_usage() {
     printf 'Usage: %s <group> [subgroup] [--] [options]\n' "$SCRIPT_NAME"
     printf '       %s install [--dir PATH] [--force]\n' "$SCRIPT_NAME"
@@ -184,12 +194,18 @@ xp2p_cmd_install() {
         return 1
     fi
 
+    scripts_dir="${target_dir%/}/scripts"
+
     if [ -d "$target_dir" ] && [ "$force_mode" -ne 1 ] && [ "$(ls -A "$target_dir" 2>/dev/null)" ]; then
+        if [ -f "$scripts_dir/xp2p.sh" ]; then
+            printf 'XRAY-P2P scripts already installed in %s.\n' "$scripts_dir"
+            xp2p_post_install_summary "$scripts_dir"
+            return 0
+        fi
         printf 'Error: %s is not empty. Use --force to overwrite.\n' "$target_dir" >&2
         return 1
     fi
 
-    scripts_dir="${target_dir%/}/scripts"
     printf 'Preparing XRAY-P2P installation in %s...\n' "$scripts_dir"
     if ! mkdir -p "$scripts_dir"; then
         printf 'Error: Unable to create %s.\n' "$scripts_dir" >&2
@@ -207,12 +223,7 @@ xp2p_cmd_install() {
     done
 
     printf 'XRAY-P2P scripts installed into %s.\n' "$scripts_dir"
-    printf 'Run: %s/xp2p.sh <command> ...\n' "$scripts_dir"
-    printf '\nAvailable targets:\n'
-    xp2p_print_available_dir "$scripts_dir"
-    printf '\nNext steps:\n'
-    printf '  sh %s/xp2p.sh --help\n' "$scripts_dir"
-    printf '  sh %s/xp2p.sh <group> ...\n' "$scripts_dir"
+    xp2p_post_install_summary "$scripts_dir"
 }
 
 xp2p_find_script() {
