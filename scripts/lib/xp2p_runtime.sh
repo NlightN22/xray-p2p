@@ -13,6 +13,7 @@ XP2P_REMOTE_BASE=${XP2P_REMOTE_BASE%/}
 
 XP2P_CORE_FILES="client.sh client_reverse.sh client_user.sh server.sh server_reverse.sh server_user.sh server_cert.sh redirect.sh dns_forward.sh config_parser.sh xsetup.sh"
 XP2P_LIB_FILES="lib/bootstrap.sh lib/client_connection.sh lib/client_install.sh lib/client_remove.sh lib/client_reverse_inputs.sh lib/client_reverse_routing.sh lib/client_reverse_store.sh lib/common.sh lib/common_loader.sh lib/dns_forward_core.sh lib/dns_forward_store.sh lib/interface_detect.sh lib/ip_show.sh lib/lan_detect.sh lib/network_interfaces.sh lib/network_validation.sh lib/redirect.sh lib/reverse_common.sh lib/server_cert_paths.sh lib/server_install.sh lib/server_install_cert_apply.sh lib/server_install_cert_selfsigned.sh lib/server_install_port.sh lib/server_remove.sh lib/server_reverse_inputs.sh lib/server_reverse_routing.sh lib/server_reverse_store.sh lib/server_user_common.sh lib/server_user_issue.sh lib/server_user_remove.sh lib/user_list.sh lib/xp2p_runtime.sh"
+XP2P_TEMPLATE_FILES="config_templates/xray-p2p.config config_templates/xray-p2p.init config_templates/client/inbounds.json config_templates/client/logs.json config_templates/client/outbounds.json config_templates/client/routing.json config_templates/server/inbounds.json config_templates/server/logs.json config_templates/server/outbounds.json config_templates/server/routing.json"
 
 xp2p_is_openwrt() {
     [ "${XP2P_FORCE_OPENWRT:-}" = "1" ] && return 0
@@ -68,7 +69,15 @@ xp2p_download_file() {
         return 1
     fi
 
-    url="$XP2P_REMOTE_BASE/scripts/$rel"
+    case "$rel" in
+        config_templates/*)
+            remote_rel="$rel"
+            ;;
+        *)
+            remote_rel="scripts/$rel"
+            ;;
+    esac
+    url="$XP2P_REMOTE_BASE/$remote_rel"
     tmp="$(mktemp 2>/dev/null)" || {
         [ "$mode" = "quiet" ] || printf 'Error: Unable to create temporary file while fetching %s.\n' "$rel" >&2
         return 1
@@ -103,23 +112,40 @@ xp2p_download_file() {
     fi
 
     case "$rel" in
-        lib/*) chmod 0644 "$dest" 2>/dev/null || true ;;
-        *) chmod 0755 "$dest" 2>/dev/null || true ;;
+        lib/*|config_templates/*)
+            chmod 0644 "$dest" 2>/dev/null || true
+            ;;
+        *)
+            chmod 0755 "$dest" 2>/dev/null || true
+            ;;
+    esac
+}
+
+xp2p_asset_base_for() {
+    rel="$1"
+    case "$rel" in
+        config_templates/*)
+            printf '%s\n' "${XP2P_ROOT_DIR:-$XP2P_SCRIPTS_DIR}"
+            ;;
+        *)
+            printf '%s\n' "$XP2P_SCRIPTS_DIR"
+            ;;
     esac
 }
 
 xp2p_ensure_rel_file() {
     rel="$1"
     mode="$2"
-    dest="${XP2P_SCRIPTS_DIR%/}/$rel"
+    base_dir="$(xp2p_asset_base_for "$rel")"
+    dest="${base_dir%/}/$rel"
     [ -f "$dest" ] && return 0
     [ "$mode" = "quiet" ] || printf 'Fetching %s...\n' "$rel"
-    xp2p_download_file "$rel" "$XP2P_SCRIPTS_DIR" "$mode"
+    xp2p_download_file "$rel" "$base_dir" "$mode"
 }
 
 xp2p_auto_bootstrap() {
     [ "${XP2P_AUTO_BOOTSTRAP_DONE:-0}" = "1" ] && return 0
-    for file in $XP2P_CORE_FILES $XP2P_LIB_FILES; do
+    for file in $XP2P_CORE_FILES $XP2P_LIB_FILES $XP2P_TEMPLATE_FILES; do
         xp2p_ensure_rel_file "$file" || return 1
     done
     XP2P_AUTO_BOOTSTRAP_DONE=1
@@ -154,6 +180,14 @@ xp2p_post_install_summary() {
     else
         printf '  sh %s/xp2p.sh --help\n' "$dir"
         printf '  sh %s/xp2p.sh <group> ...\n' "$dir"
+    fi
+    root_hint="$dir"
+    case "$root_hint" in
+        */scripts) root_hint=${root_hint%/scripts} ;;
+        */scripts/) root_hint=${root_hint%/scripts/} ;;
+    esac
+    if [ -n "$root_hint" ] && [ "$root_hint" != "$dir" ]; then
+        printf 'Config templates: %s/config_templates\n' "$root_hint"
     fi
 }
 
@@ -244,6 +278,14 @@ xp2p_cmd_install() {
         fi
     done
 
+    for file in $XP2P_TEMPLATE_FILES; do
+        printf 'Downloading %s...\n' "$file"
+        if ! xp2p_download_file "$file" "$target_dir"; then
+            printf 'Error: Installation failed while downloading %s.\n' "$file" >&2
+            return 1
+        fi
+    done
+
     printf 'XRAY-P2P scripts installed into %s.\n' "$scripts_dir"
 
     if xp2p_is_openwrt && [ "$(id -u 2>/dev/null)" = "0" ]; then
@@ -308,6 +350,16 @@ xp2p_usage() {
 }
 
 xp2p_runtime_main() {
+    xp2p_root_hint="$XP2P_SCRIPTS_DIR"
+    case "$xp2p_root_hint" in
+        */scripts) xp2p_root_hint=${xp2p_root_hint%/scripts} ;;
+        */scripts/) xp2p_root_hint=${xp2p_root_hint%/scripts/} ;;
+    esac
+    [ -n "$xp2p_root_hint" ] || xp2p_root_hint="."
+    export XP2P_ROOT_DIR="$xp2p_root_hint"
+    export XRAY_SELF_DIR="$xp2p_root_hint"
+    export XRAY_SCRIPT_ROOT="$xp2p_root_hint"
+
     if [ "$#" -eq 0 ] && [ "${XP2P_PIPE_AUTO_INSTALL:-1}" != "0" ]; then
         case "$SCRIPT_NAME" in
             sh|dash|bash)

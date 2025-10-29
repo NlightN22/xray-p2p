@@ -19,6 +19,14 @@ XP2P_SCRIPTS_DIR=${XRAY_SELF_DIR%/}
 XP2P_REMOTE_BASE=${XRAY_REPO_BASE_URL:-https://raw.githubusercontent.com/NlightN22/xray-p2p/main}
 XP2P_REMOTE_BASE=${XP2P_REMOTE_BASE%/}
 
+XP2P_ROOT_DIR="$XP2P_SCRIPTS_DIR"
+case "$XP2P_ROOT_DIR" in
+    */scripts) XP2P_ROOT_DIR=${XP2P_ROOT_DIR%/scripts} ;;
+    */scripts/) XP2P_ROOT_DIR=${XP2P_ROOT_DIR%/scripts/} ;;
+esac
+[ -n "$XP2P_ROOT_DIR" ] || XP2P_ROOT_DIR="."
+export XP2P_ROOT_DIR
+
 xp2p_try_source() {
     for candidate in "$@"; do
         [ -r "$candidate" ] || continue
@@ -47,7 +55,14 @@ xp2p_try_source() {
         esac
         if [ -n "$scripts_candidate" ]; then
             XP2P_SCRIPTS_DIR="$scripts_candidate"
+            case "$XP2P_SCRIPTS_DIR" in
+                */scripts) XP2P_ROOT_DIR=${XP2P_SCRIPTS_DIR%/scripts} ;;
+                */scripts/) XP2P_ROOT_DIR=${XP2P_SCRIPTS_DIR%/scripts/} ;;
+                *) XP2P_ROOT_DIR="$XP2P_SCRIPTS_DIR" ;;
+            esac
+            [ -n "$XP2P_ROOT_DIR" ] || XP2P_ROOT_DIR="."
             export XP2P_SCRIPTS_DIR
+            export XP2P_ROOT_DIR
         fi
         # shellcheck disable=SC1090
         . "$candidate"
