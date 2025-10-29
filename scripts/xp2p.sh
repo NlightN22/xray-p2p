@@ -22,6 +22,33 @@ XP2P_REMOTE_BASE=${XP2P_REMOTE_BASE%/}
 xp2p_try_source() {
     for candidate in "$@"; do
         [ -r "$candidate" ] || continue
+        candidate_dir=$(dirname "$candidate")
+        scripts_candidate=""
+        case "$candidate" in
+            /*)
+                case "$candidate_dir" in
+                    */lib)
+                        scripts_candidate=$(dirname "$candidate_dir")
+                        ;;
+                esac
+                ;;
+            *)
+                if [ -n "$candidate_dir" ] && [ "$candidate_dir" != "." ]; then
+                    candidate_dir_abs=$(CDPATH= cd -- "$candidate_dir" 2>/dev/null && pwd)
+                    if [ -n "$candidate_dir_abs" ]; then
+                        case "$candidate_dir_abs" in
+                            */lib)
+                                scripts_candidate=$(dirname "$candidate_dir_abs")
+                                ;;
+                        esac
+                    fi
+                fi
+                ;;
+        esac
+        if [ -n "$scripts_candidate" ]; then
+            XP2P_SCRIPTS_DIR="$scripts_candidate"
+            export XP2P_SCRIPTS_DIR
+        fi
         # shellcheck disable=SC1090
         . "$candidate"
         return 0

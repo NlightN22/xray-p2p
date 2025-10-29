@@ -148,10 +148,12 @@ xp2p_post_install_summary() {
     printf '\nAvailable targets:\n'
     xp2p_print_available_dir "$dir"
     printf '\nNext steps:\n'
-    printf '  sh %s/xp2p.sh --help\n' "$dir"
-    printf '  sh %s/xp2p.sh <group> ...\n' "$dir"
     if command -v xp2p >/dev/null 2>&1; then
+        printf '  xp2p --help\n'
         printf '  xp2p <group> ...\n'
+    else
+        printf '  sh %s/xp2p.sh --help\n' "$dir"
+        printf '  sh %s/xp2p.sh <group> ...\n' "$dir"
     fi
 }
 
@@ -212,6 +214,7 @@ xp2p_cmd_install() {
                     /usr/libexec/xp2p/scripts)
                         if ln -sf "$scripts_dir/xp2p.sh" /usr/bin/xp2p 2>/dev/null; then
                             printf 'Symlink created: %s -> %s\n' "/usr/bin/xp2p" "$scripts_dir/xp2p.sh"
+                            hash -r 2>/dev/null || true
                         else
                             printf 'Warning: Unable to create symlink %s.\n' "/usr/bin/xp2p" >&2
                         fi
@@ -249,6 +252,7 @@ xp2p_cmd_install() {
                 link_target="/usr/bin/xp2p"
                 if ln -sf "$scripts_dir/xp2p.sh" "$link_target" 2>/dev/null; then
                     printf 'Symlink created: %s -> %s\n' "$link_target" "$scripts_dir/xp2p.sh"
+                    hash -r 2>/dev/null || true
                 else
                     printf 'Warning: Unable to create symlink %s.\n' "$link_target" >&2
                 fi
