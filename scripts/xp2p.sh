@@ -89,7 +89,11 @@ xp2p_ensure_rel_file() {
     mode="$2"
     dest="${XP2P_SCRIPTS_DIR%/}/$rel"
 
-    [ -f "$dest" ] && return 0
+    if [ -f "$dest" ]; then
+        return 0
+    fi
+
+    [ "$mode" = "quiet" ] || printf 'Fetching %s...\n' "$rel"
     xp2p_download_file "$rel" "$XP2P_SCRIPTS_DIR" "$mode"
 }
 
@@ -186,12 +190,16 @@ xp2p_cmd_install() {
     fi
 
     scripts_dir="${target_dir%/}/scripts"
+    printf 'Preparing XRAY-P2P installation in %s...\n' "$scripts_dir"
     if ! mkdir -p "$scripts_dir"; then
         printf 'Error: Unable to create %s.\n' "$scripts_dir" >&2
         return 1
     fi
 
-    for file in $XP2P_CORE_FILES $XP2P_LIB_FILES xp2p.sh; do
+    bundle_list="$XP2P_CORE_FILES $XP2P_LIB_FILES xp2p.sh"
+
+    for file in $bundle_list; do
+        printf 'Downloading %s...\n' "$file"
         if ! xp2p_download_file "$file" "$scripts_dir"; then
             printf 'Error: Installation failed while downloading %s.\n' "$file" >&2
             return 1
