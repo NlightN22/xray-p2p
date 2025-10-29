@@ -103,8 +103,10 @@ xp2p_auto_bootstrap() {
     XP2P_AUTO_BOOTSTRAP_DONE=1
 }
 
-xp2p_print_available() {
-    for file in "$XP2P_SCRIPTS_DIR"/*.sh; do
+xp2p_print_available_dir() {
+    dir="$1"
+    [ -n "$dir" ] || return 0
+    for file in "$dir"/*.sh; do
         [ -f "$file" ] || continue
         base=$(basename "$file")
         case "$base" in
@@ -114,6 +116,10 @@ xp2p_print_available() {
         esac
         printf '  %s\n' "$(printf '%s' "${base%.sh}" | tr '_' ' ')"
     done
+}
+
+xp2p_print_available() {
+    xp2p_print_available_dir "$XP2P_SCRIPTS_DIR"
 }
 
 xp2p_usage() {
@@ -194,6 +200,11 @@ xp2p_cmd_install() {
 
     printf 'XRAY-P2P scripts installed into %s.\n' "$scripts_dir"
     printf 'Run: %s/xp2p.sh <command> ...\n' "$scripts_dir"
+    printf '\nAvailable targets:\n'
+    xp2p_print_available_dir "$scripts_dir"
+    printf '\nNext steps:\n'
+    printf '  sh %s/xp2p.sh --help\n' "$scripts_dir"
+    printf '  sh %s/xp2p.sh <group> ...\n' "$scripts_dir"
 }
 
 xp2p_find_script() {
