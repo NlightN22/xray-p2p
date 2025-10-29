@@ -1,3 +1,4 @@
+import json
 import re
 import shlex
 from dataclasses import dataclass
@@ -124,48 +125,87 @@ def redirect_exec(
 
 
 def _parse_client_entries(output: str) -> List[ClientEntry]:
-    lines = [line.rstrip() for line in output.splitlines() if line.strip()]
-    if not lines:
+    output = output.strip()
+    if not output:
         return []
-    if lines[0].startswith("No client outbounds configured."):
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        # Fallback to legacy table parsing for compatibility with older script versions.
+        lines = [line.rstrip() for line in output.splitlines() if line.strip()]
+        if not lines or lines[0].startswith("No client outbounds configured."):
+            return []
+        header = lines[0]
+        assert header.startswith("Tag\tProtocol\tTarget"), f"Unexpected client_user header: {header}"
+        entries: List[ClientEntry] = []
+        for line in lines[1:]:
+            parts = line.split("\t")
+            if len(parts) != 5:
+                continue
+            entries.append(ClientEntry(*parts))
+        return entries
+    if not isinstance(payload, list):
         return []
-    header = lines[0]
-    assert header.startswith("Tag\tProtocol\tTarget"), f"Unexpected client_user header: {header}"
     entries: List[ClientEntry] = []
-    for line in lines[1:]:
-        parts = line.split("\t")
-        if len(parts) != 5:
+    for item in payload:
+        if not isinstance(item, dict):
             continue
-        entries.append(ClientEntry(*parts))
+        entries.append(
+            ClientEntry(
+                tag=str(item.get("Tag", "")),
+                protocol=str(item.get("Protocol", "")),
+                target=str(item.get("Target", "")),
+                network=str(item.get("Network", "")),
+                security=str(item.get("Security", "")),
+            )
+        )
     return entries
 
 
 def _parse_redirect_entries(output: str) -> List[RedirectEntry]:
-    lines = [line.rstrip() for line in output.splitlines() if line.strip()]
-    if not lines:
+    output = output.strip()
+    if not output:
         return []
-    if lines[0].startswith("No transparent redirect entries found."):
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError:
+        # Legacy table parsing fallback.
+        lines = [line.rstrip() for line in output.splitlines() if line.strip()]
+        if not lines or lines[0].startswith("No transparent redirect entries found."):
+            return []
+        entries: List[RedirectEntry] = []
+        for line in lines[2:]:
+            if re.fullmatch(r"-+", line):
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            subnet = parts[0]
+            port = parts[-1]
+            entries.append(RedirectEntry(subnet=subnet, port=port))
+        return entries
+    if not isinstance(payload, list):
         return []
     entries: List[RedirectEntry] = []
-    for line in lines[2:]:
-        if re.fullmatch(r"-+", line):
+    for item in payload:
+        if not isinstance(item, dict):
             continue
-        parts = line.split()
-        if len(parts) < 2:
-            continue
-        subnet = parts[0]
-        port = parts[-1]
-        entries.append(RedirectEntry(subnet=subnet, port=port))
+        entries.append(
+            RedirectEntry(
+                subnet=str(item.get("Subnet", "")),
+                port=str(item.get("Port", "")),
+            )
+        )
     return entries
 
 
 def client_user_list(host) -> List[ClientEntry]:
-    result = client_user_exec(host, "list")
+    result = client_user_exec(host, "--json", "list")
     return _parse_client_entries(result.stdout)
 
 
 def redirect_list(host) -> List[RedirectEntry]:
-    result = redirect_exec(host, "list")
+    result = redirect_exec(host, "--json", "list")
     return _parse_redirect_entries(result.stdout)
 
 
