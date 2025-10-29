@@ -22,6 +22,33 @@ XP2P_REMOTE_BASE=${XP2P_REMOTE_BASE%/}
 XP2P_CORE_FILES="client.sh client_reverse.sh client_user.sh server.sh server_reverse.sh server_user.sh server_cert.sh redirect.sh dns_forward.sh config_parser.sh xsetup.sh"
 XP2P_LIB_FILES="lib/bootstrap.sh lib/client_connection.sh lib/client_install.sh lib/client_remove.sh lib/client_reverse_inputs.sh lib/client_reverse_routing.sh lib/client_reverse_store.sh lib/common.sh lib/common_loader.sh lib/dns_forward_core.sh lib/dns_forward_store.sh lib/interface_detect.sh lib/ip_show.sh lib/lan_detect.sh lib/network_interfaces.sh lib/network_validation.sh lib/redirect.sh lib/reverse_common.sh lib/server_cert_paths.sh lib/server_install.sh lib/server_install_cert_apply.sh lib/server_install_cert_selfsigned.sh lib/server_install_port.sh lib/server_remove.sh lib/server_reverse_inputs.sh lib/server_reverse_routing.sh lib/server_reverse_store.sh lib/server_user_common.sh lib/server_user_issue.sh lib/server_user_remove.sh lib/user_list.sh"
 
+xp2p_is_openwrt() {
+    if [ -r /etc/openwrt_release ]; then
+        return 0
+    fi
+    if [ -r /etc/os-release ]; then
+        if grep -qi 'openwrt' /etc/os-release 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+xp2p_default_install_dir() {
+    if xp2p_is_openwrt; then
+        if [ "$(id -u 2>/dev/null)" = "0" ]; then
+            printf '%s\n' "/usr/libexec/xp2p"
+            return
+        fi
+        if [ -n "${HOME:-}" ] && [ "$HOME" != "/" ]; then
+            printf '%s\n' "$HOME/xray-p2p"
+            return
+        fi
+    fi
+
+    printf '%s\n' "xray-p2p"
+}
+
 xp2p_download_file() {
     rel="$1"
     base_dir="$2"
@@ -187,7 +214,7 @@ xp2p_cmd_install() {
         shift
     done
 
-    [ -n "$target_dir" ] || target_dir="xray-p2p"
+    [ -n "$target_dir" ] || target_dir="$(xp2p_default_install_dir)"
 
     if [ -e "$target_dir" ] && [ ! -d "$target_dir" ]; then
         printf 'Error: %s exists and is not a directory.\n' "$target_dir" >&2
@@ -224,6 +251,15 @@ xp2p_cmd_install() {
 
     printf 'XRAY-P2P scripts installed into %s.\n' "$scripts_dir"
     xp2p_post_install_summary "$scripts_dir"
+
+    if xp2p_is_openwrt && [ "$(id -u 2>/dev/null)" = "0" ]; then
+        link_target="/usr/bin/xp2p"
+        if ln -sf "$scripts_dir/xp2p.sh" "$link_target" 2>/dev/null; then
+            printf 'Symlink created: %s -> %s\n' "$link_target" "$scripts_dir/xp2p.sh"
+        else
+            printf 'Warning: Unable to create symlink %s.\n' "$link_target" >&2
+        fi
+    fi
 }
 
 xp2p_find_script() {
