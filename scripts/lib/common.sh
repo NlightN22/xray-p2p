@@ -102,16 +102,25 @@ xray_print_table() {
             if (row_count == 0) {
                 exit 0
             }
+            for (c = 1; c <= max_fields; c++) {
+                if (width[c] > 0) {
+                    fmt[c] = sprintf("%%-%ds", width[c])
+                } else {
+                    fmt[c] = "%s"
+                }
+            }
             for (r = 1; r <= row_count; r++) {
                 for (c = 1; c <= max_fields; c++) {
                     text = field[r, c]
+                    if (text == "")
+                        text = ""
                     if (c < max_fields) {
-                        printf "%-*s", width[c], text
+                        printf fmt[c], text
                         if (max_fields > 1) {
                             printf "  "
                         }
                     } else {
-                        printf "%s", text
+                        printf fmt[c], text
                     }
                 }
                 printf "\n"
