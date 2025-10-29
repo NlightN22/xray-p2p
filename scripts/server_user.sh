@@ -6,12 +6,15 @@ SCRIPT_NAME=${0##*/}
 usage() {
     cat <<EOF
 Usage:
-  $SCRIPT_NAME                 List registered XRAY clients.
+  $SCRIPT_NAME [--json]        List registered XRAY clients.
   $SCRIPT_NAME list            Same as default list action.
   $SCRIPT_NAME issue [options] [EMAIL] [SERVER_ADDRESS]
   $SCRIPT_NAME remove [options] [EMAIL]
 
 Run \`$SCRIPT_NAME <command> --help\` for command specific options.
+
+Global options:
+  --json                       Emit JSON instead of a table.
 EOF
     exit "${1:-0}"
 }
@@ -120,6 +123,14 @@ server_user_cmd_list() {
 }
 
 main() {
+    while [ "$#" -gt 0 ]; do
+        if xray_consume_json_flag "$@"; then
+            shift "$XRAY_JSON_FLAG_CONSUMED"
+            continue
+        fi
+        break
+    done
+
     if [ "$#" -eq 0 ]; then
         server_user_cmd_list
         return
@@ -133,6 +144,13 @@ main() {
             usage 0
             ;;
         list)
+            while [ "$#" -gt 0 ]; do
+                if xray_consume_json_flag "$@"; then
+                    shift "$XRAY_JSON_FLAG_CONSUMED"
+                    continue
+                fi
+                break
+            done
             if [ "$#" -gt 0 ]; then
                 printf 'list command does not take arguments.\n' >&2
                 usage 1

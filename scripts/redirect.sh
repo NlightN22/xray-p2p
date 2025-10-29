@@ -7,10 +7,13 @@ SCRIPT_NAME=${0##*/}
 usage() {
     cat <<EOF
 Usage:
-  $SCRIPT_NAME                 List configured transparent redirects.
+  $SCRIPT_NAME [--json]        List configured transparent redirects.
   $SCRIPT_NAME list            Same as default list action.
   $SCRIPT_NAME add [SUBNET] [PORT]
   $SCRIPT_NAME remove [SUBNET|--all]
+
+Global options:
+  --json                       Emit JSON instead of a table.
 
 Environment:
   NFT_SNIPPET        Override nftables snippet path (default: /etc/nftables.d/xray-transparent.nft).
@@ -112,11 +115,16 @@ redirect_prompt_subnet() {
 }
 
 cmd_list() {
-    local entries
+    local entries format
+    format="${XRAY_OUTPUT_MODE:-table}"
     redirect_migrate_legacy_snippet || true
     entries="$(redirect_find_entries || true)"
     if [ -z "${entries:-}" ]; then
-        printf 'No transparent redirect entries found.\n'
+        if [ "$format" = "json" ]; then
+            printf '[]\n'
+        else
+            printf 'No transparent redirect entries found.\n'
+        fi
         return
     fi
     {
@@ -242,6 +250,15 @@ cmd_remove() {
 
 main() {
     local command
+
+    while [ "$#" -gt 0 ]; do
+        if xray_consume_json_flag "$@"; then
+            shift "$XRAY_JSON_FLAG_CONSUMED"
+            continue
+        fi
+        break
+    done
+
     if [ "$#" -eq 0 ]; then
         cmd_list
         return
@@ -253,6 +270,13 @@ main() {
             usage 0
             ;;
         list)
+            while [ "$#" -gt 0 ]; do
+                if xray_consume_json_flag "$@"; then
+                    shift "$XRAY_JSON_FLAG_CONSUMED"
+                    continue
+                fi
+                break
+            done
             if [ "$#" -gt 0 ]; then
                 printf 'list command does not take arguments.\n' >&2
                 usage 1

@@ -74,9 +74,83 @@ xray_warn() {
     printf 'Warning: %s\n' "$*" >&2
 }
 
+xray_consume_json_flag() {
+    XRAY_JSON_FLAG_CONSUMED=0
+    if [ "$#" -lt 1 ]; then
+        return 1
+    fi
+
+    case "$1" in
+        --json)
+            XRAY_OUTPUT_MODE="json"
+            export XRAY_OUTPUT_MODE
+            XRAY_JSON_FLAG_CONSUMED=1
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
 xray_print_table() {
-    local tab
+    local tab format
     tab=$(printf '\t')
+
+    format="${XRAY_OUTPUT_MODE:-table}"
+
+    if [ "$format" = "json" ]; then
+        awk -v tab="$tab" '
+            BEGIN {
+                FS = tab
+                cols = 0
+                started = 0
+            }
+            NF == 0 { next }
+            NR == 1 {
+                cols = NF
+                for (i = 1; i <= NF; i++) {
+                    header[i] = $i
+                }
+                next
+            }
+            {
+                if (!started) {
+                    printf "[\n"
+                    started = 1
+                } else {
+                    printf ",\n"
+                }
+                printf "  {"
+                for (i = 1; i <= cols; i++) {
+                    key = (i <= cols) ? header[i] : ""
+                    value = (i <= NF) ? $i : ""
+                    gsub(/\\/,"\\\\", key)
+                    gsub(/"/,"\\\"", key)
+                    gsub(/\r/,"\\r", key)
+                    gsub(/\n/,"\\n", key)
+                    gsub(/\t/,"\\t", key)
+                    gsub(/\\/,"\\\\", value)
+                    gsub(/"/,"\\\"", value)
+                    gsub(/\r/,"\\r", value)
+                    gsub(/\n/,"\\n", value)
+                    gsub(/\t/,"\\t", value)
+                    printf "%s\"%s\":\"%s\"", (i == 1 ? "" : ", "), key, value
+                }
+                printf "}"
+            }
+            END {
+                if (!cols) {
+                    printf "[]\n"
+                } else if (!started) {
+                    printf "[]\n"
+                } else {
+                    printf "\n]\n"
+                }
+            }
+        '
+        return
+    fi
+
     if [ "${XRAY_TABLE_DISABLE_COLUMN:-0}" != "1" ] && command -v column >/dev/null 2>&1; then
         column -t -s "$tab"
         return

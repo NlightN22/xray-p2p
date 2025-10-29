@@ -13,12 +13,15 @@ server_user_require_inbounds() {
 
 server_user_show_clients() {
     server_user_init_paths
+    format="${XRAY_OUTPUT_MODE:-table}"
     if clients_output=$(XRAY_CONFIG_DIR="$SERVER_USER_CONFIG_DIR" \
             XRAY_INBOUNDS_FILE="$SERVER_USER_INBOUNDS_FILE" \
             XRAY_CLIENTS_FILE="$SERVER_USER_CLIENTS_FILE" \
             xray_run_repo_script optional "lib/user_list.sh" "scripts/lib/user_list.sh" 2>&1); then
         if [ -n "$clients_output" ]; then
-            xray_log "Current clients (email password status):"
+            if [ "$format" != "json" ]; then
+                xray_log "Current clients (email password status):"
+            fi
             printf '%s\n' "$clients_output"
         fi
     elif [ -n "$clients_output" ]; then

@@ -6,7 +6,7 @@ SCRIPT_NAME=${0##*/}
 usage() {
     cat <<EOF
 Usage:
-  $SCRIPT_NAME                 List configured client outbounds.
+  $SCRIPT_NAME [--json]        List configured client outbounds.
   $SCRIPT_NAME list            Same as default list action.
   $SCRIPT_NAME add TROJAN_URL [SUBNET] [PORT]
       TROJAN_URL  Trojan connection string (trojan://...). Tag is derived from host:port.
@@ -14,6 +14,9 @@ Usage:
       PORT        Optional dokodemo-door port for redirect.sh; auto-detected when omitted.
   $SCRIPT_NAME remove TAG
       TAG         Outbound tag to remove (e.g. host-port constructed during add).
+
+Global options:
+  --json                       Emit JSON instead of a table.
 
 Environment:
   XRAY_CONFIG_DIR       Override XRAY configuration directory (default: /etc/xray-p2p).
@@ -124,14 +127,20 @@ client_user_require_jq() {
 }
 
 client_user_list() {
+    local entries format
+    format="${XRAY_OUTPUT_MODE:-table}"
+
     if [ ! -f "$CLIENT_USER_OUTBOUNDS_FILE" ]; then
-        xray_log "Outbound configuration not found: $CLIENT_USER_OUTBOUNDS_FILE"
+        if [ "$format" = "json" ]; then
+            printf '[]\n'
+        else
+            xray_log "Outbound configuration not found: $CLIENT_USER_OUTBOUNDS_FILE"
+        fi
         return 0
     fi
 
     client_user_require_jq
 
-    local entries
     entries="$(jq -r '
         (.outbounds // []) |
         map({
@@ -148,7 +157,11 @@ client_user_list() {
     ' "$CLIENT_USER_OUTBOUNDS_FILE" 2>/dev/null || true)"
 
     if [ -z "${entries:-}" ]; then
-        printf 'No client outbounds configured.\n'
+        if [ "$format" = "json" ]; then
+            printf '[]\n'
+        else
+            printf 'No client outbounds configured.\n'
+        fi
         return 0
     fi
 
@@ -495,6 +508,14 @@ client_user_remove() {
 main() {
     umask 077
 
+    while [ "$#" -gt 0 ]; do
+        if xray_consume_json_flag "$@"; then
+            shift "$XRAY_JSON_FLAG_CONSUMED"
+            continue
+        fi
+        break
+    done
+
     if [ "$#" -eq 0 ]; then
         client_user_list
         return
@@ -508,6 +529,13 @@ main() {
             usage 0
             ;;
         list)
+            while [ "$#" -gt 0 ]; do
+                if xray_consume_json_flag "$@"; then
+                    shift "$XRAY_JSON_FLAG_CONSUMED"
+                    continue
+                fi
+                break
+            done
             if [ "$#" -gt 0 ]; then
                 printf 'list command does not take arguments.\n' >&2
                 usage 1

@@ -64,6 +64,16 @@ xray_user_list_main() {
     INBOUNDS_FILE="${XRAY_INBOUNDS_FILE:-$CONFIG_DIR/inbounds.json}"
     CLIENTS_DIR="${XRAY_CLIENTS_DIR:-$CONFIG_DIR/config}"
     CLIENTS_FILE="${XRAY_CLIENTS_FILE:-$CLIENTS_DIR/clients.json}"
+    format="${XRAY_OUTPUT_MODE:-table}"
+
+    while [ "$#" -gt 0 ]; do
+        if xray_consume_json_flag "$@"; then
+            shift "$XRAY_JSON_FLAG_CONSUMED"
+            continue
+        fi
+        printf 'Unexpected argument: %s\n' "$1" >&2
+        return 1
+    done
 
     xray_require_cmd jq
 
@@ -71,6 +81,9 @@ xray_user_list_main() {
 
     if [ ! -f "$CLIENTS_FILE" ]; then
         xray_warn "Clients registry not found: $CLIENTS_FILE"
+        if [ "$format" = "json" ]; then
+            printf '[]\n'
+        fi
         return 0
     fi
 
@@ -189,7 +202,11 @@ xray_user_list_main() {
     fi
 
     if ! [ -s "$ACTIVE_TMP" ]; then
-        printf 'No active clients found (status not equal to revoked).\n'
+        if [ "$format" = "json" ]; then
+            printf '[]\n'
+        else
+            printf 'No active clients found (status not equal to revoked).\n'
+        fi
         return 0
     fi
 

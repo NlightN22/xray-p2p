@@ -6,10 +6,13 @@ SCRIPT_NAME=${0##*/}
 usage() {
     cat <<EOF
 Usage:
-  $SCRIPT_NAME                 List recorded client reverse tunnels.
+  $SCRIPT_NAME [--json]        List recorded client reverse tunnels.
   $SCRIPT_NAME list            Same as default list action.
   $SCRIPT_NAME add [--subnet CIDR] [--server HOST] [--id SLUG] [--outbound TAG]
   $SCRIPT_NAME remove [--id SLUG] [--server HOST]
+
+Global options:
+  --json                       Emit JSON instead of a table.
 
 Environment:
   XRAY_REVERSE_SUFFIX          Domain/tag suffix (default: .rev).
@@ -425,8 +428,15 @@ client_reverse_fetch_entry() {
 }
 
 cmd_list() {
+    local format
+    format="${XRAY_OUTPUT_MODE:-table}"
+
     if [ ! -f "$CLIENT_REVERSE_FILE" ]; then
-        printf 'No client reverse tunnels recorded.\n'
+        if [ "$format" = "json" ]; then
+            printf '[]\n'
+        else
+            printf 'No client reverse tunnels recorded.\n'
+        fi
         return 0
     fi
     client_reverse_store_require "$CLIENT_REVERSE_FILE"
@@ -624,6 +634,14 @@ EOF
 }
 
 main() {
+    while [ "$#" -gt 0 ]; do
+        if xray_consume_json_flag "$@"; then
+            shift "$XRAY_JSON_FLAG_CONSUMED"
+            continue
+        fi
+        break
+    done
+
     if [ "$#" -eq 0 ]; then
         cmd_list
         return
@@ -637,6 +655,13 @@ main() {
             usage 0
             ;;
         list)
+            while [ "$#" -gt 0 ]; do
+                if xray_consume_json_flag "$@"; then
+                    shift "$XRAY_JSON_FLAG_CONSUMED"
+                    continue
+                fi
+                break
+            done
             if [ "$#" -gt 0 ]; then
                 printf 'list command does not take arguments.\n' >&2
                 usage 1
