@@ -120,14 +120,12 @@ client_reverse_store_remove() {
 client_reverse_store_print_table() {
     store_file="$1"
 
-    output=$(jq -r '
+    if ! output=$(jq -r '
         (["tunnel_id","domain","server_id","outbound_tag","created_at"] | @tsv),
         (.[] | [(.tunnel_id // "-"), (.domain // "-"), (.server_id // "-"), (.outbound_tag // "-"), (.created_at // "-")] | @tsv)
-    ' "$store_file")
-
-    if command -v column >/dev/null 2>&1; then
-        printf '%s\n' "$output" | column -t -s '	'
-    else
-        printf '%s\n' "$output"
+    ' "$store_file"); then
+        xray_die "Failed to render client reverse store table from $store_file"
     fi
+
+    printf '%s\n' "$output" | xray_print_table
 }

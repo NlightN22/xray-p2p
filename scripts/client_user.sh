@@ -152,10 +152,10 @@ client_user_list() {
         return 0
     fi
 
-    printf 'Tag\tProtocol\tTarget\tNetwork\tSecurity\n'
-    printf '%s\n' "$entries" | while IFS=$'\t' read -r tag protocol target network security; do
-        printf '%s\t%s\t%s\t%s\t%s\n' "$tag" "$protocol" "$target" "$network" "$security"
-    done
+    {
+        printf 'Tag\tProtocol\tTarget\tNetwork\tSecurity\n'
+        printf '%s\n' "$entries"
+    } | xray_print_table
 }
 
 client_user_outbound_exists() {

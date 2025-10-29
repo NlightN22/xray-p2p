@@ -119,16 +119,19 @@ cmd_list() {
         printf 'No transparent redirect entries found.\n'
         return
     fi
-    printf 'Subnet               Port\n'
-    printf '-------------------- -----\n'
-    printf '%s\n' "$entries" | while IFS= read -r entry; do
-        [ -n "$entry" ] || continue
-        SUBNET=''
-        PORT=''
-        # shellcheck disable=SC1090
-        . "$entry"
-        [ -n "$SUBNET" ] && [ -n "$PORT" ] && printf '%-20s %s\n' "$SUBNET" "$PORT"
-    done
+    {
+        printf 'Subnet\tPort\n'
+        printf '%s\n' "$entries" | while IFS= read -r entry; do
+            [ -n "$entry" ] || continue
+            SUBNET=''
+            PORT=''
+            # shellcheck disable=SC1090
+            . "$entry"
+            if [ -n "$SUBNET" ] && [ -n "$PORT" ]; then
+                printf '%s\t%s\n' "$SUBNET" "$PORT"
+            fi
+        done
+    } | xray_print_table
 }
 
 cmd_add() {

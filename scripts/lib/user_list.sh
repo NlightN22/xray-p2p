@@ -194,9 +194,12 @@ xray_user_list_main() {
     fi
 
     sort -t "$TAB_CHAR" -k1,1 "$ACTIVE_TMP" |
-    while IFS="$TAB_CHAR" read -r email password status; do
-        printf '%s %s %s\n' "$email" "$password" "$status"
-    done
+    {
+        printf 'Email\tPassword\tStatus\n'
+        while IFS="$TAB_CHAR" read -r email password status; do
+            printf '%s\t%s\t%s\n' "$email" "$password" "$status"
+        done
+    } | xray_print_table
 }
 
 if [ "${XRAY_USER_LIST_SKIP_MAIN:-0}" != "1" ]; then

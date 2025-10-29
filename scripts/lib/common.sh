@@ -74,6 +74,52 @@ xray_warn() {
     printf 'Warning: %s\n' "$*" >&2
 }
 
+xray_print_table() {
+    local tab
+    tab=$(printf '\t')
+    if [ "${XRAY_TABLE_DISABLE_COLUMN:-0}" != "1" ] && command -v column >/dev/null 2>&1; then
+        column -t -s "$tab"
+        return
+    fi
+    awk -v tab="$tab" '
+        BEGIN {
+            FS = tab
+        }
+        {
+            row_count++
+            if (NF > max_fields) {
+                max_fields = NF
+            }
+            for (i = 1; i <= NF; i++) {
+                field[row_count, i] = $i
+                len = length($i)
+                if (len > width[i]) {
+                    width[i] = len
+                }
+            }
+        }
+        END {
+            if (row_count == 0) {
+                exit 0
+            }
+            for (r = 1; r <= row_count; r++) {
+                for (c = 1; c <= max_fields; c++) {
+                    text = field[r, c]
+                    if (c < max_fields) {
+                        printf "%-*s", width[c], text
+                        if (max_fields > 1) {
+                            printf "  "
+                        }
+                    } else {
+                        printf "%s", text
+                    }
+                }
+                printf "\n"
+            }
+        }
+    '
+}
+
 xray_require_cmd() {
     cmd="$1"
     if command -v "$cmd" >/dev/null 2>&1; then
