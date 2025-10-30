@@ -85,7 +85,7 @@ func runPing(ctx context.Context, args []string) int {
 }
 
 func printUsage() {
-	fmt.Println(`xp2p - cross-platform helper for XRAY-P2P
+	fmt.Print(`xp2p - cross-platform helper for XRAY-P2P
 
 Usage:
   xp2p            Start diagnostics service (TCP/UDP port 62022)

@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -30,10 +30,11 @@ func runService() {
 	defer cancel()
 
 	if err := server.StartBackground(ctx); err != nil {
-		log.Fatalf("xp2p: failed to start diagnostics service: %v", err)
+		logging.Error("failed to start diagnostics service", "err", err)
+		os.Exit(1)
 	}
-	log.Printf("xp2p service started (TCP/UDP port %s). Press Ctrl+C to stop.", server.DefaultPort)
+	logging.Info("diagnostics service started", "port", server.DefaultPort)
 
 	<-ctx.Done()
-	log.Println("xp2p service stopped.")
+	logging.Info("diagnostics service stopped")
 }

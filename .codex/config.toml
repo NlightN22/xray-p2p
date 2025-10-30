@@ -1,9 +1,9 @@
-description = "This repository delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. It ships with configuration templates and shell scripts that accelerate both server and client provisioning."
+description = "This repository delivers a minimal Trojan tunnel based on **xray-core**."
 name = "xray-p2p"
 
 [instructions]
 language = "en"
-code_language = "sh"
+code_language = ["sh", "go"]
 coding_style = "minimalistic, concise, without excess"
 rules = [
     "all code and comments inside the code must be written in English",

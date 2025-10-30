@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -65,11 +66,14 @@ func Run(ctx context.Context, target string, opts Options) error {
 	targetAddr := fmt.Sprintf("%s:%d", target, port)
 
 	var sent, received int
+	logger := logging.With("target", targetAddr, "proto", proto)
+	logger.Debug("ping session started", "count", count, "timeout", timeout)
 
 	for seq := 1; seq <= count; seq++ {
 		select {
 		case <-ctx.Done():
 			fmt.Println("interrupted")
+			logger.Info("ping session interrupted", "sent", sent, "received", received)
 			return ctx.Err()
 		default:
 		}
@@ -78,18 +82,23 @@ func Run(ctx context.Context, target string, opts Options) error {
 		var err error
 		switch proto {
 		case protoTCP:
+			logger.Debug("sending tcp ping", "seq", seq)
 			err = pingTCP(ctx, targetAddr, timeout)
 		case protoUDP:
+			logger.Debug("sending udp ping", "seq", seq)
 			err = pingUDP(ctx, target, port, timeout)
 		}
 
 		sent++
 		if err != nil {
 			fmt.Printf("Request %d failed: %v\n", seq, err)
+			logger.Warn("ping request failed", "seq", seq, "err", err)
 		} else {
 			received++
+			rtt := time.Since(start).Round(time.Millisecond)
 			fmt.Printf("Reply from %s: seq=%d time=%s proto=%s\n",
-				targetAddr, seq, time.Since(start).Round(time.Millisecond), proto)
+				targetAddr, seq, rtt, proto)
+			logger.Debug("ping reply received", "seq", seq, "rtt", rtt)
 		}
 
 		// Simple pacing between requests.
@@ -103,6 +112,7 @@ func Run(ctx context.Context, target string, opts Options) error {
 	}
 
 	printSummary(sent, received)
+	logger.Info("ping session completed", "sent", sent, "received", received)
 	if received == 0 {
 		return errors.New("no replies received")
 	}

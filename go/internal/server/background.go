@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"log"
 	"net"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
 const (
@@ -41,7 +42,7 @@ func StartBackground(ctx context.Context) error {
 	}
 
 	if ln, err := net.Listen("tcp", ":"+DefaultPort); err != nil {
-		log.Printf("xp2p: warning: unable to start TCP listener on %s: %v", DefaultPort, err)
+		logging.Warn("unable to start TCP listener", "port", DefaultPort, "err", err)
 	} else {
 		tcpLn = ln
 		started = true
@@ -54,7 +55,7 @@ func StartBackground(ctx context.Context) error {
 					case <-ctx.Done():
 						return
 					default:
-						log.Printf("xp2p: tcp accept error: %v", err)
+						logging.Warn("tcp accept error", "err", err)
 						continue
 					}
 				}
@@ -64,7 +65,7 @@ func StartBackground(ctx context.Context) error {
 	}
 
 	if pc, err := net.ListenPacket("udp", ":"+DefaultPort); err != nil {
-		log.Printf("xp2p: warning: unable to start UDP listener on %s: %v", DefaultPort, err)
+		logging.Warn("unable to start UDP listener", "port", DefaultPort, "err", err)
 	} else {
 		udpConn = pc
 		started = true
@@ -93,7 +94,7 @@ func handleTCP(ctx context.Context, conn net.Conn) {
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(line), pingRequest) {
-		log.Printf("xp2p: tcp ping from %s", conn.RemoteAddr())
+		logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
 		_, _ = conn.Write([]byte(pingResponse + "\n"))
 	}
 }
@@ -109,14 +110,14 @@ func handleUDP(ctx context.Context, conn net.PacketConn) {
 			case <-ctx.Done():
 				return
 			default:
-				log.Printf("xp2p: udp read error: %v", err)
+				logging.Warn("udp read error", "err", err)
 				continue
 			}
 		}
 
 		msg := strings.TrimSpace(string(buf[:n]))
 		if strings.EqualFold(msg, pingRequest) {
-			log.Printf("xp2p: udp ping from %s", addr)
+			logging.Info("udp ping received", "remote_addr", addr.String())
 			_, _ = conn.WriteTo([]byte(pingResponse+"\n"), addr)
 		}
 	}
