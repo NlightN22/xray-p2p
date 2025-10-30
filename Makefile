@@ -1,7 +1,7 @@
 run:
 	go run ./go/cmd/xp2p
 
-.PHONY: ping _ping_args run build fmt lint tag-release
+.PHONY: ping _ping_args run build fmt lint
 
 ping: _ping_args
 	@set -- $(ARGS); \
@@ -29,32 +29,6 @@ fmt:
 
 lint:
 	go vet ./...
-
-tag-release:
-	@if [ -z "$(TAG)" ]; then \
-		echo "Usage: make tag-release TAG=vX.Y.Z [TAG_MESSAGE='message'] [FORCE=1]"; \
-		exit 1; \
-	fi; \
-	force_flag=""; \
-	if git rev-parse "$(TAG)" >/dev/null 2>&1; then \
-		if [ "$(FORCE)" = "1" ]; then \
-			force_flag="--force"; \
-			msg=$${TAG_MESSAGE:-"Release $(TAG)"}; \
-			git tag -a -f "$(TAG)" -m "$$msg"; \
-			echo "Updated tag $(TAG) with force"; \
-		else \
-			echo "Tag $(TAG) already exists locally. Use FORCE=1 to overwrite."; \
-		fi; \
-	else \
-		msg=$${TAG_MESSAGE:-"Release $(TAG)"}; \
-		git tag -a "$(TAG)" -m "$$msg"; \
-		echo "Created tag $(TAG)"; \
-	fi; \
-	if [ "$(FORCE)" = "1" ]; then \
-		git push --force origin "$(TAG)"; \
-	else \
-		git push origin "$(TAG)"; \
-	fi
 
 # swallow extra positional arguments so make does not treat them as targets
 %:
