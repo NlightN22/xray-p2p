@@ -86,10 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential git python3 zip
-          git clone --depth 1 https://git.openwrt.org/project/opkg-utils.git /tmp/opkg-utils
-          make -C /tmp/opkg-utils
-          sudo make -C /tmp/opkg-utils install
+          sudo apt-get install -y binutils zip
 
       - name: Download linux-amd64 artifact
         uses: actions/download-artifact@v4
