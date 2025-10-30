@@ -37,7 +37,13 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$WORKTREE_DIR/packages"
-cp "$IPK_DIR"/*.ipk "$WORKTREE_DIR/packages/"
+shopt -s nullglob
+ipk_files=("$IPK_DIR"/*.ipk)
+if [ "${#ipk_files[@]}" -eq 0 ]; then
+  echo "No .ipk packages found in '$IPK_DIR'" >&2
+  exit 1
+fi
+cp "${ipk_files[@]}" "$WORKTREE_DIR/packages/"
 
 opkg-make-index "$WORKTREE_DIR/packages" >"$WORKTREE_DIR/Packages"
 gzip -f "$WORKTREE_DIR/Packages"

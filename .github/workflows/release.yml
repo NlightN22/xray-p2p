@@ -1,0 +1,138 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  RELEASE_NAME: xp2p
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive: tar.gz
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            archive: tar.gz
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            archive: zip
+            ext: ".exe"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          EXT: ${{ matrix.ext }}
+        run: |
+          set -euo pipefail
+          out="dist/${GOOS}-${GOARCH}/xp2p${EXT}"
+          mkdir -p "$(dirname "$out")"
+          go build -trimpath -ldflags="-s -w" -o "$out" ./go/cmd/xp2p
+
+      - name: Package archive
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ARCHIVE: ${{ matrix.archive }}
+          EXT: ${{ matrix.ext }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd "dist/${GOOS}-${GOARCH}"
+          artifact="../${{ env.RELEASE_NAME }}-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE}"
+          if [ "$ARCHIVE" = "zip" ]; then
+            zip -j "$artifact" "xp2p${EXT}"
+          else
+            tar -czf "$artifact" "xp2p${EXT}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
+
+  openwrt:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y opkg-utils zip
+
+      - name: Download linux-amd64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.RELEASE_NAME }}-linux-amd64
+          path: dist
+
+      - name: Build OpenWrt package
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci/build-ipk.sh "$VERSION" "dist/${{ env.RELEASE_NAME }}-${VERSION}-linux-amd64.tar.gz"
+
+      - name: Upload ipk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_NAME }}-ipk
+          path: dist/ipk/*.ipk
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build, openwrt]
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ env.RELEASE_NAME }}-*
+          path: release
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-linux-amd64.tar.gz
+            release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-linux-arm64.tar.gz
+            release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-windows-amd64.zip
+            release/ipk/*.ipk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update OpenWrt feed
+        env:
+          VERSION: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash scripts/ci/update-feed.sh "$VERSION" release/ipk
