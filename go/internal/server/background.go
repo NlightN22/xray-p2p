@@ -1,16 +1,20 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
 
 const (
 	// DefaultPort is the well known port used by xp2p helper services.
-	DefaultPort = "62022"
+	DefaultPort  = "62022"
+	pingRequest  = "PING"
+	pingResponse = "PONG"
 )
 
 // StartBackground launches lightweight TCP and UDP responders that can be used
@@ -67,7 +71,15 @@ func StartBackground(ctx context.Context) {
 func handleTCP(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
 	_ = conn.SetDeadline(deadlineFromContext(ctx))
-	_, _ = conn.Write([]byte("xp2p\n"))
+
+	reader := bufio.NewReader(conn)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(line), pingRequest) {
+		_, _ = conn.Write([]byte(pingResponse + "\n"))
+	}
 }
 
 func handleUDP(ctx context.Context, conn net.PacketConn) {
@@ -85,8 +97,10 @@ func handleUDP(ctx context.Context, conn net.PacketConn) {
 				continue
 			}
 		}
-		if n > 0 {
-			_, _ = conn.WriteTo([]byte("xp2p\n"), addr)
+
+		msg := strings.TrimSpace(string(buf[:n]))
+		if strings.EqualFold(msg, pingRequest) {
+			_, _ = conn.WriteTo([]byte(pingResponse+"\n"), addr)
 		}
 	}
 }

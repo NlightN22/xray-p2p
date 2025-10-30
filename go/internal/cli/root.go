@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 )
@@ -32,6 +33,8 @@ func runPing(ctx context.Context, args []string) int {
 
 	count := fs.Int("count", 4, "number of echo requests to send")
 	timeout := fs.Int("timeout", 0, "per-request timeout in seconds (optional)")
+	proto := fs.String("proto", "tcp", "protocol to use (tcp or udp)")
+	port := fs.Int("port", 0, "target port (default 62022)")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -50,7 +53,9 @@ func runPing(ctx context.Context, args []string) int {
 	target := remaining[0]
 	opts := ping.Options{
 		Count:   *count,
-		Timeout: *timeout,
+		Timeout: time.Duration(*timeout) * time.Second,
+		Proto:   *proto,
+		Port:    *port,
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -70,6 +75,6 @@ func printUsage() {
 
 Usage:
   xp2p            Start diagnostics service (TCP/UDP port 62022)
-  xp2p ping [--count N] [--timeout SECONDS] <host>
+  xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
 `)
 }
