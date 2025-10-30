@@ -22,8 +22,7 @@ var (
 // init configures the default logger based on environment settings so the
 // application has a usable logger without additional setup.
 func init() {
-	levelVar.Set(parseLevel(os.Getenv(envLogLevel)))
-	setLogger(os.Stderr)
+	initLoggerFromEnv()
 }
 
 // Options controls logger configuration.
@@ -106,4 +105,9 @@ func parseLevel(level string) slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+func initLoggerFromEnv() {
+	levelVar.Set(parseLevel(os.Getenv(envLogLevel)))
+	setLogger(os.Stderr)
 }
