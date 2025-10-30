@@ -93,5 +93,6 @@ jobs:
             release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-linux-amd64.tar.gz
             release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-linux-arm64.tar.gz
             release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-windows-amd64.zip
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
