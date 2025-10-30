@@ -87,6 +87,25 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
-          chmod +x smoke/xp2p
-          smoke/xp2p --help >/dev/null
-          smoke/xp2p ping 127.0.0.1
+          BIN="smoke/xp2p"
+          chmod +x "$BIN"
+          "$BIN" --help >/dev/null
+
+          "$BIN" &
+          XP2P_PID=$!
+          trap 'kill $XP2P_PID' EXIT
+
+          ready=0
+          for attempt in {1..10}; do
+            if "$BIN" ping 127.0.0.1 --count 1 --timeout 1 >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "xp2p service failed to start"
+            exit 1
+          fi
+
+          "$BIN" ping 127.0.0.1 --count 2 --timeout 1
