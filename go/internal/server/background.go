@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"errors"
 	"log"
 	"net"
 	"strings"
@@ -20,27 +21,34 @@ const (
 // StartBackground launches lightweight TCP and UDP responders that can be used
 // by diagnostics routines. Listeners are shut down automatically when the
 // supplied context is cancelled.
-func StartBackground(ctx context.Context) {
-	var once sync.Once
-	shutdown := func(l net.Listener, pc net.PacketConn) {
+func StartBackground(ctx context.Context) error {
+	var (
+		once    sync.Once
+		tcpLn   net.Listener
+		udpConn net.PacketConn
+		started bool
+	)
+
+	shutdown := func() {
 		once.Do(func() {
-			if l != nil {
-				_ = l.Close()
+			if tcpLn != nil {
+				_ = tcpLn.Close()
 			}
-			if pc != nil {
-				_ = pc.Close()
+			if udpConn != nil {
+				_ = udpConn.Close()
 			}
 		})
 	}
 
-	tcpLn, err := net.Listen("tcp", ":"+DefaultPort)
-	if err != nil {
+	if ln, err := net.Listen("tcp", ":"+DefaultPort); err != nil {
 		log.Printf("xp2p: warning: unable to start TCP listener on %s: %v", DefaultPort, err)
 	} else {
+		tcpLn = ln
+		started = true
 		go func() {
 			defer tcpLn.Close()
 			for {
-				conn, err := tcpLn.Accept()
+				conn, err := ln.Accept()
 				if err != nil {
 					select {
 					case <-ctx.Done():
@@ -55,17 +63,24 @@ func StartBackground(ctx context.Context) {
 		}()
 	}
 
-	udpConn, err := net.ListenPacket("udp", ":"+DefaultPort)
-	if err != nil {
+	if pc, err := net.ListenPacket("udp", ":"+DefaultPort); err != nil {
 		log.Printf("xp2p: warning: unable to start UDP listener on %s: %v", DefaultPort, err)
 	} else {
+		udpConn = pc
+		started = true
 		go handleUDP(ctx, udpConn)
+	}
+
+	if !started {
+		return errors.New("xp2p: unable to bind TCP/UDP listeners")
 	}
 
 	go func() {
 		<-ctx.Done()
-		shutdown(tcpLn, udpConn)
+		shutdown()
 	}()
+
+	return nil
 }
 
 func handleTCP(ctx context.Context, conn net.Conn) {

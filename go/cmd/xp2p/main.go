@@ -29,7 +29,9 @@ func runService() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	server.StartBackground(ctx)
+	if err := server.StartBackground(ctx); err != nil {
+		log.Fatalf("xp2p: failed to start diagnostics service: %v", err)
+	}
 	log.Printf("xp2p service started (TCP/UDP port %s). Press Ctrl+C to stop.", server.DefaultPort)
 
 	<-ctx.Done()
