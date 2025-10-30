@@ -1,0 +1,6 @@
+# xp2p configuration sample.
+logging:
+  level: info
+
+server:
+  port: 62022

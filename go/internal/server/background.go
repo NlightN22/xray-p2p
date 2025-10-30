@@ -19,16 +19,26 @@ const (
 	pingResponse = "PONG"
 )
 
+// Options controls background server behaviour.
+type Options struct {
+	Port string
+}
+
 // StartBackground launches lightweight TCP and UDP responders that can be used
 // by diagnostics routines. Listeners are shut down automatically when the
 // supplied context is cancelled.
-func StartBackground(ctx context.Context) error {
+func StartBackground(ctx context.Context, opts Options) error {
 	var (
 		once    sync.Once
 		tcpLn   net.Listener
 		udpConn net.PacketConn
 		started bool
 	)
+
+	port := strings.TrimSpace(opts.Port)
+	if port == "" {
+		port = DefaultPort
+	}
 
 	shutdown := func() {
 		once.Do(func() {
@@ -41,8 +51,8 @@ func StartBackground(ctx context.Context) error {
 		})
 	}
 
-	if ln, err := net.Listen("tcp", ":"+DefaultPort); err != nil {
-		logging.Warn("unable to start TCP listener", "port", DefaultPort, "err", err)
+	if ln, err := net.Listen("tcp", ":"+port); err != nil {
+		logging.Warn("unable to start TCP listener", "port", port, "err", err)
 	} else {
 		tcpLn = ln
 		started = true
@@ -64,8 +74,8 @@ func StartBackground(ctx context.Context) error {
 		}()
 	}
 
-	if pc, err := net.ListenPacket("udp", ":"+DefaultPort); err != nil {
-		logging.Warn("unable to start UDP listener", "port", DefaultPort, "err", err)
+	if pc, err := net.ListenPacket("udp", ":"+port); err != nil {
+		logging.Warn("unable to start UDP listener", "port", port, "err", err)
 	} else {
 		udpConn = pc
 		started = true
