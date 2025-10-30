@@ -93,6 +93,7 @@ func handleTCP(ctx context.Context, conn net.Conn) {
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(line), pingRequest) {
+		log.Printf("xp2p: tcp ping from %s", conn.RemoteAddr())
 		_, _ = conn.Write([]byte(pingResponse + "\n"))
 	}
 }
@@ -115,6 +116,7 @@ func handleUDP(ctx context.Context, conn net.PacketConn) {
 
 		msg := strings.TrimSpace(string(buf[:n]))
 		if strings.EqualFold(msg, pingRequest) {
+			log.Printf("xp2p: udp ping from %s", addr)
 			_, _ = conn.WriteTo([]byte(pingResponse+"\n"), addr)
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
@@ -28,6 +29,12 @@ func Execute(ctx context.Context, args []string) int {
 }
 
 func runPing(ctx context.Context, args []string) int {
+	var host string
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		host = args[0]
+		args = args[1:]
+	}
+
 	fs := flag.NewFlagSet("xp2p ping", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -45,12 +52,19 @@ func runPing(ctx context.Context, args []string) int {
 	}
 
 	remaining := fs.Args()
-	if len(remaining) == 0 {
-		fmt.Fprintln(os.Stderr, "xp2p ping: host is required")
+	if host == "" {
+		if len(remaining) == 0 {
+			fmt.Fprintln(os.Stderr, "xp2p ping: host is required")
+			return 2
+		}
+		host = remaining[0]
+		remaining = remaining[1:]
+	}
+	if len(remaining) > 0 {
+		fmt.Fprintf(os.Stderr, "xp2p ping: unexpected arguments: %v\n", remaining)
 		return 2
 	}
 
-	target := remaining[0]
 	opts := ping.Options{
 		Count:   *count,
 		Timeout: time.Duration(*timeout) * time.Second,
@@ -61,7 +75,7 @@ func runPing(ctx context.Context, args []string) int {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := ping.Run(ctx, target, opts); err != nil {
+	if err := ping.Run(ctx, host, opts); err != nil {
 		fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
 		return 1
 	}
