@@ -170,6 +170,30 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/ser
 
 ---
 
+## Windows smoke test VM
+
+- Install [VirtualBox](https://www.virtualbox.org/) and [Vagrant](https://developer.hashicorp.com/vagrant/downloads) on the host machine.
+- Bring up the Windows 10 environment from the repository root:
+  ```bash
+  make vagrant-win10
+  ```
+  The target boots the `gusztavvargadr/windows-10` box (version `2509.0.0`), synchronizes the project into `C:\xp2p`, installs Go, builds the `xp2p` binary, downloads `xray-core`, enables WinRM/OpenSSH, and finishes with a smoke test (`xp2p ping 127.0.0.1`).
+- Remote access:
+  - WinRM: `localhost:55985`, user `vagrant`, password `vagrant`.
+  - SSH: `ssh vagrant@localhost -p 55922` (enabled via the provisioner).
+- Re-run provisioning or the smoke test at any time:
+  ```bash
+  cd infra/vagrant-win/windows10
+  vagrant provision
+  ```
+- Clean up the VM when finished:
+  ```bash
+  make vagrant-win10-destroy
+  ```
+- Optional: set `XP2P_GO_VERSION=1.22.3 make vagrant-win10` to pin a specific Go toolchain version for the guest.
+
+---
+
 ## How server and client stay in sync
 
 - The server stores credentials in `clients.json` as records like `{ "id": "uuid", "password": "...", "status": "active" }`.

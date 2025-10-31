@@ -1,7 +1,9 @@
 run:
 	go run ./go/cmd/xp2p
 
-.PHONY: ping _ping_args run build fmt lint
+VAGRANT_WIN10_DIR := infra/vagrant-win/windows10
+
+.PHONY: ping _ping_args run build fmt lint vagrant-win10 vagrant-win10-destroy
 
 ping: _ping_args
 	@set -- $(ARGS); \
@@ -29,6 +31,12 @@ fmt:
 
 lint:
 	go vet ./...
+
+vagrant-win10:
+	cd $(VAGRANT_WIN10_DIR) && vagrant up --provision
+
+vagrant-win10-destroy:
+	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f
 
 # swallow extra positional arguments so make does not treat them as targets
 %:
