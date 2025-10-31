@@ -8,7 +8,8 @@ def define_clients(config)
     ssh_host_port = 2230 + suffix           # c1 -> 2231, c2 -> 2232, c3 -> 2233
 
     config.vm.define name do |c|
-        c.vm.box      = "generic/alpine318"
+        c.vm.box      = defined?(ALPINE_CLIENT_BOX) ? ALPINE_CLIENT_BOX : "generic/alpine318"
+        c.vm.box_version = ALPINE_CLIENT_BOX_VERSION if defined?(ALPINE_CLIENT_BOX_VERSION)
         c.vm.hostname = name
 
         c.vm.network "forwarded_port",
