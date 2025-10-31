@@ -177,7 +177,7 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/ser
   ```bash
   make vagrant-win10
   ```
-  The target boots the `gusztavvargadr/windows-10` box (version `2509.0.0`), synchronizes the project into `C:\xp2p`, installs Go, builds the `xp2p` binary, downloads `xray-core`, enables WinRM/OpenSSH, and finishes with a smoke test (`xp2p ping 127.0.0.1`).
+  The target boots the `gusztavvargadr/windows-10` box (version `2202.0.2505`), synchronizes the project into `C:\xp2p`, installs Go, builds the `xp2p` binary, downloads `xray-core`, enables WinRM/OpenSSH, и finishes with a smoke test (`xp2p ping 127.0.0.1`).
 - Remote access:
   - WinRM: `localhost:55985`, user `vagrant`, password `vagrant`.
   - SSH: `ssh vagrant@localhost -p 55922` (enabled via the provisioner).

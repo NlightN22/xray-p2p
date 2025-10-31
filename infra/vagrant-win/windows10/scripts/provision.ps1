@@ -10,6 +10,40 @@ function Write-Info {
     Write-Host "==> $Message"
 }
 
+function Wait-TcpPort {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $TargetHost,
+
+        [Parameter(Mandatory = $true)]
+        [int] $Port,
+
+        [int] $TimeoutSeconds = 20,
+        [int] $ProbeIntervalMilliseconds = 500
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $client = [System.Net.Sockets.TcpClient]::new()
+        try {
+            $task = $client.ConnectAsync($TargetHost, $Port)
+            if ($task.Wait($ProbeIntervalMilliseconds) -and $client.Connected) {
+                return $true
+            }
+        }
+        catch {
+            # ignore and retry
+        }
+        finally {
+            $client.Dispose()
+        }
+
+        Start-Sleep -Milliseconds $ProbeIntervalMilliseconds
+    }
+
+    return $false
+}
+
 function Ensure-IsElevated {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -114,7 +148,13 @@ function Ensure-XrayCore {
         throw "Failed to locate xray.exe after extraction."
     }
 
-    Copy-Item -Path $xrayExeCandidate.FullName -Destination $xrayExe -Force
+    if ($xrayExeCandidate.FullName -ne $xrayExe) {
+        Write-Info "Copying xray.exe into $installDir"
+        Copy-Item -Path $xrayExeCandidate.FullName -Destination $xrayExe -Force
+    }
+    else {
+        Write-Info "xray-core binary already located at $xrayExe"
+    }
 
     if (-not ($env:Path -split ';' | Where-Object { $_ -eq $installDir })) {
         Write-Info "Adding $installDir to the system PATH."
@@ -189,10 +229,15 @@ function Ensure-OpenSSH {
 function Configure-WinRM {
     Write-Info "Ensuring WinRM is configured for remote automation..."
     winrm quickconfig -q
-    winrm set winrm/config/service/auth '@{Basic="true"}' | Out-Null
-    winrm set winrm/config/service '@{AllowUnencrypted="true"}' | Out-Null
-    Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true
-    Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true
+    try {
+        winrm set winrm/config/service/auth '@{Basic="true"}' | Out-Null
+        winrm set winrm/config/service '@{AllowUnencrypted="true"}' | Out-Null
+        Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true
+        Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true
+    }
+    catch {
+        Write-Info "WinRM firewall rule change blocked (likely due to Public network profile). Continuing with defaults."
+    }
 }
 
 function Run-SmokeTest {
@@ -210,8 +255,31 @@ function Run-SmokeTest {
         throw "xp2p.exe not found in PATH. Cannot run smoke test."
     }
 
-    Write-Info "Running smoke test: xp2p ping 127.0.0.1"
-    & $xp2pExe.Source ping 127.0.0.1 | Write-Host
+    $smokeHost = "127.0.0.1"
+    $smokePort = 62022
+
+    Write-Info "Starting xp2p diagnostics service on port $smokePort"
+    $serverProcess = Start-Process -FilePath $xp2pExe.Source `
+        -ArgumentList "--server-port", $smokePort `
+        -PassThru `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput "C:\tools\xp2p\diagnostics.log" `
+        -RedirectStandardError "C:\tools\xp2p\diagnostics.err"
+
+    try {
+        if (-not (Wait-TcpPort -TargetHost $smokeHost -Port $smokePort -TimeoutSeconds 20)) {
+            throw "xp2p diagnostics service failed to start on port $smokePort within timeout."
+        }
+
+        Write-Info "Running smoke test: xp2p ping $smokeHost --port $smokePort"
+        & $xp2pExe.Source ping $smokeHost --port $smokePort | Write-Host
+    }
+    finally {
+        if ($serverProcess -and -not $serverProcess.HasExited) {
+            Write-Info "Stopping xp2p diagnostics service"
+            Stop-Process -Id $serverProcess.Id -Force
+        }
+    }
 }
 
 Ensure-IsElevated
