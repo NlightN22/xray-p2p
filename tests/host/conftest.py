@@ -168,6 +168,11 @@ if ($existing) {{
         }} catch {{ }}
     }}
     Start-Sleep -Seconds 1
+    $remaining = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $xp2p }}
+    if ($remaining) {{
+        Write-Output '__XP2P_ALREADY_RUNNING__'
+        exit 7
+    }}
 }}
 
 $commandLine = "`"$xp2p`" --server-port {port}"
@@ -218,12 +223,22 @@ exit 5
                     "Failed to spawn xp2p diagnostics service via Win32_Process.\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
                 )
+            if "__XP2P_ALREADY_RUNNING__" in stdout:
+                pytest.skip(
+                    "xp2p diagnostics service is already running on the server; "
+                    "stop manual instances before executing host tests."
+                )
             pytest.fail(
                 "Failed to start xp2p diagnostics service on "
                 f"{DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
 
         for line in stdout.splitlines():
+            if line == "__XP2P_EXIT__":
+                pytest.fail(
+                    "xp2p diagnostics service exited before the port was reachable.\n"
+                    f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                )
             if line.startswith("PID="):
                 pid_value = int(line.split("=", 1)[1])
                 break
