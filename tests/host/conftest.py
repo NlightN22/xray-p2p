@@ -160,6 +160,16 @@ if (-not (Test-Path $xp2p)) {{
     exit 3
 }}
 
+$existing = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $xp2p }}
+if ($existing) {{
+    foreach ($item in $existing) {{
+        try {{
+            Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue
+        }} catch {{ }}
+    }}
+    Start-Sleep -Seconds 1
+}}
+
 $commandLine = "`"$xp2p`" --server-port {port}"
 $workingDir = Split-Path $xp2p
 $createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{{ CommandLine = $commandLine; CurrentDirectory = $workingDir }}
@@ -167,26 +177,26 @@ if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {{
     Write-Output ('__XP2P_CREATE_FAIL__' + $createResult.ReturnValue)
     exit 4
 }}
-$pid = [int]$createResult.ProcessId
+$processId = [int]$createResult.ProcessId
 $deadline = (Get-Date).AddSeconds({SERVICE_START_TIMEOUT})
 
 while ((Get-Date) -lt $deadline) {{
-    $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
     if (-not $proc) {{
-    Write-Output '__XP2P_EXIT__'
+        Write-Output '__XP2P_EXIT__'
         exit 6
     }}
     if (Test-NetConnection -ComputerName '127.0.0.1' -Port {port} -InformationLevel Quiet) {{
-        Write-Output ('PID=' + $pid)
+        Write-Output ('PID=' + $processId)
         exit 0
     }}
     Start-Sleep -Seconds 1
 }}
 
-$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+$proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
 if ($proc) {{
     try {{
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }} catch {{ }}
 }}
 Write-Output '__XP2P_TIMEOUT__'
@@ -227,13 +237,13 @@ exit 5
     finally:
         if pid_value is not None:
             stop_script = f"""
-$pid = {pid_value}
-if ($pid -le 0) {{
+$pidValue = {pid_value}
+if ($pidValue -le 0) {{
     exit 0
 }}
-$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+$proc = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
 if ($proc) {{
-    Stop-Process -Id $pid -Force
+    Stop-Process -Id $pidValue -Force
 }}
 exit 0
 """

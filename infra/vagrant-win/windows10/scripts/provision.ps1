@@ -302,6 +302,14 @@ Ensure-Chocolatey
 Ensure-Go
 Build-Xp2p
 Set-HostOnlyAddress -InterfaceAlias $hostOnlyAlias -IPAddress $hostOnlyAddress
+$configuredAddress = Get-NetIPAddress -InterfaceAlias $hostOnlyAlias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -eq $hostOnlyAddress }
+if ($configuredAddress) {
+    Write-Info "Host-only interface '$hostOnlyAlias' successfully set to $hostOnlyAddress/$($configuredAddress.PrefixLength)."
+}
+else {
+    Write-Info "Warning: host-only interface '$hostOnlyAlias' did not report expected IP $hostOnlyAddress."
+}
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
 Disable-FirewallProfiles
 Run-SmokeTest -Skip:$false
