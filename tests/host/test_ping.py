@@ -2,30 +2,32 @@ import pytest
 
 
 @pytest.mark.host
-def test_xp2p_guest_ping(go_guest_runner, xp2p_options):
-    """Verify xp2p guest ping succeeds against the server endpoint."""
-    result = go_guest_runner(
-        "tests/guest/ping.go",
-        target=xp2p_options["target"],
-        port=xp2p_options["port"],
-        attempts=xp2p_options["attempts"],
+def test_xp2p_service_ping(xp2p_server_service, xp2p_client, xp2p_options):
+    """Проверяем, что клиентский xp2p ping видит поднятый на сервере сервис."""
+    result = xp2p_client(
+        "ping",
+        xp2p_options["target"],
+        "--port",
+        str(xp2p_options["port"]),
+        "--count",
+        str(xp2p_options["attempts"]),
     )
 
     assert result.returncode == 0, (
-        "Guest ping command failed:\n"
+        "xp2p ping завершился с ошибкой:\n"
         f"STDOUT:\n{result.stdout}\n"
         f"STDERR:\n{result.stderr}"
     )
 
-    output_lower = result.stdout.lower()
-    if "100% packet loss" in output_lower:
+    output_lower = (result.stdout or "").lower()
+    if "100% loss" in output_lower:
         pytest.fail(
-            "Guest ping reported 100% packet loss:\n"
+            "xp2p ping сообщил о 100% потерь:\n"
             f"{result.stdout}"
         )
 
-    if "error" in output_lower:
+    if (result.stderr or "").strip():
         pytest.fail(
-            "Guest ping output contains errors:\n"
-            f"{result.stdout}"
+            "xp2p ping вывел сообщения об ошибках в STDERR:\n"
+            f"{result.stderr}"
         )

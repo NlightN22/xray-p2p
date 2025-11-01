@@ -1,20 +1,24 @@
+import base64
+import re
 import shutil
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable, Optional
+from typing import Callable, Optional
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
-GUEST_REPO = Path(r"C:\xp2p")
 DEFAULT_CLIENT = "win10-client"
 DEFAULT_SERVER = "win10-server"
 DEFAULT_WINRM_WAIT_TIMEOUT = 180  # seconds
 DEFAULT_WINRM_POLL_INTERVAL = 5  # seconds
 DEFAULT_WINRM_COMMAND_TIMEOUT = 60  # seconds
+DEFAULT_SERVICE_START_TIMEOUT = 60  # seconds
+XP2P_EXE = Path(r"C:\tools\xp2p\xp2p.exe")
+XP2P_EXE_PS = str(XP2P_EXE).replace("\\", "\\\\")
 
 
 class GuestCommandError(RuntimeError):
@@ -78,9 +82,15 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 @pytest.fixture(scope="session")
 def xp2p_options(pytestconfig: pytest.Config) -> dict:
+    port_option = pytestconfig.getoption("xp2p_port")
+    try:
+        port_value = int(port_option)
+    except (TypeError, ValueError):
+        pytest.fail(f"Invalid xp2p port value: {port_option!r}")
+
     return {
         "target": pytestconfig.getoption("xp2p_target"),
-        "port": str(pytestconfig.getoption("xp2p_port")),
+        "port": port_value,
         "attempts": pytestconfig.getoption("xp2p_attempts"),
         "machine": pytestconfig.getoption("xp2p_machine"),
         "winrm_wait": pytestconfig.getoption("xp2p_winrm_wait"),
@@ -118,7 +128,7 @@ class VagrantRunner:
 
     def get_state(self, machine: str) -> Optional[str]:
         result = self.run("status", machine, "--machine-readable")
-        for line in result.stdout.splitlines():
+        for line in (result.stdout or "").splitlines():
             parts = line.split(",")
             if len(parts) >= 4 and parts[2] == "state":
                 return parts[3]
@@ -185,6 +195,18 @@ class VagrantRunner:
             )
         return result
 
+    def run_powershell(
+        self,
+        machine: str,
+        script: str,
+        *,
+        check: bool = True,
+        timeout: Optional[float] = 300,
+    ) -> CommandResult:
+        encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+        command = f"powershell -NoProfile -EncodedCommand {encoded}"
+        return self.run_winrm(machine, command, check=check, timeout=timeout)
+
 
 def _require_vagrant_environment() -> None:
     if shutil.which("vagrant") is None:
@@ -222,25 +244,111 @@ def winrm_runner(vagrant_environment: VagrantRunner) -> Callable[[str, str], Com
     )
 
 
+def _ps_quote(arg: str) -> str:
+    return "'" + arg.replace("'", "''") + "'"
+
+
 @pytest.fixture
-def go_guest_runner(
-    vagrant_environment: VagrantRunner, xp2p_options: dict
+def xp2p_server_service(
+    vagrant_environment: VagrantRunner,
+    xp2p_options: dict,
+) -> dict:
+    port = xp2p_options["port"]
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$xp2p = '{XP2P_EXE_PS}'
+if (-not (Test-Path $xp2p)) {{
+    Write-Output '__XP2P_MISSING__'
+    exit 3
+}}
+
+$arguments = @('--server-port', '{port}')
+$process = Start-Process -FilePath $xp2p -ArgumentList $arguments -PassThru -WindowStyle Hidden
+$deadline = (Get-Date).AddSeconds({DEFAULT_SERVICE_START_TIMEOUT})
+
+while (Get-Date -lt $deadline) {{
+    if ($process.HasExited) {{
+        Write-Output ('__XP2P_EXIT__' + $process.ExitCode)
+        exit $process.ExitCode
+    }}
+    if (Test-NetConnection -ComputerName '127.0.0.1' -Port {port} -InformationLevel Quiet) {{
+        Write-Output ('PID=' + $process.Id)
+        exit 0
+    }}
+    Start-Sleep -Seconds 1
+}}
+
+Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+Write-Output '__XP2P_TIMEOUT__'
+exit 5
+"""
+    result = vagrant_environment.run_powershell(
+        DEFAULT_SERVER,
+        script,
+        check=False,
+        timeout=DEFAULT_SERVICE_START_TIMEOUT + 30,
+    )
+    stdout = (result.stdout or "").strip()
+    if result.returncode != 0:
+        if "__XP2P_MISSING__" in stdout:
+            pytest.skip(
+                f"xp2p.exe not found on {DEFAULT_SERVER} at {XP2P_EXE}. "
+                "Provision the guest before running host tests."
+            )
+        pytest.fail(
+            "Failed to start xp2p diagnostics service on "
+            f"{DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+    match = re.search(r"PID=(\\d+)", stdout)
+    if not match:
+        pytest.fail(
+            "Unexpected xp2p service startup output:\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    pid = int(match.group(1))
+
+    yield {"pid": pid, "port": port}
+
+    stop_script = f"""
+$pid = {pid}
+if ($pid -le 0) {{
+    exit 0
+}}
+$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+if ($proc) {{
+    Stop-Process -Id $pid -Force
+    Write-Output ('Stopped PID=' + $pid)
+}} else {{
+    Write-Output ('PID=' + $pid + ' already stopped')
+}}
+exit 0
+"""
+    vagrant_environment.run_powershell(
+        DEFAULT_SERVER,
+        stop_script,
+        check=False,
+        timeout=30,
+    )
+
+
+@pytest.fixture
+def xp2p_client(
+    vagrant_environment: VagrantRunner,
+    xp2p_options: dict,
 ) -> Callable[..., CommandResult]:
     def _run(
-        script: str,
-        *,
+        *args: str,
         machine: Optional[str] = None,
-        target: Optional[str] = None,
-        port: Optional[str] = None,
-        attempts: Optional[int] = None,
-        extra_args: Optional[Iterable[str]] = None,
-        check: bool = True,
+        check: bool = False,
         timeout: Optional[float] = 300,
     ) -> CommandResult:
+        if not args:
+            raise ValueError("xp2p_client requires at least one argument")
+
         machine_name = machine or xp2p_options["machine"] or DEFAULT_CLIENT
-        runner = vagrant_environment
         try:
-            runner.ensure_running(
+            vagrant_environment.ensure_running(
                 machine_name,
                 wait_timeout=xp2p_options["winrm_wait"],
                 poll_interval=xp2p_options["winrm_poll"],
@@ -251,31 +359,39 @@ def go_guest_runner(
                 f"Guest '{machine_name}' unavailable: {exc}. Start the VM and retry."
             )
 
-        script_path = script.replace("/", "\\")
-        args = []
-        target_value = target or xp2p_options["target"]
-        port_value = port or xp2p_options["port"]
-        attempts_value = attempts if attempts is not None else xp2p_options["attempts"]
-
-        if target_value:
-            args.extend(["--target", str(target_value)])
-        if port_value:
-            args.extend(["--port", str(port_value)])
-        if attempts_value is not None:
-            args.extend(["--attempts", str(attempts_value)])
-        if extra_args:
-            args.extend(list(extra_args))
-
-        go_command = f"go run {script_path}"
-        if args:
-            go_command = f"{go_command} {' '.join(args)}"
-
-        command = f"Set-Location {GUEST_REPO}; {go_command}"
-        return runner.run_winrm(
+        quoted_args = ", ".join(_ps_quote(arg) for arg in args)
+        script = f"""
+$ErrorActionPreference = 'Stop'
+$xp2p = '{XP2P_EXE_PS}'
+if (-not (Test-Path $xp2p)) {{
+    Write-Output '__XP2P_MISSING__'
+    exit 3
+}}
+$arguments = @({quoted_args})
+& $xp2p @arguments
+exit $LASTEXITCODE
+"""
+        result = vagrant_environment.run_powershell(
             machine_name,
-            command,
-            check=check,
+            script,
+            check=False,
             timeout=timeout,
         )
+
+        stdout = result.stdout or ""
+        if result.returncode != 0:
+            if "__XP2P_MISSING__" in stdout:
+                pytest.skip(
+                    f"xp2p.exe not found on {machine_name} at {XP2P_EXE}. "
+                    "Provision the guest before running host tests."
+                )
+            if check:
+                raise GuestCommandError(
+                    f"xp2p command failed on {machine_name} (exit {result.returncode}).\n"
+                    f"Args: {args}\n"
+                    f"STDOUT:\n{result.stdout}\n"
+                    f"STDERR:\n{result.stderr}"
+                )
+        return result
 
     return _run
