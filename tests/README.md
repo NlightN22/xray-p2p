@@ -14,8 +14,7 @@
   - NAT interface remains for outbound internet access.
   - Host-only subnet `10.0.10.0/24`: server `10.0.10.1`, client `10.0.10.10`. The profile is forced to Private and firewall rules for XP2P are pre-created.
 - Host access:
-  - Server SSH: `ssh vagrant@localhost -p 55922` (`vagrant/vagrant`).
-  - Client SSH: `ssh vagrant@localhost -p 55923` (`vagrant/vagrant`).
+  - WinRM (plaintext): server `localhost:55985`, client `localhost:55986` (`vagrant/vagrant`).
 - Re-run provisioning/tests:
   ```bash
   cd infra/vagrant-win/windows10

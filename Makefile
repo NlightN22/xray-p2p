@@ -5,29 +5,9 @@ VAGRANT_WIN10_DIR := infra/vagrant-win/windows10
 VAGRANT_WIN10_SERVER_ID := win10-server
 VAGRANT_WIN10_CLIENT_ID := win10-client
 
-VAGRANT_WIN10_ROLE := all
-ifneq ($(filter --server,$(MAKECMDGOALS)),)
-VAGRANT_WIN10_ROLE := server
-endif
-ifneq ($(filter --client,$(MAKECMDGOALS)),)
-VAGRANT_WIN10_ROLE := client
-endif
-ifneq ($(filter --all,$(MAKECMDGOALS)),)
-VAGRANT_WIN10_ROLE := all
-endif
-
-ifeq ($(VAGRANT_WIN10_ROLE),server)
-VAGRANT_WIN10_UP_CMD := vagrant up $(VAGRANT_WIN10_SERVER_ID) --provision
-VAGRANT_WIN10_DESTROY_CMD := vagrant destroy -f $(VAGRANT_WIN10_SERVER_ID)
-else ifeq ($(VAGRANT_WIN10_ROLE),client)
-VAGRANT_WIN10_UP_CMD := vagrant up $(VAGRANT_WIN10_CLIENT_ID) --provision
-VAGRANT_WIN10_DESTROY_CMD := vagrant destroy -f $(VAGRANT_WIN10_CLIENT_ID)
-else
-VAGRANT_WIN10_UP_CMD := vagrant up --provision
-VAGRANT_WIN10_DESTROY_CMD := vagrant destroy -f
-endif
-
-.PHONY: ping _ping_args run build fmt lint vagrant-win10 vagrant-win10-destroy
+.PHONY: ping _ping_args run build fmt lint vagrant-win10 vagrant-win10-destroy \
+	vagrant-win10-server vagrant-win10-client \
+	vagrant-win10-destroy-server vagrant-win10-destroy-client
 
 ping: _ping_args
 	@set -- $(ARGS); \
@@ -57,10 +37,22 @@ lint:
 	go vet ./...
 
 vagrant-win10:
-	cd $(VAGRANT_WIN10_DIR) && $(VAGRANT_WIN10_UP_CMD)
+	cd $(VAGRANT_WIN10_DIR) && vagrant up --provision
 
 vagrant-win10-destroy:
-	cd $(VAGRANT_WIN10_DIR) && $(VAGRANT_WIN10_DESTROY_CMD)
+	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f
+
+vagrant-win10-server:
+	cd $(VAGRANT_WIN10_DIR) && vagrant up $(VAGRANT_WIN10_SERVER_ID) --provision
+
+vagrant-win10-client:
+	cd $(VAGRANT_WIN10_DIR) && vagrant up $(VAGRANT_WIN10_CLIENT_ID) --provision
+
+vagrant-win10-destroy-server:
+	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f $(VAGRANT_WIN10_SERVER_ID)
+
+vagrant-win10-destroy-client:
+	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f $(VAGRANT_WIN10_CLIENT_ID)
 
 # swallow extra positional arguments so make does not treat them as targets
 %:
