@@ -1,53 +1,92 @@
 # frozen_string_literal: true
 
-BOX_NAME     = "gusztavvargadr/windows-10".freeze
-BOX_VERSION  = "2202.0.2505".freeze
-MACHINE_NAME = "xp2p-win10".freeze
-HOST_SYNCED_ROOT = File.expand_path("../../..", __dir__)
-PROVISION_SCRIPT = File.expand_path("scripts/provision.ps1", __dir__)
+BOX_NAME              = "gusztavvargadr/windows-10".freeze
+BOX_VERSION           = "2202.0.2505".freeze
+SERVER_ID             = "win10-server".freeze
+CLIENT_ID             = "win10-client".freeze
+SERVER_VM_NAME        = "xp2p-win10-server".freeze
+CLIENT_VM_NAME        = "xp2p-win10-client".freeze
+SERVER_PRIVATE_IP     = "10.0.10.1".freeze
+CLIENT_PRIVATE_IP     = "10.0.10.10".freeze
+HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
+PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
+DEFAULT_WINRM_PORT    = 5985
+DEFAULT_SSH_PORT      = 22
+SERVER_WINRM_HOSTPORT = 55985
+SERVER_SSH_HOSTPORT   = 55922
+CLIENT_WINRM_HOSTPORT = 55986
+CLIENT_SSH_HOSTPORT   = 55923
+
+def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm_host_port:, ssh_host_port:)
+  config.vm.define machine_id do |machine|
+    machine.vm.box = BOX_NAME
+    machine.vm.box_version = BOX_VERSION
+    machine.vm.guest = :windows
+    machine.vm.boot_timeout = 900
+    machine.vm.communicator = "winrm"
+
+    machine.vm.synced_folder ".", "/vagrant", disabled: true
+    machine.vm.synced_folder HOST_SYNCED_ROOT, "C:/xp2p", type: "virtualbox"
+
+    machine.winrm.username = "vagrant"
+    machine.winrm.password = "vagrant"
+    machine.winrm.transport = :plaintext
+    machine.winrm.timeout = 600
+    machine.winrm.retry_limit = 30
+
+    machine.vm.network "forwarded_port",
+                       guest: DEFAULT_WINRM_PORT,
+                       host: winrm_host_port,
+                       protocol: "tcp",
+                       id: "#{machine_id}-winrm",
+                       auto_correct: true
+
+    machine.vm.network "forwarded_port",
+                       guest: DEFAULT_SSH_PORT,
+                       host: ssh_host_port,
+                       protocol: "tcp",
+                       id: "#{machine_id}-ssh",
+                       auto_correct: true
+
+    machine.vm.network "private_network",
+                       ip: private_ip
+
+    machine.ssh.username = "vagrant"
+    machine.ssh.password = "vagrant"
+    machine.ssh.insert_key = false
+
+    machine.vm.provider "virtualbox" do |vb|
+      vb.name = vb_name
+      vb.memory = 4096
+      vb.cpus = 2
+      vb.gui = false
+    end
+
+    machine.vm.provision "shell",
+                         path: PROVISION_SCRIPT,
+                         privileged: true,
+                         env: { "XP2P_ROLE" => role }
+  end
+end
 
 Vagrant.configure("2") do |config|
-  config.vm.box = BOX_NAME
-  config.vm.box_version = BOX_VERSION
-  config.vm.guest = :windows
-  config.vm.boot_timeout = 900
-  config.vm.communicator = "winrm"
+  define_xp2p_machine(
+    config,
+    machine_id: SERVER_ID,
+    vb_name: SERVER_VM_NAME,
+    role: "server",
+    private_ip: SERVER_PRIVATE_IP,
+    winrm_host_port: SERVER_WINRM_HOSTPORT,
+    ssh_host_port: SERVER_SSH_HOSTPORT
+  )
 
-  config.vm.synced_folder ".", "/vagrant", disabled: true
-  config.vm.synced_folder HOST_SYNCED_ROOT, "C:/xp2p", type: "virtualbox"
-
-  config.winrm.username = "vagrant"
-  config.winrm.password = "vagrant"
-  config.winrm.transport = :plaintext
-  config.winrm.timeout = 600
-  config.winrm.retry_limit = 30
-
-  config.vm.network "forwarded_port",
-                    guest: 5985,
-                    host: 55985,
-                    protocol: "tcp",
-                    id: "winrm",
-                    auto_correct: true
-
-  config.vm.network "forwarded_port",
-                    guest: 22,
-                    host: 55922,
-                    protocol: "tcp",
-                    id: "ssh",
-                    auto_correct: true
-
-  config.ssh.username = "vagrant"
-  config.ssh.password = "vagrant"
-  config.ssh.insert_key = false
-
-  config.vm.provider "virtualbox" do |vb|
-    vb.name = MACHINE_NAME
-    vb.memory = 4096
-    vb.cpus = 2
-    vb.gui = false
-  end
-
-  config.vm.provision "shell",
-                      path: PROVISION_SCRIPT,
-                      privileged: true
+  define_xp2p_machine(
+    config,
+    machine_id: CLIENT_ID,
+    vb_name: CLIENT_VM_NAME,
+    role: "client",
+    private_ip: CLIENT_PRIVATE_IP,
+    winrm_host_port: CLIENT_WINRM_HOSTPORT,
+    ssh_host_port: CLIENT_SSH_HOSTPORT
+  )
 end

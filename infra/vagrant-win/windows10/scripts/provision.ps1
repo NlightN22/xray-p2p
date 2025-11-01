@@ -44,6 +44,68 @@ function Wait-TcpPort {
     return $false
 }
 
+function Set-PrivateNetworkProfile {
+    param(
+        [string] $AddressPrefixPattern = "10.0.10.",
+        [int] $TimeoutSeconds = 60
+    )
+
+    Write-Info "Ensuring network interfaces matching '$AddressPrefixPattern*' use Private profile..."
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $interfaces = @()
+
+    while ((Get-Date) -lt $deadline -and -not $interfaces) {
+        $interfaces = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPAddress -like "$AddressPrefixPattern*" }
+        if (-not $interfaces) {
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    if (-not $interfaces) {
+        Write-Info "No interfaces detected for prefix '$AddressPrefixPattern'; skipping profile adjustment."
+        return
+    }
+
+    $processed = @{}
+    foreach ($entry in $interfaces) {
+        if ($processed.ContainsKey($entry.InterfaceIndex)) {
+            continue
+        }
+        $processed[$entry.InterfaceIndex] = $true
+        try {
+            Set-NetConnectionProfile -InterfaceIndex $entry.InterfaceIndex -NetworkCategory Private -ErrorAction Stop
+            Write-Info "Interface index $($entry.InterfaceIndex) set to Private."
+        }
+        catch {
+            Write-Info "Failed to set Private profile for interface index $($entry.InterfaceIndex): $($_.Exception.Message)"
+        }
+    }
+}
+
+function Ensure-Xp2pFirewall {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int] $Port,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Role
+    )
+
+    $protocols = @("TCP", "UDP")
+    foreach ($proto in $protocols) {
+        $ruleName = "xp2p-$Role-$proto-$Port"
+        if (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue) {
+            Write-Info "Firewall rule '$ruleName' already present."
+            continue
+        }
+
+        Write-Info "Creating firewall rule '$ruleName' for $proto port $Port (Private profile)."
+        New-NetFirewallRule -DisplayName $ruleName -Name $ruleName `
+            -Direction Inbound -Action Allow -Protocol $proto -LocalPort $Port -Profile Private | Out-Null
+    }
+}
+
 function Ensure-IsElevated {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -117,54 +179,20 @@ function Ensure-Go {
     Write-Info "Go toolchain ready: $goVersionOutput"
 }
 
-function Ensure-XrayCore {
-    $installDir = "C:\tools\xray"
-    $xrayExe = Join-Path $installDir "xray.exe"
-    if (Test-Path $xrayExe) {
-        Write-Info "xray-core already installed at $xrayExe"
-        return
-    }
-
-    Write-Info "Installing xray-core..."
-    if (-not (Test-Path $installDir)) {
-        New-Item -ItemType Directory -Path $installDir | Out-Null
-    }
-
-    $archivePath = Join-Path $env:TEMP "xray-core.zip"
-    $downloadUrl = "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip"
-
-    Write-Info "Downloading xray-core from $downloadUrl"
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath -UseBasicParsing
-
-    Write-Info "Extracting xray-core archive..."
-    if (Test-Path "$installDir\*") {
-        Remove-Item -Path "$installDir\*" -Recurse -Force
-    }
-    Expand-Archive -Path $archivePath -DestinationPath $installDir -Force
-    Remove-Item $archivePath -Force
-
-    $xrayExeCandidate = Get-ChildItem -Path $installDir -Filter "xray.exe" -Recurse | Select-Object -First 1
-    if (-not $xrayExeCandidate) {
-        throw "Failed to locate xray.exe after extraction."
-    }
-
-    if ($xrayExeCandidate.FullName -ne $xrayExe) {
-        Write-Info "Copying xray.exe into $installDir"
-        Copy-Item -Path $xrayExeCandidate.FullName -Destination $xrayExe -Force
-    }
-    else {
-        Write-Info "xray-core binary already located at $xrayExe"
-    }
-
-    if (-not ($env:Path -split ';' | Where-Object { $_ -eq $installDir })) {
-        Write-Info "Adding $installDir to the system PATH."
-        $newPath = "$installDir;$($env:Path)"
-        [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::Machine)
-        $env:Path = $newPath
-    }
-
-    Write-Info "xray-core installed at $xrayExe"
+$xp2pRole = $env:XP2P_ROLE
+if ([string]::IsNullOrWhiteSpace($xp2pRole)) {
+    $xp2pRole = "server"
 }
+else {
+    $xp2pRole = $xp2pRole.ToLowerInvariant()
+}
+
+if ($xp2pRole -notin @("server", "client")) {
+    Write-Info "Unknown role '$xp2pRole'. Falling back to 'server'."
+    $xp2pRole = "server"
+}
+
+Write-Info "Provisioning role detected: $xp2pRole"
 
 function Build-Xp2p {
     $sourceRoot = "C:\xp2p"
@@ -226,20 +254,6 @@ function Ensure-OpenSSH {
     }
 }
 
-function Configure-WinRM {
-    Write-Info "Ensuring WinRM is configured for remote automation..."
-    winrm quickconfig -q
-    try {
-        winrm set winrm/config/service/auth '@{Basic="true"}' | Out-Null
-        winrm set winrm/config/service '@{AllowUnencrypted="true"}' | Out-Null
-        Set-Item -Path WSMan:\localhost\Service\AllowUnencrypted -Value $true
-        Set-Item -Path WSMan:\localhost\Service\Auth\Basic -Value $true
-    }
-    catch {
-        Write-Info "WinRM firewall rule change blocked (likely due to Public network profile). Continuing with defaults."
-    }
-}
-
 function Run-SmokeTest {
     param(
         [switch] $Skip
@@ -285,10 +299,10 @@ function Run-SmokeTest {
 Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
-Ensure-XrayCore
 Build-Xp2p
 Ensure-OpenSSH
-Configure-WinRM
+Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
+Ensure-Xp2pFirewall -Port 62022 -Role $xp2pRole
 Run-SmokeTest -Skip:$false
 
 Write-Info "Provisioning completed successfully."
