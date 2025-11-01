@@ -97,6 +97,37 @@ function Disable-FirewallProfiles {
     }
 }
 
+function Set-HostOnlyAddress {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $InterfaceAlias,
+
+        [Parameter(Mandatory = $true)]
+        [string] $IPAddress,
+
+        [int] $PrefixLength = 24
+    )
+
+    Write-Info "Configuring host-only interface '$InterfaceAlias' with IP $IPAddress/$PrefixLength"
+    $existing = Get-NetIPAddress -InterfaceAlias $InterfaceAlias -AddressFamily IPv4 -ErrorAction SilentlyContinue
+    foreach ($entry in $existing) {
+        try {
+            Remove-NetIPAddress -InputObject $entry -Confirm:$false -ErrorAction Stop
+        }
+        catch {
+            Write-Info "Failed to remove existing IPv4 address $($entry.IPAddress) on '$InterfaceAlias': $($_.Exception.Message)"
+        }
+    }
+
+    try {
+        New-NetIPAddress -InterfaceAlias $InterfaceAlias -IPAddress $IPAddress -PrefixLength $PrefixLength -ErrorAction Stop | Out-Null
+    }
+    catch {
+        Write-Info "Failed to assign IP $IPAddress to '$InterfaceAlias': $($_.Exception.Message)"
+        throw
+    }
+}
+
 function Ensure-IsElevated {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -245,10 +276,32 @@ function Run-SmokeTest {
     }
 }
 
+$xp2pRole = $env:XP2P_ROLE
+if ([string]::IsNullOrWhiteSpace($xp2pRole)) {
+    $xp2pRole = "server"
+}
+else {
+    $xp2pRole = $xp2pRole.ToLowerInvariant()
+}
+
+if ($xp2pRole -notin @("server", "client")) {
+    Write-Info "Unknown role '$xp2pRole'. Falling back to 'server'."
+    $xp2pRole = "server"
+}
+
+Write-Info "Provisioning role detected: $xp2pRole"
+
+$hostOnlyAlias = if ($env:XP2P_HOSTONLY_ALIAS) { $env:XP2P_HOSTONLY_ALIAS } else { "Ethernet 2" }
+$hostOnlyAddress = switch ($xp2pRole) {
+    "server" { "10.0.10.10" }
+    "client" { "10.0.10.20" }
+}
+
 Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
 Build-Xp2p
+Set-HostOnlyAddress -InterfaceAlias $hostOnlyAlias -IPAddress $hostOnlyAddress
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
 Disable-FirewallProfiles
 Run-SmokeTest -Skip:$false

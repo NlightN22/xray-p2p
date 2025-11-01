@@ -22,7 +22,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption(
         "--xp2p-target",
         action="store",
-        default="10.0.10.1",
+        default="10.0.10.10",
         help="Target address for xp2p guest ping probes.",
     )
     group.addoption(
@@ -160,25 +160,35 @@ if (-not (Test-Path $xp2p)) {{
     exit 3
 }}
 
-$arguments = @('--server-port', '{port}')
-$process = Start-Process -FilePath $xp2p -ArgumentList $arguments -WindowStyle Hidden -PassThru
+$commandLine = "`"$xp2p`" --server-port {port}"
+$workingDir = Split-Path $xp2p
+$createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{{ CommandLine = $commandLine; CurrentDirectory = $workingDir }}
+if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {{
+    Write-Output ('__XP2P_CREATE_FAIL__' + $createResult.ReturnValue)
+    exit 4
+}}
+$pid = [int]$createResult.ProcessId
 $deadline = (Get-Date).AddSeconds({SERVICE_START_TIMEOUT})
 
 while ((Get-Date) -lt $deadline) {{
-    if ($process.HasExited) {{
-        Write-Output ('__XP2P_EXIT__' + $process.ExitCode)
-        exit $process.ExitCode
+    $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    if (-not $proc) {{
+    Write-Output '__XP2P_EXIT__'
+        exit 6
     }}
     if (Test-NetConnection -ComputerName '127.0.0.1' -Port {port} -InformationLevel Quiet) {{
-        Write-Output ('PID=' + $process.Id)
+        Write-Output ('PID=' + $pid)
         exit 0
     }}
     Start-Sleep -Seconds 1
 }}
 
-try {{
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-}} catch {{ }}
+$proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+if ($proc) {{
+    try {{
+        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    }} catch {{ }}
+}}
 Write-Output '__XP2P_TIMEOUT__'
 exit 5
 """
@@ -192,6 +202,11 @@ exit 5
                 pytest.skip(
                     f"xp2p.exe not found on {DEFAULT_SERVER} at {XP2P_EXE}. "
                     "Provision the guest before running host tests."
+                )
+            if "__XP2P_CREATE_FAIL__" in stdout:
+                pytest.fail(
+                    "Failed to spawn xp2p diagnostics service via Win32_Process.\n"
+                    f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
                 )
             pytest.fail(
                 "Failed to start xp2p diagnostics service on "
