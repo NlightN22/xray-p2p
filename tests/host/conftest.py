@@ -1,5 +1,6 @@
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Optional
@@ -11,10 +12,17 @@ VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
 GUEST_REPO = Path(r"C:\xp2p")
 DEFAULT_CLIENT = "win10-client"
 DEFAULT_SERVER = "win10-server"
+DEFAULT_WINRM_WAIT_TIMEOUT = 180  # seconds
+DEFAULT_WINRM_POLL_INTERVAL = 5  # seconds
+DEFAULT_WINRM_COMMAND_TIMEOUT = 60  # seconds
 
 
 class GuestCommandError(RuntimeError):
     """Raised when executing a guest command fails."""
+
+
+class MachineNotRunning(RuntimeError):
+    """Raised when a target Vagrant VM is not in the running state."""
 
 
 @dataclass
@@ -52,6 +60,20 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=DEFAULT_CLIENT,
         help="Vagrant machine name that executes guest probes (default: win10-client).",
     )
+    group.addoption(
+        "--xp2p-winrm-wait",
+        action="store",
+        type=int,
+        default=DEFAULT_WINRM_WAIT_TIMEOUT,
+        help="Overall timeout (seconds) while waiting for WinRM to become available.",
+    )
+    group.addoption(
+        "--xp2p-winrm-poll",
+        action="store",
+        type=int,
+        default=DEFAULT_WINRM_POLL_INTERVAL,
+        help="Polling interval (seconds) between WinRM availability checks.",
+    )
 
 
 @pytest.fixture(scope="session")
@@ -61,6 +83,8 @@ def xp2p_options(pytestconfig: pytest.Config) -> dict:
         "port": str(pytestconfig.getoption("xp2p_port")),
         "attempts": pytestconfig.getoption("xp2p_attempts"),
         "machine": pytestconfig.getoption("xp2p_machine"),
+        "winrm_wait": pytestconfig.getoption("xp2p_winrm_wait"),
+        "winrm_poll": pytestconfig.getoption("xp2p_winrm_poll"),
     }
 
 
@@ -100,14 +124,42 @@ class VagrantRunner:
                 return parts[3]
         return None
 
-    def ensure_running(self, machine: str) -> None:
+    def ensure_running(
+        self,
+        machine: str,
+        *,
+        winrm_timeout: float = DEFAULT_WINRM_COMMAND_TIMEOUT,
+        wait_timeout: float = DEFAULT_WINRM_WAIT_TIMEOUT,
+        poll_interval: float = DEFAULT_WINRM_POLL_INTERVAL,
+    ) -> None:
         if not machine:
             return
         state = self.get_state(machine)
         if state != "running":
-            self.run("up", machine, capture_output=False)
-        # Sanity check WinRM connectivity.
-        self.run_winrm(machine, "hostname")
+            raise MachineNotRunning(
+                f"Vagrant VM '{machine}' is not running (state={state!r})."
+            )
+        deadline = time.monotonic() + wait_timeout
+        last_error: Optional[Exception] = None
+        while time.monotonic() < deadline:
+            try:
+                self.run_winrm(
+                    machine,
+                    "hostname",
+                    timeout=winrm_timeout,
+                )
+                return
+            except (GuestCommandError, subprocess.TimeoutExpired) as exc:
+                last_error = exc
+                print(
+                    f"[xp2p] Waiting for WinRM on {machine} "
+                    f"(retry in {poll_interval}s)...",
+                    flush=True,
+                )
+                time.sleep(poll_interval)
+        raise RuntimeError(
+            f"Timed out waiting for WinRM connectivity on {machine}"
+        ) from last_error
 
     def run_winrm(
         self,
@@ -145,11 +197,21 @@ def _require_vagrant_environment() -> None:
 
 
 @pytest.fixture(scope="session")
-def vagrant_environment() -> VagrantRunner:
+def vagrant_environment(xp2p_options: dict) -> VagrantRunner:
     _require_vagrant_environment()
     runner = VagrantRunner(VAGRANT_DIR)
-    runner.ensure_running(DEFAULT_SERVER)
-    runner.ensure_running(DEFAULT_CLIENT)
+    ensure_kwargs = {
+        "wait_timeout": xp2p_options["winrm_wait"],
+        "poll_interval": xp2p_options["winrm_poll"],
+        "winrm_timeout": DEFAULT_WINRM_COMMAND_TIMEOUT,
+    }
+    try:
+        runner.ensure_running(DEFAULT_SERVER, **ensure_kwargs)
+        runner.ensure_running(DEFAULT_CLIENT, **ensure_kwargs)
+    except MachineNotRunning as exc:
+        pytest.skip(
+            f"Guest environment unavailable: {exc}. Run `make vagrant-win10` and retry."
+        )
     return runner
 
 
@@ -177,15 +239,23 @@ def go_guest_runner(
     ) -> CommandResult:
         machine_name = machine or xp2p_options["machine"] or DEFAULT_CLIENT
         runner = vagrant_environment
-        runner.ensure_running(machine_name)
+        try:
+            runner.ensure_running(
+                machine_name,
+                wait_timeout=xp2p_options["winrm_wait"],
+                poll_interval=xp2p_options["winrm_poll"],
+                winrm_timeout=DEFAULT_WINRM_COMMAND_TIMEOUT,
+            )
+        except MachineNotRunning as exc:
+            pytest.skip(
+                f"Guest '{machine_name}' unavailable: {exc}. Start the VM and retry."
+            )
 
         script_path = script.replace("/", "\\")
         args = []
         target_value = target or xp2p_options["target"]
         port_value = port or xp2p_options["port"]
-        attempts_value = attempts
-        if attempts_value is None:
-            attempts_value = xp2p_options["attempts"]
+        attempts_value = attempts if attempts is not None else xp2p_options["attempts"]
 
         if target_value:
             args.extend(["--target", str(target_value)])
