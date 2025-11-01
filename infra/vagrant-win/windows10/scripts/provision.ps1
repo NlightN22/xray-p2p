@@ -83,26 +83,17 @@ function Set-PrivateNetworkProfile {
     }
 }
 
-function Ensure-Xp2pFirewall {
-    param(
-        [Parameter(Mandatory = $true)]
-        [int] $Port,
-
-        [Parameter(Mandatory = $true)]
-        [string] $Role
-    )
-
-    $protocols = @("TCP", "UDP")
-    foreach ($proto in $protocols) {
-        $ruleName = "xp2p-$Role-$proto-$Port"
-        if (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue) {
-            Write-Info "Firewall rule '$ruleName' already present."
-            continue
+function Disable-FirewallProfiles {
+    $profiles = @("Domain", "Private", "Public")
+    Write-Info "Disabling Windows Firewall profiles: $($profiles -join ', ')"
+    foreach ($profile in $profiles) {
+        try {
+            Set-NetFirewallProfile -Profile $profile -Enabled $false -ErrorAction Stop
+            Write-Info "Firewall profile '$profile' disabled."
         }
-
-        Write-Info "Creating firewall rule '$ruleName' for $proto port $Port (Private profile)."
-        New-NetFirewallRule -DisplayName $ruleName -Name $ruleName `
-            -Direction Inbound -Action Allow -Protocol $proto -LocalPort $Port -Profile Private | Out-Null
+        catch {
+            Write-Info "Failed to disable firewall profile '$profile': $($_.Exception.Message)"
+        }
     }
 }
 
@@ -134,22 +125,18 @@ function Ensure-ChocoPackage {
         [string] $Version
     )
 
-    $installed = choco.exe list --local-only $Package --limit-output |
-        ForEach-Object { ($_ -split '\|')[1] } |
-        Where-Object { $_ }
-
-    if ($installed -and (-not $Version -or $installed -eq $Version)) {
-        Write-Info "Chocolatey package '$Package' already installed ($installed)."
-        return
-    }
-
-    $arguments = @("upgrade", $Package, "--yes", "--no-progress")
+    $args = @("install", $Package, "--yes", "--no-progress")
     if ($Version) {
-        $arguments += @("--version", $Version)
+        $args += @("--version", $Version)
     }
 
-    Write-Info "Installing Chocolatey package '$Package'..."
-    choco.exe @arguments | Write-Host
+    if (-not (choco list --local-only $Package | Select-String -Quiet "^$Package ")) {
+        Write-Info "Installing Chocolatey package '$Package' (version: $Version)"
+        choco $args | Write-Host
+    }
+    else {
+        Write-Info "Chocolatey package '$Package' already installed."
+    }
 }
 
 function Ensure-Go {
@@ -178,21 +165,6 @@ function Ensure-Go {
     $goVersionOutput = & go.exe version
     Write-Info "Go toolchain ready: $goVersionOutput"
 }
-
-$xp2pRole = $env:XP2P_ROLE
-if ([string]::IsNullOrWhiteSpace($xp2pRole)) {
-    $xp2pRole = "server"
-}
-else {
-    $xp2pRole = $xp2pRole.ToLowerInvariant()
-}
-
-if ($xp2pRole -notin @("server", "client")) {
-    Write-Info "Unknown role '$xp2pRole'. Falling back to 'server'."
-    $xp2pRole = "server"
-}
-
-Write-Info "Provisioning role detected: $xp2pRole"
 
 function Build-Xp2p {
     $sourceRoot = "C:\xp2p"
@@ -278,7 +250,7 @@ Ensure-Chocolatey
 Ensure-Go
 Build-Xp2p
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
-Ensure-Xp2pFirewall -Port 62022 -Role $xp2pRole
+Disable-FirewallProfiles
 Run-SmokeTest -Skip:$false
 
 Write-Info "Provisioning completed successfully."

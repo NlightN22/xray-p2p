@@ -152,35 +152,6 @@ def _ps_quote(value: str) -> str:
 @pytest.fixture
 def xp2p_server_service(server_host: testinfra.host.Host, xp2p_options: dict):
     port = xp2p_options["port"]
-    disable_firewall_script = """
-$profiles = @('Domain','Private','Public')
-foreach ($profile in $profiles) {
-    $status = (Get-NetFirewallProfile -Profile $profile).Enabled
-    Write-Output ("PROFILE:{0}={1}" -f $profile, [int]$status)
-    if ($status) {
-        Set-NetFirewallProfile -Profile $profile -Enabled $false
-    }
-}
-exit 0
-"""
-    fw_result = _run_powershell(server_host, disable_firewall_script)
-    if fw_result.rc != 0:
-        pytest.fail(
-            "Failed to disable firewall on "
-            f"{DEFAULT_SERVER}.\nSTDOUT:\n{fw_result.stdout}\nSTDERR:\n{fw_result.stderr}"
-        )
-    profiles_to_restore: list[str] = []
-    for line in (fw_result.stdout or "").splitlines():
-        if not line.startswith("PROFILE:"):
-            continue
-        try:
-            _, payload = line.split(":", 1)
-            profile, value = payload.split("=", 1)
-        except ValueError:
-            continue
-        if value.strip() == "1":
-            profiles_to_restore.append(profile.strip())
-
     script = f"""
 $ErrorActionPreference = 'Stop'
 $xp2p = '{XP2P_EXE_PS}'
@@ -252,17 +223,6 @@ if ($proc) {{
 exit 0
 """
             _run_powershell(server_host, stop_script)
-
-        if profiles_to_restore:
-            profile_args = ", ".join(_ps_quote(name) for name in profiles_to_restore)
-            restore_script = f"""
-$profiles = @({profile_args})
-foreach ($profile in $profiles) {{
-    Set-NetFirewallProfile -Profile $profile -Enabled $true
-}}
-exit 0
-"""
-            _run_powershell(server_host, restore_script)
 
 
 def _run_xp2p(
