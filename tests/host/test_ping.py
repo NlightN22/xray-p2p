@@ -2,9 +2,9 @@ import pytest
 
 
 @pytest.mark.host
-def test_xp2p_service_ping(xp2p_server_service, xp2p_client, xp2p_options):
-    """Проверяем, что клиентский xp2p ping видит поднятый на сервере сервис."""
-    result = xp2p_client(
+def test_xp2p_service_ping(xp2p_server_service, xp2p_client_runner, xp2p_options):
+    """Клиентский xp2p ping должен видеть поднятый на сервере сервис."""
+    result = xp2p_client_runner(
         "ping",
         xp2p_options["target"],
         "--port",
@@ -13,7 +13,7 @@ def test_xp2p_service_ping(xp2p_server_service, xp2p_client, xp2p_options):
         str(xp2p_options["attempts"]),
     )
 
-    assert result.returncode == 0, (
+    assert result.rc == 0, (
         "xp2p ping завершился с ошибкой:\n"
         f"STDOUT:\n{result.stdout}\n"
         f"STDERR:\n{result.stderr}"
@@ -28,6 +28,6 @@ def test_xp2p_service_ping(xp2p_server_service, xp2p_client, xp2p_options):
 
     if (result.stderr or "").strip():
         pytest.fail(
-            "xp2p ping вывел сообщения об ошибках в STDERR:\n"
+            "xp2p ping вывел ошибки в STDERR:\n"
             f"{result.stderr}"
         )
