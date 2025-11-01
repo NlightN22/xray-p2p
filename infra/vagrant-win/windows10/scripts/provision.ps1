@@ -254,6 +254,68 @@ function Ensure-OpenSSH {
     }
 }
 
+function Configure-WinRM {
+    Write-Info "Ensuring WinRM is configured for remote automation..."
+
+    try {
+        Set-Service -Name winrm -StartupType Automatic
+        if ((Get-Service -Name winrm).Status -ne 'Running') {
+            Start-Service -Name winrm
+        }
+    }
+    catch {
+        Write-Info "Failed to start WinRM service: $($_.Exception.Message)"
+    }
+
+    try {
+        Restart-Service -Name winrm -Force
+    }
+    catch {
+        Write-Info "Failed to restart WinRM service: $($_.Exception.Message)"
+    }
+
+    try {
+        $ruleName = "Vagrant WinRM"
+        if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
+            Write-Info "Creating firewall rule '$ruleName' for WinRM on port 5985 (all profiles)."
+            New-NetFirewallRule -DisplayName $ruleName -Name "VagrantWinRM" `
+                -Direction Inbound -Action Allow -Protocol TCP -LocalPort 5985 -Profile Any | Out-Null
+        }
+    }
+    catch {
+        Write-Info "Failed to configure WinRM firewall rule: $($_.Exception.Message)"
+    }
+}
+
+function Install-VagrantInsecureKey {
+    $sshDir = "C:\Users\vagrant\.ssh"
+    $authorizedKeys = Join-Path $sshDir "authorized_keys"
+    $publicKey = @"
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC0uE0CEd67+y+/4wndK7opBpZyQ9f5p2AWiPlFVs4Rc68kDireWbhepSvRjodwypMBJgZFDrKQMGMowlS8Mad76HlLIwAS1Ir+raqiJLjext/PGiMi3qBG8zf3M1h6Bu8zwmNCCNRj5t9v32qfHSYqacFBqRQw8dHV4v/TofDADYFtK9CX7Dmwvat1vas2JwSnbn24feA8JCHD1X6jR8pPzMrDQv8dGzQ+QyK6bC+DoKfpnmV0mnChk+fSdrptyPpAH4UFSTofque2ozKnDN8lRiORjyMkI13ANmfxjbTxbwh/tJ2sys5VNDH1Mc+qT1VoJFVBw4P6w0EbUnHcwEtV3J vagrant insecure public key
+"@
+
+    if (-not (Test-Path $sshDir)) {
+        New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
+    }
+
+    if (Test-Path $authorizedKeys) {
+        $existing = Get-Content -Path $authorizedKeys -ErrorAction SilentlyContinue
+        if ($existing -contains $publicKey.Trim()) {
+            Write-Info "Vagrant insecure key already present."
+            return
+        }
+    }
+
+    Write-Info "Installing Vagrant insecure SSH key."
+    $publicKey | Out-File -FilePath $authorizedKeys -Encoding ascii -Force
+
+    icacls $sshDir /inheritance:r | Out-Null
+    icacls $sshDir /grant:r "SYSTEM:(OI)(CI)F" "Administrators:(OI)(CI)F" "vagrant:(OI)(CI)F" | Out-Null
+
+    icacls $authorizedKeys /inheritance:r | Out-Null
+    icacls $authorizedKeys /grant:r "SYSTEM:R" "Administrators:R" "NT SERVICE\SSHD:R" "vagrant:F" | Out-Null
+}
+
 function Run-SmokeTest {
     param(
         [switch] $Skip
@@ -301,8 +363,10 @@ Ensure-Chocolatey
 Ensure-Go
 Build-Xp2p
 Ensure-OpenSSH
+Install-VagrantInsecureKey
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
 Ensure-Xp2pFirewall -Port 62022 -Role $xp2pRole
+Configure-WinRM
 Run-SmokeTest -Skip:$false
 
 Write-Info "Provisioning completed successfully."
