@@ -88,7 +88,7 @@ function Disable-FirewallProfiles {
     Write-Info "Disabling Windows Firewall profiles: $($profiles -join ', ')"
     foreach ($profile in $profiles) {
         try {
-            Set-NetFirewallProfile -Profile $profile -Enabled $false -ErrorAction Stop
+            Set-NetFirewallProfile -Profile $profile -Enabled False -ErrorAction Stop
             Write-Info "Firewall profile '$profile' disabled."
         }
         catch {
