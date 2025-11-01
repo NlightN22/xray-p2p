@@ -12,7 +12,7 @@ const (
 	defaultTarget   = "10.0.10.10"
 	defaultPort     = "62022"
 	defaultAttempts = 3
-	xp2pExecutable  = `C:\tools\xp2p\xp2p.exe`
+	xp2pExecutable  = `C:\xp2p\build\windows-amd64\xp2p.exe`
 )
 
 func main() {

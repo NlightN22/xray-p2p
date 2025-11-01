@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
 DEFAULT_SERVER = "win10-server"
 DEFAULT_CLIENT = "win10-client"
-XP2P_EXE = Path(r"C:\xp2p\build\windows-x64\xp2p.exe")
+XP2P_EXE = Path(r"C:\xp2p\build\windows-amd64\xp2p.exe")
 XP2P_EXE_PS = str(XP2P_EXE).replace("\\", "\\\\")
 SERVICE_START_TIMEOUT = 60
 

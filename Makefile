@@ -4,8 +4,11 @@ run:
 VAGRANT_WIN10_DIR := infra/vagrant-win/windows10
 VAGRANT_WIN10_SERVER_ID := win10-server
 VAGRANT_WIN10_CLIENT_ID := win10-client
+WINDOWS_BUILD_DIR := build/windows-amd64
+LINUX_BUILD_DIR := build/linux-amd64
+OPENWRT_BUILD_DIR := build/linux-mipsle-softfloat
 
-.PHONY: ping _ping_args run build fmt lint vagrant-win10 vagrant-win10-destroy \
+.PHONY: ping _ping_args run build build-windows build-linux build-openwrt fmt lint vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client
 
@@ -27,8 +30,16 @@ ping: _ping_args
 _ping_args:
 	$(eval ARGS := $(filter-out ping _ping_args,$(MAKECMDGOALS)))
 
-build:
-	go build -o bin/xp2p ./go/cmd/xp2p
+build: build-windows build-linux build-openwrt
+
+build-windows:
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(WINDOWS_BUILD_DIR)' | Out-Null; $$env:GOOS = 'windows'; $$env:GOARCH = 'amd64'; go build -o '$(WINDOWS_BUILD_DIR)/xp2p.exe' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue"
+
+build-linux:
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(LINUX_BUILD_DIR)' | Out-Null; $$env:GOOS = 'linux'; $$env:GOARCH = 'amd64'; go build -o '$(LINUX_BUILD_DIR)/xp2p' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue"
+
+build-openwrt:
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(OPENWRT_BUILD_DIR)' | Out-Null; $$env:GOOS = 'linux'; $$env:GOARCH = 'mipsle'; $$env:GOMIPS = 'softfloat'; go build -o '$(OPENWRT_BUILD_DIR)/xp2p' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue; Remove-Item Env:GOMIPS -ErrorAction SilentlyContinue"
 
 fmt:
 	go fmt ./...
