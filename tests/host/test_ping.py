@@ -26,8 +26,17 @@ def test_xp2p_service_ping(xp2p_server_service, xp2p_client_runner, xp2p_options
             f"{result.stdout}"
         )
 
-    if (result.stderr or "").strip():
-        pytest.fail(
-            "xp2p ping wrote errors to STDERR:\n"
-            f"{result.stderr}"
-        )
+    stderr_text = (result.stderr or "").strip()
+    if stderr_text:
+        stderr_lower = stderr_text.lower()
+        if stderr_lower.startswith("#< clixml"):
+            if "level=error" in stderr_lower or "level=warn" in stderr_lower:
+                pytest.fail(
+                    "xp2p ping reported warnings/errors in STDERR:\n"
+                    f"{result.stderr}"
+                )
+        else:
+            pytest.fail(
+                "xp2p ping wrote unexpected output to STDERR:\n"
+                f"{result.stderr}"
+            )

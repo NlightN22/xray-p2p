@@ -6,11 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 const (
-	defaultTarget   = "10.0.10.1"
+	defaultTarget   = "10.0.10.10"
 	defaultPort     = "62022"
 	defaultAttempts = 3
 	xp2pExecutable  = `C:\tools\xp2p\xp2p.exe`
