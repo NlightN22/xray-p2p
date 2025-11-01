@@ -152,6 +152,35 @@ def _ps_quote(value: str) -> str:
 @pytest.fixture
 def xp2p_server_service(server_host: testinfra.host.Host, xp2p_options: dict):
     port = xp2p_options["port"]
+    disable_firewall_script = """
+$profiles = @('Domain','Private','Public')
+foreach ($profile in $profiles) {
+    $status = (Get-NetFirewallProfile -Profile $profile).Enabled
+    Write-Output ("PROFILE:{0}={1}" -f $profile, [int]$status)
+    if ($status) {
+        Set-NetFirewallProfile -Profile $profile -Enabled $false
+    }
+}
+exit 0
+"""
+    fw_result = _run_powershell(server_host, disable_firewall_script)
+    if fw_result.rc != 0:
+        pytest.fail(
+            "Failed to disable firewall on "
+            f"{DEFAULT_SERVER}.\nSTDOUT:\n{fw_result.stdout}\nSTDERR:\n{fw_result.stderr}"
+        )
+    profiles_to_restore: list[str] = []
+    for line in (fw_result.stdout or "").splitlines():
+        if not line.startswith("PROFILE:"):
+            continue
+        try:
+            _, payload = line.split(":", 1)
+            profile, value = payload.split("=", 1)
+        except ValueError:
+            continue
+        if value.strip() == "1":
+            profiles_to_restore.append(profile.strip())
+
     script = f"""
 $ErrorActionPreference = 'Stop'
 $xp2p = '{XP2P_EXE_PS}'
@@ -182,35 +211,37 @@ try {{
 Write-Output '__XP2P_TIMEOUT__'
 exit 5
 """
-    result = _run_powershell(server_host, script)
-    stdout = (result.stdout or "").strip()
+    pid_value: int | None = None
+    try:
+        result = _run_powershell(server_host, script)
+        stdout = (result.stdout or "").strip()
 
-    if result.rc != 0:
-        if "__XP2P_MISSING__" in stdout:
-            pytest.skip(
-                f"xp2p.exe not found on {DEFAULT_SERVER} at {XP2P_EXE}. "
-                "Provision the guest before running host tests."
+        if result.rc != 0:
+            if "__XP2P_MISSING__" in stdout:
+                pytest.skip(
+                    f"xp2p.exe not found on {DEFAULT_SERVER} at {XP2P_EXE}. "
+                    "Provision the guest before running host tests."
+                )
+            pytest.fail(
+                "Failed to start xp2p diagnostics service on "
+                f"{DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
-        pytest.fail(
-            "Failed to start xp2p diagnostics service on "
-            f"{DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
 
-    pid = None
-    for line in stdout.splitlines():
-        if line.startswith("PID="):
-            pid = line.split("=", 1)[1]
-            break
-    if pid is None:
-        pytest.fail(
-            "Unexpected xp2p service startup output:\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
+        for line in stdout.splitlines():
+            if line.startswith("PID="):
+                pid_value = int(line.split("=", 1)[1])
+                break
+        if pid_value is None:
+            pytest.fail(
+                "Unexpected xp2p service startup output:\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
 
-    yield {"pid": int(pid), "port": port}
-
-    stop_script = f"""
-$pid = {pid}
+        yield {"pid": pid_value, "port": port}
+    finally:
+        if pid_value is not None:
+            stop_script = f"""
+$pid = {pid_value}
 if ($pid -le 0) {{
     exit 0
 }}
@@ -220,7 +251,18 @@ if ($proc) {{
 }}
 exit 0
 """
-    _run_powershell(server_host, stop_script)
+            _run_powershell(server_host, stop_script)
+
+        if profiles_to_restore:
+            profile_args = ", ".join(_ps_quote(name) for name in profiles_to_restore)
+            restore_script = f"""
+$profiles = @({profile_args})
+foreach ($profile in $profiles) {{
+    Set-NetFirewallProfile -Profile $profile -Enabled $true
+}}
+exit 0
+"""
+            _run_powershell(server_host, restore_script)
 
 
 def _run_xp2p(

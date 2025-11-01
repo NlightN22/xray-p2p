@@ -3,7 +3,7 @@ import pytest
 
 @pytest.mark.host
 def test_xp2p_service_ping(xp2p_server_service, xp2p_client_runner, xp2p_options):
-    """Клиентский xp2p ping должен видеть поднятый на сервере сервис."""
+    """Verify that the client xp2p ping reaches the server-side diagnostics service."""
     result = xp2p_client_runner(
         "ping",
         xp2p_options["target"],
@@ -14,7 +14,7 @@ def test_xp2p_service_ping(xp2p_server_service, xp2p_client_runner, xp2p_options
     )
 
     assert result.rc == 0, (
-        "xp2p ping завершился с ошибкой:\n"
+        "xp2p ping failed:\n"
         f"STDOUT:\n{result.stdout}\n"
         f"STDERR:\n{result.stderr}"
     )
@@ -22,12 +22,12 @@ def test_xp2p_service_ping(xp2p_server_service, xp2p_client_runner, xp2p_options
     output_lower = (result.stdout or "").lower()
     if "100% loss" in output_lower:
         pytest.fail(
-            "xp2p ping сообщил о 100% потерь:\n"
+            "xp2p ping reported 100% packet loss:\n"
             f"{result.stdout}"
         )
 
     if (result.stderr or "").strip():
         pytest.fail(
-            "xp2p ping вывел ошибки в STDERR:\n"
+            "xp2p ping wrote errors to STDERR:\n"
             f"{result.stderr}"
         )
