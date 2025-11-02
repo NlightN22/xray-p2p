@@ -6,6 +6,7 @@ import base64
 import re
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Iterable
 
@@ -62,16 +63,50 @@ def _run(command: list[str], *, cwd: Path | None = None) -> None:
         )
 
 
-def _run_capture(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    process = subprocess.run(
+def _run_stream(command: list[str], *, cwd: Path | None = None) -> tuple[int, str, str]:
+    process = subprocess.Popen(
         command,
         cwd=cwd,
-        check=False,
-        text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
     )
-    return process
+
+    if process.stdout is None or process.stderr is None:
+        raise RuntimeError("Failed to capture process output.")
+
+    stdout_buffer: list[str] = []
+    stderr_buffer: list[str] = []
+
+    def _reader(pipe, printer, buffer):
+        with pipe:
+            for line in iter(pipe.readline, ""):
+                printer(line)
+                buffer.append(line)
+
+    threads = [
+        threading.Thread(
+            target=_reader,
+            args=(process.stdout, lambda s: print(s, end="", flush=True), stdout_buffer),
+            daemon=True,
+        ),
+        threading.Thread(
+            target=_reader,
+            args=(process.stderr, lambda s: print(s, end="", file=sys.stderr, flush=True), stderr_buffer),
+            daemon=True,
+        ),
+    ]
+
+    for thread in threads:
+        thread.start()
+
+    returncode = process.wait()
+
+    for thread in threads:
+        thread.join()
+
+    return returncode, "".join(stdout_buffer), "".join(stderr_buffer)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,14 +131,9 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    if not args.xp2p_args:
-        parser.error("xp2p arguments are missing. Example: -- ping 10.0.10.10 --port 62022")
-
-    xp2p_arguments = args.xp2p_args
-    if xp2p_arguments[0] == "--":
+    xp2p_arguments = list(args.xp2p_args)
+    if xp2p_arguments and xp2p_arguments[0] == "--":
         xp2p_arguments = xp2p_arguments[1:]
-    if not xp2p_arguments:
-        parser.error("Arguments for xp2p.exe must follow the `--` separator.")
 
     repo_root = _repo_root()
     print(f"==> Repository root: {repo_root}")
@@ -126,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     display_command = _format_display(xp2p_arguments)
     print(f"==> Effective command: {display_command}")
 
-    remote_exe = r"C:\vagrant\build\windows-amd64\xp2p.exe"
+    remote_exe = r"C:\xp2p\build\windows-amd64\xp2p.exe"
     ps_arguments = ", ".join(_ps_literal(arg) for arg in xp2p_arguments)
     remote_script = f"""
 $ErrorActionPreference = 'Stop'
@@ -152,15 +182,11 @@ exit $LASTEXITCODE
     ]
 
     print(f"==> Executing xp2p on guest {args.vm}")
-    result = _run_capture(remote_command, cwd=vm_dir)
-    if result.stdout:
-        print(result.stdout, end="")
-    if result.stderr:
-        print(result.stderr, file=sys.stderr, end="")
+    returncode, stdout_text, stderr_text = _run_stream(remote_command, cwd=vm_dir)
 
-    if result.returncode != 0:
+    if returncode != 0:
         raise RuntimeError(
-            f"Remote command exited with code {result.returncode}."
+            f"Remote command exited with code {returncode}."
         )
 
     print("==> Remote execution completed successfully")
