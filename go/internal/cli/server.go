@@ -17,9 +17,11 @@ import (
 )
 
 var (
-	serverInstallFunc = server.Install
-	serverRemoveFunc  = server.Remove
-	serverRunFunc     = server.Run
+	serverInstallFunc    = server.Install
+	serverRemoveFunc     = server.Remove
+	serverRunFunc        = server.Run
+	serverUserAddFunc    = server.AddUser
+	serverUserRemoveFunc = server.RemoveUser
 )
 
 func runServer(ctx context.Context, cfg config.Config, args []string) int {
@@ -36,6 +38,8 @@ func runServer(ctx context.Context, cfg config.Config, args []string) int {
 		return runServerRemove(ctx, cfg, args[1:])
 	case "run":
 		return runServerRun(ctx, cfg, args[1:])
+	case "user":
+		return runServerUser(ctx, cfg, args[1:])
 	case "-h", "--help", "help":
 		printServerUsage()
 		return 0
@@ -312,5 +316,6 @@ func printServerUsage() {
   remove  [--path PATH] [--keep-files] [--ignore-missing]
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
           [--xray-log-file FILE]
+  user    add/remove [...]
 `)
 }
