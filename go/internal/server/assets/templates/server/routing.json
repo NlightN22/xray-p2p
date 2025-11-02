@@ -1,0 +1,10 @@
+{
+    "reverse": {
+        "portals": []
+    },
+    "routing": {
+        "domainStrategy": "AsIs",
+        "rules": []
+    }
+}
+

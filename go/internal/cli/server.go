@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -63,9 +64,20 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 		return 2
 	}
 
+	portValue := strings.TrimSpace(*port)
+	if portValue == "" {
+		cfgPort := strings.TrimSpace(cfg.Server.Port)
+		if cfgPort != "" && cfgPort != server.DefaultPort {
+			portValue = cfgPort
+		}
+	}
+	if portValue == "" {
+		portValue = strconv.Itoa(server.DefaultTrojanPort)
+	}
+
 	opts := server.InstallOptions{
 		InstallDir:      firstNonEmpty(*path, cfg.Server.InstallDir),
-		Port:            firstNonEmpty(*port, cfg.Server.Port),
+		Port:            portValue,
 		Mode:            firstNonEmpty(*mode, cfg.Server.Mode),
 		CertificateFile: firstNonEmpty(*cert, cfg.Server.CertificateFile),
 		KeyFile:         firstNonEmpty(*key, cfg.Server.KeyFile),

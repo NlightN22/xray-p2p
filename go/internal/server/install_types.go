@@ -2,6 +2,9 @@ package server
 
 import "errors"
 
+// DefaultTrojanPort specifies the default inbound port for the xray-core service.
+const DefaultTrojanPort = 58443
+
 // ErrUnsupported indicates that the requested operation is not supported on this platform.
 var ErrUnsupported = errors.New("xp2p: server installation is only supported on Windows")
 

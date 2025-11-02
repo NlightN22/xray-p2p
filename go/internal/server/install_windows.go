@@ -28,6 +28,8 @@ const (
 	windowsServiceDisplayName = "XP2P XRAY core"
 	serviceStartTimeout       = 30 * time.Second
 	serviceStopTimeout        = 30 * time.Second
+	socksInboundPort          = 51080
+	dokodemoInboundPort       = 48044
 )
 
 //go:embed assets/templates/*
@@ -127,7 +129,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 
 	portStr := strings.TrimSpace(opts.Port)
 	if portStr == "" {
-		portStr = DefaultPort
+		portStr = strconv.Itoa(DefaultTrojanPort)
 	}
 	portVal, err := strconv.Atoi(portStr)
 	if err != nil || portVal <= 0 || portVal > 65535 {
@@ -285,18 +287,38 @@ func deployConfiguration(state installState) error {
 	}
 
 	data := struct {
-		Port            int
+		TrojanPort      int
+		SocksPort       int
+		DokodemoPort    int
 		TLS             bool
 		CertificateFile string
 		KeyFile         string
 	}{
-		Port:            state.portValue,
+		TrojanPort:      state.portValue,
+		SocksPort:       socksInboundPort,
+		DokodemoPort:    dokodemoInboundPort,
 		TLS:             certPath != "",
 		CertificateFile: certPath,
 		KeyFile:         keyPath,
 	}
 
-	return renderTemplateToFile("assets/templates/xray-server.json.tmpl", state.configPath, data)
+	if err := renderTemplateToFile("assets/templates/xray-server.json.tmpl", state.configPath, data); err != nil {
+		return err
+	}
+	if err := renderTemplateToFile("assets/templates/server/inbounds.json.tmpl", filepath.Join(state.configDir, "inbounds.json"), data); err != nil {
+		return err
+	}
+	staticFiles := map[string]string{
+		"assets/templates/server/logs.json":      filepath.Join(state.configDir, "logs.json"),
+		"assets/templates/server/outbounds.json": filepath.Join(state.configDir, "outbounds.json"),
+		"assets/templates/server/routing.json":   filepath.Join(state.configDir, "routing.json"),
+	}
+	for src, dst := range staticFiles {
+		if err := writeEmbeddedFile(src, dst, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func copyFile(src, dst string, perm os.FileMode) error {
@@ -356,6 +378,17 @@ func renderTemplateToFile(name, dest string, data any) error {
 		return fmt.Errorf("xp2p: flush config %s: %w", dest, err)
 	}
 
+	return nil
+}
+
+func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
+	content, err := serverTemplates.ReadFile(name)
+	if err != nil {
+		return fmt.Errorf("xp2p: load template %s: %w", name, err)
+	}
+	if err := os.WriteFile(dest, content, perm); err != nil {
+		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
+	}
 	return nil
 }
 

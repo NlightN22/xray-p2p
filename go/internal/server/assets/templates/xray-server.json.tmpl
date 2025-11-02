@@ -3,11 +3,55 @@
     "loglevel": "warning",
     "access": "none"
   },
+  "api": {
+    "tag": "api",
+    "listen": "127.0.0.1:52080",
+    "services": [
+      "HandlerService",
+      "LoggerService",
+      "StatsService"
+    ]
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserDownlink": true,
+        "statsUserUplink": true,
+        "statsUserOnline": true
+      }
+    },
+    "system": {
+      "statsInboundDownlink": true,
+      "statsInboundUplink": true,
+      "statsOutboundDownlink": true,
+      "statsOutboundUplink": true
+    }
+  },
   "inbounds": [
     {
-      "tag": "xp2p-trojan",
+      "tag": "socks-in",
+      "protocol": "socks",
+      "listen": "127.0.0.1",
+      "port": {{ .SocksPort }},
+      "settings": {
+        "udp": true
+      }
+    },
+    {
+      "remark": "local-input",
+      "tag": "in-48044",
       "listen": "0.0.0.0",
-      "port": {{.Port}},
+      "port": {{ .DokodemoPort }},
+      "protocol": "dokodemo-door",
+      "settings": {
+        "network": "tcp",
+        "followRedirect": true
+      }
+    },
+    {
+      "port": {{ .TrojanPort }},
+      "listen": "0.0.0.0",
       "protocol": "trojan",
       "settings": {
         "clients": []
@@ -19,14 +63,41 @@
         "tlsSettings": {
           "certificates": [
             {
-              "certificateFile": "{{.CertificateFile}}",
-              "keyFile": "{{.KeyFile}}"
+              "certificateFile": "{{ .CertificateFile }}",
+              "keyFile": "{{ .KeyFile }}"
             }
           ]
-        }
+        },
 {{- else }}
-        "security": "none"
+        "security": "none",
 {{- end }}
+        "tcpSettings": {
+          "header": {
+            "type": "http",
+            "request": {
+              "version": "1.1",
+              "method": "GET",
+              "path": [
+                "/"
+              ],
+              "headers": {
+                "Host": [
+                  "www.bing.com",
+                  "www.apple.com"
+                ],
+                "User-Agent": [
+                  "Mozilla/5.0"
+                ],
+                "Accept-Encoding": [
+                  "gzip, deflate"
+                ],
+                "Connection": [
+                  "keep-alive"
+                ]
+              }
+            }
+          }
+        }
       }
     }
   ],
@@ -35,5 +106,12 @@
       "protocol": "freedom",
       "tag": "direct"
     }
-  ]
+  ],
+  "reverse": {
+    "portals": []
+  },
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": []
+  }
 }
