@@ -1,25 +1,10 @@
-import base64
-import shutil
-import subprocess
-from contextlib import contextmanager
-from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 import pytest
-import testinfra
 from testinfra.backend.base import CommandResult
+from testinfra.host import Host
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
-DEFAULT_SERVER = "win10-server"
-DEFAULT_CLIENT = "win10-client"
-XP2P_EXE = Path(r"C:\xp2p\build\windows-amd64\xp2p.exe")
-XP2P_EXE_PS = str(XP2P_EXE).replace("\\", "\\\\")
-SERVICE_START_TIMEOUT = 60
-CLIENT_LOG_FILE = Path(r"C:\Program Files\xp2p\logs\client.err")
-CLIENT_LOG_FILE_PS = str(CLIENT_LOG_FILE).replace("\\", "\\\\")
-CLIENT_RUN_LOG_ARG = "logs\\\\client.err"
-CLIENT_RUN_STABILIZE_SECONDS = 6
+from . import _client_runtime, _env
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -60,106 +45,24 @@ def xp2p_options(pytestconfig: pytest.Config) -> dict:
     }
 
 
-def _require_vagrant_environment() -> None:
-    if shutil.which("vagrant") is None:
-        pytest.skip("Vagrant executable not found on host; guest tests are unavailable.")
-    if not VAGRANT_DIR.exists():
-        pytest.skip(
-            f"Expected Vagrant environment at '{VAGRANT_DIR}' is missing; "
-            "run `make vagrant-win10` before invoking host tests."
-        )
-
-
-def _machine_state(machine: str) -> str | None:
-    output = subprocess.check_output(
-        ["vagrant", "status", machine, "--machine-readable"],
-        cwd=VAGRANT_DIR,
-        text=True,
-    )
-    for line in output.splitlines():
-        parts = line.split(",")
-        if len(parts) >= 4 and parts[2] == "state":
-            return parts[3]
-    return None
-
-
-def _parse_winrm_config(raw: str) -> dict[str, str]:
-    config: dict[str, str] = {}
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line or line.lower().startswith("host "):
-            continue
-        pieces = line.split(None, 1)
-        if len(pieces) != 2:
-            continue
-        key = pieces[0].lower()
-        value = pieces[1].strip()
-        config[key] = value
-
-    required = {"hostname", "user", "password", "port"}
-    missing = required.difference(config)
-    if missing:
-        raise RuntimeError(
-            f"Incomplete winrm-config ({missing}) in output:\n{raw}"
-        )
-    return config
-
-
-def _winrm_hostspec(config: dict[str, str]) -> str:
-    return (
-        f"winrm://{config['user']}:{config['password']}@"
-        f"{config['hostname']}:{config['port']}?no_ssl=true&transport=ntlm"
-    )
-
-
-def _get_testinfra_host(machine: str) -> testinfra.host.Host:
-    state = _machine_state(machine)
-    if state != "running":
-        pytest.skip(
-            f"Guest '{machine}' is not running (state={state!r}). "
-            "Run `make vagrant-win10` and retry."
-        )
-
-    raw = subprocess.check_output(
-        ["vagrant", "winrm-config", machine],
-        cwd=VAGRANT_DIR,
-        text=True,
-    )
-    config = _parse_winrm_config(raw)
-    return testinfra.get_host(_winrm_hostspec(config))
+@pytest.fixture(scope="session")
+def server_host() -> Host:
+    _env.require_vagrant_environment()
+    return _env.get_testinfra_host(_env.DEFAULT_SERVER)
 
 
 @pytest.fixture(scope="session")
-def server_host() -> testinfra.host.Host:
-    _require_vagrant_environment()
-    return _get_testinfra_host(DEFAULT_SERVER)
-
-
-@pytest.fixture(scope="session")
-def client_host() -> testinfra.host.Host:
-    _require_vagrant_environment()
-    return _get_testinfra_host(DEFAULT_CLIENT)
-
-
-def _encode_powershell(script: str) -> str:
-    return base64.b64encode(script.encode("utf-16le")).decode("ascii")
-
-
-def _run_powershell(host: testinfra.host.Host, script: str) -> CommandResult:
-    encoded = _encode_powershell(script)
-    return host.run(f"powershell -NoProfile -EncodedCommand {encoded}")
-
-
-def _ps_quote(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
+def client_host() -> Host:
+    _env.require_vagrant_environment()
+    return _env.get_testinfra_host(_env.DEFAULT_CLIENT)
 
 
 @pytest.fixture
-def xp2p_server_service(server_host: testinfra.host.Host, xp2p_options: dict):
+def xp2p_server_service(server_host: Host, xp2p_options: dict):
     port = xp2p_options["port"]
     script = f"""
 $ErrorActionPreference = 'Stop'
-$xp2p = '{XP2P_EXE_PS}'
+$xp2p = '{_env.XP2P_EXE_PS}'
 if (-not (Test-Path $xp2p)) {{
     Write-Output '__XP2P_MISSING__'
     exit 3
@@ -188,7 +91,7 @@ if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {{
     exit 4
 }}
 $processId = [int]$createResult.ProcessId
-$deadline = (Get-Date).AddSeconds({SERVICE_START_TIMEOUT})
+$deadline = (Get-Date).AddSeconds({_env.SERVICE_START_TIMEOUT})
 
 while ((Get-Date) -lt $deadline) {{
     $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
@@ -214,13 +117,13 @@ exit 5
 """
     pid_value: int | None = None
     try:
-        result = _run_powershell(server_host, script)
+        result = _env.run_powershell(server_host, script)
         stdout = (result.stdout or "").strip()
 
         if result.rc != 0:
             if "__XP2P_MISSING__" in stdout:
                 pytest.skip(
-                    f"xp2p.exe not found on {DEFAULT_SERVER} at {XP2P_EXE}. "
+                    f"xp2p.exe not found on {_env.DEFAULT_SERVER} at {_env.XP2P_EXE}. "
                     "Provision the guest before running host tests."
                 )
             if "__XP2P_CREATE_FAIL__" in stdout:
@@ -235,7 +138,7 @@ exit 5
                 )
             pytest.fail(
                 "Failed to start xp2p diagnostics service on "
-                f"{DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                f"{_env.DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
 
         for line in stdout.splitlines():
@@ -267,172 +170,33 @@ if ($proc) {{
 }}
 exit 0
 """
-            _run_powershell(server_host, stop_script)
-
-
-def _start_xp2p_client_run(host: testinfra.host.Host) -> int:
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$xp2p = '{XP2P_EXE_PS}'
-if (-not (Test-Path $xp2p)) {{
-    Write-Output '__XP2P_MISSING__'
-    exit 3
-}}
-
-$existing = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $xp2p }}
-if ($existing) {{
-    foreach ($item in $existing) {{
-        try {{
-            Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue
-        }} catch {{ }}
-    }}
-    Start-Sleep -Seconds 1
-}}
-
-$logPath = '{CLIENT_LOG_FILE_PS}'
-if (Test-Path $logPath) {{
-    Remove-Item $logPath -Force -ErrorAction SilentlyContinue
-}}
-
-$commandLine = "`"$xp2p`" client run --quiet --xray-log-file {CLIENT_RUN_LOG_ARG}"
-$workingDir = Split-Path $xp2p
-$createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{{ CommandLine = $commandLine; CurrentDirectory = $workingDir }}
-if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {{
-    Write-Output ('__XP2P_CREATE_FAIL__' + $createResult.ReturnValue)
-    exit 4
-}}
-$processId = [int]$createResult.ProcessId
-$deadline = (Get-Date).AddSeconds({CLIENT_RUN_STABILIZE_SECONDS})
-
-while ((Get-Date) -lt $deadline) {{
-    $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-    if (-not $proc) {{
-        Write-Output '__XP2P_EXIT__'
-        exit 6
-    }}
-    Start-Sleep -Seconds 1
-}}
-
-Write-Output ('PID=' + $processId)
-exit 0
-"""
-    result = _run_powershell(host, script)
-    stdout = (result.stdout or "").strip()
-
-    if result.rc != 0:
-        if "__XP2P_MISSING__" in stdout:
-            pytest.skip(
-                f"xp2p.exe not found on {DEFAULT_CLIENT} at {XP2P_EXE}. "
-                "Provision the guest before running host tests."
-            )
-        if "__XP2P_CREATE_FAIL__" in stdout:
-            pytest.fail(
-                "Failed to spawn xp2p client run via Win32_Process.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-        if "__XP2P_EXIT__" in stdout:
-            pytest.fail(
-                "xp2p client run exited before stabilization period elapsed.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-        pytest.fail(
-            "Failed to start xp2p client run on "
-            f"{DEFAULT_CLIENT}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-    pid_value: int | None = None
-    for line in stdout.splitlines():
-        if line.startswith("PID="):
-            pid_value = int(line.split("=", 1)[1])
-            break
-    if pid_value is None:
-        pytest.fail(
-            "Unexpected xp2p client run startup output:\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return pid_value
-
-
-def _stop_process(host: testinfra.host.Host, pid_value: int) -> None:
-    script = f"""
-$pidValue = {pid_value}
-if ($pidValue -le 0) {{
-    exit 0
-}}
-$proc = Get-Process -Id $pidValue -ErrorAction SilentlyContinue
-if ($proc) {{
-    try {{
-        Stop-Process -Id $pidValue -Force -ErrorAction SilentlyContinue
-    }} catch {{ }}
-}}
-Start-Sleep -Milliseconds 200
-$xray = Get-Process -Name xray -ErrorAction SilentlyContinue
-if ($xray) {{
-    foreach ($item in $xray) {{
-        try {{
-            Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue
-        }} catch {{ }}
-    }}
-}}
-exit 0
-"""
-    _run_powershell(host, script)
-
-
-@contextmanager
-def xp2p_client_run_session(host: testinfra.host.Host):
-    pid_value = None
-    try:
-        pid_value = _start_xp2p_client_run(host)
-        yield {"pid": pid_value, "log_path": CLIENT_LOG_FILE}
-    finally:
-        if pid_value is not None:
-            _stop_process(host, pid_value)
+            _env.run_powershell(server_host, stop_script)
 
 
 @pytest.fixture
-def xp2p_client_run_factory(client_host: testinfra.host.Host):
+def xp2p_client_run_factory(client_host: Host):
     def _factory():
-        return xp2p_client_run_session(client_host)
+        return _client_runtime.xp2p_client_run_session(client_host)
 
     return _factory
 
 
-def _run_xp2p(
-    host: testinfra.host.Host,
-    args: Iterable[str],
-) -> CommandResult:
-    arguments = ", ".join(_ps_quote(str(arg)) for arg in args)
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$xp2p = '{XP2P_EXE_PS}'
-if (-not (Test-Path $xp2p)) {{
-    Write-Output '__XP2P_MISSING__'
-    exit 3
-}}
-$arguments = @({arguments})
-& $xp2p @arguments
-exit $LASTEXITCODE
-"""
-    return _run_powershell(host, script)
-
-
 @pytest.fixture
 def xp2p_client_runner(
-    client_host: testinfra.host.Host,
+    client_host: Host,
 ) -> Callable[..., CommandResult]:
     def _runner(*args: str, check: bool = False):
-        result = _run_xp2p(client_host, args)
+        result = _env.run_xp2p(client_host, args)
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
-                f"xp2p.exe not found on {DEFAULT_CLIENT} at {XP2P_EXE}. "
+                f"xp2p.exe not found on {_env.DEFAULT_CLIENT} at {_env.XP2P_EXE}. "
                 "Provision the guest before running host tests."
             )
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed on "
-                f"{DEFAULT_CLIENT} (exit {result.rc}).\n"
+                f"{_env.DEFAULT_CLIENT} (exit {result.rc}).\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
         return result
