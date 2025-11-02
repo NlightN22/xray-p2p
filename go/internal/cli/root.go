@@ -93,7 +93,8 @@ func printUsage() {
 Usage:
   xp2p            Start diagnostics service (TCP/UDP port 62022)
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
-  xp2p server install [--path PATH] [--port PORT] [--mode auto|manual] [--cert FILE] [--key FILE]
-  xp2p server remove [--path PATH]
+  xp2p server install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE]
+  xp2p server remove  [--path PATH]
+  xp2p server run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
 `)
 }

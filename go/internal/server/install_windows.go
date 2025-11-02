@@ -14,22 +14,14 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/assets/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	windowsapi "golang.org/x/sys/windows"
-	winsvc "golang.org/x/sys/windows/svc"
-	"golang.org/x/sys/windows/svc/mgr"
 )
 
 const (
-	windowsServiceName        = "xp2p-xray"
-	windowsServiceDisplayName = "XP2P XRAY core"
-	serviceStartTimeout       = 30 * time.Second
-	serviceStopTimeout        = 30 * time.Second
-	socksInboundPort          = 51080
-	dokodemoInboundPort       = 48044
+	socksInboundPort    = 51080
+	dokodemoInboundPort = 48044
 )
 
 //go:embed assets/templates/*
@@ -46,8 +38,12 @@ type installState struct {
 	portValue  int
 }
 
-// Install deploys xray-core, configuration templates, and a Windows service.
+// Install deploys xray-core binaries and configuration files.
 func Install(ctx context.Context, opts InstallOptions) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	state, err := normalizeInstallOptions(opts)
 	if err != nil {
 		return err
@@ -63,8 +59,8 @@ func Install(ctx context.Context, opts InstallOptions) error {
 
 	logging.Info("xp2p server install starting",
 		"install_dir", state.installDir,
+		"config_dir", state.configDir,
 		"port", state.portValue,
-		"mode", state.Mode,
 		"xray_version", xray.Version,
 	)
 
@@ -82,30 +78,23 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return err
 	}
 
-	if err := configureService(ctx, state); err != nil {
-		return err
-	}
-
 	logging.Info("xp2p server install completed", "install_dir", state.installDir)
 	return nil
 }
 
-// Remove stops the Windows service and removes installed files.
+// Remove deletes installation files. When KeepFiles is true only existence is verified.
 func Remove(ctx context.Context, opts RemoveOptions) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	installDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
 		return err
 	}
 
-	logging.Info("xp2p server remove starting",
-		"install_dir", installDir,
-	)
-
-	if err := removeWindowsService(ctx, opts.IgnoreMissing); err != nil {
-		return err
-	}
-
 	if opts.KeepFiles {
+		logging.Info("xp2p server remove skipping files", "install_dir", installDir)
 		return nil
 	}
 
@@ -116,12 +105,17 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("xp2p: remove install directory: %w", err)
 	}
 
-	logging.Info("xp2p server remove completed", "install_dir", installDir)
+	logging.Info("xp2p server files removed", "install_dir", installDir)
 	return nil
 }
 
 func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 	dir, err := resolveInstallDir(opts.InstallDir)
+	if err != nil {
+		return installState{}, err
+	}
+
+	configDir, err := resolveConfigDir(dir, opts.ConfigDir)
 	if err != nil {
 		return installState{}, err
 	}
@@ -133,14 +127,6 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 	portVal, err := strconv.Atoi(portStr)
 	if err != nil || portVal <= 0 || portVal > 65535 {
 		return installState{}, fmt.Errorf("xp2p: invalid port %q", portStr)
-	}
-
-	mode := strings.ToLower(strings.TrimSpace(opts.Mode))
-	if mode == "" {
-		mode = "auto"
-	}
-	if mode != "auto" && mode != "manual" {
-		return installState{}, fmt.Errorf("xp2p: unsupported server mode %q (want auto or manual)", opts.Mode)
 	}
 
 	certSource := strings.TrimSpace(opts.CertificateFile)
@@ -164,16 +150,15 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 	state := installState{
 		InstallOptions: InstallOptions{
 			InstallDir:      dir,
+			ConfigDir:       opts.ConfigDir,
 			Port:            portStr,
-			Mode:            mode,
 			CertificateFile: certSource,
 			KeyFile:         keySource,
 			Force:           opts.Force,
-			StartService:    opts.StartService,
 		},
 		installDir: dir,
 		binDir:     filepath.Join(dir, "bin"),
-		configDir:  filepath.Join(dir, "config"),
+		configDir:  configDir,
 		xrayPath:   filepath.Join(dir, "bin", "xray.exe"),
 		portValue:  portVal,
 	}
@@ -201,6 +186,17 @@ func resolveInstallDir(raw string) (string, error) {
 	}
 
 	return abs, nil
+}
+
+func resolveConfigDir(base, cfg string) (string, error) {
+	cfg = strings.TrimSpace(cfg)
+	if cfg == "" {
+		cfg = DefaultServerConfigDir
+	}
+	if filepath.IsAbs(cfg) {
+		return cfg, nil
+	}
+	return filepath.Join(base, cfg), nil
 }
 
 func isSafeInstallDir(path string) bool {
@@ -354,9 +350,9 @@ func renderTemplateToFile(name, dest string, data any) error {
 	if err != nil {
 		return fmt.Errorf("xp2p: load template %s: %w", name, err)
 	}
-	tmpl, err := template.New(filepath.Base(name)).Parse(string(content))
+	tmpl, err := templateFromBytes(name, content)
 	if err != nil {
-		return fmt.Errorf("xp2p: parse template %s: %w", name, err)
+		return err
 	}
 
 	file, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
@@ -376,6 +372,14 @@ func renderTemplateToFile(name, dest string, data any) error {
 	return nil
 }
 
+func templateFromBytes(name string, content []byte) (*template.Template, error) {
+	tmpl, err := template.New(filepath.Base(name)).Parse(string(content))
+	if err != nil {
+		return nil, fmt.Errorf("xp2p: parse template %s: %w", name, err)
+	}
+	return tmpl, nil
+}
+
 func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 	content, err := serverTemplates.ReadFile(name)
 	if err != nil {
@@ -385,167 +389,4 @@ func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
 	}
 	return nil
-}
-
-func configureService(ctx context.Context, state installState) error {
-	manager, err := mgr.Connect()
-	if err != nil {
-		return fmt.Errorf("xp2p: connect service manager: %w", err)
-	}
-	defer manager.Disconnect()
-
-	if err := ensureServiceAbsent(ctx, manager, state.Force); err != nil {
-		return err
-	}
-
-	startType := mgr.StartAutomatic
-	if state.Mode == "manual" {
-		startType = mgr.StartManual
-	}
-
-	service, err := manager.CreateService(
-		windowsServiceName,
-		state.xrayPath,
-		mgr.Config{
-			DisplayName: windowsServiceDisplayName,
-			Description: "XRAY core service managed by xp2p",
-			StartType:   uint32(startType),
-		},
-		"-confdir",
-		state.configDir,
-	)
-	if err != nil {
-		return fmt.Errorf("xp2p: create service: %w", err)
-	}
-	defer service.Close()
-
-	if !state.StartService {
-		return nil
-	}
-
-	if err := startWindowsService(ctx, service); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func ensureServiceAbsent(ctx context.Context, manager *mgr.Mgr, force bool) error {
-	service, err := manager.OpenService(windowsServiceName)
-	if err != nil {
-		if errors.Is(err, windowsapi.ERROR_SERVICE_DOES_NOT_EXIST) {
-			return nil
-		}
-		return fmt.Errorf("xp2p: open existing service: %w", err)
-	}
-	defer service.Close()
-
-	if !force {
-		return fmt.Errorf("xp2p: service %s already exists (use --force to overwrite)", windowsServiceName)
-	}
-
-	if err := stopWindowsService(ctx, service); err != nil {
-		return err
-	}
-
-	if err := service.Delete(); err != nil {
-		return fmt.Errorf("xp2p: delete existing service: %w", err)
-	}
-
-	return nil
-}
-
-func removeWindowsService(ctx context.Context, ignoreMissing bool) error {
-	manager, err := mgr.Connect()
-	if err != nil {
-		return fmt.Errorf("xp2p: connect service manager: %w", err)
-	}
-	defer manager.Disconnect()
-
-	service, err := manager.OpenService(windowsServiceName)
-	if err != nil {
-		if errors.Is(err, windowsapi.ERROR_SERVICE_DOES_NOT_EXIST) {
-			if ignoreMissing {
-				return nil
-			}
-			return fmt.Errorf("xp2p: service %s not found", windowsServiceName)
-		}
-		return fmt.Errorf("xp2p: open service: %w", err)
-	}
-	defer service.Close()
-
-	if err := stopWindowsService(ctx, service); err != nil {
-		return err
-	}
-
-	if err := service.Delete(); err != nil {
-		return fmt.Errorf("xp2p: delete service: %w", err)
-	}
-
-	return nil
-}
-
-func stopWindowsService(ctx context.Context, service *mgr.Service) error {
-	status, err := service.Control(winsvc.Stop)
-	if err != nil {
-		if errors.Is(err, windowsapi.ERROR_SERVICE_NOT_ACTIVE) {
-			return nil
-		}
-		// If the service is already stopping, ignore.
-		if errors.Is(err, windowsapi.ERROR_INVALID_SERVICE_CONTROL) {
-			return nil
-		}
-		return fmt.Errorf("xp2p: stop service: %w", err)
-	}
-
-	// Service may already be stopped.
-	if status.State == winsvc.Stopped {
-		return nil
-	}
-
-	if err := waitForServiceState(ctx, service, winsvc.Stopped, serviceStopTimeout); err != nil {
-		return err
-	}
-	return nil
-}
-
-func startWindowsService(ctx context.Context, service *mgr.Service) error {
-	if err := service.Start(); err != nil {
-		return fmt.Errorf("xp2p: start service: %w", err)
-	}
-	logging.Info("windows service start requested", "service", windowsServiceName)
-	if err := waitForServiceState(ctx, service, winsvc.Running, serviceStartTimeout); err != nil {
-		return err
-	}
-	logging.Info("windows service running", "service", windowsServiceName)
-	return nil
-}
-
-func waitForServiceState(ctx context.Context, service *mgr.Service, target winsvc.State, timeout time.Duration) error {
-	deadlineCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-deadlineCtx.Done():
-			return fmt.Errorf("xp2p: service %s did not reach state %v: %w", windowsServiceName, target, deadlineCtx.Err())
-		case <-ticker.C:
-			status, err := service.Query()
-			if err != nil {
-				return fmt.Errorf("xp2p: query service status: %w", err)
-			}
-			switch status.State {
-			case target:
-				return nil
-			case winsvc.Stopped:
-				if target != winsvc.Stopped {
-					return fmt.Errorf("xp2p: service %s stopped unexpectedly", windowsServiceName)
-				}
-				return nil
-			}
-		}
-	}
 }

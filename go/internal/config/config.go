@@ -22,6 +22,7 @@ var defaultValues = map[string]any{
 	"logging.level":      "info",
 	"server.port":        "62022",
 	"server.install_dir": "",
+	"server.config_dir":  "config-server",
 	"server.mode":        "auto",
 	"server.certificate": "",
 	"server.key":         "",
@@ -48,6 +49,7 @@ type LoggingConfig struct {
 type ServerConfig struct {
 	Port            string `koanf:"port"`
 	InstallDir      string `koanf:"install_dir"`
+	ConfigDir       string `koanf:"config_dir"`
 	Mode            string `koanf:"mode"`
 	CertificateFile string `koanf:"certificate"`
 	KeyFile         string `koanf:"key"`
@@ -179,6 +181,11 @@ func normalize(cfg *Config) {
 	cfg.Server.InstallDir = strings.TrimSpace(cfg.Server.InstallDir)
 	if cfg.Server.InstallDir == "" {
 		cfg.Server.InstallDir = defaultInstallDir()
+	}
+
+	cfg.Server.ConfigDir = strings.TrimSpace(cfg.Server.ConfigDir)
+	if cfg.Server.ConfigDir == "" {
+		cfg.Server.ConfigDir = defaultValues["server.config_dir"].(string)
 	}
 
 	cfg.Server.Mode = strings.TrimSpace(strings.ToLower(cfg.Server.Mode))

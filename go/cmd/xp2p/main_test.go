@@ -27,6 +27,9 @@ func TestParseRootArgsDefaults(t *testing.T) {
 	if cfg.Server.InstallDir == "" {
 		t.Fatalf("expected non-empty install dir")
 	}
+	if cfg.Server.ConfigDir != "config-server" {
+		t.Fatalf("expected default config dir config-server, got %s", cfg.Server.ConfigDir)
+	}
 	if cfg.Server.Mode != "auto" {
 		t.Fatalf("expected default mode auto, got %s", cfg.Server.Mode)
 	}
@@ -45,6 +48,7 @@ func TestParseRootArgsWithFlags(t *testing.T) {
 		"--log-level", "DEBUG",
 		"--server-port", "65010",
 		"--server-install-dir", `D:\xp2p`,
+		"--server-config-dir", "cfg-run",
 		"--server-mode", "MANUAL",
 		"--server-cert", `D:\certs\cert.pem`,
 		"--server-key", `D:\certs\cert.key`,
@@ -63,6 +67,9 @@ func TestParseRootArgsWithFlags(t *testing.T) {
 	}
 	if cfg.Server.InstallDir != `D:\xp2p` {
 		t.Fatalf("expected install dir D:\\xp2p, got %s", cfg.Server.InstallDir)
+	}
+	if cfg.Server.ConfigDir != "cfg-run" {
+		t.Fatalf("expected config dir cfg-run, got %s", cfg.Server.ConfigDir)
 	}
 	if cfg.Server.Mode != "manual" {
 		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
@@ -94,6 +101,7 @@ logging:
 server:
   port: 65011
   install_dir: C:\xp2p
+  config_dir: cfg-config
   mode: manual
   certificate: C:\certs\server.pem
   key: C:\certs\server.key
@@ -114,6 +122,9 @@ server:
 	}
 	if cfg.Server.InstallDir != `C:\xp2p` {
 		t.Fatalf("expected install dir C:\\xp2p, got %s", cfg.Server.InstallDir)
+	}
+	if cfg.Server.ConfigDir != "cfg-config" {
+		t.Fatalf("expected config dir cfg-config, got %s", cfg.Server.ConfigDir)
 	}
 	if cfg.Server.Mode != "manual" {
 		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)

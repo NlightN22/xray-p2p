@@ -22,6 +22,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.InstallDir == "" {
 		t.Fatalf("expected non-empty install dir")
 	}
+	if cfg.Server.ConfigDir != "config-server" {
+		t.Fatalf("expected default config dir config-server, got %s", cfg.Server.ConfigDir)
+	}
 	if cfg.Server.Mode != "auto" {
 		t.Fatalf("expected mode auto, got %s", cfg.Server.Mode)
 	}
@@ -42,6 +45,7 @@ logging:
 server:
   port: 65001
   install_dir: C:\xp2p-test
+  config_dir: cfg-test
   mode: manual
   certificate: C:\certs\server.pem
   key: C:\certs\server.key
@@ -60,6 +64,9 @@ server:
 	if cfg.Server.InstallDir != `C:\xp2p-test` {
 		t.Fatalf("expected install dir C:\\xp2p-test, got %s", cfg.Server.InstallDir)
 	}
+	if cfg.Server.ConfigDir != "cfg-test" {
+		t.Fatalf("expected config dir cfg-test, got %s", cfg.Server.ConfigDir)
+	}
 	if cfg.Server.Mode != "manual" {
 		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
 	}
@@ -77,6 +84,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_LOGGING_LEVEL", "DEBUG")
 	t.Setenv("XP2P_SERVER_PORT", "65002")
 	t.Setenv("XP2P_SERVER_INSTALL_DIR", `D:\xp2p`)
+	t.Setenv("XP2P_SERVER_CONFIG_DIR", "cfg-dir")
 	t.Setenv("XP2P_SERVER_MODE", "AUTO")
 	t.Setenv("XP2P_SERVER_CERTIFICATE", `D:\certs\cert.pem`)
 	t.Setenv("XP2P_SERVER_KEY", `D:\certs\cert.key`)
@@ -93,6 +101,9 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.Server.InstallDir != `D:\xp2p` {
 		t.Fatalf("expected install dir D:\\xp2p, got %s", cfg.Server.InstallDir)
+	}
+	if cfg.Server.ConfigDir != "cfg-dir" {
+		t.Fatalf("expected config dir cfg-dir, got %s", cfg.Server.ConfigDir)
 	}
 	if cfg.Server.Mode != "auto" {
 		t.Fatalf("expected normalized mode auto, got %s", cfg.Server.Mode)
@@ -115,6 +126,7 @@ func TestLoadOverrides(t *testing.T) {
 			"logging.level":      "error",
 			"server.port":        "65003",
 			"server.install_dir": `E:\xp2p`,
+			"server.config_dir":  "cfg-override",
 			"server.mode":        "MANUAL",
 			"server.certificate": `E:\certs\cert.pem`,
 			"server.key":         `E:\certs\cert.key`,
@@ -131,6 +143,9 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.Server.InstallDir != `E:\xp2p` {
 		t.Fatalf("expected install dir E:\\xp2p, got %s", cfg.Server.InstallDir)
+	}
+	if cfg.Server.ConfigDir != "cfg-override" {
+		t.Fatalf("expected config dir cfg-override, got %s", cfg.Server.ConfigDir)
 	}
 	if cfg.Server.Mode != "manual" {
 		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
@@ -154,6 +169,7 @@ level = "warn"
 [server]
 port = "65004"
 install_dir = "C:\\xp2p-custom"
+config_dir = "config-alt"
 mode = "Manual"
 certificate = "C:\\certs\\server.pem"
 key = "C:\\certs\\server.key"
@@ -171,6 +187,9 @@ key = "C:\\certs\\server.key"
 	}
 	if cfg.Server.InstallDir != `C:\xp2p-custom` {
 		t.Fatalf("expected install dir C:\\xp2p-custom, got %s", cfg.Server.InstallDir)
+	}
+	if cfg.Server.ConfigDir != "config-alt" {
+		t.Fatalf("expected config dir config-alt, got %s", cfg.Server.ConfigDir)
 	}
 	if cfg.Server.Mode != "manual" {
 		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)

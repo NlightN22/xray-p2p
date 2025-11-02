@@ -47,6 +47,9 @@ fmt:
 lint:
 	go vet ./...
 
+test:
+	go test ./...	
+
 vagrant-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant up --provision
 
