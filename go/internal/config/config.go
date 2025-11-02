@@ -19,14 +19,21 @@ import (
 const defaultEnvPrefix = "XP2P_"
 
 var defaultValues = map[string]any{
-	"logging.level":      "info",
-	"logging.format":     "text",
-	"server.port":        "62022",
-	"server.install_dir": "",
-	"server.config_dir":  "config-server",
-	"server.mode":        "auto",
-	"server.certificate": "",
-	"server.key":         "",
+	"logging.level":         "info",
+	"logging.format":        "text",
+	"server.port":           "62022",
+	"server.install_dir":    "",
+	"server.config_dir":     "config-server",
+	"server.mode":           "auto",
+	"server.certificate":    "",
+	"server.key":            "",
+	"client.install_dir":    "",
+	"client.config_dir":     "config-client",
+	"client.server_address": "",
+	"client.server_port":    "8443",
+	"client.password":       "",
+	"client.server_name":    "",
+	"client.allow_insecure": true,
 }
 
 var defaultCandidates = []string{
@@ -39,6 +46,7 @@ var defaultCandidates = []string{
 type Config struct {
 	Logging LoggingConfig `koanf:"logging"`
 	Server  ServerConfig  `koanf:"server"`
+	Client  ClientConfig  `koanf:"client"`
 }
 
 // LoggingConfig holds logging related settings.
@@ -55,6 +63,17 @@ type ServerConfig struct {
 	Mode            string `koanf:"mode"`
 	CertificateFile string `koanf:"certificate"`
 	KeyFile         string `koanf:"key"`
+}
+
+// ClientConfig holds client installation settings.
+type ClientConfig struct {
+	InstallDir    string `koanf:"install_dir"`
+	ConfigDir     string `koanf:"config_dir"`
+	ServerAddress string `koanf:"server_address"`
+	ServerPort    string `koanf:"server_port"`
+	Password      string `koanf:"password"`
+	ServerName    string `koanf:"server_name"`
+	AllowInsecure bool   `koanf:"allow_insecure"`
 }
 
 // Options control configuration loading behaviour.
@@ -208,6 +227,38 @@ func normalize(cfg *Config) {
 	if cfg.Server.KeyFile == "" {
 		cfg.Server.KeyFile = defaultValues["server.key"].(string)
 	}
+
+	cfg.Client.InstallDir = strings.TrimSpace(cfg.Client.InstallDir)
+	if cfg.Client.InstallDir == "" {
+		cfg.Client.InstallDir = defaultInstallDir()
+	}
+
+	cfg.Client.ConfigDir = strings.TrimSpace(cfg.Client.ConfigDir)
+	if cfg.Client.ConfigDir == "" {
+		cfg.Client.ConfigDir = defaultValues["client.config_dir"].(string)
+	}
+
+	cfg.Client.ServerAddress = strings.TrimSpace(cfg.Client.ServerAddress)
+	if cfg.Client.ServerAddress == "" {
+		cfg.Client.ServerAddress = defaultValues["client.server_address"].(string)
+	}
+
+	cfg.Client.ServerPort = strings.TrimSpace(cfg.Client.ServerPort)
+	if cfg.Client.ServerPort == "" {
+		cfg.Client.ServerPort = defaultValues["client.server_port"].(string)
+	}
+
+	cfg.Client.Password = strings.TrimSpace(cfg.Client.Password)
+	if cfg.Client.Password == "" {
+		cfg.Client.Password = defaultValues["client.password"].(string)
+	}
+
+	cfg.Client.ServerName = strings.TrimSpace(cfg.Client.ServerName)
+	if cfg.Client.ServerName == "" {
+		cfg.Client.ServerName = defaultValues["client.server_name"].(string)
+	}
+
+	// AllowInsecure is a boolean and defaults through the map loader.
 }
 
 func defaultInstallDir() string {

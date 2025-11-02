@@ -1,0 +1,9 @@
+{
+    "routing": {
+        "domainStrategy": "IPOnDemand",
+        "rules": []
+    },
+    "reverse": {
+        "bridges": []
+    }
+}

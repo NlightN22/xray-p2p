@@ -58,6 +58,14 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	serverCert := fs.String("server-cert", "", "path to TLS certificate file (PEM)")
 	serverKey := fs.String("server-key", "", "path to TLS private key file (PEM)")
 	logJSON := fs.Bool("log-json", false, "emit logs in JSON format")
+	clientInstallDir := fs.String("client-install-dir", "", "client installation directory (Windows)")
+	clientConfigDir := fs.String("client-config-dir", "", "client configuration directory name")
+	clientServerAddress := fs.String("client-server-address", "", "remote server address for client config")
+	clientServerPort := fs.String("client-server-port", "", "remote server port for client config")
+	clientPassword := fs.String("client-password", "", "Trojan password for client config")
+	clientServerName := fs.String("client-server-name", "", "TLS server name for client config")
+	clientAllowInsecure := fs.Bool("client-allow-insecure", false, "allow TLS verification to be skipped for client config")
+	clientStrictTLS := fs.Bool("client-strict-tls", false, "enforce TLS verification for client config")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -90,6 +98,30 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	}
 	if *logJSON {
 		overrides["logging.format"] = "json"
+	}
+	if dir := strings.TrimSpace(*clientInstallDir); dir != "" {
+		overrides["client.install_dir"] = dir
+	}
+	if cfgDir := strings.TrimSpace(*clientConfigDir); cfgDir != "" {
+		overrides["client.config_dir"] = cfgDir
+	}
+	if addr := strings.TrimSpace(*clientServerAddress); addr != "" {
+		overrides["client.server_address"] = addr
+	}
+	if port := strings.TrimSpace(*clientServerPort); port != "" {
+		overrides["client.server_port"] = port
+	}
+	if pwd := strings.TrimSpace(*clientPassword); pwd != "" {
+		overrides["client.password"] = pwd
+	}
+	if name := strings.TrimSpace(*clientServerName); name != "" {
+		overrides["client.server_name"] = name
+	}
+	if *clientAllowInsecure {
+		overrides["client.allow_insecure"] = true
+	}
+	if *clientStrictTLS {
+		overrides["client.allow_insecure"] = false
 	}
 
 	cfg, err := config.Load(config.Options{
@@ -124,12 +156,23 @@ Usage:
   xp2p [--config FILE] [--log-level LEVEL] [--server-port PORT]
        [--server-install-dir PATH] [--server-config-dir NAME]
        [--server-cert FILE] [--server-key FILE] [--log-json]
+       [--client-install-dir PATH] [--client-config-dir NAME]
+       [--client-server-address HOST] [--client-server-port PORT]
+       [--client-password SECRET] [--client-server-name NAME]
+       [--client-allow-insecure|--client-strict-tls]
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
   xp2p server install [--path PATH] [--config-dir NAME] [--port PORT]
                       [--cert FILE] [--key FILE]
   xp2p server remove [--path PATH]
   xp2p server run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
                   [--xray-log-file FILE]
+  xp2p client install [--path PATH] [--config-dir NAME] --server-address HOST --password SECRET
+                      [--server-port PORT] [--server-name NAME]
+                      [--allow-insecure|--strict-tls] [--force]
+  xp2p client remove [--path PATH]
+  xp2p client run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
+                  [--xray-log-file FILE]
+                      (requires client server address and password configured)
 `)
 }
 

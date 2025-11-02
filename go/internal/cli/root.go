@@ -24,6 +24,8 @@ func Execute(ctx context.Context, cfg config.Config, args []string) int {
 		return runPing(ctx, args[1:])
 	case "server":
 		return runServer(ctx, cfg, args[1:])
+	case "client":
+		return runClient(ctx, cfg, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "xp2p: unknown command %q\n\n", args[0])
 		printUsage()
@@ -96,5 +98,11 @@ Usage:
   xp2p server install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE]
   xp2p server remove  [--path PATH]
   xp2p server run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
+  xp2p client install [--path PATH] [--config-dir NAME] --server-address HOST --password SECRET
+                      [--server-port PORT] [--server-name NAME]
+                      [--allow-insecure|--strict-tls] [--force]
+  xp2p client remove  [--path PATH]
+  xp2p client run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
+                      (requires client server address and password configured)
 `)
 }

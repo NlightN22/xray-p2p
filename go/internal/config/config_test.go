@@ -37,6 +37,27 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.KeyFile != "" {
 		t.Fatalf("expected empty key path, got %s", cfg.Server.KeyFile)
 	}
+	if cfg.Client.InstallDir == "" {
+		t.Fatalf("expected non-empty client install dir")
+	}
+	if cfg.Client.ConfigDir != "config-client" {
+		t.Fatalf("expected default client config dir config-client, got %s", cfg.Client.ConfigDir)
+	}
+	if cfg.Client.ServerAddress != "" {
+		t.Fatalf("expected empty client server address by default, got %s", cfg.Client.ServerAddress)
+	}
+	if cfg.Client.ServerPort != "8443" {
+		t.Fatalf("expected default client server port 8443, got %s", cfg.Client.ServerPort)
+	}
+	if cfg.Client.Password != "" {
+		t.Fatalf("expected empty client password by default")
+	}
+	if cfg.Client.ServerName != "" {
+		t.Fatalf("expected empty client server name by default")
+	}
+	if !cfg.Client.AllowInsecure {
+		t.Fatalf("expected default client allowInsecure to be true")
+	}
 }
 
 func TestLoadFromFile(t *testing.T) {
@@ -53,6 +74,14 @@ server:
   mode: manual
   certificate: C:\certs\server.pem
   key: C:\certs\server.key
+client:
+  install_dir: D:\xp2p-client
+  config_dir: cfg-client
+  server_address: remote.example.com
+  server_port: 9343
+  password: strongpass
+  server_name: sni.example.com
+  allow_insecure: false
 `)
 
 	cfg, err := Load(Options{})
@@ -83,6 +112,27 @@ server:
 	if cfg.Server.KeyFile != `C:\certs\server.key` {
 		t.Fatalf("expected key C:\\certs\\server.key, got %s", cfg.Server.KeyFile)
 	}
+	if cfg.Client.InstallDir != `D:\xp2p-client` {
+		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)
+	}
+	if cfg.Client.ConfigDir != "cfg-client" {
+		t.Fatalf("expected client config dir cfg-client, got %s", cfg.Client.ConfigDir)
+	}
+	if cfg.Client.ServerAddress != "remote.example.com" {
+		t.Fatalf("expected client server address remote.example.com, got %s", cfg.Client.ServerAddress)
+	}
+	if cfg.Client.ServerPort != "9343" {
+		t.Fatalf("expected client server port 9343, got %s", cfg.Client.ServerPort)
+	}
+	if cfg.Client.Password != "strongpass" {
+		t.Fatalf("expected client password strongpass, got %s", cfg.Client.Password)
+	}
+	if cfg.Client.ServerName != "sni.example.com" {
+		t.Fatalf("expected client server name sni.example.com, got %s", cfg.Client.ServerName)
+	}
+	if cfg.Client.AllowInsecure {
+		t.Fatalf("expected client allowInsecure false from file")
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -96,6 +146,13 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_SERVER_MODE", "AUTO")
 	t.Setenv("XP2P_SERVER_CERTIFICATE", `D:\certs\cert.pem`)
 	t.Setenv("XP2P_SERVER_KEY", `D:\certs\cert.key`)
+	t.Setenv("XP2P_CLIENT_INSTALL_DIR", `E:\xp2p-client`)
+	t.Setenv("XP2P_CLIENT_CONFIG_DIR", "cfg-client")
+	t.Setenv("XP2P_CLIENT_SERVER_ADDRESS", "remote.env")
+	t.Setenv("XP2P_CLIENT_SERVER_PORT", "9543")
+	t.Setenv("XP2P_CLIENT_PASSWORD", "envpass")
+	t.Setenv("XP2P_CLIENT_SERVER_NAME", "env.example.com")
+	t.Setenv("XP2P_CLIENT_ALLOW_INSECURE", "false")
 
 	cfg, err := Load(Options{})
 	if err != nil {
@@ -125,6 +182,27 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Server.KeyFile != `D:\certs\cert.key` {
 		t.Fatalf("expected key D:\\certs\\cert.key, got %s", cfg.Server.KeyFile)
 	}
+	if cfg.Client.InstallDir != `E:\xp2p-client` {
+		t.Fatalf("expected client install dir E:\\xp2p-client, got %s", cfg.Client.InstallDir)
+	}
+	if cfg.Client.ConfigDir != "cfg-client" {
+		t.Fatalf("expected client config dir cfg-client, got %s", cfg.Client.ConfigDir)
+	}
+	if cfg.Client.ServerAddress != "remote.env" {
+		t.Fatalf("expected client server address remote.env, got %s", cfg.Client.ServerAddress)
+	}
+	if cfg.Client.ServerPort != "9543" {
+		t.Fatalf("expected client server port 9543, got %s", cfg.Client.ServerPort)
+	}
+	if cfg.Client.Password != "envpass" {
+		t.Fatalf("expected client password envpass, got %s", cfg.Client.Password)
+	}
+	if cfg.Client.ServerName != "env.example.com" {
+		t.Fatalf("expected client server name env.example.com, got %s", cfg.Client.ServerName)
+	}
+	if cfg.Client.AllowInsecure {
+		t.Fatalf("expected client allowInsecure false from env")
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
@@ -134,14 +212,21 @@ func TestLoadOverrides(t *testing.T) {
 
 	cfg, err := Load(Options{
 		Overrides: map[string]any{
-			"logging.level":      "error",
-			"logging.format":     "json",
-			"server.port":        "65003",
-			"server.install_dir": `E:\xp2p`,
-			"server.config_dir":  "cfg-override",
-			"server.mode":        "MANUAL",
-			"server.certificate": `E:\certs\cert.pem`,
-			"server.key":         `E:\certs\cert.key`,
+			"logging.level":         "error",
+			"logging.format":        "json",
+			"server.port":           "65003",
+			"server.install_dir":    `E:\xp2p`,
+			"server.config_dir":     "cfg-override",
+			"server.mode":           "MANUAL",
+			"server.certificate":    `E:\certs\cert.pem`,
+			"server.key":            `E:\certs\cert.key`,
+			"client.install_dir":    `F:\xp2p-client`,
+			"client.config_dir":     "cfg-client-override",
+			"client.server_address": "remote.override",
+			"client.server_port":    "9643",
+			"client.password":       "overridepass",
+			"client.server_name":    "override.example.com",
+			"client.allow_insecure": false,
 		},
 	})
 	if err != nil {
@@ -171,6 +256,27 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.Server.KeyFile != `E:\certs\cert.key` {
 		t.Fatalf("expected key E:\\certs\\cert.key, got %s", cfg.Server.KeyFile)
 	}
+	if cfg.Client.InstallDir != `F:\xp2p-client` {
+		t.Fatalf("expected client install dir F:\\xp2p-client, got %s", cfg.Client.InstallDir)
+	}
+	if cfg.Client.ConfigDir != "cfg-client-override" {
+		t.Fatalf("expected client config dir cfg-client-override, got %s", cfg.Client.ConfigDir)
+	}
+	if cfg.Client.ServerAddress != "remote.override" {
+		t.Fatalf("expected client server address remote.override, got %s", cfg.Client.ServerAddress)
+	}
+	if cfg.Client.ServerPort != "9643" {
+		t.Fatalf("expected client server port 9643, got %s", cfg.Client.ServerPort)
+	}
+	if cfg.Client.Password != "overridepass" {
+		t.Fatalf("expected client password overridepass, got %s", cfg.Client.Password)
+	}
+	if cfg.Client.ServerName != "override.example.com" {
+		t.Fatalf("expected client server name override.example.com, got %s", cfg.Client.ServerName)
+	}
+	if cfg.Client.AllowInsecure {
+		t.Fatalf("expected client allowInsecure false from overrides")
+	}
 }
 
 func TestLoadWithExplicitPath(t *testing.T) {
@@ -189,6 +295,15 @@ config_dir = "config-alt"
 mode = "Manual"
 certificate = "C:\\certs\\server.pem"
 key = "C:\\certs\\server.key"
+
+[client]
+install_dir = "D:\\xp2p-client"
+config_dir = "cfg-client"
+server_address = "remote.toml"
+server_port = "9743"
+password = "tomlpass"
+server_name = "toml.example.com"
+allow_insecure = false
 `)
 
 	cfg, err := Load(Options{Path: cfgPath})
@@ -218,6 +333,27 @@ key = "C:\\certs\\server.key"
 	}
 	if cfg.Server.KeyFile != `C:\certs\server.key` {
 		t.Fatalf("expected key C:\\certs\\server.key, got %s", cfg.Server.KeyFile)
+	}
+	if cfg.Client.InstallDir != `D:\xp2p-client` {
+		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)
+	}
+	if cfg.Client.ConfigDir != "cfg-client" {
+		t.Fatalf("expected client config dir cfg-client, got %s", cfg.Client.ConfigDir)
+	}
+	if cfg.Client.ServerAddress != "remote.toml" {
+		t.Fatalf("expected client server address remote.toml, got %s", cfg.Client.ServerAddress)
+	}
+	if cfg.Client.ServerPort != "9743" {
+		t.Fatalf("expected client server port 9743, got %s", cfg.Client.ServerPort)
+	}
+	if cfg.Client.Password != "tomlpass" {
+		t.Fatalf("expected client password tomlpass, got %s", cfg.Client.Password)
+	}
+	if cfg.Client.ServerName != "toml.example.com" {
+		t.Fatalf("expected client server name toml.example.com, got %s", cfg.Client.ServerName)
+	}
+	if cfg.Client.AllowInsecure {
+		t.Fatalf("expected client allowInsecure false from file")
 	}
 }
 
