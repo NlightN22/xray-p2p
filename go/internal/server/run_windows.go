@@ -93,7 +93,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 }
 
 func streamPipe(r io.Reader, stream string) {
-	logger := logging.With("source", "xray_core", "stream", stream)
+	logger := logging.Logger()
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -101,12 +101,12 @@ func streamPipe(r io.Reader, stream string) {
 			continue
 		}
 		if stream == "stderr" {
-			logger.Warn("xray_core output", "line", line)
+			logger.Warn(fmt.Sprintf("xray_core %s: %s", stream, line))
 		} else {
-			logger.Info("xray_core output", "line", line)
+			logger.Info(fmt.Sprintf("xray_core %s: %s", stream, line))
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		logger.Warn("xray_core stream error", "err", err)
+		logger.Warn(fmt.Sprintf("xray_core stream error: %v", err))
 	}
 }
