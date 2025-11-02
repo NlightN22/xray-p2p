@@ -18,10 +18,7 @@ func TestLoggerIncludesServiceAttribute(t *testing.T) {
 
 	Logger().Info("started")
 	out := buf.String()
-	if !strings.Contains(out, "service=xp2p") {
-		t.Fatalf("expected service attribute in log output, got %q", out)
-	}
-	if !strings.Contains(out, "msg=started") {
+	if !strings.Contains(out, "INFO xp2p: started") {
 		t.Fatalf("expected message in log output, got %q", out)
 	}
 }

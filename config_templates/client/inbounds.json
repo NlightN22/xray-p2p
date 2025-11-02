@@ -11,9 +11,9 @@
         },
         {
             "remark": "local-input",
-            "tag": "in-48044",
+            "tag": "in-48054",
             "listen": "0.0.0.0",
-            "port": 48044,
+            "port": 48054,
             "protocol": "dokodemo-door",
             "settings": {
                 "network": "tcp",
