@@ -37,7 +37,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	code := cli.Execute(ctx, args)
+	code := cli.Execute(ctx, cfg, args)
 	cancel()
 	os.Exit(code)
 }
@@ -49,6 +49,10 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	configPath := fs.String("config", "", "path to configuration file")
 	logLevel := fs.String("log-level", "", "override logging level")
 	serverPort := fs.String("server-port", "", "diagnostics service port")
+	serverInstallDir := fs.String("server-install-dir", "", "server installation directory (Windows)")
+	serverMode := fs.String("server-mode", "", "server startup mode (auto|manual)")
+	serverCert := fs.String("server-cert", "", "path to TLS certificate file (PEM)")
+	serverKey := fs.String("server-key", "", "path to TLS private key file (PEM)")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -63,6 +67,18 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	}
 	if port := strings.TrimSpace(*serverPort); port != "" {
 		overrides["server.port"] = port
+	}
+	if dir := strings.TrimSpace(*serverInstallDir); dir != "" {
+		overrides["server.install_dir"] = dir
+	}
+	if mode := strings.TrimSpace(*serverMode); mode != "" {
+		overrides["server.mode"] = mode
+	}
+	if cert := strings.TrimSpace(*serverCert); cert != "" {
+		overrides["server.certificate"] = cert
+	}
+	if key := strings.TrimSpace(*serverKey); key != "" {
+		overrides["server.key"] = key
 	}
 
 	cfg, err := config.Load(config.Options{
@@ -95,6 +111,10 @@ func printRootUsage() {
 
 Usage:
   xp2p [--config FILE] [--log-level LEVEL] [--server-port PORT]
+       [--server-install-dir PATH] [--server-mode auto|manual]
+       [--server-cert FILE] [--server-key FILE]
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
+  xp2p server install [--path PATH] [--port PORT] [--mode auto|manual] [--cert FILE] [--key FILE]
+  xp2p server remove [--path PATH]
 `)
 }

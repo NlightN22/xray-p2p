@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 )
 
 // Execute parses CLI arguments and runs the corresponding subcommand.
-func Execute(ctx context.Context, args []string) int {
+func Execute(ctx context.Context, cfg config.Config, args []string) int {
 	if len(args) == 0 {
 		printUsage()
 		return 0
@@ -21,6 +22,8 @@ func Execute(ctx context.Context, args []string) int {
 	switch args[0] {
 	case "ping":
 		return runPing(ctx, args[1:])
+	case "server":
+		return runServer(ctx, cfg, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "xp2p: unknown command %q\n\n", args[0])
 		printUsage()
@@ -90,5 +93,7 @@ func printUsage() {
 Usage:
   xp2p            Start diagnostics service (TCP/UDP port 62022)
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
+  xp2p server install [--path PATH] [--port PORT] [--mode auto|manual] [--cert FILE] [--key FILE]
+  xp2p server remove [--path PATH]
 `)
 }

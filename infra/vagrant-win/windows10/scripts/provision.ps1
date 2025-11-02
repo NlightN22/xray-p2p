@@ -276,6 +276,81 @@ function Run-SmokeTest {
     }
 }
 
+function Invoke-Xp2pServerInstallSmokeTest {
+    param(
+        [string] $InstallDir = "C:\ProgramData\xp2p-server",
+        [int] $Port = 58443
+    )
+
+    $xp2pExe = Get-Command -Name xp2p.exe -ErrorAction Stop
+    $serviceName = "xp2p-xray"
+
+    Write-Info "Preparing xp2p server install smoke test environment at $InstallDir"
+    & $xp2pExe.Source server remove --path $InstallDir --ignore-missing | Out-Null
+    if (Test-Path $InstallDir) {
+        Remove-Item -Path $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    $installArgs = @(
+        "server", "install",
+        "--path", $InstallDir,
+        "--port", $Port.ToString(),
+        "--mode", "auto",
+        "--force"
+    )
+
+    Write-Info ("Executing xp2p {0}" -f ($installArgs -join " "))
+    & $xp2pExe.Source $installArgs | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "xp2p server install failed with exit code $LASTEXITCODE"
+    }
+
+    Write-Info "Waiting for service $serviceName to reach Running state"
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline) {
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($null -ne $service) {
+            if ($service.Status -ne "Running") {
+                try {
+                    Start-Service -Name $serviceName -ErrorAction Stop
+                }
+                catch {
+                    Start-Sleep -Seconds 1
+                }
+            }
+
+            $service.Refresh()
+            if ($service.Status -eq "Running") {
+                break
+            }
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($null -eq $service) {
+        throw "xp2p server install did not create service $serviceName"
+    }
+    if ($service.Status -ne "Running") {
+        throw "xp2p server service $serviceName is not running (status: $($service.Status))"
+    }
+
+    Write-Info "xp2p server install smoke test passed, removing installation"
+    & $xp2pExe.Source server remove --path $InstallDir --ignore-missing | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "xp2p server remove failed with exit code $LASTEXITCODE"
+    }
+
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($null -ne $service) {
+        throw "xp2p server service $serviceName still present after removal"
+    }
+    if (Test-Path $InstallDir) {
+        throw "xp2p server remove did not clean installation directory $InstallDir"
+    }
+}
+
 $xp2pRole = $env:XP2P_ROLE
 if ([string]::IsNullOrWhiteSpace($xp2pRole)) {
     $xp2pRole = "server"
@@ -313,5 +388,6 @@ else {
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
 Disable-FirewallProfiles
 Run-SmokeTest -Skip:$false
+Invoke-Xp2pServerInstallSmokeTest
 
 Write-Info "Provisioning completed successfully."

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/toml"
@@ -18,8 +19,12 @@ import (
 const defaultEnvPrefix = "XP2P_"
 
 var defaultValues = map[string]any{
-	"logging.level": "info",
-	"server.port":   "62022",
+	"logging.level":      "info",
+	"server.port":        "62022",
+	"server.install_dir": "",
+	"server.mode":        "auto",
+	"server.certificate": "",
+	"server.key":         "",
 }
 
 var defaultCandidates = []string{
@@ -41,7 +46,11 @@ type LoggingConfig struct {
 
 // ServerConfig holds diagnostics server settings.
 type ServerConfig struct {
-	Port string `koanf:"port"`
+	Port            string `koanf:"port"`
+	InstallDir      string `koanf:"install_dir"`
+	Mode            string `koanf:"mode"`
+	CertificateFile string `koanf:"certificate"`
+	KeyFile         string `koanf:"key"`
 }
 
 // Options control configuration loading behaviour.
@@ -139,8 +148,20 @@ func parserFor(path string) (koanf.Parser, error) {
 func envKeyToPath(prefix string) func(string) string {
 	return func(key string) string {
 		key = strings.TrimPrefix(key, prefix)
-		key = strings.ReplaceAll(key, "_", ".")
-		return strings.ToLower(key)
+		if key == "" {
+			return ""
+		}
+
+		parts := strings.Split(key, "_")
+		for i := range parts {
+			parts[i] = strings.ToLower(parts[i])
+		}
+
+		if len(parts) == 1 {
+			return parts[0]
+		}
+
+		return parts[0] + "." + strings.Join(parts[1:], "_")
 	}
 }
 
@@ -154,4 +175,39 @@ func normalize(cfg *Config) {
 	if cfg.Server.Port == "" {
 		cfg.Server.Port = defaultValues["server.port"].(string)
 	}
+
+	cfg.Server.InstallDir = strings.TrimSpace(cfg.Server.InstallDir)
+	if cfg.Server.InstallDir == "" {
+		cfg.Server.InstallDir = defaultInstallDir()
+	}
+
+	cfg.Server.Mode = strings.TrimSpace(strings.ToLower(cfg.Server.Mode))
+	if cfg.Server.Mode == "" {
+		cfg.Server.Mode = defaultValues["server.mode"].(string)
+	}
+
+	cfg.Server.CertificateFile = strings.TrimSpace(cfg.Server.CertificateFile)
+	if cfg.Server.CertificateFile == "" {
+		cfg.Server.CertificateFile = defaultValues["server.certificate"].(string)
+	}
+
+	cfg.Server.KeyFile = strings.TrimSpace(cfg.Server.KeyFile)
+	if cfg.Server.KeyFile == "" {
+		cfg.Server.KeyFile = defaultValues["server.key"].(string)
+	}
+}
+
+func defaultInstallDir() string {
+	if runtime.GOOS == "windows" {
+		if pf := os.Getenv("ProgramFiles"); pf != "" {
+			return filepath.Join(pf, "xp2p")
+		}
+		return filepath.Join("C:\\", "xp2p")
+	}
+
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return filepath.Join(home, "xp2p")
+	}
+
+	return filepath.Join(os.TempDir(), "xp2p")
 }

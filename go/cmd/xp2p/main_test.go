@@ -24,12 +24,32 @@ func TestParseRootArgsDefaults(t *testing.T) {
 	if cfg.Server.Port != "62022" {
 		t.Fatalf("unexpected server port: %s", cfg.Server.Port)
 	}
+	if cfg.Server.InstallDir == "" {
+		t.Fatalf("expected non-empty install dir")
+	}
+	if cfg.Server.Mode != "auto" {
+		t.Fatalf("expected default mode auto, got %s", cfg.Server.Mode)
+	}
+	if cfg.Server.CertificateFile != "" {
+		t.Fatalf("expected empty certificate path, got %s", cfg.Server.CertificateFile)
+	}
+	if cfg.Server.KeyFile != "" {
+		t.Fatalf("expected empty key path, got %s", cfg.Server.KeyFile)
+	}
 }
 
 func TestParseRootArgsWithFlags(t *testing.T) {
 	chdirTemp(t)
 
-	args := []string{"--log-level", "DEBUG", "--server-port", "65010", "ping", "--count", "3"}
+	args := []string{
+		"--log-level", "DEBUG",
+		"--server-port", "65010",
+		"--server-install-dir", `D:\xp2p`,
+		"--server-mode", "MANUAL",
+		"--server-cert", `D:\certs\cert.pem`,
+		"--server-key", `D:\certs\cert.key`,
+		"ping", "--count", "3",
+	}
 
 	cfg, rest, err := parseRootArgs(args)
 	if err != nil {
@@ -40,6 +60,18 @@ func TestParseRootArgsWithFlags(t *testing.T) {
 	}
 	if cfg.Server.Port != "65010" {
 		t.Fatalf("expected port 65010, got %s", cfg.Server.Port)
+	}
+	if cfg.Server.InstallDir != `D:\xp2p` {
+		t.Fatalf("expected install dir D:\\xp2p, got %s", cfg.Server.InstallDir)
+	}
+	if cfg.Server.Mode != "manual" {
+		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
+	}
+	if cfg.Server.CertificateFile != `D:\certs\cert.pem` {
+		t.Fatalf("expected certificate D:\\certs\\cert.pem, got %s", cfg.Server.CertificateFile)
+	}
+	if cfg.Server.KeyFile != `D:\certs\cert.key` {
+		t.Fatalf("expected key D:\\certs\\cert.key, got %s", cfg.Server.KeyFile)
 	}
 	expected := []string{"ping", "--count", "3"}
 	if len(rest) != len(expected) {
@@ -61,6 +93,10 @@ logging:
   level: warn
 server:
   port: 65011
+  install_dir: C:\xp2p
+  mode: manual
+  certificate: C:\certs\server.pem
+  key: C:\certs\server.key
 `)
 
 	cfg, rest, err := parseRootArgs([]string{"--config", cfgPath})
@@ -75,6 +111,18 @@ server:
 	}
 	if cfg.Server.Port != "65011" {
 		t.Fatalf("expected port 65011, got %s", cfg.Server.Port)
+	}
+	if cfg.Server.InstallDir != `C:\xp2p` {
+		t.Fatalf("expected install dir C:\\xp2p, got %s", cfg.Server.InstallDir)
+	}
+	if cfg.Server.Mode != "manual" {
+		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
+	}
+	if cfg.Server.CertificateFile != `C:\certs\server.pem` {
+		t.Fatalf("expected cert C:\\certs\\server.pem, got %s", cfg.Server.CertificateFile)
+	}
+	if cfg.Server.KeyFile != `C:\certs\server.key` {
+		t.Fatalf("expected key C:\\certs\\server.key, got %s", cfg.Server.KeyFile)
 	}
 }
 
