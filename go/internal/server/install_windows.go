@@ -41,7 +41,6 @@ type installState struct {
 	binDir     string
 	configDir  string
 	xrayPath   string
-	configPath string
 	certDest   string
 	keyDest    string
 	portValue  int
@@ -176,7 +175,6 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		binDir:     filepath.Join(dir, "bin"),
 		configDir:  filepath.Join(dir, "config"),
 		xrayPath:   filepath.Join(dir, "bin", "xray.exe"),
-		configPath: filepath.Join(dir, "config", "xray-server.json"),
 		portValue:  portVal,
 	}
 
@@ -302,16 +300,13 @@ func deployConfiguration(state installState) error {
 		KeyFile:         keyPath,
 	}
 
-	if err := renderTemplateToFile("assets/templates/xray-server.json.tmpl", state.configPath, data); err != nil {
-		return err
-	}
-	if err := renderTemplateToFile("assets/templates/server/inbounds.json.tmpl", filepath.Join(state.configDir, "inbounds.json"), data); err != nil {
+	if err := renderTemplateToFile("assets/templates/inbounds.json.tmpl", filepath.Join(state.configDir, "inbounds.json"), data); err != nil {
 		return err
 	}
 	staticFiles := map[string]string{
-		"assets/templates/server/logs.json":      filepath.Join(state.configDir, "logs.json"),
-		"assets/templates/server/outbounds.json": filepath.Join(state.configDir, "outbounds.json"),
-		"assets/templates/server/routing.json":   filepath.Join(state.configDir, "routing.json"),
+		"assets/templates/logs.json":      filepath.Join(state.configDir, "logs.json"),
+		"assets/templates/outbounds.json": filepath.Join(state.configDir, "outbounds.json"),
+		"assets/templates/routing.json":   filepath.Join(state.configDir, "routing.json"),
 	}
 	for src, dst := range staticFiles {
 		if err := writeEmbeddedFile(src, dst, 0o644); err != nil {
@@ -416,8 +411,8 @@ func configureService(ctx context.Context, state installState) error {
 			Description: "XRAY core service managed by xp2p",
 			StartType:   uint32(startType),
 		},
-		"-config",
-		state.configPath,
+		"-confdir",
+		state.configDir,
 	)
 	if err != nil {
 		return fmt.Errorf("xp2p: create service: %w", err)
