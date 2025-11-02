@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -32,7 +33,7 @@ func runServer(ctx context.Context, cfg config.Config, args []string) int {
 		printServerUsage()
 		return 0
 	default:
-		fmt.Fprintf(os.Stderr, "xp2p server: unknown command %q\n\n", args[0])
+		logging.Error("xp2p server: unknown command", "subcommand", args[0])
 		printServerUsage()
 		return 1
 	}
@@ -54,11 +55,11 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 		if err == flag.ErrHelp {
 			return 0
 		}
-		fmt.Fprintf(os.Stderr, "xp2p server install: %v\n", err)
+		logging.Error("xp2p server install: failed to parse arguments", "err", err)
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "xp2p server install: unexpected arguments: %v\n", fs.Args())
+		logging.Error("xp2p server install: unexpected arguments", "args", fs.Args())
 		return 2
 	}
 
@@ -73,11 +74,11 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	if err := serverInstallFunc(ctx, opts); err != nil {
-		fmt.Fprintf(os.Stderr, "xp2p server install: %v\n", err)
+		logging.Error("xp2p server install failed", "err", err)
 		return 1
 	}
 
-	fmt.Fprintf(os.Stdout, "xp2p server installed at %s\n", opts.InstallDir)
+	logging.Info("xp2p server installed", "install_dir", opts.InstallDir)
 	return 0
 }
 
@@ -93,11 +94,11 @@ func runServerRemove(ctx context.Context, cfg config.Config, args []string) int 
 		if err == flag.ErrHelp {
 			return 0
 		}
-		fmt.Fprintf(os.Stderr, "xp2p server remove: %v\n", err)
+		logging.Error("xp2p server remove: failed to parse arguments", "err", err)
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(os.Stderr, "xp2p server remove: unexpected arguments: %v\n", fs.Args())
+		logging.Error("xp2p server remove: unexpected arguments", "args", fs.Args())
 		return 2
 	}
 
@@ -108,11 +109,11 @@ func runServerRemove(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	if err := serverRemoveFunc(ctx, opts); err != nil {
-		fmt.Fprintf(os.Stderr, "xp2p server remove: %v\n", err)
+		logging.Error("xp2p server remove failed", "err", err)
 		return 1
 	}
 
-	fmt.Fprintln(os.Stdout, "xp2p server removed")
+	logging.Info("xp2p server removed", "install_dir", opts.InstallDir)
 	return 0
 }
 

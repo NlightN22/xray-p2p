@@ -16,6 +16,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/assets/xray"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	windowsapi "golang.org/x/sys/windows"
 	winsvc "golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
@@ -27,9 +29,6 @@ const (
 	serviceStartTimeout       = 30 * time.Second
 	serviceStopTimeout        = 30 * time.Second
 )
-
-//go:embed assets/bin/win-amd64/xray.exe
-var xrayCoreWindowsAMD64 []byte
 
 //go:embed assets/templates/*
 var serverTemplates embed.FS
@@ -61,6 +60,13 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 
+	logging.Info("xp2p server install starting",
+		"install_dir", state.installDir,
+		"port", state.portValue,
+		"mode", state.Mode,
+		"xray_version", xray.Version,
+	)
+
 	if err := os.MkdirAll(state.binDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create bin directory: %w", err)
 	}
@@ -79,6 +85,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return err
 	}
 
+	logging.Info("xp2p server install completed", "install_dir", state.installDir)
 	return nil
 }
 
@@ -88,6 +95,10 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err != nil {
 		return err
 	}
+
+	logging.Info("xp2p server remove starting",
+		"install_dir", installDir,
+	)
 
 	if err := removeWindowsService(ctx, opts.IgnoreMissing); err != nil {
 		return err
@@ -104,6 +115,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("xp2p: remove install directory: %w", err)
 	}
 
+	logging.Info("xp2p server remove completed", "install_dir", installDir)
 	return nil
 }
 
@@ -246,7 +258,7 @@ func writeBinary(state installState) error {
 			return fmt.Errorf("xp2p: xray-core already present at %s (use --force to overwrite)", state.xrayPath)
 		}
 	}
-	if err := os.WriteFile(state.xrayPath, xrayCoreWindowsAMD64, 0o755); err != nil {
+	if err := os.WriteFile(state.xrayPath, xray.WindowsAMD64(), 0o755); err != nil {
 		return fmt.Errorf("xp2p: write xray-core binary: %w", err)
 	}
 	return nil
@@ -473,9 +485,11 @@ func startWindowsService(ctx context.Context, service *mgr.Service) error {
 	if err := service.Start(); err != nil {
 		return fmt.Errorf("xp2p: start service: %w", err)
 	}
+	logging.Info("windows service start requested", "service", windowsServiceName)
 	if err := waitForServiceState(ctx, service, winsvc.Running, serviceStartTimeout); err != nil {
 		return err
 	}
+	logging.Info("windows service running", "service", windowsServiceName)
 	return nil
 }
 
