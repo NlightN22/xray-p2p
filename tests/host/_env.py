@@ -14,8 +14,10 @@ VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
 DEFAULT_SERVER = "win10-server"
 DEFAULT_CLIENT = "win10-client"
 BUILD_XP2P_EXE = Path(r"C:\xp2p\build\windows-amd64\xp2p.exe")
-CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
-CLIENT_BIN_DIR = CLIENT_INSTALL_DIR / "bin"
+PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+PROGRAM_FILES_BIN_DIR = PROGRAM_FILES_INSTALL_DIR / "bin"
+CLIENT_INSTALL_DIR = PROGRAM_FILES_INSTALL_DIR
+CLIENT_BIN_DIR = PROGRAM_FILES_BIN_DIR
 XP2P_EXE = CLIENT_BIN_DIR / "xp2p.exe"
 XP2P_EXE_PS = str(XP2P_EXE).replace("\\", "\\\\")
 SERVICE_START_TIMEOUT = 60
@@ -122,10 +124,10 @@ def run_vagrant_powershell(machine: str, script: str) -> subprocess.CompletedPro
     return result
 
 
-def prepare_program_files_install() -> None:
+def _prepare_program_files_install(machine: str) -> None:
     source = str(BUILD_XP2P_EXE).replace("\\", "\\\\")
-    root = str(CLIENT_INSTALL_DIR).replace("\\", "\\\\")
-    bin_dir = str(CLIENT_BIN_DIR).replace("\\", "\\\\")
+    root = str(PROGRAM_FILES_INSTALL_DIR).replace("\\", "\\\\")
+    bin_dir = str(PROGRAM_FILES_BIN_DIR).replace("\\", "\\\\")
     script = f"""
 $ErrorActionPreference = 'Stop'
 $source = '{source}'
@@ -145,12 +147,20 @@ New-Item -ItemType Directory -Path $bin -Force | Out-Null
 Copy-Item $source (Join-Path $bin 'xp2p.exe') -Force
 icacls $root /grant 'vagrant:(OI)(CI)M' /t /c | Out-Null
 """
-    result = run_vagrant_powershell(DEFAULT_CLIENT, script)
+    result = run_vagrant_powershell(machine, script)
     if result.returncode != 0:
         raise RuntimeError(
             "Failed to prepare Program Files xp2p directory:\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+
+
+def prepare_program_files_install() -> None:
+    _prepare_program_files_install(DEFAULT_CLIENT)
+
+
+def prepare_server_program_files_install() -> None:
+    _prepare_program_files_install(DEFAULT_SERVER)
 
 
 def run_xp2p(host: Host, args: Iterable[str]) -> CommandResult:

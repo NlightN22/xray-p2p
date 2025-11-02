@@ -4,7 +4,7 @@ import pytest
 from testinfra.backend.base import CommandResult
 from testinfra.host import Host
 
-from . import _client_runtime, _env
+from . import _client_runtime, _env, _server_runtime
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -48,6 +48,7 @@ def xp2p_options(pytestconfig: pytest.Config) -> dict:
 @pytest.fixture(scope="session", autouse=True)
 def xp2p_program_files_setup():
     _env.prepare_program_files_install()
+    _env.prepare_server_program_files_install()
     yield
 
 
@@ -188,6 +189,14 @@ def xp2p_client_run_factory(client_host: Host):
 
 
 @pytest.fixture
+def xp2p_server_run_factory(server_host: Host):
+    def _factory(install_dir: str, config_dir: str, log_relative: str):
+        return _server_runtime.xp2p_server_run_session(server_host, install_dir, config_dir, log_relative)
+
+    return _factory
+
+
+@pytest.fixture
 def xp2p_client_runner(
     client_host: Host,
 ) -> Callable[..., CommandResult]:
@@ -203,6 +212,29 @@ def xp2p_client_runner(
             pytest.fail(
                 "xp2p command failed on "
                 f"{_env.DEFAULT_CLIENT} (exit {result.rc}).\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        return result
+
+    return _runner
+
+
+@pytest.fixture
+def xp2p_server_runner(
+    server_host: Host,
+) -> Callable[..., CommandResult]:
+    def _runner(*args: str, check: bool = False):
+        result = _env.run_xp2p(server_host, args)
+        stdout = result.stdout or ""
+        if "__XP2P_MISSING__" in stdout:
+            pytest.skip(
+                f"xp2p.exe not found on {_env.DEFAULT_SERVER} at {_env.XP2P_EXE}. "
+                "Provision the guest before running host tests."
+            )
+        if check and result.rc != 0:
+            pytest.fail(
+                "xp2p command failed on "
+                f"{_env.DEFAULT_SERVER} (exit {result.rc}).\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
         return result
