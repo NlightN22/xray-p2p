@@ -154,6 +154,9 @@ func TestRunServerRunUsesExistingInstall(t *testing.T) {
 		if opts.ConfigDir != server.DefaultServerConfigDir {
 			t.Fatalf("unexpected config dir: %s", opts.ConfigDir)
 		}
+		if opts.ErrorLogPath != "" {
+			t.Fatalf("expected empty error log path, got %s", opts.ErrorLogPath)
+		}
 		return nil
 	})
 	defer restoreRun()
@@ -197,6 +200,9 @@ func TestRunServerRunAutoInstall(t *testing.T) {
 	runCalled := false
 	restoreRun := stubServerRun(func(ctx context.Context, opts server.RunOptions) error {
 		runCalled = true
+		if opts.ErrorLogPath != "" {
+			t.Fatalf("expected empty error log path, got %s", opts.ErrorLogPath)
+		}
 		return nil
 	})
 	defer restoreRun()
@@ -217,6 +223,33 @@ func TestRunServerRunAutoInstall(t *testing.T) {
 	}
 	if !runCalled {
 		t.Fatalf("expected run to be invoked")
+	}
+}
+
+func TestRunServerRunWithLogFile(t *testing.T) {
+	restoreInstall := stubServerInstall(nil)
+	defer restoreInstall()
+	restoreRun := stubServerRun(func(ctx context.Context, opts server.RunOptions) error {
+		if opts.ErrorLogPath != `logs\xray.err` {
+			t.Fatalf("unexpected error log path: %s", opts.ErrorLogPath)
+		}
+		return nil
+	})
+	defer restoreRun()
+
+	installDir := filepath.Join(t.TempDir(), "srv")
+	prepareInstallation(t, installDir, server.DefaultServerConfigDir)
+
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			InstallDir: installDir,
+			ConfigDir:  server.DefaultServerConfigDir,
+		},
+	}
+
+	code := runServerRun(context.Background(), cfg, []string{"--xray-log-file", `logs\xray.err`})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
 	}
 }
 

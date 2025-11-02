@@ -132,6 +132,7 @@ func runServerRun(ctx context.Context, cfg config.Config, args []string) int {
 	configDir := fs.String("config-dir", "", "server configuration directory name")
 	autoInstall := fs.Bool("auto-install", false, "install server assets when missing without prompting")
 	quiet := fs.Bool("quiet", false, "suppress interactive prompts")
+	xrayLogFile := fs.String("xray-log-file", "", "append xray stderr output to file")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -164,8 +165,9 @@ func runServerRun(ctx context.Context, cfg config.Config, args []string) int {
 	}
 
 	if err := serverRunFunc(ctx, server.RunOptions{
-		InstallDir: installDir,
-		ConfigDir:  configDirName,
+		InstallDir:   installDir,
+		ConfigDir:    configDirName,
+		ErrorLogPath: strings.TrimSpace(*xrayLogFile),
 	}); err != nil {
 		logging.Error("xp2p server run failed", "err", err)
 		return 1
@@ -309,5 +311,6 @@ func printServerUsage() {
   install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE] [--force]
   remove  [--path PATH] [--keep-files] [--ignore-missing]
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
+          [--xray-log-file FILE]
 `)
 }

@@ -22,11 +22,13 @@ const (
 var (
 	levelVar  slog.LevelVar
 	activeLog atomic.Pointer[slog.Logger]
+	formatVar atomic.Value
 )
 
 // init configures the default logger based on environment settings so the
 // application has a usable logger without additional setup.
 func init() {
+	formatVar.Store(FormatText)
 	initLoggerFromEnv()
 }
 
@@ -37,12 +39,32 @@ type Options struct {
 	Level string
 	// Output selects the destination for log records. When nil, os.Stderr is used.
 	Output io.Writer
+	// Format selects the output format ("text" or "json"). Empty value keeps current format.
+	Format Format
 }
+
+// Format describes the logger output format.
+type Format string
+
+const (
+	// FormatText outputs human-readable log lines.
+	FormatText Format = "text"
+	// FormatJSON outputs structured JSON records.
+	FormatJSON Format = "json"
+)
 
 // Configure allows the caller to adjust the global logger at runtime.
 func Configure(opts Options) {
 	if strings.TrimSpace(opts.Level) != "" {
 		levelVar.Set(parseLevel(opts.Level))
+	}
+	if opts.Format != "" {
+		switch opts.Format {
+		case FormatJSON:
+			formatVar.Store(FormatJSON)
+		default:
+			formatVar.Store(FormatText)
+		}
 	}
 	setLogger(opts.Output)
 }
@@ -88,13 +110,30 @@ func Error(msg string, args ...any) {
 
 func setLogger(output io.Writer) {
 	var handler slog.Handler
-	if output == nil {
-		infoHandler := newConsoleHandler(os.Stdout, &levelVar)
-		errorHandler := newConsoleHandler(os.Stderr, &levelVar)
-		handler = newSplitHandler(infoHandler, errorHandler, slog.LevelWarn)
-	} else {
-		handler = newConsoleHandler(output, &levelVar)
+	format, _ := formatVar.Load().(Format)
+	if format == "" {
+		format = FormatText
 	}
+
+	switch format {
+	case FormatJSON:
+		w := output
+		if w == nil {
+			w = os.Stdout
+		}
+		handler = slog.NewJSONHandler(w, &slog.HandlerOptions{
+			Level: &levelVar,
+		})
+	default:
+		if output == nil {
+			infoHandler := newConsoleHandler(os.Stdout, &levelVar)
+			errorHandler := newConsoleHandler(os.Stderr, &levelVar)
+			handler = newSplitHandler(infoHandler, errorHandler, slog.LevelWarn)
+		} else {
+			handler = newConsoleHandler(output, &levelVar)
+		}
+	}
+
 	logger := slog.New(handler).With("service", defaultServiceName)
 	activeLog.Store(logger)
 	slog.SetDefault(logger)
@@ -115,6 +154,7 @@ func parseLevel(level string) slog.Level {
 
 func initLoggerFromEnv() {
 	levelVar.Set(parseLevel(os.Getenv(envLogLevel)))
+	formatVar.Store(FormatText)
 	setLogger(os.Stderr)
 }
 

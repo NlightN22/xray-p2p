@@ -16,6 +16,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Logging.Level != "info" {
 		t.Fatalf("unexpected logging level: %s", cfg.Logging.Level)
 	}
+	if cfg.Logging.Format != "text" {
+		t.Fatalf("unexpected logging format: %s", cfg.Logging.Format)
+	}
 	if cfg.Server.Port != "62022" {
 		t.Fatalf("unexpected server port: %s", cfg.Server.Port)
 	}
@@ -42,6 +45,7 @@ func TestLoadFromFile(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "xp2p.yaml"), `
 logging:
   level: warn
+  format: json
 server:
   port: 65001
   install_dir: C:\xp2p-test
@@ -57,6 +61,9 @@ server:
 	}
 	if cfg.Logging.Level != "warn" {
 		t.Fatalf("expected warn level, got %s", cfg.Logging.Level)
+	}
+	if cfg.Logging.Format != "json" {
+		t.Fatalf("expected json format, got %s", cfg.Logging.Format)
 	}
 	if cfg.Server.Port != "65001" {
 		t.Fatalf("expected port 65001, got %s", cfg.Server.Port)
@@ -82,6 +89,7 @@ func TestLoadFromEnv(t *testing.T) {
 	chdirTemp(t)
 
 	t.Setenv("XP2P_LOGGING_LEVEL", "DEBUG")
+	t.Setenv("XP2P_LOGGING_FORMAT", "JSON")
 	t.Setenv("XP2P_SERVER_PORT", "65002")
 	t.Setenv("XP2P_SERVER_INSTALL_DIR", `D:\xp2p`)
 	t.Setenv("XP2P_SERVER_CONFIG_DIR", "cfg-dir")
@@ -95,6 +103,9 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.Logging.Level != "debug" {
 		t.Fatalf("expected debug level, got %s", cfg.Logging.Level)
+	}
+	if cfg.Logging.Format != "json" {
+		t.Fatalf("expected json format, got %s", cfg.Logging.Format)
 	}
 	if cfg.Server.Port != "65002" {
 		t.Fatalf("expected port 65002, got %s", cfg.Server.Port)
@@ -124,6 +135,7 @@ func TestLoadOverrides(t *testing.T) {
 	cfg, err := Load(Options{
 		Overrides: map[string]any{
 			"logging.level":      "error",
+			"logging.format":     "json",
 			"server.port":        "65003",
 			"server.install_dir": `E:\xp2p`,
 			"server.config_dir":  "cfg-override",
@@ -137,6 +149,9 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.Logging.Level != "error" {
 		t.Fatalf("expected error level, got %s", cfg.Logging.Level)
+	}
+	if cfg.Logging.Format != "json" {
+		t.Fatalf("expected json format, got %s", cfg.Logging.Format)
 	}
 	if cfg.Server.Port != "65003" {
 		t.Fatalf("expected port 65003, got %s", cfg.Server.Port)
@@ -165,6 +180,7 @@ func TestLoadWithExplicitPath(t *testing.T) {
 	writeFile(t, cfgPath, `
 [logging]
 level = "warn"
+format = "json"
 
 [server]
 port = "65004"
@@ -181,6 +197,9 @@ key = "C:\\certs\\server.key"
 	}
 	if cfg.Logging.Level != "warn" {
 		t.Fatalf("expected warn level, got %s", cfg.Logging.Level)
+	}
+	if cfg.Logging.Format != "json" {
+		t.Fatalf("expected json format, got %s", cfg.Logging.Format)
 	}
 	if cfg.Server.Port != "65004" {
 		t.Fatalf("expected port 65004, got %s", cfg.Server.Port)

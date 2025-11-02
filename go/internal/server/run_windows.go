@@ -45,6 +45,26 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
+	var errorWriter io.Writer
+	var errorFile *os.File
+	if path := strings.TrimSpace(opts.ErrorLogPath); path != "" {
+		logPath := path
+		if !filepath.IsAbs(logPath) {
+			logPath = filepath.Join(installDir, logPath)
+		}
+		if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+			return fmt.Errorf("xp2p: create log directory %s: %w", filepath.Dir(logPath), err)
+		}
+		file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return fmt.Errorf("xp2p: open xray log file %s: %w", logPath, err)
+		}
+		errorFile = file
+		errorWriter = file
+		defer func() { _ = errorFile.Close() }()
+		logging.Info("xray-core stderr redirected to file", "path", logPath)
+	}
+
 	args := []string{"-confdir", configDir}
 	cmd := exec.CommandContext(ctx, xrayPath, args...)
 	cmd.Dir = installDir
@@ -72,11 +92,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		streamPipe(stdout, "stdout")
+		streamPipe(stdout, "stdout", nil)
 	}()
 	go func() {
 		defer wg.Done()
-		streamPipe(stderr, "stderr")
+		streamPipe(stderr, "stderr", errorWriter)
 	}()
 
 	waitErr := cmd.Wait()
@@ -92,7 +112,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	return nil
 }
 
-func streamPipe(r io.Reader, stream string) {
+func streamPipe(r io.Reader, stream string, extra io.Writer) {
 	logger := logging.Logger()
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
@@ -100,13 +120,18 @@ func streamPipe(r io.Reader, stream string) {
 		if line == "" {
 			continue
 		}
+		if extra != nil {
+			if _, err := fmt.Fprintln(extra, line); err != nil {
+				logger.Error(fmt.Sprintf("xray_core log file write error: %v", err))
+			}
+		}
 		if stream == "stderr" {
-			logger.Warn(fmt.Sprintf("xray_core %s: %s", stream, line))
+			logger.Error(fmt.Sprintf("xray_core %s: %s", stream, line))
 		} else {
 			logger.Info(fmt.Sprintf("xray_core %s: %s", stream, line))
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		logger.Warn(fmt.Sprintf("xray_core stream error: %v", err))
+		logger.Error(fmt.Sprintf("xray_core stream error: %v", err))
 	}
 }

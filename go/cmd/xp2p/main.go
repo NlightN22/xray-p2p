@@ -27,7 +27,10 @@ func main() {
 		os.Exit(2)
 	}
 
-	logging.Configure(logging.Options{Level: cfg.Logging.Level})
+	logging.Configure(logging.Options{
+		Level:  cfg.Logging.Level,
+		Format: logFormatFromConfig(cfg.Logging.Format),
+	})
 
 	if len(args) == 0 {
 		runService(cfg)
@@ -54,6 +57,7 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	serverMode := fs.String("server-mode", "", "server startup mode (auto|manual)")
 	serverCert := fs.String("server-cert", "", "path to TLS certificate file (PEM)")
 	serverKey := fs.String("server-key", "", "path to TLS private key file (PEM)")
+	logJSON := fs.Bool("log-json", false, "emit logs in JSON format")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -83,6 +87,9 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	}
 	if key := strings.TrimSpace(*serverKey); key != "" {
 		overrides["server.key"] = key
+	}
+	if *logJSON {
+		overrides["logging.format"] = "json"
 	}
 
 	cfg, err := config.Load(config.Options{
@@ -116,12 +123,21 @@ func printRootUsage() {
 Usage:
   xp2p [--config FILE] [--log-level LEVEL] [--server-port PORT]
        [--server-install-dir PATH] [--server-config-dir NAME]
-       [--server-mode auto|manual]
-       [--server-cert FILE] [--server-key FILE]
+       [--server-cert FILE] [--server-key FILE] [--log-json]
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
   xp2p server install [--path PATH] [--config-dir NAME] [--port PORT]
-                      [--mode auto|manual] [--cert FILE] [--key FILE]
+                      [--cert FILE] [--key FILE]
   xp2p server remove [--path PATH]
   xp2p server run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
+                  [--xray-log-file FILE]
 `)
+}
+
+func logFormatFromConfig(value string) logging.Format {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "json":
+		return logging.FormatJSON
+	default:
+		return logging.FormatText
+	}
 }

@@ -23,8 +23,9 @@ type InstallOptions struct {
 
 // RunOptions controls execution of the xray-core process.
 type RunOptions struct {
-	InstallDir string
-	ConfigDir  string
+	InstallDir   string
+	ConfigDir    string
+	ErrorLogPath string
 }
 
 // RemoveOptions controls removal of the server-side components.

@@ -20,6 +20,7 @@ const defaultEnvPrefix = "XP2P_"
 
 var defaultValues = map[string]any{
 	"logging.level":      "info",
+	"logging.format":     "text",
 	"server.port":        "62022",
 	"server.install_dir": "",
 	"server.config_dir":  "config-server",
@@ -42,7 +43,8 @@ type Config struct {
 
 // LoggingConfig holds logging related settings.
 type LoggingConfig struct {
-	Level string `koanf:"level"`
+	Level  string `koanf:"level"`
+	Format string `koanf:"format"`
 }
 
 // ServerConfig holds diagnostics server settings.
@@ -171,6 +173,10 @@ func normalize(cfg *Config) {
 	cfg.Logging.Level = strings.TrimSpace(strings.ToLower(cfg.Logging.Level))
 	if cfg.Logging.Level == "" {
 		cfg.Logging.Level = defaultValues["logging.level"].(string)
+	}
+	cfg.Logging.Format = strings.TrimSpace(strings.ToLower(cfg.Logging.Format))
+	if cfg.Logging.Format == "" {
+		cfg.Logging.Format = defaultValues["logging.format"].(string)
 	}
 
 	cfg.Server.Port = strings.TrimSpace(cfg.Server.Port)

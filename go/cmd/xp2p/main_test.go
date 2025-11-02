@@ -21,6 +21,9 @@ func TestParseRootArgsDefaults(t *testing.T) {
 	if cfg.Logging.Level != "info" {
 		t.Fatalf("unexpected logging level: %s", cfg.Logging.Level)
 	}
+	if cfg.Logging.Format != "text" {
+		t.Fatalf("unexpected logging format: %s", cfg.Logging.Format)
+	}
 	if cfg.Server.Port != "62022" {
 		t.Fatalf("unexpected server port: %s", cfg.Server.Port)
 	}
@@ -52,6 +55,7 @@ func TestParseRootArgsWithFlags(t *testing.T) {
 		"--server-mode", "MANUAL",
 		"--server-cert", `D:\certs\cert.pem`,
 		"--server-key", `D:\certs\cert.key`,
+		"--log-json",
 		"ping", "--count", "3",
 	}
 
@@ -61,6 +65,9 @@ func TestParseRootArgsWithFlags(t *testing.T) {
 	}
 	if cfg.Logging.Level != "debug" {
 		t.Fatalf("expected debug level, got %s", cfg.Logging.Level)
+	}
+	if cfg.Logging.Format != "json" {
+		t.Fatalf("expected logging format json, got %s", cfg.Logging.Format)
 	}
 	if cfg.Server.Port != "65010" {
 		t.Fatalf("expected port 65010, got %s", cfg.Server.Port)
@@ -98,6 +105,7 @@ func TestParseRootArgsWithConfigFile(t *testing.T) {
 	writeFile(t, cfgPath, `
 logging:
   level: warn
+  format: json
 server:
   port: 65011
   install_dir: C:\xp2p
@@ -116,6 +124,9 @@ server:
 	}
 	if cfg.Logging.Level != "warn" {
 		t.Fatalf("expected warn level, got %s", cfg.Logging.Level)
+	}
+	if cfg.Logging.Format != "json" {
+		t.Fatalf("expected logging format json, got %s", cfg.Logging.Format)
 	}
 	if cfg.Server.Port != "65011" {
 		t.Fatalf("expected port 65011, got %s", cfg.Server.Port)
