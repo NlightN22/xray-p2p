@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Iterable
 
@@ -27,6 +28,31 @@ def _format_display(args: Iterable[str]) -> str:
         else:
             parts.append(arg)
     return " ".join(parts)
+
+
+def _windows_quote(arg: str) -> str:
+    if not arg:
+        return '""'
+    needs_quotes = any(ch in arg for ch in ' \t"')
+    if not needs_quotes:
+        return arg
+    result = '"'
+    backslashes = 0
+    for ch in arg:
+        if ch == "\\":
+            backslashes += 1
+        elif ch == '"':
+            result += "\\" * (backslashes * 2 + 1)
+            result += '"'
+            backslashes = 0
+        else:
+            if backslashes:
+                result += "\\" * backslashes
+                backslashes = 0
+            result += ch
+    result += "\\" * (backslashes * 2)
+    result += '"'
+    return result
 
 
 def _find_vm_directory(repo_root: Path, vm_name: str) -> Path:
@@ -63,7 +89,13 @@ def _run(command: list[str], *, cwd: Path | None = None) -> None:
         )
 
 
-def _run_stream(command: list[str], *, cwd: Path | None = None) -> tuple[int, str, str]:
+def _run_stream(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    poll_callback: callable | None = None,
+    poll_interval: float = 0.1,
+) -> tuple[int, str, str]:
     process = subprocess.Popen(
         command,
         cwd=cwd,
@@ -101,10 +133,21 @@ def _run_stream(command: list[str], *, cwd: Path | None = None) -> tuple[int, st
     for thread in threads:
         thread.start()
 
-    returncode = process.wait()
+    returncode: int | None = None
+    try:
+        while True:
+            returncode = process.poll()
+            if returncode is not None:
+                break
+            if poll_callback:
+                poll_callback()
+            time.sleep(poll_interval)
+    finally:
+        for thread in threads:
+            thread.join()
 
-    for thread in threads:
-        thread.join()
+    if poll_callback:
+        poll_callback()
 
     return returncode, "".join(stdout_buffer), "".join(stderr_buffer)
 
@@ -147,6 +190,15 @@ def main(argv: list[str] | None = None) -> int:
         raise FileNotFoundError(f"xp2p.exe not found at {exe_path}")
     print(f"==> Local binary: {exe_path}")
 
+    log_dir_host = exe_path.parent
+    log_dir_host.mkdir(parents=True, exist_ok=True)
+    log_filename = f"xp2p-{args.vm}-{int(time.time())}.log"
+    log_path_host = log_dir_host / log_filename
+    if log_path_host.exists():
+        log_path_host.unlink()
+    log_path_remote = r"C:\xp2p\build\windows-amd64" + "\\" + log_filename
+    print(f"==> Streaming log: {log_path_host}")
+
     vm_dir = _find_vm_directory(repo_root, args.vm)
     print(f"==> Using Vagrant environment: {vm_dir}")
 
@@ -157,19 +209,71 @@ def main(argv: list[str] | None = None) -> int:
     print(f"==> Effective command: {display_command}")
 
     remote_exe = r"C:\xp2p\build\windows-amd64\xp2p.exe"
-    ps_arguments = ", ".join(_ps_literal(arg) for arg in xp2p_arguments)
+    display_line_literal = _ps_literal(f"==> Executing: {display_command}")
+    argument_cli = " ".join(_windows_quote(arg) for arg in xp2p_arguments)
+    argument_cli_literal = _ps_literal(argument_cli)
     remote_script = f"""
 $ErrorActionPreference = 'Stop'
 $exe = {_ps_literal(remote_exe)}
+$log = {_ps_literal(log_path_remote)}
 if (-not (Test-Path $exe)) {{
     throw "xp2p executable not found at $exe"
 }}
 $info = Get-Item $exe
-Write-Host ("==> Guest binary: " + $info.FullName + " (LastWriteTime: " + $info.LastWriteTime.ToString("u") + ")")
-$argsList = @({ps_arguments})
-Write-Host {_ps_literal(f"==> Executing: {display_command}")}
-& $exe @argsList
-exit $LASTEXITCODE
+$logDir = Split-Path -Parent $log
+if ($logDir -and -not (Test-Path $logDir)) {{
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}}
+$encoding = New-Object System.Text.UTF8Encoding($false)
+$writer = New-Object System.IO.StreamWriter($log, $false, $encoding)
+$writer.AutoFlush = $true
+$writer.WriteLine("==> Guest binary: " + $info.FullName + " (LastWriteTime: " + $info.LastWriteTime.ToString("u") + ")")
+$writer.WriteLine({display_line_literal})
+$writer.WriteLine("")
+$writer.Dispose()
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $exe
+$psi.Arguments = {argument_cli_literal}
+$psi.WorkingDirectory = $info.DirectoryName
+$psi.UseShellExecute = $false
+$psi.RedirectStandardOutput = $true
+$psi.RedirectStandardError = $true
+$psi.CreateNoWindow = $true
+$process = New-Object System.Diagnostics.Process
+$process.StartInfo = $psi
+if (-not $process.Start()) {{
+    throw "Failed to start xp2p process."
+}}
+$writer = New-Object System.IO.StreamWriter($log, $true, $encoding)
+$writer.AutoFlush = $true
+$exitCode = -1
+try {{
+    while (-not $process.HasExited) {{
+        while (-not $process.StandardOutput.EndOfStream) {{
+            $line = $process.StandardOutput.ReadLine()
+            if ($line -ne $null) {{ $writer.WriteLine($line) }}
+        }}
+        while (-not $process.StandardError.EndOfStream) {{
+            $line = $process.StandardError.ReadLine()
+            if ($line -ne $null) {{ $writer.WriteLine($line) }}
+        }}
+        Start-Sleep -Milliseconds 100
+    }}
+    while (-not $process.StandardOutput.EndOfStream) {{
+        $line = $process.StandardOutput.ReadLine()
+        if ($line -ne $null) {{ $writer.WriteLine($line) }}
+    }}
+    while (-not $process.StandardError.EndOfStream) {{
+        $line = $process.StandardError.ReadLine()
+        if ($line -ne $null) {{ $writer.WriteLine($line) }}
+    }}
+    $exitCode = $process.ExitCode
+}} finally {{
+    if ($writer) {{ $writer.Dispose() }}
+    $process.Dispose()
+}}
+Add-Content -Path $log -Value ("==> Exit code: " + $exitCode) -Encoding UTF8
+exit $exitCode
 """.strip()
 
     encoded = base64.b64encode(remote_script.encode("utf-16le")).decode("ascii")
@@ -181,13 +285,34 @@ exit $LASTEXITCODE
         f"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}",
     ]
 
+    last_log_position = 0
+
+    def drain_log() -> None:
+        nonlocal last_log_position
+        if not log_path_host.exists():
+            return
+        with log_path_host.open("r", encoding="utf-8-sig") as log_file:
+            log_file.seek(last_log_position)
+            data = log_file.read()
+            if data:
+                print(data, end="")
+                last_log_position = log_file.tell()
+
     print(f"==> Executing xp2p on guest {args.vm}")
-    returncode, stdout_text, stderr_text = _run_stream(remote_command, cwd=vm_dir)
+    returncode, stdout_text, stderr_text = _run_stream(
+        remote_command,
+        cwd=vm_dir,
+        poll_callback=drain_log,
+    )
+    drain_log()
 
     if returncode != 0:
-        raise RuntimeError(
-            f"Remote command exited with code {returncode}."
-        )
+        error_lines = [f"Remote command exited with code {returncode}. See log: {log_path_host}"]
+        if stdout_text.strip():
+            error_lines.append("WinRM stdout:\n" + stdout_text.strip())
+        if stderr_text.strip():
+            error_lines.append("WinRM stderr:\n" + stderr_text.strip())
+        raise RuntimeError("\n".join(error_lines))
 
     print("==> Remote execution completed successfully")
     return 0
@@ -201,4 +326,4 @@ if __name__ == "__main__":
         raise SystemExit(130)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+   
