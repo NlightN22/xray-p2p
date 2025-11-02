@@ -161,10 +161,30 @@ def main(argv: list[str] | None = None) -> int:
         default="win10-server",
         help="Vagrant VM name to target (default: win10-server).",
     )
+    parser.set_defaults(build=False, up=False)
+    parser.add_argument(
+        "--build",
+        action="store_true",
+        dest="build",
+        help="Run `make build-windows` before executing the command.",
+    )
     parser.add_argument(
         "--skip-build",
+        action="store_false",
+        dest="build",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--up",
         action="store_true",
-        help="Skip running `make build-windows` (use existing binary).",
+        dest="up",
+        help="Run `vagrant up` before executing the command.",
+    )
+    parser.add_argument(
+        "--skip-up",
+        action="store_false",
+        dest="up",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "xp2p_args",
@@ -181,9 +201,11 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = _repo_root()
     print(f"==> Repository root: {repo_root}")
 
-    if not args.skip_build:
+    if args.build:
         print("==> Building xp2p via `make build-windows`")
         _run(["make", "build-windows"], cwd=repo_root)
+    else:
+        print("==> Skipping build (use --build to enable)")
 
     exe_path = repo_root / "build" / "windows-amd64" / "xp2p.exe"
     if not exe_path.is_file():
@@ -202,8 +224,11 @@ def main(argv: list[str] | None = None) -> int:
     vm_dir = _find_vm_directory(repo_root, args.vm)
     print(f"==> Using Vagrant environment: {vm_dir}")
 
-    print(f"==> Running `vagrant up {args.vm} --no-provision`")
-    _run(["vagrant", "up", args.vm, "--no-provision"], cwd=vm_dir)
+    if args.up:
+        print(f"==> Running `vagrant up {args.vm} --no-provision`")
+        _run(["vagrant", "up", args.vm, "--no-provision"], cwd=vm_dir)
+    else:
+        print(f"==> Skipping `vagrant up {args.vm} --no-provision` (use --up to enable)")
 
     display_command = _format_display(xp2p_arguments)
     print(f"==> Effective command: {display_command}")

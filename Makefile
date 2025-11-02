@@ -30,17 +30,6 @@ ping: _ping_args
 _ping_args:
 	$(eval ARGS := $(filter-out ping _ping_args,$(MAKECMDGOALS)))
 
-VM ?= win10-server
-
-wrm-test: build-windows
-	@if [ -z "$(CMD)" ]; then \
-		echo "Usage: make wrm-test CMD=\"ping 10.0.10.10 --port 62022\" [VM=win10-server]"; \
-		exit 1; \
-	fi; \
-	echo "==> VM: $(VM)"; \
-	echo "==> CMD: $(CMD)"; \
-	python $(subst \,/,$(abspath scripts/xp2p_winrm.py)) --vm $(VM) -- $(CMD)
-
 build: build-windows build-linux build-openwrt
 
 build-windows:
