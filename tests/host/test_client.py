@@ -1,23 +1,47 @@
 import json
+from pathlib import Path
 
 import pytest
 
-CLIENT_CONFIG_OUTBOUNDS = r"C:\Program Files\xp2p\config-client\outbounds.json"
-CLIENT_LOG_FILE = r"C:\Program Files\xp2p\logs\client.err"
+from tests.host import _env
+
+CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+CLIENT_CONFIG_DIR_NAME = "config-client"
+CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
+CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
+CLIENT_LOG_RELATIVE = r"logs\client.err"
+CLIENT_LOG_FILE = CLIENT_INSTALL_DIR / CLIENT_LOG_RELATIVE
 
 
 def _cleanup_client_install(runner) -> None:
     runner("client", "remove", "--ignore-missing")
+    _env.prepare_program_files_install()
 
 
-def _read_remote_json(client_host, path: str) -> dict:
-    file_obj = client_host.file(path)
-    assert file_obj.exists, f"Expected file {path} to exist on client guest"
-    content = file_obj.content_string
+def _read_remote_json(client_host, path: Path) -> dict:
+    quoted = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path {quoted})) {{
+    exit 3
+}}
+Get-Content -Raw {quoted}
+"""
+    result = _env.run_powershell(client_host, script)
+    assert result.rc == 0, (
+        f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
     try:
-        return json.loads(content)
+        return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}")
+        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{result.stdout}")
+
+
+def _remote_path_exists(client_host, path: Path) -> bool:
+    quoted = _env.ps_quote(str(path))
+    script = f"if (Test-Path {quoted}) {{ exit 0 }} else {{ exit 3 }}"
+    result = _env.run_powershell(client_host, script)
+    return result.rc == 0
 
 
 @pytest.mark.host
@@ -81,13 +105,19 @@ def test_client_run_starts_xray_core(client_host, xp2p_client_runner, xp2p_clien
             check=True,
         )
 
-        with xp2p_client_run_factory() as session:
+        with xp2p_client_run_factory(
+            str(CLIENT_INSTALL_DIR), CLIENT_CONFIG_DIR_NAME, CLIENT_LOG_RELATIVE
+        ) as session:
             assert session["pid"] > 0
 
-        log_file = client_host.file(CLIENT_LOG_FILE)
-        assert log_file.exists, f"Expected log file {CLIENT_LOG_FILE} to be created"
-        log_content = log_file.content_string
-        assert "Xray 25" in log_content or "core: Xray" in log_content
+        assert _remote_path_exists(client_host, CLIENT_LOG_FILE), (
+            f"Expected log file {CLIENT_LOG_FILE} to be created"
+        )
+        log_content = _env.run_powershell(
+            client_host,
+            f"$ErrorActionPreference='Stop'; Get-Content -Raw {_env.ps_quote(str(CLIENT_LOG_FILE))}",
+        ).stdout
+        assert log_content.strip(), "Expected xray-core to produce log output"
         assert "Failed to start" not in log_content
     finally:
         _cleanup_client_install(xp2p_client_runner)

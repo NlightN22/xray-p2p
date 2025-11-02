@@ -13,7 +13,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
 DEFAULT_SERVER = "win10-server"
 DEFAULT_CLIENT = "win10-client"
-XP2P_EXE = Path(r"C:\xp2p\build\windows-amd64\xp2p.exe")
+BUILD_XP2P_EXE = Path(r"C:\xp2p\build\windows-amd64\xp2p.exe")
+CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+CLIENT_BIN_DIR = CLIENT_INSTALL_DIR / "bin"
+XP2P_EXE = CLIENT_BIN_DIR / "xp2p.exe"
 XP2P_EXE_PS = str(XP2P_EXE).replace("\\", "\\\\")
 SERVICE_START_TIMEOUT = 60
 
@@ -100,6 +103,56 @@ def ps_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def run_vagrant_powershell(machine: str, script: str) -> subprocess.CompletedProcess[str]:
+    require_vagrant_environment()
+    encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
+    command = [
+        "vagrant",
+        "winrm",
+        machine,
+        "--command",
+        f"powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}",
+    ]
+    result: subprocess.CompletedProcess[str] = subprocess.run(
+        command,
+        cwd=VAGRANT_DIR,
+        text=True,
+        capture_output=True,
+    )
+    return result
+
+
+def prepare_program_files_install() -> None:
+    source = str(BUILD_XP2P_EXE).replace("\\", "\\\\")
+    root = str(CLIENT_INSTALL_DIR).replace("\\", "\\\\")
+    bin_dir = str(CLIENT_BIN_DIR).replace("\\", "\\\\")
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$source = '{source}'
+$root = '{root}'
+$bin = '{bin_dir}'
+if (-not (Test-Path $source)) {{
+    throw \"xp2p build binary not found at $source\"
+}}
+if (Test-Path $root) {{
+    try {{
+        Remove-Item $root -Recurse -Force -ErrorAction Stop
+    }} catch {{
+        Remove-Item $root -Recurse -Force -ErrorAction SilentlyContinue
+    }}
+}}
+New-Item -ItemType Directory -Path $bin -Force | Out-Null
+Copy-Item $source (Join-Path $bin 'xp2p.exe') -Force
+icacls $root /grant 'vagrant:(OI)(CI)M' /t /c | Out-Null
+"""
+    result = run_vagrant_powershell(DEFAULT_CLIENT, script)
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Failed to prepare Program Files xp2p directory:\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def run_xp2p(host: Host, args: Iterable[str]) -> CommandResult:
     arguments = ", ".join(ps_quote(str(arg)) for arg in args)
     script = f"""
@@ -114,3 +167,4 @@ $arguments = @({arguments})
 exit $LASTEXITCODE
 """
     return run_powershell(host, script)
+

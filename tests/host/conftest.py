@@ -45,6 +45,12 @@ def xp2p_options(pytestconfig: pytest.Config) -> dict:
     }
 
 
+@pytest.fixture(scope="session", autouse=True)
+def xp2p_program_files_setup():
+    _env.prepare_program_files_install()
+    yield
+
+
 @pytest.fixture(scope="session")
 def server_host() -> Host:
     _env.require_vagrant_environment()
@@ -175,8 +181,8 @@ exit 0
 
 @pytest.fixture
 def xp2p_client_run_factory(client_host: Host):
-    def _factory():
-        return _client_runtime.xp2p_client_run_session(client_host)
+    def _factory(install_dir: str, config_dir: str, log_relative: str):
+        return _client_runtime.xp2p_client_run_session(client_host, install_dir, config_dir, log_relative)
 
     return _factory
 
