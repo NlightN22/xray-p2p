@@ -37,7 +37,7 @@ func psQuote(value string) string {
 }
 
 func sshInvokePowershell(ctx context.Context, target sshTarget, script string) (string, error) {
-	command := fmt.Sprintf("powershell -NoLogo -NoProfile -NonInteractive -Command %s", psQuote(script))
+	command := fmt.Sprintf(`powershell -NoLogo -NoProfile -NonInteractive -Command "& { %s }"`, escapeForCommand(script))
 	stdout, stderr, err := sshCommandFunc(ctx, target, command)
 	if err != nil {
 		if strings.TrimSpace(stderr) != "" {
@@ -99,6 +99,10 @@ func targetAddress(target sshTarget) string {
 		return target.host
 	}
 	return fmt.Sprintf("%s@%s", target.user, target.host)
+}
+
+func escapeForCommand(value string) string {
+	return strings.ReplaceAll(value, `"`, `\"`)
 }
 
 func startDetachedProcess(binary string, args []string) (*exec.Cmd, error) {
