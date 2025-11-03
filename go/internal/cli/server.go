@@ -25,6 +25,8 @@ var (
 	serverUserRemoveFunc = server.RemoveUser
 	detectPublicHostFunc = netutil.DetectPublicHost
 	serverSetCertFunc    = server.SetCertificate
+	serverUserLinkFunc   = server.GetUserLink
+	serverUserListFunc   = server.ListUsers
 )
 
 var promptYesNoFunc = promptYesNo

@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -433,6 +436,72 @@ func TestRunServerRunQuietMissing(t *testing.T) {
 	}
 }
 
+func TestRunServerUserAddPrintsLink(t *testing.T) {
+	restoreAdd := stubServerUserAdd(func(context.Context, server.AddUserOptions) error { return nil })
+	defer restoreAdd()
+	restoreLink := stubServerUserLink(func(context.Context, server.UserLinkOptions) (server.UserLink, error) {
+		return server.UserLink{
+			UserID:   "alpha",
+			Password: "secret",
+			Link:     "trojan://secret@example.test:62022?security=tls&sni=example.test#alpha",
+		}, nil
+	})
+	defer restoreLink()
+
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			InstallDir: `C:\xp2p`,
+			ConfigDir:  "config-server",
+			Host:       "example.test",
+		},
+	}
+
+	output := captureStdout(t, func() {
+		code := runServerUserAdd(context.Background(), cfg, []string{
+			"--path", `C:\xp2p`,
+			"--config-dir", "config-server",
+			"--id", "alpha",
+			"--password", "secret",
+		})
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+	})
+	if !strings.Contains(output, "trojan://secret@example.test:62022") {
+		t.Fatalf("expected trojan link in output, got %q", output)
+	}
+}
+
+func TestRunServerUserListPrintsLinks(t *testing.T) {
+	restoreList := stubServerUserList(func(context.Context, server.ListUsersOptions) ([]server.UserLink, error) {
+		return []server.UserLink{
+			{UserID: "alpha", Link: "trojan://a"},
+			{UserID: "", Link: "trojan://b"},
+		}, nil
+	})
+	defer restoreList()
+
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			InstallDir: `C:\xp2p`,
+			ConfigDir:  "config-server",
+		},
+	}
+
+	output := captureStdout(t, func() {
+		code := runServerUser(context.Background(), cfg, []string{"--list"})
+		if code != 0 {
+			t.Fatalf("expected exit code 0, got %d", code)
+		}
+	})
+	if !strings.Contains(output, "alpha: trojan://a") {
+		t.Fatalf("expected entry for alpha, got %q", output)
+	}
+	if !strings.Contains(output, "(unnamed): trojan://b") {
+		t.Fatalf("expected unnamed entry, got %q", output)
+	}
+}
+
 func stubServerInstall(fn func(context.Context, server.InstallOptions) error) func() {
 	prev := serverInstallFunc
 	if fn != nil {
@@ -499,6 +568,70 @@ func stubPromptYesNo(answer bool, err error) func() {
 	return func() {
 		promptYesNoFunc = prev
 	}
+}
+
+func stubServerUserAdd(fn func(context.Context, server.AddUserOptions) error) func() {
+	prev := serverUserAddFunc
+	if fn != nil {
+		serverUserAddFunc = fn
+	} else {
+		serverUserAddFunc = func(context.Context, server.AddUserOptions) error { return nil }
+	}
+	return func() {
+		serverUserAddFunc = prev
+	}
+}
+
+func stubServerUserLink(fn func(context.Context, server.UserLinkOptions) (server.UserLink, error)) func() {
+	prev := serverUserLinkFunc
+	if fn != nil {
+		serverUserLinkFunc = fn
+	} else {
+		serverUserLinkFunc = func(context.Context, server.UserLinkOptions) (server.UserLink, error) {
+			return server.UserLink{}, nil
+		}
+	}
+	return func() {
+		serverUserLinkFunc = prev
+	}
+}
+
+func stubServerUserList(fn func(context.Context, server.ListUsersOptions) ([]server.UserLink, error)) func() {
+	prev := serverUserListFunc
+	if fn != nil {
+		serverUserListFunc = fn
+	} else {
+		serverUserListFunc = func(context.Context, server.ListUsersOptions) ([]server.UserLink, error) {
+			return []server.UserLink{}, nil
+		}
+	}
+	return func() {
+		serverUserListFunc = prev
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+
+	fn()
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("close stdout writer: %v", err)
+	}
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	return buf.String()
 }
 
 func prepareInstallation(t *testing.T, installDir, configDirName string) {

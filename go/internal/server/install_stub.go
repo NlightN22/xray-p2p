@@ -33,3 +33,13 @@ func RemoveUser(_ context.Context, _ RemoveUserOptions) error {
 func SetCertificate(_ context.Context, _ CertificateOptions) error {
 	return ErrUnsupported
 }
+
+// ListUsers is not supported on non-Windows platforms.
+func ListUsers(_ context.Context, _ ListUsersOptions) ([]UserLink, error) {
+	return nil, ErrUnsupported
+}
+
+// UserLink is not supported on non-Windows platforms.
+func GetUserLink(_ context.Context, _ UserLinkOptions) (UserLink, error) {
+	return UserLink{}, ErrUnsupported
+}
