@@ -185,20 +185,6 @@ func ensureConfigExists(configDir string) error {
 	return nil
 }
 
-func extractStreamSettings(trojan map[string]any) (map[string]any, error) {
-	rawSettings, ok := trojan["streamSettings"]
-	if !ok {
-		settings := make(map[string]any)
-		trojan["streamSettings"] = settings
-		return settings, nil
-	}
-	settings, ok := rawSettings.(map[string]any)
-	if !ok {
-		return nil, errors.New("xp2p: trojan streamSettings invalid")
-	}
-	return settings, nil
-}
-
 func hasTLSConfigured(stream map[string]any) bool {
 	value, _ := stream["security"].(string)
 	return strings.EqualFold(strings.TrimSpace(value), "tls")
