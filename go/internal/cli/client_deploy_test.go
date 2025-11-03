@@ -64,6 +64,22 @@ func TestParseDeployFlagsUsesDefaults(t *testing.T) {
 	}
 }
 
+func TestParseDeployFlagsPromptsForUser(t *testing.T) {
+	cfg := config.Config{}
+	restore := stubPromptString(t, func(string) (string, error) {
+		return "prompt@example.test", nil
+	})
+	defer restore()
+
+	opts, err := parseDeployFlags(cfg, []string{"--remote-host", "gateway.internal"})
+	if err != nil {
+		t.Fatalf("parseDeployFlags: %v", err)
+	}
+	if opts.trojanUser != "prompt@example.test" {
+		t.Fatalf("trojanUser mismatch: got %q", opts.trojanUser)
+	}
+}
+
 func TestRunClientDeploySuccessfulFlow(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.Config{
@@ -264,6 +280,13 @@ func stubReleaseHandle(t *testing.T, fn func(*exec.Cmd)) func() {
 	prev := releaseProcessHandleFunc
 	releaseProcessHandleFunc = fn
 	return func() { releaseProcessHandleFunc = prev }
+}
+
+func stubPromptString(t *testing.T, fn func(string) (string, error)) func() {
+	t.Helper()
+	prev := promptStringFunc
+	promptStringFunc = fn
+	return func() { promptStringFunc = prev }
 }
 
 func multiRestore(restores ...func()) func() {

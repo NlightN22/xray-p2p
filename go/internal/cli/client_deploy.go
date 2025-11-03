@@ -152,7 +152,17 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 
 	userValue := firstNonEmpty(*trojanUser, cfg.Client.User)
 	if userValue == "" {
-		return deployOptions{}, fmt.Errorf("--user is required (set client.user in config to use default)")
+		if promptStringFunc == nil {
+			return deployOptions{}, fmt.Errorf("--user is required (set client.user in config to use default)")
+		}
+		value, err := promptStringFunc("Trojan user (email): ")
+		if err != nil {
+			return deployOptions{}, fmt.Errorf("prompt trojan user: %w", err)
+		}
+		userValue = strings.TrimSpace(value)
+	}
+	if userValue == "" {
+		return deployOptions{}, fmt.Errorf("trojan user is required")
 	}
 
 	passwordValue := strings.TrimSpace(*trojanPassword)

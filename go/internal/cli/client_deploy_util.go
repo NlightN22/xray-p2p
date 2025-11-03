@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -36,4 +38,14 @@ func generateSecret(size int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func promptString(prompt string) (string, error) {
+	fmt.Print(prompt)
+	reader := bufio.NewReader(os.Stdin)
+	value, err := reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
 }

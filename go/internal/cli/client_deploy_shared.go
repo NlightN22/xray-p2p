@@ -51,4 +51,5 @@ var (
 	startLocalClientFunc     = startLocalClient
 	runPingCheckFunc         = runPingCheck
 	releaseProcessHandleFunc = releaseDetachedProcess
+	promptStringFunc         = promptString
 )
