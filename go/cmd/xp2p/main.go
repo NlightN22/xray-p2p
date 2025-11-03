@@ -179,6 +179,12 @@ Usage:
                       (--link URL | --server-address HOST --user EMAIL --password SECRET)
                       [--server-port PORT] [--server-name NAME]
                       [--allow-insecure|--strict-tls] [--force]
+  xp2p client deploy --remote-host HOST [--ssh-user NAME] [--ssh-port PORT]
+                     [--server-host HOST] [--server-port PORT]
+                     [--user EMAIL] [--password SECRET]
+                     [--install-dir PATH] [--config-dir NAME]
+                     [--local-install PATH] [--local-config NAME]
+                     [--save-link FILE]
   xp2p client remove [--path PATH]
   xp2p client run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
                   [--xray-log-file FILE]

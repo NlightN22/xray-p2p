@@ -36,6 +36,8 @@ func runClient(ctx context.Context, cfg config.Config, args []string) int {
 		return runClientRemove(ctx, cfg, args[1:])
 	case "run":
 		return runClientRun(ctx, cfg, args[1:])
+	case "deploy":
+		return runClientDeploy(ctx, cfg, args[1:])
 	case "-h", "--help", "help":
 		printClientUsage()
 		return 0
@@ -353,6 +355,11 @@ func printClientUsage() {
           (--link URL | --server-address HOST --user EMAIL --password SECRET)
           [--server-port PORT] [--server-name NAME]
           [--allow-insecure|--strict-tls] [--force]
+  deploy  --remote-host HOST [--ssh-user NAME] [--ssh-port PORT]
+          [--server-host HOST] [--server-port PORT]
+          [--user EMAIL] [--password SECRET] [--install-dir PATH]
+          [--config-dir NAME] [--local-install PATH] [--local-config NAME]
+          [--save-link FILE]
   remove  [--path PATH] [--keep-files] [--ignore-missing]
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
           [--xray-log-file FILE]
