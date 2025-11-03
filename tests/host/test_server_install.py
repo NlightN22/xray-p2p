@@ -1,5 +1,9 @@
 import base64
 import json
+import os
+import ssl
+import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -19,6 +23,7 @@ SERVER_BIN_DIR = SERVER_INSTALL_DIR / "bin"
 XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
 SERVER_LOG_RELATIVE = r"logs\server.err"
 SERVER_LOG_FILE = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
+SERVER_HOST_VALUE = "xp2p.test.local"
 
 
 def _cleanup_server_install(runner) -> None:
@@ -106,8 +111,23 @@ def _trojan_inbound(data: dict) -> dict:
     pytest.fail("Trojan inbound not found in configuration data")
 
 
+def _decode_remote_certificate(host, path: Path) -> dict:
+    pem_text = _read_remote_text(host, path)
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".pem") as tmp:
+        tmp.write(pem_text)
+        tmp.flush()
+        tmp_path = tmp.name
+    try:
+        cert_info = ssl._ssl._test_decode_cert(tmp_path)
+    finally:
+        os.unlink(tmp_path)
+    return cert_info
+
+
 @pytest.mark.host
-def test_server_install_and_force_overwrites(server_host, xp2p_server_runner):
+def test_server_install_uses_provided_certificate_and_force_overwrites(
+    server_host, xp2p_server_runner
+):
     _cleanup_server_install(xp2p_server_runner)
     cert_source = Path(r"C:\Users\vagrant\AppData\Local\Temp\xp2p-server-cert.pem")
     key_source = Path(r"C:\Users\vagrant\AppData\Local\Temp\xp2p-server-key.pem")
@@ -132,6 +152,8 @@ def test_server_install_and_force_overwrites(server_host, xp2p_server_runner):
             str(cert_source),
             "--key",
             str(key_source),
+            "--host",
+            SERVER_HOST_VALUE,
             "--force",
             check=True,
         )
@@ -178,6 +200,8 @@ def test_server_install_and_force_overwrites(server_host, xp2p_server_runner):
             str(cert_source),
             "--key",
             str(key_source),
+            "--host",
+            SERVER_HOST_VALUE,
             "--force",
             check=True,
         )
@@ -205,6 +229,68 @@ def test_server_install_and_force_overwrites(server_host, xp2p_server_runner):
 
 
 @pytest.mark.host
+def test_server_install_generates_self_signed_certificate(server_host, xp2p_server_runner):
+    _cleanup_server_install(xp2p_server_runner)
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62015",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        assert _remote_path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to exist"
+        assert _remote_path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
+
+        cert_info = _decode_remote_certificate(server_host, SERVER_CERT_DEST)
+        subject = dict(cert_info.get("subject", []))
+        assert subject.get("commonName") == SERVER_HOST_VALUE, (
+            f"Expected CN={SERVER_HOST_VALUE}, got {subject}"
+        )
+
+        san_entries = cert_info.get("subjectAltName", [])
+        san_hosts = {value for kind, value in san_entries if kind.lower() == "dns"}
+        assert SERVER_HOST_VALUE in san_hosts, (
+            f"Expected DNS SAN entries to include {SERVER_HOST_VALUE}, got {san_hosts}"
+        )
+
+        not_after_str = cert_info.get("notAfter")
+        assert not_after_str, "Certificate notAfter missing"
+        not_after = datetime.strptime(not_after_str, "%b %d %H:%M:%S %Y GMT").replace(
+            tzinfo=timezone.utc
+        )
+        now = datetime.now(timezone.utc)
+        assert not_after - now > timedelta(days=9 * 365), (
+            f"Expected certificate validity close to 10 years, got {not_after - now}"
+        )
+
+        key_content = _read_remote_text(server_host, SERVER_KEY_DEST)
+        assert "BEGIN RSA PRIVATE KEY" in key_content
+
+        inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
+        trojan = _trojan_inbound(inbounds_data)
+        stream_settings = trojan.get("streamSettings", {})
+        assert stream_settings.get("security") == "tls"
+        tls_settings = stream_settings.get("tlsSettings", {})
+        certificates = tls_settings.get("certificates", [])
+        assert certificates, "Expected TLS configuration for self-signed certificate"
+        expected_cert, expected_key = _expect_tls_paths()
+        cert_ref = certificates[0]
+        assert cert_ref.get("certificateFile") == expected_cert
+        assert cert_ref.get("keyFile") == expected_key
+    finally:
+        _cleanup_server_install(xp2p_server_runner)
+
+
+@pytest.mark.host
 def test_server_run_starts_xray_core(
     server_host, xp2p_server_runner, xp2p_server_run_factory
 ):
@@ -219,6 +305,8 @@ def test_server_run_starts_xray_core(
             SERVER_CONFIG_DIR_NAME,
             "--port",
             "62011",
+            "--host",
+            SERVER_HOST_VALUE,
             "--force",
             check=True,
         )
