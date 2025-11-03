@@ -33,6 +33,22 @@ def require_vagrant_environment() -> None:
         )
 
 
+def ensure_machine_running(machine: str) -> None:
+    try:
+        state = machine_state(machine)
+    except subprocess.CalledProcessError as exc:
+        pytest.skip(
+            f"Unable to determine state for guest '{machine}' "
+            f"(vagrant status exited with code {exc.returncode}). "
+            "Run `make vagrant-win10` and retry."
+        )
+    if state != "running":
+        pytest.skip(
+            f"Guest '{machine}' is not running (state={state!r}). "
+            "Run `make vagrant-win10` and retry."
+        )
+
+
 def machine_state(machine: str) -> str | None:
     output = subprocess.check_output(
         ["vagrant", "status", machine, "--machine-readable"],
@@ -107,6 +123,7 @@ def ps_quote(value: str) -> str:
 
 def run_vagrant_powershell(machine: str, script: str) -> subprocess.CompletedProcess[str]:
     require_vagrant_environment()
+    ensure_machine_running(machine)
     encoded = base64.b64encode(script.encode("utf-16le")).decode("ascii")
     command = [
         "vagrant",
