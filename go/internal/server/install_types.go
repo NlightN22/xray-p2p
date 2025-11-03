@@ -22,6 +22,16 @@ type InstallOptions struct {
 	Force           bool
 }
 
+// CertificateOptions describes how TLS material should be provisioned for an existing installation.
+type CertificateOptions struct {
+	InstallDir      string
+	ConfigDir       string
+	CertificateFile string
+	KeyFile         string
+	Host            string
+	Force           bool
+}
+
 // RunOptions controls execution of the xray-core process.
 type RunOptions struct {
 	InstallDir   string

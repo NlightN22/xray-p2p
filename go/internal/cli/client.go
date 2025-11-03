@@ -180,7 +180,7 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 				logging.Error("xp2p client run: installation missing and --quiet specified (use --auto-install)")
 				return 1
 			}
-			ok, promptErr := promptYesNo(fmt.Sprintf("Install client into %s?", installDir))
+			ok, promptErr := promptYesNoFunc(fmt.Sprintf("Install client into %s?", installDir))
 			if promptErr != nil {
 				logging.Error("xp2p client run: prompt failed", "err", promptErr)
 				return 1

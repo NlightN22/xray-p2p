@@ -24,7 +24,10 @@ var (
 	serverUserAddFunc    = server.AddUser
 	serverUserRemoveFunc = server.RemoveUser
 	detectPublicHostFunc = netutil.DetectPublicHost
+	serverSetCertFunc    = server.SetCertificate
 )
+
+var promptYesNoFunc = promptYesNo
 
 func runServer(ctx context.Context, cfg config.Config, args []string) int {
 	if len(args) == 0 {
@@ -42,6 +45,8 @@ func runServer(ctx context.Context, cfg config.Config, args []string) int {
 		return runServerRun(ctx, cfg, args[1:])
 	case "user":
 		return runServerUser(ctx, cfg, args[1:])
+	case "cert":
+		return runServerCert(ctx, cfg, args[1:])
 	case "-h", "--help", "help":
 		printServerUsage()
 		return 0
@@ -210,7 +215,7 @@ func ensureServerAssets(ctx context.Context, cfg config.Config, installDir, conf
 		return errors.New("installation not found and --quiet supplied (use --auto-install)")
 	}
 
-	ok, err := promptYesNo(fmt.Sprintf("Install xray-core into %s?", installDir))
+	ok, err := promptYesNoFunc(fmt.Sprintf("Install xray-core into %s?", installDir))
 	if err != nil {
 		return err
 	}
@@ -352,5 +357,7 @@ func printServerUsage() {
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
           [--xray-log-file FILE]
   user    add/remove [...]
+  cert    set [--path PATH] [--config-dir NAME|PATH] [--cert FILE] [--key FILE]
+          [--host HOST] [--force]
 `)
 }

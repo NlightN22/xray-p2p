@@ -105,6 +105,128 @@ func TestRunServerInstallFailsWhenHostDetectionFails(t *testing.T) {
 	}
 }
 
+func TestRunServerCertSetUsesFlags(t *testing.T) {
+	restoreCert := stubServerSetCertificate(func(ctx context.Context, opts server.CertificateOptions) error {
+		if opts.InstallDir != `D:\xp2p` {
+			t.Fatalf("unexpected install dir: %s", opts.InstallDir)
+		}
+		if opts.ConfigDir != "cfg-custom" {
+			t.Fatalf("unexpected config dir: %s", opts.ConfigDir)
+		}
+		if opts.CertificateFile != `C:\certs\server.pem` {
+			t.Fatalf("unexpected certificate file: %s", opts.CertificateFile)
+		}
+		if opts.KeyFile != `C:\certs\server.key` {
+			t.Fatalf("unexpected key file: %s", opts.KeyFile)
+		}
+		if opts.Host != "cert.example.test" {
+			t.Fatalf("unexpected host: %s", opts.Host)
+		}
+		if !opts.Force {
+			t.Fatalf("expected force to propagate")
+		}
+		return nil
+	})
+	defer restoreCert()
+
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			InstallDir: `C:\xp2p`,
+			ConfigDir:  server.DefaultServerConfigDir,
+			Host:       "",
+		},
+	}
+
+	code := runServerCertSet(
+		context.Background(),
+		cfg,
+		[]string{
+			"--path", `D:\xp2p`,
+			"--config-dir", "cfg-custom",
+			"--cert", `C:\certs\server.pem`,
+			"--key", `C:\certs\server.key`,
+			"--host", "cert.example.test",
+			"--force",
+		},
+	)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+}
+
+func TestRunServerCertSetDetectsHostWhenMissing(t *testing.T) {
+	restoreCert := stubServerSetCertificate(func(ctx context.Context, opts server.CertificateOptions) error {
+		if opts.Host != "198.51.100.20" {
+			t.Fatalf("unexpected detected host: %s", opts.Host)
+		}
+		return nil
+	})
+	defer restoreCert()
+	restoreDetect := stubDetectPublicHost("198.51.100.20", nil)
+	defer restoreDetect()
+
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			InstallDir: `C:\xp2p`,
+			ConfigDir:  server.DefaultServerConfigDir,
+			Host:       "",
+		},
+	}
+
+	code := runServerCertSet(
+		context.Background(),
+		cfg,
+		[]string{
+			"--path", `C:\xp2p`,
+		},
+	)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+}
+
+func TestRunServerCertSetPromptsWhenCertificateExists(t *testing.T) {
+	callCount := 0
+	restoreCert := stubServerSetCertificate(func(ctx context.Context, opts server.CertificateOptions) error {
+		callCount++
+		if callCount == 1 {
+			if opts.Force {
+				t.Fatalf("expected first attempt without force")
+			}
+			return server.ErrCertificateConfigured
+		}
+		if !opts.Force {
+			t.Fatalf("expected second attempt with force")
+		}
+		return nil
+	})
+	defer restoreCert()
+	restorePrompt := stubPromptYesNo(true, nil)
+	defer restorePrompt()
+
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			InstallDir: `C:\xp2p`,
+			ConfigDir:  server.DefaultServerConfigDir,
+			Host:       "configured.example.test",
+		},
+	}
+
+	code := runServerCertSet(
+		context.Background(),
+		cfg,
+		[]string{
+			"--path", `C:\xp2p`,
+		},
+	)
+	if code != 0 {
+		t.Fatalf("expected exit code 0 after confirmation, got %d", code)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected SetCertificate to be called twice, got %d", callCount)
+	}
+}
+
 func TestRunServerRemoveUsesDefaults(t *testing.T) {
 	restoreInstall := stubServerInstall(nil)
 	defer restoreInstall()
@@ -354,6 +476,28 @@ func stubDetectPublicHost(value string, err error) func() {
 	}
 	return func() {
 		detectPublicHostFunc = prev
+	}
+}
+
+func stubServerSetCertificate(fn func(context.Context, server.CertificateOptions) error) func() {
+	prev := serverSetCertFunc
+	if fn != nil {
+		serverSetCertFunc = fn
+	} else {
+		serverSetCertFunc = func(context.Context, server.CertificateOptions) error { return nil }
+	}
+	return func() {
+		serverSetCertFunc = prev
+	}
+}
+
+func stubPromptYesNo(answer bool, err error) func() {
+	prev := promptYesNoFunc
+	promptYesNoFunc = func(string) (bool, error) {
+		return answer, err
+	}
+	return func() {
+		promptYesNoFunc = prev
 	}
 }
 

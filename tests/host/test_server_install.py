@@ -144,10 +144,6 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
             SERVER_CONFIG_DIR_NAME,
             "--port",
             "62001",
-            "--cert",
-            str(cert_source),
-            "--key",
-            str(key_source),
             "--host",
             SERVER_HOST_VALUE,
             "--force",
@@ -167,6 +163,24 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
                 f"Expected config file {config_path}"
             )
 
+        xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--cert",
+            str(cert_source),
+            "--key",
+            str(key_source),
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
         inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds_data)
         assert trojan.get("port") == 62001
@@ -185,13 +199,12 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
 
         xp2p_server_runner(
             "server",
-            "install",
+            "cert",
+            "set",
             "--path",
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
-            "--port",
-            "62005",
             "--cert",
             str(cert_source),
             "--key",
@@ -204,12 +217,12 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
 
         updated_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         updated_trojan = _trojan_inbound(updated_inbounds)
-        assert updated_trojan.get("port") == 62005
+        assert updated_trojan.get("port") == 62001
         updated_stream = updated_trojan.get("streamSettings", {})
         assert updated_stream.get("security") == "tls"
         updated_tls = updated_stream.get("tlsSettings", {})
         updated_certificates = updated_tls.get("certificates", [])
-        assert updated_certificates, "Expected TLS certificates after force reinstall"
+        assert updated_certificates, "Expected TLS certificates after certificate update"
         updated_primary = updated_certificates[0]
         assert updated_primary.get("certificateFile") == expected_cert
         assert updated_primary.get("keyFile") == expected_key
@@ -237,6 +250,20 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
             SERVER_CONFIG_DIR_NAME,
             "--port",
             "62015",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
             "--host",
             SERVER_HOST_VALUE,
             "--force",

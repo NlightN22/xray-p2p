@@ -5,23 +5,16 @@ package server
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"embed"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/assets/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -286,7 +279,12 @@ func deployConfiguration(state installState) error {
 	var keyPath string
 	if state.certDest != "" {
 		if state.selfSigned {
-			if err := generateSelfSignedCertificate(state); err != nil {
+			logging.Info("xp2p server install generating self-signed certificate",
+				"host", state.Host,
+				"valid_years", 10,
+				"destination", state.certDest,
+			)
+			if err := generateSelfSignedCertificate(state.Host, state.certDest, state.keyDest); err != nil {
 				return err
 			}
 		} else {
@@ -415,70 +413,6 @@ func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 	if err := os.WriteFile(dest, content, perm); err != nil {
 		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
 	}
-	return nil
-}
-
-func generateSelfSignedCertificate(state installState) error {
-	logging.Info("xp2p server install generating self-signed certificate",
-		"host", state.Host,
-		"valid_years", 10,
-		"destination", state.certDest,
-	)
-
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return fmt.Errorf("xp2p: generate private key: %w", err)
-	}
-
-	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialLimit)
-	if err != nil {
-		return fmt.Errorf("xp2p: generate certificate serial: %w", err)
-	}
-
-	now := time.Now()
-	template := &x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			CommonName: state.Host,
-		},
-		NotBefore:             now.Add(-5 * time.Minute),
-		NotAfter:              now.AddDate(10, 0, 0),
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		SignatureAlgorithm:    x509.SHA256WithRSA,
-	}
-
-	if ip := net.ParseIP(state.Host); ip != nil {
-		template.IPAddresses = []net.IP{ip}
-		template.Subject.CommonName = ip.String()
-	} else {
-		template.DNSNames = []string{state.Host}
-	}
-
-	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
-	if err != nil {
-		return fmt.Errorf("xp2p: create certificate: %w", err)
-	}
-
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	if certPEM == nil {
-		return errors.New("xp2p: encode certificate: empty result")
-	}
-	if err := os.WriteFile(state.certDest, certPEM, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write certificate: %w", err)
-	}
-
-	keyDER := x509.MarshalPKCS1PrivateKey(privateKey)
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER})
-	if keyPEM == nil {
-		return errors.New("xp2p: encode private key: empty result")
-	}
-	if err := os.WriteFile(state.keyDest, keyPEM, 0o600); err != nil {
-		return fmt.Errorf("xp2p: write private key: %w", err)
-	}
-
 	return nil
 }
 

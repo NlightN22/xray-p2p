@@ -28,3 +28,8 @@ func AddUser(_ context.Context, _ AddUserOptions) error {
 func RemoveUser(_ context.Context, _ RemoveUserOptions) error {
 	return ErrUnsupported
 }
+
+// SetCertificate is not supported on non-Windows platforms.
+func SetCertificate(_ context.Context, _ CertificateOptions) error {
+	return ErrUnsupported
+}
