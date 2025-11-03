@@ -44,6 +44,15 @@ def _remote_path_exists(client_host, path: Path) -> bool:
     return result.rc == 0
 
 
+def _assert_outbounds_server(data: dict, address: str, password: str, email: str, server_name: str) -> None:
+    primary = data["outbounds"][0]["settings"]["servers"][0]
+    assert primary["address"] == address
+    assert primary["password"] == password
+    assert primary["email"] == email
+    tls_settings = data["outbounds"][0]["streamSettings"]["tlsSettings"]
+    assert tls_settings["serverName"] == server_name
+
+
 @pytest.mark.host
 def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
     _cleanup_client_install(xp2p_client_runner)
@@ -53,6 +62,8 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "install",
             "--server-address",
             "10.0.10.10",
+            "--user",
+            "alpha@example.com",
             "--password",
             "test_password123",
             "--force",
@@ -60,16 +71,15 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        primary = data["outbounds"][0]["settings"]["servers"][0]
-        assert primary["address"] == "10.0.10.10"
-        assert primary["password"] == "test_password123"
-        assert data["outbounds"][0]["streamSettings"]["tlsSettings"]["serverName"] == "10.0.10.10"
+        _assert_outbounds_server(data, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10")
 
         xp2p_client_runner(
             "client",
             "install",
             "--server-address",
             "10.0.10.11",
+            "--user",
+            "beta@example.com",
             "--password",
             "override_password456",
             "--server-name",
@@ -79,13 +89,36 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         updated_data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        primary_updated = updated_data["outbounds"][0]["settings"]["servers"][0]
-        assert primary_updated["address"] == "10.0.10.11"
-        assert primary_updated["password"] == "override_password456"
-        assert (
-            updated_data["outbounds"][0]["streamSettings"]["tlsSettings"]["serverName"]
-            == "vpn.example.local"
+        _assert_outbounds_server(
+            updated_data, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local"
         )
+    finally:
+        _cleanup_client_install(xp2p_client_runner)
+
+
+@pytest.mark.host
+def test_client_install_from_link(client_host, xp2p_client_runner):
+    _cleanup_client_install(xp2p_client_runner)
+    try:
+        link = (
+            "trojan://linkpass@link.example.test:62022?"
+            "allowInsecure=1&security=tls&sni=link.example.test#link@example.com"
+        )
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--link",
+            link,
+            "--force",
+            check=True,
+        )
+
+        data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        _assert_outbounds_server(
+            data, "link.example.test", "linkpass", "link@example.com", "link.example.test"
+        )
+        tls_settings = data["outbounds"][0]["streamSettings"]["tlsSettings"]
+        assert tls_settings["allowInsecure"] is True
     finally:
         _cleanup_client_install(xp2p_client_runner)
 
@@ -99,6 +132,8 @@ def test_client_run_starts_xray_core(client_host, xp2p_client_runner, xp2p_clien
             "install",
             "--server-address",
             "10.0.10.10",
+            "--user",
+            "gamma@example.com",
             "--password",
             "runtime_password789",
             "--force",
