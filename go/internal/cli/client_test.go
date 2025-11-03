@@ -94,7 +94,11 @@ func TestRunClientInstallPropagatesErrors(t *testing.T) {
 		},
 	}
 
-	code := runClientInstall(context.Background(), cfg, []string{"--user", "user@example.com"})
+	code := runClientInstall(context.Background(), cfg, []string{
+		"--user", "user@example.com",
+		"--server-address", "host",
+		"--password", "secret",
+	})
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)
 	}
@@ -164,12 +168,61 @@ func TestRunClientInstallRequiresUserWithoutLink(t *testing.T) {
 		},
 	}
 
-	code := runClientInstall(context.Background(), cfg, []string{"--server-address", "example.org"})
+	code := runClientInstall(context.Background(), cfg, []string{
+		"--server-address", "example.org",
+		"--password", "secret",
+	})
 	if code != 2 {
 		t.Fatalf("expected exit code 2 when --user missing without link, got %d", code)
 	}
 	if called {
 		t.Fatalf("install should not be invoked when --user missing")
+	}
+}
+
+func TestRunClientInstallRequiresServerAddressWithoutLink(t *testing.T) {
+	restore := stubClientInstall(func(context.Context, client.InstallOptions) error {
+		t.Fatalf("install must not be invoked when --server-address missing")
+		return nil
+	})
+	defer restore()
+
+	cfg := config.Config{
+		Client: config.ClientConfig{
+			InstallDir: `C:\xp2p-client`,
+			ConfigDir:  "config-client",
+		},
+	}
+
+	code := runClientInstall(context.Background(), cfg, []string{
+		"--user", "alpha@example.com",
+		"--password", "secret",
+	})
+	if code != 2 {
+		t.Fatalf("expected exit code 2 when --server-address missing without link, got %d", code)
+	}
+}
+
+func TestRunClientInstallRequiresPasswordWithoutLink(t *testing.T) {
+	restore := stubClientInstall(func(context.Context, client.InstallOptions) error {
+		t.Fatalf("install must not be invoked when --password missing")
+		return nil
+	})
+	defer restore()
+
+	cfg := config.Config{
+		Client: config.ClientConfig{
+			InstallDir: `C:\xp2p-client`,
+			ConfigDir:  "config-client",
+		},
+	}
+
+	code := runClientInstall(context.Background(), cfg, []string{
+		"--server-address", "example.org",
+		"--user", "alpha@example.com",
+	})
+	if code != 2 {
+		t.Fatalf("expected exit code 2 when --password missing without link, got %d", code)
 	}
 }
 

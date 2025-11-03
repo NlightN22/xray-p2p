@@ -175,8 +175,9 @@ Usage:
   xp2p server remove [--path PATH]
   xp2p server run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
                   [--xray-log-file FILE]
-  xp2p client install [--path PATH] [--config-dir NAME] --server-address HOST --user EMAIL --password SECRET
-                      [--server-port PORT] [--server-name NAME] [--link URL]
+  xp2p client install [--path PATH] [--config-dir NAME]
+                      (--link URL | --server-address HOST --user EMAIL --password SECRET)
+                      [--server-port PORT] [--server-name NAME]
                       [--allow-insecure|--strict-tls] [--force]
   xp2p client remove [--path PATH]
   xp2p client run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]

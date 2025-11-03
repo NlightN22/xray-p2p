@@ -86,14 +86,32 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	userFlagProvided := false
+	serverAddressProvided := false
+	passwordProvided := false
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "user" {
+		switch f.Name {
+		case "user":
 			userFlagProvided = true
+		case "server-address":
+			serverAddressProvided = true
+		case "password":
+			passwordProvided = true
 		}
 	})
-	if linkValue == "" && !userFlagProvided {
-		logging.Error("xp2p client install: --user is required when --link is not provided")
-		return 2
+
+	if linkValue == "" {
+		if !serverAddressProvided || strings.TrimSpace(*serverAddress) == "" {
+			logging.Error("xp2p client install: --server-address is required when --link is not provided")
+			return 2
+		}
+		if !userFlagProvided || strings.TrimSpace(*userEmail) == "" {
+			logging.Error("xp2p client install: --user is required when --link is not provided")
+			return 2
+		}
+		if !passwordProvided || strings.TrimSpace(*password) == "" {
+			logging.Error("xp2p client install: --password is required when --link is not provided")
+			return 2
+		}
 	}
 
 	installDir := firstNonEmpty(*path, cfg.Client.InstallDir)
@@ -326,8 +344,9 @@ func resolveClientConfigDirPath(installDir, configDir string) (string, error) {
 
 func printClientUsage() {
 	fmt.Print(`xp2p client commands:
-  install [--path PATH] [--config-dir NAME] --server-address HOST --user EMAIL --password SECRET
-          [--server-port PORT] [--server-name NAME] [--link URL]
+  install [--path PATH] [--config-dir NAME]
+          (--link URL | --server-address HOST --user EMAIL --password SECRET)
+          [--server-port PORT] [--server-name NAME]
           [--allow-insecure|--strict-tls] [--force]
   remove  [--path PATH] [--keep-files] [--ignore-missing]
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
