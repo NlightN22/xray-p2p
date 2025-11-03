@@ -36,6 +36,7 @@ var defaultValues = map[string]any{
 	"client.password":       "",
 	"client.server_name":    "",
 	"client.allow_insecure": true,
+	"client.socks_address":  "127.0.0.1:51080",
 }
 
 var defaultCandidates = []string{
@@ -78,6 +79,7 @@ type ClientConfig struct {
 	Password      string `koanf:"password"`
 	ServerName    string `koanf:"server_name"`
 	AllowInsecure bool   `koanf:"allow_insecure"`
+	SocksAddress  string `koanf:"socks_address"`
 }
 
 // Options control configuration loading behaviour.
@@ -270,6 +272,11 @@ func normalize(cfg *Config) {
 	cfg.Client.ServerName = strings.TrimSpace(cfg.Client.ServerName)
 	if cfg.Client.ServerName == "" {
 		cfg.Client.ServerName = defaultValues["client.server_name"].(string)
+	}
+
+	cfg.Client.SocksAddress = strings.TrimSpace(cfg.Client.SocksAddress)
+	if cfg.Client.SocksAddress == "" {
+		cfg.Client.SocksAddress = defaultValues["client.socks_address"].(string)
 	}
 
 	// AllowInsecure is a boolean and defaults through the map loader.

@@ -11,14 +11,16 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"golang.org/x/net/proxy"
 )
 
 // Options describes how Ping should behave.
 type Options struct {
-	Count   int
-	Timeout time.Duration
-	Proto   string
-	Port    int
+	Count      int
+	Timeout    time.Duration
+	Proto      string
+	Port       int
+	SocksProxy string
 }
 
 const (
@@ -66,7 +68,11 @@ func Run(ctx context.Context, target string, opts Options) error {
 	targetAddr := fmt.Sprintf("%s:%d", target, port)
 
 	var sent, received int
-	logger := logging.With("target", targetAddr, "proto", proto)
+	fields := []any{"target", targetAddr, "proto", proto}
+	if opts.SocksProxy != "" {
+		fields = append(fields, "socks_proxy", opts.SocksProxy)
+	}
+	logger := logging.With(fields...)
 	logger.Debug("ping session started", "count", count, "timeout", timeout)
 
 	for seq := 1; seq <= count; seq++ {
@@ -83,8 +89,14 @@ func Run(ctx context.Context, target string, opts Options) error {
 		switch proto {
 		case protoTCP:
 			logger.Debug("sending tcp ping", "seq", seq)
-			err = pingTCP(ctx, targetAddr, timeout)
+			err = pingTCP(ctx, targetAddr, timeout, opts.SocksProxy)
 		case protoUDP:
+			if opts.SocksProxy != "" {
+				logger.Warn("udp ping via socks proxy is not supported", "seq", seq)
+				err = errors.New("UDP ping via SOCKS5 proxy is not supported yet (TODO: implement RFC 1928 UDP ASSOCIATE)")
+				break
+			}
+			// TODO: support dokodemo or other proxy transports once available in diagnostics ping.
 			logger.Debug("sending udp ping", "seq", seq)
 			err = pingUDP(ctx, target, port, timeout)
 		}
@@ -119,15 +131,23 @@ func Run(ctx context.Context, target string, opts Options) error {
 	return nil
 }
 
-func pingTCP(ctx context.Context, addr string, timeout time.Duration) error {
-	dialer := &net.Dialer{Timeout: timeout}
-	conn, err := dialer.DialContext(ctx, "tcp", addr)
+func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy string) error {
+	var (
+		conn net.Conn
+		err  error
+	)
+	if socksProxy == "" {
+		dialer := &net.Dialer{Timeout: timeout}
+		conn, err = dialer.DialContext(ctx, "tcp", addr)
+	} else {
+		conn, err = dialViaSocks(ctx, addr, socksProxy, timeout)
+	}
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+	if err := setDeadline(conn, timeout); err != nil {
 		return err
 	}
 
@@ -160,7 +180,7 @@ func pingUDP(ctx context.Context, host string, port int, timeout time.Duration) 
 	}
 	defer conn.Close()
 
-	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+	if err := setDeadline(conn, timeout); err != nil {
 		return err
 	}
 
@@ -189,4 +209,31 @@ func printSummary(sent, received int) {
 	}
 	fmt.Printf("\nPackets: sent = %d, received = %d, lost = %d (%.0f%% loss)\n",
 		sent, received, lost, lossPercent)
+}
+
+func dialViaSocks(ctx context.Context, addr, proxyAddr string, timeout time.Duration) (net.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	base := &net.Dialer{Timeout: timeout}
+	if deadline, ok := ctx.Deadline(); ok {
+		base.Deadline = deadline
+	}
+
+	dialer, err := proxy.SOCKS5("tcp", proxyAddr, nil, base)
+	if err != nil {
+		return nil, fmt.Errorf("prepare SOCKS5 dialer %s: %w", proxyAddr, err)
+	}
+
+	conn, err := dialer.Dial("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect through SOCKS5 proxy %s: %w", proxyAddr, err)
+	}
+
+	return conn, nil
+}
+
+func setDeadline(conn net.Conn, timeout time.Duration) error {
+	return conn.SetDeadline(time.Now().Add(timeout))
 }
