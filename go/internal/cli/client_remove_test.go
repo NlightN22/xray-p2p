@@ -38,7 +38,7 @@ func TestRunClientRemove(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, opts := execClientRemove(t, tt.cfg, tt.args)
+			code, opts := execClientRemove(tt.cfg, tt.args)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -47,7 +47,7 @@ func TestRunClientRemove(t *testing.T) {
 	}
 }
 
-func execClientRemove(t *testing.T, cfg config.Config, args []string) (int, client.RemoveOptions) {
+func execClientRemove(cfg config.Config, args []string) (int, client.RemoveOptions) {
 	var captured client.RemoveOptions
 	restoreInstall := stubClientInstall(nil)
 	defer restoreInstall()

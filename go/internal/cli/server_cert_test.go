@@ -72,7 +72,7 @@ func TestRunServerCertSet(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, calls := execCertSet(t, tt.cfg, tt.args, tt.host, tt.hostErr, tt.prompt, tt.promptErr, tt.certErrs)
+			code, calls := execCertSet(tt.cfg, tt.args, tt.host, tt.hostErr, tt.prompt, tt.promptErr, tt.certErrs)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -86,7 +86,7 @@ func TestRunServerCertSet(t *testing.T) {
 	}
 }
 
-func execCertSet(t *testing.T, cfg config.Config, args []string, host string, hostErr error, prompt *bool, promptErr error, certErrs []error) (int, []server.CertificateOptions) {
+func execCertSet(cfg config.Config, args []string, host string, hostErr error, prompt *bool, promptErr error, certErrs []error) (int, []server.CertificateOptions) {
 	var calls []server.CertificateOptions
 	restoreCert := stubServerSetCertificate(func(ctx context.Context, opts server.CertificateOptions) error {
 		calls = append(calls, opts)

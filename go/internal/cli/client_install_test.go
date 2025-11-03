@@ -165,7 +165,7 @@ func TestRunClientInstall(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, calls := execClientInstall(t, tt.cfg, tt.args, tt.installErr)
+			code, calls := execClientInstall(tt.cfg, tt.args, tt.installErr)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -179,7 +179,7 @@ func TestRunClientInstall(t *testing.T) {
 	}
 }
 
-func execClientInstall(t *testing.T, cfg config.Config, args []string, installErr error) (int, []client.InstallOptions) {
+func execClientInstall(cfg config.Config, args []string, installErr error) (int, []client.InstallOptions) {
 	var calls []client.InstallOptions
 	restore := stubClientInstall(func(ctx context.Context, opts client.InstallOptions) error {
 		calls = append(calls, opts)

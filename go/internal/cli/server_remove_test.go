@@ -34,7 +34,7 @@ func TestRunServerRemove(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, opts := execRemove(t, tt.cfg, tt.args)
+			code, opts := execRemove(tt.cfg, tt.args)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -43,7 +43,7 @@ func TestRunServerRemove(t *testing.T) {
 	}
 }
 
-func execRemove(t *testing.T, cfg config.Config, args []string) (int, server.RemoveOptions) {
+func execRemove(cfg config.Config, args []string) (int, server.RemoveOptions) {
 	var captured server.RemoveOptions
 	restoreInstall := stubServerInstall(nil)
 	defer restoreInstall()

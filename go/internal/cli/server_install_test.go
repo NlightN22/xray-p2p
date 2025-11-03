@@ -67,7 +67,7 @@ func TestRunServerInstall(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, calls := execInstall(t, tt.cfg, tt.args, tt.host, tt.hostErr, tt.installErr)
+			code, calls := execInstall(tt.cfg, tt.args, tt.host, tt.hostErr, tt.installErr)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -81,7 +81,7 @@ func TestRunServerInstall(t *testing.T) {
 	}
 }
 
-func execInstall(t *testing.T, cfg config.Config, args []string, host string, hostErr, installErr error) (int, []server.InstallOptions) {
+func execInstall(cfg config.Config, args []string, host string, hostErr, installErr error) (int, []server.InstallOptions) {
 	var calls []server.InstallOptions
 	restoreInstall := stubServerInstall(func(ctx context.Context, opts server.InstallOptions) error {
 		calls = append(calls, opts)
