@@ -1,8 +1,5 @@
 import base64
 import json
-import os
-import ssl
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -112,16 +109,49 @@ def _trojan_inbound(data: dict) -> dict:
 
 
 def _decode_remote_certificate(host, path: Path) -> dict:
-    pem_text = _read_remote_text(host, path)
-    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".pem") as tmp:
-        tmp.write(pem_text)
-        tmp.flush()
-        tmp_path = tmp.name
-    try:
-        cert_info = ssl._ssl._test_decode_cert(tmp_path)
-    finally:
-        os.unlink(tmp_path)
-    return cert_info
+    quoted = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path {quoted})) {{
+    Write-Error "Certificate not found at {quoted}"
+    exit 3
+}}
+$bytes = [System.IO.File]::ReadAllBytes({quoted})
+$cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($bytes)
+$subjectCN = $cert.GetNameInfo(
+    [System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName,
+    $false
+)
+$notAfter = $cert.NotAfter.ToUniversalTime().ToString("o")
+$sanList = @()
+$sanExt = $cert.Extensions | Where-Object {{ $_.Oid.Value -eq "2.5.29.17" }}
+if ($sanExt) {{
+    $formatted = $sanExt.Format($false)
+    $normalized = $formatted -replace '\\s*\\r?\\n\\s*', ', '
+    foreach ($entry in ($normalized -split '\\s*,\\s*')) {{
+        if ([string]::IsNullOrWhiteSpace($entry)) {{
+            continue
+        }}
+        if ($entry -match '^(DNS Name|IP Address)=(.+)$') {{
+            $sanList += [pscustomobject]@{{
+                Type = $matches[1]
+                Value = $matches[2]
+            }}
+        }}
+    }}
+}}
+$result = [pscustomobject]@{{
+    SubjectCN = $subjectCN
+    NotAfter = $notAfter
+    SubjectAltName = $sanList
+}}
+$result | ConvertTo-Json -Compress
+"""
+    result = _env.run_powershell(host, script)
+    assert result.rc == 0, (
+        f"Failed to decode certificate {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+    return json.loads(result.stdout)
 
 
 @pytest.mark.host
@@ -251,22 +281,26 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         assert _remote_path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
 
         cert_info = _decode_remote_certificate(server_host, SERVER_CERT_DEST)
-        subject = dict(cert_info.get("subject", []))
-        assert subject.get("commonName") == SERVER_HOST_VALUE, (
-            f"Expected CN={SERVER_HOST_VALUE}, got {subject}"
+        subject_cn = cert_info.get("SubjectCN")
+        assert subject_cn == SERVER_HOST_VALUE, (
+            f"Expected CN={SERVER_HOST_VALUE}, got {subject_cn}"
         )
 
-        san_entries = cert_info.get("subjectAltName", [])
-        san_hosts = {value for kind, value in san_entries if kind.lower() == "dns"}
+        san_entries = cert_info.get("SubjectAltName", [])
+        san_hosts = {
+            entry["Value"]
+            for entry in san_entries
+            if entry.get("Type", "").lower() == "dns name"
+        }
         assert SERVER_HOST_VALUE in san_hosts, (
             f"Expected DNS SAN entries to include {SERVER_HOST_VALUE}, got {san_hosts}"
         )
 
-        not_after_str = cert_info.get("notAfter")
+        not_after_str = cert_info.get("NotAfter")
         assert not_after_str, "Certificate notAfter missing"
-        not_after = datetime.strptime(not_after_str, "%b %d %H:%M:%S %Y GMT").replace(
-            tzinfo=timezone.utc
-        )
+        not_after = datetime.fromisoformat(
+            not_after_str.replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
         now = datetime.now(timezone.utc)
         assert not_after - now > timedelta(days=9 * 365), (
             f"Expected certificate validity close to 10 years, got {not_after - now}"
