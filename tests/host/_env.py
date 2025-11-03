@@ -136,6 +136,7 @@ def run_guest_script(host: Host, relative_path: str, **parameters: object) -> Co
 
 
 def _prepare_program_files_install(machine: str) -> None:
+    ensure_host_xp2p_build()
     host = get_ssh_host(machine)
     role = "server" if machine == DEFAULT_SERVER else "client"
     result = run_guest_script(host, "prepare_program_files.ps1", Role=role)
@@ -169,3 +170,20 @@ $arguments = @({arguments})
 exit $LASTEXITCODE
 """
     return run_powershell(host, script)
+
+
+@lru_cache(maxsize=1)
+def ensure_host_xp2p_build() -> None:
+    build_path = REPO_ROOT / "build" / "windows-amd64" / "xp2p.exe"
+    result = subprocess.run(
+        ["go", "build", "-o", str(build_path), "./go/cmd/xp2p"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Failed to build xp2p.exe for host fixtures.\n"
+            f"CMD: go build -o {build_path} ./go/cmd/xp2p\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
