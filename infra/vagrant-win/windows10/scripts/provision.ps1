@@ -276,6 +276,63 @@ function Run-SmokeTest {
     }
 }
 
+function Disable-SshHostKeyChecking {
+    param(
+        [string] $TargetUser = "vagrant",
+        [string[]] $Patterns = @("10.0.10.*")
+    )
+
+    if (-not $Patterns -or $Patterns.Count -eq 0) {
+        return
+    }
+
+    $userProfile = Join-Path "C:\Users" $TargetUser
+    if (-not (Test-Path $userProfile)) {
+        Write-Info "User profile '$userProfile' missing; skipping SSH host key policy update."
+        return
+    }
+
+    $sshDir = Join-Path $userProfile ".ssh"
+    if (-not (Test-Path $sshDir)) {
+        Write-Info "Creating SSH directory at $sshDir"
+        New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
+    }
+
+    $configPath = Join-Path $sshDir "config"
+    if (-not (Test-Path $configPath)) {
+        New-Item -ItemType File -Path $configPath -Force | Out-Null
+    }
+
+    $existing = Get-Content $configPath -ErrorAction SilentlyContinue
+    $marker = "# xp2p-disable-host-key-checking"
+    if ($existing -and ($existing | Where-Object { $_ -eq $marker })) {
+        Write-Info "SSH host key checking already disabled for target patterns."
+        return
+    }
+
+    $block = @()
+    if ($existing -and $existing.Count -gt 0) {
+        $block += ""
+    }
+    $block += $marker
+    foreach ($pattern in $Patterns) {
+        $trimmed = $pattern.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed)) {
+            continue
+        }
+        $block += "Host $trimmed"
+        $block += "    StrictHostKeyChecking no"
+        $block += "    UserKnownHostsFile NUL"
+        $block += "    CheckHostIP no"
+        $block += ""
+    }
+
+    if ($block.Count -gt 0) {
+        $block | Add-Content -Path $configPath -Encoding ascii
+        Write-Info "SSH host key checking disabled for patterns: $($Patterns -join ', ')"
+    }
+}
+
 $xp2pRole = $env:XP2P_ROLE
 if ([string]::IsNullOrWhiteSpace($xp2pRole)) {
     $xp2pRole = "server"
@@ -312,5 +369,6 @@ else {
 }
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
 Disable-FirewallProfiles
+Disable-SshHostKeyChecking -Patterns @("10.0.10.*")
 Run-SmokeTest -Skip:$false
 Write-Info "Provisioning completed successfully."
