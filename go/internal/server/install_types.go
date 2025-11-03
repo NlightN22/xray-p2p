@@ -18,6 +18,7 @@ type InstallOptions struct {
 	Port            string
 	CertificateFile string
 	KeyFile         string
+	Host            string
 	Force           bool
 }
 

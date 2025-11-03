@@ -37,6 +37,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.KeyFile != "" {
 		t.Fatalf("expected empty key path, got %s", cfg.Server.KeyFile)
 	}
+	if cfg.Server.Host != "" {
+		t.Fatalf("expected empty server host by default, got %s", cfg.Server.Host)
+	}
 	if cfg.Client.InstallDir == "" {
 		t.Fatalf("expected non-empty client install dir")
 	}
@@ -74,6 +77,7 @@ server:
   mode: manual
   certificate: C:\certs\server.pem
   key: C:\certs\server.key
+  host: server.example.test
 client:
   install_dir: D:\xp2p-client
   config_dir: cfg-client
@@ -111,6 +115,9 @@ client:
 	}
 	if cfg.Server.KeyFile != `C:\certs\server.key` {
 		t.Fatalf("expected key C:\\certs\\server.key, got %s", cfg.Server.KeyFile)
+	}
+	if cfg.Server.Host != "server.example.test" {
+		t.Fatalf("expected server host server.example.test, got %s", cfg.Server.Host)
 	}
 	if cfg.Client.InstallDir != `D:\xp2p-client` {
 		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)
@@ -295,6 +302,7 @@ config_dir = "config-alt"
 mode = "Manual"
 certificate = "C:\\certs\\server.pem"
 key = "C:\\certs\\server.key"
+host = "custom.example.test"
 
 [client]
 install_dir = "D:\\xp2p-client"
@@ -333,6 +341,9 @@ allow_insecure = false
 	}
 	if cfg.Server.KeyFile != `C:\certs\server.key` {
 		t.Fatalf("expected key C:\\certs\\server.key, got %s", cfg.Server.KeyFile)
+	}
+	if cfg.Server.Host != "custom.example.test" {
+		t.Fatalf("expected server host custom.example.test, got %s", cfg.Server.Host)
 	}
 	if cfg.Client.InstallDir != `D:\xp2p-client` {
 		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)

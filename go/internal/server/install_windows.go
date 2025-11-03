@@ -5,15 +5,23 @@ package server
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"embed"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/assets/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -36,6 +44,7 @@ type installState struct {
 	certDest   string
 	keyDest    string
 	portValue  int
+	selfSigned bool
 }
 
 // Install deploys xray-core binaries and configuration files.
@@ -61,6 +70,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		"install_dir", state.installDir,
 		"config_dir", state.configDir,
 		"port", state.portValue,
+		"host", state.Host,
 		"xray_version", xray.Version,
 	)
 
@@ -120,6 +130,14 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		return installState{}, err
 	}
 
+	host := strings.TrimSpace(opts.Host)
+	if host == "" {
+		return installState{}, errors.New("xp2p: host is required")
+	}
+	if err := validateCertificateHost(host); err != nil {
+		return installState{}, err
+	}
+
 	portStr := strings.TrimSpace(opts.Port)
 	if portStr == "" {
 		portStr = strconv.Itoa(DefaultTrojanPort)
@@ -154,6 +172,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 			Port:            portStr,
 			CertificateFile: certSource,
 			KeyFile:         keySource,
+			Host:            host,
 			Force:           opts.Force,
 		},
 		installDir: dir,
@@ -163,9 +182,11 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		portValue:  portVal,
 	}
 
-	if certSource != "" {
-		state.certDest = filepath.Join(state.configDir, "cert.pem")
-		state.keyDest = filepath.Join(state.configDir, "key.pem")
+	state.certDest = filepath.Join(state.configDir, "cert.pem")
+	state.keyDest = filepath.Join(state.configDir, "key.pem")
+
+	if certSource == "" {
+		state.selfSigned = true
 	}
 
 	return state, nil
@@ -264,19 +285,25 @@ func deployConfiguration(state installState) error {
 	var certPath string
 	var keyPath string
 	if state.certDest != "" {
-		mode := os.FileMode(0o644)
-		if err := copyFile(state.CertificateFile, state.certDest, mode); err != nil {
-			return fmt.Errorf("xp2p: copy certificate: %w", err)
+		if state.selfSigned {
+			if err := generateSelfSignedCertificate(state); err != nil {
+				return err
+			}
+		} else {
+			mode := os.FileMode(0o644)
+			if err := copyFile(state.CertificateFile, state.certDest, mode); err != nil {
+				return fmt.Errorf("xp2p: copy certificate: %w", err)
+			}
+
+			keySource := state.KeyFile
+			if keySource == "" {
+				keySource = state.CertificateFile
+			}
+			if err := copyFile(keySource, state.keyDest, 0o600); err != nil {
+				return fmt.Errorf("xp2p: copy key: %w", err)
+			}
 		}
 		certPath = filepath.ToSlash(state.certDest)
-
-		keySource := state.KeyFile
-		if keySource == "" {
-			keySource = state.CertificateFile
-		}
-		if err := copyFile(keySource, state.keyDest, 0o600); err != nil {
-			return fmt.Errorf("xp2p: copy key: %w", err)
-		}
 		keyPath = filepath.ToSlash(state.keyDest)
 	}
 
@@ -387,6 +414,106 @@ func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 	}
 	if err := os.WriteFile(dest, content, perm); err != nil {
 		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
+	}
+	return nil
+}
+
+func generateSelfSignedCertificate(state installState) error {
+	logging.Info("xp2p server install generating self-signed certificate",
+		"host", state.Host,
+		"valid_years", 10,
+		"destination", state.certDest,
+	)
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return fmt.Errorf("xp2p: generate private key: %w", err)
+	}
+
+	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialLimit)
+	if err != nil {
+		return fmt.Errorf("xp2p: generate certificate serial: %w", err)
+	}
+
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: state.Host,
+		},
+		NotBefore:             now.Add(-5 * time.Minute),
+		NotAfter:              now.AddDate(10, 0, 0),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		SignatureAlgorithm:    x509.SHA256WithRSA,
+	}
+
+	if ip := net.ParseIP(state.Host); ip != nil {
+		template.IPAddresses = []net.IP{ip}
+		template.Subject.CommonName = ip.String()
+	} else {
+		template.DNSNames = []string{state.Host}
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return fmt.Errorf("xp2p: create certificate: %w", err)
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	if certPEM == nil {
+		return errors.New("xp2p: encode certificate: empty result")
+	}
+	if err := os.WriteFile(state.certDest, certPEM, 0o644); err != nil {
+		return fmt.Errorf("xp2p: write certificate: %w", err)
+	}
+
+	keyDER := x509.MarshalPKCS1PrivateKey(privateKey)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER})
+	if keyPEM == nil {
+		return errors.New("xp2p: encode private key: empty result")
+	}
+	if err := os.WriteFile(state.keyDest, keyPEM, 0o600); err != nil {
+		return fmt.Errorf("xp2p: write private key: %w", err)
+	}
+
+	return nil
+}
+
+func validateCertificateHost(host string) error {
+	if net.ParseIP(host) != nil {
+		return nil
+	}
+
+	if len(host) > 253 {
+		return fmt.Errorf("xp2p: invalid host %q", host)
+	}
+
+	// Allow optional trailing dot for FQDN and ignore it for validation.
+	if strings.HasSuffix(host, ".") {
+		host = strings.TrimSuffix(host, ".")
+	}
+	if host == "" {
+		return fmt.Errorf("xp2p: invalid host")
+	}
+
+	labels := strings.Split(host, ".")
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 {
+			return fmt.Errorf("xp2p: invalid host label %q", label)
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return fmt.Errorf("xp2p: invalid host label %q", label)
+		}
+		for i := 0; i < len(label); i++ {
+			ch := label[i]
+			if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
+				continue
+			}
+			return fmt.Errorf("xp2p: invalid host label %q", label)
+		}
 	}
 	return nil
 }

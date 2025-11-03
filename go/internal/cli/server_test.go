@@ -31,6 +31,9 @@ func TestRunServerInstallUsesCLIOverrides(t *testing.T) {
 		if opts.KeyFile != `C:\certs\server.key` {
 			t.Fatalf("unexpected key: %s", opts.KeyFile)
 		}
+		if opts.Host != "custom.example.test" {
+			t.Fatalf("unexpected host: %s", opts.Host)
+		}
 		return nil
 	})
 	defer restore()
@@ -42,6 +45,7 @@ func TestRunServerInstallUsesCLIOverrides(t *testing.T) {
 			ConfigDir:       "config-server",
 			CertificateFile: "",
 			KeyFile:         "",
+			Host:            "",
 		},
 	}
 
@@ -54,6 +58,7 @@ func TestRunServerInstallUsesCLIOverrides(t *testing.T) {
 			"--port", "65000",
 			"--cert", `C:\certs\server.pem`,
 			"--key", `C:\certs\server.key`,
+			"--host", "custom.example.test",
 			"--force",
 		},
 	)
@@ -67,11 +72,36 @@ func TestRunServerInstallPropagatesErrors(t *testing.T) {
 		return errors.New("install failure")
 	})
 	defer restore()
+	restoreDetect := stubDetectPublicHost("198.51.100.10", nil)
+	defer restoreDetect()
 
-	cfg := config.Config{}
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			Host: "",
+		},
+	}
 	code := runServerInstall(context.Background(), cfg, nil)
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)
+	}
+}
+
+func TestRunServerInstallFailsWhenHostDetectionFails(t *testing.T) {
+	restoreInstall := stubServerInstall(func(ctx context.Context, opts server.InstallOptions) error {
+		t.Fatalf("install should not be called when host detection fails")
+		return nil
+	})
+	defer restoreInstall()
+	restoreDetect := stubDetectPublicHost("", errors.New("no host"))
+	defer restoreDetect()
+
+	cfg := config.Config{
+		Server: config.ServerConfig{},
+	}
+
+	code := runServerInstall(context.Background(), cfg, nil)
+	if code != 1 {
+		t.Fatalf("expected exit code 1 when host detection fails, got %d", code)
 	}
 }
 
@@ -206,6 +236,8 @@ func TestRunServerRunAutoInstall(t *testing.T) {
 		return nil
 	})
 	defer restoreRun()
+	restoreDetect := stubDetectPublicHost("198.51.100.20", nil)
+	defer restoreDetect()
 
 	cfg := config.Config{
 		Server: config.ServerConfig{
@@ -312,6 +344,16 @@ func stubServerRun(fn func(context.Context, server.RunOptions) error) func() {
 	}
 	return func() {
 		serverRunFunc = prev
+	}
+}
+
+func stubDetectPublicHost(value string, err error) func() {
+	prev := detectPublicHostFunc
+	detectPublicHostFunc = func(context.Context) (string, error) {
+		return value, err
+	}
+	return func() {
+		detectPublicHostFunc = prev
 	}
 }
 

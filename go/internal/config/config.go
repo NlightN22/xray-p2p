@@ -27,6 +27,7 @@ var defaultValues = map[string]any{
 	"server.mode":           "auto",
 	"server.certificate":    "",
 	"server.key":            "",
+	"server.host":           "",
 	"client.install_dir":    "",
 	"client.config_dir":     "config-client",
 	"client.server_address": "",
@@ -63,6 +64,7 @@ type ServerConfig struct {
 	Mode            string `koanf:"mode"`
 	CertificateFile string `koanf:"certificate"`
 	KeyFile         string `koanf:"key"`
+	Host            string `koanf:"host"`
 }
 
 // ClientConfig holds client installation settings.
@@ -226,6 +228,11 @@ func normalize(cfg *Config) {
 	cfg.Server.KeyFile = strings.TrimSpace(cfg.Server.KeyFile)
 	if cfg.Server.KeyFile == "" {
 		cfg.Server.KeyFile = defaultValues["server.key"].(string)
+	}
+
+	cfg.Server.Host = strings.TrimSpace(cfg.Server.Host)
+	if cfg.Server.Host == "" {
+		cfg.Server.Host = defaultValues["server.host"].(string)
 	}
 
 	cfg.Client.InstallDir = strings.TrimSpace(cfg.Client.InstallDir)

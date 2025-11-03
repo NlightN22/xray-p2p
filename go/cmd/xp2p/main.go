@@ -57,6 +57,7 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	serverMode := fs.String("server-mode", "", "server startup mode (auto|manual)")
 	serverCert := fs.String("server-cert", "", "path to TLS certificate file (PEM)")
 	serverKey := fs.String("server-key", "", "path to TLS private key file (PEM)")
+	serverHost := fs.String("server-host", "", "public host name or IP for server certificate and links")
 	logJSON := fs.Bool("log-json", false, "emit logs in JSON format")
 	clientInstallDir := fs.String("client-install-dir", "", "client installation directory (Windows)")
 	clientConfigDir := fs.String("client-config-dir", "", "client configuration directory name")
@@ -95,6 +96,9 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	}
 	if key := strings.TrimSpace(*serverKey); key != "" {
 		overrides["server.key"] = key
+	}
+	if host := strings.TrimSpace(*serverHost); host != "" {
+		overrides["server.host"] = host
 	}
 	if *logJSON {
 		overrides["logging.format"] = "json"
@@ -155,7 +159,8 @@ func printRootUsage() {
 Usage:
   xp2p [--config FILE] [--log-level LEVEL] [--server-port PORT]
        [--server-install-dir PATH] [--server-config-dir NAME]
-       [--server-cert FILE] [--server-key FILE] [--log-json]
+       [--server-cert FILE] [--server-key FILE] [--server-host HOST]
+       [--log-json]
        [--client-install-dir PATH] [--client-config-dir NAME]
        [--client-server-address HOST] [--client-server-port PORT]
        [--client-password SECRET] [--client-server-name NAME]

@@ -13,6 +13,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -22,6 +23,7 @@ var (
 	serverRunFunc        = server.Run
 	serverUserAddFunc    = server.AddUser
 	serverUserRemoveFunc = server.RemoveUser
+	detectPublicHostFunc = netutil.DetectPublicHost
 )
 
 func runServer(ctx context.Context, cfg config.Config, args []string) int {
@@ -59,6 +61,7 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 	port := fs.String("port", "", "server listener port")
 	cert := fs.String("cert", "", "TLS certificate file to deploy")
 	key := fs.String("key", "", "TLS private key file to deploy")
+	host := fs.String("host", "", "public host name or IP for generated configuration")
 	force := fs.Bool("force", false, "overwrite existing installation")
 
 	if err := fs.Parse(args); err != nil {
@@ -75,12 +78,22 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 
 	portValue := resolveInstallPort(cfg, *port)
 
+	hostValue, autoDetected, err := determineInstallHost(ctx, *host, cfg.Server.Host)
+	if err != nil {
+		logging.Error("xp2p server install: failed to resolve public host", "err", err)
+		return 1
+	}
+	if autoDetected {
+		logging.Info("xp2p server install: detected public host", "host", hostValue)
+	}
+
 	opts := server.InstallOptions{
 		InstallDir:      firstNonEmpty(*path, cfg.Server.InstallDir),
 		ConfigDir:       firstNonEmpty(*configDir, cfg.Server.ConfigDir),
 		Port:            portValue,
 		CertificateFile: firstNonEmpty(*cert, cfg.Server.CertificateFile),
 		KeyFile:         firstNonEmpty(*key, cfg.Server.KeyFile),
+		Host:            hostValue,
 		Force:           *force,
 	}
 
@@ -209,10 +222,19 @@ func ensureServerAssets(ctx context.Context, cfg config.Config, installDir, conf
 }
 
 func performInstall(ctx context.Context, cfg config.Config, installDir, configDirName string) error {
+	hostValue, autoDetected, err := determineInstallHost(ctx, "", cfg.Server.Host)
+	if err != nil {
+		return fmt.Errorf("xp2p server install: detect host: %w", err)
+	}
+	if autoDetected {
+		logging.Info("xp2p server install: detected public host", "host", hostValue)
+	}
+
 	opts := server.InstallOptions{
 		InstallDir: installDir,
 		ConfigDir:  configDirName,
 		Port:       resolveInstallPort(cfg, ""),
+		Host:       hostValue,
 	}
 	if cfg.Server.CertificateFile != "" {
 		opts.CertificateFile = cfg.Server.CertificateFile
@@ -310,9 +332,22 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func determineInstallHost(ctx context.Context, explicit, fallback string) (string, bool, error) {
+	host := firstNonEmpty(explicit, fallback)
+	if host != "" {
+		return host, false, nil
+	}
+	value, err := detectPublicHostFunc(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(value), true, nil
+}
+
 func printServerUsage() {
 	fmt.Print(`xp2p server commands:
-  install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE] [--force]
+  install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE]
+          [--host HOST] [--force]
   remove  [--path PATH] [--keep-files] [--ignore-missing]
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
           [--xray-log-file FILE]
