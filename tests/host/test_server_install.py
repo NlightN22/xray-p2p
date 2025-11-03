@@ -109,45 +109,11 @@ def _trojan_inbound(data: dict) -> dict:
 
 
 def _decode_remote_certificate(host, path: Path) -> dict:
-    quoted = _env.ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path {quoted})) {{
-    Write-Error "Certificate not found at {quoted}"
-    exit 3
-}}
-$bytes = [System.IO.File]::ReadAllBytes({quoted})
-$cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($bytes)
-$subjectCN = $cert.GetNameInfo(
-    [System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName,
-    $false
-)
-$notAfter = $cert.NotAfter.ToUniversalTime().ToString("o")
-$sanList = @()
-$sanExt = $cert.Extensions | Where-Object {{ $_.Oid.Value -eq "2.5.29.17" }}
-if ($sanExt) {{
-    $formatted = $sanExt.Format($false)
-    $normalized = $formatted -replace '\\s*\\r?\\n\\s*', ', '
-    foreach ($entry in ($normalized -split '\\s*,\\s*')) {{
-        if ([string]::IsNullOrWhiteSpace($entry)) {{
-            continue
-        }}
-        if ($entry -match '^(DNS Name|IP Address)=(.+)$') {{
-            $sanList += [pscustomobject]@{{
-                Type = $matches[1]
-                Value = $matches[2]
-            }}
-        }}
-    }}
-}}
-$result = [pscustomobject]@{{
-    SubjectCN = $subjectCN
-    NotAfter = $notAfter
-    SubjectAltName = $sanList
-}}
-$result | ConvertTo-Json -Compress
-"""
-    result = _env.run_powershell(host, script)
+    result = _env.run_guest_script(
+        host,
+        "scripts/get_certificate_info.ps1",
+        Path=str(path),
+    )
     assert result.rc == 0, (
         f"Failed to decode certificate {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
