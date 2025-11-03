@@ -44,8 +44,8 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
 
     machine.vm.provider "virtualbox" do |vb|
       vb.name = vb_name
-      vb.memory = 4096
-      vb.cpus = 2
+      vb.memory = 8192
+      vb.cpus = 6
       vb.gui = false
     end
 
