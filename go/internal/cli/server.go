@@ -188,6 +188,11 @@ func runServerRun(ctx context.Context, cfg config.Config, args []string) int {
 		return 1
 	}
 
+	cancelDiagnostics := startDiagnostics(ctx, cfg.Server.Port)
+	if cancelDiagnostics != nil {
+		defer cancelDiagnostics()
+	}
+
 	if err := serverRunFunc(ctx, server.RunOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,

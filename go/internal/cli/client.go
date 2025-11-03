@@ -268,6 +268,11 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 		}
 	}
 
+	cancelDiagnostics := startDiagnostics(ctx, cfg.Server.Port)
+	if cancelDiagnostics != nil {
+		defer cancelDiagnostics()
+	}
+
 	opts := client.RunOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
