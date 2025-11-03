@@ -26,13 +26,12 @@ func runServerUser(ctx context.Context, cfg config.Config, args []string) int {
 		return runServerUserRemove(ctx, cfg, args[1:])
 	case "list":
 		return runServerUserList(ctx, cfg, args[1:])
+	case "--list":
+		return runServerUserList(ctx, cfg, args[1:])
 	case "-h", "--help", "help":
 		printServerUserUsage()
 		return 0
 	default:
-		if strings.HasPrefix(cmd, "-") {
-			return runServerUserList(ctx, cfg, args)
-		}
 		logging.Error("xp2p server user: unknown subcommand", "subcommand", args[0])
 		printServerUserUsage()
 		return 1
@@ -139,7 +138,6 @@ func runServerUserList(ctx context.Context, cfg config.Config, args []string) in
 	fs := flag.NewFlagSet("xp2p server user list", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
-	list := fs.Bool("list", false, "display configured Trojan users and their connection links")
 	path := fs.String("path", "", "server installation directory")
 	configDir := fs.String("config-dir", "", "server configuration directory name or absolute path")
 	host := fs.String("host", "", "public host name or IP for generated connection links")
@@ -149,10 +147,6 @@ func runServerUserList(ctx context.Context, cfg config.Config, args []string) in
 			return 0
 		}
 		logging.Error("xp2p server user list: failed to parse arguments", "err", err)
-		return 2
-	}
-	if !*list {
-		logging.Error("xp2p server user list: --list flag is required")
 		return 2
 	}
 	if fs.NArg() > 0 {
@@ -191,6 +185,6 @@ func printServerUserUsage() {
 	fmt.Print(`xp2p server user commands:
   add    [--path PATH] [--config-dir NAME|PATH] --id ID (--password VALUE | --key VALUE)
   remove [--path PATH] [--config-dir NAME|PATH] --id ID
-  --list [--path PATH] [--config-dir NAME|PATH] [--host HOST]
+  list   [--path PATH] [--config-dir NAME|PATH] [--host HOST]
 `)
 }

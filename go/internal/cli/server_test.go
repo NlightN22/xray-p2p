@@ -489,7 +489,7 @@ func TestRunServerUserListPrintsLinks(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		code := runServerUser(context.Background(), cfg, []string{"--list"})
+		code := runServerUser(context.Background(), cfg, []string{"list"})
 		if code != 0 {
 			t.Fatalf("expected exit code 0, got %d", code)
 		}
