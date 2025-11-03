@@ -32,6 +32,9 @@
 {{- if .TLS }}
                 "security": "tls",
                 "tlsSettings": {
+{{- if .AllowInsecure }}
+                    "allowInsecure": true,
+{{- end }}
                     "certificates": [
                         {
                             "certificateFile": "{{ .CertificateFile }}",

@@ -187,6 +187,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         stream_settings = trojan.get("streamSettings", {})
         assert stream_settings.get("security") == "tls"
         tls_settings = stream_settings.get("tlsSettings", {})
+        assert not tls_settings.get("allowInsecure")
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates in configuration"
         expected_cert, expected_key = _expect_tls_paths()
@@ -221,6 +222,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         updated_stream = updated_trojan.get("streamSettings", {})
         assert updated_stream.get("security") == "tls"
         updated_tls = updated_stream.get("tlsSettings", {})
+        assert not updated_tls.get("allowInsecure")
         updated_certificates = updated_tls.get("certificates", [])
         assert updated_certificates, "Expected TLS certificates after certificate update"
         updated_primary = updated_certificates[0]
@@ -307,6 +309,7 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         stream_settings = trojan.get("streamSettings", {})
         assert stream_settings.get("security") == "tls"
         tls_settings = stream_settings.get("tlsSettings", {})
+        assert tls_settings.get("allowInsecure") is True
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS configuration for self-signed certificate"
         expected_cert, expected_key = _expect_tls_paths()

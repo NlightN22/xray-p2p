@@ -277,6 +277,7 @@ func writeBinary(state installState) error {
 func deployConfiguration(state installState) error {
 	var certPath string
 	var keyPath string
+	allowInsecure := false
 	if state.certDest != "" {
 		if state.selfSigned {
 			logging.Info("xp2p server install generating self-signed certificate",
@@ -287,6 +288,7 @@ func deployConfiguration(state installState) error {
 			if err := generateSelfSignedCertificate(state.Host, state.certDest, state.keyDest); err != nil {
 				return err
 			}
+			allowInsecure = true
 		} else {
 			mode := os.FileMode(0o644)
 			if err := copyFile(state.CertificateFile, state.certDest, mode); err != nil {
@@ -310,6 +312,7 @@ func deployConfiguration(state installState) error {
 		SocksPort       int
 		DokodemoPort    int
 		TLS             bool
+		AllowInsecure   bool
 		CertificateFile string
 		KeyFile         string
 	}{
@@ -317,6 +320,7 @@ func deployConfiguration(state installState) error {
 		SocksPort:       socksInboundPort,
 		DokodemoPort:    dokodemoInboundPort,
 		TLS:             certPath != "",
+		AllowInsecure:   allowInsecure,
 		CertificateFile: certPath,
 		KeyFile:         keyPath,
 	}

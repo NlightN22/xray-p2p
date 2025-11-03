@@ -12,7 +12,7 @@ import (
 func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true)
+	prepareTrojanConfig(t, configDir, true, false)
 
 	certPath, keyPath := createTestCertificateFiles(t, dir, "links.example.test")
 	if err := os.Rename(certPath, filepath.Join(configDir, "cert.pem")); err != nil {
@@ -55,7 +55,7 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, false)
+	prepareTrojanConfig(t, configDir, false, false)
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -86,5 +86,43 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	}
 	if link.Link != "trojan://secret@example.internal:62022?security=none#beta" {
 		t.Fatalf("unexpected link: %s", link.Link)
+	}
+}
+
+func TestListUsersSelfSignedIncludesAllowInsecure(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config-server")
+	prepareTrojanConfig(t, configDir, true, true)
+
+	certPath, keyPath := createTestCertificateFiles(t, dir, "self.example.test")
+	if err := os.Rename(certPath, filepath.Join(configDir, "cert.pem")); err != nil {
+		t.Fatalf("rename cert: %v", err)
+	}
+	if err := os.Rename(keyPath, filepath.Join(configDir, "key.pem")); err != nil {
+		t.Fatalf("rename key: %v", err)
+	}
+
+	if err := AddUser(context.Background(), AddUserOptions{
+		InstallDir: dir,
+		ConfigDir:  "config-server",
+		UserID:     "alpha",
+		Password:   "secret",
+	}); err != nil {
+		t.Fatalf("AddUser: %v", err)
+	}
+
+	users, err := ListUsers(context.Background(), ListUsersOptions{
+		InstallDir: dir,
+		ConfigDir:  "config-server",
+	})
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(users))
+	}
+	want := "trojan://secret@self.example.test:62022?allowInsecure=1&security=tls&sni=self.example.test#alpha"
+	if users[0].Link != want {
+		t.Fatalf("unexpected link: %s", users[0].Link)
 	}
 }

@@ -443,7 +443,7 @@ func TestRunServerUserAddPrintsLink(t *testing.T) {
 		return server.UserLink{
 			UserID:   "alpha",
 			Password: "secret",
-			Link:     "trojan://secret@example.test:62022?security=tls&sni=example.test#alpha",
+			Link:     "trojan://secret@example.test:62022?allowInsecure=1&security=tls&sni=example.test#alpha",
 		}, nil
 	})
 	defer restoreLink()

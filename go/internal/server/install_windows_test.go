@@ -51,6 +51,28 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 	if cert.NotAfter.Before(time.Now().AddDate(9, 0, 0)) {
 		t.Fatalf("expected certificate validity of approximately 10 years, got %v", cert.NotAfter.Sub(cert.NotBefore))
 	}
+
+	configPath := filepath.Join(installDir, "config-server", "inbounds.json")
+	root, err := parseInbounds(readFile(t, configPath))
+	if err != nil {
+		t.Fatalf("parse inbounds: %v", err)
+	}
+	trojan, err := selectTrojanInbound(root)
+	if err != nil {
+		t.Fatalf("select trojan: %v", err)
+	}
+	stream, err := extractStreamSettings(trojan)
+	if err != nil {
+		t.Fatalf("extract stream: %v", err)
+	}
+	tlsSettings, _ := stream["tlsSettings"].(map[string]any)
+	if tlsSettings == nil {
+		t.Fatalf("expected tlsSettings")
+	}
+	value, _ := tlsSettings["allowInsecure"].(bool)
+	if !value {
+		t.Fatalf("expected allowInsecure to be true for self-signed certificate")
+	}
 }
 
 func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
@@ -83,6 +105,28 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 	if !found {
 		t.Fatalf("expected certificate to contain IP %s, got %v", host, cert.IPAddresses)
 	}
+
+	configPath := filepath.Join(installDir, "config-server", "inbounds.json")
+	root, err := parseInbounds(readFile(t, configPath))
+	if err != nil {
+		t.Fatalf("parse inbounds: %v", err)
+	}
+	trojan, err := selectTrojanInbound(root)
+	if err != nil {
+		t.Fatalf("select trojan: %v", err)
+	}
+	stream, err := extractStreamSettings(trojan)
+	if err != nil {
+		t.Fatalf("extract stream: %v", err)
+	}
+	tlsSettings, _ := stream["tlsSettings"].(map[string]any)
+	if tlsSettings == nil {
+		t.Fatalf("expected tlsSettings")
+	}
+	value, _ := tlsSettings["allowInsecure"].(bool)
+	if !value {
+		t.Fatalf("expected allowInsecure to be true for self-signed certificate")
+	}
 }
 
 func loadCertificate(t *testing.T, path string) *x509.Certificate {
@@ -101,4 +145,13 @@ func loadCertificate(t *testing.T, path string) *x509.Certificate {
 		t.Fatalf("parse certificate: %v", err)
 	}
 	return cert
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return data
 }

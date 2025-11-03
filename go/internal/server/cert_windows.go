@@ -228,5 +228,10 @@ func updateStreamSettings(stream map[string]any, state certificateState) {
 		"keyFile":         filepath.ToSlash(state.keyDest),
 	}
 	tlsSettings["certificates"] = []any{certEntry}
+	if state.generateSelfSigned {
+		tlsSettings["allowInsecure"] = true
+	} else {
+		delete(tlsSettings, "allowInsecure")
+	}
 	stream["tlsSettings"] = tlsSettings
 }
