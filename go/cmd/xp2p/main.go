@@ -63,6 +63,7 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	clientConfigDir := fs.String("client-config-dir", "", "client configuration directory name")
 	clientServerAddress := fs.String("client-server-address", "", "remote server address for client config")
 	clientServerPort := fs.String("client-server-port", "", "remote server port for client config")
+	clientUser := fs.String("client-user", "", "Trojan user email for client config")
 	clientPassword := fs.String("client-password", "", "Trojan password for client config")
 	clientServerName := fs.String("client-server-name", "", "TLS server name for client config")
 	clientAllowInsecure := fs.Bool("client-allow-insecure", false, "allow TLS verification to be skipped for client config")
@@ -115,6 +116,9 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	if port := strings.TrimSpace(*clientServerPort); port != "" {
 		overrides["client.server_port"] = port
 	}
+	if user := strings.TrimSpace(*clientUser); user != "" {
+		overrides["client.user"] = user
+	}
 	if pwd := strings.TrimSpace(*clientPassword); pwd != "" {
 		overrides["client.password"] = pwd
 	}
@@ -163,7 +167,7 @@ Usage:
        [--log-json]
        [--client-install-dir PATH] [--client-config-dir NAME]
        [--client-server-address HOST] [--client-server-port PORT]
-       [--client-password SECRET] [--client-server-name NAME]
+       [--client-user EMAIL] [--client-password SECRET] [--client-server-name NAME]
        [--client-allow-insecure|--client-strict-tls]
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
   xp2p server install [--path PATH] [--config-dir NAME] [--port PORT]
@@ -171,8 +175,8 @@ Usage:
   xp2p server remove [--path PATH]
   xp2p server run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
                   [--xray-log-file FILE]
-  xp2p client install [--path PATH] [--config-dir NAME] --server-address HOST --password SECRET
-                      [--server-port PORT] [--server-name NAME]
+  xp2p client install [--path PATH] [--config-dir NAME] --server-address HOST --user EMAIL --password SECRET
+                      [--server-port PORT] [--server-name NAME] [--link URL]
                       [--allow-insecure|--strict-tls] [--force]
   xp2p client remove [--path PATH]
   xp2p client run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]

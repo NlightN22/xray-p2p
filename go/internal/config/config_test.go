@@ -52,6 +52,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Client.ServerPort != "8443" {
 		t.Fatalf("expected default client server port 8443, got %s", cfg.Client.ServerPort)
 	}
+	if cfg.Client.User != "" {
+		t.Fatalf("expected empty client user by default")
+	}
 	if cfg.Client.Password != "" {
 		t.Fatalf("expected empty client password by default")
 	}
@@ -83,6 +86,7 @@ client:
   config_dir: cfg-client
   server_address: remote.example.com
   server_port: 9343
+  user: client@example.com
   password: strongpass
   server_name: sni.example.com
   allow_insecure: false
@@ -131,6 +135,9 @@ client:
 	if cfg.Client.ServerPort != "9343" {
 		t.Fatalf("expected client server port 9343, got %s", cfg.Client.ServerPort)
 	}
+	if cfg.Client.User != "client@example.com" {
+		t.Fatalf("expected client user client@example.com, got %s", cfg.Client.User)
+	}
 	if cfg.Client.Password != "strongpass" {
 		t.Fatalf("expected client password strongpass, got %s", cfg.Client.Password)
 	}
@@ -157,6 +164,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_CLIENT_CONFIG_DIR", "cfg-client")
 	t.Setenv("XP2P_CLIENT_SERVER_ADDRESS", "remote.env")
 	t.Setenv("XP2P_CLIENT_SERVER_PORT", "9543")
+	t.Setenv("XP2P_CLIENT_USER", "env@example.com")
 	t.Setenv("XP2P_CLIENT_PASSWORD", "envpass")
 	t.Setenv("XP2P_CLIENT_SERVER_NAME", "env.example.com")
 	t.Setenv("XP2P_CLIENT_ALLOW_INSECURE", "false")
@@ -201,6 +209,9 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Client.ServerPort != "9543" {
 		t.Fatalf("expected client server port 9543, got %s", cfg.Client.ServerPort)
 	}
+	if cfg.Client.User != "env@example.com" {
+		t.Fatalf("expected client user env@example.com, got %s", cfg.Client.User)
+	}
 	if cfg.Client.Password != "envpass" {
 		t.Fatalf("expected client password envpass, got %s", cfg.Client.Password)
 	}
@@ -231,6 +242,7 @@ func TestLoadOverrides(t *testing.T) {
 			"client.config_dir":     "cfg-client-override",
 			"client.server_address": "remote.override",
 			"client.server_port":    "9643",
+			"client.user":           "override@example.com",
 			"client.password":       "overridepass",
 			"client.server_name":    "override.example.com",
 			"client.allow_insecure": false,
@@ -275,6 +287,9 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.Client.ServerPort != "9643" {
 		t.Fatalf("expected client server port 9643, got %s", cfg.Client.ServerPort)
 	}
+	if cfg.Client.User != "override@example.com" {
+		t.Fatalf("expected client user override@example.com, got %s", cfg.Client.User)
+	}
 	if cfg.Client.Password != "overridepass" {
 		t.Fatalf("expected client password overridepass, got %s", cfg.Client.Password)
 	}
@@ -309,6 +324,7 @@ install_dir = "D:\\xp2p-client"
 config_dir = "cfg-client"
 server_address = "remote.toml"
 server_port = "9743"
+user = "client.toml@example.com"
 password = "tomlpass"
 server_name = "toml.example.com"
 allow_insecure = false
@@ -356,6 +372,9 @@ allow_insecure = false
 	}
 	if cfg.Client.ServerPort != "9743" {
 		t.Fatalf("expected client server port 9743, got %s", cfg.Client.ServerPort)
+	}
+	if cfg.Client.User != "client.toml@example.com" {
+		t.Fatalf("expected client user client.toml@example.com, got %s", cfg.Client.User)
 	}
 	if cfg.Client.Password != "tomlpass" {
 		t.Fatalf("expected client password tomlpass, got %s", cfg.Client.Password)

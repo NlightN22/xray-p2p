@@ -25,6 +25,9 @@ func TestRunClientInstallUsesCLIOverrides(t *testing.T) {
 		if opts.ServerPort != "9443" {
 			t.Fatalf("unexpected server port: %s", opts.ServerPort)
 		}
+		if opts.User != "user@example.com" {
+			t.Fatalf("unexpected user: %s", opts.User)
+		}
 		if opts.Password != "secret" {
 			t.Fatalf("unexpected password: %s", opts.Password)
 		}
@@ -47,6 +50,7 @@ func TestRunClientInstallUsesCLIOverrides(t *testing.T) {
 			ConfigDir:     "config-client",
 			ServerAddress: "default",
 			ServerPort:    "8443",
+			User:          "default@example.com",
 			Password:      "default-password",
 			ServerName:    "default.name",
 			AllowInsecure: false,
@@ -61,6 +65,7 @@ func TestRunClientInstallUsesCLIOverrides(t *testing.T) {
 			"--config-dir", "cfg-client",
 			"--server-address", "example.org",
 			"--server-port", "9443",
+			"--user", "user@example.com",
 			"--password", "secret",
 			"--server-name", "custom.name",
 			"--allow-insecure",
@@ -84,13 +89,87 @@ func TestRunClientInstallPropagatesErrors(t *testing.T) {
 			ConfigDir:     "config-client",
 			ServerAddress: "host",
 			ServerPort:    "8443",
+			User:          "existing@example.com",
 			Password:      "secret",
 		},
 	}
 
-	code := runClientInstall(context.Background(), cfg, nil)
+	code := runClientInstall(context.Background(), cfg, []string{"--user", "user@example.com"})
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)
+	}
+}
+
+func TestRunClientInstallFromLink(t *testing.T) {
+	restore := stubClientInstall(func(ctx context.Context, opts client.InstallOptions) error {
+		if opts.ServerAddress != "links.example.test" {
+			t.Fatalf("unexpected server address: %s", opts.ServerAddress)
+		}
+		if opts.ServerPort != "62022" {
+			t.Fatalf("unexpected server port: %s", opts.ServerPort)
+		}
+		if opts.User != "alpha@example.com" {
+			t.Fatalf("unexpected user: %s", opts.User)
+		}
+		if opts.Password != "secret" {
+			t.Fatalf("unexpected password: %s", opts.Password)
+		}
+		if opts.ServerName != "links.example.test" {
+			t.Fatalf("unexpected server name: %s", opts.ServerName)
+		}
+		if !opts.AllowInsecure {
+			t.Fatalf("expected allow insecure derived from link")
+		}
+		return nil
+	})
+	defer restore()
+
+	cfg := config.Config{
+		Client: config.ClientConfig{
+			InstallDir:    `C:\xp2p-client`,
+			ConfigDir:     "config-client",
+			ServerAddress: "fallback",
+			ServerPort:    "9443",
+			User:          "fallback@example.com",
+			Password:      "fallback-secret",
+			ServerName:    "fallback.example.com",
+			AllowInsecure: false,
+		},
+	}
+
+	code := runClientInstall(context.Background(), cfg, []string{
+		"--link", "trojan://secret@links.example.test:62022?allowInsecure=1&security=tls&sni=links.example.test#alpha@example.com",
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+}
+
+func TestRunClientInstallRequiresUserWithoutLink(t *testing.T) {
+	var called bool
+	restore := stubClientInstall(func(ctx context.Context, opts client.InstallOptions) error {
+		called = true
+		return nil
+	})
+	defer restore()
+
+	cfg := config.Config{
+		Client: config.ClientConfig{
+			InstallDir:    `C:\xp2p-client`,
+			ConfigDir:     "config-client",
+			ServerAddress: "host",
+			ServerPort:    "8443",
+			User:          "from-config@example.com",
+			Password:      "secret",
+		},
+	}
+
+	code := runClientInstall(context.Background(), cfg, []string{"--server-address", "example.org"})
+	if code != 2 {
+		t.Fatalf("expected exit code 2 when --user missing without link, got %d", code)
+	}
+	if called {
+		t.Fatalf("install should not be invoked when --user missing")
 	}
 }
 
@@ -172,6 +251,9 @@ func TestRunClientRunAutoInstall(t *testing.T) {
 		if opts.ServerAddress != "example.org" {
 			t.Fatalf("unexpected server address: %s", opts.ServerAddress)
 		}
+		if opts.User != "client@example.com" {
+			t.Fatalf("unexpected user: %s", opts.User)
+		}
 		if opts.Password != "secret" {
 			t.Fatalf("unexpected password: %s", opts.Password)
 		}
@@ -192,6 +274,7 @@ func TestRunClientRunAutoInstall(t *testing.T) {
 			ConfigDir:     client.DefaultClientConfigDir,
 			ServerAddress: "example.org",
 			ServerPort:    "9443",
+			User:          "client@example.com",
 			Password:      "secret",
 			ServerName:    "sni.example.org",
 			AllowInsecure: false,

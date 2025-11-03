@@ -140,6 +140,11 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		return installState{}, errors.New("xp2p: client password is required")
 	}
 
+	user := strings.TrimSpace(opts.User)
+	if user == "" {
+		return installState{}, errors.New("xp2p: client user email is required")
+	}
+
 	serverName := strings.TrimSpace(opts.ServerName)
 	if serverName == "" {
 		serverName = address
@@ -151,6 +156,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 			ConfigDir:     opts.ConfigDir,
 			ServerAddress: address,
 			ServerPort:    portStr,
+			User:          user,
 			Password:      password,
 			ServerName:    serverName,
 			AllowInsecure: opts.AllowInsecure,
@@ -259,12 +265,14 @@ func deployConfiguration(state installState) error {
 			Password      string
 			AllowInsecure bool
 			ServerName    string
+			Email         string
 		}{
 			ServerAddress: state.serverRemote,
 			ServerPort:    state.serverPort,
 			Password:      state.Password,
 			AllowInsecure: state.AllowInsecure,
 			ServerName:    state.serverName,
+			Email:         state.User,
 		},
 	); err != nil {
 		return err

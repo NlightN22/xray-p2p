@@ -5,8 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
@@ -52,8 +54,10 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	serverAddress := fs.String("server-address", "", "remote server address")
 	serverPort := fs.String("server-port", "", "remote server port")
+	userEmail := fs.String("user", "", "Trojan user email")
 	password := fs.String("password", "", "Trojan password")
 	serverName := fs.String("server-name", "", "TLS server name")
+	link := fs.String("link", "", "Trojan client link (trojan://...)")
 	allowInsecure := fs.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
 	strictTLS := fs.Bool("strict-tls", false, "enforce TLS verification")
 	force := fs.Bool("force", false, "overwrite existing installation")
@@ -70,14 +74,64 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		return 2
 	}
 
+	linkValue := strings.TrimSpace(*link)
+	var linkData trojanLink
+	if linkValue != "" {
+		var err error
+		linkData, err = parseTrojanLink(linkValue)
+		if err != nil {
+			logging.Error("xp2p client install: invalid --link", "err", err)
+			return 2
+		}
+	}
+
+	userFlagProvided := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "user" {
+			userFlagProvided = true
+		}
+	})
+	if linkValue == "" && !userFlagProvided {
+		logging.Error("xp2p client install: --user is required when --link is not provided")
+		return 2
+	}
+
+	installDir := firstNonEmpty(*path, cfg.Client.InstallDir)
+	configDirName := firstNonEmpty(*configDir, cfg.Client.ConfigDir)
+
+	serverAddressValue := cfg.Client.ServerAddress
+	serverPortValue := cfg.Client.ServerPort
+	userValue := cfg.Client.User
+	passwordValue := cfg.Client.Password
+	serverNameValue := cfg.Client.ServerName
+	allowInsecureValue := cfg.Client.AllowInsecure
+
+	if linkValue != "" {
+		serverAddressValue = linkData.ServerAddress
+		serverPortValue = linkData.ServerPort
+		passwordValue = linkData.Password
+		userValue = linkData.User
+		allowInsecureValue = linkData.AllowInsecure
+		if linkData.ServerNameSet {
+			serverNameValue = linkData.ServerName
+		}
+	}
+
+	serverAddressValue = firstNonEmpty(*serverAddress, serverAddressValue)
+	serverPortValue = firstNonEmpty(*serverPort, serverPortValue)
+	userValue = firstNonEmpty(*userEmail, userValue)
+	passwordValue = firstNonEmpty(*password, passwordValue)
+	serverNameValue = firstNonEmpty(*serverName, serverNameValue)
+
 	opts := client.InstallOptions{
-		InstallDir:    firstNonEmpty(*path, cfg.Client.InstallDir),
-		ConfigDir:     firstNonEmpty(*configDir, cfg.Client.ConfigDir),
-		ServerAddress: firstNonEmpty(*serverAddress, cfg.Client.ServerAddress),
-		ServerPort:    firstNonEmpty(*serverPort, cfg.Client.ServerPort),
-		Password:      firstNonEmpty(*password, cfg.Client.Password),
-		ServerName:    firstNonEmpty(*serverName, cfg.Client.ServerName),
-		AllowInsecure: cfg.Client.AllowInsecure,
+		InstallDir:    installDir,
+		ConfigDir:     configDirName,
+		ServerAddress: serverAddressValue,
+		ServerPort:    serverPortValue,
+		User:          userValue,
+		Password:      passwordValue,
+		ServerName:    serverNameValue,
+		AllowInsecure: allowInsecureValue,
 		Force:         *force,
 	}
 	if *allowInsecure {
@@ -216,6 +270,7 @@ func performClientInstall(ctx context.Context, cfg config.Config, installDir, co
 		ConfigDir:     configDirName,
 		ServerAddress: cfg.Client.ServerAddress,
 		ServerPort:    cfg.Client.ServerPort,
+		User:          cfg.Client.User,
 		Password:      cfg.Client.Password,
 		ServerName:    cfg.Client.ServerName,
 		AllowInsecure: cfg.Client.AllowInsecure,
@@ -271,12 +326,115 @@ func resolveClientConfigDirPath(installDir, configDir string) (string, error) {
 
 func printClientUsage() {
 	fmt.Print(`xp2p client commands:
-  install [--path PATH] [--config-dir NAME] --server-address HOST --password SECRET
-          [--server-port PORT] [--server-name NAME]
+  install [--path PATH] [--config-dir NAME] --server-address HOST --user EMAIL --password SECRET
+          [--server-port PORT] [--server-name NAME] [--link URL]
           [--allow-insecure|--strict-tls] [--force]
   remove  [--path PATH] [--keep-files] [--ignore-missing]
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
           [--xray-log-file FILE]
           (requires client server address and password configured)
 `)
+}
+
+type trojanLink struct {
+	ServerAddress string
+	ServerPort    string
+	User          string
+	Password      string
+	ServerName    string
+	ServerNameSet bool
+	AllowInsecure bool
+}
+
+func parseTrojanLink(raw string) (trojanLink, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return trojanLink{}, fmt.Errorf("trojan link is empty")
+	}
+
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return trojanLink{}, fmt.Errorf("parse trojan link: %w", err)
+	}
+	if !strings.EqualFold(parsed.Scheme, "trojan") {
+		return trojanLink{}, fmt.Errorf("unsupported scheme %q (expected trojan)", parsed.Scheme)
+	}
+
+	address := parsed.Hostname()
+	if address == "" {
+		return trojanLink{}, fmt.Errorf("missing host in trojan link")
+	}
+
+	portValue := parsed.Port()
+	if portValue == "" {
+		return trojanLink{}, fmt.Errorf("missing port in trojan link")
+	}
+	if _, err := strconv.Atoi(portValue); err != nil {
+		return trojanLink{}, fmt.Errorf("invalid port %q in trojan link", portValue)
+	}
+
+	if parsed.User == nil {
+		return trojanLink{}, fmt.Errorf("missing password in trojan link")
+	}
+	password := ""
+	if pwd, ok := parsed.User.Password(); ok {
+		password = strings.TrimSpace(pwd)
+	} else {
+		password = strings.TrimSpace(parsed.User.Username())
+	}
+	if password == "" {
+		return trojanLink{}, fmt.Errorf("empty password in trojan link")
+	}
+
+	user := strings.TrimSpace(parsed.Fragment)
+	if user == "" {
+		return trojanLink{}, fmt.Errorf("missing user fragment in trojan link")
+	}
+
+	query := parsed.Query()
+	allowInsecure := false
+	if rawAllow := strings.TrimSpace(query.Get("allowInsecure")); rawAllow != "" {
+		val, convErr := parseBoolFlag(rawAllow)
+		if convErr != nil {
+			return trojanLink{}, fmt.Errorf("invalid allowInsecure value %q", rawAllow)
+		}
+		allowInsecure = val
+	}
+
+	security := strings.ToLower(strings.TrimSpace(query.Get("security")))
+	serverName := ""
+	serverNameSet := false
+	switch security {
+	case "none":
+		serverName = ""
+		serverNameSet = true
+		allowInsecure = false
+	default:
+		serverName = strings.TrimSpace(query.Get("sni"))
+		if serverName == "" {
+			serverName = address
+		}
+		serverNameSet = true
+	}
+
+	return trojanLink{
+		ServerAddress: address,
+		ServerPort:    portValue,
+		User:          user,
+		Password:      password,
+		ServerName:    serverName,
+		ServerNameSet: serverNameSet,
+		AllowInsecure: allowInsecure,
+	}, nil
+}
+
+func parseBoolFlag(value string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid boolean value %q", value)
+	}
 }

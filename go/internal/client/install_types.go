@@ -14,6 +14,7 @@ type InstallOptions struct {
 	ConfigDir     string
 	ServerAddress string
 	ServerPort    string
+	User          string
 	Password      string
 	ServerName    string
 	AllowInsecure bool
