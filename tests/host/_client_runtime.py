@@ -9,65 +9,18 @@ from . import _env
 CLIENT_RUN_STABILIZE_SECONDS = 6
 
 
-def _escape(path: str) -> str:
-    return path.replace("\\", "\\\\")
-
-
 def _start_xp2p_client_run(host: Host, install_dir: str, config_dir: str, log_relative: str) -> int:
-    install_ps = _escape(install_dir)
-    config_ps = _escape(config_dir)
-    log_relative_ps = _escape(log_relative)
     log_abs = str(Path(install_dir) / Path(log_relative))
-    log_abs_ps = _escape(log_abs)
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$xp2p = '{_env.XP2P_EXE_PS}'
-$installDir = '{install_ps}'
-$configDir = '{config_ps}'
-$logRelative = '{log_relative_ps}'
-$logPath = '{log_abs_ps}'
-if (-not (Test-Path $xp2p)) {{
-    Write-Output '__XP2P_MISSING__'
-    exit 3
-}}
-
-$existing = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $xp2p }}
-if ($existing) {{
-    foreach ($item in $existing) {{
-        try {{
-            Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue
-        }} catch {{ }}
-    }}
-    Start-Sleep -Seconds 1
-}}
-
-if (Test-Path $logPath) {{
-    Remove-Item $logPath -Force -ErrorAction SilentlyContinue
-}}
-
-$commandLine = "`"$xp2p`" client run --quiet --path `"$installDir`" --config-dir `"$configDir`" --xray-log-file `"$logRelative`""
-$workingDir = Split-Path $xp2p
-$createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{{ CommandLine = $commandLine; CurrentDirectory = $workingDir }}
-if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {{
-    Write-Output ('__XP2P_CREATE_FAIL__' + $createResult.ReturnValue)
-    exit 4
-}}
-$processId = [int]$createResult.ProcessId
-$deadline = (Get-Date).AddSeconds({CLIENT_RUN_STABILIZE_SECONDS})
-
-while ((Get-Date) -lt $deadline) {{
-    $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-    if (-not $proc) {{
-        Write-Output '__XP2P_EXIT__'
-        exit 6
-    }}
-    Start-Sleep -Seconds 1
-}}
-
-Write-Output ('PID=' + $processId)
-exit 0
-"""
-    result = _env.run_powershell(host, script)
+    result = _env.run_guest_script(
+        host,
+        "scripts/start_xp2p_client_run.ps1",
+        Xp2pPath=str(_env.XP2P_EXE),
+        InstallDir=install_dir,
+        ConfigDir=config_dir,
+        LogRelative=log_relative,
+        LogPath=log_abs,
+        StabilizeSeconds=str(CLIENT_RUN_STABILIZE_SECONDS),
+    )
     stdout = (result.stdout or "").strip()
 
     if result.rc != 0:

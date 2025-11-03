@@ -55,76 +55,27 @@ def xp2p_program_files_setup():
 @pytest.fixture(scope="session")
 def server_host() -> Host:
     _env.require_vagrant_environment()
-    return _env.get_testinfra_host(_env.DEFAULT_SERVER)
+    return _env.get_ssh_host(_env.DEFAULT_SERVER)
 
 
 @pytest.fixture(scope="session")
 def client_host() -> Host:
     _env.require_vagrant_environment()
-    return _env.get_testinfra_host(_env.DEFAULT_CLIENT)
+    return _env.get_ssh_host(_env.DEFAULT_CLIENT)
 
 
 @pytest.fixture
 def xp2p_server_service(server_host: Host, xp2p_options: dict):
     port = xp2p_options["port"]
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$xp2p = '{_env.XP2P_EXE_PS}'
-if (-not (Test-Path $xp2p)) {{
-    Write-Output '__XP2P_MISSING__'
-    exit 3
-}}
-
-$existing = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $xp2p }}
-if ($existing) {{
-    foreach ($item in $existing) {{
-        try {{
-            Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue
-        }} catch {{ }}
-    }}
-    Start-Sleep -Seconds 1
-    $remaining = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $xp2p }}
-    if ($remaining) {{
-        Write-Output '__XP2P_ALREADY_RUNNING__'
-        exit 7
-    }}
-}}
-
-$commandLine = "`"$xp2p`" --server-port {port}"
-$workingDir = Split-Path $xp2p
-$createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{{ CommandLine = $commandLine; CurrentDirectory = $workingDir }}
-if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {{
-    Write-Output ('__XP2P_CREATE_FAIL__' + $createResult.ReturnValue)
-    exit 4
-}}
-$processId = [int]$createResult.ProcessId
-$deadline = (Get-Date).AddSeconds({_env.SERVICE_START_TIMEOUT})
-
-while ((Get-Date) -lt $deadline) {{
-    $proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-    if (-not $proc) {{
-        Write-Output '__XP2P_EXIT__'
-        exit 6
-    }}
-    if (Test-NetConnection -ComputerName '127.0.0.1' -Port {port} -InformationLevel Quiet) {{
-        Write-Output ('PID=' + $processId)
-        exit 0
-    }}
-    Start-Sleep -Seconds 1
-}}
-
-$proc = Get-Process -Id $processId -ErrorAction SilentlyContinue
-if ($proc) {{
-    try {{
-        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-    }} catch {{ }}
-}}
-Write-Output '__XP2P_TIMEOUT__'
-exit 5
-"""
     pid_value: int | None = None
     try:
-        result = _env.run_powershell(server_host, script)
+        result = _env.run_guest_script(
+            server_host,
+            "scripts/start_xp2p_service.ps1",
+            Xp2pPath=str(_env.XP2P_EXE),
+            Port=port,
+            TimeoutSeconds=_env.SERVICE_START_TIMEOUT,
+        )
         stdout = (result.stdout or "").strip()
 
         if result.rc != 0:
