@@ -44,7 +44,7 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 	}
 
 	if time.Until(cert.NotAfter) < 9*365*24*time.Hour {
-		t.Fatalf("expected certificate validity close to 10 years, got %s", cert.NotAfter.Sub(time.Now()))
+		t.Fatalf("expected certificate validity close to 10 years, got %s", time.Until(cert.NotAfter))
 	}
 
 	keyData, err := os.ReadFile(keyPath)
