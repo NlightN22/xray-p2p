@@ -3,10 +3,12 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"unicode/utf16"
 )
 
 func buildExecScript(exePath string, args []string, enforceExit bool) string {
@@ -37,7 +39,8 @@ func psQuote(value string) string {
 }
 
 func sshInvokePowershell(ctx context.Context, target sshTarget, script string) (string, error) {
-	command := fmt.Sprintf(`powershell -NoLogo -NoProfile -NonInteractive -Command "& { %s }"`, escapeForCommand(script))
+	encoded := encodePowershellCommand(fmt.Sprintf("& { %s }", script))
+	command := fmt.Sprintf("powershell -NoLogo -NoProfile -NonInteractive -EncodedCommand %s", encoded)
 	stdout, stderr, err := sshCommandFunc(ctx, target, command)
 	if err != nil {
 		if strings.TrimSpace(stderr) != "" {
@@ -101,8 +104,14 @@ func targetAddress(target sshTarget) string {
 	return fmt.Sprintf("%s@%s", target.user, target.host)
 }
 
-func escapeForCommand(value string) string {
-	return strings.ReplaceAll(value, `"`, `\"`)
+func encodePowershellCommand(script string) string {
+	runes := []rune(script)
+	utf16Data := utf16.Encode(runes)
+	buf := make([]byte, 0, len(utf16Data)*2)
+	for _, v := range utf16Data {
+		buf = append(buf, byte(v), byte(v>>8))
+	}
+	return base64.StdEncoding.EncodeToString(buf)
 }
 
 func startDetachedProcess(binary string, args []string) (*exec.Cmd, error) {
