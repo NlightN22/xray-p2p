@@ -1,6 +1,6 @@
 import pytest
 
-from .test_server import (
+from .test_server_install import (
     SERVER_CONFIG_DIR_NAME,
     SERVER_INBOUNDS,
     SERVER_INSTALL_DIR,
