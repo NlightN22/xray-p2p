@@ -405,9 +405,9 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 		return trojanLink{}, fmt.Errorf("empty password in trojan link")
 	}
 
-	user := strings.TrimSpace(parsed.Fragment)
-	if user == "" {
-		return trojanLink{}, fmt.Errorf("missing user fragment in trojan link")
+	user, err := decodeTrojanUser(parsed)
+	if err != nil {
+		return trojanLink{}, err
 	}
 
 	query := parsed.Query()
@@ -456,4 +456,39 @@ func parseBoolFlag(value string) (bool, error) {
 	default:
 		return false, fmt.Errorf("invalid boolean value %q", value)
 	}
+}
+
+func decodeTrojanUser(u *url.URL) (string, error) {
+	fragment := strings.TrimSpace(u.Fragment)
+	if fragment != "" {
+		decoded, err := url.PathUnescape(fragment)
+		if err != nil {
+			return "", fmt.Errorf("decode trojan link user: %w", err)
+		}
+		decoded = strings.TrimSpace(decoded)
+		if decoded != "" {
+			return decoded, nil
+		}
+	}
+
+	candidates := []string{
+		"email",
+		"user",
+		"username",
+		"name",
+		"remark",
+		"remarks",
+		"peer",
+	}
+	query := u.Query()
+	for _, key := range candidates {
+		if val := strings.TrimSpace(query.Get(key)); val != "" {
+			return val, nil
+		}
+	}
+
+	if strings.Contains(u.RawQuery, "&") && !strings.Contains(u.RawPath, "#") && !strings.Contains(u.Fragment, "#") {
+		return "", fmt.Errorf("trojan link missing user/email (wrap the URL in quotes or escape '&' on Windows)")
+	}
+	return "", fmt.Errorf("trojan link missing user/email (expected #email or email query parameter)")
 }

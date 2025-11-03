@@ -180,6 +180,45 @@ func TestRunClientInstallRequiresUserWithoutLink(t *testing.T) {
 	}
 }
 
+func TestRunClientInstallFromLinkEmailQuery(t *testing.T) {
+	restore := stubClientInstall(func(ctx context.Context, opts client.InstallOptions) error {
+		if opts.ServerAddress != "links.example.test" {
+			t.Fatalf("unexpected server address: %s", opts.ServerAddress)
+		}
+		if opts.User != "alpha@example.com" {
+			t.Fatalf("unexpected user: %s", opts.User)
+		}
+		return nil
+	})
+	defer restore()
+
+	cfg := config.Config{}
+	code := runClientInstall(context.Background(), cfg, []string{
+		"--link", "trojan://secret@links.example.test:62022?allowInsecure=1&email=alpha@example.com",
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+}
+
+func TestRunClientInstallFromLinkDecodesUser(t *testing.T) {
+	restore := stubClientInstall(func(ctx context.Context, opts client.InstallOptions) error {
+		if opts.User != "alpha@example.com" {
+			t.Fatalf("unexpected user: %s", opts.User)
+		}
+		return nil
+	})
+	defer restore()
+
+	cfg := config.Config{}
+	code := runClientInstall(context.Background(), cfg, []string{
+		"--link", "trojan://secret@links.example.test:62022#alpha%40example.com",
+	})
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+}
+
 func TestRunClientInstallRequiresServerAddressWithoutLink(t *testing.T) {
 	restore := stubClientInstall(func(context.Context, client.InstallOptions) error {
 		t.Fatalf("install must not be invoked when --server-address missing")
