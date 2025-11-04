@@ -131,8 +131,6 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	remoteHost := fs.String("remote-host", "", "SSH host name or address")
 	sshUser := fs.String("ssh-user", "", "SSH user name")
 	sshPort := fs.String("ssh-port", "22", "SSH port (default 22)")
-	serverHost := fs.String("server-host", "", "public host name or IP for Trojan configuration")
-	serverPort := fs.String("server-port", "", "Trojan service port")
 	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
 	packageOnly := fs.Bool("package-only", false, "prepare deployment package only (skip remote operations)")
@@ -152,8 +150,8 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		return deployOptions{}, fmt.Errorf("--remote-host: %v", err)
 	}
 
-	serverHostValue := firstNonEmpty(*serverHost, cfg.Server.Host, host)
-	serverPortValue := normalizeServerPort(cfg, *serverPort)
+	serverHostValue := firstNonEmpty(cfg.Server.Host, host)
+	serverPortValue := normalizeServerPort(cfg, "")
 
 	packageOnlyValue := *packageOnly
 

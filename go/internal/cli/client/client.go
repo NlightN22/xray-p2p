@@ -28,7 +28,6 @@ var clientUsageBlocks = []string{
           [--server-port PORT] [--server-name NAME]
           [--allow-insecure|--strict-tls] [--force]`,
 	`deploy  --remote-host HOST [--package-only] [--ssh-user NAME] [--ssh-port PORT]
-          [--server-host HOST] [--server-port PORT]
           [--user EMAIL] [--password SECRET]`,
 	`remove  [--path PATH] [--keep-files] [--ignore-missing]`,
 	`run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
