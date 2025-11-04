@@ -3,6 +3,9 @@ package servercmd
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/base32"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -100,18 +103,20 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	manifestPath := strings.TrimSpace(*deployFile)
+	var manifest *spec.Manifest
 	if manifestPath != "" {
 		file, err := os.Open(manifestPath)
 		if err != nil {
 			logging.Error("xp2p server install: open deploy manifest failed", "path", manifestPath, "err", err)
 			return 1
 		}
-		manifest, err := spec.Read(file)
+		readManifest, err := spec.Read(file)
 		file.Close()
 		if err != nil {
 			logging.Error("xp2p server install: read deploy manifest failed", "path", manifestPath, "err", err)
 			return 1
 		}
+		manifest = &readManifest
 		logging.Info("xp2p server install: using deploy manifest", "remote_host", manifest.RemoteHost, "version", manifest.XP2PVersion)
 		if strings.TrimSpace(*host) == "" {
 			if err := netutil.ValidateHost(manifest.RemoteHost); err != nil {
@@ -149,6 +154,22 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	logging.Info("xp2p server installed", "install_dir", opts.InstallDir, "config_dir", opts.ConfigDir)
+
+	manifestHandled := false
+	if manifest != nil {
+		var err error
+		manifestHandled, err = applyManifestCredential(ctx, opts, hostValue, *manifest)
+		if err != nil {
+			logging.Warn("xp2p server install: failed to apply deploy manifest credential", "err", err)
+		}
+	}
+
+	if !manifestHandled && strings.TrimSpace(cfg.Client.User) == "" && strings.TrimSpace(cfg.Client.Password) == "" {
+		if err := generateDefaultServerCredential(ctx, opts, hostValue); err != nil {
+			logging.Warn("xp2p server install: failed to generate trojan credential", "err", err)
+		}
+	}
+
 	return 0
 }
 
@@ -388,7 +409,7 @@ func determineInstallHost(ctx context.Context, explicit, fallback string) (strin
 	host = strings.TrimSpace(host)
 	if host != "" {
 		if err := netutil.ValidateHost(host); err != nil {
-			return "", false, err
+			return "", false, fmt.Errorf("invalid host %q: %w", host, err)
 		}
 		return host, false, nil
 	}
@@ -401,6 +422,133 @@ func determineInstallHost(ctx context.Context, explicit, fallback string) (strin
 		return "", false, fmt.Errorf("invalid host %q: %w", value, err)
 	}
 	return value, true, nil
+}
+
+type credentialResult struct {
+	details server.UserLink
+	linkErr error
+}
+
+func provisionCredential(ctx context.Context, installOpts server.InstallOptions, host, userID, password string) (credentialResult, error) {
+	user := strings.TrimSpace(userID)
+	pass := strings.TrimSpace(password)
+	if user == "" || pass == "" {
+		return credentialResult{}, errors.New("xp2p: trojan credential requires user and password")
+	}
+
+	addOpts := server.AddUserOptions{
+		InstallDir: installOpts.InstallDir,
+		ConfigDir:  installOpts.ConfigDir,
+		UserID:     user,
+		Password:   pass,
+	}
+	if err := serverUserAddFunc(ctx, addOpts); err != nil {
+		return credentialResult{}, err
+	}
+
+	link, err := serverUserLinkFunc(ctx, server.UserLinkOptions{
+		InstallDir: installOpts.InstallDir,
+		ConfigDir:  installOpts.ConfigDir,
+		Host:       host,
+		UserID:     user,
+	})
+	if err != nil {
+		return credentialResult{
+			details: server.UserLink{
+				UserID:   user,
+				Password: pass,
+			},
+			linkErr: err,
+		}, nil
+	}
+
+	if strings.TrimSpace(link.UserID) == "" {
+		link.UserID = user
+	}
+	if strings.TrimSpace(link.Password) == "" {
+		link.Password = pass
+	}
+
+	return credentialResult{details: link}, nil
+}
+
+func announceCredential(prefix string, result credentialResult) {
+	fmt.Printf("%s:\n  user: %s\n  password: %s\n", prefix, result.details.UserID, result.details.Password)
+	if result.linkErr == nil && strings.TrimSpace(result.details.Link) != "" {
+		fmt.Printf("  link: %s\n", result.details.Link)
+	} else if result.linkErr != nil {
+		fmt.Printf("  link: unavailable (%v)\n", result.linkErr)
+	}
+}
+
+func applyManifestCredential(ctx context.Context, installOpts server.InstallOptions, host string, manifest spec.Manifest) (bool, error) {
+	user := strings.TrimSpace(manifest.TrojanUser)
+	password := strings.TrimSpace(manifest.TrojanPassword)
+	if user == "" && password == "" {
+		return false, nil
+	}
+	if user == "" || password == "" {
+		return false, spec.ErrCredentialPair
+	}
+
+	result, err := provisionCredential(ctx, installOpts, host, user, password)
+	if err != nil {
+		return false, err
+	}
+	if result.linkErr != nil {
+		logging.Warn("xp2p server install: unable to build trojan link from deploy manifest", "err", result.linkErr)
+	}
+	announceCredential("Deploy manifest trojan credential", result)
+	logging.Info("xp2p server install: trojan credential ready", "source", "deploy-manifest", "user", result.details.UserID)
+	return true, nil
+}
+
+func generateDefaultServerCredential(ctx context.Context, installOpts server.InstallOptions, host string) error {
+	userID, err := generateDefaultUserID()
+	if err != nil {
+		return err
+	}
+	password, err := generateRandomSecret(18)
+	if err != nil {
+		return err
+	}
+
+	result, err := provisionCredential(ctx, installOpts, host, userID, password)
+	if err != nil {
+		return err
+	}
+
+	if result.linkErr != nil {
+		logging.Warn("xp2p server install: unable to build trojan link", "err", result.linkErr)
+	}
+
+	announceCredential("Generated trojan credential", result)
+	logging.Info("xp2p server install: trojan credential ready", "source", "generated", "user", result.details.UserID)
+	return nil
+}
+
+func generateRandomSecret(size int) (string, error) {
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func generateDefaultUserID() (string, error) {
+	token, err := randomToken(5)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("client-%s@xp2p.local", token), nil
+}
+
+func randomToken(size int) (string, error) {
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)), nil
 }
 
 func printServerUsage() {

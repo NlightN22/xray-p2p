@@ -10,9 +10,11 @@ import (
 
 func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 	manifest := Manifest{
-		RemoteHost:  "10.0.10.10",
-		XP2PVersion: "1.2.3",
-		GeneratedAt: time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+		RemoteHost:     "10.0.10.10",
+		XP2PVersion:    "1.2.3",
+		GeneratedAt:    time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+		TrojanUser:     "client@example.invalid",
+		TrojanPassword: "secret",
 	}
 
 	data, err := Marshal(manifest)
@@ -36,9 +38,11 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 
 func TestReadWrite(t *testing.T) {
 	manifest := Manifest{
-		RemoteHost:  "example.internal",
-		XP2PVersion: "0.5.0",
-		GeneratedAt: time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC),
+		RemoteHost:     "example.internal",
+		XP2PVersion:    "0.5.0",
+		GeneratedAt:    time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC),
+		TrojanUser:     "client@example.internal",
+		TrojanPassword: "secret",
 	}
 
 	var buf bytes.Buffer
@@ -87,6 +91,28 @@ func TestValidateFailures(t *testing.T) {
 				XP2PVersion: "0.1.0",
 			},
 			want: ErrGeneratedZero,
+		},
+		{
+			name: "credential pair missing password",
+			m: Manifest{
+				RemoteHost:     "example",
+				XP2PVersion:    "0.1.0",
+				GeneratedAt:    time.Now(),
+				TrojanUser:     "client@example",
+				TrojanPassword: "",
+			},
+			want: ErrCredentialPair,
+		},
+		{
+			name: "credential pair missing user",
+			m: Manifest{
+				RemoteHost:     "example",
+				XP2PVersion:    "0.1.0",
+				GeneratedAt:    time.Now(),
+				TrojanUser:     "",
+				TrojanPassword: "secret",
+			},
+			want: ErrCredentialPair,
 		},
 	}
 

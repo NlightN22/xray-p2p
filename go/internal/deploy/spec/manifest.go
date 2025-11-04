@@ -13,13 +13,16 @@ var (
 	ErrRemoteHostEmpty = errors.New("xp2p: deployment manifest requires remote_host")
 	ErrVersionEmpty    = errors.New("xp2p: deployment manifest requires xp2p_version")
 	ErrGeneratedZero   = errors.New("xp2p: deployment manifest requires generated_at timestamp")
+	ErrCredentialPair  = errors.New("xp2p: deployment manifest trojan_user and trojan_password must both be set")
 )
 
 // Manifest describes metadata shipped with deployment packages.
 type Manifest struct {
-	RemoteHost  string    `json:"remote_host"`
-	XP2PVersion string    `json:"xp2p_version"`
-	GeneratedAt time.Time `json:"generated_at"`
+	RemoteHost     string    `json:"remote_host"`
+	XP2PVersion    string    `json:"xp2p_version"`
+	GeneratedAt    time.Time `json:"generated_at"`
+	TrojanUser     string    `json:"trojan_user,omitempty"`
+	TrojanPassword string    `json:"trojan_password,omitempty"`
 }
 
 // Validate ensures the manifest contains required fields.
@@ -32,6 +35,11 @@ func Validate(m Manifest) error {
 	}
 	if m.GeneratedAt.IsZero() {
 		return ErrGeneratedZero
+	}
+	userPresent := strings.TrimSpace(m.TrojanUser) != ""
+	passwordPresent := strings.TrimSpace(m.TrojanPassword) != ""
+	if userPresent != passwordPresent {
+		return ErrCredentialPair
 	}
 	return nil
 }
