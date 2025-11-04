@@ -24,7 +24,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
   1. Run `go test ./...` and `go vet ./...`.
   2. Commit the version bump and related changes.
   3. Tag the commit (`git tag vX.Y.Z && git push origin vX.Y.Z`).
-  4. The `release` workflow rebuilds binaries with the tag version and publishes archives `xp2p-<version>-<os>-<arch>` on the GitHub release page.
+  4. The `release` workflow rebuilds binaries with the tag version, publishes archives `xp2p-<version>-<os>-<arch>`, force-updates the `latest` tag, and republishes `xp2p-latest-<os>-<arch>` assets for stable download links.
 
 ## Continuous integration
 

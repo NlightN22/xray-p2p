@@ -140,15 +140,30 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      contents: write
     env:
       VERSION: ${{ needs.build.outputs.version }}
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: ${{ env.RELEASE_NAME }}-${{ env.VERSION }}-*
           path: release
           merge-multiple: true
+
+      - name: Prepare latest artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p latest
+          cp "release/${{ env.RELEASE_NAME }}-${VERSION}-linux-amd64.tar.gz" "latest/${{ env.RELEASE_NAME }}-latest-linux-amd64.tar.gz"
+          cp "release/${{ env.RELEASE_NAME }}-${VERSION}-linux-arm64.tar.gz" "latest/${{ env.RELEASE_NAME }}-latest-linux-arm64.tar.gz"
+          cp "release/${{ env.RELEASE_NAME }}-${VERSION}-windows-amd64.zip" "latest/${{ env.RELEASE_NAME }}-latest-windows-amd64.zip"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -160,3 +175,31 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update latest tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags
+          git tag -f latest "$GITHUB_SHA"
+          git push origin latest --force
+
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ env.VERSION }}
+        run: |
+          set -euo pipefail
+          gh release delete latest --yes --repo "$REPO" || true
+          gh release create latest \
+            latest/${{ env.RELEASE_NAME }}-latest-linux-amd64.tar.gz \
+            latest/${{ env.RELEASE_NAME }}-latest-linux-arm64.tar.gz \
+            latest/${{ env.RELEASE_NAME }}-latest-windows-amd64.zip \
+            --repo "$REPO" \
+            --title "Latest" \
+            --notes "Automated update for version ${VERSION}" \
+            --latest
