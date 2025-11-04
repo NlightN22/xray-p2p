@@ -20,6 +20,7 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 		OutputDir:  outDir,
 		Version:    "1.2.3",
 		InstallDir: `C:\xp2p`,
+		TrojanPort: "8445",
 		TrojanUser: "client@example.invalid",
 		TrojanPass: "secret",
 		Timestamp:  timestamp,
@@ -51,8 +52,10 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 		"Build-ArtifactUrl",
 		"xp2p-$($manifest.Version)-windows-amd64.zip",
 		"--deploy-file",
+		"--port",
 		"XP2P_RELEASE_BASE_URL",
 		"$manifest.InstallDir",
+		"$manifest.TrojanPort",
 	} {
 		if !strings.Contains(scriptContent, fragment) {
 			t.Fatalf("install.ps1 is missing expected fragment %q", fragment)
@@ -79,6 +82,9 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 	}
 	if manifest.InstallDir != `C:\xp2p` {
 		t.Fatalf("install_dir mismatch: %q", manifest.InstallDir)
+	}
+	if manifest.TrojanPort != "8445" {
+		t.Fatalf("trojan_port mismatch: %q", manifest.TrojanPort)
 	}
 	if manifest.TrojanUser != "client@example.invalid" {
 		t.Fatalf("trojan_user mismatch: %q", manifest.TrojanUser)
@@ -107,6 +113,7 @@ func TestBuildPackageSanitizesArchiveName(t *testing.T) {
 		OutputDir:  outDir,
 		Version:    "0.9.0",
 		InstallDir: `C:\xp2p`,
+		TrojanPort: "62022",
 		TrojanUser: "user@example.com",
 		TrojanPass: "secret",
 		Timestamp:  timestamp,

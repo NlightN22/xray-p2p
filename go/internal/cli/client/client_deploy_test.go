@@ -115,6 +115,26 @@ func TestParseDeployFlagsPackageOnly(t *testing.T) {
 	}
 }
 
+func TestParseDeployFlagsOverridesTrojanPort(t *testing.T) {
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			Port: "62022",
+		},
+		Client: config.ClientConfig{
+			User:     "user@example.test",
+			Password: "secret",
+		},
+	}
+
+	opts, err := parseDeployFlags(cfg, []string{"--remote-host", "gateway.internal", "--trojan-port", "8445"})
+	if err != nil {
+		t.Fatalf("parseDeployFlags: %v", err)
+	}
+	if opts.serverPort != "8445" {
+		t.Fatalf("trojan port mismatch: got %q", opts.serverPort)
+	}
+}
+
 func TestRunClientDeploySuccessfulFlow(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.Config{

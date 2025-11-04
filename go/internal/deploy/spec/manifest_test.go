@@ -14,6 +14,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 		XP2PVersion:    "1.2.3",
 		GeneratedAt:    time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
 		InstallDir:     `C:\xp2p`,
+		TrojanPort:     "8443",
 		TrojanUser:     "client@example.invalid",
 		TrojanPassword: "secret",
 	}
@@ -43,6 +44,7 @@ func TestReadWrite(t *testing.T) {
 		XP2PVersion:    "0.5.0",
 		GeneratedAt:    time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC),
 		InstallDir:     `D:\custom-xp2p`,
+		TrojanPort:     "62022",
 		TrojanUser:     "client@example.internal",
 		TrojanPassword: "secret",
 	}

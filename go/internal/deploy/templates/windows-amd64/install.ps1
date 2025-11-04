@@ -64,6 +64,10 @@ function Read-DeploymentManifest {
         $installDir = [string]$data.install_dir
     }
     $installDir = $installDir.Trim()
+    $trojanPort = ""
+    if ($null -ne $data.trojan_port) {
+        $trojanPort = ([string]$data.trojan_port).Trim()
+    }
 
     if ([string]::IsNullOrWhiteSpace($version)) {
         throw "Manifest xp2p_version is missing or empty."
@@ -76,6 +80,7 @@ function Read-DeploymentManifest {
         Version    = $version.Trim()
         RemoteHost = $remoteHost.Trim()
         InstallDir = $installDir
+        TrojanPort = $trojanPort
     }
 }
 
@@ -250,7 +255,12 @@ try {
         "server", "install",
         "--path", $installDir,
         "--config-dir", $configDirName,
-        "--host", $manifest.RemoteHost,
+        "--host", $manifest.RemoteHost
+    )
+    if (-not [string]::IsNullOrWhiteSpace($manifest.TrojanPort)) {
+        $arguments += @("--port", $manifest.TrojanPort)
+    }
+    $arguments += @(
         "--deploy-file", $manifestPath,
         "--force"
     )
