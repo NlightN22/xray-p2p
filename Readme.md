@@ -176,6 +176,18 @@ The Windows smoke-test environment and other test workflows are documented in [`
 
 ---
 
+## Versioning and releases
+
+- Check the current CLI version with `xp2p --version`. The program also logs the version on startup and during remote deployments.
+- The canonical version string lives in `go/internal/version/version.go`. Bump the `current` variable before cutting a release so `go run ./go/cmd/xp2p --version` reports the target number.
+- Local builds automatically embed the version and produce versioned binaries. Run `make build` (or `make VERSION=1.2.3 build` to override) to obtain files like `build/windows-amd64/xp2p-1.2.3-windows-amd64.exe`.
+- Continuous integration runs via the `ci` workflow on every branch and pull request. The cross-platform artifact build lives in the `build` workflow (triggered manually through GitHub Actions) and mirrors the release matrix.
+- To publish a release:
+  1. Ensure `go test ./...` and `go vet ./...` pass locally.
+  2. Commit the version bump.
+  3. Tag the commit as `vX.Y.Z` and push the tag: `git tag v1.2.3 && git push origin v1.2.3`.
+  4. The `release` workflow validates the sources, embeds the version via ldflags, and attaches archives named `xp2p-<version>-<os>-<arch>` to the GitHub release.
+
 ## How server and client stay in sync
 
 - The server stores credentials in `clients.json` as records like `{ "id": "uuid", "password": "...", "status": "active" }`.

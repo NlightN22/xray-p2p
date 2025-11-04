@@ -14,10 +14,11 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"github.com/NlightN22/xray-p2p/go/internal/version"
 )
 
 func main() {
-	cfg, args, err := parseRootArgs(os.Args[1:])
+	cfg, args, versionRequested, err := parseRootArgs(os.Args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			printRootUsage()
@@ -27,10 +28,16 @@ func main() {
 		os.Exit(2)
 	}
 
+	if versionRequested {
+		fmt.Println(version.Current())
+		return
+	}
+
 	logging.Configure(logging.Options{
 		Level:  cfg.Logging.Level,
 		Format: logFormatFromConfig(cfg.Logging.Format),
 	})
+	logging.Info("xp2p starting", "version", version.Current())
 
 	if len(args) == 0 {
 		runService(cfg)
@@ -45,7 +52,7 @@ func main() {
 	os.Exit(code)
 }
 
-func parseRootArgs(args []string) (config.Config, []string, error) {
+func parseRootArgs(args []string) (config.Config, []string, bool, error) {
 	fs := flag.NewFlagSet("xp2p", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -68,12 +75,20 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 	clientServerName := fs.String("client-server-name", "", "TLS server name for client config")
 	clientAllowInsecure := fs.Bool("client-allow-insecure", false, "allow TLS verification to be skipped for client config")
 	clientStrictTLS := fs.Bool("client-strict-tls", false, "enforce TLS verification for client config")
+	printVersion := fs.Bool("version", false, "print xp2p version and exit")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			return config.Config{}, nil, flag.ErrHelp
+			return config.Config{}, nil, false, flag.ErrHelp
 		}
-		return config.Config{}, nil, err
+		return config.Config{}, nil, false, err
+	}
+
+	if *printVersion {
+		if fs.NArg() > 0 {
+			return config.Config{}, nil, false, fmt.Errorf("--version cannot be combined with positional arguments")
+		}
+		return config.Config{}, nil, true, nil
 	}
 
 	overrides := make(map[string]any)
@@ -137,10 +152,10 @@ func parseRootArgs(args []string) (config.Config, []string, error) {
 		Overrides: overrides,
 	})
 	if err != nil {
-		return config.Config{}, nil, err
+		return config.Config{}, nil, false, err
 	}
 
-	return cfg, fs.Args(), nil
+	return cfg, fs.Args(), false, nil
 }
 
 func runService(cfg config.Config) {
@@ -161,6 +176,7 @@ func printRootUsage() {
 	fmt.Print(`xp2p - cross-platform helper for XRAY-P2P
 
 Usage:
+  xp2p --version
   xp2p [--config FILE] [--log-level LEVEL] [--server-port PORT]
        [--server-install-dir PATH] [--server-config-dir NAME]
        [--server-cert FILE] [--server-key FILE] [--server-host HOST]

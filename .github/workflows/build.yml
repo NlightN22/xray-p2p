@@ -33,16 +33,26 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Determine version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(go run ./go/cmd/xp2p --version)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           EXT: ${{ matrix.ext }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          out="dist/${GOOS}-${GOARCH}/xp2p${EXT}"
+          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
+          out="dist/${GOOS}-${GOARCH}/${binary}"
           mkdir -p "$(dirname "$out")"
-          go build -trimpath -ldflags="-s -w" -o "$out" ./go/cmd/xp2p
+          ldflags="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
+          go build -trimpath -ldflags="$ldflags" -o "$out" ./go/cmd/xp2p
 
       - name: Package
         env:
@@ -50,21 +60,23 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           ARCHIVE: ${{ matrix.archive }}
           EXT: ${{ matrix.ext }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           cd "dist/${GOOS}-${GOARCH}"
-          artifact="../xp2p-${GOOS}-${GOARCH}.${ARCHIVE}"
+          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
+          artifact="../xp2p-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE}"
           if [ "$ARCHIVE" = "zip" ]; then
-            zip -j "$artifact" "xp2p${EXT}"
+            zip -j "$artifact" "$binary"
           else
-            tar -czf "$artifact" "xp2p${EXT}"
+            tar -czf "$artifact" "$binary"
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xp2p-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/xp2p-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
+          name: xp2p-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/xp2p-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
           retention-days: 7
 
   smoke:
@@ -74,18 +86,28 @@ jobs:
       - name: Download linux-amd64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: xp2p-linux-amd64
+          pattern: xp2p-*-linux-amd64
           path: smoke
+          merge-multiple: true
 
       - name: Extract
         run: |
           set -euo pipefail
-          tar -xzf smoke/xp2p-linux-amd64.tar.gz -C smoke
+          artifact="$(find smoke -maxdepth 1 -name 'xp2p-*-linux-amd64.tar.gz' -print -quit)"
+          if [ -z "$artifact" ]; then
+            echo "linux artifact not found"
+            exit 1
+          fi
+          tar -xzf "$artifact" -C smoke
 
       - name: Smoke test
         run: |
           set -euo pipefail
-          BIN="smoke/xp2p"
+          BIN="$(find smoke -maxdepth 1 -type f -name 'xp2p-*-linux-amd64' -print -quit)"
+          if [ -z "$BIN" ]; then
+            echo "extracted binary not found"
+            exit 1
+          fi
           chmod +x "$BIN"
           "$BIN" --help >/dev/null
 

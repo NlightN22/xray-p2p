@@ -11,9 +11,12 @@ import (
 func TestParseRootArgsDefaults(t *testing.T) {
 	chdirTemp(t)
 
-	cfg, rest, err := parseRootArgs(nil)
+	cfg, rest, versionRequested, err := parseRootArgs(nil)
 	if err != nil {
 		t.Fatalf("parseRootArgs failed: %v", err)
+	}
+	if versionRequested {
+		t.Fatalf("expected versionRequested to be false")
 	}
 	if len(rest) != 0 {
 		t.Fatalf("expected no remaining args, got %v", rest)
@@ -59,9 +62,12 @@ func TestParseRootArgsWithFlags(t *testing.T) {
 		"ping", "--count", "3",
 	}
 
-	cfg, rest, err := parseRootArgs(args)
+	cfg, rest, versionRequested, err := parseRootArgs(args)
 	if err != nil {
 		t.Fatalf("parseRootArgs failed: %v", err)
+	}
+	if versionRequested {
+		t.Fatalf("expected versionRequested to be false")
 	}
 	if cfg.Logging.Level != "debug" {
 		t.Fatalf("expected debug level, got %s", cfg.Logging.Level)
@@ -115,9 +121,12 @@ server:
   key: C:\certs\server.key
 `)
 
-	cfg, rest, err := parseRootArgs([]string{"--config", cfgPath})
+	cfg, rest, versionRequested, err := parseRootArgs([]string{"--config", cfgPath})
 	if err != nil {
 		t.Fatalf("parseRootArgs failed: %v", err)
+	}
+	if versionRequested {
+		t.Fatalf("expected versionRequested to be false")
 	}
 	if len(rest) != 0 {
 		t.Fatalf("expected no remaining args, got %v", rest)
@@ -151,9 +160,33 @@ server:
 func TestParseRootArgsHelp(t *testing.T) {
 	chdirTemp(t)
 
-	_, _, err := parseRootArgs([]string{"--help"})
+	_, _, _, err := parseRootArgs([]string{"--help"})
 	if !errors.Is(err, flag.ErrHelp) {
 		t.Fatalf("expected flag.ErrHelp, got %v", err)
+	}
+}
+
+func TestParseRootArgsVersionFlag(t *testing.T) {
+	chdirTemp(t)
+
+	_, rest, versionRequested, err := parseRootArgs([]string{"--version"})
+	if err != nil {
+		t.Fatalf("parseRootArgs failed: %v", err)
+	}
+	if !versionRequested {
+		t.Fatalf("expected versionRequested to be true")
+	}
+	if len(rest) != 0 {
+		t.Fatalf("expected no remaining args, got %v", rest)
+	}
+}
+
+func TestParseRootArgsVersionWithArgsFails(t *testing.T) {
+	chdirTemp(t)
+
+	_, _, _, err := parseRootArgs([]string{"--version", "ping"})
+	if err == nil {
+		t.Fatal("expected error when combining --version with positional arguments")
 	}
 }
 

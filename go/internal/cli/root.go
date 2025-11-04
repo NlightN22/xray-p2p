@@ -200,6 +200,7 @@ func printUsage() {
 	fmt.Print(`xp2p - cross-platform helper for XRAY-P2P
 
 Usage:
+  xp2p --version
   xp2p            Start diagnostics service (TCP/UDP port 62022)
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS]
             [--socks [HOST:PORT]] <host>

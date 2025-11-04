@@ -8,8 +8,70 @@ env:
   RELEASE_NAME: xp2p
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Determine version
+        id: version
+        run: |
+          set -euo pipefail
+          raw="${GITHUB_REF_NAME:-}"
+          if [ -z "$raw" ]; then
+            raw="$(git describe --tags --abbrev=0 || true)"
+          fi
+          if [ -z "$raw" ]; then
+            raw="$(go run ./go/cmd/xp2p --version)"
+          fi
+          version="${raw#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$raw" >> "$GITHUB_OUTPUT"
+
+      - name: Validate source version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          source_version="$(go run ./go/cmd/xp2p --version)"
+          if [ "$source_version" != "$VERSION" ]; then
+            echo "source version $source_version does not match release version $VERSION"
+            exit 1
+          fi
+
+      - name: go vet
+        run: |
+          set -euo pipefail
+          go vet ./...
+
+      - name: go test
+        run: |
+          set -euo pipefail
+          go test ./...
+
+      - name: go test (integration)
+        run: |
+          set -euo pipefail
+          go test -tags=integration ./...
+
   build:
     runs-on: ubuntu-latest
+    needs: verify
+    outputs:
+      version: ${{ needs.verify.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -44,11 +106,14 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           EXT: ${{ matrix.ext }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          out="dist/${GOOS}-${GOARCH}/xp2p${EXT}"
+          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
+          out="dist/${GOOS}-${GOARCH}/${binary}"
           mkdir -p "$(dirname "$out")"
-          go build -trimpath -ldflags="-s -w" -o "$out" ./go/cmd/xp2p
+          ldflags="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
+          go build -trimpath -ldflags="$ldflags" -o "$out" ./go/cmd/xp2p
 
       - name: Package archive
         env:
@@ -56,33 +121,34 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           ARCHIVE: ${{ matrix.archive }}
           EXT: ${{ matrix.ext }}
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
           cd "dist/${GOOS}-${GOARCH}"
+          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
           artifact="../${{ env.RELEASE_NAME }}-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE}"
           if [ "$ARCHIVE" = "zip" ]; then
-            zip -j "$artifact" "xp2p${EXT}"
+            zip -j "$artifact" "$binary"
           else
-            tar -czf "$artifact" "xp2p${EXT}"
+            tar -czf "$artifact" "$binary"
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.RELEASE_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
-
-  # openwrt job temporarily disabled (no OpenWrt packaging required)
+          name: ${{ env.RELEASE_NAME }}-${{ needs.verify.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/${{ env.RELEASE_NAME }}-${{ needs.verify.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
 
   publish:
     runs-on: ubuntu-latest
     needs: build
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: ${{ env.RELEASE_NAME }}-*
+          pattern: ${{ env.RELEASE_NAME }}-${{ env.VERSION }}-*
           path: release
           merge-multiple: true
 
@@ -90,9 +156,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-linux-amd64.tar.gz
-            release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-linux-arm64.tar.gz
-            release/${{ env.RELEASE_NAME }}-${{ github.ref_name }}-windows-amd64.zip
+            release/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-linux-amd64.tar.gz
+            release/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-linux-arm64.tar.gz
+            release/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-windows-amd64.zip
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

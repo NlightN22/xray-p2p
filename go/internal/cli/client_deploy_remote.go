@@ -8,6 +8,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"github.com/NlightN22/xray-p2p/go/internal/version"
 )
 
 func ensureRemoteBinary(ctx context.Context, target sshTarget, localExe, remoteInstallDir string) error {
@@ -25,7 +26,7 @@ func ensureRemoteBinary(ctx context.Context, target sshTarget, localExe, remoteI
 		return nil
 	}
 
-	logging.Info("xp2p client deploy: uploading xp2p binary", "remote_path", remotePath)
+	logging.Info("xp2p client deploy: uploading xp2p binary", "remote_path", remotePath, "version", version.Current())
 	return scpCommandFunc(ctx, target, localExe, remotePath)
 }
 
