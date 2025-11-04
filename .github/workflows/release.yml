@@ -109,8 +109,7 @@ jobs:
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
           set -euo pipefail
-          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
-          out="dist/${GOOS}-${GOARCH}/${binary}"
+          out="dist/${GOOS}-${GOARCH}/xp2p${EXT}"
           mkdir -p "$(dirname "$out")"
           ldflags="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
           go build -trimpath -ldflags="$ldflags" -o "$out" ./go/cmd/xp2p
@@ -125,12 +124,11 @@ jobs:
         run: |
           set -euo pipefail
           cd "dist/${GOOS}-${GOARCH}"
-          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
           artifact="../${{ env.RELEASE_NAME }}-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE}"
           if [ "$ARCHIVE" = "zip" ]; then
-            zip -j "$artifact" "$binary"
+            zip -j "$artifact" "xp2p${EXT}"
           else
-            tar -czf "$artifact" "$binary"
+            tar -czf "$artifact" "xp2p${EXT}"
           fi
 
       - name: Upload artifact

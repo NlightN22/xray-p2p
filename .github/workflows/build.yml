@@ -48,8 +48,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
-          out="dist/${GOOS}-${GOARCH}/${binary}"
+          out="dist/${GOOS}-${GOARCH}/xp2p${EXT}"
           mkdir -p "$(dirname "$out")"
           ldflags="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
           go build -trimpath -ldflags="$ldflags" -o "$out" ./go/cmd/xp2p
@@ -64,12 +63,11 @@ jobs:
         run: |
           set -euo pipefail
           cd "dist/${GOOS}-${GOARCH}"
-          binary="xp2p-${VERSION}-${GOOS}-${GOARCH}${EXT}"
           artifact="../xp2p-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE}"
           if [ "$ARCHIVE" = "zip" ]; then
-            zip -j "$artifact" "$binary"
+            zip -j "$artifact" "xp2p${EXT}"
           else
-            tar -czf "$artifact" "$binary"
+            tar -czf "$artifact" "xp2p${EXT}"
           fi
 
       - name: Upload artifact
@@ -103,7 +101,7 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
-          BIN="$(find smoke -maxdepth 1 -type f -name 'xp2p-*-linux-amd64' -print -quit)"
+          BIN="$(find smoke -maxdepth 1 -type f -name 'xp2p' -print -quit)"
           if [ -z "$BIN" ]; then
             echo "extracted binary not found"
             exit 1

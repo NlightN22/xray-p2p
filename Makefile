@@ -10,10 +10,6 @@ VAGRANT_WIN10_CLIENT_ID := win10-client
 WINDOWS_BUILD_DIR := build/windows-amd64
 LINUX_BUILD_DIR := build/linux-amd64
 OPENWRT_BUILD_DIR := build/linux-mipsle-softfloat
-WINDOWS_BINARY := xp2p-$(VERSION)-windows-amd64.exe
-LINUX_BINARY := xp2p-$(VERSION)-linux-amd64
-OPENWRT_BINARY := xp2p-$(VERSION)-linux-mipsle-softfloat
-
 .PHONY: run build build-windows build-linux build-openwrt fmt lint test vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client
@@ -21,13 +17,13 @@ OPENWRT_BINARY := xp2p-$(VERSION)-linux-mipsle-softfloat
 build: build-windows build-linux build-openwrt
 
 build-windows:
-	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(WINDOWS_BUILD_DIR)' | Out-Null; $$env:GOOS = 'windows'; $$env:GOARCH = 'amd64'; go build -trimpath -ldflags '$(GO_LDFLAGS)' -o '$(WINDOWS_BUILD_DIR)/$(WINDOWS_BINARY)' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue"
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(WINDOWS_BUILD_DIR)' | Out-Null; $$env:GOOS = 'windows'; $$env:GOARCH = 'amd64'; go build -trimpath -ldflags '$(GO_LDFLAGS)' -o '$(WINDOWS_BUILD_DIR)/xp2p.exe' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue"
 
 build-linux:
-	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(LINUX_BUILD_DIR)' | Out-Null; $$env:GOOS = 'linux'; $$env:GOARCH = 'amd64'; go build -trimpath -ldflags '$(GO_LDFLAGS)' -o '$(LINUX_BUILD_DIR)/$(LINUX_BINARY)' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue"
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(LINUX_BUILD_DIR)' | Out-Null; $$env:GOOS = 'linux'; $$env:GOARCH = 'amd64'; go build -trimpath -ldflags '$(GO_LDFLAGS)' -o '$(LINUX_BUILD_DIR)/xp2p' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue"
 
 build-openwrt:
-	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(OPENWRT_BUILD_DIR)' | Out-Null; $$env:GOOS = 'linux'; $$env:GOARCH = 'mipsle'; $$env:GOMIPS = 'softfloat'; go build -trimpath -ldflags '$(GO_LDFLAGS)' -o '$(OPENWRT_BUILD_DIR)/$(OPENWRT_BINARY)' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue; Remove-Item Env:GOMIPS -ErrorAction SilentlyContinue"
+	powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '$(OPENWRT_BUILD_DIR)' | Out-Null; $$env:GOOS = 'linux'; $$env:GOARCH = 'mipsle'; $$env:GOMIPS = 'softfloat'; go build -trimpath -ldflags '$(GO_LDFLAGS)' -o '$(OPENWRT_BUILD_DIR)/xp2p' ./go/cmd/xp2p; Remove-Item Env:GOOS -ErrorAction SilentlyContinue; Remove-Item Env:GOARCH -ErrorAction SilentlyContinue; Remove-Item Env:GOMIPS -ErrorAction SilentlyContinue"
 
 fmt:
 	go fmt ./...

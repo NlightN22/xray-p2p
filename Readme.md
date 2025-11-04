@@ -180,7 +180,7 @@ The Windows smoke-test environment and other test workflows are documented in [`
 
 - Check the current CLI version with `xp2p --version`. The program also logs the version on startup and during remote deployments.
 - The canonical version string lives in `go/internal/version/version.go`. Bump the `current` variable before cutting a release so `go run ./go/cmd/xp2p --version` reports the target number.
-- Local builds automatically embed the version and produce versioned binaries. Run `make build` (or `make VERSION=1.2.3 build` to override) to obtain files like `build/windows-amd64/xp2p-1.2.3-windows-amd64.exe`.
+- Local builds automatically embed the version while keeping binary names unchanged (`xp2p.exe`, `xp2p`). Run `make build` (or `make VERSION=1.2.3 build` to override) — the version is embedded via ldflags, and archives are named `xp2p-<version>-<os>-<arch>`.
 - Continuous integration runs via the `ci` workflow on every branch and pull request. The cross-platform artifact build lives in the `build` workflow (triggered manually through GitHub Actions) and mirrors the release matrix.
 - To publish a release:
   1. Ensure `go test ./...` and `go vet ./...` pass locally.
