@@ -67,6 +67,15 @@ func TestParseDeployFlagsUsesDefaults(t *testing.T) {
 	}
 }
 
+func TestParseDeployFlagsRejectsMissingHost(t *testing.T) {
+	if _, err := parseDeployFlags(config.Config{}, []string{"--remote-host"}); err == nil {
+		t.Fatalf("expected error when --remote-host has no value")
+	}
+	if _, err := parseDeployFlags(config.Config{}, []string{"--remote-host", "--package-only"}); err == nil {
+		t.Fatalf("expected error when --remote-host value looks like a flag")
+	}
+}
+
 func TestParseDeployFlagsPromptsForUser(t *testing.T) {
 	cfg := config.Config{}
 	restore := stubPromptString(t, func(string) (string, error) {

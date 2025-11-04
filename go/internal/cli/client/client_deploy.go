@@ -157,7 +157,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	}
 
 	host := strings.TrimSpace(*remoteHost)
-	if host == "" {
+	if host == "" || strings.HasPrefix(host, "-") {
 		return deployOptions{}, fmt.Errorf("--remote-host is required")
 	}
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-BOX_NAME              = "gusztavvargadr/windows-10".freeze
-BOX_VERSION           = "2202.0.2505".freeze
+BOX_NAME              = "stefanscherer/windows_10".freeze
+BOX_VERSION           = "2021.12.09".freeze
 SERVER_ID             = "win10-server".freeze
 CLIENT_ID             = "win10-client".freeze
 SERVER_VM_NAME        = "xp2p-win10-server".freeze
