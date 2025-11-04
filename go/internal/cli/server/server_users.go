@@ -63,11 +63,11 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, args []string) int
 
 	secret := firstNonEmpty(*password, *passwordAlias)
 	if strings.TrimSpace(secret) == "" {
-		logging.Error("xp2p server user add: password is required")
+		logging.Error("xp2p server user add: --password (or --key) is required")
 		return 2
 	}
 	if strings.TrimSpace(*password) != "" && strings.TrimSpace(*passwordAlias) != "" && strings.TrimSpace(*password) != strings.TrimSpace(*passwordAlias) {
-		logging.Error("xp2p server user add: conflicting password values for --password and --key")
+		logging.Error("xp2p server user add: conflicting values for --password and --key")
 		return 2
 	}
 
