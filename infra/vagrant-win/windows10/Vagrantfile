@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-BOX_NAME              = "gusztavvargadr/windows-10-21h2-enterprise-ltsc".freeze
-BOX_VERSION           = "2102.0.2503".freeze
+BOX_NAME              = "gusztavvargadr/windows-10".freeze
+BOX_VERSION           = "2202.0.2505".freeze
 SERVER_ID             = "win10-server".freeze
 CLIENT_ID             = "win10-client".freeze
 SERVER_VM_NAME        = "xp2p-win10-server".freeze
@@ -13,7 +13,8 @@ PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
 DEFAULT_WINRM_PORT    = 5985
 SERVER_WINRM_HOSTPORT = 55985
 CLIENT_WINRM_HOSTPORT = 55986
-def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:)
+
+def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm_host_port:)
   config.vm.define machine_id do |machine|
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
@@ -29,8 +30,15 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:)
     machine.winrm.password = "vagrant"
     machine.winrm.transport = :plaintext
     machine.winrm.basic_auth_only = true
-    machine.winrm.timeout = 300
+    machine.winrm.timeout = 600
     machine.winrm.retry_limit = 30
+
+    machine.vm.network "forwarded_port",
+                       guest: DEFAULT_WINRM_PORT,
+                       host: winrm_host_port,
+                       protocol: "tcp",
+                       id: "#{machine_id}-winrm",
+                       auto_correct: true
 
     machine.vm.network "private_network",
                        ip: private_ip
@@ -55,7 +63,8 @@ Vagrant.configure("2") do |config|
     machine_id: SERVER_ID,
     vb_name: SERVER_VM_NAME,
     role: "server",
-    private_ip: SERVER_PRIVATE_IP
+    private_ip: SERVER_PRIVATE_IP,
+    winrm_host_port: SERVER_WINRM_HOSTPORT
   )
 
   define_xp2p_machine(
@@ -63,6 +72,7 @@ Vagrant.configure("2") do |config|
     machine_id: CLIENT_ID,
     vb_name: CLIENT_VM_NAME,
     role: "client",
-    private_ip: CLIENT_PRIVATE_IP
+    private_ip: CLIENT_PRIVATE_IP,
+    winrm_host_port: CLIENT_WINRM_HOSTPORT
   )
 end
