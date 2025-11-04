@@ -13,12 +13,7 @@ PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
 DEFAULT_WINRM_PORT    = 5985
 SERVER_WINRM_HOSTPORT = 55985
 CLIENT_WINRM_HOSTPORT = 55986
-SERVER_RDP_HOSTPORT   = 42201
-CLIENT_RDP_HOSTPORT   = 42202
-SERVER_SSH_HOSTPORT   = 42221
-CLIENT_SSH_HOSTPORT   = 42222
-
-def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm_host_port:, rdp_host_port:, ssh_host_port:)
+def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:)
   config.vm.define machine_id do |machine|
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
@@ -36,27 +31,6 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.winrm.basic_auth_only = true
     machine.winrm.timeout = 600
     machine.winrm.retry_limit = 30
-
-    machine.vm.network "forwarded_port",
-                       guest: DEFAULT_WINRM_PORT,
-                       host: winrm_host_port,
-                       protocol: "tcp",
-                       id: "#{machine_id}-winrm",
-                       auto_correct: true
-
-    machine.vm.network "forwarded_port",
-                       guest: 22,
-                       host: ssh_host_port,
-                       protocol: "tcp",
-                       id: "#{machine_id}-ssh",
-                       auto_correct: true
-
-    machine.vm.network "forwarded_port",
-                       guest: 3389,
-                       host: rdp_host_port,
-                       protocol: "tcp",
-                       id: "#{machine_id}-rdp",
-                       auto_correct: true
 
     machine.vm.network "private_network",
                        ip: private_ip
@@ -81,4 +55,14 @@ Vagrant.configure("2") do |config|
     machine_id: SERVER_ID,
     vb_name: SERVER_VM_NAME,
     role: "server",
-    private_ip: SERVER_PRIVATE_IP,
+    private_ip: SERVER_PRIVATE_IP
+  )
+
+  define_xp2p_machine(
+    config,
+    machine_id: CLIENT_ID,
+    vb_name: CLIENT_VM_NAME,
+    role: "client",
+    private_ip: CLIENT_PRIVATE_IP
+  )
+end
