@@ -1,9 +1,8 @@
 package deploy
 
 import (
-	"archive/zip"
 	"errors"
-	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,38 +25,36 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 		t.Fatalf("BuildPackage: %v", err)
 	}
 
-	expectedName := filepath.Join(outDir, "xp2p-client-1.2.3-10.0.10.10-20241123-184510.zip")
+	expectedName := filepath.Join(outDir, "xp2p-client-1.2.3-10.0.10.10-20241123-184510")
 	if path != expectedName {
-		t.Fatalf("archive path mismatch: expected %q, got %q", expectedName, path)
+		t.Fatalf("package path mismatch: expected %q, got %q", expectedName, path)
 	}
 
-	reader, err := zip.OpenReader(path)
+	info, err := os.Stat(path)
 	if err != nil {
-		t.Fatalf("open archive: %v", err)
+		t.Fatalf("stat package: %v", err)
 	}
-	defer reader.Close()
-
-	files := make(map[string]*zip.File)
-	for _, file := range reader.File {
-		files[file.Name] = file
+	if !info.IsDir() {
+		t.Fatalf("expected package to be directory")
 	}
 
-	script := files["templates/windows-amd64/install.ps1"]
-	if script == nil {
+	scriptPath := filepath.Join(path, "templates", "windows-amd64", "install.ps1")
+	data, err := os.ReadFile(scriptPath)
+	if err != nil {
 		t.Fatalf("expected install script in archive")
 	}
-	data := readZipFile(t, script)
 	if !strings.Contains(string(data), "placeholder install script") {
 		t.Fatalf("unexpected script content: %q", string(data))
 	}
 
-	configEntry := files["config/deployment.json"]
-	if configEntry == nil {
-		t.Fatalf("expected deployment.json in archive")
+	configPath := filepath.Join(path, "config", "deployment.json")
+	configFile, err := os.Open(configPath)
+	if err != nil {
+		t.Fatalf("open deployment.json: %v", err)
 	}
-	configData := readZipFile(t, configEntry)
+	defer configFile.Close()
 
-	manifest, err := spec.Unmarshal(configData)
+	manifest, err := spec.Read(configFile)
 	if err != nil {
 		t.Fatalf("unmarshal deployment.json: %v", err)
 	}
@@ -96,22 +93,6 @@ func TestBuildPackageSanitizesArchiveName(t *testing.T) {
 
 	name := filepath.Base(path)
 	if !strings.Contains(name, "bad-host") {
-		t.Fatalf("expected sanitized host in archive name, got %q", name)
+		t.Fatalf("expected sanitized host in directory name, got %q", name)
 	}
-}
-
-func readZipFile(t *testing.T, file *zip.File) []byte {
-	t.Helper()
-
-	reader, err := file.Open()
-	if err != nil {
-		t.Fatalf("open zip entry %q: %v", file.Name, err)
-	}
-	defer reader.Close()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatalf("read zip entry %q: %v", file.Name, err)
-	}
-	return data
 }

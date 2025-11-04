@@ -199,28 +199,22 @@ func validatePort(port string) error {
 }
 
 func printUsage() {
-	fmt.Print(`xp2p - cross-platform helper for XRAY-P2P
+	fmt.Print(Usage())
+}
+
+// Usage returns root-level usage information for xp2p.
+func Usage() string {
+	return `xp2p - cross-platform helper for XRAY-P2P
 
 Usage:
   xp2p --version
   xp2p            Start diagnostics service (TCP/UDP port 62022)
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS]
             [--socks [HOST:PORT]] <host>
-  xp2p server install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE]
-                      [--host HOST] [--deploy-file FILE] [--force]
-  xp2p server remove  [--path PATH]
-  xp2p server run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
-  xp2p client install [--path PATH] [--config-dir NAME] --server-address HOST --password SECRET
-                      [--server-port PORT] [--server-name NAME]
-                      [--allow-insecure|--strict-tls] [--force]
-  xp2p client deploy  --remote-host HOST [--package-only] [--ssh-user NAME] [--ssh-port PORT]
-                      [--server-host HOST] [--server-port PORT]
-                      [--user EMAIL] [--password SECRET]
-                      [--install-dir PATH] [--config-dir NAME]
-                      [--local-install PATH] [--local-config NAME]
-                      [--save-link FILE]
-  xp2p client remove  [--path PATH]
-  xp2p client run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
-                      (requires client server address and password configured)
-`)
+` + CommandsUsage()
+}
+
+// CommandsUsage returns formatted usage lines for client and server subcommands.
+func CommandsUsage() string {
+	return servercmd.RootUsage() + clientcmd.RootUsage()
 }

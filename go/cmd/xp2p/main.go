@@ -186,27 +186,8 @@ Usage:
        [--client-user EMAIL] [--client-password SECRET] [--client-server-name NAME]
        [--client-allow-insecure|--client-strict-tls]
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
-  xp2p server install [--path PATH] [--config-dir NAME] [--port PORT]
-                      [--cert FILE] [--key FILE] [--host HOST]
-                      [--deploy-file FILE] [--force]
-  xp2p server remove [--path PATH]
-  xp2p server run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
-                  [--xray-log-file FILE]
-  xp2p client install [--path PATH] [--config-dir NAME]
-                      (--link URL | --server-address HOST --user EMAIL --password SECRET)
-                      [--server-port PORT] [--server-name NAME]
-                      [--allow-insecure|--strict-tls] [--force]
-  xp2p client deploy --remote-host HOST [--package-only] [--ssh-user NAME] [--ssh-port PORT]
-                     [--server-host HOST] [--server-port PORT]
-                     [--user EMAIL] [--password SECRET]
-                     [--install-dir PATH] [--config-dir NAME]
-                     [--local-install PATH] [--local-config NAME]
-                     [--save-link FILE]
-  xp2p client remove [--path PATH]
-  xp2p client run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
-                  [--xray-log-file FILE]
-                      (requires client server address and password configured)
 `)
+	fmt.Print(cli.CommandsUsage())
 }
 
 func logFormatFromConfig(value string) logging.Format {

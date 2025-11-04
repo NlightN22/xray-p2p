@@ -80,7 +80,7 @@ The Go CLI can build standalone deployment archives so you can inspect or upload
 xp2p client deploy --remote-host 10.0.10.10 --package-only
 ```
 
-The command produces a versioned zip file with placeholder install scripts and a generated configuration tied to the requested host.
+The command produces a versioned directory with placeholder install scripts and a generated configuration tied to the requested host.
 
 On the remote host, reuse the manifest baked into the package:
 
