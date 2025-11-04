@@ -30,8 +30,8 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.winrm.password = "vagrant"
     machine.winrm.transport = :plaintext
     machine.winrm.basic_auth_only = true
-    machine.winrm.timeout = 600
-    machine.winrm.retry_limit = 30
+    machine.winrm.timeout = 60
+    machine.winrm.retry_limit = 10
 
     machine.vm.network "forwarded_port",
                        guest: DEFAULT_WINRM_PORT,

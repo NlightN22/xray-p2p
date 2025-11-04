@@ -106,7 +106,11 @@ func TestRunServerInstall(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, calls := execInstall(tt.cfg, tt.args, tt.host, tt.hostErr, tt.installErr)
+			args := tt.args
+			if tt.prepare != nil {
+				args = append(args, tt.prepare(t)...)
+			}
+			code, calls := execInstall(tt.cfg, args, tt.host, tt.hostErr, tt.installErr)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
