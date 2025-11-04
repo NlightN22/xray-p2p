@@ -13,6 +13,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,6 +53,13 @@ jobs:
             exit 1
           fi
 
+      - name: Compute build matrix
+        id: matrix
+        run: |
+          set -euo pipefail
+          matrix=$(go run ./go/tools/targets matrix)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
       - name: go vet
         run: |
           set -euo pipefail
@@ -74,20 +82,7 @@ jobs:
       version: ${{ needs.verify.outputs.version }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            archive: tar.gz
-            ext: ""
-          - goos: linux
-            goarch: arm64
-            archive: tar.gz
-            ext: ""
-          - goos: windows
-            goarch: amd64
-            archive: zip
-            ext: ".exe"
+      matrix: ${{ fromJson(needs.verify.outputs.matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -158,20 +153,38 @@ jobs:
           merge-multiple: true
 
       - name: Prepare latest artifacts
+        id: prepare_latest_artifacts
         run: |
           set -euo pipefail
+          assets=$(go run ./go/tools/targets assets --name "${{ env.RELEASE_NAME }}" --version "${VERSION}")
+          printf '%s\n' "$assets" > artifacts.tsv
           mkdir -p latest
-          cp "release/${{ env.RELEASE_NAME }}-${VERSION}-linux-amd64.tar.gz" "latest/${{ env.RELEASE_NAME }}-latest-linux-amd64.tar.gz"
-          cp "release/${{ env.RELEASE_NAME }}-${VERSION}-linux-arm64.tar.gz" "latest/${{ env.RELEASE_NAME }}-latest-linux-arm64.tar.gz"
-          cp "release/${{ env.RELEASE_NAME }}-${VERSION}-windows-amd64.zip" "latest/${{ env.RELEASE_NAME }}-latest-windows-amd64.zip"
+          while IFS=$'\t' read -r _ release latest; do
+            if [ -z "$release" ]; then
+              continue
+            fi
+            cp "release/$release" "latest/$latest"
+          done < artifacts.tsv
+
+          release_paths=$(awk -F'\t' '{print "release/" $2}' artifacts.tsv)
+          latest_paths=$(awk -F'\t' '{print "latest/" $3}' artifacts.tsv)
+
+          {
+            echo "release_files<<EOF"
+            echo "$release_paths"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "latest_files<<EOF"
+            echo "$latest_paths"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-linux-amd64.tar.gz
-            release/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-linux-arm64.tar.gz
-            release/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-windows-amd64.zip
+          files: ${{ steps.prepare_latest_artifacts.outputs.release_files }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -195,10 +208,13 @@ jobs:
         run: |
           set -euo pipefail
           gh release delete latest --yes --repo "$REPO" || true
-          gh release create latest \
-            latest/${{ env.RELEASE_NAME }}-latest-linux-amd64.tar.gz \
-            latest/${{ env.RELEASE_NAME }}-latest-linux-arm64.tar.gz \
-            latest/${{ env.RELEASE_NAME }}-latest-windows-amd64.zip \
+          args=()
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              args+=("$file")
+            fi
+          done <<< "${{ steps.prepare_latest_artifacts.outputs.latest_files }}"
+          gh release create latest "${args[@]}" \
             --repo "$REPO" \
             --title "Latest" \
             --notes "Automated update for version ${VERSION}" \

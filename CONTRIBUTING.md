@@ -7,7 +7,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Install Go (version is defined via `go.mod`).
 - Run `go mod tidy` only if you intentionally manage dependencies.
 - Use `go fmt ./...` before sending changes; CI will double-check formatting.
-- Build binaries with `make build`. The Makefile sets `GOOS`/`GOARCH` combinations and injects the version via ldflags while keeping binary names (`xp2p`, `xp2p.exe`).
+- Build binaries with `make build`. Supported targets are defined once in `go/internal/buildtarget`, and the helper `go/tools/targets` drives both the Makefile and CI so packages stay in sync. The version is injected via ldflags and binaries keep their platform-specific names (`xp2p`, `xp2p.exe`).
 
 ## Testing
 
@@ -24,7 +24,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
   1. Run `go test ./...` and `go vet ./...`.
   2. Commit the version bump and related changes.
   3. Tag the commit (`git tag vX.Y.Z && git push origin vX.Y.Z`).
-  4. The `release` workflow rebuilds binaries with the tag version, publishes archives `xp2p-<version>-<os>-<arch>`, force-updates the `latest` tag, and republishes `xp2p-latest-<os>-<arch>` assets for stable download links.
+  4. The `release` workflow reads the same target catalog and rebuilds binaries with the tag version, publishes archives `xp2p-<version>-<os>-<arch>`, force-updates the `latest` tag, and republishes `xp2p-latest-<os>-<arch>` assets for stable download links.
 
 ## Continuous integration
 
