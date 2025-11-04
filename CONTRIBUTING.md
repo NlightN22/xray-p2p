@@ -25,6 +25,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
   2. Commit the version bump and related changes.
   3. Tag the commit (`git tag vX.Y.Z && git push origin vX.Y.Z`).
   4. The `release` workflow reads the same target catalog and rebuilds binaries with the tag version, publishes archives `xp2p-<version>-<os>-<arch>`, force-updates the `latest` tag, and republishes `xp2p-latest-<os>-<arch>` assets for stable download links.
+  5. You can run `scripts/New-Release.ps1 -Version X.Y.Z` to update `go/internal/version/version.go`, verify tests/builds, and get the exact commit/tag commands before tagging.
 
 ## Continuous integration
 
