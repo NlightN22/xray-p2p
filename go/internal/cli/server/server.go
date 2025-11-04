@@ -1,4 +1,4 @@
-package cli
+package servercmd
 
 import (
 	"bufio"
@@ -30,6 +30,10 @@ var (
 )
 
 var promptYesNoFunc = promptYesNo
+
+func Execute(ctx context.Context, cfg config.Config, args []string) int {
+	return runServer(ctx, cfg, args)
+}
 
 func runServer(ctx context.Context, cfg config.Config, args []string) int {
 	if len(args) == 0 {

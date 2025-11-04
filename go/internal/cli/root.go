@@ -11,6 +11,7 @@ import (
 	"time"
 
 	clientcmd "github.com/NlightN22/xray-p2p/go/internal/cli/client"
+	servercmd "github.com/NlightN22/xray-p2p/go/internal/cli/server"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 )
@@ -26,7 +27,7 @@ func Execute(ctx context.Context, cfg config.Config, args []string) int {
 	case "ping":
 		return runPing(ctx, cfg, args[1:])
 	case "server":
-		return runServer(ctx, cfg, args[1:])
+		return servercmd.Execute(ctx, cfg, args[1:])
 	case "client":
 		return clientcmd.Execute(ctx, cfg, args[1:])
 	default:
