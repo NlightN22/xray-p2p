@@ -12,20 +12,29 @@ const (
 	defaultPingTarget       = "10.0.10.10"
 )
 
+type manifestOptions struct {
+	remoteHost     string
+	installDir     string
+	trojanPort     string
+	trojanUser     string
+	trojanPassword string
+}
+
+type runtimeOptions struct {
+	remoteHost      string
+	sshUser         string
+	sshPort         string
+	serverHost      string
+	remoteConfigDir string
+	localInstallDir string
+	localConfigDir  string
+	packageOnly     bool
+}
+
 type deployOptions struct {
-	remoteHost       string
-	sshUser          string
-	sshPort          string
-	serverHost       string
-	serverPort       string
-	trojanUser       string
-	trojanPassword   string
-	remoteInstallDir string
-	remoteConfigDir  string
-	localInstallDir  string
-	localConfigDir   string
-	packageOnly      bool
-	packagePath      string
+	manifest    manifestOptions
+	runtime     runtimeOptions
+	packagePath string
 }
 
 type sshTarget struct {

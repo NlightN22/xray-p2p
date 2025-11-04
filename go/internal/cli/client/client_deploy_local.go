@@ -17,8 +17,8 @@ func installLocalClient(ctx context.Context, opts deployOptions, link string) er
 	}
 
 	installOpts := client.InstallOptions{
-		InstallDir:    opts.localInstallDir,
-		ConfigDir:     opts.localConfigDir,
+		InstallDir:    opts.runtime.localInstallDir,
+		ConfigDir:     opts.runtime.localConfigDir,
 		ServerAddress: linkData.ServerAddress,
 		ServerPort:    linkData.ServerPort,
 		User:          linkData.User,
@@ -33,8 +33,8 @@ func installLocalClient(ctx context.Context, opts deployOptions, link string) er
 	}
 
 	logging.Info("xp2p client deploy: local client installed",
-		"install_dir", opts.localInstallDir,
-		"config_dir", opts.localConfigDir,
+		"install_dir", opts.runtime.localInstallDir,
+		"config_dir", opts.runtime.localConfigDir,
 	)
 	return nil
 }
@@ -47,8 +47,8 @@ func startLocalClient(opts deployOptions) (*exec.Cmd, error) {
 
 	args := []string{
 		"client", "run",
-		"--path", opts.localInstallDir,
-		"--config-dir", opts.localConfigDir,
+		"--path", opts.runtime.localInstallDir,
+		"--config-dir", opts.runtime.localConfigDir,
 		"--quiet",
 		"--auto-install",
 	}

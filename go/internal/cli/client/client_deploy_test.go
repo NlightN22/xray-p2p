@@ -32,34 +32,34 @@ func TestParseDeployFlagsUsesDefaults(t *testing.T) {
 		t.Fatalf("parseDeployFlags: %v", err)
 	}
 
-	if opts.remoteHost != "gateway.internal" {
-		t.Fatalf("remoteHost mismatch: got %q", opts.remoteHost)
+	if opts.runtime.remoteHost != "gateway.internal" {
+		t.Fatalf("remoteHost mismatch: got %q", opts.runtime.remoteHost)
 	}
-	if opts.serverHost != "edge.example.test" {
-		t.Fatalf("serverHost mismatch: got %q", opts.serverHost)
+	if opts.runtime.serverHost != "edge.example.test" {
+		t.Fatalf("serverHost mismatch: got %q", opts.runtime.serverHost)
 	}
-	if opts.serverPort != "58443" {
-		t.Fatalf("serverPort mismatch: got %q", opts.serverPort)
+	if opts.manifest.trojanPort != "58443" {
+		t.Fatalf("serverPort mismatch: got %q", opts.manifest.trojanPort)
 	}
-	if opts.trojanUser != "user@example.test" {
-		t.Fatalf("trojanUser mismatch: got %q", opts.trojanUser)
+	if opts.manifest.trojanUser != "user@example.test" {
+		t.Fatalf("trojanUser mismatch: got %q", opts.manifest.trojanUser)
 	}
-	if opts.trojanPassword != "hunter2" {
-		t.Fatalf("trojanPassword mismatch: got %q", opts.trojanPassword)
+	if opts.manifest.trojanPassword != "hunter2" {
+		t.Fatalf("trojanPassword mismatch: got %q", opts.manifest.trojanPassword)
 	}
-	if opts.remoteInstallDir != `C:\remote` {
-		t.Fatalf("remoteInstallDir mismatch: got %q", opts.remoteInstallDir)
+	if opts.manifest.installDir != `C:\remote` {
+		t.Fatalf("remoteInstallDir mismatch: got %q", opts.manifest.installDir)
 	}
-	if opts.remoteConfigDir != "cfg-server" {
-		t.Fatalf("remoteConfigDir mismatch: got %q", opts.remoteConfigDir)
+	if opts.runtime.remoteConfigDir != "cfg-server" {
+		t.Fatalf("remoteConfigDir mismatch: got %q", opts.runtime.remoteConfigDir)
 	}
-	if opts.localInstallDir != filepath.Clean(`C:\local`) {
-		t.Fatalf("localInstallDir mismatch: got %q", opts.localInstallDir)
+	if opts.runtime.localInstallDir != filepath.Clean(`C:\local`) {
+		t.Fatalf("localInstallDir mismatch: got %q", opts.runtime.localInstallDir)
 	}
-	if opts.localConfigDir != "cfg-client" {
-		t.Fatalf("localConfigDir mismatch: got %q", opts.localConfigDir)
+	if opts.runtime.localConfigDir != "cfg-client" {
+		t.Fatalf("localConfigDir mismatch: got %q", opts.runtime.localConfigDir)
 	}
-	if opts.packageOnly {
+	if opts.runtime.packageOnly {
 		t.Fatalf("packageOnly expected false")
 	}
 }
@@ -92,8 +92,8 @@ func TestParseDeployFlagsPromptsForUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseDeployFlags: %v", err)
 	}
-	if opts.trojanUser != "prompt@example.test" {
-		t.Fatalf("trojanUser mismatch: got %q", opts.trojanUser)
+	if opts.manifest.trojanUser != "prompt@example.test" {
+		t.Fatalf("trojanUser mismatch: got %q", opts.manifest.trojanUser)
 	}
 }
 
@@ -104,14 +104,14 @@ func TestParseDeployFlagsPackageOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseDeployFlags: %v", err)
 	}
-	if !opts.packageOnly {
+	if !opts.runtime.packageOnly {
 		t.Fatalf("packageOnly expected true")
 	}
-	if opts.trojanUser != "client@example.invalid" {
-		t.Fatalf("trojanUser mismatch: %q", opts.trojanUser)
+	if opts.manifest.trojanUser != "client@example.invalid" {
+		t.Fatalf("trojanUser mismatch: %q", opts.manifest.trojanUser)
 	}
-	if opts.trojanPassword != "placeholder-secret" {
-		t.Fatalf("trojanPassword mismatch: %q", opts.trojanPassword)
+	if opts.manifest.trojanPassword != "placeholder-secret" {
+		t.Fatalf("trojanPassword mismatch: %q", opts.manifest.trojanPassword)
 	}
 }
 
@@ -130,8 +130,8 @@ func TestParseDeployFlagsOverridesTrojanPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseDeployFlags: %v", err)
 	}
-	if opts.serverPort != "8445" {
-		t.Fatalf("trojan port mismatch: got %q", opts.serverPort)
+	if opts.manifest.trojanPort != "8445" {
+		t.Fatalf("trojan port mismatch: got %q", opts.manifest.trojanPort)
 	}
 }
 
@@ -155,8 +155,23 @@ func TestRunClientDeploySuccessfulFlow(t *testing.T) {
 	restore := multiRestore(
 		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
 			packageCalled = true
-			if o.remoteHost != "gateway.internal" {
-				t.Fatalf("package remoteHost: %q", o.remoteHost)
+			if o.manifest.remoteHost != "gateway.internal" {
+				t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
+			}
+			if o.manifest.installDir != `C:\remote` {
+				t.Fatalf("package installDir: %q", o.manifest.installDir)
+			}
+			if o.manifest.trojanUser != "user@example.test" {
+				t.Fatalf("package trojanUser: %q", o.manifest.trojanUser)
+			}
+			if o.manifest.trojanPassword != "secret" {
+				t.Fatalf("package trojanPassword: %q", o.manifest.trojanPassword)
+			}
+			if o.manifest.trojanPort == "" {
+				t.Fatalf("package trojanPort should not be empty")
+			}
+			if o.runtime.packageOnly {
+				t.Fatalf("packageOnly should be false for full deploy")
 			}
 			return `C:\package.zip`, nil
 		}),
@@ -239,14 +254,14 @@ func TestRunClientDeploySuccessfulFlow(t *testing.T) {
 	if gotEnsureTarget.host != "gateway.internal" {
 		t.Fatalf("ensure target host: %q", gotEnsureTarget.host)
 	}
-	if gotPrepareOpts.serverHost != "edge.example.test" {
-		t.Fatalf("prepare opts serverHost: %q", gotPrepareOpts.serverHost)
+	if gotPrepareOpts.runtime.serverHost != "edge.example.test" {
+		t.Fatalf("prepare opts serverHost: %q", gotPrepareOpts.runtime.serverHost)
 	}
 	if gotPrepareOpts.packagePath != `C:\package.zip` {
 		t.Fatalf("prepare opts packagePath: %q", gotPrepareOpts.packagePath)
 	}
-	if gotInstallOpts.localInstallDir != filepath.Clean(`C:\local`) {
-		t.Fatalf("install opts localInstallDir: %q", gotInstallOpts.localInstallDir)
+	if gotInstallOpts.runtime.localInstallDir != filepath.Clean(`C:\local`) {
+		t.Fatalf("install opts localInstallDir: %q", gotInstallOpts.runtime.localInstallDir)
 	}
 	if gotInstallOpts.packagePath != `C:\package.zip` {
 		t.Fatalf("install opts packagePath: %q", gotInstallOpts.packagePath)
@@ -271,8 +286,8 @@ func TestRunClientDeployStopsOnFailure(t *testing.T) {
 
 	restore := multiRestore(
 		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
-			if o.remoteHost != "gateway.internal" {
-				t.Fatalf("package remoteHost: %q", o.remoteHost)
+			if o.manifest.remoteHost != "gateway.internal" {
+				t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
 			}
 			return `C:\package.zip`, nil
 		}),
@@ -298,10 +313,10 @@ func TestRunClientDeployPackageOnlySkipsRemote(t *testing.T) {
 	restore := multiRestore(
 		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
 			packageCalled = true
-			if o.remoteHost != "gateway.internal" {
-				t.Fatalf("package remoteHost: %q", o.remoteHost)
+			if o.manifest.remoteHost != "gateway.internal" {
+				t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
 			}
-			if !o.packageOnly {
+			if !o.runtime.packageOnly {
 				t.Fatalf("expected packageOnly in package builder options")
 			}
 			return `C:\package.zip`, nil
@@ -348,8 +363,8 @@ func TestRunClientDeployPackageBuildFailure(t *testing.T) {
 	}
 
 	restore := stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
-		if o.remoteHost != "gateway.internal" {
-			t.Fatalf("package remoteHost: %q", o.remoteHost)
+		if o.manifest.remoteHost != "gateway.internal" {
+			t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
 		}
 		return "", errors.New("packaging failed")
 	})

@@ -1,6 +1,8 @@
 package deploy
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -63,12 +65,34 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 	}
 
 	configPath := filepath.Join(path, "config", "deployment.json")
-	configFile, err := os.Open(configPath)
+	manifestBytes, err := os.ReadFile(configPath)
 	if err != nil {
-		t.Fatalf("open deployment.json: %v", err)
+		t.Fatalf("read deployment.json: %v", err)
 	}
-	defer configFile.Close()
 
+	var manifestFields map[string]any
+	if err := json.Unmarshal(manifestBytes, &manifestFields); err != nil {
+		t.Fatalf("manifest json decode: %v", err)
+	}
+	expectedKeys := []string{
+		"remote_host",
+		"xp2p_version",
+		"generated_at",
+		"install_dir",
+		"trojan_port",
+		"trojan_user",
+		"trojan_password",
+	}
+	if len(manifestFields) != len(expectedKeys) {
+		t.Fatalf("manifest contains unexpected keys: %#v", manifestFields)
+	}
+	for _, key := range expectedKeys {
+		if _, ok := manifestFields[key]; !ok {
+			t.Fatalf("manifest missing key %q", key)
+		}
+	}
+
+	configFile := bytes.NewReader(manifestBytes)
 	manifest, err := spec.Read(configFile)
 	if err != nil {
 		t.Fatalf("unmarshal deployment.json: %v", err)

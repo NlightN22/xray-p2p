@@ -38,7 +38,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	opts.packagePath = packagePath
 	logging.Info("xp2p client deploy: package prepared", "path", packagePath)
 
-	if opts.packageOnly {
+	if opts.runtime.packageOnly {
 		logging.Info("xp2p client deploy: package-only mode enabled, skipping remote deployment")
 		return 0
 	}
@@ -55,12 +55,12 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	target := sshTarget{
-		user: opts.sshUser,
-		host: opts.remoteHost,
-		port: opts.sshPort,
+		user: opts.runtime.sshUser,
+		host: opts.runtime.remoteHost,
+		port: opts.runtime.sshPort,
 	}
 
-	if err := ensureRemoteBinaryFunc(ctx, target, exePath, opts.remoteInstallDir); err != nil {
+	if err := ensureRemoteBinaryFunc(ctx, target, exePath, opts.manifest.installDir); err != nil {
 		logging.Error("xp2p client deploy: remote binary setup failed", "err", err)
 		return 1
 	}
@@ -198,17 +198,22 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	localConfigDir := firstNonEmpty(cfg.Client.ConfigDir, client.DefaultClientConfigDir)
 
 	return deployOptions{
-		remoteHost:       host,
-		sshUser:          strings.TrimSpace(*sshUser),
-		sshPort:          strings.TrimSpace(*sshPort),
-		serverHost:       serverHostValue,
-		serverPort:       serverPortValue,
-		trojanUser:       strings.TrimSpace(userValue),
-		trojanPassword:   strings.TrimSpace(passwordValue),
-		remoteInstallDir: strings.TrimSpace(remoteInstallDir),
-		remoteConfigDir:  strings.TrimSpace(remoteConfigDir),
-		localInstallDir:  filepath.Clean(localInstallDir),
-		localConfigDir:   strings.TrimSpace(localConfigDir),
-		packageOnly:      packageOnlyValue,
+		manifest: manifestOptions{
+			remoteHost:     host,
+			installDir:     strings.TrimSpace(remoteInstallDir),
+			trojanPort:     serverPortValue,
+			trojanUser:     strings.TrimSpace(userValue),
+			trojanPassword: strings.TrimSpace(passwordValue),
+		},
+		runtime: runtimeOptions{
+			remoteHost:      host,
+			sshUser:         strings.TrimSpace(*sshUser),
+			sshPort:         strings.TrimSpace(*sshPort),
+			serverHost:      serverHostValue,
+			remoteConfigDir: strings.TrimSpace(remoteConfigDir),
+			localInstallDir: filepath.Clean(localInstallDir),
+			localConfigDir:  strings.TrimSpace(localConfigDir),
+			packageOnly:     packageOnlyValue,
+		},
 	}, nil
 }

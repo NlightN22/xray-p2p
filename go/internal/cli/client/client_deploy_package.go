@@ -7,11 +7,11 @@ import (
 
 func buildDeploymentPackage(opts deployOptions) (string, error) {
 	return deploy.BuildPackage(deploy.PackageOptions{
-		RemoteHost: opts.remoteHost,
+		RemoteHost: opts.manifest.remoteHost,
 		Version:    version.Current(),
-		InstallDir: opts.remoteInstallDir,
-		TrojanPort: opts.serverPort,
-		TrojanUser: opts.trojanUser,
-		TrojanPass: opts.trojanPassword,
+		InstallDir: opts.manifest.installDir,
+		TrojanPort: opts.manifest.trojanPort,
+		TrojanUser: opts.manifest.trojanUser,
+		TrojanPass: opts.manifest.trojanPassword,
 	})
 }

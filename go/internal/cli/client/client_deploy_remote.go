@@ -31,18 +31,24 @@ func ensureRemoteBinary(ctx context.Context, target sshTarget, localExe, remoteI
 }
 
 func prepareRemoteServer(ctx context.Context, target sshTarget, opts deployOptions) (string, error) {
-	xp2pPath := filepath.Join(opts.remoteInstallDir, "xp2p.exe")
-	present, err := remoteServerAssetsPresent(ctx, target, opts.remoteInstallDir, opts.remoteConfigDir)
+	installDir := opts.manifest.installDir
+	configDir := opts.runtime.remoteConfigDir
+	xp2pPath := filepath.Join(installDir, "xp2p.exe")
+	present, err := remoteServerAssetsPresent(ctx, target, installDir, configDir)
 	if err != nil {
 		return "", err
 	}
 	if !present {
+		portArg := opts.manifest.trojanPort
+		if strings.TrimSpace(portArg) == "" {
+			portArg = fmt.Sprintf("%d", server.DefaultTrojanPort)
+		}
 		args := []string{
 			"server", "install",
-			"--path", opts.remoteInstallDir,
-			"--config-dir", opts.remoteConfigDir,
-			"--port", opts.serverPort,
-			"--host", opts.serverHost,
+			"--path", installDir,
+			"--config-dir", configDir,
+			"--port", portArg,
+			"--host", opts.runtime.serverHost,
 			"--force",
 		}
 		if _, err := remoteRunExecutable(ctx, target, xp2pPath, args); err != nil {
@@ -52,9 +58,9 @@ func prepareRemoteServer(ctx context.Context, target sshTarget, opts deployOptio
 
 	if _, err := remoteRunExecutable(ctx, target, xp2pPath, []string{
 		"server", "cert", "set",
-		"--path", opts.remoteInstallDir,
-		"--config-dir", opts.remoteConfigDir,
-		"--host", opts.serverHost,
+		"--path", installDir,
+		"--config-dir", configDir,
+		"--host", opts.runtime.serverHost,
 		"--force",
 	}); err != nil {
 		return "", fmt.Errorf("server cert set: %w", err)
@@ -62,11 +68,11 @@ func prepareRemoteServer(ctx context.Context, target sshTarget, opts deployOptio
 
 	rawOutput, err := remoteRunExecutable(ctx, target, xp2pPath, []string{
 		"server", "user", "add",
-		"--path", opts.remoteInstallDir,
-		"--config-dir", opts.remoteConfigDir,
-		"--id", opts.trojanUser,
-		"--password", opts.trojanPassword,
-		"--host", opts.serverHost,
+		"--path", installDir,
+		"--config-dir", configDir,
+		"--id", opts.manifest.trojanUser,
+		"--password", opts.manifest.trojanPassword,
+		"--host", opts.runtime.serverHost,
 	})
 	if err != nil {
 		return "", fmt.Errorf("server user add: %w", err)
@@ -81,11 +87,13 @@ func prepareRemoteServer(ctx context.Context, target sshTarget, opts deployOptio
 }
 
 func startRemoteServer(ctx context.Context, target sshTarget, opts deployOptions) error {
-	xp2pPath := filepath.Join(opts.remoteInstallDir, "xp2p.exe")
+	installDir := opts.manifest.installDir
+	configDir := opts.runtime.remoteConfigDir
+	xp2pPath := filepath.Join(installDir, "xp2p.exe")
 	args := []string{
 		"server", "run",
-		"--path", opts.remoteInstallDir,
-		"--config-dir", opts.remoteConfigDir,
+		"--path", installDir,
+		"--config-dir", configDir,
 		"--quiet",
 		"--auto-install",
 	}
