@@ -24,7 +24,6 @@ type deployOptions struct {
 	remoteConfigDir  string
 	localInstallDir  string
 	localConfigDir   string
-	saveLinkPath     string
 	packageOnly      bool
 	packagePath      string
 }
@@ -43,7 +42,6 @@ var (
 	startProcessFunc           = startDetachedProcess
 	stopLocalProcessFunc       = stopProcess
 	stopRemoteFunc             = stopRemoteService
-	writeFileFunc              = os.WriteFile
 	sleepFunc                  = time.Sleep
 	runPingCommandFunc         = runPingCommand
 	ensureRemoteBinaryFunc     = ensureRemoteBinary

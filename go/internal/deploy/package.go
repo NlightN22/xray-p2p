@@ -33,6 +33,8 @@ type PackageOptions struct {
 	OutputDir  string
 	Version    string
 	InstallDir string
+	TrojanUser string
+	TrojanPass string
 	Timestamp  time.Time
 }
 
@@ -91,7 +93,15 @@ func BuildPackage(opts PackageOptions) (string, error) {
 		return "", err
 	}
 
-	if err := writePackageConfig(finalPath, host, pkgVersion, strings.TrimSpace(opts.InstallDir), timestamp); err != nil {
+	if err := writePackageConfig(
+		finalPath,
+		host,
+		pkgVersion,
+		strings.TrimSpace(opts.InstallDir),
+		strings.TrimSpace(opts.TrojanUser),
+		strings.TrimSpace(opts.TrojanPass),
+		timestamp,
+	); err != nil {
 		os.RemoveAll(finalPath)
 		return "", err
 	}
@@ -133,12 +143,16 @@ func copyTemplates(dest string) error {
 	})
 }
 
-func writePackageConfig(dest, remoteHost, pkgVersion, installDir string, timestamp time.Time) error {
+func writePackageConfig(dest, remoteHost, pkgVersion, installDir, trojanUser, trojanPass string, timestamp time.Time) error {
 	manifest := spec.Manifest{
 		RemoteHost:  remoteHost,
 		XP2PVersion: pkgVersion,
 		GeneratedAt: timestamp,
 		InstallDir:  installDir,
+	}
+	if strings.TrimSpace(trojanUser) != "" && strings.TrimSpace(trojanPass) != "" {
+		manifest.TrojanUser = trojanUser
+		manifest.TrojanPassword = trojanPass
 	}
 
 	configPath := filepath.Join(dest, "config", "deployment.json")

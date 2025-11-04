@@ -20,6 +20,8 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 		OutputDir:  outDir,
 		Version:    "1.2.3",
 		InstallDir: `C:\xp2p`,
+		TrojanUser: "client@example.invalid",
+		TrojanPass: "secret",
 		Timestamp:  timestamp,
 	})
 	if err != nil {
@@ -78,6 +80,12 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 	if manifest.InstallDir != `C:\xp2p` {
 		t.Fatalf("install_dir mismatch: %q", manifest.InstallDir)
 	}
+	if manifest.TrojanUser != "client@example.invalid" {
+		t.Fatalf("trojan_user mismatch: %q", manifest.TrojanUser)
+	}
+	if manifest.TrojanPassword != "secret" {
+		t.Fatalf("trojan_password mismatch: %q", manifest.TrojanPassword)
+	}
 	if manifest.GeneratedAt != timestamp {
 		t.Fatalf("generated_at mismatch: %v", manifest.GeneratedAt)
 	}
@@ -99,6 +107,8 @@ func TestBuildPackageSanitizesArchiveName(t *testing.T) {
 		OutputDir:  outDir,
 		Version:    "0.9.0",
 		InstallDir: `C:\xp2p`,
+		TrojanUser: "user@example.com",
+		TrojanPass: "secret",
 		Timestamp:  timestamp,
 	})
 	if err != nil {

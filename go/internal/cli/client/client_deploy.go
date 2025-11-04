@@ -73,14 +73,6 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 
 	logging.Info("xp2p client deploy: trojan link generated", "link", link)
 
-	if strings.TrimSpace(opts.saveLinkPath) != "" {
-		if err := writeFileFunc(opts.saveLinkPath, []byte(link), 0o600); err != nil {
-			logging.Warn("xp2p client deploy: unable to save link", "path", opts.saveLinkPath, "err", err)
-		} else {
-			logging.Info("xp2p client deploy: link saved", "path", opts.saveLinkPath)
-		}
-	}
-
 	if err := installLocalClientFunc(ctx, opts, link); err != nil {
 		logging.Error("xp2p client deploy: local installation failed", "err", err)
 		return 1
@@ -143,11 +135,6 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	serverPort := fs.String("server-port", "", "Trojan service port")
 	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
-	remoteInstall := fs.String("install-dir", "", "remote xp2p installation directory")
-	remoteConfig := fs.String("config-dir", "", "remote configuration directory name")
-	localInstall := fs.String("local-install", "", "local client installation directory")
-	localConfig := fs.String("local-config", "", "local client configuration directory name")
-	saveLink := fs.String("save-link", "", "file path to persist generated trojan link")
 	packageOnly := fs.Bool("package-only", false, "prepare deployment package only (skip remote operations)")
 
 	if err := fs.Parse(args); err != nil {
@@ -205,11 +192,11 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		}
 	}
 
-	remoteInstallDir := firstNonEmpty(*remoteInstall, cfg.Server.InstallDir, defaultRemoteInstallDir)
-	remoteConfigDir := firstNonEmpty(*remoteConfig, cfg.Server.ConfigDir, server.DefaultServerConfigDir)
+	remoteInstallDir := firstNonEmpty(cfg.Server.InstallDir, defaultRemoteInstallDir)
+	remoteConfigDir := firstNonEmpty(cfg.Server.ConfigDir, server.DefaultServerConfigDir)
 
-	localInstallDir := firstNonEmpty(*localInstall, cfg.Client.InstallDir, defaultLocalInstallDir)
-	localConfigDir := firstNonEmpty(*localConfig, cfg.Client.ConfigDir, client.DefaultClientConfigDir)
+	localInstallDir := firstNonEmpty(cfg.Client.InstallDir, defaultLocalInstallDir)
+	localConfigDir := firstNonEmpty(cfg.Client.ConfigDir, client.DefaultClientConfigDir)
 
 	return deployOptions{
 		remoteHost:       host,
@@ -223,7 +210,6 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		remoteConfigDir:  strings.TrimSpace(remoteConfigDir),
 		localInstallDir:  filepath.Clean(localInstallDir),
 		localConfigDir:   strings.TrimSpace(localConfigDir),
-		saveLinkPath:     strings.TrimSpace(*saveLink),
 		packageOnly:      packageOnlyValue,
 	}, nil
 }

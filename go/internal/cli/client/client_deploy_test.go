@@ -59,9 +59,6 @@ func TestParseDeployFlagsUsesDefaults(t *testing.T) {
 	if opts.localConfigDir != "cfg-client" {
 		t.Fatalf("localConfigDir mismatch: got %q", opts.localConfigDir)
 	}
-	if opts.saveLinkPath != "" {
-		t.Fatalf("saveLinkPath expected empty, got %q", opts.saveLinkPath)
-	}
 	if opts.packageOnly {
 		t.Fatalf("packageOnly expected false")
 	}

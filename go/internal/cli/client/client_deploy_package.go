@@ -10,5 +10,7 @@ func buildDeploymentPackage(opts deployOptions) (string, error) {
 		RemoteHost: opts.remoteHost,
 		Version:    version.Current(),
 		InstallDir: opts.remoteInstallDir,
+		TrojanUser: opts.trojanUser,
+		TrojanPass: opts.trojanPassword,
 	})
 }
