@@ -14,6 +14,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Unit tests: `go test ./...`
 - Integration suite (requires additional dependencies): `go test -tags=integration ./...`
 - Windows smoke workflows are described in `tests/README.md`. They run automatically in CI when triggered.
+- Deployment packages: `go test ./go/internal/deploy` checks the embedded templates and archive layout.
 
 ## Versioning and releases
 

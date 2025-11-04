@@ -29,6 +29,19 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 2
 	}
 
+	packagePath, err := buildDeploymentPackageFunc(opts)
+	if err != nil {
+		logging.Error("xp2p client deploy: package preparation failed", "err", err)
+		return 1
+	}
+	opts.packagePath = packagePath
+	logging.Info("xp2p client deploy: package prepared", "path", packagePath)
+
+	if opts.packageOnly {
+		logging.Info("xp2p client deploy: package-only mode enabled, skipping remote deployment")
+		return 0
+	}
+
 	if err := ensureSSHPrerequisites(); err != nil {
 		logging.Error("xp2p client deploy: prerequisites failed", "err", err)
 		return 1
@@ -134,6 +147,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	localInstall := fs.String("local-install", "", "local client installation directory")
 	localConfig := fs.String("local-config", "", "local client configuration directory name")
 	saveLink := fs.String("save-link", "", "file path to persist generated trojan link")
+	packageOnly := fs.Bool("package-only", false, "prepare deployment package only (skip remote operations)")
 
 	if err := fs.Parse(args); err != nil {
 		return deployOptions{}, err
@@ -150,18 +164,24 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	serverHostValue := firstNonEmpty(*serverHost, cfg.Server.Host, host)
 	serverPortValue := normalizeServerPort(cfg, *serverPort)
 
+	packageOnlyValue := *packageOnly
+
 	userValue := firstNonEmpty(*trojanUser, cfg.Client.User)
-	if userValue == "" {
-		if promptStringFunc == nil {
-			return deployOptions{}, fmt.Errorf("--user is required (set client.user in config to use default)")
+	if strings.TrimSpace(userValue) == "" {
+		if packageOnlyValue {
+			userValue = "client@example.invalid"
+		} else {
+			if promptStringFunc == nil {
+				return deployOptions{}, fmt.Errorf("--user is required (set client.user in config to use default)")
+			}
+			value, err := promptStringFunc("Trojan user (email): ")
+			if err != nil {
+				return deployOptions{}, fmt.Errorf("prompt trojan user: %w", err)
+			}
+			userValue = strings.TrimSpace(value)
 		}
-		value, err := promptStringFunc("Trojan user (email): ")
-		if err != nil {
-			return deployOptions{}, fmt.Errorf("prompt trojan user: %w", err)
-		}
-		userValue = strings.TrimSpace(value)
 	}
-	if userValue == "" {
+	if strings.TrimSpace(userValue) == "" {
 		return deployOptions{}, fmt.Errorf("trojan user is required")
 	}
 
@@ -170,11 +190,15 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		passwordValue = strings.TrimSpace(cfg.Client.Password)
 	}
 	if passwordValue == "" {
-		gen, err := generateSecret(18)
-		if err != nil {
-			return deployOptions{}, fmt.Errorf("generate password: %w", err)
+		if packageOnlyValue {
+			passwordValue = "placeholder-secret"
+		} else {
+			gen, err := generateSecret(18)
+			if err != nil {
+				return deployOptions{}, fmt.Errorf("generate password: %w", err)
+			}
+			passwordValue = gen
 		}
-		passwordValue = gen
 	}
 
 	remoteInstallDir := firstNonEmpty(*remoteInstall, cfg.Server.InstallDir, defaultRemoteInstallDir)
@@ -196,5 +220,6 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		localInstallDir:  filepath.Clean(localInstallDir),
 		localConfigDir:   strings.TrimSpace(localConfigDir),
 		saveLinkPath:     strings.TrimSpace(*saveLink),
+		packageOnly:      packageOnlyValue,
 	}, nil
 }
