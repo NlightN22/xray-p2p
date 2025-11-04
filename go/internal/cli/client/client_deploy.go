@@ -14,6 +14,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -159,6 +160,9 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	host := strings.TrimSpace(*remoteHost)
 	if host == "" || strings.HasPrefix(host, "-") {
 		return deployOptions{}, fmt.Errorf("--remote-host is required")
+	}
+	if err := netutil.ValidateHost(host); err != nil {
+		return deployOptions{}, fmt.Errorf("--remote-host: %v", err)
 	}
 
 	serverHostValue := firstNonEmpty(*serverHost, cfg.Server.Host, host)

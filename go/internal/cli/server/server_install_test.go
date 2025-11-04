@@ -3,9 +3,13 @@ package servercmd
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -14,6 +18,7 @@ func TestRunServerInstall(t *testing.T) {
 		name       string
 		cfg        config.Config
 		args       []string
+		prepare    func(*testing.T) []string
 		host       string
 		hostErr    error
 		installErr error
@@ -59,6 +64,40 @@ func TestRunServerInstall(t *testing.T) {
 			name:     "host detection failure aborts",
 			cfg:      serverCfg("", "", ""),
 			hostErr:  errors.New("no host"),
+			wantCode: 1,
+			wantCall: false,
+		},
+		{
+			name:     "invalid host flag",
+			cfg:      serverCfg(`C:\xp2p`, "config-server", ""),
+			args:     []string{"--host", "bad host"},
+			wantCode: 1,
+			wantCall: false,
+		},
+		{
+			name: "invalid host in manifest",
+			cfg:  serverCfg(`C:\xp2p`, "config-server", ""),
+			prepare: func(t *testing.T) []string {
+				t.Helper()
+				dir := t.TempDir()
+				path := filepath.Join(dir, "deployment.json")
+				manifest := spec.Manifest{
+					RemoteHost:  "bad host",
+					XP2PVersion: "9.9.9",
+					GeneratedAt: time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+				}
+				file, err := os.Create(path)
+				if err != nil {
+					t.Fatalf("create manifest: %v", err)
+				}
+				if err := spec.Write(file, manifest); err != nil {
+					t.Fatalf("write manifest: %v", err)
+				}
+				if err := file.Close(); err != nil {
+					t.Fatalf("close manifest: %v", err)
+				}
+				return []string{"--deploy-file", path}
+			},
 			wantCode: 1,
 			wantCall: false,
 		},

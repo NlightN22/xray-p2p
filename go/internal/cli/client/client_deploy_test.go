@@ -67,15 +67,23 @@ func TestParseDeployFlagsUsesDefaults(t *testing.T) {
 	}
 }
 
-func TestParseDeployFlagsRejectsMissingHost(t *testing.T) {
-	if _, err := parseDeployFlags(config.Config{}, []string{"--remote-host"}); err == nil {
+func TestParseDeployFlagsRejectsInvalidHost(t *testing.T) {
+	cfg := config.Config{
+		Client: config.ClientConfig{
+			User:     "user@example.test",
+			Password: "secret",
+		},
+	}
+	if _, err := parseDeployFlags(cfg, []string{"--remote-host"}); err == nil {
 		t.Fatalf("expected error when --remote-host has no value")
 	}
-	if _, err := parseDeployFlags(config.Config{}, []string{"--remote-host", "--package-only"}); err == nil {
+	if _, err := parseDeployFlags(cfg, []string{"--remote-host", "--package-only"}); err == nil {
 		t.Fatalf("expected error when --remote-host value looks like a flag")
 	}
+	if _, err := parseDeployFlags(cfg, []string{"--remote-host", "bad host"}); err == nil {
+		t.Fatalf("expected error when --remote-host is invalid")
+	}
 }
-
 func TestParseDeployFlagsPromptsForUser(t *testing.T) {
 	cfg := config.Config{}
 	restore := stubPromptString(t, func(string) (string, error) {

@@ -360,14 +360,22 @@ func firstNonEmpty(values ...string) string {
 
 func determineInstallHost(ctx context.Context, explicit, fallback string) (string, bool, error) {
 	host := firstNonEmpty(explicit, fallback)
+	host = strings.TrimSpace(host)
 	if host != "" {
+		if err := netutil.ValidateHost(host); err != nil {
+			return "", false, err
+		}
 		return host, false, nil
 	}
 	value, err := detectPublicHostFunc(ctx)
 	if err != nil {
 		return "", false, err
 	}
-	return strings.TrimSpace(value), true, nil
+	value = strings.TrimSpace(value)
+	if err := netutil.ValidateHost(value); err != nil {
+		return "", false, fmt.Errorf("invalid host %q: %w", value, err)
+	}
+	return value, true, nil
 }
 
 func printServerUsage() {
