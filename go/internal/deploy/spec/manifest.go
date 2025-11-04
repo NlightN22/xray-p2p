@@ -21,6 +21,7 @@ type Manifest struct {
 	RemoteHost     string    `json:"remote_host"`
 	XP2PVersion    string    `json:"xp2p_version"`
 	GeneratedAt    time.Time `json:"generated_at"`
+	InstallDir     string    `json:"install_dir,omitempty"`
 	TrojanUser     string    `json:"trojan_user,omitempty"`
 	TrojanPassword string    `json:"trojan_password,omitempty"`
 }
@@ -50,6 +51,11 @@ func Marshal(m Manifest) ([]byte, error) {
 		return nil, err
 	}
 	m.GeneratedAt = m.GeneratedAt.UTC()
+	m.InstallDir = strings.TrimSpace(m.InstallDir)
+	m.RemoteHost = strings.TrimSpace(m.RemoteHost)
+	m.XP2PVersion = strings.TrimSpace(m.XP2PVersion)
+	m.TrojanUser = strings.TrimSpace(m.TrojanUser)
+	m.TrojanPassword = strings.TrimSpace(m.TrojanPassword)
 
 	type manifest Manifest
 	return json.MarshalIndent(manifest(m), "", "  ")
@@ -65,6 +71,11 @@ func Unmarshal(data []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	m.GeneratedAt = m.GeneratedAt.UTC()
+	m.InstallDir = strings.TrimSpace(m.InstallDir)
+	m.RemoteHost = strings.TrimSpace(m.RemoteHost)
+	m.XP2PVersion = strings.TrimSpace(m.XP2PVersion)
+	m.TrojanUser = strings.TrimSpace(m.TrojanUser)
+	m.TrojanPassword = strings.TrimSpace(m.TrojanPassword)
 	return m, nil
 }
 

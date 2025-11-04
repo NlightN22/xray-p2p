@@ -9,5 +9,6 @@ func buildDeploymentPackage(opts deployOptions) (string, error) {
 	return deploy.BuildPackage(deploy.PackageOptions{
 		RemoteHost: opts.remoteHost,
 		Version:    version.Current(),
+		InstallDir: opts.remoteInstallDir,
 	})
 }

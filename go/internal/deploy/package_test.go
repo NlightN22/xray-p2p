@@ -19,6 +19,7 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 		RemoteHost: "10.0.10.10",
 		OutputDir:  outDir,
 		Version:    "1.2.3",
+		InstallDir: `C:\xp2p`,
 		Timestamp:  timestamp,
 	})
 	if err != nil {
@@ -43,8 +44,17 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected install script in archive")
 	}
-	if !strings.Contains(string(data), "placeholder install script") {
-		t.Fatalf("unexpected script content: %q", string(data))
+	scriptContent := string(data)
+	for _, fragment := range []string{
+		"Build-ArtifactUrl",
+		"xp2p-$($manifest.Version)-windows-amd64.zip",
+		"--deploy-file",
+		"XP2P_RELEASE_BASE_URL",
+		"$manifest.InstallDir",
+	} {
+		if !strings.Contains(scriptContent, fragment) {
+			t.Fatalf("install.ps1 is missing expected fragment %q", fragment)
+		}
 	}
 
 	configPath := filepath.Join(path, "config", "deployment.json")
@@ -64,6 +74,9 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 	}
 	if manifest.XP2PVersion != "1.2.3" {
 		t.Fatalf("xp2p_version mismatch: %q", manifest.XP2PVersion)
+	}
+	if manifest.InstallDir != `C:\xp2p` {
+		t.Fatalf("install_dir mismatch: %q", manifest.InstallDir)
 	}
 	if manifest.GeneratedAt != timestamp {
 		t.Fatalf("generated_at mismatch: %v", manifest.GeneratedAt)
@@ -85,6 +98,7 @@ func TestBuildPackageSanitizesArchiveName(t *testing.T) {
 		RemoteHost: "..Bad host??",
 		OutputDir:  outDir,
 		Version:    "0.9.0",
+		InstallDir: `C:\xp2p`,
 		Timestamp:  timestamp,
 	})
 	if err != nil {

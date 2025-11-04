@@ -13,6 +13,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 		RemoteHost:     "10.0.10.10",
 		XP2PVersion:    "1.2.3",
 		GeneratedAt:    time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+		InstallDir:     `C:\xp2p`,
 		TrojanUser:     "client@example.invalid",
 		TrojanPassword: "secret",
 	}
@@ -41,6 +42,7 @@ func TestReadWrite(t *testing.T) {
 		RemoteHost:     "example.internal",
 		XP2PVersion:    "0.5.0",
 		GeneratedAt:    time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC),
+		InstallDir:     `D:\custom-xp2p`,
 		TrojanUser:     "client@example.internal",
 		TrojanPassword: "secret",
 	}

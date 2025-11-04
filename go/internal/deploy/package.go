@@ -32,6 +32,7 @@ type PackageOptions struct {
 	RemoteHost string
 	OutputDir  string
 	Version    string
+	InstallDir string
 	Timestamp  time.Time
 }
 
@@ -90,7 +91,7 @@ func BuildPackage(opts PackageOptions) (string, error) {
 		return "", err
 	}
 
-	if err := writePackageConfig(finalPath, host, pkgVersion, timestamp); err != nil {
+	if err := writePackageConfig(finalPath, host, pkgVersion, strings.TrimSpace(opts.InstallDir), timestamp); err != nil {
 		os.RemoveAll(finalPath)
 		return "", err
 	}
@@ -132,11 +133,12 @@ func copyTemplates(dest string) error {
 	})
 }
 
-func writePackageConfig(dest, remoteHost, pkgVersion string, timestamp time.Time) error {
+func writePackageConfig(dest, remoteHost, pkgVersion, installDir string, timestamp time.Time) error {
 	manifest := spec.Manifest{
 		RemoteHost:  remoteHost,
 		XP2PVersion: pkgVersion,
 		GeneratedAt: timestamp,
+		InstallDir:  installDir,
 	}
 
 	configPath := filepath.Join(dest, "config", "deployment.json")
