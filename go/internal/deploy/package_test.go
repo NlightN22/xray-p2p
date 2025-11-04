@@ -2,13 +2,14 @@ package deploy
 
 import (
 	"archive/zip"
-	"encoding/json"
 	"errors"
 	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 )
 
 func TestBuildPackageCreatesArchive(t *testing.T) {
@@ -56,19 +57,19 @@ func TestBuildPackageCreatesArchive(t *testing.T) {
 	}
 	configData := readZipFile(t, configEntry)
 
-	var payload map[string]string
-	if err := json.Unmarshal(configData, &payload); err != nil {
+	manifest, err := spec.Unmarshal(configData)
+	if err != nil {
 		t.Fatalf("unmarshal deployment.json: %v", err)
 	}
 
-	if payload["remote_host"] != "10.0.10.10" {
-		t.Fatalf("remote_host mismatch: %q", payload["remote_host"])
+	if manifest.RemoteHost != "10.0.10.10" {
+		t.Fatalf("remote_host mismatch: %q", manifest.RemoteHost)
 	}
-	if payload["xp2p_version"] != "1.2.3" {
-		t.Fatalf("xp2p_version mismatch: %q", payload["xp2p_version"])
+	if manifest.XP2PVersion != "1.2.3" {
+		t.Fatalf("xp2p_version mismatch: %q", manifest.XP2PVersion)
 	}
-	if payload["generated_at"] != timestamp.Format(time.RFC3339) {
-		t.Fatalf("generated_at mismatch: %q", payload["generated_at"])
+	if manifest.GeneratedAt != timestamp {
+		t.Fatalf("generated_at mismatch: %v", manifest.GeneratedAt)
 	}
 }
 

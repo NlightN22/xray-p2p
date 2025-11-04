@@ -3,7 +3,6 @@ package deploy
 import (
 	"archive/zip"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 )
 
@@ -133,22 +133,25 @@ func copyTemplates(dest string) error {
 }
 
 func writePackageConfig(dest, remoteHost, pkgVersion string, timestamp time.Time) error {
-	payload := map[string]string{
-		"remote_host":  remoteHost,
-		"xp2p_version": pkgVersion,
-		"generated_at": timestamp.Format(time.RFC3339),
-	}
-	data, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return fmt.Errorf("xp2p: marshal package config: %w", err)
+	manifest := spec.Manifest{
+		RemoteHost:  remoteHost,
+		XP2PVersion: pkgVersion,
+		GeneratedAt: timestamp,
 	}
 
 	configPath := filepath.Join(dest, "config", "deployment.json")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return fmt.Errorf("xp2p: ensure config directory %q: %w", filepath.Dir(configPath), err)
 	}
-	if err := os.WriteFile(configPath, append(data, '\n'), 0o644); err != nil {
-		return fmt.Errorf("xp2p: write config %q: %w", configPath, err)
+
+	file, err := os.OpenFile(configPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return fmt.Errorf("xp2p: open config %q: %w", configPath, err)
+	}
+	defer file.Close()
+
+	if err := spec.Write(file, manifest); err != nil {
+		return err
 	}
 	return nil
 }
