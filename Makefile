@@ -8,27 +8,9 @@ WINDOWS_BUILD_DIR := build/windows-amd64
 LINUX_BUILD_DIR := build/linux-amd64
 OPENWRT_BUILD_DIR := build/linux-mipsle-softfloat
 
-.PHONY: ping _ping_args wrm-test run build build-windows build-linux build-openwrt fmt lint vagrant-win10 vagrant-win10-destroy \
+.PHONY: run build build-windows build-linux build-openwrt fmt lint test vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client
-
-ping: _ping_args
-	@set -- $(ARGS); \
-	if [ -z "$$1" ]; then \
-		echo "Usage: make ping <host> [proto] [port]"; exit 1; \
-	fi; \
-	HOST="$$1"; shift || true; \
-	PROTO="$$1"; if [ -n "$$PROTO" ]; then shift || true; fi; \
-	PORT="$$1"; \
-	CMD="go run ./go/cmd/xp2p ping"; \
-	if [ -n "$$PROTO" ]; then CMD="$$CMD --proto $$PROTO"; fi; \
-	if [ -n "$$PORT" ]; then CMD="$$CMD --port $$PORT"; fi; \
-	CMD="$$CMD $$HOST"; \
-	echo $$CMD; \
-	eval $$CMD
-
-_ping_args:
-	$(eval ARGS := $(filter-out ping _ping_args,$(MAKECMDGOALS)))
 
 build: build-windows build-linux build-openwrt
 
