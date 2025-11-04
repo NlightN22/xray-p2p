@@ -187,7 +187,8 @@ Usage:
        [--client-allow-insecure|--client-strict-tls]
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS] <host>
   xp2p server install [--path PATH] [--config-dir NAME] [--port PORT]
-                      [--cert FILE] [--key FILE]
+                      [--cert FILE] [--key FILE] [--host HOST]
+                      [--deploy-file FILE] [--force]
   xp2p server remove [--path PATH]
   xp2p server run [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
                   [--xray-log-file FILE]

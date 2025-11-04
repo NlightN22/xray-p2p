@@ -3,9 +3,13 @@ package servercmd
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -14,6 +18,7 @@ func TestRunServerInstall(t *testing.T) {
 		name       string
 		cfg        config.Config
 		args       []string
+		prepare    func(*testing.T) []string
 		host       string
 		hostErr    error
 		installErr error
@@ -62,12 +67,47 @@ func TestRunServerInstall(t *testing.T) {
 			wantCode: 1,
 			wantCall: false,
 		},
+		{
+			name: "deploy file provides host",
+			cfg:  serverCfg(`C:\xp2p`, "config-server", ""),
+			prepare: func(t *testing.T) []string {
+				t.Helper()
+				dir := t.TempDir()
+				path := filepath.Join(dir, "deployment.json")
+				manifest := spec.Manifest{
+					RemoteHost:  "deploy.internal",
+					XP2PVersion: "9.9.9",
+					GeneratedAt: time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+				}
+				file, err := os.Create(path)
+				if err != nil {
+					t.Fatalf("create manifest: %v", err)
+				}
+				if err := spec.Write(file, manifest); err != nil {
+					t.Fatalf("write manifest: %v", err)
+				}
+				if err := file.Close(); err != nil {
+					t.Fatalf("close manifest: %v", err)
+				}
+				return []string{"--deploy-file", path}
+			},
+			hostErr:  errors.New("detect should not run"),
+			wantCode: 0,
+			wantCall: true,
+			check: func(t *testing.T, opts server.InstallOptions) {
+				requireEqual(t, opts.Host, "deploy.internal", "host")
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, calls := execInstall(tt.cfg, tt.args, tt.host, tt.hostErr, tt.installErr)
+			args := tt.args
+			if tt.prepare != nil {
+				args = tt.prepare(t)
+			}
+			code, calls := execInstall(tt.cfg, args, tt.host, tt.hostErr, tt.installErr)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}

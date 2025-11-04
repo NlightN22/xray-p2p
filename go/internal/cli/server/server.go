@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -73,6 +74,7 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 	cert := fs.String("cert", "", "TLS certificate file to deploy")
 	key := fs.String("key", "", "TLS private key file to deploy")
 	host := fs.String("host", "", "public host name or IP for generated configuration")
+	deployFile := fs.String("deploy-file", "", "path to deployment manifest (deployment.json)")
 	force := fs.Bool("force", false, "overwrite existing installation")
 
 	if err := fs.Parse(args); err != nil {
@@ -85,6 +87,26 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 	if fs.NArg() > 0 {
 		logging.Error("xp2p server install: unexpected arguments", "args", fs.Args())
 		return 2
+	}
+
+	manifestPath := strings.TrimSpace(*deployFile)
+	if manifestPath != "" {
+		file, err := os.Open(manifestPath)
+		if err != nil {
+			logging.Error("xp2p server install: open deploy manifest failed", "path", manifestPath, "err", err)
+			return 1
+		}
+		defer file.Close()
+
+		m, err := spec.Read(file)
+		if err != nil {
+			logging.Error("xp2p server install: read deploy manifest failed", "path", manifestPath, "err", err)
+			return 1
+		}
+		logging.Info("xp2p server install: using deploy manifest", "remote_host", m.RemoteHost, "version", m.XP2PVersion)
+		if strings.TrimSpace(*host) == "" {
+			*host = strings.TrimSpace(m.RemoteHost)
+		}
 	}
 
 	portValue := resolveInstallPort(cfg, *port)
@@ -363,7 +385,7 @@ func determineInstallHost(ctx context.Context, explicit, fallback string) (strin
 func printServerUsage() {
 	fmt.Print(`xp2p server commands:
   install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE]
-          [--host HOST] [--force]
+          [--host HOST] [--deploy-file FILE] [--force]
   remove  [--path PATH] [--keep-files] [--ignore-missing]
   run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
           [--xray-log-file FILE]

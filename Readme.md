@@ -82,6 +82,14 @@ xp2p client deploy --remote-host 10.0.10.10 --package-only
 
 The command produces a versioned zip file with placeholder install scripts and a generated configuration tied to the requested host.
 
+On the remote host, reuse the manifest baked into the package:
+
+```powershell
+xp2p server install --deploy-file .\config\deployment.json
+```
+
+The CLI pulls the target host/version from the manifest and keeps the installation in sync with the generated package.
+
 ---
 
 ## Follow-up tasks on the client

@@ -207,6 +207,7 @@ Usage:
   xp2p ping [--proto tcp|udp] [--port PORT] [--count N] [--timeout SECONDS]
             [--socks [HOST:PORT]] <host>
   xp2p server install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE]
+                      [--host HOST] [--deploy-file FILE] [--force]
   xp2p server remove  [--path PATH]
   xp2p server run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
   xp2p client install [--path PATH] [--config-dir NAME] --server-address HOST --password SECRET
