@@ -1,4 +1,4 @@
-package cli
+package clientcmd
 
 import (
 	"context"
@@ -21,6 +21,10 @@ var (
 	clientRemoveFunc  = client.Remove
 	clientRunFunc     = client.Run
 )
+
+func Execute(ctx context.Context, cfg config.Config, args []string) int {
+	return runClient(ctx, cfg, args)
+}
 
 func runClient(ctx context.Context, cfg config.Config, args []string) int {
 	if len(args) == 0 {

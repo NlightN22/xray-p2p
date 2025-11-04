@@ -1,4 +1,4 @@
-package cli
+package clientcmd
 
 import (
 	"github.com/NlightN22/xray-p2p/go/internal/deploy"

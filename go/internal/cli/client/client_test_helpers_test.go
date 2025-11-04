@@ -1,4 +1,4 @@
-package cli
+package clientcmd
 
 import (
 	"context"
@@ -67,5 +67,12 @@ func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}
+	}
+}
+
+func requireEqual[T comparable](t *testing.T, got, want T, label string) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s mismatch: got %v want %v", label, got, want)
 	}
 }

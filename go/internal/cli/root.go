@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	clientcmd "github.com/NlightN22/xray-p2p/go/internal/cli/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 )
@@ -27,7 +28,7 @@ func Execute(ctx context.Context, cfg config.Config, args []string) int {
 	case "server":
 		return runServer(ctx, cfg, args[1:])
 	case "client":
-		return runClient(ctx, cfg, args[1:])
+		return clientcmd.Execute(ctx, cfg, args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "xp2p: unknown command %q\n\n", args[0])
 		printUsage()
