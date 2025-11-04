@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 BOX_NAME              = "gusztavvargadr/windows-10".freeze
-BOX_VERSION           = "2202.0.2505".freeze
+BOX_VERSION           = "2509.0.0".freeze
 SERVER_ID             = "win10-server".freeze
 CLIENT_ID             = "win10-client".freeze
 SERVER_VM_NAME        = "xp2p-win10-server".freeze
@@ -10,17 +10,27 @@ SERVER_PRIVATE_IP     = "10.0.10.10".freeze
 CLIENT_PRIVATE_IP     = "10.0.10.20".freeze
 HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
 PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
+DEFAULT_WINRM_PORT    = 5985
+SERVER_WINRM_HOSTPORT = 55985
+CLIENT_WINRM_HOSTPORT = 55986
 def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:)
   config.vm.define machine_id do |machine|
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
     machine.vm.guest = :windows
     machine.vm.boot_timeout = 300
-    machine.vm.communicator = "ssh"
+    machine.vm.communicator = "winrm"
     machine.vm.hostname = vb_name
 
     machine.vm.synced_folder ".", "/vagrant", disabled: true
     machine.vm.synced_folder HOST_SYNCED_ROOT, "C:/xp2p", type: "virtualbox"
+
+    machine.winrm.username = "vagrant"
+    machine.winrm.password = "vagrant"
+    machine.winrm.transport = :plaintext
+    machine.winrm.basic_auth_only = true
+    machine.winrm.timeout = 300
+    machine.winrm.retry_limit = 30
 
     machine.vm.network "private_network",
                        ip: private_ip
