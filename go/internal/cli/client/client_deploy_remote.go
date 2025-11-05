@@ -26,7 +26,7 @@ func runRemoteDeployment(ctx context.Context, opts deployOptions) error {
 		return fmt.Errorf("invalid package path %q", opts.packagePath)
 	}
 
-	remoteParent := "~/.xp2p-deploy"
+	remoteParent := "~"
 	remotePackageDir := remoteParent + "/" + baseName
 
 	logging.Info("xp2p client deploy: uploading package",
@@ -52,8 +52,7 @@ func runRemoteDeployment(ctx context.Context, opts deployOptions) error {
 // runRemoteInstallCombined builds one command that tries PowerShell first, then falls back to POSIX sh.
 func runRemoteInstallCombined(ctx context.Context, binary string, target sshTarget, packageBaseName string) (string, error) {
 	psScript := strings.Join([]string{
-		fmt.Sprintf("$package = Join-Path -Path $HOME, %s", psQuote(".xp2p-deploy")),
-		fmt.Sprintf("$package = Join-Path -Path $package -ChildPath %s", psQuote(packageBaseName)),
+		fmt.Sprintf("$package = Join-Path -Path $HOME -ChildPath %s", psQuote(packageBaseName)),
 		"$scriptPath = Join-Path -Path $package -ChildPath 'templates\\windows-amd64\\install.ps1'",
 		"if (-not (Test-Path -LiteralPath $scriptPath)) { throw \"xp2p install script not found at $scriptPath\" }",
 		"$scriptDir = Split-Path -Parent -LiteralPath $scriptPath",
@@ -63,7 +62,7 @@ func runRemoteInstallCombined(ctx context.Context, binary string, target sshTarg
 	encoded := encodePowershellCommand(fmt.Sprintf("& { %s }", psScript))
 
 	shLines := []string{
-		fmt.Sprintf("PACKAGE=\"$HOME/.xp2p-deploy/%s\"", escapeForSh(packageBaseName)),
+		fmt.Sprintf("PACKAGE=\"$HOME/%s\"", escapeForSh(packageBaseName)),
 		"if [ -f \"$PACKAGE/templates/linux-amd64/install.sh\" ]; then sh \"$PACKAGE/templates/linux-amd64/install.sh\"; exit $?; fi",
 		"if [ -f \"$PACKAGE/templates/darwin-amd64/install.sh\" ]; then sh \"$PACKAGE/templates/darwin-amd64/install.sh\"; exit $?; fi",
 		"uname_s=\"$(uname -s 2>/dev/null || echo unknown)\"",

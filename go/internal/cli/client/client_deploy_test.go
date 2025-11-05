@@ -275,7 +275,7 @@ func TestRunRemoteDeploymentWindows(t *testing.T) {
 		callIndex      int
 		scpCalled      bool
 		remoteDest     string
-		expectedParent = "~/.xp2p-deploy"
+		expectedParent = "~"
 	)
 
 	restore := multiRestore(
@@ -290,7 +290,7 @@ func TestRunRemoteDeploymentWindows(t *testing.T) {
 				if !strings.Contains(script, "install.ps1") {
 					t.Fatalf("expected install script path, got %q", script)
 				}
-				if !strings.Contains(script, ".xp2p-deploy") || !strings.Contains(script, "pkg") {
+				if !strings.Contains(script, "pkg") {
 					t.Fatalf("expected package directory in script, got %q", script)
 				}
 				return "[INFO] success", "", nil
