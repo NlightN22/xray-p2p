@@ -53,8 +53,9 @@ func runRemoteDeployment(ctx context.Context, opts deployOptions) error {
 func runRemoteInstallCombined(ctx context.Context, binary string, target sshTarget, packageBaseName string) (string, error) {
 	psScript := strings.Join([]string{
 		fmt.Sprintf("$package = Join-Path -Path $HOME -ChildPath %s", psQuote(packageBaseName)),
-		"$scriptPath = Join-Path -Path $package -ChildPath 'templates\\windows-amd64\\install.ps1'",
-		"if (-not (Test-Path -LiteralPath $scriptPath)) { throw \"xp2p install script not found at $scriptPath\" }",
+		"$match = Get-ChildItem -LiteralPath $package -Recurse -Filter 'install.ps1' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -First 1",
+		"if (-not $match) { throw \"xp2p install script not found under $package\" }",
+		"$scriptPath = $match",
 		"$scriptDir = Split-Path -Parent -LiteralPath $scriptPath",
 		"Push-Location -LiteralPath $scriptDir",
 		"try { & $scriptPath } finally { Pop-Location }",
