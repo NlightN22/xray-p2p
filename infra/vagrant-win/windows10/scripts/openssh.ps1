@@ -22,28 +22,29 @@ function Ensure-KeyPresent {
     )
 
     if ([string]::IsNullOrWhiteSpace($KeyValue)) {
-        return
+        return $false
     }
 
     $normalized = $KeyValue.Trim()
     if ([string]::IsNullOrWhiteSpace($normalized)) {
-        return
+        return $false
     }
 
     if (-not (Test-Path $AuthorizedKeysPath)) {
         Set-Content -Path $AuthorizedKeysPath -Value $normalized -Encoding ascii
         Write-Info ("Added {0} to {1}" -f $Description, $AuthorizedKeysPath)
-        return
+        return $true
     }
 
     $existingKeys = Get-Content -Path $AuthorizedKeysPath -ErrorAction SilentlyContinue
     if ($existingKeys -and ($existingKeys | ForEach-Object { $_.Trim() }) -contains $normalized) {
         Write-Info ("{0} already present." -f $Description)
-        return
+        return $false
     }
 
     Add-Content -Path $AuthorizedKeysPath -Value $normalized -Encoding ascii
     Write-Info ("Added {0} to {1}" -f $Description, $AuthorizedKeysPath)
+    return $true
 }
 
 function Ensure-OpenSsh {
@@ -121,6 +122,11 @@ function Ensure-SshdConfig {
     $block += "AuthorizedKeysFile __PROGRAMDATA__/ssh/authorized_keys %h/.ssh/authorized_keys"
     $block += "PubkeyAuthentication yes"
     $block += "PasswordAuthentication yes"
+    $block += ""
+    $block += "Match Group administrators"
+    $block += "    AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys"
+    $block += "    PubkeyAuthentication yes"
+    $block += "    PasswordAuthentication yes"
 
     try {
         $block | Add-Content -Path $configPath -Encoding ascii
@@ -141,26 +147,23 @@ function Ensure-SshdConfig {
 }
 
 function Ensure-VagrantKeys {
-    param(
-        [string] $TargetUser = "vagrant"
-    )
-
-    $userProfile = Join-Path "C:\Users" $TargetUser
-    if (-not (Test-Path $userProfile)) {
-        Write-Info ("User profile '{0}' not found; skipping Vagrant key provisioning." -f $userProfile)
-        return
+    $programDataSsh = "C:\ProgramData\ssh"
+    if (-not (Test-Path $programDataSsh)) {
+        Write-Info ("Creating SSH configuration directory at {0}" -f $programDataSsh)
+        New-Item -ItemType Directory -Path $programDataSsh -Force | Out-Null
     }
 
-    $sshDir = Join-Path $userProfile ".ssh"
-    if (-not (Test-Path $sshDir)) {
-        Write-Info ("Creating SSH directory at {0}" -f $sshDir)
-        New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
+    $authorizedKeysPath = Join-Path $programDataSsh "administrators_authorized_keys"
+    $insecureRsa = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
+    $insecureEd25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN1YdxBpNlzxDqfJyw/QKow1F+wvG9hXGoqiysfJOn5Y vagrant insecure public key"
+
+    $changes = $false
+    if (Ensure-KeyPresent -KeyValue $insecureRsa -AuthorizedKeysPath $authorizedKeysPath -Description "Vagrant insecure RSA key") {
+        $changes = $true
     }
-
-    $authorizedKeysPath = Join-Path $sshDir "authorized_keys"
-    $insecureKey = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
-
-    Ensure-KeyPresent -KeyValue $insecureKey -AuthorizedKeysPath $authorizedKeysPath -Description "Vagrant insecure public key"
+    if (Ensure-KeyPresent -KeyValue $insecureEd25519 -AuthorizedKeysPath $authorizedKeysPath -Description "Vagrant insecure ED25519 key") {
+        $changes = $true
+    }
 
     $machineId = $env:XP2P_MACHINE_ID
     $sharedRoot = if ($env:XP2P_SYNC_ROOT) { $env:XP2P_SYNC_ROOT } else { "C:\xp2p" }
@@ -170,7 +173,9 @@ function Ensure-VagrantKeys {
             try {
                 $machinePublicKey = & ssh-keygen.exe -y -f $machineKeyPath 2>$null
                 if ($machinePublicKey) {
-                    Ensure-KeyPresent -KeyValue $machinePublicKey -AuthorizedKeysPath $authorizedKeysPath -Description ("machine-specific key from {0}" -f $machineKeyPath)
+                    if (Ensure-KeyPresent -KeyValue $machinePublicKey -AuthorizedKeysPath $authorizedKeysPath -Description ("machine-specific key from {0}" -f $machineKeyPath)) {
+                        $changes = $true
+                    }
                 }
             }
             catch {
@@ -179,37 +184,24 @@ function Ensure-VagrantKeys {
         }
     }
 
-    try {
-        $directoryGrants = @(
-            "{0}:(OI)(CI)F" -f $TargetUser,
-            "Administrators:(OI)(CI)F",
-            "SYSTEM:(OI)(CI)F",
-            '"NT SERVICE\SSHD":(OI)(CI)R'
-        )
-        $dirArgs = @("/inheritance:r")
-        foreach ($grant in $directoryGrants) {
-            $dirArgs += @("/grant:r", $grant)
+    if (Test-Path $authorizedKeysPath) {
+        try {
+            $aclArgs = @(
+                $authorizedKeysPath,
+                "/inheritance:r",
+                "/grant:r", "SYSTEM:F",
+                "/grant:r", "Administrators:F",
+                "/grant:r", '"NT SERVICE\SSHD":R'
+            )
+            & icacls @aclArgs | Out-Null
         }
-        & icacls $sshDir @dirArgs | Out-Null
-
-        $fileGrants = @(
-            "{0}:F" -f $TargetUser,
-            "Administrators:F",
-            "SYSTEM:F",
-            '"NT SERVICE\SSHD":R'
-        )
-        $fileArgs = @("/inheritance:r")
-        foreach ($grant in $fileGrants) {
-            $fileArgs += @("/grant:r", $grant)
+        catch {
+            Write-Info ("Failed to adjust ACL for '{0}': {1}" -f $authorizedKeysPath, $_.Exception.Message)
         }
-        & icacls $authorizedKeysPath @fileArgs | Out-Null
-    }
-    catch {
-        Write-Info ("Failed to adjust ACL for '{0}': {1}" -f $sshDir, $_.Exception.Message)
     }
 }
 
 Ensure-OpenSsh
 Ensure-SshdConfig
-Ensure-VagrantKeys -TargetUser "vagrant"
+Ensure-VagrantKeys
 Write-Info "OpenSSH provisioning completed."
