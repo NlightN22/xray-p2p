@@ -9,7 +9,7 @@ import (
 const (
 	defaultRemoteInstallDir = `C:\xp2p`
 	defaultLocalInstallDir  = `C:\xp2p-client`
-	defaultPingTarget       = "10.0.10.10"
+	defaultPingTarget       = "127.0.0.1"
 )
 
 type manifestOptions struct {
@@ -29,6 +29,8 @@ type runtimeOptions struct {
 	localInstallDir string
 	localConfigDir  string
 	packageOnly     bool
+	sshBinary       string
+	scpBinary       string
 }
 
 type deployOptions struct {
@@ -46,20 +48,19 @@ type sshTarget struct {
 var (
 	lookPathFunc               = exec.LookPath
 	executablePathFunc         = os.Executable
-	sshCommandFunc             = runSSHCommand
-	scpCommandFunc             = runSCPCommand
 	startProcessFunc           = startDetachedProcess
 	stopLocalProcessFunc       = stopProcess
-	stopRemoteFunc             = stopRemoteService
 	sleepFunc                  = time.Sleep
 	runPingCommandFunc         = runPingCommand
-	ensureRemoteBinaryFunc     = ensureRemoteBinary
-	prepareRemoteServerFunc    = prepareRemoteServer
 	installLocalClientFunc     = installLocalClient
-	startRemoteServerFunc      = startRemoteServer
 	startLocalClientFunc       = startLocalClient
 	runPingCheckFunc           = runPingCheck
 	releaseProcessHandleFunc   = releaseDetachedProcess
 	promptStringFunc           = promptString
 	buildDeploymentPackageFunc = buildDeploymentPackage
+	ensureSSHPrerequisitesFunc = ensureSSHPrerequisites
+	sshCommandFunc             = executeSSHCommand
+	sshInteractiveCommandFunc  = executeInteractiveSSHCommand
+	scpCopyFunc                = executeSCPCommand
+	runRemoteDeploymentFunc    = runRemoteDeployment
 )

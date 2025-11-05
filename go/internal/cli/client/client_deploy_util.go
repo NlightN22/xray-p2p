@@ -12,14 +12,33 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
-func ensureSSHPrerequisites() error {
-	if _, err := lookPathFunc("ssh"); err != nil {
-		return fmt.Errorf("ssh binary not found in PATH")
+type sshPrerequisites struct {
+	sshPath string
+	scpPath string
+}
+
+func ensureSSHPrerequisites() (sshPrerequisites, error) {
+	sshPath, err := resolveExecutable("ssh", "ssh.exe")
+	if err != nil {
+		return sshPrerequisites{}, fmt.Errorf("ssh client binary not found in PATH (install OpenSSH client and ensure `ssh` is available): %w", err)
 	}
-	if _, err := lookPathFunc("scp"); err != nil {
-		return fmt.Errorf("scp binary not found in PATH")
+	scpPath, err := resolveExecutable("scp", "scp.exe")
+	if err != nil {
+		return sshPrerequisites{}, fmt.Errorf("scp binary not found in PATH (install OpenSSH client and ensure `scp` is available): %w", err)
 	}
-	return nil
+	return sshPrerequisites{
+		sshPath: sshPath,
+		scpPath: scpPath,
+	}, nil
+}
+
+func resolveExecutable(candidates ...string) (string, error) {
+	for _, name := range candidates {
+		if path, err := lookPathFunc(name); err == nil {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("executables %v not found", candidates)
 }
 
 func normalizeServerPort(cfg config.Config, flagPort string) string {

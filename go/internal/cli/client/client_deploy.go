@@ -6,10 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -17,8 +15,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
-
-const deployStartupDelay = 2 * time.Second
 
 func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int {
 	opts, err := parseDeployFlags(cfg, args)
@@ -29,6 +25,14 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Error("xp2p client deploy: argument parsing failed", "err", err)
 		return 2
 	}
+
+	prereq, err := ensureSSHPrerequisitesFunc()
+	if err != nil {
+		logging.Error("xp2p client deploy: prerequisites failed", "err", err)
+		return 1
+	}
+	opts.runtime.sshBinary = prereq.sshPath
+	opts.runtime.scpBinary = prereq.scpPath
 
 	packagePath, err := buildDeploymentPackageFunc(opts)
 	if err != nil {
@@ -43,83 +47,11 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 0
 	}
 
-	if err := ensureSSHPrerequisites(); err != nil {
-		logging.Error("xp2p client deploy: prerequisites failed", "err", err)
+	if err := runRemoteDeploymentFunc(ctx, opts); err != nil {
+		logging.Error("xp2p client deploy: remote deployment failed", "err", err)
 		return 1
 	}
 
-	exePath, err := executablePathFunc()
-	if err != nil {
-		logging.Error("xp2p client deploy: resolve executable", "err", err)
-		return 1
-	}
-
-	target := sshTarget{
-		user: opts.runtime.sshUser,
-		host: opts.runtime.remoteHost,
-		port: opts.runtime.sshPort,
-	}
-
-	if err := ensureRemoteBinaryFunc(ctx, target, exePath, opts.manifest.installDir); err != nil {
-		logging.Error("xp2p client deploy: remote binary setup failed", "err", err)
-		return 1
-	}
-
-	link, err := prepareRemoteServerFunc(ctx, target, opts)
-	if err != nil {
-		logging.Error("xp2p client deploy: remote provisioning failed", "err", err)
-		return 1
-	}
-
-	logging.Info("xp2p client deploy: trojan link generated", "link", link)
-
-	if err := installLocalClientFunc(ctx, opts, link); err != nil {
-		logging.Error("xp2p client deploy: local installation failed", "err", err)
-		return 1
-	}
-
-	var (
-		startErr      error
-		localProcess  *exec.Cmd
-		remoteStarted bool
-	)
-	defer func() {
-		if startErr != nil {
-			if localProcess != nil {
-				stopLocalProcessFunc(localProcess)
-			}
-			if remoteStarted {
-				if err := stopRemoteFunc(ctx, target); err != nil {
-					logging.Warn("xp2p client deploy: remote cleanup failed", "err", err)
-				}
-			}
-		}
-	}()
-
-	if err := startRemoteServerFunc(ctx, target, opts); err != nil {
-		startErr = err
-		logging.Error("xp2p client deploy: unable to start remote server", "err", err)
-		return 1
-	}
-	remoteStarted = true
-
-	localCmd, err := startLocalClientFunc(opts)
-	if err != nil {
-		startErr = err
-		logging.Error("xp2p client deploy: unable to start local client", "err", err)
-		return 1
-	}
-	localProcess = localCmd
-
-	waitForTunnelStartup()
-
-	if err := runPingCheckFunc(ctx, opts); err != nil {
-		startErr = err
-		logging.Error("xp2p client deploy: connectivity check failed", "err", err)
-		return 1
-	}
-
-	releaseProcessHandleFunc(localProcess)
 	logging.Info("xp2p client deploy completed successfully")
 	return 0
 }

@@ -3,10 +3,8 @@ package clientcmd
 import (
 	"context"
 	"errors"
-	"os/exec"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
@@ -81,6 +79,7 @@ func TestParseDeployFlagsRejectsInvalidHost(t *testing.T) {
 		t.Fatalf("expected error when --remote-host is invalid")
 	}
 }
+
 func TestParseDeployFlagsPromptsForUser(t *testing.T) {
 	cfg := config.Config{}
 	restore := stubPromptString(t, func(string) (string, error) {
@@ -135,182 +134,27 @@ func TestParseDeployFlagsOverridesTrojanPort(t *testing.T) {
 	}
 }
 
-func TestRunClientDeploySuccessfulFlow(t *testing.T) {
+func TestRunClientDeployPackageOnly(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.Config{
-		Server: config.ServerConfig{
-			InstallDir: `C:\remote`,
-			ConfigDir:  "cfg-server",
-			Host:       "edge.example.test",
-		},
 		Client: config.ClientConfig{
-			InstallDir: `C:\local`,
-			ConfigDir:  "cfg-client",
-			User:       "user@example.test",
-			Password:   "secret",
+			User:     "user@example.test",
+			Password: "secret",
 		},
 	}
-
-	var packageCalled bool
-	restore := multiRestore(
-		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
-			packageCalled = true
-			if o.manifest.remoteHost != "gateway.internal" {
-				t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
-			}
-			if o.manifest.installDir != `C:\remote` {
-				t.Fatalf("package installDir: %q", o.manifest.installDir)
-			}
-			if o.manifest.trojanUser != "user@example.test" {
-				t.Fatalf("package trojanUser: %q", o.manifest.trojanUser)
-			}
-			if o.manifest.trojanPassword != "secret" {
-				t.Fatalf("package trojanPassword: %q", o.manifest.trojanPassword)
-			}
-			if o.manifest.trojanPort == "" {
-				t.Fatalf("package trojanPort should not be empty")
-			}
-			if o.runtime.packageOnly {
-				t.Fatalf("packageOnly should be false for full deploy")
-			}
-			return `C:\package.zip`, nil
-		}),
-		stubLookPath(t, func(string) (string, error) { return `C:\Windows\System32\ssh.exe`, nil }),
-		stubExecutable(t, func() (string, error) { return `C:\xp2p.exe`, nil }),
-		stubSleep(t, func(time.Duration) {}),
-	)
-	defer restore()
 
 	var (
-		gotEnsureTarget sshTarget
-		gotPrepareOpts  deployOptions
-		gotInstallOpts  deployOptions
-		ensureCalled    bool
-		prepareCalled   bool
-		installCalled   bool
-		startRemote     bool
-		startLocal      bool
-		pingCalled      bool
-		released        bool
+		ensureCalled  bool
+		packageCalled bool
 	)
-
-	restore = multiRestore(
-		restore,
-		stubEnsureRemoteBinary(t, func(_ context.Context, target sshTarget, _ string, installDir string) error {
+	restore := multiRestore(
+		stubEnsureSSHPrerequisites(t, func() (sshPrerequisites, error) {
 			ensureCalled = true
-			gotEnsureTarget = target
-			if installDir != `C:\remote` {
-				t.Fatalf("ensureRemoteBinary installDir: %q", installDir)
-			}
-			return nil
+			return sshPrerequisites{
+				sshPath: "ssh",
+				scpPath: "scp",
+			}, nil
 		}),
-		stubPrepareRemoteServer(t, func(_ context.Context, target sshTarget, opts deployOptions) (string, error) {
-			prepareCalled = true
-			if target != gotEnsureTarget {
-				t.Fatalf("prepare target mismatch")
-			}
-			gotPrepareOpts = opts
-			return "trojan://secret@edge.example.test:58443?security=tls&sni=edge.example.test#user@example.test", nil
-		}),
-		stubInstallLocalClient(t, func(_ context.Context, opts deployOptions, link string) error {
-			installCalled = true
-			gotInstallOpts = opts
-			if link == "" {
-				t.Fatalf("installLocalClient link empty")
-			}
-			return nil
-		}),
-		stubStartRemoteServer(t, func(context.Context, sshTarget, deployOptions) error {
-			startRemote = true
-			return nil
-		}),
-		stubStartLocalClient(t, func(deployOptions) (*exec.Cmd, error) {
-			startLocal = true
-			return &exec.Cmd{}, nil
-		}),
-		stubRunPingCheck(t, func(context.Context, deployOptions) error {
-			pingCalled = true
-			return nil
-		}),
-		stubReleaseHandle(t, func(*exec.Cmd) {
-			released = true
-		}),
-	)
-	defer restore()
-
-	code := runClientDeploy(ctx, cfg, []string{"--remote-host", "gateway.internal"})
-	if code != 0 {
-		t.Fatalf("runClientDeploy exit code: %d", code)
-	}
-	if !packageCalled {
-		t.Fatalf("expected package builder to be called")
-	}
-
-	if !ensureCalled || !prepareCalled || !installCalled || !startRemote || !startLocal || !pingCalled || !released {
-		t.Fatalf("deployment steps missing: ensure=%t prepare=%t install=%t startRemote=%t startLocal=%t ping=%t released=%t",
-			ensureCalled, prepareCalled, installCalled, startRemote, startLocal, pingCalled, released)
-	}
-
-	if gotEnsureTarget.host != "gateway.internal" {
-		t.Fatalf("ensure target host: %q", gotEnsureTarget.host)
-	}
-	if gotPrepareOpts.runtime.serverHost != "edge.example.test" {
-		t.Fatalf("prepare opts serverHost: %q", gotPrepareOpts.runtime.serverHost)
-	}
-	if gotPrepareOpts.packagePath != `C:\package.zip` {
-		t.Fatalf("prepare opts packagePath: %q", gotPrepareOpts.packagePath)
-	}
-	if gotInstallOpts.runtime.localInstallDir != filepath.Clean(`C:\local`) {
-		t.Fatalf("install opts localInstallDir: %q", gotInstallOpts.runtime.localInstallDir)
-	}
-	if gotInstallOpts.packagePath != `C:\package.zip` {
-		t.Fatalf("install opts packagePath: %q", gotInstallOpts.packagePath)
-	}
-}
-
-func TestRunClientDeployStopsOnFailure(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Config{
-		Server: config.ServerConfig{
-			InstallDir: `C:\remote`,
-			ConfigDir:  "cfg-server",
-			Host:       "edge.example.test",
-		},
-		Client: config.ClientConfig{
-			InstallDir: `C:\local`,
-			ConfigDir:  "cfg-client",
-			User:       "user@example.test",
-			Password:   "secret",
-		},
-	}
-
-	restore := multiRestore(
-		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
-			if o.manifest.remoteHost != "gateway.internal" {
-				t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
-			}
-			return `C:\package.zip`, nil
-		}),
-		stubLookPath(t, func(string) (string, error) { return `C:\Windows\System32\ssh.exe`, nil }),
-		stubExecutable(t, func() (string, error) { return `C:\xp2p.exe`, nil }),
-		stubEnsureRemoteBinary(t, func(context.Context, sshTarget, string, string) error {
-			return errors.New("upload failed")
-		}),
-	)
-	defer restore()
-
-	code := runClientDeploy(ctx, cfg, []string{"--remote-host", "gateway.internal"})
-	if code == 0 {
-		t.Fatalf("expected non-zero exit code on failure")
-	}
-}
-
-func TestRunClientDeployPackageOnlySkipsRemote(t *testing.T) {
-	ctx := context.Background()
-	cfg := config.Config{}
-
-	var packageCalled bool
-	restore := multiRestore(
 		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
 			packageCalled = true
 			if o.manifest.remoteHost != "gateway.internal" {
@@ -321,25 +165,9 @@ func TestRunClientDeployPackageOnlySkipsRemote(t *testing.T) {
 			}
 			return `C:\package.zip`, nil
 		}),
-		stubEnsureRemoteBinary(t, func(context.Context, sshTarget, string, string) error {
-			t.Fatalf("ensureRemoteBinary should not be called in package-only mode")
+		stubRunRemoteDeployment(t, func(context.Context, deployOptions) error {
+			t.Fatalf("runRemoteDeployment should not be called in package-only mode")
 			return nil
-		}),
-		stubPrepareRemoteServer(t, func(context.Context, sshTarget, deployOptions) (string, error) {
-			t.Fatalf("prepareRemoteServer should not be called in package-only mode")
-			return "", nil
-		}),
-		stubInstallLocalClient(t, func(context.Context, deployOptions, string) error {
-			t.Fatalf("installLocalClient should not be called in package-only mode")
-			return nil
-		}),
-		stubStartRemoteServer(t, func(context.Context, sshTarget, deployOptions) error {
-			t.Fatalf("startRemoteServer should not be called in package-only mode")
-			return nil
-		}),
-		stubStartLocalClient(t, func(deployOptions) (*exec.Cmd, error) {
-			t.Fatalf("startLocalClient should not be called in package-only mode")
-			return nil, nil
 		}),
 	)
 	defer restore()
@@ -347,6 +175,9 @@ func TestRunClientDeployPackageOnlySkipsRemote(t *testing.T) {
 	code := runClientDeploy(ctx, cfg, []string{"--remote-host", "gateway.internal", "--package-only"})
 	if code != 0 {
 		t.Fatalf("expected zero exit code in package-only mode, got %d", code)
+	}
+	if !ensureCalled {
+		t.Fatalf("expected ensureSSHPrerequisites to be called")
 	}
 	if !packageCalled {
 		t.Fatalf("expected package builder to be called")
@@ -362,12 +193,21 @@ func TestRunClientDeployPackageBuildFailure(t *testing.T) {
 		},
 	}
 
-	restore := stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
-		if o.manifest.remoteHost != "gateway.internal" {
-			t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
-		}
-		return "", errors.New("packaging failed")
-	})
+	restore := multiRestore(
+		stubEnsureSSHPrerequisites(t, func() (sshPrerequisites, error) {
+			return sshPrerequisites{sshPath: "ssh", scpPath: "scp"}, nil
+		}),
+		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
+			if o.manifest.remoteHost != "gateway.internal" {
+				t.Fatalf("package remoteHost: %q", o.manifest.remoteHost)
+			}
+			return "", errors.New("packaging failed")
+		}),
+		stubRunRemoteDeployment(t, func(context.Context, deployOptions) error {
+			t.Fatalf("runRemoteDeployment should not be called on package failure")
+			return nil
+		}),
+	)
 	defer restore()
 
 	code := runClientDeploy(ctx, cfg, []string{"--remote-host", "gateway.internal"})
@@ -376,74 +216,47 @@ func TestRunClientDeployPackageBuildFailure(t *testing.T) {
 	}
 }
 
-func stubLookPath(t *testing.T, fn func(string) (string, error)) func() {
-	t.Helper()
-	prev := lookPathFunc
-	lookPathFunc = fn
-	return func() { lookPathFunc = prev }
+func TestRunClientDeployPrerequisitesFailure(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.Config{}
+
+	restore := stubEnsureSSHPrerequisites(t, func() (sshPrerequisites, error) {
+		return sshPrerequisites{}, errors.New("ssh missing")
+	})
+	defer restore()
+
+	code := runClientDeploy(ctx, cfg, []string{"--remote-host", "gateway.internal"})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code when prerequisites fail")
+	}
 }
 
-func stubExecutable(t *testing.T, fn func() (string, error)) func() {
-	t.Helper()
-	prev := executablePathFunc
-	executablePathFunc = fn
-	return func() { executablePathFunc = prev }
-}
+func TestRunClientDeployRemoteFailure(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.Config{
+		Client: config.ClientConfig{
+			User:     "user@example.test",
+			Password: "secret",
+		},
+	}
 
-func stubSleep(t *testing.T, fn func(time.Duration)) func() {
-	t.Helper()
-	prev := sleepFunc
-	sleepFunc = fn
-	return func() { sleepFunc = prev }
-}
+	restore := multiRestore(
+		stubEnsureSSHPrerequisites(t, func() (sshPrerequisites, error) {
+			return sshPrerequisites{sshPath: "ssh", scpPath: "scp"}, nil
+		}),
+		stubBuildDeploymentPackage(t, func(o deployOptions) (string, error) {
+			return `C:\package.zip`, nil
+		}),
+		stubRunRemoteDeployment(t, func(context.Context, deployOptions) error {
+			return errors.New("remote failure")
+		}),
+	)
+	defer restore()
 
-func stubEnsureRemoteBinary(t *testing.T, fn func(context.Context, sshTarget, string, string) error) func() {
-	t.Helper()
-	prev := ensureRemoteBinaryFunc
-	ensureRemoteBinaryFunc = fn
-	return func() { ensureRemoteBinaryFunc = prev }
-}
-
-func stubPrepareRemoteServer(t *testing.T, fn func(context.Context, sshTarget, deployOptions) (string, error)) func() {
-	t.Helper()
-	prev := prepareRemoteServerFunc
-	prepareRemoteServerFunc = fn
-	return func() { prepareRemoteServerFunc = prev }
-}
-
-func stubInstallLocalClient(t *testing.T, fn func(context.Context, deployOptions, string) error) func() {
-	t.Helper()
-	prev := installLocalClientFunc
-	installLocalClientFunc = fn
-	return func() { installLocalClientFunc = prev }
-}
-
-func stubStartRemoteServer(t *testing.T, fn func(context.Context, sshTarget, deployOptions) error) func() {
-	t.Helper()
-	prev := startRemoteServerFunc
-	startRemoteServerFunc = fn
-	return func() { startRemoteServerFunc = prev }
-}
-
-func stubStartLocalClient(t *testing.T, fn func(deployOptions) (*exec.Cmd, error)) func() {
-	t.Helper()
-	prev := startLocalClientFunc
-	startLocalClientFunc = fn
-	return func() { startLocalClientFunc = prev }
-}
-
-func stubRunPingCheck(t *testing.T, fn func(context.Context, deployOptions) error) func() {
-	t.Helper()
-	prev := runPingCheckFunc
-	runPingCheckFunc = fn
-	return func() { runPingCheckFunc = prev }
-}
-
-func stubReleaseHandle(t *testing.T, fn func(*exec.Cmd)) func() {
-	t.Helper()
-	prev := releaseProcessHandleFunc
-	releaseProcessHandleFunc = fn
-	return func() { releaseProcessHandleFunc = prev }
+	code := runClientDeploy(ctx, cfg, []string{"--remote-host", "gateway.internal"})
+	if code == 0 {
+		t.Fatalf("expected non-zero exit code when remote deployment fails")
+	}
 }
 
 func stubPromptString(t *testing.T, fn func(string) (string, error)) func() {
@@ -453,11 +266,25 @@ func stubPromptString(t *testing.T, fn func(string) (string, error)) func() {
 	return func() { promptStringFunc = prev }
 }
 
+func stubEnsureSSHPrerequisites(t *testing.T, fn func() (sshPrerequisites, error)) func() {
+	t.Helper()
+	prev := ensureSSHPrerequisitesFunc
+	ensureSSHPrerequisitesFunc = fn
+	return func() { ensureSSHPrerequisitesFunc = prev }
+}
+
 func stubBuildDeploymentPackage(t *testing.T, fn func(deployOptions) (string, error)) func() {
 	t.Helper()
 	prev := buildDeploymentPackageFunc
 	buildDeploymentPackageFunc = fn
 	return func() { buildDeploymentPackageFunc = prev }
+}
+
+func stubRunRemoteDeployment(t *testing.T, fn func(context.Context, deployOptions) error) func() {
+	t.Helper()
+	prev := runRemoteDeploymentFunc
+	runRemoteDeploymentFunc = fn
+	return func() { runRemoteDeploymentFunc = prev }
 }
 
 func multiRestore(restores ...func()) func() {

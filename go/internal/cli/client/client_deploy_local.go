@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
+
+const localTunnelStartupDelay = 2 * time.Second
 
 func installLocalClient(ctx context.Context, opts deployOptions, link string) error {
 	linkData, err := parseTrojanLink(link)
@@ -82,7 +85,7 @@ func runPingCommand(ctx context.Context, exe string, args []string) ([]byte, err
 }
 
 func waitForTunnelStartup() {
-	sleepFunc(deployStartupDelay)
+	sleepFunc(localTunnelStartupDelay)
 }
 
 func releaseDetachedProcess(cmd *exec.Cmd) {

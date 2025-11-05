@@ -11,19 +11,6 @@ import (
 	"unicode/utf16"
 )
 
-func buildExecScript(exePath string, args []string, enforceExit bool) string {
-	var parts []string
-	parts = append(parts, "&", psQuote(exePath))
-	for _, arg := range args {
-		parts = append(parts, psArgQuote(arg))
-	}
-	command := strings.Join(parts, " ")
-	if enforceExit {
-		return fmt.Sprintf("%s; exit $LASTEXITCODE", command)
-	}
-	return command
-}
-
 func psArgQuote(value string) string {
 	if value == "" {
 		return "''"
@@ -38,10 +25,10 @@ func psQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
 
-func sshInvokePowershell(ctx context.Context, target sshTarget, script string) (string, error) {
+func sshInvokePowershell(ctx context.Context, binary string, target sshTarget, script string) (string, error) {
 	encoded := encodePowershellCommand(fmt.Sprintf("& { %s }", script))
 	command := fmt.Sprintf("powershell -NoLogo -NoProfile -NonInteractive -EncodedCommand %s", encoded)
-	stdout, stderr, err := sshCommandFunc(ctx, target, command)
+	stdout, stderr, err := sshCommandFunc(ctx, binary, target, command)
 	if err != nil {
 		if strings.TrimSpace(stderr) != "" {
 			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
@@ -51,9 +38,9 @@ func sshInvokePowershell(ctx context.Context, target sshTarget, script string) (
 	return strings.TrimSpace(stdout), nil
 }
 
-func runSSHCommand(ctx context.Context, target sshTarget, command string) (string, string, error) {
+func executeSSHCommand(ctx context.Context, binary string, target sshTarget, command string) (string, string, error) {
 	args := buildSSHArgs(target, command)
-	cmd := exec.CommandContext(ctx, "ssh", args...)
+	cmd := exec.CommandContext(ctx, binary, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -61,9 +48,18 @@ func runSSHCommand(ctx context.Context, target sshTarget, command string) (strin
 	return stdout.String(), stderr.String(), err
 }
 
-func runSCPCommand(ctx context.Context, target sshTarget, localPath, remotePath string) error {
-	args := buildSCPArgs(target, localPath, remotePath)
-	cmd := exec.CommandContext(ctx, "scp", args...)
+func executeInteractiveSSHCommand(ctx context.Context, binary string, target sshTarget, command string) error {
+	args := buildSSHArgs(target, command)
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func executeSCPCommand(ctx context.Context, binary string, target sshTarget, localPath, remotePath string, recursive bool) error {
+	args := buildSCPArgs(target, localPath, remotePath, recursive)
+	cmd := exec.CommandContext(ctx, binary, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -80,12 +76,18 @@ func buildSSHArgs(target sshTarget, command string) []string {
 	if target.port != "" {
 		args = append(args, "-p", target.port)
 	}
-	args = append(args, targetAddress(target), command)
+	args = append(args, targetAddress(target))
+	if strings.TrimSpace(command) != "" {
+		args = append(args, command)
+	}
 	return args
 }
 
-func buildSCPArgs(target sshTarget, localPath, remotePath string) []string {
+func buildSCPArgs(target sshTarget, localPath, remotePath string, recursive bool) []string {
 	var args []string
+	if recursive {
+		args = append(args, "-r")
+	}
 	if target.port != "" {
 		args = append(args, "-P", target.port)
 	}
@@ -132,8 +134,8 @@ func stopProcess(cmd *exec.Cmd) {
 	_ = cmd.Process.Release()
 }
 
-func stopRemoteService(ctx context.Context, target sshTarget) error {
+func stopRemoteService(ctx context.Context, binary string, target sshTarget) error {
 	script := "Stop-Process -Name xp2p -Force -ErrorAction SilentlyContinue"
-	_, err := sshInvokePowershell(ctx, target, script)
+	_, err := sshInvokePowershell(ctx, binary, target, script)
 	return err
 }
