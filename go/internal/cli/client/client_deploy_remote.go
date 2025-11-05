@@ -26,7 +26,8 @@ func runRemoteDeployment(ctx context.Context, opts deployOptions) error {
 		return fmt.Errorf("invalid package path %q", opts.packagePath)
 	}
 
-	remoteParent := "~"
+	// Copy to the user's home directory without creating extra folders
+	remoteParent := "."
 	remotePackageDir := remoteParent + "/" + baseName
 
 	logging.Info("xp2p client deploy: uploading package",
@@ -53,9 +54,15 @@ func runRemoteDeployment(ctx context.Context, opts deployOptions) error {
 func runRemoteInstallCombined(ctx context.Context, binary string, target sshTarget, packageBaseName string) (string, error) {
 	psScript := strings.Join([]string{
 		fmt.Sprintf("$package = Join-Path -Path $HOME -ChildPath %s", psQuote(packageBaseName)),
-		"$match = Get-ChildItem -LiteralPath $package -Recurse -Filter 'install.ps1' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -First 1",
-		"if (-not $match) { throw \"xp2p install script not found under $package\" }",
-		"$scriptPath = $match",
+		"$default = Join-Path -Path $package -ChildPath 'templates\\windows-amd64\\install.ps1'",
+		"if (Test-Path -LiteralPath $default) { $scriptPath = $default } else {",
+		"  $match = Get-ChildItem -LiteralPath $package -Recurse -Filter 'install.ps1' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -First 1",
+		"  if ($match) { $scriptPath = $match } else {",
+		"    Write-Output '[INFO] xp2p: install.ps1 not found at default; listing top files:'",
+		"    Get-ChildItem -LiteralPath $package -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 200 | ForEach-Object { Write-Output $_.FullName }",
+		"    throw 'xp2p install script not found under ' + $package",
+		"  }",
+		"}",
 		"$scriptDir = Split-Path -Parent -LiteralPath $scriptPath",
 		"Push-Location -LiteralPath $scriptDir",
 		"try { & $scriptPath } finally { Pop-Location }",
@@ -78,8 +85,9 @@ func runRemoteInstallCombined(ctx context.Context, binary string, target sshTarg
 
 	stdout, stderr, err := sshCommandFunc(ctx, binary, target, combined)
 	if err != nil {
-		if strings.TrimSpace(stderr) != "" {
-			return stdout, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr))
+		msg := strings.TrimSpace(strings.Join([]string{strings.TrimSpace(stderr), strings.TrimSpace(stdout)}, "\n"))
+		if msg != "" {
+			return stdout, fmt.Errorf("%w: %s", err, msg)
 		}
 		return stdout, err
 	}
@@ -97,60 +105,4 @@ func shQuote(s string) string {
 func escapeForSh(s string) string {
 	// Minimal escaping for inclusion inside double quotes
 	return strings.ReplaceAll(s, "\"", "\\\"")
-}
-
-// windowsHomeJoin builds a PowerShell Join-Path expression that joins $HOME with provided parts.
-func windowsHomeJoin(parts ...string) string {
-	var quoted []string
-	for _, p := range parts {
-		quoted = append(quoted, psQuote(strings.ReplaceAll(p, "/", `\`)))
-	}
-	// $HOME, 'part1', 'part2'
-	return "$HOME, " + strings.Join(quoted, ", ")
-}
-
-func runRemoteWindowsInstall(ctx context.Context, binary string, target sshTarget, packagePathExpr string) (string, error) {
-	// packagePathExpr is a PS expression, not a quoted string.
-	script := strings.Join([]string{
-		fmt.Sprintf("$package = Join-Path -Path %s", packagePathExpr),
-		"$scriptPath = Join-Path -Path $package -ChildPath 'templates\\windows-amd64\\install.ps1'",
-		"if (-not (Test-Path -LiteralPath $scriptPath)) { throw \"xp2p install script not found at $scriptPath\" }",
-		"$scriptDir = Split-Path -Parent -LiteralPath $scriptPath",
-		"Push-Location -LiteralPath $scriptDir",
-		"try { & $scriptPath } finally { Pop-Location }",
-	}, "; ")
-
-	out, err := sshInvokePowershell(ctx, binary, target, script)
-	if err != nil {
-		return out, err
-	}
-	return out, nil
-}
-
-func splitNonEmptyLines(value string) []string {
-	var lines []string
-	replaced := strings.ReplaceAll(value, "\r\n", "\n")
-	for _, line := range strings.Split(replaced, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed != "" {
-			lines = append(lines, trimmed)
-		}
-	}
-	return lines
-}
-
-func joinWindowsPath(first string, elements ...string) string {
-	path := strings.TrimRight(strings.ReplaceAll(first, "/", `\`), `\`)
-	for _, elem := range elements {
-		trimmed := strings.Trim(strings.ReplaceAll(elem, "/", `\`), `\`)
-		if trimmed == "" {
-			continue
-		}
-		if path == "" {
-			path = trimmed
-		} else {
-			path = path + `\` + trimmed
-		}
-	}
-	return path
 }

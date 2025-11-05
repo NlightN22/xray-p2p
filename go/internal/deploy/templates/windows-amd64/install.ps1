@@ -205,6 +205,7 @@ $tempDir = $null
 
 try {
     Write-Info "xp2p Windows deployment install script started."
+    Write-Output "XP2P_INSTALLER=windows-amd64"
 
     $scriptPath = Get-ScriptPath
     $scriptDir = Split-Path -Parent -LiteralPath $scriptPath
@@ -212,7 +213,9 @@ try {
     $manifestPath = Join-Path -Path $packageRoot -ChildPath "config\deployment.json"
 
     Write-Info "Reading deployment manifest from $manifestPath."
+    Write-Output "XP2P_MANIFEST_PATH=$manifestPath"
     $manifest = Read-DeploymentManifest -ManifestPath $manifestPath
+    Write-Output "XP2P_PACKAGE_VERSION=$($manifest.Version)"
 
     $installDir = if ([string]::IsNullOrWhiteSpace($manifest.InstallDir)) {
         Get-DefaultInstallDir

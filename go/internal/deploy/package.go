@@ -18,7 +18,7 @@ import (
 // Embedded templates that are shipped with the binary and copied into client
 // deployment packages.
 //
-//go:embed templates/*
+//go:embed templates/* templates/*/*
 var templatesFS embed.FS
 
 var (

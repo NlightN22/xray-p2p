@@ -275,7 +275,7 @@ func TestRunRemoteDeploymentWindows(t *testing.T) {
 		callIndex      int
 		scpCalled      bool
 		remoteDest     string
-		expectedParent = "~"
+		expectedParent = "."
 	)
 
 	restore := multiRestore(
