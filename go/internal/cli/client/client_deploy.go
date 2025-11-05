@@ -88,23 +88,9 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 
 	packageOnlyValue := *packageOnly
 
-	userValue := firstNonEmpty(*trojanUser, cfg.Client.User)
-	if strings.TrimSpace(userValue) == "" {
-		if packageOnlyValue {
-			userValue = "client@example.invalid"
-		} else {
-			if promptStringFunc == nil {
-				return deployOptions{}, fmt.Errorf("--user is required (set client.user in config to use default)")
-			}
-			value, err := promptStringFunc("Trojan user (email): ")
-			if err != nil {
-				return deployOptions{}, fmt.Errorf("prompt trojan user: %w", err)
-			}
-			userValue = strings.TrimSpace(value)
-		}
-	}
-	if strings.TrimSpace(userValue) == "" {
-		return deployOptions{}, fmt.Errorf("trojan user is required")
+	userValue := strings.TrimSpace(firstNonEmpty(*trojanUser, cfg.Client.User))
+	if userValue == "" && packageOnlyValue {
+		userValue = "client@example.invalid"
 	}
 
 	passwordValue := strings.TrimSpace(*trojanPassword)
@@ -114,7 +100,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	if passwordValue == "" {
 		if packageOnlyValue {
 			passwordValue = "placeholder-secret"
-		} else {
+		} else if userValue != "" {
 			gen, err := generateSecret(18)
 			if err != nil {
 				return deployOptions{}, fmt.Errorf("generate password: %w", err)

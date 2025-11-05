@@ -84,19 +84,14 @@ func TestParseDeployFlagsRejectsInvalidHost(t *testing.T) {
 	}
 }
 
-func TestParseDeployFlagsPromptsForUser(t *testing.T) {
+func TestParseDeployFlagsAllowsEmptyUser(t *testing.T) {
 	cfg := config.Config{}
-	restore := stubPromptString(t, func(string) (string, error) {
-		return "prompt@example.test", nil
-	})
-	defer restore()
-
 	opts, err := parseDeployFlags(cfg, []string{"--remote-host", "gateway.internal"})
 	if err != nil {
 		t.Fatalf("parseDeployFlags: %v", err)
 	}
-	if opts.manifest.trojanUser != "prompt@example.test" {
-		t.Fatalf("trojanUser mismatch: got %q", opts.manifest.trojanUser)
+	if opts.manifest.trojanUser != "" {
+		t.Fatalf("trojanUser expected empty, got %q", opts.manifest.trojanUser)
 	}
 }
 
