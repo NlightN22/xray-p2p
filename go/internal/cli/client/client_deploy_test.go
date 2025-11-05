@@ -421,7 +421,12 @@ func decodePSEncodedCommand(command string) (string, bool) {
 	if idx == -1 {
 		return "", false
 	}
-	encoded := strings.TrimSpace(command[idx+len(token):])
+	rest := strings.TrimSpace(command[idx+len(token):])
+	parts := strings.Fields(rest)
+	if len(parts) == 0 {
+		return "", false
+	}
+	encoded := parts[0]
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", false
