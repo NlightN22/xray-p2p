@@ -10,21 +10,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-type remoteOS string
-
-const (
-	remoteOSWindows remoteOS = "windows"
-	remoteOSLinux   remoteOS = "linux"
-	remoteOSDarwin  remoteOS = "darwin"
-	remoteOSUnknown remoteOS = "unknown"
-)
-
-type remoteWorkspace struct {
-	baseDir       string
-	packageParent string
-	packageDir    string
-}
-
 func runRemoteDeployment(ctx context.Context, opts deployOptions) error {
 	if strings.TrimSpace(opts.runtime.remoteHost) == "" {
 		return errors.New("remote host is empty")
@@ -36,115 +21,49 @@ func runRemoteDeployment(ctx context.Context, opts deployOptions) error {
 		port: opts.runtime.sshPort,
 	}
 
-	osID, err := detectRemoteOS(ctx, opts.runtime.sshBinary, target)
-	if err != nil {
-		return fmt.Errorf("detect remote operating system: %w", err)
+	baseName := filepath.Base(filepath.Clean(opts.packagePath))
+	if strings.TrimSpace(baseName) == "" {
+		return fmt.Errorf("invalid package path %q", opts.packagePath)
 	}
 
-	switch osID {
-	case remoteOSWindows:
-		return runRemoteDeploymentWindows(ctx, opts, target)
-	case remoteOSLinux, remoteOSDarwin:
-		return fmt.Errorf("remote operating system %s is not supported yet", osID)
-	default:
-		return fmt.Errorf("remote operating system could not be determined")
-	}
-}
-
-func detectRemoteOS(ctx context.Context, binary string, target sshTarget) (remoteOS, error) {
-	if stdout, err := sshInvokePowershell(ctx, binary, target, "$PSVersionTable.PSEdition"); err == nil {
-		if strings.TrimSpace(stdout) != "" {
-			return remoteOSWindows, nil
-		}
-	}
-
-	stdout, _, err := sshCommandFunc(ctx, binary, target, "uname -s")
-	if err == nil {
-		switch strings.ToLower(strings.TrimSpace(stdout)) {
-		case "linux":
-			return remoteOSLinux, nil
-		case "darwin":
-			return remoteOSDarwin, nil
-		default:
-			return remoteOSUnknown, nil
-		}
-	}
-
-	return remoteOSUnknown, fmt.Errorf("unable to detect remote OS: %w", err)
-}
-
-func runRemoteDeploymentWindows(ctx context.Context, opts deployOptions, target sshTarget) error {
-	workspace, err := prepareRemoteWorkspaceWindows(ctx, opts.runtime.sshBinary, target, opts.packagePath)
-	if err != nil {
-		return fmt.Errorf("prepare remote workspace: %w", err)
-	}
+	remoteParent := "~/.xp2p-deploy"
+	remotePackageDir := remoteParent + "/" + baseName
 
 	logging.Info("xp2p client deploy: uploading package",
 		"local_path", opts.packagePath,
-		"remote_base", workspace.baseDir,
+		"remote_parent", remoteParent,
 	)
 
-	if err := scpCopyFunc(ctx, opts.runtime.scpBinary, target, opts.packagePath, workspace.packageParent, true); err != nil {
+	if err := scpCopyFunc(ctx, opts.runtime.scpBinary, target, opts.packagePath, remoteParent, true); err != nil {
 		return fmt.Errorf("copy deployment package: %w", err)
 	}
 
-	logging.Info("xp2p client deploy: package uploaded",
-		"remote_package_dir", workspace.packageDir,
-	)
+	logging.Info("xp2p client deploy: package uploaded", "remote_package_dir", remotePackageDir)
 
-	output, err := runRemoteWindowsInstall(ctx, opts.runtime.sshBinary, target, workspace.packageDir)
+	// Windows-only execution for now: run PowerShell installer under user's HOME.
+	pathExpr := windowsHomeJoin(".xp2p-deploy", baseName)
+	output, err := runRemoteWindowsInstall(ctx, opts.runtime.sshBinary, target, pathExpr)
 	if err != nil {
 		return fmt.Errorf("run remote install script: %w", err)
 	}
-
-	logging.Info("xp2p client deploy: windows install script completed",
-		"remote_package_dir", workspace.packageDir,
-		"output", strings.TrimSpace(output),
-	)
-
+	logging.Info("xp2p client deploy: install script completed", "output", strings.TrimSpace(output))
 	return nil
 }
 
-func prepareRemoteWorkspaceWindows(ctx context.Context, binary string, target sshTarget, packagePath string) (remoteWorkspace, error) {
-	script := strings.Join([]string{
-		"$base = Join-Path -Path ([IO.Path]::GetTempPath()) -ChildPath ('xp2p-client-' + [Guid]::NewGuid().ToString('N'))",
-		"New-Item -ItemType Directory -Path $base -Force | Out-Null",
-		"$packageParent = Join-Path -Path $base -ChildPath 'package'",
-		"New-Item -ItemType Directory -Path $packageParent -Force | Out-Null",
-		"$packageParent",
-		"$base",
-	}, "; ")
-
-	output, err := sshInvokePowershell(ctx, binary, target, script)
-	if err != nil {
-		return remoteWorkspace{}, err
+// windowsHomeJoin builds a PowerShell Join-Path expression that joins $HOME with provided parts.
+func windowsHomeJoin(parts ...string) string {
+	var quoted []string
+	for _, p := range parts {
+		quoted = append(quoted, psQuote(strings.ReplaceAll(p, "/", `\`)))
 	}
-
-	lines := splitNonEmptyLines(output)
-	if len(lines) < 2 {
-		return remoteWorkspace{}, fmt.Errorf("unexpected workspace response: %q", output)
-	}
-
-	baseName := filepath.Base(filepath.Clean(packagePath))
-	if strings.TrimSpace(baseName) == "" || baseName == string(filepath.Separator) {
-		return remoteWorkspace{}, fmt.Errorf("invalid package path %q", packagePath)
-	}
-
-	packageParent := lines[0]
-	baseDir := lines[1]
-	packageDir := joinWindowsPath(packageParent, baseName)
-
-	return remoteWorkspace{
-		baseDir:       baseDir,
-		packageParent: packageParent,
-		packageDir:    packageDir,
-	}, nil
+	// $HOME, 'part1', 'part2'
+	return "$HOME, " + strings.Join(quoted, ", ")
 }
 
-func runRemoteWindowsInstall(ctx context.Context, binary string, target sshTarget, packageDir string) (string, error) {
-	packageLiteral := psQuote(packageDir)
+func runRemoteWindowsInstall(ctx context.Context, binary string, target sshTarget, packagePathExpr string) (string, error) {
+	// packagePathExpr is a PS expression, not a quoted string.
 	script := strings.Join([]string{
-		fmt.Sprintf("$package = %s", packageLiteral),
+		fmt.Sprintf("$package = Join-Path -Path %s", packagePathExpr),
 		"$scriptPath = Join-Path -Path $package -ChildPath 'templates\\windows-amd64\\install.ps1'",
 		"if (-not (Test-Path -LiteralPath $scriptPath)) { throw \"xp2p install script not found at $scriptPath\" }",
 		"$scriptDir = Split-Path -Parent -LiteralPath $scriptPath",

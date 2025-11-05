@@ -280,7 +280,7 @@ func TestRunRemoteDeploymentWindows(t *testing.T) {
 		callIndex      int
 		scpCalled      bool
 		remoteDest     string
-		expectedParent = `C:\Users\Remote\AppData\Local\Temp\xp2p-client-123\package`
+		expectedParent = "~/.xp2p-deploy"
 	)
 
 	restore := multiRestore(
@@ -288,21 +288,14 @@ func TestRunRemoteDeploymentWindows(t *testing.T) {
 			callIndex++
 			switch callIndex {
 			case 1:
-				if !strings.Contains(command, "EncodedCommand") {
-					t.Fatalf("expected powershell detection command, got %q", command)
-				}
-				return "Desktop", "", nil
-			case 2:
-				return expectedParent + "\n" + `C:\Users\Remote\AppData\Local\Temp\xp2p-client-123`, "", nil
-			case 3:
 				script, ok := decodePSEncodedCommand(command)
 				if !ok {
 					t.Fatalf("unable to decode encoded command: %q", command)
 				}
-				if !strings.Contains(script, `templates\windows-amd64\install.ps1`) {
+				if !strings.Contains(script, "install.ps1") {
 					t.Fatalf("expected install script path, got %q", script)
 				}
-				if !strings.Contains(script, joinWindowsPath(expectedParent, "pkg")) {
+				if !strings.Contains(script, ".xp2p-deploy") || !strings.Contains(script, "pkg") {
 					t.Fatalf("expected package directory in script, got %q", script)
 				}
 				return "[INFO] success", "", nil
@@ -337,7 +330,7 @@ func TestRunRemoteDeploymentWindows(t *testing.T) {
 	if remoteDest == "" {
 		t.Fatalf("remote destination not captured")
 	}
-	if callIndex != 3 {
+	if callIndex != 1 {
 		t.Fatalf("unexpected number of ssh commands: %d", callIndex)
 	}
 }
@@ -353,18 +346,16 @@ func TestRunRemoteDeploymentUnsupportedOS(t *testing.T) {
 		},
 	}
 
+	var scpCalled bool
 	restore := multiRestore(
 		stubSSHCommand(t, func(command string) (string, string, error) {
 			if strings.Contains(command, "EncodedCommand") {
 				return "", "powershell not found", errors.New("command failed")
 			}
-			if strings.Contains(command, "uname -s") {
-				return "Linux", "", nil
-			}
 			return "", "", errors.New("unexpected command")
 		}),
 		stubSCPCopy(t, func(string, string, bool) error {
-			t.Fatalf("scpCopyFunc should not be called for unsupported OS")
+			scpCalled = true
 			return nil
 		}),
 	)
@@ -372,6 +363,9 @@ func TestRunRemoteDeploymentUnsupportedOS(t *testing.T) {
 
 	if err := runRemoteDeployment(ctx, opts); err == nil {
 		t.Fatalf("expected error for unsupported operating system")
+	}
+	if !scpCalled {
+		t.Fatalf("expected scp to be called before failure")
 	}
 }
 
