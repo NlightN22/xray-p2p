@@ -1,6 +1,12 @@
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = [System.Security.Principal.WindowsPrincipal]::new($currentIdentity)
+if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "OpenSSH provisioning requires administrative privileges. Rerun this script from an elevated PowerShell session."
+}
+
 function Write-Info {
     param(
         [Parameter(Mandatory = $true)]
@@ -26,6 +32,70 @@ function Ensure-OpenSshFeature {
         Write-Info ("Installing Windows capability '{0}'" -f $capability)
         Add-WindowsCapability -Online -Name $capability -ErrorAction Stop | Out-Null
     }
+}
+
+function Ensure-AclRules {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [array] $ExpectedRules,
+
+        [Parameter(Mandatory = $true)]
+        [string[]] $IcaclsArguments
+    )
+
+    if (-not (Test-Path $Path)) {
+        return $false
+    }
+
+    $acl = Get-Acl -Path $Path -ErrorAction SilentlyContinue
+    if (-not $acl) {
+        return $false
+    }
+
+    $allPresent = $true
+    foreach ($rule in $ExpectedRules) {
+        $matched = $false
+        foreach ($entry in $acl.Access) {
+            $identityValue = $entry.IdentityReference.Value
+            if (-not (& $rule.Match $identityValue)) {
+                continue
+            }
+
+            if ($entry.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {
+                continue
+            }
+
+            if (($entry.FileSystemRights -band $rule.Rights) -ne $rule.Rights) {
+                continue
+            }
+
+            if (($entry.InheritanceFlags -band $rule.Inheritance) -ne $rule.Inheritance) {
+                continue
+            }
+
+            if ($entry.PropagationFlags -ne $rule.Propagation) {
+                continue
+            }
+
+            $matched = $true
+            break
+        }
+
+        if (-not $matched) {
+            $allPresent = $false
+            break
+        }
+    }
+
+    if ($allPresent) {
+        return $false
+    }
+
+    & icacls @IcaclsArguments | Out-Null
+    return $true
 }
 
 function Register-SshdServiceManual {
@@ -138,16 +208,40 @@ function Ensure-SshdService {
     }
 }
 
+function Restart-SshdService {
+    $serviceName = "sshd"
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if (-not $service) {
+        Write-Info "Service 'sshd' not present; skipping restart."
+        return
+    }
+
+    try {
+        Restart-Service -Name $serviceName -Force -ErrorAction Stop
+        Write-Info "Service 'sshd' restarted to apply changes."
+    }
+    catch {
+        Write-Info ("Failed to restart service 'sshd': {0}" -f $_.Exception.Message)
+        try {
+            Start-Service -Name $serviceName -ErrorAction Stop
+            Write-Info "Service 'sshd' started."
+        }
+        catch {
+            Write-Info ("Failed to start service 'sshd': {0}" -f $_.Exception.Message)
+        }
+    }
+}
+
 function Ensure-SshdConfigDefaults {
     $configPath = Join-Path $env:ProgramData "ssh\sshd_config"
     if (-not (Test-Path $configPath)) {
         Write-Info ("sshd_config not found at {0}; skipping config cleanup." -f $configPath)
-        return
+        return $false
     }
 
     $lines = Get-Content -Path $configPath -ErrorAction Stop
     if (-not $lines) {
-        return
+        return $false
     }
 
     $changed = $false
@@ -173,6 +267,8 @@ function Ensure-SshdConfigDefaults {
         Set-Content -Path $configPath -Encoding ascii -Value $lines
         Write-Info ("Commented administrative override entries in {0}" -f $configPath)
     }
+
+    return $changed
 }
 
 function Ensure-VagrantKeys {
@@ -180,13 +276,15 @@ function Ensure-VagrantKeys {
     $userProfile = Join-Path "C:\Users" $targetUser
     if (-not (Test-Path $userProfile)) {
         Write-Info ("User profile '{0}' not found; skipping Vagrant key provisioning." -f $userProfile)
-        return
+        return $false
     }
 
+    $changes = $false
     $sshDir = Join-Path $userProfile ".ssh"
     if (-not (Test-Path $sshDir)) {
         Write-Info ("Creating SSH directory at {0}" -f $sshDir)
         New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
+        $changes = $true
     }
 
     $authorizedKeysPath = Join-Path $sshDir "authorized_keys"
@@ -213,36 +311,78 @@ function Ensure-VagrantKeys {
         }
 
         Write-Info ("Added key to {0}" -f $authorizedKeysPath)
+        $changes = $true
     }
 
-    try {
-        & icacls $sshDir `
-            /inheritance:r `
-            /grant:r ("{0}:(OI)(CI)F" -f $targetUser) `
-            /grant:r "Administrators:(OI)(CI)F" `
-            /grant:r "SYSTEM:(OI)(CI)F" | Out-Null
+    $inheritAll = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+    $inheritNone = [System.Security.AccessControl.InheritanceFlags]::None
+    $propagationNone = [System.Security.AccessControl.PropagationFlags]::None
+    $fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl
+
+    $matchUser = {
+        param($id)
+        if (-not $id) { return $false }
+        $id.Equals($targetUser, [System.StringComparison]::OrdinalIgnoreCase) -or
+            $id.EndsWith("\$targetUser", [System.StringComparison]::OrdinalIgnoreCase)
     }
-    catch {
-        Write-Info ("Failed to adjust ACL for '{0}': {1}" -f $sshDir, $_.Exception.Message)
+    $matchAdmins = {
+        param($id)
+        if (-not $id) { return $false }
+        $id.Equals("BUILTIN\Administrators", [System.StringComparison]::OrdinalIgnoreCase) -or
+            $id.EndsWith("\Administrators", [System.StringComparison]::OrdinalIgnoreCase)
+    }
+    $matchSystem = {
+        param($id)
+        if (-not $id) { return $false }
+        $id.Equals("NT AUTHORITY\SYSTEM", [System.StringComparison]::OrdinalIgnoreCase)
+    }
+
+    $dirRules = @(
+        @{ Match = $matchUser; Rights = $fullControl; Inheritance = $inheritAll; Propagation = $propagationNone },
+        @{ Match = $matchAdmins; Rights = $fullControl; Inheritance = $inheritAll; Propagation = $propagationNone },
+        @{ Match = $matchSystem; Rights = $fullControl; Inheritance = $inheritAll; Propagation = $propagationNone }
+    )
+    $dirIcaclsArgs = @(
+        $sshDir,
+        "/inheritance:r",
+        "/grant:r", ("{0}:(OI)(CI)F" -f $targetUser),
+        "/grant:r", "Administrators:(OI)(CI)F",
+        "/grant:r", "SYSTEM:(OI)(CI)F"
+    )
+    if (Ensure-AclRules -Path $sshDir -ExpectedRules $dirRules -IcaclsArguments $dirIcaclsArgs) {
+        $changes = $true
     }
 
     if (Test-Path $authorizedKeysPath) {
-        try {
-            & icacls $authorizedKeysPath `
-                /inheritance:r `
-                /grant:r ("{0}:F" -f $targetUser) `
-                /grant:r "Administrators:F" `
-                /grant:r "SYSTEM:F" | Out-Null
-        }
-        catch {
-            Write-Info ("Failed to adjust ACL for '{0}': {1}" -f $authorizedKeysPath, $_.Exception.Message)
+        $fileRules = @(
+            @{ Match = $matchUser; Rights = $fullControl; Inheritance = $inheritNone; Propagation = $propagationNone },
+            @{ Match = $matchAdmins; Rights = $fullControl; Inheritance = $inheritNone; Propagation = $propagationNone },
+            @{ Match = $matchSystem; Rights = $fullControl; Inheritance = $inheritNone; Propagation = $propagationNone }
+        )
+        $fileIcaclsArgs = @(
+            $authorizedKeysPath,
+            "/inheritance:r",
+            "/grant:r", ("{0}:F" -f $targetUser),
+            "/grant:r", "Administrators:F",
+            "/grant:r", "SYSTEM:F"
+        )
+        if (Ensure-AclRules -Path $authorizedKeysPath -ExpectedRules $fileRules -IcaclsArguments $fileIcaclsArgs) {
+            $changes = $true
         }
     }
+
+    return $changes
 }
 
 Ensure-OpenSshFeature
 Ensure-SshdRegistered
-Ensure-SshdConfigDefaults
+$configChanged = Ensure-SshdConfigDefaults
+$keysChanged = Ensure-VagrantKeys
 Ensure-SshdService
-Ensure-VagrantKeys
+if ($configChanged -or $keysChanged) {
+    Restart-SshdService
+}
+else {
+    Write-Info "Service 'sshd' restart not required."
+}
 Write-Info "OpenSSH provisioning completed."
