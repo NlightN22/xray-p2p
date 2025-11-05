@@ -78,21 +78,21 @@ function Set-PrivateNetworkProfile {
             Write-Info "Interface index $($entry.InterfaceIndex) set to Private."
         }
         catch {
-            Write-Info "Failed to set Private profile for interface index $($entry.InterfaceIndex): $($_.Exception.Message)"
+            Write-Info ("Failed to set Private profile for interface index {0}: {1}" -f $entry.InterfaceIndex, $_.Exception.Message)
         }
     }
 }
 
 function Disable-FirewallProfiles {
     $profiles = @("Domain", "Private", "Public")
-    Write-Info "Disabling Windows Firewall profiles: $($profiles -join ', ')"
+    Write-Info ("Disabling Windows Firewall profiles: {0}" -f ($profiles -join ", "))
     foreach ($fwProfile in $profiles) {
         try {
             Set-NetFirewallProfile -Profile $fwProfile -Enabled False -ErrorAction Stop
             Write-Info "Firewall profile '$fwProfile' disabled."
         }
         catch {
-            Write-Info "Failed to disable firewall profile '$fwProfile': $($_.Exception.Message)"
+            Write-Info ("Failed to disable firewall profile '{0}': {1}" -f $fwProfile, $_.Exception.Message)
         }
     }
 }
@@ -115,7 +115,7 @@ function Set-HostOnlyAddress {
             Remove-NetIPAddress -InputObject $entry -Confirm:$false -ErrorAction Stop
         }
         catch {
-            Write-Info "Failed to remove existing IPv4 address $($entry.IPAddress) on '$InterfaceAlias': $($_.Exception.Message)"
+            Write-Info ("Failed to remove existing IPv4 address {0} on '{1}': {2}" -f $entry.IPAddress, $InterfaceAlias, $_.Exception.Message)
         }
     }
 
@@ -123,7 +123,7 @@ function Set-HostOnlyAddress {
         New-NetIPAddress -InterfaceAlias $InterfaceAlias -IPAddress $IPAddress -PrefixLength $PrefixLength -ErrorAction Stop | Out-Null
     }
     catch {
-        Write-Info "Failed to assign IP $IPAddress to '$InterfaceAlias': $($_.Exception.Message)"
+        Write-Info ("Failed to assign IP {0} to '{1}': {2}" -f $IPAddress, $InterfaceAlias, $_.Exception.Message)
         throw
     }
 }
@@ -162,7 +162,7 @@ function Ensure-ChocoPackage {
     }
 
     if (-not (choco list --local-only $Package | Select-String -Quiet "^$Package ")) {
-        Write-Info "Installing Chocolatey package '$Package' (version: $Version)"
+        Write-Info ("Installing Chocolatey package '{0}' (version: {1})" -f $Package, $Version)
         choco $installArgs | Write-Host
     }
     else {
@@ -194,7 +194,7 @@ function Ensure-OpenSsh {
             Set-Service -Name $serviceName -StartupType Automatic -ErrorAction Stop
         }
         catch {
-            Write-Info "Failed to configure startup type for service '$serviceName': $($_.Exception.Message)"
+            Write-Info ("Failed to configure startup type for service '{0}': {1}" -f $serviceName, $_.Exception.Message)
         }
 
         $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
@@ -204,7 +204,7 @@ function Ensure-OpenSsh {
                 Write-Info "Service '$serviceName' started."
             }
             catch {
-                Write-Info "Failed to start service '$serviceName': $($_.Exception.Message)"
+                Write-Info ("Failed to start service '{0}': {1}" -f $serviceName, $_.Exception.Message)
             }
         }
         elseif ($service) {
@@ -213,6 +213,54 @@ function Ensure-OpenSsh {
     }
     else {
         Write-Info "Service '$serviceName' not detected after capability installation attempt."
+    }
+}
+
+function Ensure-SshdConfig {
+    $configPath = "C:\ProgramData\ssh\sshd_config"
+    if (-not (Test-Path $configPath)) {
+        Write-Info "sshd_config not found at $configPath; skipping configuration update."
+        return
+    }
+
+    try {
+        $existing = Get-Content -Path $configPath -ErrorAction Stop
+    }
+    catch {
+        Write-Info ("Unable to read {0}: {1}" -f $configPath, $_.Exception.Message)
+        return
+    }
+
+    $marker = "# xp2p-sshd-config"
+    if ($existing | Where-Object { $_ -eq $marker }) {
+        Write-Info "sshd_config already contains xp2p overrides."
+        return
+    }
+
+    $block = @()
+    if ($existing.Length -gt 0) {
+        $block += ""
+    }
+    $block += $marker
+    $block += "AuthorizedKeysFile __PROGRAMDATA__/ssh/authorized_keys %h/.ssh/authorized_keys"
+    $block += "PubkeyAuthentication yes"
+    $block += "PasswordAuthentication yes"
+
+    try {
+        $block | Add-Content -Path $configPath -Encoding ascii
+        Write-Info "Appended xp2p sshd overrides to $configPath"
+    }
+    catch {
+        Write-Info ("Failed to update {0}: {1}" -f $configPath, $_.Exception.Message)
+        return
+    }
+
+    try {
+        Restart-Service -Name "sshd" -Force -ErrorAction Stop
+        Write-Info "Service 'sshd' restarted to apply configuration."
+    }
+    catch {
+        Write-Info ("Failed to restart service 'sshd': {0}" -f $_.Exception.Message)
     }
 }
 
@@ -236,27 +284,94 @@ function Ensure-VagrantKeys {
     $authorizedKeysPath = Join-Path $sshDir "authorized_keys"
     $insecureKey = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
 
+    $addKeyIfMissing = {
+        param(
+            [string] $KeyValue,
+            [string] $Path
+        )
+
+        if ([string]::IsNullOrWhiteSpace($KeyValue)) {
+            return $false
+        }
+
+        $normalized = $KeyValue.Trim()
+        if ([string]::IsNullOrWhiteSpace($normalized)) {
+            return $false
+        }
+
+        if (-not (Test-Path $Path)) {
+            Set-Content -Path $Path -Value $normalized -Encoding ascii
+            return $true
+        }
+
+        $existingKeys = Get-Content -Path $Path -ErrorAction SilentlyContinue
+        if ($existingKeys -and ($existingKeys | ForEach-Object { $_.Trim() }) -contains $normalized) {
+            return $false
+        }
+
+        Add-Content -Path $Path -Value $normalized -Encoding ascii
+        return $true
+    }
+
     if (-not (Test-Path $authorizedKeysPath)) {
         Write-Info "Creating Vagrant authorized_keys file."
-        Set-Content -Path $authorizedKeysPath -Value $insecureKey -Encoding ascii
+    }
+
+    if (& $addKeyIfMissing $insecureKey $authorizedKeysPath) {
+        Write-Info "Ensured Vagrant insecure public key present."
     }
     else {
-        $existingKeys = Get-Content -Path $authorizedKeysPath -ErrorAction SilentlyContinue
-        if ($existingKeys -and ($existingKeys | ForEach-Object { $_.Trim() }) -contains $insecureKey) {
-            Write-Info "Vagrant insecure public key already present."
-        }
-        else {
-            Write-Info "Appending Vagrant insecure public key."
-            Add-Content -Path $authorizedKeysPath -Value $insecureKey -Encoding ascii
+        Write-Info "Vagrant insecure public key already present."
+    }
+
+    $machineId = $env:XP2P_MACHINE_ID
+    $sharedRoot = if ($env:XP2P_SYNC_ROOT) { $env:XP2P_SYNC_ROOT } else { "C:\xp2p" }
+    if (-not [string]::IsNullOrWhiteSpace($machineId)) {
+        $machinesRoot = Join-Path $sharedRoot ".vagrant\machines"
+        $machineRoot = Join-Path $machinesRoot $machineId
+        $machineKeyPath = Join-Path $machineRoot "virtualbox\private_key"
+        if (Test-Path $machineKeyPath) {
+            try {
+                $machinePublicKey = & ssh-keygen.exe -y -f $machineKeyPath 2>$null
+                if ($machinePublicKey) {
+                    if (& $addKeyIfMissing $machinePublicKey $authorizedKeysPath) {
+                        Write-Info ("Added machine-specific public key derived from {0}." -f $machineKeyPath)
+                    }
+                }
+            }
+            catch {
+                Write-Info ("Failed to derive public key from '{0}': {1}" -f $machineKeyPath, $_.Exception.Message)
+            }
         }
     }
 
     try {
-        $targetRule = "{0}:(OI)(CI)F" -f $TargetUser
-        & icacls $sshDir /inheritance:r /grant:r $targetRule /grant:r "Administrators:(OI)(CI)F" | Out-Null
+        $directoryGrants = @(
+            "{0}:(OI)(CI)F" -f $TargetUser,
+            "Administrators:(OI)(CI)F",
+            "SYSTEM:(OI)(CI)F",
+            '"NT SERVICE\SSHD":(OI)(CI)R'
+        )
+        $dirArgs = @("/inheritance:r")
+        foreach ($grant in $directoryGrants) {
+            $dirArgs += @("/grant:r", $grant)
+        }
+        & icacls $sshDir @dirArgs | Out-Null
+
+        $fileGrants = @(
+            "{0}:F" -f $TargetUser,
+            "Administrators:F",
+            "SYSTEM:F",
+            '"NT SERVICE\SSHD":R'
+        )
+        $fileArgs = @("/inheritance:r")
+        foreach ($grant in $fileGrants) {
+            $fileArgs += @("/grant:r", $grant)
+        }
+        & icacls $authorizedKeysPath @fileArgs | Out-Null
     }
     catch {
-        Write-Info "Failed to adjust ACL for '$sshDir': $($_.Exception.Message)"
+        Write-Info ("Failed to adjust ACL for '{0}': {1}" -f $sshDir, $_.Exception.Message)
     }
 }
 
@@ -284,7 +399,7 @@ function Ensure-Go {
     }
 
     $goVersionOutput = & go.exe version
-    Write-Info "Go toolchain ready: $goVersionOutput"
+    Write-Info ("Go toolchain ready: {0}" -f $goVersionOutput)
 }
 
 function Build-Xp2p {
@@ -419,7 +534,7 @@ function Disable-SshHostKeyChecking {
 
     if ($block.Count -gt 0) {
         $block | Add-Content -Path $configPath -Encoding ascii
-        Write-Info "SSH host key checking disabled for patterns: $($Patterns -join ', ')"
+        Write-Info ("SSH host key checking disabled for patterns: {0}" -f ($Patterns -join ", "))
     }
 }
 
@@ -436,7 +551,7 @@ if ($xp2pRole -notin @("server", "client")) {
     $xp2pRole = "server"
 }
 
-Write-Info "Provisioning role detected: $xp2pRole"
+Write-Info ("Provisioning role detected: {0}" -f $xp2pRole)
 
 $hostOnlyAlias = if ($env:XP2P_HOSTONLY_ALIAS) { $env:XP2P_HOSTONLY_ALIAS } else { "Ethernet 2" }
 $hostOnlyAddress = switch ($xp2pRole) {
@@ -447,6 +562,7 @@ $hostOnlyAddress = switch ($xp2pRole) {
 Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-OpenSsh
+Ensure-SshdConfig
 Ensure-VagrantKeys -TargetUser "vagrant"
 Ensure-Go
 Build-Xp2p

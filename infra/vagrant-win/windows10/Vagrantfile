@@ -43,6 +43,9 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.network "private_network",
                        ip: private_ip
 
+    machine.ssh.username = "vagrant"
+    machine.ssh.insert_key = false
+
     machine.vm.provider "virtualbox" do |vb|
       vb.name = vb_name
       vb.memory = 8192
@@ -53,7 +56,10 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.provision "shell",
                          path: PROVISION_SCRIPT,
                          privileged: true,
-                         env: { "XP2P_ROLE" => role }
+                         env: {
+                           "XP2P_ROLE" => role,
+                           "XP2P_MACHINE_ID" => machine_id
+                         }
   end
 end
 
