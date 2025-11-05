@@ -86,13 +86,13 @@ function Set-PrivateNetworkProfile {
 function Disable-FirewallProfiles {
     $profiles = @("Domain", "Private", "Public")
     Write-Info "Disabling Windows Firewall profiles: $($profiles -join ', ')"
-    foreach ($profile in $profiles) {
+    foreach ($fwProfile in $profiles) {
         try {
-            Set-NetFirewallProfile -Profile $profile -Enabled False -ErrorAction Stop
-            Write-Info "Firewall profile '$profile' disabled."
+            Set-NetFirewallProfile -Profile $fwProfile -Enabled False -ErrorAction Stop
+            Write-Info "Firewall profile '$fwProfile' disabled."
         }
         catch {
-            Write-Info "Failed to disable firewall profile '$profile': $($_.Exception.Message)"
+            Write-Info "Failed to disable firewall profile '$fwProfile': $($_.Exception.Message)"
         }
     }
 }
@@ -156,17 +156,107 @@ function Ensure-ChocoPackage {
         [string] $Version
     )
 
-    $args = @("install", $Package, "--yes", "--no-progress")
+    $installArgs = @("install", $Package, "--yes", "--no-progress")
     if ($Version) {
-        $args += @("--version", $Version)
+        $installArgs += @("--version", $Version)
     }
 
     if (-not (choco list --local-only $Package | Select-String -Quiet "^$Package ")) {
         Write-Info "Installing Chocolatey package '$Package' (version: $Version)"
-        choco $args | Write-Host
+        choco $installArgs | Write-Host
     }
     else {
         Write-Info "Chocolatey package '$Package' already installed."
+    }
+}
+
+function Ensure-OpenSsh {
+    $capabilities = @(
+        "OpenSSH.Client~~~~0.0.1.0",
+        "OpenSSH.Server~~~~0.0.1.0"
+    )
+
+    foreach ($capability in $capabilities) {
+        $current = Get-WindowsCapability -Online -Name $capability -ErrorAction SilentlyContinue
+        if (-not $current -or $current.State -ne "Installed") {
+            Write-Info "Installing Windows capability '$capability'"
+            Add-WindowsCapability -Online -Name $capability -ErrorAction Stop | Out-Null
+        }
+        else {
+            Write-Info "Windows capability '$capability' already installed."
+        }
+    }
+
+    $serviceName = "sshd"
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($service) {
+        try {
+            Set-Service -Name $serviceName -StartupType Automatic -ErrorAction Stop
+        }
+        catch {
+            Write-Info "Failed to configure startup type for service '$serviceName': $($_.Exception.Message)"
+        }
+
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($service -and $service.Status -ne "Running") {
+            try {
+                Start-Service -Name $serviceName -ErrorAction Stop
+                Write-Info "Service '$serviceName' started."
+            }
+            catch {
+                Write-Info "Failed to start service '$serviceName': $($_.Exception.Message)"
+            }
+        }
+        elseif ($service) {
+            Write-Info "Service '$serviceName' already running."
+        }
+    }
+    else {
+        Write-Info "Service '$serviceName' not detected after capability installation attempt."
+    }
+}
+
+function Ensure-VagrantKeys {
+    param(
+        [string] $TargetUser = "vagrant"
+    )
+
+    $userProfile = Join-Path "C:\Users" $TargetUser
+    if (-not (Test-Path $userProfile)) {
+        Write-Info "User profile '$userProfile' not found; skipping Vagrant key provisioning."
+        return
+    }
+
+    $sshDir = Join-Path $userProfile ".ssh"
+    if (-not (Test-Path $sshDir)) {
+        Write-Info "Creating SSH directory at $sshDir"
+        New-Item -ItemType Directory -Path $sshDir -Force | Out-Null
+    }
+
+    $authorizedKeysPath = Join-Path $sshDir "authorized_keys"
+    $insecureKey = "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA6NF8iallvQVp22WDkTkyrtvp9eWW6A8YVr+kz4TjGYe7gHzIw+niNltGEFHzD8+v1I2YJ6oXevct1YeS0o9HZyN1Q9qgCgzUFtdOKLv6IedplqoPkcmF0aYet2PkEDo3MlTBckFXPITAMzF8dJSIFo9D8HfdOV0IAdx4O7PtixWKn5y2hMNG0zQPyUecp4pzC6kivAIhyfHilFR61RGL+GPXQ2MWZWFYbAGjyiYJnAmCP3NOTd0jMZEnDkbUvxhMmBYSdETk1rRgm+R4LOzFUGaHqHDLKLX+FIPKcF96hrucXzcWyLbIbEgE98OHlnVYCzRdK8jlqm8tehUc9c9WhQ== vagrant insecure public key"
+
+    if (-not (Test-Path $authorizedKeysPath)) {
+        Write-Info "Creating Vagrant authorized_keys file."
+        Set-Content -Path $authorizedKeysPath -Value $insecureKey -Encoding ascii
+    }
+    else {
+        $existingKeys = Get-Content -Path $authorizedKeysPath -ErrorAction SilentlyContinue
+        if ($existingKeys -and ($existingKeys | ForEach-Object { $_.Trim() }) -contains $insecureKey) {
+            Write-Info "Vagrant insecure public key already present."
+        }
+        else {
+            Write-Info "Appending Vagrant insecure public key."
+            Add-Content -Path $authorizedKeysPath -Value $insecureKey -Encoding ascii
+        }
+    }
+
+    try {
+        $targetRule = "{0}:(OI)(CI)F" -f $TargetUser
+        & icacls $sshDir /inheritance:r /grant:r $targetRule /grant:r "Administrators:(OI)(CI)F" | Out-Null
+    }
+    catch {
+        Write-Info "Failed to adjust ACL for '$sshDir': $($_.Exception.Message)"
     }
 }
 
@@ -356,6 +446,8 @@ $hostOnlyAddress = switch ($xp2pRole) {
 
 Ensure-IsElevated
 Ensure-Chocolatey
+Ensure-OpenSsh
+Ensure-VagrantKeys -TargetUser "vagrant"
 Ensure-Go
 Build-Xp2p
 Set-HostOnlyAddress -InterfaceAlias $hostOnlyAlias -IPAddress $hostOnlyAddress
