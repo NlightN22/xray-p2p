@@ -272,8 +272,14 @@ try {
         "--force"
     )
 
-    & $xp2pExe $arguments
+    Write-Output "XP2P_RUN=server_install"
+    Write-Output "XP2P_XP2P_EXE=$xp2pExe"
+    $processOutput = & $xp2pExe $arguments 2>&1
     $exitCode = $LASTEXITCODE
+    Write-Output "XP2P_SERVER_INSTALL_EXIT=$exitCode"
+    Write-Output "XP2P_SERVER_INSTALL_OUTPUT_START"
+    if ($processOutput) { $processOutput | ForEach-Object { Write-Output $_ } }
+    Write-Output "XP2P_SERVER_INSTALL_OUTPUT_END"
     if ($exitCode -ne 0) {
         throw "xp2p server install failed with exit code $exitCode."
     }
@@ -285,6 +291,7 @@ try {
     }
 
     Write-Info "xp2p server install completed successfully."
+    Write-Output "XP2P_DONE=1"
 }
 catch {
     Write-Failure $_.Exception.Message
