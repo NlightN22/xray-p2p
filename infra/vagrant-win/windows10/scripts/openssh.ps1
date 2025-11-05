@@ -138,6 +138,43 @@ function Ensure-SshdService {
     }
 }
 
+function Ensure-SshdConfigDefaults {
+    $configPath = Join-Path $env:ProgramData "ssh\sshd_config"
+    if (-not (Test-Path $configPath)) {
+        Write-Info ("sshd_config not found at {0}; skipping config cleanup." -f $configPath)
+        return
+    }
+
+    $lines = Get-Content -Path $configPath -ErrorAction Stop
+    if (-not $lines) {
+        return
+    }
+
+    $changed = $false
+    $matchPattern = '^\s*Match\s+Group\s+administrators\b'
+    $adminKeyPattern = '^\s*AuthorizedKeysFile\s+__PROGRAMDATA__/ssh/administrators_authorized_keys\b'
+
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+
+        if ($line -notmatch '^\s*#' -and $line -match $matchPattern) {
+            $lines[$i] = "# Match Group administrators"
+            $changed = $true
+            continue
+        }
+
+        if ($line -notmatch '^\s*#' -and $line -match $adminKeyPattern) {
+            $lines[$i] = "# AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys"
+            $changed = $true
+        }
+    }
+
+    if ($changed) {
+        Set-Content -Path $configPath -Encoding ascii -Value $lines
+        Write-Info ("Commented administrative override entries in {0}" -f $configPath)
+    }
+}
+
 function Ensure-VagrantKeys {
     $targetUser = "vagrant"
     $userProfile = Join-Path "C:\Users" $targetUser
@@ -205,6 +242,7 @@ function Ensure-VagrantKeys {
 
 Ensure-OpenSshFeature
 Ensure-SshdRegistered
+Ensure-SshdConfigDefaults
 Ensure-SshdService
 Ensure-VagrantKeys
 Write-Info "OpenSSH provisioning completed."
