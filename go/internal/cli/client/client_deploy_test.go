@@ -2,9 +2,13 @@ package clientcmd
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
@@ -259,6 +263,118 @@ func TestRunClientDeployRemoteFailure(t *testing.T) {
 	}
 }
 
+func TestRunRemoteDeploymentWindows(t *testing.T) {
+	ctx := context.Background()
+	opts := deployOptions{
+		packagePath: `C:\local\pkg`,
+		runtime: runtimeOptions{
+			remoteHost: "gateway.internal",
+			sshUser:    "admin",
+			sshPort:    "22",
+			sshBinary:  "ssh",
+			scpBinary:  "scp",
+		},
+	}
+
+	var (
+		callIndex      int
+		scpCalled      bool
+		remoteDest     string
+		expectedParent = `C:\Users\Remote\AppData\Local\Temp\xp2p-client-123\package`
+	)
+
+	restore := multiRestore(
+		stubSSHCommand(t, func(command string) (string, string, error) {
+			callIndex++
+			switch callIndex {
+			case 1:
+				if !strings.Contains(command, "EncodedCommand") {
+					t.Fatalf("expected powershell detection command, got %q", command)
+				}
+				return "Desktop", "", nil
+			case 2:
+				return expectedParent + "\n" + `C:\Users\Remote\AppData\Local\Temp\xp2p-client-123`, "", nil
+			case 3:
+				script, ok := decodePSEncodedCommand(command)
+				if !ok {
+					t.Fatalf("unable to decode encoded command: %q", command)
+				}
+				if !strings.Contains(script, `templates\windows-amd64\install.ps1`) {
+					t.Fatalf("expected install script path, got %q", script)
+				}
+				if !strings.Contains(script, joinWindowsPath(expectedParent, "pkg")) {
+					t.Fatalf("expected package directory in script, got %q", script)
+				}
+				return "[INFO] success", "", nil
+			default:
+				t.Fatalf("unexpected ssh command: %q", command)
+				return "", "", errors.New("unexpected command")
+			}
+		}),
+		stubSCPCopy(t, func(localPath, remotePath string, recursive bool) error {
+			scpCalled = true
+			if localPath != opts.packagePath {
+				t.Fatalf("unexpected local path: %q", localPath)
+			}
+			if !recursive {
+				t.Fatalf("scp should be recursive")
+			}
+			remoteDest = remotePath
+			if remotePath != expectedParent {
+				t.Fatalf("unexpected remote destination: %q", remotePath)
+			}
+			return nil
+		}),
+	)
+	defer restore()
+
+	if err := runRemoteDeployment(ctx, opts); err != nil {
+		t.Fatalf("runRemoteDeployment failed: %v", err)
+	}
+	if !scpCalled {
+		t.Fatalf("scpCopyFunc was not called")
+	}
+	if remoteDest == "" {
+		t.Fatalf("remote destination not captured")
+	}
+	if callIndex != 3 {
+		t.Fatalf("unexpected number of ssh commands: %d", callIndex)
+	}
+}
+
+func TestRunRemoteDeploymentUnsupportedOS(t *testing.T) {
+	ctx := context.Background()
+	opts := deployOptions{
+		packagePath: `C:\local\pkg`,
+		runtime: runtimeOptions{
+			remoteHost: "gateway.internal",
+			sshBinary:  "ssh",
+			scpBinary:  "scp",
+		},
+	}
+
+	restore := multiRestore(
+		stubSSHCommand(t, func(command string) (string, string, error) {
+			if strings.Contains(command, "EncodedCommand") {
+				return "", "powershell not found", errors.New("command failed")
+			}
+			if strings.Contains(command, "uname -s") {
+				return "Linux", "", nil
+			}
+			return "", "", errors.New("unexpected command")
+		}),
+		stubSCPCopy(t, func(string, string, bool) error {
+			t.Fatalf("scpCopyFunc should not be called for unsupported OS")
+			return nil
+		}),
+	)
+	defer restore()
+
+	if err := runRemoteDeployment(ctx, opts); err == nil {
+		t.Fatalf("expected error for unsupported operating system")
+	}
+}
+
 func stubPromptString(t *testing.T, fn func(string) (string, error)) func() {
 	t.Helper()
 	prev := promptStringFunc
@@ -285,6 +401,45 @@ func stubRunRemoteDeployment(t *testing.T, fn func(context.Context, deployOption
 	prev := runRemoteDeploymentFunc
 	runRemoteDeploymentFunc = fn
 	return func() { runRemoteDeploymentFunc = prev }
+}
+
+func stubSSHCommand(t *testing.T, fn func(string) (string, string, error)) func() {
+	t.Helper()
+	prev := sshCommandFunc
+	sshCommandFunc = func(ctx context.Context, binary string, target sshTarget, command string) (string, string, error) {
+		return fn(command)
+	}
+	return func() { sshCommandFunc = prev }
+}
+
+func stubSCPCopy(t *testing.T, fn func(localPath, remotePath string, recursive bool) error) func() {
+	t.Helper()
+	prev := scpCopyFunc
+	scpCopyFunc = func(ctx context.Context, binary string, target sshTarget, localPath, remotePath string, recursive bool) error {
+		return fn(localPath, remotePath, recursive)
+	}
+	return func() { scpCopyFunc = prev }
+}
+
+func decodePSEncodedCommand(command string) (string, bool) {
+	const token = "-EncodedCommand "
+	idx := strings.Index(command, token)
+	if idx == -1 {
+		return "", false
+	}
+	encoded := strings.TrimSpace(command[idx+len(token):])
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", false
+	}
+	if len(data)%2 != 0 {
+		return "", false
+	}
+	u16 := make([]uint16, len(data)/2)
+	for i := range u16 {
+		u16[i] = binary.LittleEndian.Uint16(data[2*i:])
+	}
+	return string(utf16.Decode(u16)), true
 }
 
 func multiRestore(restores ...func()) func() {

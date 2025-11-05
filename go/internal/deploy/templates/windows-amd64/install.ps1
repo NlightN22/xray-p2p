@@ -85,9 +85,13 @@ function Read-DeploymentManifest {
 }
 
 function Get-DefaultInstallDir {
-    $programFiles = [Environment]::GetEnvironmentVariable("ProgramFiles")
-    if (-not [string]::IsNullOrWhiteSpace($programFiles)) {
-        return (Join-Path -Path $programFiles -ChildPath "xp2p")
+    $appData = [Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData)
+    if (-not [string]::IsNullOrWhiteSpace($appData)) {
+        return (Join-Path -Path $appData -ChildPath "xp2p")
+    }
+    $userProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
+    if (-not [string]::IsNullOrWhiteSpace($userProfile)) {
+        return (Join-Path -Path $userProfile -ChildPath "xp2p")
     }
     return "C:\xp2p"
 }
