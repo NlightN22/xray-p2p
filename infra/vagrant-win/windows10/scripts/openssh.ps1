@@ -1,3 +1,51 @@
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+function Write-Info {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Message
+    )
+
+    Write-Host "==> $Message"
+}
+
+function Ensure-KeyPresent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $KeyValue,
+
+        [Parameter(Mandatory = $true)]
+        [string] $AuthorizedKeysPath,
+
+        [string] $Description = "key"
+    )
+
+    if ([string]::IsNullOrWhiteSpace($KeyValue)) {
+        return
+    }
+
+    $normalized = $KeyValue.Trim()
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return
+    }
+
+    if (-not (Test-Path $AuthorizedKeysPath)) {
+        Set-Content -Path $AuthorizedKeysPath -Value $normalized -Encoding ascii
+        Write-Info ("Added {0} to {1}" -f $Description, $AuthorizedKeysPath)
+        return
+    }
+
+    $existingKeys = Get-Content -Path $AuthorizedKeysPath -ErrorAction SilentlyContinue
+    if ($existingKeys -and ($existingKeys | ForEach-Object { $_.Trim() }) -contains $normalized) {
+        Write-Info ("{0} already present." -f $Description)
+        return
+    }
+
+    Add-Content -Path $AuthorizedKeysPath -Value $normalized -Encoding ascii
+    Write-Info ("Added {0} to {1}" -f $Description, $AuthorizedKeysPath)
+}
+
 function Ensure-OpenSsh {
     $capabilities = @(
         "OpenSSH.Client~~~~0.0.1.0",
@@ -161,38 +209,7 @@ function Ensure-VagrantKeys {
     }
 }
 
-function Ensure-KeyPresent {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $KeyValue,
-
-        [Parameter(Mandatory = $true)]
-        [string] $AuthorizedKeysPath,
-
-        [string] $Description = "key"
-    )
-
-    if ([string]::IsNullOrWhiteSpace($KeyValue)) {
-        return
-    }
-
-    $normalized = $KeyValue.Trim()
-    if ([string]::IsNullOrWhiteSpace($normalized)) {
-        return
-    }
-
-    if (-not (Test-Path $AuthorizedKeysPath)) {
-        Set-Content -Path $AuthorizedKeysPath -Value $normalized -Encoding ascii
-        Write-Info ("Added {0} to {1}" -f $Description, $AuthorizedKeysPath)
-        return
-    }
-
-    $existingKeys = Get-Content -Path $AuthorizedKeysPath -ErrorAction SilentlyContinue
-    if ($existingKeys -and ($existingKeys | ForEach-Object { $_.Trim() }) -contains $normalized) {
-        Write-Info ("{0} already present." -f $Description)
-        return
-    }
-
-    Add-Content -Path $AuthorizedKeysPath -Value $normalized -Encoding ascii
-    Write-Info ("Added {0} to {1}" -f $Description, $AuthorizedKeysPath)
-}
+Ensure-OpenSsh
+Ensure-SshdConfig
+Ensure-VagrantKeys -TargetUser "vagrant"
+Write-Info "OpenSSH provisioning completed."

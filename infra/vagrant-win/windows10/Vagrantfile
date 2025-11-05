@@ -10,6 +10,7 @@ SERVER_PRIVATE_IP     = "10.0.10.10".freeze
 CLIENT_PRIVATE_IP     = "10.0.10.20".freeze
 HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
 PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
+OPENSSH_SCRIPT        = File.expand_path("scripts/openssh.ps1", __dir__)
 DEFAULT_WINRM_PORT    = 5985
 SERVER_WINRM_HOSTPORT = 55985
 CLIENT_WINRM_HOSTPORT = 55986
@@ -43,9 +44,6 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.network "private_network",
                        ip: private_ip
 
-    machine.ssh.username = "vagrant"
-    machine.ssh.insert_key = false
-
     machine.vm.provider "virtualbox" do |vb|
       vb.name = vb_name
       vb.memory = 8192
@@ -53,13 +51,23 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
       vb.gui = false
     end
 
+    shared_env = {
+      "XP2P_ROLE" => role,
+      "XP2P_MACHINE_ID" => machine_id,
+      "XP2P_SYNC_ROOT" => "C:/xp2p"
+    }
+
     machine.vm.provision "shell",
+                         name: "openssh",
+                         path: OPENSSH_SCRIPT,
+                         privileged: true,
+                         env: shared_env
+
+    machine.vm.provision "shell",
+                         name: "common",
                          path: PROVISION_SCRIPT,
                          privileged: true,
-                         env: {
-                           "XP2P_ROLE" => role,
-                           "XP2P_MACHINE_ID" => machine_id
-                         }
+                         env: shared_env
   end
 end
 

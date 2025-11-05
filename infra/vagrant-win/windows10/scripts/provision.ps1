@@ -10,12 +10,6 @@ function Write-Info {
     Write-Host "==> $Message"
 }
 
-$openSshLibPath = Join-Path $PSScriptRoot "lib\openssh.ps1"
-if (-not (Test-Path $openSshLibPath)) {
-    throw ("OpenSSH helper library not found at {0}" -f $openSshLibPath)
-}
-. $openSshLibPath
-
 function Wait-TcpPort {
     param(
         [Parameter(Mandatory = $true)]
@@ -362,9 +356,6 @@ $hostOnlyAddress = switch ($xp2pRole) {
 
 Ensure-IsElevated
 Ensure-Chocolatey
-Ensure-OpenSsh
-Ensure-SshdConfig
-Ensure-VagrantKeys -TargetUser "vagrant"
 Ensure-Go
 Build-Xp2p
 Set-HostOnlyAddress -InterfaceAlias $hostOnlyAlias -IPAddress $hostOnlyAddress
