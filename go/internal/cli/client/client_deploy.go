@@ -51,11 +51,40 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	logging.Info("xp2p client deploy: link generated", "link", link)
 	logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
 
-	res, err := performDeployHandshake(ctx, opts)
-	if err != nil {
-		logging.Error("xp2p client deploy: handshake failed", "err", err)
-		return 1
-	}
+    // Retry handshake until server is ready or timeout elapses.
+    var (
+        res          deployResult
+        handshakeErr error
+    )
+    deadline := time.Now().Add(10 * time.Minute)
+    backoff := 2 * time.Second
+    if backoff <= 0 {
+        backoff = 2 * time.Second
+    }
+    for {
+        if ctx.Err() != nil {
+            logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
+            return 1
+        }
+        res, handshakeErr = performDeployHandshake(ctx, opts)
+        if handshakeErr == nil {
+            break
+        }
+        if time.Now().After(deadline) {
+            logging.Error("xp2p client deploy: handshake timeout", "err", handshakeErr)
+            return 1
+        }
+        logging.Info("xp2p client deploy: server not ready, retrying", "next_in", backoff)
+        select {
+        case <-time.After(backoff):
+        case <-ctx.Done():
+            logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
+            return 1
+        }
+        if backoff < 5*time.Second {
+            backoff += 1 * time.Second
+        }
+    }
 
 	if res.ExitCode != 0 {
 		logging.Error("xp2p client deploy: server install failed", "exit_code", res.ExitCode)
