@@ -1,142 +1,145 @@
 package clientcmd
 
 import (
-    "context"
-    "errors"
-    "flag"
-    "fmt"
-    "io"
-    "strings"
-    "time"
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"strings"
+	"time"
 
-    "github.com/NlightN22/xray-p2p/go/internal/client"
-    "github.com/NlightN22/xray-p2p/go/internal/config"
-    "github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
-    "github.com/NlightN22/xray-p2p/go/internal/logging"
-    "github.com/NlightN22/xray-p2p/go/internal/netutil"
+	"github.com/NlightN22/xray-p2p/go/internal/client"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 )
 
 type manifestOptions struct {
-    remoteHost     string
-    installDir     string
-    trojanPort     string
-    trojanUser     string
-    trojanPassword string
+	remoteHost     string
+	installDir     string
+	trojanPort     string
+	trojanUser     string
+	trojanPassword string
 }
 
 type runtimeOptions struct {
     remoteHost string
     deployPort string
     serverHost string
+    token      string
 }
 
 type deployOptions struct {
-    manifest manifestOptions
-    runtime  runtimeOptions
+	manifest manifestOptions
+	runtime  runtimeOptions
 }
 
 func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int {
-    opts, err := parseDeployFlags(cfg, args)
-    if err != nil {
-        if errors.Is(err, flag.ErrHelp) {
-            return 0
-        }
-        logging.Error("xp2p client deploy: argument parsing failed", "err", err)
-        return 2
-    }
+	opts, err := parseDeployFlags(cfg, args)
+	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		logging.Error("xp2p client deploy: argument parsing failed", "err", err)
+		return 2
+	}
 
     // Build and print deploy link, then run handshake with server deploy
     link := buildDeployLink(opts)
-    logging.Info("xp2p client deploy: link generated", "link", link)
-    logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
+	logging.Info("xp2p client deploy: link generated", "link", link)
+	logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
 
     res, err := performDeployHandshake(ctx, opts)
-    if err != nil {
-        logging.Error("xp2p client deploy: handshake failed", "err", err)
-        return 1
-    }
+	if err != nil {
+		logging.Error("xp2p client deploy: handshake failed", "err", err)
+		return 1
+	}
 
-    if res.ExitCode != 0 {
-        logging.Error("xp2p client deploy: server install failed", "exit_code", res.ExitCode)
-        return 1
-    }
-    if strings.TrimSpace(res.Link) == "" {
-        logging.Error("xp2p client deploy: missing trojan link from server")
-        return 1
-    }
+	if res.ExitCode != 0 {
+		logging.Error("xp2p client deploy: server install failed", "exit_code", res.ExitCode)
+		return 1
+	}
+	if strings.TrimSpace(res.Link) == "" {
+		logging.Error("xp2p client deploy: missing trojan link from server")
+		return 1
+	}
 
-    logging.Info("xp2p client deploy: installing local client from trojan link")
-    tl, err := parseTrojanLink(res.Link)
-    if err != nil {
-        logging.Error("xp2p client deploy: invalid trojan link", "err", err)
-        return 1
-    }
+	logging.Info("xp2p client deploy: installing local client from trojan link")
+	tl, err := parseTrojanLink(res.Link)
+	if err != nil {
+		logging.Error("xp2p client deploy: invalid trojan link", "err", err)
+		return 1
+	}
 
-    installOpts := buildInstallOptionsFromLink(cfg, tl)
-    if err := clientInstallFunc(ctx, installOpts); err != nil {
-        logging.Error("xp2p client deploy: local install failed", "err", err)
-        return 1
-    }
-    logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
+	installOpts := buildInstallOptionsFromLink(cfg, tl)
+	if err := clientInstallFunc(ctx, installOpts); err != nil {
+		logging.Error("xp2p client deploy: local install failed", "err", err)
+		return 1
+	}
+	logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 
-    // Verify via SOCKS ping
-    logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping")
-    pingOpts := ping.Options{
-        Count:      1,
-        Timeout:    3 * time.Second,
-        Proto:      "tcp",
-        SocksProxy: cfg.Client.SocksAddress,
-    }
-    if err := ping.Run(ctx, "127.0.0.1", pingOpts); err != nil {
-        logging.Error("xp2p client deploy: ping failed", "err", err)
-        return 1
-    }
-    logging.Info("xp2p client deploy: ping ok")
-    return 0
+	// Verify via SOCKS ping
+	logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping")
+	pingOpts := ping.Options{
+		Count:      1,
+		Timeout:    3 * time.Second,
+		Proto:      "tcp",
+		SocksProxy: cfg.Client.SocksAddress,
+	}
+	if err := ping.Run(ctx, "127.0.0.1", pingOpts); err != nil {
+		logging.Error("xp2p client deploy: ping failed", "err", err)
+		return 1
+	}
+	logging.Info("xp2p client deploy: ping ok")
+	return 0
 }
 
 func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
-    fs := flag.NewFlagSet("xp2p client deploy", flag.ContinueOnError)
-    fs.SetOutput(io.Discard)
+	fs := flag.NewFlagSet("xp2p client deploy", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 
-    remoteHost := fs.String("remote-host", "", "deploy host name or address")
-    deployPort := fs.String("deploy-port", "62025", "deploy port (default 62025)")
-    trojanUser := fs.String("user", "", "Trojan user identifier (email)")
-    trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
-    trojanPort := fs.String("trojan-port", "", "Trojan service port")
+	remoteHost := fs.String("remote-host", "", "deploy host name or address")
+	deployPort := fs.String("deploy-port", "62025", "deploy port (default 62025)")
+	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
+	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
+	trojanPort := fs.String("trojan-port", "", "Trojan service port")
 
-    if err := fs.Parse(args); err != nil {
-        return deployOptions{}, err
-    }
-    if fs.NArg() > 0 {
-        return deployOptions{}, fmt.Errorf("unexpected arguments: %v", fs.Args())
-    }
+	if err := fs.Parse(args); err != nil {
+		return deployOptions{}, err
+	}
+	if fs.NArg() > 0 {
+		return deployOptions{}, fmt.Errorf("unexpected arguments: %v", fs.Args())
+	}
 
-    host := strings.TrimSpace(*remoteHost)
-    if host == "" || strings.HasPrefix(host, "-") {
-        return deployOptions{}, fmt.Errorf("--remote-host is required")
-    }
-    if err := netutil.ValidateHost(host); err != nil {
-        return deployOptions{}, fmt.Errorf("--remote-host: %v", err)
-    }
+	host := strings.TrimSpace(*remoteHost)
+	if host == "" || strings.HasPrefix(host, "-") {
+		return deployOptions{}, fmt.Errorf("--remote-host is required")
+	}
+	if err := netutil.ValidateHost(host); err != nil {
+		return deployOptions{}, fmt.Errorf("--remote-host: %v", err)
+	}
 
-    serverHostValue := firstNonEmpty(cfg.Server.Host, host)
-    serverPortValue := normalizeServerPort(cfg, *trojanPort)
+	serverHostValue := firstNonEmpty(cfg.Server.Host, host)
+	serverPortValue := normalizeServerPort(cfg, *trojanPort)
 
-    userValue := strings.TrimSpace(firstNonEmpty(*trojanUser, cfg.Client.User))
-    // optional: user/password can be empty; server may generate
+	userValue := strings.TrimSpace(firstNonEmpty(*trojanUser, cfg.Client.User))
+	// optional: user/password can be empty; server may generate
 
-    passwordValue := strings.TrimSpace(*trojanPassword)
-    if passwordValue == "" {
-        passwordValue = strings.TrimSpace(cfg.Client.Password)
-    }
-    if passwordValue == "" && userValue != "" {
-        gen, err := generateSecret(18)
-        if err != nil {
-            return deployOptions{}, fmt.Errorf("generate password: %w", err)
-        }
-        passwordValue = gen
-    }
+	passwordValue := strings.TrimSpace(*trojanPassword)
+	if passwordValue == "" {
+		passwordValue = strings.TrimSpace(cfg.Client.Password)
+	}
+	if passwordValue == "" && userValue != "" {
+		gen, err := generateSecret(18)
+		if err != nil {
+			return deployOptions{}, fmt.Errorf("generate password: %w", err)
+		}
+		passwordValue = gen
+	}
+
+    token, _ := generateDeployToken()
 
     return deployOptions{
         manifest: manifestOptions{
@@ -150,17 +153,22 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
             remoteHost: host,
             deployPort: strings.TrimSpace(*deployPort),
             serverHost: serverHostValue,
+            token:      token,
         },
     }, nil
 }
 
 // buildDeployLink composes a basic xp2p+deploy link.
 func buildDeployLink(opts deployOptions) string {
-    // TODO: include token and options as needed
-    host := strings.TrimSpace(opts.runtime.remoteHost)
-    port := strings.TrimSpace(opts.runtime.deployPort)
-    if port == "" {
-        port = "62025"
+	// TODO: include token and options as needed
+	host := strings.TrimSpace(opts.runtime.remoteHost)
+	port := strings.TrimSpace(opts.runtime.deployPort)
+	if port == "" {
+		port = "62025"
+	}
+    token := strings.TrimSpace(opts.runtime.token)
+    if token != "" {
+        return fmt.Sprintf("xp2p+deploy://%s:%s?v=1&token=%s", host, port, token)
     }
     return fmt.Sprintf("xp2p+deploy://%s:%s?v=1", host, port)
 }
@@ -168,15 +176,15 @@ func buildDeployLink(opts deployOptions) string {
 // buildInstallOptionsFromLink converts a parsed trojan link into client install options,
 // applying config defaults for install paths.
 func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.InstallOptions {
-    return client.InstallOptions{
-        InstallDir:    cfg.Client.InstallDir,
-        ConfigDir:     cfg.Client.ConfigDir,
-        ServerAddress: link.ServerAddress,
-        ServerPort:    link.ServerPort,
-        User:          link.User,
-        Password:      link.Password,
-        ServerName:    link.ServerName,
-        AllowInsecure: link.AllowInsecure,
-        Force:         true,
-    }
+	return client.InstallOptions{
+		InstallDir:    cfg.Client.InstallDir,
+		ConfigDir:     cfg.Client.ConfigDir,
+		ServerAddress: link.ServerAddress,
+		ServerPort:    link.ServerPort,
+		User:          link.User,
+		Password:      link.Password,
+		ServerName:    link.ServerName,
+		AllowInsecure: link.AllowInsecure,
+		Force:         true,
+	}
 }
