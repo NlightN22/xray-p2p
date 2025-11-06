@@ -170,6 +170,44 @@ function Ensure-ChocoPackage {
     }
 }
 
+function Disable-IdleSleepAndHibernate {
+    Write-Info "Disabling sleep/hibernate and idle timeouts (AC/DC)"
+
+    try {
+        powercfg /hibernate off | Out-Null
+        Write-Info "Hibernation disabled."
+    }
+    catch {
+        Write-Info ("Failed to disable hibernation: {0}" -f $_.Exception.Message)
+    }
+
+    $commands = @(
+        @('/x','-standby-timeout-ac','0'),
+        @('/x','-standby-timeout-dc','0'),
+        @('/x','-hibernate-timeout-ac','0'),
+        @('/x','-hibernate-timeout-dc','0'),
+        @('/x','-monitor-timeout-ac','0'),
+        @('/x','-monitor-timeout-dc','0')
+    )
+
+    foreach ($cmd in $commands) {
+        try {
+            powercfg @cmd | Out-Null
+        }
+        catch {
+            Write-Info ("powercfg {0} failed: {1}" -f ($cmd -join ' '), $_.Exception.Message)
+        }
+    }
+
+    try {
+        powercfg /setactive SCHEME_MIN | Out-Null
+        Write-Info "Power scheme set to High performance."
+    }
+    catch {
+        Write-Info ("Failed to set High performance scheme: {0}" -f $_.Exception.Message)
+    }
+}
+
 function Ensure-Go {
     $goVersion = $env:XP2P_GO_VERSION
     if (-not $goVersion) {
@@ -358,6 +396,7 @@ Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
 Build-Xp2p
+Disable-IdleSleepAndHibernate
 Set-HostOnlyAddress -InterfaceAlias $hostOnlyAlias -IPAddress $hostOnlyAddress
 $configuredAddress = Get-NetIPAddress -InterfaceAlias $hostOnlyAlias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -eq $hostOnlyAddress }
