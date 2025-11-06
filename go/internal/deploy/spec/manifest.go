@@ -6,37 +6,33 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 )
 
 var (
-	ErrRemoteHostEmpty = errors.New("xp2p: deployment manifest requires remote_host")
-	ErrVersionEmpty    = errors.New("xp2p: deployment manifest requires xp2p_version")
-	ErrGeneratedZero   = errors.New("xp2p: deployment manifest requires generated_at timestamp")
-	ErrCredentialPair  = errors.New("xp2p: deployment manifest trojan_user and trojan_password must both be set")
+	ErrHostEmpty      = errors.New("xp2p: deploy manifest requires host")
+	ErrVersionInvalid = errors.New("xp2p: deploy manifest requires positive version")
+	ErrCredentialPair = errors.New("xp2p: deploy manifest user and password must both be set or both be empty")
 )
 
-// Manifest describes metadata shipped with deployment packages.
+// Manifest represents the encrypted deploy payload shared between client and server.
+// It is also reused for offline deployment manifests.
 type Manifest struct {
-	RemoteHost     string    `json:"remote_host"`
-	XP2PVersion    string    `json:"xp2p_version"`
-	GeneratedAt    time.Time `json:"generated_at"`
-	InstallDir     string    `json:"install_dir,omitempty"`
-	TrojanPort     string    `json:"trojan_port,omitempty"`
-	TrojanUser     string    `json:"trojan_user,omitempty"`
-	TrojanPassword string    `json:"trojan_password,omitempty"`
+	Host           string `json:"host"`
+	Version        int    `json:"version"`
+	InstallDir     string `json:"install_dir,omitempty"`
+	TrojanPort     string `json:"trojan_port,omitempty"`
+	TrojanUser     string `json:"user,omitempty"`
+	TrojanPassword string `json:"password,omitempty"`
+	ExpiresAt      int64  `json:"exp,omitempty"`
 }
 
-// Validate ensures the manifest contains required fields.
+// Validate checks required fields and basic consistency.
 func Validate(m Manifest) error {
-	if strings.TrimSpace(m.RemoteHost) == "" {
-		return ErrRemoteHostEmpty
+	if strings.TrimSpace(m.Host) == "" {
+		return ErrHostEmpty
 	}
-	if strings.TrimSpace(m.XP2PVersion) == "" {
-		return ErrVersionEmpty
-	}
-	if m.GeneratedAt.IsZero() {
-		return ErrGeneratedZero
+	if m.Version <= 0 {
+		return ErrVersionInvalid
 	}
 	userPresent := strings.TrimSpace(m.TrojanUser) != ""
 	passwordPresent := strings.TrimSpace(m.TrojanPassword) != ""
@@ -46,39 +42,38 @@ func Validate(m Manifest) error {
 	return nil
 }
 
-// Marshal encodes the manifest as formatted JSON.
+// Normalize trims strings and applies defaults.
+func Normalize(m Manifest) Manifest {
+	if m.Version == 0 {
+		m.Version = 2
+	}
+	m.Host = strings.TrimSpace(m.Host)
+	m.InstallDir = strings.TrimSpace(m.InstallDir)
+	m.TrojanPort = strings.TrimSpace(m.TrojanPort)
+	m.TrojanUser = strings.TrimSpace(m.TrojanUser)
+	m.TrojanPassword = strings.TrimSpace(m.TrojanPassword)
+	return m
+}
+
+// Marshal encodes the manifest as compact JSON after validation.
 func Marshal(m Manifest) ([]byte, error) {
+	m = Normalize(m)
 	if err := Validate(m); err != nil {
 		return nil, err
 	}
-	m.GeneratedAt = m.GeneratedAt.UTC()
-	m.InstallDir = strings.TrimSpace(m.InstallDir)
-	m.TrojanPort = strings.TrimSpace(m.TrojanPort)
-	m.RemoteHost = strings.TrimSpace(m.RemoteHost)
-	m.XP2PVersion = strings.TrimSpace(m.XP2PVersion)
-	m.TrojanUser = strings.TrimSpace(m.TrojanUser)
-	m.TrojanPassword = strings.TrimSpace(m.TrojanPassword)
-
-	type manifest Manifest
-	return json.MarshalIndent(manifest(m), "", "  ")
+	return json.Marshal(m)
 }
 
 // Unmarshal decodes manifest data from JSON.
 func Unmarshal(data []byte) (Manifest, error) {
 	var m Manifest
 	if err := json.Unmarshal(data, &m); err != nil {
-		return Manifest{}, fmt.Errorf("xp2p: decode deployment manifest: %w", err)
+		return Manifest{}, fmt.Errorf("xp2p: decode deploy manifest: %w", err)
 	}
+	m = Normalize(m)
 	if err := Validate(m); err != nil {
 		return Manifest{}, err
 	}
-	m.GeneratedAt = m.GeneratedAt.UTC()
-	m.InstallDir = strings.TrimSpace(m.InstallDir)
-	m.TrojanPort = strings.TrimSpace(m.TrojanPort)
-	m.RemoteHost = strings.TrimSpace(m.RemoteHost)
-	m.XP2PVersion = strings.TrimSpace(m.XP2PVersion)
-	m.TrojanUser = strings.TrimSpace(m.TrojanUser)
-	m.TrojanPassword = strings.TrimSpace(m.TrojanPassword)
 	return m, nil
 }
 
@@ -86,19 +81,19 @@ func Unmarshal(data []byte) (Manifest, error) {
 func Read(r io.Reader) (Manifest, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("xp2p: read deployment manifest: %w", err)
+		return Manifest{}, fmt.Errorf("xp2p: read deploy manifest: %w", err)
 	}
 	return Unmarshal(data)
 }
 
-// Write serialises the manifest to writer using formatted JSON.
+// Write serialises the manifest to writer using compact JSON.
 func Write(w io.Writer, m Manifest) error {
 	data, err := Marshal(m)
 	if err != nil {
 		return err
 	}
 	if _, err := w.Write(append(data, '\n')); err != nil {
-		return fmt.Errorf("xp2p: write deployment manifest: %w", err)
+		return fmt.Errorf("xp2p: write deploy manifest: %w", err)
 	}
 	return nil
 }

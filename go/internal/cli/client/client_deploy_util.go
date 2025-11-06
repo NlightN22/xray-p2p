@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"encoding/base32"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -31,18 +30,6 @@ func generateSecret(size int) (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
-
-func generateDeployToken() (string, error) {
-	// 10 bytes -> 16 base32 chars; lower-case, no padding
-	buf := make([]byte, 10)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	enc := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)
-	return strings.ToLower(enc), nil
-}
-
-// removed HMAC helpers (v1 deprecated)
 
 // crypto helpers for v2 encrypted deploy links
 

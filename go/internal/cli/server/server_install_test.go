@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
@@ -83,9 +82,8 @@ func TestRunServerInstall(t *testing.T) {
 				dir := t.TempDir()
 				path := filepath.Join(dir, "deployment.json")
 				manifest := spec.Manifest{
-					RemoteHost:  "bad host",
-					XP2PVersion: "9.9.9",
-					GeneratedAt: time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+					Host:    "bad host",
+					Version: 2,
 				}
 				file, err := os.Create(path)
 				if err != nil {
@@ -216,9 +214,8 @@ func TestRunServerInstallUsesManifestCredential(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deployment.json")
 	manifest := spec.Manifest{
-		RemoteHost:     "deploy.example",
-		XP2PVersion:    "0.1.1",
-		GeneratedAt:    time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+		Host:           "deploy.example",
+		Version:        2,
 		TrojanUser:     "client@example",
 		TrojanPassword: "manifest-secret",
 	}
@@ -291,9 +288,8 @@ func TestRunServerInstallGeneratesCredentialWhenManifestHasNoAuth(t *testing.T) 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "deployment.json")
 	manifest := spec.Manifest{
-		RemoteHost:  "deploy.example",
-		XP2PVersion: "0.1.1",
-		GeneratedAt: time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+		Host:    "deploy.example",
+		Version: 2,
 	}
 	file, err := os.Create(path)
 	if err != nil {

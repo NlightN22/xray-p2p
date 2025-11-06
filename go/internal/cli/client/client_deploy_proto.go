@@ -3,7 +3,6 @@ package clientcmd
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,15 +19,6 @@ const (
 	deployIOTimeout   = 60 * time.Second
 	deployBufferLimit = 64 * 1024 // 64KB cap for OUT/ERR buffers
 )
-
-type deployManifest struct {
-	Host       string `json:"host"`
-	Version    int    `json:"version"`
-	TrojanPort string `json:"trojan_port,omitempty"`
-	InstallDir string `json:"install_dir,omitempty"`
-	User       string `json:"user,omitempty"`
-	Password   string `json:"password,omitempty"`
-}
 
 type deployResult struct {
 	ExitCode int
@@ -72,40 +62,17 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 		return deployResult{}, fmt.Errorf("unexpected AUTH response: %q", line)
 	}
 
-	// MANIFEST-ENC for v2: send raw ciphertext bytes only
-	if len(opts.runtime.encCT) > 0 {
-		if _, err := fmt.Fprintf(rw, "MANIFEST-ENC %d\n", len(opts.runtime.encCT)); err != nil {
-			return deployResult{}, fmt.Errorf("send MANIFEST-ENC header: %w", err)
-		}
-		if _, err := rw.Write(opts.runtime.encCT); err != nil {
-			return deployResult{}, fmt.Errorf("send MANIFEST-ENC body: %w", err)
-		}
-		if err := rw.Flush(); err != nil {
-			return deployResult{}, fmt.Errorf("flush MANIFEST-ENC: %w", err)
-		}
-	} else {
-		// fallback MANIFEST v1 (should not be used in v2 flow)
-		man := deployManifest{
-			Host:       strings.TrimSpace(opts.runtime.serverHost),
-			Version:    1,
-			TrojanPort: strings.TrimSpace(opts.manifest.trojanPort),
-			InstallDir: strings.TrimSpace(opts.manifest.installDir),
-			User:       strings.TrimSpace(opts.manifest.trojanUser),
-			Password:   strings.TrimSpace(opts.manifest.trojanPassword),
-		}
-		payload, err := json.Marshal(man)
-		if err != nil {
-			return deployResult{}, fmt.Errorf("encode manifest: %w", err)
-		}
-		if _, err := fmt.Fprintf(rw, "MANIFEST %d\n", len(payload)); err != nil {
-			return deployResult{}, fmt.Errorf("send MANIFEST header: %w", err)
-		}
-		if _, err := rw.Write(payload); err != nil {
-			return deployResult{}, fmt.Errorf("send MANIFEST body: %w", err)
-		}
-		if err := rw.Flush(); err != nil {
-			return deployResult{}, fmt.Errorf("flush MANIFEST: %w", err)
-		}
+	if len(opts.runtime.encCT) == 0 {
+		return deployResult{}, fmt.Errorf("encrypted manifest missing")
+	}
+	if _, err := fmt.Fprintf(rw, "MANIFEST-ENC %d\n", len(opts.runtime.encCT)); err != nil {
+		return deployResult{}, fmt.Errorf("send MANIFEST-ENC header: %w", err)
+	}
+	if _, err := rw.Write(opts.runtime.encCT); err != nil {
+		return deployResult{}, fmt.Errorf("send MANIFEST-ENC body: %w", err)
+	}
+	if err := rw.Flush(); err != nil {
+		return deployResult{}, fmt.Errorf("flush MANIFEST-ENC: %w", err)
 	}
 
 	// Process server responses

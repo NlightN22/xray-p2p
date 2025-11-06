@@ -120,13 +120,13 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 			return 1
 		}
 		manifest = &readManifest
-		logging.Info("xp2p server install: using deploy manifest", "remote_host", manifest.RemoteHost, "version", manifest.XP2PVersion)
+		logging.Info("xp2p server install: using deploy manifest", "host", manifest.Host, "version", manifest.Version)
 		if strings.TrimSpace(*host) == "" {
-			if err := netutil.ValidateHost(manifest.RemoteHost); err != nil {
-				logging.Error("xp2p server install: invalid host in deploy manifest", "host", manifest.RemoteHost, "err", err)
+			if err := netutil.ValidateHost(manifest.Host); err != nil {
+				logging.Error("xp2p server install: invalid host in deploy manifest", "host", manifest.Host, "err", err)
 				return 1
 			}
-			*host = strings.TrimSpace(manifest.RemoteHost)
+			*host = strings.TrimSpace(manifest.Host)
 		}
 	}
 

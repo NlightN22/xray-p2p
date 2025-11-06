@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -19,6 +18,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -39,7 +39,7 @@ type expectedLink struct {
 	CipherB64 string
 	Exp       int64
 	ctHashHex string
-	Manifest  deployManifest
+	Manifest  spec.Manifest
 }
 
 type runSignal struct {
@@ -239,9 +239,9 @@ func parseDeployLink(raw string) (expectedLink, error) {
 	if err != nil {
 		return expectedLink{}, fmt.Errorf("invalid encrypted manifest: %w", err)
 	}
-	var manifest deployManifest
-	if err := json.Unmarshal(plain, &manifest); err != nil {
-		return expectedLink{}, fmt.Errorf("invalid manifest payload: %w", err)
+	manifest, err := spec.Unmarshal(plain)
+	if err != nil {
+		return expectedLink{}, err
 	}
 
 	manifestHost := strings.TrimSpace(manifest.Host)
@@ -258,6 +258,12 @@ func parseDeployLink(raw string) (expectedLink, error) {
 	if err := netutil.ValidateHost(finalHost); err != nil {
 		return expectedLink{}, fmt.Errorf("invalid host %q: %w", finalHost, err)
 	}
+
+	if expUnix == 0 {
+		expUnix = manifest.ExpiresAt
+	}
+	manifest.Host = finalHost
+	manifest.ExpiresAt = expUnix
 
 	ctBytes, err := base64.RawURLEncoding.DecodeString(cipherText)
 	if err != nil {
@@ -339,7 +345,7 @@ func decryptManifestAESGCM(keyB64, nonceB64, ctB64 string) ([]byte, error) {
 	return aead.Open(nil, nonce, ct, aad)
 }
 
-func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter, results chan<- runSignal, man deployManifest) {
+func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter, results chan<- runSignal, man spec.Manifest) {
 	host := strings.TrimSpace(man.Host)
 	if host == "" {
 		host = strings.TrimSpace(s.Expected.Host)
@@ -391,11 +397,11 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 		return
 	}
 
-	userID := strings.TrimSpace(man.User)
+	userID := strings.TrimSpace(man.TrojanUser)
 	if userID == "" {
 		userID = fmt.Sprintf("xp2p-%d@local", time.Now().Unix())
 	}
-	password := strings.TrimSpace(man.Password)
+	password := strings.TrimSpace(man.TrojanPassword)
 	if password == "" {
 		secret, err := generateSecret(18)
 		if err != nil {
