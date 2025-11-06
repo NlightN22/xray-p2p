@@ -25,10 +25,10 @@ type manifestOptions struct {
 }
 
 type runtimeOptions struct {
-    remoteHost string
-    deployPort string
-    serverHost string
-    token      string
+	remoteHost string
+	deployPort string
+	serverHost string
+	token      string
 }
 
 type deployOptions struct {
@@ -46,12 +46,12 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 2
 	}
 
-    // Build and print deploy link, then run handshake with server deploy
-    link := buildDeployLink(opts)
+	// Build and print deploy link, then run handshake with server deploy
+	link := buildDeployLink(opts)
 	logging.Info("xp2p client deploy: link generated", "link", link)
 	logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
 
-    res, err := performDeployHandshake(ctx, opts)
+	res, err := performDeployHandshake(ctx, opts)
 	if err != nil {
 		logging.Error("xp2p client deploy: handshake failed", "err", err)
 		return 1
@@ -139,23 +139,23 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		passwordValue = gen
 	}
 
-    token, _ := generateDeployToken()
+	token, _ := generateDeployToken()
 
-    return deployOptions{
-        manifest: manifestOptions{
-            remoteHost:     host,
-            installDir:     strings.TrimSpace(cfg.Server.InstallDir),
-            trojanPort:     serverPortValue,
-            trojanUser:     strings.TrimSpace(userValue),
-            trojanPassword: strings.TrimSpace(passwordValue),
-        },
-        runtime: runtimeOptions{
-            remoteHost: host,
-            deployPort: strings.TrimSpace(*deployPort),
-            serverHost: serverHostValue,
-            token:      token,
-        },
-    }, nil
+	return deployOptions{
+		manifest: manifestOptions{
+			remoteHost:     host,
+			installDir:     strings.TrimSpace(cfg.Server.InstallDir),
+			trojanPort:     serverPortValue,
+			trojanUser:     strings.TrimSpace(userValue),
+			trojanPassword: strings.TrimSpace(passwordValue),
+		},
+		runtime: runtimeOptions{
+			remoteHost: host,
+			deployPort: strings.TrimSpace(*deployPort),
+			serverHost: serverHostValue,
+			token:      token,
+		},
+	}, nil
 }
 
 // buildDeployLink composes a basic xp2p+deploy link.
@@ -166,11 +166,11 @@ func buildDeployLink(opts deployOptions) string {
 	if port == "" {
 		port = "62025"
 	}
-    token := strings.TrimSpace(opts.runtime.token)
-    if token != "" {
-        return fmt.Sprintf("xp2p+deploy://%s:%s?v=1&token=%s", host, port, token)
-    }
-    return fmt.Sprintf("xp2p+deploy://%s:%s?v=1", host, port)
+	token := strings.TrimSpace(opts.runtime.token)
+	if token != "" {
+		return fmt.Sprintf("xp2p+deploy://%s:%s?v=1&token=%s", host, port, token)
+	}
+	return fmt.Sprintf("xp2p+deploy://%s:%s?v=1", host, port)
 }
 
 // buildInstallOptionsFromLink converts a parsed trojan link into client install options,

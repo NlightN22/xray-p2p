@@ -1,17 +1,18 @@
 package servercmd
 
 import (
-    "bufio"
-    "context"
-    "crypto/rand"
-    "encoding/base64"
-    "encoding/json"
-    "fmt"
-    "io"
-    "net"
-    "net/url"
-    "strconv"
+	"bufio"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -26,6 +27,12 @@ type deployServer struct {
 	Once       bool
 	Timeout    time.Duration
 	Cfg        config.Config
+
+	// Token policy (one-time with TTL)
+	TokenTTL    time.Duration
+	tokenIssued time.Time
+	mu          sync.Mutex
+	tokenUsed   bool
 }
 
 type expectedLink struct {
@@ -44,55 +51,65 @@ func (s *deployServer) Run(ctx context.Context) error {
 	}
 	defer ln.Close()
 
-	type result struct{ err error }
-	done := make(chan result, 1)
+	// initialize token issuance time and default TTL
+	if s.Expected.Token != "" && s.TokenTTL <= 0 {
+		s.TokenTTL = 10 * time.Minute
+	}
+	s.tokenIssued = time.Now()
 
-	go func() {
-		defer close(done)
-		var served int
-		idleTimer := time.NewTimer(s.Timeout)
-		defer idleTimer.Stop()
+	results := make(chan bool, 8)
+	defer close(results)
 
-		for {
-			ln.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
-			conn, err := ln.Accept()
-			if err != nil {
-				if ne, ok := err.(net.Error); ok && ne.Timeout() {
-					if s.Timeout > 0 {
-						select {
-						case <-idleTimer.C:
-							logging.Info("xp2p server deploy: idle timeout reached; shutting down")
-							return
-						default:
-						}
-					}
-					select {
-					case <-ctx.Done():
-						return
-					default:
-					}
-					continue
+	idleTimer := time.NewTimer(s.Timeout)
+	defer idleTimer.Stop()
+
+	for {
+		// stop on context cancel
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		// stop on successful session when --once
+		select {
+		case ok := <-results:
+			if ok {
+				if s.Expected.Token != "" {
+					s.mu.Lock()
+					s.tokenUsed = true
+					s.mu.Unlock()
 				}
-				done <- result{err: err}
-				return
+				if s.Once {
+					return nil
+				}
 			}
-			go s.handleConn(ctx, conn)
-			served++
-			if s.Once && served >= 1 {
-				return
+		default:
+		}
+
+		// idle timeout
+		if s.Timeout > 0 {
+			select {
+			case <-idleTimer.C:
+				logging.Info("xp2p server deploy: idle timeout reached; shutting down")
+				return nil
+			default:
 			}
 		}
-	}()
 
-	select {
-	case r := <-done:
-		return r.err
-	case <-ctx.Done():
-		return ctx.Err()
+		_ = ln.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
+		conn, err := ln.Accept()
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				continue
+			}
+			return err
+		}
+		go s.handleConn(ctx, conn, results)
 	}
 }
 
-func (s *deployServer) handleConn(ctx context.Context, conn net.Conn) {
+func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results chan<- bool) {
 	defer conn.Close()
 
 	_ = conn.SetDeadline(time.Now().Add(60 * time.Second))
@@ -101,42 +118,87 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn) {
 	// AUTH
 	line, err := readLine(rw)
 	if err != nil {
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 	if !strings.HasPrefix(line, "AUTH") {
 		_ = writeLine(rw, "ERR expected AUTH")
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 	token := strings.TrimSpace(strings.TrimPrefix(line, "AUTH"))
 	if strings.HasPrefix(token, " ") {
 		token = strings.TrimSpace(token)
 	}
-	if s.Expected.Token != "" && token != s.Expected.Token {
-		_ = writeLine(rw, "ERR unauthorized")
-		return
+	if s.Expected.Token != "" {
+		s.mu.Lock()
+		used := s.tokenUsed
+		issued := s.tokenIssued
+		ttl := s.TokenTTL
+		s.mu.Unlock()
+		if used {
+			_ = writeLine(rw, "ERR unauthorized")
+			if results != nil {
+				results <- false
+			}
+			return
+		}
+		if token != s.Expected.Token {
+			_ = writeLine(rw, "ERR unauthorized")
+			if results != nil {
+				results <- false
+			}
+			return
+		}
+		if ttl > 0 && time.Since(issued) > ttl {
+			_ = writeLine(rw, "ERR token expired")
+			if results != nil {
+				results <- false
+			}
+			return
+		}
 	}
 	if err := writeLine(rw, "OK"); err != nil {
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 
 	// MANIFEST header
 	header, err := readLine(rw)
 	if err != nil {
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 	if !strings.HasPrefix(header, "MANIFEST ") {
 		_ = writeLine(rw, "ERR expected MANIFEST")
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 	nStr := strings.TrimSpace(strings.TrimPrefix(header, "MANIFEST "))
 	n, err := strconv.Atoi(nStr)
 	if err != nil || n < 0 || n > 1<<20 {
 		_ = writeLine(rw, "ERR invalid MANIFEST length")
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(rw, buf); err != nil {
 		_ = writeLine(rw, "ERR read MANIFEST body failed")
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 	var man struct {
@@ -147,26 +209,38 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn) {
 		User       string `json:"user"`
 		Password   string `json:"password"`
 	}
-    if err := json.Unmarshal(buf, &man); err != nil {
-        _ = writeLine(rw, "ERR parse MANIFEST failed")
-        return
-    }
-	if err := netutil.ValidateHost(man.Host); err != nil {
-		_ = writeLine(rw, "ERR invalid host")
+	if err := json.Unmarshal(buf, &man); err != nil {
+		_ = writeLine(rw, "ERR parse MANIFEST failed")
 		return
 	}
-    if s.Expected.Host != "" && !strings.EqualFold(strings.TrimSpace(s.Expected.Host), strings.TrimSpace(man.Host)) {
-        _ = writeLine(rw, "ERR host mismatch")
-        return
-    }
-    if s.Expected.User != "" && strings.TrimSpace(man.User) != "" && !strings.EqualFold(strings.TrimSpace(man.User), strings.TrimSpace(s.Expected.User)) {
-        _ = writeLine(rw, "ERR user mismatch")
-        return
-    }
-    if s.Expected.Password != "" && strings.TrimSpace(man.Password) != "" && strings.TrimSpace(man.Password) != strings.TrimSpace(s.Expected.Password) {
-        _ = writeLine(rw, "ERR password mismatch")
-        return
-    }
+	if err := netutil.ValidateHost(man.Host); err != nil {
+		_ = writeLine(rw, "ERR invalid host")
+		if results != nil {
+			results <- false
+		}
+		return
+	}
+	if s.Expected.Host != "" && !strings.EqualFold(strings.TrimSpace(s.Expected.Host), strings.TrimSpace(man.Host)) {
+		_ = writeLine(rw, "ERR host mismatch")
+		if results != nil {
+			results <- false
+		}
+		return
+	}
+	if s.Expected.User != "" && strings.TrimSpace(man.User) != "" && !strings.EqualFold(strings.TrimSpace(man.User), strings.TrimSpace(s.Expected.User)) {
+		_ = writeLine(rw, "ERR user mismatch")
+		if results != nil {
+			results <- false
+		}
+		return
+	}
+	if s.Expected.Password != "" && strings.TrimSpace(man.Password) != "" && strings.TrimSpace(man.Password) != strings.TrimSpace(s.Expected.Password) {
+		_ = writeLine(rw, "ERR password mismatch")
+		if results != nil {
+			results <- false
+		}
+		return
+	}
 
 	// Installation
 	_ = writeLine(rw, "RUN")
@@ -199,6 +273,9 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn) {
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 
@@ -222,6 +299,9 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn) {
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 
@@ -240,6 +320,9 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn) {
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{reason})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
+		if results != nil {
+			results <- false
+		}
 		return
 	}
 
@@ -247,6 +330,9 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn) {
 	_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 	_ = writeLine(rw, "LINK "+link.Link)
 	_ = writeLine(rw, "DONE")
+	if results != nil {
+		results <- true
+	}
 }
 
 // --- link parsing and helpers ---
