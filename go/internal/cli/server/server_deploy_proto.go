@@ -49,6 +49,14 @@ type expectedLink struct {
 	Key        string
 }
 
+// runSignal is sent from a handled connection to the accept loop
+// to start xray-core in the foreground with the installed paths.
+type runSignal struct {
+	ok         bool
+	installDir string
+	configDir  string
+}
+
 func (s *deployServer) Run(ctx context.Context) error {
 	ln, err := net.Listen("tcp", s.ListenAddr)
 	if err != nil {
@@ -62,7 +70,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 	}
 	s.tokenIssued = time.Now()
 
-	results := make(chan bool, 8)
+	results := make(chan runSignal, 4)
 	defer close(results)
 
 	idleTimer := time.NewTimer(s.Timeout)
@@ -78,12 +86,20 @@ func (s *deployServer) Run(ctx context.Context) error {
 
 		// stop on successful session when --once
 		select {
-		case ok := <-results:
-			if ok {
+		case sig := <-results:
+			if sig.ok {
 				if s.Expected.Token != "" {
 					s.mu.Lock()
 					s.tokenUsed = true
 					s.mu.Unlock()
+				}
+				// Start diagnostics responders for ping on configured port.
+				if err := server.StartBackground(ctx, server.Options{Port: s.Cfg.Server.Port}); err != nil {
+					logging.Warn("xp2p server deploy: diagnostics start failed", "err", err)
+				}
+				logging.Info("xp2p server deploy: starting xray-core", "install_dir", sig.installDir, "config_dir", sig.configDir)
+				if err := server.Run(ctx, server.RunOptions{InstallDir: sig.installDir, ConfigDir: sig.configDir}); err != nil {
+					logging.Error("xp2p server deploy: xray-core start failed", "err", err)
 				}
 				if s.Once {
 					return nil
@@ -114,7 +130,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 	}
 }
 
-func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results chan<- bool) {
+func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results chan<- runSignal) {
 	defer conn.Close()
 
 	_ = conn.SetDeadline(time.Now().Add(60 * time.Second))
@@ -124,14 +140,14 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	line, err := readLine(rw)
 	if err != nil {
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
 	if !strings.HasPrefix(line, "AUTH") {
 		_ = writeLine(rw, "ERR expected AUTH")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -148,28 +164,28 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		if used {
 			_ = writeLine(rw, "ERR unauthorized")
 			if results != nil {
-				results <- false
+				results <- runSignal{ok: false}
 			}
 			return
 		}
 		if token != s.Expected.Token {
 			_ = writeLine(rw, "ERR unauthorized")
 			if results != nil {
-				results <- false
+				results <- runSignal{ok: false}
 			}
 			return
 		}
 		if ttl > 0 && time.Since(issued) > ttl {
 			_ = writeLine(rw, "ERR token expired")
 			if results != nil {
-				results <- false
+				results <- runSignal{ok: false}
 			}
 			return
 		}
 	}
 	if err := writeLine(rw, "OK"); err != nil {
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -178,14 +194,14 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	header, err := readLine(rw)
 	if err != nil {
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
 	if !strings.HasPrefix(header, "MANIFEST ") {
 		_ = writeLine(rw, "ERR expected MANIFEST")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -194,7 +210,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	if err != nil || n < 0 || n > 1<<20 {
 		_ = writeLine(rw, "ERR invalid MANIFEST length")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -202,7 +218,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	if _, err := io.ReadFull(rw, buf); err != nil {
 		_ = writeLine(rw, "ERR read MANIFEST body failed")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -221,28 +237,28 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	if err := netutil.ValidateHost(man.Host); err != nil {
 		_ = writeLine(rw, "ERR invalid host")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
 	if s.Expected.Host != "" && !strings.EqualFold(strings.TrimSpace(s.Expected.Host), strings.TrimSpace(man.Host)) {
 		_ = writeLine(rw, "ERR host mismatch")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
 	if s.Expected.User != "" && strings.TrimSpace(man.User) != "" && !strings.EqualFold(strings.TrimSpace(man.User), strings.TrimSpace(s.Expected.User)) {
 		_ = writeLine(rw, "ERR user mismatch")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
 	if s.Expected.Password != "" && strings.TrimSpace(man.Password) != "" && strings.TrimSpace(man.Password) != strings.TrimSpace(s.Expected.Password) {
 		_ = writeLine(rw, "ERR password mismatch")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -279,7 +295,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -305,7 +321,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -326,7 +342,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
 		if results != nil {
-			results <- false
+			results <- runSignal{ok: false}
 		}
 		return
 	}
@@ -335,17 +351,10 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 	_ = writeLine(rw, "LINK "+link.Link)
 	_ = writeLine(rw, "DONE")
-	// Start xray-core after successful deploy.
-	go func(installDir, configDir string) {
-		logging.Info("xp2p server deploy: starting xray-core", "install_dir", installDir, "config_dir", configDir)
-		runErr := server.Run(context.Background(), server.RunOptions{InstallDir: installDir, ConfigDir: configDir})
-		if runErr != nil {
-			logging.Error("xp2p server deploy: xray-core start failed", "err", runErr)
-		}
-	}(installDir, configDir)
 	if results != nil {
-		results <- true
+		results <- runSignal{ok: true, installDir: installDir, configDir: configDir}
 	}
+	return
 }
 
 // --- link parsing and helpers ---
