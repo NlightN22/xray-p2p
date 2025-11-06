@@ -79,9 +79,10 @@ func TestValidateFailures(t *testing.T) {
 			want: ErrHostEmpty,
 		},
 		{
-			name: "missing version",
+			name: "invalid version",
 			m: Manifest{
-				Host: "example",
+				Host:    "example",
+				Version: -1,
 			},
 			want: ErrVersionInvalid,
 		},
