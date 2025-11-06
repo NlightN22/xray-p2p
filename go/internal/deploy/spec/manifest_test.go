@@ -5,18 +5,17 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 	manifest := Manifest{
-		RemoteHost:     "10.0.10.10",
-		XP2PVersion:    "1.2.3",
-		GeneratedAt:    time.Date(2025, 11, 4, 7, 47, 42, 0, time.UTC),
+		Host:           "10.0.10.10",
+		Version:        2,
 		InstallDir:     `C:\xp2p`,
 		TrojanPort:     "8443",
 		TrojanUser:     "client@example.invalid",
 		TrojanPassword: "secret",
+		ExpiresAt:      1730916462,
 	}
 
 	data, err := Marshal(manifest)
@@ -24,7 +23,7 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 		t.Fatalf("Marshal: %v", err)
 	}
 
-	if !strings.Contains(string(data), `"remote_host": "10.0.10.10"`) {
+	if !strings.Contains(string(data), `"host":"10.0.10.10"`) {
 		t.Fatalf("unexpected marshalled data: %s", string(data))
 	}
 
@@ -40,13 +39,13 @@ func TestMarshalUnmarshalRoundTrip(t *testing.T) {
 
 func TestReadWrite(t *testing.T) {
 	manifest := Manifest{
-		RemoteHost:     "example.internal",
-		XP2PVersion:    "0.5.0",
-		GeneratedAt:    time.Date(2024, 6, 1, 14, 0, 0, 0, time.UTC),
+		Host:           "example.internal",
+		Version:        2,
 		InstallDir:     `D:\custom-xp2p`,
 		TrojanPort:     "62022",
 		TrojanUser:     "client@example.internal",
 		TrojanPassword: "secret",
+		ExpiresAt:      1893458400,
 	}
 
 	var buf bytes.Buffer
@@ -75,33 +74,22 @@ func TestValidateFailures(t *testing.T) {
 		{
 			name: "missing host",
 			m: Manifest{
-				XP2PVersion: "0.1.0",
-				GeneratedAt: time.Now(),
+				Version: 2,
 			},
-			want: ErrRemoteHostEmpty,
+			want: ErrHostEmpty,
 		},
 		{
 			name: "missing version",
 			m: Manifest{
-				RemoteHost:  "example",
-				GeneratedAt: time.Now(),
+				Host: "example",
 			},
-			want: ErrVersionEmpty,
-		},
-		{
-			name: "missing timestamp",
-			m: Manifest{
-				RemoteHost:  "example",
-				XP2PVersion: "0.1.0",
-			},
-			want: ErrGeneratedZero,
+			want: ErrVersionInvalid,
 		},
 		{
 			name: "credential pair missing password",
 			m: Manifest{
-				RemoteHost:     "example",
-				XP2PVersion:    "0.1.0",
-				GeneratedAt:    time.Now(),
+				Host:           "example",
+				Version:        2,
 				TrojanUser:     "client@example",
 				TrojanPassword: "",
 			},
@@ -110,9 +98,8 @@ func TestValidateFailures(t *testing.T) {
 		{
 			name: "credential pair missing user",
 			m: Manifest{
-				RemoteHost:     "example",
-				XP2PVersion:    "0.1.0",
-				GeneratedAt:    time.Now(),
+				Host:           "example",
+				Version:        2,
 				TrojanUser:     "",
 				TrojanPassword: "secret",
 			},
