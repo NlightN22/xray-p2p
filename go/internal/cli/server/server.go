@@ -43,6 +43,7 @@ var serverUsageBlocks = []string{
 	`user    add/remove [...]`,
 	`cert    set [--path PATH] [--config-dir NAME|PATH] [--cert FILE] [--key FILE]
           [--host HOST] [--force]`,
+	`deploy  --listen ADDR [--once] [--link URL]`,
 }
 
 func Execute(ctx context.Context, cfg config.Config, args []string) int {
@@ -67,6 +68,8 @@ func runServer(ctx context.Context, cfg config.Config, args []string) int {
 		return runServerUser(ctx, cfg, args[1:])
 	case "cert":
 		return runServerCert(ctx, cfg, args[1:])
+	case "deploy":
+		return runServerDeploy(ctx, cfg, args[1:])
 	case "-h", "--help", "help":
 		printServerUsage()
 		return 0

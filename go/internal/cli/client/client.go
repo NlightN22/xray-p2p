@@ -27,7 +27,7 @@ var clientUsageBlocks = []string{
           (--link URL | --server-address HOST --user EMAIL --password SECRET)
           [--server-port PORT] [--server-name NAME]
           [--allow-insecure|--strict-tls] [--force]`,
-	`deploy  --remote-host HOST [--package-only] [--ssh-user NAME] [--ssh-port PORT]
+	`deploy  --remote-host HOST [--deploy-port PORT]
           [--user EMAIL] [--password SECRET] [--trojan-port PORT]`,
 	`remove  [--path PATH] [--keep-files] [--ignore-missing]`,
 	`run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
