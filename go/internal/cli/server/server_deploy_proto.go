@@ -3,8 +3,11 @@ package servercmd
 import (
 	"bufio"
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,6 +45,8 @@ type expectedLink struct {
 	InstallDir string
 	User       string
 	Password   string
+	Sig        string
+	Key        string
 }
 
 func (s *deployServer) Run(ctx context.Context) error {
@@ -330,6 +335,14 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 	_ = writeLine(rw, "LINK "+link.Link)
 	_ = writeLine(rw, "DONE")
+	// Start xray-core after successful deploy.
+	go func(installDir, configDir string) {
+		logging.Info("xp2p server deploy: starting xray-core", "install_dir", installDir, "config_dir", configDir)
+		runErr := server.Run(context.Background(), server.RunOptions{InstallDir: installDir, ConfigDir: configDir})
+		if runErr != nil {
+			logging.Error("xp2p server deploy: xray-core start failed", "err", runErr)
+		}
+	}(installDir, configDir)
 	if results != nil {
 		results <- true
 	}
@@ -354,14 +367,30 @@ func parseDeployLink(raw string) (expectedLink, error) {
 		return expectedLink{}, fmt.Errorf("invalid host in link")
 	}
 	q := u.Query()
-	return expectedLink{
+	exp := expectedLink{
 		Host:       host,
 		Token:      strings.TrimSpace(q.Get("token")),
 		TrojanPort: strings.TrimSpace(q.Get("tp")),
 		InstallDir: strings.TrimSpace(q.Get("idir")),
 		User:       strings.TrimSpace(q.Get("user")),
 		Password:   strings.TrimSpace(q.Get("pass")),
-	}, nil
+		Sig:        strings.TrimSpace(q.Get("sig")),
+		Key:        strings.TrimSpace(q.Get("key")),
+	}
+	// If sig/key present, verify that sig = HMAC_SHA256(key, token)
+	if (exp.Sig != "" || exp.Key != "") && !(exp.Sig != "" && exp.Key != "") {
+		return expectedLink{}, fmt.Errorf("sig/key must be both present or absent")
+	}
+	if exp.Sig != "" {
+		calc, err := hmacSHA256Hex(exp.Key, exp.Token)
+		if err != nil {
+			return expectedLink{}, fmt.Errorf("invalid key in link: %w", err)
+		}
+		if !strings.EqualFold(calc, exp.Sig) {
+			return expectedLink{}, fmt.Errorf("invalid signature in link")
+		}
+	}
+	return exp, nil
 }
 
 func readLine(rw *bufio.ReadWriter) (string, error) {
@@ -400,4 +429,15 @@ func generateSecret(size int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func hmacSHA256Hex(keyBase64URL, data string) (string, error) {
+	key, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(keyBase64URL))
+	if err != nil {
+		return "", err
+	}
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write([]byte(data))
+	sum := mac.Sum(nil)
+	return hex.EncodeToString(sum), nil
 }

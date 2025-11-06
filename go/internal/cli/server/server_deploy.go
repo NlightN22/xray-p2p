@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -23,7 +24,24 @@ func runServerDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 2
 	}
 
-	expected, _ := parseDeployLink(*link)
+	var expected expectedLink
+	rawLink := strings.TrimSpace(*link)
+	if rawLink != "" {
+		var err error
+		expected, err = parseDeployLink(rawLink)
+		if err != nil {
+			logging.Error("xp2p server deploy: invalid --link", "err", err)
+			return 2
+		}
+		if strings.TrimSpace(expected.Token) == "" {
+			logging.Error("xp2p server deploy: --link must include token parameter")
+			return 2
+		}
+		if strings.TrimSpace(expected.Host) == "" {
+			logging.Error("xp2p server deploy: --link must include host")
+			return 2
+		}
+	}
 	logging.Info("xp2p server deploy: starting listener", "listen", *listen, "once", *once)
 
 	srv := deployServer{

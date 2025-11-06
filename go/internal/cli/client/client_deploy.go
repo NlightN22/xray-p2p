@@ -51,40 +51,40 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	logging.Info("xp2p client deploy: link generated", "link", link)
 	logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
 
-    // Retry handshake until server is ready or timeout elapses.
-    var (
-        res          deployResult
-        handshakeErr error
-    )
-    deadline := time.Now().Add(10 * time.Minute)
-    backoff := 2 * time.Second
-    if backoff <= 0 {
-        backoff = 2 * time.Second
-    }
-    for {
-        if ctx.Err() != nil {
-            logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
-            return 1
-        }
-        res, handshakeErr = performDeployHandshake(ctx, opts)
-        if handshakeErr == nil {
-            break
-        }
-        if time.Now().After(deadline) {
-            logging.Error("xp2p client deploy: handshake timeout", "err", handshakeErr)
-            return 1
-        }
-        logging.Info("xp2p client deploy: server not ready, retrying", "next_in", backoff)
-        select {
-        case <-time.After(backoff):
-        case <-ctx.Done():
-            logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
-            return 1
-        }
-        if backoff < 5*time.Second {
-            backoff += 1 * time.Second
-        }
-    }
+	// Retry handshake until server is ready or timeout elapses.
+	var (
+		res          deployResult
+		handshakeErr error
+	)
+	deadline := time.Now().Add(10 * time.Minute)
+	backoff := 2 * time.Second
+	if backoff <= 0 {
+		backoff = 2 * time.Second
+	}
+	for {
+		if ctx.Err() != nil {
+			logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
+			return 1
+		}
+		res, handshakeErr = performDeployHandshake(ctx, opts)
+		if handshakeErr == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			logging.Error("xp2p client deploy: handshake timeout", "err", handshakeErr)
+			return 1
+		}
+		logging.Debug("xp2p client deploy: server not ready, retrying", "next_in", backoff)
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
+			return 1
+		}
+		if backoff < 5*time.Second {
+			backoff += 1 * time.Second
+		}
+	}
 
 	if res.ExitCode != 0 {
 		logging.Error("xp2p client deploy: server install failed", "exit_code", res.ExitCode)
@@ -189,17 +189,38 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 
 // buildDeployLink composes a basic xp2p+deploy link.
 func buildDeployLink(opts deployOptions) string {
-	// TODO: include token and options as needed
 	host := strings.TrimSpace(opts.runtime.remoteHost)
 	port := strings.TrimSpace(opts.runtime.deployPort)
 	if port == "" {
 		port = "62025"
 	}
 	token := strings.TrimSpace(opts.runtime.token)
+	// Bind token to link via HMAC(sig) with a per-link secret key.
+	key, _ := generateHMACKey(16)
+	sig := ""
 	if token != "" {
-		return fmt.Sprintf("xp2p+deploy://%s:%s?v=1&token=%s", host, port, token)
+		if s, err := hmacSHA256Hex(key, token); err == nil {
+			sig = s
+		}
 	}
-	return fmt.Sprintf("xp2p+deploy://%s:%s?v=1", host, port)
+	// Build query
+	b := strings.Builder{}
+	b.WriteString("xp2p+deploy://")
+	b.WriteString(host)
+	b.WriteString(":")
+	b.WriteString(port)
+	b.WriteString("?v=1")
+	if token != "" {
+		b.WriteString("&token=")
+		b.WriteString(token)
+	}
+	if sig != "" {
+		b.WriteString("&sig=")
+		b.WriteString(sig)
+		b.WriteString("&key=")
+		b.WriteString(key)
+	}
+	return b.String()
 }
 
 // buildInstallOptionsFromLink converts a parsed trojan link into client install options,
