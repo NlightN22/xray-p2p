@@ -2,6 +2,7 @@ package clientcmd
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -29,6 +30,11 @@ type runtimeOptions struct {
 	deployPort string
 	serverHost string
 	token      string
+	// v2 encryption payload
+	encCT    []byte
+	encKey   string
+	encNonce string
+	encExp   int64
 }
 
 type deployOptions struct {
@@ -46,8 +52,8 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 2
 	}
 
-	// Build and print deploy link, then run handshake with server deploy
-	link := buildDeployLink(opts)
+	// Build and print deploy link (v2 encrypted), then run handshake
+	link := buildDeployLink(&opts)
 	logging.Info("xp2p client deploy: link generated", "link", link)
 	logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
 
@@ -188,39 +194,36 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 }
 
 // buildDeployLink composes a basic xp2p+deploy link.
-func buildDeployLink(opts deployOptions) string {
+func buildDeployLink(opts *deployOptions) string {
 	host := strings.TrimSpace(opts.runtime.remoteHost)
 	port := strings.TrimSpace(opts.runtime.deployPort)
 	if port == "" {
 		port = "62025"
 	}
-	token := strings.TrimSpace(opts.runtime.token)
-	// Bind token to link via HMAC(sig) with a per-link secret key.
-	key, _ := generateHMACKey(16)
-	sig := ""
-	if token != "" {
-		if s, err := hmacSHA256Hex(key, token); err == nil {
-			sig = s
-		}
-	}
-	// Build query
-	b := strings.Builder{}
-	b.WriteString("xp2p+deploy://")
-	b.WriteString(host)
-	b.WriteString(":")
-	b.WriteString(port)
-	b.WriteString("?v=1")
-	if token != "" {
-		b.WriteString("&token=")
-		b.WriteString(token)
-	}
-	if sig != "" {
-		b.WriteString("&sig=")
-		b.WriteString(sig)
-		b.WriteString("&key=")
-		b.WriteString(key)
-	}
-	return b.String()
+	// v2 encrypted manifest
+	// Prepare manifest JSON
+	manifest := fmt.Sprintf(`{"host":"%s","version":2,"trojan_port":"%s","install_dir":"%s","user":"%s","password":"%s","exp":%d}`,
+		strings.TrimSpace(opts.runtime.serverHost),
+		strings.TrimSpace(opts.manifest.trojanPort),
+		strings.TrimSpace(opts.manifest.installDir),
+		strings.TrimSpace(opts.manifest.trojanUser),
+		strings.TrimSpace(opts.manifest.trojanPassword),
+		nowPlusMinutes(10),
+	)
+	keyB64, keyRaw, _ := generateAESKey()
+	nonceB64, nonceRaw, _ := generateNonce()
+	ct, _ := encryptManifestAESGCM(keyRaw, nonceRaw, []byte(manifest))
+	ctB64 := base64.RawURLEncoding.EncodeToString(ct)
+
+	opts.runtime.encCT = ct
+	opts.runtime.encKey = keyB64
+	opts.runtime.encNonce = nonceB64
+	opts.runtime.encExp = nowPlusMinutes(10)
+
+	// Build v2 link: include key only in link, not sent over network
+	return fmt.Sprintf("xp2p+deploy://%s:%s?v=2&k=%s&ct=%s&n=%s&exp=%d",
+		host, port, keyB64, ctB64, nonceB64, opts.runtime.encExp,
+	)
 }
 
 // buildInstallOptionsFromLink converts a parsed trojan link into client install options,

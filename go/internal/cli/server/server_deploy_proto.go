@@ -3,6 +3,8 @@ package servercmd
 import (
 	"bufio"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -47,6 +49,11 @@ type expectedLink struct {
 	Password   string
 	Sig        string
 	Key        string
+	Version    int
+	Nonce      string
+	CipherB64  string
+	Exp        int64
+	ctHashHex  string
 }
 
 // runSignal is sent from a handled connection to the accept loop
@@ -198,6 +205,67 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		}
 		return
 	}
+	if strings.HasPrefix(header, "MANIFEST-ENC ") {
+		// read ciphertext and compare against expected
+		nStr := strings.TrimSpace(strings.TrimPrefix(header, "MANIFEST-ENC "))
+		n, err := strconv.Atoi(nStr)
+		if err != nil || n <= 0 || n > 1<<20 {
+			_ = writeLine(rw, "ERR invalid MANIFEST-ENC length")
+			if results != nil {
+				results <- runSignal{ok: false}
+			}
+			return
+		}
+		buf := make([]byte, n)
+		if _, err := io.ReadFull(rw, buf); err != nil {
+			_ = writeLine(rw, "ERR read MANIFEST-ENC body failed")
+			if results != nil {
+				results <- runSignal{ok: false}
+			}
+			return
+		}
+		// log received network link (without key)
+		recvCT := base64.RawURLEncoding.EncodeToString(buf)
+		deployPort := extractPort(s.ListenAddr)
+		netLink := fmt.Sprintf("xp2p+deploy://%s:%s?v=2&ct=%s&n=%s&exp=%d", s.Expected.Host, deployPort, recvCT, s.Expected.Nonce, s.Expected.Exp)
+		logging.Info("xp2p server deploy: received deploy link", "link", netLink)
+
+		if s.Expected.Version >= 2 {
+			sum := sha256.Sum256(buf)
+			if hex.EncodeToString(sum[:]) != strings.TrimSpace(s.Expected.ctHashHex) {
+				_ = writeLine(rw, "ERR unauthorized")
+				if results != nil {
+					results <- runSignal{ok: false}
+				}
+				return
+			}
+			// decrypt to manifest
+			plain, err := decryptManifestAESGCM(s.Expected.Key, s.Expected.Nonce, s.Expected.CipherB64)
+			if err != nil {
+				_ = writeLine(rw, "ERR decrypt failed")
+				if results != nil {
+					results <- runSignal{ok: false}
+				}
+				return
+			}
+			var man deployManifest
+			if err := json.Unmarshal(plain, &man); err != nil {
+				_ = writeLine(rw, "ERR decode manifest failed")
+				if results != nil {
+					results <- runSignal{ok: false}
+				}
+				return
+			}
+			// continue with install using decrypted manifest
+			s.proceedInstall(ctx, rw, results, man)
+			return
+		}
+		_ = writeLine(rw, "ERR unexpected MANIFEST-ENC")
+		if results != nil {
+			results <- runSignal{ok: false}
+		}
+		return
+	}
 	if !strings.HasPrefix(header, "MANIFEST ") {
 		_ = writeLine(rw, "ERR expected MANIFEST")
 		if results != nil {
@@ -222,14 +290,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		}
 		return
 	}
-	var man struct {
-		Host       string `json:"host"`
-		Version    int    `json:"version"`
-		TrojanPort string `json:"trojan_port"`
-		InstallDir string `json:"install_dir"`
-		User       string `json:"user"`
-		Password   string `json:"password"`
-	}
+	var man deployManifest
 	if err := json.Unmarshal(buf, &man); err != nil {
 		_ = writeLine(rw, "ERR parse MANIFEST failed")
 		return
@@ -264,6 +325,8 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	}
 
 	// Installation
+	s.proceedInstall(ctx, rw, results, man)
+	return
 	_ = writeLine(rw, "RUN")
 
 	installDir := firstNonEmpty(man.InstallDir, s.Expected.InstallDir, s.Cfg.Server.InstallDir)
@@ -376,6 +439,12 @@ func parseDeployLink(raw string) (expectedLink, error) {
 		return expectedLink{}, fmt.Errorf("invalid host in link")
 	}
 	q := u.Query()
+	ver := 1
+	if v := strings.TrimSpace(q.Get("v")); v != "" {
+		if n, _ := strconv.Atoi(v); n > 0 {
+			ver = n
+		}
+	}
 	exp := expectedLink{
 		Host:       host,
 		Token:      strings.TrimSpace(q.Get("token")),
@@ -385,18 +454,42 @@ func parseDeployLink(raw string) (expectedLink, error) {
 		Password:   strings.TrimSpace(q.Get("pass")),
 		Sig:        strings.TrimSpace(q.Get("sig")),
 		Key:        strings.TrimSpace(q.Get("key")),
+		Version:    ver,
+		Nonce:      strings.TrimSpace(q.Get("n")),
+		CipherB64:  strings.TrimSpace(q.Get("ct")),
 	}
-	// If sig/key present, verify that sig = HMAC_SHA256(key, token)
-	if (exp.Sig != "" || exp.Key != "") && !(exp.Sig != "" && exp.Key != "") {
-		return expectedLink{}, fmt.Errorf("sig/key must be both present or absent")
-	}
-	if exp.Sig != "" {
-		calc, err := hmacSHA256Hex(exp.Key, exp.Token)
-		if err != nil {
-			return expectedLink{}, fmt.Errorf("invalid key in link: %w", err)
+	if exp.Version >= 2 {
+		if exp.Key == "" || exp.CipherB64 == "" || exp.Nonce == "" {
+			return expectedLink{}, fmt.Errorf("v=2 requires k, ct, n")
 		}
-		if !strings.EqualFold(calc, exp.Sig) {
-			return expectedLink{}, fmt.Errorf("invalid signature in link")
+		// compute hash of ciphertext for later matching
+		if ct, err := base64.RawURLEncoding.DecodeString(exp.CipherB64); err == nil {
+			sum := sha256.Sum256(ct)
+			exp.ctHashHex = hex.EncodeToString(sum[:])
+		}
+		// optional: parse exp
+		if rawExp := strings.TrimSpace(q.Get("exp")); rawExp != "" {
+			if n, err := strconv.ParseInt(rawExp, 10, 64); err == nil {
+				exp.Exp = n
+			}
+		}
+		// decrypt once at startup to validate manifest fields
+		if _, err := decryptManifestAESGCM(exp.Key, exp.Nonce, exp.CipherB64); err != nil {
+			return expectedLink{}, fmt.Errorf("invalid encrypted manifest: %w", err)
+		}
+	} else {
+		// If sig/key present, verify that sig = HMAC_SHA256(key, token)
+		if (exp.Sig != "" || exp.Key != "") && !(exp.Sig != "" && exp.Key != "") {
+			return expectedLink{}, fmt.Errorf("sig/key must be both present or absent")
+		}
+		if exp.Sig != "" {
+			calc, err := hmacSHA256Hex(exp.Key, exp.Token)
+			if err != nil {
+				return expectedLink{}, fmt.Errorf("invalid key in link: %w", err)
+			}
+			if !strings.EqualFold(calc, exp.Sig) {
+				return expectedLink{}, fmt.Errorf("invalid signature in link")
+			}
 		}
 	}
 	return exp, nil
@@ -449,4 +542,130 @@ func hmacSHA256Hex(keyBase64URL, data string) (string, error) {
 	_, _ = mac.Write([]byte(data))
 	sum := mac.Sum(nil)
 	return hex.EncodeToString(sum), nil
+}
+
+// v2 decryption helpers
+func decryptManifestAESGCM(keyB64, nonceB64, ctB64 string) ([]byte, error) {
+	key, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(keyB64))
+	if err != nil {
+		return nil, err
+	}
+	nonce, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(nonceB64))
+	if err != nil {
+		return nil, err
+	}
+	ct, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(ctB64))
+	if err != nil {
+		return nil, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	aad := []byte("XP2PDEPLOY|v=2")
+	return aead.Open(nil, nonce, ct, aad)
+}
+
+// proceedInstall continues with installation and responds over rw; shared for v1/v2
+func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter, results chan<- runSignal, man deployManifest) {
+	if err := netutil.ValidateHost(man.Host); err != nil {
+		_ = writeLine(rw, "ERR invalid host")
+		if results != nil {
+			results <- runSignal{ok: false}
+		}
+		return
+	}
+	if s.Expected.Host != "" && !strings.EqualFold(strings.TrimSpace(s.Expected.Host), strings.TrimSpace(man.Host)) {
+		_ = writeLine(rw, "ERR host mismatch")
+		if results != nil {
+			results <- runSignal{ok: false}
+		}
+		return
+	}
+
+	_ = writeLine(rw, "RUN")
+
+	installDir := firstNonEmpty(man.InstallDir, s.Expected.InstallDir, s.Cfg.Server.InstallDir)
+	configDir := s.Cfg.Server.ConfigDir
+	port := firstNonEmpty(man.TrojanPort, s.Expected.TrojanPort)
+	if port == "" {
+		port = strconv.Itoa(server.DefaultTrojanPort)
+	}
+
+	logs := []string{
+		fmt.Sprintf("install_dir=%s", installDir),
+		fmt.Sprintf("config_dir=%s", configDir),
+		fmt.Sprintf("trojan_port=%s", port),
+		fmt.Sprintf("host=%s", man.Host),
+	}
+
+	inst := server.InstallOptions{InstallDir: installDir, ConfigDir: configDir, Port: port, Host: man.Host, Force: true}
+	if err := server.Install(ctx, inst); err != nil {
+		_ = writeLine(rw, "EXIT 1")
+		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
+		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
+		_ = writeLine(rw, "DONE")
+		if results != nil {
+			results <- runSignal{ok: false}
+		}
+		return
+	}
+
+	userID := firstNonEmpty(strings.TrimSpace(man.User), strings.TrimSpace(s.Expected.User))
+	if userID == "" {
+		userID = fmt.Sprintf("xp2p-%d@local", time.Now().Unix())
+	}
+	password := firstNonEmpty(strings.TrimSpace(man.Password), strings.TrimSpace(s.Expected.Password))
+	if password == "" {
+		if p, err := generateSecret(18); err == nil {
+			password = p
+		}
+	}
+
+	if err := server.AddUser(ctx, server.AddUserOptions{InstallDir: installDir, ConfigDir: configDir, UserID: userID, Password: password}); err != nil {
+		_ = writeLine(rw, "EXIT 1")
+		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
+		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
+		_ = writeLine(rw, "DONE")
+		if results != nil {
+			results <- runSignal{ok: false}
+		}
+		return
+	}
+
+	link, err := server.GetUserLink(ctx, server.UserLinkOptions{InstallDir: installDir, ConfigDir: configDir, Host: man.Host, UserID: userID})
+	if err != nil || strings.TrimSpace(link.Link) == "" {
+		_ = writeLine(rw, "EXIT 1")
+		reason := "failed to build user link"
+		if err != nil {
+			reason = err.Error()
+		}
+		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{reason})
+		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
+		_ = writeLine(rw, "DONE")
+		if results != nil {
+			results <- runSignal{ok: false}
+		}
+		return
+	}
+
+	_ = writeLine(rw, "EXIT 0")
+	_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
+	_ = writeLine(rw, "LINK "+link.Link)
+	_ = writeLine(rw, "DONE")
+	if results != nil {
+		results <- runSignal{ok: true, installDir: installDir, configDir: configDir}
+	}
+}
+
+func extractPort(listen string) string {
+	// expect ":port" or "host:port"; fallback default deploy port
+	if i := strings.LastIndex(listen, ":"); i >= 0 && i+1 < len(listen) {
+		return strings.TrimSpace(listen[i+1:])
+	}
+	return "62025"
 }

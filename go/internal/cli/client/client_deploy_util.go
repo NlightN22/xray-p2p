@@ -1,6 +1,8 @@
 package clientcmd
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -59,4 +62,39 @@ func hmacSHA256Hex(keyBase64URL, data string) (string, error) {
 	_, _ = mac.Write([]byte(data))
 	sum := mac.Sum(nil)
 	return hex.EncodeToString(sum), nil
+}
+
+// crypto helpers for v2 encrypted deploy links
+
+func generateAESKey() (string, []byte, error) {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return "", nil, err
+	}
+	return base64.RawURLEncoding.EncodeToString(key), key, nil
+}
+
+func generateNonce() (string, []byte, error) {
+	nonce := make([]byte, 12)
+	if _, err := rand.Read(nonce); err != nil {
+		return "", nil, err
+	}
+	return base64.RawURLEncoding.EncodeToString(nonce), nonce, nil
+}
+
+func encryptManifestAESGCM(key []byte, nonce []byte, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	aad := []byte("XP2PDEPLOY|v=2")
+	return aead.Seal(nil, nonce, plaintext, aad), nil
+}
+
+func nowPlusMinutes(mins int) int64 {
+	return time.Now().Add(time.Duration(mins) * time.Minute).Unix()
 }
