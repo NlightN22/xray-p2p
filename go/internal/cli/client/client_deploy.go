@@ -7,8 +7,11 @@ import (
     "fmt"
     "io"
     "strings"
+    "time"
 
+    "github.com/NlightN22/xray-p2p/go/internal/client"
     "github.com/NlightN22/xray-p2p/go/internal/config"
+    "github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
     "github.com/NlightN22/xray-p2p/go/internal/logging"
     "github.com/NlightN22/xray-p2p/go/internal/netutil"
 )
@@ -42,11 +45,53 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
         return 2
     }
 
-    // Build and print deploy link, then TODO: handshake with server deploy
+    // Build and print deploy link, then run handshake with server deploy
     link := buildDeployLink(opts)
     logging.Info("xp2p client deploy: link generated", "link", link)
-    logging.Info("xp2p client deploy: waiting for server deploy to accept this link (TODO)")
-    // TODO: Implement deploy link handshake protocol
+    logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
+
+    res, err := performDeployHandshake(ctx, opts)
+    if err != nil {
+        logging.Error("xp2p client deploy: handshake failed", "err", err)
+        return 1
+    }
+
+    if res.ExitCode != 0 {
+        logging.Error("xp2p client deploy: server install failed", "exit_code", res.ExitCode)
+        return 1
+    }
+    if strings.TrimSpace(res.Link) == "" {
+        logging.Error("xp2p client deploy: missing trojan link from server")
+        return 1
+    }
+
+    logging.Info("xp2p client deploy: installing local client from trojan link")
+    tl, err := parseTrojanLink(res.Link)
+    if err != nil {
+        logging.Error("xp2p client deploy: invalid trojan link", "err", err)
+        return 1
+    }
+
+    installOpts := buildInstallOptionsFromLink(cfg, tl)
+    if err := clientInstallFunc(ctx, installOpts); err != nil {
+        logging.Error("xp2p client deploy: local install failed", "err", err)
+        return 1
+    }
+    logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
+
+    // Verify via SOCKS ping
+    logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping")
+    pingOpts := ping.Options{
+        Count:      1,
+        Timeout:    3 * time.Second,
+        Proto:      "tcp",
+        SocksProxy: cfg.Client.SocksAddress,
+    }
+    if err := ping.Run(ctx, "127.0.0.1", pingOpts); err != nil {
+        logging.Error("xp2p client deploy: ping failed", "err", err)
+        return 1
+    }
+    logging.Info("xp2p client deploy: ping ok")
     return 0
 }
 
@@ -118,4 +163,20 @@ func buildDeployLink(opts deployOptions) string {
         port = "62025"
     }
     return fmt.Sprintf("xp2p+deploy://%s:%s?v=1", host, port)
+}
+
+// buildInstallOptionsFromLink converts a parsed trojan link into client install options,
+// applying config defaults for install paths.
+func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.InstallOptions {
+    return client.InstallOptions{
+        InstallDir:    cfg.Client.InstallDir,
+        ConfigDir:     cfg.Client.ConfigDir,
+        ServerAddress: link.ServerAddress,
+        ServerPort:    link.ServerPort,
+        User:          link.User,
+        Password:      link.Password,
+        ServerName:    link.ServerName,
+        AllowInsecure: link.AllowInsecure,
+        Force:         true,
+    }
 }
