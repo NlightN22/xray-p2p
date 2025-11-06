@@ -33,14 +33,6 @@ func runServerDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			logging.Error("xp2p server deploy: invalid --link", "err", err)
 			return 2
 		}
-		if strings.TrimSpace(expected.Token) == "" {
-			logging.Error("xp2p server deploy: --link must include token parameter")
-			return 2
-		}
-		if strings.TrimSpace(expected.Host) == "" {
-			logging.Error("xp2p server deploy: --link must include host")
-			return 2
-		}
 	}
 	logging.Info("xp2p server deploy: starting listener", "listen", *listen, "once", *once)
 

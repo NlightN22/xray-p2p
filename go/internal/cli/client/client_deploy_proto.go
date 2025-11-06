@@ -53,8 +53,8 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
-	// AUTH with token when present
-	if _, err := fmt.Fprintf(rw, "AUTH %s\n", strings.TrimSpace(opts.runtime.token)); err != nil {
+	// AUTH (no token for v2)
+	if _, err := fmt.Fprintf(rw, "AUTH\n"); err != nil {
 		return deployResult{}, fmt.Errorf("send AUTH: %w", err)
 	}
 	if err := rw.Flush(); err != nil {

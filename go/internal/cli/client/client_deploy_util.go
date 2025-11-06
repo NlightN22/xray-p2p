@@ -3,12 +3,9 @@ package clientcmd
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base32"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -45,24 +42,7 @@ func generateDeployToken() (string, error) {
 	return strings.ToLower(enc), nil
 }
 
-func generateHMACKey(size int) (string, error) {
-	buf := make([]byte, size)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
-}
-
-func hmacSHA256Hex(keyBase64URL, data string) (string, error) {
-	key, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(keyBase64URL))
-	if err != nil {
-		return "", err
-	}
-	mac := hmac.New(sha256.New, key)
-	_, _ = mac.Write([]byte(data))
-	sum := mac.Sum(nil)
-	return hex.EncodeToString(sum), nil
-}
+// removed HMAC helpers (v1 deprecated)
 
 // crypto helpers for v2 encrypted deploy links
 

@@ -29,7 +29,6 @@ type runtimeOptions struct {
 	remoteHost string
 	deployPort string
 	serverHost string
-	token      string
 	// v2 encryption payload
 	encCT    []byte
 	encKey   string
@@ -174,8 +173,6 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		passwordValue = gen
 	}
 
-	token, _ := generateDeployToken()
-
 	return deployOptions{
 		manifest: manifestOptions{
 			remoteHost:     host,
@@ -188,7 +185,6 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 			remoteHost: host,
 			deployPort: strings.TrimSpace(*deployPort),
 			serverHost: serverHostValue,
-			token:      token,
 		},
 	}, nil
 }
