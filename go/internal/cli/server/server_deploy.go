@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
@@ -24,7 +25,7 @@ func runServerDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 2
 	}
 
-	var expected expectedLink
+	var expected deploylink.EncryptedLink
 	rawLink := strings.TrimSpace(*link)
 	if rawLink != "" {
 		var err error

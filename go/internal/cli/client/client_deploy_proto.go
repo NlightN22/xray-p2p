@@ -62,13 +62,13 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 		return deployResult{}, fmt.Errorf("unexpected AUTH response: %q", line)
 	}
 
-	if len(opts.runtime.encCT) == 0 {
+	if len(opts.runtime.encLink.Ciphertext) == 0 {
 		return deployResult{}, fmt.Errorf("encrypted manifest missing")
 	}
-	if _, err := fmt.Fprintf(rw, "MANIFEST-ENC %d\n", len(opts.runtime.encCT)); err != nil {
+	if _, err := fmt.Fprintf(rw, "MANIFEST-ENC %d\n", len(opts.runtime.encLink.Ciphertext)); err != nil {
 		return deployResult{}, fmt.Errorf("send MANIFEST-ENC header: %w", err)
 	}
-	if _, err := rw.Write(opts.runtime.encCT); err != nil {
+	if _, err := rw.Write(opts.runtime.encLink.Ciphertext); err != nil {
 		return deployResult{}, fmt.Errorf("send MANIFEST-ENC body: %w", err)
 	}
 	if err := rw.Flush(); err != nil {

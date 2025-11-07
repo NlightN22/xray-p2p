@@ -2,7 +2,6 @@ package clientcmd
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,10 +11,15 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
+)
+
+const (
+	deployLinkTTL = 10 * time.Minute
 )
 
 type manifestOptions struct {
@@ -30,11 +34,7 @@ type runtimeOptions struct {
 	remoteHost string
 	deployPort string
 	serverHost string
-	// v2 encryption payload
-	encCT    []byte
-	encKey   string
-	encNonce string
-	encExp   int64
+	encLink    deploylink.EncryptedLink
 }
 
 type deployOptions struct {
@@ -53,9 +53,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	// Build and print deploy link (v2 encrypted), then run handshake
-	link := buildDeployLink(&opts)
-	logging.Info("xp2p client deploy: link generated", "link", link)
-	logging.Info("xp2p client deploy: waiting for server…", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
+	linkURL, err := buildDeployLink(&opts)
+	if err != nil {
+		logging.Error("xp2p client deploy: build link failed", "err", err)
+		return 2
+	}
+	logging.Info("xp2p client deploy: link generated", "link", linkURL)
+	logging.Info("xp2p client deploy: waiting for server...", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
 
 	// Retry handshake until server is ready or timeout elapses.
 	var (
@@ -190,42 +194,21 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	}, nil
 }
 
-// buildDeployLink composes a basic xp2p+deploy link.
-func buildDeployLink(opts *deployOptions) string {
-	host := strings.TrimSpace(opts.runtime.remoteHost)
-	port := strings.TrimSpace(opts.runtime.deployPort)
-	if port == "" {
-		port = "62025"
-	}
+func buildDeployLink(opts *deployOptions) (string, error) {
 	manifest := spec.Manifest{
 		Host:           strings.TrimSpace(opts.runtime.serverHost),
 		Version:        2,
-		TrojanPort:     strings.TrimSpace(opts.manifest.trojanPort),
 		InstallDir:     strings.TrimSpace(opts.manifest.installDir),
+		TrojanPort:     strings.TrimSpace(opts.manifest.trojanPort),
 		TrojanUser:     strings.TrimSpace(opts.manifest.trojanUser),
 		TrojanPassword: strings.TrimSpace(opts.manifest.trojanPassword),
-		ExpiresAt:      nowPlusMinutes(10),
 	}
-	payload, err := spec.Marshal(manifest)
+	linkURL, enc, err := deploylink.Build(opts.runtime.remoteHost, opts.runtime.deployPort, manifest, deployLinkTTL)
 	if err != nil {
-		logging.Error("xp2p client deploy: marshal manifest failed", "err", err)
-		payload = []byte("{}")
+		return "", err
 	}
-
-	keyB64, keyRaw, _ := generateAESKey()
-	nonceB64, nonceRaw, _ := generateNonce()
-	ct, _ := encryptManifestAESGCM(keyRaw, nonceRaw, payload)
-	ctB64 := base64.RawURLEncoding.EncodeToString(ct)
-
-	opts.runtime.encCT = ct
-	opts.runtime.encKey = keyB64
-	opts.runtime.encNonce = nonceB64
-	opts.runtime.encExp = manifest.ExpiresAt
-
-	// Build v2 link: include key only in link, not sent over network
-	return fmt.Sprintf("xp2p+deploy://%s:%s?v=2&k=%s&ct=%s&n=%s&exp=%d",
-		host, port, keyB64, ctB64, nonceB64, opts.runtime.encExp,
-	)
+	opts.runtime.encLink = enc
+	return linkURL, nil
 }
 
 // buildInstallOptionsFromLink converts a parsed trojan link into client install options,

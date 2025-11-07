@@ -2,195 +2,95 @@ package servercmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/NlightN22/xray-p2p/go/internal/config"
+	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
-type deployServer struct {
-	ListenAddr string
-	Expected   expectedLink
-	Once       bool
-	Timeout    time.Duration
-	Cfg        config.Config
-}
-
-type expectedLink struct {
-	Host      string
-	Key       string
-	Nonce     string
-	CipherB64 string
-	Exp       int64
-	ctHashHex string
-	Manifest  spec.Manifest
-}
-
-type runSignal struct {
-	ok         bool
-	installDir string
-	configDir  string
-}
-
-func (s *deployServer) Run(ctx context.Context) error {
-	ln, err := net.Listen("tcp", s.ListenAddr)
-	if err != nil {
-		return err
-	}
-	defer ln.Close()
-
-	results := make(chan runSignal, 4)
-	defer close(results)
-
-	idleTimer := time.NewTimer(s.Timeout)
-	defer idleTimer.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case sig := <-results:
-			if sig.ok {
-				if err := server.StartBackground(ctx, server.Options{Port: s.Cfg.Server.Port}); err != nil {
-					logging.Warn("xp2p server deploy: diagnostics start failed", "err", err)
-				}
-				logging.Info("xp2p server deploy: starting xray-core", "install_dir", sig.installDir, "config_dir", sig.configDir)
-				if err := server.Run(ctx, server.RunOptions{InstallDir: sig.installDir, ConfigDir: sig.configDir}); err != nil {
-					logging.Error("xp2p server deploy: xray-core start failed", "err", err)
-				}
-				if s.Once {
-					return nil
-				}
-			}
-		default:
-		}
-
-		if s.Timeout > 0 {
-			select {
-			case <-idleTimer.C:
-				logging.Info("xp2p server deploy: idle timeout reached; shutting down")
-				return nil
-			default:
-			}
-		}
-
-		_ = ln.(*net.TCPListener).SetDeadline(time.Now().Add(1 * time.Second))
-		conn, err := ln.Accept()
-		if err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Timeout() {
-				continue
-			}
-			return err
-		}
-
-		go s.handleConn(ctx, conn, results)
-	}
-}
+const (
+	serverDeployIOTimeout = 60 * time.Second
+)
 
 func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results chan<- runSignal) {
 	defer conn.Close()
 
-	_ = conn.SetDeadline(time.Now().Add(60 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(serverDeployIOTimeout))
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 	line, err := readLine(rw)
 	if err != nil {
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 	if !strings.HasPrefix(line, "AUTH") {
 		_ = writeLine(rw, "ERR expected AUTH")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 	if err := writeLine(rw, "OK"); err != nil {
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 
 	header, err := readLine(rw)
 	if err != nil {
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 	if !strings.HasPrefix(header, "MANIFEST-ENC ") {
 		_ = writeLine(rw, "ERR expected MANIFEST-ENC")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
-
 	nStr := strings.TrimSpace(strings.TrimPrefix(header, "MANIFEST-ENC "))
 	n, err := strconv.Atoi(nStr)
 	if err != nil || n <= 0 || n > 1<<20 {
 		_ = writeLine(rw, "ERR invalid MANIFEST-ENC length")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
+
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(rw, buf); err != nil {
 		_ = writeLine(rw, "ERR read MANIFEST-ENC body failed")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 
-	if s.Expected.Key == "" {
-		_ = writeLine(rw, "ERR deploy link not configured")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
-		return
-	}
-	if s.Expected.Exp > 0 && time.Now().Unix() > s.Expected.Exp {
-		_ = writeLine(rw, "ERR link expired")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
-		return
-	}
-
-	sum := sha256.Sum256(buf)
-	if hex.EncodeToString(sum[:]) != s.Expected.ctHashHex {
-		_ = writeLine(rw, "ERR unauthorized")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
-		return
-	}
-
-	recvCT := base64.RawURLEncoding.EncodeToString(buf)
+	cipherB64 := base64.RawURLEncoding.EncodeToString(buf)
+	logHost := strings.TrimSpace(firstNonEmpty(s.Expected.Host, s.Cfg.Server.Host))
 	deployPort := extractPort(s.ListenAddr)
-	netLink := fmt.Sprintf("xp2p+deploy://%s:%s?v=2&ct=%s&n=%s&exp=%d", s.Expected.Host, deployPort, recvCT, s.Expected.Nonce, s.Expected.Exp)
+	netLink := deploylink.RedactedURL(logHost, deployPort, s.Expected.Nonce, s.Expected.ExpiresAt, cipherB64)
 	logging.Info("xp2p server deploy: received deploy link", "link", netLink)
+
+	if strings.TrimSpace(s.Expected.Key) == "" || len(s.Expected.Ciphertext) == 0 {
+		_ = writeLine(rw, "ERR deploy link not configured")
+		notifyFailure(results)
+		return
+	}
+	if s.Expected.ExpiresAt > 0 && time.Now().Unix() > s.Expected.ExpiresAt {
+		_ = writeLine(rw, "ERR link expired")
+		notifyFailure(results)
+		return
+	}
+	if !bytes.Equal(buf, s.Expected.Ciphertext) {
+		_ = writeLine(rw, "ERR unauthorized")
+		notifyFailure(results)
+		return
+	}
 
 	manifest := s.Expected.Manifest
 	if strings.TrimSpace(manifest.Host) == "" {
@@ -200,86 +100,20 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	s.proceedInstall(ctx, rw, results, manifest)
 }
 
-func parseDeployLink(raw string) (expectedLink, error) {
+func parseDeployLink(raw string) (deploylink.EncryptedLink, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return expectedLink{}, nil
+		return deploylink.EncryptedLink{}, nil
 	}
-	u, err := url.Parse(raw)
+
+	enc, err := deploylink.Parse(raw)
 	if err != nil {
-		return expectedLink{}, err
+		return deploylink.EncryptedLink{}, err
 	}
-	if !strings.EqualFold(u.Scheme, "xp2p+deploy") {
-		return expectedLink{}, fmt.Errorf("invalid scheme %q", u.Scheme)
+	if err := netutil.ValidateHost(enc.Host); err != nil {
+		return deploylink.EncryptedLink{}, err
 	}
-
-	linkHost := strings.TrimSpace(u.Hostname())
-	q := u.Query()
-	if ver := strings.TrimSpace(q.Get("v")); ver != "2" {
-		return expectedLink{}, fmt.Errorf("unsupported deploy link version %q (require v=2)", ver)
-	}
-
-	key := strings.TrimSpace(q.Get("k"))
-	cipherText := strings.TrimSpace(q.Get("ct"))
-	nonce := strings.TrimSpace(q.Get("n"))
-	if key == "" || cipherText == "" || nonce == "" {
-		return expectedLink{}, fmt.Errorf("deploy link missing required parameters (k, ct, n)")
-	}
-
-	var expUnix int64
-	if rawExp := strings.TrimSpace(q.Get("exp")); rawExp != "" {
-		value, err := strconv.ParseInt(rawExp, 10, 64)
-		if err != nil {
-			return expectedLink{}, fmt.Errorf("invalid exp value %q", rawExp)
-		}
-		expUnix = value
-	}
-
-	plain, err := decryptManifestAESGCM(key, nonce, cipherText)
-	if err != nil {
-		return expectedLink{}, fmt.Errorf("invalid encrypted manifest: %w", err)
-	}
-	manifest, err := spec.Unmarshal(plain)
-	if err != nil {
-		return expectedLink{}, err
-	}
-
-	manifestHost := strings.TrimSpace(manifest.Host)
-	if manifestHost == "" && linkHost == "" {
-		return expectedLink{}, fmt.Errorf("deploy link missing host")
-	}
-	if linkHost != "" && manifestHost != "" && !strings.EqualFold(linkHost, manifestHost) {
-		return expectedLink{}, fmt.Errorf("link host %q mismatches manifest host %q", linkHost, manifestHost)
-	}
-	finalHost := manifestHost
-	if finalHost == "" {
-		finalHost = linkHost
-	}
-	if err := netutil.ValidateHost(finalHost); err != nil {
-		return expectedLink{}, fmt.Errorf("invalid host %q: %w", finalHost, err)
-	}
-
-	if expUnix == 0 {
-		expUnix = manifest.ExpiresAt
-	}
-	manifest.Host = finalHost
-	manifest.ExpiresAt = expUnix
-
-	ctBytes, err := base64.RawURLEncoding.DecodeString(cipherText)
-	if err != nil {
-		return expectedLink{}, fmt.Errorf("invalid ciphertext encoding: %w", err)
-	}
-	sum := sha256.Sum256(ctBytes)
-
-	return expectedLink{
-		Host:      finalHost,
-		Key:       key,
-		Nonce:     nonce,
-		CipherB64: cipherText,
-		Exp:       expUnix,
-		ctHashHex: hex.EncodeToString(sum[:]),
-		Manifest:  manifest,
-	}, nil
+	return enc, nil
 }
 
 func readLine(rw *bufio.ReadWriter) (string, error) {
@@ -312,37 +146,18 @@ func writeSegment(rw *bufio.ReadWriter, begin, end string, lines []string) error
 	return writeLine(rw, end)
 }
 
+func notifyFailure(results chan<- runSignal) {
+	if results != nil {
+		results <- runSignal{ok: false}
+	}
+}
+
 func generateSecret(size int) (string, error) {
 	buf := make([]byte, size)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
-}
-
-func decryptManifestAESGCM(keyB64, nonceB64, ctB64 string) ([]byte, error) {
-	key, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(keyB64))
-	if err != nil {
-		return nil, err
-	}
-	nonce, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(nonceB64))
-	if err != nil {
-		return nil, err
-	}
-	ct, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(ctB64))
-	if err != nil {
-		return nil, err
-	}
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	aead, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	aad := []byte("XP2PDEPLOY|v=2")
-	return aead.Open(nil, nonce, ct, aad)
 }
 
 func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter, results chan<- runSignal, man spec.Manifest) {
@@ -352,9 +167,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 	}
 	if err := netutil.ValidateHost(host); err != nil {
 		_ = writeLine(rw, "ERR invalid host")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 
@@ -391,9 +204,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 
@@ -406,9 +217,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 		secret, err := generateSecret(18)
 		if err != nil {
 			_ = writeLine(rw, "ERR generate password failed")
-			if results != nil {
-				results <- runSignal{ok: false}
-			}
+			notifyFailure(results)
 			return
 		}
 		password = secret
@@ -419,9 +228,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 
@@ -435,9 +242,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{reason})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 		_ = writeLine(rw, "DONE")
-		if results != nil {
-			results <- runSignal{ok: false}
-		}
+		notifyFailure(results)
 		return
 	}
 
