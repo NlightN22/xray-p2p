@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"time"
 
@@ -19,7 +20,9 @@ import (
 )
 
 const (
-	deployLinkTTL = 10 * time.Minute
+	deployLinkTTL      = 10 * time.Minute
+	socksReadyTimeout  = 30 * time.Second
+	socksProbeInterval = 500 * time.Millisecond
 )
 
 type manifestOptions struct {
@@ -119,19 +122,55 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 	logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 
-	// Verify via SOCKS ping
-	logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping")
-	pingOpts := ping.Options{
-		Count:      1,
-		Timeout:    3 * time.Second,
-		Proto:      "tcp",
-		SocksProxy: cfg.Client.SocksAddress,
+	cancelDiagnostics := startDiagnostics(ctx, cfg.Server.Port)
+	if cancelDiagnostics != nil {
+		defer cancelDiagnostics()
 	}
-	if err := ping.Run(ctx, "127.0.0.1", pingOpts); err != nil {
-		logging.Error("xp2p client deploy: ping failed", "err", err)
+
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
+
+	runOpts := client.RunOptions{
+		InstallDir: installOpts.InstallDir,
+		ConfigDir:  installOpts.ConfigDir,
+	}
+	runErrCh := make(chan error, 1)
+	logging.Info("xp2p client deploy: starting local client run", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)
+	go func() {
+		runErrCh <- clientRunFunc(runCtx, runOpts)
+	}()
+
+	socksAddr := strings.TrimSpace(cfg.Client.SocksAddress)
+	if socksAddr != "" {
+		logging.Info("xp2p client deploy: waiting for local SOCKS proxy", "socks_proxy", socksAddr)
+		if err := waitForSocksProxy(runCtx, socksAddr, socksReadyTimeout); err != nil {
+			logging.Error("xp2p client deploy: socks proxy not ready", "err", err)
+			abortLocalClient(runCancel, runErrCh)
+			return 1
+		}
+
+		logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping")
+		pingOpts := ping.Options{
+			Count:      1,
+			Timeout:    3 * time.Second,
+			Proto:      "tcp",
+			SocksProxy: socksAddr,
+		}
+		if err := ping.Run(ctx, "127.0.0.1", pingOpts); err != nil {
+			logging.Error("xp2p client deploy: ping failed", "err", err)
+			abortLocalClient(runCancel, runErrCh)
+			return 1
+		}
+		logging.Info("xp2p client deploy: ping ok")
+	} else {
+		logging.Warn("xp2p client deploy: socks proxy address missing; skipping ping")
+	}
+
+	logging.Info("xp2p client deploy: client run active (press Ctrl+C to stop)")
+	if err := <-runErrCh; err != nil && !errors.Is(err, context.Canceled) {
+		logging.Error("xp2p client deploy: client run exited", "err", err)
 		return 1
 	}
-	logging.Info("xp2p client deploy: ping ok")
 	return 0
 }
 
@@ -224,5 +263,46 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 		ServerName:    link.ServerName,
 		AllowInsecure: link.AllowInsecure,
 		Force:         true,
+	}
+}
+
+func waitForSocksProxy(ctx context.Context, addr string, timeout time.Duration) error {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return fmt.Errorf("socks proxy address is empty")
+	}
+
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		conn, err := net.DialTimeout("tcp", addr, socksProbeInterval)
+		if err == nil {
+			_ = conn.Close()
+			return nil
+		}
+		lastErr = err
+		if time.Now().After(deadline) {
+			if lastErr != nil {
+				return fmt.Errorf("socks proxy %s not ready: %w", addr, lastErr)
+			}
+			return fmt.Errorf("socks proxy %s not ready", addr)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(socksProbeInterval):
+		}
+	}
+}
+
+func abortLocalClient(cancel context.CancelFunc, runErrCh <-chan error) {
+	cancel()
+	select {
+	case err := <-runErrCh:
+		if err != nil && !errors.Is(err, context.Canceled) {
+			logging.Warn("xp2p client deploy: local client run exited", "err", err)
+		}
+	case <-time.After(5 * time.Second):
+		logging.Warn("xp2p client deploy: timed out waiting for local client to stop")
 	}
 }
