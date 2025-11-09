@@ -107,25 +107,25 @@ func (o *rootOptions) bindGlobalFlags(cmd *cobra.Command) {
 
 func (o *rootOptions) bindClientOverrideFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
-	flags.StringVarP(&o.clientInstallDir, "client-install-dir", "i", "", "client installation directory (Windows)")
-	flags.StringVarP(&o.clientConfigDir, "client-config-dir", "C", "", "client configuration directory name")
-	flags.StringVarP(&o.clientServerAddr, "client-server-address", "a", "", "remote server address for client config")
-	flags.StringVarP(&o.clientServerPort, "client-server-port", "p", "", "remote server port for client config")
-	flags.StringVarP(&o.clientUser, "client-user", "u", "", "Trojan user email for client config")
-	flags.StringVarP(&o.clientPassword, "client-password", "P", "", "Trojan password for client config")
-	flags.StringVarP(&o.clientServerName, "client-server-name", "n", "", "TLS server name for client config")
-	flags.BoolVarP(&o.clientAllowInsecure, "client-allow-insecure", "I", false, "allow TLS verification to be skipped for client config")
-	flags.BoolVarP(&o.clientStrictTLS, "client-strict-tls", "S", false, "enforce TLS verification for client config")
+	flags.StringVarP(&o.clientInstallDir, "client-install-dir", "I", "", "client installation directory (Windows)")
+	flags.StringVarP(&o.clientConfigDir, "client-config-dir", "D", "", "client configuration directory name")
+	flags.StringVarP(&o.clientServerAddr, "client-server-address", "A", "", "remote server address for client config")
+	flags.StringVarP(&o.clientServerPort, "client-server-port", "R", "", "remote server port for client config")
+	flags.StringVarP(&o.clientUser, "client-user", "U", "", "Trojan user email for client config")
+	flags.StringVarP(&o.clientPassword, "client-password", "W", "", "Trojan password for client config")
+	flags.StringVarP(&o.clientServerName, "client-server-name", "N", "", "TLS server name for client config")
+	flags.BoolVarP(&o.clientAllowInsecure, "client-allow-insecure", "K", false, "allow TLS verification to be skipped for client config")
+	flags.BoolVarP(&o.clientStrictTLS, "client-strict-tls", "T", false, "enforce TLS verification for client config")
 }
 
 func (o *rootOptions) bindServerOverrideFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
-	flags.StringVarP(&o.serverPort, "server-port", "p", "", "diagnostics service port")
-	flags.StringVarP(&o.serverInstallDir, "server-install-dir", "i", "", "server installation directory (Windows)")
-	flags.StringVarP(&o.serverConfigDir, "server-config-dir", "C", "", "server configuration directory name")
-	flags.StringVarP(&o.serverMode, "server-mode", "m", "", "server startup mode (auto|manual)")
-	flags.StringVarP(&o.serverCert, "server-cert", "c", "", "path to TLS certificate file (PEM)")
-	flags.StringVarP(&o.serverKey, "server-key", "k", "", "path to TLS private key file (PEM)")
+	flags.StringVarP(&o.serverPort, "server-port", "P", "", "diagnostics service port")
+	flags.StringVarP(&o.serverInstallDir, "server-install-dir", "I", "", "server installation directory (Windows)")
+	flags.StringVarP(&o.serverConfigDir, "server-config-dir", "D", "", "server configuration directory name")
+	flags.StringVarP(&o.serverMode, "server-mode", "M", "", "server startup mode (auto|manual)")
+	flags.StringVarP(&o.serverCert, "server-cert", "E", "", "path to TLS certificate file (PEM)")
+	flags.StringVarP(&o.serverKey, "server-key", "K", "", "path to TLS private key file (PEM)")
 	flags.StringVarP(&o.serverHost, "server-host", "H", "", "public host name or IP for server certificate and links")
 }
 
