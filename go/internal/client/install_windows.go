@@ -15,12 +15,8 @@ import (
 	"text/template"
 
 	"github.com/NlightN22/xray-p2p/go/assets/xray"
+	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-)
-
-const (
-	localSocksPort    = 51080
-	localDokodemoPort = 48054
 )
 
 //go:embed assets/templates/*
@@ -35,6 +31,7 @@ type installState struct {
 	serverPort   int
 	serverName   string
 	serverRemote string
+	stateFile    string
 }
 
 // Install deploys xray-core binaries and client configuration files.
@@ -49,10 +46,10 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if !state.Force {
-		if exists, err := pathExists(state.installDir); err != nil {
+		if exists, reason, err := clientInstallationPresent(state); err != nil {
 			return err
 		} else if exists {
-			return fmt.Errorf("xp2p: installation directory %q already exists (use --force to overwrite)", state.installDir)
+			return fmt.Errorf("xp2p: client already installed (%s) (use --force to overwrite)", reason)
 		}
 	}
 
@@ -77,6 +74,9 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	}
 	if err := deployConfiguration(state); err != nil {
 		return err
+	}
+	if err := installstate.Write(state.stateFile, installstate.KindClient); err != nil {
+		return fmt.Errorf("xp2p: write client state: %w", err)
 	}
 
 	logging.Info("xp2p client install completed", "install_dir", state.installDir)
@@ -171,6 +171,9 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		serverRemote: address,
 	}
 
+	state.xrayPath = filepath.Join(state.binDir, "xray.exe")
+	state.stateFile = filepath.Join(state.configDir, installstate.FileName)
+
 	return state, nil
 }
 
@@ -224,6 +227,20 @@ func isSafeInstallDir(path string) bool {
 	}
 
 	return true
+}
+
+func clientInstallationPresent(state installState) (bool, string, error) {
+	marker, err := installstate.Read(state.stateFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("xp2p: read client state: %w", err)
+	}
+	if marker.Kind != installstate.KindClient {
+		return false, "", fmt.Errorf("xp2p: unexpected install state kind %q in %s", marker.Kind, state.stateFile)
+	}
+	return true, fmt.Sprintf("state file %s", state.stateFile), nil
 }
 
 func pathExists(path string) (bool, error) {
