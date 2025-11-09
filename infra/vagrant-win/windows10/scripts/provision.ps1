@@ -235,6 +235,37 @@ function Ensure-Go {
     Write-Info ("Go toolchain ready: {0}" -f $goVersionOutput)
 }
 
+function Ensure-WiX {
+    $wixVersion = $env:XP2P_WIX_VERSION
+    if (-not $wixVersion) {
+        $wixVersion = $null
+    }
+
+    $wixDirectories = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" -Directory -ErrorAction SilentlyContinue
+    if (-not $wixDirectories) {
+        Ensure-ChocoPackage -Package "wixtoolset" -Version $wixVersion
+        $wixDirectories = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" -Directory -ErrorAction SilentlyContinue
+    }
+
+    if (-not $wixDirectories) {
+        throw "WiX Toolset installation directory not found even after installation."
+    }
+
+    $latest = $wixDirectories | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $binPath = Join-Path $latest.FullName "bin"
+    $candlePath = Join-Path $binPath "candle.exe"
+    $lightPath = Join-Path $binPath "light.exe"
+
+    if (-not (Test-Path $candlePath)) {
+        throw "candle.exe not found in '$binPath'."
+    }
+    if (-not (Test-Path $lightPath)) {
+        throw "light.exe not found in '$binPath'."
+    }
+
+    Write-Info ("WiX Toolset ready: {0}" -f $latest.FullName)
+}
+
 function Build-Xp2p {
     $sourceRoot = "C:\xp2p"
     $xp2pDir = "C:\tools\xp2p"
@@ -395,6 +426,7 @@ $hostOnlyAddress = switch ($xp2pRole) {
 Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
+Ensure-WiX
 Build-Xp2p
 Disable-IdleSleepAndHibernate
 Set-HostOnlyAddress -InterfaceAlias $hostOnlyAlias -IPAddress $hostOnlyAddress

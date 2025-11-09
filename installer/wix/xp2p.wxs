@@ -56,7 +56,7 @@
         <File Id="fileXp2pExe" Source="$(var.Xp2pBinary)" KeyPath="yes" Checksum="yes" />
       </Component>
 
-      <Component Id="cmpInstallRoot" Guid="{6F63342C-ED20-4D49-B0EC-5688E0C21818}" Directory="INSTALLFOLDER" Win64="yes" KeyPath="yes">
+      <Component Id="cmpInstallRoot" Guid="{6F63342C-ED20-4D49-B0EC-5688E0C21818}" Win64="yes" KeyPath="yes">
         <CreateFolder />
         <RemoveFile Id="PurgeInstallDir" On="uninstall" Name="*" Directory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveInstallDir" On="uninstall" Directory="INSTALLFOLDER" />
