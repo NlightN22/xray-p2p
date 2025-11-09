@@ -1,7 +1,6 @@
 package root
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,7 +9,7 @@ import (
 func TestEnsureRuntimeDefaults(t *testing.T) {
 	chdirTemp(t)
 	opts := &rootOptions{}
-	if err := opts.ensureRuntime(context.Background()); err != nil {
+	if err := opts.ensureRuntime(); err != nil {
 		t.Fatalf("ensureRuntime failed: %v", err)
 	}
 
@@ -53,7 +52,7 @@ func TestEnsureRuntimeWithOverrides(t *testing.T) {
 		serverKey:        `D:\certs\cert.key`,
 		logJSON:          true,
 	}
-	if err := opts.ensureRuntime(context.Background()); err != nil {
+	if err := opts.ensureRuntime(); err != nil {
 		t.Fatalf("ensureRuntime failed: %v", err)
 	}
 
@@ -101,7 +100,7 @@ server:
 `)
 
 	opts := &rootOptions{configPath: cfgPath}
-	if err := opts.ensureRuntime(context.Background()); err != nil {
+	if err := opts.ensureRuntime(); err != nil {
 		t.Fatalf("ensureRuntime failed: %v", err)
 	}
 

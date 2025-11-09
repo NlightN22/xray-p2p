@@ -26,14 +26,14 @@ func NewCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := opts.ensureRuntime(cmd.Context()); err != nil {
+			if err := opts.ensureRuntime(); err != nil {
 				return err
 			}
 			return opts.runService(cmd.Context())
 		},
 	}
 
-	opts.bindFlags(rootCmd)
+	opts.bindGlobalFlags(rootCmd)
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
 		if opts.versionRequested {
 			if cmd != rootCmd {
@@ -42,12 +42,27 @@ func NewCommand() *cobra.Command {
 			fmt.Println(version.Current())
 			return exitError{code: 0}
 		}
-		return opts.ensureRuntime(cmd.Context())
+		return opts.ensureRuntime()
 	}
 
+	clientCmd := clientcmd.NewCommand(func() config.Config { return opts.cfg })
+	opts.bindClientOverrideFlags(clientCmd)
+
+	serverCmd := servercmd.NewCommand(func() config.Config { return opts.cfg })
+	opts.bindServerOverrideFlags(serverCmd)
+
+	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		if err != nil {
+			cmd.PrintErrln(err)
+		}
+		cmd.PrintErrln()
+		_ = cmd.Usage()
+		return err
+	})
+
 	rootCmd.AddCommand(
-		clientcmd.NewCommand(func() config.Config { return opts.cfg }),
-		servercmd.NewCommand(func() config.Config { return opts.cfg }),
+		clientCmd,
+		serverCmd,
 		newPingCommand(func() config.Config { return opts.cfg }),
 		newCompletionCommand(rootCmd),
 		newDocsCommand(rootCmd),
@@ -82,31 +97,39 @@ type rootOptions struct {
 	runtimeOK bool
 }
 
-func (o *rootOptions) bindFlags(cmd *cobra.Command) {
+func (o *rootOptions) bindGlobalFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
-	flags.StringVar(&o.configPath, "config", "", "path to configuration file")
-	flags.StringVar(&o.logLevel, "log-level", "", "override logging level")
-	flags.StringVar(&o.serverPort, "server-port", "", "diagnostics service port")
-	flags.StringVar(&o.serverInstallDir, "server-install-dir", "", "server installation directory (Windows)")
-	flags.StringVar(&o.serverConfigDir, "server-config-dir", "", "server configuration directory name")
-	flags.StringVar(&o.serverMode, "server-mode", "", "server startup mode (auto|manual)")
-	flags.StringVar(&o.serverCert, "server-cert", "", "path to TLS certificate file (PEM)")
-	flags.StringVar(&o.serverKey, "server-key", "", "path to TLS private key file (PEM)")
-	flags.StringVar(&o.serverHost, "server-host", "", "public host name or IP for server certificate and links")
-	flags.BoolVar(&o.logJSON, "log-json", false, "emit logs in JSON format")
-	flags.StringVar(&o.clientInstallDir, "client-install-dir", "", "client installation directory (Windows)")
-	flags.StringVar(&o.clientConfigDir, "client-config-dir", "", "client configuration directory name")
-	flags.StringVar(&o.clientServerAddr, "client-server-address", "", "remote server address for client config")
-	flags.StringVar(&o.clientServerPort, "client-server-port", "", "remote server port for client config")
-	flags.StringVar(&o.clientUser, "client-user", "", "Trojan user email for client config")
-	flags.StringVar(&o.clientPassword, "client-password", "", "Trojan password for client config")
-	flags.StringVar(&o.clientServerName, "client-server-name", "", "TLS server name for client config")
-	flags.BoolVar(&o.clientAllowInsecure, "client-allow-insecure", false, "allow TLS verification to be skipped for client config")
-	flags.BoolVar(&o.clientStrictTLS, "client-strict-tls", false, "enforce TLS verification for client config")
-	flags.BoolVar(&o.versionRequested, "version", false, "print xp2p version and exit")
+	flags.StringVarP(&o.configPath, "config", "c", "", "path to configuration file")
+	flags.StringVarP(&o.logLevel, "log-level", "l", "", "override logging level")
+	flags.BoolVarP(&o.logJSON, "log-json", "j", false, "emit logs in JSON format")
+	flags.BoolVarP(&o.versionRequested, "version", "v", false, "print xp2p version and exit")
 }
 
-func (o *rootOptions) ensureRuntime(ctx context.Context) error {
+func (o *rootOptions) bindClientOverrideFlags(cmd *cobra.Command) {
+	flags := cmd.PersistentFlags()
+	flags.StringVarP(&o.clientInstallDir, "client-install-dir", "i", "", "client installation directory (Windows)")
+	flags.StringVarP(&o.clientConfigDir, "client-config-dir", "C", "", "client configuration directory name")
+	flags.StringVarP(&o.clientServerAddr, "client-server-address", "a", "", "remote server address for client config")
+	flags.StringVarP(&o.clientServerPort, "client-server-port", "p", "", "remote server port for client config")
+	flags.StringVarP(&o.clientUser, "client-user", "u", "", "Trojan user email for client config")
+	flags.StringVarP(&o.clientPassword, "client-password", "P", "", "Trojan password for client config")
+	flags.StringVarP(&o.clientServerName, "client-server-name", "n", "", "TLS server name for client config")
+	flags.BoolVarP(&o.clientAllowInsecure, "client-allow-insecure", "I", false, "allow TLS verification to be skipped for client config")
+	flags.BoolVarP(&o.clientStrictTLS, "client-strict-tls", "S", false, "enforce TLS verification for client config")
+}
+
+func (o *rootOptions) bindServerOverrideFlags(cmd *cobra.Command) {
+	flags := cmd.PersistentFlags()
+	flags.StringVarP(&o.serverPort, "server-port", "p", "", "diagnostics service port")
+	flags.StringVarP(&o.serverInstallDir, "server-install-dir", "i", "", "server installation directory (Windows)")
+	flags.StringVarP(&o.serverConfigDir, "server-config-dir", "C", "", "server configuration directory name")
+	flags.StringVarP(&o.serverMode, "server-mode", "m", "", "server startup mode (auto|manual)")
+	flags.StringVarP(&o.serverCert, "server-cert", "c", "", "path to TLS certificate file (PEM)")
+	flags.StringVarP(&o.serverKey, "server-key", "k", "", "path to TLS private key file (PEM)")
+	flags.StringVarP(&o.serverHost, "server-host", "H", "", "public host name or IP for server certificate and links")
+}
+
+func (o *rootOptions) ensureRuntime() error {
 	if o.runtimeOK {
 		return nil
 	}
