@@ -28,6 +28,19 @@ Write-Info "Preparing Program Files install for role '$Role'"
 
 if (Test-Path $installRoot) {
     Write-Info "Removing existing install directory $installRoot"
+    $xp2pProcs = Get-Process -Name xp2p -ErrorAction SilentlyContinue
+    if ($xp2pProcs) {
+        Write-Info "Stopping running xp2p processes"
+        foreach ($proc in $xp2pProcs) {
+            try {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            }
+            catch {
+                Write-Info ("Failed to stop xp2p process Id={0}: {1}" -f $proc.Id, $_.Exception.Message)
+            }
+        }
+        Start-Sleep -Seconds 1
+    }
     try {
         Remove-Item $installRoot -Recurse -Force -ErrorAction Stop
     }

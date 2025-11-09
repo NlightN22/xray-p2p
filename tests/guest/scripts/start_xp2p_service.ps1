@@ -31,7 +31,8 @@ if ($existing) {
     }
 }
 
-$commandLine = "`"$Xp2pPath`" --server-port $Port"
+$escapedPath = $Xp2pPath.Replace("'", "''")
+$commandLine = "powershell -NoProfile -Command `"& { `$env:XP2P_SERVER_PORT = '$Port'; & '$escapedPath' }`""
 $workingDir = Split-Path $Xp2pPath
 $createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine; CurrentDirectory = $workingDir }
 if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {
