@@ -1,4 +1,4 @@
-﻿package version
+package version
 
 // current holds the application version. It is overridden at build time via
 // -ldflags "-X github.com/NlightN22/xray-p2p/go/internal/version.current=...".

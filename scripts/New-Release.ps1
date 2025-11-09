@@ -57,6 +57,7 @@ if ($original -eq $updated) {
     $updated,
     [System.Text.Encoding]::UTF8
 )
+& gofmt -w $VersionFile
 
 Write-Section "Running go test ./..."
 go test ./...
