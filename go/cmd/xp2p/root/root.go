@@ -120,10 +120,10 @@ func (o *rootOptions) bindClientOverrideFlags(cmd *cobra.Command) {
 
 func (o *rootOptions) bindServerOverrideFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
-	flags.StringVarP(&o.serverPort, "server-port", "P", "", "diagnostics service port")
+	flags.StringVarP(&o.serverPort, "diag-service-port", "P", "", "diagnostics service port")
 	flags.StringVarP(&o.serverInstallDir, "server-install-dir", "I", "", "server installation directory (Windows)")
 	flags.StringVarP(&o.serverConfigDir, "server-config-dir", "D", "", "server configuration directory name")
-	flags.StringVarP(&o.serverMode, "server-mode", "M", "", "server startup mode (auto|manual)")
+	flags.StringVarP(&o.serverMode, "diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
 	flags.StringVarP(&o.serverCert, "server-cert", "E", "", "path to TLS certificate file (PEM)")
 	flags.StringVarP(&o.serverKey, "server-key", "K", "", "path to TLS private key file (PEM)")
 	flags.StringVarP(&o.serverHost, "server-host", "H", "", "public host name or IP for server certificate and links")
