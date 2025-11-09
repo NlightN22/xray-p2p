@@ -149,14 +149,22 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			return 1
 		}
 
-		logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping")
+		targetHost := strings.TrimSpace(tl.ServerAddress)
+		if targetHost == "" {
+			targetHost = strings.TrimSpace(opts.runtime.serverHost)
+		}
+		if targetHost == "" {
+			targetHost = strings.TrimSpace(opts.runtime.remoteHost)
+		}
+
+		logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping", "target", targetHost)
 		pingOpts := ping.Options{
 			Count:      1,
 			Timeout:    3 * time.Second,
 			Proto:      "tcp",
 			SocksProxy: socksAddr,
 		}
-		if err := ping.Run(ctx, "127.0.0.1", pingOpts); err != nil {
+		if err := ping.Run(ctx, targetHost, pingOpts); err != nil {
 			logging.Error("xp2p client deploy: ping failed", "err", err)
 			abortLocalClient(runCancel, runErrCh)
 			return 1
