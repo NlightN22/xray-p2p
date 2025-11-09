@@ -450,9 +450,7 @@ func validateCertificateHost(host string) error {
 	}
 
 	// Allow optional trailing dot for FQDN and ignore it for validation.
-	if strings.HasSuffix(host, ".") {
-		host = strings.TrimSuffix(host, ".")
-	}
+	host = strings.TrimSuffix(host, ".")
 	if host == "" {
 		return fmt.Errorf("xp2p: invalid host")
 	}

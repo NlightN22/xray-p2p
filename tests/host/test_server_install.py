@@ -21,6 +21,7 @@ XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
 SERVER_LOG_RELATIVE = r"logs\server.err"
 SERVER_LOG_FILE = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
 SERVER_HOST_VALUE = "xp2p.test.local"
+SERVER_STATE_FILE = SERVER_CONFIG_DIR / "install-state.json"
 
 
 def _cleanup_server_install(runner) -> None:
@@ -355,3 +356,85 @@ def test_server_run_starts_xray_core(
     finally:
         _cleanup_server_install(xp2p_server_runner)
         _remove_remote_path(server_host, SERVER_LOG_FILE)
+
+
+@pytest.mark.host
+def test_server_install_requires_force_when_state_exists(server_host, xp2p_server_runner):
+    _cleanup_server_install(xp2p_server_runner)
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62100",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        result = xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62101",
+            "--host",
+            SERVER_HOST_VALUE,
+            check=False,
+        )
+        assert result.rc != 0, "Expected second install without --force to fail when state file exists"
+        combined = f"{result.stdout}\n{result.stderr}".strip().lower()
+        assert "server already installed" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+    finally:
+        _cleanup_server_install(xp2p_server_runner)
+
+
+@pytest.mark.host
+def test_server_install_succeeds_without_state_marker(server_host, xp2p_server_runner):
+    _cleanup_server_install(xp2p_server_runner)
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62110",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        _remove_remote_path(server_host, SERVER_STATE_FILE)
+        assert not _remote_path_exists(
+            server_host, SERVER_STATE_FILE
+        ), "Expected install-state.json to be removed before re-install"
+
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62111",
+            "--host",
+            SERVER_HOST_VALUE,
+            check=True,
+        )
+
+        assert _remote_path_exists(server_host, SERVER_STATE_FILE), "Expected install-state.json to be recreated"
+    finally:
+        _cleanup_server_install(xp2p_server_runner)

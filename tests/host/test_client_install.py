@@ -11,6 +11,7 @@ CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
 CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
 CLIENT_LOG_FILE = CLIENT_INSTALL_DIR / CLIENT_LOG_RELATIVE
+CLIENT_STATE_FILE = CLIENT_CONFIG_DIR / "install-state.json"
 
 
 def _cleanup_client_install(runner) -> None:
@@ -42,6 +43,17 @@ def _remote_path_exists(client_host, path: Path) -> bool:
     script = f"if (Test-Path {quoted}) {{ exit 0 }} else {{ exit 3 }}"
     result = _env.run_powershell(client_host, script)
     return result.rc == 0
+
+
+def _remove_remote_path(client_host, path: Path) -> None:
+    quoted = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (Test-Path {quoted}) {{
+    Remove-Item {quoted} -Force -Recurse -ErrorAction SilentlyContinue
+}}
+"""
+    _env.run_powershell(client_host, script)
 
 
 def _assert_outbounds_server(data: dict, address: str, password: str, email: str, server_name: str) -> None:
@@ -154,5 +166,79 @@ def test_client_run_starts_xray_core(client_host, xp2p_client_runner, xp2p_clien
         ).stdout
         assert log_content.strip(), "Expected xray-core to produce log output"
         assert "Failed to start" not in log_content
+    finally:
+        _cleanup_client_install(xp2p_client_runner)
+
+
+@pytest.mark.host
+def test_client_install_requires_force_when_state_exists(client_host, xp2p_client_runner):
+    _cleanup_client_install(xp2p_client_runner)
+    try:
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--server-address",
+            "10.0.10.50",
+            "--user",
+            "state@example.com",
+            "--password",
+            "state-pass",
+            "--force",
+            check=True,
+        )
+
+        result = xp2p_client_runner(
+            "client",
+            "install",
+            "--server-address",
+            "10.0.10.51",
+            "--user",
+            "state2@example.com",
+            "--password",
+            "state-pass-2",
+            check=False,
+        )
+        assert result.rc != 0, "Expected install to fail while state file exists"
+        combined = f"{result.stdout}\n{result.stderr}".strip().lower()
+        assert "client already installed" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+    finally:
+        _cleanup_client_install(xp2p_client_runner)
+
+
+@pytest.mark.host
+def test_client_install_succeeds_without_state_marker(client_host, xp2p_client_runner):
+    _cleanup_client_install(xp2p_client_runner)
+    try:
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--server-address",
+            "10.0.10.60",
+            "--user",
+            "nostate@example.com",
+            "--password",
+            "nostate-pass",
+            "--force",
+            check=True,
+        )
+
+        _remove_remote_path(client_host, CLIENT_STATE_FILE)
+        assert not _remote_path_exists(
+            client_host, CLIENT_STATE_FILE
+        ), "Expected install-state.json to be removed before re-install"
+
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--server-address",
+            "10.0.10.61",
+            "--user",
+            "nostate2@example.com",
+            "--password",
+            "nostate-pass-2",
+            check=True,
+        )
+
+        assert _remote_path_exists(client_host, CLIENT_STATE_FILE), "Expected install-state.json to be recreated"
     finally:
         _cleanup_client_install(xp2p_client_runner)
