@@ -19,6 +19,60 @@ def _trojan_clients(data: dict) -> list[dict]:
     return clients
 
 
+def _initial_install_client(server_host) -> dict:
+    current = _read_remote_json(server_host, SERVER_INBOUNDS)
+    clients = _trojan_clients(current)
+    assert len(clients) == 1, "xp2p server install should provision a single default client"
+    default = clients[0]
+    assert isinstance(default.get("email"), str) and default["email"].startswith("client-")
+    assert isinstance(default.get("password"), str) and default["password"]
+    return default
+
+
+def _remove_initial_install_client(server_host, xp2p_server_runner):
+    default_client = _initial_install_client(server_host)
+    xp2p_server_runner(
+        "server",
+        "user",
+        "remove",
+        "--path",
+        str(SERVER_INSTALL_DIR),
+        "--config-dir",
+        SERVER_CONFIG_DIR_NAME,
+        "--id",
+        default_client["email"],
+        check=True,
+    )
+    cleared = _read_remote_json(server_host, SERVER_INBOUNDS)
+    assert _trojan_clients(cleared) == []
+    return default_client
+
+
+@pytest.mark.host
+def test_server_install_creates_and_allows_removing_default_user(server_host, xp2p_server_runner):
+    _cleanup_server_install(xp2p_server_runner)
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62030",
+            "--force",
+            check=True,
+        )
+
+        default_client = _initial_install_client(server_host)
+        assert default_client["email"].startswith("client-")
+
+        _remove_initial_install_client(server_host, xp2p_server_runner)
+    finally:
+        _cleanup_server_install(xp2p_server_runner)
+
+
 @pytest.mark.host
 def test_server_user_add_and_idempotent(server_host, xp2p_server_runner):
     _cleanup_server_install(xp2p_server_runner)
@@ -35,6 +89,8 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner):
             "--force",
             check=True,
         )
+
+        _remove_initial_install_client(server_host, xp2p_server_runner)
 
         xp2p_server_runner(
             "server",
@@ -117,6 +173,8 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
             check=True,
         )
 
+        _remove_initial_install_client(server_host, xp2p_server_runner)
+
         xp2p_server_runner(
             "server",
             "user",
@@ -180,6 +238,8 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner):
             "--force",
             check=True,
         )
+
+        _remove_initial_install_client(server_host, xp2p_server_runner)
 
         missing_password = xp2p_server_runner(
             "server",
