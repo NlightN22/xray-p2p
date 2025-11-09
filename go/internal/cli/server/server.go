@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -35,14 +34,13 @@ var (
 var promptYesNoFunc = promptYesNo
 
 type serverInstallCommandOptions struct {
-	Path       string
-	ConfigDir  string
-	Port       string
-	Cert       string
-	Key        string
-	Host       string
-	DeployFile string
-	Force      bool
+	Path      string
+	ConfigDir string
+	Port      string
+	Cert      string
+	Key       string
+	Host      string
+	Force     bool
 }
 
 type serverRemoveCommandOptions struct {
@@ -60,35 +58,7 @@ type serverRunCommandOptions struct {
 }
 
 func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstallCommandOptions) int {
-	manifestPath := strings.TrimSpace(opts.DeployFile)
-	var manifest *spec.Manifest
-	if manifestPath != "" {
-		file, err := os.Open(manifestPath)
-		if err != nil {
-			logging.Error("xp2p server install: open deploy manifest failed", "path", manifestPath, "err", err)
-			return 1
-		}
-		readManifest, err := spec.Read(file)
-		file.Close()
-		if err != nil {
-			logging.Error("xp2p server install: read deploy manifest failed", "path", manifestPath, "err", err)
-			return 1
-		}
-		manifest = &readManifest
-		logging.Info("xp2p server install: using deploy manifest", "host", manifest.Host, "version", manifest.Version)
-		if strings.TrimSpace(opts.Host) == "" {
-			if err := netutil.ValidateHost(manifest.Host); err != nil {
-				logging.Error("xp2p server install: invalid host in deploy manifest", "host", manifest.Host, "err", err)
-				return 1
-			}
-			opts.Host = strings.TrimSpace(manifest.Host)
-		}
-	}
-
 	portValue := resolveInstallPort(cfg, opts.Port)
-	if manifest != nil && strings.TrimSpace(manifest.TrojanPort) != "" && strings.TrimSpace(opts.Port) == "" {
-		portValue = strings.TrimSpace(manifest.TrojanPort)
-	}
 	if err := validatePortValue(portValue); err != nil {
 		logging.Error("xp2p server install: invalid port", "port", portValue, "err", err)
 		return 1
@@ -120,16 +90,7 @@ func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstall
 
 	logging.Info("xp2p server installed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 
-	manifestHandled := false
-	if manifest != nil {
-		var err error
-		manifestHandled, err = applyManifestCredential(ctx, installOpts, hostValue, *manifest)
-		if err != nil {
-			logging.Warn("xp2p server install: failed to apply deploy manifest credential", "err", err)
-		}
-	}
-
-	if !manifestHandled && strings.TrimSpace(cfg.Client.User) == "" && strings.TrimSpace(cfg.Client.Password) == "" {
+	if strings.TrimSpace(cfg.Client.User) == "" && strings.TrimSpace(cfg.Client.Password) == "" {
 		if err := generateDefaultServerCredential(ctx, installOpts, hostValue); err != nil {
 			logging.Warn("xp2p server install: failed to generate trojan credential", "err", err)
 		}
@@ -418,28 +379,6 @@ func announceCredential(prefix string, result credentialResult) {
 	} else if result.linkErr != nil {
 		fmt.Printf("  link: unavailable (%v)\n", result.linkErr)
 	}
-}
-
-func applyManifestCredential(ctx context.Context, installOpts server.InstallOptions, host string, manifest spec.Manifest) (bool, error) {
-	user := strings.TrimSpace(manifest.TrojanUser)
-	password := strings.TrimSpace(manifest.TrojanPassword)
-	if user == "" && password == "" {
-		return false, nil
-	}
-	if user == "" || password == "" {
-		return false, spec.ErrCredentialPair
-	}
-
-	result, err := provisionCredential(ctx, installOpts, host, user, password)
-	if err != nil {
-		return false, err
-	}
-	if result.linkErr != nil {
-		logging.Warn("xp2p server install: unable to build trojan link from deploy manifest", "err", result.linkErr)
-	}
-	announceCredential("Deploy manifest trojan credential", result)
-	logging.Info("xp2p server install: trojan credential ready", "source", "deploy-manifest", "user", result.details.UserID)
-	return true, nil
 }
 
 func generateDefaultServerCredential(ctx context.Context, installOpts server.InstallOptions, host string) error {

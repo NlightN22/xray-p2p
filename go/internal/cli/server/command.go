@@ -75,7 +75,6 @@ func newServerInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.Cert, "cert", "", "TLS certificate file to deploy")
 	flags.StringVar(&opts.Key, "key", "", "TLS private key file to deploy")
 	flags.StringVar(&opts.Host, "host", "", "public host name or IP for generated configuration")
-	flags.StringVar(&opts.DeployFile, "deploy-file", "", "path to deployment manifest (deployment.json)")
 	flags.BoolVar(&opts.Force, "force", false, "overwrite existing installation")
 	return cmd
 }
