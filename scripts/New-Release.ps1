@@ -44,11 +44,19 @@ if (-not (Test-Path $VersionFile)) {
 }
 
 Write-Section "Updating version file"
-$pattern = 'const current = ".*"'
-$replacement = "const current = `"$Version`""
-(Get-Content $VersionFile) `
-    -replace $pattern, $replacement `
-    | Set-Content -NoNewline $VersionFile
+$pattern = 'var current = ".*"'
+$replacement = "var current = `"$Version`""
+$original = Get-Content -Raw $VersionFile
+$updated = $original -replace $pattern, $replacement
+if ($original -eq $updated) {
+    Write-Error "Version placeholder not found in $VersionFile"
+    exit 1
+}
+[System.IO.File]::WriteAllText(
+    $VersionFile,
+    $updated,
+    [System.Text.Encoding]::UTF8
+)
 
 Write-Section "Running go test ./..."
 go test ./...
@@ -56,10 +64,23 @@ go test ./...
 Write-Section "Running make build"
 make build
 
-Write-Section "Version update complete"
+$pending = git status --porcelain
+if (-not $pending) {
+    Write-Error "No changes detected after version bump; aborting."
+    exit 1
+}
+
+Write-Section "Creating release commit"
+git commit -am "chore: release $Tag"
+
+Write-Section "Tagging $Tag"
+git tag $Tag
+
+Write-Section "Pushing branch main"
+git push origin main
+
+Write-Section "Pushing tag $Tag"
+git push origin $Tag
+
+Write-Section "Release $Tag complete"
 git status -s
-Write-Host "`nRun the following to finalize the release:" -ForegroundColor Yellow
-Write-Host "  git commit -am `"chore: release $Tag`""
-Write-Host "  git tag $Tag"
-Write-Host "  git push origin main"
-Write-Host "  git push origin $Tag"
