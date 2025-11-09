@@ -17,8 +17,8 @@ func TestRunServerInstall(t *testing.T) {
 	tests := []struct {
 		name       string
 		cfg        config.Config
-		args       []string
-		prepare    func(*testing.T) []string
+		opts       serverInstallCommandOptions
+		modify     func(*testing.T, *serverInstallCommandOptions)
 		host       string
 		hostErr    error
 		installErr error
@@ -29,14 +29,14 @@ func TestRunServerInstall(t *testing.T) {
 		{
 			name: "cli overrides",
 			cfg:  serverCfg(`C:\programdata\xp2p`, "config-server", ""),
-			args: []string{
-				"--path", `D:\xp2p`,
-				"--config-dir", "cfg-custom",
-				"--port", "65000",
-				"--cert", `C:\certs\server.pem`,
-				"--key", `C:\certs\server.key`,
-				"--host", "custom.example.test",
-				"--force",
+			opts: serverInstallCommandOptions{
+				Path:      `D:\xp2p`,
+				ConfigDir: "cfg-custom",
+				Port:      "65000",
+				Cert:      `C:\certs\server.pem`,
+				Key:       `C:\certs\server.key`,
+				Host:      "custom.example.test",
+				Force:     true,
 			},
 			wantCode: 0,
 			wantCall: true,
@@ -70,14 +70,14 @@ func TestRunServerInstall(t *testing.T) {
 		{
 			name:     "invalid host flag",
 			cfg:      serverCfg(`C:\xp2p`, "config-server", ""),
-			args:     []string{"--host", "bad host"},
+			opts:     serverInstallCommandOptions{Host: "bad host"},
 			wantCode: 1,
 			wantCall: false,
 		},
 		{
 			name: "invalid host in manifest",
 			cfg:  serverCfg(`C:\xp2p`, "config-server", ""),
-			prepare: func(t *testing.T) []string {
+			modify: func(t *testing.T, opts *serverInstallCommandOptions) {
 				t.Helper()
 				dir := t.TempDir()
 				path := filepath.Join(dir, "deployment.json")
@@ -95,7 +95,7 @@ func TestRunServerInstall(t *testing.T) {
 				if err := file.Close(); err != nil {
 					t.Fatalf("close manifest: %v", err)
 				}
-				return []string{"--deploy-file", path}
+				opts.DeployFile = path
 			},
 			wantCode: 1,
 			wantCall: false,
@@ -105,11 +105,11 @@ func TestRunServerInstall(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			args := tt.args
-			if tt.prepare != nil {
-				args = append(args, tt.prepare(t)...)
+			opts := tt.opts
+			if tt.modify != nil {
+				tt.modify(t, &opts)
 			}
-			code, calls := execInstall(tt.cfg, args, tt.host, tt.hostErr, tt.installErr)
+			code, calls := execInstall(tt.cfg, opts, tt.host, tt.hostErr, tt.installErr)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -123,7 +123,7 @@ func TestRunServerInstall(t *testing.T) {
 	}
 }
 
-func execInstall(cfg config.Config, args []string, host string, hostErr, installErr error) (int, []server.InstallOptions) {
+func execInstall(cfg config.Config, opts serverInstallCommandOptions, host string, hostErr, installErr error) (int, []server.InstallOptions) {
 	var calls []server.InstallOptions
 	restoreInstall := stubServerInstall(func(ctx context.Context, opts server.InstallOptions) error {
 		calls = append(calls, opts)
@@ -131,7 +131,7 @@ func execInstall(cfg config.Config, args []string, host string, hostErr, install
 	})
 	defer restoreInstall()
 	defer stubDetectPublicHost(host, hostErr)()
-	code := runServerInstall(context.Background(), cfg, args)
+	code := runServerInstall(context.Background(), cfg, opts)
 	return code, calls
 }
 
@@ -164,7 +164,7 @@ func TestRunServerInstallGeneratesCredentialWhenMissing(t *testing.T) {
 	defer restoreLink()
 
 	output := captureStdout(t, func() {
-		code := runServerInstall(context.Background(), cfg, nil)
+		code := runServerInstall(context.Background(), cfg, serverInstallCommandOptions{})
 		if code != 0 {
 			t.Fatalf("exit code: got %d want 0", code)
 		}
@@ -231,7 +231,7 @@ func TestRunServerInstallUsesManifestCredential(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		code := runServerInstall(context.Background(), cfg, []string{"--deploy-file", path})
+		code := runServerInstall(context.Background(), cfg, serverInstallCommandOptions{DeployFile: path})
 		if code != 0 {
 			t.Fatalf("exit code: got %d want 0", code)
 		}
@@ -303,7 +303,7 @@ func TestRunServerInstallGeneratesCredentialWhenManifestHasNoAuth(t *testing.T) 
 	}
 
 	output := captureStdout(t, func() {
-		code := runServerInstall(context.Background(), cfg, []string{"--deploy-file", path})
+		code := runServerInstall(context.Background(), cfg, serverInstallCommandOptions{DeployFile: path})
 		if code != 0 {
 			t.Fatalf("exit code: got %d want 0", code)
 		}

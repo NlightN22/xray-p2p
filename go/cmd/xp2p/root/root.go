@@ -3,12 +3,14 @@ package root
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 
-	"github.com/NlightN22/xray-p2p/go/internal/cli"
 	clientcmd "github.com/NlightN22/xray-p2p/go/internal/cli/client"
+	servercmd "github.com/NlightN22/xray-p2p/go/internal/cli/server"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -45,8 +47,10 @@ func NewCommand() *cobra.Command {
 
 	rootCmd.AddCommand(
 		clientcmd.NewCommand(func() config.Config { return opts.cfg }),
-		newLegacyCommand("ping", opts),
-		newLegacyCommand("server", opts),
+		servercmd.NewCommand(func() config.Config { return opts.cfg }),
+		newPingCommand(func() config.Config { return opts.cfg }),
+		newCompletionCommand(rootCmd),
+		newDocsCommand(rootCmd),
 	)
 
 	return rootCmd
@@ -219,18 +223,47 @@ func (e exitError) ExitCode() int {
 	return e.code
 }
 
-func newLegacyCommand(name string, opts *rootOptions) *cobra.Command {
+func newCompletionCommand(rootCmd *cobra.Command) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:                name,
-		Short:              fmt.Sprintf("legacy %s command", name),
-		DisableFlagParsing: true,
-		SilenceErrors:      true,
-		SilenceUsage:       true,
+		Use:   "completion [bash|zsh|fish|powershell]",
+		Short: "Generate shell completion scripts",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			code := cli.Execute(commandContext(cmd), opts.cfg, append([]string{name}, args...))
-			return exitError{code: code}
+			switch args[0] {
+			case "bash":
+				return rootCmd.GenBashCompletion(os.Stdout)
+			case "zsh":
+				return rootCmd.GenZshCompletion(os.Stdout)
+			case "fish":
+				return rootCmd.GenFishCompletion(os.Stdout, true)
+			case "powershell":
+				return rootCmd.GenPowerShellCompletionWithDesc(os.Stdout)
+			default:
+				return fmt.Errorf("unsupported shell %q", args[0])
+			}
 		},
 	}
+	return cmd
+}
+
+func newDocsCommand(rootCmd *cobra.Command) *cobra.Command {
+	var dir string
+	cmd := &cobra.Command{
+		Use:   "docs",
+		Short: "Generate CLI reference documentation",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			path := strings.TrimSpace(dir)
+			if path == "" {
+				return fmt.Errorf("--dir is required")
+			}
+			if err := os.MkdirAll(path, 0o755); err != nil {
+				return fmt.Errorf("create docs directory: %w", err)
+			}
+			return doc.GenMarkdownTree(rootCmd, path)
+		},
+	}
+	cmd.Flags().StringVar(&dir, "dir", "", "destination directory for generated docs")
+	_ = cmd.MarkFlagRequired("dir")
 	return cmd
 }
 

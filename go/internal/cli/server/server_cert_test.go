@@ -13,7 +13,7 @@ func TestRunServerCertSet(t *testing.T) {
 	tests := []struct {
 		name      string
 		cfg       config.Config
-		args      []string
+		opts      serverCertSetOptions
 		host      string
 		hostErr   error
 		prompt    *bool
@@ -25,13 +25,13 @@ func TestRunServerCertSet(t *testing.T) {
 		{
 			name: "uses flags",
 			cfg:  serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, ""),
-			args: []string{
-				"--path", `D:\xp2p`,
-				"--config-dir", "cfg-custom",
-				"--cert", `C:\certs\server.pem`,
-				"--key", `C:\certs\server.key`,
-				"--host", "cert.example.test",
-				"--force",
+			opts: serverCertSetOptions{
+				Path:      `D:\xp2p`,
+				ConfigDir: "cfg-custom",
+				Cert:      `C:\certs\server.pem`,
+				Key:       `C:\certs\server.key`,
+				Host:      "cert.example.test",
+				Force:     true,
 			},
 			wantCode: 0,
 			wantCalls: []server.CertificateOptions{
@@ -48,7 +48,7 @@ func TestRunServerCertSet(t *testing.T) {
 		{
 			name:     "detects host when missing",
 			cfg:      serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, ""),
-			args:     []string{"--path", `C:\xp2p`},
+			opts:     serverCertSetOptions{Path: `C:\xp2p`},
 			host:     "198.51.100.20",
 			wantCode: 0,
 			wantCalls: []server.CertificateOptions{
@@ -58,7 +58,7 @@ func TestRunServerCertSet(t *testing.T) {
 		{
 			name:     "retries when certificate exists",
 			cfg:      serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, "configured.example.test"),
-			args:     []string{"--path", `C:\xp2p`},
+			opts:     serverCertSetOptions{Path: `C:\xp2p`},
 			prompt:   &yes,
 			certErrs: []error{server.ErrCertificateConfigured, nil},
 			wantCode: 0,
@@ -72,7 +72,7 @@ func TestRunServerCertSet(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, calls := execCertSet(tt.cfg, tt.args, tt.host, tt.hostErr, tt.prompt, tt.promptErr, tt.certErrs)
+			code, calls := execCertSet(tt.cfg, tt.opts, tt.host, tt.hostErr, tt.prompt, tt.promptErr, tt.certErrs)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -86,7 +86,7 @@ func TestRunServerCertSet(t *testing.T) {
 	}
 }
 
-func execCertSet(cfg config.Config, args []string, host string, hostErr error, prompt *bool, promptErr error, certErrs []error) (int, []server.CertificateOptions) {
+func execCertSet(cfg config.Config, opts serverCertSetOptions, host string, hostErr error, prompt *bool, promptErr error, certErrs []error) (int, []server.CertificateOptions) {
 	var calls []server.CertificateOptions
 	restoreCert := stubServerSetCertificate(func(ctx context.Context, opts server.CertificateOptions) error {
 		calls = append(calls, opts)
@@ -101,6 +101,6 @@ func execCertSet(cfg config.Config, args []string, host string, hostErr error, p
 	if prompt != nil {
 		defer stubPromptYesNo(*prompt, promptErr)()
 	}
-	code := runServerCertSet(context.Background(), cfg, args)
+	code := runServerCertSet(context.Background(), cfg, opts)
 	return code, calls
 }

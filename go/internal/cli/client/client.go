@@ -22,19 +22,6 @@ var (
 	clientRunFunc     = client.Run
 )
 
-var clientUsageBlocks = []string{
-	`install [--path PATH] [--config-dir NAME]
-          (--link URL | --server-address HOST --user EMAIL --password SECRET)
-          [--server-port PORT] [--server-name NAME]
-          [--allow-insecure|--strict-tls] [--force]`,
-	`deploy  --remote-host HOST [--deploy-port PORT]
-          [--user EMAIL] [--password SECRET] [--trojan-port PORT]`,
-	`remove  [--path PATH] [--keep-files] [--ignore-missing]`,
-	`run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
-          [--xray-log-file FILE]
-          (requires client server address and password configured)`,
-}
-
 func Execute(ctx context.Context, cfg config.Config, args []string) int {
 	cmd := NewCommand(func() config.Config { return cfg })
 	cmd.SetContext(ctx)
@@ -491,35 +478,3 @@ func decodeTrojanUser(u *url.URL) (string, error) {
 }
 
 // Usage returns detailed help text for xp2p client commands.
-func Usage() string {
-	var b strings.Builder
-	b.WriteString("xp2p client commands:\n")
-	for _, block := range clientUsageBlocks {
-		lines := strings.Split(block, "\n")
-		for _, line := range lines {
-			b.WriteString("  ")
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
-	}
-	return b.String()
-}
-
-// RootUsage returns the subset of usage lines suitable for the root help output.
-func RootUsage() string {
-	var b strings.Builder
-	prefix := "  xp2p client "
-	continuation := strings.Repeat(" ", len(prefix))
-	for _, block := range clientUsageBlocks {
-		lines := strings.Split(block, "\n")
-		b.WriteString(prefix)
-		b.WriteString(lines[0])
-		b.WriteString("\n")
-		for _, line := range lines[1:] {
-			b.WriteString(continuation)
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
-	}
-	return b.String()
-}

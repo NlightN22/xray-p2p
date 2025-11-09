@@ -13,7 +13,7 @@ func TestRunServerRun(t *testing.T) {
 	tests := []struct {
 		name      string
 		cfg       func(*testing.T) config.Config
-		args      []string
+		opts      serverRunCommandOptions
 		prepared  bool
 		autoPrep  bool
 		host      string
@@ -42,7 +42,7 @@ func TestRunServerRun(t *testing.T) {
 			cfg: func(t *testing.T) config.Config {
 				return serverCfg(filepath.Join(t.TempDir(), "srv"), "config-server", "")
 			},
-			args:     []string{"--auto-install"},
+			opts:     serverRunCommandOptions{AutoInstall: true},
 			autoPrep: true,
 			host:     "198.51.100.20",
 			wantCode: 0,
@@ -64,7 +64,7 @@ func TestRunServerRun(t *testing.T) {
 			cfg: func(t *testing.T) config.Config {
 				return serverCfg(filepath.Join(t.TempDir(), "srv"), server.DefaultServerConfigDir, "")
 			},
-			args:     []string{"--xray-log-file", `logs\xray.err`},
+			opts:     serverRunCommandOptions{XrayLogFile: `logs\xray.err`},
 			prepared: true,
 			wantCode: 0,
 			wantRun:  1,
@@ -79,7 +79,7 @@ func TestRunServerRun(t *testing.T) {
 			cfg: func(t *testing.T) config.Config {
 				return serverCfg(filepath.Join(t.TempDir(), "srv"), server.DefaultServerConfigDir, "")
 			},
-			args:     []string{"--quiet"},
+			opts:     serverRunCommandOptions{Quiet: true},
 			wantCode: 1,
 		},
 	}
@@ -91,7 +91,7 @@ func TestRunServerRun(t *testing.T) {
 			if tt.prepared {
 				prepareInstallation(t, cfg.Server.InstallDir, cfg.Server.ConfigDir)
 			}
-			code, installs, runs := execRun(t, cfg, tt.args, tt.host, tt.autoPrep, tt.onInstall, tt.onRun)
+			code, installs, runs := execRun(t, cfg, tt.opts, tt.host, tt.autoPrep, tt.onInstall, tt.onRun)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -105,7 +105,7 @@ func TestRunServerRun(t *testing.T) {
 	}
 }
 
-func execRun(t *testing.T, cfg config.Config, args []string, host string, autoPrep bool, onInstall func(*testing.T, config.Config, server.InstallOptions), onRun func(*testing.T, config.Config, server.RunOptions)) (int, []server.InstallOptions, []server.RunOptions) {
+func execRun(t *testing.T, cfg config.Config, opts serverRunCommandOptions, host string, autoPrep bool, onInstall func(*testing.T, config.Config, server.InstallOptions), onRun func(*testing.T, config.Config, server.RunOptions)) (int, []server.InstallOptions, []server.RunOptions) {
 	var installs []server.InstallOptions
 	restoreInstall := stubServerInstall(func(ctx context.Context, opts server.InstallOptions) error {
 		installs = append(installs, opts)
@@ -130,6 +130,6 @@ func execRun(t *testing.T, cfg config.Config, args []string, host string, autoPr
 	defer restoreRun()
 
 	defer stubDetectPublicHost(host, nil)()
-	code := runServerRun(context.Background(), cfg, args)
+	code := runServerRun(context.Background(), cfg, opts)
 	return code, installs, runs
 }

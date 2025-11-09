@@ -90,6 +90,32 @@ xp2p server install --deploy-file .\config\deployment.json
 
 The CLI pulls the target host/version from the manifest and keeps the installation in sync with the generated package.
 
+## CLI reference
+
+`xp2p` now uses Cobra, so every command ships with contextual `--help` output and sensible flag defaults. The most common flows are:
+
+```bash
+# Install or update the server
+xp2p server install --path C:\xp2p --host edge.example.com --force
+
+# Run the server in the foreground and auto-install if assets are missing
+xp2p server run --auto-install --xray-log-file C:\xp2p\logs\xray.err
+
+# Manage Trojan users
+xp2p server user add --id alpha --password secret --host edge.example.com
+xp2p server user list --host edge.example.com
+
+# Configure the Windows client
+xp2p client install --link trojan://SECRET@edge.example.com:62022
+xp2p client run --auto-install
+```
+
+Additional helpers:
+
+- `xp2p ping <host>` runs the diagnostics pinger (`--socks` accepts either a value or falls back to the config default).
+- `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
+- `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.
+
 ---
 
 ## Follow-up tasks on the client

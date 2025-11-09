@@ -2,8 +2,6 @@ package servercmd
 
 import (
 	"context"
-	"flag"
-	"io"
 	"strings"
 	"time"
 
@@ -12,21 +10,21 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-func runServerDeploy(ctx context.Context, cfg config.Config, args []string) int {
-	fs := flag.NewFlagSet("xp2p server deploy", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
+type serverDeployOptions struct {
+	Listen  string
+	Link    string
+	Once    bool
+	Timeout time.Duration
+}
 
-	listen := fs.String("listen", ":62025", "deploy listen address")
-	link := fs.String("link", "", "deploy link (xp2p+deploy://...)")
-	once := fs.Bool("once", true, "stop after a single deploy")
-	timeout := fs.Duration("timeout", 10*time.Minute, "idle shutdown timeout")
-
-	if err := fs.Parse(args); err != nil {
-		return 2
+func runServerDeploy(ctx context.Context, cfg config.Config, opts serverDeployOptions) int {
+	listenAddr := strings.TrimSpace(opts.Listen)
+	if listenAddr == "" {
+		listenAddr = ":62025"
 	}
 
 	var expected deploylink.EncryptedLink
-	rawLink := strings.TrimSpace(*link)
+	rawLink := strings.TrimSpace(opts.Link)
 	if rawLink != "" {
 		var err error
 		expected, err = parseDeployLink(rawLink)
@@ -35,14 +33,23 @@ func runServerDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			return 2
 		}
 	}
-	logging.Info("xp2p server deploy: starting listener", "listen", *listen, "once", *once)
+
+	if rawLink == "" {
+		logging.Error("xp2p server deploy: --link is required")
+		return 2
+	}
+
+	logging.Info("xp2p server deploy: starting listener", "listen", listenAddr, "once", opts.Once)
 
 	srv := deployServer{
-		ListenAddr: *listen,
+		ListenAddr: listenAddr,
 		Expected:   expected,
-		Once:       *once,
-		Timeout:    *timeout,
+		Once:       opts.Once,
+		Timeout:    opts.Timeout,
 		Cfg:        cfg,
+	}
+	if srv.Timeout <= 0 {
+		srv.Timeout = 10 * time.Minute
 	}
 	if err := srv.Run(ctx); err != nil {
 		logging.Error("xp2p server deploy: listener failed", "err", err)

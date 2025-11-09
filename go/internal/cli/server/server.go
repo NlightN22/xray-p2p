@@ -7,7 +7,6 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -34,78 +33,34 @@ var (
 )
 
 var promptYesNoFunc = promptYesNo
-var serverUsageBlocks = []string{
-	`install [--path PATH] [--config-dir NAME] [--port PORT] [--cert FILE] [--key FILE]
-          [--host HOST] [--deploy-file FILE] [--force]`,
-	`remove  [--path PATH] [--keep-files] [--ignore-missing]`,
-	`run     [--path PATH] [--config-dir NAME] [--quiet] [--auto-install]
-          [--xray-log-file FILE]`,
-	`user    add/remove [...]`,
-	`cert    set [--path PATH] [--config-dir NAME|PATH] [--cert FILE] [--key FILE]
-          [--host HOST] [--force]`,
-	`deploy  --listen ADDR [--once] [--link URL]`,
+
+type serverInstallCommandOptions struct {
+	Path       string
+	ConfigDir  string
+	Port       string
+	Cert       string
+	Key        string
+	Host       string
+	DeployFile string
+	Force      bool
 }
 
-func Execute(ctx context.Context, cfg config.Config, args []string) int {
-	return runServer(ctx, cfg, args)
+type serverRemoveCommandOptions struct {
+	Path          string
+	KeepFiles     bool
+	IgnoreMissing bool
 }
 
-func runServer(ctx context.Context, cfg config.Config, args []string) int {
-	if len(args) == 0 {
-		printServerUsage()
-		return 1
-	}
-
-	cmd := strings.ToLower(args[0])
-	switch cmd {
-	case "install":
-		return runServerInstall(ctx, cfg, args[1:])
-	case "remove":
-		return runServerRemove(ctx, cfg, args[1:])
-	case "run":
-		return runServerRun(ctx, cfg, args[1:])
-	case "user":
-		return runServerUser(ctx, cfg, args[1:])
-	case "cert":
-		return runServerCert(ctx, cfg, args[1:])
-	case "deploy":
-		return runServerDeploy(ctx, cfg, args[1:])
-	case "-h", "--help", "help":
-		printServerUsage()
-		return 0
-	default:
-		logging.Error("xp2p server: unknown command", "subcommand", args[0])
-		printServerUsage()
-		return 1
-	}
+type serverRunCommandOptions struct {
+	Path        string
+	ConfigDir   string
+	AutoInstall bool
+	Quiet       bool
+	XrayLogFile string
 }
 
-func runServerInstall(ctx context.Context, cfg config.Config, args []string) int {
-	fs := flag.NewFlagSet("xp2p server install", flag.ContinueOnError)
-	fs.SetOutput(os.Stdout)
-
-	path := fs.String("path", "", "server installation directory")
-	configDir := fs.String("config-dir", "", "server configuration directory name")
-	port := fs.String("port", "", "server listener port")
-	cert := fs.String("cert", "", "TLS certificate file to deploy")
-	key := fs.String("key", "", "TLS private key file to deploy")
-	host := fs.String("host", "", "public host name or IP for generated configuration")
-	deployFile := fs.String("deploy-file", "", "path to deployment manifest (deployment.json)")
-	force := fs.Bool("force", false, "overwrite existing installation")
-
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		logging.Error("xp2p server install: failed to parse arguments", "err", err)
-		return 2
-	}
-	if fs.NArg() > 0 {
-		logging.Error("xp2p server install: unexpected arguments", "args", fs.Args())
-		return 2
-	}
-
-	manifestPath := strings.TrimSpace(*deployFile)
+func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstallCommandOptions) int {
+	manifestPath := strings.TrimSpace(opts.DeployFile)
 	var manifest *spec.Manifest
 	if manifestPath != "" {
 		file, err := os.Open(manifestPath)
@@ -121,18 +76,25 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 		}
 		manifest = &readManifest
 		logging.Info("xp2p server install: using deploy manifest", "host", manifest.Host, "version", manifest.Version)
-		if strings.TrimSpace(*host) == "" {
+		if strings.TrimSpace(opts.Host) == "" {
 			if err := netutil.ValidateHost(manifest.Host); err != nil {
 				logging.Error("xp2p server install: invalid host in deploy manifest", "host", manifest.Host, "err", err)
 				return 1
 			}
-			*host = strings.TrimSpace(manifest.Host)
+			opts.Host = strings.TrimSpace(manifest.Host)
 		}
 	}
 
-	portValue := resolveInstallPort(cfg, *port)
+	portValue := resolveInstallPort(cfg, opts.Port)
+	if manifest != nil && strings.TrimSpace(manifest.TrojanPort) != "" && strings.TrimSpace(opts.Port) == "" {
+		portValue = strings.TrimSpace(manifest.TrojanPort)
+	}
+	if err := validatePortValue(portValue); err != nil {
+		logging.Error("xp2p server install: invalid port", "port", portValue, "err", err)
+		return 1
+	}
 
-	hostValue, autoDetected, err := determineInstallHost(ctx, *host, cfg.Server.Host)
+	hostValue, autoDetected, err := determineInstallHost(ctx, opts.Host, cfg.Server.Host)
 	if err != nil {
 		logging.Error("xp2p server install: failed to resolve public host", "err", err)
 		return 1
@@ -141,112 +103,70 @@ func runServerInstall(ctx context.Context, cfg config.Config, args []string) int
 		logging.Info("xp2p server install: detected public host", "host", hostValue)
 	}
 
-	opts := server.InstallOptions{
-		InstallDir:      firstNonEmpty(*path, cfg.Server.InstallDir),
-		ConfigDir:       firstNonEmpty(*configDir, cfg.Server.ConfigDir),
+	installOpts := server.InstallOptions{
+		InstallDir:      firstNonEmpty(opts.Path, cfg.Server.InstallDir),
+		ConfigDir:       firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		Port:            portValue,
-		CertificateFile: firstNonEmpty(*cert, cfg.Server.CertificateFile),
-		KeyFile:         firstNonEmpty(*key, cfg.Server.KeyFile),
+		CertificateFile: firstNonEmpty(opts.Cert, cfg.Server.CertificateFile),
+		KeyFile:         firstNonEmpty(opts.Key, cfg.Server.KeyFile),
 		Host:            hostValue,
-		Force:           *force,
+		Force:           opts.Force,
 	}
 
-	if err := serverInstallFunc(ctx, opts); err != nil {
+	if err := serverInstallFunc(ctx, installOpts); err != nil {
 		logging.Error("xp2p server install failed", "err", err)
 		return 1
 	}
 
-	logging.Info("xp2p server installed", "install_dir", opts.InstallDir, "config_dir", opts.ConfigDir)
+	logging.Info("xp2p server installed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 
 	manifestHandled := false
 	if manifest != nil {
 		var err error
-		manifestHandled, err = applyManifestCredential(ctx, opts, hostValue, *manifest)
+		manifestHandled, err = applyManifestCredential(ctx, installOpts, hostValue, *manifest)
 		if err != nil {
 			logging.Warn("xp2p server install: failed to apply deploy manifest credential", "err", err)
 		}
 	}
 
 	if !manifestHandled && strings.TrimSpace(cfg.Client.User) == "" && strings.TrimSpace(cfg.Client.Password) == "" {
-		if err := generateDefaultServerCredential(ctx, opts, hostValue); err != nil {
+		if err := generateDefaultServerCredential(ctx, installOpts, hostValue); err != nil {
 			logging.Warn("xp2p server install: failed to generate trojan credential", "err", err)
 		}
 	}
 
 	return 0
 }
-
-func runServerRemove(ctx context.Context, cfg config.Config, args []string) int {
-	fs := flag.NewFlagSet("xp2p server remove", flag.ContinueOnError)
-	fs.SetOutput(os.Stdout)
-
-	path := fs.String("path", "", "server installation directory")
-	keepFiles := fs.Bool("keep-files", false, "keep installation files")
-	ignoreMissing := fs.Bool("ignore-missing", false, "do not fail if service or files are absent")
-
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		logging.Error("xp2p server remove: failed to parse arguments", "err", err)
-		return 2
-	}
-	if fs.NArg() > 0 {
-		logging.Error("xp2p server remove: unexpected arguments", "args", fs.Args())
-		return 2
+func runServerRemove(ctx context.Context, cfg config.Config, opts serverRemoveCommandOptions) int {
+	removeOpts := server.RemoveOptions{
+		InstallDir:    firstNonEmpty(opts.Path, cfg.Server.InstallDir),
+		KeepFiles:     opts.KeepFiles,
+		IgnoreMissing: opts.IgnoreMissing,
 	}
 
-	opts := server.RemoveOptions{
-		InstallDir:    firstNonEmpty(*path, cfg.Server.InstallDir),
-		KeepFiles:     *keepFiles,
-		IgnoreMissing: *ignoreMissing,
-	}
-
-	if err := serverRemoveFunc(ctx, opts); err != nil {
+	if err := serverRemoveFunc(ctx, removeOpts); err != nil {
 		logging.Error("xp2p server remove failed", "err", err)
 		return 1
 	}
 
-	logging.Info("xp2p server removed", "install_dir", opts.InstallDir)
+	logging.Info("xp2p server removed", "install_dir", removeOpts.InstallDir)
 	return 0
 }
-
-func runServerRun(ctx context.Context, cfg config.Config, args []string) int {
-	fs := flag.NewFlagSet("xp2p server run", flag.ContinueOnError)
-	fs.SetOutput(os.Stdout)
-
-	path := fs.String("path", "", "server installation directory")
-	configDir := fs.String("config-dir", "", "server configuration directory name")
-	autoInstall := fs.Bool("auto-install", false, "install server assets when missing without prompting")
-	quiet := fs.Bool("quiet", false, "suppress interactive prompts")
-	xrayLogFile := fs.String("xray-log-file", "", "append xray stderr output to file")
-
-	if err := fs.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return 0
-		}
-		logging.Error("xp2p server run: failed to parse arguments", "err", err)
-		return 2
-	}
-	if fs.NArg() > 0 {
-		logging.Error("xp2p server run: unexpected arguments", "args", fs.Args())
-		return 2
-	}
-
-	installDir := firstNonEmpty(*path, cfg.Server.InstallDir)
+func runServerRun(ctx context.Context, cfg config.Config, opts serverRunCommandOptions) int {
+	installDir := firstNonEmpty(opts.Path, cfg.Server.InstallDir)
 	if installDir == "" {
 		logging.Error("xp2p server run: installation directory is required")
 		return 1
 	}
 
-	configDirName := firstNonEmpty(*configDir, cfg.Server.ConfigDir)
+	configDirName := firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir)
 	configDirPath, err := resolveConfigDirPath(installDir, configDirName)
 	if err != nil {
 		logging.Error("xp2p server run: resolve config directory", "err", err)
 		return 1
 	}
 
-	if err := ensureServerAssets(ctx, cfg, installDir, configDirName, configDirPath, *autoInstall, *quiet); err != nil {
+	if err := ensureServerAssets(ctx, cfg, installDir, configDirName, configDirPath, opts.AutoInstall, opts.Quiet); err != nil {
 		logging.Error("xp2p server run: prerequisites failed", "err", err)
 		return 1
 	}
@@ -256,18 +176,19 @@ func runServerRun(ctx context.Context, cfg config.Config, args []string) int {
 		defer cancelDiagnostics()
 	}
 
-	if err := serverRunFunc(ctx, server.RunOptions{
+	runOpts := server.RunOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
-		ErrorLogPath: strings.TrimSpace(*xrayLogFile),
-	}); err != nil {
+		ErrorLogPath: strings.TrimSpace(opts.XrayLogFile),
+	}
+
+	if err := serverRunFunc(ctx, runOpts); err != nil {
 		logging.Error("xp2p server run failed", "err", err)
 		return 1
 	}
 
 	return 0
 }
-
 func ensureServerAssets(ctx context.Context, cfg config.Config, installDir, configDirName, configDirPath string, autoInstall, quiet bool) error {
 	present, err := serverAssetsPresent(installDir, configDirPath)
 	if err != nil {
@@ -405,6 +326,21 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func validatePortValue(port string) error {
+	value := strings.TrimSpace(port)
+	if value == "" {
+		return fmt.Errorf("port is empty")
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid port %q: %w", value, err)
+	}
+	if n <= 0 || n > 65535 {
+		return fmt.Errorf("invalid port %q: must be within 1-65535", value)
+	}
+	return nil
 }
 
 func determineInstallHost(ctx context.Context, explicit, fallback string) (string, bool, error) {
@@ -552,42 +488,4 @@ func randomToken(size int) (string, error) {
 		return "", err
 	}
 	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)), nil
-}
-
-func printServerUsage() {
-	fmt.Print(Usage())
-}
-
-// Usage returns detailed help text for xp2p server commands.
-func Usage() string {
-	var b strings.Builder
-	b.WriteString("xp2p server commands:\n")
-	for _, block := range serverUsageBlocks {
-		lines := strings.Split(block, "\n")
-		for _, line := range lines {
-			b.WriteString("  ")
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
-	}
-	return b.String()
-}
-
-// RootUsage returns the subset of usage lines suitable for the root help output.
-func RootUsage() string {
-	var b strings.Builder
-	prefix := "  xp2p server "
-	continuation := strings.Repeat(" ", len(prefix))
-	for _, block := range serverUsageBlocks {
-		lines := strings.Split(block, "\n")
-		b.WriteString(prefix)
-		b.WriteString(lines[0])
-		b.WriteString("\n")
-		for _, line := range lines[1:] {
-			b.WriteString(continuation)
-			b.WriteString(line)
-			b.WriteString("\n")
-		}
-	}
-	return b.String()
 }

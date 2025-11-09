@@ -12,7 +12,7 @@ func TestRunServerRemove(t *testing.T) {
 	tests := []struct {
 		name     string
 		cfg      config.Config
-		args     []string
+		opts     serverRemoveCommandOptions
 		wantCode int
 		wantOpts server.RemoveOptions
 	}{
@@ -25,7 +25,7 @@ func TestRunServerRemove(t *testing.T) {
 		{
 			name:     "flags override",
 			cfg:      serverCfg(`C:\xp2p`, "", ""),
-			args:     []string{"--path", `D:\xp2p`, "--keep-files", "--ignore-missing"},
+			opts:     serverRemoveCommandOptions{Path: `D:\xp2p`, KeepFiles: true, IgnoreMissing: true},
 			wantCode: 0,
 			wantOpts: server.RemoveOptions{InstallDir: `D:\xp2p`, KeepFiles: true, IgnoreMissing: true},
 		},
@@ -34,7 +34,7 @@ func TestRunServerRemove(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			code, opts := execRemove(tt.cfg, tt.args)
+			code, opts := execRemove(tt.cfg, tt.opts)
 			if code != tt.wantCode {
 				t.Fatalf("exit code: got %d want %d", code, tt.wantCode)
 			}
@@ -43,7 +43,7 @@ func TestRunServerRemove(t *testing.T) {
 	}
 }
 
-func execRemove(cfg config.Config, args []string) (int, server.RemoveOptions) {
+func execRemove(cfg config.Config, opts serverRemoveCommandOptions) (int, server.RemoveOptions) {
 	var captured server.RemoveOptions
 	restoreInstall := stubServerInstall(nil)
 	defer restoreInstall()
@@ -52,6 +52,6 @@ func execRemove(cfg config.Config, args []string) (int, server.RemoveOptions) {
 		return nil
 	})
 	defer restoreRemove()
-	code := runServerRemove(context.Background(), cfg, args)
+	code := runServerRemove(context.Background(), cfg, opts)
 	return code, captured
 }
