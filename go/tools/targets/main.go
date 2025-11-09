@@ -80,6 +80,10 @@ func runAssets(args []string) {
 	for _, t := range targets {
 		fmt.Printf("%s\t%s\t%s\n", t.Identifier(), t.ArchiveName(*name, *version), t.LatestArchiveName(*name))
 	}
+
+	msiRelease := fmt.Sprintf("%s-%s-windows-amd64.msi", *name, *version)
+	msiLatest := fmt.Sprintf("%s-latest-windows-amd64.msi", *name)
+	fmt.Printf("windows-amd64-msi\t%s\t%s\n", msiRelease, msiLatest)
 }
 
 func runList(args []string) {

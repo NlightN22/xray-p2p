@@ -132,9 +132,66 @@ jobs:
           name: ${{ env.RELEASE_NAME }}-${{ needs.verify.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/${{ env.RELEASE_NAME }}-${{ needs.verify.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
 
+  msi:
+    runs-on: windows-latest
+    needs: verify
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Install WiX Toolset
+        run: choco install wixtoolset --no-progress -y
+
+      - name: Build Windows binary
+        run: |
+          $ldflags = "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$env:VERSION"
+          go run ./go/tools/targets build --target windows-amd64 --base build --binary xp2p --pkg ./go/cmd/xp2p --ldflags "$ldflags"
+
+      - name: Build MSI
+        run: |
+          $binary = "build/windows-amd64/xp2p.exe"
+          if (!(Test-Path $binary)) {
+            throw "xp2p binary not found at $binary"
+          }
+          $wixRoot = Get-ChildItem -Path "${env:ProgramFiles(x86)}" -Filter "WiX Toolset*" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $wixRoot) {
+            throw "WiX Toolset installation directory was not found"
+          }
+          $candle = Join-Path $wixRoot.FullName "bin\\candle.exe"
+          $light = Join-Path $wixRoot.FullName "bin\\light.exe"
+          & $candle "-dProductVersion=$env:VERSION" "-dXp2pBinary=$binary" "-out" "installer/wix/xp2p.wixobj" "installer/wix/xp2p.wxs"
+          if ($LASTEXITCODE -ne 0) {
+            throw "candle failed"
+          }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          $msiPath = "dist/${{ env.RELEASE_NAME }}-$($env:VERSION)-windows-amd64.msi"
+          & $light "-out" $msiPath "installer/wix/xp2p.wixobj"
+          if ($LASTEXITCODE -ne 0) {
+            throw "light failed"
+          }
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_NAME }}-${{ env.VERSION }}-windows-amd64-msi
+          path: dist/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-windows-amd64.msi
+
   publish:
     runs-on: ubuntu-latest
-    needs: build
+    needs:
+      - build
+      - msi
     permissions:
       contents: write
     env:

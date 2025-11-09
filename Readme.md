@@ -234,6 +234,36 @@ Developer-focused docs (tests, CI, release flow) live in [`CONTRIBUTING.md`](CON
 
 ---
 
+## Windows MSI installer
+
+A signed Windows release now includes `xp2p-<version>-windows-amd64.msi` (and its `latest` companion). The installer copies `xp2p.exe` into `C:\Program Files\xp2p` for elevated sessions and automatically falls back to `%LOCALAPPDATA%\xp2p` when the user does not hold administrative privileges. Repairs (`msiexec /fa`) restore the binary if it becomes corrupted, and uninstalls purge all files left in the installation directory.
+
+### Optional CLI bootstrap
+
+- Pass `XP2P_CLIENT_ARGS="--link trojan://... --force"` to run `xp2p client install ...` right after the binary lands on disk.
+- Pass `XP2P_SERVER_ARGS="--deploy-file C:\xp2p\config\deployment.json"` to execute `xp2p server install ...`.
+- Both custom actions run only during a fresh install, so repairs and uninstalls are unaffected.
+
+### Silent, custom, and per-user installs
+
+- Override the target directory explicitly: `msiexec /i xp2p-<version>-windows-amd64.msi INSTALLFOLDER="D:\Network\xp2p"`.
+- Force a per-user install even when you have elevation: `msiexec /i xp2p-<version>-windows-amd64.msi MSIINSTALLPERUSER=1`.
+- Fully silent automation examples:
+  - Install: `msiexec /i xp2p-<version>-windows-amd64.msi /qn XP2P_CLIENT_ARGS="--link trojan://secret@example.com:62022"`
+  - Repair: `msiexec /fa xp2p-<version>-windows-amd64.msi /qn`
+  - Uninstall: `msiexec /x xp2p-<version>-windows-amd64.msi /qn`
+
+### Building the MSI locally
+
+1. Install the WiX Toolset (`choco install wixtoolset --no-progress -y`) and make sure `candle.exe`/`light.exe` sit on `PATH`.
+2. Build the Windows binary with the embedded version:  
+   `go run ./go/tools/targets build --target windows-amd64 --base build --binary xp2p --pkg ./go/cmd/xp2p --ldflags "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$(go run ./go/cmd/xp2p --version)"`
+3. Compile the WiX project from `installer/wix/xp2p.wxs`:
+   ```powershell
+   candle -dProductVersion=<version> -dXp2pBinary=build/windows-amd64/xp2p.exe installer/wix/xp2p.wxs
+   light -out dist/xp2p-<version>-windows-amd64.msi installer/wix/xp2p.wixobj
+   ```
+
 ## Security notes
 
 - Expose the server only over hardened SSH (keys plus firewall rules). Keep the Trojan port open on the WAN side.

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{E99A193E-D6A9-4743-93D8-EB45053E517A}">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x64" />
+
+    <Condition Message="xp2p requires 64-bit Windows.">VersionNT64</Condition>
+
+    <MajorUpgrade Schedule="afterInstallValidate"
+                  AllowDowngrades="no"
+                  DowngradeErrorMessage="A newer version of xp2p is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="XP2P_CLIENT_ARGS" Hidden="yes" Secure="yes" />
+    <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
+
+    <CustomAction Id="SetPerUserInstall" Property="MSIINSTALLPERUSER" Value="1" Execute="immediate" />
+    <CustomAction Id="SetPerUserFolder" Property="INSTALLFOLDER" Value="[LocalAppDataFolder]xp2p" Execute="immediate" />
+
+    <CustomAction Id="RunClientInstall"
+                  FileKey="fileXp2pExe"
+                  ExeCommand='client install [XP2P_CLIENT_ARGS]'
+                  Execute="deferred"
+                  Return="check"
+                  Impersonate="yes" />
+
+    <CustomAction Id="RunServerInstall"
+                  FileKey="fileXp2pExe"
+                  ExeCommand='server install [XP2P_SERVER_ARGS]'
+                  Execute="deferred"
+                  Return="check"
+                  Impersonate="yes" />
+
+    <InstallExecuteSequence>
+      <Custom Action="SetPerUserInstall" Before="CostFinalize">NOT Privileged</Custom>
+      <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
+      <Custom Action="RunClientInstall" After="InstallFiles">NOT Installed AND XP2P_CLIENT_ARGS</Custom>
+      <Custom Action="RunServerInstall" After="RunClientInstall">NOT Installed AND XP2P_SERVER_ARGS</Custom>
+    </InstallExecuteSequence>
+
+    <InstallUISequence>
+      <Custom Action="SetPerUserInstall" Before="CostFinalize">NOT Privileged</Custom>
+      <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
+    </InstallUISequence>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="xp2p" />
+      </Directory>
+      <Directory Id="LocalAppDataFolder" />
+    </Directory>
+
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="cmpXp2pExe" Guid="{6A53942E-0C09-4164-9F15-A41E4630FA8E}" Win64="yes">
+        <File Id="fileXp2pExe" Source="$(var.Xp2pBinary)" KeyPath="yes" Checksum="yes" />
+      </Component>
+
+      <Component Id="cmpInstallRoot" Guid="{6F63342C-ED20-4D49-B0EC-5688E0C21818}" Directory="INSTALLFOLDER" Win64="yes" KeyPath="yes">
+        <CreateFolder />
+        <RemoveFile Id="PurgeInstallDir" On="uninstall" Name="*" Directory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveInstallDir" On="uninstall" Directory="INSTALLFOLDER" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="MainFeature" Title="xp2p" Level="1">
+      <ComponentRef Id="cmpXp2pExe" />
+      <ComponentRef Id="cmpInstallRoot" />
+    </Feature>
+  </Product>
+</Wix>
