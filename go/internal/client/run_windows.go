@@ -69,8 +69,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	cmd := exec.CommandContext(ctx, xrayPath, args...)
 	cmd.Dir = installDir
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
+		HideWindow: true,
 	}
 
 	stdout, err := cmd.StdoutPipe()
