@@ -88,17 +88,17 @@ def _assert_ping_success(result) -> None:
             )
 
 
-def _run_ping_via_socks(xp2p_client_runner, host: str, port: int, attempts: int = 3):
-    return xp2p_client_runner(
+def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, attempts: int = 3):
+    args = [
         "ping",
         host,
-        "--port",
-        str(port),
         "--count",
         str(attempts),
         "--socks",
-        check=True,
-    )
+    ]
+    if port is not None:
+        args[2:2] = ["--port", str(port)]
+    return xp2p_client_runner(*args, check=True)
 
 
 @pytest.mark.host
@@ -145,11 +145,7 @@ def test_install_server_and_client_default(
                 CLIENT_LOG_RELATIVE,
             ) as client_session:
                 assert client_session["pid"] > 0
-                ping_result = _run_ping_via_socks(
-                    xp2p_client_runner,
-                    SERVER_PUBLIC_HOST,
-                    DEFAULT_DIAGNOSTICS_PORT,
-                )
+                ping_result = _run_ping_via_socks(xp2p_client_runner, SERVER_PUBLIC_HOST)
                 _assert_ping_success(ping_result)
     finally:
         _cleanup_client_install(xp2p_client_runner, DEFAULT_CLIENT_INSTALL_DIR)
@@ -221,11 +217,7 @@ def test_install_server_and_client_nodefault(
                 CLIENT_LOG_RELATIVE,
             ) as client_session:
                 assert client_session["pid"] > 0
-                ping_result = _run_ping_via_socks(
-                    xp2p_client_runner,
-                    SERVER_PUBLIC_HOST,
-                    CUSTOM_SERVER_PORT,
-                )
+                ping_result = _run_ping_via_socks(xp2p_client_runner, SERVER_PUBLIC_HOST)
                 _assert_ping_success(ping_result)
     finally:
         _cleanup_client_install(xp2p_client_runner, CUSTOM_CLIENT_INSTALL_DIR)
