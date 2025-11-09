@@ -1,26 +1,20 @@
-package main
+package root
 
 import (
-	"errors"
-	"flag"
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestParseRootArgsDefaults(t *testing.T) {
+func TestEnsureRuntimeDefaults(t *testing.T) {
 	chdirTemp(t)
+	opts := &rootOptions{}
+	if err := opts.ensureRuntime(context.Background()); err != nil {
+		t.Fatalf("ensureRuntime failed: %v", err)
+	}
 
-	cfg, rest, versionRequested, err := parseRootArgs(nil)
-	if err != nil {
-		t.Fatalf("parseRootArgs failed: %v", err)
-	}
-	if versionRequested {
-		t.Fatalf("expected versionRequested to be false")
-	}
-	if len(rest) != 0 {
-		t.Fatalf("expected no remaining args, got %v", rest)
-	}
+	cfg := opts.cfg
 	if cfg.Logging.Level != "info" {
 		t.Fatalf("unexpected logging level: %s", cfg.Logging.Level)
 	}
@@ -47,28 +41,23 @@ func TestParseRootArgsDefaults(t *testing.T) {
 	}
 }
 
-func TestParseRootArgsWithFlags(t *testing.T) {
+func TestEnsureRuntimeWithOverrides(t *testing.T) {
 	chdirTemp(t)
-
-	args := []string{
-		"--log-level", "DEBUG",
-		"--server-port", "65010",
-		"--server-install-dir", `D:\xp2p`,
-		"--server-config-dir", "cfg-run",
-		"--server-mode", "MANUAL",
-		"--server-cert", `D:\certs\cert.pem`,
-		"--server-key", `D:\certs\cert.key`,
-		"--log-json",
-		"ping", "--count", "3",
+	opts := &rootOptions{
+		logLevel:         "DEBUG",
+		serverPort:       "65010",
+		serverInstallDir: `D:\xp2p`,
+		serverConfigDir:  "cfg-run",
+		serverMode:       "MANUAL",
+		serverCert:       `D:\certs\cert.pem`,
+		serverKey:        `D:\certs\cert.key`,
+		logJSON:          true,
+	}
+	if err := opts.ensureRuntime(context.Background()); err != nil {
+		t.Fatalf("ensureRuntime failed: %v", err)
 	}
 
-	cfg, rest, versionRequested, err := parseRootArgs(args)
-	if err != nil {
-		t.Fatalf("parseRootArgs failed: %v", err)
-	}
-	if versionRequested {
-		t.Fatalf("expected versionRequested to be false")
-	}
+	cfg := opts.cfg
 	if cfg.Logging.Level != "debug" {
 		t.Fatalf("expected debug level, got %s", cfg.Logging.Level)
 	}
@@ -93,20 +82,10 @@ func TestParseRootArgsWithFlags(t *testing.T) {
 	if cfg.Server.KeyFile != `D:\certs\cert.key` {
 		t.Fatalf("expected key D:\\certs\\cert.key, got %s", cfg.Server.KeyFile)
 	}
-	expected := []string{"ping", "--count", "3"}
-	if len(rest) != len(expected) {
-		t.Fatalf("unexpected remaining args: %v", rest)
-	}
-	for i, v := range expected {
-		if rest[i] != v {
-			t.Fatalf("expected rest[%d]=%s, got %s", i, v, rest[i])
-		}
-	}
 }
 
-func TestParseRootArgsWithConfigFile(t *testing.T) {
+func TestEnsureRuntimeWithConfigFile(t *testing.T) {
 	chdirTemp(t)
-
 	cfgPath := filepath.Join(".", "xp2p.yaml")
 	writeFile(t, cfgPath, `
 logging:
@@ -121,16 +100,12 @@ server:
   key: C:\certs\server.key
 `)
 
-	cfg, rest, versionRequested, err := parseRootArgs([]string{"--config", cfgPath})
-	if err != nil {
-		t.Fatalf("parseRootArgs failed: %v", err)
+	opts := &rootOptions{configPath: cfgPath}
+	if err := opts.ensureRuntime(context.Background()); err != nil {
+		t.Fatalf("ensureRuntime failed: %v", err)
 	}
-	if versionRequested {
-		t.Fatalf("expected versionRequested to be false")
-	}
-	if len(rest) != 0 {
-		t.Fatalf("expected no remaining args, got %v", rest)
-	}
+
+	cfg := opts.cfg
 	if cfg.Logging.Level != "warn" {
 		t.Fatalf("expected warn level, got %s", cfg.Logging.Level)
 	}
@@ -157,40 +132,7 @@ server:
 	}
 }
 
-func TestParseRootArgsHelp(t *testing.T) {
-	chdirTemp(t)
-
-	_, _, _, err := parseRootArgs([]string{"--help"})
-	if !errors.Is(err, flag.ErrHelp) {
-		t.Fatalf("expected flag.ErrHelp, got %v", err)
-	}
-}
-
-func TestParseRootArgsVersionFlag(t *testing.T) {
-	chdirTemp(t)
-
-	_, rest, versionRequested, err := parseRootArgs([]string{"--version"})
-	if err != nil {
-		t.Fatalf("parseRootArgs failed: %v", err)
-	}
-	if !versionRequested {
-		t.Fatalf("expected versionRequested to be true")
-	}
-	if len(rest) != 0 {
-		t.Fatalf("expected no remaining args, got %v", rest)
-	}
-}
-
-func TestParseRootArgsVersionWithArgsFails(t *testing.T) {
-	chdirTemp(t)
-
-	_, _, _, err := parseRootArgs([]string{"--version", "ping"})
-	if err == nil {
-		t.Fatal("expected error when combining --version with positional arguments")
-	}
-}
-
-func chdirTemp(t *testing.T) string {
+func chdirTemp(t *testing.T) {
 	t.Helper()
 	oldWD, err := os.Getwd()
 	if err != nil {
@@ -203,7 +145,6 @@ func chdirTemp(t *testing.T) string {
 	t.Cleanup(func() {
 		_ = os.Chdir(oldWD)
 	})
-	return tmp
 }
 
 func writeFile(t *testing.T, path, content string) {

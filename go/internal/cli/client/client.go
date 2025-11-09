@@ -36,33 +36,19 @@ var clientUsageBlocks = []string{
 }
 
 func Execute(ctx context.Context, cfg config.Config, args []string) int {
-	return runClient(ctx, cfg, args)
-}
-
-func runClient(ctx context.Context, cfg config.Config, args []string) int {
-	if len(args) == 0 {
-		printClientUsage()
+	cmd := NewCommand(func() config.Config { return cfg })
+	cmd.SetContext(ctx)
+	cmd.SetArgs(args)
+	if err := cmd.Execute(); err != nil {
+		var exitErr interface {
+			ExitCode() int
+		}
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode()
+		}
 		return 1
 	}
-
-	cmd := strings.ToLower(args[0])
-	switch cmd {
-	case "install":
-		return runClientInstall(ctx, cfg, args[1:])
-	case "remove":
-		return runClientRemove(ctx, cfg, args[1:])
-	case "run":
-		return runClientRun(ctx, cfg, args[1:])
-	case "deploy":
-		return runClientDeploy(ctx, cfg, args[1:])
-	case "-h", "--help", "help":
-		printClientUsage()
-		return 0
-	default:
-		logging.Error("xp2p client: unknown command", "subcommand", args[0])
-		printClientUsage()
-		return 1
-	}
+	return 0
 }
 
 func runClientInstall(ctx context.Context, cfg config.Config, args []string) int {
@@ -502,10 +488,6 @@ func decodeTrojanUser(u *url.URL) (string, error) {
 		return "", fmt.Errorf("trojan link missing user/email (wrap the URL in quotes or escape '&' on Windows)")
 	}
 	return "", fmt.Errorf("trojan link missing user/email (expected #email or email query parameter)")
-}
-
-func printClientUsage() {
-	fmt.Print(Usage())
 }
 
 // Usage returns detailed help text for xp2p client commands.
