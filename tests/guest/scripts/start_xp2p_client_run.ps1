@@ -39,7 +39,7 @@ if (Test-Path $LogPath) {
     Remove-Item $LogPath -Force -ErrorAction SilentlyContinue
 }
 
-$commandLine = "`"$Xp2pPath`" client run --quiet --path `"$InstallDir`" --config-dir `"$ConfigDir`" --xray-log-file `"$LogRelative`""
+$commandLine = "`"$Xp2pPath`" client run --quiet --auto-install --path `"$InstallDir`" --config-dir `"$ConfigDir`" --xray-log-file `"$LogRelative`""
 $workingDir = Split-Path $Xp2pPath
 $createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine; CurrentDirectory = $workingDir }
 if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {

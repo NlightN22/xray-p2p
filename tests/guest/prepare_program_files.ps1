@@ -36,10 +36,13 @@ if (Test-Path $installRoot) {
     }
 }
 
-Write-Info "Creating bin directory $binDir"
+Write-Info "Creating install directory $installRoot"
+New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
+
+Write-Info "Ensuring bin directory $binDir"
 New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 
-$target = Join-Path $binDir 'xp2p.exe'
+$target = Join-Path $installRoot 'xp2p.exe'
 Write-Info "Copying xp2p.exe to $target"
 Copy-Item $source $target -Force
 
