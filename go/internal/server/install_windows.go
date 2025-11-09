@@ -182,7 +182,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 
 	state.certDest = filepath.Join(state.configDir, "cert.pem")
 	state.keyDest = filepath.Join(state.configDir, "key.pem")
-	state.stateFile = filepath.Join(state.configDir, installstate.FileName)
+	state.stateFile = filepath.Join(state.installDir, installstate.FileName)
 
 	if certSource == "" {
 		state.selfSigned = true

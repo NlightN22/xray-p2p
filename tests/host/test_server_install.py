@@ -21,7 +21,7 @@ XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
 SERVER_LOG_RELATIVE = r"logs\server.err"
 SERVER_LOG_FILE = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
 SERVER_HOST_VALUE = "xp2p.test.local"
-SERVER_STATE_FILE = SERVER_CONFIG_DIR / "install-state.json"
+SERVER_STATE_FILE = SERVER_INSTALL_DIR / "install-state.json"
 
 
 def _cleanup_server_install(runner) -> None:

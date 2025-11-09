@@ -171,8 +171,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		serverRemote: address,
 	}
 
-	state.xrayPath = filepath.Join(state.binDir, "xray.exe")
-	state.stateFile = filepath.Join(state.configDir, installstate.FileName)
+	state.stateFile = filepath.Join(state.installDir, installstate.FileName)
 
 	return state, nil
 }
@@ -243,25 +242,7 @@ func clientInstallationPresent(state installState) (bool, string, error) {
 	return true, fmt.Sprintf("state file %s", state.stateFile), nil
 }
 
-func pathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	return false, err
-}
-
 func writeBinary(state installState) error {
-	if !state.Force {
-		if exists, err := pathExists(state.xrayPath); err != nil {
-			return err
-		} else if exists {
-			return fmt.Errorf("xp2p: xray-core already present at %s (use --force to overwrite)", state.xrayPath)
-		}
-	}
 	if err := os.WriteFile(state.xrayPath, xray.WindowsAMD64(), 0o755); err != nil {
 		return fmt.Errorf("xp2p: write xray-core binary: %w", err)
 	}
