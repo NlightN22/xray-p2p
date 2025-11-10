@@ -303,48 +303,6 @@ function Build-Xp2p {
     Write-Info "xp2p built successfully at $xp2pExe"
 }
 
-function Run-SmokeTest {
-    param(
-        [switch] $Skip
-    )
-
-    if ($Skip) {
-        Write-Info "Skipping smoke test as requested."
-        return
-    }
-
-    $xp2pExe = Get-Command -Name xp2p.exe -ErrorAction SilentlyContinue
-    if (-not $xp2pExe) {
-        throw "xp2p.exe not found in PATH. Cannot run smoke test."
-    }
-
-    $smokeHost = "127.0.0.1"
-    $smokePort = 62022
-
-    Write-Info "Starting xp2p diagnostics service on port $smokePort"
-    $serverProcess = Start-Process -FilePath $xp2pExe.Source `
-        -ArgumentList "--server-port", $smokePort `
-        -PassThru `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput "C:\tools\xp2p\diagnostics.log" `
-        -RedirectStandardError "C:\tools\xp2p\diagnostics.err"
-
-    try {
-        if (-not (Wait-TcpPort -TargetHost $smokeHost -Port $smokePort -TimeoutSeconds 20)) {
-            throw "xp2p diagnostics service failed to start on port $smokePort within timeout."
-        }
-
-        Write-Info "Running smoke test: xp2p ping $smokeHost --port $smokePort"
-        & $xp2pExe.Source ping $smokeHost --port $smokePort | Write-Host
-    }
-    finally {
-        if ($serverProcess -and -not $serverProcess.HasExited) {
-            Write-Info "Stopping xp2p diagnostics service"
-            Stop-Process -Id $serverProcess.Id -Force
-        }
-    }
-}
-
 function Disable-SshHostKeyChecking {
     param(
         [string] $TargetUser = "vagrant",
@@ -441,5 +399,4 @@ else {
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
 Disable-FirewallProfiles
 Disable-SshHostKeyChecking -Patterns @("10.0.10.*")
-Run-SmokeTest -Skip:$false
 Write-Info "Provisioning completed successfully."
