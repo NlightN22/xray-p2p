@@ -14,14 +14,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
 DEFAULT_SERVER = "win10-server"
 DEFAULT_CLIENT = "win10-client"
-BUILD_XP2P_EXE = Path(r"C:\xp2p\build\windows-amd64\xp2p.exe")
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
-PROGRAM_FILES_BIN_DIR = PROGRAM_FILES_INSTALL_DIR / "bin"
-CLIENT_INSTALL_DIR = PROGRAM_FILES_INSTALL_DIR
-CLIENT_BIN_DIR = PROGRAM_FILES_BIN_DIR
-XP2P_EXE = CLIENT_INSTALL_DIR / "xp2p.exe"
+XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
 GUEST_TESTS_ROOT = Path(r"C:\xp2p\tests\guest")
+MSI_MARKER = "__MSI_PATH__="
+
+_MSI_CACHE_PATH: str | None = None
 
 
 def require_vagrant_environment() -> None:
@@ -135,24 +134,12 @@ def run_guest_script(host: Host, relative_path: str, **parameters: object) -> Co
     return host.run(command)
 
 
-def _prepare_program_files_install(machine: str) -> None:
-    ensure_host_xp2p_build()
-    host = get_ssh_host(machine)
-    role = "server" if machine == DEFAULT_SERVER else "client"
-    result = run_guest_script(host, "prepare_program_files.ps1", Role=role)
-    if result.rc != 0:
-        raise RuntimeError(
-            "Failed to prepare Program Files xp2p directory:\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-
-def prepare_program_files_install() -> None:
-    _prepare_program_files_install(DEFAULT_CLIENT)
-
-
-def prepare_server_program_files_install() -> None:
-    _prepare_program_files_install(DEFAULT_SERVER)
+def _extract_marker(output: str, marker: str) -> str | None:
+    for line in (output or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith(marker):
+            return stripped[len(marker) :].strip()
+    return None
 
 
 def run_xp2p(host: Host, args: Iterable[str]) -> CommandResult:
@@ -172,18 +159,120 @@ exit $LASTEXITCODE
     return run_powershell(host, script)
 
 
-@lru_cache(maxsize=1)
-def ensure_host_xp2p_build() -> None:
-    build_path = REPO_ROOT / "build" / "windows-amd64" / "xp2p.exe"
-    result = subprocess.run(
-        ["go", "build", "-o", str(build_path), "./go/cmd/xp2p"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
+def ensure_msi_package(host: Host) -> str:
+    """Builds the MSI inside the guest if it does not exist and returns its path."""
+    global _MSI_CACHE_PATH
+    if _MSI_CACHE_PATH:
+        return _MSI_CACHE_PATH
+
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$repo = 'C:\\xp2p'
+$cacheDir = 'C:\\xp2p\\build\\msi-cache'
+$marker = '{MSI_MARKER}'
+if (-not (Test-Path $cacheDir)) {{
+    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
+}}
+Push-Location $repo
+try {{
+    $version = (& go run ./go/cmd/xp2p --version).Trim()
+    if ([string]::IsNullOrWhiteSpace($version)) {{
+        throw "xp2p --version returned empty output."
+    }}
+    $msiName = "xp2p-$version-windows-amd64.msi"
+    $msiPath = Join-Path $cacheDir $msiName
+    if (-not (Test-Path $msiPath)) {{
+        $ldflags = "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$version"
+        $binaryDir = Join-Path $repo 'build\\msi-bin'
+        if (Test-Path $binaryDir) {{
+            Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue
+        }}
+        New-Item -ItemType Directory -Path $binaryDir -Force | Out-Null
+        $binaryPath = Join-Path $binaryDir 'xp2p.exe'
+        & go build -trimpath -ldflags $ldflags -o $binaryPath ./go/cmd/xp2p | Write-Output
+        if ($LASTEXITCODE -ne 0) {{
+            throw "go build failed with exit code $LASTEXITCODE"
+        }}
+        $wixDir = Get-ChildItem "C:\\Program Files (x86)" -Filter "WiX Toolset*" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $wixDir) {{
+            throw "WiX Toolset installation directory not found."
+        }}
+        $candle = Join-Path $wixDir.FullName 'bin\\candle.exe'
+        $light = Join-Path $wixDir.FullName 'bin\\light.exe'
+        $wixSource = Join-Path $repo 'installer\\wix\\xp2p.wxs'
+        $wixObj = Join-Path $binaryDir 'xp2p.wixobj'
+        & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryPath" "-out" $wixObj $wixSource | Write-Output
+        if ($LASTEXITCODE -ne 0) {{
+            throw "candle.exe failed with exit code $LASTEXITCODE"
+        }}
+        & $light "-out" $msiPath $wixObj | Write-Output
+        if ($LASTEXITCODE -ne 0) {{
+            throw "light.exe failed with exit code $LASTEXITCODE"
+        }}
+    }}
+    Write-Output ("$marker$msiPath")
+}}
+finally {{
+    Pop-Location
+}}
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
         raise RuntimeError(
-            "Failed to build xp2p.exe for host fixtures.\n"
-            f"CMD: go build -o {build_path} ./go/cmd/xp2p\n"
+            "Failed to build MSI package.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+    path = _extract_marker(result.stdout, MSI_MARKER)
+    if not path:
+        raise RuntimeError(
+            "MSI build script did not return artifact path.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    _MSI_CACHE_PATH = path
+    return path
+
+
+def install_xp2p_from_msi(host: Host, msi_path: str | Path) -> None:
+    msi_str = ps_quote(str(msi_path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$msi = {msi_str}
+if (-not (Test-Path $msi)) {{
+    throw "MSI package not found at $msi"
+}}
+$arguments = @('/i', $msi, '/qn', '/norestart')
+$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -Wait -PassThru
+if ($process.ExitCode -ne 0) {{
+    exit $process.ExitCode
+}}
+exit 0
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to install xp2p via MSI.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def get_remote_file_size(host: Host, path: str | Path) -> int:
+    target = ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target}
+if (-not (Test-Path $target)) {{
+    throw "File not found at $target"
+}}
+$item = Get-Item $target
+Write-Output $item.Length
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to query remote file size.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    try:
+        return int((result.stdout or "").strip().splitlines()[-1])
+    except (ValueError, IndexError) as exc:
+        raise RuntimeError(f"Unexpected size output: {result.stdout!r}") from exc

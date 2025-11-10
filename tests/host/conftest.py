@@ -45,10 +45,15 @@ def xp2p_options(pytestconfig: pytest.Config) -> dict:
     }
 
 
+@pytest.fixture(scope="session")
+def xp2p_msi_path(server_host: Host) -> str:
+    return _env.ensure_msi_package(server_host)
+
+
 @pytest.fixture(scope="session", autouse=True)
-def xp2p_program_files_setup():
-    _env.prepare_program_files_install()
-    _env.prepare_server_program_files_install()
+def xp2p_program_files_setup(server_host: Host, client_host: Host, xp2p_msi_path: str):
+    _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+    _env.install_xp2p_from_msi(client_host, xp2p_msi_path)
     yield
 
 

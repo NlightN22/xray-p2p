@@ -24,7 +24,7 @@ SERVER_HOST_VALUE = "xp2p.test.local"
 SERVER_STATE_FILE = SERVER_INSTALL_DIR / "install-state.json"
 
 
-def _cleanup_server_install(runner) -> None:
+def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
     runner(
         "server",
         "remove",
@@ -32,7 +32,7 @@ def _cleanup_server_install(runner) -> None:
         str(SERVER_INSTALL_DIR),
         "--ignore-missing",
     )
-    _env.prepare_server_program_files_install()
+    _env.install_xp2p_from_msi(server_host, msi_path)
 
 
 def _remote_path_exists(host, path: Path) -> bool:
@@ -123,9 +123,9 @@ def _decode_remote_certificate(host, path: Path) -> dict:
 
 @pytest.mark.host
 def test_server_install_uses_provided_certificate_and_force_overwrites(
-    server_host, xp2p_server_runner
+    server_host, xp2p_server_runner, xp2p_msi_path
 ):
-    _cleanup_server_install(xp2p_server_runner)
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     cert_source = Path(r"C:\Users\vagrant\AppData\Local\Temp\xp2p-server-cert.pem")
     key_source = Path(r"C:\Users\vagrant\AppData\Local\Temp\xp2p-server-key.pem")
     first_cert_content = "CERTIFICATE-DATA-ONE"
@@ -235,14 +235,16 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         assert second_cert_content in cert_content
         assert second_key_content in key_content
     finally:
-        _cleanup_server_install(xp2p_server_runner)
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
         _remove_remote_path(server_host, cert_source)
         _remove_remote_path(server_host, key_source)
 
 
 @pytest.mark.host
-def test_server_install_generates_self_signed_certificate(server_host, xp2p_server_runner):
-    _cleanup_server_install(xp2p_server_runner)
+def test_server_install_generates_self_signed_certificate(
+    server_host, xp2p_server_runner, xp2p_msi_path
+):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -318,14 +320,14 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         assert cert_ref.get("certificateFile") == expected_cert
         assert cert_ref.get("keyFile") == expected_key
     finally:
-        _cleanup_server_install(xp2p_server_runner)
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
 def test_server_run_starts_xray_core(
-    server_host, xp2p_server_runner, xp2p_server_run_factory
+    server_host, xp2p_server_runner, xp2p_server_run_factory, xp2p_msi_path
 ):
-    _cleanup_server_install(xp2p_server_runner)
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -354,13 +356,15 @@ def test_server_run_starts_xray_core(
         assert log_content.strip(), "Expected xray-core to produce log output"
         assert "Failed to start" not in log_content
     finally:
-        _cleanup_server_install(xp2p_server_runner)
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
         _remove_remote_path(server_host, SERVER_LOG_FILE)
 
 
 @pytest.mark.host
-def test_server_install_requires_force_when_state_exists(server_host, xp2p_server_runner):
-    _cleanup_server_install(xp2p_server_runner)
+def test_server_install_requires_force_when_state_exists(
+    server_host, xp2p_server_runner, xp2p_msi_path
+):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -394,12 +398,14 @@ def test_server_install_requires_force_when_state_exists(server_host, xp2p_serve
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
         assert "server already installed" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
     finally:
-        _cleanup_server_install(xp2p_server_runner)
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
-def test_server_install_succeeds_without_state_marker(server_host, xp2p_server_runner):
-    _cleanup_server_install(xp2p_server_runner)
+def test_server_install_succeeds_without_state_marker(
+    server_host, xp2p_server_runner, xp2p_msi_path
+):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -437,4 +443,4 @@ def test_server_install_succeeds_without_state_marker(server_host, xp2p_server_r
 
         assert _remote_path_exists(server_host, SERVER_STATE_FILE), "Expected install-state.json to be recreated"
     finally:
-        _cleanup_server_install(xp2p_server_runner)
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

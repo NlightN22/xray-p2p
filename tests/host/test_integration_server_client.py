@@ -25,20 +25,20 @@ CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 
 
-def _cleanup_server_install(runner, install_dir: Path | None = None) -> None:
+def _cleanup_server_install(server_host, runner, msi_path: str, install_dir: Path | None = None) -> None:
     args = ["server", "remove", "--ignore-missing"]
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
-    _env.prepare_server_program_files_install()
+    _env.install_xp2p_from_msi(server_host, msi_path)
 
 
-def _cleanup_client_install(runner, install_dir: Path | None = None) -> None:
+def _cleanup_client_install(client_host, runner, msi_path: str, install_dir: Path | None = None) -> None:
     args = ["client", "remove", "--ignore-missing"]
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
-    _env.prepare_program_files_install()
+    _env.install_xp2p_from_msi(client_host, msi_path)
 
 
 def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
@@ -103,13 +103,16 @@ def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, 
 
 @pytest.mark.host
 def test_install_server_and_client_default(
-    xp2p_server_runner,
+    server_host,
+    client_host,
     xp2p_client_runner,
+    xp2p_server_runner,
     xp2p_server_run_factory,
     xp2p_client_run_factory,
+    xp2p_msi_path,
 ):
-    _cleanup_server_install(xp2p_server_runner, DEFAULT_SERVER_INSTALL_DIR)
-    _cleanup_client_install(xp2p_client_runner, DEFAULT_CLIENT_INSTALL_DIR)
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, DEFAULT_SERVER_INSTALL_DIR)
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, DEFAULT_CLIENT_INSTALL_DIR)
     try:
         server_install = xp2p_server_runner(
             "--server-host",
@@ -148,19 +151,22 @@ def test_install_server_and_client_default(
                 ping_result = _run_ping_via_socks(xp2p_client_runner, SERVER_PUBLIC_HOST)
                 _assert_ping_success(ping_result)
     finally:
-        _cleanup_client_install(xp2p_client_runner, DEFAULT_CLIENT_INSTALL_DIR)
-        _cleanup_server_install(xp2p_server_runner, DEFAULT_SERVER_INSTALL_DIR)
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, DEFAULT_CLIENT_INSTALL_DIR)
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, DEFAULT_SERVER_INSTALL_DIR)
 
 
 @pytest.mark.host
 def test_install_server_and_client_nodefault(
+    server_host,
+    client_host,
     xp2p_server_runner,
     xp2p_client_runner,
     xp2p_server_run_factory,
     xp2p_client_run_factory,
+    xp2p_msi_path,
 ):
-    _cleanup_server_install(xp2p_server_runner, CUSTOM_SERVER_INSTALL_DIR)
-    _cleanup_client_install(xp2p_client_runner, CUSTOM_CLIENT_INSTALL_DIR)
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR)
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR)
     try:
         server_install = xp2p_server_runner(
             "server",
@@ -220,5 +226,6 @@ def test_install_server_and_client_nodefault(
                 ping_result = _run_ping_via_socks(xp2p_client_runner, SERVER_PUBLIC_HOST)
                 _assert_ping_success(ping_result)
     finally:
-        _cleanup_client_install(xp2p_client_runner, CUSTOM_CLIENT_INSTALL_DIR)
-        _cleanup_server_install(xp2p_server_runner, CUSTOM_SERVER_INSTALL_DIR)
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR)
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR)
+                        

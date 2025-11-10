@@ -14,9 +14,9 @@ CLIENT_LOG_FILE = CLIENT_INSTALL_DIR / CLIENT_LOG_RELATIVE
 CLIENT_STATE_FILE = CLIENT_INSTALL_DIR / "install-state.json"
 
 
-def _cleanup_client_install(runner) -> None:
+def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--ignore-missing")
-    _env.prepare_program_files_install()
+    _env.install_xp2p_from_msi(client_host, msi_path)
 
 
 def _read_remote_json(client_host, path: Path) -> dict:
@@ -66,8 +66,8 @@ def _assert_outbounds_server(data: dict, address: str, password: str, email: str
 
 
 @pytest.mark.host
-def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
-    _cleanup_client_install(xp2p_client_runner)
+def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp2p_msi_path):
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
         xp2p_client_runner(
             "client",
@@ -105,12 +105,12 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             updated_data, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local"
         )
     finally:
-        _cleanup_client_install(xp2p_client_runner)
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
-def test_client_install_from_link(client_host, xp2p_client_runner):
-    _cleanup_client_install(xp2p_client_runner)
+def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path):
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
         link = (
             "trojan://linkpass@link.example.test:62022?"
@@ -132,12 +132,14 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
         tls_settings = data["outbounds"][0]["streamSettings"]["tlsSettings"]
         assert tls_settings["allowInsecure"] is True
     finally:
-        _cleanup_client_install(xp2p_client_runner)
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
-def test_client_run_starts_xray_core(client_host, xp2p_client_runner, xp2p_client_run_factory):
-    _cleanup_client_install(xp2p_client_runner)
+def test_client_run_starts_xray_core(
+    client_host, xp2p_client_runner, xp2p_client_run_factory, xp2p_msi_path
+):
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
         xp2p_client_runner(
             "client",
@@ -167,12 +169,14 @@ def test_client_run_starts_xray_core(client_host, xp2p_client_runner, xp2p_clien
         assert log_content.strip(), "Expected xray-core to produce log output"
         assert "Failed to start" not in log_content
     finally:
-        _cleanup_client_install(xp2p_client_runner)
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
-def test_client_install_requires_force_when_state_exists(client_host, xp2p_client_runner):
-    _cleanup_client_install(xp2p_client_runner)
+def test_client_install_requires_force_when_state_exists(
+    client_host, xp2p_client_runner, xp2p_msi_path
+):
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
         xp2p_client_runner(
             "client",
@@ -202,12 +206,14 @@ def test_client_install_requires_force_when_state_exists(client_host, xp2p_clien
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
         assert "client already installed" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
     finally:
-        _cleanup_client_install(xp2p_client_runner)
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
-def test_client_install_succeeds_without_state_marker(client_host, xp2p_client_runner):
-    _cleanup_client_install(xp2p_client_runner)
+def test_client_install_succeeds_without_state_marker(
+    client_host, xp2p_client_runner, xp2p_msi_path
+):
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
         xp2p_client_runner(
             "client",
@@ -241,4 +247,4 @@ def test_client_install_succeeds_without_state_marker(client_host, xp2p_client_r
 
         assert _remote_path_exists(client_host, CLIENT_STATE_FILE), "Expected install-state.json to be recreated"
     finally:
-        _cleanup_client_install(xp2p_client_runner)
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
