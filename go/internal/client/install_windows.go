@@ -104,14 +104,23 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return nil
 	}
 
-	if err := os.RemoveAll(installDir); err != nil {
-		if opts.IgnoreMissing && errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("xp2p: remove install directory: %w", err)
+	configDir, err := resolveConfigDir(installDir, opts.ConfigDir)
+	if err != nil {
+		return err
 	}
 
-	logging.Info("xp2p client files removed", "install_dir", installDir)
+	if err := os.RemoveAll(configDir); err != nil {
+		return fmt.Errorf("xp2p: remove client config dir: %w", err)
+	}
+
+	statePath := filepath.Join(installDir, layout.StateFileName)
+	if err := os.Remove(statePath); err != nil {
+		if !(opts.IgnoreMissing && errors.Is(err, os.ErrNotExist)) {
+			return fmt.Errorf("xp2p: remove client state file: %w", err)
+		}
+	}
+
+	logging.Info("xp2p client configuration removed", "install_dir", installDir, "config_dir", configDir)
 	return nil
 }
 

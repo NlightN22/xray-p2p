@@ -46,6 +46,7 @@ type RunOptions struct {
 // RemoveOptions controls removal of the server-side components.
 type RemoveOptions struct {
 	InstallDir    string
+	ConfigDir     string
 	KeepFiles     bool
 	IgnoreMissing bool
 }

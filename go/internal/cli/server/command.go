@@ -92,6 +92,7 @@ func newServerRemoveCmd(cfg commandConfig) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVar(&opts.Path, "path", "", "server installation directory")
+	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name")
 	flags.BoolVar(&opts.KeepFiles, "keep-files", false, "keep installation files")
 	flags.BoolVar(&opts.IgnoreMissing, "ignore-missing", false, "do not fail if service or files are absent")
 	return cmd

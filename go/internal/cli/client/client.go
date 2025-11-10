@@ -166,6 +166,7 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 	fs.SetOutput(os.Stdout)
 
 	path := fs.String("path", "", "client installation directory")
+	configDir := fs.String("config-dir", "", "client configuration directory name")
 	keepFiles := fs.Bool("keep-files", false, "keep installation files")
 	ignoreMissing := fs.Bool("ignore-missing", false, "do not fail if installation is absent")
 
@@ -183,6 +184,7 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 
 	opts := client.RemoveOptions{
 		InstallDir:    firstNonEmpty(*path, cfg.Client.InstallDir),
+		ConfigDir:     firstNonEmpty(*configDir, cfg.Client.ConfigDir),
 		KeepFiles:     *keepFiles,
 		IgnoreMissing: *ignoreMissing,
 	}
@@ -192,7 +194,7 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 		return 1
 	}
 
-	logging.Info("xp2p client removed", "install_dir", opts.InstallDir)
+	logging.Info("xp2p client removed", "install_dir", opts.InstallDir, "config_dir", opts.ConfigDir)
 	return 0
 }
 

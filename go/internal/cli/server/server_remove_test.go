@@ -18,16 +18,24 @@ func TestRunServerRemove(t *testing.T) {
 	}{
 		{
 			name:     "defaults",
-			cfg:      serverCfg(`C:\xp2p`, "", ""),
+			cfg:      serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, ""),
 			wantCode: 0,
-			wantOpts: server.RemoveOptions{InstallDir: `C:\xp2p`},
+			wantOpts: server.RemoveOptions{
+				InstallDir: `C:\xp2p`,
+				ConfigDir:  server.DefaultServerConfigDir,
+			},
 		},
 		{
 			name:     "flags override",
-			cfg:      serverCfg(`C:\xp2p`, "", ""),
-			opts:     serverRemoveCommandOptions{Path: `D:\xp2p`, KeepFiles: true, IgnoreMissing: true},
+			cfg:      serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, ""),
+			opts:     serverRemoveCommandOptions{Path: `D:\xp2p`, ConfigDir: "srv-cfg", KeepFiles: true, IgnoreMissing: true},
 			wantCode: 0,
-			wantOpts: server.RemoveOptions{InstallDir: `D:\xp2p`, KeepFiles: true, IgnoreMissing: true},
+			wantOpts: server.RemoveOptions{
+				InstallDir:    `D:\xp2p`,
+				ConfigDir:     "srv-cfg",
+				KeepFiles:     true,
+				IgnoreMissing: true,
+			},
 		},
 	}
 

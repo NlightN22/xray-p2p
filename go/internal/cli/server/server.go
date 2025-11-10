@@ -46,6 +46,7 @@ type serverInstallCommandOptions struct {
 
 type serverRemoveCommandOptions struct {
 	Path          string
+	ConfigDir     string
 	KeepFiles     bool
 	IgnoreMissing bool
 }
@@ -102,6 +103,7 @@ func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstall
 func runServerRemove(ctx context.Context, cfg config.Config, opts serverRemoveCommandOptions) int {
 	removeOpts := server.RemoveOptions{
 		InstallDir:    firstNonEmpty(opts.Path, cfg.Server.InstallDir),
+		ConfigDir:     firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		KeepFiles:     opts.KeepFiles,
 		IgnoreMissing: opts.IgnoreMissing,
 	}
@@ -111,7 +113,7 @@ func runServerRemove(ctx context.Context, cfg config.Config, opts serverRemoveCo
 		return 1
 	}
 
-	logging.Info("xp2p server removed", "install_dir", removeOpts.InstallDir)
+	logging.Info("xp2p server removed", "install_dir", removeOpts.InstallDir, "config_dir", removeOpts.ConfigDir)
 	return 0
 }
 func runServerRun(ctx context.Context, cfg config.Config, opts serverRunCommandOptions) int {

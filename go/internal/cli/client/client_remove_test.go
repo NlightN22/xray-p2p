@@ -18,17 +18,21 @@ func TestRunClientRemove(t *testing.T) {
 	}{
 		{
 			name:     "defaults",
-			cfg:      clientCfg(`C:\xp2p-client`, ""),
+			cfg:      clientCfg(`C:\xp2p-client`, client.DefaultClientConfigDir),
 			wantCode: 0,
-			wantOpts: client.RemoveOptions{InstallDir: `C:\xp2p-client`},
+			wantOpts: client.RemoveOptions{
+				InstallDir: `C:\xp2p-client`,
+				ConfigDir:  client.DefaultClientConfigDir,
+			},
 		},
 		{
 			name:     "flags override",
-			cfg:      clientCfg(`C:\xp2p-client`, ""),
-			args:     []string{"--path", `D:\xp2p-client`, "--keep-files", "--ignore-missing"},
+			cfg:      clientCfg(`C:\xp2p-client`, client.DefaultClientConfigDir),
+			args:     []string{"--path", `D:\xp2p-client`, "--config-dir", "cfg-alt", "--keep-files", "--ignore-missing"},
 			wantCode: 0,
 			wantOpts: client.RemoveOptions{
 				InstallDir:    `D:\xp2p-client`,
+				ConfigDir:     "cfg-alt",
 				KeepFiles:     true,
 				IgnoreMissing: true,
 			},
