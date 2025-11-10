@@ -266,43 +266,6 @@ function Ensure-WiX {
     Write-Info ("WiX Toolset ready: {0}" -f $latest.FullName)
 }
 
-function Build-Xp2p {
-    $sourceRoot = "C:\xp2p"
-    $xp2pDir = "C:\tools\xp2p"
-    $xp2pExe = Join-Path $xp2pDir "xp2p.exe"
-
-    if (-not (Test-Path $sourceRoot)) {
-        throw "Shared folder '$sourceRoot' not mounted. Ensure Vagrant synced folders are available."
-    }
-
-    if (-not (Test-Path $xp2pDir)) {
-        New-Item -ItemType Directory -Path $xp2pDir | Out-Null
-    }
-
-    Write-Info "Building xp2p binary..."
-    Push-Location $sourceRoot
-    try {
-        & go.exe version | Write-Host
-        & go.exe build -o $xp2pExe .\go\cmd\xp2p | Write-Host
-    }
-    finally {
-        Pop-Location
-    }
-
-    if (-not (Test-Path $xp2pExe)) {
-        throw "xp2p build failed - executable not found at $xp2pExe"
-    }
-
-    if (-not ($env:Path -split ';' | Where-Object { $_ -eq $xp2pDir })) {
-        Write-Info "Adding $xp2pDir to the system PATH."
-        $newPath = "$xp2pDir;$($env:Path)"
-        [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::Machine)
-        $env:Path = $newPath
-    }
-
-    Write-Info "xp2p built successfully at $xp2pExe"
-}
-
 function Disable-SshHostKeyChecking {
     param(
         [string] $TargetUser = "vagrant",
@@ -385,7 +348,6 @@ Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
 Ensure-WiX
-Build-Xp2p
 Disable-IdleSleepAndHibernate
 Set-HostOnlyAddress -InterfaceAlias $hostOnlyAlias -IPAddress $hostOnlyAddress
 $configuredAddress = Get-NetIPAddress -InterfaceAlias $hostOnlyAlias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
