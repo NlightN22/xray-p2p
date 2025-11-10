@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/toml"
@@ -280,19 +279,4 @@ func normalize(cfg *Config) {
 	}
 
 	// AllowInsecure is a boolean and defaults through the map loader.
-}
-
-func defaultInstallDir() string {
-	if runtime.GOOS == "windows" {
-		if pf := os.Getenv("ProgramFiles"); pf != "" {
-			return filepath.Join(pf, "xp2p")
-		}
-		return filepath.Join("C:\\", "xp2p")
-	}
-
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, "xp2p")
-	}
-
-	return filepath.Join(os.TempDir(), "xp2p")
 }

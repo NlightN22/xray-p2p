@@ -19,6 +19,7 @@ function Write-Info {
 $source = 'C:\xp2p\build\windows-amd64\xp2p.exe'
 $installRoot = 'C:\Program Files\xp2p'
 $binDir = Join-Path $installRoot 'bin'
+$logsDir = Join-Path $installRoot 'logs'
 
 if (-not (Test-Path $source)) {
     throw "xp2p build binary not found at $source"
@@ -55,9 +56,12 @@ New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 Write-Info "Creating bin directory $binDir"
 New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 
-$target = Join-Path $binDir 'xp2p.exe'
-Write-Info "Copying xp2p.exe to $target"
-Copy-Item $source $target -Force
+Write-Info "Creating logs directory $logsDir"
+New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
+
+$xp2pTarget = Join-Path $installRoot 'xp2p.exe'
+Write-Info "Copying xp2p.exe to $xp2pTarget"
+Copy-Item $source $xp2pTarget -Force
 
 Write-Info "Granting Modify rights to vagrant on $installRoot"
 icacls $installRoot /grant 'vagrant:(OI)(CI)M' /t /c | Out-Null

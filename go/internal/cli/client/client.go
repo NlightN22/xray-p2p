@@ -13,6 +13,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
@@ -294,7 +295,7 @@ func performClientInstall(ctx context.Context, cfg config.Config, installDir, co
 }
 
 func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
-	binPath := filepath.Join(installDir, "bin", "xray.exe")
+	binPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
 	if info, err := os.Stat(binPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil

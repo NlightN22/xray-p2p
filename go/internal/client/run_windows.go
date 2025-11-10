@@ -14,6 +14,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
@@ -33,7 +34,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	xrayPath := filepath.Join(installDir, "bin", "xray.exe")
+	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
 	if _, err := os.Stat(xrayPath); err != nil {
 		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
 	}

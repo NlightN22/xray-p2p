@@ -116,6 +116,33 @@ Additional helpers:
 - `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
 - `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.
 
+## Installation layout
+
+xp2p now ships as a single self-contained directory. Every installation follows the same structure:
+
+```text
+<install-dir>/
+  xp2p(.exe)
+  install-state.json
+  logs/
+  bin/
+    xray(.exe)
+  config-client/
+  config-server/
+```
+
+- The `xp2p` binary always lives at the root next to `install-state.json`, so running `xp2p` from that directory automatically discovers the configs/logs without extra flags.
+- `bin/` stores only the xray-core runtime that the CLI manages.
+- `config-client/` and `config-server/` contain the rendered JSON configs for each role.
+- `logs/` is created during install so that `--xray-log-file logs\<name>.err` always resolves within the tree.
+
+Default install locations:
+
+- **Windows** – `C:\Program Files\xp2p` when the directory is writable; otherwise `%LOCALAPPDATA%\xp2p`.
+- **Linux** – `/opt/xp2p` for root sessions, or `$HOME/.local/share/xp2p` for unprivileged users.
+
+When xp2p detects that it is already running from an installation root (for example, a portable unzip), it transparently uses that directory for all commands. MSI/PKG installers only need to copy the tree into place; xp2p will keep configs and logs alongside itself unless explicit `--path`/`--config-dir` flags are provided.
+
 ---
 
 ## Follow-up tasks on the client

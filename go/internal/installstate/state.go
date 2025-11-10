@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 )
 
@@ -20,7 +21,7 @@ const (
 	// KindClient marks a client installation.
 	KindClient Kind = "client"
 	// FileName is the default file name for state markers.
-	FileName = "install-state.json"
+	FileName = layout.StateFileName
 )
 
 // Marker captures the installation metadata persisted on disk.

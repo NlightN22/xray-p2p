@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -217,7 +218,7 @@ func resolveInstallPort(cfg config.Config, flagPort string) string {
 }
 
 func serverAssetsPresent(installDir, configDirPath string) (bool, error) {
-	binPath := filepath.Join(installDir, "bin", "xray.exe")
+	binPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
 	if info, err := os.Stat(binPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil

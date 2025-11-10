@@ -34,7 +34,7 @@ test:
 	go test ./...	
 
 vagrant-win10:
-	cd $(VAGRANT_WIN10_DIR) && vagrant up --provision
+	cd $(VAGRANT_WIN10_DIR) && vagrant up
 
 vagrant-win10-destroy:
 	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f

@@ -1,12 +1,16 @@
 package server
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
+)
 
 // DefaultTrojanPort specifies the default inbound port for the xray-core service.
 const DefaultTrojanPort = 58443
 
 // DefaultServerConfigDir is the default directory name for server configuration files.
-const DefaultServerConfigDir = "config-server"
+const DefaultServerConfigDir = layout.ServerConfigDir
 
 // ErrUnsupported indicates that the requested operation is not supported on this platform.
 var ErrUnsupported = errors.New("xp2p: server installation is only supported on Windows")

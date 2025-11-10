@@ -8,6 +8,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func clientCfg(installDir, configDir string) config.Config {
@@ -49,7 +50,7 @@ func stubClientRun(fn func(context.Context, client.RunOptions) error) func() {
 func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 	t.Helper()
 
-	binDir := filepath.Join(installDir, "bin")
+	binDir := filepath.Join(installDir, layout.BinDirName)
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", binDir, err)
 	}

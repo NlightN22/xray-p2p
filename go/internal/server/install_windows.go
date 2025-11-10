@@ -18,6 +18,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/assets/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
@@ -33,6 +34,7 @@ type installState struct {
 	InstallOptions
 	installDir string
 	binDir     string
+	logsDir    string
 	configDir  string
 	xrayPath   string
 	certDest   string
@@ -71,6 +73,9 @@ func Install(ctx context.Context, opts InstallOptions) error {
 
 	if err := os.MkdirAll(state.binDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create bin directory: %w", err)
+	}
+	if err := os.MkdirAll(state.logsDir, 0o755); err != nil {
+		return fmt.Errorf("xp2p: create logs directory: %w", err)
 	}
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
@@ -174,15 +179,16 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 			Force:           opts.Force,
 		},
 		installDir: dir,
-		binDir:     filepath.Join(dir, "bin"),
+		binDir:     filepath.Join(dir, layout.BinDirName),
+		logsDir:    filepath.Join(dir, layout.LogsDirName),
 		configDir:  configDir,
-		xrayPath:   filepath.Join(dir, "bin", "xray.exe"),
+		xrayPath:   filepath.Join(dir, layout.BinDirName, "xray.exe"),
 		portValue:  portVal,
 	}
 
 	state.certDest = filepath.Join(state.configDir, "cert.pem")
 	state.keyDest = filepath.Join(state.configDir, "key.pem")
-	state.stateFile = filepath.Join(state.installDir, installstate.FileName)
+	state.stateFile = filepath.Join(state.installDir, layout.StateFileName)
 
 	if certSource == "" {
 		state.selfSigned = true

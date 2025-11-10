@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -122,7 +123,7 @@ func captureStdout(t *testing.T, fn func()) string {
 
 func prepareInstallation(t *testing.T, installDir, configDirName string) {
 	t.Helper()
-	binDir := filepath.Join(installDir, "bin")
+	binDir := filepath.Join(installDir, layout.BinDirName)
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", binDir, err)
 	}
