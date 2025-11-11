@@ -1,12 +1,12 @@
 project_root = File.expand_path("../../..", __FILE__)
 
 Vagrant.configure("2") do |config|
-  config.vm.define "openwrt-sdk" do |vm|
+  config.vm.define "deb12-server" do |vm|
     vm.vm.box = "generic/debian12"
-    vm.vm.hostname = "openwrt-sdk"
+    vm.vm.hostname = "deb12-server"
 
     vm.vm.provider "virtualbox" do |vb|
-      vb.name = "openwrt-sdk"
+      vb.name = "deb12-server"
       vb.memory = 4096
       vb.cpus = 4
     end

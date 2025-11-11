@@ -60,13 +60,13 @@ and mounts this workspace so you can build the ipk without touching your host.
 
    ```bash
    cd infra/vagrant/debian12
-   vagrant up openwrt-sdk
+   vagrant up deb12-server
    ```
 
 2. Enter the VM when provisioning is done:
 
    ```bash
-   vagrant ssh openwrt-sdk
+   vagrant ssh deb12-server
    ```
 
    The xp2p repository is mounted under `/srv/xray-p2p`, while the SDK lives in
