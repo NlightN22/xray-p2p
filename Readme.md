@@ -214,6 +214,17 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/ser
 
 ---
 
+## Development prerequisites
+
+- **Go toolchain**: Install Go 1.23.x (tested with 1.23.3) so local builds match
+  the OpenWrt SDK toolchain. On Windows either install the official
+  `go1.23.3.windows-amd64.msi` or set `GOTOOLCHAIN=go1.23.3` in your shell/VS Code
+  settings. Newer Go releases try to bump `go.mod` to 1.24+, which the SDK rejects.
+- **Vagrant**: Use the Debian 13 box under `infra/vagrant/debian13` for a reproducible
+  OpenWrt SDK environment (runs on VirtualBox with 4 GB RAM by default).
+
+---
+
 ## Manual operations
 
 ### Server maintenance

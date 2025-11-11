@@ -21,7 +21,7 @@ yet another project when iterating on the Go sources.
    ./scripts/feeds install xp2p
    ```
 
-4. **Select the package** (`Network → xp2p`) via `make menuconfig`, or enable it
+4. **Select the package** (`Network в†’ xp2p`) via `make menuconfig`, or enable it
    non-interactively with:
 
    ```bash
@@ -59,14 +59,14 @@ and mounts this workspace so you can build the ipk without touching your host.
 1. Bring up the guest:
 
    ```bash
-   cd infra/vagrant/debian12
-   vagrant up deb12-server
+   cd infra/vagrant/debian13
+   vagrant up deb13-server
    ```
 
 2. Enter the VM when provisioning is done:
 
    ```bash
-   vagrant ssh deb12-server
+   vagrant ssh deb13-server
    ```
 
    The xp2p repository is mounted under `/srv/xray-p2p`, while the SDK lives in
@@ -88,6 +88,15 @@ and mounts this workspace so you can build the ipk without touching your host.
    inside the repository (e.g. `build/openwrt/linux-amd64/xp2p_*.ipk`). Use
    `vagrant ssh-config` + `scp` or `vagrant rsync` to copy them back to your host.
 
+### Host Go toolchain
+
+Install Go **1.23.x** on the host to keep `go.mod` compatible with the OpenWrt
+SDK (the SDK currently ships Go 1.19). On Windows you can either install
+`go1.23.3.windows-amd64.msi` or set `GOTOOLCHAIN=go1.23.3` (globally via
+`setx` or in VS Code's `go.toolsEnvVars`) so every `go` command uses the same
+toolchain as the module. Newer host versions will otherwise rewrite the module
+to `go 1.24+`, which the SDK refuses to parse.
+
 To smoke-test the build you can install the ipk inside the VM with `opkg install
 ./bin/packages/<target>/xp2p/xp2p_*.ipk` and run `xp2p --version`.
 
@@ -96,9 +105,9 @@ To smoke-test the build you can install the ipk inside the VM with `opkg install
 By default the helper builds all supported Linux targets. Use the following
 environment variables if you need finer control:
 
-- `XP2P_TARGETS` — comma-separated identifiers (e.g. `linux-amd64,linux-arm64`).
+- `XP2P_TARGETS` вЂ” comma-separated identifiers (e.g. `linux-amd64,linux-arm64`).
   The special value `all` (default) restores the multi-arch build.
-- `XP2P_KEEP_CONFIG=1` — reuse the existing `.config` inside each SDK instead of
+- `XP2P_KEEP_CONFIG=1` вЂ” reuse the existing `.config` inside each SDK instead of
   generating a default one.
 - `XP2P_OPENWRT_VERSION`, `XP2P_OPENWRT_MIRROR`, `XP2P_SDK_BASE`, and
   `XP2P_BUILD_ROOT` allow you to override the release, download mirror, SDK
