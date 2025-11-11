@@ -27,12 +27,13 @@ jobs:
   openwrt:
     needs: linux
     runs-on: ubuntu-latest
-    env:
-      OPENWRT_VERSION: "23.05.3"
-      OPENWRT_TARGET: "x86"
-      OPENWRT_SUBTARGET: "64"
-      OPENWRT_SDK_TARBALL: "openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
-      OPENWRT_SDK_URL: "https://downloads.openwrt.org/releases/23.05.3/targets/x86/64/openwrt-sdk-23.05.3-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+    strategy:
+      fail-fast: false
+      matrix:
+        identifier:
+          - linux-amd64
+          - linux-arm64
+          - linux-mipsle-softfloat
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,33 +42,23 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y bc build-essential ca-certificates curl file gawk git jq \
-            libelf-dev libncurses5-dev libncursesw5-dev libssl-dev opkg pkg-config python3 \
+            libelf-dev libncurses5-dev libncursesw5-dev libssl-dev pkg-config python3 \
             python3-distutils rsync subversion tar time unzip wget xz-utils zip zlib1g-dev
-
-      - name: Download OpenWrt SDK
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/openwrt"
-          cd "$RUNNER_TEMP/openwrt"
-          curl -L "$OPENWRT_SDK_URL" -o sdk.tar.xz
-          tar -xf sdk.tar.xz
-          SDK_DIR=$(tar -tf sdk.tar.xz | head -n 1 | cut -d/ -f1)
-          mv "$SDK_DIR" "$RUNNER_TEMP/openwrt-sdk"
-          echo "SDK_DIR=$RUNNER_TEMP/openwrt-sdk" >> "$GITHUB_ENV"
 
       - name: Build xp2p ipk
         run: |
           set -euo pipefail
-          OPENWRT_SDK_DIR="$SDK_DIR" \
-          XP2P_FEED_PATH="$GITHUB_WORKSPACE/openwrt/feed" \
+          XP2P_TARGETS="${{ matrix.identifier }}" \
+          XP2P_PROJECT_ROOT="$GITHUB_WORKSPACE" \
+          XP2P_BUILD_ROOT="$GITHUB_WORKSPACE/build/openwrt" \
             "$GITHUB_WORKSPACE/tests/guest/scripts/build_openwrt_xp2p.sh"
 
       - name: Locate artifact
         id: locate-ipk
         run: |
           set -euo pipefail
-          cd "$SDK_DIR"
-          pkg=$(find bin/packages -type f -name "xp2p_*.ipk" | head -n 1 || true)
+          target_dir="$GITHUB_WORKSPACE/build/openwrt/${{ matrix.identifier }}"
+          pkg=$(find "$target_dir" -type f -name "xp2p_*.ipk" -print | sort | head -n 1 || true)
           if [ -z "$pkg" ]; then
             echo "No xp2p ipk produced" >&2
             exit 1
@@ -78,5 +69,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xp2p-ipk
+          name: xp2p-ipk-${{ matrix.identifier }}
           path: ${{ steps.locate-ipk.outputs.ipk }}

@@ -79,11 +79,44 @@ and mounts this workspace so you can build the ipk without touching your host.
    ```
 
    The helper script injects the local feed (`src-link xp2p /srv/xray-p2p/openwrt/feed`),
-   installs it, and runs `make package/xp2p/compile V=sc`.
+   installs it, and compiles `xp2p` for every release architecture defined in
+   `go/internal/buildtarget/target.go` (linux-amd64, linux-arm64,
+   linux-mipsle-softfloat). Required SDKs are cached under
+   `/home/vagrant/openwrt-sdk-<identifier>` on first use.
 
-4. Collect the artifact from
-   `/home/vagrant/openwrt-sdk/bin/packages/<target>/xp2p/xp2p_*.ipk`. Use
-   `vagrant ssh-config` + `scp` or `vagrant rsync` to copy it to your host.
+4. Collect the artifacts from the shared `./build/openwrt/<identifier>` folders
+   inside the repository (e.g. `build/openwrt/linux-amd64/xp2p_*.ipk`). Use
+   `vagrant ssh-config` + `scp` or `vagrant rsync` to copy them back to your host.
 
 To smoke-test the build you can install the ipk inside the VM with `opkg install
 ./bin/packages/<target>/xp2p/xp2p_*.ipk` and run `xp2p --version`.
+
+### Building for other OpenWrt targets
+
+By default the helper builds all supported Linux targets. Use the following
+environment variables if you need finer control:
+
+- `XP2P_TARGETS` — comma-separated identifiers (e.g. `linux-amd64,linux-arm64`).
+  The special value `all` (default) restores the multi-arch build.
+- `XP2P_KEEP_CONFIG=1` — reuse the existing `.config` inside each SDK instead of
+  generating a default one.
+- `XP2P_OPENWRT_VERSION`, `XP2P_OPENWRT_MIRROR`, `XP2P_SDK_BASE`, and
+  `XP2P_BUILD_ROOT` allow you to override the release, download mirror, SDK
+  cache location, and destination for the resulting `.ipk` files respectively.
+
+Example invocations inside the Vagrant guest:
+
+```bash
+# Build every release target and drop ipks into ./build/openwrt/*
+/srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+
+# Only refresh the arm64 packages
+XP2P_TARGETS=linux-arm64 /srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+
+# Keep a hand-crafted .config when rebuilding mipsle
+XP2P_TARGETS=linux-mipsle-softfloat XP2P_KEEP_CONFIG=1 \
+  /srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+```
+
+Each run copies the resulting archives into `build/openwrt/<identifier>`, so you
+can grab the artifacts from the host OS together with other release binaries.
