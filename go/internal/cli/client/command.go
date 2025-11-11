@@ -140,8 +140,9 @@ func newClientDeployCmd(cfg commandConfig) *cobra.Command {
 }
 
 func forwardFlags(cmd *cobra.Command, args []string) []string {
-	forwarded := make([]string, 0, len(args)+cmd.Flags().NFlag())
-	cmd.Flags().Visit(func(f *pflag.Flag) {
+	localFlags := cmd.LocalFlags()
+	forwarded := make([]string, 0, len(args)+localFlags.NFlag())
+	localFlags.Visit(func(f *pflag.Flag) {
 		name := fmt.Sprintf("--%s", f.Name)
 		if f.Value.Type() == "bool" {
 			if f.Value.String() == "true" {
