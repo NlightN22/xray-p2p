@@ -30,6 +30,7 @@ var (
 	serverSetCertFunc    = server.SetCertificate
 	serverUserLinkFunc   = server.GetUserLink
 	serverUserListFunc   = server.ListUsers
+	serverDeployFunc     = runServerDeploy
 )
 
 var promptYesNoFunc = promptYesNo

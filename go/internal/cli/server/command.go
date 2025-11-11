@@ -227,7 +227,7 @@ func newServerDeployCmd(cfg commandConfig) *cobra.Command {
 		Use:   "deploy",
 		Short: "Listen for xp2p client deploy requests",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runServerDeploy(commandContext(cmd), cfg(), opts)
+			code := serverDeployFunc(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
 		},
 	}
