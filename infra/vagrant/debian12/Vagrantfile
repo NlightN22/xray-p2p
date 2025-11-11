@@ -3,6 +3,7 @@ project_root = File.expand_path("../../..", __FILE__)
 Vagrant.configure("2") do |config|
   config.vm.define "deb12-server" do |vm|
     vm.vm.box = "generic/debian12"
+    vm.vm.box_version = "4.3.12"
     vm.vm.hostname = "deb12-server"
 
     vm.vm.provider "virtualbox" do |vb|
