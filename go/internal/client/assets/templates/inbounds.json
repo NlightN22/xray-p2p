@@ -4,7 +4,7 @@
             "tag": "socks-in",
             "protocol": "socks",
             "listen": "127.0.0.1",
-            "port": 51080,
+            "port": 51180,
             "settings": {
                 "udp": true
             }
