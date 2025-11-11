@@ -173,18 +173,54 @@ $marker = '{MSI_MARKER}'
 if (-not (Test-Path $cacheDir)) {{
     New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
 }}
-Push-Location $repo
-try {{
-    $version = (& go run ./go/cmd/xp2p --version).Trim()
-    if ([string]::IsNullOrWhiteSpace($version)) {{
-        throw "xp2p --version returned empty output."
-    }}
-    $msiName = "xp2p-$version-windows-amd64.msi"
-    $msiPath = Join-Path $cacheDir $msiName
-    if (-not (Test-Path $msiPath)) {{
-        $ldflags = "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$version"
-        $binaryDir = Join-Path $repo 'build\\msi-bin'
-        if (Test-Path $binaryDir) {{
+    Push-Location $repo
+    try {{
+        $version = (& go run ./go/cmd/xp2p --version).Trim()
+        if ([string]::IsNullOrWhiteSpace($version)) {{
+            throw "xp2p --version returned empty output."
+        }}
+        $headFile = Join-Path $repo '.git\\HEAD'
+        if (-not (Test-Path $headFile)) {{
+            throw ".git\\HEAD not found at $headFile"
+        }}
+        $headContent = (Get-Content -Raw $headFile).Trim()
+        $commit = ''
+        if ($headContent -like 'ref:*') {{
+            $ref = $headContent.Substring(5).Trim()
+            $refFile = Join-Path $repo ('.git\\' + $ref)
+            if (Test-Path $refFile) {{
+                $commit = (Get-Content -Raw $refFile).Trim()
+            }} else {{
+                $packedRefs = Join-Path $repo '.git\\packed-refs'
+                if (Test-Path $packedRefs) {{
+                    $match = Select-String -Path $packedRefs -Pattern ([regex]::Escape($ref)) | Select-Object -First 1
+                    if ($match) {{
+                        $commit = ($match.Line.Split(' '))[0].Trim()
+                    }}
+                }}
+            }}
+        }} else {{
+            $commit = $headContent
+        }}
+        if ([string]::IsNullOrWhiteSpace($commit)) {{
+            throw "Unable to resolve git commit hash."
+        }}
+        $dirty = ''
+        try {{
+            $gitCmd = (Get-Command git -ErrorAction Stop).Source
+            $dirty = (& $gitCmd status --porcelain 2>$null).Trim()
+        }} catch {{
+            $dirty = ''
+        }}
+        if ($dirty) {{
+            $commit = "$commit-dirty"
+        }}
+        $msiName = "xp2p-$version-$commit-windows-amd64.msi"
+        $msiPath = Join-Path $cacheDir $msiName
+        if (-not (Test-Path $msiPath)) {{
+            $ldflags = "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$version"
+            $binaryDir = Join-Path $repo 'build\\msi-bin'
+            if (Test-Path $binaryDir) {{
             Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue
         }}
         New-Item -ItemType Directory -Path $binaryDir -Force | Out-Null
