@@ -228,4 +228,3 @@ def test_install_server_and_client_nodefault(
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR)
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR)
-                        
