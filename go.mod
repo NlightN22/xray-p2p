@@ -1,6 +1,8 @@
 module github.com/NlightN22/xray-p2p
 
-go 1.23
+go 1.23.0
+
+toolchain go1.23.3
 
 require (
 	github.com/knadh/koanf/parsers/toml v0.1.0
