@@ -114,8 +114,8 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	statePath := filepath.Join(installDir, layout.StateFileName)
-	if err := os.Remove(statePath); err != nil {
-		if !(opts.IgnoreMissing && errors.Is(err, os.ErrNotExist)) {
+	if err := installstate.Remove(statePath, installstate.KindClient); err != nil {
+		if !(opts.IgnoreMissing && (errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled))) {
 			return fmt.Errorf("xp2p: remove client state file: %w", err)
 		}
 	}
@@ -244,15 +244,12 @@ func isSafeInstallDir(path string) bool {
 }
 
 func clientInstallationPresent(state installState) (bool, string, error) {
-	marker, err := installstate.Read(state.stateFile)
+	_, err := installstate.Read(state.stateFile, installstate.KindClient)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled) {
 			return false, "", nil
 		}
 		return false, "", fmt.Errorf("xp2p: read client state: %w", err)
-	}
-	if marker.Kind != installstate.KindClient {
-		return false, "", fmt.Errorf("xp2p: unexpected install state kind %q in %s", marker.Kind, state.stateFile)
 	}
 	return true, fmt.Sprintf("state file %s", state.stateFile), nil
 }

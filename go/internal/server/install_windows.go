@@ -4,6 +4,7 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"embed"
 	"errors"
@@ -121,8 +122,8 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	statePath := filepath.Join(installDir, layout.StateFileName)
-	if err := os.Remove(statePath); err != nil {
-		if !(opts.IgnoreMissing && errors.Is(err, os.ErrNotExist)) {
+	if err := installstate.Remove(statePath, installstate.KindServer); err != nil {
+		if !(opts.IgnoreMissing && (errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled))) {
 			return fmt.Errorf("xp2p: remove server state file: %w", err)
 		}
 	}
@@ -235,15 +236,12 @@ func resolveConfigDir(base, cfg string) (string, error) {
 }
 
 func serverArtifactsPresent(state installState) (bool, string, error) {
-	marker, err := installstate.Read(state.stateFile)
+	_, err := installstate.Read(state.stateFile, installstate.KindServer)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled) {
 			return false, "", nil
 		}
 		return false, "", fmt.Errorf("xp2p: read server state: %w", err)
-	}
-	if marker.Kind != installstate.KindServer {
-		return false, "", fmt.Errorf("xp2p: unexpected install state kind %q in %s", marker.Kind, state.stateFile)
 	}
 	return true, fmt.Sprintf("state file %s", state.stateFile), nil
 }
@@ -296,14 +294,25 @@ func ensureFileExists(path string) error {
 }
 
 func writeBinary(state installState) error {
-	if !state.Force {
-		if exists, err := pathExists(state.xrayPath); err != nil {
-			return err
-		} else if exists {
+	expected := xray.WindowsAMD64()
+	exists, err := pathExists(state.xrayPath)
+	if err != nil {
+		return err
+	}
+	if exists {
+		match, err := binaryMatches(state.xrayPath, expected)
+		if err != nil {
+			return fmt.Errorf("xp2p: compare existing xray-core: %w", err)
+		}
+		if match {
+			logging.Info("xp2p server install reusing existing xray-core binary", "path", state.xrayPath)
+			return nil
+		}
+		if !state.Force {
 			return fmt.Errorf("xp2p: xray-core already present at %s (use --force to overwrite)", state.xrayPath)
 		}
 	}
-	if err := os.WriteFile(state.xrayPath, xray.WindowsAMD64(), 0o755); err != nil {
+	if err := os.WriteFile(state.xrayPath, expected, 0o755); err != nil {
 		return fmt.Errorf("xp2p: write xray-core binary: %w", err)
 	}
 	return nil
@@ -453,6 +462,14 @@ func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
 	}
 	return nil
+}
+
+func binaryMatches(path string, expected []byte) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(data, expected), nil
 }
 
 func validateCertificateHost(host string) error {

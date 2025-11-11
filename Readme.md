@@ -131,6 +131,7 @@ xp2p now ships as a single self-contained directory. Every installation follows 
   config-server/
 ```
 
+- `install-state.json` tracks independent `client` and `server` role markers, so both installations can coexist in the same directory without forcing re-installs.
 - The `xp2p` binary always lives at the root next to `install-state.json`, so running `xp2p` from that directory automatically discovers the configs/logs without extra flags.
 - `bin/` stores only the xray-core runtime that the CLI manages.
 - `config-client/` and `config-server/` contain the rendered JSON configs for each role.
