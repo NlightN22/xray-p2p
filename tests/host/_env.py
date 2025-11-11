@@ -11,7 +11,7 @@ from testinfra.backend.base import CommandResult
 from testinfra.host import Host
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant-win" / "windows10"
+VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "windows10"
 DEFAULT_SERVER = "win10-server"
 DEFAULT_CLIENT = "win10-client"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")

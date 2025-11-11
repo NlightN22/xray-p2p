@@ -50,3 +50,40 @@ make package/xp2p/download V=sc \
 
 Alternatively, edit `openwrt/feed/packages/utils/xp2p/Makefile` and set
 `PKG_SOURCE_VERSION` to the desired tag/commit before running the build.
+
+## Reproducible builds with Vagrant
+
+The repository includes a Debian 12 Vagrant box that prepares the OpenWrt SDK
+and mounts this workspace so you can build the ipk without touching your host.
+
+1. Bring up the guest:
+
+   ```bash
+   cd infra/vagrant/debian12
+   vagrant up openwrt-sdk
+   ```
+
+2. Enter the VM when provisioning is done:
+
+   ```bash
+   vagrant ssh openwrt-sdk
+   ```
+
+   The xp2p repository is mounted under `/srv/xray-p2p`, while the SDK lives in
+   `/home/vagrant/openwrt-sdk`.
+
+3. Build the ipk inside the guest:
+
+   ```bash
+   /srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+   ```
+
+   The helper script injects the local feed (`src-link xp2p /srv/xray-p2p/openwrt/feed`),
+   installs it, and runs `make package/xp2p/compile V=sc`.
+
+4. Collect the artifact from
+   `/home/vagrant/openwrt-sdk/bin/packages/<target>/xp2p/xp2p_*.ipk`. Use
+   `vagrant ssh-config` + `scp` or `vagrant rsync` to copy it to your host.
+
+To smoke-test the build you can install the ipk inside the VM with `opkg install
+./bin/packages/<target>/xp2p/xp2p_*.ipk` and run `xp2p --version`.

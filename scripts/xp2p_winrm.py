@@ -58,7 +58,7 @@ def _windows_quote(arg: str) -> str:
 def _find_vm_directory(repo_root: Path, vm_name: str) -> Path:
     candidates = [
         path
-        for path in (repo_root / "infra" / "vagrant-win").iterdir()
+        for path in (repo_root / "infra" / "vagrant").iterdir()
         if (path / "Vagrantfile").is_file()
     ]
     matches: list[Path] = []

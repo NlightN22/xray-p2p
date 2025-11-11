@@ -15,7 +15,7 @@
 - Host access:
   - WinRM (plaintext): server localhost:55985, client localhost:55986 (vagrant/vagrant).
 - Re-run provisioning/tests:
-  cd infra/vagrant-win/windows10
+  cd infra/vagrant/windows10
   vagrant provision win10-server
   vagrant provision win10-client
 - Cleanup (flags --server, --client, --all apply):

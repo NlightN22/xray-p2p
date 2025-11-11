@@ -4,7 +4,7 @@ run:
 VERSION ?= $(strip $(shell go run ./go/cmd/xp2p --version))
 GO_LDFLAGS := -s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$(VERSION)
 
-VAGRANT_WIN10_DIR := infra/vagrant-win/windows10
+VAGRANT_WIN10_DIR := infra/vagrant/windows10
 VAGRANT_WIN10_SERVER_ID := win10-server
 VAGRANT_WIN10_CLIENT_ID := win10-client
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))

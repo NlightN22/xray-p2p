@@ -4,7 +4,7 @@ set -eu
 export DEBIAN_FRONTEND=noninteractive
 
 APT_PACKAGES="bc build-essential ca-certificates curl file gawk git jq libelf-dev \
-  libncurses5-dev libncursesw5-dev libssl-dev pkg-config python3 python3-distutils \
+  libncurses5-dev libncursesw5-dev libssl-dev opkg pkg-config python3 python3-distutils \
   rsync subversion tar time unzip wget xz-utils zip zlib1g-dev"
 
 apt-get update -y

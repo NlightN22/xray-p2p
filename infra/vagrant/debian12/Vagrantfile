@@ -1,0 +1,18 @@
+project_root = File.expand_path("../../..", __FILE__)
+
+Vagrant.configure("2") do |config|
+  config.vm.define "openwrt-sdk" do |vm|
+    vm.vm.box = "generic/debian12"
+    vm.vm.hostname = "openwrt-sdk"
+
+    vm.vm.provider "virtualbox" do |vb|
+      vb.name = "openwrt-sdk"
+      vb.memory = 4096
+      vb.cpus = 4
+    end
+
+    vm.vm.synced_folder project_root, "/srv/xray-p2p", type: "virtualbox"
+
+    vm.vm.provision "shell", path: "provision-openwrt-sdk.sh"
+  end
+end
