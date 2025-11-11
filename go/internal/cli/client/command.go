@@ -140,9 +140,18 @@ func newClientDeployCmd(cfg commandConfig) *cobra.Command {
 }
 
 func forwardFlags(cmd *cobra.Command, args []string) []string {
-	localFlags := cmd.LocalFlags()
-	forwarded := make([]string, 0, len(args)+localFlags.NFlag())
-	localFlags.Visit(func(f *pflag.Flag) {
+	disallowed := map[string]struct{}{
+		"diag-service-port": {},
+		"diag-service-mode": {},
+	}
+
+	flags := cmd.Flags()
+	forwarded := make([]string, 0, len(args)+flags.NFlag())
+	flags.Visit(func(f *pflag.Flag) {
+		if _, skip := disallowed[f.Name]; skip {
+			return
+		}
+
 		name := fmt.Sprintf("--%s", f.Name)
 		if f.Value.Type() == "bool" {
 			if f.Value.String() == "true" {
