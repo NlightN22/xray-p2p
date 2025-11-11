@@ -374,10 +374,41 @@ function Ensure-VagrantKeys {
     return $changes
 }
 
+function Ensure-DefaultOpenSshShell {
+    param(
+        [string] $ShellPath = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+    )
+
+    $regPath = "HKLM:\SOFTWARE\OpenSSH"
+    $name = "DefaultShell"
+
+    $current = $null
+    try {
+        $current = (Get-ItemProperty -Path $regPath -Name $name -ErrorAction Stop).$name
+    }
+    catch {
+        # Property missing; will create it below.
+    }
+
+    if ($current -and ($current.Trim()) -eq $ShellPath) {
+        Write-Info ("Default OpenSSH shell already set to '{0}'." -f $ShellPath)
+        return $false
+    }
+
+    Write-Info ("Setting OpenSSH default shell to '{0}'." -f $ShellPath)
+    if (-not (Test-Path $regPath)) {
+        New-Item -Path $regPath -Force | Out-Null
+    }
+
+    New-ItemProperty -Path $regPath -Name $name -Value $ShellPath -PropertyType String -Force | Out-Null
+    return $true
+}
+
 Ensure-OpenSshFeature
 Ensure-SshdRegistered
 $configChanged = Ensure-SshdConfigDefaults
 $keysChanged = Ensure-VagrantKeys
+$defaultShellChanged = Ensure-DefaultOpenSshShell
 Ensure-SshdService
 if ($configChanged -or $keysChanged) {
     Restart-SshdService

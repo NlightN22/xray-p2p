@@ -20,7 +20,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
     machine.vm.guest = :windows
-    machine.vm.boot_timeout = 300
+    machine.vm.boot_timeout = 400
     machine.vm.communicator = "winrm"
     machine.vm.hostname = vb_name
 
