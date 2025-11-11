@@ -21,6 +21,17 @@ if ! grep -qs "^src-link xp2p " feeds.conf.default; then
   echo "src-link xp2p $FEED_PATH" >> feeds.conf.default
 fi
 
-./scripts/feeds update xp2p
+./scripts/feeds update -a
+./scripts/feeds install golang/host
 ./scripts/feeds install xp2p
+
+if [ ! -f .config ]; then
+  cat > .config <<'EOF'
+CONFIG_TARGET_x86=y
+CONFIG_TARGET_x86_64=y
+CONFIG_TARGET_x86_64_Generic=y
+EOF
+fi
+
+make defconfig
 make "$BUILD_TARGET" V=sc
