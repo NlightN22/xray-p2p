@@ -59,14 +59,14 @@ and mounts this workspace so you can build the ipk without touching your host.
 1. Bring up the guest:
 
    ```bash
-   cd infra/vagrant/debian13
-   vagrant up deb13-server
+   cd infra/vagrant/debian12
+   vagrant up deb12-server
    ```
 
 2. Enter the VM when provisioning is done:
 
    ```bash
-   vagrant ssh deb13-server
+   vagrant ssh deb12-server
    ```
 
    The xp2p repository is mounted under `/srv/xray-p2p`, while the SDK lives in
@@ -83,6 +83,8 @@ and mounts this workspace so you can build the ipk without touching your host.
    `go/internal/buildtarget/target.go` (linux-amd64, linux-arm64,
    linux-mipsle-softfloat). Required SDKs are cached under
    `/home/vagrant/openwrt-sdk-<identifier>` on first use.
+   Provisioning additionally installs Go 1.23.3 system-wide inside the guest, so
+   the SDK always sees the expected `go` binary in `$PATH`.
 
 4. Collect the artifacts from the shared `./build/openwrt/<identifier>` folders
    inside the repository (e.g. `build/openwrt/linux-amd64/xp2p_*.ipk`). Use

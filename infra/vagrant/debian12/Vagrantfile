@@ -1,13 +1,13 @@
 project_root = File.expand_path("../../..", __dir__)
 
 Vagrant.configure("2") do |config|
-  config.vm.define "deb13-server" do |vm|
-    vm.vm.box = "generic/debian13"
+  config.vm.define "deb12-server" do |vm|
+    vm.vm.box = "generic/debian12"
     vm.vm.box_version = "4.3.12"
-    vm.vm.hostname = "deb13-server"
+    vm.vm.hostname = "deb12-server"
 
     vm.vm.provider "virtualbox" do |vb|
-      vb.name = "deb13-server"
+      vb.name = "deb12-server"
       vb.memory = 4096
       vb.cpus = 4
     end

@@ -220,7 +220,7 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/ser
   the OpenWrt SDK toolchain. On Windows either install the official
   `go1.23.3.windows-amd64.msi` or set `GOTOOLCHAIN=go1.23.3` in your shell/VS Code
   settings. Newer Go releases try to bump `go.mod` to 1.24+, which the SDK rejects.
-- **Vagrant**: Use the Debian 13 box under `infra/vagrant/debian13` for a reproducible
+- **Vagrant**: Use the Debian 12 box under `infra/vagrant/debian12` for a reproducible
   OpenWrt SDK environment (runs on VirtualBox with 4 GB RAM by default).
 
 ---
