@@ -93,6 +93,7 @@ func newClientRemoveCmd(cfg commandConfig) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.String("path", "", "client installation directory")
+	flags.String("config-dir", "", "client configuration directory name")
 	flags.Bool("keep-files", false, "keep installation files")
 	flags.Bool("ignore-missing", false, "do not fail if installation is absent")
 	return cmd

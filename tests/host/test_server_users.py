@@ -1,10 +1,11 @@
 import pytest
 
+from tests.host import _env
+
 from .test_server_install import (
     SERVER_CONFIG_DIR_NAME,
     SERVER_INBOUNDS,
     SERVER_INSTALL_DIR,
-    _cleanup_server_install,
     _read_remote_json,
     _trojan_inbound,
 )
@@ -52,7 +53,7 @@ def _remove_initial_install_client(server_host, xp2p_server_runner):
 def test_server_install_creates_and_allows_removing_default_user(
     server_host, xp2p_server_runner, xp2p_msi_path
 ):
-    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -72,12 +73,12 @@ def test_server_install_creates_and_allows_removing_default_user(
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
     finally:
-        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+        _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
 def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_msi_path):
-    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -155,12 +156,12 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
         assert len(final_clients) == 1
         assert final_clients[0].get("password") == "secret-two"
     finally:
-        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+        _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
 def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_msi_path):
-    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -221,12 +222,12 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
             check=True,
         )
     finally:
-        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+        _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
 def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_msi_path):
-    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
         xp2p_server_runner(
             "server",
@@ -272,4 +273,13 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
         current_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         assert _trojan_clients(current_inbounds) == []
     finally:
-        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+        _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+def _reset_server_install(server_host, runner, msi_path: str) -> None:
+    runner(
+        "server",
+        "remove",
+        "--path",
+        str(SERVER_INSTALL_DIR),
+        "--ignore-missing",
+    )
+    _env.install_xp2p_from_msi(server_host, msi_path)

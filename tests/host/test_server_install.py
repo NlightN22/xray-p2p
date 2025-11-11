@@ -396,7 +396,7 @@ def test_server_install_requires_force_when_state_exists(
         )
         assert result.rc != 0, "Expected second install without --force to fail when state file exists"
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
-        assert "server already installed" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        assert "server files already present" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 

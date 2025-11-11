@@ -40,8 +40,8 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 		{
 			name:      "remove booleans",
 			builder:   newClientRemoveCmd,
-			localArgs: []string{"--path", `D:\xp2p`, "--keep-files", "--ignore-missing"},
-			wantFlags: []string{"--ignore-missing", "--keep-files", "--path=D:\\xp2p"},
+			localArgs: []string{"--path", `D:\xp2p`, "--config-dir", "cfg-client", "--keep-files", "--ignore-missing"},
+			wantFlags: []string{"--config-dir=cfg-client", "--ignore-missing", "--keep-files", "--path=D:\\xp2p"},
 		},
 		{
 			name:      "run bool true/false and strings",
