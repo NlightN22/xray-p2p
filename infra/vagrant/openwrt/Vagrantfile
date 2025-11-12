@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 BOX_PATH = File.expand_path('../boxes/openwrt-24.10.2.box', __dir__)
+PROJECT_ROOT = File.expand_path('../../..', __dir__)
 
 Vagrant.configure('2') do |config|
   config.vm.box = 'openwrt-24.10.2'
@@ -12,5 +13,17 @@ Vagrant.configure('2') do |config|
   config.vm.synced_folder '.', '/vagrant', disabled: true
 
   config.vm.network 'forwarded_port', guest: 22, host: 2222, auto_correct: true
+  config.vm.network 'private_network', ip: '10.0.10.30'
 
+  # Sync the entire repo via SMB (no Guest Additions required)
+  config.vm.synced_folder PROJECT_ROOT, '/srv/project', type: 'smb',
+                          mount_options: ['vers=3.0', 'mfsymlinks']
+
+  config.vm.provision 'shell', privileged: true, inline: <<~'SH'
+    set -e
+    if ! opkg list-installed | grep -q '^kmod-fs-cifs '; then
+      opkg update || true
+      opkg install kmod-fs-cifs cifs-utils
+    fi
+  SH
 end
