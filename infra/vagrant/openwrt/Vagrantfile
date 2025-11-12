@@ -2,9 +2,12 @@
 
 BOX_PATH = File.expand_path('../boxes/openwrt-24.10.2.box', __dir__)
 PROJECT_ROOT = File.expand_path('../../..', __dir__)
-HOST_IP = ENV.fetch('OPENWRT_HOST_IP', '10.0.10.30')
+HOST_IP = ENV.fetch('OPENWRT_HOST_IP', '10.152.152.1')
 HOST_NETMASK = ENV.fetch('OPENWRT_HOST_NETMASK', '255.255.255.0')
 HOST_INTERFACE = ENV.fetch('OPENWRT_HOST_INTERFACE', 'eth1')
+TUNNEL_INTERFACE = ENV.fetch('OPENWRT_TUNNEL_INTERFACE', 'eth2')
+TUNNEL_IP = ENV.fetch('OPENWRT_TUNNEL_IP', '10.0.10.30')
+TUNNEL_NETMASK = ENV.fetch('OPENWRT_TUNNEL_NETMASK', '255.255.255.0')
 
 Vagrant.configure('2') do |config|
   config.vm.box = 'openwrt-24.10.2'
@@ -17,6 +20,9 @@ Vagrant.configure('2') do |config|
 
   config.vm.network 'forwarded_port', guest: 22, host: 2222, auto_correct: true
   config.vm.network 'private_network', ip: HOST_IP, auto_config: false
+  config.vm.network 'private_network',
+                    virtualbox__intnet: 'openwrt_tunnel_net',
+                    auto_config: false
 
   # Sync the entire repo via NFS (requires vagrant-winnfsd on Windows hosts)
   config.vm.synced_folder PROJECT_ROOT, '/srv/project', type: 'nfs',
@@ -31,18 +37,29 @@ Vagrant.configure('2') do |config|
 
   config.vm.provision 'shell', privileged: true, inline: <<~SH
     set -e
-    uci -q delete network.host
-    uci set network.host='interface'
-    uci set network.host.device='#{HOST_INTERFACE}'
-    uci set network.host.proto='static'
-    uci set network.host.ipaddr='#{HOST_IP}'
-    uci set network.host.netmask='#{HOST_NETMASK}'
-    if uci -q show firewall.lan >/dev/null 2>&1; then
-      uci -q del_list firewall.lan.network='host'
-      uci add_list firewall.lan.network='host'
-    fi
+    HOST_IF='#{HOST_INTERFACE}'
+    HOST_IP='#{HOST_IP}'
+    HOST_NETMASK='#{HOST_NETMASK}'
+    TUN_IF='#{TUNNEL_INTERFACE}'
+    TUN_IP='#{TUNNEL_IP}'
+    TUN_MASK='#{TUNNEL_NETMASK}'
+
+    uci batch <<EOF
+      delete network.host
+      set network.host=interface
+      set network.host.device='${HOST_IF}'
+      set network.host.proto='static'
+      set network.host.ipaddr='${HOST_IP}'
+      set network.host.netmask='${HOST_NETMASK}'
+      delete network.tunnel
+      set network.tunnel=interface
+      set network.tunnel.device='${TUN_IF}'
+      set network.tunnel.proto='static'
+      set network.tunnel.ipaddr='${TUN_IP}'
+      set network.tunnel.netmask='${TUN_MASK}'
+    EOF
+
     uci commit network
-    uci commit firewall 2>/dev/null || true
-    /etc/init.d/network reload
+    /etc/init.d/network restart
   SH
 end
