@@ -187,11 +187,65 @@ jobs:
           name: ${{ env.RELEASE_NAME }}-${{ env.VERSION }}-windows-amd64-msi
           path: dist/${{ env.RELEASE_NAME }}-${{ env.VERSION }}-windows-amd64.msi
 
+  openwrt-ipk:
+    runs-on: ubuntu-22.04
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        identifier:
+          - linux-amd64
+          - linux-arm64
+          - linux-mipsle-softfloat
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential ca-certificates curl file gawk git jq \
+            libelf-dev libncurses5-dev libncursesw5-dev libssl-dev pkg-config python3 \
+            python3-distutils rsync subversion tar time unzip wget xz-utils zip zlib1g-dev
+
+      - name: Build OpenWrt ipk
+        run: |
+          set -euo pipefail
+          XP2P_STAGE_SOURCE=1 \
+          XP2P_TARGETS="${{ matrix.identifier }}" \
+          XP2P_PROJECT_ROOT="$GITHUB_WORKSPACE" \
+          XP2P_BUILD_ROOT="$GITHUB_WORKSPACE/build/openwrt" \
+            "$GITHUB_WORKSPACE/tests/guest/scripts/build_openwrt_xp2p.sh"
+
+      - name: Prepare artifact
+        id: openwrt-artifact
+        run: |
+          set -euo pipefail
+          target_dir="$GITHUB_WORKSPACE/build/openwrt/${{ matrix.identifier }}"
+          pkg=$(find "$target_dir" -type f -name "xp2p_*.ipk" -print | sort | head -n 1 || true)
+          if [ -z "$pkg" ]; then
+            echo "No xp2p ipk produced" >&2
+            exit 1
+          fi
+          mkdir -p dist
+          dest="dist/${{ env.RELEASE_NAME }}-${VERSION}-openwrt-${{ matrix.identifier }}.ipk"
+          cp "$pkg" "$dest"
+          echo "artifact=$dest" >> "$GITHUB_OUTPUT"
+
+      - name: Upload OpenWrt artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.RELEASE_NAME }}-${{ env.VERSION }}-openwrt-${{ matrix.identifier }}
+          path: ${{ steps.openwrt-artifact.outputs.artifact }}
+
   publish:
     runs-on: ubuntu-latest
     needs:
       - build
       - msi
+      - openwrt-ipk
     permissions:
       contents: write
     env:
