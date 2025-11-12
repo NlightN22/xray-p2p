@@ -73,7 +73,7 @@ ensure_sdk() {
   tmp_dir=$(mktemp -d)
   local tarball="openwrt-sdk-${OPENWRT_VERSION}-${tarball_suffix}"
   local url="${OPENWRT_MIRROR}/${OPENWRT_VERSION}/targets/${feed_segment}/${tarball}"
-  echo "==> [$identifier] Downloading SDK from $url"
+  echo "==> [$identifier] Downloading SDK from $url" >&2
   download_file "$url" "$tmp_dir/sdk.tar.xz"
   local extracted
   extracted=$(tar -tf "$tmp_dir/sdk.tar.xz" | head -n 1 | cut -d/ -f1)
