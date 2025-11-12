@@ -111,6 +111,9 @@ prepare_config() {
 
 ensure_feed_link() {
   local sdk_dir=$1
+  if [ ! -f "$sdk_dir/feeds.conf.default" ]; then
+    touch "$sdk_dir/feeds.conf.default"
+  fi
   if ! grep -qs "^src-link xp2p " "$sdk_dir/feeds.conf.default"; then
     echo "src-link xp2p $FEED_PATH" >> "$sdk_dir/feeds.conf.default"
   fi
@@ -272,8 +275,8 @@ while IFS='|' read -r identifier target subtarget profile feed_segment tarball_s
 done <<'EOF'
 # identifier|target|subtarget|profile|feed-segment|tarball-suffix
 linux-amd64|x86|64|Generic|x86/64|x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-linux-arm64|armvirt|64|Default|armvirt/64|armvirt-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
-linux-mipsle-softfloat|mipsel|24kc||mipsel/24kc|mipsel-24kc_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+linux-arm64|armsr|armv8|Generic|armsr/armv8|armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+linux-mipsle-softfloat|ramips|mt7621|Default|ramips/mt7621|ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz
 EOF
 
 if [ "$built_any" -eq 0 ]; then
