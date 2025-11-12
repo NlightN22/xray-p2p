@@ -218,6 +218,10 @@ patch_golang_builder() {
     return
   fi
 
+  if [ "$target" != "ramips" ]; then
+    return
+  fi
+
   if grep -q "XP2P_FORCE_NO_CGO" "$script" >/dev/null 2>&1; then
     return
   fi
@@ -252,7 +256,7 @@ build_for_target() {
 
   ensure_feed_link "$sdk_dir"
   stage_local_source "$sdk_dir"
-  patch_golang_builder "$sdk_dir"
+  patch_golang_builder "$sdk_dir" "$target"
 
   (
     cd "$sdk_dir"
