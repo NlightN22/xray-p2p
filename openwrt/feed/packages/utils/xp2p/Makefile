@@ -19,6 +19,7 @@ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 GO_PKG:=github.com/NlightN22/xray-p2p/go/cmd/xp2p
 GO_PKG_BUILD_PKG:=$(GO_PKG)
 GO_PKG_ENABLE_CGO:=0
+GO_PKG_BUILD_VARS+=CGO_ENABLED=0
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk

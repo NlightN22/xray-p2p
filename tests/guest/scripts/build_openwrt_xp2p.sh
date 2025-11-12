@@ -210,6 +210,26 @@ stage_local_source() {
   rm -rf "$tmp_dir"
 }
 
+patch_golang_builder() {
+  local sdk_dir=$1
+  local script="$sdk_dir/feeds/packages/lang/golang/golang-build.sh"
+
+  if [ ! -f "$script" ]; then
+    return
+  fi
+
+  if grep -q "XP2P_FORCE_NO_CGO" "$script" >/dev/null 2>&1; then
+    return
+  fi
+
+  local tmp
+  tmp=$(mktemp)
+  awk 'NR==1 { print; print "export CGO_ENABLED=0 # XP2P_FORCE_NO_CGO"; next } { print }' \
+    "$script" > "$tmp"
+  mv "$tmp" "$script"
+  chmod +x "$script"
+}
+
 find_recent_ipk() {
   local sdk_dir=$1
   find "$sdk_dir/bin/packages" -type f -name "xp2p_*.ipk" -printf '%T@ %p\n' 2>/dev/null \
@@ -232,6 +252,7 @@ build_for_target() {
 
   ensure_feed_link "$sdk_dir"
   stage_local_source "$sdk_dir"
+  patch_golang_builder "$sdk_dir"
 
   (
     cd "$sdk_dir"
