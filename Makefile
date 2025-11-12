@@ -7,6 +7,9 @@ GO_LDFLAGS := -s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current
 VAGRANT_WIN10_DIR := infra/vagrant/windows10
 VAGRANT_WIN10_SERVER_ID := win10-server
 VAGRANT_WIN10_CLIENT_ID := win10-client
+
+VAGRANT_DEB12_DIR := infra/vagrant/debian12
+
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
 .PHONY: run build build-% build-windows build-linux build-openwrt fmt lint test vagrant-win10 vagrant-win10-destroy \
@@ -50,6 +53,9 @@ vagrant-win10-destroy-server:
 
 vagrant-win10-destroy-client:
 	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f $(VAGRANT_WIN10_CLIENT_ID)
+
+vagrant-deb12:
+	cd $(VAGRANT_DEB12_DIR) && vagrant up
 
 # swallow extra positional arguments so make does not treat them as targets
 %:
