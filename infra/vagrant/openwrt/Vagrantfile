@@ -29,4 +29,22 @@ Vagrant.configure('2') do |config|
     vb.gui = false
   end
 
+  config.vm.provision 'shell', name: 'verify-shared-folder', privileged: true, inline: <<~'SH'
+    set -e
+    TARGET='/srv/project'
+    TIMEOUT=60
+    INTERVAL=3
+    ELAPSED=0
+
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+      if mount | grep -q "on ${TARGET} "; then
+        exit 0
+      fi
+      sleep $INTERVAL
+      ELAPSED=$((ELAPSED + INTERVAL))
+    done
+
+    echo "[verify-shared-folder] ${TARGET} is not mounted after ${TIMEOUT}s" >&2
+    exit 1
+  SH
 end
