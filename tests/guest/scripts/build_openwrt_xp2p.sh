@@ -11,6 +11,10 @@ OPENWRT_VERSION=${XP2P_OPENWRT_VERSION:-"23.05.3"}
 OPENWRT_MIRROR=${XP2P_OPENWRT_MIRROR:-"https://downloads.openwrt.org/releases"}
 TARGET_FILTER=${XP2P_TARGETS:-"all"}
 KEEP_CONFIG=${XP2P_KEEP_CONFIG:-0}
+SOURCE_OVERRIDE=${XP2P_STAGE_SOURCE:-1}
+SOURCE_ARCHIVE_NAME=""
+VERSION_FILE=${XP2P_VERSION_FILE:-"$PROJECT_ROOT/go/internal/version/version.go"}
+PACKAGE_MAKEFILE="$FEED_PATH/packages/utils/xp2p/Makefile"
 
 mkdir -p "$BUILD_OUTPUT_ROOT"
 
@@ -112,6 +116,97 @@ ensure_feed_link() {
   fi
 }
 
+resolve_pkg_version() {
+  if [ -n "$SOURCE_ARCHIVE_NAME" ]; then
+    return
+  fi
+  sync_pkg_version
+  local version
+  version=$(awk -F':=' '
+    $1 ~ /^PKG_VERSION/ {
+      gsub(/[[:space:]]/, "", $2);
+      print $2;
+      exit
+    }' "$PACKAGE_MAKEFILE")
+  if [ -z "$version" ]; then
+    echo "Unable to resolve PKG_VERSION from xp2p Makefile." >&2
+    exit 1
+  fi
+  SOURCE_ARCHIVE_NAME="xp2p-${version}.tar.xz"
+}
+
+sync_pkg_version() {
+  if [ ! -f "$VERSION_FILE" ] || [ ! -f "$PACKAGE_MAKEFILE" ]; then
+    return
+  fi
+
+  local version
+  version=$(awk -F'"' '
+    /var[[:space:]]+current/ {
+      print $2;
+      exit
+    }' "$VERSION_FILE")
+
+  if [ -z "$version" ]; then
+    echo "WARNING: unable to read version from $VERSION_FILE" >&2
+    return
+  fi
+
+  local current
+  current=$(awk -F':=' '
+    $1 ~ /^PKG_VERSION/ {
+      gsub(/[[:space:]]/, "", $2);
+      print $2;
+      exit
+    }' "$PACKAGE_MAKEFILE")
+
+  if [ "$current" = "$version" ]; then
+    return
+  fi
+
+  echo "==> Syncing PKG_VERSION in $(basename "$PACKAGE_MAKEFILE") to $version"
+  tmp_file=$(mktemp)
+  awk -v ver="$version" '
+    /^PKG_VERSION:=/ { print "PKG_VERSION:="ver; next }
+    { print }
+  ' "$PACKAGE_MAKEFILE" > "$tmp_file"
+  mv "$tmp_file" "$PACKAGE_MAKEFILE"
+}
+
+stage_local_source() {
+  local sdk_dir=$1
+  if [ "$SOURCE_OVERRIDE" != "1" ]; then
+    return
+  fi
+
+  resolve_pkg_version
+
+  local archive="$sdk_dir/dl/$SOURCE_ARCHIVE_NAME"
+  local repo_root=${XP2P_SOURCE_DIR:-$PROJECT_ROOT}
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  local version_dir=${SOURCE_ARCHIVE_NAME%.tar.xz}
+  local staging_dir="$tmp_dir/$version_dir"
+
+  mkdir -p "$staging_dir"
+  rsync -a --delete \
+    --exclude '.git' \
+    --exclude '.github' \
+    --exclude 'build' \
+    --exclude '.vagrant' \
+    "$repo_root/" "$staging_dir/" >/dev/null
+
+  mkdir -p "$sdk_dir/dl"
+  echo "==> Staging local sources into $archive"
+  (
+    cd "$tmp_dir"
+    tar --numeric-owner --owner=0 --group=0 --mode=a-s -cf - "$version_dir" \
+      | xz -zc -7e > "$archive".tmp
+  )
+  mv "$archive".tmp "$archive"
+  rm -rf "$tmp_dir"
+}
+
 find_recent_ipk() {
   local sdk_dir=$1
   find "$sdk_dir/bin/packages" -type f -name "xp2p_*.ipk" -printf '%T@ %p\n' 2>/dev/null \
@@ -133,6 +228,7 @@ build_for_target() {
   echo "==> [$identifier] Using SDK at $sdk_dir"
 
   ensure_feed_link "$sdk_dir"
+  stage_local_source "$sdk_dir"
 
   (
     cd "$sdk_dir"
