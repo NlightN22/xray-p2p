@@ -244,7 +244,7 @@ build_for_target() {
     fi
 
     make defconfig
-    make "$BUILD_TARGET" V=sc
+    CGO_ENABLED=0 make "$BUILD_TARGET" V=sc
   )
 
   local pkg
