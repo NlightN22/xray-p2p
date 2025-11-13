@@ -8,7 +8,6 @@ APT_PACKAGES="
   ca-certificates
   curl
   debhelper
-  fpm
   git
   lintian
   pkg-config
@@ -47,6 +46,11 @@ ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 cat >/etc/profile.d/go-path.sh <<'EOF'
 export PATH=/usr/local/go/bin:$PATH
 EOF
+
+if ! command -v fpm >/dev/null 2>&1; then
+  echo "Installing fpm via RubyGems"
+  gem install --no-document fpm
+fi
 
 PROJECT_ROOT="/srv/xray-p2p"
 VAGRANT_HOME="/home/vagrant"

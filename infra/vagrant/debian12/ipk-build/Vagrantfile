@@ -1,4 +1,4 @@
-project_root = File.expand_path("../../..", __dir__)
+project_root = File.expand_path("../../../..", __dir__)
 
 Vagrant.configure("2") do |config|
   config.vm.define "deb12-ipk-build" do |vm|
