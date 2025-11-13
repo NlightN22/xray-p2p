@@ -52,7 +52,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	var errorWriter io.Writer
 	var errorFile *os.File
 	if raw := strings.TrimSpace(opts.ErrorLogPath); raw != "" {
-		logPath, err := resolveLogPath(raw)
+		logPath, err := resolveClientLogPath(raw)
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	return nil
 }
 
-func resolveLogPath(raw string) (string, error) {
+func resolveClientLogPath(raw string) (string, error) {
 	trimmed := strings.TrimSpace(filepath.Clean(raw))
 	if trimmed == "" {
 		return "", errors.New("xp2p: log path is empty")
