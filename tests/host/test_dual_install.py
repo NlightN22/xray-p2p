@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -8,8 +10,12 @@ from tests.host import _env
 INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
 SERVER_CONFIG_DIR = "config-server"
-STATE_FILE = INSTALL_DIR / "install-state.json"
 XRAY_BINARY = INSTALL_DIR / "bin" / "xray.exe"
+STATE_FILES = {
+    "client": INSTALL_DIR / "install-state-client.json",
+    "server": INSTALL_DIR / "install-state-server.json",
+}
+LEGACY_STATE_FILE = INSTALL_DIR / "install-state.json"
 
 
 def _xp2p_run(host, *args: str, check: bool = False):
@@ -43,6 +49,41 @@ Get-Content -Raw {quoted}
         f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
     return json.loads(result.stdout)
+
+
+def _read_remote_json_optional(host, path: Path) -> tuple[dict | None, bool]:
+    quoted = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path {quoted})) {{
+    exit 3
+}}
+Get-Content -Raw {quoted}
+"""
+    result = _env.run_powershell(host, script)
+    if result.rc == 3:
+        return None, False
+    if result.rc != 0:
+        return None, False
+    return json.loads(result.stdout), True
+
+
+def _read_roles(host) -> dict:
+    roles: dict[str, dict] = {}
+    for role, path in STATE_FILES.items():
+        data, ok = _read_remote_json_optional(host, path)
+        if ok and data is not None:
+            roles[role] = data
+    if roles:
+        return roles
+    legacy, ok = _read_remote_json_optional(host, LEGACY_STATE_FILE)
+    if not ok or legacy is None:
+        return roles
+    if nested := legacy.get("roles"):
+        return nested
+    if kind := legacy.get("kind"):
+        roles[kind] = legacy
+    return roles
 
 
 def _remote_sha256(host, path: Path) -> str:
@@ -124,8 +165,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
         server_hash = _remote_sha256(server_host, XRAY_BINARY)
         assert client_hash == server_hash, "Expected shared xray.exe to be reused without modification"
 
-        state = _read_remote_json(server_host, STATE_FILE)
-        roles = state.get("roles", {})
+        roles = _read_roles(server_host)
         assert "client" in roles and "server" in roles, f"Unexpected roles state: {roles}"
 
         run(
@@ -138,8 +178,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "--ignore-missing",
             check=True,
         )
-        state_after = _read_remote_json(server_host, STATE_FILE)
-        roles_after = state_after.get("roles", {})
+        roles_after = _read_roles(server_host)
         assert "server" in roles_after and "client" not in roles_after, (
             f"Client removal should not delete server role: {roles_after}"
         )
