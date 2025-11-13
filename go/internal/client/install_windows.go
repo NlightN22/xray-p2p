@@ -14,7 +14,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/NlightN22/xray-p2p/go/assets/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -29,14 +28,13 @@ type installState struct {
 	binDir       string
 	logsDir      string
 	configDir    string
-	xrayPath     string
 	serverPort   int
 	serverName   string
 	serverRemote string
 	stateFile    string
 }
 
-// Install deploys xray-core binaries and client configuration files.
+// Install deploys client configuration files.
 func Install(ctx context.Context, opts InstallOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -61,7 +59,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		"server_address", state.serverRemote,
 		"server_port", state.serverPort,
 		"allow_insecure", state.AllowInsecure,
-		"xray_version", xray.Version,
 	)
 
 	if err := os.MkdirAll(state.binDir, 0o755); err != nil {
@@ -74,7 +71,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
 
-	if err := writeBinary(state); err != nil {
+	if err := ensureXrayBinaryPresent(state.binDir); err != nil {
 		return err
 	}
 	if err := deployConfiguration(state); err != nil {
@@ -200,7 +197,6 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		binDir:       filepath.Join(dir, layout.BinDirName),
 		logsDir:      filepath.Join(dir, layout.LogsDirName),
 		configDir:    configDir,
-		xrayPath:     filepath.Join(dir, layout.BinDirName, "xray.exe"),
 		serverPort:   portVal,
 		serverName:   serverName,
 		serverRemote: address,
@@ -272,13 +268,6 @@ func clientInstallationPresent(state installState) (bool, string, error) {
 		return false, "", fmt.Errorf("xp2p: read client state: %w", err)
 	}
 	return true, fmt.Sprintf("state file %s", state.stateFile), nil
-}
-
-func writeBinary(state installState) error {
-	if err := os.WriteFile(state.xrayPath, xray.WindowsAMD64(), 0o755); err != nil {
-		return fmt.Errorf("xp2p: write xray-core binary: %w", err)
-	}
-	return nil
 }
 
 func deployConfiguration(state installState) error {
@@ -362,6 +351,21 @@ func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 	}
 	if err := os.WriteFile(dest, content, perm); err != nil {
 		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
+	}
+	return nil
+}
+
+func ensureXrayBinaryPresent(binDir string) error {
+	path := filepath.Join(binDir, "xray.exe")
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: xray binary missing at %s (copy xray.exe into this directory before running install)", path)
+		}
+		return fmt.Errorf("xp2p: inspect xray binary at %s: %w", path, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("xp2p: expected file at %s, found directory", path)
 	}
 	return nil
 }

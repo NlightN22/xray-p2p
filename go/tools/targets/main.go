@@ -194,7 +194,9 @@ func splitIdentifier(id string) (string, string, error) {
 func runDeps(args []string) {
 	fs := flag.NewFlagSet("deps", flag.ExitOnError)
 	targetID := fs.String("target", "", "target identifier (GOOS-GOARCH)")
-	destDir := fs.String("dest", "", "directory where dependencies will be staged")
+	destDir := fs.String("dest", "", "directory where dependencies will be staged (overrides --out-dir/--base)")
+	outDir := fs.String("out-dir", "", "explicit output directory")
+	baseDir := fs.String("base", "build", "base directory for build outputs")
 	repoRoot := fs.String("repo", ".", "repository root for resolving dependencies")
 	if err := fs.Parse(args); err != nil {
 		log.Fatalf("parse flags: %v", err)
@@ -202,9 +204,6 @@ func runDeps(args []string) {
 
 	if strings.TrimSpace(*targetID) == "" {
 		log.Fatal("--target is required")
-	}
-	if strings.TrimSpace(*destDir) == "" {
-		log.Fatal("--dest is required")
 	}
 
 	goos, goarch, err := splitIdentifier(*targetID)
@@ -220,12 +219,20 @@ func runDeps(args []string) {
 		return
 	}
 
-	if err := os.MkdirAll(*destDir, 0o755); err != nil {
+	dir := strings.TrimSpace(*destDir)
+	if dir == "" {
+		dir = strings.TrimSpace(*outDir)
+	}
+	if dir == "" {
+		dir = target.OutputDir(strings.TrimSpace(*baseDir))
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		log.Fatalf("create dest dir: %v", err)
 	}
 
 	for _, dep := range target.Dependencies {
-		if err := stageDependency(*repoRoot, *destDir, dep); err != nil {
+		if err := stageDependency(*repoRoot, dir, dep); err != nil {
 			log.Fatalf("prepare dependency %s: %v", dep.Source, err)
 		}
 	}

@@ -28,6 +28,7 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 	t.Helper()
 
 	installDir := filepath.Join(t.TempDir(), "srv-domain")
+	stageTestXrayBinary(t, installDir)
 	opts := InstallOptions{
 		InstallDir: installDir,
 		ConfigDir:  "config-server",
@@ -77,6 +78,7 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 
 func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 	installDir := filepath.Join(t.TempDir(), "srv-ip")
+	stageTestXrayBinary(t, installDir)
 	host := "203.0.113.5"
 	opts := InstallOptions{
 		InstallDir: installDir,
@@ -154,4 +156,16 @@ func readFile(t *testing.T, path string) []byte {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return data
+}
+
+func stageTestXrayBinary(t *testing.T, installDir string) {
+	t.Helper()
+	binDir := filepath.Join(installDir, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	path := filepath.Join(binDir, "xray.exe")
+	if err := os.WriteFile(path, []byte("test-xray"), 0o755); err != nil {
+		t.Fatalf("write xray binary: %v", err)
+	}
 }

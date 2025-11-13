@@ -12,20 +12,14 @@ VAGRANT_DEB12_DIR := infra/vagrant/debian12
 
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
-.PHONY: run build build-% build-windows build-linux build-openwrt fmt lint test vagrant-win10 vagrant-win10-destroy \
+.PHONY: run build build-% fmt lint test vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client
 
 build: $(TARGETS:%=build-%)
 
 build-%:
-	powershell -NoProfile -Command "go run ./go/tools/targets build --target '$*' --base '$(BUILD_BASE)' --binary 'xp2p' --pkg './go/cmd/xp2p' --ldflags \"$(GO_LDFLAGS)\""
-
-build-windows: build-windows-amd64
-
-build-linux: build-linux-amd64
-
-build-openwrt: build-linux-mipsle
+	powershell -NoProfile -Command "go run ./go/tools/targets build --target '$*' --base '$(BUILD_BASE)' --binary 'xp2p' --pkg './go/cmd/xp2p' --ldflags \"$(GO_LDFLAGS)\"; go run ./go/tools/targets deps --target '$*' --base '$(BUILD_BASE)'"
 
 fmt:
 	go fmt ./...

@@ -4,7 +4,6 @@ package server
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"embed"
 	"errors"
@@ -17,7 +16,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/NlightN22/xray-p2p/go/assets/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -45,7 +43,7 @@ type installState struct {
 	stateFile  string
 }
 
-// Install deploys xray-core binaries and configuration files.
+// Install deploys server configuration files.
 func Install(ctx context.Context, opts InstallOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -69,7 +67,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		"config_dir", state.configDir,
 		"port", state.portValue,
 		"host", state.Host,
-		"xray_version", xray.Version,
 	)
 
 	if err := os.MkdirAll(state.binDir, 0o755); err != nil {
@@ -82,7 +79,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
 
-	if err := writeBinary(state); err != nil {
+	if err := ensureXrayBinaryPresent(state.xrayPath); err != nil {
 		return err
 	}
 	if err := deployConfiguration(state); err != nil {
@@ -291,42 +288,6 @@ func isSafeInstallDir(path string) bool {
 	return true
 }
 
-func pathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	return false, err
-}
-
-func writeBinary(state installState) error {
-	expected := xray.WindowsAMD64()
-	exists, err := pathExists(state.xrayPath)
-	if err != nil {
-		return err
-	}
-	if exists {
-		match, err := binaryMatches(state.xrayPath, expected)
-		if err != nil {
-			return fmt.Errorf("xp2p: compare existing xray-core: %w", err)
-		}
-		if match {
-			logging.Info("xp2p server install reusing existing xray-core binary", "path", state.xrayPath)
-			return nil
-		}
-		if !state.Force {
-			return fmt.Errorf("xp2p: xray-core already present at %s (use --force to overwrite)", state.xrayPath)
-		}
-	}
-	if err := os.WriteFile(state.xrayPath, expected, 0o755); err != nil {
-		return fmt.Errorf("xp2p: write xray-core binary: %w", err)
-	}
-	return nil
-}
-
 func deployConfiguration(state installState) error {
 	var certPath string
 	var keyPath string
@@ -473,12 +434,18 @@ func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 	return nil
 }
 
-func binaryMatches(path string, expected []byte) (bool, error) {
-	data, err := os.ReadFile(path)
+func ensureXrayBinaryPresent(path string) error {
+	info, err := os.Stat(path)
 	if err != nil {
-		return false, err
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: xray binary is missing at %s (copy xray.exe into this directory before running install)", path)
+		}
+		return fmt.Errorf("xp2p: inspect xray binary at %s: %w", path, err)
 	}
-	return bytes.Equal(data, expected), nil
+	if info.IsDir() {
+		return fmt.Errorf("xp2p: expected file at %s, found directory", path)
+	}
+	return nil
 }
 
 func validateCertificateHost(host string) error {
