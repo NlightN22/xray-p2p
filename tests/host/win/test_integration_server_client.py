@@ -23,6 +23,7 @@ CUSTOM_SERVER_PORT = 62055
 CUSTOM_SERVER_HOST = "xp2p-integration.local"
 CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
+XRAY_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\xray.exe")
 
 
 def _remove_remote_path(host, path: Path) -> None:
@@ -58,6 +59,27 @@ def _cleanup_client_install(
     _env.install_xp2p_from_msi(client_host, msi_path)
     if purge and install_dir is not None:
         _remove_remote_path(client_host, install_dir)
+
+
+def _stage_xray_binary(host, install_dir: Path) -> None:
+    target_dir = install_dir / "bin"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$source = {_env.ps_quote(str(XRAY_SOURCE_X64))}
+if (-not (Test-Path $source)) {{
+    throw "xray.exe not found at $source"
+}}
+$destDir = {_env.ps_quote(str(target_dir))}
+$destPath = Join-Path $destDir 'xray.exe'
+New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+Copy-Item -Path $source -Destination $destPath -Force
+"""
+    result = _env.run_powershell(host, script)
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to stage xray.exe prior to custom install.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
@@ -193,6 +215,7 @@ def test_install_server_and_client_nodefault(
         client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR, purge=True
     )
     try:
+        _stage_xray_binary(server_host, CUSTOM_SERVER_INSTALL_DIR)
         server_install = xp2p_server_runner(
             "server",
             "install",
@@ -220,6 +243,7 @@ def test_install_server_and_client_nodefault(
         ) as server_session:
             assert server_session["pid"] > 0
 
+            _stage_xray_binary(client_host, CUSTOM_CLIENT_INSTALL_DIR)
             xp2p_client_runner(
                 "client",
                 "install",
