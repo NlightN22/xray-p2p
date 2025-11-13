@@ -109,6 +109,12 @@ jobs:
           ldflags="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
           go build -trimpath -ldflags="$ldflags" -o "$out" ./go/cmd/xp2p
 
+      - name: Stage bundled dependencies
+        run: |
+          set -euo pipefail
+          dest="dist/${{ matrix.goos }}-${{ matrix.goarch }}"
+          go run ./go/tools/targets deps --target "${{ matrix.goos }}-${{ matrix.goarch }}" --dest "$dest"
+
       - name: Package archive
         env:
           GOOS: ${{ matrix.goos }}
@@ -120,10 +126,16 @@ jobs:
           set -euo pipefail
           cd "dist/${GOOS}-${GOARCH}"
           artifact="../${{ env.RELEASE_NAME }}-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE}"
+          shopt -s nullglob
+          files=(*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No files to package in $(pwd)" >&2
+            exit 1
+          fi
           if [ "$ARCHIVE" = "zip" ]; then
-            zip -j "$artifact" "xp2p${EXT}"
+            zip -j "$artifact" "${files[@]}"
           else
-            tar -czf "$artifact" "xp2p${EXT}"
+            tar -czf "$artifact" "${files[@]}"
           fi
 
       - name: Upload artifact

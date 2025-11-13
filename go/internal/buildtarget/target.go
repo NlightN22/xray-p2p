@@ -18,13 +18,24 @@ const (
 
 // Target captures a single GOOS/GOARCH build along with packaging metadata.
 type Target struct {
-	GOOS      string
-	GOARCH    string
-	Archive   ArchiveFormat
-	BinaryExt string
-	GoEnv     map[string]string
-	OutDir    string
-	release   bool
+	GOOS         string
+	GOARCH       string
+	Archive      ArchiveFormat
+	BinaryExt    string
+	GoEnv        map[string]string
+	OutDir       string
+	Dependencies []Dependency
+	release      bool
+}
+
+// Dependency describes an extra file that should be staged alongside the build output.
+type Dependency struct {
+	// Source is a path relative to the repository root pointing to the dependency file.
+	Source string
+	// Destination is the file name used inside the output directory. When empty the base name of Source is used.
+	Destination string
+	// Optional controls whether missing files should fail the build.
+	Optional bool
 }
 
 // Identifier returns a stable shorthand used in artifact names.
@@ -93,13 +104,40 @@ var targets = []Target{
 		Archive:   ArchiveZip,
 		BinaryExt: ".exe",
 		OutDir:    "windows-amd64",
-		release:   true,
+		Dependencies: []Dependency{
+			xrayDependency("windows", "x86_64", "xray.exe", false),
+		},
+		release: true,
+	},
+	{
+		GOOS:      "windows",
+		GOARCH:    "386",
+		Archive:   ArchiveZip,
+		BinaryExt: ".exe",
+		OutDir:    "windows-386",
+		Dependencies: []Dependency{
+			xrayDependency("windows", "x86", "xray.exe", true),
+		},
+		release: true,
 	},
 	{
 		GOOS:    "linux",
 		GOARCH:  "amd64",
 		Archive: ArchiveTarGz,
 		OutDir:  "linux-amd64",
+		Dependencies: []Dependency{
+			xrayDependency("linux", "x86_64", "xray", true),
+		},
+		release: true,
+	},
+	{
+		GOOS:    "linux",
+		GOARCH:  "386",
+		Archive: ArchiveTarGz,
+		OutDir:  "linux-386",
+		Dependencies: []Dependency{
+			xrayDependency("linux", "x86", "xray", true),
+		},
 		release: true,
 	},
 	{
@@ -107,6 +145,22 @@ var targets = []Target{
 		GOARCH:  "arm64",
 		Archive: ArchiveTarGz,
 		OutDir:  "linux-arm64",
+		Dependencies: []Dependency{
+			xrayDependency("linux", "arm64", "xray", true),
+		},
+		release: true,
+	},
+	{
+		GOOS:    "linux",
+		GOARCH:  "arm",
+		Archive: ArchiveTarGz,
+		GoEnv: map[string]string{
+			"GOARM": "7",
+		},
+		OutDir: "linux-armhf",
+		Dependencies: []Dependency{
+			xrayDependency("linux", "armhf", "xray", true),
+		},
 		release: true,
 	},
 	{
@@ -117,5 +171,35 @@ var targets = []Target{
 			"GOMIPS": "softfloat",
 		},
 		OutDir: "linux-mipsle-softfloat",
+		Dependencies: []Dependency{
+			xrayDependency("linux", "mipsel", "xray", true),
+		},
 	},
+	{
+		GOOS:    "linux",
+		GOARCH:  "mips64le",
+		Archive: ArchiveTarGz,
+		OutDir:  "linux-mips64le",
+		Dependencies: []Dependency{
+			xrayDependency("linux", "mips64el", "xray", true),
+		},
+	},
+	{
+		GOOS:    "linux",
+		GOARCH:  "riscv64",
+		Archive: ArchiveTarGz,
+		OutDir:  "linux-riscv64",
+		Dependencies: []Dependency{
+			xrayDependency("linux", "riscv64", "xray", true),
+		},
+	},
+}
+
+func xrayDependency(osDir, archDir, fileName string, optional bool) Dependency {
+	path := filepath.ToSlash(filepath.Join("distro", osDir, "bundle", archDir, fileName))
+	return Dependency{
+		Source:      path,
+		Destination: fileName,
+		Optional:    optional,
+	}
 }

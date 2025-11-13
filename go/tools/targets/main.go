@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -34,6 +35,8 @@ func main() {
 		runList(args)
 	case "build":
 		runBuild(args)
+	case "deps":
+		runDeps(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -164,7 +167,7 @@ func runBuild(args []string) {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: targets <matrix|assets|list|build> [flags]\n")
+	fmt.Fprintf(os.Stderr, "Usage: targets <matrix|assets|list|build|deps> [flags]\n")
 }
 
 func buildEnv(t buildtarget.Target) []string {
@@ -186,4 +189,89 @@ func splitIdentifier(id string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid identifier %q", id)
 	}
 	return parts[0], parts[1], nil
+}
+
+func runDeps(args []string) {
+	fs := flag.NewFlagSet("deps", flag.ExitOnError)
+	targetID := fs.String("target", "", "target identifier (GOOS-GOARCH)")
+	destDir := fs.String("dest", "", "directory where dependencies will be staged")
+	repoRoot := fs.String("repo", ".", "repository root for resolving dependencies")
+	if err := fs.Parse(args); err != nil {
+		log.Fatalf("parse flags: %v", err)
+	}
+
+	if strings.TrimSpace(*targetID) == "" {
+		log.Fatal("--target is required")
+	}
+	if strings.TrimSpace(*destDir) == "" {
+		log.Fatal("--dest is required")
+	}
+
+	goos, goarch, err := splitIdentifier(*targetID)
+	if err != nil {
+		log.Fatalf("parse target: %v", err)
+	}
+
+	target, ok := buildtarget.Lookup(goos, goarch)
+	if !ok {
+		log.Fatalf("unknown target %s", *targetID)
+	}
+	if len(target.Dependencies) == 0 {
+		return
+	}
+
+	if err := os.MkdirAll(*destDir, 0o755); err != nil {
+		log.Fatalf("create dest dir: %v", err)
+	}
+
+	for _, dep := range target.Dependencies {
+		if err := stageDependency(*repoRoot, *destDir, dep); err != nil {
+			log.Fatalf("prepare dependency %s: %v", dep.Source, err)
+		}
+	}
+}
+
+func stageDependency(repoRoot, destDir string, dep buildtarget.Dependency) error {
+	src := filepath.Join(repoRoot, filepath.FromSlash(dep.Source))
+	if _, err := os.Stat(src); err != nil {
+		if os.IsNotExist(err) && dep.Optional {
+			log.Printf("warning: optional dependency %s not found, skipping", dep.Source)
+			return nil
+		}
+		return fmt.Errorf("stat source: %w", err)
+	}
+
+	destName := dep.Destination
+	if strings.TrimSpace(destName) == "" {
+		destName = filepath.Base(src)
+	}
+	dst := filepath.Join(destDir, destName)
+	if err := copyFile(src, dst); err != nil {
+		return fmt.Errorf("copy %s to %s: %w", src, dst, err)
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	source, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+
+	info, err := source.Stat()
+	if err != nil {
+		return err
+	}
+
+	dest, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	defer dest.Close()
+
+	if _, err := io.Copy(dest, source); err != nil {
+		return err
+	}
+	return nil
 }
