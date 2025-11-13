@@ -15,9 +15,9 @@ SERVER_LOG_RELATIVE = r"logs\server.err"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
 DEFAULT_DIAGNOSTICS_PORT = 62022
 
-CUSTOM_SERVER_INSTALL_DIR = Path(r"C:\xp2p\it-server")
+CUSTOM_SERVER_INSTALL_DIR = Path(r"C:\ProgramData\xp2p-it\server")
 CUSTOM_SERVER_CONFIG_NAME = "it-server-config"
-CUSTOM_CLIENT_INSTALL_DIR = Path(r"C:\xp2p\it-client")
+CUSTOM_CLIENT_INSTALL_DIR = Path(r"C:\ProgramData\xp2p-it\client")
 CUSTOM_CLIENT_CONFIG_NAME = "it-client-config"
 CUSTOM_SERVER_PORT = 62055
 CUSTOM_SERVER_HOST = "xp2p-integration.local"
@@ -25,20 +25,39 @@ CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 
 
-def _cleanup_server_install(server_host, runner, msi_path: str, install_dir: Path | None = None) -> None:
+def _remove_remote_path(host, path: Path) -> None:
+    quoted = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (Test-Path {quoted}) {{
+    Remove-Item {quoted} -Force -Recurse -ErrorAction SilentlyContinue
+}}
+"""
+    _env.run_powershell(host, script)
+
+
+def _cleanup_server_install(
+    server_host, runner, msi_path: str, install_dir: Path | None = None, purge: bool = False
+) -> None:
     args = ["server", "remove", "--ignore-missing"]
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
     _env.install_xp2p_from_msi(server_host, msi_path)
+    if purge and install_dir is not None:
+        _remove_remote_path(server_host, install_dir)
 
 
-def _cleanup_client_install(client_host, runner, msi_path: str, install_dir: Path | None = None) -> None:
+def _cleanup_client_install(
+    client_host, runner, msi_path: str, install_dir: Path | None = None, purge: bool = False
+) -> None:
     args = ["client", "remove", "--ignore-missing"]
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
     _env.install_xp2p_from_msi(client_host, msi_path)
+    if purge and install_dir is not None:
+        _remove_remote_path(client_host, install_dir)
 
 
 def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
@@ -165,8 +184,12 @@ def test_install_server_and_client_nodefault(
     xp2p_client_run_factory,
     xp2p_msi_path,
 ):
-    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR)
-    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR)
+    _cleanup_server_install(
+        server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR, purge=True
+    )
+    _cleanup_client_install(
+        client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR, purge=True
+    )
     try:
         server_install = xp2p_server_runner(
             "server",
@@ -226,5 +249,9 @@ def test_install_server_and_client_nodefault(
                 ping_result = _run_ping_via_socks(xp2p_client_runner, SERVER_PUBLIC_HOST)
                 _assert_ping_success(ping_result)
     finally:
-        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR)
-        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR)
+        _cleanup_client_install(
+            client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR, purge=True
+        )
+        _cleanup_server_install(
+            server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR, purge=True
+        )
