@@ -61,6 +61,13 @@ try {
         throw "xp2p binary missing at $binaryOut"
     }
 
+    $xraySource = Join-Path $RepoRoot 'distro\windows\bundle\x86_64\xray.exe'
+    if (-not (Test-Path $xraySource)) {
+        throw "xray binary missing at $xraySource (place the Windows bundle before building the MSI)."
+    }
+    $xrayOut = Join-Path $binaryDir 'xray.exe'
+    Copy-Item $xraySource $xrayOut -Force
+
     Write-Info "Locating WiX Toolset"
     $wixDir = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" -Directory |
         Sort-Object LastWriteTime -Descending |
@@ -73,7 +80,7 @@ try {
 
     Write-Info "Running candle.exe"
     $wixObj = Join-Path $binaryDir 'xp2p.wixobj'
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-out" $wixObj (Join-Path $RepoRoot 'installer\wix\xp2p.wxs')
+    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dXrayBinary=$xrayOut" "-out" $wixObj (Join-Path $RepoRoot 'installer\wix\xp2p.wxs')
     if ($LASTEXITCODE -ne 0) {
         throw "candle.exe failed with exit code $LASTEXITCODE"
     }

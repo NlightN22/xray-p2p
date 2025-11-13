@@ -46,7 +46,9 @@
 
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="xp2p" />
+        <Directory Id="INSTALLFOLDER" Name="xp2p">
+          <Directory Id="BinFolder" Name="bin" />
+        </Directory>
       </Directory>
       <Directory Id="LocalAppDataFolder" />
     </Directory>
@@ -63,9 +65,16 @@
       </Component>
     </DirectoryRef>
 
+    <DirectoryRef Id="BinFolder">
+      <Component Id="cmpXrayExe" Guid="{3E2DD8E7-5DFA-4E57-9A5E-4F38C5E0B27B}" Win64="yes">
+        <File Id="fileXrayExe" Source="$(var.XrayBinary)" KeyPath="yes" Checksum="yes" />
+      </Component>
+    </DirectoryRef>
+
     <Feature Id="MainFeature" Title="xp2p" Level="1">
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
+      <ComponentRef Id="cmpXrayExe" />
     </Feature>
   </Product>
 </Wix>

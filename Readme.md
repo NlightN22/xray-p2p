@@ -343,9 +343,13 @@ A signed Windows release now includes `xp2p-<version>-windows-amd64.msi` (and it
 1. Install the WiX Toolset (`choco install wixtoolset --no-progress -y`) and make sure `candle.exe`/`light.exe` sit on `PATH`.
 2. Build the Windows binary with the embedded version:  
    `go run ./go/tools/targets build --target windows-amd64 --base build --binary xp2p --pkg ./go/cmd/xp2p --ldflags "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$(go run ./go/cmd/xp2p --version)"`
-3. Compile the WiX project from `installer/wix/xp2p.wxs`:
+3. Copy the matching `xray.exe` into `distro/windows/bundle/x86_64/xray.exe` (the MSI build script copies it into the staging directory automatically).
+4. Compile the WiX project from `installer/wix/xp2p.wxs`:
    ```powershell
-   candle -dProductVersion=<version> -dXp2pBinary=build/windows-amd64/xp2p.exe installer/wix/xp2p.wxs
+   candle -dProductVersion=<version> `
+          -dXp2pBinary=build/windows-amd64/xp2p.exe `
+          -dXrayBinary=distro/windows/bundle/x86_64/xray.exe `
+          installer/wix/xp2p.wxs
    light -out dist/xp2p-<version>-windows-amd64.msi installer/wix/xp2p.wixobj
    ```
 
