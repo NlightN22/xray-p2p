@@ -232,6 +232,25 @@ curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/ser
 - **Vagrant**: Use the Debian 12 box under `infra/vagrant/debian12` for a reproducible
   OpenWrt SDK environment (runs on VirtualBox with 4 GB RAM by default).
 
+## Debian package sandbox
+
+Use `infra/vagrant/debian12/deb-build` to spin up a Debian 12 builder that already
+contains `build-essential`, `debhelper`, `lintian`, `fpm`, and the Go toolchain
+required for xp2p.
+
+1. `cd infra/vagrant/debian12/deb-build && vagrant up` – provisions the VM and syncs
+   the repository into `/srv/xray-p2p` (and `/home/vagrant/xray-p2p` inside the VM).
+2. Run the packaging script:  
+   `vagrant ssh -c '/srv/xray-p2p/infra/vagrant/debian12/deb-build/build-deb.sh'`.
+   The script builds xp2p, infers the version via `xp2p --version`, and calls FPM
+   with explicit dependencies (`ca-certificates`, `iproute2`, `iptables`).
+3. Collect the artefact from the shared folder:
+   `build/deb/artifacts/xp2p_<version>_amd64.deb` (visible both on the host and in
+   the VM). Use `lintian build/deb/artifacts/*.deb` inside the VM for quick checks.
+
+Re-run `build-deb.sh` any time you need a fresh package; it cleans the staging
+directory before building so repeated runs stay deterministic.
+
 ---
 
 ## Manual operations
