@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.host.win.win import _env
+from tests.host.win import env as _env
 
 SERVER_PUBLIC_HOST = "10.0.10.10"
 DEFAULT_SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")

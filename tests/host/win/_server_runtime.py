@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from testinfra.host import Host
 
-from . import _env
+from . import env as _env
 
 SERVER_RUN_STABILIZE_SECONDS = 6
 

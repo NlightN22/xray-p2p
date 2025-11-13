@@ -1,6 +1,6 @@
 import pytest
 
-from tests.host.win.win import _env
+from tests.host.win import env as _env
 
 from .test_server_install import (
     SERVER_CONFIG_DIR_NAME,

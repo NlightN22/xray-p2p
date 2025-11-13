@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.host.win.win import _env
+from tests.host.win import env as _env
 
 MSI_CACHE_DIR = Path(r"C:\xp2p\build\msi-cache")
 MSI_MIN_SIZE_BYTES = 1_000_000

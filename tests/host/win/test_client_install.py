@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.host.win.win import _env
+from tests.host.win import env as _env
 
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
