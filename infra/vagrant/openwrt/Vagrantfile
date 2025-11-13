@@ -1,7 +1,8 @@
-# frozen_string_literal: true
+﻿# frozen_string_literal: true
 
 BOX_PATH = File.expand_path('../boxes/openwrt-24.10.2.box', __dir__)
 PROJECT_ROOT = File.expand_path('../../..', __dir__)
+BUILD_OUTPUT = File.join(PROJECT_ROOT, 'build', 'openwrt')
 HOST_IP = ENV.fetch('OPENWRT_HOST_IP', '10.0.10.30')
 HOST_NETMASK = ENV.fetch('OPENWRT_HOST_NETMASK', '255.255.255.0')
 HOST_INTERFACE = ENV.fetch('OPENWRT_HOST_INTERFACE', 'eth1')
@@ -18,33 +19,12 @@ Vagrant.configure('2') do |config|
   config.vm.network 'forwarded_port', guest: 22, host: 2222, auto_correct: true
   config.vm.network 'private_network', ip: HOST_IP, auto_config: false
 
-  # Sync the entire repo via NFS (requires vagrant-winnfsd on Windows hosts)
-  config.vm.synced_folder PROJECT_ROOT, '/srv/project', type: 'nfs',
-                          nfs_version: 3,
-                          mount_options: ['vers=3', 'tcp', 'nolock'],
-                          linux__mount_command: %w[/usr/sbin/mount.nfs]
-
   config.vm.provider 'virtualbox' do |vb|
     vb.name = 'openwrt-24.10.2-server'
     vb.gui = false
   end
 
-  config.vm.provision 'shell', name: 'verify-shared-folder', privileged: true, inline: <<~'SH'
-    set -e
-    TARGET='/srv/project'
-    TIMEOUT=60
-    INTERVAL=3
-    ELAPSED=0
-
-    while [ $ELAPSED -lt $TIMEOUT ]; do
-      if mount | grep -q "on ${TARGET} "; then
-        exit 0
-      fi
-      sleep $INTERVAL
-      ELAPSED=$((ELAPSED + INTERVAL))
-    done
-
-    echo "[verify-shared-folder] ${TARGET} is not mounted after ${TIMEOUT}s" >&2
-    exit 1
-  SH
+  config.vm.provision 'file',
+                      source: BUILD_OUTPUT,
+                      destination: '/tmp/build-openwrt'
 end
