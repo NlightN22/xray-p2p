@@ -55,6 +55,8 @@ func looksLikeInstallRoot(dir string) bool {
 		expectFile bool
 	}{
 		{path: filepath.Join(dir, layout.StateFileName), expectFile: true},
+		{path: filepath.Join(dir, layout.ClientStateFileName), expectFile: true},
+		{path: filepath.Join(dir, layout.ServerStateFileName), expectFile: true},
 		{path: filepath.Join(dir, layout.ClientConfigDir), expectDir: true},
 		{path: filepath.Join(dir, layout.ServerConfigDir), expectDir: true},
 	}

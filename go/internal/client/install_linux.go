@@ -1,4 +1,4 @@
-//go:build windows
+//go:build linux
 
 package client
 
@@ -14,7 +14,6 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/NlightN22/xray-p2p/go/assets/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -25,18 +24,16 @@ var clientTemplates embed.FS
 
 type installState struct {
 	InstallOptions
-	installDir   string
-	binDir       string
-	logsDir      string
-	configDir    string
-	xrayPath     string
-	serverPort   int
-	serverName   string
-	serverRemote string
-	stateFile    string
+	installDir string
+	configDir  string
+	logsDir    string
+	serverPort int
+	serverName string
+	serverHost string
+	stateFile  string
 }
 
-// Install deploys xray-core binaries and client configuration files.
+// Install deploys client configuration files on Linux/OpenWrt hosts.
 func Install(ctx context.Context, opts InstallOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -58,25 +55,18 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	logging.Info("xp2p client install starting",
 		"install_dir", state.installDir,
 		"config_dir", state.configDir,
-		"server_address", state.serverRemote,
+		"server_address", state.ServerAddress,
 		"server_port", state.serverPort,
 		"allow_insecure", state.AllowInsecure,
-		"xray_version", xray.Version,
 	)
 
-	if err := os.MkdirAll(state.binDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create bin directory: %w", err)
-	}
-	if err := os.MkdirAll(state.logsDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create logs directory: %w", err)
-	}
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
-
-	if err := writeBinary(state); err != nil {
-		return err
+	if err := os.MkdirAll(state.logsDir, 0o755); err != nil {
+		return fmt.Errorf("xp2p: create log directory: %w", err)
 	}
+
 	if err := deployConfiguration(state); err != nil {
 		return err
 	}
@@ -88,7 +78,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	return nil
 }
 
-// Remove deletes installation files. When KeepFiles is true only existence is verified.
+// Remove deletes client configuration files. When KeepFiles is true only existence is verified.
 func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -113,31 +103,11 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("xp2p: remove client config dir: %w", err)
 	}
 
-	statePaths := []string{
-		filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient)),
-		filepath.Join(installDir, layout.StateFileName),
-	}
-	var lastErr error
-	for idx, statePath := range statePaths {
-		if err := installstate.Remove(statePath, installstate.KindClient); err != nil {
-			if errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled) {
-				lastErr = err
-				if idx == len(statePaths)-1 && !opts.IgnoreMissing {
-					return fmt.Errorf("xp2p: remove client state file: %w", err)
-				}
-				if opts.IgnoreMissing {
-					continue
-				}
-				continue
-			}
+	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient))
+	if err := installstate.Remove(statePath, installstate.KindClient); err != nil {
+		if !(opts.IgnoreMissing && (errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled))) {
 			return fmt.Errorf("xp2p: remove client state file: %w", err)
-		} else {
-			lastErr = nil
-			break
 		}
-	}
-	if lastErr != nil && !opts.IgnoreMissing {
-		return fmt.Errorf("xp2p: remove client state file: %w", lastErr)
 	}
 
 	logging.Info("xp2p client configuration removed", "install_dir", installDir, "config_dir", configDir)
@@ -184,6 +154,8 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		serverName = address
 	}
 
+	logsDir := filepath.Join(layout.UnixLogRoot, "client")
+
 	state := installState{
 		InstallOptions: InstallOptions{
 			InstallDir:    dir,
@@ -196,17 +168,14 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 			AllowInsecure: opts.AllowInsecure,
 			Force:         opts.Force,
 		},
-		installDir:   dir,
-		binDir:       filepath.Join(dir, layout.BinDirName),
-		logsDir:      filepath.Join(dir, layout.LogsDirName),
-		configDir:    configDir,
-		xrayPath:     filepath.Join(dir, layout.BinDirName, "xray.exe"),
-		serverPort:   portVal,
-		serverName:   serverName,
-		serverRemote: address,
+		installDir: dir,
+		configDir:  configDir,
+		logsDir:    logsDir,
+		serverPort: portVal,
+		serverName: serverName,
+		serverHost: address,
+		stateFile:  filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient)),
 	}
-
-	state.stateFile = filepath.Join(state.installDir, installstate.FileNameForKind(installstate.KindClient))
 
 	return state, nil
 }
@@ -216,51 +185,25 @@ func resolveInstallDir(raw string) (string, error) {
 	if cleaned == "" {
 		return "", errors.New("xp2p: install directory is required")
 	}
-	abs, err := filepath.Abs(cleaned)
-	if err != nil {
-		return "", fmt.Errorf("xp2p: resolve install directory: %w", err)
+	if !filepath.IsAbs(cleaned) {
+		abs, err := filepath.Abs(cleaned)
+		if err != nil {
+			return "", fmt.Errorf("xp2p: resolve install directory: %w", err)
+		}
+		cleaned = abs
 	}
-
-	if !isSafeInstallDir(abs) {
-		return "", fmt.Errorf("xp2p: install directory %q is not allowed", abs)
-	}
-
-	return abs, nil
+	return cleaned, nil
 }
 
 func resolveConfigDir(base, cfg string) (string, error) {
 	cfg = strings.TrimSpace(cfg)
 	if cfg == "" {
-		cfg = DefaultClientConfigDir
+		cfg = layout.ClientConfigDir
 	}
 	if filepath.IsAbs(cfg) {
 		return cfg, nil
 	}
 	return filepath.Join(base, cfg), nil
-}
-
-func isSafeInstallDir(path string) bool {
-	clean := filepath.Clean(path)
-	if clean == "." || clean == string(filepath.Separator) {
-		return false
-	}
-
-	volume := filepath.VolumeName(clean)
-	if volume != "" {
-		root := volume + string(filepath.Separator)
-		if strings.EqualFold(clean, root) {
-			return false
-		}
-	}
-
-	if strings.HasPrefix(clean, `\\`) {
-		parts := strings.Split(clean[2:], `\`)
-		if len(parts) < 3 {
-			return false
-		}
-	}
-
-	return true
 }
 
 func clientInstallationPresent(state installState) (bool, string, error) {
@@ -272,13 +215,6 @@ func clientInstallationPresent(state installState) (bool, string, error) {
 		return false, "", fmt.Errorf("xp2p: read client state: %w", err)
 	}
 	return true, fmt.Sprintf("state file %s", state.stateFile), nil
-}
-
-func writeBinary(state installState) error {
-	if err := os.WriteFile(state.xrayPath, xray.WindowsAMD64(), 0o755); err != nil {
-		return fmt.Errorf("xp2p: write xray-core binary: %w", err)
-	}
-	return nil
 }
 
 func deployConfiguration(state installState) error {
@@ -297,7 +233,7 @@ func deployConfiguration(state installState) error {
 			ServerName    string
 			Email         string
 		}{
-			ServerAddress: state.serverRemote,
+			ServerAddress: state.serverHost,
 			ServerPort:    state.serverPort,
 			Password:      state.Password,
 			AllowInsecure: state.AllowInsecure,

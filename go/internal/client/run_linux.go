@@ -1,9 +1,10 @@
-//go:build windows
+//go:build linux
 
-package server
+package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,13 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-// Run launches xray-core using the installed configuration directory and blocks until the process exits.
+// Run launches xray-core using the installed client configuration directory and blocks until the process exits.
 func Run(ctx context.Context, opts RunOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -33,11 +33,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
-	if _, err := os.Stat(xrayPath); err != nil {
-		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
-	}
-
 	if stat, err := os.Stat(configDir); err != nil || !stat.IsDir() {
 		if err != nil {
 			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", configDir, err)
@@ -45,12 +40,21 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
+	xrayPath := strings.TrimSpace(os.Getenv("XP2P_XRAY_BIN"))
+	if xrayPath == "" {
+		path, err := exec.LookPath("xray")
+		if err != nil {
+			return fmt.Errorf("xp2p: xray binary not found in PATH (set XP2P_XRAY_BIN): %w", err)
+		}
+		xrayPath = path
+	}
+
 	var errorWriter io.Writer
 	var errorFile *os.File
-	if path := strings.TrimSpace(opts.ErrorLogPath); path != "" {
-		logPath := path
-		if !filepath.IsAbs(logPath) {
-			logPath = filepath.Join(installDir, logPath)
+	if raw := strings.TrimSpace(opts.ErrorLogPath); raw != "" {
+		logPath, err := resolveLogPath(raw)
+		if err != nil {
+			return err
 		}
 		if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 			return fmt.Errorf("xp2p: create log directory %s: %w", filepath.Dir(logPath), err)
@@ -67,11 +71,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	args := []string{"-confdir", configDir}
 	cmd := exec.CommandContext(ctx, xrayPath, args...)
-	cmd.Dir = installDir
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		HideWindow:    true,
-		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
-	}
+	cmd.Dir = configDir
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -110,4 +110,24 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: xray-core exited: %w", waitErr)
 	}
 	return nil
+}
+
+func resolveLogPath(raw string) (string, error) {
+	trimmed := strings.TrimSpace(filepath.Clean(raw))
+	if trimmed == "" {
+		return "", errors.New("xp2p: log path is empty")
+	}
+	if filepath.IsAbs(trimmed) {
+		return trimmed, nil
+	}
+
+	rel := filepath.ToSlash(trimmed)
+	if strings.HasPrefix(rel, "logs/") {
+		rel = strings.TrimPrefix(rel, "logs/")
+	}
+	if rel == "" || rel == "." {
+		rel = "xp2p-client.log"
+	}
+
+	return filepath.Join(layout.UnixLogRoot, rel), nil
 }

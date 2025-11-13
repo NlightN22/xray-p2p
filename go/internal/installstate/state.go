@@ -20,9 +20,21 @@ const (
 	KindServer Kind = "server"
 	// KindClient marks a client installation.
 	KindClient Kind = "client"
-	// FileName is the default file name for state markers.
-	FileName = layout.StateFileName
+	// FileName is retained for legacy single-role installations.
+	FileName = "install-state.json"
 )
+
+// FileNameForKind returns the canonical marker name for the provided kind.
+func FileNameForKind(kind Kind) string {
+	switch kind {
+	case KindClient:
+		return layout.ClientStateFileName
+	case KindServer:
+		return layout.ServerStateFileName
+	default:
+		return FileName
+	}
+}
 
 // ErrRoleNotInstalled is returned when the state file exists but lacks the requested role.
 var ErrRoleNotInstalled = errors.New("installstate: role marker not found")

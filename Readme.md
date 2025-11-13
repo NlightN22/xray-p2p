@@ -118,31 +118,40 @@ Additional helpers:
 
 ## Installation layout
 
-xp2p now ships as a single self-contained directory. Every installation follows the same structure:
+xp2p keeps configuration and logs in predictable locations and supports running the client and server roles side-by-side.
+
+**Windows (MSI/portable)**
 
 ```text
-<install-dir>/
-  xp2p(.exe)
-  install-state.json
-  logs/
-  bin/
-    xray(.exe)
-  config-client/
-  config-server/
+C:\Program Files\xp2p\
+  xp2p.exe
+  bin\xray.exe
+  config-client\
+  config-server\
+  logs\
+  install-state-client.json
+  install-state-server.json
 ```
 
-- `install-state.json` tracks independent `client` and `server` role markers, so both installations can coexist in the same directory without forcing re-installs.
-- The `xp2p` binary always lives at the root next to `install-state.json`, so running `xp2p` from that directory automatically discovers the configs/logs without extra flags.
-- `bin/` stores only the xray-core runtime that the CLI manages.
-- `config-client/` and `config-server/` contain the rendered JSON configs for each role.
-- `logs/` is created during install so that `--xray-log-file logs\<name>.err` always resolves within the tree.
+**Linux / OpenWrt**
 
-Default install locations:
+```text
+/usr/sbin/xp2p                # binary provided by the package manager
+/etc/xp2p/
+  config-client/
+  config-server/
+  install-state-client.json
+  install-state-server.json
+/var/log/xp2p/
+  client.log / server.log …
+```
 
-- **Windows** – `C:\Program Files\xp2p` when the directory is writable; otherwise `%LOCALAPPDATA%\xp2p`.
-- **Linux** – `/opt/xp2p` for root sessions, or `$HOME/.local/share/xp2p` for unprivileged users.
+- The marker files (`install-state-*.json`) record which roles are active; reinstalling one role no longer overwrites the other.
+- Windows bundles `xray.exe` in `bin/`. Linux/OpenWrt expect `xray` to be installed separately (e.g. via opkg) and available in `PATH` or via `XP2P_XRAY_BIN`.
+- `--config-dir` continues to work on every platform: relative values are resolved against `C:\Program Files\xp2p` on Windows and `/etc/xp2p` on Linux.
+- `--xray-log-file` is still accepted; on Linux relative paths are stored under `/var/log/xp2p`.
 
-When xp2p detects that it is already running from an installation root (for example, a portable unzip), it transparently uses that directory for all commands. MSI/PKG installers only need to copy the tree into place; xp2p will keep configs and logs alongside itself unless explicit `--path`/`--config-dir` flags are provided.
+When xp2p detects a self-contained layout (for example, a portable Windows unzip), it transparently uses that directory. Otherwise it falls back to the platform defaults described above.
 
 ---
 
