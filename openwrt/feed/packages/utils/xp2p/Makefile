@@ -29,7 +29,7 @@ define Package/xp2p
   CATEGORY:=Network
   TITLE:=xp2p tunnel helper
   URL:=https://github.com/NlightN22/xray-p2p
-  DEPENDS:=$(GO_ARCH_DEPENDS)
+DEPENDS:=$(GO_ARCH_DEPENDS) +xray-core
 endef
 
 define Package/xp2p/description
