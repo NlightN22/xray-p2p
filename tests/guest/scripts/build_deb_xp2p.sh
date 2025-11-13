@@ -45,6 +45,7 @@ mkdir -p \
   "$STAGING_DIR/usr/sbin" \
   "$STAGING_DIR/etc/xp2p/config-client" \
   "$STAGING_DIR/etc/xp2p/config-server" \
+  "$STAGING_DIR/etc/xp2p/bin" \
   "$STAGING_DIR/var/log/xp2p"
 
 echo "==> Building xp2p binary (GOARCH=$PKG_ARCH)"
@@ -55,6 +56,32 @@ LDFLAGS="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VE
     go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/sbin/xp2p" ./go/cmd/xp2p
 )
 chmod 0755 "$STAGING_DIR/usr/sbin/xp2p"
+
+map_xray_bundle_arch() {
+  case "$1" in
+    amd64|x86_64) echo "x86_64" ;;
+    arm64|aarch64) echo "arm64" ;;
+    armhf|armv7l|armv7|arm32) echo "arm32" ;;
+    armel) echo "arm32" ;;
+    386|x86) echo "x86" ;;
+    mipsel|mips32le) echo "mips32le" ;;
+    mips64el|mips64le) echo "mips64le" ;;
+    riscv64) echo "riscv64" ;;
+    *) return 1 ;;
+  esac
+}
+
+BUNDLE_ARCH=$(map_xray_bundle_arch "$PKG_ARCH") || {
+  echo "Unsupported XP2P_DEB_ARCH=$PKG_ARCH (no xray bundle mapping)" >&2
+  exit 1
+}
+XRAY_SOURCE="$PROJECT_ROOT/distro/linux/bundle/$BUNDLE_ARCH/xray"
+if [ ! -f "$XRAY_SOURCE" ]; then
+  echo "xray binary not found at $XRAY_SOURCE" >&2
+  exit 1
+fi
+echo "==> Staging xray binary from $XRAY_SOURCE"
+install -m 0755 "$XRAY_SOURCE" "$STAGING_DIR/etc/xp2p/bin/xray"
 
 PACKAGE_PATH="$ARTIFACT_DIR/${PKG_NAME}_${VERSION}_${PKG_ARCH}.deb"
 
