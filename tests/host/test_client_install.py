@@ -11,7 +11,10 @@ CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
 CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
 CLIENT_LOG_FILE = CLIENT_INSTALL_DIR / CLIENT_LOG_RELATIVE
-CLIENT_STATE_FILE = CLIENT_INSTALL_DIR / "install-state.json"
+CLIENT_STATE_FILES = [
+    CLIENT_INSTALL_DIR / "install-state-client.json",
+    CLIENT_INSTALL_DIR / "install-state.json",
+]
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
@@ -228,10 +231,11 @@ def test_client_install_succeeds_without_state_marker(
             check=True,
         )
 
-        _remove_remote_path(client_host, CLIENT_STATE_FILE)
-        assert not _remote_path_exists(
-            client_host, CLIENT_STATE_FILE
-        ), "Expected install-state.json to be removed before re-install"
+        for state_file in CLIENT_STATE_FILES:
+            _remove_remote_path(client_host, state_file)
+        assert all(
+            not _remote_path_exists(client_host, path) for path in CLIENT_STATE_FILES
+        ), "Expected client state files to be removed before re-install"
 
         xp2p_client_runner(
             "client",
@@ -245,6 +249,8 @@ def test_client_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert _remote_path_exists(client_host, CLIENT_STATE_FILE), "Expected install-state.json to be recreated"
+        assert any(
+            _remote_path_exists(client_host, path) for path in CLIENT_STATE_FILES
+        ), "Expected client install-state file to be recreated"
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

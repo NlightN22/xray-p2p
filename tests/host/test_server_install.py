@@ -21,7 +21,10 @@ XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
 SERVER_LOG_RELATIVE = r"logs\server.err"
 SERVER_LOG_FILE = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
 SERVER_HOST_VALUE = "xp2p.test.local"
-SERVER_STATE_FILE = SERVER_INSTALL_DIR / "install-state.json"
+SERVER_STATE_FILES = [
+    SERVER_INSTALL_DIR / "install-state-server.json",
+    SERVER_INSTALL_DIR / "install-state.json",
+]
 
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
@@ -422,10 +425,11 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        _remove_remote_path(server_host, SERVER_STATE_FILE)
-        assert not _remote_path_exists(
-            server_host, SERVER_STATE_FILE
-        ), "Expected install-state.json to be removed before re-install"
+        for state_file in SERVER_STATE_FILES:
+            _remove_remote_path(server_host, state_file)
+        assert all(
+            not _remote_path_exists(server_host, path) for path in SERVER_STATE_FILES
+        ), "Expected server state files to be removed before re-install"
 
         xp2p_server_runner(
             "server",
@@ -441,6 +445,8 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert _remote_path_exists(server_host, SERVER_STATE_FILE), "Expected install-state.json to be recreated"
+        assert any(
+            _remote_path_exists(server_host, path) for path in SERVER_STATE_FILES
+        ), "Expected server install-state file to be recreated"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
