@@ -242,15 +242,30 @@ required for xp2p.
    the repository into `/srv/xray-p2p` (and `/home/vagrant/xray-p2p` inside the VM).
 2. Run the packaging script:  
    `vagrant ssh -c '/srv/xray-p2p/infra/vagrant/debian12/deb-build/build-deb.sh'`.
-   The script builds xp2p, infers the version via `xp2p --version`, and calls FPM
-   with the `xray-core` dependency declared explicitly (override via
-   `XP2P_DEB_DEPENDS`).
+   The script builds xp2p, infers the version via `xp2p --version`, and calls FPM.
+   Pass `XP2P_DEB_DEPENDS="..."` to declare optional package deps (empty by default).
 3. Collect the artefact from the shared folder:
    `build/deb/artifacts/xp2p_<version>_amd64.deb` (visible both on the host and in
    the VM). Use `lintian build/deb/artifacts/*.deb` inside the VM for quick checks.
 
 Re-run `build-deb.sh` any time you need a fresh package; it cleans the staging
 directory before building so repeated runs stay deterministic.
+
+Need the upstream `xray` binary on a clean Debian install? Run the helper wrapper
+around the official installer:
+
+```bash
+sudo scripts/install_xray_core.sh --install
+```
+
+The wrapper simply downloads `https://github.com/XTLS/Xray-install` and hands all
+arguments through to the upstream script, so check that project for supported
+flags/versions.
+
+When you want to ship a Linux `xray` binary together with xp2p (for example inside
+the `.deb`), place it under `distro/linux/bundle/<arch>/xray` using the same
+layout as the Windows bundle (`distro/windows/bundle/x86_64/xray.exe`). Leave the
+OpenWrt builds external so their packages stay lean.
 
 ---
 
