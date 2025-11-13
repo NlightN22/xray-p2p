@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.host import _env
+from tests.host.win.win import _env
 
 INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
@@ -103,6 +103,7 @@ if (-not (Test-Path {quoted})) {{
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
     _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
 

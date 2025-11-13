@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.host import _env
+from tests.host.win.win import _env
 
 SERVER_PUBLIC_HOST = "10.0.10.10"
 DEFAULT_SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
@@ -121,6 +121,7 @@ def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, 
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_install_server_and_client_default(
     server_host,
     client_host,
@@ -175,6 +176,7 @@ def test_install_server_and_client_default(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_install_server_and_client_nodefault(
     server_host,
     client_host,

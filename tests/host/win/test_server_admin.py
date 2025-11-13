@@ -2,6 +2,7 @@ import pytest
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_has_admin_rights(server_host):
     script = (
         "[Security.Principal.WindowsPrincipal]::new("

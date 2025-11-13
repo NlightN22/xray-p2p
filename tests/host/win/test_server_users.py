@@ -1,6 +1,6 @@
 import pytest
 
-from tests.host import _env
+from tests.host.win.win import _env
 
 from .test_server_install import (
     SERVER_CONFIG_DIR_NAME,
@@ -50,6 +50,7 @@ def _remove_initial_install_client(server_host, xp2p_server_runner):
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_install_creates_and_allows_removing_default_user(
     server_host, xp2p_server_runner, xp2p_msi_path
 ):
@@ -77,6 +78,7 @@ def test_server_install_creates_and_allows_removing_default_user(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_msi_path):
     _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
@@ -160,6 +162,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_msi_path):
     _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
@@ -226,6 +229,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_msi_path):
     _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:

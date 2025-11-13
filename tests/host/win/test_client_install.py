@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.host import _env
+from tests.host.win.win import _env
 
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
@@ -69,6 +69,7 @@ def _assert_outbounds_server(data: dict, address: str, password: str, email: str
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp2p_msi_path):
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
@@ -112,6 +113,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path):
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
@@ -139,6 +141,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_client_run_starts_xray_core(
     client_host, xp2p_client_runner, xp2p_client_run_factory, xp2p_msi_path
 ):
@@ -176,6 +179,7 @@ def test_client_run_starts_xray_core(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_client_install_requires_force_when_state_exists(
     client_host, xp2p_client_runner, xp2p_msi_path
 ):
@@ -213,6 +217,7 @@ def test_client_install_requires_force_when_state_exists(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_client_install_succeeds_without_state_marker(
     client_host, xp2p_client_runner, xp2p_msi_path
 ):

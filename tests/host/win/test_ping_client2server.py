@@ -1,6 +1,6 @@
 import pytest
 
-from tests.host import _env
+from tests.host.win.win import _env
 
 CLIENT_SUBNET_HOST = "10.0.10.20"
 FIREWALL_RULE_NAME = "xp2p-test-block-client"
@@ -81,6 +81,7 @@ def _set_firewall_profiles(server_host, *, enabled: bool) -> None:
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_xp2p_service_ping(xp2p_server_service, xp2p_client_runner, xp2p_options):
     """Verify that the client xp2p ping reaches the server-side diagnostics service."""
     result = _run_ping(xp2p_client_runner, xp2p_options)
@@ -88,6 +89,7 @@ def test_xp2p_service_ping(xp2p_server_service, xp2p_client_runner, xp2p_options
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_xp2p_service_ping_blocked_by_firewall(
     xp2p_server_service, xp2p_client_runner, xp2p_options, server_host
 ):

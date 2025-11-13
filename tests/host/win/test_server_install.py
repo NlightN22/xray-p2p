@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.host import _env
+from tests.host.win.win import _env
 
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR_NAME = "config-server"
@@ -125,6 +125,7 @@ def _decode_remote_certificate(host, path: Path) -> dict:
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_install_uses_provided_certificate_and_force_overwrites(
     server_host, xp2p_server_runner, xp2p_msi_path
 ):
@@ -244,6 +245,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_install_generates_self_signed_certificate(
     server_host, xp2p_server_runner, xp2p_msi_path
 ):
@@ -327,6 +329,7 @@ def test_server_install_generates_self_signed_certificate(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_run_starts_xray_core(
     server_host, xp2p_server_runner, xp2p_server_run_factory, xp2p_msi_path
 ):
@@ -364,6 +367,7 @@ def test_server_run_starts_xray_core(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_install_requires_force_when_state_exists(
     server_host, xp2p_server_runner, xp2p_msi_path
 ):
@@ -405,6 +409,7 @@ def test_server_install_requires_force_when_state_exists(
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_server_install_succeeds_without_state_marker(
     server_host, xp2p_server_runner, xp2p_msi_path
 ):

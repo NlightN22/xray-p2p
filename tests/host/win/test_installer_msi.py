@@ -4,13 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from tests.host import _env
+from tests.host.win.win import _env
 
 MSI_CACHE_DIR = Path(r"C:\xp2p\build\msi-cache")
 MSI_MIN_SIZE_BYTES = 1_000_000
 
 
 @pytest.mark.host
+@pytest.mark.win
 def test_windows_installer_builds_msi(server_host):
     msi_path = _env.ensure_msi_package(server_host)
     assert msi_path.startswith(str(MSI_CACHE_DIR)), (
