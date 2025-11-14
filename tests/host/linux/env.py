@@ -18,8 +18,7 @@ MACHINE_IDS: tuple[str, ...] = (
 )
 WORK_TREE = Path("/srv/xray-p2p")
 INSTALL_PATH = Path("/usr/bin/xp2p")
-BUILD_SCRIPT = WORK_TREE / "scripts" / "build" / "build_deb_xp2p.sh"
-ARTIFACT_DIR = WORK_TREE / "build" / "deb" / "artifacts"
+GUEST_SCRIPTS_ROOT = WORK_TREE / "tests" / "guest"
 
 _VERSION_CACHE: dict[str, dict[str, str]] = {}
 
@@ -41,6 +40,13 @@ def _run_shell(host: Host, script: str) -> CommandResult:
     return host.run(f"bash -lc {quoted}")
 
 
+def run_guest_script(host: Host, relative_path: str, *args: str) -> CommandResult:
+    script_path = GUEST_SCRIPTS_ROOT / relative_path
+    quoted_script = shlex.quote(str(script_path))
+    quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
+    return host.run(f"bash {quoted_script} {quoted_args}".strip())
+
+
 def _install_marker(marker: str, output: str | None) -> str | None:
     for line in (output or "").splitlines():
         line = line.strip()
@@ -54,66 +60,7 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     if cached:
         return cached
 
-    script = f"""
-set -euo pipefail
-export PATH="/usr/local/go/bin:$PATH"
-work="{WORK_TREE}"
-install_path="{INSTALL_PATH}"
-build_script="{BUILD_SCRIPT}"
-artifact_dir="{ARTIFACT_DIR}"
-if [ ! -d "$work" ]; then
-  echo "__XP2P_SOURCE_VERSION__="
-  echo "__XP2P_INSTALLED_VERSION__="
-  echo "Missing xp2p repo at $work" >&2
-  exit 3
-fi
-if [ ! -x "$build_script" ]; then
-  echo "__XP2P_SOURCE_VERSION__="
-  echo "__XP2P_INSTALLED_VERSION__="
-  echo "Build script $build_script is not executable" >&2
-  exit 3
-fi
-cd "$work"
-source_version=$(go run ./go/cmd/xp2p --version | tr -d '\\r')
-if [ -z "$source_version" ]; then
-  echo "__XP2P_SOURCE_VERSION__="
-  echo "__XP2P_INSTALLED_VERSION__="
-  exit 3
-fi
-installed_version=""
-need_install=0
-if [ -x "$install_path" ]; then
-  installed_version=$("$install_path" --version | tr -d '\\r')
-  if [ "$installed_version" != "$source_version" ]; then
-    need_install=1
-  fi
-else
-  need_install=1
-fi
-if [ "$need_install" -eq 1 ]; then
-  "$build_script"
-  shopt -s nullglob
-  arch=$(dpkg --print-architecture)
-  latest_pkg=""
-  for pkg in "$artifact_dir"/xp2p_*_"$arch".deb; do
-    if [ -z "$latest_pkg" ] || [ "$pkg" -nt "$latest_pkg" ]; then
-      latest_pkg="$pkg"
-    fi
-  done
-  shopt -u nullglob
-  if [ -z "$latest_pkg" ]; then
-    echo "__XP2P_SOURCE_VERSION__="
-    echo "__XP2P_INSTALLED_VERSION__="
-    echo "xp2p package not found in $artifact_dir" >&2
-    exit 3
-  fi
-  sudo dpkg -i "$latest_pkg"
-  installed_version=$("$install_path" --version | tr -d '\\r')
-fi
-echo "__XP2P_SOURCE_VERSION__=$source_version"
-echo "__XP2P_INSTALLED_VERSION__=$installed_version"
-"""
-    result = _run_shell(host, script)
+    result = run_guest_script(host, "scripts/linux/install_xp2p.sh")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to build and install xp2p on guest "
