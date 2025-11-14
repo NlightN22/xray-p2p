@@ -25,26 +25,40 @@ SERVER_LOG_FILE = LOG_ROOT / "server.err"
 XRAY_BINARY = INSTALL_ROOT / "bin" / "xray"
 
 
-def cleanup_client_install(host: Host, runner) -> None:
+def cleanup_client_install(
+    host: Host,
+    runner,
+    install_dir: PurePosixPath | None = None,
+    config_dir: str | None = None,
+) -> None:
+    install_path = (install_dir or INSTALL_ROOT).as_posix()
+    config_name = config_dir or CLIENT_CONFIG_DIR_NAME
     runner(
         "client",
         "remove",
         "--path",
-        INSTALL_ROOT.as_posix(),
+        install_path,
         "--config-dir",
-        CLIENT_CONFIG_DIR_NAME,
+        config_name,
         "--ignore-missing",
     )
 
 
-def cleanup_server_install(host: Host, runner) -> None:
+def cleanup_server_install(
+    host: Host,
+    runner,
+    install_dir: PurePosixPath | None = None,
+    config_dir: str | None = None,
+) -> None:
+    install_path = (install_dir or INSTALL_ROOT).as_posix()
+    config_name = config_dir or SERVER_CONFIG_DIR_NAME
     runner(
         "server",
         "remove",
         "--path",
-        INSTALL_ROOT.as_posix(),
+        install_path,
         "--config-dir",
-        SERVER_CONFIG_DIR_NAME,
+        config_name,
         "--ignore-missing",
     )
 
@@ -95,3 +109,60 @@ def extract_trojan_credential(output: str) -> dict[str, str]:
             f"STDOUT:\n{output}"
         )
     return {"user": user, "password": password, "link": link}
+
+
+def expected_proxy_tag(host: str) -> str:
+    cleaned = "".join(_sanitize_host(host)).strip("-")
+    if not cleaned:
+        cleaned = "endpoint"
+    return f"proxy-{cleaned}"
+
+
+def _sanitize_host(host: str):
+    host = host.strip().lower()
+    last_dash = False
+    for char in host:
+        if char.isalnum():
+            yield char
+            last_dash = False
+            continue
+        if char == "-" and not last_dash:
+            yield "-"
+            last_dash = True
+            continue
+        if not last_dash:
+            yield "-"
+            last_dash = True
+
+
+def assert_outbound(
+    data: dict,
+    host: str,
+    password: str,
+    email: str,
+    server_name: str,
+    *,
+    allow_insecure: bool = False,
+) -> None:
+    tag = expected_proxy_tag(host)
+    for outbound in data.get("outbounds", []):
+        if outbound.get("tag") != tag:
+            continue
+        server = outbound["settings"]["servers"][0]
+        assert server["address"] == host
+        assert server["password"] == password
+        assert server["email"] == email
+        tls_settings = outbound["streamSettings"]["tlsSettings"]
+        assert tls_settings["serverName"] == server_name
+        assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+        return
+    raise AssertionError(f"Outbound {tag} for host {host} not found")
+
+
+def assert_routing_rule(data: dict, host: str) -> None:
+    tag = expected_proxy_tag(host)
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") == tag and host in rule.get("ip", []):
+            return
+    raise AssertionError(f"Routing rule for {host} -> {tag} not found")

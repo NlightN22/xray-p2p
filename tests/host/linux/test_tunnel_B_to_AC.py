@@ -7,6 +7,9 @@ from tests.host.linux import env as linux_env
 
 SERVER_A_IP = "10.62.10.11"  # deb-test-a
 SERVER_C_IP = "10.62.10.13"  # deb-test-c
+CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
+CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
+CLIENT_STATE_FILE = helpers.CLIENT_STATE_FILES[0]
 
 
 def _runner(host):
@@ -67,7 +70,6 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--link",
             cred_a["link"],
-            "--force",
             check=True,
         )
         client_runner(
@@ -79,9 +81,20 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--link",
             cred_c["link"],
-            "--force",
             check=True,
         )
+
+        outbounds = helpers.read_json(client_b, CLIENT_OUTBOUNDS)
+        helpers.assert_outbound(outbounds, SERVER_A_IP, cred_a["password"], cred_a["user"], SERVER_A_IP)
+        helpers.assert_outbound(outbounds, SERVER_C_IP, cred_c["password"], cred_c["user"], SERVER_C_IP)
+
+        routing = helpers.read_json(client_b, CLIENT_ROUTING)
+        helpers.assert_routing_rule(routing, SERVER_A_IP)
+        helpers.assert_routing_rule(routing, SERVER_C_IP)
+
+        state = helpers.read_json(client_b, CLIENT_STATE_FILE)
+        recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
+        assert recorded_hosts == {SERVER_A_IP, SERVER_C_IP}
 
         with linux_env.xp2p_run_session(
             server_a,
@@ -89,34 +102,32 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.SERVER_CONFIG_DIR_NAME,
             helpers.SERVER_LOG_FILE,
+        ), linux_env.xp2p_run_session(
+            server_c,
+            "server",
+            helpers.INSTALL_ROOT.as_posix(),
+            helpers.SERVER_CONFIG_DIR_NAME,
+            helpers.SERVER_LOG_FILE,
+        ), linux_env.xp2p_run_session(
+            client_b,
+            "client",
+            helpers.INSTALL_ROOT.as_posix(),
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            helpers.CLIENT_LOG_FILE,
         ):
-            with linux_env.xp2p_run_session(
-                server_c,
-                "server",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            ):
-                with linux_env.xp2p_run_session(
-                    client_b,
-                    "client",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    helpers.CLIENT_LOG_FILE,
-                ):
-                    for target in (SERVER_A_IP, SERVER_C_IP):
-                        result = client_runner(
-                            "ping",
-                            target,
-                            "--socks",
-                            "--count",
-                            "3",
-                            check=True,
-                        )
-                        stdout = (result.stdout or "").lower()
-                        assert "0% loss" in stdout, (
-                            f"xp2p ping to {target} did not report zero loss:\n"
-                            f"{result.stdout}"
-                        )
+            for target in (SERVER_A_IP, SERVER_C_IP):
+                result = client_runner(
+                    "ping",
+                    target,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=True,
+                )
+                stdout = (result.stdout or "").lower()
+                assert "0% loss" in stdout, (
+                    f"xp2p ping to {target} did not report zero loss:\n"
+                    f"{result.stdout}"
+                )
     finally:
         cleanup()

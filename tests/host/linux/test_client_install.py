@@ -13,57 +13,6 @@ CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_STATE_FILE = helpers.CLIENT_STATE_FILES[0]
 
 
-def _expected_tag(host: str) -> str:
-    cleaned = host.strip().lower()
-    result = []
-    last_dash = False
-    for char in cleaned:
-        if char.isalnum():
-            result.append(char)
-            last_dash = False
-            continue
-        if char == "-":
-            result.append(char)
-            last_dash = False
-            continue
-        if not last_dash:
-            result.append("-")
-            last_dash = True
-    sanitized = "".join(result).strip("-")
-    if not sanitized:
-        sanitized = "endpoint"
-    return f"proxy-{sanitized}"
-
-
-def _find_outbound(data: dict, tag: str) -> dict:
-    for outbound in data.get("outbounds", []):
-        if outbound.get("tag") == tag:
-            return outbound
-    raise AssertionError(f"Expected outbound with tag {tag}")
-
-
-def _assert_outbound(
-    data: dict, host: str, password: str, email: str, server_name: str, allow_insecure: bool = False
-) -> None:
-    outbound = _find_outbound(data, _expected_tag(host))
-    server = outbound["settings"]["servers"][0]
-    assert server["address"] == host
-    assert server["password"] == password
-    assert server["email"] == email
-    tls_settings = outbound["streamSettings"]["tlsSettings"]
-    assert tls_settings["serverName"] == server_name
-    assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
-
-
-def _assert_routing_rule(data: dict, host: str) -> None:
-    tag = _expected_tag(host)
-    rules = data.get("routing", {}).get("rules", [])
-    for rule in rules:
-        if rule.get("outboundTag") == tag and host in rule.get("ip", []):
-            return
-    raise AssertionError(f"Expected routing rule for {host} -> {tag}")
-
-
 def _cleanup(client_host, xp2p_client_runner) -> None:
     helpers.cleanup_client_install(client_host, xp2p_client_runner)
 
@@ -90,7 +39,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        _assert_outbound(data, "10.55.0.10", "test_password123", "alpha@example.com", "10.55.0.10")
+        helpers.assert_outbound(data, "10.55.0.10", "test_password123", "alpha@example.com", "10.55.0.10")
 
         xp2p_client_runner(
             "client",
@@ -111,12 +60,12 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         updated = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        _assert_outbound(updated, "10.55.0.10", "test_password123", "alpha@example.com", "10.55.0.10")
-        _assert_outbound(updated, "10.55.0.11", "override_password456", "beta@example.com", "vpn.example.local")
+        helpers.assert_outbound(updated, "10.55.0.10", "test_password123", "alpha@example.com", "10.55.0.10")
+        helpers.assert_outbound(updated, "10.55.0.11", "override_password456", "beta@example.com", "vpn.example.local")
 
         routing = helpers.read_json(client_host, CLIENT_ROUTING)
-        _assert_routing_rule(routing, "10.55.0.10")
-        _assert_routing_rule(routing, "10.55.0.11")
+        helpers.assert_routing_rule(routing, "10.55.0.10")
+        helpers.assert_routing_rule(routing, "10.55.0.11")
 
         state = helpers.read_json(client_host, CLIENT_STATE_FILE)
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
@@ -160,8 +109,8 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         refreshed = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        _assert_outbound(refreshed, "10.55.0.10", "forcepass", "gamma@example.com", "override.linux")
-        _assert_outbound(refreshed, "10.55.0.11", "override_password456", "beta@example.com", "vpn.example.local")
+        helpers.assert_outbound(refreshed, "10.55.0.10", "forcepass", "gamma@example.com", "override.linux")
+        helpers.assert_outbound(refreshed, "10.55.0.11", "override_password456", "beta@example.com", "vpn.example.local")
     finally:
         _cleanup(client_host, xp2p_client_runner)
 
@@ -188,7 +137,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
             check=True,
         )
         data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        _assert_outbound(
+        helpers.assert_outbound(
             data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=True
         )
     finally:
