@@ -42,7 +42,7 @@ echo "==> Version: $VERSION"
 echo "==> Preparing staging tree at $STAGING_DIR"
 rm -rf "$STAGING_DIR"
 mkdir -p \
-  "$STAGING_DIR/usr/sbin" \
+  "$STAGING_DIR/usr/bin" \
   "$STAGING_DIR/etc/xp2p/config-client" \
   "$STAGING_DIR/etc/xp2p/config-server" \
   "$STAGING_DIR/etc/xp2p/bin" \
@@ -53,9 +53,9 @@ LDFLAGS="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VE
 (
   cd "$PROJECT_ROOT"
   env GOOS=linux GOARCH="$PKG_ARCH" CGO_ENABLED=0 \
-    go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/sbin/xp2p" ./go/cmd/xp2p
+    go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
 )
-chmod 0755 "$STAGING_DIR/usr/sbin/xp2p"
+chmod 0755 "$STAGING_DIR/usr/bin/xp2p"
 
 map_xray_bundle_arch() {
   case "$1" in
