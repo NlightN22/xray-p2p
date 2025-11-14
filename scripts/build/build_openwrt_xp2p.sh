@@ -2,7 +2,7 @@
 set -eu
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
-PROJECT_ROOT=${XP2P_PROJECT_ROOT:-$(cd "$script_dir/../../.." && pwd)}
+PROJECT_ROOT=${XP2P_PROJECT_ROOT:-$(cd "$script_dir/../.." && pwd)}
 FEED_PATH=${XP2P_FEED_PATH:-"$PROJECT_ROOT/openwrt/feed"}
 BUILD_TARGET=${XP2P_BUILD_TARGET:-"package/xp2p/compile"}
 BUILD_OUTPUT_ROOT=${XP2P_BUILD_ROOT:-"$PROJECT_ROOT/build/openwrt"}

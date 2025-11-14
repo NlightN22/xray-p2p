@@ -2,7 +2,7 @@
 set -eu
 
 script_dir=$(cd "$(dirname "$0")" && pwd)
-PROJECT_ROOT=${XP2P_PROJECT_ROOT:-$(cd "$script_dir/../../.." && pwd)}
+PROJECT_ROOT=${XP2P_PROJECT_ROOT:-$(cd "$script_dir/../.." && pwd)}
 BUILD_ROOT=${XP2P_DEB_BUILD_ROOT:-"$PROJECT_ROOT/build/deb"}
 STAGING_DIR="$BUILD_ROOT/staging"
 ARTIFACT_DIR="$BUILD_ROOT/artifacts"
