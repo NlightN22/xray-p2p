@@ -18,6 +18,7 @@ Artifacts land in `/srv/xray-p2p/build/deb/artifacts`. The same script is execut
 ./scripts/build/build_deb_xp2p.sh
 ```
 Ensure the host has Go, FPM (`gem install fpm`), and the necessary build tools installed.
+The resulting package installs `xp2p` under `/usr/bin` and drops shell completions into `/usr/share/bash-completion/completions/xp2p`, `/usr/share/zsh/vendor-completions/_xp2p`, and `/usr/share/fish/vendor_completions.d/xp2p.fish`.
 
 ## MSI (Windows installer)
 

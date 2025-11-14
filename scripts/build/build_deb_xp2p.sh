@@ -46,7 +46,10 @@ mkdir -p \
   "$STAGING_DIR/etc/xp2p/config-client" \
   "$STAGING_DIR/etc/xp2p/config-server" \
   "$STAGING_DIR/etc/xp2p/bin" \
-  "$STAGING_DIR/var/log/xp2p"
+  "$STAGING_DIR/var/log/xp2p" \
+  "$STAGING_DIR/usr/share/bash-completion/completions" \
+  "$STAGING_DIR/usr/share/zsh/vendor-completions" \
+  "$STAGING_DIR/usr/share/fish/vendor_completions.d"
 
 echo "==> Building xp2p binary (GOARCH=$PKG_ARCH)"
 LDFLAGS="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
@@ -56,6 +59,15 @@ LDFLAGS="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VE
     go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
 )
 chmod 0755 "$STAGING_DIR/usr/bin/xp2p"
+
+echo "==> Generating completion scripts"
+tmp_exec_dir=$(mktemp -d)
+cp "$STAGING_DIR/usr/bin/xp2p" "$tmp_exec_dir/xp2p"
+chmod 0755 "$tmp_exec_dir/xp2p"
+"$tmp_exec_dir/xp2p" completion bash >"$STAGING_DIR/usr/share/bash-completion/completions/xp2p"
+"$tmp_exec_dir/xp2p" completion zsh >"$STAGING_DIR/usr/share/zsh/vendor-completions/_xp2p"
+"$tmp_exec_dir/xp2p" completion fish >"$STAGING_DIR/usr/share/fish/vendor_completions.d/xp2p.fish"
+rm -rf "$tmp_exec_dir"
 
 map_xray_bundle_arch() {
   case "$1" in
