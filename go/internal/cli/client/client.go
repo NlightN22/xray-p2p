@@ -54,7 +54,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	link := fs.String("link", "", "Trojan client link (trojan://...)")
 	allowInsecure := fs.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
 	strictTLS := fs.Bool("strict-tls", false, "enforce TLS verification")
-	force := fs.Bool("force", false, "overwrite existing installation")
+	force := fs.Bool("force", false, "replace existing endpoint configuration")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {

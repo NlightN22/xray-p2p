@@ -9,12 +9,14 @@ CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
 CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
+CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
 CLIENT_LOG_FILE = CLIENT_INSTALL_DIR / CLIENT_LOG_RELATIVE
 CLIENT_STATE_FILES = [
     CLIENT_INSTALL_DIR / "install-state-client.json",
     CLIENT_INSTALL_DIR / "install-state.json",
 ]
+CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
@@ -59,13 +61,56 @@ if (Test-Path {quoted}) {{
     _env.run_powershell(client_host, script)
 
 
-def _assert_outbounds_server(data: dict, address: str, password: str, email: str, server_name: str) -> None:
-    primary = data["outbounds"][0]["settings"]["servers"][0]
-    assert primary["address"] == address
-    assert primary["password"] == password
-    assert primary["email"] == email
-    tls_settings = data["outbounds"][0]["streamSettings"]["tlsSettings"]
+def _expected_tag(host: str) -> str:
+    cleaned = host.strip().lower()
+    result = []
+    last_dash = False
+    for char in cleaned:
+        if char.isalnum():
+            result.append(char)
+            last_dash = False
+            continue
+        if char == "-":
+            result.append(char)
+            last_dash = False
+            continue
+        if not last_dash:
+            result.append("-")
+            last_dash = True
+    sanitized = "".join(result).strip("-")
+    if not sanitized:
+        sanitized = "endpoint"
+    return f"proxy-{sanitized}"
+
+
+def _find_outbound(data: dict, tag: str) -> dict:
+    for outbound in data.get("outbounds", []):
+        if outbound.get("tag") == tag:
+            return outbound
+    raise AssertionError(f"Expected outbound with tag {tag} to exist")
+
+
+def _assert_outbound_entry(
+    data: dict, host: str, password: str, email: str, server_name: str, allow_insecure: bool = False
+) -> None:
+    tag = _expected_tag(host)
+    outbound = _find_outbound(data, tag)
+    server = outbound["settings"]["servers"][0]
+    assert server["address"] == host
+    assert server["password"] == password
+    assert server["email"] == email
+    tls_settings = outbound["streamSettings"]["tlsSettings"]
     assert tls_settings["serverName"] == server_name
+    assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+
+
+def _assert_routing_rule(data: dict, host: str) -> None:
+    tag = _expected_tag(host)
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") == tag and host in rule.get("ip", []):
+            return
+    raise AssertionError(f"Expected routing rule for {host} -> {tag}")
 
 
 @pytest.mark.host
@@ -82,12 +127,11 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "alpha@example.com",
             "--password",
             "test_password123",
-            "--force",
             check=True,
         )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbounds_server(data, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10")
+        _assert_outbound_entry(data, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10")
 
         xp2p_client_runner(
             "client",
@@ -100,14 +144,56 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "override_password456",
             "--server-name",
             "vpn.example.local",
+            check=True,
+        )
+
+        updated_outbounds = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        _assert_outbound_entry(updated_outbounds, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10")
+        _assert_outbound_entry(
+            updated_outbounds, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local"
+        )
+
+        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        _assert_routing_rule(routing, "10.0.10.10")
+        _assert_routing_rule(routing, "10.0.10.11")
+
+        state = _read_remote_json(client_host, CLIENT_STATE_FILE)
+        recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
+        assert recorded_hosts == {"10.0.10.10", "10.0.10.11"}
+
+        duplicate = xp2p_client_runner(
+            "client",
+            "install",
+            "--server-address",
+            "10.0.10.10",
+            "--user",
+            "gamma@example.com",
+            "--password",
+            "new-password",
+            check=False,
+        )
+        assert duplicate.rc != 0, "Expected duplicate endpoint install to fail without --force"
+        combined = f"{duplicate.stdout}\n{duplicate.stderr}".lower()
+        assert "endpoint 10.0.10.10 already exists" in combined
+
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--server-address",
+            "10.0.10.10",
+            "--user",
+            "gamma@example.com",
+            "--password",
+            "force-password",
+            "--server-name",
+            "override.example",
             "--force",
             check=True,
         )
 
-        updated_data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbounds_server(
-            updated_data, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local"
-        )
+        refreshed = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        _assert_outbound_entry(refreshed, "10.0.10.10", "force-password", "gamma@example.com", "override.example")
+        _assert_outbound_entry(refreshed, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local")
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
@@ -131,11 +217,9 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
         )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbounds_server(
-            data, "link.example.test", "linkpass", "link@example.com", "link.example.test"
+        _assert_outbound_entry(
+            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=True
         )
-        tls_settings = data["outbounds"][0]["streamSettings"]["tlsSettings"]
-        assert tls_settings["allowInsecure"] is True
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
@@ -180,7 +264,7 @@ def test_client_run_starts_xray_core(
 
 @pytest.mark.host
 @pytest.mark.win
-def test_client_install_requires_force_when_state_exists(
+def test_client_install_requires_force_for_existing_endpoint(
     client_host, xp2p_client_runner, xp2p_msi_path
 ):
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
@@ -194,7 +278,6 @@ def test_client_install_requires_force_when_state_exists(
             "state@example.com",
             "--password",
             "state-pass",
-            "--force",
             check=True,
         )
 
@@ -202,16 +285,29 @@ def test_client_install_requires_force_when_state_exists(
             "client",
             "install",
             "--server-address",
-            "10.0.10.51",
+            "10.0.10.50",
             "--user",
             "state2@example.com",
             "--password",
             "state-pass-2",
             check=False,
         )
-        assert result.rc != 0, "Expected install to fail while state file exists"
+        assert result.rc != 0, "Expected install to fail when endpoint exists without --force"
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
-        assert "client already installed" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        assert "endpoint 10.0.10.50 already exists" in combined
+
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--server-address",
+            "10.0.10.50",
+            "--user",
+            "state2@example.com",
+            "--password",
+            "state-pass-2",
+            "--force",
+            check=True,
+        )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 

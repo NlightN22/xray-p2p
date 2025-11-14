@@ -3,7 +3,6 @@
 package client
 
 import (
-	"bufio"
 	"context"
 	"embed"
 	"errors"
@@ -12,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"text/template"
 
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -44,14 +42,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return err
 	}
 
-	if !state.Force {
-		if exists, reason, err := clientInstallationPresent(state); err != nil {
-			return err
-		} else if exists {
-			return fmt.Errorf("xp2p: client already installed (%s) (use --force to overwrite)", reason)
-		}
-	}
-
 	logging.Info("xp2p client install starting",
 		"install_dir", state.installDir,
 		"config_dir", state.configDir,
@@ -69,9 +59,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 
 	if err := deployConfiguration(state); err != nil {
 		return err
-	}
-	if err := installstate.Write(state.stateFile, installstate.KindClient); err != nil {
-		return fmt.Errorf("xp2p: write client state: %w", err)
 	}
 
 	logging.Info("xp2p client install completed", "install_dir", state.installDir)
@@ -103,11 +90,28 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("xp2p: remove client config dir: %w", err)
 	}
 
-	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient))
-	if err := installstate.Remove(statePath, installstate.KindClient); err != nil {
-		if !(opts.IgnoreMissing && (errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled))) {
+	clientStatePath := filepath.Join(installDir, layout.ClientStateFileName)
+	legacyStatePath := filepath.Join(installDir, layout.StateFileName)
+	stateRemoved := false
+
+	if err := os.Remove(clientStatePath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("xp2p: remove client state file: %w", err)
 		}
+	} else {
+		stateRemoved = true
+	}
+
+	if err := installstate.Remove(legacyStatePath, installstate.KindClient); err != nil {
+		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, installstate.ErrRoleNotInstalled) {
+			return fmt.Errorf("xp2p: remove client state file: %w", err)
+		}
+	} else {
+		stateRemoved = true
+	}
+
+	if !stateRemoved && !opts.IgnoreMissing {
+		return fmt.Errorf("xp2p: remove client state file: %w", os.ErrNotExist)
 	}
 
 	logging.Info("xp2p client configuration removed", "install_dir", installDir, "config_dir", configDir)
@@ -206,89 +210,23 @@ func resolveConfigDir(base, cfg string) (string, error) {
 	return filepath.Join(base, cfg), nil
 }
 
-func clientInstallationPresent(state installState) (bool, string, error) {
-	_, err := installstate.Read(state.stateFile, installstate.KindClient)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled) {
-			return false, "", nil
-		}
-		return false, "", fmt.Errorf("xp2p: read client state: %w", err)
-	}
-	return true, fmt.Sprintf("state file %s", state.stateFile), nil
-}
-
 func deployConfiguration(state installState) error {
 	if err := writeEmbeddedFile("assets/templates/inbounds.json", filepath.Join(state.configDir, "inbounds.json"), 0o644); err != nil {
 		return err
 	}
 
-	if err := renderTemplateToFile(
-		"assets/templates/outbounds.json.tmpl",
-		filepath.Join(state.configDir, "outbounds.json"),
-		struct {
-			ServerAddress string
-			ServerPort    int
-			Password      string
-			AllowInsecure bool
-			ServerName    string
-			Email         string
-		}{
-			ServerAddress: state.serverHost,
-			ServerPort:    state.serverPort,
-			Password:      state.Password,
-			AllowInsecure: state.AllowInsecure,
-			ServerName:    state.serverName,
-			Email:         state.User,
-		},
-	); err != nil {
+	if err := writeEmbeddedFile("assets/templates/logs.json", filepath.Join(state.configDir, "logs.json"), 0o644); err != nil {
 		return err
 	}
 
-	staticFiles := map[string]string{
-		"assets/templates/logs.json":    filepath.Join(state.configDir, "logs.json"),
-		"assets/templates/routing.json": filepath.Join(state.configDir, "routing.json"),
-	}
-	for src, dst := range staticFiles {
-		if err := writeEmbeddedFile(src, dst, 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func renderTemplateToFile(name, dest string, data any) error {
-	content, err := clientTemplates.ReadFile(name)
-	if err != nil {
-		return fmt.Errorf("xp2p: load template %s: %w", name, err)
-	}
-	tmpl, err := templateFromBytes(name, content)
-	if err != nil {
-		return err
-	}
-
-	file, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
-	if err != nil {
-		return fmt.Errorf("xp2p: create config %s: %w", dest, err)
-	}
-	defer file.Close()
-
-	writer := bufio.NewWriter(file)
-	if err := tmpl.Execute(writer, data); err != nil {
-		return fmt.Errorf("xp2p: render template %s: %w", name, err)
-	}
-	if err := writer.Flush(); err != nil {
-		return fmt.Errorf("xp2p: flush config %s: %w", dest, err)
-	}
-
-	return nil
-}
-
-func templateFromBytes(name string, content []byte) (*template.Template, error) {
-	tmpl, err := template.New(filepath.Base(name)).Parse(string(content))
-	if err != nil {
-		return nil, fmt.Errorf("xp2p: parse template %s: %w", name, err)
-	}
-	return tmpl, nil
+	return applyClientEndpointConfig(state.configDir, state.stateFile, endpointConfig{
+		Hostname:      state.serverHost,
+		Port:          state.serverPort,
+		User:          state.User,
+		Password:      state.Password,
+		ServerName:    state.serverName,
+		AllowInsecure: state.AllowInsecure,
+	}, state.Force)
 }
 
 func writeEmbeddedFile(name, dest string, perm os.FileMode) error {

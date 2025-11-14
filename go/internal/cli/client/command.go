@@ -76,7 +76,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.String("link", "", "Trojan client link (trojan://...)")
 	flags.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
 	flags.Bool("strict-tls", false, "enforce TLS verification")
-	flags.Bool("force", false, "overwrite existing installation")
+	flags.Bool("force", false, "replace existing endpoint configuration")
 	return cmd
 }
 
