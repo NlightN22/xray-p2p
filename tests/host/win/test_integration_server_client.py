@@ -52,7 +52,7 @@ def _cleanup_server_install(
 def _cleanup_client_install(
     client_host, runner, msi_path: str, install_dir: Path | None = None, purge: bool = False
 ) -> None:
-    args = ["client", "remove", "--ignore-missing"]
+    args = ["client", "remove", "--all", "--ignore-missing"]
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)

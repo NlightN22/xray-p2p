@@ -20,7 +20,7 @@ CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
-    runner("client", "remove", "--ignore-missing")
+    runner("client", "remove", "--all", "--ignore-missing")
     _env.install_xp2p_from_msi(client_host, msi_path)
 
 
@@ -148,9 +148,9 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
 
         updated_outbounds = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbound_entry(updated_outbounds, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10")
+        _assert_outbound_entry(updated_outbounds, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10", allow_insecure=True)
         _assert_outbound_entry(
-            updated_outbounds, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local"
+            updated_outbounds, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local", allow_insecure=True
         )
 
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
@@ -192,8 +192,8 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
 
         refreshed = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbound_entry(refreshed, "10.0.10.10", "force-password", "gamma@example.com", "override.example")
-        _assert_outbound_entry(refreshed, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local")
+        _assert_outbound_entry(refreshed, "10.0.10.10", "force-password", "gamma@example.com", "override.example", allow_insecure=True)
+        _assert_outbound_entry(refreshed, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local", allow_insecure=True)
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 

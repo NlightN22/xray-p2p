@@ -118,6 +118,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             str(INSTALL_DIR),
             "--config-dir",
             CLIENT_CONFIG_DIR,
+            "--all",
             "--ignore-missing",
             check=True,
         )
@@ -200,5 +201,6 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             str(INSTALL_DIR),
             "--config-dir",
             CLIENT_CONFIG_DIR,
+            "--all",
             "--ignore-missing",
         )
