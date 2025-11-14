@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import shlex
 from pathlib import Path, PurePosixPath
 from typing import Callable
@@ -16,6 +18,9 @@ MACHINE_IDS: tuple[str, ...] = (
     "deb-test-b",
     "deb-test-c",
 )
+DEFAULT_CLIENT = MACHINE_IDS[0]
+DEFAULT_SERVER = MACHINE_IDS[1]
+DEFAULT_AUX = MACHINE_IDS[2]
 WORK_TREE = PurePosixPath("/srv/xray-p2p")
 INSTALL_PATH = PurePosixPath("/usr/bin/xp2p")
 GUEST_SCRIPTS_ROOT = WORK_TREE / "tests" / "guest"
@@ -40,11 +45,20 @@ def _run_shell(host: Host, script: str) -> CommandResult:
     return host.run(f"bash -lc {quoted}")
 
 
+def _posix(value: str | Path | PurePosixPath) -> str:
+    if isinstance(value, (Path, PurePosixPath)):
+        return value.as_posix()
+    return str(value)
+
+
 def run_guest_script(host: Host, relative_path: str, *args: str) -> CommandResult:
     script_path = GUEST_SCRIPTS_ROOT / relative_path
-    quoted_script = shlex.quote(str(script_path))
+    quoted_script = shlex.quote(script_path.as_posix())
     quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
-    return host.run(f"bash {quoted_script} {quoted_args}".strip())
+    command = f"sudo -n {quoted_script}"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    return host.run(command)
 
 
 def _install_marker(marker: str, output: str | None) -> str | None:
@@ -83,7 +97,10 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
 
 def run_xp2p(host: Host, *args: str) -> CommandResult:
     quoted_args = " ".join(shlex.quote(arg) for arg in args)
-    return host.run(f"{INSTALL_PATH} {quoted_args}")
+    command = f"sudo -n {INSTALL_PATH.as_posix()}"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    return host.run(command)
 
 
 def machine_host_factory() -> Callable[[str], Host]:
@@ -98,3 +115,60 @@ def machine_host_factory() -> Callable[[str], Host]:
         return cache[machine]
 
     return _get
+
+
+def path_exists(host: Host, path: str | Path | PurePosixPath) -> bool:
+    result = run_guest_script(host, "scripts/linux/path_exists.sh", _posix(path))
+    if result.rc in (0, 3):
+        return result.rc == 0
+    raise RuntimeError(
+        f"Failed to check path {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+def remove_path(host: Host, path: str | Path | PurePosixPath) -> None:
+    result = run_guest_script(host, "scripts/linux/remove_path.sh", _posix(path))
+    if result.rc not in (0, 3):
+        raise RuntimeError(
+            f"Failed to remove path {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def read_text(host: Host, path: str | Path | PurePosixPath) -> str:
+    result = run_guest_script(host, "scripts/linux/read_file.sh", _posix(path))
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to read remote text {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result.stdout
+
+
+def read_json(host: Host, path: str | Path | PurePosixPath) -> dict:
+    content = read_text(host, path)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def write_text(host: Host, path: str | Path | PurePosixPath, content: str) -> None:
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    result = run_guest_script(
+        host,
+        "scripts/linux/write_file.sh",
+        _posix(path),
+        encoded,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to write remote text {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def file_sha256(host: Host, path: str | Path | PurePosixPath) -> str:
+    result = run_guest_script(host, "scripts/linux/file_sha256.sh", _posix(path))
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to hash remote file {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return (result.stdout or "").strip()

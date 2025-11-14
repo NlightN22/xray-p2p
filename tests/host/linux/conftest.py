@@ -21,3 +21,41 @@ def xp2p_linux_versions(linux_host_factory) -> dict[str, dict[str, str]]:
         host = linux_host_factory(machine)
         versions[machine] = linux_env.ensure_xp2p_installed(machine, host)
     return versions
+
+
+@pytest.fixture(scope="session")
+def client_host(linux_host_factory, xp2p_linux_versions) -> Host:
+    return linux_host_factory(linux_env.DEFAULT_CLIENT)
+
+
+@pytest.fixture(scope="session")
+def server_host(linux_host_factory, xp2p_linux_versions) -> Host:
+    return linux_host_factory(linux_env.DEFAULT_SERVER)
+
+
+@pytest.fixture(scope="session")
+def aux_host(linux_host_factory, xp2p_linux_versions) -> Host:
+    return linux_host_factory(linux_env.DEFAULT_AUX)
+
+
+def _xp2p_runner(host: Host):
+    def _runner(*args: str, check: bool = False):
+        result = linux_env.run_xp2p(host, *args)
+        if check and result.rc != 0:
+            pytest.fail(
+                "xp2p command failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        return result
+
+    return _runner
+
+
+@pytest.fixture
+def xp2p_client_runner(client_host: Host):
+    return _xp2p_runner(client_host)
+
+
+@pytest.fixture
+def xp2p_server_runner(server_host: Host):
+    return _xp2p_runner(server_host)

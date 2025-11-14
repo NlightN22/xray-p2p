@@ -207,7 +207,7 @@ def _build_msi_script(
     reset_env = ""
     if goarch:
         reset_env = "Remove-Item Env:GOARCH; Remove-Item Env:GOOS"
-
+# TODO change to use scripts\build\build_and_install_msi.ps1
     return f"""
 $ErrorActionPreference = 'Stop'
 $repo = 'C:\\xp2p'
