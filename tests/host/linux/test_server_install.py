@@ -136,6 +136,6 @@ def test_server_install_requires_force_when_state_exists(server_host, xp2p_serve
         )
         assert result.rc != 0, "Expected server install to fail without --force when state exists"
         combined = f"{result.stdout}\n{result.stderr}".lower()
-        assert "server already installed" in combined
+        assert "server files already present" in combined
     finally:
         _cleanup(server_host, xp2p_server_runner)
