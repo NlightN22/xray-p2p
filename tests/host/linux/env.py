@@ -17,7 +17,9 @@ MACHINE_IDS: tuple[str, ...] = (
     "deb-test-c",
 )
 WORK_TREE = Path("/srv/xray-p2p")
-INSTALL_PATH = Path("/usr/local/bin/xp2p")
+INSTALL_PATH = Path("/usr/bin/xp2p")
+BUILD_SCRIPT = WORK_TREE / "scripts" / "build" / "build_deb_xp2p.sh"
+ARTIFACT_DIR = WORK_TREE / "build" / "deb" / "artifacts"
 
 _VERSION_CACHE: dict[str, dict[str, str]] = {}
 
@@ -57,30 +59,59 @@ set -euo pipefail
 export PATH="/usr/local/go/bin:$PATH"
 work="{WORK_TREE}"
 install_path="{INSTALL_PATH}"
+build_script="{BUILD_SCRIPT}"
+artifact_dir="{ARTIFACT_DIR}"
 if [ ! -d "$work" ]; then
   echo "__XP2P_SOURCE_VERSION__="
   echo "__XP2P_INSTALLED_VERSION__="
   echo "Missing xp2p repo at $work" >&2
   exit 3
 fi
-tmpdir=$(mktemp -d)
-cleanup() {{
-  rm -rf "$tmpdir"
-}}
-trap cleanup EXIT
+if [ ! -x "$build_script" ]; then
+  echo "__XP2P_SOURCE_VERSION__="
+  echo "__XP2P_INSTALLED_VERSION__="
+  echo "Build script $build_script is not executable" >&2
+  exit 3
+fi
 cd "$work"
-version=$(go run ./go/cmd/xp2p --version | tr -d '\\r')
-if [ -z "$version" ]; then
+source_version=$(go run ./go/cmd/xp2p --version | tr -d '\\r')
+if [ -z "$source_version" ]; then
   echo "__XP2P_SOURCE_VERSION__="
   echo "__XP2P_INSTALLED_VERSION__="
   exit 3
 fi
-ldflags="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$version"
-go build -trimpath -ldflags "$ldflags" -o "$tmpdir/xp2p" ./go/cmd/xp2p
-sudo install -m 0755 "$tmpdir/xp2p" "$install_path"
-installed=$("$install_path" --version | tr -d '\\r')
-echo "__XP2P_SOURCE_VERSION__=$version"
-echo "__XP2P_INSTALLED_VERSION__=$installed"
+installed_version=""
+need_install=0
+if [ -x "$install_path" ]; then
+  installed_version=$("$install_path" --version | tr -d '\\r')
+  if [ "$installed_version" != "$source_version" ]; then
+    need_install=1
+  fi
+else
+  need_install=1
+fi
+if [ "$need_install" -eq 1 ]; then
+  "$build_script"
+  shopt -s nullglob
+  arch=$(dpkg --print-architecture)
+  latest_pkg=""
+  for pkg in "$artifact_dir"/xp2p_*_"$arch".deb; do
+    if [ -z "$latest_pkg" ] || [ "$pkg" -nt "$latest_pkg" ]; then
+      latest_pkg="$pkg"
+    fi
+  done
+  shopt -u nullglob
+  if [ -z "$latest_pkg" ]; then
+    echo "__XP2P_SOURCE_VERSION__="
+    echo "__XP2P_INSTALLED_VERSION__="
+    echo "xp2p package not found in $artifact_dir" >&2
+    exit 3
+  fi
+  sudo dpkg -i "$latest_pkg"
+  installed_version=$("$install_path" --version | tr -d '\\r')
+fi
+echo "__XP2P_SOURCE_VERSION__=$source_version"
+echo "__XP2P_INSTALLED_VERSION__=$installed_version"
 """
     result = _run_shell(host, script)
     if result.rc != 0:

@@ -9,37 +9,43 @@ guest suites -- the CI and fellow contributors expect these rules.
 ## 1. General Principles
 - Prefer **guest-side execution**. Host-driven orchestration should only launch
   a self-contained guest script or test and collect artefacts or return codes.
+- **All guest logic lives under `tests/guest/`** (PowerShell/Bash/Go helpers,
+  etc.). Host fixtures merely trigger those entrypoints; do not inline ad-hoc
+  scripts inside Python.
 - **Never introduce new WinRM logic.** We route everything through SSH
-  (`testinfra` Paramiko backend) for performance and stability.
+  (`testinfra` Paramiko backend) for performance and stability, even on Windows.
 - Keep tests **idempotent and clean**. Leave the guest in the same state you
   found it (use fixtures with `yield`, teardown hooks, or the shared PowerShell
   helpers).
-- Tests must be **hermetic** -- no dependence on global state beyond what
-  `xp2p_program_files_setup` prepares.
+- Tests must be **hermetic** -- no dependence on global state beyond what the
+  suite fixtures provision (MSI install on Windows, `.deb` install on Linux, etc.).
 
 ---
 
 ## 2. Host-Side Structure (`tests/host`)
 1. **Fixtures**
-   - Use `server_host` / `client_host` from `tests/host/conftest.py`.
+   - Use the fixtures exposed by the platform package (e.g.
+     `tests.host.win.conftest`, `tests.host.linux.conftest`) to obtain hosts or
+     xp2p runners.
    - Launch long-lived activities through existing helpers:
      - `_env.run_guest_script(...)`
      - `_server_runtime.xp2p_server_run_session(...)`
      - `_client_runtime.xp2p_client_run_session(...)`
-   - Need a new helper? Put shared orchestration in `_env.py` or a runtime
+   - Need a new helper? Put shared orchestration in the relevant `env.py` or a runtime
      module; keep tests themselves declarative.
 
-2. **PowerShell scripts**
-   - Do not inline large PowerShell blobs in Python.
-   - Place reusable scripts under `tests/guest/scripts/`.
-   - Invoke them with `_env.run_guest_script(host, "scripts/<name>.ps1", ...)`.
+2. **Guest scripts**
+   - Do not inline large PowerShell/Bash blobs in Python.
+   - Place reusable scripts under `tests/guest/scripts/` (match the platform,
+     e.g. `.ps1` for Windows, `.sh`/`.py` for Linux guests).
+   - Invoke them with `_env.run_guest_script(host, "scripts/<name>.<ext>", ...)`.
    - Parameters must be strings; cast numbers explicitly with `str(...)`.
 
 3. **Assertions and artefacts**
-   - Fetch remote files with helper utilities; avoid ad-hoc WinRM or manual
-     Base64 wrangling.
-  - When capturing logs/configs, store them under `C:\xp2p\artifacts\...`
-    inside the guest so the host can read through the synced folder.
+   - Fetch remote files with helper utilities; avoid ad-hoc transport hacks.
+   - When capturing logs/configs, store them under the synced root so the host
+     can read them (e.g. `C:\xp2p\artifacts\...` on Windows,
+     `/srv/xray-p2p/artifacts/...` on Linux).
 
 ---
 
@@ -49,14 +55,18 @@ guest suites -- the CI and fellow contributors expect these rules.
   the VM (pytest in guest, minimal dependencies).
 - Store common PowerShell utilities under `tests/guest/scripts/` and document
   expected parameters at the top of each script.
+- Build/install automation that multiple suites reuse belongs in `scripts/build/`
+  (for example `build_deb_xp2p.sh`). Host tests invoke those scripts instead of
+  duplicating build logic inline.
 
 ---
 
 ## 4. Performance Expectations
 - SSH orchestration should complete quickly; if a test takes more than
   two minutes, audit for redundant provisioning or repeated guest prep.
-- `xp2p_program_files_setup` already copies `xp2p.exe` for both guests. Skip
-  extra copying unless a test requires a custom binary build.
+- Platform fixtures already install xp2p (MSI on Windows, `.deb` on Debian). Skip
+  extra copying unless a test requires a custom build; in that case, use the
+  helper scripts from `scripts/build/` and stage artefacts via the synced folder.
 - Cache results when practical: leverage the `lru_cache` helpers in `_env.py`
   so we do not spam `vagrant status` or `ssh-config`.
 
@@ -65,9 +75,10 @@ guest suites -- the CI and fellow contributors expect these rules.
 ## 5. Adding New Tests -- Checklist
 1. Does the scenario truly require host coordination? If not, prefer in-guest
    pytest or Go tests.
-2. Are you using `server_host` / `client_host` and the provided helpers?
+2. Are you using platform fixtures (`server_host`, `client_host`, Linux machine
+   factories, etc.) and the provided helpers?
 3. Have you avoided new WinRM usage entirely?
-4. Are PowerShell actions stored in a `.ps1` under `tests/guest/scripts/`?
+4. Are guest actions stored in `tests/guest/scripts/` (with the right extension)?
 5. Did you clean up temporary files or processes in a `finally` block or fixture
    teardown?
 6. Can the test run in isolation on a freshly provisioned VM?
