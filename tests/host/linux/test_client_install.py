@@ -144,6 +144,168 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
         _cleanup(client_host, xp2p_client_runner)
 
 
+def _assert_no_endpoint(host: str, data: dict):
+    tag = helpers.expected_proxy_tag(host)
+    for outbound in data.get("outbounds", []):
+        if outbound.get("tag") == tag:
+            pytest.fail(f"Unexpected outbound {tag} still present")
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
+    _cleanup(client_host, xp2p_client_runner)
+    try:
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--server-address",
+            "10.66.0.10",
+            "--user",
+            "delta@example.com",
+            "--password",
+            "delta-pass",
+            check=True,
+        )
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--server-address",
+            "10.66.0.11",
+            "--user",
+            "echo@example.com",
+            "--password",
+            "echo-pass",
+            check=True,
+        )
+
+        list_result = xp2p_client_runner(
+            "client",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert "HOSTNAME" in list_result
+        assert "10.66.0.10" in list_result
+        assert "10.66.0.11" in list_result
+
+        redirect_cidr = "10.200.0.0/16"
+        host_tag = helpers.expected_proxy_tag("10.66.0.10")
+        xp2p_client_runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            redirect_cidr,
+            "--tag",
+            host_tag,
+            check=True,
+        )
+        redirect_list = xp2p_client_runner(
+            "client",
+            "redirect",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert redirect_cidr in redirect_list
+
+        xp2p_client_runner(
+            "client",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "10.66.0.10",
+            check=True,
+        )
+
+        outbounds = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        helpers.assert_outbound(
+            outbounds,
+            "10.66.0.11",
+            "echo-pass",
+            "echo@example.com",
+            "10.66.0.11",
+            allow_insecure=True,
+        )
+        _assert_no_endpoint("10.66.0.10", outbounds)
+
+        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        helpers.assert_routing_rule(routing, "10.66.0.11")
+
+        state = helpers.read_json(client_host, CLIENT_STATE_FILE)
+        hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
+        assert hosts == {"10.66.0.11"}
+
+        redirect_list_after = xp2p_client_runner(
+            "client",
+            "redirect",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert redirect_cidr not in redirect_list_after
+
+        list_after = xp2p_client_runner(
+            "client",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert "10.66.0.11" in list_after
+        assert "10.66.0.10" not in list_after
+
+        xp2p_client_runner(
+            "client",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--all",
+            check=True,
+        )
+
+        final_list = xp2p_client_runner(
+            "client",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert "No client endpoints configured." in final_list
+    finally:
+        _cleanup(client_host, xp2p_client_runner)
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_client_runner):

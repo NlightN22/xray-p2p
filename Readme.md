@@ -108,6 +108,9 @@ xp2p server user list --host edge.example.com
 # Configure the Windows client
 xp2p client install --link trojan://SECRET@edge.example.com:62022
 xp2p client run --auto-install
+xp2p client list
+xp2p client remove edge.example.com
+xp2p client remove --all --ignore-missing
 ```
 
 Additional helpers:
@@ -115,6 +118,18 @@ Additional helpers:
 - `xp2p ping <host>` runs the diagnostics pinger (`--socks` accepts either a value or falls back to the config default).
 - `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
 - `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.
+- `xp2p client list` and `xp2p client remove` help you inspect or prune tunnels without touching the files manually.
+
+### Client inventory and cleanup
+
+`xp2p client list` reads `install-state-client.json` and prints every configured tunnel with hostname, outbound tag, remote address, user, server name, and TLS policy. When no endpoints exist it prints `No client endpoints configured.` which keeps automation simple.
+
+`xp2p client remove` requires either a positional `<hostname|tag>` or the `--all` flag:
+
+- `xp2p client remove example.com` removes a single endpoint, deletes redirect rules bound to that outbound tag, and rewrites `outbounds.json`/`routing.json`. If it was the last endpoint, the command transparently falls back to `xp2p client remove --all`.
+- `xp2p client remove --all [--keep-files] [--ignore-missing]` keeps the previous behavior and wipes the full config/state tree (with optional flags to keep files or skip missing installs).
+
+Running `xp2p client remove` without a target or `--all` now errors out with a clear hint, so accidental full wipes are avoided.
 
 ## Installation layout
 

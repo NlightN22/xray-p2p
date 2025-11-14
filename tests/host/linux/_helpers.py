@@ -40,6 +40,7 @@ def cleanup_client_install(
         install_path,
         "--config-dir",
         config_name,
+        "--all",
         "--ignore-missing",
     )
 
