@@ -158,7 +158,7 @@ jobs:
           XP2P_TARGETS="${{ matrix.identifier }}" \
           XP2P_PROJECT_ROOT="$GITHUB_WORKSPACE" \
           XP2P_BUILD_ROOT="$GITHUB_WORKSPACE/build/openwrt" \
-            "$GITHUB_WORKSPACE/tests/guest/scripts/build_openwrt_xp2p.sh"
+            "$GITHUB_WORKSPACE/scripts/build/build_openwrt_xp2p.sh"
 
       - name: Upload ipk
         run: |

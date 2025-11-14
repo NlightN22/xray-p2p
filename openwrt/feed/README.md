@@ -75,7 +75,7 @@ and mounts this workspace so you can build the ipk without touching your host.
 3. Build the ipk inside the guest:
 
    ```bash
-   /srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+   /srv/xray-p2p/scripts/build/build_openwrt_xp2p.sh
    ```
 
    The helper script injects the local feed (`src-link xp2p /srv/xray-p2p/openwrt/feed`),
@@ -119,14 +119,14 @@ Example invocations inside the Vagrant guest:
 
 ```bash
 # Build every release target and drop ipks into ./build/openwrt/*
-/srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+/srv/xray-p2p/scripts/build/build_openwrt_xp2p.sh
 
 # Only refresh the arm64 packages
-XP2P_TARGETS=linux-arm64 /srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+XP2P_TARGETS=linux-arm64 /srv/xray-p2p/scripts/build/build_openwrt_xp2p.sh
 
 # Keep a hand-crafted .config when rebuilding mipsle
 XP2P_TARGETS=linux-mipsle-softfloat XP2P_KEEP_CONFIG=1 \
-  /srv/xray-p2p/tests/guest/scripts/build_openwrt_xp2p.sh
+  /srv/xray-p2p/scripts/build/build_openwrt_xp2p.sh
 ```
 
 Each run copies the resulting archives into `build/openwrt/<identifier>`, so you

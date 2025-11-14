@@ -352,7 +352,8 @@ A signed Windows release now includes `xp2p-<version>-windows-amd64.msi` (and it
           installer/wix/xp2p.wxs
    light -out dist/xp2p-<version>-windows-amd64.msi installer/wix/xp2p.wixobj
    ```
-   For 32-bit systems use `installer/wix/xp2p-x86.wxs`, `distro/windows/bundle/x86/xray.exe`, and the helper script `tests/guest/scripts/build_and_install_msi_x86.ps1`.
+   The helper `scripts/build/build_and_install_msi.ps1` automates the amd64 build/install flow if you prefer a single command.
+   For 32-bit systems use `installer/wix/xp2p-x86.wxs`, `distro/windows/bundle/x86/xray.exe`, and the helper script `scripts/build/build_and_install_msi_x86.ps1`.
 
 ## Security notes
 
