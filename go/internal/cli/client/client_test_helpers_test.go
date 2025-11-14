@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
@@ -54,8 +55,15 @@ func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", binDir, err)
 	}
-	if err := os.WriteFile(filepath.Join(binDir, "xray.exe"), []byte{}, 0o755); err != nil {
-		t.Fatalf("write xray.exe: %v", err)
+
+	binaries := []string{"xray.exe"}
+	if runtime.GOOS != "windows" {
+		binaries = append(binaries, "xray")
+	}
+	for _, name := range binaries {
+		if err := os.WriteFile(filepath.Join(binDir, name), []byte{}, 0o755); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
 	}
 
 	configDir := filepath.Join(installDir, configDirName)
