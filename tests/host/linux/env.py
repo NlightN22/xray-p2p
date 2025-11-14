@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import shlex
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable
 
 from testinfra.backend.base import CommandResult
@@ -16,8 +16,8 @@ MACHINE_IDS: tuple[str, ...] = (
     "deb-test-b",
     "deb-test-c",
 )
-WORK_TREE = Path("/srv/xray-p2p")
-INSTALL_PATH = Path("/usr/bin/xp2p")
+WORK_TREE = PurePosixPath("/srv/xray-p2p")
+INSTALL_PATH = PurePosixPath("/usr/bin/xp2p")
 GUEST_SCRIPTS_ROOT = WORK_TREE / "tests" / "guest"
 
 _VERSION_CACHE: dict[str, dict[str, str]] = {}
