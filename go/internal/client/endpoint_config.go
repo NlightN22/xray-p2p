@@ -21,6 +21,7 @@ type endpointConfig struct {
 
 type clientInstallState struct {
 	Endpoints []clientEndpointRecord `json:"endpoints"`
+	Redirects []clientRedirectRule   `json:"redirects,omitempty"`
 }
 
 type clientEndpointRecord struct {
@@ -32,6 +33,11 @@ type clientEndpointRecord struct {
 	Password      string `json:"password"`
 	ServerName    string `json:"server_name"`
 	AllowInsecure bool   `json:"allow_insecure"`
+}
+
+type clientRedirectRule struct {
+	CIDR        string `json:"cidr"`
+	OutboundTag string `json:"outbound_tag"`
 }
 
 func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointConfig, force bool) error {
@@ -66,7 +72,7 @@ func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointCon
 	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), state.Endpoints); err != nil {
 		return err
 	}
-	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), state.Endpoints); err != nil {
+	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), state.Endpoints, state.Redirects); err != nil {
 		return err
 	}
 	return nil
@@ -97,6 +103,9 @@ func (s *clientInstallState) normalize() {
 	if s.Endpoints == nil {
 		s.Endpoints = []clientEndpointRecord{}
 	}
+	if s.Redirects == nil {
+		s.Redirects = []clientRedirectRule{}
+	}
 }
 
 func (s clientInstallState) save(path string) error {
@@ -111,6 +120,43 @@ func (s clientInstallState) save(path string) error {
 		return fmt.Errorf("xp2p: write client state %s: %w", path, err)
 	}
 	return nil
+}
+
+func (s *clientInstallState) addRedirect(rule clientRedirectRule) error {
+	cidr := strings.TrimSpace(rule.CIDR)
+	tag := strings.TrimSpace(rule.OutboundTag)
+	if cidr == "" || tag == "" {
+		return errors.New("xp2p: redirect CIDR and outbound tag are required")
+	}
+
+	for _, existing := range s.Redirects {
+		if strings.EqualFold(existing.CIDR, cidr) && strings.EqualFold(existing.OutboundTag, tag) {
+			return fmt.Errorf("xp2p: redirect %s via %s already exists", cidr, tag)
+		}
+	}
+	s.Redirects = append(s.Redirects, clientRedirectRule{
+		CIDR:        cidr,
+		OutboundTag: tag,
+	})
+	return nil
+}
+
+func (s *clientInstallState) removeRedirect(cidr, tagFilter string) ([]clientRedirectRule, bool) {
+	if len(s.Redirects) == 0 {
+		return s.Redirects, false
+	}
+	result := make([]clientRedirectRule, 0, len(s.Redirects))
+	removed := false
+	for _, rule := range s.Redirects {
+		matchCIDR := strings.EqualFold(rule.CIDR, cidr)
+		matchTag := tagFilter == "" || strings.EqualFold(rule.OutboundTag, tagFilter)
+		if matchCIDR && matchTag {
+			removed = true
+			continue
+		}
+		result = append(result, rule)
+	}
+	return result, removed
 }
 
 func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) error {
@@ -310,7 +356,7 @@ type freedomSettings struct {
 	DomainStrategy string `json:"domainStrategy"`
 }
 
-func updateRoutingConfig(path string, endpoints []clientEndpointRecord) error {
+func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirects []clientRedirectRule) error {
 	var document map[string]any
 
 	data, err := os.ReadFile(path)
@@ -337,7 +383,14 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord) error {
 	}
 
 	existing := extractRuleSlice(routing["rules"])
-	filtered := filterManagedRules(existing, endpoints)
+	filtered := filterManagedRules(existing, managedOutboundTags(endpoints, redirects))
+	for _, rule := range redirects {
+		filtered = append(filtered, map[string]any{
+			"type":        "field",
+			"ip":          []string{rule.CIDR},
+			"outboundTag": rule.OutboundTag,
+		})
+	}
 	for _, ep := range endpoints {
 		filtered = append(filtered, map[string]any{
 			"type":        "field",
@@ -383,13 +436,31 @@ func extractRuleSlice(raw any) []any {
 	return []any{}
 }
 
-func filterManagedRules(rules []any, endpoints []clientEndpointRecord) []any {
+func managedOutboundTags(endpoints []clientEndpointRecord, redirects []clientRedirectRule) map[string]struct{} {
+	total := len(endpoints) + len(redirects)
+	if total == 0 {
+		return map[string]struct{}{}
+	}
+	known := make(map[string]struct{}, total)
+	for _, ep := range endpoints {
+		if tag := strings.TrimSpace(ep.Tag); tag != "" {
+			known[strings.ToLower(tag)] = struct{}{}
+		}
+	}
+	for _, rule := range redirects {
+		if tag := strings.TrimSpace(rule.OutboundTag); tag != "" {
+			known[strings.ToLower(tag)] = struct{}{}
+		}
+	}
+	return known
+}
+
+func filterManagedRules(rules []any, managed map[string]struct{}) []any {
 	if len(rules) == 0 {
 		return []any{}
 	}
-	known := make(map[string]struct{}, len(endpoints))
-	for _, ep := range endpoints {
-		known[ep.Tag] = struct{}{}
+	if len(managed) == 0 {
+		return rules
 	}
 
 	result := make([]any, 0, len(rules))
@@ -400,7 +471,7 @@ func filterManagedRules(rules []any, endpoints []clientEndpointRecord) []any {
 			continue
 		}
 		outbound, _ := ruleMap["outboundTag"].(string)
-		if _, managed := known[outbound]; managed {
+		if _, managed := managed[strings.ToLower(outbound)]; managed {
 			continue
 		}
 		result = append(result, ruleMap)
