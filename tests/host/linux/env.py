@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import shlex
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Callable
 
@@ -172,3 +173,36 @@ def file_sha256(host: Host, path: str | Path | PurePosixPath) -> str:
             f"Failed to hash remote file {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     return (result.stdout or "").strip()
+
+
+@contextmanager
+def xp2p_run_session(
+    host: Host,
+    role: str,
+    install_dir: str | Path | PurePosixPath,
+    config_dir: str,
+    log_path: str | Path | PurePosixPath,
+):
+    install_arg = _posix(install_dir)
+    log_arg = _posix(log_path)
+    result = run_guest_script(
+        host,
+        "scripts/linux/start_xp2p_run.sh",
+        role,
+        install_arg,
+        config_dir,
+        log_arg,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to start xp2p {role} run (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    pid_value = _install_marker("__XP2P_PID__=", result.stdout)
+    if not pid_value:
+        raise RuntimeError(
+            f"xp2p {role} run script did not emit PID marker.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    try:
+        yield {"pid": int(pid_value), "log": log_arg}
+    finally:
+        run_guest_script(host, "scripts/linux/stop_process.sh", pid_value)

@@ -71,3 +71,22 @@ def write_text(host: Host, path: PurePosixPath, content: str) -> None:
 
 def file_sha256(host: Host, path: PurePosixPath) -> str:
     return linux_env.file_sha256(host, path)
+
+
+def extract_trojan_credential(output: str) -> dict[str, str | None]:
+    user = password = link = None
+    for raw in (output or "").splitlines():
+        line = raw.strip()
+        lowered = line.lower()
+        if lowered.startswith("user:"):
+            user = line.split(":", 1)[1].strip()
+        elif lowered.startswith("password:"):
+            password = line.split(":", 1)[1].strip()
+        elif lowered.startswith("link:"):
+            link = line.split(":", 1)[1].strip()
+    if not user or not password:
+        raise RuntimeError(
+            "xp2p server install did not emit trojan credential lines.\n"
+            f"STDOUT:\n{output}"
+        )
+    return {"user": user, "password": password, "link": link}
