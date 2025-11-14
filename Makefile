@@ -31,7 +31,6 @@ test:
 	go test ./...
 
 test-wsl:
-	go test ./...
 	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go test ./..."
 
 vagrant-win10:
