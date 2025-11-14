@@ -15,6 +15,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/xray"
 )
 
 // Run launches xray-core using the installed server configuration directory and blocks until completion.
@@ -40,13 +41,9 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
-	xrayPath := strings.TrimSpace(os.Getenv("XP2P_XRAY_BIN"))
-	if xrayPath == "" {
-		path, err := exec.LookPath("xray")
-		if err != nil {
-			return fmt.Errorf("xp2p: xray binary not found in PATH (set XP2P_XRAY_BIN): %w", err)
-		}
-		xrayPath = path
+	xrayPath, err := xray.ResolveBinaryPath()
+	if err != nil {
+		return err
 	}
 
 	var errorWriter io.Writer
