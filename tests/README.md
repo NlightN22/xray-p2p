@@ -22,10 +22,26 @@
   make vagrant-win10-destroy
 - Optional: XP2P_GO_VERSION=1.22.3 make vagrant-win10 --client pins a specific Go toolchain for that VM.
 
+## Debian deb-build VM trio
+
+- Install VirtualBox and Vagrant on the host.
+- Boot the Debian 12 playground (three guests) manually:
+  cd infra/vagrant/debian12/deb-build
+  vagrant up
+
+  The Vagrantfile defines `deb12-deb-build-a/b/c`. Each guest uses `generic/debian12` (4.3.12), gets 4 vCPUs / 4 GB RAM, attaches the repo as `/srv/xray-p2p`, and receives a host-only address in the 10.62.0.0/24 subnet.
+- Provisioning installs build prerequisites (Go, build-essential, rsync, etc.) and syncs the repo into `/home/vagrant/xray-p2p`. xp2p itself is not compiled or installed during provisioning; the host-side pytest suite handles that so future integration scenarios can reuse the same machines without reprovisioning.
+- Re-run provisioning per machine if needed:
+  vagrant provision deb12-deb-build-a
+- Cleanup:
+  vagrant destroy
+
 ## Host integration tests
 
-- Prerequisites: boot both guests (make vagrant-win10) and ensure the repository is built so that C:\\xp2p\\build\\windows-amd64\\xp2p.exe exists in each VM.
-- Execution: run pytest tests/host from the repository root. Individual suites:
-  - tests/host/test_client.py - provisions the client tree under C:\\Program Files\\xp2p, verifies templated configs, re-runs xp2p client install --force with overrides, and confirms xp2p client run spawns xray-core while creating logs.
-  - tests/host/test_server.py - provisions the server tree under C:\\Program Files\\xp2p, deploys TLS assets, ensures --force refreshes configs/certificates, and checks xp2p server run launches xray-core and writes logs.
-- Both suites operate through WinRM via testinfra helpers in tests/host/_env.py, which stage binaries in C:\\Program Files\\xp2p and clean up installations between tests.
+- Prerequisites:
+  - Windows: boot both guests (make vagrant-win10) so that C:\\xp2p is available inside each VM.
+  - Linux: boot all three Debian guests from infra/vagrant/debian12/deb-build and wait for provisioning to finish.
+- Execution:
+  - Windows suite: pytest tests/host/win. These tests build MSI packages inside the guests, install xp2p into `C:\Program Files\xp2p`, manage services, and exercise client/server install/update flows via WinRM.
+  - Linux suite: pytest tests/host/linux. The helpers connect over SSH, resync `/srv/xray-p2p` into `/home/vagrant/xray-p2p`, build xp2p from source with Go, install the binary into `/usr/local/bin`, and verify `xp2p --version` on every Debian VM. These checks are the base layer for future multi-role scenarios.
+- Both suites rely on the shared helpers under tests/host/common.py for Vagrant orchestration.
