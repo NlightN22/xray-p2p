@@ -39,6 +39,15 @@ func stubClientRemove(fn func(context.Context, client.RemoveOptions) error) func
 	return func() { clientRemoveFunc = prev }
 }
 
+func stubClientRemoveEndpoint(fn func(context.Context, client.RemoveEndpointOptions) error) func() {
+	prev := clientRemoveEndpointFunc
+	if fn == nil {
+		fn = func(context.Context, client.RemoveEndpointOptions) error { return nil }
+	}
+	clientRemoveEndpointFunc = fn
+	return func() { clientRemoveEndpointFunc = prev }
+}
+
 func stubClientRun(fn func(context.Context, client.RunOptions) error) func() {
 	prev := clientRunFunc
 	if fn == nil {
@@ -46,6 +55,15 @@ func stubClientRun(fn func(context.Context, client.RunOptions) error) func() {
 	}
 	clientRunFunc = fn
 	return func() { clientRunFunc = prev }
+}
+
+func stubClientList(fn func(client.ListOptions) ([]client.EndpointRecord, error)) func() {
+	prev := clientListFunc
+	if fn == nil {
+		fn = func(client.ListOptions) ([]client.EndpointRecord, error) { return nil, nil }
+	}
+	clientListFunc = fn
+	return func() { clientListFunc = prev }
 }
 
 func prepareClientInstallation(t *testing.T, installDir, configDirName string) {

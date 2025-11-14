@@ -6,8 +6,6 @@ import (
 	"net"
 	"path/filepath"
 	"strings"
-
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 )
 
 // RedirectAddOptions controls redirect creation.
@@ -42,10 +40,8 @@ type RedirectRecord struct {
 }
 
 type redirectPaths struct {
-	installDir string
-	configDir  string
-	stateFile  string
-	routing    string
+	clientPaths
+	routing string
 }
 
 // AddRedirect registers a custom CIDR redirect.
@@ -157,21 +153,13 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 }
 
 func resolveRedirectPaths(installDir, configDir string) (redirectPaths, error) {
-	dir, err := resolveInstallDir(installDir)
+	paths, err := resolveClientPaths(installDir, configDir)
 	if err != nil {
 		return redirectPaths{}, err
 	}
-	cfgDir, err := resolveConfigDir(dir, configDir)
-	// config dir may not exist yet; it will be created by install normally.
-	if err != nil {
-		return redirectPaths{}, err
-	}
-	stateFile := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
 	return redirectPaths{
-		installDir: dir,
-		configDir:  cfgDir,
-		stateFile:  stateFile,
-		routing:    filepath.Join(cfgDir, "routing.json"),
+		clientPaths: paths,
+		routing:     filepath.Join(paths.configDir, "routing.json"),
 	}, nil
 }
 

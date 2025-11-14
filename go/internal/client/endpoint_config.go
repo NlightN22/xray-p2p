@@ -159,6 +159,43 @@ func (s *clientInstallState) removeRedirect(cidr, tagFilter string) ([]clientRed
 	return result, removed
 }
 
+func (s *clientInstallState) removeEndpoint(target string) (clientEndpointRecord, bool) {
+	if len(s.Endpoints) == 0 {
+		return clientEndpointRecord{}, false
+	}
+	trimmed := strings.TrimSpace(target)
+	if trimmed == "" {
+		return clientEndpointRecord{}, false
+	}
+	lower := strings.ToLower(trimmed)
+	for idx, ep := range s.Endpoints {
+		if strings.EqualFold(ep.Hostname, trimmed) || strings.ToLower(ep.Tag) == lower {
+			removed := ep
+			s.Endpoints = append(s.Endpoints[:idx], s.Endpoints[idx+1:]...)
+			return removed, true
+		}
+	}
+	return clientEndpointRecord{}, false
+}
+
+func (s *clientInstallState) removeRedirectsByTag(tag string) {
+	if len(s.Redirects) == 0 {
+		return
+	}
+	lower := strings.ToLower(strings.TrimSpace(tag))
+	if lower == "" {
+		return
+	}
+	filtered := s.Redirects[:0]
+	for _, rule := range s.Redirects {
+		if strings.ToLower(strings.TrimSpace(rule.OutboundTag)) == lower {
+			continue
+		}
+		filtered = append(filtered, rule)
+	}
+	s.Redirects = filtered
+}
+
 func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) error {
 	for idx, existing := range s.Endpoints {
 		sameHost := strings.EqualFold(existing.Hostname, record.Hostname)

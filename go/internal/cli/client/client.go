@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -19,9 +20,11 @@ import (
 )
 
 var (
-	clientInstallFunc = client.Install
-	clientRemoveFunc  = client.Remove
-	clientRunFunc     = client.Run
+	clientInstallFunc        = client.Install
+	clientRemoveFunc         = client.Remove
+	clientRunFunc            = client.Run
+	clientRemoveEndpointFunc = client.RemoveEndpoint
+	clientListFunc           = client.ListEndpoints
 )
 
 func Execute(ctx context.Context, cfg config.Config, args []string) int {
@@ -170,6 +173,7 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	keepFiles := fs.Bool("keep-files", false, "keep installation files")
 	ignoreMissing := fs.Bool("ignore-missing", false, "do not fail if installation is absent")
+	removeAll := fs.Bool("all", false, "remove all endpoints and configuration")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -178,24 +182,108 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Error("xp2p client remove: failed to parse arguments", "err", err)
 		return 2
 	}
-	if fs.NArg() > 0 {
-		logging.Error("xp2p client remove: unexpected arguments", "args", fs.Args())
+
+	targetArgs := fs.Args()
+	if *removeAll {
+		if len(targetArgs) > 0 {
+			logging.Error("xp2p client remove: --all does not accept positional arguments", "args", targetArgs)
+			return 2
+		}
+	} else {
+		if len(targetArgs) == 0 {
+			logging.Error("xp2p client remove: specify <hostname|tag> or --all")
+			return 2
+		}
+		if len(targetArgs) > 1 {
+			logging.Error("xp2p client remove: too many arguments", "args", targetArgs)
+			return 2
+		}
+		if *keepFiles || *ignoreMissing {
+			logging.Error("xp2p client remove: --keep-files and --ignore-missing can only be used with --all")
+			return 2
+		}
+	}
+
+	installDir := firstNonEmpty(*path, cfg.Client.InstallDir)
+	configDirName := firstNonEmpty(*configDir, cfg.Client.ConfigDir)
+
+	if *removeAll {
+		opts := client.RemoveOptions{
+			InstallDir:    installDir,
+			ConfigDir:     configDirName,
+			KeepFiles:     *keepFiles,
+			IgnoreMissing: *ignoreMissing,
+		}
+
+		if err := clientRemoveFunc(ctx, opts); err != nil {
+			logging.Error("xp2p client remove failed", "err", err)
+			return 1
+		}
+
+		logging.Info("xp2p client removed", "install_dir", opts.InstallDir, "config_dir", opts.ConfigDir)
+		return 0
+	}
+
+	target := strings.TrimSpace(targetArgs[0])
+	if target == "" {
+		logging.Error("xp2p client remove: specify <hostname|tag> or --all")
 		return 2
 	}
 
-	opts := client.RemoveOptions{
-		InstallDir:    firstNonEmpty(*path, cfg.Client.InstallDir),
-		ConfigDir:     firstNonEmpty(*configDir, cfg.Client.ConfigDir),
-		KeepFiles:     *keepFiles,
-		IgnoreMissing: *ignoreMissing,
+	endpointOpts := client.RemoveEndpointOptions{
+		InstallDir: installDir,
+		ConfigDir:  configDirName,
+		Target:     target,
 	}
-
-	if err := clientRemoveFunc(ctx, opts); err != nil {
+	if err := clientRemoveEndpointFunc(ctx, endpointOpts); err != nil {
 		logging.Error("xp2p client remove failed", "err", err)
 		return 1
 	}
 
-	logging.Info("xp2p client removed", "install_dir", opts.InstallDir, "config_dir", opts.ConfigDir)
+	logging.Info("xp2p client endpoint removed", "target", target, "config_dir", endpointOpts.ConfigDir)
+	return 0
+}
+
+func runClientList(_ context.Context, cfg config.Config, args []string) int {
+	fs := flag.NewFlagSet("xp2p client list", flag.ContinueOnError)
+	fs.SetOutput(os.Stdout)
+
+	path := fs.String("path", "", "client installation directory")
+	configDir := fs.String("config-dir", "", "client configuration directory name")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		logging.Error("xp2p client list: failed to parse arguments", "err", err)
+		return 2
+	}
+	if fs.NArg() > 0 {
+		logging.Error("xp2p client list: unexpected arguments", "args", fs.Args())
+		return 2
+	}
+
+	opts := client.ListOptions{
+		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
+		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
+	}
+	records, err := clientListFunc(opts)
+	if err != nil {
+		logging.Error("xp2p client list failed", "err", err)
+		return 1
+	}
+	if len(records) == 0 {
+		fmt.Println("No client endpoints configured.")
+		return 0
+	}
+
+	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(writer, "HOSTNAME\tTAG\tADDRESS\tPORT\tUSER\tALLOW INSECURE\tSERVER NAME")
+	for _, rec := range records {
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%d\t%s\t%t\t%s\n",
+			rec.Hostname, rec.Tag, rec.Address, rec.Port, rec.User, rec.AllowInsecure, rec.ServerName)
+	}
+	_ = writer.Flush()
 	return 0
 }
 

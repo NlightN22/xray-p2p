@@ -48,6 +48,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 	cmd.AddCommand(
 		newClientInstallCmd(cfg),
 		newClientRemoveCmd(cfg),
+		newClientListCmd(cfg),
 		newClientRunCmd(cfg),
 		newClientDeployCmd(cfg),
 		newClientRedirectCmd(cfg),
@@ -83,8 +84,8 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 
 func newClientRemoveCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "remove",
-		Short: "Remove xp2p client installation",
+		Use:   "remove [hostname|tag]",
+		Short: "Remove xp2p client endpoints or entire installation",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRemove(commandContext(cmd), cfg(), forwarded)
@@ -97,6 +98,24 @@ func newClientRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.String("config-dir", "", "client configuration directory name")
 	flags.Bool("keep-files", false, "keep installation files")
 	flags.Bool("ignore-missing", false, "do not fail if installation is absent")
+	flags.Bool("all", false, "remove all endpoints and configuration")
+	return cmd
+}
+
+func newClientListCmd(cfg commandConfig) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List configured xp2p client endpoints",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			forwarded := forwardFlags(cmd, args)
+			code := runClientList(commandContext(cmd), cfg(), forwarded)
+			return errorForCode(code)
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.String("path", "", "client installation directory")
+	flags.String("config-dir", "", "client configuration directory name")
 	return cmd
 }
 
