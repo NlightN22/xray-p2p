@@ -113,8 +113,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 }
 
 func resolveClientLogPath(raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", errors.New("xp2p: log path is empty")
+	}
 	trimmed := strings.TrimSpace(filepath.Clean(raw))
-	if trimmed == "" {
+	if trimmed == "" || trimmed == "." {
 		return "", errors.New("xp2p: log path is empty")
 	}
 	if filepath.IsAbs(trimmed) {
