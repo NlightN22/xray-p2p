@@ -20,3 +20,10 @@ func osPreferredInstallDir() string {
 	}
 	return filepath.Join(home, ".config", "xp2p")
 }
+
+func detectSystemInstallDir() string {
+	if looksLikeInstallRoot(layout.UnixConfigRoot) {
+		return layout.UnixConfigRoot
+	}
+	return ""
+}

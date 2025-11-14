@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -221,7 +222,11 @@ func resolveInstallPort(cfg config.Config, flagPort string) string {
 }
 
 func serverAssetsPresent(installDir, configDirPath string) (bool, error) {
-	binPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
+	binaryName := "xray.exe"
+	if runtime.GOOS != "windows" {
+		binaryName = "xray"
+	}
+	binPath := filepath.Join(installDir, layout.BinDirName, binaryName)
 	if info, err := os.Stat(binPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil

@@ -24,6 +24,9 @@ func computeDefaultInstallDir() string {
 	if dir := detectSelfInstallDir(); dir != "" {
 		return dir
 	}
+	if dir := detectSystemInstallDir(); dir != "" {
+		return dir
+	}
 	if dir := osPreferredInstallDir(); dir != "" {
 		return dir
 	}
