@@ -10,14 +10,13 @@ from testinfra.host import Host
 from tests.host import common
 
 REPO_ROOT = common.REPO_ROOT
-VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "debian12" / "deb-build"
+VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "debian12" / "deb-test"
 MACHINE_IDS: tuple[str, ...] = (
-    "deb12-deb-build-a",
-    "deb12-deb-build-b",
-    "deb12-deb-build-c",
+    "deb-test-a",
+    "deb-test-b",
+    "deb-test-c",
 )
-SYNCED_REPO = Path("/srv/xray-p2p")
-WORK_TREE = Path("/home/vagrant/xray-p2p")
+WORK_TREE = Path("/srv/xray-p2p")
 INSTALL_PATH = Path("/usr/local/bin/xp2p")
 
 _VERSION_CACHE: dict[str, dict[str, str]] = {}
@@ -40,26 +39,6 @@ def _run_shell(host: Host, script: str) -> CommandResult:
     return host.run(f"bash -lc {quoted}")
 
 
-def _sync_work_tree(host: Host) -> None:
-    script = f"""
-set -euo pipefail
-src="{SYNCED_REPO}"
-dest="{WORK_TREE}"
-if [ ! -d "$src" ]; then
-  echo "Shared folder $src is unavailable" >&2
-  exit 3
-fi
-install -d -m 0755 "$dest"
-rsync -a --delete "$src"/ "$dest"/
-"""
-    result = _run_shell(host, script)
-    if result.rc != 0:
-        raise RuntimeError(
-            "Failed to synchronize xp2p sources on guest.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-
 def _install_marker(marker: str, output: str | None) -> str | None:
     for line in (output or "").splitlines():
         line = line.strip()
@@ -73,13 +52,17 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     if cached:
         return cached
 
-    _sync_work_tree(host)
-
     script = f"""
 set -euo pipefail
 export PATH="/usr/local/go/bin:$PATH"
 work="{WORK_TREE}"
 install_path="{INSTALL_PATH}"
+if [ ! -d "$work" ]; then
+  echo "__XP2P_SOURCE_VERSION__="
+  echo "__XP2P_INSTALLED_VERSION__="
+  echo "Missing xp2p repo at $work" >&2
+  exit 3
+fi
 tmpdir=$(mktemp -d)
 cleanup() {{
   rm -rf "$tmpdir"

@@ -1,0 +1,52 @@
+project_root = File.expand_path("../../../..", __dir__)
+
+BOX_NAME = "generic/debian12".freeze
+BOX_VERSION = "4.3.12".freeze
+SYNC_DEST = "/srv/xray-p2p".freeze
+
+MACHINES = [
+  {
+    id: "deb-test-a",
+    hostname: "deb-test-a",
+    vb_name: "deb-test-a",
+    private_ip: "10.62.10.11",
+  },
+  {
+    id: "deb-test-b",
+    hostname: "deb-test-b",
+    vb_name: "deb-test-b",
+    private_ip: "10.62.10.12",
+  },
+  {
+    id: "deb-test-c",
+    hostname: "deb-test-c",
+    vb_name: "deb-test-c",
+    private_ip: "10.62.10.13",
+  },
+].freeze
+
+def define_guest(config, project_root, machine)
+  config.vm.define machine[:id] do |vm|
+    vm.vm.box = BOX_NAME
+    vm.vm.box_version = BOX_VERSION
+    vm.vm.hostname = machine[:hostname]
+
+    vm.vm.synced_folder project_root, SYNC_DEST, type: "virtualbox"
+
+    vm.vm.network "private_network", ip: machine[:private_ip]
+
+    vm.vm.provider "virtualbox" do |vb|
+      vb.name = machine[:vb_name]
+      vb.memory = 4096
+      vb.cpus = 4
+    end
+
+    vm.vm.provision "shell", path: "provision-deb-test.sh"
+  end
+end
+
+Vagrant.configure("2") do |config|
+  MACHINES.each do |machine|
+    define_guest(config, project_root, machine)
+  end
+end
