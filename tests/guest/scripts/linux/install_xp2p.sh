@@ -33,29 +33,22 @@ if [ -z "$SOURCE_VERSION" ]; then
   exit 3
 fi
 
-INSTALLED_VERSION=""
-if [ -x "$INSTALL_BIN" ]; then
-  INSTALLED_VERSION=$("$INSTALL_BIN" --version | tr -d '\r')
-fi
-
-if [ "$INSTALLED_VERSION" != "$SOURCE_VERSION" ]; then
-  "$BUILD_SCRIPT"
-  ARCH=$(dpkg --print-architecture)
-  shopt -s nullglob
-  LATEST_PKG=""
-  for pkg in "$ARTIFACT_DIR"/xp2p_*_"$ARCH".deb; do
-    if [ -z "$LATEST_PKG" ] || [ "$pkg" -nt "$LATEST_PKG" ]; then
-      LATEST_PKG="$pkg"
-    fi
-  done
-  shopt -u nullglob
-  if [ -z "$LATEST_PKG" ]; then
-    echo "xp2p package not found in $ARTIFACT_DIR for arch $ARCH" >&2
-    emit_versions ""
-    exit 3
+"$BUILD_SCRIPT"
+ARCH=$(dpkg --print-architecture)
+shopt -s nullglob
+LATEST_PKG=""
+for pkg in "$ARTIFACT_DIR"/xp2p_*_"$ARCH".deb; do
+  if [ -z "$LATEST_PKG" ] || [ "$pkg" -nt "$LATEST_PKG" ]; then
+    LATEST_PKG="$pkg"
   fi
-  sudo dpkg -i "$LATEST_PKG" >/dev/null
-  INSTALLED_VERSION=$("$INSTALL_BIN" --version | tr -d '\r')
+done
+shopt -u nullglob
+if [ -z "$LATEST_PKG" ]; then
+  echo "xp2p package not found in $ARTIFACT_DIR for arch $ARCH" >&2
+  emit_versions ""
+  exit 3
 fi
+sudo dpkg -i "$LATEST_PKG" >/dev/null
+INSTALLED_VERSION=$("$INSTALL_BIN" --version | tr -d '\r')
 
 emit_versions "$SOURCE_VERSION" "$INSTALLED_VERSION"
