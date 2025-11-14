@@ -39,7 +39,14 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(data, "10.55.0.10", "test_password123", "alpha@example.com", "10.55.0.10")
+        helpers.assert_outbound(
+            data,
+            "10.55.0.10",
+            "test_password123",
+            "alpha@example.com",
+            "10.55.0.10",
+            allow_insecure=True,
+        )
 
         xp2p_client_runner(
             "client",
@@ -60,8 +67,22 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         updated = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(updated, "10.55.0.10", "test_password123", "alpha@example.com", "10.55.0.10")
-        helpers.assert_outbound(updated, "10.55.0.11", "override_password456", "beta@example.com", "vpn.example.local")
+        helpers.assert_outbound(
+            updated,
+            "10.55.0.10",
+            "test_password123",
+            "alpha@example.com",
+            "10.55.0.10",
+            allow_insecure=True,
+        )
+        helpers.assert_outbound(
+            updated,
+            "10.55.0.11",
+            "override_password456",
+            "beta@example.com",
+            "vpn.example.local",
+            allow_insecure=True,
+        )
 
         routing = helpers.read_json(client_host, CLIENT_ROUTING)
         helpers.assert_routing_rule(routing, "10.55.0.10")
@@ -109,8 +130,22 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         )
 
         refreshed = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(refreshed, "10.55.0.10", "forcepass", "gamma@example.com", "override.linux")
-        helpers.assert_outbound(refreshed, "10.55.0.11", "override_password456", "beta@example.com", "vpn.example.local")
+        helpers.assert_outbound(
+            refreshed,
+            "10.55.0.10",
+            "forcepass",
+            "gamma@example.com",
+            "override.linux",
+            allow_insecure=True,
+        )
+        helpers.assert_outbound(
+            refreshed,
+            "10.55.0.11",
+            "override_password456",
+            "beta@example.com",
+            "vpn.example.local",
+            allow_insecure=True,
+        )
     finally:
         _cleanup(client_host, xp2p_client_runner)
 

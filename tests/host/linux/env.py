@@ -56,7 +56,7 @@ def run_guest_script(host: Host, relative_path: str, *args: str) -> CommandResul
     script_path = GUEST_SCRIPTS_ROOT / relative_path
     quoted_script = shlex.quote(script_path.as_posix())
     quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
-    command = f"sudo -n {quoted_script}"
+    command = f"sudo -n /bin/bash {quoted_script}"
     if quoted_args:
         command = f"{command} {quoted_args}"
     return host.run(command)
