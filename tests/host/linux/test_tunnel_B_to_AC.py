@@ -85,8 +85,22 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
         )
 
         outbounds = helpers.read_json(client_b, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(outbounds, SERVER_A_IP, cred_a["password"], cred_a["user"], SERVER_A_IP)
-        helpers.assert_outbound(outbounds, SERVER_C_IP, cred_c["password"], cred_c["user"], SERVER_C_IP)
+        helpers.assert_outbound(
+            outbounds,
+            SERVER_A_IP,
+            cred_a["password"],
+            cred_a["user"],
+            SERVER_A_IP,
+            allow_insecure=True,
+        )
+        helpers.assert_outbound(
+            outbounds,
+            SERVER_C_IP,
+            cred_c["password"],
+            cred_c["user"],
+            SERVER_C_IP,
+            allow_insecure=True,
+        )
 
         routing = helpers.read_json(client_b, CLIENT_ROUTING)
         helpers.assert_routing_rule(routing, SERVER_A_IP)
