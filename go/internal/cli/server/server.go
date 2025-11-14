@@ -164,6 +164,10 @@ func ensureServerAssets(ctx context.Context, cfg config.Config, installDir, conf
 		return nil
 	}
 
+	if handled, err := skipInstallForSystemBinary(installDir); handled {
+		return err
+	}
+
 	if autoInstall {
 		return performInstall(ctx, cfg, installDir, configDirName)
 	}
@@ -256,6 +260,28 @@ func serverAssetsPresent(installDir, configDirPath string) (bool, error) {
 			}
 			return false, fmt.Errorf("xp2p: stat %s: %w", path, err)
 		}
+	}
+	return true, nil
+}
+
+func skipInstallForSystemBinary(installDir string) (bool, error) {
+	if runtime.GOOS != "linux" {
+		return false, nil
+	}
+	if filepath.Clean(installDir) != layout.UnixConfigRoot {
+		return false, nil
+	}
+
+	binPath := filepath.Join(layout.UnixConfigRoot, layout.BinDirName, "xray")
+	info, err := os.Stat(binPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return true, fmt.Errorf("xp2p: xray binary not found at %s (install the system package or set XP2P_XRAY_BIN)", binPath)
+		}
+		return true, fmt.Errorf("xp2p: inspect xray binary at %s: %w", binPath, err)
+	}
+	if info.IsDir() {
+		return true, fmt.Errorf("xp2p: expected xray binary file at %s", binPath)
 	}
 	return true, nil
 }

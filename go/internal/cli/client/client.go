@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -297,7 +298,11 @@ func performClientInstall(ctx context.Context, cfg config.Config, installDir, co
 }
 
 func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
-	binPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
+	binaryName := "xray.exe"
+	if runtime.GOOS != "windows" {
+		binaryName = "xray"
+	}
+	binPath := filepath.Join(installDir, layout.BinDirName, binaryName)
 	if info, err := os.Stat(binPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
