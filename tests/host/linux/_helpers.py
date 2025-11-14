@@ -73,7 +73,7 @@ def file_sha256(host: Host, path: PurePosixPath) -> str:
     return linux_env.file_sha256(host, path)
 
 
-def extract_trojan_credential(output: str) -> dict[str, str | None]:
+def extract_trojan_credential(output: str) -> dict[str, str]:
     user = password = link = None
     for raw in (output or "").splitlines():
         line = raw.strip()
@@ -87,6 +87,11 @@ def extract_trojan_credential(output: str) -> dict[str, str | None]:
     if not user or not password:
         raise RuntimeError(
             "xp2p server install did not emit trojan credential lines.\n"
+            f"STDOUT:\n{output}"
+        )
+    if not link:
+        raise RuntimeError(
+            "xp2p server install did not emit trojan link.\n"
             f"STDOUT:\n{output}"
         )
     return {"user": user, "password": password, "link": link}
