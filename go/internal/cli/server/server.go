@@ -376,6 +376,7 @@ func provisionCredential(ctx context.Context, installOpts server.InstallOptions,
 		ConfigDir:  installOpts.ConfigDir,
 		UserID:     user,
 		Password:   pass,
+		Host:       host,
 	}
 	if err := serverUserAddFunc(ctx, addOpts); err != nil {
 		return credentialResult{}, err

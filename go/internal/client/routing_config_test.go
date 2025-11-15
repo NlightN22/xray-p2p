@@ -45,7 +45,7 @@ func TestUpdateRoutingConfigManagesReverseRules(t *testing.T) {
 		{Hostname: "alpha.example", Tag: "proxy-alpha", Address: "alpha.example"},
 	}
 	reverse := map[string]clientReverseChannel{
-		"alpha.rev": {UserID: "alpha", Tag: "alpha.rev", Domain: "alpha.rev", EndpointTag: "proxy-alpha"},
+		"alphaalpha-example.rev": {UserID: "alpha", Host: "alpha.example", Tag: "alphaalpha-example.rev", Domain: "alphaalpha-example.rev", EndpointTag: "proxy-alpha"},
 	}
 
 	if err := updateRoutingConfig(path, endpoints, nil, reverse); err != nil {

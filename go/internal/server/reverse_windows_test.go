@@ -12,6 +12,8 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 )
 
+const reverseHost = "edge.example"
+
 func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config-server")
@@ -23,6 +25,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "alpha.user",
 		Password:   "secret",
+		Host:       reverseHost,
 	}); err != nil {
 		t.Fatalf("AddUser: %v", err)
 	}
@@ -37,7 +40,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 		t.Fatalf("expected 1 portal, got %d", len(portals))
 	}
 	entry := portals[0].(map[string]any)
-	if entry["tag"] != "alpha-user.rev" || entry["domain"] != "alpha-user.rev" {
+	if entry["tag"] != "alpha-useredge-example.rev" || entry["domain"] != "alpha-useredge-example.rev" {
 		t.Fatalf("unexpected portal entry: %+v", entry)
 	}
 
@@ -46,18 +49,18 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 		t.Fatalf("expected 1 routing rule, got %d", len(rules))
 	}
 	rule := rules[0].(map[string]any)
-	if rule["outboundTag"] != "alpha-user.rev" {
+	if rule["outboundTag"] != "alpha-useredge-example.rev" {
 		t.Fatalf("unexpected outbound tag: %+v", rule)
 	}
 	domains := rule["domain"].([]any)
-	if len(domains) != 1 || domains[0] != "full:alpha-user.rev" {
+	if len(domains) != 1 || domains[0] != "full:alpha-useredge-example.rev" {
 		t.Fatalf("unexpected domain match: %+v", rule)
 	}
 
 	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindServer))
 	stateDoc := loadJSONFile(t, statePath)
 	channels := stateDoc["reverse_channels"].(map[string]any)
-	if _, ok := channels["alpha-user.rev"]; !ok {
+	if _, ok := channels["alpha-useredge-example.rev"]; !ok {
 		t.Fatalf("expected reverse channel entry, got %v", channels)
 	}
 }
@@ -73,6 +76,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "beta.user",
 		Password:   "secret",
+		Host:       reverseHost,
 	}
 	if err := AddUser(context.Background(), opts); err != nil {
 		t.Fatalf("AddUser: %v", err)
@@ -82,6 +86,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 		InstallDir: dir,
 		ConfigDir:  "config-server",
 		UserID:     "beta.user",
+		Host:       reverseHost,
 	}); err != nil {
 		t.Fatalf("RemoveUser: %v", err)
 	}
@@ -114,6 +119,7 @@ func TestAddUserDetectsReverseConflicts(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "gamma.user",
 		Password:   "secret",
+		Host:       reverseHost,
 	}); err != nil {
 		t.Fatalf("AddUser: %v", err)
 	}
@@ -123,6 +129,7 @@ func TestAddUserDetectsReverseConflicts(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "gamma:user",
 		Password:   "secret",
+		Host:       reverseHost,
 	})
 	if err == nil {
 		t.Fatalf("expected error due to reverse identifier conflict")

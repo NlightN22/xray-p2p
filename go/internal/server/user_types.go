@@ -6,6 +6,7 @@ type AddUserOptions struct {
 	ConfigDir  string
 	UserID     string
 	Password   string
+	Host       string
 }
 
 // RemoveUserOptions describes parameters for removing a Trojan client from the server configuration.
@@ -13,6 +14,7 @@ type RemoveUserOptions struct {
 	InstallDir string
 	ConfigDir  string
 	UserID     string
+	Host       string
 }
 
 // ListUsersOptions describes parameters for enumerating Trojan users and generating connection links.

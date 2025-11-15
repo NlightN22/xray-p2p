@@ -35,6 +35,11 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		return errPasswordRequired
 	}
 
+	host := strings.TrimSpace(opts.Host)
+	if host == "" {
+		return errors.New("xp2p: host is required to derive reverse identifiers")
+	}
+
 	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
 		return err
@@ -45,7 +50,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		return err
 	}
 
-	channel, err := buildServerReverseChannel(userID)
+	channel, err := buildServerReverseChannel(userID, host)
 	if err != nil {
 		return err
 	}
@@ -133,6 +138,11 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		return errUserIDRequired
 	}
 
+	host := strings.TrimSpace(opts.Host)
+	if host == "" {
+		return errors.New("xp2p: host is required to derive reverse identifiers")
+	}
+
 	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
 		return err
@@ -143,7 +153,7 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		return err
 	}
 
-	channel, err := buildServerReverseChannel(userID)
+	channel, err := buildServerReverseChannel(userID, host)
 	if err != nil {
 		return err
 	}

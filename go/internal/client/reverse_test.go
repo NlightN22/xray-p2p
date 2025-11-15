@@ -34,7 +34,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		t.Fatalf("expected 1 reverse bridge, got %d", len(bridges))
 	}
 	entry := bridges[0].(map[string]any)
-	if entry["tag"] != "reverse-user.rev" || entry["domain"] != "reverse-user.rev" {
+	if entry["tag"] != "reverse-userserver-example.rev" || entry["domain"] != "reverse-userserver-example.rev" {
 		t.Fatalf("unexpected bridge entry: %+v", entry)
 	}
 
@@ -46,7 +46,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	if domainRule["outboundTag"] != "proxy-server-example" {
 		t.Fatalf("unexpected outbound tag: %+v", domainRule)
 	}
-	if domains := domainRule["domain"].([]any); domains[0] != "full:reverse-user.rev" {
+	if domains := domainRule["domain"].([]any); domains[0] != "full:reverse-userserver-example.rev" {
 		t.Fatalf("unexpected domains: %+v", domains)
 	}
 	directRule := rules[1].(map[string]any)
@@ -54,7 +54,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		t.Fatalf("expected direct outbound, got %+v", directRule)
 	}
 	inbound := directRule["inboundTag"].([]any)
-	if inbound[0] != "reverse-user.rev" {
+	if inbound[0] != "reverse-userserver-example.rev" {
 		t.Fatalf("unexpected inbound tag: %+v", inbound)
 	}
 
@@ -62,7 +62,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load client state: %v", err)
 	}
-	if _, ok := state.Reverse["reverse-user.rev"]; !ok {
+	if _, ok := state.Reverse["reverse-userserver-example.rev"]; !ok {
 		t.Fatalf("expected reverse entry in state, got %v", state.Reverse)
 	}
 }

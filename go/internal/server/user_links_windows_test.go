@@ -27,6 +27,7 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "alpha",
 		Password:   "secret",
+		Host:       "links.example.test",
 	}); err != nil {
 		t.Fatalf("AddUser: %v", err)
 	}
@@ -62,6 +63,7 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "beta",
 		Password:   "secret",
+		Host:       "example.internal",
 	}); err != nil {
 		t.Fatalf("AddUser: %v", err)
 	}
@@ -107,6 +109,7 @@ func TestListUsersSelfSignedIncludesAllowInsecure(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "alpha",
 		Password:   "secret",
+		Host:       "self.example.test",
 	}); err != nil {
 		t.Fatalf("AddUser: %v", err)
 	}

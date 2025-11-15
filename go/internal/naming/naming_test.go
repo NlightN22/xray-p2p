@@ -22,15 +22,18 @@ func TestSanitizeLabel(t *testing.T) {
 }
 
 func TestReverseTag(t *testing.T) {
-	tag, err := ReverseTag("User.Name")
+	tag, err := ReverseTag("User.Name", "Edge.EXAMPLE.com")
 	if err != nil {
 		t.Fatalf("ReverseTag returned error: %v", err)
 	}
-	if tag != "user-name.rev" {
-		t.Fatalf("ReverseTag = %q, want user-name.rev", tag)
+	if tag != "user-nameedge-example-com.rev" {
+		t.Fatalf("ReverseTag = %q, want user-nameedge-example-com.rev", tag)
 	}
 
-	if _, err := ReverseTag("  !!!  "); err == nil {
+	if _, err := ReverseTag("  !!!  ", "host"); err == nil {
+		t.Fatalf("expected error for invalid user id")
+	}
+	if _, err := ReverseTag("user", "   "); err == nil {
 		t.Fatalf("expected error for invalid user id")
 	}
 }

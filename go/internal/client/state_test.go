@@ -27,7 +27,7 @@ func TestClientInstallStateSaveAndLoad(t *testing.T) {
 			{Domain: "svc.example", OutboundTag: "proxy-alpha"},
 		},
 		Reverse: map[string]clientReverseChannel{
-			"alpha.rev": {UserID: "alpha", Tag: "alpha.rev", EndpointTag: "proxy-alpha"},
+			"alphaedge-example.rev": {UserID: "alpha", Host: "edge.example", Tag: "alphaedge-example.rev", EndpointTag: "proxy-alpha"},
 		},
 	}
 	if err := original.save(path); err != nil {
@@ -44,26 +44,26 @@ func TestClientInstallStateSaveAndLoad(t *testing.T) {
 	if len(loaded.Redirects) != 1 || loaded.Redirects[0].Domain != "svc.example" {
 		t.Fatalf("unexpected redirects: %+v", loaded.Redirects)
 	}
-	if len(loaded.Reverse) != 1 || loaded.Reverse["alpha.rev"].EndpointTag != "proxy-alpha" {
+	if len(loaded.Reverse) != 1 || loaded.Reverse["alphaedge-example.rev"].EndpointTag != "proxy-alpha" {
 		t.Fatalf("unexpected reverse map: %+v", loaded.Reverse)
 	}
 }
 
 func TestClientInstallStateEnsureReverseChannel(t *testing.T) {
 	state := clientInstallState{}
-	channel, err := state.ensureReverseChannel("User.One", "proxy-alpha")
+	channel, err := state.ensureReverseChannel("User.One", "edge.example", "proxy-alpha")
 	if err != nil {
 		t.Fatalf("ensureReverseChannel failed: %v", err)
 	}
-	if channel.Tag != "user-one.rev" {
+	if channel.Tag != "user-oneedge-example.rev" {
 		t.Fatalf("unexpected tag: %s", channel.Tag)
 	}
 
-	if _, err := state.ensureReverseChannel("User.One", "proxy-alpha"); err != nil {
+	if _, err := state.ensureReverseChannel("User.One", "edge.example", "proxy-alpha"); err != nil {
 		t.Fatalf("expected repeated call to succeed, got %v", err)
 	}
 
-	if _, err := state.ensureReverseChannel("User.One", "proxy-beta"); err == nil {
+	if _, err := state.ensureReverseChannel("User.One", "edge.example", "proxy-beta"); err == nil {
 		t.Fatalf("expected conflict when user mapped to a different endpoint tag")
 	}
 

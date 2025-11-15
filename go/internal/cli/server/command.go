@@ -137,7 +137,7 @@ func newServerUserAddCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a Trojan user and reverse portal",
-		Long:  "Add a Trojan user, update inbounds.json, and create a sanitized <user>.rev reverse portal/routing entry so clients can mirror the bridge automatically.",
+		Long:  "Add a Trojan user, update inbounds.json, and create a sanitized <user><host>.rev reverse portal/routing entry so clients can mirror the bridge automatically.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerUserAdd(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
@@ -147,7 +147,7 @@ func newServerUserAddCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&opts.Path, "path", "", "server installation directory")
 	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
-	flags.StringVar(&opts.UserID, "id", "", "Trojan client identifier (derives the <id>.rev reverse tag)")
+	flags.StringVar(&opts.UserID, "id", "", "Trojan client identifier (derives the <id><host>.rev reverse tag)")
 	flags.StringVar(&opts.Password, "password", "", "Trojan client password or pre-shared key")
 	flags.StringVar(&opts.Key, "key", "", "alias for --password")
 	flags.StringVar(&opts.LinkHost, "host", "", "public host name or IP for generated connection link")
@@ -159,6 +159,7 @@ func newServerUserRemoveCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove",
 		Short: "Remove a Trojan user",
+		Long:  "Remove a Trojan user and clean up the matching <user><host>.rev reverse portal.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerUserRemove(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
@@ -169,6 +170,7 @@ func newServerUserRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.Path, "path", "", "server installation directory")
 	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
 	flags.StringVar(&opts.UserID, "id", "", "Trojan client identifier")
+	flags.StringVar(&opts.Host, "host", "", "public host name or IP (defaults to server host)")
 	_ = cmd.MarkFlagRequired("id")
 	return cmd
 }

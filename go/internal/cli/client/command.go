@@ -60,7 +60,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install xp2p client assets and reverse bridges",
-		Long:  "Install xp2p client assets, register forward tunnels, and provision reverse bridges (<user>.rev) that reuse the server's sanitized user identifiers.",
+		Long:  "Install xp2p client assets, register forward tunnels, and provision reverse bridges (<user><host>.rev) that reuse the server's sanitized user/host identifiers.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientInstall(commandContext(cmd), cfg(), forwarded)
@@ -73,7 +73,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.String("config-dir", "", "client configuration directory name")
 	flags.String("server-address", "", "remote server address")
 	flags.String("server-port", "", "remote server port")
-	flags.String("user", "", "Trojan user email (used to derive the <user>.rev reverse bridge)")
+	flags.String("user", "", "Trojan user email (used to derive the <user><host>.rev reverse bridge)")
 	flags.String("password", "", "Trojan password")
 	flags.String("server-name", "", "TLS server name")
 	flags.String("link", "", "Trojan client link (trojan://...)")

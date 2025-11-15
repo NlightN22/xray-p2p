@@ -44,7 +44,7 @@ func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointCon
 		return err
 	}
 
-	if _, err := state.ensureReverseChannel(record.User, record.Tag); err != nil {
+	if _, err := state.ensureReverseChannel(record.User, record.Hostname, record.Tag); err != nil {
 		return err
 	}
 

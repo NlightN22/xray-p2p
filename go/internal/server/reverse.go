@@ -19,6 +19,7 @@ const serverReverseStateKey = "reverse_channels"
 
 type serverReverseChannel struct {
 	UserID string `json:"user_id"`
+	Host   string `json:"host"`
 	Tag    string `json:"tag"`
 	Domain string `json:"domain"`
 }
@@ -113,14 +114,19 @@ func (s *reverseStore) save() error {
 	return nil
 }
 
-func buildServerReverseChannel(userID string) (serverReverseChannel, error) {
+func buildServerReverseChannel(userID, host string) (serverReverseChannel, error) {
 	trimmed := strings.TrimSpace(userID)
-	tag, err := naming.ReverseTag(trimmed)
+	if trimmed == "" {
+		return serverReverseChannel{}, errUserIDRequired
+	}
+	hostValue := strings.TrimSpace(host)
+	tag, err := naming.ReverseTag(trimmed, hostValue)
 	if err != nil {
 		return serverReverseChannel{}, err
 	}
 	return serverReverseChannel{
 		UserID: trimmed,
+		Host:   hostValue,
 		Tag:    tag,
 		Domain: tag,
 	}, nil

@@ -117,7 +117,7 @@ xp2p client remove edge.example.com
 xp2p client remove --all --ignore-missing
 ```
 
-Both the server and client automatically wire up reverse tunnels keyed by sanitized user identifiers. Running `xp2p server user add --id alpha@example.com ...` now provisions the `<alpha-example-com>.rev` portal/tag, and every `xp2p client install` using that user creates the mirrored reverse bridge plus routing rules without any manual JSON edits.
+Both the server and client automatically wire up reverse tunnels keyed by sanitized user+host identifiers. Running `xp2p server user add --id alpha@example.com --host edge.example.com ...` now provisions the `<alpha-example-comedge-example-com>.rev` portal/tag, and every `xp2p client install` using that user/server pair creates the mirrored reverse bridge plus routing rules without any manual JSON edits.
 
 
 Additional helpers:

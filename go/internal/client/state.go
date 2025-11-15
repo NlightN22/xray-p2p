@@ -37,6 +37,7 @@ type clientRedirectRule struct {
 
 type clientReverseChannel struct {
 	UserID      string `json:"user_id"`
+	Host        string `json:"host"`
 	Tag         string `json:"tag"`
 	Domain      string `json:"domain"`
 	EndpointTag string `json:"endpoint_tag"`
@@ -238,21 +239,27 @@ func (s *clientInstallState) removeRedirectsByTag(tag string) {
 	s.Redirects = filtered
 }
 
-func (s *clientInstallState) ensureReverseChannel(userID, endpointTag string) (clientReverseChannel, error) {
+func (s *clientInstallState) ensureReverseChannel(userID, host, endpointTag string) (clientReverseChannel, error) {
 	s.normalize()
-	tag, err := naming.ReverseTag(userID)
+	user := strings.TrimSpace(userID)
+	trimmedHost := strings.TrimSpace(host)
+	if user == "" || trimmedHost == "" {
+		return clientReverseChannel{}, fmt.Errorf("xp2p: reverse channels require user and host")
+	}
+	tag, err := naming.ReverseTag(user, trimmedHost)
 	if err != nil {
 		return clientReverseChannel{}, err
 	}
 	channel := clientReverseChannel{
-		UserID:      strings.TrimSpace(userID),
+		UserID:      user,
+		Host:        trimmedHost,
 		Tag:         tag,
 		Domain:      tag,
 		EndpointTag: endpointTag,
 	}
 	if existing, ok := s.Reverse[tag]; ok {
-		if !strings.EqualFold(existing.UserID, channel.UserID) {
-			return clientReverseChannel{}, fmt.Errorf("xp2p: reverse tag %s already assigned to %s", tag, existing.UserID)
+		if !strings.EqualFold(existing.UserID, channel.UserID) || !strings.EqualFold(existing.Host, channel.Host) {
+			return clientReverseChannel{}, fmt.Errorf("xp2p: reverse tag %s already assigned to %s@%s", tag, existing.UserID, existing.Host)
 		}
 		if !strings.EqualFold(existing.EndpointTag, endpointTag) {
 			return clientReverseChannel{}, fmt.Errorf("xp2p: reverse tag %s already routed via %s", tag, existing.EndpointTag)

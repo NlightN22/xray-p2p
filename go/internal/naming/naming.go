@@ -35,11 +35,12 @@ func SanitizeLabel(value string) string {
 	return strings.Trim(b.String(), "-")
 }
 
-// ReverseTag builds the shared reverse-tunnel identifier for a user.
-func ReverseTag(userID string) (string, error) {
-	sanitized := SanitizeLabel(userID)
-	if sanitized == "" {
-		return "", fmt.Errorf("xp2p: unable to derive reverse identifier from %q", strings.TrimSpace(userID))
+// ReverseTag builds the shared reverse-tunnel identifier for a user and host combination.
+func ReverseTag(userID, host string) (string, error) {
+	user := SanitizeLabel(userID)
+	hostLabel := SanitizeLabel(host)
+	if user == "" || hostLabel == "" {
+		return "", fmt.Errorf("xp2p: unable to derive reverse identifier from %q/%q", strings.TrimSpace(userID), strings.TrimSpace(host))
 	}
-	return sanitized + reverseSuffix, nil
+	return user + hostLabel + reverseSuffix, nil
 }

@@ -23,6 +23,7 @@ type serverUserRemoveOptions struct {
 	Path      string
 	ConfigDir string
 	UserID    string
+	Host      string
 }
 
 type serverUserListOptions struct {
@@ -42,11 +43,18 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 		return 2
 	}
 
+	host := firstNonEmpty(opts.LinkHost, cfg.Server.Host)
+	if strings.TrimSpace(host) == "" {
+		logging.Error("xp2p server user add: --host is required to derive reverse tunnel identifiers")
+		return 2
+	}
+
 	addOpts := server.AddUserOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		UserID:     opts.UserID,
 		Password:   secret,
+		Host:       host,
 	}
 
 	if err := serverUserAddFunc(ctx, addOpts); err != nil {
@@ -57,9 +65,9 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 	logging.Info("xp2p server user add completed", "user_id", strings.TrimSpace(opts.UserID))
 
 	linkOpts := server.UserLinkOptions{
-		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
-		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
-		Host:       firstNonEmpty(opts.LinkHost, cfg.Server.Host),
+		InstallDir: addOpts.InstallDir,
+		ConfigDir:  addOpts.ConfigDir,
+		Host:       host,
 		UserID:     opts.UserID,
 	}
 	if link, err := serverUserLinkFunc(ctx, linkOpts); err != nil {
@@ -71,10 +79,17 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 }
 
 func runServerUserRemove(ctx context.Context, cfg config.Config, opts serverUserRemoveOptions) int {
+	host := firstNonEmpty(opts.Host, cfg.Server.Host)
+	if strings.TrimSpace(host) == "" {
+		logging.Error("xp2p server user remove: --host is required to clean up reverse tunnels")
+		return 2
+	}
+
 	removeOpts := server.RemoveUserOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		UserID:     opts.UserID,
+		Host:       host,
 	}
 
 	if err := serverUserRemoveFunc(ctx, removeOpts); err != nil {
