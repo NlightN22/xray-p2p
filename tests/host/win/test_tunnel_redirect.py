@@ -18,6 +18,8 @@ CLIENT_ROUTING_JSON = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR / "routing.json"
 DIAG_IP = "10.77.0.1"
 DIAG_CIDR = f"{DIAG_IP}/32"
 DIAG_PREFIX = 32
+DIAG_DOMAIN_IP = "10.77.0.2"
+DIAG_DOMAIN = "diag.service.internal"
 
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
@@ -160,6 +162,53 @@ def _assert_no_redirect_rule(data: dict, cidr: str) -> None:
             pytest.fail(f"Unexpected redirect rule for {cidr}")
 
 
+def _assert_domain_redirect_rule(data: dict, domain: str, tag: str) -> None:
+    normalized = domain.strip().lower()
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") != tag:
+            continue
+        domains = rule.get("domains") or []
+        lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
+        if normalized in lowered:
+            return
+    pytest.fail(f"Domain redirect rule for {domain} via {tag} not found")
+
+
+def _assert_no_domain_redirect_rule(data: dict, domain: str) -> None:
+    normalized = domain.strip().lower()
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        domains = rule.get("domains") or []
+        lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
+        if normalized in lowered:
+            pytest.fail(f"Unexpected domain redirect rule for {domain}")
+
+
+def _add_hosts_entry(host, ip: str, hostname: str) -> None:
+    result = _env.run_guest_script(
+        host,
+        "update_hosts_entry.ps1",
+        Action="Add",
+        HostName=hostname,
+        IPAddress=ip,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to add hosts entry.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _remove_hosts_entry(host, hostname: str) -> None:
+    _env.run_guest_script(
+        host,
+        "update_hosts_entry.ps1",
+        Action="Remove",
+        HostName=hostname,
+    )
+
+
 @pytest.mark.host
 @pytest.mark.win
 def test_client_redirect_tunnel_win(
@@ -176,8 +225,11 @@ def test_client_redirect_tunnel_win(
     server_log_path = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
     iface = _get_interface_alias(server_host, SERVER_PUBLIC_HOST)
     _remove_ip_alias(server_host, DIAG_IP)
+    _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
     try:
         _add_ip_alias(server_host, iface, DIAG_IP, DIAG_PREFIX)
+        _add_ip_alias(server_host, iface, DIAG_DOMAIN_IP, DIAG_PREFIX)
+        _add_hosts_entry(client_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
 
         server_install = xp2p_server_runner(
             "--server-host",
@@ -218,6 +270,15 @@ def test_client_redirect_tunnel_win(
                     check=False,
                 )
                 assert initial_ping.rc != 0
+                initial_domain_ping = xp2p_client_runner(
+                    "ping",
+                    DIAG_DOMAIN,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=False,
+                )
+                assert initial_domain_ping.rc != 0
 
                 xp2p_client_runner(
                     "client",
@@ -238,8 +299,17 @@ def test_client_redirect_tunnel_win(
                     "3",
                     check=True,
                 )
-                redirected_output = (redirected_ping.stdout or "").lower()
-                assert "0% loss" in redirected_output
+                assert "0% loss" in (redirected_ping.stdout or "").lower()
+
+                domain_before_rule = xp2p_client_runner(
+                    "ping",
+                    DIAG_DOMAIN,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=False,
+                )
+                assert domain_before_rule.rc != 0
 
                 redirect_list = xp2p_client_runner(
                     "client",
@@ -258,6 +328,53 @@ def test_client_redirect_tunnel_win(
                 xp2p_client_runner(
                     "client",
                     "redirect",
+                    "add",
+                    "--domain",
+                    DIAG_DOMAIN,
+                    "--host",
+                    SERVER_PUBLIC_HOST,
+                    check=True,
+                )
+
+                redirect_list = xp2p_client_runner(
+                    "client",
+                    "redirect",
+                    "list",
+                    check=True,
+                ).stdout or ""
+                assert DIAG_DOMAIN in redirect_list
+
+                routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+                _assert_domain_redirect_rule(routing, DIAG_DOMAIN, _expected_tag(SERVER_PUBLIC_HOST))
+
+                xp2p_client_runner(
+                    "client",
+                    "redirect",
+                    "remove",
+                    "--domain",
+                    DIAG_DOMAIN,
+                    "--host",
+                    SERVER_PUBLIC_HOST,
+                    check=True,
+                )
+
+                routing_after_domain = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+                _assert_redirect_rule(routing_after_domain, DIAG_CIDR, _expected_tag(SERVER_PUBLIC_HOST))
+                _assert_no_domain_redirect_rule(routing_after_domain, DIAG_DOMAIN)
+
+                redirected_ping_again = xp2p_client_runner(
+                    "ping",
+                    DIAG_IP,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=True,
+                )
+                assert "0% loss" in (redirected_ping_again.stdout or "").lower()
+
+                xp2p_client_runner(
+                    "client",
+                    "redirect",
                     "remove",
                     "--cidr",
                     DIAG_CIDR,
@@ -266,6 +383,7 @@ def test_client_redirect_tunnel_win(
 
                 routing_after = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
                 _assert_no_redirect_rule(routing_after, DIAG_CIDR)
+                _assert_no_domain_redirect_rule(routing_after, DIAG_DOMAIN)
 
                 final_ping = xp2p_client_runner(
                     "ping",
@@ -286,5 +404,7 @@ def test_client_redirect_tunnel_win(
                 assert "no redirect rules configured" in final_list.lower()
     finally:
         _remove_ip_alias(server_host, DIAG_IP)
+        _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
+        _remove_hosts_entry(client_host, DIAG_DOMAIN)
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

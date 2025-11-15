@@ -8,6 +8,9 @@ from tests.host.linux import env as linux_env
 SERVER_IP = "10.62.10.11"  # deb-test-a (host A)
 DIAG_IP = "10.77.0.1"
 DIAG_CIDR = f"{DIAG_IP}/32"
+DIAG_DOMAIN_IP = "10.77.0.2"
+DIAG_DOMAIN_CIDR = f"{DIAG_DOMAIN_IP}/32"
+DIAG_DOMAIN = "diag.service.internal"
 
 
 def _runner(host):
@@ -55,6 +58,19 @@ def _remove_blackhole_route(host, cidr: str) -> None:
     host.run(f"sudo -n ip route del {cidr} >/dev/null 2>&1 || true")
 
 
+def _add_hosts_entry(host, ip: str, domain: str) -> None:
+    result = linux_env.run_guest_script(host, "scripts/linux/update_hosts_entry.sh", "add", ip, domain)
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to add hosts entry "
+            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _remove_hosts_entry(host, domain: str) -> None:
+    linux_env.run_guest_script(host, "scripts/linux/update_hosts_entry.sh", "remove", domain)
+
+
 def _combined_output(result) -> str:
     return f"{result.stdout}\n{result.stderr}".lower()
 
@@ -70,15 +86,21 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
     def cleanup(iface: str | None = None):
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
-        _remove_blackhole_route(client_host, DIAG_CIDR)
+        for cidr in (DIAG_CIDR, DIAG_DOMAIN_CIDR):
+            _remove_blackhole_route(client_host, cidr)
+        _remove_hosts_entry(client_host, DIAG_DOMAIN)
         if iface:
-            _remove_ip_alias(server_host, iface, DIAG_CIDR)
+            for alias in (DIAG_CIDR, DIAG_DOMAIN_CIDR):
+                _remove_ip_alias(server_host, iface, alias)
 
     iface_name = _find_interface_for_ip(server_host, SERVER_IP)
     cleanup(iface_name)
     try:
         _add_ip_alias(server_host, iface_name, DIAG_CIDR)
+        _add_ip_alias(server_host, iface_name, DIAG_DOMAIN_CIDR)
         _add_blackhole_route(client_host, DIAG_CIDR)
+        _add_blackhole_route(client_host, DIAG_DOMAIN_CIDR)
+        _add_hosts_entry(client_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
 
         server_install = server_runner(
             "server",
@@ -135,6 +157,15 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
                 )
                 initial_log = helpers.read_text(server_host, helpers.SERVER_LOG_FILE)
                 assert initial_log.lower().count("ping received") == baseline_count
+                initial_domain_ping = client_runner(
+                    "ping",
+                    DIAG_DOMAIN,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=False,
+                )
+                assert initial_domain_ping.rc != 0
 
                 client_runner(
                     "client",
@@ -161,6 +192,16 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
                 )
                 assert "0% loss" in _combined_output(redirected_ping)
 
+                domain_before_rule = client_runner(
+                    "ping",
+                    DIAG_DOMAIN,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=False,
+                )
+                assert domain_before_rule.rc != 0
+
                 redirect_list = client_runner(
                     "client",
                     "redirect",
@@ -179,6 +220,69 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
                 client_runner(
                     "client",
                     "redirect",
+                    "add",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.CLIENT_CONFIG_DIR_NAME,
+                    "--domain",
+                    DIAG_DOMAIN,
+                    "--host",
+                    SERVER_IP,
+                    check=True,
+                )
+
+                redirect_list = client_runner(
+                    "client",
+                    "redirect",
+                    "list",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.CLIENT_CONFIG_DIR_NAME,
+                    check=True,
+                ).stdout or ""
+                assert DIAG_DOMAIN in redirect_list
+
+                routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+                helpers.assert_domain_redirect_rule(routing, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP))
+
+                client_runner(
+                    "client",
+                    "redirect",
+                    "remove",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.CLIENT_CONFIG_DIR_NAME,
+                    "--domain",
+                    DIAG_DOMAIN,
+                    "--host",
+                    SERVER_IP,
+                    check=True,
+                )
+
+                routing_after_domain_removal = helpers.read_json(
+                    client_host, helpers.CLIENT_CONFIG_DIR / "routing.json"
+                )
+                helpers.assert_redirect_rule(routing_after_domain_removal, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
+                helpers.assert_no_domain_redirect_rule(
+                    routing_after_domain_removal, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP)
+                )
+
+                redirected_ping_after_domain = client_runner(
+                    "ping",
+                    DIAG_IP,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=True,
+                )
+                assert "0% loss" in _combined_output(redirected_ping_after_domain)
+
+                client_runner(
+                    "client",
+                    "redirect",
                     "remove",
                     "--path",
                     helpers.INSTALL_ROOT.as_posix(),
@@ -189,17 +293,9 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
                     check=True,
                 )
 
-                routing_after = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
-                helpers.assert_no_redirect_rule(routing_after, DIAG_CIDR)
-
-                final_ping = client_runner(
-                    "ping",
-                    DIAG_IP,
-                    "--socks",
-                    "--count",
-                    "3",
-                    check=False,
-                )
+                routing_after_remove = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+                helpers.assert_no_redirect_rule(routing_after_remove, DIAG_CIDR)
+                helpers.assert_no_domain_redirect_rule(routing_after_remove, DIAG_DOMAIN)
 
                 final_list = client_runner(
                     "client",
