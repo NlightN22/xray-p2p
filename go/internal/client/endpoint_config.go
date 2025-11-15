@@ -420,7 +420,20 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 	}
 
 	existing := extractRuleSlice(routing["rules"])
-	filtered := filterManagedRules(existing, managedOutboundTags(endpoints, redirects))
+	managed := managedOutboundTags(endpoints, redirects)
+	for _, rule := range existing {
+		ruleMap, ok := rule.(map[string]any)
+		if !ok {
+			continue
+		}
+		outbound, _ := ruleMap["outboundTag"].(string)
+		trimmedOutbound := strings.ToLower(strings.TrimSpace(outbound))
+		if strings.HasPrefix(trimmedOutbound, "proxy-") {
+			managed[trimmedOutbound] = struct{}{}
+		}
+	}
+
+	filtered := filterManagedRules(existing, managed)
 	for _, rule := range redirects {
 		filtered = append(filtered, map[string]any{
 			"type":        "field",

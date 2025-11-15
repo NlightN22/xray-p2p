@@ -57,15 +57,19 @@ def _list_redirects(runner):
 
 def _parse_redirect_output(text: str) -> list[dict[str, str]]:
     lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
-    if not lines:
-        return []
-    header = lines[0].lower()
-    if header.startswith("no redirect rules"):
-        return []
-    if not header.startswith("cidr"):
-        raise AssertionError(f"Unexpected redirect header: {lines[0]!r}")
+    header_idx = None
+    for idx, line in enumerate(lines):
+        lowered = line.lower()
+        if lowered.startswith("no redirect rules"):
+            return []
+        if lowered.startswith("cidr"):
+            header_idx = idx
+            break
+    if header_idx is None:
+        raise AssertionError(f"Unexpected redirect output: {text!r}")
+
     entries: list[dict[str, str]] = []
-    for row in lines[1:]:
+    for row in lines[header_idx + 1 :]:
         parts = row.split()
         if len(parts) < 3:
             continue
