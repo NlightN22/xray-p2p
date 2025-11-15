@@ -17,8 +17,8 @@ if [ ! -d "$WORK_TREE" ]; then
   exit 3
 fi
 
-if [ ! -x "$BUILD_SCRIPT" ]; then
-  echo "Build script $BUILD_SCRIPT is not executable" >&2
+if [ ! -f "$BUILD_SCRIPT" ]; then
+  echo "Build script $BUILD_SCRIPT is missing" >&2
   emit_versions ""
   exit 3
 fi
@@ -32,8 +32,7 @@ if [ -z "$SOURCE_VERSION" ]; then
   emit_versions ""
   exit 3
 fi
-
-"$BUILD_SCRIPT"
+bash "$BUILD_SCRIPT"
 ARCH=$(dpkg --print-architecture)
 shopt -s nullglob
 LATEST_PKG=""
