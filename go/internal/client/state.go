@@ -10,11 +10,12 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/naming"
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 type clientInstallState struct {
 	Endpoints []clientEndpointRecord          `json:"endpoints"`
-	Redirects []clientRedirectRule            `json:"redirects,omitempty"`
+	Redirects []redirect.Rule                 `json:"redirects,omitempty"`
 	Reverse   map[string]clientReverseChannel `json:"reverse,omitempty"`
 }
 
@@ -29,78 +30,12 @@ type clientEndpointRecord struct {
 	AllowInsecure bool   `json:"allow_insecure"`
 }
 
-type clientRedirectRule struct {
-	CIDR        string `json:"cidr,omitempty"`
-	Domain      string `json:"domain,omitempty"`
-	OutboundTag string `json:"outbound_tag"`
-}
-
 type clientReverseChannel struct {
 	UserID      string `json:"user_id"`
 	Host        string `json:"host"`
 	Tag         string `json:"tag"`
 	Domain      string `json:"domain"`
 	EndpointTag string `json:"endpoint_tag"`
-}
-
-type redirectRuleType int
-
-const (
-	redirectRuleTypeCIDR redirectRuleType = iota
-	redirectRuleTypeDomain
-)
-
-type redirectTarget struct {
-	kind  redirectRuleType
-	value string
-}
-
-func (t redirectRuleType) label() string {
-	switch t {
-	case redirectRuleTypeDomain:
-		return "domain"
-	default:
-		return "CIDR"
-	}
-}
-
-func describeRedirect(kind redirectRuleType, value string) string {
-	return fmt.Sprintf("%s %s", kind.label(), value)
-}
-
-func (t redirectTarget) describe() string {
-	return describeRedirect(t.kind, t.value)
-}
-
-func (t redirectTarget) matches(rule clientRedirectRule) bool {
-	switch t.kind {
-	case redirectRuleTypeDomain:
-		if strings.TrimSpace(rule.Domain) == "" {
-			return false
-		}
-		return strings.EqualFold(rule.value(), t.value)
-	default:
-		if strings.TrimSpace(rule.CIDR) == "" {
-			return false
-		}
-		return strings.EqualFold(rule.value(), t.value)
-	}
-}
-
-func (r clientRedirectRule) kind() redirectRuleType {
-	if strings.TrimSpace(r.Domain) != "" {
-		return redirectRuleTypeDomain
-	}
-	return redirectRuleTypeCIDR
-}
-
-func (r clientRedirectRule) value() string {
-	switch r.kind() {
-	case redirectRuleTypeDomain:
-		return strings.ToLower(strings.TrimSpace(r.Domain))
-	default:
-		return strings.TrimSpace(r.CIDR)
-	}
 }
 
 func loadClientInstallState(path string) (clientInstallState, error) {
@@ -129,7 +64,7 @@ func (s *clientInstallState) normalize() {
 		s.Endpoints = []clientEndpointRecord{}
 	}
 	if s.Redirects == nil {
-		s.Redirects = []clientRedirectRule{}
+		s.Redirects = []redirect.Rule{}
 	}
 	if s.Reverse == nil {
 		s.Reverse = make(map[string]clientReverseChannel)
@@ -150,56 +85,21 @@ func (s clientInstallState) save(path string) error {
 	return nil
 }
 
-func (s *clientInstallState) addRedirect(rule clientRedirectRule) error {
-	tag := strings.TrimSpace(rule.OutboundTag)
-	value := rule.value()
-	if tag == "" || value == "" {
-		return errors.New("xp2p: redirect CIDR or domain and outbound tag are required")
+func (s *clientInstallState) addRedirect(rule redirect.Rule) error {
+	updated, err := redirect.AddRule(s.Redirects, rule)
+	if err != nil {
+		return err
 	}
-
-	kind := rule.kind()
-	switch kind {
-	case redirectRuleTypeDomain:
-		rule.Domain = value
-		rule.CIDR = ""
-	default:
-		rule.CIDR = value
-		rule.Domain = ""
-	}
-	rule.OutboundTag = tag
-
-	for _, existing := range s.Redirects {
-		if existing.kind() != kind {
-			continue
-		}
-		if !strings.EqualFold(existing.value(), value) {
-			continue
-		}
-		if strings.EqualFold(existing.OutboundTag, tag) {
-			return fmt.Errorf("xp2p: redirect %s via %s already exists", describeRedirect(kind, value), tag)
-		}
-	}
-	s.Redirects = append(s.Redirects, rule)
+	s.Redirects = updated
 	return nil
 }
 
-func (s *clientInstallState) removeRedirect(target redirectTarget, tagFilter string) ([]clientRedirectRule, bool) {
-	if len(s.Redirects) == 0 {
-		return s.Redirects, false
+func (s *clientInstallState) removeRedirect(target redirect.Target, tagFilter string) ([]redirect.Rule, bool) {
+	updated, removed := redirect.RemoveRule(s.Redirects, target, tagFilter)
+	if removed {
+		s.Redirects = updated
 	}
-	result := make([]clientRedirectRule, 0, len(s.Redirects))
-	trimmedTag := strings.TrimSpace(tagFilter)
-	removed := false
-	for _, rule := range s.Redirects {
-		matchValue := target.matches(rule)
-		matchTag := trimmedTag == "" || strings.EqualFold(rule.OutboundTag, trimmedTag)
-		if matchValue && matchTag {
-			removed = true
-			continue
-		}
-		result = append(result, rule)
-	}
-	return result, removed
+	return updated, removed
 }
 
 func (s *clientInstallState) removeEndpoint(target string) (clientEndpointRecord, bool) {

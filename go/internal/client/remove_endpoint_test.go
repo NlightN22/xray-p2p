@@ -10,6 +10,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
@@ -46,7 +47,7 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 				AllowInsecure: true,
 			},
 		},
-		Redirects: []clientRedirectRule{
+		Redirects: []redirect.Rule{
 			{CIDR: "10.50.0.0/16", OutboundTag: "proxy-server-a"},
 			{Domain: "svc.server-a.example", OutboundTag: "proxy-server-a"},
 			{CIDR: "10.60.0.0/16", OutboundTag: "proxy-server-b"},

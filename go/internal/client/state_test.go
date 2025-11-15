@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 func TestLoadClientInstallStateMissingFile(t *testing.T) {
@@ -23,7 +25,7 @@ func TestClientInstallStateSaveAndLoad(t *testing.T) {
 		Endpoints: []clientEndpointRecord{
 			{Hostname: "alpha.example", Tag: "proxy-alpha"},
 		},
-		Redirects: []clientRedirectRule{
+		Redirects: []redirect.Rule{
 			{Domain: "svc.example", OutboundTag: "proxy-alpha"},
 		},
 		Reverse: map[string]clientReverseChannel{
@@ -75,11 +77,11 @@ func TestClientInstallStateEnsureReverseChannel(t *testing.T) {
 
 func TestClientInstallStateAddRedirectValidatesUniqueness(t *testing.T) {
 	state := clientInstallState{}
-	err := state.addRedirect(clientRedirectRule{Domain: "svc.example", OutboundTag: "proxy-alpha"})
+	err := state.addRedirect(redirect.Rule{Domain: "svc.example", OutboundTag: "proxy-alpha"})
 	if err != nil {
 		t.Fatalf("addRedirect failed: %v", err)
 	}
-	err = state.addRedirect(clientRedirectRule{Domain: "svc.example", OutboundTag: "proxy-alpha"})
+	err = state.addRedirect(redirect.Rule{Domain: "svc.example", OutboundTag: "proxy-alpha"})
 	if err == nil {
 		t.Fatalf("expected duplicate redirect to fail")
 	}
@@ -90,7 +92,7 @@ func TestClientInstallStateRemoveEndpointAlsoRemovesRedirects(t *testing.T) {
 		Endpoints: []clientEndpointRecord{
 			{Hostname: "alpha.example", Tag: "proxy-alpha"},
 		},
-		Redirects: []clientRedirectRule{
+		Redirects: []redirect.Rule{
 			{Domain: "svc.example", OutboundTag: "proxy-alpha"},
 			{Domain: "beta.example", OutboundTag: "proxy-beta"},
 		},

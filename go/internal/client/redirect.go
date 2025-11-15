@@ -3,9 +3,10 @@ package client
 import (
 	"errors"
 	"fmt"
-	"net"
 	"path/filepath"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 // RedirectAddOptions controls redirect creation.
@@ -69,19 +70,19 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 
-	ruleTarget, err := resolveRedirectRule(opts.CIDR, opts.Domain)
+	ruleTarget, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
 	if err != nil {
 		return err
 	}
 
-	rule := clientRedirectRule{
+	rule := redirect.Rule{
 		OutboundTag: tag,
 	}
-	switch ruleTarget.kind {
-	case redirectRuleTypeDomain:
-		rule.Domain = ruleTarget.value
+	switch ruleTarget.Kind {
+	case redirect.KindDomain:
+		rule.Domain = ruleTarget.Value
 	default:
-		rule.CIDR = ruleTarget.value
+		rule.CIDR = ruleTarget.Value
 	}
 	if err := state.addRedirect(rule); err != nil {
 		return err
@@ -107,7 +108,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return errors.New("xp2p: no redirect rules configured")
 	}
 
-	ruleTarget, err := resolveRedirectRule(opts.CIDR, opts.Domain)
+	ruleTarget, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
 	if err != nil {
 		return err
 	}
@@ -124,7 +125,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 
 	updated, removed := state.removeRedirect(ruleTarget, tagFilter)
 	if !removed {
-		return fmt.Errorf("xp2p: redirect %s not found", ruleTarget.describe())
+		return fmt.Errorf("xp2p: redirect %s not found", ruleTarget.Describe())
 	}
 	state.Redirects = updated
 	if err := state.save(paths.stateFile); err != nil {
@@ -153,8 +154,11 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 	records := make([]RedirectRecord, 0, len(state.Redirects))
 	for _, rule := range state.Redirects {
 		host := tagToHost[strings.ToLower(rule.OutboundTag)]
-		recType := rule.kind().label()
-		value := rule.value()
+		recType := "CIDR"
+		if rule.Kind() == redirect.KindDomain {
+			recType = "domain"
+		}
+		value := rule.Value()
 		records = append(records, RedirectRecord{
 			Type:     recType,
 			Value:    value,
@@ -179,90 +183,31 @@ func resolveRedirectPaths(installDir, configDir string) (redirectPaths, error) {
 }
 
 func resolveRedirectTarget(tag, host string, endpoints []clientEndpointRecord) (string, string, error) {
-	trimmedTag := strings.TrimSpace(tag)
-	trimmedHost := strings.TrimSpace(host)
-
-	if trimmedTag == "" && trimmedHost == "" {
-		return "", "", errors.New("xp2p: --tag or --host is required")
+	bindings := make([]redirect.Binding, 0, len(endpoints))
+	for _, ep := range endpoints {
+		bindings = append(bindings, redirect.Binding{
+			Tag:  ep.Tag,
+			Host: ep.Hostname,
+		})
 	}
-
-	var matched clientEndpointRecord
-	if trimmedHost != "" {
-		found := false
-		for _, ep := range endpoints {
-			if strings.EqualFold(ep.Hostname, trimmedHost) {
-				matched = ep
-				found = true
-				break
-			}
-		}
-		if !found {
-			return "", "", fmt.Errorf("xp2p: client endpoint %q not found", trimmedHost)
-		}
-		trimmedTag = matched.Tag
-	} else {
-		found := false
-		for _, ep := range endpoints {
-			if strings.EqualFold(ep.Tag, trimmedTag) {
-				matched = ep
-				found = true
-				break
-			}
-		}
-		if !found {
-			return "", "", fmt.Errorf("xp2p: outbound tag %q is not registered", trimmedTag)
-		}
-	}
-
-	if strings.TrimSpace(tag) != "" && !strings.EqualFold(tag, matched.Tag) {
-		return "", "", fmt.Errorf("xp2p: tag %q does not match host %q", tag, matched.Hostname)
-	}
-
-	return matched.Tag, matched.Hostname, nil
-}
-
-func resolveRedirectRule(cidr, domain string) (redirectTarget, error) {
-	hasCIDR := strings.TrimSpace(cidr) != ""
-	hasDomain := strings.TrimSpace(domain) != ""
-	switch {
-	case hasCIDR && hasDomain:
-		return redirectTarget{}, errors.New("xp2p: specify only one of --cidr or --domain")
-	case !hasCIDR && !hasDomain:
-		return redirectTarget{}, errors.New("xp2p: --cidr or --domain is required")
-	case hasCIDR:
-		normalized, err := normalizeCIDR(cidr)
-		if err != nil {
-			return redirectTarget{}, err
-		}
-		return redirectTarget{kind: redirectRuleTypeCIDR, value: normalized}, nil
-	default:
-		normalized, err := normalizeDomain(domain)
-		if err != nil {
-			return redirectTarget{}, err
-		}
-		return redirectTarget{kind: redirectRuleTypeDomain, value: normalized}, nil
-	}
-}
-
-func normalizeCIDR(value string) (string, error) {
-	clean := strings.TrimSpace(value)
-	if clean == "" {
-		return "", errors.New("xp2p: --cidr is required")
-	}
-	_, network, err := net.ParseCIDR(clean)
+	binding, err := redirect.ResolveBinding(tag, host, bindings)
 	if err != nil {
-		return "", fmt.Errorf("xp2p: invalid CIDR %q: %w", value, err)
+		switch {
+		case errors.Is(err, redirect.ErrBindingNotSpecified):
+			return "", "", errors.New("xp2p: --tag or --host is required")
+		case errors.Is(err, redirect.ErrBindingHostNotFound):
+			return "", "", fmt.Errorf("xp2p: client endpoint %q not found", strings.TrimSpace(host))
+		case errors.Is(err, redirect.ErrBindingTagNotFound):
+			return "", "", fmt.Errorf("xp2p: outbound tag %q is not registered", strings.TrimSpace(tag))
+		case errors.Is(err, redirect.ErrBindingTagMismatch):
+			resolvedHost := binding.Host
+			if strings.TrimSpace(resolvedHost) == "" {
+				resolvedHost = strings.TrimSpace(host)
+			}
+			return "", "", fmt.Errorf("xp2p: tag %q does not match host %q", tag, resolvedHost)
+		default:
+			return "", "", err
+		}
 	}
-	return network.String(), nil
-}
-
-func normalizeDomain(value string) (string, error) {
-	clean := strings.TrimSpace(value)
-	if clean == "" {
-		return "", errors.New("xp2p: --domain is required")
-	}
-	if strings.ContainsAny(clean, " \t\r\n") {
-		return "", fmt.Errorf("xp2p: invalid domain %q", value)
-	}
-	return strings.ToLower(clean), nil
+	return binding.Tag, binding.Host, nil
 }

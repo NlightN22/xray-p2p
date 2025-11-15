@@ -8,6 +8,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
@@ -211,7 +212,7 @@ func TestRemoveRedirectByTag(t *testing.T) {
 				Address:  "203.0.113.10",
 			},
 		},
-		Redirects: []clientRedirectRule{
+		Redirects: []redirect.Rule{
 			{CIDR: "10.70.0.0/16", OutboundTag: "proxy-server-example"},
 			{CIDR: "10.90.0.0/16", OutboundTag: "proxy-server-example"},
 		},
@@ -278,7 +279,7 @@ func TestRemoveDomainRedirect(t *testing.T) {
 				Address:  "203.0.113.10",
 			},
 		},
-		Redirects: []clientRedirectRule{
+		Redirects: []redirect.Rule{
 			{Domain: "api.example.com", OutboundTag: "proxy-server-example"},
 			{CIDR: "10.90.0.0/16", OutboundTag: "proxy-server-example"},
 		},
@@ -349,7 +350,7 @@ func TestListRedirectsReportsMixedRecords(t *testing.T) {
 			{Hostname: "server-a.example", Tag: "proxy-server-a"},
 			{Hostname: "server-b.example", Tag: "proxy-server-b"},
 		},
-		Redirects: []clientRedirectRule{
+		Redirects: []redirect.Rule{
 			{CIDR: "10.100.0.0/16", OutboundTag: "proxy-server-a"},
 			{Domain: "svc.example.net", OutboundTag: "proxy-server-b"},
 		},

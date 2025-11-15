@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 func writeOutboundsConfig(path string, endpoints []clientEndpointRecord) error {
@@ -149,7 +151,7 @@ type freedomSettings struct {
 	DomainStrategy string `json:"domainStrategy"`
 }
 
-func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirects []clientRedirectRule, reverse map[string]clientReverseChannel) error {
+func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel) error {
 	var document map[string]any
 
 	data, err := os.ReadFile(path)
@@ -196,11 +198,11 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 			"type":        "field",
 			"outboundTag": rule.OutboundTag,
 		}
-		switch rule.kind() {
-		case redirectRuleTypeDomain:
-			entry["domains"] = []string{rule.value()}
+		switch rule.Kind() {
+		case redirect.KindDomain:
+			entry["domains"] = []string{rule.Value()}
 		default:
-			entry["ip"] = []string{rule.value()}
+			entry["ip"] = []string{rule.Value()}
 		}
 		filtered = append(filtered, entry)
 	}
@@ -251,7 +253,7 @@ func extractRuleSlice(raw any) []any {
 	return []any{}
 }
 
-func managedOutboundTags(endpoints []clientEndpointRecord, redirects []clientRedirectRule) map[string]struct{} {
+func managedOutboundTags(endpoints []clientEndpointRecord, redirects []redirect.Rule) map[string]struct{} {
 	total := len(endpoints) + len(redirects)
 	if total == 0 {
 		return map[string]struct{}{}

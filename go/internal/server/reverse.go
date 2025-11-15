@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/naming"
 )
 
@@ -39,37 +38,20 @@ type reverseStore struct {
 }
 
 func openReverseStore(installDir string) (reverseStore, error) {
-	store := reverseStore{
-		path: filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer)),
-		doc:  make(map[string]any),
-	}
-	data, err := os.ReadFile(store.path)
+	path := serverStatePath(installDir)
+	doc, err := loadServerStateDoc(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			store.state.ensure()
-			return store, nil
-		}
-		return reverseStore{}, fmt.Errorf("xp2p: read server state %s: %w", store.path, err)
+		return reverseStore{}, err
 	}
-	if len(bytes.TrimSpace(data)) > 0 {
-		if err := json.Unmarshal(data, &store.doc); err != nil {
-			return reverseStore{}, fmt.Errorf("xp2p: parse server state %s: %w", store.path, err)
-		}
-	}
-	raw := store.doc[serverReverseStateKey]
-	if raw == nil {
-		store.state.ensure()
-		return store, nil
-	}
-	buf, err := json.Marshal(raw)
+	state, err := decodeServerReverseState(doc)
 	if err != nil {
-		return reverseStore{}, fmt.Errorf("xp2p: encode server reverse state: %w", err)
+		return reverseStore{}, err
 	}
-	if err := json.Unmarshal(buf, &store.state); err != nil {
-		return reverseStore{}, fmt.Errorf("xp2p: parse server reverse state: %w", err)
-	}
-	store.state.ensure()
-	return store, nil
+	return reverseStore{
+		path:  path,
+		doc:   doc,
+		state: state,
+	}, nil
 }
 
 func (s *reverseStore) ensureAvailable(channel serverReverseChannel) error {
@@ -101,17 +83,7 @@ func (s *reverseStore) save() error {
 	} else {
 		s.doc[serverReverseStateKey] = s.state
 	}
-	data, err := json.MarshalIndent(s.doc, "", "  ")
-	if err != nil {
-		return fmt.Errorf("xp2p: encode server state %s: %w", s.path, err)
-	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure server state dir %s: %w", filepath.Dir(s.path), err)
-	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write server state %s: %w", s.path, err)
-	}
-	return nil
+	return writeServerStateDoc(s.path, s.doc)
 }
 
 func buildServerReverseChannel(userID, host string) (serverReverseChannel, error) {

@@ -22,16 +22,19 @@ import (
 )
 
 var (
-	serverInstallFunc    = server.Install
-	serverRemoveFunc     = server.Remove
-	serverRunFunc        = server.Run
-	serverUserAddFunc    = server.AddUser
-	serverUserRemoveFunc = server.RemoveUser
-	detectPublicHostFunc = netutil.DetectPublicHost
-	serverSetCertFunc    = server.SetCertificate
-	serverUserLinkFunc   = server.GetUserLink
-	serverUserListFunc   = server.ListUsers
-	serverDeployFunc     = runServerDeploy
+	serverInstallFunc        = server.Install
+	serverRemoveFunc         = server.Remove
+	serverRunFunc            = server.Run
+	serverUserAddFunc        = server.AddUser
+	serverUserRemoveFunc     = server.RemoveUser
+	detectPublicHostFunc     = netutil.DetectPublicHost
+	serverSetCertFunc        = server.SetCertificate
+	serverUserLinkFunc       = server.GetUserLink
+	serverUserListFunc       = server.ListUsers
+	serverDeployFunc         = runServerDeploy
+	serverRedirectAddFunc    = server.AddRedirect
+	serverRedirectRemoveFunc = server.RemoveRedirect
+	serverRedirectListFunc   = server.ListRedirects
 )
 
 var promptYesNoFunc = promptYesNo
