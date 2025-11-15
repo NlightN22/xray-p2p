@@ -108,18 +108,23 @@ xp2p server user list --host edge.example.com
 # Configure the Windows client
 xp2p client install --link trojan://SECRET@edge.example.com:62022
 xp2p client run --auto-install
+xp2p client redirect add --cidr 10.10.0.0/16 --host edge.example.com
+xp2p client redirect add --domain api.example.com --tag proxy-edge-example
+xp2p client redirect list
+xp2p client redirect remove --domain api.example.com --host edge.example.com
 xp2p client list
 xp2p client remove edge.example.com
 xp2p client remove --all --ignore-missing
 ```
 
+
 Additional helpers:
 
+- `xp2p client redirect add --cidr <cidr> --host <host>` or `--domain <name>` configures per-destination routing that also shows up in `xp2p client redirect list`.
 - `xp2p ping <host>` runs the diagnostics pinger (`--socks` accepts either a value or falls back to the config default).
 - `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
 - `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.
 - `xp2p client list` and `xp2p client remove` help you inspect or prune tunnels without touching the files manually.
-
 ### Client inventory and cleanup
 
 `xp2p client list` reads `install-state-client.json` and prints every configured tunnel with hostname, outbound tag, remote address, user, server name, and TLS policy. When no endpoints exist it prints `No client endpoints configured.` which keeps automation simple.
