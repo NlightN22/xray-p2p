@@ -89,7 +89,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err := state.save(paths.stateFile); err != nil {
 		return err
 	}
-	return updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects)
+	return updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse)
 }
 
 // RemoveRedirect deletes redirect rules.
@@ -130,7 +130,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	if err := state.save(paths.stateFile); err != nil {
 		return err
 	}
-	return updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects)
+	return updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse)
 }
 
 // ListRedirects returns configured redirect entries.

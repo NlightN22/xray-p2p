@@ -219,7 +219,7 @@ func TestRemoveRedirectByTag(t *testing.T) {
 	if err := state.save(statePath); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
-	if err := updateRoutingConfig(filepath.Join(configDirPath, "routing.json"), state.Endpoints, state.Redirects); err != nil {
+	if err := updateRoutingConfig(filepath.Join(configDirPath, "routing.json"), state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		t.Fatalf("seed routing config: %v", err)
 	}
 
@@ -287,7 +287,7 @@ func TestRemoveDomainRedirect(t *testing.T) {
 		t.Fatalf("save state: %v", err)
 	}
 	routingPath := filepath.Join(configDirPath, "routing.json")
-	if err := updateRoutingConfig(routingPath, state.Endpoints, state.Redirects); err != nil {
+	if err := updateRoutingConfig(routingPath, state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		t.Fatalf("seed routing config: %v", err)
 	}
 

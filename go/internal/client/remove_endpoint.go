@@ -45,6 +45,7 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 	}
 
 	state.removeRedirectsByTag(record.Tag)
+	state.removeReverseChannelsByTag(record.Tag)
 
 	if len(state.Endpoints) == 0 {
 		return Remove(ctx, RemoveOptions{
@@ -59,5 +60,5 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), state.Endpoints); err != nil {
 		return err
 	}
-	return updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), state.Endpoints, state.Redirects)
+	return updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), state.Endpoints, state.Redirects, state.Reverse)
 }

@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/naming"
 )
 
 type endpointConfig struct {
@@ -20,8 +23,9 @@ type endpointConfig struct {
 }
 
 type clientInstallState struct {
-	Endpoints []clientEndpointRecord `json:"endpoints"`
-	Redirects []clientRedirectRule   `json:"redirects,omitempty"`
+	Endpoints []clientEndpointRecord          `json:"endpoints"`
+	Redirects []clientRedirectRule            `json:"redirects,omitempty"`
+	Reverse   map[string]clientReverseChannel `json:"reverse,omitempty"`
 }
 
 type clientEndpointRecord struct {
@@ -39,6 +43,13 @@ type clientRedirectRule struct {
 	CIDR        string `json:"cidr,omitempty"`
 	Domain      string `json:"domain,omitempty"`
 	OutboundTag string `json:"outbound_tag"`
+}
+
+type clientReverseChannel struct {
+	UserID      string `json:"user_id"`
+	Tag         string `json:"tag"`
+	Domain      string `json:"domain"`
+	EndpointTag string `json:"endpoint_tag"`
 }
 
 type redirectRuleType int
@@ -127,13 +138,18 @@ func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointCon
 	if err := state.upsert(record, force); err != nil {
 		return err
 	}
+
+	if _, err := state.ensureReverseChannel(record.User, record.Tag); err != nil {
+		return err
+	}
+
 	if err := state.save(stateFile); err != nil {
 		return err
 	}
 	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), state.Endpoints); err != nil {
 		return err
 	}
-	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), state.Endpoints, state.Redirects); err != nil {
+	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		return err
 	}
 	return nil
@@ -166,6 +182,9 @@ func (s *clientInstallState) normalize() {
 	}
 	if s.Redirects == nil {
 		s.Redirects = []clientRedirectRule{}
+	}
+	if s.Reverse == nil {
+		s.Reverse = make(map[string]clientReverseChannel)
 	}
 }
 
@@ -272,6 +291,46 @@ func (s *clientInstallState) removeRedirectsByTag(tag string) {
 	s.Redirects = filtered
 }
 
+func (s *clientInstallState) ensureReverseChannel(userID, endpointTag string) (clientReverseChannel, error) {
+	s.normalize()
+	tag, err := naming.ReverseTag(userID)
+	if err != nil {
+		return clientReverseChannel{}, err
+	}
+	channel := clientReverseChannel{
+		UserID:      strings.TrimSpace(userID),
+		Tag:         tag,
+		Domain:      tag,
+		EndpointTag: endpointTag,
+	}
+	if existing, ok := s.Reverse[tag]; ok {
+		if !strings.EqualFold(existing.UserID, channel.UserID) {
+			return clientReverseChannel{}, fmt.Errorf("xp2p: reverse tag %s already assigned to %s", tag, existing.UserID)
+		}
+		if !strings.EqualFold(existing.EndpointTag, endpointTag) {
+			return clientReverseChannel{}, fmt.Errorf("xp2p: reverse tag %s already routed via %s", tag, existing.EndpointTag)
+		}
+		return existing, nil
+	}
+	s.Reverse[tag] = channel
+	return channel, nil
+}
+
+func (s *clientInstallState) removeReverseChannelsByTag(tag string) {
+	if len(s.Reverse) == 0 {
+		return
+	}
+	lower := strings.ToLower(strings.TrimSpace(tag))
+	if lower == "" {
+		return
+	}
+	for key, channel := range s.Reverse {
+		if strings.ToLower(strings.TrimSpace(channel.EndpointTag)) == lower {
+			delete(s.Reverse, key)
+		}
+	}
+}
+
 func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) error {
 	for idx, existing := range s.Endpoints {
 		sameHost := strings.EqualFold(existing.Hostname, record.Hostname)
@@ -291,44 +350,11 @@ func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) err
 }
 
 func buildProxyTag(host string) string {
-	sanitized := sanitizeHost(host)
+	sanitized := naming.SanitizeLabel(host)
 	if sanitized == "" {
 		sanitized = "endpoint"
 	}
 	return "proxy-" + sanitized
-}
-
-func sanitizeHost(host string) string {
-	host = strings.ToLower(strings.TrimSpace(host))
-	var b strings.Builder
-	lastDash := false
-	for _, r := range host {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			lastDash = false
-			continue
-		}
-		if r == '-' {
-			if !lastDash {
-				b.WriteByte('-')
-				lastDash = true
-			}
-			continue
-		}
-		switch r {
-		case '.', ':':
-			if !lastDash {
-				b.WriteByte('-')
-				lastDash = true
-			}
-		default:
-			if !lastDash {
-				b.WriteByte('-')
-				lastDash = true
-			}
-		}
-	}
-	return strings.Trim(b.String(), "-")
 }
 
 func writeOutboundsConfig(path string, endpoints []clientEndpointRecord) error {
@@ -469,7 +495,7 @@ type freedomSettings struct {
 	DomainStrategy string `json:"domainStrategy"`
 }
 
-func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirects []clientRedirectRule) error {
+func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirects []clientRedirectRule, reverse map[string]clientReverseChannel) error {
 	var document map[string]any
 
 	data, err := os.ReadFile(path)
@@ -510,6 +536,7 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 	}
 
 	filtered := filterManagedRules(existing, managed)
+	filtered = filterReverseRules(filtered, reverse)
 	for _, rule := range redirects {
 		entry := map[string]any{
 			"type":        "field",
@@ -530,12 +557,14 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 			"outboundTag": ep.Tag,
 		})
 	}
+	reverseRules := buildClientReverseRules(reverse)
+	if len(reverseRules) > 0 {
+		filtered = append(reverseRules, filtered...)
+	}
 	routing["rules"] = filtered
 
-	reverse := ensureObject(document, "reverse")
-	if _, ok := reverse["bridges"]; !ok {
-		reverse["bridges"] = []any{}
-	}
+	reverseObj := ensureObject(document, "reverse")
+	updateReverseBridges(reverseObj, sortedReverseChannels(reverse))
 
 	encoded, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
@@ -609,4 +638,129 @@ func filterManagedRules(rules []any, managed map[string]struct{}) []any {
 		result = append(result, ruleMap)
 	}
 	return result
+}
+
+func filterReverseRules(rules []any, reverse map[string]clientReverseChannel) []any {
+	if len(rules) == 0 || len(reverse) == 0 {
+		return rules
+	}
+	known := make(map[string]struct{}, len(reverse))
+	for _, channel := range reverse {
+		known[strings.ToLower(strings.TrimSpace(channel.Tag))] = struct{}{}
+	}
+	filtered := make([]any, 0, len(rules))
+	for _, rule := range rules {
+		ruleMap, ok := rule.(map[string]any)
+		if !ok {
+			filtered = append(filtered, rule)
+			continue
+		}
+		inbound := extractStringSlice(ruleMap["inboundTag"])
+		remove := false
+		for _, tag := range inbound {
+			if _, ok := known[strings.ToLower(strings.TrimSpace(tag))]; ok {
+				remove = true
+				break
+			}
+		}
+		if remove {
+			continue
+		}
+		filtered = append(filtered, ruleMap)
+	}
+	return filtered
+}
+
+func buildClientReverseRules(reverse map[string]clientReverseChannel) []any {
+	channels := sortedReverseChannels(reverse)
+	if len(channels) == 0 {
+		return nil
+	}
+	result := make([]any, 0, len(channels)*2)
+	for _, channel := range channels {
+		inbound := []string{channel.Tag}
+		result = append(result, map[string]any{
+			"type":        "field",
+			"domain":      []string{"full:" + channel.Domain},
+			"inboundTag":  inbound,
+			"outboundTag": channel.EndpointTag,
+		})
+		result = append(result, map[string]any{
+			"type":        "field",
+			"inboundTag":  inbound,
+			"outboundTag": "direct",
+		})
+	}
+	return result
+}
+
+func sortedReverseChannels(reverse map[string]clientReverseChannel) []clientReverseChannel {
+	if len(reverse) == 0 {
+		return []clientReverseChannel{}
+	}
+	keys := make([]string, 0, len(reverse))
+	for key := range reverse {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]clientReverseChannel, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, reverse[key])
+	}
+	return result
+}
+
+func updateReverseBridges(reverseObj map[string]any, channels []clientReverseChannel) {
+	existing, _ := reverseObj["bridges"].([]any)
+	managed := make(map[string]struct{}, len(channels))
+	for _, channel := range channels {
+		managed[strings.ToLower(strings.TrimSpace(channel.Tag))] = struct{}{}
+	}
+	filtered := make([]any, 0, len(existing))
+	for _, raw := range existing {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			filtered = append(filtered, raw)
+			continue
+		}
+		tag, _ := entry["tag"].(string)
+		if _, ok := managed[strings.ToLower(strings.TrimSpace(tag))]; ok {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	for _, channel := range channels {
+		filtered = append(filtered, map[string]any{
+			"domain": channel.Domain,
+			"tag":    channel.Tag,
+		})
+	}
+	if filtered == nil {
+		filtered = []any{}
+	}
+	reverseObj["bridges"] = filtered
+}
+
+func extractStringSlice(raw any) []string {
+	switch values := raw.(type) {
+	case []string:
+		result := make([]string, len(values))
+		for i, item := range values {
+			result[i] = strings.TrimSpace(item)
+		}
+		return result
+	case []any:
+		result := make([]string, 0, len(values))
+		for _, item := range values {
+			if str, ok := item.(string); ok {
+				result = append(result, strings.TrimSpace(str))
+			}
+		}
+		return result
+	default:
+		if str, ok := raw.(string); ok {
+			return []string{strings.TrimSpace(str)}
+		}
+		return []string{}
+	}
 }

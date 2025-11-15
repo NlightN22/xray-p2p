@@ -35,8 +35,25 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		return errPasswordRequired
 	}
 
-	configDir, err := resolveUserConfigDir(opts.InstallDir, opts.ConfigDir)
+	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
+		return err
+	}
+
+	configDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+
+	channel, err := buildServerReverseChannel(userID)
+	if err != nil {
+		return err
+	}
+	store, err := openReverseStore(resolvedInstallDir)
+	if err != nil {
+		return err
+	}
+	if err := store.ensureAvailable(channel); err != nil {
 		return err
 	}
 
@@ -77,7 +94,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 				"user_id", userID,
 				"config", configPath,
 			)
-			return nil
+			return applyServerReverseChannel(&store, configDir, channel)
 		}
 		clients[idx].Password = password
 		updated = true
@@ -102,7 +119,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		"config", configPath,
 		"updated", updated,
 	)
-	return nil
+	return applyServerReverseChannel(&store, configDir, channel)
 }
 
 // RemoveUser removes the Trojan client with the provided identifier. The operation is idempotent.
@@ -116,7 +133,21 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		return errUserIDRequired
 	}
 
-	configDir, err := resolveUserConfigDir(opts.InstallDir, opts.ConfigDir)
+	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
+	if err != nil {
+		return err
+	}
+
+	configDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+
+	channel, err := buildServerReverseChannel(userID)
+	if err != nil {
+		return err
+	}
+	store, err := openReverseStore(resolvedInstallDir)
 	if err != nil {
 		return err
 	}
@@ -165,7 +196,7 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 			"user_id", userID,
 			"config", configPath,
 		)
-		return nil
+		return purgeServerReverseChannel(&store, configDir, channel)
 	}
 
 	settings["clients"] = clientsToInterfaces(filtered)
@@ -177,7 +208,7 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		"user_id", userID,
 		"config", configPath,
 	)
-	return nil
+	return purgeServerReverseChannel(&store, configDir, channel)
 }
 
 func resolveUserConfigDir(installDir, configDir string) (string, error) {
