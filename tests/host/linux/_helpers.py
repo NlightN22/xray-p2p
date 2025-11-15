@@ -167,3 +167,28 @@ def assert_routing_rule(data: dict, host: str) -> None:
         if rule.get("outboundTag") == tag and host in rule.get("ip", []):
             return
     raise AssertionError(f"Routing rule for {host} -> {tag} not found")
+
+
+def assert_redirect_rule(data: dict, cidr: str, tag: str) -> None:
+    normalized = cidr.strip()
+    if not normalized:
+        raise AssertionError("CIDR value is empty")
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") != tag:
+            continue
+        ips = rule.get("ip") or []
+        if isinstance(ips, list) and len(ips) == 1 and ips[0] == normalized:
+            return
+    raise AssertionError(f"Redirect rule for {normalized} via {tag} not found")
+
+
+def assert_no_redirect_rule(data: dict, cidr: str, tag: str | None = None) -> None:
+    normalized = cidr.strip()
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if tag and rule.get("outboundTag") != tag:
+            continue
+        ips = rule.get("ip") or []
+        if isinstance(ips, list) and normalized in ips:
+            raise AssertionError(f"Unexpected redirect rule for {normalized} via {rule.get('outboundTag')}")
