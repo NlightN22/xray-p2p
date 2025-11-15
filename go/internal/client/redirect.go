@@ -13,6 +13,7 @@ type RedirectAddOptions struct {
 	InstallDir string
 	ConfigDir  string
 	CIDR       string
+	Domain     string
 	Tag        string
 	Hostname   string
 }
@@ -22,6 +23,7 @@ type RedirectRemoveOptions struct {
 	InstallDir string
 	ConfigDir  string
 	CIDR       string
+	Domain     string
 	Tag        string
 	Hostname   string
 }
@@ -34,7 +36,10 @@ type RedirectListOptions struct {
 
 // RedirectRecord describes a redirect rule.
 type RedirectRecord struct {
+	Type     string
+	Value    string
 	CIDR     string
+	Domain   string
 	Tag      string
 	Hostname string
 }
@@ -64,14 +69,19 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 
-	cidr, err := normalizeCIDR(opts.CIDR)
+	ruleTarget, err := resolveRedirectRule(opts.CIDR, opts.Domain)
 	if err != nil {
 		return err
 	}
 
 	rule := clientRedirectRule{
-		CIDR:        cidr,
 		OutboundTag: tag,
+	}
+	switch ruleTarget.kind {
+	case redirectRuleTypeDomain:
+		rule.Domain = ruleTarget.value
+	default:
+		rule.CIDR = ruleTarget.value
 	}
 	if err := state.addRedirect(rule); err != nil {
 		return err
@@ -97,7 +107,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return errors.New("xp2p: no redirect rules configured")
 	}
 
-	cidr, err := normalizeCIDR(opts.CIDR)
+	ruleTarget, err := resolveRedirectRule(opts.CIDR, opts.Domain)
 	if err != nil {
 		return err
 	}
@@ -112,9 +122,9 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		tagFilter = resolved
 	}
 
-	updated, removed := state.removeRedirect(cidr, strings.ToLower(tagFilter))
+	updated, removed := state.removeRedirect(ruleTarget, tagFilter)
 	if !removed {
-		return fmt.Errorf("xp2p: redirect %s not found", cidr)
+		return fmt.Errorf("xp2p: redirect %s not found", ruleTarget.describe())
 	}
 	state.Redirects = updated
 	if err := state.save(paths.stateFile); err != nil {
@@ -143,8 +153,13 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 	records := make([]RedirectRecord, 0, len(state.Redirects))
 	for _, rule := range state.Redirects {
 		host := tagToHost[strings.ToLower(rule.OutboundTag)]
+		recType := rule.kind().label()
+		value := rule.value()
 		records = append(records, RedirectRecord{
+			Type:     recType,
+			Value:    value,
 			CIDR:     rule.CIDR,
+			Domain:   rule.Domain,
 			Tag:      rule.OutboundTag,
 			Hostname: host,
 		})
@@ -206,6 +221,29 @@ func resolveRedirectTarget(tag, host string, endpoints []clientEndpointRecord) (
 	return matched.Tag, matched.Hostname, nil
 }
 
+func resolveRedirectRule(cidr, domain string) (redirectTarget, error) {
+	hasCIDR := strings.TrimSpace(cidr) != ""
+	hasDomain := strings.TrimSpace(domain) != ""
+	switch {
+	case hasCIDR && hasDomain:
+		return redirectTarget{}, errors.New("xp2p: specify only one of --cidr or --domain")
+	case !hasCIDR && !hasDomain:
+		return redirectTarget{}, errors.New("xp2p: --cidr or --domain is required")
+	case hasCIDR:
+		normalized, err := normalizeCIDR(cidr)
+		if err != nil {
+			return redirectTarget{}, err
+		}
+		return redirectTarget{kind: redirectRuleTypeCIDR, value: normalized}, nil
+	default:
+		normalized, err := normalizeDomain(domain)
+		if err != nil {
+			return redirectTarget{}, err
+		}
+		return redirectTarget{kind: redirectRuleTypeDomain, value: normalized}, nil
+	}
+}
+
 func normalizeCIDR(value string) (string, error) {
 	clean := strings.TrimSpace(value)
 	if clean == "" {
@@ -216,4 +254,15 @@ func normalizeCIDR(value string) (string, error) {
 		return "", fmt.Errorf("xp2p: invalid CIDR %q: %w", value, err)
 	}
 	return network.String(), nil
+}
+
+func normalizeDomain(value string) (string, error) {
+	clean := strings.TrimSpace(value)
+	if clean == "" {
+		return "", errors.New("xp2p: --domain is required")
+	}
+	if strings.ContainsAny(clean, " \t\r\n") {
+		return "", fmt.Errorf("xp2p: invalid domain %q", value)
+	}
+	return strings.ToLower(clean), nil
 }

@@ -48,7 +48,9 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 		},
 		Redirects: []clientRedirectRule{
 			{CIDR: "10.50.0.0/16", OutboundTag: "proxy-server-a"},
+			{Domain: "svc.server-a.example", OutboundTag: "proxy-server-a"},
 			{CIDR: "10.60.0.0/16", OutboundTag: "proxy-server-b"},
+			{Domain: "svc.server-b.example", OutboundTag: "proxy-server-b"},
 		},
 	}
 	if err := initial.save(statePath); err != nil {
@@ -75,8 +77,13 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 	if updated.Endpoints[0].Tag != "proxy-server-b" {
 		t.Fatalf("unexpected remaining endpoint %+v", updated.Endpoints[0])
 	}
-	if len(updated.Redirects) != 1 || updated.Redirects[0].OutboundTag != "proxy-server-b" {
-		t.Fatalf("redirects not filtered: %+v", updated.Redirects)
+	if len(updated.Redirects) != 2 {
+		t.Fatalf("unexpected redirects after filtering: %+v", updated.Redirects)
+	}
+	for _, rule := range updated.Redirects {
+		if rule.OutboundTag != "proxy-server-b" {
+			t.Fatalf("redirects not filtered: %+v", updated.Redirects)
+		}
 	}
 
 	outboundsPath := filepath.Join(configDirPath, "outbounds.json")
@@ -109,6 +116,7 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 			Rules []struct {
 				OutboundTag string   `json:"outboundTag"`
 				IP          []string `json:"ip"`
+				Domains     []string `json:"domains"`
 			} `json:"rules"`
 		} `json:"routing"`
 	}

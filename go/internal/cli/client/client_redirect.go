@@ -18,7 +18,7 @@ import (
 func newClientRedirectCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redirect",
-		Short: "Manage custom client CIDR redirects",
+		Short: "Manage custom client redirects",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			_ = cmd.Help()
 			return exitError{code: 1}
@@ -35,7 +35,7 @@ func newClientRedirectCmd(cfg commandConfig) *cobra.Command {
 func newClientRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
-		Short: "Add a custom CIDR redirect",
+		Short: "Add a custom redirect rule",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRedirectAdd(commandContext(cmd), cfg(), forwarded)
@@ -46,6 +46,7 @@ func newClientRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	flags.String("path", "", "client installation directory")
 	flags.String("config-dir", "", "client configuration directory name")
 	flags.String("cidr", "", "CIDR to redirect")
+	flags.String("domain", "", "domain to redirect")
 	flags.String("tag", "", "outbound tag to route through")
 	flags.String("host", "", "client endpoint hostname to route through")
 	return cmd
@@ -54,7 +55,7 @@ func newClientRedirectAddCmd(cfg commandConfig) *cobra.Command {
 func newClientRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove",
-		Short: "Remove a CIDR redirect",
+		Short: "Remove a redirect rule",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRedirectRemove(commandContext(cmd), cfg(), forwarded)
@@ -65,6 +66,7 @@ func newClientRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.String("path", "", "client installation directory")
 	flags.String("config-dir", "", "client configuration directory name")
 	flags.String("cidr", "", "CIDR mapping to remove")
+	flags.String("domain", "", "domain mapping to remove")
 	flags.String("tag", "", "outbound tag filter")
 	flags.String("host", "", "client endpoint hostname filter")
 	return cmd
@@ -73,7 +75,7 @@ func newClientRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 func newClientRedirectListCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List configured CIDR redirects",
+		Short: "List configured redirect rules",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRedirectList(commandContext(cmd), cfg(), forwarded)
@@ -93,6 +95,7 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	cidr := fs.String("cidr", "", "CIDR to redirect")
+	domain := fs.String("domain", "", "domain to redirect")
 	tag := fs.String("tag", "", "outbound tag to use")
 	host := fs.String("host", "", "client endpoint hostname")
 
@@ -107,8 +110,14 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 		logging.Error("xp2p client redirect add: unexpected arguments", "args", fs.Args())
 		return 2
 	}
-	if strings.TrimSpace(*cidr) == "" {
-		logging.Error("xp2p client redirect add: --cidr is required")
+	hasCIDR := strings.TrimSpace(*cidr) != ""
+	hasDomain := strings.TrimSpace(*domain) != ""
+	if !hasCIDR && !hasDomain {
+		logging.Error("xp2p client redirect add: --cidr or --domain is required")
+		return 2
+	}
+	if hasCIDR && hasDomain {
+		logging.Error("xp2p client redirect add: specify only one of --cidr or --domain")
 		return 2
 	}
 	if strings.TrimSpace(*tag) == "" && strings.TrimSpace(*host) == "" {
@@ -120,6 +129,7 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
 		CIDR:       *cidr,
+		Domain:     *domain,
 		Tag:        *tag,
 		Hostname:   *host,
 	}
@@ -127,7 +137,13 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 		logging.Error("xp2p client redirect add failed", "err", err)
 		return 1
 	}
-	logging.Info("xp2p client redirect added", "cidr", strings.TrimSpace(*cidr), "tag", strings.TrimSpace(*tag), "host", strings.TrimSpace(*host))
+	fields := []any{"tag", strings.TrimSpace(*tag), "host", strings.TrimSpace(*host)}
+	if hasCIDR {
+		fields = append(fields, "cidr", strings.TrimSpace(*cidr))
+	} else {
+		fields = append(fields, "domain", strings.TrimSpace(*domain))
+	}
+	logging.Info("xp2p client redirect added", fields...)
 	return 0
 }
 
@@ -138,6 +154,7 @@ func runClientRedirectRemove(_ context.Context, cfg config.Config, args []string
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	cidr := fs.String("cidr", "", "CIDR to remove")
+	domain := fs.String("domain", "", "domain to remove")
 	tag := fs.String("tag", "", "outbound tag filter")
 	host := fs.String("host", "", "client endpoint host filter")
 
@@ -152,8 +169,14 @@ func runClientRedirectRemove(_ context.Context, cfg config.Config, args []string
 		logging.Error("xp2p client redirect remove: unexpected arguments", "args", fs.Args())
 		return 2
 	}
-	if strings.TrimSpace(*cidr) == "" {
-		logging.Error("xp2p client redirect remove: --cidr is required")
+	hasCIDR := strings.TrimSpace(*cidr) != ""
+	hasDomain := strings.TrimSpace(*domain) != ""
+	if !hasCIDR && !hasDomain {
+		logging.Error("xp2p client redirect remove: --cidr or --domain is required")
+		return 2
+	}
+	if hasCIDR && hasDomain {
+		logging.Error("xp2p client redirect remove: specify only one of --cidr or --domain")
 		return 2
 	}
 
@@ -161,6 +184,7 @@ func runClientRedirectRemove(_ context.Context, cfg config.Config, args []string
 		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
 		CIDR:       *cidr,
+		Domain:     *domain,
 		Tag:        *tag,
 		Hostname:   *host,
 	}
@@ -168,7 +192,13 @@ func runClientRedirectRemove(_ context.Context, cfg config.Config, args []string
 		logging.Error("xp2p client redirect remove failed", "err", err)
 		return 1
 	}
-	logging.Info("xp2p client redirect removed", "cidr", strings.TrimSpace(*cidr), "tag", strings.TrimSpace(*tag), "host", strings.TrimSpace(*host))
+	fields := []any{"tag", strings.TrimSpace(*tag), "host", strings.TrimSpace(*host)}
+	if hasCIDR {
+		fields = append(fields, "cidr", strings.TrimSpace(*cidr))
+	} else {
+		fields = append(fields, "domain", strings.TrimSpace(*domain))
+	}
+	logging.Info("xp2p client redirect removed", fields...)
 	return 0
 }
 
@@ -206,9 +236,9 @@ func runClientRedirectList(_ context.Context, cfg config.Config, args []string) 
 	}
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "CIDR\tOUTBOUND TAG\tHOST")
+	fmt.Fprintln(writer, "TYPE\tVALUE\tOUTBOUND TAG\tHOST")
 	for _, rec := range records {
-		fmt.Fprintf(writer, "%s\t%s\t%s\n", rec.CIDR, rec.Tag, rec.Hostname)
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\n", rec.Type, rec.Value, rec.Tag, rec.Hostname)
 	}
 	_ = writer.Flush()
 	return 0

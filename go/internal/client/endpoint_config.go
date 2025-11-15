@@ -36,8 +36,69 @@ type clientEndpointRecord struct {
 }
 
 type clientRedirectRule struct {
-	CIDR        string `json:"cidr"`
+	CIDR        string `json:"cidr,omitempty"`
+	Domain      string `json:"domain,omitempty"`
 	OutboundTag string `json:"outbound_tag"`
+}
+
+type redirectRuleType int
+
+const (
+	redirectRuleTypeCIDR redirectRuleType = iota
+	redirectRuleTypeDomain
+)
+
+type redirectTarget struct {
+	kind  redirectRuleType
+	value string
+}
+
+func (t redirectRuleType) label() string {
+	switch t {
+	case redirectRuleTypeDomain:
+		return "domain"
+	default:
+		return "CIDR"
+	}
+}
+
+func describeRedirect(kind redirectRuleType, value string) string {
+	return fmt.Sprintf("%s %s", kind.label(), value)
+}
+
+func (t redirectTarget) describe() string {
+	return describeRedirect(t.kind, t.value)
+}
+
+func (t redirectTarget) matches(rule clientRedirectRule) bool {
+	switch t.kind {
+	case redirectRuleTypeDomain:
+		if strings.TrimSpace(rule.Domain) == "" {
+			return false
+		}
+		return strings.EqualFold(rule.value(), t.value)
+	default:
+		if strings.TrimSpace(rule.CIDR) == "" {
+			return false
+		}
+		return strings.EqualFold(rule.value(), t.value)
+	}
+}
+
+func (r clientRedirectRule) kind() redirectRuleType {
+	if strings.TrimSpace(r.Domain) != "" {
+		return redirectRuleTypeDomain
+	}
+	return redirectRuleTypeCIDR
+}
+
+func (r clientRedirectRule) value() string {
+	switch r.kind() {
+	case redirectRuleTypeDomain:
+		return strings.ToLower(strings.TrimSpace(r.Domain))
+	default:
+		return strings.TrimSpace(r.CIDR)
+	}
 }
 
 func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointConfig, force bool) error {
@@ -123,34 +184,49 @@ func (s clientInstallState) save(path string) error {
 }
 
 func (s *clientInstallState) addRedirect(rule clientRedirectRule) error {
-	cidr := strings.TrimSpace(rule.CIDR)
 	tag := strings.TrimSpace(rule.OutboundTag)
-	if cidr == "" || tag == "" {
-		return errors.New("xp2p: redirect CIDR and outbound tag are required")
+	value := rule.value()
+	if tag == "" || value == "" {
+		return errors.New("xp2p: redirect CIDR or domain and outbound tag are required")
 	}
 
+	kind := rule.kind()
+	switch kind {
+	case redirectRuleTypeDomain:
+		rule.Domain = value
+		rule.CIDR = ""
+	default:
+		rule.CIDR = value
+		rule.Domain = ""
+	}
+	rule.OutboundTag = tag
+
 	for _, existing := range s.Redirects {
-		if strings.EqualFold(existing.CIDR, cidr) && strings.EqualFold(existing.OutboundTag, tag) {
-			return fmt.Errorf("xp2p: redirect %s via %s already exists", cidr, tag)
+		if existing.kind() != kind {
+			continue
+		}
+		if !strings.EqualFold(existing.value(), value) {
+			continue
+		}
+		if strings.EqualFold(existing.OutboundTag, tag) {
+			return fmt.Errorf("xp2p: redirect %s via %s already exists", describeRedirect(kind, value), tag)
 		}
 	}
-	s.Redirects = append(s.Redirects, clientRedirectRule{
-		CIDR:        cidr,
-		OutboundTag: tag,
-	})
+	s.Redirects = append(s.Redirects, rule)
 	return nil
 }
 
-func (s *clientInstallState) removeRedirect(cidr, tagFilter string) ([]clientRedirectRule, bool) {
+func (s *clientInstallState) removeRedirect(target redirectTarget, tagFilter string) ([]clientRedirectRule, bool) {
 	if len(s.Redirects) == 0 {
 		return s.Redirects, false
 	}
 	result := make([]clientRedirectRule, 0, len(s.Redirects))
+	trimmedTag := strings.TrimSpace(tagFilter)
 	removed := false
 	for _, rule := range s.Redirects {
-		matchCIDR := strings.EqualFold(rule.CIDR, cidr)
-		matchTag := tagFilter == "" || strings.EqualFold(rule.OutboundTag, tagFilter)
-		if matchCIDR && matchTag {
+		matchValue := target.matches(rule)
+		matchTag := trimmedTag == "" || strings.EqualFold(rule.OutboundTag, trimmedTag)
+		if matchValue && matchTag {
 			removed = true
 			continue
 		}
@@ -435,11 +511,17 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 
 	filtered := filterManagedRules(existing, managed)
 	for _, rule := range redirects {
-		filtered = append(filtered, map[string]any{
+		entry := map[string]any{
 			"type":        "field",
-			"ip":          []string{rule.CIDR},
 			"outboundTag": rule.OutboundTag,
-		})
+		}
+		switch rule.kind() {
+		case redirectRuleTypeDomain:
+			entry["domains"] = []string{rule.value()}
+		default:
+			entry["ip"] = []string{rule.value()}
+		}
+		filtered = append(filtered, entry)
 	}
 	for _, ep := range endpoints {
 		filtered = append(filtered, map[string]any{
