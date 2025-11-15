@@ -13,6 +13,7 @@ CLIENT_STATE_FILE = CLIENT_INSTALL_DIR / "install-state-client.json"
 PRIMARY_HOST = "10.120.0.10"
 SECONDARY_HOST = "10.120.0.11"
 REDIRECT_CIDR = "10.123.0.0/16"
+REDIRECT_DOMAIN = "svc.internal.example"
 INVALID_CIDR = "10.999.0.0/33"
 
 
@@ -107,6 +108,29 @@ def _assert_no_redirect_rule(data: dict, cidr: str) -> None:
             raise AssertionError(f"Unexpected redirect rule for {normalized}")
 
 
+def _assert_domain_redirect_rule(data: dict, domain: str, tag: str) -> None:
+    normalized = domain.strip().lower()
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") != tag:
+            continue
+        domains = rule.get("domains", [])
+        lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
+        if normalized in lowered:
+            return
+    raise AssertionError(f"Domain redirect rule for {normalized} via {tag} not found")
+
+
+def _assert_no_domain_redirect_rule(data: dict, domain: str) -> None:
+    normalized = domain.strip().lower()
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        domains = rule.get("domains", [])
+        lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
+        if normalized in lowered:
+            raise AssertionError(f"Unexpected domain redirect rule for {domain}")
+
+
 def _redirect_cmd(runner, subcommand: str, *args: str, check: bool = False):
     base = ["client", "redirect", subcommand]
     base.extend(args)
@@ -121,11 +145,16 @@ def _list_redirects(runner):
 def _parse_redirect_output(text: str) -> list[dict[str, str]]:
     lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
     header_idx = None
+    legacy = False
     for idx, line in enumerate(lines):
         lowered = line.lower()
         if lowered.startswith("no redirect rules"):
             return []
+        if lowered.startswith("type"):
+            header_idx = idx
+            break
         if lowered.startswith("cidr"):
+            legacy = True
             header_idx = idx
             break
     if header_idx is None:
@@ -134,9 +163,17 @@ def _parse_redirect_output(text: str) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
     for row in lines[header_idx + 1 :]:
         parts = row.split()
-        if len(parts) < 3:
+        if legacy:
+            if len(parts) < 3:
+                continue
+            entries.append({"type": "CIDR", "value": parts[0], "cidr": parts[0], "tag": parts[1], "host": parts[2]})
             continue
-        entries.append({"cidr": parts[0], "tag": parts[1], "host": parts[2]})
+        if len(parts) < 4:
+            continue
+        entry = {"type": parts[0], "value": parts[1], "tag": parts[2], "host": parts[3]}
+        if entry["type"].lower() == "cidr":
+            entry["cidr"] = entry["value"]
+        entries.append(entry)
     return entries
 
 
@@ -170,7 +207,10 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
         )
 
         list_output, records = _list_redirects(xp2p_client_runner)
-        assert any(rec["cidr"] == REDIRECT_CIDR and rec["tag"] == primary_tag for rec in records)
+        assert any(
+            rec.get("cidr") == REDIRECT_CIDR and rec["tag"] == primary_tag and rec["type"].lower() == "cidr"
+            for rec in records
+        )
 
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_redirect_rule(routing, REDIRECT_CIDR, primary_tag)
@@ -240,12 +280,50 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
         _redirect_cmd(
             xp2p_client_runner,
             "add",
+            "--domain",
+            REDIRECT_DOMAIN,
+            "--host",
+            SECONDARY_HOST,
+            check=True,
+        )
+        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        _assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
+        list_output, records = _list_redirects(xp2p_client_runner)
+        assert any(
+            rec["type"].lower() == "domain"
+            and rec["value"].lower() == REDIRECT_DOMAIN
+            and rec["host"] == SECONDARY_HOST
+            for rec in records
+        )
+
+        _redirect_cmd(
+            xp2p_client_runner,
+            "add",
             "--cidr",
             REDIRECT_CIDR,
             "--host",
             SECONDARY_HOST,
             check=True,
         )
+        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        _assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
+        _assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
+        list_output, records = _list_redirects(xp2p_client_runner)
+        assert any(rec.get("cidr") == REDIRECT_CIDR for rec in records)
+        assert any(rec["value"].lower() == REDIRECT_DOMAIN for rec in records)
+
+        _redirect_cmd(
+            xp2p_client_runner,
+            "remove",
+            "--domain",
+            REDIRECT_DOMAIN,
+            "--host",
+            SECONDARY_HOST,
+            check=True,
+        )
+        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        _assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
+        _assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
 
         xp2p_client_runner(
             "client",
@@ -260,6 +338,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
 
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_no_redirect_rule(routing, REDIRECT_CIDR)
+        _assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
         _assert_routing_rule(routing, PRIMARY_HOST)
 
         state = _read_remote_json(client_host, CLIENT_STATE_FILE)

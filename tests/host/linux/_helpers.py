@@ -183,6 +183,21 @@ def assert_redirect_rule(data: dict, cidr: str, tag: str) -> None:
     raise AssertionError(f"Redirect rule for {normalized} via {tag} not found")
 
 
+def assert_domain_redirect_rule(data: dict, domain: str, tag: str) -> None:
+    normalized = domain.strip().lower()
+    if not normalized:
+        raise AssertionError("Domain value is empty")
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") != tag:
+            continue
+        domains = rule.get("domains") or []
+        lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
+        if normalized in lowered:
+            return
+    raise AssertionError(f"Domain redirect rule for {normalized} via {tag} not found")
+
+
 def assert_no_redirect_rule(data: dict, cidr: str, tag: str | None = None) -> None:
     normalized = cidr.strip()
     rules = data.get("routing", {}).get("rules", [])
@@ -192,3 +207,15 @@ def assert_no_redirect_rule(data: dict, cidr: str, tag: str | None = None) -> No
         ips = rule.get("ip") or []
         if isinstance(ips, list) and normalized in ips:
             raise AssertionError(f"Unexpected redirect rule for {normalized} via {rule.get('outboundTag')}")
+
+
+def assert_no_domain_redirect_rule(data: dict, domain: str, tag: str | None = None) -> None:
+    normalized = domain.strip().lower()
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if tag and rule.get("outboundTag") != tag:
+            continue
+        domains = rule.get("domains") or []
+        lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
+        if normalized in lowered:
+            raise AssertionError(f"Unexpected domain redirect rule for {domain} via {rule.get('outboundTag')}")
