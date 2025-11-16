@@ -22,8 +22,5 @@ func osPreferredInstallDir() string {
 }
 
 func detectSystemInstallDir() string {
-	if looksLikeInstallRoot(layout.UnixConfigRoot) {
-		return layout.UnixConfigRoot
-	}
-	return ""
+	return layout.UnixConfigRoot
 }
