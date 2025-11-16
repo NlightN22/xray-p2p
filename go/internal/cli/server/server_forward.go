@@ -38,7 +38,8 @@ func newServerForwardAddCmd(cfg commandConfig) *cobra.Command {
 		Use:   "add",
 		Short: "Add a server dokodemo-door forward",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			code := runServerForwardAdd(commandContext(cmd), cfg(), args)
+			forwarded := forwardFlags(cmd, args)
+			code := runServerForwardAdd(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)
 		},
 	}
@@ -59,7 +60,8 @@ func newServerForwardRemoveCmd(cfg commandConfig) *cobra.Command {
 		Use:   "remove",
 		Short: "Remove a server forward",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			code := runServerForwardRemove(commandContext(cmd), cfg(), args)
+			forwarded := forwardFlags(cmd, args)
+			code := runServerForwardRemove(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)
 		},
 	}
@@ -78,7 +80,8 @@ func newServerForwardListCmd(cfg commandConfig) *cobra.Command {
 		Use:   "list",
 		Short: "List server forwards",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			code := runServerForwardList(commandContext(cmd), cfg(), args)
+			forwarded := forwardFlags(cmd, args)
+			code := runServerForwardList(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)
 		},
 	}

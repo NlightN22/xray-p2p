@@ -2,9 +2,11 @@ package servercmd
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
@@ -57,6 +59,34 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 	)
 
 	return cmd
+}
+
+func forwardFlags(cmd *cobra.Command, args []string) []string {
+	disallowed := map[string]struct{}{
+		"diag-service-port": {},
+		"diag-service-mode": {},
+	}
+
+	flags := cmd.Flags()
+	forwarded := make([]string, 0, len(args)+flags.NFlag())
+	flags.Visit(func(f *pflag.Flag) {
+		if _, skip := disallowed[f.Name]; skip {
+			return
+		}
+
+		name := fmt.Sprintf("--%s", f.Name)
+		if f.Value.Type() == "bool" {
+			if f.Value.String() == "true" {
+				forwarded = append(forwarded, name)
+				return
+			}
+			forwarded = append(forwarded, fmt.Sprintf("%s=%s", name, f.Value.String()))
+			return
+		}
+		forwarded = append(forwarded, fmt.Sprintf("%s=%s", name, f.Value.String()))
+	})
+	forwarded = append(forwarded, args...)
+	return forwarded
 }
 
 func newServerInstallCmd(cfg commandConfig) *cobra.Command {
