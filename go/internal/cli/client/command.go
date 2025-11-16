@@ -52,6 +52,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newClientRunCmd(cfg),
 		newClientDeployCmd(cfg),
 		newClientRedirectCmd(cfg),
+		newClientForwardCmd(cfg),
 	)
 	return cmd
 }

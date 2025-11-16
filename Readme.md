@@ -114,9 +114,9 @@ xp2p client redirect list
 xp2p client redirect remove --domain api.example.com --host edge.example.com
 
 # Forward local services through dokodemo-door listeners (works for both roles)
-xp2p forward add --role client --target 192.0.2.50:22 --listen 127.0.0.1 --proto tcp
-xp2p forward list --role server
-xp2p forward remove --role client --listen-port 53331
+xp2p client forward add --target 192.0.2.50:22 --listen 127.0.0.1 --proto tcp
+xp2p server forward list
+xp2p client forward remove --listen-port 53331
 xp2p client list
 xp2p client remove edge.example.com
 xp2p client remove --all --ignore-missing
@@ -128,9 +128,9 @@ Both the server and client automatically wire up reverse tunnels keyed by saniti
 Additional helpers:
 
 - `xp2p client redirect add --cidr <cidr> --host <host>` or `--domain <name>` configures per-destination routing that also shows up in `xp2p client redirect list`.
-- `xp2p forward add --role client|server --target <ip:port>` provisions a dokodemo-door inbound, auto-picks a listen port from 53331 when `--listen-port` is omitted, and persists the full rule in `install-state-*.json`. The `--proto` flag accepts `tcp`, `udp`, or `both`.
-- `xp2p forward remove --role ... --listen-port <port>` removes the matching rule (you can also use `--tag` or `--remark`) and rewrites `inbounds.json`.
-- `xp2p forward list --role ...` prints every forward with listen address/port, protocol set, target, and remark. When the target IP does not fall inside any redirect range the CLI emits a warning so you can add the missing redirect.
+- `xp2p client forward add --target <ip:port>` (or `xp2p server forward add`) provisions a dokodemo-door inbound, auto-picks a listen port from 53331 when `--listen-port` is omitted, and persists the full rule in `install-state-*.json`. The `--proto` flag accepts `tcp`, `udp`, or `both`.
+- `xp2p client forward remove --listen-port <port>` / `xp2p server forward remove` removes the matching rule (you can also use `--tag` or `--remark`) and rewrites `inbounds.json`.
+- `xp2p client forward list` and `xp2p server forward list` print every forward with listen address/port, protocol set, target, and remark. When the target IP does not fall inside any redirect range the CLI emits a warning so you can add the missing redirect.
 - `xp2p ping <host>` runs the diagnostics pinger (`--socks` accepts either a value or falls back to the config default).
 - `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
 - `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.

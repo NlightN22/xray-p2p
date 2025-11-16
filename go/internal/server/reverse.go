@@ -278,7 +278,7 @@ func ensureReverseRule(doc map[string]any, channel serverReverseChannel) bool {
 			filtered = append(filtered, ruleMap)
 			continue
 		}
-		if !kept && reverseRuleMatches(ruleMap, channel, targetDomain, trimmedUser) {
+		if !kept && reverseRuleMatches(ruleMap, channel, trimmedUser) {
 			filtered = append(filtered, ruleMap)
 		} else {
 			changed = true
@@ -287,7 +287,7 @@ func ensureReverseRule(doc map[string]any, channel serverReverseChannel) bool {
 	}
 	if !kept {
 		changed = true
-		filtered = append(filtered, desiredReverseRule(channel, targetDomain, trimmedUser))
+		filtered = append(filtered, desiredReverseRule(channel, trimmedUser))
 	}
 	routing["rules"] = filtered
 	return changed
@@ -318,7 +318,7 @@ func removeReverseRules(doc map[string]any, channel serverReverseChannel) bool {
 	return changed
 }
 
-func reverseRuleMatches(rule map[string]any, channel serverReverseChannel, domain string, trimmedUser string) bool {
+func reverseRuleMatches(rule map[string]any, channel serverReverseChannel, trimmedUser string) bool {
 	if typ, _ := rule["type"].(string); !strings.EqualFold(strings.TrimSpace(typ), "field") {
 		return false
 	}
@@ -341,7 +341,7 @@ func reverseRuleMatches(rule map[string]any, channel serverReverseChannel, domai
 	return true
 }
 
-func desiredReverseRule(channel serverReverseChannel, domain string, trimmedUser string) map[string]any {
+func desiredReverseRule(channel serverReverseChannel, trimmedUser string) map[string]any {
 	rule := map[string]any{
 		"type":        "field",
 		"domain":      []string{"full:" + channel.Domain},
