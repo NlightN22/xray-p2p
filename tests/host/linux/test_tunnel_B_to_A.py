@@ -10,6 +10,7 @@ from tests.host.linux import env as linux_env
 
 SERVER_IP = "10.62.10.11"  # deb-test-a (host A)
 CLIENT_IP = "10.62.10.12"  # deb-test-b (host B)
+CLIENT_REVERSE_TEST_IP = "10.62.20.5"
 DIAGNOSTICS_PORT = 62022
 SERVER_FORWARD_PORT = 53341
 CLIENT_REDIRECT_CIDR = "10.200.50.0/24"
@@ -187,6 +188,21 @@ def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = F
         args.append("--")
         args.extend(extra)
     return env["server_runner"](*args, check=check)
+
+
+@contextmanager
+def _ip_alias(host, cidr: str, dev: str = "lo"):
+    add_cmd = f"sudo -n ip addr add {cidr} dev {dev}"
+    add_result = host.run(add_cmd)
+    if add_result.rc != 0 and "File exists" not in (add_result.stderr or "").lower():
+        pytest.fail(
+            f"Failed to add IP alias {cidr} on {dev}.\n"
+            f"CMD: {add_cmd}\nSTDOUT:\n{add_result.stdout}\nSTDERR:\n{add_result.stderr}"
+        )
+    try:
+        yield
+    finally:
+        host.run(f"sudo -n ip addr del {cidr} dev {dev}")
 
 
 def _exercise_client_forward_diagnostics(env: dict) -> None:
@@ -421,62 +437,115 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
     server_runner = tunnel_environment["server_runner"]
     server_install_path = tunnel_environment["server_install_path"]
     reverse_tag = tunnel_environment["reverse_tag"]
+    client_host = tunnel_environment["client_host"]
+    server_host = tunnel_environment["server_host"]
 
-    redirect_domain = f"full:{reverse_tag}"
-    server_runner(
-        "server",
-        "redirect",
-        "add",
-        "--path",
-        server_install_path,
-        "--config-dir",
-        helpers.SERVER_CONFIG_DIR_NAME,
-        "--domain",
-        redirect_domain,
-        "--tag",
-        reverse_tag,
-        check=True,
-    )
-    try:
-        list_output = server_runner(
-            "server",
-            "redirect",
-            "list",
-            "--path",
-            server_install_path,
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            check=True,
-        ).stdout or ""
-        assert redirect_domain in list_output.lower(), f"Server redirect list missing {redirect_domain}"
-
-        server_state = helpers.read_first_existing_json(tunnel_environment["server_host"], helpers.SERVER_STATE_FILES)
-        server_routing = helpers.read_json(tunnel_environment["server_host"], helpers.SERVER_CONFIG_DIR / "routing.json")
-        helpers.assert_server_redirect_state(server_state, redirect_domain, reverse_tag)
-        helpers.assert_server_redirect_rule(server_routing, redirect_domain, reverse_tag)
-    finally:
+    alias_cidr = f"{CLIENT_REVERSE_TEST_IP}/32"
+    with _ip_alias(client_host, alias_cidr):
         server_runner(
             "server",
             "redirect",
-            "remove",
-            "--path",
-            server_install_path,
-            "--config-dir",
-        helpers.SERVER_CONFIG_DIR_NAME,
-        "--domain",
-        redirect_domain,
-        "--tag",
-        reverse_tag,
-        check=True,
-    )
-        final_list = server_runner(
-            "server",
-            "redirect",
-            "list",
+            "add",
             "--path",
             server_install_path,
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
+            "--cidr",
+            alias_cidr,
+            "--tag",
+            reverse_tag,
             check=True,
-        ).stdout or ""
-        assert "no server redirect rules configured" in final_list.lower()
+        )
+        forward_added = False
+        try:
+            list_output = server_runner(
+                "server",
+                "redirect",
+                "list",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                check=True,
+            ).stdout or ""
+            assert alias_cidr in list_output, f"Server redirect list missing {alias_cidr}"
+
+            server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+            server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+            helpers.assert_server_redirect_state(server_state, alias_cidr, reverse_tag)
+            helpers.assert_server_redirect_rule(server_routing, alias_cidr, reverse_tag)
+
+            server_runner(
+                "server",
+                "forward",
+                "add",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--target",
+                f"{CLIENT_REVERSE_TEST_IP}:{DIAGNOSTICS_PORT}",
+                "--listen",
+                "127.0.0.1",
+                "--listen-port",
+                str(SERVER_FORWARD_PORT),
+                "--proto",
+                "tcp",
+                check=True,
+            )
+            forward_added = True
+
+            server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+            entry = _forward_entry_for_target(server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, DIAGNOSTICS_PORT)
+            listen_port = _listen_port_from_entry(entry)
+            assert listen_port == SERVER_FORWARD_PORT
+
+            with _active_tunnel_sessions(tunnel_environment):
+                ping_result = _ping_with_retries(
+                    server_runner,
+                    (
+                        "ping",
+                        "127.0.0.1",
+                        "--port",
+                        str(SERVER_FORWARD_PORT),
+                        "--count",
+                        "3",
+                    ),
+                    f"via server forward targeting {CLIENT_REVERSE_TEST_IP}",
+                )
+                _assert_zero_loss(ping_result, f"via server forward targeting {CLIENT_REVERSE_TEST_IP}")
+        finally:
+            if forward_added:
+                _server_forward_cmd(
+                    tunnel_environment,
+                    "remove",
+                    "--listen-port",
+                    str(SERVER_FORWARD_PORT),
+                    "--ignore-missing",
+                    check=True,
+                )
+            server_runner(
+                "server",
+                "redirect",
+                "remove",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--cidr",
+                alias_cidr,
+                "--tag",
+                reverse_tag,
+                check=True,
+            )
+            final_list = server_runner(
+                "server",
+                "redirect",
+                "list",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                check=True,
+            ).stdout or ""
+            assert alias_cidr not in final_list
