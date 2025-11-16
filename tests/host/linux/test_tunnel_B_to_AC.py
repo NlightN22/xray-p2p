@@ -9,7 +9,6 @@ SERVER_A_IP = "10.62.10.11"  # deb-test-a
 SERVER_C_IP = "10.62.10.13"  # deb-test-c
 CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
-CLIENT_STATE_FILE = helpers.CLIENT_STATE_FILES[0]
 
 
 def _runner(host):
@@ -61,6 +60,35 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
         cred_a = _install_server(server_a, server_a_runner, SERVER_A_IP)
         cred_c = _install_server(server_c, server_c_runner, SERVER_C_IP)
 
+        server_entries = [
+            {
+                "host": server_a,
+                "runner": server_a_runner,
+                "ip": SERVER_A_IP,
+                "credential": cred_a,
+                "reverse_tag": helpers.expected_reverse_tag(cred_a["user"], SERVER_A_IP),
+            },
+            {
+                "host": server_c,
+                "runner": server_c_runner,
+                "ip": SERVER_C_IP,
+                "credential": cred_c,
+                "reverse_tag": helpers.expected_reverse_tag(cred_c["user"], SERVER_C_IP),
+            },
+        ]
+        for entry in server_entries:
+            server_state = helpers.read_first_existing_json(entry["host"], helpers.SERVER_STATE_FILES)
+            server_routing = helpers.read_json(entry["host"], helpers.SERVER_CONFIG_DIR / "routing.json")
+            helpers.assert_server_reverse_state(
+                server_state,
+                entry["reverse_tag"],
+                user=entry["credential"]["user"],
+                host=entry["ip"],
+            )
+            helpers.assert_server_reverse_routing(
+                server_routing, entry["reverse_tag"], user=entry["credential"]["user"]
+            )
+
         client_runner(
             "client",
             "install",
@@ -84,6 +112,9 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             check=True,
         )
 
+        client_state = helpers.read_first_existing_json(client_b, helpers.CLIENT_STATE_FILES)
+        client_routing = helpers.read_json(client_b, CLIENT_ROUTING)
+
         outbounds = helpers.read_json(client_b, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             outbounds,
@@ -102,46 +133,134 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             allow_insecure=True,
         )
 
-        routing = helpers.read_json(client_b, CLIENT_ROUTING)
+        routing = client_routing
         helpers.assert_routing_rule(routing, SERVER_A_IP)
         helpers.assert_routing_rule(routing, SERVER_C_IP)
 
-        state = helpers.read_json(client_b, CLIENT_STATE_FILE)
+        state = client_state
         recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert recorded_hosts == {SERVER_A_IP, SERVER_C_IP}
+        reverse_entries = state.get("reverse", {}) or {}
+        expected_reverse_tags = {entry["reverse_tag"] for entry in server_entries}
+        assert set(reverse_entries.keys()) == expected_reverse_tags, (
+            "Client reverse entries do not match installed servers"
+        )
 
-        with linux_env.xp2p_run_session(
-            server_a,
-            "server",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
-        ), linux_env.xp2p_run_session(
-            server_c,
-            "server",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
-        ), linux_env.xp2p_run_session(
-            client_b,
-            "client",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            helpers.CLIENT_LOG_FILE,
-        ):
-            for target in (SERVER_A_IP, SERVER_C_IP):
-                result = client_runner(
-                    "ping",
-                    target,
-                    "--socks",
-                    "--count",
-                    "3",
+        for entry in server_entries:
+            endpoint_tag = helpers.expected_proxy_tag(entry["ip"])
+            helpers.assert_client_reverse_artifacts(client_routing, entry["reverse_tag"], endpoint_tag)
+            helpers.assert_client_reverse_state(
+                client_state,
+                entry["reverse_tag"],
+                endpoint_tag=endpoint_tag,
+                user=entry["credential"]["user"],
+                host=entry["ip"],
+            )
+
+        redirect_specs: list[dict[str, str]] = []
+        try:
+            for entry in server_entries:
+                redirect_domain = f"full:{entry['reverse_tag']}"
+                entry["runner"](
+                    "server",
+                    "redirect",
+                    "add",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.SERVER_CONFIG_DIR_NAME,
+                    "--domain",
+                    redirect_domain,
+                    "--host",
+                    entry["ip"],
                     check=True,
                 )
-                stdout = (result.stdout or "").lower()
-                assert "0% loss" in stdout, (
-                    f"xp2p ping to {target} did not report zero loss:\n"
-                    f"{result.stdout}"
+                redirect_specs.append(
+                    {
+                        "domain": redirect_domain,
+                        "runner": entry["runner"],
+                        "host": entry["host"],
+                        "ip": entry["ip"],
+                        "reverse_tag": entry["reverse_tag"],
+                    }
                 )
+                list_output = entry["runner"](
+                    "server",
+                    "redirect",
+                    "list",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.SERVER_CONFIG_DIR_NAME,
+                    check=True,
+                ).stdout or ""
+                assert redirect_domain in list_output.lower(), (
+                    f"Server redirect list missing {redirect_domain} for {entry['ip']}"
+                )
+                server_state = helpers.read_first_existing_json(entry["host"], helpers.SERVER_STATE_FILES)
+                server_routing = helpers.read_json(entry["host"], helpers.SERVER_CONFIG_DIR / "routing.json")
+                helpers.assert_server_redirect_state(server_state, redirect_domain, entry["reverse_tag"])
+                helpers.assert_server_redirect_rule(server_routing, redirect_domain, entry["reverse_tag"])
+
+            with linux_env.xp2p_run_session(
+                server_a,
+                "server",
+                helpers.INSTALL_ROOT.as_posix(),
+                helpers.SERVER_CONFIG_DIR_NAME,
+                helpers.SERVER_LOG_FILE,
+            ), linux_env.xp2p_run_session(
+                server_c,
+                "server",
+                helpers.INSTALL_ROOT.as_posix(),
+                helpers.SERVER_CONFIG_DIR_NAME,
+                helpers.SERVER_LOG_FILE,
+            ), linux_env.xp2p_run_session(
+                client_b,
+                "client",
+                helpers.INSTALL_ROOT.as_posix(),
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                helpers.CLIENT_LOG_FILE,
+            ):
+                for target in (SERVER_A_IP, SERVER_C_IP):
+                    result = client_runner(
+                        "ping",
+                        target,
+                        "--socks",
+                        "--count",
+                        "3",
+                        check=True,
+                    )
+                    stdout = (result.stdout or "").lower()
+                    assert "0% loss" in stdout, (
+                        f"xp2p ping to {target} did not report zero loss:\n"
+                        f"{result.stdout}"
+                    )
+        finally:
+            for spec in redirect_specs:
+                spec["runner"](
+                    "server",
+                    "redirect",
+                    "remove",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.SERVER_CONFIG_DIR_NAME,
+                    "--domain",
+                    spec["domain"],
+                    "--host",
+                    spec["ip"],
+                    check=True,
+                )
+                final_list = spec["runner"](
+                    "server",
+                    "redirect",
+                    "list",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.SERVER_CONFIG_DIR_NAME,
+                    check=True,
+                ).stdout or ""
+                assert "no server redirect rules configured" in final_list.lower()
     finally:
         cleanup()
