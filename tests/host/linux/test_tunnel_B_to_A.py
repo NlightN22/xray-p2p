@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+import time
+
 import pytest
 
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 
 SERVER_IP = "10.62.10.11"  # deb-test-a (host A)
+CLIENT_IP = "10.62.10.12"  # deb-test-b (host B)
+DIAGNOSTICS_PORT = 62022
+SERVER_FORWARD_PORT = 53341
 CLIENT_REDIRECT_CIDR = "10.200.50.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 
@@ -21,6 +27,51 @@ def _runner(host):
         return result
 
     return _run
+
+
+def _forward_entry_for_target(entries: list[dict], target_ip: str, target_port: int) -> dict:
+    """Locate a forward entry recorded in install-state for the provided target."""
+    normalized_ip = target_ip.strip()
+    normalized_port = int(target_port)
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        recorded_ip = (entry.get("target_ip") or entry.get("targetIP") or "").strip()
+        recorded_port = int(entry.get("target_port") or entry.get("targetPort") or 0)
+        if recorded_ip == normalized_ip and recorded_port == normalized_port:
+            return entry
+    raise AssertionError(f"Forward entry targeting {target_ip}:{target_port} not found in state")
+
+
+def _listen_port_from_entry(entry: dict) -> int:
+    """Extract listen port from the forward entry."""
+    port = int(entry.get("listen_port") or entry.get("listenPort") or 0)
+    if port <= 0:
+        raise AssertionError("Forward entry is missing listen port")
+    return port
+
+
+def _assert_zero_loss(ping_result, context: str) -> None:
+    stdout = (ping_result.stdout or "").lower()
+    assert "0% loss" in stdout, (
+        f"xp2p ping {context} did not report full delivery:\n"
+        f"{ping_result.stdout}"
+    )
+
+
+def _ping_with_retries(runner, args: tuple[str, ...], context: str, attempts: int = 3, delay_seconds: float = 2.0):
+    last_result = None
+    for attempt in range(1, attempts + 1):
+        result = runner(*args, check=False)
+        if result.rc == 0:
+            return result
+        last_result = result
+        if attempt < attempts:
+            time.sleep(delay_seconds)
+    pytest.fail(
+        f"xp2p ping {context} failed after {attempts} attempts "
+        f"(exit {last_result.rc}).\nSTDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}"
+    )
 
 
 @pytest.fixture(scope="module")
@@ -89,48 +140,218 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
         recorded_tags = {tag for tag in client_state.get("reverse", {}).keys()}
         assert recorded_tags == {reverse_tag}, f"Unexpected reverse entries recorded: {recorded_tags}"
 
-        with linux_env.xp2p_run_session(
-            server_host,
-            "server",
-            server_install_path,
-            helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
-        ), linux_env.xp2p_run_session(
-            client_host,
-            "client",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            helpers.CLIENT_LOG_FILE,
-        ):
-            yield {
-                "server_host": server_host,
-                "client_host": client_host,
-                "server_runner": server_runner,
-                "client_runner": client_runner,
-                "server_install_path": server_install_path,
-                "reverse_tag": reverse_tag,
-                "endpoint_tag": endpoint_tag,
-            }
+        yield {
+            "server_host": server_host,
+            "client_host": client_host,
+            "server_runner": server_runner,
+            "client_runner": client_runner,
+            "server_install_path": server_install_path,
+            "reverse_tag": reverse_tag,
+            "endpoint_tag": endpoint_tag,
+        }
     finally:
         cleanup()
+
+
+@contextmanager
+def _active_tunnel_sessions(env: dict):
+    with linux_env.xp2p_run_session(
+        env["server_host"],
+        "server",
+        env["server_install_path"],
+        helpers.SERVER_CONFIG_DIR_NAME,
+        helpers.SERVER_LOG_FILE,
+    ), linux_env.xp2p_run_session(
+        env["client_host"],
+        "client",
+        helpers.INSTALL_ROOT.as_posix(),
+        helpers.CLIENT_CONFIG_DIR_NAME,
+        helpers.CLIENT_LOG_FILE,
+    ):
+        yield
+
+
+def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = False):
+    args = [
+        "server",
+        "forward",
+        subcommand,
+        "--path",
+        env["server_install_path"],
+        "--config-dir",
+        helpers.SERVER_CONFIG_DIR_NAME,
+    ]
+    if extra:
+        args.extend(extra)
+        args.append("--")
+        args.extend(extra)
+    return env["server_runner"](*args, check=check)
+
+
+def _exercise_client_forward_diagnostics(env: dict) -> None:
+    client_runner = env["client_runner"]
+    client_host = env["client_host"]
+    forward_target = f"{SERVER_IP}:{DIAGNOSTICS_PORT}"
+    listen_port = None
+    try:
+        client_runner(
+            "client",
+            "forward",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--target",
+            forward_target,
+            "--listen",
+            "127.0.0.1",
+            "--proto",
+            "tcp",
+            check=True,
+        )
+        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        entry = _forward_entry_for_target(client_state.get("forwards") or [], SERVER_IP, DIAGNOSTICS_PORT)
+        listen_port = _listen_port_from_entry(entry)
+
+        with _active_tunnel_sessions(env):
+            ping_result = _ping_with_retries(
+                client_runner,
+                (
+                    "ping",
+                    "127.0.0.1",
+                    "--port",
+                    str(listen_port),
+                    "--count",
+                    "3",
+                    "--proto",
+                    "tcp",
+                ),
+                f"via client forward on port {listen_port}",
+            )
+            _assert_zero_loss(ping_result, f"via client forward on port {listen_port}")
+    finally:
+        if listen_port:
+            client_runner(
+                "client",
+                "forward",
+                "remove",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                "--listen-port",
+                str(listen_port),
+                "--ignore-missing",
+                check=True,
+            )
+
+
+def _exercise_server_forward_diagnostics(env: dict) -> None:
+    server_host = env["server_host"]
+    server_runner = env["server_runner"]
+    server_install_path = env["server_install_path"]
+    forward_target = f"{CLIENT_IP}:{DIAGNOSTICS_PORT}"
+    listen_port = None
+    redirect_cidr = f"{CLIENT_IP}/32"
+    redirect_added = False
+    enable_redirect = False
+    try:
+        _server_forward_cmd(
+            env,
+            "add",
+            "--target",
+            forward_target,
+            "--listen-port",
+            str(SERVER_FORWARD_PORT),
+            "--listen",
+            "127.0.0.1",
+            "--proto",
+            "tcp",
+            check=True,
+        )
+        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        entry = _forward_entry_for_target(server_state.get("forward_rules") or [], CLIENT_IP, DIAGNOSTICS_PORT)
+        listen_port = _listen_port_from_entry(entry)
+
+        if enable_redirect:
+            server_runner(
+                "server",
+                "redirect",
+                "add",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--cidr",
+                redirect_cidr,
+                "--tag",
+                env["reverse_tag"],
+                check=True,
+            )
+            redirect_added = True
+
+        with _active_tunnel_sessions(env):
+            ping_result = _ping_with_retries(
+                server_runner,
+                (
+                    "ping",
+                    "127.0.0.1",
+                    "--port",
+                    str(listen_port),
+                    "--count",
+                    "3",
+                    "--proto",
+                    "tcp",
+                ),
+                f"via server forward on port {listen_port}",
+            )
+            _assert_zero_loss(ping_result, f"via server forward on port {listen_port}")
+    finally:
+        if listen_port:
+            _server_forward_cmd(
+                env,
+                "remove",
+                "--listen-port",
+                str(listen_port),
+                "--ignore-missing",
+                check=True,
+            )
+        if redirect_added:
+            server_runner(
+                "server",
+                "redirect",
+                "remove",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--cidr",
+                redirect_cidr,
+                "--tag",
+                env["reverse_tag"],
+                check=True,
+            )
 
 
 def test_forward_tunnel_operational(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
 
-    ping_result = client_runner(
-        "ping",
-        SERVER_IP,
-        "--socks",
-        "--count",
-        "3",
-        check=True,
-    )
-    stdout = (ping_result.stdout or "").lower()
-    assert "0% loss" in stdout, (
-        "xp2p ping did not report full delivery:\n"
-        f"{ping_result.stdout}"
-    )
+    with _active_tunnel_sessions(tunnel_environment):
+        ping_result = _ping_with_retries(
+            client_runner,
+            (
+                "ping",
+                SERVER_IP,
+                "--socks",
+                "--count",
+                "3",
+            ),
+            "through SOCKS tunnel",
+        )
+        _assert_zero_loss(ping_result, "through SOCKS tunnel")
+    _exercise_client_forward_diagnostics(tunnel_environment)
+    _exercise_server_forward_diagnostics(tunnel_environment)
 
 
 def test_client_redirect_through_server(tunnel_environment):
