@@ -68,6 +68,7 @@ def _ping_with_retries(runner, args: tuple[str, ...], context: str, attempts: in
         last_result = result
         if attempt < attempts:
             time.sleep(delay_seconds)
+    assert last_result is not None, "xp2p ping failed but no result captured"
     pytest.fail(
         f"xp2p ping {context} failed after {attempts} attempts "
         f"(exit {last_result.rc}).\nSTDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}"
