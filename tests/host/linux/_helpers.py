@@ -390,3 +390,110 @@ def assert_server_redirect_state(state: dict, target: str, outbound_tag: str) ->
         if normalized in (domain_value, cidr_value):
             return
     raise AssertionError(f"Server state is missing redirect for {target} via {outbound_tag}")
+
+
+def expected_forward_tag(port: int) -> str:
+    if port <= 0:
+        raise AssertionError("Listen port must be positive")
+    return f"in_{int(port)}"
+
+
+def expected_forward_remark(ip: str, port: int) -> str:
+    trimmed = ip.strip()
+    if not trimmed:
+        raise AssertionError("Target IP is empty")
+    return f"forward:{trimmed}:{int(port)}"
+
+
+def forward_network_value(protocol: str) -> str:
+    normalized = (protocol or "").strip().lower()
+    if normalized == "tcp":
+        return "tcp"
+    if normalized == "udp":
+        return "udp"
+    return "tcp,udp"
+
+
+def assert_forward_rule_entry(
+    entries: list[dict],
+    listen_port: int,
+    *,
+    listen_address: str,
+    target_ip: str,
+    target_port: int,
+    protocol: str,
+) -> dict:
+    listen = listen_port
+    addr = listen_address.strip()
+    ip = target_ip.strip()
+    proto = (protocol or "").strip().lower() or "both"
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        recorded_port = int(entry.get("listen_port") or entry.get("listenPort") or 0)
+        if recorded_port != listen:
+            continue
+        recorded_addr = (entry.get("listen_address") or entry.get("listenAddress") or "").strip()
+        recorded_ip = (entry.get("target_ip") or entry.get("targetIP") or "").strip()
+        recorded_port_target = int(entry.get("target_port") or entry.get("targetPort") or 0)
+        recorded_proto = (entry.get("protocol") or "").strip().lower()
+        if recorded_addr != addr:
+            continue
+        if recorded_ip != ip:
+            continue
+        if recorded_port_target != target_port:
+            continue
+        if recorded_proto != proto:
+            continue
+        return entry
+    raise AssertionError(f"Forward entry on {addr}:{listen} targeting {ip}:{target_port} not found")
+
+
+def assert_no_forward_rule_entry(entries: list[dict], listen_port: int) -> None:
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        recorded_port = int(entry.get("listen_port") or entry.get("listenPort") or 0)
+        if recorded_port == listen_port:
+            raise AssertionError(f"Unexpected forward entry recorded on port {listen_port}")
+
+
+def assert_forward_inbound_entry(
+    data: dict,
+    listen_port: int,
+    *,
+    listen_address: str,
+    target_ip: str,
+    target_port: int,
+    protocol: str,
+) -> None:
+    listen = listen_address.strip()
+    ip = target_ip.strip()
+    network = forward_network_value(protocol)
+    for entry in data.get("inbounds", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("protocol") != "dokodemo-door":
+            continue
+        if int(entry.get("port") or 0) != listen_port:
+            continue
+        recorded_listen = (entry.get("listen") or "").strip()
+        if recorded_listen != listen:
+            continue
+        settings = entry.get("settings") or {}
+        recorded_ip = (settings.get("address") or "").strip()
+        recorded_port = int(settings.get("port") or 0)
+        recorded_network = (settings.get("network") or "").strip().lower()
+        if recorded_ip == ip and recorded_port == target_port and recorded_network == network:
+            return
+    raise AssertionError(f"dokodemo-door inbound on {listen}:{listen_port} not found")
+
+
+def assert_no_forward_inbound_entry(data: dict, listen_port: int) -> None:
+    for entry in data.get("inbounds", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("protocol") != "dokodemo-door":
+            continue
+        if int(entry.get("port") or 0) == listen_port:
+            raise AssertionError(f"Unexpected dokodemo-door inbound present on port {listen_port}")

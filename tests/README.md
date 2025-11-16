@@ -45,4 +45,5 @@
 - Execution:
   - Windows suite: pytest tests/host/win. These tests build MSI packages inside the guests, install xp2p into `C:\Program Files\xp2p`, manage services, and exercise client/server install/update flows via WinRM.
   - Linux suite: pytest tests/host/linux. The helpers connect over SSH, work directly from `/srv/xray-p2p`, invoke `scripts/build/build_deb_xp2p.sh` to build a `.deb`, install it via `dpkg` (placing `xp2p` into `/usr/bin`), and then run integration scenarios mirroring the Windows coverage (client install flows, server install + TLS management, dual-role installs, server user CRUD).
+  - Forward CLI coverage: `tests/host/linux/test_forward_cli.py` drives `xp2p client/server forward {add,remove,list}` end to end, checking auto-port selection (start at 53331 and skip busy ports), list/table output, removal via listen-port/tag/remark, and the warning emitted when no redirect matches the forward target.
 - Both suites rely on the shared helpers under tests/host/common.py for Vagrant orchestration.
