@@ -63,6 +63,7 @@ func NewCommand() *cobra.Command {
 	rootCmd.AddCommand(
 		clientCmd,
 		serverCmd,
+		newForwardCommand(func() config.Config { return opts.cfg }),
 		newPingCommand(func() config.Config { return opts.cfg }),
 		newCompletionCommand(rootCmd),
 		newDocsCommand(rootCmd),
