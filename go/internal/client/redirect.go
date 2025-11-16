@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 
@@ -151,7 +152,21 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 		tagToHost[strings.ToLower(ep.Tag)] = ep.Hostname
 	}
 
-	records := make([]RedirectRecord, 0, len(state.Redirects))
+	records := make([]RedirectRecord, 0, len(state.Redirects)+len(state.Endpoints))
+	seen := make(map[string]struct{}, len(state.Redirects)+len(state.Endpoints))
+
+	addRecord := func(rec RedirectRecord) {
+		if rec.Value == "" || rec.Tag == "" {
+			return
+		}
+		key := strings.ToLower(rec.Type) + "|" + strings.ToLower(rec.Value) + "|" + strings.ToLower(rec.Tag)
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		records = append(records, rec)
+	}
+
 	for _, rule := range state.Redirects {
 		host := tagToHost[strings.ToLower(rule.OutboundTag)]
 		recType := "CIDR"
@@ -159,7 +174,7 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 			recType = "domain"
 		}
 		value := rule.Value()
-		records = append(records, RedirectRecord{
+		addRecord(RedirectRecord{
 			Type:     recType,
 			Value:    value,
 			CIDR:     rule.CIDR,
@@ -168,7 +183,35 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 			Hostname: host,
 		})
 	}
+	for _, ep := range state.Endpoints {
+		defaultCIDR := normalizeEndpointCIDR(ep.Address)
+		if defaultCIDR == "" {
+			continue
+		}
+		addRecord(RedirectRecord{
+			Type:     "CIDR",
+			Value:    defaultCIDR,
+			CIDR:     defaultCIDR,
+			Tag:      ep.Tag,
+			Hostname: ep.Hostname,
+		})
+	}
 	return records, nil
+}
+
+func normalizeEndpointCIDR(address string) string {
+	trimmed := strings.TrimSpace(address)
+	if trimmed == "" {
+		return ""
+	}
+	ip := net.ParseIP(trimmed)
+	if ip == nil {
+		return ""
+	}
+	if v4 := ip.To4(); v4 != nil {
+		return fmt.Sprintf("%s/32", v4.String())
+	}
+	return fmt.Sprintf("%s/128", ip.String())
 }
 
 func resolveRedirectPaths(installDir, configDir string) (redirectPaths, error) {
