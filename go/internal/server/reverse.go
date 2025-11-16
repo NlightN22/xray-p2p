@@ -328,9 +328,6 @@ func reverseRuleMatches(rule map[string]any, channel serverReverseChannel, trimm
 	if !stringSliceEqual(extractStringSlice(rule["domain"]), []string{"full:" + channel.Domain}) {
 		return false
 	}
-	if !stringSliceEqual(extractStringSlice(rule["inboundTag"]), []string{channel.Tag}) {
-		return false
-	}
 	expectedUser := []string{}
 	if trimmedUser != "" {
 		expectedUser = []string{trimmedUser}
@@ -345,7 +342,6 @@ func desiredReverseRule(channel serverReverseChannel, trimmedUser string) map[st
 	rule := map[string]any{
 		"type":        "field",
 		"domain":      []string{"full:" + channel.Domain},
-		"inboundTag":  []string{channel.Tag},
 		"outboundTag": channel.Tag,
 	}
 	if trimmedUser != "" {
