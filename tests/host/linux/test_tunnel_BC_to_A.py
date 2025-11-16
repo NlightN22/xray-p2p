@@ -141,7 +141,7 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
         )
         assert set((client_c_state.get("reverse") or {}).keys()) == {reverse_second}
 
-        redirect_domains: list[str] = []
+        redirect_domains: list[dict[str, str]] = []
         try:
             for reverse_tag in (reverse_default, reverse_second):
                 domain = f"full:{reverse_tag}"
@@ -155,11 +155,11 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                     helpers.SERVER_CONFIG_DIR_NAME,
                     "--domain",
                     domain,
-                    "--host",
-                    SERVER_IP,
+                    "--tag",
+                    reverse_tag,
                     check=True,
                 )
-                redirect_domains.append(domain)
+                redirect_domains.append({"domain": domain, "tag": reverse_tag})
                 list_output = server_runner(
                     "server",
                     "redirect",
@@ -211,8 +211,22 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                     )
         finally:
             while redirect_domains:
-                domain = redirect_domains.pop()
-                server_runner(
+                entry = redirect_domains.pop()
+                domain = entry["domain"]
+                tag = entry["tag"]
+                list_output = server_runner(
+                    "server",
+                    "redirect",
+                    "list",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.SERVER_CONFIG_DIR_NAME,
+                ).stdout or ""
+                listed = (list_output or "").lower()
+                if domain not in listed:
+                    continue
+                removal = server_runner(
                     "server",
                     "redirect",
                     "remove",
@@ -222,10 +236,15 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                     helpers.SERVER_CONFIG_DIR_NAME,
                     "--domain",
                     domain,
-                    "--host",
-                    SERVER_IP,
-                    check=True,
+                    "--tag",
+                    tag,
+                    check=False,
                 )
+                stderr = (removal.stderr or "").lower()
+                if removal.rc != 0 and "not found" not in stderr:
+                    pytest.fail(
+                        f"Failed to remove redirect {domain}:\nSTDOUT:\n{removal.stdout}\nSTDERR:\n{removal.stderr}"
+                    )
             final_list = server_runner(
                 "server",
                 "redirect",

@@ -211,8 +211,8 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
         helpers.SERVER_CONFIG_DIR_NAME,
         "--domain",
         redirect_domain,
-        "--host",
-        SERVER_IP,
+        "--tag",
+        reverse_tag,
         check=True,
     )
     try:
@@ -240,13 +240,13 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             "--path",
             server_install_path,
             "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--domain",
-            redirect_domain,
-            "--host",
-            SERVER_IP,
-            check=True,
-        )
+        helpers.SERVER_CONFIG_DIR_NAME,
+        "--domain",
+        redirect_domain,
+        "--tag",
+        reverse_tag,
+        check=True,
+    )
         final_list = server_runner(
             "server",
             "redirect",

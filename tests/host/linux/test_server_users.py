@@ -21,7 +21,7 @@ def _trojan_clients(server_host) -> list[dict]:
     pytest.fail("Trojan inbound not found in configuration")
 
 
-def _remove_default_user(server_host, xp2p_server_runner):
+def _remove_default_user(server_host, xp2p_server_runner, host: str):
     clients = _trojan_clients(server_host)
     assert clients, "Expected default client from server install"
     default_client = clients[0]
@@ -35,13 +35,15 @@ def _remove_default_user(server_host, xp2p_server_runner):
         helpers.SERVER_CONFIG_DIR_NAME,
         "--id",
         default_client["email"],
+        "--host",
+        host,
         check=True,
     )
     assert _trojan_clients(server_host) == []
     return default_client
 
 
-def _install_server(server_host, xp2p_server_runner, port: str):
+def _install_server(server_host, xp2p_server_runner, port: str, host: str):
     xp2p_server_runner(
         "server",
         "install",
@@ -51,6 +53,8 @@ def _install_server(server_host, xp2p_server_runner, port: str):
         helpers.SERVER_CONFIG_DIR_NAME,
         "--port",
         port,
+        "--host",
+        host,
         "--force",
         check=True,
     )
@@ -61,11 +65,12 @@ def _install_server(server_host, xp2p_server_runner, port: str):
 def test_server_install_provisions_default_user(server_host, xp2p_server_runner):
     _cleanup(server_host, xp2p_server_runner)
     try:
-        _install_server(server_host, xp2p_server_runner, "62040")
+        host = "srv-install.xp2p.test"
+        _install_server(server_host, xp2p_server_runner, "62040", host)
         default_client = _trojan_clients(server_host)[0]
         assert default_client["email"].startswith("client-")
 
-        removed = _remove_default_user(server_host, xp2p_server_runner)
+        removed = _remove_default_user(server_host, xp2p_server_runner, host)
         assert removed["email"].startswith("client-")
     finally:
         _cleanup(server_host, xp2p_server_runner)
@@ -76,8 +81,9 @@ def test_server_install_provisions_default_user(server_host, xp2p_server_runner)
 def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
     _cleanup(server_host, xp2p_server_runner)
     try:
-        _install_server(server_host, xp2p_server_runner, "62041")
-        _remove_default_user(server_host, xp2p_server_runner)
+        host = "srv-add.xp2p.test"
+        _install_server(server_host, xp2p_server_runner, "62041", host)
+        _remove_default_user(server_host, xp2p_server_runner, host)
 
         xp2p_server_runner(
             "server",
@@ -91,6 +97,8 @@ def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
             "alpha",
             "--password",
             "secret-one",
+            "--host",
+            host,
             check=True,
         )
 
@@ -109,6 +117,8 @@ def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
             "alpha",
             "--password",
             "secret-one",
+            "--host",
+            host,
             check=True,
         )
         second = _trojan_clients(server_host)
@@ -126,6 +136,8 @@ def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
             "alpha",
             "--password",
             "secret-two",
+            "--host",
+            host,
             check=True,
         )
         final = _trojan_clients(server_host)
@@ -139,8 +151,9 @@ def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
 def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
     _cleanup(server_host, xp2p_server_runner)
     try:
-        _install_server(server_host, xp2p_server_runner, "62042")
-        _remove_default_user(server_host, xp2p_server_runner)
+        host = "srv-remove.xp2p.test"
+        _install_server(server_host, xp2p_server_runner, "62042", host)
+        _remove_default_user(server_host, xp2p_server_runner, host)
 
         xp2p_server_runner(
             "server",
@@ -154,6 +167,8 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
             "bravo",
             "--password",
             "secret",
+            "--host",
+            host,
             check=True,
         )
 
@@ -167,6 +182,8 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
             helpers.SERVER_CONFIG_DIR_NAME,
             "--id",
             "bravo",
+            "--host",
+            host,
             check=True,
         )
 
@@ -180,6 +197,8 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
             helpers.SERVER_CONFIG_DIR_NAME,
             "--id",
             "bravo",
+            "--host",
+            host,
             check=True,
         )
 
