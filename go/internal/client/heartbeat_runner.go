@@ -165,6 +165,7 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 	payload := heartbeat.Payload{
 		Tag:       r.endpoint.Tag,
 		Host:      r.endpoint.Hostname,
+		User:      r.endpoint.User,
 		ClientIP:  detectLocalIP(),
 		Timestamp: time.Now().UTC(),
 		RTTMillis: result.RTT.Milliseconds(),

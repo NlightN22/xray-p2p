@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -27,9 +28,9 @@ func Snapshot(path string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
 // RenderTable prints the heartbeat snapshot as a tabular report.
 func RenderTable(w io.Writer, snapshots []heartbeat.Snapshot) {
 	tw := tabwriter.NewWriter(w, 2, 2, 2, ' ', 0)
-	fmt.Fprintln(tw, "TAG\tHOST\tSTATUS\tLAST_RTT\tAVG_RTT\tLAST_UPDATE\tCLIENT_IP")
+	fmt.Fprintln(tw, "TAG\tHOST\tSTATUS\tLAST_RTT\tAVG_RTT\tLAST_UPDATE\tCLIENT_USER\tCLIENT_IP")
 	if len(snapshots) == 0 {
-		fmt.Fprintln(tw, "-\t-\t-\t-\t-\t-\t-")
+		fmt.Fprintln(tw, "-\t-\t-\t-\t-\t-\t-\t-")
 	} else {
 		for _, snap := range snapshots {
 			status := "dead"
@@ -40,18 +41,26 @@ func RenderTable(w io.Writer, snapshots []heartbeat.Snapshot) {
 			if !snap.Entry.LastSeen.IsZero() {
 				lastUpdate = snap.Entry.LastSeen.UTC().Format(time.RFC3339)
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%dms\t%.1fms\t%s\t%s\n",
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%dms\t%.1fms\t%s\t%s\t%s\n",
 				snap.Entry.Tag,
 				snap.Entry.Host,
 				status,
 				snap.Entry.LastRTTMillis,
 				snap.AvgRTTMillis,
 				lastUpdate,
+				safeClientUser(snap.Entry.User),
 				snap.Entry.ClientIP,
 			)
 		}
 	}
 	_ = tw.Flush()
+}
+
+func safeClientUser(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "-"
+	}
+	return value
 }
 
 // Print renders the current state to stdout.

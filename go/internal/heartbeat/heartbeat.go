@@ -16,6 +16,7 @@ import (
 type Payload struct {
 	Tag       string    `json:"tag"`
 	Host      string    `json:"host"`
+	User      string    `json:"user,omitempty"`
 	ClientIP  string    `json:"client_ip,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
 	RTTMillis int64     `json:"rtt_ms"`
@@ -25,6 +26,7 @@ type Payload struct {
 type Entry struct {
 	Tag            string    `json:"tag"`
 	Host           string    `json:"host"`
+	User           string    `json:"user,omitempty"`
 	ClientIP       string    `json:"client_ip,omitempty"`
 	LastRTTMillis  int64     `json:"last_rtt_ms"`
 	MinRTTMillis   int64     `json:"min_rtt_ms"`
@@ -180,6 +182,9 @@ func (s *State) update(payload Payload) (Entry, error) {
 	entry := s.Entries[key]
 	entry.Tag = tag
 	entry.Host = host
+	if payload.User != "" {
+		entry.User = strings.TrimSpace(payload.User)
+	}
 	if payload.ClientIP != "" {
 		entry.ClientIP = strings.TrimSpace(payload.ClientIP)
 	}
