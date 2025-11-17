@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any, Callable
+
 import pytest
 
 from tests.host.linux import _helpers as helpers
@@ -9,6 +12,15 @@ SERVER_A_IP = "10.62.10.11"  # deb-test-a
 SERVER_C_IP = "10.62.10.13"  # deb-test-c
 CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
+
+
+@dataclass
+class RedirectSpec:
+    runner: Callable[..., Any]
+    host: Any
+    ip: str
+    domain: str
+    reverse_tag: str
 
 
 def _runner(host):
@@ -171,7 +183,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                 entry["reverse_tag"],
             )
 
-        redirect_specs: list[dict[str, str]] = []
+        redirect_specs: list[RedirectSpec] = []
         try:
             for entry in server_entries:
                 redirect_domain = f"full:{entry['reverse_tag']}"
@@ -190,13 +202,13 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                     check=True,
                 )
                 redirect_specs.append(
-                    {
-                        "domain": redirect_domain,
-                        "runner": entry["runner"],
-                        "host": entry["host"],
-                        "ip": entry["ip"],
-                        "reverse_tag": entry["reverse_tag"],
-                    }
+                    RedirectSpec(
+                        runner=entry["runner"],
+                        host=entry["host"],
+                        ip=entry["ip"],
+                        domain=redirect_domain,
+                        reverse_tag=entry["reverse_tag"],
+                    )
                 )
                 list_output = entry["runner"](
                     "server",
@@ -251,7 +263,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                     )
         finally:
             for spec in redirect_specs:
-                spec["runner"](
+                spec.runner(
                     "server",
                     "redirect",
                     "remove",
@@ -260,12 +272,12 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                     "--config-dir",
                     helpers.SERVER_CONFIG_DIR_NAME,
                     "--domain",
-                    spec["domain"],
+                    spec.domain,
                     "--host",
-                    spec["ip"],
+                    spec.ip,
                     check=True,
                 )
-                final_list = spec["runner"](
+                final_list = spec.runner(
                     "server",
                     "redirect",
                     "list",
