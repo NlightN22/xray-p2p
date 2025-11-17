@@ -102,6 +102,7 @@ func newClientRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.Bool("keep-files", false, "keep installation files")
 	flags.Bool("ignore-missing", false, "do not fail if installation is absent")
 	flags.Bool("all", false, "remove all endpoints and configuration")
+	flags.Bool("quiet", false, "do not prompt for removal")
 	return cmd
 }
 
