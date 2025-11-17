@@ -43,6 +43,7 @@ def cleanup_client_install(
         config_name,
         "--all",
         "--ignore-missing",
+        "--quiet",
     )
 
 
@@ -62,6 +63,7 @@ def cleanup_server_install(
         "--config-dir",
         config_name,
         "--ignore-missing",
+        "--quiet",
     )
 
 

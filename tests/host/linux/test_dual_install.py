@@ -93,6 +93,7 @@ def test_client_and_server_share_install_dir(server_host):
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--all",
             "--ignore-missing",
+            "--quiet",
             check=True,
         )
         roles_after = _read_roles(server_host)
@@ -106,6 +107,7 @@ def test_client_and_server_share_install_dir(server_host):
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
             "--ignore-missing",
+            "--quiet",
         )
         run(
             "client",
@@ -116,4 +118,5 @@ def test_client_and_server_share_install_dir(server_host):
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--all",
             "--ignore-missing",
+            "--quiet",
         )

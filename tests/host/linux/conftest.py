@@ -40,7 +40,11 @@ def aux_host(linux_host_factory, xp2p_linux_versions) -> Host:
 
 def _xp2p_runner(host: Host):
     def _runner(*args: str, check: bool = False):
-        result = linux_env.run_xp2p(host, *args)
+        cmd = list(args)
+        if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
+            if not any(arg == "--quiet" for arg in cmd):
+                cmd.append("--quiet")
+        result = linux_env.run_xp2p(host, *cmd)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "

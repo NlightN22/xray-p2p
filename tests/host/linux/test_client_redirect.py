@@ -258,6 +258,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             INSTALL_PATH,
             "--config-dir",
             CONFIG_DIR,
+            "--quiet",
             SECONDARY_HOST,
             check=True,
         )
@@ -284,6 +285,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             INSTALL_PATH,
             "--config-dir",
             CONFIG_DIR,
+            "--quiet",
             SECONDARY_HOST,
             check=False,
         )
@@ -298,6 +300,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             "--config-dir",
             CONFIG_DIR,
             "--all",
+            "--quiet",
             check=True,
         )
         _, records = _list_redirects(xp2p_client_runner)

@@ -157,7 +157,11 @@ def xp2p_client_runner(
     client_host: Host,
 ) -> Callable[..., CommandResult]:
     def _runner(*args: str, check: bool = False):
-        result = win_env.run_xp2p(client_host, args)
+        cmd = list(args)
+        if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
+            if "--quiet" not in cmd:
+                cmd.append("--quiet")
+        result = win_env.run_xp2p(client_host, cmd)
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
@@ -180,7 +184,11 @@ def xp2p_server_runner(
     server_host: Host,
 ) -> Callable[..., CommandResult]:
     def _runner(*args: str, check: bool = False):
-        result = win_env.run_xp2p(server_host, args)
+        cmd = list(args)
+        if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
+            if "--quiet" not in cmd:
+                cmd.append("--quiet")
+        result = win_env.run_xp2p(server_host, cmd)
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
