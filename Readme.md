@@ -132,7 +132,7 @@ Additional helpers:
 - `xp2p client forward remove --listen-port <port>` / `xp2p server forward remove` removes the matching rule (you can also use `--tag` or `--remark`) and rewrites `inbounds.json`.
 - `xp2p client forward list` and `xp2p server forward list` print every forward with listen address/port, protocol set, target, and remark. When the target IP does not fall inside any redirect range the CLI emits a warning so you can add the missing redirect.
 - `xp2p server reverse [list]` and `xp2p client reverse [list]` read the relevant `install-state-*.json` and `config-*/routing.json` files, showing the domain/tag, host, user, outbound/endpoint tag, and whether the portal/bridge plus routing rules are present. Running the command without an explicit `list` subcommand defaults to the table view.
-- `xp2p ping <host>` runs the diagnostics pinger (`--socks` accepts either a value or falls back to the config default).
+- `xp2p ping <host>` runs the diagnostics pinger. For example, `xp2p ping 10.62.10.12 --socks` forces SOCKS5 routing; omit the value to auto-detect the listener from local xp2p configs (client first, then server). When neither config exposes a SOCKS inbound the CLI reports `SOCKS proxy not configured; specify --socks host:port or install xp2p client/server`.
 - `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
 - `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.
 - `xp2p client list` and `xp2p client remove` help you inspect or prune tunnels without touching the files manually.
