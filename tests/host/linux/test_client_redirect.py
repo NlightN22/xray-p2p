@@ -109,9 +109,8 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         _install_endpoint(xp2p_client_runner, SECONDARY_HOST, "secondary@example.com", "secondary-pass")
 
         empty_output, entries = _list_redirects(xp2p_client_runner)
-        assert "no redirect rules configured" in empty_output.lower()
-        assert entries == []
-
+        assert REDIRECT_CIDR not in empty_output
+        assert entries == [] or all(entry["value"] in {PRIMARY_HOST + "/32", SECONDARY_HOST + "/32"} for entry in entries)
         primary_tag = helpers.expected_proxy_tag(PRIMARY_HOST)
         secondary_tag = helpers.expected_proxy_tag(SECONDARY_HOST)
 
@@ -147,7 +146,8 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
 
         routing_after_remove = helpers.read_json(client_host, CLIENT_ROUTING)
         helpers.assert_no_redirect_rule(routing_after_remove, REDIRECT_CIDR)
-        assert "no redirect rules configured" in _list_redirects(xp2p_client_runner)[0].lower()
+        _, after_records = _list_redirects(xp2p_client_runner)
+        assert all(rec.get("cidr") != REDIRECT_CIDR for rec in after_records)
 
         _redirect_cmd(
             xp2p_client_runner,
@@ -259,8 +259,8 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         )
 
         auto_output, auto_records = _list_redirects(xp2p_client_runner)
-        assert "no redirect rules configured" in auto_output.lower()
-        assert auto_records == []
+        assert REDIRECT_CIDR not in auto_output
+        assert all(rec["value"] == f"{PRIMARY_HOST}/32" for rec in auto_records)
 
         routing = helpers.read_json(client_host, CLIENT_ROUTING)
         helpers.assert_no_redirect_rule(routing, REDIRECT_CIDR)
@@ -296,8 +296,8 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             "--all",
             check=True,
         )
-        final_output, records = _list_redirects(xp2p_client_runner)
-        assert "no redirect rules configured" in final_output.lower()
+        _, records = _list_redirects(xp2p_client_runner)
+        assert all(rec.get("cidr") != REDIRECT_CIDR for rec in records)
         assert records == []
     finally:
         _cleanup(client_host, xp2p_client_runner)

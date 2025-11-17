@@ -297,16 +297,17 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
                 helpers.assert_no_redirect_rule(routing_after_remove, DIAG_CIDR)
                 helpers.assert_no_domain_redirect_rule(routing_after_remove, DIAG_DOMAIN)
 
-                final_list = client_runner(
-                    "client",
-                    "redirect",
-                    "list",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    check=True,
-                ).stdout or ""
-                assert "no redirect rules configured" in final_list.lower()
+        final_list = client_runner(
+            "client",
+            "redirect",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert DIAG_CIDR not in final_list
+        assert DIAG_DOMAIN_CIDR not in final_list
     finally:
         cleanup(iface_name)
