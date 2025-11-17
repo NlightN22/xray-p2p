@@ -111,6 +111,26 @@ func stubServerReverseList(fn func(server.ReverseListOptions) ([]server.ReverseR
 	return func() { serverReverseListFunc = prev }
 }
 
+func stubServerRedirectAdd(fn func(server.RedirectAddOptions) error) func() {
+	prev := serverRedirectAddFunc
+	if fn == nil {
+		fn = func(server.RedirectAddOptions) error { return nil }
+	}
+	serverRedirectAddFunc = fn
+	return func() { serverRedirectAddFunc = prev }
+}
+
+func stubServerRedirectPromptReader(reader io.Reader) func() {
+	prev := serverRedirectPromptReader
+	serverRedirectPromptReader = func() io.Reader {
+		if reader != nil {
+			return reader
+		}
+		return os.Stdin
+	}
+	return func() { serverRedirectPromptReader = prev }
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	oldStdout := os.Stdout

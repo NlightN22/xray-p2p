@@ -26,6 +26,9 @@ var (
 	clientRemoveEndpointFunc = client.RemoveEndpoint
 	clientListFunc           = client.ListEndpoints
 	clientReverseListFunc    = client.ListReverse
+	clientRedirectAddFunc    = client.AddRedirect
+	clientRedirectRemoveFunc = client.RemoveRedirect
+	clientRedirectListFunc   = client.ListRedirects
 )
 
 func Execute(ctx context.Context, cfg config.Config, args []string) int {

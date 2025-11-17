@@ -127,7 +127,7 @@ Both the server and client automatically wire up reverse tunnels keyed by saniti
 
 Additional helpers:
 
-- `xp2p client redirect add --cidr <cidr> --host <host>` or `--domain <name>` configures per-destination routing that also shows up in `xp2p client redirect list`.
+- `xp2p client redirect add --cidr <cidr> --host <host>` or `--domain <name>` configures per-destination routing that also shows up in `xp2p client redirect list`. When neither `--tag` nor `--host` is supplied the CLI prints every known client endpoint (tag + host) and prompts you to pick one, keeping Enter as a quick cancel. `xp2p client redirect remove` and the matching `xp2p server redirect add/remove` commands reuse the same interactive picker for reverse portals.
 - `xp2p client forward add --target <ip:port>` (or `xp2p server forward add`) provisions a dokodemo-door inbound, auto-picks a listen port from 53331 when `--listen-port` is omitted, and persists the full rule in `install-state-*.json`. The `--proto` flag accepts `tcp`, `udp`, or `both`.
 - `xp2p client forward remove --listen-port <port>` / `xp2p server forward remove` removes the matching rule (you can also use `--tag` or `--remark`) and rewrites `inbounds.json`.
 - `xp2p client forward list` and `xp2p server forward list` print every forward with listen address/port, protocol set, target, and remark. When the target IP does not fall inside any redirect range the CLI emits a warning so you can add the missing redirect.

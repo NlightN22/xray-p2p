@@ -77,6 +77,26 @@ func stubClientReverseList(fn func(client.ReverseListOptions) ([]client.ReverseR
 	return func() { clientReverseListFunc = prev }
 }
 
+func stubClientRedirectAdd(fn func(client.RedirectAddOptions) error) func() {
+	prev := clientRedirectAddFunc
+	if fn == nil {
+		fn = func(client.RedirectAddOptions) error { return nil }
+	}
+	clientRedirectAddFunc = fn
+	return func() { clientRedirectAddFunc = prev }
+}
+
+func stubClientRedirectPromptReader(reader io.Reader) func() {
+	prev := clientRedirectPromptReader
+	clientRedirectPromptReader = func() io.Reader {
+		if reader != nil {
+			return reader
+		}
+		return os.Stdin
+	}
+	return func() { clientRedirectPromptReader = prev }
+}
+
 func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 	t.Helper()
 

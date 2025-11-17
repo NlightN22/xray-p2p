@@ -2,6 +2,7 @@ package clientcmd
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -36,6 +38,7 @@ func newClientRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a custom redirect rule",
+		Long:  "Add a custom redirect rule. When --tag/--host is omitted the CLI lists configured endpoints and prompts for an outbound tag.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRedirectAdd(commandContext(cmd), cfg(), forwarded)
@@ -47,8 +50,9 @@ func newClientRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	flags.String("config-dir", "", "client configuration directory name")
 	flags.String("cidr", "", "CIDR to redirect")
 	flags.String("domain", "", "domain to redirect")
-	flags.String("tag", "", "outbound tag to route through")
+	flags.String("tag", "", "outbound tag to route through (prompts when omitted)")
 	flags.String("host", "", "client endpoint hostname to route through")
+	flags.Bool("quiet", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -56,6 +60,7 @@ func newClientRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove",
 		Short: "Remove a redirect rule",
+		Long:  "Remove a redirect rule. When --tag/--host is omitted the CLI lists configured endpoints and prompts for an outbound tag.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRedirectRemove(commandContext(cmd), cfg(), forwarded)
@@ -67,8 +72,9 @@ func newClientRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.String("config-dir", "", "client configuration directory name")
 	flags.String("cidr", "", "CIDR mapping to remove")
 	flags.String("domain", "", "domain mapping to remove")
-	flags.String("tag", "", "outbound tag filter")
+	flags.String("tag", "", "outbound tag filter (prompts when omitted)")
 	flags.String("host", "", "client endpoint hostname filter")
+	flags.Bool("quiet", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -98,6 +104,7 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 	domain := fs.String("domain", "", "domain to redirect")
 	tag := fs.String("tag", "", "outbound tag to use")
 	host := fs.String("host", "", "client endpoint hostname")
+	quiet := fs.Bool("quiet", false, "do not prompt for outbound tags")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -120,24 +127,43 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 		logging.Error("xp2p client redirect add: specify only one of --cidr or --domain")
 		return 2
 	}
-	if strings.TrimSpace(*tag) == "" && strings.TrimSpace(*host) == "" {
-		logging.Error("xp2p client redirect add: --tag or --host is required")
-		return 2
+
+	installDir := firstNonEmpty(*path, cfg.Client.InstallDir)
+	configDirName := firstNonEmpty(*configDir, cfg.Client.ConfigDir)
+
+	tagValue := strings.TrimSpace(*tag)
+	hostValue := strings.TrimSpace(*host)
+	if tagValue == "" && hostValue == "" {
+		if *quiet {
+			logging.Error("xp2p client redirect add: --tag or --host is required")
+			return 2
+		}
+		selection, err := promptClientRedirectBinding(installDir, configDirName)
+		if err != nil {
+			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+				logging.Error("xp2p client redirect add: --tag or --host is required")
+				return 2
+			}
+			logging.Error("xp2p client redirect add: failed to enumerate endpoints", "err", err)
+			return 1
+		}
+		tagValue = selection.Tag
+		hostValue = selection.Host
 	}
 
 	opts := client.RedirectAddOptions{
-		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
-		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
+		InstallDir: installDir,
+		ConfigDir:  configDirName,
 		CIDR:       *cidr,
 		Domain:     *domain,
-		Tag:        *tag,
-		Hostname:   *host,
+		Tag:        tagValue,
+		Hostname:   hostValue,
 	}
-	if err := client.AddRedirect(opts); err != nil {
+	if err := clientRedirectAddFunc(opts); err != nil {
 		logging.Error("xp2p client redirect add failed", "err", err)
 		return 1
 	}
-	fields := []any{"tag", strings.TrimSpace(*tag), "host", strings.TrimSpace(*host)}
+	fields := []any{"tag", strings.TrimSpace(tagValue), "host", strings.TrimSpace(hostValue)}
 	if hasCIDR {
 		fields = append(fields, "cidr", strings.TrimSpace(*cidr))
 	} else {
@@ -157,6 +183,7 @@ func runClientRedirectRemove(_ context.Context, cfg config.Config, args []string
 	domain := fs.String("domain", "", "domain to remove")
 	tag := fs.String("tag", "", "outbound tag filter")
 	host := fs.String("host", "", "client endpoint host filter")
+	quiet := fs.Bool("quiet", false, "do not prompt for outbound tags")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -180,19 +207,41 @@ func runClientRedirectRemove(_ context.Context, cfg config.Config, args []string
 		return 2
 	}
 
+	installDir := firstNonEmpty(*path, cfg.Client.InstallDir)
+	configDirName := firstNonEmpty(*configDir, cfg.Client.ConfigDir)
+	tagValue := strings.TrimSpace(*tag)
+	hostValue := strings.TrimSpace(*host)
+	if tagValue == "" && hostValue == "" {
+		if *quiet {
+			logging.Error("xp2p client redirect remove: --tag or --host is required")
+			return 2
+		}
+		selection, err := promptClientRedirectBinding(installDir, configDirName)
+		if err != nil {
+			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+				logging.Error("xp2p client redirect remove: --tag or --host is required")
+				return 2
+			}
+			logging.Error("xp2p client redirect remove: failed to enumerate endpoints", "err", err)
+			return 1
+		}
+		tagValue = selection.Tag
+		hostValue = selection.Host
+	}
+
 	opts := client.RedirectRemoveOptions{
-		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
-		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
+		InstallDir: installDir,
+		ConfigDir:  configDirName,
 		CIDR:       *cidr,
 		Domain:     *domain,
-		Tag:        *tag,
-		Hostname:   *host,
+		Tag:        tagValue,
+		Hostname:   hostValue,
 	}
-	if err := client.RemoveRedirect(opts); err != nil {
+	if err := clientRedirectRemoveFunc(opts); err != nil {
 		logging.Error("xp2p client redirect remove failed", "err", err)
 		return 1
 	}
-	fields := []any{"tag", strings.TrimSpace(*tag), "host", strings.TrimSpace(*host)}
+	fields := []any{"tag", strings.TrimSpace(tagValue), "host", strings.TrimSpace(hostValue)}
 	if hasCIDR {
 		fields = append(fields, "cidr", strings.TrimSpace(*cidr))
 	} else {
@@ -225,7 +274,7 @@ func runClientRedirectList(_ context.Context, cfg config.Config, args []string) 
 		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
 	}
-	records, err := client.ListRedirects(opts)
+	records, err := clientRedirectListFunc(opts)
 	if err != nil {
 		logging.Error("xp2p client redirect list failed", "err", err)
 		return 1

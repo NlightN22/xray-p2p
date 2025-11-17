@@ -2,6 +2,7 @@ package servercmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -21,6 +23,7 @@ type serverRedirectAddOptions struct {
 	Domain    string
 	Tag       string
 	Host      string
+	Quiet     bool
 }
 
 type serverRedirectRemoveOptions struct {
@@ -30,6 +33,7 @@ type serverRedirectRemoveOptions struct {
 	Domain    string
 	Tag       string
 	Host      string
+	Quiet     bool
 }
 
 type serverRedirectListOptions struct {
@@ -59,6 +63,7 @@ func newServerRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a server redirect rule",
+		Long:  "Add a server redirect rule. When --tag/--host is omitted the CLI lists reverse portals and prompts for an outbound tag.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerRedirectAdd(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
@@ -70,8 +75,9 @@ func newServerRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
 	flags.StringVar(&opts.CIDR, "cidr", "", "CIDR to redirect")
 	flags.StringVar(&opts.Domain, "domain", "", "domain to redirect")
-	flags.StringVar(&opts.Tag, "tag", "", "reverse outbound tag to route through")
+	flags.StringVar(&opts.Tag, "tag", "", "reverse outbound tag to route through (prompts when omitted)")
 	flags.StringVar(&opts.Host, "host", "", "reverse portal host to route through")
+	flags.BoolVar(&opts.Quiet, "quiet", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -80,6 +86,7 @@ func newServerRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove",
 		Short: "Remove a server redirect rule",
+		Long:  "Remove a server redirect rule. When --tag/--host is omitted the CLI lists reverse portals and prompts for an outbound tag.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerRedirectRemove(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
@@ -91,8 +98,9 @@ func newServerRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
 	flags.StringVar(&opts.CIDR, "cidr", "", "CIDR mapping to remove")
 	flags.StringVar(&opts.Domain, "domain", "", "domain mapping to remove")
-	flags.StringVar(&opts.Tag, "tag", "", "reverse outbound tag filter")
+	flags.StringVar(&opts.Tag, "tag", "", "reverse outbound tag filter (prompts when omitted)")
 	flags.StringVar(&opts.Host, "host", "", "reverse portal host filter")
+	flags.BoolVar(&opts.Quiet, "quiet", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -124,25 +132,44 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 		logging.Error("xp2p server redirect add: specify only one of --cidr or --domain")
 		return 2
 	}
-	if strings.TrimSpace(opts.Tag) == "" && strings.TrimSpace(opts.Host) == "" {
-		logging.Error("xp2p server redirect add: --tag or --host is required")
-		return 2
+
+	installDir := firstNonEmpty(opts.Path, cfg.Server.InstallDir)
+	configDir := firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir)
+
+	tagValue := strings.TrimSpace(opts.Tag)
+	hostValue := strings.TrimSpace(opts.Host)
+	if tagValue == "" && hostValue == "" {
+		if opts.Quiet {
+			logging.Error("xp2p server redirect add: --tag or --host is required")
+			return 2
+		}
+		selection, err := promptServerRedirectBinding(installDir, configDir)
+		if err != nil {
+			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+				logging.Error("xp2p server redirect add: --tag or --host is required")
+				return 2
+			}
+			logging.Error("xp2p server redirect add: failed to enumerate reverse portals", "err", err)
+			return 1
+		}
+		tagValue = selection.Tag
+		hostValue = selection.Host
 	}
 
 	addOpts := server.RedirectAddOptions{
-		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
-		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		InstallDir: installDir,
+		ConfigDir:  configDir,
 		CIDR:       opts.CIDR,
 		Domain:     opts.Domain,
-		Tag:        opts.Tag,
-		Hostname:   opts.Host,
+		Tag:        tagValue,
+		Hostname:   hostValue,
 	}
 	if err := serverRedirectAddFunc(addOpts); err != nil {
 		logging.Error("xp2p server redirect add failed", "err", err)
 		return 1
 	}
 
-	fields := []any{"tag", strings.TrimSpace(opts.Tag), "host", strings.TrimSpace(opts.Host)}
+	fields := []any{"tag", strings.TrimSpace(tagValue), "host", strings.TrimSpace(hostValue)}
 	if hasCIDR {
 		fields = append(fields, "cidr", strings.TrimSpace(opts.CIDR))
 	} else {
@@ -164,20 +191,42 @@ func runServerRedirectRemove(_ context.Context, cfg config.Config, opts serverRe
 		return 2
 	}
 
+	installDir := firstNonEmpty(opts.Path, cfg.Server.InstallDir)
+	configDir := firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir)
+	tagValue := strings.TrimSpace(opts.Tag)
+	hostValue := strings.TrimSpace(opts.Host)
+	if tagValue == "" && hostValue == "" {
+		if opts.Quiet {
+			logging.Error("xp2p server redirect remove: --tag or --host is required")
+			return 2
+		}
+		selection, err := promptServerRedirectBinding(installDir, configDir)
+		if err != nil {
+			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+				logging.Error("xp2p server redirect remove: --tag or --host is required")
+				return 2
+			}
+			logging.Error("xp2p server redirect remove: failed to enumerate reverse portals", "err", err)
+			return 1
+		}
+		tagValue = selection.Tag
+		hostValue = selection.Host
+	}
+
 	removeOpts := server.RedirectRemoveOptions{
-		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
-		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		InstallDir: installDir,
+		ConfigDir:  configDir,
 		CIDR:       opts.CIDR,
 		Domain:     opts.Domain,
-		Tag:        opts.Tag,
-		Hostname:   opts.Host,
+		Tag:        tagValue,
+		Hostname:   hostValue,
 	}
 	if err := serverRedirectRemoveFunc(removeOpts); err != nil {
 		logging.Error("xp2p server redirect remove failed", "err", err)
 		return 1
 	}
 
-	fields := []any{"tag", strings.TrimSpace(opts.Tag), "host", strings.TrimSpace(opts.Host)}
+	fields := []any{"tag", strings.TrimSpace(tagValue), "host", strings.TrimSpace(hostValue)}
 	if hasCIDR {
 		fields = append(fields, "cidr", strings.TrimSpace(opts.CIDR))
 	} else {
