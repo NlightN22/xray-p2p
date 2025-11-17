@@ -65,6 +65,50 @@ func TestRunClientRemoveRequiresArgument(t *testing.T) {
 	}
 }
 
+func TestRunClientRemoveAllPromptDecline(t *testing.T) {
+	cfg := clientCfg(`C:\xp2p-client`, client.DefaultClientConfigDir)
+	code, capture := execClientRemoveWithPrompt(cfg, []string{"--all"}, false, nil)
+	if code != 1 {
+		t.Fatalf("exit code: got %d want 1", code)
+	}
+	if capture.removeCalled || capture.endpointCalled {
+		t.Fatalf("no removal should occur when prompt is declined")
+	}
+}
+
+func TestRunClientRemoveAllQuietSkipsPrompt(t *testing.T) {
+	cfg := clientCfg(`C:\xp2p-client`, client.DefaultClientConfigDir)
+	code, capture := execClientRemoveWithPrompt(cfg, []string{"--all", "--quiet"}, false, nil)
+	if code != 0 {
+		t.Fatalf("exit code: got %d want 0", code)
+	}
+	if !capture.removeCalled {
+		t.Fatalf("expected removal to proceed in quiet mode")
+	}
+}
+
+func TestRunClientRemoveEndpointPromptDecline(t *testing.T) {
+	cfg := clientCfg(`C:\xp2p-client`, client.DefaultClientConfigDir)
+	code, capture := execClientRemoveWithPrompt(cfg, []string{"example.com"}, false, nil)
+	if code != 1 {
+		t.Fatalf("exit code: got %d want 1", code)
+	}
+	if capture.endpointCalled {
+		t.Fatalf("endpoint removal should not run when prompt is declined")
+	}
+}
+
+func TestRunClientRemoveEndpointQuietSkipsPrompt(t *testing.T) {
+	cfg := clientCfg(`C:\xp2p-client`, client.DefaultClientConfigDir)
+	code, capture := execClientRemoveWithPrompt(cfg, []string{"--quiet", "example.com"}, false, nil)
+	if code != 0 {
+		t.Fatalf("exit code: got %d want 0", code)
+	}
+	if !capture.endpointCalled {
+		t.Fatalf("endpoint removal should run in quiet mode")
+	}
+}
+
 type removeCapture struct {
 	removeCalled   bool
 	endpointCalled bool
@@ -73,6 +117,10 @@ type removeCapture struct {
 }
 
 func execClientRemove(cfg config.Config, args []string) (int, removeCapture) {
+	return execClientRemoveWithPrompt(cfg, args, true, nil)
+}
+
+func execClientRemoveWithPrompt(cfg config.Config, args []string, answer bool, promptErr error) (int, removeCapture) {
 	var capture removeCapture
 
 	restoreInstall := stubClientInstall(nil)
@@ -91,6 +139,9 @@ func execClientRemove(cfg config.Config, args []string) (int, removeCapture) {
 		return nil
 	})
 	defer restoreEndpoint()
+
+	restorePrompt := stubClientPromptYesNo(answer, promptErr)
+	defer restorePrompt()
 
 	code := runClientRemove(context.Background(), cfg, args)
 	return code, capture

@@ -146,6 +146,7 @@ Additional helpers:
 - `xp2p client remove --all [--keep-files] [--ignore-missing]` keeps the previous behavior and wipes the full config/state tree (with optional flags to keep files or skip missing installs).
 
 Running `xp2p client remove` without a target or `--all` now errors out with a clear hint, so accidental full wipes are avoided.
+Both `xp2p client remove` and `xp2p server remove` prompt for confirmation unless `--quiet` is supplied, ensuring unattended scripts can opt out of interactive prompts.
 
 ## Installation layout
 

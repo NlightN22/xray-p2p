@@ -51,6 +51,46 @@ func TestRunServerRemove(t *testing.T) {
 	}
 }
 
+func TestRunServerRemovePromptDecline(t *testing.T) {
+	cfg := serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, "")
+	var called bool
+	restoreRemove := stubServerRemove(func(ctx context.Context, opts server.RemoveOptions) error {
+		called = true
+		return nil
+	})
+	defer restoreRemove()
+	restorePrompt := stubPromptYesNo(false, nil)
+	defer restorePrompt()
+
+	code := runServerRemove(context.Background(), cfg, serverRemoveCommandOptions{})
+	if code != 1 {
+		t.Fatalf("exit code: got %d want 1", code)
+	}
+	if called {
+		t.Fatalf("server remove should not run when prompt is declined")
+	}
+}
+
+func TestRunServerRemoveQuietSkipsPrompt(t *testing.T) {
+	cfg := serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, "")
+	var called bool
+	restoreRemove := stubServerRemove(func(ctx context.Context, opts server.RemoveOptions) error {
+		called = true
+		return nil
+	})
+	defer restoreRemove()
+	restorePrompt := stubPromptYesNo(false, nil)
+	defer restorePrompt()
+
+	code := runServerRemove(context.Background(), cfg, serverRemoveCommandOptions{Quiet: true})
+	if code != 0 {
+		t.Fatalf("exit code: got %d want 0", code)
+	}
+	if !called {
+		t.Fatalf("server remove should proceed in quiet mode")
+	}
+}
+
 func execRemove(cfg config.Config, opts serverRemoveCommandOptions) (int, server.RemoveOptions) {
 	var captured server.RemoveOptions
 	restoreInstall := stubServerInstall(nil)
@@ -60,6 +100,8 @@ func execRemove(cfg config.Config, opts serverRemoveCommandOptions) (int, server
 		return nil
 	})
 	defer restoreRemove()
+	restorePrompt := stubPromptYesNo(true, nil)
+	defer restorePrompt()
 	code := runServerRemove(context.Background(), cfg, opts)
 	return code, captured
 }

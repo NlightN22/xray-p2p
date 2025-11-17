@@ -55,6 +55,7 @@ type serverRemoveCommandOptions struct {
 	ConfigDir     string
 	KeepFiles     bool
 	IgnoreMissing bool
+	Quiet         bool
 }
 
 type serverRunCommandOptions struct {
@@ -112,6 +113,19 @@ func runServerRemove(ctx context.Context, cfg config.Config, opts serverRemoveCo
 		ConfigDir:     firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		KeepFiles:     opts.KeepFiles,
 		IgnoreMissing: opts.IgnoreMissing,
+	}
+
+	if !opts.Quiet {
+		question := fmt.Sprintf("Remove xp2p server installation at %s (%s)?", removeOpts.InstallDir, removeOpts.ConfigDir)
+		ok, err := promptYesNoFunc(question)
+		if err != nil {
+			logging.Error("xp2p server remove: prompt failed", "err", err)
+			return 1
+		}
+		if !ok {
+			logging.Info("xp2p server remove aborted by user")
+			return 1
+		}
 	}
 
 	if err := serverRemoveFunc(ctx, removeOpts); err != nil {

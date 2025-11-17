@@ -178,6 +178,7 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 	keepFiles := fs.Bool("keep-files", false, "keep installation files")
 	ignoreMissing := fs.Bool("ignore-missing", false, "do not fail if installation is absent")
 	removeAll := fs.Bool("all", false, "remove all endpoints and configuration")
+	quiet := fs.Bool("quiet", false, "do not prompt for removal")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -212,6 +213,18 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 	configDirName := firstNonEmpty(*configDir, cfg.Client.ConfigDir)
 
 	if *removeAll {
+		if !*quiet {
+			ok, promptErr := promptYesNoFunc(fmt.Sprintf("Remove all client configuration from %s (%s)?", installDir, configDirName))
+			if promptErr != nil {
+				logging.Error("xp2p client remove: prompt failed", "err", promptErr)
+				return 1
+			}
+			if !ok {
+				logging.Info("xp2p client remove aborted by user")
+				return 1
+			}
+		}
+
 		opts := client.RemoveOptions{
 			InstallDir:    installDir,
 			ConfigDir:     configDirName,
@@ -232,6 +245,18 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 	if target == "" {
 		logging.Error("xp2p client remove: specify <hostname|tag> or --all")
 		return 2
+	}
+
+	if !*quiet {
+		ok, promptErr := promptYesNoFunc(fmt.Sprintf("Remove client endpoint %s from %s?", target, installDir))
+		if promptErr != nil {
+			logging.Error("xp2p client remove: prompt failed", "err", promptErr)
+			return 1
+		}
+		if !ok {
+			logging.Info("xp2p client remove aborted by user")
+			return 1
+		}
 	}
 
 	endpointOpts := client.RemoveEndpointOptions{

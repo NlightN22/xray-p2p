@@ -123,6 +123,9 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 				t.Cleanup(cleanup)
 			}
 
+			restorePrompt := stubPromptYesNo(true, nil)
+			t.Cleanup(restorePrompt)
+
 			cmd := NewCommand(func() config.Config { return cfg })
 			root := newServerTestRoot(cmd)
 			fullArgs := append([]string{"server"}, args...)

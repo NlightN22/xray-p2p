@@ -97,6 +97,17 @@ func stubClientRedirectPromptReader(reader io.Reader) func() {
 	return func() { clientRedirectPromptReader = prev }
 }
 
+func stubClientPromptYesNo(answer bool, err error) func() {
+	prev := promptYesNoFunc
+	promptYesNoFunc = func(string) (bool, error) {
+		if err != nil {
+			return false, err
+		}
+		return answer, nil
+	}
+	return func() { promptYesNoFunc = prev }
+}
+
 func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 	t.Helper()
 
