@@ -1,6 +1,10 @@
 param(
     [string] $RepoRoot = 'C:\xp2p',
-    [string] $CacheDir = 'C:\xp2p\build\msi-cache'
+    [string] $CacheDir = 'C:\xp2p\build\msi-cache',
+    [string] $WixSourceRelative = 'installer\wix\xp2p.wxs',
+    [string] $MsiArchLabel = 'amd64',
+    [switch] $BuildOnly = $false,
+    [string] $OutputMarker = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +42,7 @@ Ensure-Directory $RepoRoot
 Ensure-Directory $CacheDir
 
 Push-Location $RepoRoot
+$msiPath = $null
 try {
     Write-Info "Resolving xp2p version"
     $version = (& go run .\go\cmd\xp2p --version).Trim()
@@ -47,7 +52,7 @@ try {
 
     $ldflags = "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$version"
     $binaryDir = Join-Path $RepoRoot 'build\msi-bin'
-    $msiPath = Join-Path $CacheDir ("xp2p-$version-windows-amd64.msi")
+    $msiPath = Join-Path $CacheDir ("xp2p-$version-windows-$MsiArchLabel.msi")
 
     Write-Info "Cleaning previous build artifacts"
     Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -80,7 +85,7 @@ try {
 
     Write-Info "Running candle.exe"
     $wixObj = Join-Path $binaryDir 'xp2p.wixobj'
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dXrayBinary=$xrayOut" "-out" $wixObj (Join-Path $RepoRoot 'installer\wix\xp2p.wxs')
+    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dXrayBinary=$xrayOut" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative)
     if ($LASTEXITCODE -ne 0) {
         throw "candle.exe failed with exit code $LASTEXITCODE"
     }
@@ -99,12 +104,21 @@ if (-not (Test-Path $msiPath)) {
     throw "MSI build failed - file not found at $msiPath"
 }
 
-Write-Info "Installing xp2p from MSI"
-Start-Process -FilePath 'msiexec.exe' -ArgumentList '/i', "`"$msiPath`"", '/qn', '/norestart' -Wait
+if (-not $BuildOnly) {
+    Write-Info "Installing xp2p from MSI"
+    Start-Process -FilePath 'msiexec.exe' -ArgumentList '/i', "`"$msiPath`"", '/qn', '/norestart' -Wait
 
-$installDir = Join-Path $env:ProgramFiles 'xp2p'
-Write-Info "Ensuring $installDir is on PATH"
-Add-ToPath $installDir
+    $installDir = Join-Path $env:ProgramFiles 'xp2p'
+    Write-Info "Ensuring $installDir is on PATH"
+    Add-ToPath $installDir
 
-Write-Info "xp2p MSI build and installation complete"
+    Write-Info "xp2p MSI build and installation complete"
+}
+else {
+    Write-Info "xp2p MSI build complete (build-only mode)"
+}
+
 Write-Info "MSI path: $msiPath"
+if ($OutputMarker) {
+    Write-Output ("$OutputMarker$msiPath")
+}

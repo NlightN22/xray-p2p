@@ -12,6 +12,9 @@ guest suites -- the CI and fellow contributors expect these rules.
 - **All guest logic lives under `tests/guest/`** (PowerShell/Bash/Go helpers,
   etc.). Host fixtures merely trigger those entrypoints; do not inline ad-hoc
   scripts inside Python.
+- Windows MSI builds from host tests must execute `tests/guest/scripts/build_msi_package.ps1`,
+  which wraps the canonical scripts under `scripts/build/`. Keep the MSI build
+  pipeline there instead of duplicating commands inside host helpers.
 - **Never introduce new WinRM logic.** We route everything through SSH
   (`testinfra` Paramiko backend) for performance and stability, even on Windows.
 - Keep tests **idempotent and clean**. Leave the guest in the same state you

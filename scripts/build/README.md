@@ -32,7 +32,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_inst
 # x86
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi_x86.ps1
 ```
-The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed.
+The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed. Additional parameters let you control the WiX source (`-WixSourceRelative`), the MSI name suffix (`-MsiArchLabel`), and whether the script should only build the MSI (`-BuildOnly`) instead of running `msiexec`. Use `-OutputMarker '__MSI_PATH__='` when another tool needs to parse the resulting path from `stdout`.
 
 ## OpenWrt ipk
 

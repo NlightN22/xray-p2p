@@ -94,25 +94,12 @@ def ensure_msi_package(host: Host) -> str:
     if _MSI_CACHE_PATH_X64:
         return _MSI_CACHE_PATH_X64
 
-    script = _build_msi_script(
-        msi_cache=str(MSI_CACHE_DIR_X64),
+    path = _build_msi_package(
+        host,
+        architecture="amd64",
+        cache_dir=MSI_CACHE_DIR_X64,
         wix_source=r"installer\wix\xp2p.wxs",
-        bundle_arch="x86_64",
-        candle_suffix="",
-        build_suffix="",
     )
-    result = run_powershell(host, script)
-    if result.rc != 0:
-        raise RuntimeError(
-            "Failed to build MSI package.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    path = _extract_marker(result.stdout, MSI_MARKER)
-    if not path:
-        raise RuntimeError(
-            "MSI build script did not return artifact path.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
     _MSI_CACHE_PATH_X64 = path
     return path
 
@@ -122,26 +109,12 @@ def ensure_msi_package_x86(host: Host) -> str:
     if _MSI_CACHE_PATH_X86:
         return _MSI_CACHE_PATH_X86
 
-    script = _build_msi_script(
-        msi_cache=str(MSI_CACHE_DIR_X86),
+    path = _build_msi_package(
+        host,
+        architecture="x86",
+        cache_dir=MSI_CACHE_DIR_X86,
         wix_source=r"installer\wix\xp2p-x86.wxs",
-        bundle_arch="x86",
-        candle_suffix="-x86",
-        build_suffix="-x86",
-        goarch="386",
     )
-    result = run_powershell(host, script)
-    if result.rc != 0:
-        raise RuntimeError(
-            "Failed to build x86 MSI package.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    path = _extract_marker(result.stdout, MSI_MARKER)
-    if not path:
-        raise RuntimeError(
-            "x86 MSI build script did not return artifact path.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
     _MSI_CACHE_PATH_X86 = path
     return path
 
@@ -192,78 +165,30 @@ Write-Output $item.Length
         raise RuntimeError(f"Unexpected size output: {result.stdout!r}") from exc
 
 
-def _build_msi_script(
+def _build_msi_package(
+    host: Host,
     *,
-    msi_cache: str,
+    architecture: str,
+    cache_dir: Path,
     wix_source: str,
-    bundle_arch: str,
-    candle_suffix: str,
-    build_suffix: str,
-    goarch: str | None = None,
 ) -> str:
-    go_env = ""
-    if goarch:
-        go_env = f"$env:GOARCH = '{goarch}'; $env:GOOS = 'windows'"
-    reset_env = ""
-    if goarch:
-        reset_env = "Remove-Item Env:GOARCH; Remove-Item Env:GOOS"
-# TODO change to use scripts\build\build_and_install_msi.ps1
-    return f"""
-$ErrorActionPreference = 'Stop'
-$repo = 'C:\\xp2p'
-$cacheDir = '{msi_cache}'
-$marker = '{MSI_MARKER}'
-if (-not (Test-Path $cacheDir)) {{
-    New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null
-}}
-Push-Location $repo
-try {{
-    $version = (& go run ./go/cmd/xp2p --version).Trim()
-    if ([string]::IsNullOrWhiteSpace($version)) {{
-        throw "xp2p --version returned empty output."
-    }}
-    $msiName = "xp2p-$version-windows-{bundle_arch}.msi"
-    $msiPath = Join-Path $cacheDir $msiName
-    if (-not (Test-Path $msiPath)) {{
-        $ldflags = "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$version"
-        $binaryDir = Join-Path $repo 'build\\msi-bin{build_suffix}'
-        if (Test-Path $binaryDir) {{
-            Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue
-        }}
-        New-Item -ItemType Directory -Path $binaryDir -Force | Out-Null
-        $binaryPath = Join-Path $binaryDir 'xp2p.exe'
-        {go_env}
-        & go build -trimpath -ldflags $ldflags -o $binaryPath ./go/cmd/xp2p | Write-Output
-        {reset_env}
-        if ($LASTEXITCODE -ne 0) {{
-            throw "go build failed with exit code $LASTEXITCODE"
-        }}
-        $xraySource = Join-Path $repo 'distro\\windows\\bundle\\{bundle_arch}\\xray.exe'
-        if (-not (Test-Path $xraySource)) {{
-            throw "xray binary missing at $xraySource"
-        }}
-        $xrayPath = Join-Path $binaryDir 'xray.exe'
-        Copy-Item $xraySource $xrayPath -Force
-        $wixDir = Get-ChildItem "C:\\Program Files (x86)" -Filter "WiX Toolset*" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if (-not $wixDir) {{
-            throw "WiX Toolset installation directory not found."
-        }}
-        $candle = Join-Path $wixDir.FullName 'bin\\candle.exe'
-        $light = Join-Path $wixDir.FullName 'bin\\light.exe'
-        $wixSource = Join-Path $repo '{wix_source}'
-        $wixObj = Join-Path $binaryDir 'xp2p{candle_suffix}.wixobj'
-        & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryPath" "-dXrayBinary=$xrayPath" "-out" $wixObj $wixSource | Write-Output
-        if ($LASTEXITCODE -ne 0) {{
-            throw "candle.exe failed with exit code $LASTEXITCODE"
-        }}
-        & $light "-out" $msiPath $wixObj | Write-Output
-        if ($LASTEXITCODE -ne 0) {{
-            throw "light.exe failed with exit code $LASTEXITCODE"
-        }}
-    }}
-    Write-Output ("$marker$msiPath")
-}}
-finally {{
-    Pop-Location
-}}
-"""
+    result = run_guest_script(
+        host,
+        "scripts/build_msi_package.ps1",
+        Architecture=architecture,
+        CacheDir=str(cache_dir),
+        WixSource=wix_source,
+        Marker=MSI_MARKER,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to build MSI package for {architecture}.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    path = _extract_marker(result.stdout, MSI_MARKER)
+    if not path:
+        raise RuntimeError(
+            f"MSI build script ({architecture}) did not return artifact path.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return path
