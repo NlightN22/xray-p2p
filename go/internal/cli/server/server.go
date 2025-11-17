@@ -155,7 +155,7 @@ func runServerRun(ctx context.Context, cfg config.Config, opts serverRunCommandO
 		return 1
 	}
 
-	cancelDiagnostics := startDiagnostics(ctx, cfg.Server.Port)
+	cancelDiagnostics := startDiagnostics(ctx, cfg.Server.Port, installDir)
 	if cancelDiagnostics != nil {
 		defer cancelDiagnostics()
 	}

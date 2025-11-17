@@ -69,7 +69,7 @@ func Watch(ctx context.Context, path string, interval, ttl time.Duration) error 
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
-	if err := Print(path, ttl); err != nil {
+	if err := printWithClear(path, ttl); err != nil {
 		return err
 	}
 	ticker := time.NewTicker(interval)
@@ -80,9 +80,21 @@ func Watch(ctx context.Context, path string, interval, ttl time.Duration) error 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := Print(path, ttl); err != nil {
+			if err := printWithClear(path, ttl); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+func printWithClear(path string, ttl time.Duration) error {
+	clearTerminal(os.Stdout)
+	return Print(path, ttl)
+}
+
+func clearTerminal(w io.Writer) {
+	if w == nil {
+		return
+	}
+	_, _ = fmt.Fprint(w, "\033[H\033[2J")
 }
