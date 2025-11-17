@@ -97,7 +97,11 @@ func Run(ctx context.Context, target string, opts Options) error {
 			if !opts.Silent {
 				fmt.Println("interrupted")
 			}
-			logger.Info("ping session interrupted", "sent", sent, "received", received)
+			if opts.Silent {
+				logger.Debug("ping session interrupted", "sent", sent, "received", received)
+			} else {
+				logger.Info("ping session interrupted", "sent", sent, "received", received)
+			}
 			return ctx.Err()
 		default:
 		}
@@ -124,7 +128,11 @@ func Run(ctx context.Context, target string, opts Options) error {
 			if !opts.Silent {
 				fmt.Printf("Request %d failed: %v\n", seq, err)
 			}
-			logger.Warn("ping request failed", "seq", seq, "err", err)
+			if opts.Silent {
+				logger.Debug("ping request failed", "seq", seq, "err", err)
+			} else {
+				logger.Warn("ping request failed", "seq", seq, "err", err)
+			}
 		} else {
 			received++
 			formatted := rtt.Round(time.Millisecond)
@@ -148,7 +156,11 @@ func Run(ctx context.Context, target string, opts Options) error {
 	if !opts.Silent {
 		printSummary(sent, received)
 	}
-	logger.Info("ping session completed", "sent", sent, "received", received)
+	if opts.Silent {
+		logger.Debug("ping session completed", "sent", sent, "received", received)
+	} else {
+		logger.Info("ping session completed", "sent", sent, "received", received)
+	}
 	if received == 0 {
 		return errors.New("no replies received")
 	}

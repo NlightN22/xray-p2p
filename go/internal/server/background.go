@@ -124,9 +124,13 @@ func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store) {
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(line), pingRequest) {
-		logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
 		_, _ = conn.Write([]byte(pingResponse + "\n"))
-		consumeHeartbeatPayload(ctx, reader, conn, store)
+		hadHeartbeat := consumeHeartbeatPayload(ctx, reader, conn, store)
+		if !hadHeartbeat {
+			logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
+		} else {
+			logging.Debug("tcp heartbeat received", "remote_addr", conn.RemoteAddr().String())
+		}
 	}
 }
 
@@ -161,9 +165,9 @@ func deadlineFromContext(ctx context.Context) time.Time {
 	return time.Time{}
 }
 
-func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net.Conn, store *heartbeat.Store) {
+func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net.Conn, store *heartbeat.Store) bool {
 	if store == nil {
-		return
+		return false
 	}
 	deadline := time.Now().Add(heartbeatPayloadTimeout)
 	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
@@ -174,32 +178,33 @@ func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net
 	if err != nil {
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
-			return
+			return false
 		}
 		if err == io.EOF && len(line) == 0 {
-			return
+			return false
 		}
 		if len(line) == 0 {
-			return
+			return false
 		}
 	}
 
 	payloadRaw := strings.TrimSpace(line)
 	if payloadRaw == "" {
-		return
+		return false
 	}
 
 	var payload heartbeat.Payload
 	if err := json.Unmarshal([]byte(payloadRaw), &payload); err != nil {
 		logging.Warn("invalid heartbeat payload", "remote_addr", conn.RemoteAddr().String(), "err", err)
-		return
+		return true
 	}
 	if payload.Timestamp.IsZero() {
 		payload.Timestamp = time.Now().UTC()
 	}
 	if _, err := store.Update(payload); err != nil {
 		logging.Warn("unable to persist heartbeat", "tag", payload.Tag, "err", err)
-		return
+		return true
 	}
 	logging.Debug("heartbeat recorded", "tag", payload.Tag, "host", payload.Host, "client_ip", payload.ClientIP)
+	return true
 }
