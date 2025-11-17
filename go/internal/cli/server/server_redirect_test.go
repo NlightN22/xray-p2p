@@ -113,6 +113,7 @@ func TestRunServerRedirectAdd_PromptCancelled(t *testing.T) {
 	t.Cleanup(stubServerReverseList(func(server.ReverseListOptions) ([]server.ReverseRecord, error) {
 		return []server.ReverseRecord{
 			{Tag: "alpha.rev", Host: "edge-a"},
+			{Tag: "beta.rev", Host: "edge-b"},
 		}, nil
 	}))
 	t.Cleanup(stubServerRedirectPromptReader(strings.NewReader("\n")))

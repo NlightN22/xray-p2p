@@ -41,6 +41,7 @@ func TestRunClientRedirectAdd_PromptCancelled(t *testing.T) {
 	t.Cleanup(stubClientList(func(client.ListOptions) ([]client.EndpointRecord, error) {
 		return []client.EndpointRecord{
 			{Tag: "proxy-a", Hostname: "edge-a"},
+			{Tag: "proxy-b", Hostname: "edge-b"},
 		}, nil
 	}))
 	t.Cleanup(stubClientRedirectPromptReader(strings.NewReader("\n")))

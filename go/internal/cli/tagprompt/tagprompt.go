@@ -34,6 +34,9 @@ func Select(entries []Entry, opts Options) (Entry, error) {
 	if len(entries) == 0 {
 		return Entry{}, ErrEmpty
 	}
+	if len(entries) == 1 {
+		return entries[0], nil
+	}
 
 	header := strings.TrimSpace(opts.Header)
 	if header == "" {
