@@ -35,6 +35,7 @@ var (
 	serverRedirectAddFunc    = server.AddRedirect
 	serverRedirectRemoveFunc = server.RemoveRedirect
 	serverRedirectListFunc   = server.ListRedirects
+	serverReverseListFunc    = server.ListReverse
 )
 
 var promptYesNoFunc = promptYesNo

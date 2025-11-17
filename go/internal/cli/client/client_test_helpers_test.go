@@ -1,7 +1,9 @@
 package clientcmd
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -66,6 +68,15 @@ func stubClientList(fn func(client.ListOptions) ([]client.EndpointRecord, error)
 	return func() { clientListFunc = prev }
 }
 
+func stubClientReverseList(fn func(client.ReverseListOptions) ([]client.ReverseRecord, error)) func() {
+	prev := clientReverseListFunc
+	if fn == nil {
+		fn = func(client.ReverseListOptions) ([]client.ReverseRecord, error) { return nil, nil }
+	}
+	clientReverseListFunc = fn
+	return func() { clientReverseListFunc = prev }
+}
+
 func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 	t.Helper()
 
@@ -102,4 +113,24 @@ func requireEqual[T comparable](t *testing.T, got, want T, label string) {
 	if got != want {
 		t.Fatalf("%s mismatch: got %v want %v", label, got, want)
 	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = w
+	fn()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close stdout: %v", err)
+	}
+	os.Stdout = oldStdout
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	return buf.String()
 }

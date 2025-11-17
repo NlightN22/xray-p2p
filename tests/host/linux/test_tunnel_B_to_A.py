@@ -146,6 +146,21 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
         recorded_tags = {tag for tag in client_state.get("reverse", {}).keys()}
         assert recorded_tags == {reverse_tag}, f"Unexpected reverse entries recorded: {recorded_tags}"
 
+        helpers.assert_reverse_cli_output(
+            server_runner,
+            "server",
+            server_install_path,
+            helpers.SERVER_CONFIG_DIR_NAME,
+            reverse_tag,
+        )
+        helpers.assert_reverse_cli_output(
+            client_runner,
+            "client",
+            helpers.INSTALL_ROOT,
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            reverse_tag,
+        )
+
         yield {
             "server_host": server_host,
             "client_host": client_host,

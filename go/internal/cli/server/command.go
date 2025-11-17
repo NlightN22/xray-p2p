@@ -54,6 +54,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newServerUserCmd(cfg),
 		newServerRedirectCmd(cfg),
 		newServerForwardCmd(cfg),
+		newServerReverseCmd(cfg),
 		newServerCertCmd(cfg),
 		newServerDeployCmd(cfg),
 	)

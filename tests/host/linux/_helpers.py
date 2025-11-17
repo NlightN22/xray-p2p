@@ -65,6 +65,28 @@ def cleanup_server_install(
     )
 
 
+def assert_reverse_cli_output(
+    runner,
+    role: str,
+    install_dir: PurePosixPath | str,
+    config_dir: str,
+    reverse_tag: str,
+) -> None:
+    install_path = install_dir.as_posix() if isinstance(install_dir, PurePosixPath) else str(install_dir)
+    result = runner(
+        role,
+        "reverse",
+        "--path",
+        install_path,
+        "--config-dir",
+        config_dir,
+        check=True,
+    )
+    output = (result.stdout or "").lower()
+    tag = reverse_tag.strip().lower()
+    assert tag in output, f"{role} reverse list output missing {reverse_tag}. STDOUT: {result.stdout}"
+
+
 def read_json(host: Host, path: PurePosixPath) -> dict:
     return linux_env.read_json(host, path)
 

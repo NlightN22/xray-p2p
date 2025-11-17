@@ -88,6 +88,13 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             helpers.assert_server_reverse_routing(
                 server_routing, entry["reverse_tag"], user=entry["credential"]["user"]
             )
+            helpers.assert_reverse_cli_output(
+                entry["runner"],
+                "server",
+                helpers.INSTALL_ROOT,
+                helpers.SERVER_CONFIG_DIR_NAME,
+                entry["reverse_tag"],
+            )
 
         client_runner(
             "client",
@@ -155,6 +162,13 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                 endpoint_tag=endpoint_tag,
                 user=entry["credential"]["user"],
                 host=entry["ip"],
+            )
+            helpers.assert_reverse_cli_output(
+                client_runner,
+                "client",
+                helpers.INSTALL_ROOT,
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                entry["reverse_tag"],
             )
 
         redirect_specs: list[dict[str, str]] = []

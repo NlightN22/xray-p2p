@@ -25,6 +25,7 @@ var (
 	clientRunFunc            = client.Run
 	clientRemoveEndpointFunc = client.RemoveEndpoint
 	clientListFunc           = client.ListEndpoints
+	clientReverseListFunc    = client.ListReverse
 )
 
 func Execute(ctx context.Context, cfg config.Config, args []string) int {

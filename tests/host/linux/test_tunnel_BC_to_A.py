@@ -112,6 +112,14 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
             helpers.assert_server_reverse_routing(server_routing, reverse_tag, user=user)
         recorded_server_tags = set((server_state.get("reverse_channels") or {}).keys())
         assert recorded_server_tags == {reverse_default, reverse_second}
+        for reverse_tag in (reverse_default, reverse_second):
+            helpers.assert_reverse_cli_output(
+                server_runner,
+                "server",
+                helpers.INSTALL_ROOT,
+                helpers.SERVER_CONFIG_DIR_NAME,
+                reverse_tag,
+            )
 
         _install_client(client_b, client_b_runner, default_cred["link"])
         _install_client(client_c, client_c_runner, second_link)
@@ -128,6 +136,13 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
             host=SERVER_IP,
         )
         assert set((client_b_state.get("reverse") or {}).keys()) == {reverse_default}
+        helpers.assert_reverse_cli_output(
+            client_b_runner,
+            "client",
+            helpers.INSTALL_ROOT,
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            reverse_default,
+        )
 
         client_c_state = helpers.read_first_existing_json(client_c, helpers.CLIENT_STATE_FILES)
         client_c_routing = helpers.read_json(client_c, helpers.CLIENT_CONFIG_DIR / "routing.json")
@@ -140,6 +155,13 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
             host=SERVER_IP,
         )
         assert set((client_c_state.get("reverse") or {}).keys()) == {reverse_second}
+        helpers.assert_reverse_cli_output(
+            client_c_runner,
+            "client",
+            helpers.INSTALL_ROOT,
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            reverse_second,
+        )
 
         redirect_domains: list[dict[str, str]] = []
         try:

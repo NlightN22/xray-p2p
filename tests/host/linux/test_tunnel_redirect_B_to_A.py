@@ -116,6 +116,14 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
         )
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
         assert credential["link"], "Expected trojan link in server install output"
+        reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
+        helpers.assert_reverse_cli_output(
+            server_runner,
+            "server",
+            helpers.INSTALL_ROOT,
+            helpers.SERVER_CONFIG_DIR_NAME,
+            reverse_tag,
+        )
 
         client_runner(
             "client",
@@ -128,6 +136,13 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
             credential["link"],
             "--force",
             check=True,
+        )
+        helpers.assert_reverse_cli_output(
+            client_runner,
+            "client",
+            helpers.INSTALL_ROOT,
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            reverse_tag,
         )
 
         with linux_env.xp2p_run_session(

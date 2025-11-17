@@ -102,6 +102,15 @@ func stubServerUserList(fn func(context.Context, server.ListUsersOptions) ([]ser
 	return func() { serverUserListFunc = prev }
 }
 
+func stubServerReverseList(fn func(server.ReverseListOptions) ([]server.ReverseRecord, error)) func() {
+	prev := serverReverseListFunc
+	if fn == nil {
+		fn = func(server.ReverseListOptions) ([]server.ReverseRecord, error) { return nil, nil }
+	}
+	serverReverseListFunc = fn
+	return func() { serverReverseListFunc = prev }
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	oldStdout := os.Stdout
