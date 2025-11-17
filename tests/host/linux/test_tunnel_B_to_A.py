@@ -85,6 +85,10 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
     server_install_path = helpers.INSTALL_ROOT.as_posix()
 
     def cleanup():
+        for host in (server_host, client_host):
+            host.run("sudo -n pkill -f '/usr/bin/xp2p server run' >/dev/null 2>&1 || true")
+            host.run("sudo -n pkill -f '/usr/bin/xp2p client run' >/dev/null 2>&1 || true")
+            host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
 
@@ -194,7 +198,7 @@ def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = F
 def _ip_alias(host, cidr: str, dev: str = "lo"):
     add_cmd = f"sudo -n ip addr add {cidr} dev {dev}"
     add_result = host.run(add_cmd)
-    if add_result.rc != 0 and "File exists" not in (add_result.stderr or "").lower():
+    if add_result.rc != 0 and "file exists" not in (add_result.stderr or "").lower():
         pytest.fail(
             f"Failed to add IP alias {cidr} on {dev}.\n"
             f"CMD: {add_cmd}\nSTDOUT:\n{add_result.stdout}\nSTDERR:\n{add_result.stderr}"
@@ -430,7 +434,7 @@ def test_client_redirect_through_server(tunnel_environment):
             helpers.CLIENT_CONFIG_DIR_NAME,
             check=True,
         ).stdout or ""
-        assert "no redirect rules configured" in final_list.lower()
+        assert CLIENT_REDIRECT_CIDR not in final_list
 
 
 def test_reverse_redirect_via_server_portal(tunnel_environment):

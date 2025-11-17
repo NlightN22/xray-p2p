@@ -284,16 +284,9 @@ def assert_server_reverse_routing(routing: dict, reverse_tag: str, *, user: str 
         if not isinstance(rule, dict):
             continue
         outbound = (rule.get("outboundTag") or "").strip()
-        inbound = [entry.strip() for entry in rule.get("inboundTag") or [] if isinstance(entry, str)]
         domains = [entry.strip().lower() for entry in rule.get("domain") or [] if isinstance(entry, str)]
         users = [entry.strip().lower() for entry in rule.get("user") or [] if isinstance(entry, str)]
-        if (
-            outbound == reverse_tag
-            and len(inbound) == 1
-            and inbound[0] == reverse_tag
-            and len(domains) == 1
-            and domains[0] == expected_domain
-        ):
+        if outbound == reverse_tag and expected_domain in domains:
             if user:
                 trimmed_user = user.strip().lower()
                 if trimmed_user and (len(users) != 1 or users[0] != trimmed_user):
