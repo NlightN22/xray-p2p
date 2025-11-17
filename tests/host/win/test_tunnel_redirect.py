@@ -378,6 +378,8 @@ def test_client_redirect_tunnel_win(
                     "remove",
                     "--cidr",
                     DIAG_CIDR,
+                    "--host",
+                    SERVER_PUBLIC_HOST,
                     check=True,
                 )
 

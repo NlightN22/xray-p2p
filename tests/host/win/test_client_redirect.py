@@ -133,6 +133,8 @@ def _assert_no_domain_redirect_rule(data: dict, domain: str) -> None:
 
 def _redirect_cmd(runner, subcommand: str, *args: str, check: bool = False):
     base = ["client", "redirect", subcommand]
+    if subcommand in {"add", "remove"}:
+        base.append("--quiet")
     base.extend(args)
     return runner(*base, check=check)
 
@@ -222,6 +224,8 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "remove",
             "--cidr",
             REDIRECT_CIDR,
+            "--host",
+            PRIMARY_HOST,
             check=True,
         )
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)

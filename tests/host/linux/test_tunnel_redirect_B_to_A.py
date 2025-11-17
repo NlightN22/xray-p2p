@@ -84,6 +84,10 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
     client_runner = _runner(client_host)
 
     def cleanup(iface: str | None = None):
+        for host in (server_host, client_host):
+            host.run("sudo -n pkill -f '/usr/bin/xp2p server run' >/dev/null 2>&1 || true")
+            host.run("sudo -n pkill -f '/usr/bin/xp2p client run' >/dev/null 2>&1 || true")
+            host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
         for cidr in (DIAG_CIDR, DIAG_DOMAIN_CIDR):
@@ -305,6 +309,8 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
                     helpers.CLIENT_CONFIG_DIR_NAME,
                     "--cidr",
                     DIAG_CIDR,
+                    "--host",
+                    SERVER_IP,
                     check=True,
                 )
 

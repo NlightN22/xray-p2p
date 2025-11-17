@@ -435,6 +435,8 @@ def test_client_redirect_through_server(tunnel_environment):
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--cidr",
             CLIENT_REDIRECT_CIDR,
+            "--host",
+            SERVER_IP,
             check=True,
         )
         routing_after = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")

@@ -47,6 +47,8 @@ def _redirect_cmd(runner, subcommand: str, *args: str, check: bool = False):
         "--config-dir",
         CONFIG_DIR,
     ]
+    if subcommand in {"add", "remove"}:
+        base.append("--quiet")
     base.extend(args)
     return runner(*base, check=check)
 
@@ -141,6 +143,8 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             "remove",
             "--cidr",
             REDIRECT_CIDR,
+            "--host",
+            PRIMARY_HOST,
             check=True,
         )
 
