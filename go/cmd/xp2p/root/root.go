@@ -215,7 +215,10 @@ func (o *rootOptions) runService(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if err := server.StartBackground(ctx, server.Options{Port: o.cfg.Server.Port}); err != nil {
+	if err := server.StartBackground(ctx, server.Options{
+		Port:       o.cfg.Server.Port,
+		InstallDir: o.cfg.Server.InstallDir,
+	}); err != nil {
 		logging.Error("failed to start diagnostics service", "err", err)
 		return exitError{code: 1}
 	}

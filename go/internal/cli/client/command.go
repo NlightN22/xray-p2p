@@ -50,6 +50,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newClientRemoveCmd(cfg),
 		newClientListCmd(cfg),
 		newClientRunCmd(cfg),
+		newClientStateCmd(cfg),
 		newClientDeployCmd(cfg),
 		newClientRedirectCmd(cfg),
 		newClientForwardCmd(cfg),

@@ -136,6 +136,11 @@ Additional helpers:
 - `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
 - `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.
 - `xp2p client list` and `xp2p client remove` help you inspect or prune tunnels without touching the files manually.
+
+### Heartbeat monitoring
+
+- `xp2p server state` reads `state-heartbeat.json` under the server install directory and prints tunnel tag, host, status (alive/dead), RTT metrics, last update, and the reported client IP. Use `--watch` to refresh every few seconds, `--ttl` to tweak the alive threshold (defaults to 10s), and `--interval` to control refresh cadence.
+- `xp2p client state` shows the local heartbeat cache so you can confirm the server was reachable recently; the watch/ttl flags mirror the server command.
 ### Client inventory and cleanup
 
 `xp2p client list` reads `install-state-client.json` and prints every configured tunnel with hostname, outbound tag, remote address, user, server name, and TLS policy. When no endpoints exist it prints `No client endpoints configured.` which keeps automation simple.

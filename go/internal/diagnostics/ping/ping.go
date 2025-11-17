@@ -21,6 +21,22 @@ type Options struct {
 	Proto      string
 	Port       int
 	SocksProxy string
+	Reporter   Reporter
+	Silent     bool
+}
+
+// Reporter is invoked when a TCP ping succeeds allowing callers to emit
+// auxiliary payloads before the connection is closed.
+type Reporter interface {
+	Report(ctx context.Context, conn net.Conn, result Result) error
+}
+
+// Result captures statistics associated with a single ping request.
+type Result struct {
+	Seq    int
+	Target string
+	Proto  string
+	RTT    time.Duration
 }
 
 const (
@@ -78,18 +94,20 @@ func Run(ctx context.Context, target string, opts Options) error {
 	for seq := 1; seq <= count; seq++ {
 		select {
 		case <-ctx.Done():
-			fmt.Println("interrupted")
+			if !opts.Silent {
+				fmt.Println("interrupted")
+			}
 			logger.Info("ping session interrupted", "sent", sent, "received", received)
 			return ctx.Err()
 		default:
 		}
 
-		start := time.Now()
 		var err error
+		var rtt time.Duration
 		switch proto {
 		case protoTCP:
 			logger.Debug("sending tcp ping", "seq", seq)
-			err = pingTCP(ctx, targetAddr, timeout, opts.SocksProxy)
+			rtt, err = pingTCP(ctx, targetAddr, timeout, opts.SocksProxy, seq, opts.Reporter)
 		case protoUDP:
 			if opts.SocksProxy != "" {
 				logger.Warn("udp ping via socks proxy is not supported", "seq", seq)
@@ -98,18 +116,22 @@ func Run(ctx context.Context, target string, opts Options) error {
 			}
 			// TODO: support dokodemo or other proxy transports once available in diagnostics ping.
 			logger.Debug("sending udp ping", "seq", seq)
-			err = pingUDP(ctx, target, port, timeout)
+			rtt, err = pingUDP(ctx, target, port, timeout)
 		}
 
 		sent++
 		if err != nil {
-			fmt.Printf("Request %d failed: %v\n", seq, err)
+			if !opts.Silent {
+				fmt.Printf("Request %d failed: %v\n", seq, err)
+			}
 			logger.Warn("ping request failed", "seq", seq, "err", err)
 		} else {
 			received++
-			rtt := time.Since(start).Round(time.Millisecond)
-			fmt.Printf("Reply from %s: seq=%d time=%s proto=%s\n",
-				targetAddr, seq, rtt, proto)
+			formatted := rtt.Round(time.Millisecond)
+			if !opts.Silent {
+				fmt.Printf("Reply from %s: seq=%d time=%s proto=%s\n",
+					targetAddr, seq, formatted, proto)
+			}
 			logger.Debug("ping reply received", "seq", seq, "rtt", rtt)
 		}
 
@@ -123,7 +145,9 @@ func Run(ctx context.Context, target string, opts Options) error {
 		}
 	}
 
-	printSummary(sent, received)
+	if !opts.Silent {
+		printSummary(sent, received)
+	}
 	logger.Info("ping session completed", "sent", sent, "received", received)
 	if received == 0 {
 		return errors.New("no replies received")
@@ -131,7 +155,7 @@ func Run(ctx context.Context, target string, opts Options) error {
 	return nil
 }
 
-func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy string) error {
+func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy string, seq int, reporter Reporter) (time.Duration, error) {
 	var (
 		conn net.Conn
 		err  error
@@ -143,62 +167,77 @@ func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy
 		conn, err = dialViaSocks(ctx, addr, socksProxy, timeout)
 	}
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer conn.Close()
 
 	if err := setDeadline(conn, timeout); err != nil {
-		return err
+		return 0, err
 	}
 
+	start := time.Now()
 	if _, err = conn.Write([]byte(pingRequestBody)); err != nil {
-		return err
+		return 0, err
 	}
 
 	buf := make([]byte, 64)
 	n, err := conn.Read(buf)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if !strings.EqualFold(strings.TrimSpace(string(buf[:n])), expectedResponse) {
-		return fmt.Errorf("unexpected response: %q", string(buf[:n]))
+		return 0, fmt.Errorf("unexpected response: %q", string(buf[:n]))
 	}
 
-	return nil
+	rtt := time.Since(start)
+	if reporter != nil {
+		result := Result{
+			Seq:    seq,
+			Target: addr,
+			Proto:  protoTCP,
+			RTT:    rtt,
+		}
+		if err := reporter.Report(ctx, conn, result); err != nil {
+			return rtt, err
+		}
+	}
+
+	return rtt, nil
 }
 
-func pingUDP(ctx context.Context, host string, port int, timeout time.Duration) error {
+func pingUDP(ctx context.Context, host string, port int, timeout time.Duration) (time.Duration, error) {
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer conn.Close()
 
 	if err := setDeadline(conn, timeout); err != nil {
-		return err
+		return 0, err
 	}
 
+	start := time.Now()
 	if _, err = conn.Write([]byte(pingRequestBody)); err != nil {
-		return err
+		return 0, err
 	}
 
 	buf := make([]byte, 64)
 	n, err := conn.Read(buf)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	if !strings.EqualFold(strings.TrimSpace(string(buf[:n])), expectedResponse) {
-		return fmt.Errorf("unexpected response: %q", string(buf[:n]))
+		return 0, fmt.Errorf("unexpected response: %q", string(buf[:n]))
 	}
 
-	return nil
+	return time.Since(start), nil
 }
 
 func printSummary(sent, received int) {

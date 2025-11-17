@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -325,6 +326,11 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	quiet := fs.Bool("quiet", false, "do not prompt for installation")
 	autoInstall := fs.Bool("auto-install", false, "install automatically if missing")
 	logFile := fs.String("xray-log-file", "", "file to append xray-core stderr output")
+	hbEnabled := fs.Bool("heartbeat", true, "enable background heartbeat probes")
+	hbInterval := fs.Duration("heartbeat-interval", 2*time.Second, "frequency of heartbeat probes")
+	hbTimeout := fs.Duration("heartbeat-timeout", 2*time.Second, "timeout per heartbeat probe")
+	hbPort := fs.String("heartbeat-port", cfg.Server.Port, "diagnostics service port to probe")
+	hbSocks := fs.String("heartbeat-socks", cfg.Client.SocksAddress, "SOCKS5 proxy for heartbeat (optional)")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -390,6 +396,13 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
 		ErrorLogPath: strings.TrimSpace(*logFile),
+		Heartbeat: client.HeartbeatOptions{
+			Enabled:      *hbEnabled,
+			Interval:     *hbInterval,
+			Timeout:      *hbTimeout,
+			Port:         firstNonEmpty(strings.TrimSpace(*hbPort), cfg.Server.Port),
+			SocksAddress: firstNonEmpty(strings.TrimSpace(*hbSocks), cfg.Client.SocksAddress),
+		},
 	}
 
 	if err := clientRunFunc(ctx, opts); err != nil {

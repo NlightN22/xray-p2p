@@ -133,6 +133,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	runOpts := client.RunOptions{
 		InstallDir: installOpts.InstallDir,
 		ConfigDir:  installOpts.ConfigDir,
+		Heartbeat: client.HeartbeatOptions{
+			Enabled:      true,
+			Interval:     2 * time.Second,
+			Timeout:      2 * time.Second,
+			Port:         cfg.Server.Port,
+			SocksAddress: cfg.Client.SocksAddress,
+		},
 	}
 	runErrCh := make(chan error, 1)
 	logging.Info("xp2p client deploy: starting local client run", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)

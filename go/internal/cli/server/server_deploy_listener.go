@@ -44,7 +44,10 @@ func (s *deployServer) Run(ctx context.Context) error {
 			return ctx.Err()
 		case sig := <-results:
 			if sig.ok {
-				if err := server.StartBackground(ctx, server.Options{Port: s.Cfg.Server.Port}); err != nil {
+				if err := server.StartBackground(ctx, server.Options{
+					Port:       s.Cfg.Server.Port,
+					InstallDir: s.Cfg.Server.InstallDir,
+				}); err != nil {
 					logging.Warn("xp2p server deploy: diagnostics start failed", "err", err)
 				}
 				logging.Info("xp2p server deploy: starting xray-core", "install_dir", sig.installDir, "config_dir", sig.configDir)

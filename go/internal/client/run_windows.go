@@ -45,6 +45,9 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
+	stopHeartbeat := startHeartbeatLoop(ctx, installDir, opts.Heartbeat)
+	defer stopHeartbeat()
+
 	var errorWriter io.Writer
 	var errorFile *os.File
 	if path := strings.TrimSpace(opts.ErrorLogPath); path != "" {

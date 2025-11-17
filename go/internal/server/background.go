@@ -3,12 +3,17 @@ package server
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
@@ -19,9 +24,12 @@ const (
 	pingResponse = "PONG"
 )
 
+const heartbeatPayloadTimeout = 250 * time.Millisecond
+
 // Options controls background server behaviour.
 type Options struct {
-	Port string
+	Port       string
+	InstallDir string
 }
 
 // StartBackground launches lightweight TCP and UDP responders that can be used
@@ -29,15 +37,27 @@ type Options struct {
 // supplied context is cancelled.
 func StartBackground(ctx context.Context, opts Options) error {
 	var (
-		once    sync.Once
-		tcpLn   net.Listener
-		udpConn net.PacketConn
-		started bool
+		once     sync.Once
+		tcpLn    net.Listener
+		udpConn  net.PacketConn
+		started  bool
+		hbStore  *heartbeat.Store
+		storeErr error
 	)
 
 	port := strings.TrimSpace(opts.Port)
 	if port == "" {
 		port = DefaultPort
+	}
+
+	storePath := ""
+	if dir := strings.TrimSpace(opts.InstallDir); dir != "" {
+		storePath = filepath.Join(dir, layout.HeartbeatStateFileName)
+	}
+	hbStore, storeErr = heartbeat.NewStore(storePath)
+	if storeErr != nil {
+		logging.Warn("heartbeat store disabled", "err", storeErr)
+		hbStore, _ = heartbeat.NewStore("")
 	}
 
 	shutdown := func() {
@@ -69,7 +89,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 						continue
 					}
 				}
-				go handleTCP(ctx, conn)
+				go handleTCP(ctx, conn, hbStore)
 			}
 		}()
 	}
@@ -94,7 +114,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 	return nil
 }
 
-func handleTCP(ctx context.Context, conn net.Conn) {
+func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store) {
 	defer conn.Close()
 	_ = conn.SetDeadline(deadlineFromContext(ctx))
 
@@ -106,6 +126,7 @@ func handleTCP(ctx context.Context, conn net.Conn) {
 	if strings.EqualFold(strings.TrimSpace(line), pingRequest) {
 		logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
 		_, _ = conn.Write([]byte(pingResponse + "\n"))
+		consumeHeartbeatPayload(ctx, reader, conn, store)
 	}
 }
 
@@ -138,4 +159,47 @@ func deadlineFromContext(ctx context.Context) time.Time {
 		return dl
 	}
 	return time.Time{}
+}
+
+func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net.Conn, store *heartbeat.Store) {
+	if store == nil {
+		return
+	}
+	deadline := time.Now().Add(heartbeatPayloadTimeout)
+	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
+		deadline = dl
+	}
+	_ = conn.SetReadDeadline(deadline)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			return
+		}
+		if err == io.EOF && len(line) == 0 {
+			return
+		}
+		if len(line) == 0 {
+			return
+		}
+	}
+
+	payloadRaw := strings.TrimSpace(line)
+	if payloadRaw == "" {
+		return
+	}
+
+	var payload heartbeat.Payload
+	if err := json.Unmarshal([]byte(payloadRaw), &payload); err != nil {
+		logging.Warn("invalid heartbeat payload", "remote_addr", conn.RemoteAddr().String(), "err", err)
+		return
+	}
+	if payload.Timestamp.IsZero() {
+		payload.Timestamp = time.Now().UTC()
+	}
+	if _, err := store.Update(payload); err != nil {
+		logging.Warn("unable to persist heartbeat", "tag", payload.Tag, "err", err)
+		return
+	}
+	logging.Debug("heartbeat recorded", "tag", payload.Tag, "host", payload.Host, "client_ip", payload.ClientIP)
 }

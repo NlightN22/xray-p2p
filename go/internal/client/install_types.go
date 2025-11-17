@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -30,6 +31,16 @@ type RunOptions struct {
 	InstallDir   string
 	ConfigDir    string
 	ErrorLogPath string
+	Heartbeat    HeartbeatOptions
+}
+
+// HeartbeatOptions controls background telemetry probes.
+type HeartbeatOptions struct {
+	Enabled      bool
+	Interval     time.Duration
+	Timeout      time.Duration
+	Port         string
+	SocksAddress string
 }
 
 // RemoveOptions controls removal of the client-side components.

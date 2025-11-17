@@ -3,13 +3,17 @@ package server
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
@@ -100,5 +104,79 @@ func TestStartBackgroundServesAndShutsDown(t *testing.T) {
 		if _, err := udpConn.Read(buf); err == nil {
 			t.Fatalf("expected udp read to fail after shutdown")
 		}
+	}
+}
+
+func TestHeartbeatPayloadIsPersisted(t *testing.T) {
+	logging.Configure(logging.Options{Output: io.Discard})
+	t.Cleanup(func() {
+		logging.Configure(logging.Options{Output: os.Stderr})
+	})
+
+	dir := t.TempDir()
+	portStr, _ := testutil.FreePort(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := StartBackground(ctx, Options{Port: portStr, InstallDir: dir}); err != nil {
+		t.Fatalf("StartBackground: %v", err)
+	}
+
+	addr := net.JoinHostPort("127.0.0.1", portStr)
+	testutil.WaitForCondition(t, time.Second, func() bool {
+		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	})
+
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial server: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.Write([]byte("PING\n")); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	reader := bufio.NewReader(conn)
+	if _, err := reader.ReadString('\n'); err != nil {
+		t.Fatalf("read pong: %v", err)
+	}
+
+	payload := heartbeat.Payload{
+		Tag:       "proxy-test",
+		Host:      "edge.example.com",
+		ClientIP:  "10.0.0.5",
+		Timestamp: time.Now().UTC(),
+		RTTMillis: 12,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if _, err := conn.Write(append(data, '\n')); err != nil {
+		t.Fatalf("write payload: %v", err)
+	}
+
+	statePath := filepath.Join(dir, layout.HeartbeatStateFileName)
+	testutil.WaitForCondition(t, time.Second, func() bool {
+		_, err := os.Stat(statePath)
+		return err == nil
+	})
+
+	state, err := heartbeat.Load(statePath)
+	if err != nil {
+		t.Fatalf("Load heartbeat state: %v", err)
+	}
+	snapshots := state.Snapshot(time.Now(), time.Second)
+	if len(snapshots) != 1 {
+		t.Fatalf("expected 1 snapshot, got %d", len(snapshots))
+	}
+	if got := snapshots[0].Entry.Host; got != payload.Host {
+		t.Fatalf("unexpected host %q", got)
 	}
 }

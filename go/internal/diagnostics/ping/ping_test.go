@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -73,6 +74,44 @@ func TestRunFailsWhenServerUnavailable(t *testing.T) {
 	if time.Since(start) > 2*time.Second {
 		t.Fatalf("Run took too long: %s", time.Since(start))
 	}
+}
+
+func TestReporterInvokedOnSuccess(t *testing.T) {
+	setupLogging(t)
+	cancel, port := startBackgroundServer(t)
+	defer cancel()
+
+	var called atomic.Bool
+	reporter := reporterFunc(func(ctx context.Context, conn net.Conn, result Result) error {
+		called.Store(true)
+		if conn == nil {
+			t.Fatalf("expected live connection")
+		}
+		return nil
+	})
+
+	runCtx, runCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer runCancel()
+
+	if err := Run(runCtx, "127.0.0.1", Options{
+		Count:    1,
+		Timeout:  time.Second,
+		Proto:    "tcp",
+		Port:     port,
+		Reporter: reporter,
+		Silent:   true,
+	}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !called.Load() {
+		t.Fatalf("reporter was not invoked")
+	}
+}
+
+type reporterFunc func(context.Context, net.Conn, Result) error
+
+func (fn reporterFunc) Report(ctx context.Context, conn net.Conn, result Result) error {
+	return fn(ctx, conn, result)
 }
 
 func setupLogging(t *testing.T) {
