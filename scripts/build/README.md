@@ -34,20 +34,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_inst
 ```
 The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed. Additional parameters let you control the WiX source (`-WixSourceRelative`), the MSI name suffix (`-MsiArchLabel`), and whether the script should only build the MSI (`-BuildOnly`) instead of running `msiexec`. Use `-OutputMarker '__MSI_PATH__='` when another tool needs to parse the resulting path from `stdout`.
 
-## OpenWrt ipk
-
-`build_openwrt_xp2p.sh` orchestrates SDK downloads, repo syncing, feed wiring, and ipk builds.
-
-### Inside the Debian OpenWrt builder VM
-```
-cd /srv/xray-p2p
-./scripts/build/build_openwrt_xp2p.sh
-```
-Use `XP2P_TARGETS`, `XP2P_TARGETS="linux-arm64"`, `XP2P_KEEP_CONFIG=1`, etc., to control targets. Artifacts are copied to `/srv/xray-p2p/build/openwrt/<identifier>`.
-
-### CI usage
-GitHub workflows call the same script via `$GITHUB_WORKSPACE/scripts/build/build_openwrt_xp2p.sh`, exporting `XP2P_PROJECT_ROOT` and `XP2P_BUILD_ROOT` as needed.
-
 ## Notes
 - All scripts assume the repo root is mounted at either `/srv/xray-p2p` (guests) or the current working directory (host). Set `XP2P_PROJECT_ROOT` when you need to override detection.
 - Windows PowerShell helpers rely on WiX Toolset being installed (e.g., `C:\Program Files (x86)\WiX Toolset v3.11`).
