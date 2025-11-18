@@ -2,7 +2,7 @@
 
 BOX_PATH = File.expand_path('../boxes/openwrt-24.10.2.box', __dir__)
 PROJECT_ROOT = File.expand_path('../../..', __dir__)
-BUILD_OUTPUT = File.join(PROJECT_ROOT, 'build', 'openwrt')
+BUILD_OUTPUT = File.join(PROJECT_ROOT, 'build', 'ipk')
 HOST_IP = ENV.fetch('OPENWRT_HOST_IP', '10.0.10.30')
 HOST_NETMASK = ENV.fetch('OPENWRT_HOST_NETMASK', '255.255.255.0')
 HOST_INTERFACE = ENV.fetch('OPENWRT_HOST_INTERFACE', 'eth1')
