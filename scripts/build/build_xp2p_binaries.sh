@@ -11,6 +11,19 @@ STRIP_ENABLE=${XP2P_STRIP:-1}
 STRIP_BIN=${XP2P_STRIP_BIN:-strip}
 GOEXPERIMENT_OPT=${XP2P_GOEXPERIMENT:-""}
 
+bundle_path_for_target() {
+  case "$1" in
+    linux-amd64) echo "$PROJECT_ROOT/distro/linux/bundle/x86_64/xray" ;;
+    linux-386) echo "$PROJECT_ROOT/distro/linux/bundle/x86/xray" ;;
+    linux-arm64) echo "$PROJECT_ROOT/distro/linux/bundle/arm64/xray" ;;
+    linux-armhf) echo "$PROJECT_ROOT/distro/linux/bundle/arm32/xray" ;;
+    linux-mipsle-softfloat) echo "$PROJECT_ROOT/distro/linux/bundle/mips32le/xray" ;;
+    linux-mips64le) echo "$PROJECT_ROOT/distro/linux/bundle/mips64le/xray" ;;
+    linux-riscv64) echo "$PROJECT_ROOT/distro/linux/bundle/riscv64/xray" ;;
+    *) return 1 ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage: scripts/build/build_xp2p_binaries.sh
@@ -101,6 +114,16 @@ for target in $TARGETS; do
     fi
     if [ -f "$binary_path" ]; then
       "$STRIP_BIN" --strip-unneeded "$binary_path" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if bundle_path=$(bundle_path_for_target "$target"); then
+    if [ -f "$bundle_path" ]; then
+      cp "$bundle_path" "$out_dir/xray"
+      chmod 0755 "$out_dir/xray"
+    else
+      echo "ERROR: xray bundle for $target not found at $bundle_path" >&2
+      exit 1
     fi
   fi
 done
