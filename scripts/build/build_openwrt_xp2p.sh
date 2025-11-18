@@ -9,7 +9,7 @@ BUILD_OUTPUT_ROOT=${XP2P_BUILD_ROOT:-"$PROJECT_ROOT/build/openwrt"}
 SDK_BASE_DIR=${XP2P_SDK_BASE:-"$HOME"}
 OPENWRT_VERSION=${XP2P_OPENWRT_VERSION:-"23.05.3"}
 OPENWRT_MIRROR=${XP2P_OPENWRT_MIRROR:-"https://downloads.openwrt.org/releases"}
-TARGET_FILTER=${XP2P_TARGETS:-"all"}
+TARGET_FILTER=${XP2P_TARGETS:-""}
 KEEP_CONFIG=${XP2P_KEEP_CONFIG:-0}
 SOURCE_OVERRIDE=${XP2P_STAGE_SOURCE:-1}
 SOURCE_ARCHIVE_NAME=""
@@ -26,10 +26,10 @@ normalize_filter() {
   local normalized
   normalized=$(printf "%s" "$TARGET_FILTER" | tr ',\t\r ' '\n' | sed '/^$/d' | tr '[:upper:]' '[:lower:]')
   if [ -z "$normalized" ]; then
-    TARGET_FILTER_LIST=" all "
-  else
-    TARGET_FILTER_LIST=" $(printf "%s" "$normalized" | tr '\n' ' ') "
+    echo "ERROR: XP2P_TARGETS is not set; specify comma-separated identifiers (e.g. linux-amd64)" >&2
+    exit 1
   fi
+  TARGET_FILTER_LIST=" $(printf "%s" "$normalized" | tr '\n' ' ') "
 }
 
 should_build() {
@@ -114,9 +114,10 @@ ensure_feed_link() {
   if [ ! -f "$sdk_dir/feeds.conf.default" ]; then
     touch "$sdk_dir/feeds.conf.default"
   fi
-  if ! grep -qs "^src-link xp2p " "$sdk_dir/feeds.conf.default"; then
-    echo "src-link xp2p $FEED_PATH" >> "$sdk_dir/feeds.conf.default"
+  if grep -qs "^src-.*[[:space:]]xp2p[[:space:]]" "$sdk_dir/feeds.conf.default"; then
+    sed -i '/^src-.*[[:space:]]xp2p[[:space:]]/d' "$sdk_dir/feeds.conf.default"
   fi
+  echo "src-link xp2p $FEED_PATH" >> "$sdk_dir/feeds.conf.default"
 }
 
 resolve_pkg_version() {
@@ -291,6 +292,11 @@ built_any=0
 while IFS='|' read -r identifier target subtarget profile feed_segment tarball_suffix; do
   if [ -z "${identifier:-}" ] || [ "${identifier#\#}" != "$identifier" ]; then
     continue
+  fi
+
+  if [ -z "${target:-}" ] || [ -z "${subtarget:-}" ] || [ -z "${profile:-}" ] || [ -z "${feed_segment:-}" ] || [ -z "${tarball_suffix:-}" ]; then
+    echo "ERROR: invalid entry in target table (identifier=${identifier:-?})" >&2
+    exit 1
   fi
 
   if should_build "$identifier"; then
