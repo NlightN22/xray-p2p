@@ -61,11 +61,14 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
     server_a_runner = _runner(server_a)
     server_c_runner = _runner(server_c)
     client_runner = _runner(client_b)
+    client_primary_ip = helpers.detect_primary_ipv4(client_b)
 
     def cleanup():
         helpers.cleanup_server_install(server_a, server_a_runner)
         helpers.cleanup_server_install(server_c, server_c_runner)
         helpers.cleanup_client_install(client_b, client_runner)
+        for host in (server_a, server_c, client_b):
+            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
 
     cleanup()
     try:
@@ -260,6 +263,15 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                     assert "0% loss" in stdout, (
                         f"xp2p ping to {target} did not report zero loss:\n"
                         f"{result.stdout}"
+                    )
+                for entry in server_entries:
+                    heartbeat_state = helpers.wait_for_heartbeat_state(entry["host"])
+                    helpers.assert_heartbeat_entry(
+                        heartbeat_state,
+                        helpers.expected_proxy_tag(entry["ip"]),
+                        host=entry["ip"],
+                        user=entry["credential"]["user"],
+                        client_ip=client_primary_ip,
                     )
         finally:
             for spec in redirect_specs:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import time
 
 from testinfra.host import Host
 
@@ -19,6 +20,7 @@ SERVER_STATE_FILES = [
     INSTALL_ROOT / "install-state-server.json",
     INSTALL_ROOT / "install-state.json",
 ]
+HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat.json"
 LOG_ROOT = PurePosixPath("/var/log/xp2p")
 CLIENT_LOG_FILE = LOG_ROOT / "client.err"
 SERVER_LOG_FILE = LOG_ROOT / "server.err"
@@ -118,6 +120,80 @@ def write_text(host: Host, path: PurePosixPath, content: str) -> None:
 
 def file_sha256(host: Host, path: PurePosixPath) -> str:
     return linux_env.file_sha256(host, path)
+
+
+def detect_primary_ipv4(host: Host) -> str:
+    command = "ip -o -4 addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1"
+    result = host.run(command)
+    ip_address = (result.stdout or "").strip()
+    if result.rc != 0 or not ip_address:
+        raise AssertionError(
+            f"Unable to detect primary IPv4 address on {host.backend.hostname}.\n"
+            f"CMD: {command}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return ip_address
+
+
+def wait_for_heartbeat_state(
+    host: Host,
+    path: PurePosixPath | None = None,
+    *,
+    timeout_seconds: float = 60.0,
+    poll_interval: float = 1.5,
+) -> dict:
+    target = path or HEARTBEAT_STATE_FILE
+    deadline = time.time() + timeout_seconds
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        if linux_env.path_exists(host, target):
+            try:
+                return read_json(host, target)
+            except RuntimeError as exc:
+                last_error = exc
+        time.sleep(poll_interval)
+    if last_error:
+        raise AssertionError(f"Failed to read heartbeat state {target}: {last_error}") from last_error
+    raise AssertionError(f"Heartbeat state {target} not found on {host.backend.hostname}")
+
+
+def assert_heartbeat_entry(
+    state: dict,
+    tag: str,
+    *,
+    host: str | None = None,
+    user: str | None = None,
+    client_ip: str | None = None,
+) -> dict:
+    entries = state.get("entries")
+    if not isinstance(entries, dict):
+        raise AssertionError("Heartbeat state is missing entries map")
+    normalized = (tag or "").strip().lower()
+    if not normalized:
+        raise AssertionError("Heartbeat tag to look up is empty")
+    for entry in entries.values():
+        entry_tag = (entry.get("tag") or "").strip()
+        if entry_tag.lower() != normalized:
+            continue
+        if host is not None:
+            recorded_host = (entry.get("host") or "").strip()
+            if recorded_host != host.strip():
+                raise AssertionError(
+                    f"Heartbeat entry {entry_tag} host mismatch (expected {host}, got {recorded_host})"
+                )
+        if user is not None:
+            recorded_user = (entry.get("user") or "").strip()
+            if recorded_user != user.strip():
+                raise AssertionError(
+                    f"Heartbeat entry {entry_tag} user mismatch (expected {user}, got {recorded_user})"
+                )
+        if client_ip is not None:
+            recorded_ip = (entry.get("client_ip") or "").strip()
+            if recorded_ip != client_ip.strip():
+                raise AssertionError(
+                    f"Heartbeat entry {entry_tag} client IP mismatch (expected {client_ip}, got {recorded_ip})"
+                )
+        return entry
+    raise AssertionError(f"Heartbeat entry for tag {tag} not found in state")
 
 
 def extract_trojan_credential(output: str) -> dict[str, str]:

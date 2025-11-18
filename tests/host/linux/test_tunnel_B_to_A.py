@@ -16,7 +16,7 @@ DIAGNOSTICS_PORT = 62022
 SERVER_FORWARD_PORT = 53341
 CLIENT_REDIRECT_CIDR = "10.200.50.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
-HEARTBEAT_STATE_FILE = helpers.INSTALL_ROOT / "state-heartbeat.json"
+HEARTBEAT_STATE_FILE = helpers.HEARTBEAT_STATE_FILE
 STATE_TABLE_HEADER = (
     "TAG",
     "HOST",
@@ -87,27 +87,6 @@ def _ping_with_retries(runner, args: tuple[str, ...], context: str, attempts: in
         f"xp2p ping {context} failed after {attempts} attempts "
         f"(exit {last_result.rc}).\nSTDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}"
     )
-
-
-def _detect_primary_ipv4(host) -> str:
-    command = "ip -o -4 addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1"
-    result = host.run(command)
-    ip_address = (result.stdout or "").strip()
-    if result.rc != 0 or not ip_address:
-        pytest.fail(
-            "Failed to detect primary IPv4 address on "
-            f"{host.backend.hostname}. STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return ip_address
-
-
-def _wait_for_heartbeat_file(host, path, *, timeout_seconds: float = 45.0, poll_interval: float = 1.5) -> None:
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if helpers.path_exists(host, path):
-            return
-        time.sleep(poll_interval)
-    pytest.fail(f"Heartbeat state file {path} not found on {host.backend.hostname}")
 
 
 def _strip_ansi(value: str | None) -> str:
@@ -202,8 +181,8 @@ def _verify_heartbeat_state(env: dict) -> None:
     server_install_path = env["server_install_path"]
     client_install_path = helpers.INSTALL_ROOT.as_posix()
 
-    _wait_for_heartbeat_file(env["server_host"], HEARTBEAT_STATE_FILE)
-    _wait_for_heartbeat_file(env["client_host"], HEARTBEAT_STATE_FILE)
+    helpers.wait_for_heartbeat_state(env["server_host"], HEARTBEAT_STATE_FILE)
+    helpers.wait_for_heartbeat_state(env["client_host"], HEARTBEAT_STATE_FILE)
     _wait_for_alive_entry(
         env["server_runner"],
         "server",
@@ -256,7 +235,7 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
     server_runner = _runner(server_host)
     client_runner = _runner(client_host)
     server_install_path = helpers.INSTALL_ROOT.as_posix()
-    client_primary_ip = _detect_primary_ipv4(client_host)
+    client_primary_ip = helpers.detect_primary_ipv4(client_host)
 
     def cleanup():
         for host in (server_host, client_host):
