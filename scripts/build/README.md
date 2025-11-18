@@ -34,6 +34,33 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_inst
 ```
 The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed. Additional parameters let you control the WiX source (`-WixSourceRelative`), the MSI name suffix (`-MsiArchLabel`), and whether the script should only build the MSI (`-BuildOnly`) instead of running `msiexec`. Use `-OutputMarker '__MSI_PATH__='` when another tool needs to parse the resulting path from `stdout`.
 
+## OpenWrt SDK fetcher
+
+`ensure_openwrt_sdk.sh` downloads (or refreshes) the OpenWrt SDK for selected targets and drops them into `~/openwrt-sdk-<identifier>`.
+
+```
+# grab every supported target (release matrix)
+./scripts/build/ensure_openwrt_sdk.sh
+
+# only refresh linux-amd64
+./scripts/build/ensure_openwrt_sdk.sh linux-amd64
+```
+
+Override the defaults with `OPENWRT_VERSION`, `OPENWRT_MIRROR`, or `OPENWRT_SDK_BASE`.
+
+## Bare xp2p binaries
+
+`build_xp2p_binaries.sh` cross-compiles the CLI using Go's native toolchain and writes artefacts into `/tmp/build/<target>` (change via `XP2P_BUILD_ROOT`). Targets are mandatory (`--targets` / `--target` or `XP2P_TARGETS` env). By default binaries are stripped with `-s -w`, embed the `version.Current()` value, disable CGO (`CGO_ENABLED=0`), leave `GOEXPERIMENT` empty (override via `XP2P_GOEXPERIMENT`), and run `strip --strip-unneeded`.
+
+```
+# build linux-amd64 and linux-arm64
+./scripts/build/build_xp2p_binaries.sh --targets "linux-amd64 linux-arm64"
+
+# only linux-mipsle-softfloat into a custom folder
+XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
+  ./scripts/build/build_xp2p_binaries.sh
+```
+
 ## Notes
 - All scripts assume the repo root is mounted at either `/srv/xray-p2p` (guests) or the current working directory (host). Set `XP2P_PROJECT_ROOT` when you need to override detection.
 - Windows PowerShell helpers rely on WiX Toolset being installed (e.g., `C:\Program Files (x86)\WiX Toolset v3.11`).
