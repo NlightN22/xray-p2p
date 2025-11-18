@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import re
 import time
 
 import pytest
@@ -15,6 +16,18 @@ DIAGNOSTICS_PORT = 62022
 SERVER_FORWARD_PORT = 53341
 CLIENT_REDIRECT_CIDR = "10.200.50.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
+HEARTBEAT_STATE_FILE = helpers.INSTALL_ROOT / "state-heartbeat.json"
+STATE_TABLE_HEADER = (
+    "TAG",
+    "HOST",
+    "STATUS",
+    "LAST_RTT",
+    "AVG_RTT",
+    "LAST_UPDATE",
+    "CLIENT_USER",
+    "CLIENT_IP",
+)
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def _runner(host):
@@ -76,6 +89,166 @@ def _ping_with_retries(runner, args: tuple[str, ...], context: str, attempts: in
     )
 
 
+def _detect_primary_ipv4(host) -> str:
+    command = "ip -o -4 addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1"
+    result = host.run(command)
+    ip_address = (result.stdout or "").strip()
+    if result.rc != 0 or not ip_address:
+        pytest.fail(
+            "Failed to detect primary IPv4 address on "
+            f"{host.backend.hostname}. STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return ip_address
+
+
+def _wait_for_heartbeat_file(host, path, *, timeout_seconds: float = 45.0, poll_interval: float = 1.5) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if helpers.path_exists(host, path):
+            return
+        time.sleep(poll_interval)
+    pytest.fail(f"Heartbeat state file {path} not found on {host.backend.hostname}")
+
+
+def _strip_ansi(value: str | None) -> str:
+    if not value:
+        return ""
+    return ANSI_ESCAPE_RE.sub("", value)
+
+
+def _parse_state_rows(output: str) -> list[dict[str, str]]:
+    cleaned = _strip_ansi(output)
+    header = None
+    rows: list[dict[str, str]] = []
+    for raw_line in cleaned.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        cells = _split_state_line(line)
+        if not cells:
+            continue
+        if tuple(cells[: len(STATE_TABLE_HEADER)]) == STATE_TABLE_HEADER:
+            header = list(STATE_TABLE_HEADER)
+            continue
+        if not header:
+            continue
+        if len(cells) != len(header):
+            continue
+        if all(cell.strip() == "-" for cell in cells):
+            continue
+        rows.append({header[idx]: cell.strip() for idx, cell in enumerate(cells)})
+    return rows
+
+
+def _split_state_line(line: str) -> list[str]:
+    parts = [segment.strip() for segment in line.split("\t") if segment.strip()]
+    if len(parts) >= len(STATE_TABLE_HEADER):
+        return parts[: len(STATE_TABLE_HEADER)]
+    regex_parts = [segment.strip() for segment in re.split(r"\s{2,}", line) if segment.strip()]
+    if len(regex_parts) >= len(STATE_TABLE_HEADER):
+        return regex_parts[: len(STATE_TABLE_HEADER)]
+    return regex_parts or parts
+
+
+def _wait_for_alive_entry(
+    runner,
+    role: str,
+    install_path: str,
+    expected_tag: str,
+    expected_host: str,
+    expected_user: str,
+    expected_client_ip: str,
+    *,
+    timeout_seconds: float = 60.0,
+    poll_interval: float = 2.0,
+) -> dict:
+    deadline = time.time() + timeout_seconds
+    last_stdout = ""
+    while time.time() < deadline:
+        result = runner(
+            role,
+            "state",
+            "--path",
+            install_path,
+            check=True,
+        )
+        last_stdout = result.stdout or ""
+        for row in _parse_state_rows(last_stdout):
+            tag = row.get("TAG", "").strip()
+            host_value = row.get("HOST", "").strip()
+            status = row.get("STATUS", "").strip().lower()
+            if tag != expected_tag or host_value != expected_host or status != "alive":
+                continue
+            client_user = row.get("CLIENT_USER", "").strip()
+            client_ip = row.get("CLIENT_IP", "").strip()
+            assert (
+                client_user == expected_user
+            ), f"Heartbeat CLIENT_USER mismatch (expected {expected_user}, got {client_user})"
+            assert (
+                client_ip == expected_client_ip
+            ), f"Heartbeat CLIENT_IP mismatch (expected {expected_client_ip}, got {client_ip})"
+            return row
+        time.sleep(poll_interval)
+    pytest.fail(
+        "Alive heartbeat entry not observed for "
+        f"{expected_tag}@{expected_host}. Last xp2p {role} state output:\n{last_stdout}"
+    )
+
+
+def _verify_heartbeat_state(env: dict) -> None:
+    expected_tag = env["endpoint_tag"]
+    expected_user = env["client_user"]
+    expected_client_ip = env["client_primary_ip"]
+    server_install_path = env["server_install_path"]
+    client_install_path = helpers.INSTALL_ROOT.as_posix()
+
+    _wait_for_heartbeat_file(env["server_host"], HEARTBEAT_STATE_FILE)
+    _wait_for_heartbeat_file(env["client_host"], HEARTBEAT_STATE_FILE)
+    _wait_for_alive_entry(
+        env["server_runner"],
+        "server",
+        server_install_path,
+        expected_tag,
+        SERVER_IP,
+        expected_user,
+        expected_client_ip,
+    )
+    _wait_for_alive_entry(
+        env["client_runner"],
+        "client",
+        client_install_path,
+        expected_tag,
+        SERVER_IP,
+        expected_user,
+        expected_client_ip,
+    )
+
+
+def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
+    server_host = env["server_host"]
+    install_path = env["server_install_path"]
+    xp2p_binary = linux_env.INSTALL_PATH.as_posix()
+    timeout_arg = f"{duration_seconds:.0f}s"
+    command = (
+        f"timeout -k 1s {timeout_arg} sudo -n {xp2p_binary} server state "
+        f"--watch --interval 2s --path {install_path}"
+    )
+    result = server_host.run(command)
+    if result.rc not in (0, 124):
+        pytest.fail(
+            "xp2p server state --watch failed "
+            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    cleaned = _strip_ansi(result.stdout or "")
+    header_count = sum(
+        1
+        for raw in cleaned.splitlines()
+        if tuple(_split_state_line(raw.strip())) == STATE_TABLE_HEADER
+    )
+    assert header_count >= 2, "xp2p server state --watch did not refresh multiple times"
+    assert header_count <= 5, "xp2p server state --watch produced unexpected amount of output"
+
+
 @pytest.fixture(scope="module")
 def tunnel_environment(linux_host_factory, xp2p_linux_versions):
     server_host = linux_host_factory(linux_env.DEFAULT_CLIENT)
@@ -83,6 +256,7 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
     server_runner = _runner(server_host)
     client_runner = _runner(client_host)
     server_install_path = helpers.INSTALL_ROOT.as_posix()
+    client_primary_ip = _detect_primary_ipv4(client_host)
 
     def cleanup():
         for host in (server_host, client_host):
@@ -91,6 +265,8 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
             host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
+        for host in (server_host, client_host):
+            helpers.remove_path(host, HEARTBEAT_STATE_FILE)
 
     cleanup()
     try:
@@ -169,6 +345,8 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
             "server_install_path": server_install_path,
             "reverse_tag": reverse_tag,
             "endpoint_tag": endpoint_tag,
+            "client_primary_ip": client_primary_ip,
+            "client_user": credential["user"],
         }
     finally:
         cleanup()
@@ -386,6 +564,8 @@ def test_forward_tunnel_operational(tunnel_environment):
             "through SOCKS tunnel",
         )
         _assert_zero_loss(ping_result, "through SOCKS tunnel")
+        _verify_heartbeat_state(tunnel_environment)
+        _run_server_state_watch(tunnel_environment)
     _exercise_client_forward_diagnostics(tunnel_environment)
     _exercise_server_forward_diagnostics(tunnel_environment)
 

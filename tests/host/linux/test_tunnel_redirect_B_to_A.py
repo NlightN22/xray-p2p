@@ -11,6 +11,7 @@ DIAG_CIDR = f"{DIAG_IP}/32"
 DIAG_DOMAIN_IP = "10.77.0.2"
 DIAG_DOMAIN_CIDR = f"{DIAG_DOMAIN_IP}/32"
 DIAG_DOMAIN = "diag.service.internal"
+HEARTBEAT_STATE_FILE = helpers.INSTALL_ROOT / "state-heartbeat.json"
 
 
 def _runner(host):
@@ -90,6 +91,8 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
             host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
+        for host in (server_host, client_host):
+            helpers.remove_path(host, HEARTBEAT_STATE_FILE)
         for cidr in (DIAG_CIDR, DIAG_DOMAIN_CIDR):
             _remove_blackhole_route(client_host, cidr)
         _remove_hosts_entry(client_host, DIAG_DOMAIN)
