@@ -102,7 +102,7 @@ run_for_target() {
   local xray_bin="$output_dir/xray"
   local completions_dir="$output_dir/completions"
 
-  echo "==> [$target] Ensuring OpenWrt SDK"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Ensuring OpenWrt SDK"
   "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
 
   local release_version="$RELEASE_VERSION"
@@ -114,7 +114,7 @@ run_for_target() {
     fi
   fi
 
-  echo "==> [$target] Building xp2p binaries"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Building xp2p binaries"
   GOTOOLCHAIN=$GOTOOLCHAIN_VERSION "$PROJECT_ROOT/scripts/build/build_xp2p_binaries.sh" --target "$target"
 
   if [ ! -x "$xp2p_bin" ]; then
@@ -139,7 +139,7 @@ run_for_target() {
 
   rm -rf feeds/xp2p package/feeds/xp2p 2>/dev/null || true
 
-  echo "==> [$target] Updating feed"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Updating feed"
   ./scripts/feeds update xp2p
   ./scripts/feeds install xp2p
 
@@ -158,7 +158,7 @@ run_for_target() {
     fi
   fi
 
-  echo "==> [$target] Running defconfig"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Running defconfig"
   make defconfig
 
   if ! grep -q '^CONFIG_PACKAGE_xp2p=y' .config; then
@@ -171,7 +171,7 @@ run_for_target() {
     ./scripts/diffconfig.sh > "$DIFFCONFIG_OUT"
   fi
 
-  echo "==> [$target] Building xp2p ipk"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Building xp2p ipk"
   XP2P_PREBUILT="$xp2p_bin" \
   XP2P_XRAY="$xray_bin" \
   XP2P_COMPLETIONS="$completions_dir" \
@@ -181,7 +181,7 @@ run_for_target() {
   XP2P_COMPLETIONS="$completions_dir" \
     make package/xp2p/compile V=sc
 
-  echo "==> [$target] Collecting artefact"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Collecting artefact"
   IPK_PATH=$(find "$sdk_dir/bin/packages" -type f -name "xp2p_*.ipk" -print | sort | tail -n1 || true)
   if [ -z "$IPK_PATH" ]; then
     echo "ERROR: xp2p ipk not found in $sdk_dir/bin/packages" >&2
@@ -200,13 +200,13 @@ run_for_target() {
   mkdir -p "$DEST_DIR"
   cp "$IPK_PATH" "$DEST_DIR/"
 
-  echo "==> [$target] Updating feed index at $DEST_DIR"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Updating feed index at $DEST_DIR"
   "$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$DEST_DIR"
 
   popd >/dev/null
 
-  echo "Build complete: $(basename "$IPK_PATH")"
-  echo "Stored under: $DEST_DIR"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') Build complete: $(basename "$IPK_PATH")"
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') Stored under: $DEST_DIR"
 }
 
 for tgt in "${TARGETS[@]}"; do
