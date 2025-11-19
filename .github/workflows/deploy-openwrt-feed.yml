@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'openwrt/**'
+      - 'openwrt/repo/**'
 
 permissions:
   contents: read
