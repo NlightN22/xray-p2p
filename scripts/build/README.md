@@ -36,7 +36,7 @@ The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot
 
 ## OpenWrt SDK fetcher
 
-`ensure_openwrt_sdk.sh` downloads (or refreshes) the OpenWrt SDK for selected targets and drops them into `~/openwrt-sdk-<identifier>`.
+`ensure_openwrt_sdk.sh` downloads (or refreshes) the OpenWrt SDK for selected targets and drops them into `~/openwrt-sdk-<identifier>`. Supported identifiers currently include `linux-amd64`, `linux-386`, `linux-arm64`, `linux-armhf`, and `linux-mipsle-softfloat`.
 
 ```
 # grab every supported target (release matrix)
@@ -63,7 +63,7 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
 
 ## OpenWrt ipk orchestrator
 
-`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index.
+`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index. It reuses `ensure_openwrt_sdk.sh` and `build_xp2p_binaries.sh`, so all prerequisites for them apply (Go 1.21.7 toolchain, distro bundles, etc.).
 
 ```
 # build linux-amd64 ipk and update openwrt/feed/packages/utils/xp2p
@@ -74,7 +74,7 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
   --diffconfig-out openwrt/configs/diffconfig.linux-amd64
 ```
 
-Omit `--diffconfig` if you want the SDK defaults; specify `--diffconfig-out` to capture the resulting configuration. The script stores artifacts under `/tmp/build/<target>` and copies the resulting `.ipk` into `openwrt/feed/packages/utils/xp2p`, regenerating `Packages`/`Packages.gz` automatically.
+Omit `--diffconfig` if you want the SDK defaults; specify `--diffconfig-out` to capture the resulting configuration. The script stores artifacts under `/tmp/build/<target>` and copies the resulting `.ipk` into `openwrt/feed/packages/utils/xp2p`, regenerating `Packages`/`Packages.gz` automatically. Run it once per target (e.g. `linux-armhf`, `linux-arm64`, `linux-mipsle-softfloat`, `linux-386`, `linux-amd64`); the underlying SDKs are cached and reused between invocations.
 
 ## Notes
 - All scripts assume the repo root is mounted at either `/srv/xray-p2p` (guests) or the current working directory (host). Set `XP2P_PROJECT_ROOT` when you need to override detection.
