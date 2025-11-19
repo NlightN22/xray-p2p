@@ -10,8 +10,8 @@ Maintainer: xray-p2p maintainers
 Architecture: aarch64_generic
 Installed-Size: 14900185
 Filename: xp2p_0.1.4-1_aarch64_generic.ipk
-Size: 14854782
-SHA256sum: 18a6c1f936beb1b3efc1ef11db6d5aba07033703ab15bec10f3c8cf21597969f
+Size: 14854712
+SHA256sum: fc6e3b443bbf1c7a7b69d43cf051f684241c03e8dde5e2a71bbcce8176b626ff
 Description:  Minimal xp2p CLI packaging helper that reuses a prebuilt binary.
  Build the binary ahead of time and point XP2P_PREBUILT to it when invoking make.
 

@@ -72,6 +72,9 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
   --sdk-dir ~/openwrt-sdk-linux-amd64 \
   --diffconfig openwrt/configs/diffconfig.linux-amd64 \
   --diffconfig-out openwrt/configs/diffconfig.linux-amd64
+
+# build every supported target in one go (SDKs default to ~/openwrt-sdk-<target>)
+./scripts/build/build_openwrt_ipk.sh --all
 ```
 
 Omit `--diffconfig` if you want the SDK defaults; specify `--diffconfig-out` to capture the resulting configuration. The script stores artifacts under `/tmp/build/<target>` and copies the resulting `.ipk` into `openwrt/repo/<release>/<arch>`, regenerating `Packages`/`Packages.gz` (and `index.html` files) automatically. Run it once per target (e.g. `linux-armhf`, `linux-arm64`, `linux-mipsle-softfloat`, `linux-mips64le`, `linux-386`, `linux-amd64`); the underlying SDKs are cached and reused between invocations.

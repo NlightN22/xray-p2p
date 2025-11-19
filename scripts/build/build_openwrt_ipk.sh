@@ -6,6 +6,7 @@ PROJECT_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
 DEFAULT_BUILD_ROOT="/tmp/build"
 
 TARGET=""
+BUILD_ALL=0
 SDK_DIR=""
 DIFFCONFIG=""
 DIFFCONFIG_OUT=""
@@ -17,23 +18,29 @@ RELEASE_VERSION=${OPENWRT_VERSION:-""}
 GOTOOLCHAIN_VERSION=${GOTOOLCHAIN:-go1.21.7}
 
 usage() {
-  cat <<'EOF'
-Usage: build_openwrt_ipk.sh --target <identifier> [options]
+  cat <<'USAGE'
+Usage: build_openwrt_ipk.sh [--target <identifier> | --all] [options]
 
 Options:
-  --sdk-dir <path>         Existing OpenWrt SDK directory (defaults to ~/openwrt-sdk-<target>)
-  --diffconfig <path>      diffconfig file applied before make defconfig
+  --target <identifier>    Target identifier (e.g. linux-amd64)
+  --all                    Build every supported target
+  --sdk-dir <path>         Use an existing OpenWrt SDK directory
+  --diffconfig <path>      diffconfig applied before make defconfig
   --diffconfig-out <path>  write fresh diffconfig after defconfig
-  --build-root <path>      directory containing prebuilt xp2p/xray/completions (default: /tmp/build)
+  --build-root <path>      location of prebuilt xp2p/xray/completions (default: /tmp/build)
   -h, --help               Show this message
-EOF
+USAGE
 }
 
-while [ "$#" -gt 0 ]; do
+while [ "${1:-}" != "" ]; do
   case "$1" in
     --target)
       TARGET="$2"
       shift 2
+      ;;
+    --all)
+      BUILD_ALL=1
+      shift
       ;;
     --sdk-dir)
       SDK_DIR="$2"
@@ -63,118 +70,145 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -z "$TARGET" ]; then
-  echo "ERROR: --target is required" >&2
-  usage
-  exit 1
-fi
+SUPPORTED_TARGETS=(linux-386 linux-amd64 linux-armhf linux-arm64 linux-mipsle-softfloat linux-mips64le)
 
-if [ -z "$SDK_DIR" ]; then
-  SDK_DIR="$HOME/openwrt-sdk-$TARGET"
-fi
-
-OUTPUT_DIR="${BUILD_ROOT%/}/$TARGET"
-XP2P_BIN="$OUTPUT_DIR/xp2p"
-XRAY_BIN="$OUTPUT_DIR/xray"
-COMPLETIONS_DIR="$OUTPUT_DIR/completions"
-
-echo "==> [$TARGET] Ensuring OpenWrt SDK"
-"$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$TARGET"
-
-if [ -z "$RELEASE_VERSION" ]; then
-  if [ -f "$SDK_DIR/.xp2p-openwrt-version" ]; then
-    RELEASE_VERSION=$(cut -d'-' -f1 "$SDK_DIR/.xp2p-openwrt-version")
-  else
-    RELEASE_VERSION="unknown"
+if [ $BUILD_ALL -eq 1 ]; then
+  TARGETS=("${SUPPORTED_TARGETS[@]}")
+else
+  if [ -z "$TARGET" ]; then
+    echo "ERROR: --target is required (or use --all)" >&2
+    usage
+    exit 1
   fi
+  TARGETS=("$TARGET")
 fi
 
-echo "==> [$TARGET] Building xp2p binaries"
-GOTOOLCHAIN=$GOTOOLCHAIN_VERSION "$PROJECT_ROOT/scripts/build/build_xp2p_binaries.sh" --target "$TARGET"
-
-if [ ! -x "$XP2P_BIN" ]; then
-  echo "ERROR: xp2p binary not found at $XP2P_BIN" >&2
-  exit 1
-fi
-if [ ! -x "$XRAY_BIN" ]; then
-  echo "ERROR: bundled xray not found at $XRAY_BIN" >&2
-  exit 1
-fi
-if [ ! -d "$COMPLETIONS_DIR" ]; then
-  echo "ERROR: completion directory not found at $COMPLETIONS_DIR" >&2
+if [ $BUILD_ALL -eq 1 ] && [ -n "$SDK_DIR" ]; then
+  echo "ERROR: --sdk-dir cannot be combined with --all" >&2
   exit 1
 fi
 
-mkdir -p "$SDK_DIR"
-cd "$SDK_DIR"
+run_for_target() {
+  local target=$1
+  local sdk_dir_override=$2
 
-if ! grep -qE '^\s*src-link\s+xp2p\s+' feeds.conf.default 2>/dev/null; then
-  echo "src-link xp2p $FEED_PATH" >> feeds.conf.default
-fi
-
-rm -rf feeds/xp2p package/feeds/xp2p 2>/dev/null || true
-
-echo "==> [$TARGET] Updating feed"
-./scripts/feeds update xp2p
-./scripts/feeds install xp2p
-
-SDK_MAKEFILE="package/feeds/xp2p/xp2p/Makefile"
-REPO_MAKEFILE="$FEED_PACKAGE_PATH/Makefile"
-if [ -f "$SDK_MAKEFILE" ] && ! cmp -s "$SDK_MAKEFILE" "$REPO_MAKEFILE"; then
-  echo "WARNING: SDK Makefile differs from repository copy ($SDK_MAKEFILE)" >&2
-fi
-
-if [ -n "$DIFFCONFIG" ]; then
-  if [ -f "$DIFFCONFIG" ]; then
-    echo "==> [$TARGET] Applying diffconfig from $DIFFCONFIG"
-    cp "$DIFFCONFIG" .config
-  else
-    echo "WARNING: diffconfig $DIFFCONFIG not found, skipping" >&2
+  local sdk_dir="$sdk_dir_override"
+  if [ -z "$sdk_dir" ]; then
+    sdk_dir="$HOME/openwrt-sdk-$target"
   fi
-fi
 
-echo "==> [$TARGET] Running defconfig"
-make defconfig
+  local output_dir="${BUILD_ROOT%/}/$target"
+  local xp2p_bin="$output_dir/xp2p"
+  local xray_bin="$output_dir/xray"
+  local completions_dir="$output_dir/completions"
 
-if ! grep -q '^CONFIG_PACKAGE_xp2p=y' .config; then
-  echo "CONFIG_PACKAGE_xp2p=y" >> .config
+  echo "==> [$target] Ensuring OpenWrt SDK"
+  "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
+
+  local release_version="$RELEASE_VERSION"
+  if [ -z "$release_version" ]; then
+    if [ -f "$sdk_dir/.xp2p-openwrt-version" ]; then
+      release_version=$(cut -d'-' -f1 "$sdk_dir/.xp2p-openwrt-version")
+    else
+      release_version="unknown"
+    fi
+  fi
+
+  echo "==> [$target] Building xp2p binaries"
+  GOTOOLCHAIN=$GOTOOLCHAIN_VERSION "$PROJECT_ROOT/scripts/build/build_xp2p_binaries.sh" --target "$target"
+
+  if [ ! -x "$xp2p_bin" ]; then
+    echo "ERROR: xp2p binary not found at $xp2p_bin" >&2
+    exit 1
+  fi
+  if [ ! -x "$xray_bin" ]; then
+    echo "ERROR: bundled xray not found at $xray_bin" >&2
+    exit 1
+  fi
+  if [ ! -d "$completions_dir" ]; then
+    echo "ERROR: completion directory not found at $completions_dir" >&2
+    exit 1
+  fi
+
+  mkdir -p "$sdk_dir"
+  pushd "$sdk_dir" >/dev/null
+
+  if ! grep -qE '^\s*src-link\s+xp2p\s+' feeds.conf.default 2>/dev/null; then
+    echo "src-link xp2p $FEED_PATH" >> feeds.conf.default
+  fi
+
+  rm -rf feeds/xp2p package/feeds/xp2p 2>/dev/null || true
+
+  echo "==> [$target] Updating feed"
+  ./scripts/feeds update xp2p
+  ./scripts/feeds install xp2p
+
+  local sdk_makefile="package/feeds/xp2p/xp2p/Makefile"
+  local repo_makefile="$FEED_PACKAGE_PATH/Makefile"
+  if [ -f "$sdk_makefile" ] && ! cmp -s "$sdk_makefile" "$repo_makefile"; then
+    echo "WARNING: SDK Makefile differs from repository copy ($sdk_makefile)" >&2
+  fi
+
+  if [ -n "$DIFFCONFIG" ]; then
+    if [ -f "$DIFFCONFIG" ]; then
+      echo "==> [$target] Applying diffconfig from $DIFFCONFIG"
+      cp "$DIFFCONFIG" .config
+    else
+      echo "WARNING: diffconfig $DIFFCONFIG not found, skipping" >&2
+    fi
+  fi
+
+  echo "==> [$target] Running defconfig"
   make defconfig
-fi
 
-if [ -n "$DIFFCONFIG_OUT" ]; then
-  echo "==> [$TARGET] Writing diffconfig to $DIFFCONFIG_OUT"
-  ./scripts/diffconfig.sh > "$DIFFCONFIG_OUT"
-fi
+  if ! grep -q '^CONFIG_PACKAGE_xp2p=y' .config; then
+    echo "CONFIG_PACKAGE_xp2p=y" >> .config
+    make defconfig
+  fi
 
-echo "==> [$TARGET] Building xp2p ipk"
-XP2P_PREBUILT="$XP2P_BIN" \
-XP2P_XRAY="$XRAY_BIN" \
-XP2P_COMPLETIONS="$COMPLETIONS_DIR" \
-  make package/xp2p/clean V=sc >/dev/null 2>&1 || true
-XP2P_PREBUILT="$XP2P_BIN" \
-XP2P_XRAY="$XRAY_BIN" \
-XP2P_COMPLETIONS="$COMPLETIONS_DIR" \
-  make package/xp2p/compile V=sc
+  if [ -n "$DIFFCONFIG_OUT" ]; then
+    echo "==> [$target] Writing diffconfig to $DIFFCONFIG_OUT"
+    ./scripts/diffconfig.sh > "$DIFFCONFIG_OUT"
+  fi
 
-echo "==> [$TARGET] Collecting artefact"
-IPK_PATH=$(find "$SDK_DIR/bin/packages" -type f -name "xp2p_*.ipk" -print | sort | tail -n1 || true)
-if [ -z "$IPK_PATH" ]; then
-  echo "ERROR: xp2p ipk not found in $SDK_DIR/bin/packages" >&2
-  exit 1
-fi
+  echo "==> [$target] Building xp2p ipk"
+  XP2P_PREBUILT="$xp2p_bin" \
+  XP2P_XRAY="$xray_bin" \
+  XP2P_COMPLETIONS="$completions_dir" \
+    make package/xp2p/clean V=sc >/dev/null 2>&1 || true
+  XP2P_PREBUILT="$xp2p_bin" \
+  XP2P_XRAY="$xray_bin" \
+  XP2P_COMPLETIONS="$completions_dir" \
+    make package/xp2p/compile V=sc
 
-ARCH_DIR=$(tar -xzOf "$IPK_PATH" ./control.tar.gz | tar -xzOf - ./control | awk -F': ' '/^Architecture:/ {print $2; exit}')
-if [ -z "$ARCH_DIR" ]; then
-  echo "ERROR: unable to determine architecture for $IPK_PATH" >&2
-  exit 1
-fi
+  echo "==> [$target] Collecting artefact"
+  IPK_PATH=$(find "$sdk_dir/bin/packages" -type f -name "xp2p_*.ipk" -print | sort | tail -n1 || true)
+  if [ -z "$IPK_PATH" ]; then
+    echo "ERROR: xp2p ipk not found in $sdk_dir/bin/packages" >&2
+    popd >/dev/null
+    exit 1
+  fi
 
-DEST_DIR="$REPO_ROOT/$RELEASE_VERSION/$ARCH_DIR"
-mkdir -p "$DEST_DIR"
-cp "$IPK_PATH" "$DEST_DIR/"
+  ARCH_DIR=$(tar -xzOf "$IPK_PATH" ./control.tar.gz | tar -xzOf - ./control | awk -F': ' '/^Architecture:/ {print $2; exit}')
+  if [ -z "$ARCH_DIR" ]; then
+    echo "ERROR: unable to determine architecture for $IPK_PATH" >&2
+    popd >/dev/null
+    exit 1
+  fi
 
-echo "==> [$TARGET] Updating feed index at $DEST_DIR"
-"$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$DEST_DIR"
+  DEST_DIR="$REPO_ROOT/$release_version/$ARCH_DIR"
+  mkdir -p "$DEST_DIR"
+  cp "$IPK_PATH" "$DEST_DIR/"
 
-echo "Build complete: $(basename "$IPK_PATH")"
-echo "Stored under: $DEST_DIR"
+  echo "==> [$target] Updating feed index at $DEST_DIR"
+  "$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$DEST_DIR"
+
+  popd >/dev/null
+
+  echo "Build complete: $(basename "$IPK_PATH")"
+  echo "Stored under: $DEST_DIR"
+}
+
+for tgt in "${TARGETS[@]}"; do
+  run_for_target "$tgt" "$SDK_DIR"
+done

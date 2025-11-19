@@ -8,10 +8,10 @@ Section: net
 SourceDateEpoch: 1763571516
 Maintainer: xray-p2p maintainers
 Architecture: mipsel_24kc
-Installed-Size: 13105739
+Installed-Size: 13105740
 Filename: xp2p_0.1.4-1_mipsel_24kc.ipk
-Size: 13076731
-SHA256sum: 42b749562f5001c2449eaf0a0bc9a6e2b25a3b3ebed9cacd14925c007f184bb5
+Size: 13076687
+SHA256sum: 6e6e7c356b2bad58eadb012b7afc875908e0f95a870f43f7747f7359170795f6
 Description:  Minimal xp2p CLI packaging helper that reuses a prebuilt binary.
  Build the binary ahead of time and point XP2P_PREBUILT to it when invoking make.
 

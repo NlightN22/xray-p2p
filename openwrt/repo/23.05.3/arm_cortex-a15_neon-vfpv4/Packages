@@ -5,13 +5,13 @@ Source: /srv/xray-p2p/openwrt/feed/packages/utils/xp2p
 SourceName: xp2p
 License: MIT
 Section: net
-SourceDateEpoch: 1763568257
+SourceDateEpoch: 1763571516
 Maintainer: xray-p2p maintainers
 Architecture: arm_cortex-a15_neon-vfpv4
-Installed-Size: 15442111
+Installed-Size: 15442124
 Filename: xp2p_0.1.4-1_arm_cortex-a15_neon-vfpv4.ipk
-Size: 15416234
-SHA256sum: e02719c66bb10e00178fdf5bec04cc712b5279b9a90c97a8d413f55305d8ea06
+Size: 15415947
+SHA256sum: b388ed994b899262ad17973fd8f241d1fd96ed8ad91ba6fd5eec12ff3226c20a
 Description:  Minimal xp2p CLI packaging helper that reuses a prebuilt binary.
  Build the binary ahead of time and point XP2P_PREBUILT to it when invoking make.
 
