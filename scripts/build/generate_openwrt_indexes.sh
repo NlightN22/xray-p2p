@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="${1:-openwrt}"
+ROOT="${1:-openwrt/repo}"
 
 template_dir_index() {
   local path=$1
