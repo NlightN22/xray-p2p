@@ -192,6 +192,12 @@ When xp2p detects a self-contained layout (for example, a portable Windows unzip
 
 Packaging tools or manual installs must place the `xray` binary under `bin/` ahead of time; `xp2p client install` and `xp2p server install` no longer write or update `xray.exe` themselves and will error out if the binary is missing.
 
+To completely remove the OpenWrt package (together with dependencies), run:
+
+```bash
+opkg remove --autoremove xp2p
+```
+
 ---
 
 ## Follow-up tasks on the client

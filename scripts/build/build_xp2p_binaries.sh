@@ -10,6 +10,8 @@ CGO_OPTION=${XP2P_CGO_ENABLED:-0}
 STRIP_ENABLE=${XP2P_STRIP:-1}
 STRIP_BIN=${XP2P_STRIP_BIN:-strip}
 GOEXPERIMENT_OPT=${XP2P_GOEXPERIMENT:-""}
+completion_helper=""
+completion_helper_dir=""
 
 bundle_path_for_target() {
   case "$1" in
@@ -92,6 +94,30 @@ fi
 
 export CGO_ENABLED="$CGO_OPTION"
 export GOEXPERIMENT="$GOEXPERIMENT_OPT"
+cleanup_completion_helper() {
+  if [ -n "$completion_helper_dir" ] && [ -d "$completion_helper_dir" ]; then
+    rm -rf "$completion_helper_dir"
+  fi
+}
+trap cleanup_completion_helper EXIT
+
+ensure_completion_helper() {
+  if [ -n "$completion_helper" ] && [ -x "$completion_helper" ]; then
+    return
+  fi
+  completion_helper_dir=$(mktemp -d)
+  completion_helper="$completion_helper_dir/xp2p-completion"
+  (cd "$PROJECT_ROOT" && go build -ldflags "$LDFLAGS" -o "$completion_helper" ./go/cmd/xp2p)
+}
+
+generate_completions() {
+  dest="$1/completions"
+  ensure_completion_helper
+  mkdir -p "$dest/bash" "$dest/zsh" "$dest/fish"
+  "$completion_helper" completion bash >"$dest/bash/xp2p"
+  "$completion_helper" completion zsh >"$dest/zsh/_xp2p"
+  "$completion_helper" completion fish >"$dest/fish/xp2p.fish"
+}
 
 mkdir -p "$BUILD_ROOT"
 
@@ -126,6 +152,8 @@ for target in $TARGETS; do
       exit 1
     fi
   fi
+
+  generate_completions "$out_dir"
 done
 
 echo "xp2p binaries are available under $BUILD_ROOT"

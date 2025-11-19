@@ -50,7 +50,7 @@ Override the defaults with `OPENWRT_VERSION`, `OPENWRT_MIRROR`, or `OPENWRT_SDK_
 
 ## Bare xp2p binaries
 
-`build_xp2p_binaries.sh` cross-compiles the CLI using Go's native toolchain and writes artefacts into `/tmp/build/<target>` (change via `XP2P_BUILD_ROOT`). Targets are mandatory (`--targets` / `--target` or `XP2P_TARGETS` env). By default binaries are stripped with `-s -w`, embed the `version.Current()` value, disable CGO (`CGO_ENABLED=0`), leave `GOEXPERIMENT` empty (override via `XP2P_GOEXPERIMENT`), run `strip --strip-unneeded`, and copy the matching `distro/linux/bundle/<arch>/xray` into the target directory when available.
+`build_xp2p_binaries.sh` cross-compiles the CLI using Go's native toolchain and writes artefacts into `/tmp/build/<target>` (change via `XP2P_BUILD_ROOT`). Targets are mandatory (`--targets` / `--target` or `XP2P_TARGETS` env). By default binaries are stripped with `-s -w`, embed the `version.Current()` value, disable CGO (`CGO_ENABLED=0`), leave `GOEXPERIMENT` empty (override via `XP2P_GOEXPERIMENT`), run `strip --strip-unneeded`, copy the matching `distro/linux/bundle/<arch>/xray` into the target directory when available, and generate bash/zsh/fish completion scripts under `<target>/completions`.
 
 ```
 # build linux-amd64 and linux-arm64
