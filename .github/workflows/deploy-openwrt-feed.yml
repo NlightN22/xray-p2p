@@ -47,18 +47,18 @@ jobs:
 
       - name: Sign Packages
         run: |
-          find openwrt -type f -name Packages | while read pkg; do
-            case "$pkg" in
-              openwrt/packages/*) continue ;;
-            esac
+          find openwrt/repo -type f -name Packages | while read pkg; do
             dir=$(dirname "$pkg")
             usign -S -m "$pkg" -s keys/xp2p.sec -x "$dir/Packages.sig"
           done
 
+      - name: Generate index pages
+        run: ./scripts/build/generate_openwrt_indexes.sh openwrt/repo
+
       - name: Upload feed artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./openwrt
+          path: ./openwrt/repo
 
       - name: Deploy to GitHub Pages
         id: deployment
