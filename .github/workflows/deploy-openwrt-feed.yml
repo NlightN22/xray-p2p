@@ -53,7 +53,7 @@ jobs:
           done
 
       - name: Generate index pages
-        run: ./scripts/build/generate_openwrt_indexes.sh openwrt/repo
+        run: bash scripts/build/generate_openwrt_indexes.sh openwrt/repo
 
       - name: Upload feed artifact
         uses: actions/upload-pages-artifact@v3
