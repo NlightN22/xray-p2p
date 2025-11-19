@@ -13,7 +13,9 @@ Usage: scripts/build/ensure_openwrt_sdk.sh [identifier ...]
 Ensures that each requested OpenWrt SDK (23.05.x by default) is downloaded
 under ~/openwrt-sdk-<identifier>. Supported identifiers:
   - linux-amd64
+  - linux-386
   - linux-arm64
+  - linux-armhf
   - linux-mipsle-softfloat
 
 Set OPENWRT_VERSION/OPENWRT_MIRROR/OPENWRT_SDK_BASE when customization is needed.
@@ -39,11 +41,23 @@ resolve_identifier() {
       FEED_SEGMENT="x86/64"
       TARBALL_SUFFIX="x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
+    linux-386)
+      TARGET="x86"
+      SUBTARGET="generic"
+      FEED_SEGMENT="x86/generic"
+      TARBALL_SUFFIX="x86-generic_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ;;
     linux-arm64)
       TARGET="armsr"
       SUBTARGET="armv8"
       FEED_SEGMENT="armsr/armv8"
       TARBALL_SUFFIX="armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ;;
+    linux-armhf)
+      TARGET="armsr"
+      SUBTARGET="armv7"
+      FEED_SEGMENT="armsr/armv7"
+      TARBALL_SUFFIX="armsr-armv7_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz"
       ;;
     linux-mipsle-softfloat)
       TARGET="ramips"
@@ -100,7 +114,7 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
 fi
 
 if [ "$#" -eq 0 ]; then
-  set -- linux-amd64 linux-arm64 linux-mipsle-softfloat
+  set -- linux-amd64 linux-386 linux-arm64 linux-armhf linux-mipsle-softfloat
 fi
 
 for identifier in "$@"; do
