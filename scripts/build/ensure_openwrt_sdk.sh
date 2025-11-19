@@ -17,6 +17,7 @@ under ~/openwrt-sdk-<identifier>. Supported identifiers:
   - linux-arm64
   - linux-armhf
   - linux-mipsle-softfloat
+  - linux-mips64le
 
 Set OPENWRT_VERSION/OPENWRT_MIRROR/OPENWRT_SDK_BASE when customization is needed.
 EOF
@@ -64,6 +65,12 @@ resolve_identifier() {
       SUBTARGET="mt7621"
       FEED_SEGMENT="ramips/mt7621"
       TARBALL_SUFFIX="ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ;;
+    linux-mips64le)
+      TARGET="malta"
+      SUBTARGET="be"
+      FEED_SEGMENT="malta/be"
+      TARBALL_SUFFIX="malta-be_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     *)
       echo "ERROR: unsupported identifier '$identifier'" >&2
@@ -114,7 +121,7 @@ if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
 fi
 
 if [ "$#" -eq 0 ]; then
-  set -- linux-amd64 linux-386 linux-arm64 linux-armhf linux-mipsle-softfloat
+  set -- linux-amd64 linux-386 linux-arm64 linux-armhf linux-mipsle-softfloat linux-mips64le
 fi
 
 for identifier in "$@"; do

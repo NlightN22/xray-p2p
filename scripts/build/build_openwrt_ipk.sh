@@ -102,6 +102,8 @@ if ! grep -qE '^\s*src-link\s+xp2p\s+' feeds.conf.default 2>/dev/null; then
   echo "src-link xp2p $FEED_PATH" >> feeds.conf.default
 fi
 
+rm -rf feeds/xp2p package/feeds/xp2p 2>/dev/null || true
+
 echo "==> [$TARGET] Updating feed"
 ./scripts/feeds update xp2p
 ./scripts/feeds install xp2p
