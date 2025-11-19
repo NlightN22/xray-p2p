@@ -85,6 +85,16 @@ normalize_targets() {
   printf "%s\n" "$TARGET_FILTER" | tr ',\t ' '\n' | sed '/^$/d'
 }
 
+resolve_canonical_target() {
+  case "$1" in
+    linux-armhf) echo "linux-arm" ;;
+    linux-mipsle-softfloat) echo "linux-mipsle" ;;
+    linux-mips64le) echo "linux-mips64le" ;;
+    linux-386) echo "linux-386" ;;
+    *) echo "$1" ;;
+  esac
+}
+
 TARGETS=$(normalize_targets)
 
 if [ -z "$LDFLAGS" ]; then
@@ -122,12 +132,13 @@ generate_completions() {
 mkdir -p "$BUILD_ROOT"
 
 for target in $TARGETS; do
+  canonical=$(resolve_canonical_target "$target")
   out_dir="${BUILD_ROOT%/}/$target"
   mkdir -p "$out_dir"
   echo "==> Building xp2p for $target into $out_dir"
   (cd "$PROJECT_ROOT" && \
     go run ./go/tools/targets build \
-      --target "$target" \
+      --target "$canonical" \
       --out-dir "$out_dir" \
       --binary xp2p \
       --pkg ./go/cmd/xp2p \
