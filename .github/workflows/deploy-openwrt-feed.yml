@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'openwrt/feed/**'
+      - 'openwrt/**'
 
 permissions:
   contents: read
@@ -47,15 +47,18 @@ jobs:
 
       - name: Sign Packages
         run: |
-          usign -S \
-            -m openwrt/feed/packages/utils/xp2p/Packages \
-            -s keys/xp2p.sec \
-            -x openwrt/feed/packages/utils/xp2p/Packages.sig
+          find openwrt -type f -name Packages | while read pkg; do
+            case "$pkg" in
+              openwrt/packages/*) continue ;;
+            esac
+            dir=$(dirname "$pkg")
+            usign -S -m "$pkg" -s keys/xp2p.sec -x "$dir/Packages.sig"
+          done
 
       - name: Upload feed artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./openwrt/feed
+          path: ./openwrt
 
       - name: Deploy to GitHub Pages
         id: deployment

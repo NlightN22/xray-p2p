@@ -63,10 +63,10 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
 
 ## OpenWrt ipk orchestrator
 
-`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index. It reuses `ensure_openwrt_sdk.sh` and `build_xp2p_binaries.sh`, so all prerequisites for them apply (Go 1.21.7 toolchain, distro bundles, etc.).
+`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index. It reuses `ensure_openwrt_sdk.sh` and `build_xp2p_binaries.sh`, so all prerequisites for them apply (Go 1.21.7 toolchain, distro bundles, etc.). The canonical package recipe lives in `openwrt/Makefile`; the script copies it into the temporary feed tree (`packages/utils/xp2p/Makefile`) before running `./scripts/feeds`. Release artefacts are copied into `openwrt/<OPENWRT_VERSION>/<arch>/`, where `arch` is read from the resulting `.ipk`, so the repository doubles as the GitHub Pages feed.
 
 ```
-# build linux-amd64 ipk and update openwrt/feed/packages/utils/xp2p
+# build linux-amd64 ipk and update openwrt/<release>/<arch>
 ./scripts/build/build_openwrt_ipk.sh \
   --target linux-amd64 \
   --sdk-dir ~/openwrt-sdk-linux-amd64 \
@@ -74,7 +74,7 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
   --diffconfig-out openwrt/configs/diffconfig.linux-amd64
 ```
 
-Omit `--diffconfig` if you want the SDK defaults; specify `--diffconfig-out` to capture the resulting configuration. The script stores artifacts under `/tmp/build/<target>` and copies the resulting `.ipk` into `openwrt/feed/packages/utils/xp2p`, regenerating `Packages`/`Packages.gz` automatically. Run it once per target (e.g. `linux-armhf`, `linux-arm64`, `linux-mipsle-softfloat`, `linux-386`, `linux-amd64`); the underlying SDKs are cached and reused between invocations.
+Omit `--diffconfig` if you want the SDK defaults; specify `--diffconfig-out` to capture the resulting configuration. The script stores artifacts under `/tmp/build/<target>` and copies the resulting `.ipk` into `openwrt/<OPENWRT_VERSION>/<arch>/`, regenerating `Packages`/`Packages.gz` automatically. Run it once per target (e.g. `linux-armhf`, `linux-arm64`, `linux-mipsle-softfloat`, `linux-mips64le`, `linux-386`, `linux-amd64`); the underlying SDKs are cached and reused between invocations.
 
 ## Notes
 - All scripts assume the repo root is mounted at either `/srv/xray-p2p` (guests) or the current working directory (host). Set `XP2P_PROJECT_ROOT` when you need to override detection.
