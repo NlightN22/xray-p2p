@@ -18,13 +18,39 @@ concurrency:
 
 jobs:
   deploy:
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install usign
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+          git clone https://git.openwrt.org/project/usign.git
+          cd usign
+          cmake .
+          make
+          sudo make install
+
+      - name: Restore usign secret key
+        run: |
+          mkdir -p keys
+          echo "${XP2P_USIGN_SECRET}" | base64 -d > keys/xp2p.sec
+          chmod 600 keys/xp2p.sec
+        env:
+          XP2P_USIGN_SECRET: ${{ secrets.XP2P_USIGN_SECRET }}
+
+      - name: Sign Packages
+        run: |
+          usign -S \
+            -m openwrt/feed/packages/utils/xp2p/Packages \
+            -s keys/xp2p.sec \
+            -x openwrt/feed/packages/utils/xp2p/Packages.sig
 
       - name: Upload feed artifact
         uses: actions/upload-pages-artifact@v3

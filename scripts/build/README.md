@@ -61,6 +61,21 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
   ./scripts/build/build_xp2p_binaries.sh
 ```
 
+## OpenWrt ipk orchestrator
+
+`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index.
+
+```
+# build linux-amd64 ipk and update openwrt/feed/packages/utils/xp2p
+./scripts/build/build_openwrt_ipk.sh \
+  --target linux-amd64 \
+  --sdk-dir ~/openwrt-sdk-linux-amd64 \
+  --diffconfig openwrt/configs/diffconfig.linux-amd64 \
+  --diffconfig-out openwrt/configs/diffconfig.linux-amd64
+```
+
+Omit `--diffconfig` if you want the SDK defaults; specify `--diffconfig-out` to capture the resulting configuration. The script stores artifacts under `/tmp/build/<target>` and copies the resulting `.ipk` into `openwrt/feed/packages/utils/xp2p`, regenerating `Packages`/`Packages.gz` automatically.
+
 ## Notes
 - All scripts assume the repo root is mounted at either `/srv/xray-p2p` (guests) or the current working directory (host). Set `XP2P_PROJECT_ROOT` when you need to override detection.
 - Windows PowerShell helpers rely on WiX Toolset being installed (e.g., `C:\Program Files (x86)\WiX Toolset v3.11`).

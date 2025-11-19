@@ -1,4 +1,5 @@
-build/
+/build/
+/keys/
 .idea*
 .vagrant
 .vscode
