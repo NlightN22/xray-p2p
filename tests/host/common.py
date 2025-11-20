@@ -66,8 +66,6 @@ def parse_ssh_config(raw: str) -> dict[str, str]:
         value = pieces[1].strip()
         if value.startswith('"') and value.endswith('"'):
             value = value[1:-1]
-        if key == "identityfile" and key in config:
-            continue
         config[key] = value
 
     required = {"hostname", "user", "port", "identityfile"}

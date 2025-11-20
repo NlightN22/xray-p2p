@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path, PurePosixPath
 import shlex
 
 from testinfra.host import Host
 
 from tests.host import common
-from tests.host.linux import env as linux_env
 
 REPO_ROOT = common.REPO_ROOT
 WORKTREE_POSIX = PurePosixPath("/srv/xray-p2p")
@@ -42,8 +42,18 @@ def get_openwrt_host(machine: str) -> Host:
     return common.get_ssh_host(OPENWRT_VAGRANT_DIR, machine)
 
 
-def _run_script(host: Host, relative_path: str, *args: str):
-    return linux_env.run_guest_script(host, relative_path, *args)
+def sync_build_output(machine: str = DEFAULT_OPENWRT_MACHINE) -> None:
+    if machine not in OPENWRT_MACHINES:
+        raise ValueError(f"Unknown OpenWrt machine id: {machine}")
+    require_openwrt_environment()
+    command = ["vagrant", "provision", machine, "--provision-with", "file"]
+    try:
+        subprocess.run(command, cwd=OPENWRT_VAGRANT_DIR, check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            "Failed to sync build/ipk into OpenWrt guest via Vagrant file provisioner:\n"
+            f"STDOUT:\n{exc.stdout}\nSTDERR:\n{exc.stderr}"
+        ) from exc
 
 
 def build_ipk(host: Host, target: str) -> None:
@@ -84,15 +94,26 @@ def ensure_packages_index_present() -> None:
 
 def stage_ipk_on_guest(host: Host, ipk_path: Path, destination: PurePosixPath | None = None) -> PurePosixPath:
     target_path = destination or PurePosixPath("/tmp/xp2p.ipk")
-    host.put_file(local_path=str(ipk_path), remote_path=target_path.as_posix())
+    remote_source = PurePosixPath("/tmp/build-openwrt") / ipk_path.name
+    copy_command = f"cp {shlex.quote(remote_source.as_posix())} {shlex.quote(target_path.as_posix())}"
+    result = host.run(copy_command)
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to copy ipk from /tmp/build-openwrt.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
     return target_path
 
 
 def opkg_remove(host: Host, package: str, ignore_missing: bool = True) -> None:
-    args = ["--package", package]
-    if ignore_missing:
-        args.append("--ignore-missing")
-    result = _run_script(host, "scripts/openwrt/opkg_remove.sh", *args)
+    status = host.run(f"opkg status {shlex.quote(package)}")
+    if status.rc != 0:
+        if ignore_missing:
+            return
+        raise RuntimeError(
+            f"Package {package} is not installed.\nSTDOUT:\n{status.stdout}\nSTDERR:\n{status.stderr}"
+        )
+    result = host.run(f"opkg remove {shlex.quote(package)}")
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to remove package {package} "
@@ -101,7 +122,9 @@ def opkg_remove(host: Host, package: str, ignore_missing: bool = True) -> None:
 
 
 def opkg_install_local(host: Host, path: PurePosixPath) -> None:
-    result = _run_script(host, "scripts/openwrt/opkg_install_local.sh", "--path", path.as_posix())
+    result = host.run(
+        f"opkg install --force-reinstall {shlex.quote(path.as_posix())}"
+    )
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to install ipk {path} "
@@ -110,7 +133,11 @@ def opkg_install_local(host: Host, path: PurePosixPath) -> None:
 
 
 def run_xp2p(host: Host, *args: str):
-    return _run_script(host, "scripts/openwrt/run_xp2p.sh", *args)
+    quoted_args = " ".join(shlex.quote(arg) for arg in args)
+    command = "xp2p"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    return host.run(command)
 
 
 def resolve_target_from_env() -> str:
