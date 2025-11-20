@@ -1,30 +1,37 @@
-﻿# frozen_string_literal: true
+﻿project_root = File.expand_path('../../..', __dir__)
 
 BOX_PATH = File.expand_path('../boxes/openwrt-24.10.2.box', __dir__)
-PROJECT_ROOT = File.expand_path('../../..', __dir__)
-BUILD_OUTPUT = File.join(PROJECT_ROOT, 'build', 'ipk')
-HOST_IP = ENV.fetch('OPENWRT_HOST_IP', '10.0.10.30')
+BOX_NAME = 'openwrt-24.10.2'.freeze
+BUILD_OUTPUT = File.join(project_root, 'build', 'ipk')
 HOST_NETMASK = ENV.fetch('OPENWRT_HOST_NETMASK', '255.255.255.0')
 HOST_INTERFACE = ENV.fetch('OPENWRT_HOST_INTERFACE', 'eth1')
 
+MACHINES = [
+  { id: 'openwrt-a', hostname: 'openwrt-a', vb_name: 'openwrt-a', forwarded_port: 2221, private_ip: '10.62.20.11' },
+  { id: 'openwrt-b', hostname: 'openwrt-b', vb_name: 'openwrt-b', forwarded_port: 2222, private_ip: '10.62.20.12' },
+  { id: 'openwrt-c', hostname: 'openwrt-c', vb_name: 'openwrt-c', forwarded_port: 2223, private_ip: '10.62.20.13' },
+].freeze
+
 Vagrant.configure('2') do |config|
-  config.vm.box = 'openwrt-24.10.2'
-  config.vm.box_url = BOX_PATH
-  config.vm.hostname = 'openwrt-server'
+  MACHINES.each do |machine|
+    config.vm.define machine[:id] do |vm|
+      vm.vm.box = BOX_NAME
+      vm.vm.box_url = BOX_PATH
+      vm.vm.hostname = machine[:hostname]
 
-  config.ssh.insert_key = false
-  config.vm.boot_timeout = 200
-  config.vm.synced_folder '.', '/vagrant', disabled: true
+      vm.ssh.insert_key = false
+      vm.vm.boot_timeout = 200
+      vm.vm.synced_folder '.', '/vagrant', disabled: true
 
-  config.vm.network 'forwarded_port', guest: 22, host: 2222, auto_correct: true
-  config.vm.network 'private_network', ip: HOST_IP, auto_config: false
+      vm.vm.network 'forwarded_port', guest: 22, host: machine[:forwarded_port], auto_correct: true
+      vm.vm.network 'private_network', ip: machine[:private_ip], auto_config: false
 
-  config.vm.provider 'virtualbox' do |vb|
-    vb.name = 'openwrt-24.10.2-server'
-    vb.gui = false
+      vm.vm.provider 'virtualbox' do |vb|
+        vb.name = machine[:vb_name]
+        vb.gui = false
+      end
+
+      vm.vm.provision 'file', source: BUILD_OUTPUT, destination: '/tmp/build-openwrt'
+    end
   end
-
-  config.vm.provision 'file',
-                      source: BUILD_OUTPUT,
-                      destination: '/tmp/build-openwrt'
 end
