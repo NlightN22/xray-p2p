@@ -12,11 +12,16 @@ SDK_DIR=""
 DIFFCONFIG=""
 DIFFCONFIG_OUT=""
 BUILD_ROOT=${XP2P_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}
+SOURCE_HASH_FILE="$BUILD_ROOT/.xp2p_source_hash"
+IPK_CACHE_DIR="$BUILD_ROOT/.xp2p_ipk_cache"
 FEED_PATH="$PROJECT_ROOT/openwrt/feed"
 FEED_PACKAGE_PATH="$FEED_PATH/packages/utils/xp2p"
 REPO_ROOT="$PROJECT_ROOT/openwrt/repo"
 RELEASE_VERSION=${OPENWRT_VERSION:-""}
 GOTOOLCHAIN_VERSION=${GOTOOLCHAIN:-go1.21.7}
+FORCE_BUILD=0
+SOURCE_SIGNATURE=""
+SOURCE_TRACK_PATHS=(go cmd internal pkg go.mod go.sum)
 OUTPUT_DIR=""
 
 usage() {
@@ -31,6 +36,7 @@ Options:
   --diffconfig-out <path>  write fresh diffconfig after defconfig
   --build-root <path>      location of prebuilt xp2p/xray/completions (default: /tmp/build)
   --output-dir <path>      store the resulting .ipk/Packages under <path> instead of openwrt/repo/<release>/<arch>
+  --force-build            always rebuild xp2p binaries even if sources are unchanged
   -h, --help               Show this message
 USAGE
 }
@@ -59,6 +65,8 @@ while [ "${1:-}" != "" ]; do
       ;;
     --build-root)
       BUILD_ROOT="$2"
+      SOURCE_HASH_FILE="$BUILD_ROOT/.xp2p_source_hash"
+      IPK_CACHE_DIR="$BUILD_ROOT/.xp2p_ipk_cache"
       shift 2
       ;;
     --output-dir)
@@ -68,6 +76,10 @@ while [ "${1:-}" != "" ]; do
         *) OUTPUT_DIR="$CALLER_PWD/$OUTPUT_DIR" ;;
       esac
       shift 2
+      ;;
+    --force-build)
+      FORCE_BUILD=1
+      shift
       ;;
     -h|--help)
       usage
@@ -82,6 +94,149 @@ while [ "${1:-}" != "" ]; do
 done
 
 SUPPORTED_TARGETS=(linux-386 linux-amd64 linux-armhf linux-arm64 linux-mipsle-softfloat linux-mips64le)
+
+hash_data() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{print $1}'
+  else
+    python3 - <<'EOF'
+import hashlib, sys
+print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())
+EOF
+  fi
+}
+
+file_checksum() {
+  local file=$1
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  else
+    python3 - "$file" <<'EOF'
+import hashlib, sys, pathlib
+path = pathlib.Path(sys.argv[1])
+with path.open('rb') as handle:
+    print(hashlib.sha256(handle.read()).hexdigest())
+EOF
+  fi
+}
+
+compute_source_signature() {
+  local available_paths=()
+  local rel
+  for rel in "${SOURCE_TRACK_PATHS[@]}"; do
+    if [ -e "$PROJECT_ROOT/$rel" ]; then
+      available_paths+=("$rel")
+    fi
+  done
+  if [ ${#available_paths[@]} -eq 0 ]; then
+    echo ""
+    return 0
+  fi
+
+  local files=()
+  for rel in "${available_paths[@]}"; do
+    local abs="$PROJECT_ROOT/$rel"
+    if [ -d "$abs" ]; then
+      while IFS= read -r -d '' file; do
+        files+=("$file")
+      done < <(find "$abs" -type f -name '*.go' -print0)
+    elif [ -f "$abs" ]; then
+      files+=("$abs")
+    fi
+  done
+  if [ ${#files[@]} -eq 0 ]; then
+    echo ""
+    return 0
+  fi
+  printf "%s\0" "${files[@]}" | LC_ALL=C sort -z | xargs -0 cat | hash_data
+}
+
+record_source_signature() {
+  local signature=$1
+  if [ -z "$signature" ]; then
+    return
+  fi
+  mkdir -p "$(dirname "$SOURCE_HASH_FILE")"
+  echo "$signature" > "$SOURCE_HASH_FILE"
+}
+
+record_ipk_metadata() {
+  local target=$1
+  local signature=$2
+  local ipk_path=$3
+  if [ -z "$signature" ] || [ -z "$ipk_path" ]; then
+    return
+  fi
+  mkdir -p "$IPK_CACHE_DIR"
+  {
+    printf "signature=%s\n" "$signature"
+    printf "ipk_path=%s\n" "$ipk_path"
+  } > "$IPK_CACHE_DIR/$target"
+}
+
+load_cached_ipk() {
+  local target=$1
+  local metadata="$IPK_CACHE_DIR/$target"
+  if [ ! -f "$metadata" ]; then
+    return 1
+  fi
+  local cached_signature=""
+  local cached_ipk=""
+  while IFS='=' read -r key value; do
+    value=${value%$'\r'}
+    case "$key" in
+      signature) cached_signature=$value ;;
+      ipk_path) cached_ipk=$value ;;
+    esac
+  done < "$metadata"
+  if [ "$cached_signature" != "$SOURCE_SIGNATURE" ]; then
+    return 1
+  fi
+  if [ -z "$cached_ipk" ] || [ ! -f "$cached_ipk" ]; then
+    return 1
+  fi
+  printf "%s" "$cached_ipk"
+  return 0
+}
+
+ensure_binaries() {
+  local target=$1
+  local xp2p_bin=$2
+  local xray_bin=$3
+  local completions_dir=$4
+  local needs_build=0
+  if [ $FORCE_BUILD -eq 1 ]; then
+    needs_build=1
+  elif [ ! -x "$xp2p_bin" ] || [ ! -x "$xray_bin" ] || [ ! -d "$completions_dir" ]; then
+    needs_build=1
+  elif [ -z "$SOURCE_SIGNATURE" ]; then
+    needs_build=1
+  else
+    local cached=""
+    if [ -f "$SOURCE_HASH_FILE" ]; then
+      cached=$(cat "$SOURCE_HASH_FILE" 2>/dev/null || true)
+    fi
+    if [ "$cached" != "$SOURCE_SIGNATURE" ]; then
+      needs_build=1
+    fi
+  fi
+
+  if [ $needs_build -eq 1 ]; then
+    echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Building xp2p binaries"
+    GOTOOLCHAIN=$GOTOOLCHAIN_VERSION "$PROJECT_ROOT/scripts/build/build_xp2p_binaries.sh" --target "$target"
+    if [ -n "$SOURCE_SIGNATURE" ]; then
+      record_source_signature "$SOURCE_SIGNATURE"
+    else
+      rm -f "$SOURCE_HASH_FILE" 2>/dev/null || true
+    fi
+  else
+    echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Sources unchanged; reusing cached xp2p binaries"
+  fi
+}
 
 if [ $BUILD_ALL -eq 1 ]; then
   TARGETS=("${SUPPORTED_TARGETS[@]}")
@@ -99,9 +254,21 @@ if [ $BUILD_ALL -eq 1 ] && [ -n "$SDK_DIR" ]; then
   exit 1
 fi
 
+if [ $FORCE_BUILD -eq 0 ]; then
+  SOURCE_SIGNATURE=$(compute_source_signature || true)
+fi
 run_for_target() {
   local target=$1
   local sdk_dir_override=$2
+
+  if [ $FORCE_BUILD -eq 0 ] && [ -n "$SOURCE_SIGNATURE" ]; then
+    local cached_ipk_path=""
+    cached_ipk_path=$(load_cached_ipk "$target" || true)
+    if [ -n "$cached_ipk_path" ]; then
+      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Sources unchanged and cached ipk present at $cached_ipk_path; skipping build"
+      return
+    fi
+  fi
 
   local sdk_dir="$sdk_dir_override"
   if [ -z "$sdk_dir" ]; then
@@ -125,8 +292,7 @@ run_for_target() {
     fi
   fi
 
-  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Building xp2p binaries"
-  GOTOOLCHAIN=$GOTOOLCHAIN_VERSION "$PROJECT_ROOT/scripts/build/build_xp2p_binaries.sh" --target "$target"
+  ensure_binaries "$target" "$xp2p_bin" "$xray_bin" "$completions_dir"
 
   if [ ! -x "$xp2p_bin" ]; then
     echo "ERROR: xp2p binary not found at $xp2p_bin" >&2
@@ -219,6 +385,10 @@ run_for_target() {
 
   echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Updating feed index at $DEST_DIR"
   "$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$DEST_DIR"
+
+  if [ -n "$SOURCE_SIGNATURE" ]; then
+    record_ipk_metadata "$target" "$SOURCE_SIGNATURE" "$DEST_DIR/$(basename "$IPK_PATH")"
+  fi
 
   popd >/dev/null
 

@@ -63,7 +63,7 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
 
 ## OpenWrt ipk orchestrator
 
-`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index. It reuses `ensure_openwrt_sdk.sh` and `build_xp2p_binaries.sh`, so all prerequisites for them apply (Go 1.21.7 toolchain, distro bundles, etc.). The canonical package recipe lives in `openwrt/feed/packages/utils/xp2p/Makefile`; the script leaves it in place and only references the feed when wiring the SDK. Release artefacts are copied into `openwrt/repo/<release>/<arch>/`, where `arch` is read from the resulting `.ipk` and `<release>` defaults to the value stored in `~/.xp2p-openwrt-version` (or `OPENWRT_VERSION` when set), so the repository doubles as the GitHub Pages feed. Pass `--output-dir build/ipk` (or any other folder) when you need the resulting `.ipk` and `Packages`/`Packages.gz` in a custom destination; this is what the OpenWrt Vagrant boxes use during provisioning.
+`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index. It reuses `ensure_openwrt_sdk.sh` and `build_xp2p_binaries.sh`, so all prerequisites for them apply (Go 1.21.7 toolchain, distro bundles, etc.). The canonical package recipe lives in `openwrt/feed/packages/utils/xp2p/Makefile`; the script leaves it in place and only references the feed when wiring the SDK. Release artefacts are copied into `openwrt/repo/<release>/<arch>/`, where `arch` is read from the resulting `.ipk` and `<release>` defaults to the value stored in `~/.xp2p-openwrt-version` (or `OPENWRT_VERSION` when set), so the repository doubles as the GitHub Pages feed. Pass `--output-dir build/ipk` (or any other folder) when you need the resulting `.ipk` and `Packages`/`Packages.gz` in a custom destination; this is what the OpenWrt Vagrant boxes use during provisioning. The script fingerprints the Go sources (`go/`, `go.mod`, `go.sum`, etc.) and reuses the cached binaries stored under `--build-root` while the fingerprint stays the same; when an identical fingerprint already produced an `.ipk`, the script reuses the cached artefact (recorded under `--build-root/.xp2p_ipk_cache`) instead of rerunning the OpenWrt toolchain. Use `--force-build` to discard the cache intentionally.
 
 ```
 # build linux-amd64 ipk and update openwrt/<release>/<arch>
@@ -78,6 +78,9 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
 
 # write artefacts into build/ipk so infra/vagrant/openwrt can provision /tmp/build-openwrt
 ./scripts/build/build_openwrt_ipk.sh --target linux-amd64 --output-dir build/ipk
+
+# force a rebuild of the xp2p binaries even if no Go files changed
+./scripts/build/build_openwrt_ipk.sh --target linux-amd64 --force-build
 ```
 
 Omit `--diffconfig` if you want the SDK defaults; specify `--diffconfig-out` to capture the resulting configuration. The script stores artifacts under `/tmp/build/<target>` and copies the resulting `.ipk` into `openwrt/repo/<release>/<arch>`, regenerating `Packages`/`Packages.gz` (and `index.html` files) automatically. Run it once per target (e.g. `linux-armhf`, `linux-arm64`, `linux-mipsle-softfloat`, `linux-mips64le`, `linux-386`, `linux-amd64`); the underlying SDKs are cached and reused between invocations.
