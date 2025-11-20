@@ -29,47 +29,24 @@ Release targets:
 
 Additional experimental targets (MIPS softfloat, MIPS64LE, RISC-V) are available via the build tooling but are not uploaded automatically.
 
-Use the helper tool to inspect identifiers and asset names:
-
-```bash
-go run ./go/tools/targets list --scope release
-go run ./go/tools/targets assets --version 0.1.5 --name xp2p
-```
-
-### Install from source
-
-1. Install Go 1.21.7+ (the repo sets `toolchain go1.21.7` in `go.mod` to ensure reproducibility).
-2. Clone this repository and install the CLI straight from source:
-   ```bash
-   git clone https://github.com/NlightN22/xray-p2p.git
-   cd xray-p2p
-   go install ./go/cmd/xp2p@latest
-   xp2p --help
-   ```
-3. Cross-compile or stage binaries with the provided helpers:
-   ```bash
-   make build                                    # builds every release target into build/<target>
-   go run ./go/tools/targets build --target linux-arm64
-   go run ./go/tools/targets deps --target linux-arm64 --base build
-   ```
-
-The `deps` command copies the platform-specific `xray` binary from `distro/<os>/bundle/<arch>/`. Drop the upstream `xray-core` release there before invoking the build so archives stay self-contained. When running from source without the release bundles, copy the appropriate `xray` binary into your installation directory (Windows expects `<install>/bin/xray.exe`, Linux typically uses `/usr/bin/xray` or the OpenWrt package).
+Need to build from source or generate packages? Follow the dedicated recipes collected in [`scripts/build/README.md`](scripts/build/README.md).
 
 ### Windows MSI installer
 
-The WiX projects under `installer/wix` bundle `xp2p.exe`, `xray.exe`, and optional bootstrap actions into `xp2p-<version>-windows-amd64.msi`. The quickest way to build and smoke-test the installer is:
+Every release ships `xp2p-<version>-windows-amd64.msi`. Install it with standard Windows tooling:
 
 ```powershell
-# From the repo root on Windows
-.\scripts\build\build_and_install_msi.ps1 -Version 0.1.5
+msiexec /i xp2p-<version>-windows-amd64.msi
+msiexec /x xp2p-<version>-windows-amd64.msi          # uninstall
+msiexec /i xp2p-<version>-windows-amd64.msi /qn      # silent install
+msiexec /i xp2p-<version>-windows-amd64.msi INSTALLFOLDER="D:\Network\xp2p"
 ```
 
-For manual control, compile via `candle.exe`/`light.exe` while pointing `-dXp2pBinary` and `-dXrayBinary` at the artifacts under `build/windows-<arch>/`. Installs accept standard `msiexec` properties such as `INSTALLFOLDER`, `MSIINSTALLPERUSER`, `XP2P_CLIENT_ARGS`, and `XP2P_SERVER_ARGS`.
+Optional properties such as `XP2P_CLIENT_ARGS` or `XP2P_SERVER_ARGS` let you kick off `xp2p client install ...` or `xp2p server install ...` immediately after setup. Custom MSI builds still live under `installer/wix`; see [`scripts/build/README.md`](scripts/build/README.md) for authoring instructions.
 
 ### Other packages
 
-- Debian packaging, OpenWrt IPKs, and SDK bootstrapping scripts are documented in [`scripts/build/README.md`](scripts/build/README.md).
-- The Debian builder VM lives under `infra/vagrant/debian12`, while Windows smoke-test boxes sit in `infra/vagrant/windows10`. Use these environments when you need hermetic packaging workflows.
+- Debian packages (`.deb`), OpenWrt feeds, and helper SDK environments are covered in [`scripts/build/README.md`](scripts/build/README.md).
 
 ## Configuration
 
@@ -125,7 +102,7 @@ xp2p server cert set --cert C:\certs\fullchain.pem --key C:\certs\privkey.pem --
 
 ### Client lifecycle
 
-Client commands configure Windows workstations, Linux servers, or OpenWrt routers. Release archives already place `xray` next to `xp2p`; if you build from source make sure the platform-appropriate binary exists before running `xp2p client install`.
+Client commands configure Windows workstations, Linux servers, or OpenWrt routers. Release archives already place `xray` next to `xp2p`, so keep both binaries together when copying the installation directory between hosts.
 
 ```bash
 # Install from trojan:// link (auto-populates user, host, password, TLS settings)
@@ -171,14 +148,6 @@ xp2p server deploy --link "xp2p+deploy://ENCODED_PAYLOAD" --listen :62025 --once
 ```
 
 The deploy listener pulls the manifest (install directory, Trojan port, optional user/password), installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
-
-## Building & packaging details
-
-- `go/tools/targets matrix` prints the GOOS/GOARCH matrix consumed by CI. Pair it with `targets build` and `targets deps` to cross-compile and gather dependencies locally.
-- Release archives are produced by zipping the contents of `build/<target>/`. Use standard tooling (`tar`, `zip`, or the GitHub release workflow) to publish the files named by `targets assets`.
-- Windows MSI installers are maintained under `installer/wix`, while helper scripts for MSI, Debian, and OpenWrt IPK generation sit inside `scripts/build/`. Those scripts document the exact prerequisites (WiX, dpkg-dev, OpenWrt SDK) and clean staging directories between runs.
-- The Debian builder Vagrant box under `infra/vagrant/debian12` mounts the repository at `/srv/xray-p2p` and ships everything needed for `scripts/build/build_deb_xp2p.sh`.
-- OpenWrt packages rely on the SDK assets in `openwrt/` plus `scripts/build/ensure_openwrt_sdk.sh`. Generated packages end up in `build/ipk/` along with repository indexes (`generate_openwrt_indexes.sh`).
 
 ## Project layout and further docs
 
