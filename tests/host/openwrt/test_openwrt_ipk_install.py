@@ -21,25 +21,10 @@ from tests.host.openwrt import env as openwrt_env
 REMOTE_IPK_PATH = PurePosixPath("/tmp/xp2p.ipk")
 
 
-@pytest.fixture(scope="session")
-def openwrt_ipk_target() -> str:
-    return openwrt_env.resolve_target_from_env()
-
-
-@pytest.fixture(scope="session")
-def xp2p_openwrt_ipk(ipk_builder_host, openwrt_ipk_target):
-    openwrt_env.IPK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    openwrt_env.build_ipk(ipk_builder_host, openwrt_ipk_target)
-    artifact = openwrt_env.latest_local_ipk()
-    assert artifact, "Expected build/ipk to contain a freshly built xp2p ipk"
-    openwrt_env.ensure_packages_index_present()
-    openwrt_env.sync_build_output()
-    return artifact
-
-
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_ipk_can_be_installed(openwrt_host, xp2p_openwrt_ipk):
+    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     staged_path = openwrt_env.stage_ipk_on_guest(openwrt_host, xp2p_openwrt_ipk, REMOTE_IPK_PATH)
     openwrt_env.opkg_remove(openwrt_host, "xp2p", ignore_missing=True)
     openwrt_env.opkg_install_local(openwrt_host, staged_path)

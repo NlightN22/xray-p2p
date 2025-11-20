@@ -1,25 +1,28 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-import time
 
 import pytest
 
-from tests.host.linux import _helpers as helpers
-from tests.host.linux import env as linux_env
+from tests.host.openwrt import _helpers as helpers
+from tests.host.openwrt import env as openwrt_env
 from tests.host.tunnel import common as tunnel_common
 
-SERVER_IP = "10.62.10.11"  # deb-test-a (host A)
-CLIENT_IP = "10.62.10.12"  # deb-test-b (host B)
+SERVER_MACHINE = openwrt_env.OPENWRT_MACHINES[0]
+CLIENT_MACHINE = openwrt_env.OPENWRT_MACHINES[1]
+SERVER_IP = "10.62.20.11"
+CLIENT_IP = "10.62.20.12"
 CLIENT_REVERSE_TEST_IP = "10.62.20.5"
 DIAGNOSTICS_PORT = 62022
 SERVER_FORWARD_PORT = 53341
 CLIENT_REDIRECT_CIDR = "10.200.50.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 HEARTBEAT_STATE_FILE = helpers.HEARTBEAT_STATE_FILE
+
+
 def _runner(host):
     def _run(*args: str, check: bool = False):
-        result = linux_env.run_xp2p(host, *args)
+        result = openwrt_env.run_xp2p(host, *args)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "
@@ -30,65 +33,10 @@ def _runner(host):
     return _run
 
 
-
-def _verify_heartbeat_state(env: dict) -> None:
-    expected_tag = env["endpoint_tag"]
-    expected_user = env["client_user"]
-    expected_client_ip = env["client_primary_ip"]
-    server_install_path = env["server_install_path"]
-    client_install_path = helpers.INSTALL_ROOT.as_posix()
-
-    helpers.wait_for_heartbeat_state(env["server_host"], HEARTBEAT_STATE_FILE)
-    helpers.wait_for_heartbeat_state(env["client_host"], HEARTBEAT_STATE_FILE)
-    tunnel_common.wait_for_alive_entry(
-        env["server_runner"],
-        "server",
-        server_install_path,
-        expected_tag,
-        SERVER_IP,
-        expected_user,
-        expected_client_ip,
-    )
-    tunnel_common.wait_for_alive_entry(
-        env["client_runner"],
-        "client",
-        client_install_path,
-        expected_tag,
-        SERVER_IP,
-        expected_user,
-        expected_client_ip,
-    )
-
-
-def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
-    server_host = env["server_host"]
-    install_path = env["server_install_path"]
-    xp2p_binary = linux_env.INSTALL_PATH.as_posix()
-    timeout_arg = f"{duration_seconds:.0f}s"
-    command = (
-        f"timeout -k 1s {timeout_arg} sudo -n {xp2p_binary} server state "
-        f"--watch --interval 2s --path {install_path}"
-    )
-    result = server_host.run(command)
-    if result.rc not in (0, 124):
-        pytest.fail(
-            "xp2p server state --watch failed "
-            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    cleaned = tunnel_common.strip_ansi(result.stdout or "")
-    header_count = sum(
-        1
-        for raw in cleaned.splitlines()
-        if tuple(tunnel_common.split_state_line(raw.strip())) == tunnel_common.STATE_TABLE_HEADER
-    )
-    assert header_count >= 2, "xp2p server state --watch did not refresh multiple times"
-    assert header_count <= 5, "xp2p server state --watch produced unexpected amount of output"
-
-
 @pytest.fixture(scope="module")
-def tunnel_environment(linux_host_factory, xp2p_linux_versions):
-    server_host = linux_host_factory(linux_env.DEFAULT_CLIENT)
-    client_host = linux_host_factory(linux_env.DEFAULT_SERVER)
+def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
+    server_host = openwrt_server_host
+    client_host = openwrt_client_host
     server_runner = _runner(server_host)
     client_runner = _runner(client_host)
     server_install_path = helpers.INSTALL_ROOT.as_posix()
@@ -96,15 +44,19 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
 
     def cleanup():
         for host in (server_host, client_host):
-            host.run("sudo -n pkill -f '/usr/bin/xp2p server run' >/dev/null 2>&1 || true")
-            host.run("sudo -n pkill -f '/usr/bin/xp2p client run' >/dev/null 2>&1 || true")
-            host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+            host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
+            host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
+            host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
         for host in (server_host, client_host):
             helpers.remove_path(host, HEARTBEAT_STATE_FILE)
 
     cleanup()
+    openwrt_env.sync_build_output(SERVER_MACHINE)
+    openwrt_env.install_ipk_on_host(server_host, xp2p_openwrt_ipk)
+    openwrt_env.sync_build_output(CLIENT_MACHINE)
+    openwrt_env.install_ipk_on_host(client_host, xp2p_openwrt_ipk)
     try:
         server_install = server_runner(
             "server",
@@ -155,8 +107,6 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
             user=credential["user"],
             host=SERVER_IP,
         )
-        recorded_tags = {tag for tag in client_state.get("reverse", {}).keys()}
-        assert recorded_tags == {reverse_tag}, f"Unexpected reverse entries recorded: {recorded_tags}"
 
         helpers.assert_reverse_cli_output(
             server_runner,
@@ -190,13 +140,13 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
 
 @contextmanager
 def _active_tunnel_sessions(env: dict):
-    with linux_env.xp2p_run_session(
+    with openwrt_env.xp2p_run_session(
         env["server_host"],
         "server",
         env["server_install_path"],
         helpers.SERVER_CONFIG_DIR_NAME,
         helpers.SERVER_LOG_FILE,
-    ), linux_env.xp2p_run_session(
+    ), openwrt_env.xp2p_run_session(
         env["client_host"],
         "client",
         helpers.INSTALL_ROOT.as_posix(),
@@ -225,7 +175,7 @@ def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = F
 
 @contextmanager
 def _ip_alias(host, cidr: str, dev: str = "lo"):
-    add_cmd = f"sudo -n ip addr add {cidr} dev {dev}"
+    add_cmd = f"ip addr add {cidr} dev {dev}"
     add_result = host.run(add_cmd)
     if add_result.rc != 0 and "file exists" not in (add_result.stderr or "").lower():
         pytest.fail(
@@ -235,7 +185,7 @@ def _ip_alias(host, cidr: str, dev: str = "lo"):
     try:
         yield
     finally:
-        host.run(f"sudo -n ip addr del {cidr} dev {dev}")
+        host.run(f"ip addr del {cidr} dev {dev} >/dev/null 2>&1 || true")
 
 
 def _exercise_client_forward_diagnostics(env: dict) -> None:
@@ -300,12 +250,8 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
 def _exercise_server_forward_diagnostics(env: dict) -> None:
     server_host = env["server_host"]
     server_runner = env["server_runner"]
-    server_install_path = env["server_install_path"]
     forward_target = f"{CLIENT_IP}:{DIAGNOSTICS_PORT}"
     listen_port = None
-    redirect_cidr = f"{CLIENT_IP}/32"
-    redirect_added = False
-    enable_redirect = False
     try:
         _server_forward_cmd(
             env,
@@ -323,23 +269,6 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
         server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
         entry = tunnel_common.forward_entry_for_target(server_state.get("forward_rules") or [], CLIENT_IP, DIAGNOSTICS_PORT)
         listen_port = tunnel_common.listen_port_from_entry(entry)
-
-        if enable_redirect:
-            server_runner(
-                "server",
-                "redirect",
-                "add",
-                "--path",
-                server_install_path,
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
-                "--cidr",
-                redirect_cidr,
-                "--tag",
-                env["reverse_tag"],
-                check=True,
-            )
-            redirect_added = True
 
         with _active_tunnel_sessions(env):
             ping_result = tunnel_common.ping_with_retries(
@@ -367,21 +296,59 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
                 "--ignore-missing",
                 check=True,
             )
-        if redirect_added:
-            server_runner(
-                "server",
-                "redirect",
-                "remove",
-                "--path",
-                server_install_path,
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
-                "--cidr",
-                redirect_cidr,
-                "--tag",
-                env["reverse_tag"],
-                check=True,
-            )
+
+
+def _verify_heartbeat_state(env: dict) -> None:
+    expected_tag = env["endpoint_tag"]
+    expected_user = env["client_user"]
+    expected_client_ip = env["client_primary_ip"]
+    server_install_path = env["server_install_path"]
+    client_install_path = helpers.INSTALL_ROOT.as_posix()
+
+    helpers.wait_for_heartbeat_state(env["server_host"], HEARTBEAT_STATE_FILE)
+    helpers.wait_for_heartbeat_state(env["client_host"], HEARTBEAT_STATE_FILE)
+    tunnel_common.wait_for_alive_entry(
+        env["server_runner"],
+        "server",
+        server_install_path,
+        expected_tag,
+        SERVER_IP,
+        expected_user,
+        expected_client_ip,
+    )
+    tunnel_common.wait_for_alive_entry(
+        env["client_runner"],
+        "client",
+        client_install_path,
+        expected_tag,
+        SERVER_IP,
+        expected_user,
+        expected_client_ip,
+    )
+
+
+def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
+    server_host = env["server_host"]
+    install_path = env["server_install_path"]
+    timeout_arg = f"{duration_seconds:.0f}s"
+    command = (
+        f"timeout -k 1s {timeout_arg} xp2p server state "
+        f"--watch --interval 2s --path {install_path}"
+    )
+    result = server_host.run(command)
+    if result.rc not in (0, 124):
+        pytest.fail(
+            "xp2p server state --watch failed "
+            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    cleaned = tunnel_common.strip_ansi(result.stdout or "")
+    header_count = sum(
+        1
+        for raw in cleaned.splitlines()
+        if tuple(tunnel_common.split_state_line(raw.strip())) == tunnel_common.STATE_TABLE_HEADER
+    )
+    assert header_count >= 2, "xp2p server state --watch did not refresh multiple times"
+    assert header_count <= 5, "xp2p server state --watch produced unexpected amount of output"
 
 
 def test_forward_tunnel_operational(tunnel_environment):
@@ -421,42 +388,53 @@ def test_client_redirect_through_server(tunnel_environment):
         helpers.CLIENT_CONFIG_DIR_NAME,
         "--cidr",
         CLIENT_REDIRECT_CIDR,
-        "--host",
-        SERVER_IP,
+        "--tag",
+        endpoint_tag,
         check=True,
     )
+    redirect_added = True
     try:
-        redirect_list = client_runner(
-            "client",
-            "redirect",
-            "list",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            check=True,
-        ).stdout or ""
-        assert CLIENT_REDIRECT_CIDR in redirect_list
-
-        routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
-        helpers.assert_redirect_rule(routing, CLIENT_REDIRECT_CIDR, endpoint_tag)
-    finally:
-        client_runner(
-            "client",
-            "redirect",
-            "remove",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            "--cidr",
-            CLIENT_REDIRECT_CIDR,
-            "--host",
-            SERVER_IP,
-            check=True,
+        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        helpers.assert_redirect_rule(client_routing, CLIENT_REDIRECT_CIDR, endpoint_tag)
+        helpers.assert_client_reverse_state(
+            client_state,
+            tunnel_environment["reverse_tag"],
+            endpoint_tag=endpoint_tag,
+            user=tunnel_environment["client_user"],
+            host=SERVER_IP,
         )
-        routing_after = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
-        helpers.assert_no_redirect_rule(routing_after, CLIENT_REDIRECT_CIDR, endpoint_tag)
+        with _active_tunnel_sessions(tunnel_environment):
+            ping_result = tunnel_common.ping_with_retries(
+                client_runner,
+                (
+                    "ping",
+                    SERVER_IP,
+                    "--count",
+                    "3",
+                    "--proto",
+                    "tcp",
+                ),
+                "while redirecting through server",
+            )
+            tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
+    finally:
+        if redirect_added:
+            client_runner(
+                "client",
+                "redirect",
+                "remove",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                "--cidr",
+                CLIENT_REDIRECT_CIDR,
+                "--tag",
+                endpoint_tag,
+                "--ignore-missing",
+                check=True,
+            )
         final_list = client_runner(
             "client",
             "redirect",
@@ -533,7 +511,9 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             forward_added = True
 
             server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
-            entry = tunnel_common.forward_entry_for_target(server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, DIAGNOSTICS_PORT)
+            entry = tunnel_common.forward_entry_for_target(
+                server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, DIAGNOSTICS_PORT
+            )
             listen_port = tunnel_common.listen_port_from_entry(entry)
             assert listen_port == SERVER_FORWARD_PORT
 

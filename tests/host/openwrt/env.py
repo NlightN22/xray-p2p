@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import os
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 import shlex
+import time
+from typing import Callable
 
 from testinfra.host import Host
 
@@ -20,6 +23,12 @@ OPENWRT_MACHINES: tuple[str, ...] = ("openwrt-a", "openwrt-b", "openwrt-c")
 DEFAULT_OPENWRT_MACHINE = OPENWRT_MACHINES[0]
 TARGET_ENV_VAR = "XP2P_OPENWRT_IPK_TARGET"
 DEFAULT_TARGET = "linux-amd64"
+
+
+def _posix(value: PurePosixPath | Path | str) -> str:
+    if isinstance(value, (PurePosixPath, Path)):
+        return value.as_posix()
+    return str(value)
 
 
 def require_ipk_builder_environment() -> None:
@@ -40,6 +49,20 @@ def get_openwrt_host(machine: str) -> Host:
         raise ValueError(f"Unknown OpenWrt machine id: {machine}")
     common.ensure_machine_running(OPENWRT_VAGRANT_DIR, machine)
     return common.get_ssh_host(OPENWRT_VAGRANT_DIR, machine)
+
+
+def host_factory() -> Callable[[str], Host]:
+    cache: dict[str, Host] = {}
+
+    def _get(machine: str) -> Host:
+        if machine not in OPENWRT_MACHINES:
+            raise ValueError(f"Unknown OpenWrt machine id: {machine}")
+        if machine not in cache:
+            require_openwrt_environment()
+            cache[machine] = get_openwrt_host(machine)
+        return cache[machine]
+
+    return _get
 
 
 def sync_build_output(machine: str = DEFAULT_OPENWRT_MACHINE) -> None:
@@ -105,6 +128,13 @@ def stage_ipk_on_guest(host: Host, ipk_path: Path, destination: PurePosixPath | 
     return target_path
 
 
+def install_ipk_on_host(host: Host, ipk_path: Path, *, destination: PurePosixPath | None = None) -> PurePosixPath:
+    staged_path = stage_ipk_on_guest(host, ipk_path, destination)
+    opkg_remove(host, "xp2p", ignore_missing=True)
+    opkg_install_local(host, staged_path)
+    return staged_path
+
+
 def opkg_remove(host: Host, package: str, ignore_missing: bool = True) -> None:
     status = host.run(f"opkg status {shlex.quote(package)}")
     if status.rc != 0:
@@ -142,3 +172,44 @@ def run_xp2p(host: Host, *args: str):
 
 def resolve_target_from_env() -> str:
     return os.environ.get(TARGET_ENV_VAR, DEFAULT_TARGET)
+
+
+@contextmanager
+def xp2p_run_session(
+    host: Host,
+    role: str,
+    install_dir: str | Path | PurePosixPath,
+    config_dir: str,
+    log_path: str | Path | PurePosixPath,
+):
+    if role not in {"server", "client"}:
+        raise ValueError(f"Unsupported role: {role}")
+    install_path = _posix(install_dir)
+    log_file = _posix(log_path)
+    log_dir = str(PurePosixPath(log_file).parent)
+    host.run(f"mkdir -p {shlex.quote(log_dir)}")
+    start_cmd = (
+        f"nohup xp2p {role} run "
+        f"--path {shlex.quote(install_path)} "
+        f"--config-dir {shlex.quote(config_dir)} "
+        f"--auto-install "
+        f"--xray-log-file {shlex.quote(log_file)} "
+        f"--quiet >/tmp/xp2p-{role}-run.log 2>&1 & echo $!"
+    )
+    result = host.run(f"sh -c {shlex.quote(start_cmd)}")
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to start xp2p {role} run.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    pid_line = (result.stdout or "").strip().splitlines()
+    if not pid_line:
+        raise RuntimeError("xp2p run did not output PID")
+    pid_value = pid_line[-1].strip()
+    time.sleep(1)
+    alive = host.run(f"kill -0 {pid_value} >/dev/null 2>&1")
+    if alive.rc != 0:
+        raise RuntimeError(f"xp2p {role} run exited prematurely (pid {pid_value}).")
+    try:
+        yield {"pid": int(pid_value), "log": log_file}
+    finally:
+        host.run(f"kill {pid_value} >/dev/null 2>&1 || true")
