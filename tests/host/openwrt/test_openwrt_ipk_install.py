@@ -25,10 +25,7 @@ REMOTE_IPK_PATH = PurePosixPath("/tmp/xp2p.ipk")
 @pytest.mark.linux
 def test_openwrt_ipk_can_be_installed(openwrt_host, xp2p_openwrt_ipk):
     openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
-    staged_path = openwrt_env.stage_ipk_on_guest(openwrt_host, xp2p_openwrt_ipk, REMOTE_IPK_PATH)
-    openwrt_env.opkg_remove(openwrt_host, "xp2p", ignore_missing=True)
-    openwrt_env.opkg_install_local(openwrt_host, staged_path)
-
+    openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, destination=REMOTE_IPK_PATH, force=True)
     version = openwrt_env.run_xp2p(openwrt_host, "--version")
     assert version.rc == 0, f"xp2p --version failed:\nSTDOUT:\n{version.stdout}\nSTDERR:\n{version.stderr}"
     assert (version.stdout or "").strip(), "xp2p --version did not emit any output"

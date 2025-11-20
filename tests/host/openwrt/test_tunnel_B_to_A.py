@@ -10,12 +10,12 @@ from tests.host.tunnel import common as tunnel_common
 
 SERVER_MACHINE = openwrt_env.OPENWRT_MACHINES[0]
 CLIENT_MACHINE = openwrt_env.OPENWRT_MACHINES[1]
-SERVER_IP = "10.62.20.11"
-CLIENT_IP = "10.62.20.12"
-CLIENT_REVERSE_TEST_IP = "10.62.20.5"
+SERVER_IP = "10.63.30.11"
+CLIENT_IP = "10.63.30.12"
+CLIENT_REVERSE_TEST_IP = "10.0.102.50"
 DIAGNOSTICS_PORT = 62022
 SERVER_FORWARD_PORT = 53341
-CLIENT_REDIRECT_CIDR = "10.200.50.0/24"
+CLIENT_REDIRECT_CIDR = "10.0.102.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 HEARTBEAT_STATE_FILE = helpers.HEARTBEAT_STATE_FILE
 
@@ -330,10 +330,10 @@ def _verify_heartbeat_state(env: dict) -> None:
 def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
     server_host = env["server_host"]
     install_path = env["server_install_path"]
-    timeout_arg = f"{duration_seconds:.0f}s"
+    timeout_arg = f"{duration_seconds:.0f}"
     command = (
-        f"timeout -k 1s {timeout_arg} xp2p server state "
-        f"--watch --interval 2s --path {install_path}"
+        f"busybox timeout -s TERM {timeout_arg} "
+        f"xp2p server state --watch --interval 2s --path {install_path}"
     )
     result = server_host.run(command)
     if result.rc not in (0, 124):

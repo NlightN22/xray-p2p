@@ -1,11 +1,17 @@
 #!/bin/ash
 
 MARKER="/etc/router_provisioned"
+MARKER_VERSION="v3"
 
 if [ -f "$MARKER" ]; then
-  echo "Router provisioning already completed; skipping."
-  exit 0
+  if grep -qx "$MARKER_VERSION" "$MARKER"; then
+    echo "Router provisioning already completed; skipping."
+    exit 0
+  fi
+  rm -f "$MARKER"
 fi
+
+opkg remove coreutils-nohup coreutils-timeout >/dev/null 2>&1 || true
 
 TUNNEL_IP=$1
 LAN_COUNT=$2
@@ -45,4 +51,4 @@ uci set firewall.$zone.forward='REJECT'
 uci commit firewall
 /etc/init.d/firewall restart
 
-touch "$MARKER"
+echo "$MARKER_VERSION" > "$MARKER"
