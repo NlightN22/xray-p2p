@@ -12,6 +12,10 @@ guest suites -- the CI and fellow contributors expect these rules.
 - **All guest logic lives under `tests/guest/`** (PowerShell/Bash/Go helpers,
   etc.). Host fixtures merely trigger those entrypoints; do not inline ad-hoc
   scripts inside Python.
+- **Build automation stays under `scripts/build/`**. Tests may invoke those
+  helpers from guests or hosts, but must not duplicate or relocate build logic
+  inside `tests/guest` (e.g., no alternative OpenWrt/DEB/MSI builders under
+  the test tree).
 - Windows MSI builds from host tests must execute `tests/guest/scripts/build_msi_package.ps1`,
   which wraps the canonical scripts under `scripts/build/`. Keep the MSI build
   pipeline there instead of duplicating commands inside host helpers.
