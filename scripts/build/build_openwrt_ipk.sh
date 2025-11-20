@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
 DEFAULT_BUILD_ROOT="/tmp/build"
+CALLER_PWD=$(pwd)
 
 TARGET=""
 BUILD_ALL=0
@@ -16,6 +17,7 @@ FEED_PACKAGE_PATH="$FEED_PATH/packages/utils/xp2p"
 REPO_ROOT="$PROJECT_ROOT/openwrt/repo"
 RELEASE_VERSION=${OPENWRT_VERSION:-""}
 GOTOOLCHAIN_VERSION=${GOTOOLCHAIN:-go1.21.7}
+OUTPUT_DIR=""
 
 usage() {
   cat <<'USAGE'
@@ -28,6 +30,7 @@ Options:
   --diffconfig <path>      diffconfig applied before make defconfig
   --diffconfig-out <path>  write fresh diffconfig after defconfig
   --build-root <path>      location of prebuilt xp2p/xray/completions (default: /tmp/build)
+  --output-dir <path>      store the resulting .ipk/Packages under <path> instead of openwrt/repo/<release>/<arch>
   -h, --help               Show this message
 USAGE
 }
@@ -56,6 +59,14 @@ while [ "${1:-}" != "" ]; do
       ;;
     --build-root)
       BUILD_ROOT="$2"
+      shift 2
+      ;;
+    --output-dir)
+      OUTPUT_DIR="$2"
+      case "$OUTPUT_DIR" in
+        /*) ;;
+        *) OUTPUT_DIR="$CALLER_PWD/$OUTPUT_DIR" ;;
+      esac
       shift 2
       ;;
     -h|--help)
@@ -196,7 +207,13 @@ run_for_target() {
     exit 1
   fi
 
-  DEST_DIR="$REPO_ROOT/$release_version/$ARCH_DIR"
+  local dest_dir
+  if [ -n "$OUTPUT_DIR" ]; then
+    dest_dir="${OUTPUT_DIR%/}"
+  else
+    dest_dir="$REPO_ROOT/$release_version/$ARCH_DIR"
+  fi
+  DEST_DIR="$dest_dir"
   mkdir -p "$DEST_DIR"
   cp "$IPK_PATH" "$DEST_DIR/"
 
