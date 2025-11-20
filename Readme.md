@@ -1,427 +1,187 @@
-# XRAY-p2p Trojan Tunnel
+# XRAY-p2p (Go)
 
-XRAY-p2p delivers a minimal Trojan tunnel based on **xray-core** for OpenWrt. The repository ships with configuration templates and shell scripts that automate both server and client provisioning.
+XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. The Go-based `xp2p` CLI owns server and client provisioning, state tracking, TLS assets, and helper routes on Windows, Linux, and OpenWrt so you no longer need to depend on the original shell automation.
 
-## Overview
+> Need the legacy shell workflow? The archived text lives in [Readme-old.md](Readme-old.md).
 
-- Fast bootstrap flows: either a guided one-command setup or explicit server/client steps.
-- Manages Trojan user credentials and keeps server and client state in sync.
-- Generates TLS certificates or consumes existing ones for inbound listeners.
-- Provides helper scripts for redirects, DNS, and troubleshooting on OpenWrt.
+## What xp2p provides
 
----
+- A single statically linked CLI (`xp2p`) with Cobra-based help, completions, doc generation, and a background diagnostics service.
+- Server management covering installation, upgrades, TLS deployment, user provisioning, redirect/forward/reverse bridges, and `xray-core` log collection.
+- Client management on Windows, Linux, and OpenWrt including endpoint installs from `trojan://` links, reverse portals, SOCKS autodiscovery, redirects, and DNS-aware forwarding.
+- Remote deployment handshakes (`xp2p client deploy` + `xp2p server deploy`) that ship ready-to-use manifests over an encrypted link before bootstrapping both sides.
+- Build tooling that emits per-OS packages together with vendor-supplied `xray` binaries, Windows MSI installers, Debian packages, and OpenWrt IPKs.
 
-## Connection topology
+## Getting xp2p
 
-```text
-      Server LAN                     Internet                    Client LAN
-   +---------------+          +-----------------+         +--------------------+
-   | Server router |==========| Trojan tunnel   |=========| OpenWrt router     |
-   | (xray inbound)|   TLS    | (TLS over TCP)  |   TLS   | (xray client)      |
-   +-------+-------+          +-----------------+         +-----+--------------+
-           |                                                   |
-   +-------+--------+                                   +------+-------+
-   | Internal hosts |                                   | LAN devices |
-   | (servers etc.) |                                   | PCs / TVs   |
-   +----------------+                                   +--------------+
-```
+### Download release archives
 
-- The server hosts the public Trojan inbound and manages user credentials.
-- The OpenWrt router establishes the outbound tunnel and publishes local socks/redirect listeners.
-- LAN devices stay untouched; traffic is steered through the router via redirects or per-subnet policies.
+Grab pre-built archives from the GitHub Releases page. File names follow `xp2p-<version>-<target>.zip` on Windows and `xp2p-<version>-<target>.tar.gz` on Linux. Each archive contains the `xp2p` binary and the matching `xray` binary staged under the same directory, so unpack it anywhere and add it to `PATH` (or point services at that folder).
 
----
+Release targets:
 
-## Quick Start
+- `windows-amd64` (`.zip`)
+- `windows-386` (`.zip`)
+- `linux-amd64` (`.tar.gz`)
+- `linux-386` (`.tar.gz`)
+- `linux-arm64` (`.tar.gz`)
+- `linux-armhf` (`.tar.gz`)
 
-### Prerequisites
+Additional experimental targets (MIPS softfloat, MIPS64LE, RISC-V) are available via the build tooling but are not uploaded automatically.
 
-- SSH access to the target server with the port open (default `22`, or your custom port).
-- Internet connectivity for the server and every OpenWrt client router.
-- At least 30 MB of free storage on the OpenWrt router for xray binaries and configs.
-- `curl` available on both devices (fall back to `wget -qO- ... | sh` if required).
-
-### Preferred: Guided bootstrap from the client
-
-Run on the OpenWrt router and follow the prompts. The wizard provisions both sides in one run.
+Use the helper tool to inspect identifiers and asset names:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/xsetup.sh | sh
+go run ./go/tools/targets list --scope release
+go run ./go/tools/targets assets --version 0.1.5 --name xp2p
 ```
 
-The helper walks through address prompts, connects over SSH to the server, installs xray-core, issues a Trojan credential, applies client templates, and wires up redirects and reverse proxies automatically.
+### Install from source
 
-### Manual setup (alternative path)
-
-Use this route when you need to run each stage independently or customize pieces along the way.
-
-1. **Prepare the server** on Debian/Ubuntu/CentOS-like hosts:
+1. Install Go 1.21.7+ (the repo sets `toolchain go1.21.7` in `go.mod` to ensure reproducibility).
+2. Clone this repository and install the CLI straight from source:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server.sh | sh -s -- install
+   git clone https://github.com/NlightN22/xray-p2p.git
+   cd xray-p2p
+   go install ./go/cmd/xp2p@latest
+   xp2p --help
    ```
-   Installs xray-core, writes Trojan inbound configs, and enables the xray-p2p service.
-2. **Issue a client credential** and save the resulting URL:
+3. Cross-compile or stage binaries with the provided helpers:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh | sh -s -- issue
+   make build                                    # builds every release target into build/<target>
+   go run ./go/tools/targets build --target linux-arm64
+   go run ./go/tools/targets deps --target linux-arm64 --base build
    ```
-   Use `list` or `remove` with the same script to manage users later on.
-3. **Install the client** on OpenWrt:
-   ```bash
-   opkg update && opkg install jq
-   curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client.sh | sh -s -- install
-   ```
-   Paste the saved URL when prompted. The installer pulls state from the server, writes templates from `config_templates/client`, and restarts xray-p2p.
 
-### Client deployment packages
+The `deps` command copies the platform-specific `xray` binary from `distro/<os>/bundle/<arch>/`. Drop the upstream `xray-core` release there before invoking the build so archives stay self-contained. When running from source without the release bundles, copy the appropriate `xray` binary into your installation directory (Windows expects `<install>/bin/xray.exe`, Linux typically uses `/usr/bin/xray` or the OpenWrt package).
 
-The Go CLI can build standalone deployment archives so you can inspect or upload them manually:
+### Windows MSI installer
 
-```bash
-xp2p client deploy --remote-host 10.0.10.10 --package-only
-```
-
-The command produces a versioned directory with placeholder install scripts and a generated configuration tied to the requested host.
-
-On the remote host, reuse the manifest baked into the package:
+The WiX projects under `installer/wix` bundle `xp2p.exe`, `xray.exe`, and optional bootstrap actions into `xp2p-<version>-windows-amd64.msi`. The quickest way to build and smoke-test the installer is:
 
 ```powershell
-xp2p server install --deploy-file .\config\deployment.json
+# From the repo root on Windows
+.\scripts\build\build_and_install_msi.ps1 -Version 0.1.5
 ```
 
-The CLI pulls the target host/version from the manifest and keeps the installation in sync with the generated package.
+For manual control, compile via `candle.exe`/`light.exe` while pointing `-dXp2pBinary` and `-dXrayBinary` at the artifacts under `build/windows-<arch>/`. Installs accept standard `msiexec` properties such as `INSTALLFOLDER`, `MSIINSTALLPERUSER`, `XP2P_CLIENT_ARGS`, and `XP2P_SERVER_ARGS`.
 
-## CLI reference
+### Other packages
 
-`xp2p` now uses Cobra, so every command ships with contextual `--help` output and sensible flag defaults. The most common flows are:
+- Debian packaging, OpenWrt IPKs, and SDK bootstrapping scripts are documented in [`scripts/build/README.md`](scripts/build/README.md).
+- The Debian builder VM lives under `infra/vagrant/debian12`, while Windows smoke-test boxes sit in `infra/vagrant/windows10`. Use these environments when you need hermetic packaging workflows.
 
-```bash
-# Install or update the server
-xp2p server install --path C:\xp2p --host edge.example.com --force
+## Configuration
 
-# Run the server in the foreground and auto-install if assets are missing
+`xp2p` reads configuration in the following order: built-in defaults > optional file > environment variables > CLI overrides. By default it scans for `xp2p.yaml|yml|toml` in the current directory, or you can pass `--config path/to/file`. Settings map 1:1 to environment variables via the `XP2P_` prefix (`XP2P_SERVER_INSTALL_DIR`, `XP2P_CLIENT_SERVER_ADDRESS`, etc.). See `config_templates/xp2p.example.yaml` for a starting point:
+
+```yaml
+logging:
+  level: info
+  format: text
+
+server:
+  port: 62022
+  install_dir: C:\xp2p
+  config_dir: config-server
+  host: edge.example.com
+
+client:
+  install_dir: C:\xp2p
+  config_dir: config-client
+  server_address: edge.example.com
+  server_port: 8443
+  allow_insecure: true
+```
+
+Every command shares global flags such as `--config`, `--log-level`, `--log-json`, `--diag-service-port`, and `--diag-service-mode`. Run `xp2p completion <shell>` to install shell completions or `xp2p docs --dir ./docs/cli` to generate a Markdown command reference straight from the Cobra tree.
+
+## Typical workflows
+
+### Server lifecycle
+
+Server commands manage xray inbound listeners, TLS assets, and user state. A common flow looks like:
+
+```powershell
+xp2p server install --path C:\xp2p --host edge.example.com --port 62022 `
+  --cert C:\certs\fullchain.pem --key C:\certs\privkey.pem --force
 xp2p server run --auto-install --xray-log-file C:\xp2p\logs\xray.err
 
-# Manage Trojan users
-xp2p server user add --id alpha --password secret --host edge.example.com
-xp2p server user list --host edge.example.com
+# Manage users and reverse bridges
+xp2p server user add --id branch@example.com --password S3cret --host edge.example.com
+xp2p server user list
+xp2p server user remove --id branch@example.com
 
-# Configure the Windows client
-xp2p client install --link trojan://SECRET@edge.example.com:62022
-xp2p client run --auto-install
-xp2p client redirect add --cidr 10.10.0.0/16 --host edge.example.com
-xp2p client redirect add --domain api.example.com --tag proxy-edge-example
-xp2p client redirect list
-xp2p client redirect remove --domain api.example.com --host edge.example.com
+# Networking helpers
+xp2p server redirect add --cidr 10.20.0.0/16 --tag trojan-inbound
+xp2p server forward add --target 192.0.2.10:22 --proto tcp --listen 127.0.0.1 --listen-port 60022
+xp2p server reverse list
 
-# Forward local services through dokodemo-door listeners (works for both roles)
-xp2p client forward add --target 192.0.2.50:22 --listen 127.0.0.1 --proto tcp
-xp2p server forward list
-xp2p client forward remove --listen-port 53331
+# TLS upkeep
+xp2p server cert set --cert C:\certs\fullchain.pem --key C:\certs\privkey.pem --host edge.example.com --force
+```
+
+`xp2p server state` prints the currently installed assets, while `xp2p server remove --keep-files` verifies presence without deleting anything. All server commands honor `--path`/`--config-dir` overrides so you can stage multiple instances side by side.
+
+### Client lifecycle
+
+Client commands configure Windows workstations, Linux servers, or OpenWrt routers. Release archives already place `xray` next to `xp2p`; if you build from source make sure the platform-appropriate binary exists before running `xp2p client install`.
+
+```bash
+# Install from trojan:// link (auto-populates user, host, password, TLS settings)
+xp2p client install --link "trojan://PASSWORD@edge.example.com:62022?security=tls#office@example.com" --force
+
+# Or supply fields manually
+xp2p client install \
+  --server-address edge.example.com \
+  --server-port 62022 \
+  --user office@example.com \
+  --password PASSWORD \
+  --server-name edge.example.com \
+  --allow-insecure=false
+
 xp2p client list
-xp2p client remove edge.example.com
-xp2p client remove --all --ignore-missing
+xp2p client run --auto-install --xray-log-file /var/log/xp2p/xray.log
+
+# LAN policy helpers
+xp2p client redirect add --cidr 192.168.10.0/24 --host edge.example.com
+xp2p client redirect add --domain "*.corp.example" --tag trojan-inbound
+xp2p client redirect list
+xp2p client redirect remove --cidr 192.168.10.0/24
+
+# Inspect reverse bridges and forwards mirrored from the server
+xp2p client reverse list
+xp2p client forward list
 ```
 
-Both the server and client automatically wire up reverse tunnels keyed by sanitized user+host identifiers. Running `xp2p server user add --id alpha@example.com --host edge.example.com ...` now provisions the `<alpha-example-comedge-example-com>.rev` portal/tag, and every `xp2p client install` using that user/server pair creates the mirrored reverse bridge plus routing rules without any manual JSON edits. Use `xp2p server reverse` or `xp2p client reverse` to audit the portals, bridges, endpoint bindings, and routing rules that keep those tunnels alive.
+`xp2p client remove --all --keep-files` leaves binaries intact but clears configuration, which is useful when repackaging deployments. SOCKS proxy autodetection feeds diagnostics: `xp2p ping example.com --socks` will read the client/server configuration and probe connectivity through the tunnel.
 
+### Remote deploy handshake
 
-Additional helpers:
-
-- `xp2p client redirect add --cidr <cidr> --host <host>` or `--domain <name>` configures per-destination routing that also shows up in `xp2p client redirect list`. When neither `--tag` nor `--host` is supplied the CLI prints every known client endpoint (tag + host) and prompts you to pick one, keeping Enter as a quick cancel. `xp2p client redirect remove` and the matching `xp2p server redirect add/remove` commands reuse the same interactive picker for reverse portals.
-- `xp2p client forward add --target <ip:port>` (or `xp2p server forward add`) provisions a dokodemo-door inbound, auto-picks a listen port from 53331 when `--listen-port` is omitted, and persists the full rule in `install-state-*.json`. The `--proto` flag accepts `tcp`, `udp`, or `both`.
-- `xp2p client forward remove --listen-port <port>` / `xp2p server forward remove` removes the matching rule (you can also use `--tag` or `--remark`) and rewrites `inbounds.json`.
-- `xp2p client forward list` and `xp2p server forward list` print every forward with listen address/port, protocol set, target, and remark. When the target IP does not fall inside any redirect range the CLI emits a warning so you can add the missing redirect.
-- `xp2p server reverse [list]` and `xp2p client reverse [list]` read the relevant `install-state-*.json` and `config-*/routing.json` files, showing the domain/tag, host, user, outbound/endpoint tag, and whether the portal/bridge plus routing rules are present. Running the command without an explicit `list` subcommand defaults to the table view.
-- `xp2p ping <host>` runs the diagnostics pinger. For example, `xp2p ping 10.62.10.12 --socks` forces SOCKS5 routing; omit the value to auto-detect the listener from local xp2p configs (client first, then server). When neither config exposes a SOCKS inbound the CLI reports `SOCKS proxy not configured; specify --socks host:port or install xp2p client/server`.
-- `xp2p completion [bash|zsh|fish|powershell]` emits shell completion scripts.
-- `xp2p docs --dir ./docs/cli` writes Markdown reference files for every command/subcommand via `cobra/doc`.
-- `xp2p client list` and `xp2p client remove` help you inspect or prune tunnels without touching the files manually.
-
-### Heartbeat monitoring
-
-- `xp2p server state` reads `state-heartbeat.json` under the server install directory and prints tunnel tag, host, status (alive/dead), RTT metrics, last update, and the reported client IP. Use `--watch` to refresh every few seconds, `--ttl` to tweak the alive threshold (defaults to 10s), and `--interval` to control refresh cadence.
-- `xp2p client state` shows the local heartbeat cache so you can confirm the server was reachable recently; the watch/ttl flags mirror the server command.
-### Client inventory and cleanup
-
-`xp2p client list` reads `install-state-client.json` and prints every configured tunnel with hostname, outbound tag, remote address, user, server name, and TLS policy. When no endpoints exist it prints `No client endpoints configured.` which keeps automation simple.
-
-`xp2p client remove` requires either a positional `<hostname|tag>` or the `--all` flag:
-
-- `xp2p client remove example.com` removes a single endpoint, deletes redirect rules bound to that outbound tag, and rewrites `outbounds.json`/`routing.json`. If it was the last endpoint, the command transparently falls back to `xp2p client remove --all`.
-- `xp2p client remove --all [--keep-files] [--ignore-missing]` keeps the previous behavior and wipes the full config/state tree (with optional flags to keep files or skip missing installs).
-
-Running `xp2p client remove` without a target or `--all` now errors out with a clear hint, so accidental full wipes are avoided.
-Both `xp2p client remove` and `xp2p server remove` prompt for confirmation unless `--quiet` is supplied, ensuring unattended scripts can opt out of interactive prompts.
-
-## Installation layout
-
-xp2p keeps configuration and logs in predictable locations and supports running the client and server roles side-by-side.
-
-**Windows (MSI/portable)**
-
-```text
-C:\Program Files\xp2p\
-  xp2p.exe
-  bin\xray.exe
-  config-client\
-  config-server\
-  logs\
-  install-state-client.json
-  install-state-server.json
-```
-
-**Linux / OpenWrt**
-
-```text
-/usr/sbin/xp2p                # binary provided by the package manager
-/etc/xp2p/
-  config-client/
-  config-server/
-  install-state-client.json
-  install-state-server.json
-/var/log/xp2p/
-  client.log / server.log …
-```
-
-- The marker files (`install-state-*.json`) record which roles are active; reinstalling one role no longer overwrites the other.
-- Windows bundles `xray.exe` in `bin/`. Linux/OpenWrt expect `xray` to be installed separately (e.g. via opkg) and available in `PATH` or via `XP2P_XRAY_BIN`.
-- `--config-dir` continues to work on every platform: relative values are resolved against `C:\Program Files\xp2p` on Windows and `/etc/xp2p` on Linux.
-- `--xray-log-file` is still accepted; on Linux relative paths are stored under `/var/log/xp2p`.
-
-When xp2p detects a self-contained layout (for example, a portable Windows unzip), it transparently uses that directory. Otherwise it falls back to the platform defaults described above.
-
-Packaging tools or manual installs must place the `xray` binary under `bin/` ahead of time; `xp2p client install` and `xp2p server install` no longer write or update `xray.exe` themselves and will error out if the binary is missing.
-
-To completely remove the OpenWrt package (together with dependencies), run:
+`xp2p client deploy` bootstraps a remote host over SSH/RDP-less channels. It emits an encrypted `xp2p+deploy://` link, waits for the server-side listener, pushes state, and then installs the local client using the generated `trojan://` link:
 
 ```bash
-opkg remove --autoremove xp2p
+xp2p client deploy --remote-host branch-gw.example.com --user branch@example.com --trojan-port 62022
 ```
 
----
-
-## Follow-up tasks on the client
+On the server, run:
 
 ```bash
-# Add a subnet redirect to the local dokodemo port (rerun for additional subnets)
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect.sh | sh -s -- add
-
-# Forward a wildcard domain to a dedicated upstream DNS resolver (ports auto-increment from 53331)
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/dns_forward.sh | sh -s -- add
+xp2p server deploy --link "xp2p+deploy://ENCODED_PAYLOAD" --listen :62025 --once
 ```
 
-Supply arguments directly if you already know the CIDR or domain mask:
+The deploy listener pulls the manifest (install directory, Trojan port, optional user/password), installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
 
-```bash
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/redirect.sh | sh -s -- add 192.168.10.0/24
-```
+## Building & packaging details
 
-To remove redirects later, run `scripts/redirect.sh remove SUBNET` or `scripts/redirect.sh remove --all`. For DNS forwards use `scripts/dns_forward.sh list`, `add`, or `remove DOMAIN_MASK`.
+- `go/tools/targets matrix` prints the GOOS/GOARCH matrix consumed by CI. Pair it with `targets build` and `targets deps` to cross-compile and gather dependencies locally.
+- Release archives are produced by zipping the contents of `build/<target>/`. Use standard tooling (`tar`, `zip`, or the GitHub release workflow) to publish the files named by `targets assets`.
+- Windows MSI installers are maintained under `installer/wix`, while helper scripts for MSI, Debian, and OpenWrt IPK generation sit inside `scripts/build/`. Those scripts document the exact prerequisites (WiX, dpkg-dev, OpenWrt SDK) and clean staging directories between runs.
+- The Debian builder Vagrant box under `infra/vagrant/debian12` mounts the repository at `/srv/xray-p2p` and ships everything needed for `scripts/build/build_deb_xp2p.sh`.
+- OpenWrt packages rely on the SDK assets in `openwrt/` plus `scripts/build/ensure_openwrt_sdk.sh`. Generated packages end up in `build/ipk/` along with repository indexes (`generate_openwrt_indexes.sh`).
 
----
+## Project layout and further docs
 
-## DNS forwarding
-
-Use DNS forwarding when specific domains must resolve through the tunneled server (for example, to bypass ISP DNS filtering or ensure split-tunnel services use the remote DNS).
-
-```bash
-curl -s https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/dns_forward.sh | sh -s -- add *.example.com 1.1.1.1
-```
-
-The script reserves a dokodemo-door inbound, updates dnsmasq to hand out port-specific servers, and restarts xray-p2p/dnsmasq. Each domain mask gets its own listener so you can mix upstream resolvers domain-by-domain.
-
-- `list` shows every forwarded domain and its assigned port.
-- `remove DOMAIN_MASK` deletes the listener and dnsmasq entries.
-
----
-
-## TLS certificates
-
-For production use you should install a trusted certificate instead of relying on the self-signed fallback. A simple path is to issue via `acme.sh` on the server:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/acmesh-official/acme.sh/refs/heads/master/acme.sh | sh
-~/.acme.sh/acme.sh --issue --standalone -d vpn.example.com
-~/.acme.sh/acme.sh --install-cert -d vpn.example.com \
-  --cert-file      /etc/xray-p2p/cert.pem \
-  --key-file       /etc/xray-p2p/key.pem \
-  --fullchain-file /etc/xray-p2p/fullchain.pem
-```
-
-Once the certificate and key are in place, wire them into the XRAY config using the helper:
-
-```bash
-scripts/lib/server_install_cert_apply.sh \
-  --cert /etc/xray-p2p/cert.pem \
-  --key  /etc/xray-p2p/key.pem \
-  --inbounds /etc/xray-p2p/inbounds.json
-```
-
-The script updates the Trojan inbound with the supplied paths without touching the files themselves, so rerun it after each renewal. If you need to fall back to a local self-signed pair, invoke `scripts/lib/server_install_cert_selfsigned.sh`.
-
-During fresh installs the same paths can be supplied in one go:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server.sh \
-  | sh -s -- install --cert /etc/xray-p2p/cert.pem --key /etc/xray-p2p/key.pem
-```
-
----
-
-## Development prerequisites
-
-- **Go toolchain**: Install Go 1.23.x (tested with 1.23.3) so local builds match
-  the OpenWrt SDK toolchain. On Windows either install the official
-  `go1.23.3.windows-amd64.msi` or set `GOTOOLCHAIN=go1.23.3` in your shell/VS Code
-  settings. Newer Go releases try to bump `go.mod` to 1.24+, which the SDK rejects.
-- **Vagrant**: Use the Debian 12 box under `infra/vagrant/debian12` for a reproducible
-  OpenWrt SDK environment (runs on VirtualBox with 4 GB RAM by default).
-
-## Debian package sandbox
-
-Use `infra/vagrant/debian12/deb-build` to spin up a Debian 12 builder that already
-contains `build-essential`, `debhelper`, `lintian`, `fpm`, and the Go toolchain
-required for xp2p.
-
-1. `cd infra/vagrant/debian12/deb-build && vagrant up` – provisions the VM and syncs
-   the repository into `/srv/xray-p2p` (and `/home/vagrant/xray-p2p` inside the VM).
-2. Run the packaging script:  
-   `vagrant ssh -c '/srv/xray-p2p/infra/vagrant/debian12/deb-build/build-deb.sh'`.
-   The script builds xp2p, infers the version via `xp2p --version`, and calls FPM.
-   Pass `XP2P_DEB_DEPENDS="..."` to declare optional package deps (empty by default).
-3. Collect the artefact from the shared folder:
-   `build/deb/artifacts/xp2p_<version>_amd64.deb` (visible both on the host and in
-   the VM). Use `lintian build/deb/artifacts/*.deb` inside the VM for quick checks.
-
-Re-run `build-deb.sh` any time you need a fresh package; it cleans the staging
-directory before building so repeated runs stay deterministic.
-
-Need the upstream `xray` binary on a clean Debian install? Run the helper wrapper
-around the official installer:
-
-```bash
-sudo scripts/install_xray_core.sh --install
-```
-
-The wrapper simply downloads `https://github.com/XTLS/Xray-install` and hands all
-arguments through to the upstream script, so check that project for supported
-flags/versions.
-
-When you want to ship a Linux `xray` binary together with xp2p (for example inside
-the `.deb`), place it under `distro/linux/bundle/<arch>/xray` using the same
-layout as the Windows bundle (`distro/windows/bundle/x86_64/xray.exe`). Leave the
-OpenWrt builds external so their packages stay lean.
-
----
-
-## Manual operations
-
-### Server maintenance
-
-- Install or reinstall server components:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server.sh | sh -s -- install
-  ```
-- Manage Trojan users without reinstalling:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh | sh -s -- list
-  curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh | sh -s -- issue
-  curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/server_user.sh | sh -s -- remove you@example.com
-  ```
-
-### Client maintenance
-
-- Re-run the installer to refresh configs:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client.sh | sh -s -- install
-  ```
-- Remove the client stack if needed:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/NlightN22/xray-p2p/main/scripts/client.sh | sh -s -- remove
-  ```
-
----
-
-## Contributing
-
-Developer-focused docs (tests, CI, release flow) live in [`CONTRIBUTING.md`](CONTRIBUTING.md). The Windows smoke-test environment is still covered in [`tests/README.md`](tests/README.md).
-
-## How server and client stay in sync
-
-- The server stores credentials in `clients.json` as records like `{ "id": "uuid", "password": "...", "status": "active" }`.
-- When a client installs, it requests the next unused record, marks it as consumed, and writes the details to its outbound config.
-- Automations can pull data via SSH, for example: `ssh root@server 'scripts/lib/user_list.sh'`.
-
----
-
-## Troubleshooting
-
-- Validate the combined config: `xray -test -confdir /etc/xray-p2p -format json`.
-- Review logs on OpenWrt: `logread -e xray`.
-- Confirm outbound connectivity: `curl --socks5 127.0.0.1:1080 https://ifconfig.me` (adjust port if customized).
-
----
-
-## Windows MSI installer
-
-A signed Windows release now includes `xp2p-<version>-windows-amd64.msi` (and its `latest` companion). The installer copies `xp2p.exe` into `C:\Program Files\xp2p` for elevated sessions and automatically falls back to `%LOCALAPPDATA%\xp2p` when the user does not hold administrative privileges. Repairs (`msiexec /fa`) restore the binary if it becomes corrupted, and uninstalls purge all files left in the installation directory.
-
-### Optional CLI bootstrap
-
-- Pass `XP2P_CLIENT_ARGS="--link trojan://... --force"` to run `xp2p client install ...` right after the binary lands on disk.
-- Pass `XP2P_SERVER_ARGS="--deploy-file C:\xp2p\config\deployment.json"` to execute `xp2p server install ...`.
-- Both custom actions run only during a fresh install, so repairs and uninstalls are unaffected.
-
-### Silent, custom, and per-user installs
-
-- Override the target directory explicitly: `msiexec /i xp2p-<version>-windows-amd64.msi INSTALLFOLDER="D:\Network\xp2p"`.
-- Force a per-user install even when you have elevation: `msiexec /i xp2p-<version>-windows-amd64.msi MSIINSTALLPERUSER=1`.
-- Fully silent automation examples:
-  - Install: `msiexec /i xp2p-<version>-windows-amd64.msi /qn XP2P_CLIENT_ARGS="--link trojan://secret@example.com:62022"`
-  - Repair: `msiexec /fa xp2p-<version>-windows-amd64.msi /qn`
-  - Uninstall: `msiexec /x xp2p-<version>-windows-amd64.msi /qn`
-
-### Building the MSI locally
-
-1. Install the WiX Toolset (`choco install wixtoolset --no-progress -y`) and make sure `candle.exe`/`light.exe` sit on `PATH`.
-2. Build the Windows binary with the embedded version:  
-   `go run ./go/tools/targets build --target windows-amd64 --base build --binary xp2p --pkg ./go/cmd/xp2p --ldflags "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$(go run ./go/cmd/xp2p --version)"`
-3. Copy the matching `xray.exe` into `distro/windows/bundle/x86_64/xray.exe` (the MSI build script copies it into the staging directory automatically).
-4. Compile the WiX project from `installer/wix/xp2p.wxs`:
-   ```powershell
-   candle -dProductVersion=<version> `
-          -dXp2pBinary=build/windows-amd64/xp2p.exe `
-          -dXrayBinary=distro/windows/bundle/x86_64/xray.exe `
-          installer/wix/xp2p.wxs
-   light -out dist/xp2p-<version>-windows-amd64.msi installer/wix/xp2p.wixobj
-   ```
-   The helper `scripts/build/build_and_install_msi.ps1` automates the amd64 build/install flow if you prefer a single command.
-   For 32-bit systems use `installer/wix/xp2p-x86.wxs`, `distro/windows/bundle/x86/xray.exe`, and the helper script `scripts/build/build_and_install_msi_x86.ps1`.
-
-## Security notes
-
-- Expose the server only over hardened SSH (keys plus firewall rules). Keep the Trojan port open on the WAN side.
-- Restrict access to `clients.json` (`chmod 600`) and rotate credentials if compromise is suspected.
-- Prefer ACME-issued certificates over self-signed ones whenever possible.
-
----
-
-## Helper scripts
-
-- `scripts/ssl_cert_create.sh` - minimal helper to issue a self-signed certificate with OpenSSL.
-- `scripts/lib/ip_show.sh` - determines the server public IPv4 address via multiple sources.
-- `scripts/client.sh` - manages XRAY client install/remove lifecycle on OpenWrt routers.
-- `scripts/lib/user_list.sh` - compares `clients.json` with Trojan inbounds and prints active accounts.
-- `scripts/server_user.sh` - lists, issues, or removes clients and keeps configs in sync.
-- `scripts/lib/server_install_cert_apply.sh` - applies existing certificate/key paths to trojan inbounds.
-- `scripts/lib/server_install_cert_selfsigned.sh` - generates or refreshes a self-signed certificate.
-- `scripts/redirect.sh` - manages nftables redirects (`list`, `add SUBNET [PORT]`, `remove SUBNET|--all`).
-- `scripts/dns_forward.sh` - manages per-domain dokodemo-door DNS inbounds (`add`, `list`, `remove`).
-
----
-
-## Ideas for improvement
-
-- Provide an authenticated HTTP API for issuing and revoking clients remotely.
-- Integrate `acme.sh` for automated certificate issuance and renewal.
-- Add UCI/Netifd glue for first-class OpenWrt service management.
+- `go/cmd/xp2p` and `go/internal/...` contain the CLI, installers, deploy logic, and state helpers.
+- `config_templates/`, `distro/`, `installer/`, `openwrt/`, and `infra/` provide reference configs, bundled binaries, packaging manifests, and reproducible environments.
+- Development, testing, and release guidance lives in [`CONTRIBUTING.md`](CONTRIBUTING.md), [`tests/README.md`](tests/README.md), and [`tests/TESTING_GUIDELINES.md`](tests/TESTING_GUIDELINES.md). Follow those docs for smoke tests, regression suites, and CI conventions.
