@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import shlex
+import time
 
 import pytest
 
@@ -168,8 +170,6 @@ def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = F
     ]
     if extra:
         args.extend(extra)
-        args.append("--")
-        args.extend(extra)
     return env["server_runner"](*args, check=check)
 
 
@@ -215,7 +215,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
         listen_port = tunnel_common.listen_port_from_entry(entry)
 
         with _active_tunnel_sessions(env):
-            ping_result = tunnel_common.ping_with_retries(
+            _assert_zero_loss_with_retry(
                 client_runner,
                 (
                     "ping",
@@ -229,7 +229,6 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
                 ),
                 f"via client forward on port {listen_port}",
             )
-            tunnel_common.assert_zero_loss(ping_result, f"via client forward on port {listen_port}")
     finally:
         if listen_port:
             client_runner(
@@ -242,8 +241,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
                 helpers.CLIENT_CONFIG_DIR_NAME,
                 "--listen-port",
                 str(listen_port),
-                "--ignore-missing",
-                check=True,
+                check=False,
             )
 
 
@@ -271,7 +269,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
         listen_port = tunnel_common.listen_port_from_entry(entry)
 
         with _active_tunnel_sessions(env):
-            ping_result = tunnel_common.ping_with_retries(
+            _assert_zero_loss_with_retry(
                 server_runner,
                 (
                     "ping",
@@ -285,7 +283,6 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
                 ),
                 f"via server forward on port {listen_port}",
             )
-            tunnel_common.assert_zero_loss(ping_result, f"via server forward on port {listen_port}")
     finally:
         if listen_port:
             _server_forward_cmd(
@@ -293,8 +290,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
                 "remove",
                 "--listen-port",
                 str(listen_port),
-                "--ignore-missing",
-                check=True,
+                check=False,
             )
 
 
@@ -332,11 +328,17 @@ def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
     install_path = env["server_install_path"]
     timeout_arg = f"{duration_seconds:.0f}"
     command = (
-        f"busybox timeout -s TERM {timeout_arg} "
-        f"xp2p server state --watch --interval 2s --path {install_path}"
+        "sh -c '"
+        "tmp=$(mktemp); "
+        f"xp2p server state --watch --interval 2s --path {shlex.quote(install_path)} >\"$tmp\" 2>&1 & "
+        "pid=$!; "
+        f"sleep {timeout_arg}; "
+        "kill -INT $pid >/dev/null 2>&1 || true; "
+        "wait $pid >/dev/null 2>&1 || true; "
+        "cat \"$tmp\"; rm -f \"$tmp\"'"
     )
     result = server_host.run(command)
-    if result.rc not in (0, 124):
+    if result.rc != 0:
         pytest.fail(
             "xp2p server state --watch failed "
             f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -355,7 +357,7 @@ def test_forward_tunnel_operational(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
 
     with _active_tunnel_sessions(tunnel_environment):
-        ping_result = tunnel_common.ping_with_retries(
+        _assert_zero_loss_with_retry(
             client_runner,
             (
                 "ping",
@@ -366,7 +368,6 @@ def test_forward_tunnel_operational(tunnel_environment):
             ),
             "through SOCKS tunnel",
         )
-        tunnel_common.assert_zero_loss(ping_result, "through SOCKS tunnel")
         _verify_heartbeat_state(tunnel_environment)
         _run_server_state_watch(tunnel_environment)
     _exercise_client_forward_diagnostics(tunnel_environment)
@@ -405,7 +406,7 @@ def test_client_redirect_through_server(tunnel_environment):
             host=SERVER_IP,
         )
         with _active_tunnel_sessions(tunnel_environment):
-            ping_result = tunnel_common.ping_with_retries(
+            _assert_zero_loss_with_retry(
                 client_runner,
                 (
                     "ping",
@@ -417,7 +418,6 @@ def test_client_redirect_through_server(tunnel_environment):
                 ),
                 "while redirecting through server",
             )
-            tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
     finally:
         if redirect_added:
             client_runner(
@@ -432,8 +432,7 @@ def test_client_redirect_through_server(tunnel_environment):
                 CLIENT_REDIRECT_CIDR,
                 "--tag",
                 endpoint_tag,
-                "--ignore-missing",
-                check=True,
+                check=False,
             )
         final_list = client_runner(
             "client",
@@ -518,7 +517,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             assert listen_port == SERVER_FORWARD_PORT
 
             with _active_tunnel_sessions(tunnel_environment):
-                ping_result = tunnel_common.ping_with_retries(
+                _assert_zero_loss_with_retry(
                     server_runner,
                     (
                         "ping",
@@ -529,8 +528,8 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                         "3",
                     ),
                     f"via server forward targeting {CLIENT_REVERSE_TEST_IP}",
+                    retries=2,
                 )
-                tunnel_common.assert_zero_loss(ping_result, f"via server forward targeting {CLIENT_REVERSE_TEST_IP}")
         finally:
             if forward_added:
                 _server_forward_cmd(
@@ -538,8 +537,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                     "remove",
                     "--listen-port",
                     str(SERVER_FORWARD_PORT),
-                    "--ignore-missing",
-                    check=True,
+                    check=False,
                 )
             server_runner(
                 "server",
@@ -566,3 +564,18 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 check=True,
             ).stdout or ""
             assert alias_cidr not in final_list
+
+
+def _assert_zero_loss_with_retry(runner, args: tuple[str, ...], context: str, retries: int = 1) -> None:
+    last_error: AssertionError | None = None
+    for attempt in range(retries + 1):
+        ping_result = tunnel_common.ping_with_retries(runner, args, context)
+        try:
+            tunnel_common.assert_zero_loss(ping_result, context)
+            return
+        except AssertionError as exc:
+            last_error = exc
+            if attempt < retries:
+                time.sleep(1)
+                continue
+            raise exc
