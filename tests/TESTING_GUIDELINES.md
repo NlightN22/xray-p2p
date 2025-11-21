@@ -53,6 +53,14 @@ guest suites -- the CI and fellow contributors expect these rules.
    - When capturing logs/configs, store them under the synced root so the host
      can read them (e.g. `C:\xp2p\artifacts\...` on Windows,
      `/srv/xray-p2p/artifacts/...` on Linux).
+- **OpenWrt reverse tunnel domains**
+  - When testing domain redirects from client (B) to server (A), add the
+    domain→IP mapping only on the server guest (e.g.
+    `echo "10.0.200.10 diag.service.internal" >> /etc/hosts`).
+  - The client still adds `xp2p client redirect add --domain ...`, but the
+    server does *not* need a matching `xp2p server redirect add --domain`.
+    Xray knows how to return the flow back to the requesting client; duplicate
+    redirects on the server side cause unnecessary config churn.
 
 ---
 

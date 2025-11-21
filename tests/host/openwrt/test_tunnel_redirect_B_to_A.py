@@ -15,6 +15,7 @@ CLIENT_TUNNEL_IP = "10.63.30.12"
 SERVER_IP = "10.63.30.11"
 DIAG_IP = "10.0.200.10"
 DIAG_CIDR = f"{DIAG_IP}/32"
+DIAG_DOMAIN = "diag.service.internal"
 CLIENT_DIAG_IP = "10.0.200.11"
 CLIENT_DIAG_CIDR = f"{CLIENT_DIAG_IP}/32"
 SOCKS_PORT = 51180
@@ -55,6 +56,27 @@ def _remove_ip_alias(host, iface: str, cidr: str) -> None:
     host.run(f"ip addr del {cidr} dev {iface} >/dev/null 2>&1 || true")
 
 
+def _stop_xp2p_processes(host) -> None:
+    host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
+    host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
+    host.run("pkill -f 'xp2p diag' >/dev/null 2>&1 || true")
+    host.run("pkill -f 'xp2p' >/dev/null 2>&1 || true")
+    host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+    host.run("fuser -k 62022/tcp >/dev/null 2>&1 || true")
+    host.run("fuser -k 62022/udp >/dev/null 2>&1 || true")
+
+
+def _add_hosts_entry(host, ip: str, domain: str) -> None:
+    host.run(f"sed -i '/{domain}/d' /etc/hosts >/dev/null 2>&1 || true")
+    result = host.run(f"echo '{ip} {domain}' >> /etc/hosts")
+    if result.rc != 0:
+        pytest.fail(f"Failed to append hosts entry {domain} -> {ip} on {host.backend.hostname}")
+
+
+def _remove_hosts_entry(host, domain: str) -> None:
+    host.run(f"sed -i '/{domain}/d' /etc/hosts >/dev/null 2>&1 || true")
+
+
 def _combined_output(result) -> str:
     return f"{result.stdout}\n{result.stderr}".lower()
 
@@ -86,15 +108,14 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
 
     def cleanup(iface: str | None = None):
         for host in (server_host, client_host):
-            host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
-            host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
-            host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+            _stop_xp2p_processes(host)
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
         for host in (server_host, client_host):
             helpers.remove_path(host, HEARTBEAT_STATE_FILE)
         if iface:
             _remove_ip_alias(server_host, iface, DIAG_CIDR)
+        _remove_hosts_entry(server_host, DIAG_DOMAIN)
         if endpoint_tag:
             client_runner(
                 "client",
@@ -114,7 +135,6 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
     iface_name = _find_interface_for_ip(server_host, SERVER_IP)
     cleanup(iface_name)
     try:
-        _add_ip_alias(server_host, iface_name, DIAG_CIDR)
 
         server_install = server_runner(
             "server",
@@ -173,6 +193,8 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 check=False,
             )
             assert initial_ping.rc != 0
+
+            _add_ip_alias(server_host, iface_name, DIAG_CIDR)
 
             client_runner(
                 "client",
@@ -240,6 +262,81 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 endpoint_tag,
                 check=False,
             )
+
+        _add_hosts_entry(server_host, DIAG_IP, DIAG_DOMAIN)
+        domain_redirect_added = False
+        try:
+            client_runner(
+                "client",
+                "redirect",
+                "add",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                "--domain",
+                DIAG_DOMAIN,
+                "--tag",
+                endpoint_tag,
+                check=True,
+            )
+            domain_redirect_added = True
+
+            for host in (server_host, client_host):
+                _stop_xp2p_processes(host)
+
+            with openwrt_env.xp2p_run_session(
+                server_host,
+                "server",
+                helpers.INSTALL_ROOT.as_posix(),
+                helpers.SERVER_CONFIG_DIR_NAME,
+                helpers.SERVER_LOG_FILE,
+            ), openwrt_env.xp2p_run_session(
+                client_host,
+                "client",
+                helpers.INSTALL_ROOT.as_posix(),
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                helpers.CLIENT_LOG_FILE,
+            ):
+                _wait_for_port(client_host, SOCKS_PORT)
+                heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
+                helpers.assert_heartbeat_entry(
+                    heartbeat_state,
+                    endpoint_tag,
+                    host=SERVER_IP,
+                    user=credential["user"],
+                    client_ip=client_primary_ip,
+                )
+
+                redirected_domain = tunnel_common.ping_with_retries(
+                    client_runner,
+                    (
+                        "ping",
+                        DIAG_DOMAIN,
+                        "--socks",
+                        "--count",
+                        "3",
+                    ),
+                    f"redirected ping to {DIAG_DOMAIN}",
+                    attempts=5,
+                )
+                tunnel_common.assert_zero_loss(redirected_domain, f"redirected ping to {DIAG_DOMAIN}")
+        finally:
+            if domain_redirect_added:
+                client_runner(
+                    "client",
+                    "redirect",
+                    "remove",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.CLIENT_CONFIG_DIR_NAME,
+                    "--domain",
+                    DIAG_DOMAIN,
+                    "--tag",
+                    endpoint_tag,
+                    check=False,
+                )
     finally:
         cleanup(iface_name)
 
