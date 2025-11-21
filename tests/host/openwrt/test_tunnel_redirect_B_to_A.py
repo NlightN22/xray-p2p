@@ -18,6 +18,7 @@ DIAG_CIDR = f"{DIAG_IP}/32"
 DIAG_DOMAIN = "diag.service.internal"
 CLIENT_DIAG_IP = "10.0.200.11"
 CLIENT_DIAG_CIDR = f"{CLIENT_DIAG_IP}/32"
+CLIENT_DIAG_DOMAIN = "diag.client.service"
 SOCKS_PORT = 51180
 HEARTBEAT_STATE_FILE = helpers.INSTALL_ROOT / "state-heartbeat.json"
 
@@ -62,6 +63,10 @@ def _stop_xp2p_processes(host) -> None:
     host.run("pkill -f 'xp2p diag' >/dev/null 2>&1 || true")
     host.run("pkill -f 'xp2p' >/dev/null 2>&1 || true")
     host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+    host.run("killall xp2p >/dev/null 2>&1 || true")
+    host.run("killall -9 xp2p >/dev/null 2>&1 || true")
+    host.run("killall xray >/dev/null 2>&1 || true")
+    host.run("killall -9 xray >/dev/null 2>&1 || true")
     host.run("fuser -k 62022/tcp >/dev/null 2>&1 || true")
     host.run("fuser -k 62022/udp >/dev/null 2>&1 || true")
 
@@ -285,6 +290,9 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             for host in (server_host, client_host):
                 _stop_xp2p_processes(host)
 
+            for host in (server_host, client_host):
+                _stop_xp2p_processes(host)
+
             with openwrt_env.xp2p_run_session(
                 server_host,
                 "server",
@@ -492,5 +500,81 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 attempts=8,
             )
             tunnel_common.assert_zero_loss(redirected_ping, f"redirected ping to {CLIENT_DIAG_IP}")
+
+        _add_hosts_entry(client_host, CLIENT_DIAG_IP, CLIENT_DIAG_DOMAIN)
+        server_domain_redirect_added = False
+        try:
+            server_runner(
+                "server",
+                "redirect",
+                "add",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--domain",
+                CLIENT_DIAG_DOMAIN,
+                "--tag",
+                reverse_tag,
+                check=True,
+            )
+            server_domain_redirect_added = True
+
+            for host in (server_host, client_host):
+                _stop_xp2p_processes(host)
+
+            with openwrt_env.xp2p_run_session(
+                server_host,
+                "server",
+                helpers.INSTALL_ROOT.as_posix(),
+                helpers.SERVER_CONFIG_DIR_NAME,
+                helpers.SERVER_LOG_FILE,
+            ), openwrt_env.xp2p_run_session(
+                client_host,
+                "client",
+                helpers.INSTALL_ROOT.as_posix(),
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                helpers.CLIENT_LOG_FILE,
+            ):
+                _wait_for_port(client_host, SOCKS_PORT)
+                heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
+                helpers.assert_heartbeat_entry(
+                    heartbeat_state,
+                    endpoint_tag,
+                    host=SERVER_IP,
+                    user=credential["user"],
+                    client_ip=helpers.detect_primary_ipv4(client_host),
+                )
+
+                redirected_domain = tunnel_common.ping_with_retries(
+                    server_runner,
+                    (
+                        "ping",
+                        CLIENT_DIAG_DOMAIN,
+                        f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                        "--count",
+                        "3",
+                    ),
+                    f"redirected ping to {CLIENT_DIAG_DOMAIN}",
+                    attempts=8,
+                )
+                tunnel_common.assert_zero_loss(redirected_domain, f"redirected ping to {CLIENT_DIAG_DOMAIN}")
+        finally:
+            if server_domain_redirect_added:
+                server_runner(
+                    "server",
+                    "redirect",
+                    "remove",
+                    "--path",
+                    helpers.INSTALL_ROOT.as_posix(),
+                    "--config-dir",
+                    helpers.SERVER_CONFIG_DIR_NAME,
+                    "--domain",
+                    CLIENT_DIAG_DOMAIN,
+                    "--tag",
+                    reverse_tag,
+                    check=False,
+                )
+            _remove_hosts_entry(client_host, CLIENT_DIAG_DOMAIN)
     finally:
         cleanup()
