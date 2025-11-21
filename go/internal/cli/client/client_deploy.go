@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,6 +64,9 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 2
 	}
 	logging.Info("xp2p client deploy: link generated", "link", linkURL)
+	if plainLink := plaintextDeployLink(opts.runtime.encLink); plainLink != "" {
+		logging.Info("xp2p client deploy: manifest link (plaintext)", "link", plainLink)
+	}
 	logging.Info("xp2p client deploy: waiting for server...", "remote_host", opts.runtime.remoteHost, "deploy_port", opts.runtime.deployPort)
 
 	// Retry handshake until server is ready or timeout elapses.
@@ -320,4 +325,42 @@ func abortLocalClient(cancel context.CancelFunc, runErrCh <-chan error) {
 	case <-time.After(5 * time.Second):
 		logging.Warn("xp2p client deploy: timed out waiting for local client to stop")
 	}
+}
+
+func plaintextDeployLink(enc deploylink.EncryptedLink) string {
+	host := strings.TrimSpace(enc.Host)
+	if host == "" {
+		host = strings.TrimSpace(enc.Manifest.Host)
+	}
+	if host == "" {
+		return ""
+	}
+	port := strings.TrimSpace(enc.Port)
+	if port == "" {
+		port = "62025"
+	}
+	manifest := enc.Manifest
+	q := url.Values{}
+	if manifest.Version > 0 {
+		q.Set("v", strconv.Itoa(manifest.Version))
+	}
+	if manifest.InstallDir != "" {
+		q.Set("install_dir", manifest.InstallDir)
+	}
+	if manifest.TrojanPort != "" {
+		q.Set("trojan_port", manifest.TrojanPort)
+	}
+	if manifest.TrojanUser != "" {
+		q.Set("user", manifest.TrojanUser)
+	}
+	if manifest.TrojanPassword != "" {
+		q.Set("password", manifest.TrojanPassword)
+	}
+	if manifest.ExpiresAt != 0 {
+		q.Set("exp", strconv.FormatInt(manifest.ExpiresAt, 10))
+	}
+	if len(q) == 0 {
+		return fmt.Sprintf("%s://%s:%s", deploylink.Scheme, host, port)
+	}
+	return fmt.Sprintf("%s://%s:%s?%s", deploylink.Scheme, host, port, q.Encode())
 }

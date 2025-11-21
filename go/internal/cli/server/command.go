@@ -260,7 +260,9 @@ func newServerCertSetCmd(cfg commandConfig) *cobra.Command {
 }
 
 func newServerDeployCmd(cfg commandConfig) *cobra.Command {
-	var opts serverDeployOptions
+	opts := serverDeployOptions{
+		Once: true,
+	}
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Listen for xp2p client deploy requests",
@@ -274,7 +276,6 @@ func newServerDeployCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.Listen, "listen", ":62025", "deploy listen address")
 	flags.StringVar(&opts.Link, "link", "", "deploy link (xp2p+deploy://...)")
 	_ = cmd.MarkFlagRequired("link")
-	flags.BoolVar(&opts.Once, "once", true, "stop after a single deploy")
 	flags.DurationVar(&opts.Timeout, "timeout", 10*time.Minute, "idle shutdown timeout")
 	return cmd
 }

@@ -144,10 +144,10 @@ xp2p client deploy --remote-host branch-gw.example.com --user branch@example.com
 On the server, run:
 
 ```bash
-xp2p server deploy --link "xp2p+deploy://ENCODED_PAYLOAD" --listen :62025 --once
+xp2p server deploy --link "xp2p+deploy://ENCODED_PAYLOAD" --listen :62025
 ```
 
-The deploy listener pulls the manifest (install directory, Trojan port, optional user/password), installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
+The server stops listening after the first deploy request. The deploy listener pulls the manifest (install directory, Trojan port, optional user/password), installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
 
 ## Project layout and further docs
 
