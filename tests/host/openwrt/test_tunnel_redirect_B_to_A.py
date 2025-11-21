@@ -20,6 +20,8 @@ CLIENT_DIAG_IP = "10.0.200.11"
 CLIENT_DIAG_CIDR = f"{CLIENT_DIAG_IP}/32"
 CLIENT_DIAG_DOMAIN = "diag.client.service"
 SOCKS_PORT = 51180
+DIAGNOSTICS_PORT = 62022
+REVERSE_TUNNEL_WARMUP_SECONDS = 2.5
 HEARTBEAT_STATE_FILE = helpers.INSTALL_ROOT / "state-heartbeat.json"
 
 
@@ -94,6 +96,13 @@ def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: 
             return
         time.sleep(interval)
     pytest.fail(f"Port {port} did not open on {host.backend.hostname} within {timeout_seconds}s")
+
+
+def _warmup_reverse_tunnel():
+    # Reverse redirects occasionally drop the very first connection immediately
+    # after bringing both xp2p daemons online. Give xray/xp2p a short moment to
+    # finish wiring the listener before asserting ping delivery.
+    time.sleep(REVERSE_TUNNEL_WARMUP_SECONDS)
 
 
 @pytest.mark.host
@@ -230,6 +239,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_LOG_FILE,
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
+                _wait_for_port(server_host, DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
@@ -239,17 +249,13 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     client_ip=client_primary_ip,
                 )
 
-                redirected_ping = tunnel_common.ping_with_retries(
-                    client_runner,
-                    (
-                        "ping",
-                        DIAG_IP,
-                        "--socks",
-                        "--count",
-                        "3",
-                    ),
-                    f"redirected ping to {DIAG_IP}",
-                    attempts=8,
+                redirected_ping = client_runner(
+                    "ping",
+                    DIAG_IP,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=True,
                 )
                 tunnel_common.assert_zero_loss(redirected_ping, f"redirected ping to {DIAG_IP}")
         finally:
@@ -307,6 +313,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_LOG_FILE,
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
+                _wait_for_port(server_host, DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
@@ -316,17 +323,13 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     client_ip=client_primary_ip,
                 )
 
-                redirected_domain = tunnel_common.ping_with_retries(
-                    client_runner,
-                    (
-                        "ping",
-                        DIAG_DOMAIN,
-                        "--socks",
-                        "--count",
-                        "3",
-                    ),
-                    f"redirected ping to {DIAG_DOMAIN}",
-                    attempts=5,
+                redirected_domain = client_runner(
+                    "ping",
+                    DIAG_DOMAIN,
+                    "--socks",
+                    "--count",
+                    "3",
+                    check=True,
                 )
                 tunnel_common.assert_zero_loss(redirected_domain, f"redirected ping to {DIAG_DOMAIN}")
         finally:
@@ -360,9 +363,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
 
     def cleanup():
         for host in (server_host, client_host):
-            host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
-            host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
-            host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+            _stop_xp2p_processes(host)
         helpers.cleanup_server_install(server_host, _runner(server_host))
         helpers.cleanup_client_install(client_host, _runner(client_host))
         for host in (server_host, client_host):
@@ -478,6 +479,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.CLIENT_LOG_FILE,
         ):
             _wait_for_port(client_host, SOCKS_PORT)
+            _wait_for_port(client_host, DIAGNOSTICS_PORT)
             heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
             helpers.assert_heartbeat_entry(
                 heartbeat_state,
@@ -486,18 +488,15 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 user=credential["user"],
                 client_ip=helpers.detect_primary_ipv4(client_host),
             )
+            _warmup_reverse_tunnel()
 
-            redirected_ping = tunnel_common.ping_with_retries(
-                server_runner,
-                (
-                    "ping",
-                    CLIENT_DIAG_IP,
-                    f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
-                    "--count",
-                    "3",
-                ),
-                f"redirected ping to {CLIENT_DIAG_IP}",
-                attempts=8,
+            redirected_ping = server_runner(
+                "ping",
+                CLIENT_DIAG_IP,
+                f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                "--count",
+                "3",
+                check=True,
             )
             tunnel_common.assert_zero_loss(redirected_ping, f"redirected ping to {CLIENT_DIAG_IP}")
 
@@ -537,6 +536,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_LOG_FILE,
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
+                _wait_for_port(client_host, DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
@@ -545,20 +545,19 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                     user=credential["user"],
                     client_ip=helpers.detect_primary_ipv4(client_host),
                 )
+                _warmup_reverse_tunnel()
 
-                redirected_domain = tunnel_common.ping_with_retries(
-                    server_runner,
-                    (
-                        "ping",
-                        CLIENT_DIAG_DOMAIN,
-                        f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
-                        "--count",
-                        "3",
-                    ),
-                    f"redirected ping to {CLIENT_DIAG_DOMAIN}",
-                    attempts=8,
+                redirected_domain = server_runner(
+                    "ping",
+                    CLIENT_DIAG_DOMAIN,
+                    f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                    "--count",
+                    "3",
+                    check=True,
                 )
-                tunnel_common.assert_zero_loss(redirected_domain, f"redirected ping to {CLIENT_DIAG_DOMAIN}")
+                tunnel_common.assert_zero_loss(
+                    redirected_domain, f"redirected ping to {CLIENT_DIAG_DOMAIN}"
+                )
         finally:
             if server_domain_redirect_added:
                 server_runner(

@@ -86,22 +86,6 @@ def assert_zero_loss(ping_result, context: str) -> None:
     )
 
 
-def ping_with_retries(runner, args: tuple[str, ...], context: str, attempts: int = 3, delay_seconds: float = 2.0):
-    last_result = None
-    for attempt in range(1, attempts + 1):
-        result = runner(*args, check=False)
-        if result.rc == 0:
-            return result
-        last_result = result
-        if attempt < attempts:
-            time.sleep(delay_seconds)
-    assert last_result is not None, "xp2p ping failed but no result captured"
-    raise AssertionError(
-        f"xp2p ping {context} failed after {attempts} attempts "
-        f"(exit {last_result.rc}).\nSTDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}"
-    )
-
-
 def wait_for_alive_entry(
     runner,
     role: str,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-import time
 
 import pytest
 
@@ -265,19 +264,16 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
         listen_port = tunnel_common.listen_port_from_entry(entry)
 
         with _active_tunnel_sessions(env):
-            ping_result = tunnel_common.ping_with_retries(
-                client_runner,
-                (
-                    "ping",
-                    "127.0.0.1",
-                    "--port",
-                    str(listen_port),
-                    "--count",
-                    "3",
-                    "--proto",
-                    "tcp",
-                ),
-                f"via client forward on port {listen_port}",
+            ping_result = client_runner(
+                "ping",
+                "127.0.0.1",
+                "--port",
+                str(listen_port),
+                "--count",
+                "3",
+                "--proto",
+                "tcp",
+                check=True,
             )
             tunnel_common.assert_zero_loss(ping_result, f"via client forward on port {listen_port}")
     finally:
@@ -342,19 +338,16 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             redirect_added = True
 
         with _active_tunnel_sessions(env):
-            ping_result = tunnel_common.ping_with_retries(
-                server_runner,
-                (
-                    "ping",
-                    "127.0.0.1",
-                    "--port",
-                    str(listen_port),
-                    "--count",
-                    "3",
-                    "--proto",
-                    "tcp",
-                ),
-                f"via server forward on port {listen_port}",
+            ping_result = server_runner(
+                "ping",
+                "127.0.0.1",
+                "--port",
+                str(listen_port),
+                "--count",
+                "3",
+                "--proto",
+                "tcp",
+                check=True,
             )
             tunnel_common.assert_zero_loss(ping_result, f"via server forward on port {listen_port}")
     finally:
@@ -388,16 +381,13 @@ def test_forward_tunnel_operational(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
 
     with _active_tunnel_sessions(tunnel_environment):
-        ping_result = tunnel_common.ping_with_retries(
-            client_runner,
-            (
-                "ping",
-                SERVER_IP,
-                "--socks",
-                "--count",
-                "3",
-            ),
-            "through SOCKS tunnel",
+        ping_result = client_runner(
+            "ping",
+            SERVER_IP,
+            "--socks",
+            "--count",
+            "3",
+            check=True,
         )
         tunnel_common.assert_zero_loss(ping_result, "through SOCKS tunnel")
         _verify_heartbeat_state(tunnel_environment)
@@ -538,18 +528,15 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             assert listen_port == SERVER_FORWARD_PORT
 
             with _active_tunnel_sessions(tunnel_environment):
-                ping_result = tunnel_common.ping_with_retries(
-                    server_runner,
-                    (
-                        "ping",
-                        "127.0.0.1",
-                        "--port",
-                        str(SERVER_FORWARD_PORT),
-                        "--count",
-                        "3",
-                    ),
-                    f"via server forward targeting {CLIENT_REVERSE_TEST_IP}",
-                )
+            ping_result = server_runner(
+                "ping",
+                "127.0.0.1",
+                "--port",
+                str(SERVER_FORWARD_PORT),
+                "--count",
+                "3",
+                check=True,
+            )
                 tunnel_common.assert_zero_loss(ping_result, f"via server forward targeting {CLIENT_REVERSE_TEST_IP}")
         finally:
             if forward_added:

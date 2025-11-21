@@ -53,15 +53,21 @@ guest suites -- the CI and fellow contributors expect these rules.
    - When capturing logs/configs, store them under the synced root so the host
      can read them (e.g. `C:\xp2p\artifacts\...` on Windows,
      `/srv/xray-p2p/artifacts/...` on Linux).
-- **OpenWrt reverse tunnel domains**
-  - Add redirect rules only on the ingress side of the tunnel. For client→server
-    flows (B→A) this means `xp2p client redirect add --domain ...` on the client
+- **OpenWrt reverse tunnel redirects**
+  - Add redirect rules only on the ingress side of the tunnel. For client->server
+    flows (B->A) this means `xp2p client redirect add --domain ...` on the client
     guest plus a host entry on the server guest so xray resolves the domain. The
-    server does **not** need a matching domain rule for the same target.
-  - For server→client flows (A→B) the inverse applies: the server owns the
+    server does **not** need a matching domain rule for the same target. This
+    rule applies to both CIDR and domain redirects; configure them only where
+    traffic initially enters the tunnel.
+  - For server->client flows (A->B) the inverse applies: the server owns the
     redirect (`xp2p server redirect add --domain ...`) and the client provides
     the hosts entry for resolution, while the client does not add an extra
     domain redirect for that same target.
+- **Ping assertions**
+  - `xp2p ping` invocations must succeed without retries. Do not wrap pings in
+    helper loops; invoke once with `check=True` and fail fast when the tunnel is
+    misbehaving.
 
 ---
 
