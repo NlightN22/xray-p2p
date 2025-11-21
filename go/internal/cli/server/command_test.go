@@ -98,7 +98,7 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 		{
 			name: "deploy",
 			cfg:  func(*testing.T) config.Config { return baseCfg() },
-			args: []string{"deploy", "--listen", ":62090", "--link", "xp2p+deploy://host.example.com?cipher=AA&nonce=AA"},
+			args: []string{"deploy", "--listen", ":62090", "--link", "trojan://secret@host.example.com:62022?security=tls&sni=host.example.com#user"},
 			stub: expectDeployCall,
 		},
 	}

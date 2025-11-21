@@ -26,13 +26,13 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildDeployLink error: %v", err)
 	}
-	if opts.runtime.encLink.Key == "" || len(opts.runtime.encLink.Ciphertext) == 0 {
-		t.Fatalf("encrypted link data not stored in runtime options: %#v", opts.runtime.encLink)
+	if len(opts.runtime.ciphertext) == 0 {
+		t.Fatalf("ciphertext not stored in runtime options")
 	}
 
-	parsed, err := deploylink.Parse(linkURL)
+	gotManifest, err := deploylink.Decrypt(linkURL, opts.runtime.ciphertext)
 	if err != nil {
-		t.Fatalf("parse returned error: %v", err)
+		t.Fatalf("decrypt returned error: %v", err)
 	}
 
 	want := spec.Manifest{
@@ -43,7 +43,7 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 		TrojanUser:     "user@example.invalid",
 		TrojanPassword: "p@ssw0rd",
 	}
-	got := parsed.Manifest
+	got := gotManifest
 	got.ExpiresAt = 0
 
 	if got != want {

@@ -135,7 +135,7 @@ xp2p client forward list
 
 ### Remote deploy handshake
 
-`xp2p client deploy` bootstraps a remote host over SSH/RDP-less channels. It emits an encrypted `xp2p+deploy://` link, waits for the server-side listener, pushes state, and then installs the local client using the generated `trojan://` link:
+`xp2p client deploy` bootstraps a remote host over SSH/RDP-less channels. It emits a single `trojan://` deploy link (with user/password and extra tokens), waits for the server-side listener, pushes state, and then installs the local client using the generated `trojan://` link:
 
 ```bash
 xp2p client deploy --remote-host branch-gw.example.com --user branch@example.com --trojan-port 62022
@@ -144,10 +144,10 @@ xp2p client deploy --remote-host branch-gw.example.com --user branch@example.com
 On the server, run:
 
 ```bash
-xp2p server deploy --link "xp2p+deploy://ENCODED_PAYLOAD" --listen :62025
+xp2p server deploy --link "trojan://PASSWORD@branch-gw.example.com:62022?deploy_version=2&exp=1763743202&security=tls&sni=branch-gw.example.com#branch@example.com" --listen :62025
 ```
 
-The server stops listening after the first deploy request. The deploy listener pulls the manifest (install directory, Trojan port, optional user/password), installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
+The server stops listening after the first deploy request. The client encrypts its deploy manifest with a key derived from the trojan link, so only ciphertext crosses the wire. The deploy listener decrypts the payload, verifies it matches the link you supplied, installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
 
 ## Project layout and further docs
 

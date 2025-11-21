@@ -2,7 +2,6 @@ package servercmd
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -69,32 +68,37 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		notifyFailure(results)
 		return
 	}
+	logging.Info("xp2p server deploy: received encrypted manifest", "bytes", len(buf))
 
-	cipherB64 := base64.RawURLEncoding.EncodeToString(buf)
-	logHost := strings.TrimSpace(firstNonEmpty(s.Expected.Host, s.Cfg.Server.Host))
-	deployPort := extractPort(s.ListenAddr)
-	netLink := deploylink.RedactedURL(logHost, deployPort, s.Expected.Nonce, s.Expected.ExpiresAt, cipherB64)
-	logging.Info("xp2p server deploy: received deploy link", "link", netLink)
-
-	if strings.TrimSpace(s.Expected.Key) == "" || len(s.Expected.Ciphertext) == 0 {
+	if strings.TrimSpace(s.Expected.Link) == "" {
 		_ = writeLine(rw, "ERR deploy link not configured")
 		notifyFailure(results)
 		return
 	}
-	if s.Expected.ExpiresAt > 0 && time.Now().Unix() > s.Expected.ExpiresAt {
-		_ = writeLine(rw, "ERR link expired")
-		notifyFailure(results)
-		return
-	}
-	if !bytes.Equal(buf, s.Expected.Ciphertext) {
+
+	manifest, err := deploylink.Decrypt(s.Expected.Link, buf)
+	if err != nil {
 		_ = writeLine(rw, "ERR unauthorized")
 		notifyFailure(results)
 		return
 	}
 
-	manifest := s.Expected.Manifest
-	if strings.TrimSpace(manifest.Host) == "" {
-		manifest.Host = s.Expected.Host
+	if manifest.ExpiresAt > 0 && time.Now().Unix() > manifest.ExpiresAt {
+		_ = writeLine(rw, "ERR link expired")
+		notifyFailure(results)
+		return
+	}
+
+	canonicalLink, err := deploylink.CanonicalLink(manifest)
+	if err != nil {
+		_ = writeLine(rw, "ERR invalid manifest")
+		notifyFailure(results)
+		return
+	}
+	if canonicalLink != s.Expected.Link {
+		_ = writeLine(rw, "ERR unauthorized")
+		notifyFailure(results)
+		return
 	}
 
 	s.proceedInstall(ctx, rw, results, manifest)
@@ -253,11 +257,4 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 	if results != nil {
 		results <- runSignal{ok: true, installDir: installDir, configDir: configDir}
 	}
-}
-
-func extractPort(listen string) string {
-	if i := strings.LastIndex(listen, ":"); i >= 0 && i+1 < len(listen) {
-		return strings.TrimSpace(listen[i+1:])
-	}
-	return "62025"
 }

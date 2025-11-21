@@ -3,7 +3,6 @@ package servercmd
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net"
 	"strings"
@@ -16,10 +15,21 @@ import (
 
 func TestDeployServerHandleConnUnauthorized(t *testing.T) {
 	ctx := context.Background()
-	payload := []byte("expected-payload")
+	manifest := spec.Manifest{
+		Host:           "10.0.0.1",
+		Version:        2,
+		InstallDir:     "/srv/xp2p",
+		TrojanPort:     "62022",
+		TrojanUser:     "user@example.com",
+		TrojanPassword: "secret",
+	}
+	_, enc, err := deploylink.Build(manifest.Host, "62025", manifest, time.Minute)
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
 	srv := deployServer{
 		ListenAddr: ":62025",
-		Expected:   newTestEncryptedLink(payload, time.Now().Add(time.Minute)),
+		Expected:   enc,
 	}
 
 	serverConn, clientConn := net.Pipe()
@@ -61,10 +71,22 @@ func TestDeployServerHandleConnUnauthorized(t *testing.T) {
 
 func TestDeployServerHandleConnExpired(t *testing.T) {
 	ctx := context.Background()
-	payload := []byte("ciphertext")
+	manifest := spec.Manifest{
+		Host:           "10.0.0.1",
+		Version:        2,
+		InstallDir:     "/srv/xp2p",
+		TrojanPort:     "62022",
+		TrojanUser:     "user@example.com",
+		TrojanPassword: "secret",
+		ExpiresAt:      time.Now().Add(-time.Minute).Unix(),
+	}
+	_, enc, err := deploylink.Build(manifest.Host, "62025", manifest, time.Minute)
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
 	srv := deployServer{
 		ListenAddr: ":62025",
-		Expected:   newTestEncryptedLink(payload, time.Now().Add(-time.Minute)),
+		Expected:   enc,
 	}
 
 	serverConn, clientConn := net.Pipe()
@@ -82,8 +104,8 @@ func TestDeployServerHandleConnExpired(t *testing.T) {
 		t.Fatalf("AUTH roundtrip failed: %q err=%v", line, err)
 	}
 
-	fmt.Fprintf(clientConn, "MANIFEST-ENC %d\n", len(payload))
-	if _, err := clientConn.Write(payload); err != nil {
+	fmt.Fprintf(clientConn, "MANIFEST-ENC %d\n", len(enc.Ciphertext))
+	if _, err := clientConn.Write(enc.Ciphertext); err != nil {
 		t.Fatalf("write payload: %v", err)
 	}
 
@@ -97,20 +119,4 @@ func TestDeployServerHandleConnExpired(t *testing.T) {
 
 	clientConn.Close()
 	<-done
-}
-
-func newTestEncryptedLink(payload []byte, expiry time.Time) deploylink.EncryptedLink {
-	return deploylink.EncryptedLink{
-		Host:          "10.0.0.1",
-		Port:          "62025",
-		Key:           "test-key",
-		Nonce:         "test-nonce",
-		Ciphertext:    payload,
-		CiphertextB64: base64.RawURLEncoding.EncodeToString(payload),
-		ExpiresAt:     expiry.Unix(),
-		Manifest: spec.Manifest{
-			Host:    "10.0.0.1",
-			Version: 2,
-		},
-	}
 }

@@ -1,14 +1,13 @@
 package link
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 )
 
-func TestBuildParseRoundTrip(t *testing.T) {
+func TestBuildAndDecryptRoundTrip(t *testing.T) {
 	manifest := spec.Manifest{
 		Host:           "10.0.10.10",
 		Version:        2,
@@ -19,61 +18,53 @@ func TestBuildParseRoundTrip(t *testing.T) {
 		ExpiresAt:      1_900_000_000,
 	}
 
-	url, enc, err := Build("10.0.10.10", "62025", manifest, time.Minute)
+	linkURL, enc, err := Build("10.0.10.10", "62025", manifest, time.Minute)
 	if err != nil {
 		t.Fatalf("Build error: %v", err)
 	}
-	if url == "" {
-		t.Fatal("expected non-empty link URL")
+	if linkURL == "" || enc.Link != linkURL {
+		t.Fatalf("expected canonical link to be stored: %q vs %#v", linkURL, enc)
 	}
-	if enc.Key == "" || enc.Nonce == "" || enc.CiphertextB64 == "" {
-		t.Fatalf("encrypted link missing fields: %#v", enc)
+	if len(enc.Ciphertext) == 0 {
+		t.Fatal("ciphertext missing from encrypted link")
 	}
 
-	parsed, err := Parse(url)
+	parsed, err := Parse("\n" + linkURL + "\n")
 	if err != nil {
 		t.Fatalf("Parse error: %v", err)
 	}
-	if parsed.Manifest != manifest {
-		t.Fatalf("manifest mismatch: %#v != %#v", parsed.Manifest, manifest)
+	if parsed.Link != linkURL {
+		t.Fatalf("expected canonical link, got %q", parsed.Link)
 	}
-	if parsed.Port != "62025" {
-		t.Fatalf("unexpected port %q", parsed.Port)
+
+	got, err := Decrypt(parsed.Link, enc.Ciphertext)
+	if err != nil {
+		t.Fatalf("Decrypt error: %v", err)
 	}
-	if parsed.CiphertextB64 != enc.CiphertextB64 {
-		t.Fatalf("ciphertext mismatch")
+	if got.Host != manifest.Host || got.TrojanUser != manifest.TrojanUser || got.TrojanPassword != manifest.TrojanPassword {
+		t.Fatalf("decrypted manifest mismatch: %#v", got)
 	}
 }
 
-func TestParseRejectsInvalidVersion(t *testing.T) {
-	url, _, err := Build("host", "62025", spec.Manifest{
-		Host:    "host",
-		Version: 2,
-	}, time.Minute)
-	if err != nil {
-		t.Fatalf("Build error: %v", err)
-	}
-
-	broken := strings.Replace(url, "v=2", "v=3", 1)
-	if _, err := Parse(broken); err == nil {
-		t.Fatal("expected error for invalid version")
+func TestCanonicalLinkRequiresCredentials(t *testing.T) {
+	_, err := CanonicalLink(spec.Manifest{
+		Host:       "10.0.0.1",
+		Version:    2,
+		TrojanPort: "62022",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing credentials")
 	}
 }
 
-func TestRedactedURLOmitsKey(t *testing.T) {
-	_, enc, err := Build("host", "62025", spec.Manifest{
-		Host:    "host",
-		Version: 2,
-	}, time.Minute)
-	if err != nil {
-		t.Fatalf("Build error: %v", err)
+func TestParseRejectsMissingParts(t *testing.T) {
+	if _, err := Parse(""); err != nil {
+		t.Fatalf("empty link should return zero value: %v", err)
 	}
-
-	redacted := RedactedURL(enc.Host, enc.Port, enc.Nonce, enc.ExpiresAt, enc.CiphertextB64)
-	if strings.Contains(redacted, enc.Key) {
-		t.Fatalf("redacted link leaks key: %s", redacted)
+	if _, err := Parse("trojan://@host:62022"); err == nil {
+		t.Fatal("expected error for missing password")
 	}
-	if !strings.Contains(redacted, enc.CiphertextB64) {
-		t.Fatalf("redacted link missing ciphertext")
+	if _, err := Parse("https://host:62022"); err == nil {
+		t.Fatal("expected error for wrong scheme")
 	}
 }

@@ -3,8 +3,7 @@ package link
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
-	"encoding/base64"
+	"crypto/sha512"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -15,32 +14,31 @@ import (
 )
 
 const (
-	Scheme      = "xp2p+deploy"
-	Version     = "2"
-	aad         = "XP2PDEPLOY|v=2"
-	keySize     = 32
-	nonceSize   = 12
-	defaultPort = "62025"
+	// Scheme defines the link prefix presented to users (canonical trojan link).
+	Scheme    = "trojan"
+	aad       = "XP2PDEPLOY|v=2"
+	nonceSize = 12
+	keySize   = 32
 )
 
-// EncryptedLink holds encrypted manifest data and associated metadata.
+// EncryptedLink keeps the canonical trojan link together with the encrypted manifest.
 type EncryptedLink struct {
-	Host          string
-	Port          string
-	Key           string
-	Nonce         string
-	Ciphertext    []byte
-	CiphertextB64 string
-	ExpiresAt     int64
-	Manifest      spec.Manifest
+	Link       string
+	Host       string
+	Port       string
+	Ciphertext []byte
+	ExpiresAt  int64
+	Manifest   spec.Manifest
 }
 
-// Build constructs an encrypted deploy link for the provided manifest.
+// Build constructs a trojan link from the manifest, derives an encryption key from it,
+// and returns the ciphertext together with the canonical link string.
 func Build(remoteHost, deployPort string, manifest spec.Manifest, ttl time.Duration) (string, EncryptedLink, error) {
 	remoteHost = strings.TrimSpace(remoteHost)
 	if strings.TrimSpace(manifest.Host) == "" {
 		manifest.Host = remoteHost
 	}
+
 	manifest = spec.Normalize(manifest)
 	if manifest.Host == "" {
 		return "", EncryptedLink{}, spec.ErrHostEmpty
@@ -52,13 +50,9 @@ func Build(remoteHost, deployPort string, manifest spec.Manifest, ttl time.Durat
 		return "", EncryptedLink{}, err
 	}
 
-	key := make([]byte, keySize)
-	if _, err := rand.Read(key); err != nil {
-		return "", EncryptedLink{}, fmt.Errorf("generate key: %w", err)
-	}
-	nonce := make([]byte, nonceSize)
-	if _, err := rand.Read(nonce); err != nil {
-		return "", EncryptedLink{}, fmt.Errorf("generate nonce: %w", err)
+	linkURL, err := CanonicalLink(manifest)
+	if err != nil {
+		return "", EncryptedLink{}, err
 	}
 
 	payload, err := spec.Marshal(manifest)
@@ -66,133 +60,175 @@ func Build(remoteHost, deployPort string, manifest spec.Manifest, ttl time.Durat
 		return "", EncryptedLink{}, err
 	}
 
+	key, nonce := deriveKeyNonce(linkURL)
 	ct, err := encrypt(key, nonce, payload)
 	if err != nil {
 		return "", EncryptedLink{}, err
 	}
 
 	enc := EncryptedLink{
-		Host:          manifest.Host,
-		Port:          normalizePort(deployPort),
-		Key:           base64.RawURLEncoding.EncodeToString(key),
-		Nonce:         base64.RawURLEncoding.EncodeToString(nonce),
-		Ciphertext:    ct,
-		CiphertextB64: base64.RawURLEncoding.EncodeToString(ct),
-		ExpiresAt:     manifest.ExpiresAt,
-		Manifest:      manifest,
+		Link:       linkURL,
+		Host:       manifest.Host,
+		Port:       manifest.TrojanPort,
+		Ciphertext: ct,
+		ExpiresAt:  manifest.ExpiresAt,
+		Manifest:   manifest,
 	}
 
-	return enc.URL(), enc, nil
+	// deployPort kept to avoid signature churn; it is unused in v3 links.
+	_ = deployPort
+
+	return linkURL, enc, nil
 }
 
-// Parse parses a deploy link string and decrypts the embedded manifest.
+// Parse validates a trojan deploy link and normalizes it for consistent key derivation.
 func Parse(raw string) (EncryptedLink, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return EncryptedLink{}, nil
 	}
-	u, err := url.Parse(raw)
+
+	canonical, host, port, exp, err := normalizeTrojanLink(raw)
 	if err != nil {
-		return EncryptedLink{}, err
-	}
-	if !strings.EqualFold(u.Scheme, Scheme) {
-		return EncryptedLink{}, fmt.Errorf("invalid scheme %q", u.Scheme)
-	}
-
-	linkHost := strings.TrimSpace(u.Hostname())
-	port := normalizePort(u.Port())
-
-	q := u.Query()
-	if v := strings.TrimSpace(q.Get("v")); v != Version {
-		return EncryptedLink{}, fmt.Errorf("unsupported deploy link version %q", v)
-	}
-
-	keyB64 := strings.TrimSpace(q.Get("k"))
-	cipherB64 := strings.TrimSpace(q.Get("ct"))
-	nonceB64 := strings.TrimSpace(q.Get("n"))
-	if keyB64 == "" || cipherB64 == "" || nonceB64 == "" {
-		return EncryptedLink{}, fmt.Errorf("deploy link missing required parameters")
-	}
-
-	var expUnix int64
-	if rawExp := strings.TrimSpace(q.Get("exp")); rawExp != "" {
-		value, err := strconv.ParseInt(rawExp, 10, 64)
-		if err != nil {
-			return EncryptedLink{}, fmt.Errorf("invalid exp value %q", rawExp)
-		}
-		expUnix = value
-	}
-
-	key, err := base64.RawURLEncoding.DecodeString(keyB64)
-	if err != nil {
-		return EncryptedLink{}, fmt.Errorf("decode key: %w", err)
-	}
-	nonce, err := base64.RawURLEncoding.DecodeString(nonceB64)
-	if err != nil {
-		return EncryptedLink{}, fmt.Errorf("decode nonce: %w", err)
-	}
-	ct, err := base64.RawURLEncoding.DecodeString(cipherB64)
-	if err != nil {
-		return EncryptedLink{}, fmt.Errorf("decode ciphertext: %w", err)
-	}
-
-	plain, err := decrypt(key, nonce, ct)
-	if err != nil {
-		return EncryptedLink{}, fmt.Errorf("decrypt manifest: %w", err)
-	}
-	manifest, err := spec.Unmarshal(plain)
-	if err != nil {
-		return EncryptedLink{}, err
-	}
-
-	manifestHost := strings.TrimSpace(manifest.Host)
-	if manifestHost == "" {
-		manifestHost = linkHost
-	} else if linkHost != "" && !strings.EqualFold(linkHost, manifestHost) {
-		return EncryptedLink{}, fmt.Errorf("link host %q mismatches manifest host %q", linkHost, manifestHost)
-	}
-	if manifestHost == "" {
-		return EncryptedLink{}, spec.ErrHostEmpty
-	}
-	manifest.Host = manifestHost
-	if expUnix != 0 {
-		manifest.ExpiresAt = expUnix
-	}
-
-	if err := spec.Validate(manifest); err != nil {
 		return EncryptedLink{}, err
 	}
 
 	return EncryptedLink{
-		Host:          manifest.Host,
-		Port:          port,
-		Key:           keyB64,
-		Nonce:         nonceB64,
-		Ciphertext:    ct,
-		CiphertextB64: cipherB64,
-		ExpiresAt:     manifest.ExpiresAt,
-		Manifest:      manifest,
+		Link:      canonical,
+		Host:      host,
+		Port:      port,
+		ExpiresAt: exp,
 	}, nil
 }
 
-// URL returns the full deploy link string including the encryption key.
-func (e EncryptedLink) URL() string {
-	host := e.Host
+// CanonicalLink renders the manifest as a deterministic trojan link string.
+func CanonicalLink(manifest spec.Manifest) (string, error) {
+	host := strings.TrimSpace(manifest.Host)
 	if host == "" {
-		host = "localhost"
+		return "", spec.ErrHostEmpty
 	}
-	port := normalizePort(e.Port)
-	return fmt.Sprintf("%s://%s:%s?v=%s&k=%s&ct=%s&n=%s&exp=%d", Scheme, host, port, Version, e.Key, e.CiphertextB64, e.Nonce, e.ExpiresAt)
+	port := strings.TrimSpace(manifest.TrojanPort)
+	if port == "" {
+		return "", fmt.Errorf("xp2p: deploy manifest missing trojan port")
+	}
+	password := strings.TrimSpace(manifest.TrojanPassword)
+	if password == "" {
+		return "", fmt.Errorf("xp2p: deploy manifest missing trojan password")
+	}
+	user := strings.TrimSpace(manifest.TrojanUser)
+	if user == "" {
+		return "", fmt.Errorf("xp2p: deploy manifest missing trojan user")
+	}
+
+	params := url.Values{}
+	params.Set("security", "tls")
+	params.Set("sni", host)
+	if manifest.InstallDir != "" {
+		params.Set("install_dir", manifest.InstallDir)
+	}
+	if manifest.Version > 0 {
+		params.Set("deploy_version", strconv.Itoa(manifest.Version))
+	}
+	if manifest.ExpiresAt != 0 {
+		params.Set("exp", strconv.FormatInt(manifest.ExpiresAt, 10))
+	}
+
+	return renderTrojanURL(host, port, password, user, params), nil
 }
 
-// RedactedURL returns the deploy link string without embedding the key.
-func RedactedURL(host, port, nonce string, exp int64, cipherB64 string) string {
-	host = strings.TrimSpace(host)
-	if host == "" {
-		host = "localhost"
+// Decrypt decrypts an encrypted manifest using the canonical trojan link as key material.
+func Decrypt(link string, ciphertext []byte) (spec.Manifest, error) {
+	if strings.TrimSpace(link) == "" {
+		return spec.Manifest{}, fmt.Errorf("xp2p: link is empty")
 	}
-	port = normalizePort(port)
-	return fmt.Sprintf("%s://%s:%s?v=%s&ct=%s&n=%s&exp=%d", Scheme, host, port, Version, cipherB64, nonce, exp)
+	if len(ciphertext) == 0 {
+		return spec.Manifest{}, fmt.Errorf("xp2p: ciphertext is empty")
+	}
+
+	key, nonce := deriveKeyNonce(link)
+	plain, err := decrypt(key, nonce, ciphertext)
+	if err != nil {
+		return spec.Manifest{}, err
+	}
+	return spec.Unmarshal(plain)
+}
+
+func normalizeTrojanLink(raw string) (string, string, string, int64, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", "", "", 0, err
+	}
+	if !strings.EqualFold(u.Scheme, Scheme) {
+		return "", "", "", 0, fmt.Errorf("invalid scheme %q", u.Scheme)
+	}
+
+	host := strings.TrimSpace(u.Hostname())
+	if host == "" {
+		return "", "", "", 0, fmt.Errorf("trojan link missing host")
+	}
+
+	port := strings.TrimSpace(u.Port())
+	if port == "" {
+		return "", "", "", 0, fmt.Errorf("trojan link missing port")
+	}
+
+	if u.User == nil {
+		return "", "", "", 0, fmt.Errorf("trojan link missing password")
+	}
+	password := strings.TrimSpace(u.User.String())
+	if pwd, hasPwd := u.User.Password(); hasPwd {
+		password = strings.TrimSpace(pwd)
+	}
+	if password == "" {
+		return "", "", "", 0, fmt.Errorf("trojan link missing password")
+	}
+
+	userFragment := strings.TrimSpace(u.Fragment)
+	query := u.Query()
+
+	var expUnix int64
+	if rawExp := strings.TrimSpace(query.Get("exp")); rawExp != "" {
+		value, err := strconv.ParseInt(rawExp, 10, 64)
+		if err != nil {
+			return "", "", "", 0, fmt.Errorf("invalid exp value %q", rawExp)
+		}
+		expUnix = value
+	}
+
+	canonical := renderTrojanURL(host, port, password, userFragment, query)
+	return canonical, host, port, expUnix, nil
+}
+
+func renderTrojanURL(host, port, password, fragment string, query url.Values) string {
+	var builder strings.Builder
+	builder.Grow(len(host) + len(port) + len(password) + 32)
+	builder.WriteString(Scheme)
+	builder.WriteString("://")
+	builder.WriteString(url.PathEscape(password))
+	builder.WriteString("@")
+	builder.WriteString(host)
+	builder.WriteString(":")
+	builder.WriteString(port)
+
+	if encoded := query.Encode(); encoded != "" {
+		builder.WriteString("?")
+		builder.WriteString(encoded)
+	}
+	if fragment != "" {
+		builder.WriteString("#")
+		builder.WriteString(url.PathEscape(fragment))
+	}
+	return builder.String()
+}
+
+func deriveKeyNonce(link string) ([]byte, []byte) {
+	sum := sha512.Sum512([]byte(link))
+	key := make([]byte, keySize)
+	copy(key, sum[:keySize])
+
+	nonce := make([]byte, nonceSize)
+	copy(nonce, sum[keySize:keySize+nonceSize])
+	return key, nonce
 }
 
 func encrypt(key, nonce, payload []byte) ([]byte, error) {
@@ -217,12 +253,4 @@ func decrypt(key, nonce, ciphertext []byte) ([]byte, error) {
 		return nil, err
 	}
 	return aead.Open(nil, nonce, ciphertext, []byte(aad))
-}
-
-func normalizePort(port string) string {
-	port = strings.TrimSpace(port)
-	if port == "" {
-		return defaultPort
-	}
-	return port
 }
