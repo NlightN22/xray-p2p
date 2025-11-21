@@ -137,8 +137,9 @@ def install_ipk_on_host(
 ) -> PurePosixPath:
     dest = destination or PurePosixPath("/tmp/xp2p.ipk")
     if not force:
+        binary_check = host.run("test -x /usr/bin/xp2p")
         status = host.run("opkg status xp2p")
-        if status.rc == 0:
+        if binary_check.rc == 0 and status.rc == 0:
             return dest
     staged_path = stage_ipk_on_guest(host, ipk_path, dest)
     opkg_remove(host, "xp2p", ignore_missing=True)
@@ -175,7 +176,7 @@ def opkg_install_local(host: Host, path: PurePosixPath) -> None:
 
 def run_xp2p(host: Host, *args: str):
     quoted_args = " ".join(shlex.quote(arg) for arg in args)
-    command = "xp2p"
+    command = "/usr/bin/xp2p"
     if quoted_args:
         command = f"{command} {quoted_args}"
     return host.run(command)
@@ -200,7 +201,7 @@ def xp2p_run_session(
     log_dir = str(PurePosixPath(log_file).parent)
     host.run(f"mkdir -p {shlex.quote(log_dir)}")
     start_cmd = (
-        f"setsid xp2p {role} run "
+        f"setsid /usr/bin/xp2p {role} run "
         f"--path {shlex.quote(install_path)} "
         f"--config-dir {shlex.quote(config_dir)} "
         f"--auto-install "
