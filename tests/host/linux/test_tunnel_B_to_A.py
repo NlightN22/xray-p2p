@@ -528,15 +528,15 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             assert listen_port == SERVER_FORWARD_PORT
 
             with _active_tunnel_sessions(tunnel_environment):
-            ping_result = server_runner(
-                "ping",
-                "127.0.0.1",
-                "--port",
-                str(SERVER_FORWARD_PORT),
-                "--count",
-                "3",
-                check=True,
-            )
+                ping_result = server_runner(
+                    "ping",
+                    "127.0.0.1",
+                    "--port",
+                    str(SERVER_FORWARD_PORT),
+                    "--count",
+                    "3",
+                    check=True,
+                )
                 tunnel_common.assert_zero_loss(ping_result, f"via server forward targeting {CLIENT_REVERSE_TEST_IP}")
         finally:
             if forward_added:
