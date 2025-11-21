@@ -68,7 +68,8 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		notifyFailure(results)
 		return
 	}
-	logging.Info("xp2p server deploy: received encrypted manifest", "bytes", len(buf))
+	cipherB64 := base64.RawURLEncoding.EncodeToString(buf)
+	logging.Info("xp2p server deploy: received encrypted manifest", "bytes", len(buf), "ciphertext_b64", cipherB64)
 
 	if strings.TrimSpace(s.Expected.Link) == "" {
 		_ = writeLine(rw, "ERR deploy link not configured")
@@ -100,6 +101,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		notifyFailure(results)
 		return
 	}
+	logging.Info("xp2p server deploy: manifest decrypted", "host", manifest.Host, "install_dir", manifest.InstallDir, "trojan_port", manifest.TrojanPort, "user", manifest.TrojanUser, "expires_at", manifest.ExpiresAt)
 
 	s.proceedInstall(ctx, rw, results, manifest)
 }
