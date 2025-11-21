@@ -20,6 +20,7 @@ HEARTBEAT_STATE_FILE = linux_helpers.HEARTBEAT_STATE_FILE
 CLIENT_LOG_FILE = linux_helpers.CLIENT_LOG_FILE
 SERVER_LOG_FILE = linux_helpers.SERVER_LOG_FILE
 REVERSE_SUFFIX = linux_helpers.REVERSE_SUFFIX
+XRAY_BINARY = linux_helpers.XRAY_BINARY
 
 cleanup_client_install = linux_helpers.cleanup_client_install
 cleanup_server_install = linux_helpers.cleanup_server_install
@@ -45,6 +46,16 @@ def _posix(value: PurePosixPath | Path | str) -> str:
     if isinstance(value, (PurePosixPath, Path)):
         return value.as_posix()
     return str(value)
+
+
+def file_sha256(host: Host, path: PurePosixPath | Path | str) -> str:
+    target = _posix(path)
+    result = host.run(f"sha256sum {shlex.quote(target)}")
+    if result.rc != 0 or not result.stdout:
+        raise RuntimeError(
+            f"Failed to hash remote file {target}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return (result.stdout.strip().split()[0]).strip()
 
 
 def read_text(host: Host, path: PurePosixPath | Path | str) -> str:
