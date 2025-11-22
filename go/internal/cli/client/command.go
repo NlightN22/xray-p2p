@@ -78,7 +78,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.String("port", "", "remote server port")
 	flags.String("user", "", "Trojan user email (used to derive the <user><host>.rev reverse bridge)")
 	flags.String("password", "", "Trojan password")
-	flags.String("server-name", "", "TLS server name")
+	flags.String("sni", "", "TLS server name (SNI)")
 	flags.String("link", "", "Trojan client link (trojan://...)")
 	flags.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
 	flags.Bool("strict-tls", false, "enforce TLS verification")

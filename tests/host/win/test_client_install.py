@@ -142,7 +142,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "beta@example.com",
             "--password",
             "override_password456",
-            "--server-name",
+            "--sni",
             "vpn.example.local",
             check=True,
         )
@@ -185,7 +185,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "gamma@example.com",
             "--password",
             "force-password",
-            "--server-name",
+            "--sni",
             "override.example",
             "--force",
             check=True,

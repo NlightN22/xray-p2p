@@ -115,7 +115,7 @@ func (o *rootOptions) bindClientOverrideFlags(cmd *cobra.Command) {
 	flags.StringVarP(&o.clientServerPort, "client-server-port", "R", "", "remote server port for client config")
 	flags.StringVarP(&o.clientUser, "client-user", "U", "", "Trojan user email for client config")
 	flags.StringVarP(&o.clientPassword, "client-password", "W", "", "Trojan password for client config")
-	flags.StringVarP(&o.clientServerName, "client-server-name", "N", "", "TLS server name for client config")
+	flags.StringVarP(&o.clientServerName, "client-sni", "N", "", "TLS server name (SNI) for client config")
 	flags.BoolVarP(&o.clientAllowInsecure, "client-allow-insecure", "K", false, "allow TLS verification to be skipped for client config")
 	flags.BoolVarP(&o.clientStrictTLS, "client-strict-tls", "T", false, "enforce TLS verification for client config")
 }

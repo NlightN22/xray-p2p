@@ -114,7 +114,7 @@ xp2p client install \
   --port 62022 \
   --user office@example.com \
   --password PASSWORD \
-  --server-name edge.example.com \
+  --sni edge.example.com \
   --allow-insecure=false
 
 xp2p client list

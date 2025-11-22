@@ -259,7 +259,7 @@ def test_install_server_and_client_nodefault(
                 credential["user"],
                 "--password",
                 credential["password"],
-                "--server-name",
+                "--sni",
                 CUSTOM_SERVER_HOST,
                 "--allow-insecure",
                 "--force",

@@ -21,7 +21,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	portFlag := fs.String("port", "", "remote server port")
 	userEmail := fs.String("user", "", "Trojan user email")
 	password := fs.String("password", "", "Trojan password")
-	serverName := fs.String("server-name", "", "TLS server name")
+	serverName := fs.String("sni", "", "TLS server name (SNI)")
 	link := fs.String("link", "", "Trojan client link (trojan://...)")
 	allowInsecure := fs.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
 	strictTLS := fs.Bool("strict-tls", false, "enforce TLS verification")

@@ -42,7 +42,7 @@ func TestRunClientInstall(t *testing.T) {
 				"--port", "9443",
 				"--user", "user@example.com",
 				"--password", "secret",
-				"--server-name", "custom.name",
+				"--sni", "custom.name",
 				"--allow-insecure",
 				"--force",
 			},
