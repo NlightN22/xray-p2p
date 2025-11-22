@@ -26,7 +26,7 @@ def _install_endpoint(runner, host: str, user: str, password: str) -> None:
     runner(
         "client",
         "install",
-        "--server-address",
+        "--host",
         host,
         "--user",
         user,

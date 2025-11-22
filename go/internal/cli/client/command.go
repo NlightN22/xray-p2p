@@ -74,7 +74,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.String("path", "", "client installation directory")
 	flags.String("config-dir", "", "client configuration directory name")
-	flags.String("server-address", "", "remote server address")
+	flags.String("host", "", "remote server host")
 	flags.String("server-port", "", "remote server port")
 	flags.String("user", "", "Trojan user email (used to derive the <user><host>.rev reverse bridge)")
 	flags.String("password", "", "Trojan password")

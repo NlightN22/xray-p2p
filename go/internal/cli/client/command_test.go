@@ -72,11 +72,11 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 			name:           "persistent overrides forwarded",
 			builder:        newClientInstallCmd,
 			persistentArgs: []string{"--client-install-dir", `E:\xp2p`},
-			localArgs:      []string{"--server-address", "10.0.10.10", "--user", "demo@example.com", "--password", "p@ss"},
+			localArgs:      []string{"--host", "10.0.10.10", "--user", "demo@example.com", "--password", "p@ss"},
 			wantFlags: []string{
 				"--client-install-dir=E:\\xp2p",
 				"--password=p@ss",
-				"--server-address=10.0.10.10",
+				"--host=10.0.10.10",
 				"--user=demo@example.com",
 			},
 		},

@@ -56,7 +56,7 @@ def test_openwrt_client_and_server_share_install_dir(openwrt_host, xp2p_openwrt_
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
-            "--server-address",
+            "--host",
             "10.66.0.10",
             "--user",
             "dual@example.com",

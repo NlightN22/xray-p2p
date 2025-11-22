@@ -38,7 +38,7 @@ func TestRunClientInstall(t *testing.T) {
 			args: []string{
 				"--path", `D:\xp2p-client`,
 				"--config-dir", "cfg-client",
-				"--server-address", "example.org",
+				"--host", "example.org",
 				"--server-port", "9443",
 				"--user", "user@example.com",
 				"--password", "secret",
@@ -65,7 +65,7 @@ func TestRunClientInstall(t *testing.T) {
 		{
 			name:       "install error surfaces",
 			cfg:        defaultCfg,
-			args:       []string{"--server-address", "host", "--user", "user@example.com", "--password", "secret"},
+			args:       []string{"--host", "host", "--user", "user@example.com", "--password", "secret"},
 			installErr: errors.New("install failure"),
 			wantCode:   1,
 			wantCalled: true,
@@ -142,7 +142,7 @@ func TestRunClientInstall(t *testing.T) {
 					Password:      "secret",
 				},
 			},
-			args:       []string{"--server-address", "example.org", "--password", "secret"},
+			args:       []string{"--host", "example.org", "--password", "secret"},
 			wantCode:   2,
 			wantCalled: false,
 		},
@@ -156,7 +156,7 @@ func TestRunClientInstall(t *testing.T) {
 		{
 			name:       "requires password without link",
 			cfg:        clientCfg(`C:\xp2p-client`, "config-client"),
-			args:       []string{"--server-address", "example.org", "--user", "alpha@example.com"},
+			args:       []string{"--host", "example.org", "--user", "alpha@example.com"},
 			wantCode:   2,
 			wantCalled: false,
 		},

@@ -121,7 +121,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.10",
             "--user",
             "alpha@example.com",
@@ -136,7 +136,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.11",
             "--user",
             "beta@example.com",
@@ -164,7 +164,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         duplicate = xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.10",
             "--user",
             "gamma@example.com",
@@ -179,7 +179,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.10",
             "--user",
             "gamma@example.com",
@@ -234,7 +234,7 @@ def test_client_run_starts_xray_core(
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.10",
             "--user",
             "gamma@example.com",
@@ -272,7 +272,7 @@ def test_client_install_requires_force_for_existing_endpoint(
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.50",
             "--user",
             "state@example.com",
@@ -284,7 +284,7 @@ def test_client_install_requires_force_for_existing_endpoint(
         result = xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.50",
             "--user",
             "state2@example.com",
@@ -299,7 +299,7 @@ def test_client_install_requires_force_for_existing_endpoint(
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.50",
             "--user",
             "state2@example.com",
@@ -322,7 +322,7 @@ def test_client_install_succeeds_without_state_marker(
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.60",
             "--user",
             "nostate@example.com",
@@ -341,7 +341,7 @@ def test_client_install_succeeds_without_state_marker(
         xp2p_client_runner(
             "client",
             "install",
-            "--server-address",
+            "--host",
             "10.0.10.61",
             "--user",
             "nostate2@example.com",

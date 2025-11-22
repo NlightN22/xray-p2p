@@ -110,7 +110,7 @@ xp2p client install --link "trojan://PASSWORD@edge.example.com:62022?security=tl
 
 # Or supply fields manually
 xp2p client install \
-  --server-address edge.example.com \
+  --host edge.example.com \
   --server-port 62022 \
   --user office@example.com \
   --password PASSWORD \

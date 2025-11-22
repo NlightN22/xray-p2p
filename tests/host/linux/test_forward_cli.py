@@ -18,7 +18,7 @@ def _install_client(runner) -> None:
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",
         helpers.CLIENT_CONFIG_DIR_NAME,
-        "--server-address",
+        "--host",
         "10.77.55.10",
         "--user",
         "forwarder@example.com",

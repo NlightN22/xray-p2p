@@ -27,7 +27,7 @@ def _install_endpoint(runner, host: str, user: str, password: str) -> None:
         INSTALL_PATH,
         "--config-dir",
         CONFIG_DIR,
-        "--server-address",
+        "--host",
         host,
         "--user",
         user,

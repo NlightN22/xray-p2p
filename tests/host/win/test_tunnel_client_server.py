@@ -251,7 +251,7 @@ def test_install_server_and_client_nodefault(
                 str(CUSTOM_CLIENT_INSTALL_DIR),
                 "--config-dir",
                 CUSTOM_CLIENT_CONFIG_NAME,
-                "--server-address",
+                "--host",
                 SERVER_PUBLIC_HOST,
                 "--server-port",
                 str(CUSTOM_SERVER_PORT),

@@ -140,7 +140,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             str(INSTALL_DIR),
             "--config-dir",
             CLIENT_CONFIG_DIR,
-            "--server-address",
+            "--host",
             "10.0.10.210",
             "--user",
             "dual@example.com",

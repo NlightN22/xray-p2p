@@ -54,7 +54,7 @@ def test_client_and_server_share_install_dir(server_host):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
-            "--server-address",
+            "--host",
             "10.66.0.10",
             "--user",
             "dual@example.com",

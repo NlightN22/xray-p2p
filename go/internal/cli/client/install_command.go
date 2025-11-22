@@ -17,8 +17,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
-	serverAddress := fs.String("server-address", "", "remote server address")
-	serverPort := fs.String("server-port", "", "remote server port")
+	hostFlag := fs.String("host", "", "remote server host")
+	portFlag := fs.String("port", "", "remote server port")
 	userEmail := fs.String("user", "", "Trojan user email")
 	password := fs.String("password", "", "Trojan password")
 	serverName := fs.String("server-name", "", "TLS server name")
@@ -51,30 +51,35 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	userFlagProvided := false
-	serverAddressProvided := false
+	hostProvided := false
 	passwordProvided := false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "user":
 			userFlagProvided = true
-		case "server-address":
-			serverAddressProvided = true
+		case "host":
+			hostProvided = true
 		case "password":
 			passwordProvided = true
 		}
 	})
 
 	if linkValue == "" {
-		if !serverAddressProvided || strings.TrimSpace(*serverAddress) == "" {
-			logging.Error("xp2p client install: --server-address is required when --link is not provided")
-			return 2
+		var missing []string
+		if !hostProvided || strings.TrimSpace(*hostFlag) == "" {
+			missing = append(missing, "--host")
 		}
 		if !userFlagProvided || strings.TrimSpace(*userEmail) == "" {
-			logging.Error("xp2p client install: --user is required when --link is not provided")
-			return 2
+			missing = append(missing, "--user")
 		}
 		if !passwordProvided || strings.TrimSpace(*password) == "" {
-			logging.Error("xp2p client install: --password is required when --link is not provided")
+			missing = append(missing, "--password")
+		}
+		if len(missing) > 0 {
+			logging.Error(
+				"xp2p client install: missing required arguments when --link is not provided",
+				"arguments", strings.Join(missing, ", "),
+			)
 			return 2
 		}
 	}
@@ -100,8 +105,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		}
 	}
 
-	serverAddressValue = firstNonEmpty(*serverAddress, serverAddressValue)
-	serverPortValue = firstNonEmpty(*serverPort, serverPortValue)
+	serverAddressValue = firstNonEmpty(*hostFlag, serverAddressValue)
+	serverPortValue = firstNonEmpty(*portFlag, serverPortValue)
 	userValue = firstNonEmpty(*userEmail, userValue)
 	passwordValue = firstNonEmpty(*password, passwordValue)
 	serverNameValue = firstNonEmpty(*serverName, serverNameValue)
