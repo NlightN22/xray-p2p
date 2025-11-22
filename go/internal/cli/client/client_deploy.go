@@ -299,10 +299,7 @@ func waitForSocksProxy(ctx context.Context, addr string, timeout time.Duration) 
 		}
 		lastErr = err
 		if time.Now().After(deadline) {
-			if lastErr != nil {
-				return fmt.Errorf("socks proxy %s not ready: %w", addr, lastErr)
-			}
-			return fmt.Errorf("socks proxy %s not ready", addr)
+			return fmt.Errorf("socks proxy %s not ready: %w", addr, lastErr)
 		}
 		select {
 		case <-ctx.Done():
