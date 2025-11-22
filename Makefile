@@ -28,7 +28,7 @@ lint:
 	go vet ./...
 
 test:
-	go clean -testcache ; go test ./... -cover
+	powershell -NoProfile -Command "go clean -testcache ; go test ./... -cover"
 
 test-wsl:
 	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
