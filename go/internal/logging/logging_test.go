@@ -57,8 +57,8 @@ func TestWithAddsAttributes(t *testing.T) {
 	log.Info("step")
 
 	out := buf.String()
-	if !strings.Contains(out, "trace_id=abc123") {
-		t.Fatalf("expected trace attribute, got %q", out)
+	if !strings.Contains(out, ". abc123") {
+		t.Fatalf("expected attribute appended as value, got %q", out)
 	}
 }
 
@@ -119,11 +119,39 @@ func TestConsoleHandlerFormatsGroups(t *testing.T) {
 		t.Fatalf("handle failed: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "user=\"alpha beta\"") {
-		t.Fatalf("expected quoted attribute, got %q", out)
+	if !strings.Contains(out, ". alpha beta") {
+		t.Fatalf("expected attribute value, got %q", out)
 	}
-	if !strings.Contains(out, "meta.id=7") || !strings.Contains(out, "meta.span=root") {
-		t.Fatalf("expected flattened group attributes, got %q", out)
+	if !strings.Contains(out, ". 7") || !strings.Contains(out, ". root") {
+		t.Fatalf("expected group values appended, got %q", out)
+	}
+}
+
+func TestConsoleHandlerTrimsServicePrefixAndFormatsErrors(t *testing.T) {
+	var buf bytes.Buffer
+	var lvl slog.LevelVar
+	lvl.Set(slog.LevelError)
+	handler := newConsoleHandler(&buf, &lvl)
+
+	record := slog.NewRecord(time.Unix(0, 0), slog.LevelError, "xp2p server install: failed to resolve public host", 0)
+	record.AddAttrs(
+		slog.String("service", "xp2p"),
+		slog.String("err", "netutil: unable to detect public host"),
+	)
+
+	if err := handler.Handle(context.Background(), record); err != nil {
+		t.Fatalf("handle failed: %v", err)
+	}
+
+	out := buf.String()
+	if strings.Count(out, "xp2p") != 1 {
+		t.Fatalf("expected single service prefix, got %q", out)
+	}
+	if !strings.Contains(out, "server install: failed to resolve public host. netutil: unable to detect public host") {
+		t.Fatalf("expected attributes appended as sentences, got %q", out)
+	}
+	if strings.Contains(out, "err=") {
+		t.Fatalf("err attribute should not include key, got %q", out)
 	}
 }
 

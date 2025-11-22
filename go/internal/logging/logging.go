@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -192,13 +191,23 @@ func (h *consoleHandler) Handle(_ context.Context, record slog.Record) error {
 	})
 
 	var service string
-	filtered := make([]slog.Attr, 0, len(attrs))
+	attrTexts := make([]string, 0, len(attrs))
 	for _, attr := range attrs {
 		if attr.Key == "service" && service == "" {
 			service = attr.Value.String()
 			continue
 		}
-		filtered = append(filtered, attr)
+		if text := formatAttr(attr); text != "" {
+			attrTexts = append(attrTexts, text)
+		}
+	}
+
+	message := record.Message
+	if service != "" {
+		prefix := service + " "
+		if strings.HasPrefix(message, prefix) {
+			message = message[len(prefix):]
+		}
 	}
 
 	var b strings.Builder
@@ -209,17 +218,21 @@ func (h *consoleHandler) Handle(_ context.Context, record slog.Record) error {
 		b.WriteString(" ")
 		b.WriteString(service)
 	}
-	if record.Message != "" {
+	if message != "" {
 		if service != "" {
 			b.WriteString(": ")
 		} else {
 			b.WriteString(" ")
 		}
-		b.WriteString(record.Message)
+		b.WriteString(message)
 	}
-	for _, attr := range filtered {
-		b.WriteString(" ")
-		b.WriteString(formatAttr(attr))
+	if len(attrTexts) > 0 {
+		if message != "" {
+			b.WriteString(". ")
+		} else {
+			b.WriteString(" ")
+		}
+		b.WriteString(strings.Join(attrTexts, ". "))
 	}
 	b.WriteByte('\n')
 
@@ -281,21 +294,13 @@ func appendResolvedAttr(dst []slog.Attr, attr slog.Attr, groups []string) []slog
 }
 
 func formatAttr(attr slog.Attr) string {
-	val := attrValueString(attr.Value)
-	if attr.Key == "" {
-		return val
-	}
-	return attr.Key + "=" + val
+	return attrValueString(attr.Value)
 }
 
 func attrValueString(v slog.Value) string {
 	switch v.Kind() {
 	case slog.KindString:
-		s := v.String()
-		if strings.ContainsAny(s, " \t\n\"") {
-			return strconv.Quote(s)
-		}
-		return s
+		return v.String()
 	case slog.KindTime:
 		return v.Time().UTC().Format(time.RFC3339)
 	case slog.KindInt64, slog.KindUint64, slog.KindFloat64, slog.KindBool, slog.KindDuration:
