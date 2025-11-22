@@ -39,7 +39,7 @@ func TestRunClientInstall(t *testing.T) {
 				"--path", `D:\xp2p-client`,
 				"--config-dir", "cfg-client",
 				"--host", "example.org",
-				"--server-port", "9443",
+				"--port", "9443",
 				"--user", "user@example.com",
 				"--password", "secret",
 				"--server-name", "custom.name",

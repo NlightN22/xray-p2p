@@ -253,7 +253,7 @@ def test_install_server_and_client_nodefault(
                 CUSTOM_CLIENT_CONFIG_NAME,
                 "--host",
                 SERVER_PUBLIC_HOST,
-                "--server-port",
+                "--port",
                 str(CUSTOM_SERVER_PORT),
                 "--user",
                 credential["user"],

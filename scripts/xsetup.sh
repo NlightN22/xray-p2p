@@ -13,7 +13,7 @@ Options:
   -h, --help            Show this help message and exit.
   -u, --ssh-user USER   SSH user for the remote server (default: root).
   -p, --ssh-port PORT   SSH port for the remote server (default: 22).
-  -s, --server-port PORT
+  -s, --port PORT
                         External port exposed on the server (default: 8443).
   -C, --cert FILE       Path to existing certificate file for the server.
   -K, --key  FILE       Path to existing private key file for the server.
@@ -237,7 +237,7 @@ while [ "$#" -gt 0 ]; do
             SSH_PORT="$2"
             shift 2
             ;;
-        -s|--server-port)
+        -s|--port)
             if [ "$#" -lt 2 ]; then
                 printf 'Error: %s requires an argument.\n' "$1" >&2
                 usage 1
