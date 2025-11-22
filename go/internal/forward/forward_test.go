@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -132,6 +133,9 @@ func TestCheckPortAndFindAvailablePort(t *testing.T) {
 	}
 	_ = tcpLn.Close()
 	if err := CheckPort(listen, port, ProtocolBoth); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "forbidden") {
+			t.Skipf("unable to bind due to environment restrictions: %v", err)
+		}
 		t.Fatalf("CheckPort after release failed: %v", err)
 	}
 

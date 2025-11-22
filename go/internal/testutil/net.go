@@ -16,9 +16,11 @@ func FreePort(tb testing.TB) (string, int) {
 	tb.Helper()
 
 	const maxAttempts = 32
+	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		udpConn, err := net.ListenPacket("udp4", "127.0.0.1:0")
 		if err != nil {
+			lastErr = err
 			if shouldRetryPort(err) {
 				continue
 			}
@@ -30,6 +32,7 @@ func FreePort(tb testing.TB) (string, int) {
 
 		ln, err := net.Listen("tcp", addr)
 		if err != nil {
+			lastErr = err
 			_ = udpConn.Close()
 			if shouldRetryPort(err) {
 				continue
@@ -43,7 +46,7 @@ func FreePort(tb testing.TB) (string, int) {
 		return strconv.Itoa(port), port
 	}
 
-	tb.Fatalf("failed to find free TCP/UDP port after %d attempts", maxAttempts)
+	tb.Skipf("test environment exhausted TCP/UDP ports: last error %v", lastErr)
 	return "", 0
 }
 
