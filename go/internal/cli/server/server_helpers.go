@@ -170,7 +170,7 @@ func determineInstallHost(ctx context.Context, explicit, fallback string) (strin
 	}
 	value, err := detectPublicHostFunc(ctx)
 	if err != nil {
-		return "", false, err
+		return "", false, fmt.Errorf("%w (use --host to specify the public address)", err)
 	}
 	value = strings.TrimSpace(value)
 	if err := netutil.ValidateHost(value); err != nil {
