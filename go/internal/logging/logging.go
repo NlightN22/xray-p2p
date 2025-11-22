@@ -205,9 +205,7 @@ func (h *consoleHandler) Handle(_ context.Context, record slog.Record) error {
 	message := record.Message
 	if service != "" {
 		prefix := service + " "
-		if strings.HasPrefix(message, prefix) {
-			message = message[len(prefix):]
-		}
+		message = strings.TrimPrefix(message, prefix)
 	}
 
 	var b strings.Builder
