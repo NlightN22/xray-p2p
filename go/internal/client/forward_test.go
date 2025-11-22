@@ -135,3 +135,42 @@ func readInbounds(t *testing.T, path string) map[string]any {
 	}
 	return doc
 }
+
+func TestListForwardsReturnsCopyOfState(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+
+	state := clientInstallState{
+		Forwards: []forward.Rule{
+			{ListenAddress: "127.0.0.1", ListenPort: 10001, Tag: "forward-10001"},
+			{ListenAddress: "127.0.0.1", ListenPort: 10002, Tag: "forward-10002"},
+		},
+	}
+	if err := state.save(statePath); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	rules, err := ListForwards(ForwardListOptions{
+		InstallDir: dir,
+		ConfigDir:  DefaultClientConfigDir,
+	})
+	if err != nil {
+		t.Fatalf("ListForwards returned error: %v", err)
+	}
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 forwards, got %d", len(rules))
+	}
+	if rules[0].ListenPort != 10001 || rules[1].Tag != "forward-10002" {
+		t.Fatalf("unexpected rules: %+v", rules)
+	}
+
+	// Mutate the returned slice and ensure persisted state remains intact.
+	rules[0].ListenPort = 99999
+	reloaded, err := loadClientInstallState(statePath)
+	if err != nil {
+		t.Fatalf("reload state: %v", err)
+	}
+	if reloaded.Forwards[0].ListenPort != 10001 {
+		t.Fatalf("state was modified when rules slice changed: %+v", reloaded.Forwards[0])
+	}
+}

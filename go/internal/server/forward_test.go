@@ -25,14 +25,14 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 		ConfigDir:     DefaultServerConfigDir,
 		Target:        "198.51.100.5:7000",
 		ListenAddress: "127.0.0.1",
-		ListenPort:    62050,
+		BasePort:      52000,
 		Protocol:      forward.ProtocolUDP,
 	})
 	if err != nil {
 		t.Fatalf("AddForward returned error: %v", err)
 	}
-	if result.Rule.ListenPort != 62050 {
-		t.Fatalf("unexpected listen port %d", result.Rule.ListenPort)
+	if result.Rule.ListenPort <= 0 {
+		t.Fatalf("expected listen port to be auto-assigned, got %d", result.Rule.ListenPort)
 	}
 	if result.Routed {
 		t.Fatalf("expected Routed=false without redirect rules")
@@ -67,14 +67,15 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 	}
 	writeServerInboundsFile(t, filepath.Join(configDir, "inbounds.json"))
 
-	if _, err := AddForward(ForwardAddOptions{
+	addRes, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultServerConfigDir,
 		Target:        "198.51.100.6:9000",
 		ListenAddress: "127.0.0.1",
-		ListenPort:    62051,
+		BasePort:      53000,
 		Protocol:      forward.ProtocolBoth,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("AddForward returned error: %v", err)
 	}
 
@@ -82,7 +83,7 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 		InstallDir: dir,
 		ConfigDir:  DefaultServerConfigDir,
 		Selector: forward.Selector{
-			ListenPort: 62051,
+			ListenPort: addRes.Rule.ListenPort,
 		},
 	}); err != nil {
 		t.Fatalf("RemoveForward returned error: %v", err)
