@@ -16,6 +16,12 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
+var (
+	serverAddForwardFunc    = server.AddForward
+	serverRemoveForwardFunc = server.RemoveForward
+	serverListForwardFunc   = server.ListForwards
+)
+
 func newServerForwardCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "forward",
@@ -124,7 +130,7 @@ func runServerForwardAdd(_ context.Context, cfg config.Config, args []string) in
 		return 2
 	}
 
-	result, err := server.AddForward(server.ForwardAddOptions{
+	result, err := serverAddForwardFunc(server.ForwardAddOptions{
 		InstallDir:    firstNonEmpty(*path, cfg.Server.InstallDir),
 		ConfigDir:     firstNonEmpty(*configDir, cfg.Server.ConfigDir),
 		Target:        *target,
@@ -182,7 +188,7 @@ func runServerForwardRemove(_ context.Context, cfg config.Config, args []string)
 		return 2
 	}
 
-	removed, err := server.RemoveForward(server.ForwardRemoveOptions{
+	removed, err := serverRemoveForwardFunc(server.ForwardRemoveOptions{
 		InstallDir: firstNonEmpty(*path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Server.ConfigDir),
 		Selector:   selector,
@@ -223,7 +229,7 @@ func runServerForwardList(_ context.Context, cfg config.Config, args []string) i
 		return 2
 	}
 
-	rules, err := server.ListForwards(server.ForwardListOptions{
+	rules, err := serverListForwardFunc(server.ForwardListOptions{
 		InstallDir: firstNonEmpty(*path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Server.ConfigDir),
 	})

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
@@ -118,6 +119,33 @@ func stubServerRedirectAdd(fn func(server.RedirectAddOptions) error) func() {
 	}
 	serverRedirectAddFunc = fn
 	return func() { serverRedirectAddFunc = prev }
+}
+
+func stubServerForwardAdd(fn func(server.ForwardAddOptions) (server.ForwardAddResult, error)) func() {
+	prev := serverAddForwardFunc
+	if fn == nil {
+		fn = func(server.ForwardAddOptions) (server.ForwardAddResult, error) { return server.ForwardAddResult{}, nil }
+	}
+	serverAddForwardFunc = fn
+	return func() { serverAddForwardFunc = prev }
+}
+
+func stubServerForwardRemove(fn func(server.ForwardRemoveOptions) (forward.Rule, error)) func() {
+	prev := serverRemoveForwardFunc
+	if fn == nil {
+		fn = func(server.ForwardRemoveOptions) (forward.Rule, error) { return forward.Rule{}, nil }
+	}
+	serverRemoveForwardFunc = fn
+	return func() { serverRemoveForwardFunc = prev }
+}
+
+func stubServerForwardList(fn func(server.ForwardListOptions) ([]forward.Rule, error)) func() {
+	prev := serverListForwardFunc
+	if fn == nil {
+		fn = func(server.ForwardListOptions) ([]forward.Rule, error) { return nil, nil }
+	}
+	serverListForwardFunc = fn
+	return func() { serverListForwardFunc = prev }
 }
 
 func stubServerRedirectPromptReader(reader io.Reader) func() {
