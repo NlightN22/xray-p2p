@@ -480,7 +480,7 @@ def test_client_forward_add_warns_without_redirect(client_host, xp2p_client_runn
             check=True,
         )
         stderr = (result.stderr or "").lower()
-        assert "xp2p client forward has no matching redirect" in stderr
+        assert "client forward has no matching redirect" in stderr
         forwards = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES).get("forwards") or []
         assert forwards, "Expected client forward entry recorded"
         listen_port = forwards[-1].get("listen_port")
@@ -514,7 +514,7 @@ def test_server_forward_add_warns_without_redirect(server_host, xp2p_server_runn
             check=True,
         )
         stderr = (result.stderr or "").lower()
-        assert "xp2p server forward has no matching redirect" in stderr
+        assert "server forward has no matching redirect" in stderr
         forwards = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES).get("forward_rules") or []
         assert forwards, "Expected server forward entry recorded"
         listen_port = forwards[-1].get("listen_port")

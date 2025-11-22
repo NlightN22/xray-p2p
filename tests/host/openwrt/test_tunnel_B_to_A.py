@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import shlex
+import time
 
 import pytest
 
@@ -154,6 +155,7 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_CONFIG_DIR_NAME,
         helpers.CLIENT_LOG_FILE,
     ):
+        time.sleep(2.0)
         yield
 
 
