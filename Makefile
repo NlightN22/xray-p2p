@@ -28,10 +28,10 @@ lint:
 	go vet ./...
 
 test:
-	go test ./...
+	go clean -testcache ; go test ./... -cover
 
 test-wsl:
-	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go test ./..."
+	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
 
 vagrant-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant up
