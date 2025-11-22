@@ -178,7 +178,7 @@ func (h *consoleHandler) Enabled(_ context.Context, lvl slog.Level) bool {
 }
 
 func (h *consoleHandler) Handle(_ context.Context, record slog.Record) error {
-	if !h.Enabled(nil, record.Level) {
+	if !h.Enabled(context.Background(), record.Level) {
 		return nil
 	}
 
