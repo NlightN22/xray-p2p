@@ -2,9 +2,12 @@ package ping
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -105,6 +108,47 @@ func TestReporterInvokedOnSuccess(t *testing.T) {
 	}
 	if !called.Load() {
 		t.Fatalf("reporter was not invoked")
+	}
+}
+
+func TestRunValidatesTargetAndProtocol(t *testing.T) {
+	setupLogging(t)
+	if err := Run(context.Background(), "", Options{}); err == nil {
+		t.Fatalf("expected error for missing target")
+	}
+	if err := Run(context.Background(), "127.0.0.1", Options{Proto: "icmp"}); err == nil {
+		t.Fatalf("expected error for unsupported protocol")
+	}
+}
+
+func TestReporterErrorPropagates(t *testing.T) {
+	setupLogging(t)
+	cancel, port := startBackgroundServer(t)
+	defer cancel()
+	reporter := reporterFunc(func(context.Context, net.Conn, Result) error {
+		return errors.New("report failure")
+	})
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	_, err := pingTCP(context.Background(), addr, time.Second, "", 1, reporter)
+	if err == nil || !strings.Contains(err.Error(), "report failure") {
+		t.Fatalf("expected reporter error, got %v", err)
+	}
+}
+
+func TestDialViaSocksInvalidProxy(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err := dialViaSocks(ctx, "127.0.0.1:9", "127.0.0.1:1", 100*time.Millisecond)
+	if err == nil {
+		t.Fatalf("expected error when SOCKS proxy is unreachable")
+	}
+}
+
+func TestDialViaSocksRespectsContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := dialViaSocks(ctx, "127.0.0.1:80", "127.0.0.1:1080", time.Second); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
 	}
 }
 
