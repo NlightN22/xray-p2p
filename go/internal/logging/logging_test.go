@@ -2,10 +2,12 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoggerIncludesServiceAttribute(t *testing.T) {
@@ -84,4 +86,88 @@ func TestConfigureRespectsEnvOnInit(t *testing.T) {
 	if got := levelVar.Level(); got != slog.LevelError {
 		t.Fatalf("expected level error from env var, got %v", got)
 	}
+}
+
+func TestConfigureJSONFormatWritesStructuredOutput(t *testing.T) {
+	var buf bytes.Buffer
+	Configure(Options{Level: "debug", Output: &buf, Format: FormatJSON})
+	t.Cleanup(func() {
+		SetLevel("info")
+		Configure(Options{Output: os.Stderr, Format: FormatText})
+	})
+
+	Logger().Info("json-line", "trace_id", "42")
+	out := buf.String()
+	if !strings.Contains(out, `"msg":"json-line"`) || !strings.Contains(out, `"trace_id":"42"`) {
+		t.Fatalf("expected JSON output, got %q", out)
+	}
+}
+
+func TestConsoleHandlerFormatsGroups(t *testing.T) {
+	var buf bytes.Buffer
+	var lvl slog.LevelVar
+	lvl.Set(slog.LevelDebug)
+	handler := newConsoleHandler(&buf, &lvl)
+
+	record := slog.NewRecord(time.Unix(0, 0), slog.LevelInfo, "hello", 0)
+	record.AddAttrs(
+		slog.String("user", "alpha beta"),
+		slog.Group("meta", slog.String("id", "7"), slog.String("span", "root")),
+	)
+
+	if err := handler.Handle(context.Background(), record); err != nil {
+		t.Fatalf("handle failed: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "user=\"alpha beta\"") {
+		t.Fatalf("expected quoted attribute, got %q", out)
+	}
+	if !strings.Contains(out, "meta.id=7") || !strings.Contains(out, "meta.span=root") {
+		t.Fatalf("expected flattened group attributes, got %q", out)
+	}
+}
+
+func TestSplitHandlerRoutesLevels(t *testing.T) {
+	low := &recordingHandler{}
+	high := &recordingHandler{}
+	handler := newSplitHandler(low, high, slog.LevelWarn)
+
+	info := slog.NewRecord(time.Unix(0, 0), slog.LevelInfo, "info", 0)
+	errRec := slog.NewRecord(time.Unix(0, 0), slog.LevelError, "error", 0)
+
+	if err := handler.Handle(context.Background(), info); err != nil {
+		t.Fatalf("handle info: %v", err)
+	}
+	if err := handler.Handle(context.Background(), errRec); err != nil {
+		t.Fatalf("handle error: %v", err)
+	}
+
+	if !strings.Contains(low.buf.String(), "info") {
+		t.Fatalf("info record should go to low handler, got %q", low.buf.String())
+	}
+	if !strings.Contains(high.buf.String(), "error") {
+		t.Fatalf("error record should go to high handler, got %q", high.buf.String())
+	}
+}
+
+type recordingHandler struct {
+	buf strings.Builder
+}
+
+func (h *recordingHandler) Enabled(context.Context, slog.Level) bool {
+	return true
+}
+
+func (h *recordingHandler) Handle(_ context.Context, record slog.Record) error {
+	h.buf.WriteString(record.Message)
+	h.buf.WriteString("\n")
+	return nil
+}
+
+func (h *recordingHandler) WithAttrs([]slog.Attr) slog.Handler {
+	return h
+}
+
+func (h *recordingHandler) WithGroup(string) slog.Handler {
+	return h
 }
