@@ -1,7 +1,6 @@
 package servercmd
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/base32"
@@ -14,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -38,7 +38,7 @@ var (
 	serverReverseListFunc    = server.ListReverse
 )
 
-var promptYesNoFunc = promptYesNo
+var promptYesNoFunc = clishared.PromptYesNo
 
 type serverInstallCommandOptions struct {
 	Path      string
@@ -304,24 +304,6 @@ func skipInstallForSystemBinary(installDir string) (bool, error) {
 	return true, nil
 }
 
-func promptYesNo(question string) (bool, error) {
-	fmt.Printf("%s [Y/n]: ", question)
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return false, err
-	}
-	answer := strings.TrimSpace(strings.ToLower(line))
-	if answer == "" || answer == "y" || answer == "yes" {
-		return true, nil
-	}
-	if answer == "n" || answer == "no" {
-		return false, nil
-	}
-	fmt.Println("Please answer 'y' or 'n'.")
-	return promptYesNo(question)
-}
-
 func resolveConfigDirPath(installDir, configDir string) (string, error) {
 	cfgDir := strings.TrimSpace(configDir)
 	if cfgDir == "" {
@@ -334,12 +316,7 @@ func resolveConfigDirPath(installDir, configDir string) (string, error) {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
+	return clishared.FirstNonEmpty(values...)
 }
 
 func validatePortValue(port string) error {
