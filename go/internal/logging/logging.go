@@ -294,7 +294,14 @@ func appendResolvedAttr(dst []slog.Attr, attr slog.Attr, groups []string) []slog
 }
 
 func formatAttr(attr slog.Attr) string {
-	return attrValueString(attr.Value)
+	val := attrValueString(attr.Value)
+	if attr.Key == "" {
+		return val
+	}
+	if val == "" {
+		return attr.Key
+	}
+	return attr.Key + ": " + val
 }
 
 func attrValueString(v slog.Value) string {

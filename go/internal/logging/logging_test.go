@@ -57,7 +57,7 @@ func TestWithAddsAttributes(t *testing.T) {
 	log.Info("step")
 
 	out := buf.String()
-	if !strings.Contains(out, ". abc123") {
+	if !strings.Contains(out, ". trace_id: abc123") {
 		t.Fatalf("expected attribute appended as value, got %q", out)
 	}
 }
@@ -119,10 +119,10 @@ func TestConsoleHandlerFormatsGroups(t *testing.T) {
 		t.Fatalf("handle failed: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, ". alpha beta") {
+	if !strings.Contains(out, ". user: alpha beta") {
 		t.Fatalf("expected attribute value, got %q", out)
 	}
-	if !strings.Contains(out, ". 7") || !strings.Contains(out, ". root") {
+	if !strings.Contains(out, ". meta.id: 7") || !strings.Contains(out, ". meta.span: root") {
 		t.Fatalf("expected group values appended, got %q", out)
 	}
 }
@@ -147,7 +147,10 @@ func TestConsoleHandlerTrimsServicePrefixAndFormatsErrors(t *testing.T) {
 	if strings.Count(out, "xp2p") != 1 {
 		t.Fatalf("expected single service prefix, got %q", out)
 	}
-	if !strings.Contains(out, "server install: failed to resolve public host. netutil: unable to detect public host") {
+	if strings.Count(out, "server install: failed to resolve public host") != 1 {
+		t.Fatalf("expected message kept once, got %q", out)
+	}
+	if !strings.Contains(out, "netutil: unable to detect public host") {
 		t.Fatalf("expected attributes appended as sentences, got %q", out)
 	}
 	if strings.Contains(out, "err=") {
