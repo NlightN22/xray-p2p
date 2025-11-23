@@ -24,7 +24,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
     helpers.cleanup_client_install(client_host, xp2p_client_runner)
     helpers.cleanup_server_install(server_host, xp2p_server_runner)
     client_ip = helpers.detect_primary_ipv4(client_host)
-    server_ip = helpers.detect_primary_ipv4(server_host)
+    server_ip = _detect_host_ipv4(server_host)
     trojan_user = "deploy-suite@example.com"
     trojan_password = "deploy-pass-123"
 
@@ -65,37 +65,37 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         _wait_for_log_phrase(
             server_host,
             SERVER_DEPLOY_LOG,
-            "xp2p server deploy: manifest decrypted",
+            "server deploy: manifest decrypted",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
             server_host,
             SERVER_DEPLOY_LOG,
-            "xp2p server deploy: starting xray-core",
+            "server deploy: starting xray-core",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "xp2p client deploy: trojan link received",
+            "client deploy: trojan link received",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "xp2p client deploy: local install completed",
+            "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "xp2p client deploy: ping ok",
+            "client deploy: ping ok",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "xp2p client deploy: client run active",
+            "client deploy: client run active",
             timeout=LOG_WAIT_TIMEOUT,
         )
 
@@ -212,7 +212,7 @@ def _assert_client_routing(host: Host, server_ip: str) -> None:
 def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
     def _extract_link(text: str) -> str | None:
         for line in text.splitlines():
-            if "xp2p client deploy: link generated" not in line:
+            if "client deploy: link generated" not in line:
                 continue
             if "link:" not in line:
                 continue
@@ -232,8 +232,13 @@ def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
 
 
 def _wait_for_log_phrase(host: Host, path: PurePosixPath, phrase: str, *, timeout: int) -> None:
+    expected_variants = (phrase, f"xp2p: {phrase}")
+
     def _matcher(text: str) -> bool | None:
-        return True if phrase in text else None
+        for variant in expected_variants:
+            if variant in text:
+                return True
+        return None
 
     _wait_for_log_value(
         host,
@@ -283,3 +288,20 @@ def _extract_marker(output: str | None, marker: str) -> str | None:
         if line.startswith(marker):
             return line[len(marker) :].strip()
     return None
+
+
+def _detect_host_ipv4(host: Host) -> str:
+    command = "ip -o -4 addr show scope global | awk '{print $4}' | cut -d/ -f1"
+    result = host.run(command)
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to detect IPv4 addresses.\n"
+            f"CMD: {command}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    addresses = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not addresses:
+        pytest.fail("No IPv4 addresses found on host")
+    for addr in addresses:
+        if not addr.startswith("10.0.2."):
+            return addr
+    return addresses[0]
