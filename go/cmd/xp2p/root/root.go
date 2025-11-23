@@ -85,7 +85,7 @@ type rootOptions struct {
 	clientInstallDir    string
 	clientConfigDir     string
 	clientServerAddr    string
-	clientServerPort    string
+	clientPort          string
 	clientUser          string
 	clientPassword      string
 	clientServerName    string
@@ -112,7 +112,7 @@ func (o *rootOptions) bindClientOverrideFlags(cmd *cobra.Command) {
 	flags.StringVarP(&o.clientInstallDir, "client-install-dir", "I", "", "client installation directory (Windows)")
 	flags.StringVarP(&o.clientConfigDir, "client-config-dir", "D", "", "client configuration directory name")
 	flags.StringVarP(&o.clientServerAddr, "client-host", "A", "", "remote server host for client config")
-	flags.StringVarP(&o.clientServerPort, "client-server-port", "R", "", "remote server port for client config")
+	flags.StringVarP(&o.clientPort, "client-port", "R", "", "remote server port for client config")
 	flags.StringVarP(&o.clientUser, "client-user", "U", "", "Trojan user email for client config")
 	flags.StringVarP(&o.clientPassword, "client-password", "W", "", "Trojan password for client config")
 	flags.StringVarP(&o.clientServerName, "client-sni", "N", "", "TLS server name (SNI) for client config")
@@ -190,7 +190,7 @@ func (o *rootOptions) buildOverrides() map[string]any {
 	if addr := strings.TrimSpace(o.clientServerAddr); addr != "" {
 		overrides["client.server_address"] = addr
 	}
-	if port := strings.TrimSpace(o.clientServerPort); port != "" {
+	if port := strings.TrimSpace(o.clientPort); port != "" {
 		overrides["client.server_port"] = port
 	}
 	if user := strings.TrimSpace(o.clientUser); user != "" {

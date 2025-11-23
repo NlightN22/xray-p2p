@@ -138,7 +138,7 @@ xp2p client forward list
 `xp2p client deploy` bootstraps a remote host over SSH/RDP-less channels. It emits a single `trojan://` deploy link (with user/password and extra tokens), waits for the server-side listener, pushes state, and then installs the local client using the generated `trojan://` link:
 
 ```bash
-xp2p client deploy --remote-host branch-gw.example.com --user branch@example.com --trojan-port 62022
+xp2p client deploy --host branch-gw.example.com --user branch@example.com --trojan-port 62022
 ```
 
 On the server, run:

@@ -156,9 +156,9 @@ func newClientDeployCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.String("remote-host", "", "remote host (IP or DNS) to deploy")
-	_ = cmd.MarkFlagRequired("remote-host")
-	flags.String("deploy-port", "62025", "deploy port (default 62025)")
+	flags.String("host", "", "remote host (IP or DNS) to deploy")
+	_ = cmd.MarkFlagRequired("host")
+	flags.String("port", "62025", "deploy port (default 62025)")
 	flags.String("user", "", "Trojan user identifier (email)")
 	flags.String("password", "", "Trojan user password (auto-generated when omitted)")
 	flags.String("trojan-port", "", "Trojan service port")

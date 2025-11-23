@@ -19,8 +19,8 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 	}
 
 	args := []string{
-		"--remote-host", "deploy.example.com",
-		"--deploy-port", "62030",
+		"--host", "deploy.example.com",
+		"--port", "62030",
 		"--user", "branch@example.com",
 		"--password", "secret",
 		"--trojan-port", "65010",

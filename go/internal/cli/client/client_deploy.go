@@ -193,8 +193,8 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	fs := flag.NewFlagSet("xp2p client deploy", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
-	remoteHost := fs.String("remote-host", "", "deploy host name or address")
-	deployPort := fs.String("deploy-port", "62025", "deploy port (default 62025)")
+	hostFlag := fs.String("host", "", "deploy host name or address")
+	deployPort := fs.String("port", "62025", "deploy port (default 62025)")
 	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
 	trojanPort := fs.String("trojan-port", "", "Trojan service port")
@@ -206,12 +206,12 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		return deployOptions{}, fmt.Errorf("unexpected arguments: %v", fs.Args())
 	}
 
-	host := strings.TrimSpace(*remoteHost)
+	host := strings.TrimSpace(*hostFlag)
 	if host == "" || strings.HasPrefix(host, "-") {
-		return deployOptions{}, fmt.Errorf("--remote-host is required")
+		return deployOptions{}, fmt.Errorf("--host is required")
 	}
 	if err := netutil.ValidateHost(host); err != nil {
-		return deployOptions{}, fmt.Errorf("--remote-host: %v", err)
+		return deployOptions{}, fmt.Errorf("--host: %v", err)
 	}
 
 	serverHostValue := firstNonEmpty(cfg.Server.Host, host)

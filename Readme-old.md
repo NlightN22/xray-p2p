@@ -77,7 +77,7 @@ Use this route when you need to run each stage independently or customize pieces
 The Go CLI can build standalone deployment archives so you can inspect or upload them manually:
 
 ```bash
-xp2p client deploy --remote-host 10.0.10.10 --package-only
+xp2p client deploy --host 10.0.10.10 --package-only
 ```
 
 The command produces a versioned directory with placeholder install scripts and a generated configuration tied to the requested host.
