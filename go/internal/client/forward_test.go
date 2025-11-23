@@ -8,6 +8,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
+	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
 
 func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
@@ -18,18 +19,21 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 	}
 	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
 
+	reserved := map[int]struct{}{}
+	listenPort := findAvailablePort(t, reserved)
+
 	result, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultClientConfigDir,
 		Target:        "192.0.2.10:8080",
 		ListenAddress: "127.0.0.1",
-		ListenPort:    61234,
+		ListenPort:    listenPort,
 		Protocol:      forward.ProtocolTCP,
 	})
 	if err != nil {
 		t.Fatalf("AddForward returned error: %v", err)
 	}
-	if result.Rule.ListenPort != 61234 {
+	if result.Rule.ListenPort != listenPort {
 		t.Fatalf("unexpected listen port %d", result.Rule.ListenPort)
 	}
 	if result.Routed {
@@ -71,12 +75,15 @@ func TestRemoveForwardCleansState(t *testing.T) {
 	}
 	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
 
+	reserved := map[int]struct{}{}
+	listenPort := findAvailablePort(t, reserved)
+
 	if _, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultClientConfigDir,
 		Target:        "192.0.2.20:9000",
 		ListenAddress: "127.0.0.1",
-		ListenPort:    61235,
+		ListenPort:    listenPort,
 		Protocol:      forward.ProtocolTCP,
 	}); err != nil {
 		t.Fatalf("AddForward returned error: %v", err)
@@ -86,7 +93,7 @@ func TestRemoveForwardCleansState(t *testing.T) {
 		InstallDir: dir,
 		ConfigDir:  DefaultClientConfigDir,
 		Selector: forward.Selector{
-			ListenPort: 61235,
+			ListenPort: listenPort,
 		},
 	}); err != nil {
 		t.Fatalf("RemoveForward returned error: %v", err)
@@ -134,6 +141,15 @@ func readInbounds(t *testing.T, path string) map[string]any {
 		t.Fatalf("parse inbounds: %v", err)
 	}
 	return doc
+}
+
+func findAvailablePort(t *testing.T, reserved map[int]struct{}) int {
+	t.Helper()
+	_, port := testutil.FreePort(t)
+	if reserved != nil {
+		reserved[port] = struct{}{}
+	}
+	return port
 }
 
 func TestListForwardsReturnsCopyOfState(t *testing.T) {
