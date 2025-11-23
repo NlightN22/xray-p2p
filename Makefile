@@ -8,7 +8,10 @@ VAGRANT_WIN10_DIR := infra/vagrant/windows10
 VAGRANT_WIN10_SERVER_ID := win10-server
 VAGRANT_WIN10_CLIENT_ID := win10-client
 
-VAGRANT_DEB12_DIR := infra/vagrant/debian12
+VAGRANT_DEB12_DIR := infra/vagrant/debian12/deb-test
+
+VAGRANT_IPK_BUILD_DIR := infra/vagrant/debian12/ipk-build
+VAGRANT_OWRT_DIR := infra/vagrant/openwrt
 
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
@@ -33,26 +36,23 @@ test:
 test-wsl:
 	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
 
-vagrant-win10:
+up-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant up
+halt-win10:
+	cd $(VAGRANT_WIN10_DIR) && vagrant halt
 
-vagrant-win10-destroy:
-	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f
-
-vagrant-win10-server:
-	cd $(VAGRANT_WIN10_DIR) && vagrant up $(VAGRANT_WIN10_SERVER_ID) --provision
-
-vagrant-win10-client:
-	cd $(VAGRANT_WIN10_DIR) && vagrant up $(VAGRANT_WIN10_CLIENT_ID) --provision
-
-vagrant-win10-destroy-server:
-	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f $(VAGRANT_WIN10_SERVER_ID)
-
-vagrant-win10-destroy-client:
-	cd $(VAGRANT_WIN10_DIR) && vagrant destroy -f $(VAGRANT_WIN10_CLIENT_ID)
-
-vagrant-deb12:
+up-deb12:
 	cd $(VAGRANT_DEB12_DIR) && vagrant up
+halt-deb12:
+	cd $(VAGRANT_DEB12_DIR) && vagrant halt
+
+up-owrt:
+	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant up
+	cd $(VAGRANT_OWRT_DIR) && vagrant up
+halt-owrt:
+	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant halt
+	cd $(VAGRANT_OWRT_DIR) && vagrant halt
+
 
 # swallow extra positional arguments so make does not treat them as targets
 %:
