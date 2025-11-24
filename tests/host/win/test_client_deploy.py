@@ -1,0 +1,502 @@
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+
+import pytest
+
+from tests.host.win import env as win_env
+
+CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+CLIENT_CONFIG_DIR_NAME = "config-client"
+CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
+CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
+CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
+CLIENT_STATE_FILES = [
+    CLIENT_INSTALL_DIR / "install-state-client.json",
+    CLIENT_INSTALL_DIR / "install-state.json",
+]
+CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
+HEARTBEAT_STATE_FILE = CLIENT_INSTALL_DIR / "state-heartbeat.json"
+CLIENT_DEPLOY_STDOUT = Path(r"C:\xp2p\logs\client-deploy.log")
+SERVER_DEPLOY_STDOUT = Path(r"C:\xp2p\logs\server-deploy.log")
+DEPLOY_PORT = "62125"
+TROJAN_PORT = "58601"
+LOG_WAIT_TIMEOUT = 240
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_windows_client_deploy_end_to_end(
+    client_host,
+    server_host,
+    xp2p_client_runner,
+    xp2p_server_runner,
+    xp2p_msi_path,
+):
+    xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+    xp2p_server_runner("server", "remove", "--ignore-missing")
+    win_env.install_xp2p_from_msi(client_host, xp2p_msi_path)
+    win_env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+
+    for host in (client_host, server_host):
+        _remove_remote_path(host, HEARTBEAT_STATE_FILE)
+    _remove_remote_path(client_host, CLIENT_DEPLOY_STDOUT)
+    _remove_remote_path(server_host, SERVER_DEPLOY_STDOUT)
+    _remove_remote_path(client_host, Path(str(CLIENT_DEPLOY_STDOUT) + ".err"))
+    _remove_remote_path(server_host, Path(str(SERVER_DEPLOY_STDOUT) + ".err"))
+
+    server_host_ip = _detect_host_ipv4(server_host)
+    client_host_ip = _detect_host_ipv4(client_host)
+    trojan_user = "deploy-suite@example.com"
+    trojan_password = "deploy-pass-123"
+
+    client_proc = None
+    server_proc = None
+    try:
+        client_proc = _start_client_deploy(
+            client_host,
+            remote_host=server_host_ip,
+            deploy_port=DEPLOY_PORT,
+            trojan_user=trojan_user,
+            trojan_password=trojan_password,
+            trojan_port=TROJAN_PORT,
+        )
+        link = _wait_for_client_link(client_host, client_proc)
+        assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
+
+        server_proc = _start_server_deploy(
+            server_host,
+            listen_addr=f":{DEPLOY_PORT}",
+            deploy_link=link,
+        )
+
+        _wait_for_log_phrase(
+            server_host,
+            server_proc,
+            "server deploy: manifest decrypted",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            server_host,
+            server_proc,
+            "server deploy: starting xray-core",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            client_host,
+            client_proc,
+            "client deploy: trojan link received",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            client_host,
+            client_proc,
+            "client deploy: local install completed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            client_host,
+            client_proc,
+            "client deploy: ping ok",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            client_host,
+            client_proc,
+            "client deploy: client run active",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+
+        _assert_client_install_artifacts(client_host, server_host_ip, trojan_user, trojan_password)
+        _assert_client_state(client_host, server_host_ip)
+        _assert_client_routing(client_host, server_host_ip)
+
+        heartbeat = _wait_for_heartbeat_state(client_host, timeout=LOG_WAIT_TIMEOUT)
+        _assert_heartbeat_entry(
+            heartbeat,
+            _expected_tag(server_host_ip),
+            host=server_host_ip,
+            user=trojan_user,
+            client_ip=client_host_ip,
+        )
+    finally:
+        if client_proc:
+            _stop_process(client_host, client_proc["pid"])
+        if server_proc:
+            _stop_process(server_host, server_proc["pid"])
+        xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+        xp2p_server_runner("server", "remove", "--ignore-missing")
+        for host in (client_host, server_host):
+            _remove_remote_path(host, HEARTBEAT_STATE_FILE)
+
+
+def _start_client_deploy(
+    host,
+    *,
+    remote_host: str,
+    deploy_port: str,
+    trojan_user: str,
+    trojan_password: str,
+    trojan_port: str,
+) -> dict[str, str | int]:
+    result = win_env.run_guest_script(
+        host,
+        "scripts/start_xp2p_client_deploy.ps1",
+        Xp2pPath=str(win_env.XP2P_EXE),
+        LogPath=str(CLIENT_DEPLOY_STDOUT),
+        RemoteHost=remote_host,
+        DeployPort=deploy_port,
+        TrojanUser=trojan_user,
+        TrojanPassword=trojan_password,
+        TrojanPort=trojan_port,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to start xp2p client deploy.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    pid = _extract_marker(result.stdout, "PID=")
+    stdout_path = _extract_marker(result.stdout, "STDOUT=")
+    stderr_path = _extract_marker(result.stdout, "STDERR=")
+    if not pid or not stdout_path or not stderr_path:
+        pytest.fail(
+            "xp2p client deploy script did not emit expected markers.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return {"pid": int(pid), "stdout": Path(stdout_path), "stderr": Path(stderr_path)}
+
+
+def _start_server_deploy(host, *, listen_addr: str, deploy_link: str) -> dict[str, str | int]:
+    result = win_env.run_guest_script(
+        host,
+        "scripts/start_xp2p_server_deploy.ps1",
+        Xp2pPath=str(win_env.XP2P_EXE),
+        LogPath=str(SERVER_DEPLOY_STDOUT),
+        ListenAddress=listen_addr,
+        DeployLink=deploy_link,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to start xp2p server deploy.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    pid = _extract_marker(result.stdout, "PID=")
+    stdout_path = _extract_marker(result.stdout, "STDOUT=")
+    stderr_path = _extract_marker(result.stdout, "STDERR=")
+    if not pid or not stdout_path or not stderr_path:
+        pytest.fail(
+            "xp2p server deploy script did not emit expected markers.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return {"pid": int(pid), "stdout": Path(stdout_path), "stderr": Path(stderr_path)}
+
+
+def _stop_process(host, pid: int) -> None:
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$proc = Get-Process -Id {pid} -ErrorAction SilentlyContinue
+if ($proc) {{
+    Stop-Process -Id $proc.Id -Force
+}}
+exit 0
+"""
+    win_env.run_powershell(host, script)
+
+
+def _assert_client_install_artifacts(host, server_ip: str, user: str, password: str) -> None:
+    assert _remote_path_exists(host, CLIENT_CONFIG_OUTBOUNDS), "client config directory missing after deploy"
+    outbounds = _read_remote_json(host, CLIENT_CONFIG_OUTBOUNDS)
+    _assert_outbound_entry(
+        outbounds,
+        server_ip,
+        password,
+        user,
+        server_ip,
+        allow_insecure=True,
+    )
+
+
+def _assert_client_state(host, server_ip: str) -> None:
+    state = _read_first_existing_json(host, CLIENT_STATE_FILES)
+    recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
+    assert recorded_hosts == {server_ip}, f"Unexpected endpoint entries recorded: {recorded_hosts}"
+
+
+def _assert_client_routing(host, server_ip: str) -> None:
+    routing = _read_remote_json(host, CLIENT_ROUTING_JSON)
+    _assert_routing_rule(routing, server_ip)
+
+
+def _wait_for_client_link(host, proc_info: dict[str, str | int]) -> str:
+    def _extract_link(text: str) -> str | None:
+        for line in text.splitlines():
+            if "client deploy: link generated" not in line:
+                continue
+            if "link:" not in line:
+                continue
+            return line.split("link:", 1)[1].strip()
+        return None
+
+    link = _wait_for_log_value(
+        host,
+        proc_info,
+        extractor=_extract_link,
+        description="xp2p client deploy link",
+        timeout=LOG_WAIT_TIMEOUT,
+    )
+    if not link:
+        pytest.fail("xp2p client deploy log did not include a deploy link")
+    return link
+
+
+def _wait_for_log_phrase(host, proc_info: dict[str, str | int], phrase: str, *, timeout: int) -> None:
+    expected_variants = (phrase, f"xp2p: {phrase}")
+
+    def _matcher(text: str) -> bool | None:
+        for variant in expected_variants:
+            if variant in text:
+                return True
+        return None
+
+    _wait_for_log_value(host, proc_info, extractor=_matcher, description=f"'{phrase}'", timeout=timeout)
+
+
+def _wait_for_log_value(
+    host,
+    proc_info: dict[str, str | int],
+    *,
+    extractor,
+    description: str,
+    timeout: int,
+):
+    deadline = time.time() + timeout
+    last_text = ""
+    while time.time() < deadline:
+        text = _read_combined_logs(host, proc_info)
+        if text:
+            value = extractor(text)
+            if value:
+                return value
+            last_text = text
+        time.sleep(1)
+    tail = "\n".join((last_text or "").splitlines()[-30:])
+    pytest.fail(f"Timed out waiting for {description}. Recent log tail:\n{tail}")
+
+
+def _read_combined_logs(host, proc_info: dict[str, str | int]) -> str:
+    stdout_text = _read_optional_text(host, proc_info["stdout"])
+    stderr_text = _read_optional_text(host, proc_info["stderr"])
+    return "\n".join(filter(None, [stdout_text, stderr_text]))
+
+
+def _read_optional_text(host, path_value) -> str:
+    path = Path(path_value)
+    quoted = win_env.ps_quote(str(path))
+    script = f"""
+$target = {quoted}
+if (-not (Test-Path $target)) {{
+    exit 3
+}}
+Get-Content -Raw $target
+"""
+    result = win_env.run_powershell(host, script)
+    if result.rc == 0:
+        return result.stdout or ""
+    if result.rc == 3:
+        return ""
+    pytest.fail(
+        f"Failed to read remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+def _read_remote_json(client_host, path: Path) -> dict:
+    quoted = win_env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path {quoted})) {{
+    exit 3
+}}
+Get-Content -Raw {quoted}
+"""
+    result = win_env.run_powershell(client_host, script)
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{result.stdout}")
+
+
+def _read_first_existing_json(host, paths: list[Path]) -> dict:
+    for path in paths:
+        if _remote_path_exists(host, path):
+            return _read_remote_json(host, path)
+    raise AssertionError(f"None of the state files exist: {paths}")
+
+
+def _remote_path_exists(client_host, path: Path) -> bool:
+    quoted = win_env.ps_quote(str(path))
+    script = f"if (Test-Path {quoted}) {{ exit 0 }} else {{ exit 3 }}"
+    result = win_env.run_powershell(client_host, script)
+    return result.rc == 0
+
+
+def _remove_remote_path(client_host, path: Path) -> None:
+    quoted = win_env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (Test-Path {quoted}) {{
+    Remove-Item {quoted} -Force -Recurse -ErrorAction SilentlyContinue
+}}
+"""
+    win_env.run_powershell(client_host, script)
+
+
+def _expected_tag(host: str) -> str:
+    cleaned = host.strip().lower()
+    result = []
+    last_dash = False
+    for char in cleaned:
+        if char.isalnum():
+            result.append(char)
+            last_dash = False
+            continue
+        if char == "-":
+            result.append(char)
+            last_dash = False
+            continue
+        if not last_dash:
+            result.append("-")
+            last_dash = True
+    sanitized = "".join(result).strip("-")
+    if not sanitized:
+        sanitized = "endpoint"
+    return f"proxy-{sanitized}"
+
+
+def _assert_outbound_entry(
+    data: dict,
+    host: str,
+    password: str,
+    email: str,
+    server_name: str,
+    allow_insecure: bool = False,
+) -> None:
+    tag = _expected_tag(host)
+    outbound = _find_outbound(data, tag)
+    server = outbound["settings"]["servers"][0]
+    assert server["address"] == host
+    assert server["password"] == password
+    assert server["email"] == email
+    tls_settings = outbound["streamSettings"]["tlsSettings"]
+    assert tls_settings["serverName"] == server_name
+    assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+
+
+def _find_outbound(data: dict, tag: str) -> dict:
+    for outbound in data.get("outbounds", []):
+        if outbound.get("tag") == tag:
+            return outbound
+    raise AssertionError(f"Expected outbound with tag {tag} to exist")
+
+
+def _assert_routing_rule(data: dict, host: str) -> None:
+    tag = _expected_tag(host)
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") == tag and host in rule.get("ip", []):
+            return
+    raise AssertionError(f"Expected routing rule for {host} -> {tag}")
+
+
+def _wait_for_heartbeat_state(host, *, timeout: int) -> dict:
+    deadline = time.time() + timeout
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        if _remote_path_exists(host, HEARTBEAT_STATE_FILE):
+            try:
+                return _read_remote_json(host, HEARTBEAT_STATE_FILE)
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+        time.sleep(1)
+    if last_error:
+        raise AssertionError(f"Failed to read heartbeat state: {last_error}") from last_error
+    raise AssertionError("Heartbeat state file not found on client host")
+
+
+def _assert_heartbeat_entry(
+    state: dict,
+    tag: str,
+    *,
+    host: str | None = None,
+    user: str | None = None,
+    client_ip: str | None = None,
+) -> None:
+    entries = state.get("entries")
+    if not isinstance(entries, dict):
+        raise AssertionError("Heartbeat state is missing entries map")
+    normalized = (tag or "").strip().lower()
+    if not normalized:
+        raise AssertionError("Heartbeat tag to look up is empty")
+    for entry in entries.values():
+        entry_tag = (entry.get("tag") or "").strip()
+        if entry_tag.lower() != normalized:
+            continue
+        if host is not None:
+            recorded_host = (entry.get("host") or "").strip()
+            if recorded_host != host.strip():
+                raise AssertionError(
+                    f"Heartbeat entry {entry_tag} host mismatch (expected {host}, got {recorded_host})"
+                )
+        if user is not None:
+            recorded_user = (entry.get("user") or "").strip()
+            if recorded_user != user.strip():
+                raise AssertionError(
+                    f"Heartbeat entry {entry_tag} user mismatch (expected {user}, got {recorded_user})"
+                )
+        if client_ip is not None:
+            recorded_ip = (entry.get("client_ip") or "").strip()
+            if recorded_ip != client_ip.strip():
+                raise AssertionError(
+                    f"Heartbeat entry {entry_tag} client IP mismatch (expected {client_ip}, got {recorded_ip})"
+                )
+        return
+    raise AssertionError(f"Heartbeat entry for tag {tag} not found in state")
+
+
+def _detect_host_ipv4(host) -> str:
+    script = """
+$ErrorActionPreference = 'Stop'
+$addresses = Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin (@('Dhcp', 'Manual')) `
+    | Where-Object { $_.IPAddress -ne '127.0.0.1' } `
+    | Select-Object -ExpandProperty IPAddress
+if (-not $addresses) {
+    exit 3
+}
+$addresses
+"""
+    result = win_env.run_powershell(host, script)
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to detect IPv4 addresses.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    addresses = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not addresses:
+        pytest.fail("No IPv4 addresses found on host")
+    for addr in addresses:
+        if not addr.startswith("10.0.2."):
+            return addr
+    return addresses[0]
+
+
+def _extract_marker(output: str | None, marker: str) -> str | None:
+    for raw in (output or "").splitlines():
+        line = raw.strip()
+        if line.startswith(marker):
+            return line[len(marker) :].strip()
+    return None
