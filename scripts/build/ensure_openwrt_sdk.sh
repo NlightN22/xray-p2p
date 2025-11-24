@@ -1,14 +1,15 @@
 #!/bin/sh
 set -eu
 
-OPENWRT_VERSION=${OPENWRT_VERSION:-"23.05.3"}
+DEFAULT_OPENWRT_VERSION="23.05.3"
+OPENWRT_VERSION=${OPENWRT_VERSION:-$DEFAULT_OPENWRT_VERSION}
 OPENWRT_MIRROR=${OPENWRT_MIRROR:-"https://downloads.openwrt.org/releases"}
 OPENWRT_SDK_BASE=${OPENWRT_SDK_BASE:-"$HOME"}
 METADATA_FILE=".xp2p-openwrt-version"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/build/ensure_openwrt_sdk.sh [identifier ...]
+Usage: scripts/build/ensure_openwrt_sdk.sh [options] [identifier ...]
 
 Ensures that each requested OpenWrt SDK (23.05.x by default) is downloaded
 under ~/openwrt-sdk-<identifier>. Supported identifiers:
@@ -20,6 +21,9 @@ under ~/openwrt-sdk-<identifier>. Supported identifiers:
   - linux-mips64le
 
 Set OPENWRT_VERSION/OPENWRT_MIRROR/OPENWRT_SDK_BASE when customization is needed.
+Options:
+  -r, --release <ver>   OpenWrt release version (default: 23.05.3)
+  -h, --help            Show this message
 EOF
 }
 
@@ -115,10 +119,38 @@ ensure_sdk() {
   echo "==> [$identifier] SDK ready at $sdk_dir"
 }
 
-if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  usage
-  exit 0
-fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -r|--release)
+      if [ "${2:-}" = "" ]; then
+        echo "ERROR: --release requires a version argument" >&2
+        exit 1
+      fi
+      OPENWRT_VERSION="$2"
+      shift 2
+      ;;
+    --release=*)
+      OPENWRT_VERSION="${1#*=}"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "ERROR: unknown option '$1'" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 if [ "$#" -eq 0 ]; then
   set -- linux-amd64 linux-386 linux-arm64 linux-armhf linux-mipsle-softfloat linux-mips64le

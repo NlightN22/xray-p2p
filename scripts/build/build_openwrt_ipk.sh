@@ -17,7 +17,8 @@ IPK_CACHE_DIR="$BUILD_ROOT/.xp2p_ipk_cache"
 FEED_PATH="$PROJECT_ROOT/openwrt/feed"
 FEED_PACKAGE_PATH="$FEED_PATH/packages/utils/xp2p"
 REPO_ROOT="$PROJECT_ROOT/openwrt/repo"
-RELEASE_VERSION=${OPENWRT_VERSION:-""}
+DEFAULT_OPENWRT_VERSION="23.05.3"
+RELEASE_VERSION=${OPENWRT_VERSION:-$DEFAULT_OPENWRT_VERSION}
 GOTOOLCHAIN_VERSION=${GOTOOLCHAIN:-go1.21.7}
 FORCE_BUILD=0
 SOURCE_SIGNATURE=""
@@ -36,6 +37,7 @@ Options:
   --diffconfig-out <path>  write fresh diffconfig after defconfig
   --build-root <path>      location of prebuilt xp2p/xray/completions (default: /tmp/build)
   --output-dir <path>      store the resulting .ipk/Packages under <path> instead of openwrt/repo/<release>/<arch>
+  --openwrt-release <ver>  OpenWrt release to target (default: 23.05.3, env OPENWRT_VERSION)
   --force-build            always rebuild xp2p binaries even if sources are unchanged
   -h, --help               Show this message
 USAGE
@@ -75,6 +77,10 @@ while [ "${1:-}" != "" ]; do
         /*) ;;
         *) OUTPUT_DIR="$CALLER_PWD/$OUTPUT_DIR" ;;
       esac
+      shift 2
+      ;;
+    --openwrt-release|--release)
+      RELEASE_VERSION="$2"
       shift 2
       ;;
     --force-build)
@@ -281,7 +287,7 @@ run_for_target() {
   local completions_dir="$output_dir/completions"
 
   echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Ensuring OpenWrt SDK"
-  "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
+  OPENWRT_VERSION="$release_version" "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
 
   local release_version="$RELEASE_VERSION"
   if [ -z "$release_version" ]; then
