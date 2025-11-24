@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -13,7 +14,10 @@ const DefaultTrojanPort = 58443
 const DefaultServerConfigDir = layout.ServerConfigDir
 
 // ErrUnsupported indicates that the requested operation is not supported on this platform.
-var ErrUnsupported = errors.New("xp2p: server installation is only supported on Windows")
+var ErrUnsupported = errors.New("xp2p: server installation is not supported on this platform")
+
+// ErrServiceUnsupported indicates that service mode is unavailable on this platform.
+var ErrServiceUnsupported = errors.New("xp2p: server service is not supported on this platform")
 
 // InstallOptions describes how the server-side components should be provisioned.
 type InstallOptions struct {
@@ -41,6 +45,15 @@ type RunOptions struct {
 	InstallDir   string
 	ConfigDir    string
 	ErrorLogPath string
+}
+
+// ServiceOptions controls execution of the managed server service.
+type ServiceOptions struct {
+	InstallDir   string
+	ConfigDir    string
+	XrayLogPath  string
+	MaxRestarts  int
+	RestartDelay time.Duration
 }
 
 // RemoveOptions controls removal of the server-side components.

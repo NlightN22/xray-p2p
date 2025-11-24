@@ -1,0 +1,13 @@
+[Unit]
+Description=xp2p server tunnel service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/xp2p server service run --path /etc/xp2p --config-dir config-server --log-file /var/log/xp2p/server/service.log --xray-log-file /var/log/xp2p/server/xray-service.log
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

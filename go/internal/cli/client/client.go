@@ -12,6 +12,7 @@ var (
 	clientInstallFunc        = client.Install
 	clientRemoveFunc         = client.Remove
 	clientRunFunc            = client.Run
+	clientServiceRunFunc     = client.RunService
 	clientRemoveEndpointFunc = client.RemoveEndpoint
 	clientListFunc           = client.ListEndpoints
 	clientReverseListFunc    = client.ListReverse

@@ -11,7 +11,10 @@ import (
 const DefaultClientConfigDir = layout.ClientConfigDir
 
 // ErrUnsupported indicates that the requested operation is not supported on this platform.
-var ErrUnsupported = errors.New("xp2p: client installation is only supported on Windows")
+var ErrUnsupported = errors.New("xp2p: client installation is not supported on this platform")
+
+// ErrServiceUnsupported indicates that service mode is unavailable on this platform.
+var ErrServiceUnsupported = errors.New("xp2p: client service is not supported on this platform")
 
 // InstallOptions describes how the client-side components should be provisioned.
 type InstallOptions struct {
@@ -32,6 +35,16 @@ type RunOptions struct {
 	ConfigDir    string
 	ErrorLogPath string
 	Heartbeat    HeartbeatOptions
+}
+
+// ServiceOptions controls execution of the managed client service.
+type ServiceOptions struct {
+	InstallDir   string
+	ConfigDir    string
+	XrayLogPath  string
+	Heartbeat    HeartbeatOptions
+	MaxRestarts  int
+	RestartDelay time.Duration
 }
 
 // HeartbeatOptions controls background telemetry probes.

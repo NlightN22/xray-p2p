@@ -18,6 +18,7 @@ var (
 	serverInstallFunc        = server.Install
 	serverRemoveFunc         = server.Remove
 	serverRunFunc            = server.Run
+	serverServiceRunFunc     = server.RunService
 	serverUserAddFunc        = server.AddUser
 	serverUserRemoveFunc     = server.RemoveUser
 	detectPublicHostFunc     = netutil.DetectPublicHost

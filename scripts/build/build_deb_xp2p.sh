@@ -47,6 +47,7 @@ mkdir -p \
   "$STAGING_DIR/etc/xp2p/config-server" \
   "$STAGING_DIR/etc/xp2p/bin" \
   "$STAGING_DIR/var/log/xp2p" \
+  "$STAGING_DIR/lib/systemd/system" \
   "$STAGING_DIR/usr/share/bash-completion/completions" \
   "$STAGING_DIR/usr/share/zsh/vendor-completions" \
   "$STAGING_DIR/usr/share/fish/vendor_completions.d"
@@ -95,6 +96,10 @@ fi
 echo "==> Staging xray binary from $XRAY_SOURCE"
 install -m 0755 "$XRAY_SOURCE" "$STAGING_DIR/etc/xp2p/bin/xray"
 
+echo "==> Staging systemd unit files"
+install -m 0644 "$PROJECT_ROOT/distro/linux/systemd/xp2p-client.service" "$STAGING_DIR/lib/systemd/system/xp2p-client.service"
+install -m 0644 "$PROJECT_ROOT/distro/linux/systemd/xp2p-server.service" "$STAGING_DIR/lib/systemd/system/xp2p-server.service"
+
 PACKAGE_PATH="$ARTIFACT_DIR/${PKG_NAME}_${VERSION}_${PKG_ARCH}.deb"
 
 if [ -e "$PACKAGE_PATH" ]; then
@@ -122,6 +127,6 @@ fpm -s dir -t deb \
   "$@" \
   --package "$PACKAGE_PATH" \
   -C "$STAGING_DIR" \
-  usr etc var
+  usr etc var lib
 
 echo "==> Package ready: $PACKAGE_PATH"
