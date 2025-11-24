@@ -29,7 +29,7 @@ if [ -n "$EXTRA_ARGS" ]; then
   set -- "$@" $EXTRA_ARGS
 fi
 
-nohup /usr/bin/xp2p "$@" >"$LOG_PATH" 2>&1 &
+setsid /usr/bin/xp2p "$@" >"$LOG_PATH" 2>&1 &
 PID=$!
 sleep 1
 if ! kill -0 "$PID" >/dev/null 2>&1; then

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import time
 from pathlib import PurePosixPath
-import shlex
 
 import pytest
 from testinfra.host import Host
@@ -161,32 +160,16 @@ def _start_client_deploy(
     trojan_password: str,
     trojan_port: str,
 ) -> int:
-    script = f"""
-LOG_PATH={shlex.quote(log_path.as_posix())}
-REMOTE_HOST={shlex.quote(remote_host)}
-DEPLOY_PORT={shlex.quote(deploy_port)}
-TROJAN_USER={shlex.quote(trojan_user)}
-TROJAN_PASSWORD={shlex.quote(trojan_password)}
-TROJAN_PORT={shlex.quote(trojan_port)}
-mkdir -p "$(dirname "$LOG_PATH")"
-: >"$LOG_PATH"
-chmod 600 "$LOG_PATH"
-CMD="/usr/bin/xp2p client deploy --host $REMOTE_HOST --port $DEPLOY_PORT --user $TROJAN_USER --password $TROJAN_PASSWORD"
-if [ -n "$TROJAN_PORT" ]; then
-  CMD="$CMD --trojan-port $TROJAN_PORT"
-fi
-setsid $CMD >>"$LOG_PATH" 2>&1 &
-PID=$!
-sleep 1
-if ! kill -0 "$PID" >/dev/null 2>&1; then
-  echo "__XP2P_PID__="
-  exit 3
-fi
-echo "__XP2P_PID__=$PID"
-echo "__XP2P_LOG__=$LOG_PATH"
-"""
-    cmd = f"/bin/sh -c {shlex.quote(script)}"
-    result = host.run(cmd)
+    result = openwrt_env.run_guest_script(
+        host,
+        "scripts/openwrt/start_xp2p_client_deploy.sh",
+        log_path.as_posix(),
+        remote_host,
+        deploy_port,
+        trojan_user,
+        trojan_password,
+        trojan_port,
+    )
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p client deploy.\n"
@@ -202,26 +185,13 @@ echo "__XP2P_LOG__=$LOG_PATH"
 
 
 def _start_server_deploy(host: Host, *, log_path: PurePosixPath, listen_addr: str, deploy_link: str) -> int:
-    script = f"""
-LOG_PATH={shlex.quote(log_path.as_posix())}
-LISTEN_ADDR={shlex.quote(listen_addr)}
-DEPLOY_LINK={shlex.quote(deploy_link)}
-mkdir -p "$(dirname "$LOG_PATH")"
-: >"$LOG_PATH"
-chmod 600 "$LOG_PATH"
-CMD="/usr/bin/xp2p server deploy --listen $LISTEN_ADDR --link $DEPLOY_LINK"
-setsid $CMD >>"$LOG_PATH" 2>&1 &
-PID=$!
-sleep 1
-if ! kill -0 "$PID" >/dev/null 2>&1; then
-  echo "__XP2P_PID__="
-  exit 3
-fi
-echo "__XP2P_PID__=$PID"
-echo "__XP2P_LOG__=$LOG_PATH"
-"""
-    cmd = f"/bin/sh -c {shlex.quote(script)}"
-    result = host.run(cmd)
+    result = openwrt_env.run_guest_script(
+        host,
+        "scripts/openwrt/start_xp2p_server_deploy.sh",
+        log_path.as_posix(),
+        listen_addr,
+        deploy_link,
+    )
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p server deploy.\n"

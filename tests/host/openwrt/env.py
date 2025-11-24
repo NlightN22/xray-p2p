@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 from contextlib import contextmanager
@@ -14,6 +15,9 @@ from tests.host import common
 
 REPO_ROOT = common.REPO_ROOT
 WORKTREE_POSIX = PurePosixPath("/srv/xray-p2p")
+GUEST_SCRIPTS_ROOT = WORKTREE_POSIX / "tests" / "guest"
+GUEST_SCRIPTS_SOURCE = REPO_ROOT / "tests" / "guest"
+GUEST_SCRIPTS_HASH_FILE = REPO_ROOT / "build" / ".openwrt_guest_scripts.hash"
 IPK_OUTPUT_DIR = REPO_ROOT / "build" / "ipk"
 IPK_OUTPUT_POSIX = WORKTREE_POSIX / "build" / "ipk"
 BUILDER_VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "debian12" / "ipk-build"
@@ -24,11 +28,86 @@ DEFAULT_OPENWRT_MACHINE = OPENWRT_MACHINES[0]
 TARGET_ENV_VAR = "XP2P_OPENWRT_IPK_TARGET"
 DEFAULT_TARGET = "linux-amd64"
 
+_SCRIPTS_HASH_CACHE: str | None = None
+
 
 def _posix(value: PurePosixPath | Path | str) -> str:
     if isinstance(value, (PurePosixPath, Path)):
         return value.as_posix()
     return str(value)
+
+
+def _compute_guest_scripts_hash() -> str:
+    if not GUEST_SCRIPTS_SOURCE.exists():
+        return ""
+    hasher = hashlib.sha256()
+    for path in sorted(GUEST_SCRIPTS_SOURCE.rglob("*")):
+        if path.is_dir():
+            continue
+        rel = path.relative_to(GUEST_SCRIPTS_SOURCE).as_posix().encode("utf-8")
+        hasher.update(rel)
+        hasher.update(b"\0")
+        hasher.update(path.read_bytes())
+    return hasher.hexdigest()
+
+
+def _read_cached_scripts_hash() -> str | None:
+    if not GUEST_SCRIPTS_HASH_FILE.exists():
+        return None
+    data = GUEST_SCRIPTS_HASH_FILE.read_text(encoding="utf-8").strip()
+    return data or None
+
+
+def _write_cached_scripts_hash(value: str) -> None:
+    GUEST_SCRIPTS_HASH_FILE.parent.mkdir(parents=True, exist_ok=True)
+    GUEST_SCRIPTS_HASH_FILE.write_text(value, encoding="utf-8")
+
+
+def _provision_guest_scripts(machine: str) -> None:
+    common.ensure_machine_running(OPENWRT_VAGRANT_DIR, machine)
+    command = [
+        "vagrant",
+        "upload",
+        str(GUEST_SCRIPTS_SOURCE),
+        GUEST_SCRIPTS_ROOT.as_posix(),
+        machine,
+    ]
+    try:
+        subprocess.run(command, cwd=OPENWRT_VAGRANT_DIR, check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Failed to sync guest scripts into OpenWrt host {machine} via Vagrant.\n"
+            f"STDOUT:\n{exc.stdout}\nSTDERR:\n{exc.stderr}"
+        ) from exc
+
+
+def ensure_guest_scripts_synced() -> None:
+    global _SCRIPTS_HASH_CACHE
+    if not GUEST_SCRIPTS_SOURCE.exists():
+        return
+    current_hash = _compute_guest_scripts_hash()
+    if _SCRIPTS_HASH_CACHE == current_hash:
+        return
+    cached = _read_cached_scripts_hash()
+    if cached == current_hash and cached is not None:
+        _SCRIPTS_HASH_CACHE = current_hash
+        return
+    require_openwrt_environment()
+    for machine in OPENWRT_MACHINES:
+        _provision_guest_scripts(machine)
+    if current_hash:
+        _write_cached_scripts_hash(current_hash)
+    _SCRIPTS_HASH_CACHE = current_hash
+
+
+def run_guest_script(host: Host, relative_path: str, *args: str):
+    script_path = GUEST_SCRIPTS_ROOT / relative_path
+    quoted_script = shlex.quote(script_path.as_posix())
+    quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
+    command = f"/bin/sh {quoted_script}"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    return host.run(command)
 
 
 def require_ipk_builder_environment() -> None:
@@ -59,6 +138,7 @@ def host_factory() -> Callable[[str], Host]:
             raise ValueError(f"Unknown OpenWrt machine id: {machine}")
         if machine not in cache:
             require_openwrt_environment()
+            ensure_guest_scripts_synced()
             cache[machine] = get_openwrt_host(machine)
         return cache[machine]
 
