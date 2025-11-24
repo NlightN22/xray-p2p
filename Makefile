@@ -54,7 +54,8 @@ halt-owrt:
 	cd $(VAGRANT_OWRT_DIR) && vagrant halt
 
 build-ipk:
-	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --all --force-build"
+	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --all --force-build --release 23.05.3"
+	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --all --force-build --release 24.10.2"
 
 # swallow extra positional arguments so make does not treat them as targets
 %:

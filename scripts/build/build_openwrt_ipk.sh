@@ -276,25 +276,31 @@ run_for_target() {
     fi
   fi
 
-  local sdk_dir="$sdk_dir_override"
-  if [ -z "$sdk_dir" ]; then
-    sdk_dir="$HOME/openwrt-sdk-$target"
-  fi
-
+  local sdk_dir=""
   local output_dir="${BUILD_ROOT%/}/$target"
   local xp2p_bin="$output_dir/xp2p"
   local xray_bin="$output_dir/xray"
   local completions_dir="$output_dir/completions"
 
-  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Ensuring OpenWrt SDK"
-  OPENWRT_VERSION="$release_version" "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
-
   local release_version="$RELEASE_VERSION"
+  local sdk_release="$release_version"
+  if [ -z "$sdk_release" ]; then
+    sdk_release="$DEFAULT_OPENWRT_VERSION"
+  fi
+  echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Ensuring OpenWrt SDK (release=${sdk_release})"
+  OPENWRT_VERSION="$sdk_release" "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
+
+  if [ -n "$sdk_dir_override" ]; then
+    sdk_dir="$sdk_dir_override"
+  else
+    sdk_dir="$HOME/openwrt-sdk-${sdk_release}-${target}"
+  fi
+
   if [ -z "$release_version" ]; then
     if [ -f "$sdk_dir/.xp2p-openwrt-version" ]; then
       release_version=$(cut -d'-' -f1 "$sdk_dir/.xp2p-openwrt-version")
     else
-      release_version="unknown"
+      release_version="$sdk_release"
     fi
   fi
 

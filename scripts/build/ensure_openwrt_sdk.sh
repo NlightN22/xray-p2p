@@ -31,10 +31,15 @@ download_file() {
   url=$1
   dest=$2
   if command -v curl >/dev/null 2>&1; then
-    curl -fL "$url" -o "$dest"
-  else
-    wget -qO "$dest" "$url"
+    if curl -fL "$url" -o "$dest"; then
+      return 0
+    fi
+    return $?
   fi
+  if wget -qO "$dest" "$url"; then
+    return 0
+  fi
+  return $?
 }
 
 resolve_identifier() {
@@ -44,37 +49,37 @@ resolve_identifier() {
       TARGET="x86"
       SUBTARGET="64"
       FEED_SEGMENT="x86/64"
-      TARBALL_SUFFIX="x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      TARBALL_SUFFIXES="x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-386)
       TARGET="x86"
       SUBTARGET="generic"
       FEED_SEGMENT="x86/generic"
-      TARBALL_SUFFIX="x86-generic_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      TARBALL_SUFFIXES="x86-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst x86-generic_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-arm64)
       TARGET="armsr"
       SUBTARGET="armv8"
       FEED_SEGMENT="armsr/armv8"
-      TARBALL_SUFFIX="armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      TARBALL_SUFFIXES="armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-armhf)
       TARGET="armsr"
       SUBTARGET="armv7"
       FEED_SEGMENT="armsr/armv7"
-      TARBALL_SUFFIX="armsr-armv7_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz"
+      TARBALL_SUFFIXES="armsr-armv7_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst armsr-armv7_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz"
       ;;
     linux-mipsle-softfloat)
       TARGET="ramips"
       SUBTARGET="mt7621"
       FEED_SEGMENT="ramips/mt7621"
-      TARBALL_SUFFIX="ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      TARBALL_SUFFIXES="ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-mips64le)
       TARGET="malta"
       SUBTARGET="be"
       FEED_SEGMENT="malta/be"
-      TARBALL_SUFFIX="malta-be_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      TARBALL_SUFFIXES="malta-be_gcc-13.3.0_musl.Linux-x86_64.tar.zst malta-be_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     *)
       echo "ERROR: unsupported identifier '$identifier'" >&2
@@ -87,10 +92,9 @@ ensure_sdk() {
   identifier=$1
   resolve_identifier "$identifier"
 
-  sdk_dir="${OPENWRT_SDK_BASE%/}/openwrt-sdk-$identifier"
+  sdk_dir="${OPENWRT_SDK_BASE%/}/openwrt-sdk-${OPENWRT_VERSION}-${identifier}"
   version_token="${OPENWRT_VERSION}-${TARGET}-${SUBTARGET}"
-  tarball="openwrt-sdk-${OPENWRT_VERSION}-${TARBALL_SUFFIX}"
-  download_url="${OPENWRT_MIRROR}/${OPENWRT_VERSION}/targets/${FEED_SEGMENT}/${tarball}"
+  tarball=""
 
   if [ -d "$sdk_dir" ]; then
     if [ -f "$sdk_dir/$METADATA_FILE" ] && [ "$(cat "$sdk_dir/$METADATA_FILE")" = "$version_token" ]; then
@@ -104,9 +108,24 @@ ensure_sdk() {
   tmp_dir=$(mktemp -d)
   trap 'rm -rf "$tmp_dir"' EXIT
 
-  archive="$tmp_dir/sdk.tar.xz"
-  echo "==> [$identifier] Downloading $download_url"
-  download_file "$download_url" "$archive"
+  archive=""
+  for suffix in $TARBALL_SUFFIXES; do
+    candidate="openwrt-sdk-${OPENWRT_VERSION}-${suffix}"
+    url="${OPENWRT_MIRROR}/${OPENWRT_VERSION}/targets/${FEED_SEGMENT}/${candidate}"
+    archive="$tmp_dir/${candidate##*/}"
+    echo "==> [$identifier] Downloading $url"
+    if download_file "$url" "$archive"; then
+      tarball="$candidate"
+      break
+    fi
+    echo "==> [$identifier] Failed to download $candidate, trying fallback..." >&2
+    archive=""
+    tarball=""
+  done
+  if [ -z "$tarball" ] || [ -z "$archive" ]; then
+    echo "ERROR: Unable to download OpenWrt SDK for $identifier (release $OPENWRT_VERSION)" >&2
+    exit 1
+  fi
 
   extracted_dir=$(tar -tf "$archive" | head -n 1 | cut -d/ -f1)
   tar -C "$tmp_dir" -xf "$archive"
