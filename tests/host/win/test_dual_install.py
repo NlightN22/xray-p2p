@@ -204,3 +204,120 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "--all",
             "--ignore-missing",
         )
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_client_and_server_install_support_extended_arguments(server_host, xp2p_msi_path):
+    _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+
+    def run(*cmd: str, check: bool = False):
+        return _xp2p_run(server_host, *cmd, check=check)
+
+    custom_client_config = "config-client-max"
+    custom_server_config = "config-server-max"
+    client_host = "10.0.10.220"
+    client_port = "62105"
+    client_user = "max_win@example.com"
+    client_password = "max-win-pass"
+    client_sni = "edge.win.example"
+    server_host_value = "win-max.example"
+    server_port_value = "62666"
+
+    try:
+        run(
+            "client",
+            "remove",
+            "--path",
+            str(INSTALL_DIR),
+            "--config-dir",
+            custom_client_config,
+            "--all",
+            "--ignore-missing",
+            check=True,
+        )
+        run(
+            "server",
+            "remove",
+            "--path",
+            str(INSTALL_DIR),
+            "--config-dir",
+            custom_server_config,
+            "--ignore-missing",
+            check=True,
+        )
+
+        run(
+            "client",
+            "install",
+            "--path",
+            str(INSTALL_DIR),
+            "--config-dir",
+            custom_client_config,
+            "--host",
+            client_host,
+            "--port",
+            client_port,
+            "--user",
+            client_user,
+            "--password",
+            client_password,
+            "--sni",
+            client_sni,
+            "--allow-insecure",
+            "--force",
+            check=True,
+        )
+
+        client_config_path = INSTALL_DIR / custom_client_config
+        outbounds = _read_remote_json(server_host, client_config_path / "outbounds.json")
+        _assert_outbound_entry(
+            outbounds,
+            client_host,
+            client_password,
+            client_user,
+            client_sni,
+            allow_insecure=True,
+        )
+        routing = _read_remote_json(server_host, client_config_path / "routing.json")
+        _assert_routing_rule(routing, client_host)
+        roles_after_client = _read_roles(server_host)
+        assert "client" in roles_after_client
+
+        run(
+            "server",
+            "install",
+            "--path",
+            str(INSTALL_DIR),
+            "--config-dir",
+            custom_server_config,
+            "--port",
+            server_port_value,
+            "--host",
+            server_host_value,
+            "--force",
+            check=True,
+        )
+
+        final_roles = _read_roles(server_host)
+        assert {"client", "server"} <= set(final_roles.keys())
+    finally:
+        run(
+            "server",
+            "remove",
+            "--path",
+            str(INSTALL_DIR),
+            "--config-dir",
+            custom_server_config,
+            "--ignore-missing",
+        )
+        run(
+            "client",
+            "remove",
+            "--path",
+            str(INSTALL_DIR),
+            "--config-dir",
+            custom_client_config,
+            "--all",
+            "--ignore-missing",
+        )
