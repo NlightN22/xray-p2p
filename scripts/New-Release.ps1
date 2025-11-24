@@ -65,6 +65,26 @@ go test ./...
 Write-Section "Running make build"
 make build
 
+$OpenWrtMakefile = Join-Path -Path (Get-Location) -ChildPath "openwrt/feed/packages/utils/xp2p/Makefile"
+if (-not (Test-Path $OpenWrtMakefile)) {
+    Write-Error "OpenWrt package Makefile not found at $OpenWrtMakefile"
+    exit 1
+}
+
+Write-Section "Updating OpenWrt package version"
+$pkgPattern = '^(PKG_VERSION:=)(.*)$'
+$pkgContent = Get-Content -Raw $OpenWrtMakefile
+$pkgUpdated = $pkgContent -replace $pkgPattern, "`$1$Version"
+if ($pkgContent -eq $pkgUpdated) {
+    Write-Error "Failed to update PKG_VERSION in $OpenWrtMakefile"
+    exit 1
+}
+[System.IO.File]::WriteAllText(
+    $OpenWrtMakefile,
+    $pkgUpdated,
+    [System.Text.Encoding]::UTF8
+)
+
 $pending = git status --porcelain
 if (-not $pending) {
     Write-Error "No changes detected after version bump; aborting."
