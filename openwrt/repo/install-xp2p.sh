@@ -6,8 +6,9 @@ set -eu
 BASE_URL="https://nlightn22.github.io/xray-p2p"
 KEY_ID="a371ae624079a206"
 KEY_PATH="/etc/opkg/keys/${KEY_ID}"
+FEED_CONF_MAIN="/etc/opkg/customfeeds.conf"
 FEED_DIR="/etc/opkg/customfeeds.d"
-FEED_FILE="${FEED_DIR}/99-xp2p.conf"
+FEED_FALLBACK="${FEED_DIR}/99-xp2p.conf"
 
 log() {
     echo "[xp2p] $*"
@@ -67,8 +68,23 @@ chmod 0644 "$KEY_PATH"
 
 # Configure feed
 log "Configuring feed at ${feed_url}"
-mkdir -p "$FEED_DIR"
-printf 'src/gz xp2p %s\n' "$feed_url" >"$FEED_FILE"
+if [ -w "$FEED_CONF_MAIN" ] || [ ! -e "$FEED_CONF_MAIN" ]; then
+    FEED_FILE="$FEED_CONF_MAIN"
+    touch "$FEED_FILE"
+else
+    mkdir -p "$FEED_DIR"
+    FEED_FILE="$FEED_FALLBACK"
+fi
+if [ -e "$FEED_FILE" ]; then
+    if command -v sed >/dev/null 2>&1; then
+        sed -i '/^src\/gz xp2p /d' "$FEED_FILE"
+    else
+        tmp_feed="$(mktemp "/tmp/xp2p-feed.XXXXXX")"
+        grep -v '^src/gz xp2p ' "$FEED_FILE" >"$tmp_feed" || true
+        mv "$tmp_feed" "$FEED_FILE"
+    fi
+fi
+printf 'src/gz xp2p %s\n' "$feed_url" >>"$FEED_FILE"
 
 # Refresh and install
 log "Running opkg update"
