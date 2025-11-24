@@ -50,4 +50,6 @@ if [ ! -d "$ROOT" ]; then
   exit 1
 fi
 
+find "$ROOT" -name index.html -type f -delete
+
 generate_indexes "$ROOT" "xp2p OpenWrt feed"
