@@ -70,15 +70,29 @@ func newClientServiceStatusCmd() *cobra.Command {
 }
 
 func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:    "run",
 		Short:  "Run the xp2p client service in the foreground",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			code := runClientServiceRun(commandContext(cmd), cfg(), args)
+			forwarded := forwardFlags(cmd, args)
+			code := runClientServiceRun(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)
 		},
 	}
+	flags := cmd.Flags()
+	flags.String("path", "", "client installation directory")
+	flags.String("config-dir", "", "client configuration directory name")
+	flags.String("log-file", filepath.Join(layout.UnixLogRoot, "client", "service.log"), "xp2p service log file")
+	flags.String("xray-log-file", filepath.Join(layout.UnixLogRoot, "client", "xray-service.log"), "xray stderr log file")
+	flags.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
+	flags.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
+	flags.Bool("heartbeat", true, "enable heartbeat probes")
+	flags.Duration("heartbeat-interval", 2*time.Second, "heartbeat interval")
+	flags.Duration("heartbeat-timeout", 2*time.Second, "heartbeat timeout")
+	flags.String("heartbeat-port", "", "diagnostics service port to probe")
+	flags.String("heartbeat-socks", "", "SOCKS5 proxy for heartbeat (optional)")
+	return cmd
 }
 
 func runClientServiceStart(ctx context.Context) int {

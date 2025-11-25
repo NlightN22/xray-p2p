@@ -69,15 +69,24 @@ func newServerServiceStatusCmd() *cobra.Command {
 }
 
 func newServerServiceRunCmd(cfg commandConfig) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:    "run",
 		Short:  "Run the xp2p server service in the foreground",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			code := runServerServiceRun(commandContext(cmd), cfg(), args)
+			forwarded := forwardFlags(cmd, args)
+			code := runServerServiceRun(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)
 		},
 	}
+	flags := cmd.Flags()
+	flags.String("path", "", "server installation directory")
+	flags.String("config-dir", "", "server configuration directory name")
+	flags.String("log-file", filepath.Join(layout.UnixLogRoot, "server", "service.log"), "xp2p service log file")
+	flags.String("xray-log-file", filepath.Join(layout.UnixLogRoot, "server", "xray-service.log"), "xray stderr log file")
+	flags.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
+	flags.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
+	return cmd
 }
 
 func runServerServiceStart(ctx context.Context) int {
