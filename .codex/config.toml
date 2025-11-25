@@ -18,5 +18,6 @@ rules = [
     "for testing shell scripts, you can use Vagrant; the test environment is located in the infra/vagrant folder",
     "for shell scripts the Vagrant environment scheme is located in infra/vagrant/openwrt/scheme.drawio",
     "for go use common logger for all output",
-    "for editing and viewing try to use python, if it's is exist"
+    "for editing and viewing try to use python, if it's is exist",
+    "system services must not rely on CLI flags; service units should run xp2p binaries with default parameters only"
 ]

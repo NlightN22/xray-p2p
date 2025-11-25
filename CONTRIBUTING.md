@@ -8,6 +8,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Run `go mod tidy` only if you intentionally manage dependencies.
 - Use `go fmt ./...` before sending changes; CI will double-check formatting.
 - Build binaries with `make build`. Supported targets are defined once in `go/internal/buildtarget`, and the helper `go/tools/targets` drives both the Makefile and CI so packages stay in sync. The version is injected via ldflags and binaries keep their platform-specific names (`xp2p`, `xp2p.exe`).
+- When authoring service units or packaging hooks, run `xp2p ... service run` without extra CLI flags. Services must rely on the default configuration baked into the binary so upgrades do not require flag migrations.
 
 ## Testing
 
