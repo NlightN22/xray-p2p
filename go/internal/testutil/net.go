@@ -66,6 +66,9 @@ func shouldRetryPort(err error) bool {
 	if msg := strings.ToLower(err.Error()); strings.Contains(msg, "forbidden") {
 		return true
 	}
+	if msg := strings.ToLower(err.Error()); strings.Contains(msg, "only one usage of each socket address") {
+		return true
+	}
 	return false
 }
 
