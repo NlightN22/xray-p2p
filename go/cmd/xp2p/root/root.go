@@ -162,6 +162,7 @@ func (o *rootOptions) buildOverrides() map[string]any {
 	}
 	if port := strings.TrimSpace(o.serverPort); port != "" {
 		overrides["server.port"] = port
+		overrides["client.diag_port"] = port
 	}
 	if dir := strings.TrimSpace(o.serverInstallDir); dir != "" {
 		overrides["server.install_dir"] = dir

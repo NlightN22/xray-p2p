@@ -4,3 +4,6 @@ logging:
 
 server:
   port: 62022
+
+client:
+  diag_port: 62023

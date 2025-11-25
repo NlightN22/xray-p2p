@@ -205,11 +205,16 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 
 	logging.Configure(logging.Options{Output: logWriter})
 
+	diagPort := strings.TrimSpace(cfg.Client.DiagPort)
+	if diagPort == "" {
+		diagPort = cfg.Server.Port
+	}
+
 	opts := client.ServiceOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
 		XrayLogPath:  strings.TrimSpace(*xrayLog),
-		DiagPort:     cfg.Server.Port,
+		DiagPort:     diagPort,
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
 		Heartbeat: client.HeartbeatOptions{

@@ -31,6 +31,7 @@ var defaultValues = map[string]any{
 	"client.config_dir":     "config-client",
 	"client.server_address": "",
 	"client.server_port":    "8443",
+	"client.diag_port":      "62023",
 	"client.user":           "",
 	"client.password":       "",
 	"client.server_name":    "",
@@ -74,6 +75,7 @@ type ClientConfig struct {
 	ConfigDir     string `koanf:"config_dir"`
 	ServerAddress string `koanf:"server_address"`
 	ServerPort    string `koanf:"server_port"`
+	DiagPort      string `koanf:"diag_port"`
 	User          string `koanf:"user"`
 	Password      string `koanf:"password"`
 	ServerName    string `koanf:"server_name"`
@@ -256,6 +258,11 @@ func normalize(cfg *Config) {
 	cfg.Client.ServerPort = strings.TrimSpace(cfg.Client.ServerPort)
 	if cfg.Client.ServerPort == "" {
 		cfg.Client.ServerPort = defaultValues["client.server_port"].(string)
+	}
+
+	cfg.Client.DiagPort = strings.TrimSpace(cfg.Client.DiagPort)
+	if cfg.Client.DiagPort == "" {
+		cfg.Client.DiagPort = defaultValues["client.diag_port"].(string)
 	}
 
 	cfg.Client.User = strings.TrimSpace(cfg.Client.User)

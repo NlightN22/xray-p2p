@@ -14,8 +14,8 @@ SERVER_SERVICE_LOG = helpers.LOG_ROOT / "server" / "service.log"
 SERVER_XRAY_LOG = helpers.LOG_ROOT / "server" / "xray-service.log"
 CLIENT_INBOUNDS = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
 SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
-CLIENT_DIAG_PORT = "62022"
-SERVER_DIAG_PORT = "62023"
+CLIENT_DIAG_PORT = "62023"
+SERVER_DIAG_PORT = "62022"
 
 SERVICE_TIMEOUT = 45.0
 POLL_INTERVAL = 1.5
