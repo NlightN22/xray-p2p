@@ -52,6 +52,7 @@ type ServiceOptions struct {
 	InstallDir   string
 	ConfigDir    string
 	XrayLogPath  string
+	DiagPort     string
 	MaxRestarts  int
 	RestartDelay time.Duration
 }

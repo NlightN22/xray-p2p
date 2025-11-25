@@ -43,6 +43,7 @@ type ServiceOptions struct {
 	ConfigDir    string
 	XrayLogPath  string
 	Heartbeat    HeartbeatOptions
+	DiagPort     string
 	MaxRestarts  int
 	RestartDelay time.Duration
 }

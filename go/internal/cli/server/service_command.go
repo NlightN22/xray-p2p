@@ -196,6 +196,7 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
 		XrayLogPath:  strings.TrimSpace(*xrayLog),
+		DiagPort:     cfg.Server.Port,
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
 	}

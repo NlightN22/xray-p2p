@@ -6,7 +6,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/bin/xp2p client service run --path /etc/xp2p --config-dir config-client --log-file /var/log/xp2p/client/service.log --xray-log-file /var/log/xp2p/client/xray-service.log
+ExecStart=/usr/bin/xp2p client service run --diag-service-port 62022 --path /etc/xp2p --config-dir config-client --log-file /var/log/xp2p/client/service.log --xray-log-file /var/log/xp2p/client/xray-service.log
 Restart=no
 
 [Install]

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -17,6 +19,8 @@ type Options struct {
 	Name string
 	// WatchPaths lists directories whose modifications should trigger graceful restarts.
 	WatchPaths []string
+	// IgnorePaths lists exact paths that should not trigger restarts when changed.
+	IgnorePaths []string
 	// MaxRestarts overrides the default restart limit. Zero or negative keeps the default.
 	MaxRestarts int
 	// RestartDelay specifies the pause between restart attempts. Zero defaults to 3 seconds.
@@ -62,6 +66,11 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 		watchCh = watcher.Events()
 	}
 
+	ignored := make(map[string]struct{}, len(opts.IgnorePaths))
+	for _, path := range considerPathList(opts.IgnorePaths) {
+		ignored[path] = struct{}{}
+	}
+
 	failures := 0
 	for {
 		select {
@@ -93,6 +102,9 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 			case path, ok := <-watchCh:
 				if !ok {
 					watchCh = nil
+					continue
+				}
+				if shouldIgnoreEvent(path, ignored) {
 					continue
 				}
 				restarting = true
@@ -146,4 +158,28 @@ func waitWithContext(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+func considerPathList(paths []string) []string {
+	cleaned := make([]string, 0, len(paths))
+	for _, path := range paths {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		cleaned = append(cleaned, filepath.Clean(trimmed))
+	}
+	return cleaned
+}
+
+func shouldIgnoreEvent(path string, ignored map[string]struct{}) bool {
+	if len(ignored) == 0 {
+		return false
+	}
+	clean := filepath.Clean(strings.TrimSpace(path))
+	if clean == "" {
+		return false
+	}
+	_, skip := ignored[clean]
+	return skip
 }

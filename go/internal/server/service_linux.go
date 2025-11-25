@@ -5,8 +5,11 @@ package server
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/service"
 )
 
@@ -32,6 +35,22 @@ func RunService(ctx context.Context, opts ServiceOptions) error {
 		return err
 	}
 
+	var diagCancel context.CancelFunc
+	if port := strings.TrimSpace(opts.DiagPort); port != "" {
+		bgCtx, cancel := context.WithCancel(ctx)
+		if err := StartBackground(bgCtx, Options{Port: port, InstallDir: installDir}); err != nil {
+			cancel()
+			logging.Warn("xp2p server diagnostics: failed to start responders", "port", port, "err", err)
+		} else {
+			diagCancel = cancel
+		}
+	}
+	defer func() {
+		if diagCancel != nil {
+			diagCancel()
+		}
+	}()
+
 	runOpts := RunOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
@@ -42,10 +61,14 @@ func RunService(ctx context.Context, opts ServiceOptions) error {
 		installDir,
 		configDirPath,
 	}
+	ignorePaths := []string{
+		filepath.Join(installDir, layout.HeartbeatStateFileName),
+	}
 
 	runnerOpts := service.Options{
 		Name:         "server",
 		WatchPaths:   watchPaths,
+		IgnorePaths:  ignorePaths,
 		MaxRestarts:  opts.MaxRestarts,
 		RestartDelay: opts.RestartDelay,
 	}
