@@ -117,6 +117,9 @@ for dep in $DEPENDS; do
   fi
 done
 
+BEFORE_REMOVE_SCRIPT="$PROJECT_ROOT/distro/linux/deb/before-remove.sh"
+AFTER_REMOVE_SCRIPT="$PROJECT_ROOT/distro/linux/deb/after-remove.sh"
+
 fpm -s dir -t deb \
   -n "$PKG_NAME" \
   -v "$VERSION" \
@@ -127,6 +130,8 @@ fpm -s dir -t deb \
   --license "$LICENSE" \
   "$@" \
   --package "$PACKAGE_PATH" \
+  --before-remove "$BEFORE_REMOVE_SCRIPT" \
+  --after-remove "$AFTER_REMOVE_SCRIPT" \
   -C "$STAGING_DIR" \
   usr etc var lib
 

@@ -104,6 +104,11 @@ def _unit_missing(result) -> bool:
     return "could not be found" in text or "loaded: not-found" in text
 
 
+def _assert_service_inactive(host, service_name: str) -> None:
+    result = host.run(f"sudo -n systemctl is-active {service_name}")
+    assert result.rc != 0, f"{service_name} should not be active"
+
+
 def _assert_diag_listener(host, port: str) -> None:
     deadline = time.time() + SERVICE_TIMEOUT
     while time.time() < deadline:
@@ -379,8 +384,6 @@ def test_package_uninstall_removes_services(server_host):
         server_host.run(
             "sudo -n /usr/bin/xp2p server remove --path /etc/xp2p --config-dir config-server --ignore-missing --quiet"
         )
-        server_host.run("sudo -n systemctl stop xp2p-client.service >/dev/null 2>&1 || true")
-        server_host.run("sudo -n systemctl stop xp2p-server.service >/dev/null 2>&1 || true")
 
         server_host.run("sudo -n rm -rf /etc/xp2p /var/log/xp2p >/dev/null 2>&1 || true")
 
@@ -396,6 +399,8 @@ def test_package_uninstall_removes_services(server_host):
         status_server = server_host.run("sudo -n systemctl status xp2p-server.service")
         assert status_client.rc != 0 and _unit_missing(status_client)
         assert status_server.rc != 0 and _unit_missing(status_server)
+        _assert_service_inactive(server_host, "xp2p-client.service")
+        _assert_service_inactive(server_host, "xp2p-server.service")
 
         _assert_missing(install_root)
         _assert_missing(log_root)
