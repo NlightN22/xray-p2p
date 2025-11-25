@@ -94,6 +94,7 @@ if [ ! -f "$XRAY_SOURCE" ]; then
   exit 1
 fi
 echo "==> Staging xray binary from $XRAY_SOURCE"
+rm -f "$STAGING_DIR/etc/xp2p/bin/xray"
 install -m 0755 "$XRAY_SOURCE" "$STAGING_DIR/etc/xp2p/bin/xray"
 
 echo "==> Staging systemd unit files"
