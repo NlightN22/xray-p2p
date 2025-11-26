@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=xp2p
 PKG_VERSION:=0.1.5
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=xray-p2p maintainers
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
@@ -55,14 +55,69 @@ endef
 define Package/xp2p/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_DIR) $(1)/etc/xp2p/bin
+	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_DIR) $(1)/usr/share/bash-completion/completions
 	$(INSTALL_DIR) $(1)/usr/share/zsh/vendor-completions
 	$(INSTALL_DIR) $(1)/usr/share/fish/vendor_completions.d
+	$(INSTALL_DIR) $(1)/usr/lib/xp2p
+	$(INSTALL_DIR) $(1)/var/log/xp2p
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/xp2p $(1)/usr/bin/xp2p
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/xray $(1)/etc/xp2p/bin/xray
+	$(INSTALL_BIN) ./files/etc/init.d/xp2p-client $(1)/etc/init.d/xp2p-client
+	$(INSTALL_BIN) ./files/etc/init.d/xp2p-server $(1)/etc/init.d/xp2p-server
+	$(INSTALL_DATA) ./files/usr/lib/xp2p/procd-service.sh $(1)/usr/lib/xp2p/procd-service.sh
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/completions/xp2p.bash $(1)/usr/share/bash-completion/completions/xp2p
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/completions/_xp2p $(1)/usr/share/zsh/vendor-completions/_xp2p
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/completions/xp2p.fish $(1)/usr/share/fish/vendor_completions.d/xp2p.fish
+endef
+
+define Package/xp2p/postinst
+#!/bin/sh
+if [ -n "$$IPKG_INSTROOT" ]; then
+	exit 0
+fi
+
+install -d -m 0755 /etc/xp2p
+install -d -m 0755 /etc/xp2p/bin
+install -d -m 0755 /var/log/xp2p
+/etc/init.d/xp2p-client enable >/dev/null 2>&1 || true
+/etc/init.d/xp2p-server enable >/dev/null 2>&1 || true
+exit 0
+endef
+
+define Package/xp2p/prerm
+#!/bin/sh
+if [ -n "$$IPKG_INSTROOT" ]; then
+	exit 0
+fi
+
+case "$$1" in
+	remove|upgrade|deconfigure)
+		/etc/init.d/xp2p-client stop >/dev/null 2>&1 || true
+		/etc/init.d/xp2p-server stop >/dev/null 2>&1 || true
+		;;
+esac
+exit 0
+endef
+
+define Package/xp2p/postrm
+#!/bin/sh
+if [ -n "$$IPKG_INSTROOT" ]; then
+	exit 0
+fi
+
+case "$$1" in
+	remove|upgrade|failed-upgrade|abort-install|abort-upgrade)
+		/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true
+		/etc/init.d/xp2p-server disable >/dev/null 2>&1 || true
+		;;
+esac
+
+if [ "$$1" = "purge" ] || [ "$${IPKG_FORCE_REMOVE:-0}" != "0" ]; then
+	rm -rf /etc/xp2p /var/log/xp2p
+	rm -f /etc/init.d/xp2p-client /etc/init.d/xp2p-server
+fi
+exit 0
 endef
 
 $(eval $(call BuildPackage,xp2p))

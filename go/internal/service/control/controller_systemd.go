@@ -12,10 +12,6 @@ import (
 
 type systemdController struct{}
 
-func defaultController() Controller {
-	return systemdController{}
-}
-
 func (systemdController) Start(ctx context.Context, role Role) error {
 	unit := unitName(role)
 	if unit == "" {

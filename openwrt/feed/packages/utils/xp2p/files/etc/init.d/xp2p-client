@@ -1,0 +1,16 @@
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+START=95
+STOP=05
+PROCD_REQUIRES="network device"
+
+. /usr/lib/xp2p/procd-service.sh
+
+ROLE="client"
+CONFIG_DIR="config-client"
+
+start_service() {
+	xp2p_start_service "$ROLE" "$CONFIG_DIR"
+}
+
