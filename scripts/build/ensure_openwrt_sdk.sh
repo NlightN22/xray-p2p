@@ -44,46 +44,71 @@ download_file() {
 
 resolve_identifier() {
   identifier=$1
+  ZST_SUFFIX=""
+  XZ_SUFFIX=""
   case "$identifier" in
     linux-amd64)
       TARGET="x86"
       SUBTARGET="64"
       FEED_SEGMENT="x86/64"
-      TARBALL_SUFFIXES="x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ZST_SUFFIX="x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+      XZ_SUFFIX="x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-386)
       TARGET="x86"
       SUBTARGET="generic"
       FEED_SEGMENT="x86/generic"
-      TARBALL_SUFFIXES="x86-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst x86-generic_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ZST_SUFFIX="x86-generic_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+      XZ_SUFFIX="x86-generic_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-arm64)
       TARGET="armsr"
       SUBTARGET="armv8"
       FEED_SEGMENT="armsr/armv8"
-      TARBALL_SUFFIXES="armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ZST_SUFFIX="armsr-armv8_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+      XZ_SUFFIX="armsr-armv8_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-armhf)
       TARGET="armsr"
       SUBTARGET="armv7"
       FEED_SEGMENT="armsr/armv7"
-      TARBALL_SUFFIXES="armsr-armv7_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst armsr-armv7_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz"
+      ZST_SUFFIX="armsr-armv7_gcc-13.3.0_musl_eabi.Linux-x86_64.tar.zst"
+      XZ_SUFFIX="armsr-armv7_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz"
       ;;
     linux-mipsle-softfloat)
       TARGET="ramips"
       SUBTARGET="mt7621"
       FEED_SEGMENT="ramips/mt7621"
-      TARBALL_SUFFIXES="ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ZST_SUFFIX="ramips-mt7621_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+      XZ_SUFFIX="ramips-mt7621_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     linux-mips64le)
       TARGET="malta"
       SUBTARGET="be"
       FEED_SEGMENT="malta/be"
-      TARBALL_SUFFIXES="malta-be_gcc-13.3.0_musl.Linux-x86_64.tar.zst malta-be_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
+      ZST_SUFFIX="malta-be_gcc-13.3.0_musl.Linux-x86_64.tar.zst"
+      XZ_SUFFIX="malta-be_gcc-12.3.0_musl.Linux-x86_64.tar.xz"
       ;;
     *)
       echo "ERROR: unsupported identifier '$identifier'" >&2
       exit 1
+      ;;
+  esac
+
+  if release_prefers_zst; then
+    TARBALL_SUFFIXES="$ZST_SUFFIX $XZ_SUFFIX"
+  else
+    TARBALL_SUFFIXES="$XZ_SUFFIX $ZST_SUFFIX"
+  fi
+}
+
+release_prefers_zst() {
+  case "$OPENWRT_VERSION" in
+    2[4-9].*|[3-9][0-9]*)
+      return 0
+      ;;
+    *)
+      return 1
       ;;
   esac
 }
