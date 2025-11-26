@@ -54,6 +54,38 @@
     <DirectoryRef Id="INSTALLFOLDER">
       <Component Id="cmpXp2pExe" Guid="{0F91C0C5-5DDE-4F54-ABFD-DA4D1730B464}">
         <File Id="fileXp2pExe" Source="$(var.Xp2pBinary)" KeyPath="yes" Checksum="yes" />
+        <ServiceInstall Id="SvcInstallClient"
+                        Name="xp2p-client"
+                        DisplayName="xp2p Client Service"
+                        Description="xp2p client tunnel service"
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Vital="yes"
+                        Account="LocalSystem"
+                        Arguments='client service run --path "[INSTALLFOLDER]" --config-dir config-client --log-file "[INSTALLFOLDER]logs\client\service.log" --xray-log-file "[INSTALLFOLDER]logs\client\xray-service.log"' />
+        <ServiceControl Id="SvcControlClient"
+                        Name="xp2p-client"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+        <ServiceInstall Id="SvcInstallServer"
+                        Name="xp2p-server"
+                        DisplayName="xp2p Server Service"
+                        Description="xp2p server tunnel service"
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Vital="yes"
+                        Account="LocalSystem"
+                        Arguments='server service run --path "[INSTALLFOLDER]" --config-dir config-server --log-file "[INSTALLFOLDER]logs\server\service.log" --xray-log-file "[INSTALLFOLDER]logs\server\xray-service.log"' />
+        <ServiceControl Id="SvcControlServer"
+                        Name="xp2p-server"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
       </Component>
 
       <Component Id="cmpInstallRoot" Guid="{F7F77E38-B7FB-4B5B-8995-20FE8F5DCB68}" KeyPath="yes">

@@ -19,5 +19,5 @@ rules = [
     "for shell scripts the Vagrant environment scheme is located in infra/vagrant/openwrt/scheme.drawio",
     "for go use common logger for all output",
     "for editing and viewing try to use python, if it's is exist",
-    "system services (systemd/procd) must not rely on CLI flags; packages must run xp2p binaries with default parameters only"
+    "system services (systemd/procd/Windows SCM) must not rely on CLI flags; packages must run xp2p binaries with default parameters only"
 ]

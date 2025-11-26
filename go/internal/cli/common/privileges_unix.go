@@ -2,12 +2,7 @@
 
 package common
 
-import (
-	"errors"
-	"os"
-)
-
-var errRootRequired = errors.New("xp2p: administrative privileges required")
+import "os"
 
 // RequireRoot verifies the caller is running with elevated privileges.
 func RequireRoot() error {

@@ -44,6 +44,8 @@ msiexec /i xp2p-<version>-windows-amd64.msi INSTALLFOLDER="D:\Network\xp2p"
 
 Optional properties such as `XP2P_CLIENT_ARGS` or `XP2P_SERVER_ARGS` let you kick off `xp2p client install ...` or `xp2p server install ...` immediately after setup. Custom MSI builds still live under `installer/wix`; see [`scripts/build/README.md`](scripts/build/README.md) for authoring instructions.
 
+The MSI also installs two Windows services (`xp2p-client` and `xp2p-server`) that wrap `xp2p client|server service run` and auto-start on boot. Use `xp2p client service start|stop|status` (or the Services snap-in) to manage them; service logs land under `C:\Program Files\xp2p\logs\<role>\`. Service definitions carry no extra CLI arguments beyond the defaults baked into the binary, so upgrades do not require flag migrations.
+
 ### Other packages
 
 - Debian packages (`.deb`), OpenWrt feeds, and helper SDK environments are covered in [`scripts/build/README.md`](scripts/build/README.md). OpenWrt IPKs install `/etc/init.d/xp2p-client` and `/etc/init.d/xp2p-server` procd services that run `xp2p client|server service run` without extra flags, stream logs into `/var/log/xp2p`, and restart automatically via package-managed hooks. Use `service xp2p-client start` or `xp2p client service start` to control them; the CLI now delegates to procd on OpenWrt so `service status` and `xp2p ... service status` stay in sync. `opkg remove xp2p` stops the services and `opkg purge xp2p` (or `opkg remove --force-removal-of-dependent-packages xp2p`) removes `/etc/xp2p`, `/var/log/xp2p`, and the init scripts.

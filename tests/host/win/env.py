@@ -192,3 +192,58 @@ def _build_msi_package(
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     return path
+
+
+def path_exists(host: Host, path: Path | str) -> bool:
+    target = ps_quote(str(path))
+    script = f"if (Test-Path {target}) {{ exit 0 }} else {{ exit 3 }}"
+    result = run_powershell(host, script)
+    return result.rc == 0
+
+
+def remove_path(host: Host, path: Path | str) -> None:
+    target = ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (Test-Path {target}) {{
+    Remove-Item {target} -Force -Recurse -ErrorAction SilentlyContinue
+}}
+"""
+    run_powershell(host, script)
+
+
+def read_text(host: Host, path: Path | str) -> str:
+    target = ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path {target})) {{
+    exit 3
+}}
+Get-Content -Raw {target}
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to read remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result.stdout or ""
+
+
+def write_text(host: Host, path: Path | str, content: str) -> None:
+    target = ps_quote(str(path))
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target}
+$dir = Split-Path -Parent $target
+if ($dir -and -not (Test-Path $dir)) {{
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+}}
+$data = [System.Convert]::FromBase64String('{encoded}')
+[System.IO.File]::WriteAllBytes($target, $data)
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to write remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )

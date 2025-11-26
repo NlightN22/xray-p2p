@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -157,8 +158,8 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 
 	path := fs.String("path", "", "server installation directory")
 	configDir := fs.String("config-dir", "", "server configuration directory name")
-	logFile := fs.String("log-file", filepath.Join(layout.UnixLogRoot, "server", "service.log"), "xp2p service log file")
-	xrayLog := fs.String("xray-log-file", filepath.Join(layout.UnixLogRoot, "server", "xray-service.log"), "xray stderr log file")
+	logFile := fs.String("log-file", "", "xp2p service log file (default: platform-specific path)")
+	xrayLog := fs.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
 	maxRestarts := fs.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	restartDelay := fs.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
 
@@ -178,7 +179,7 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	configDirName := common.FirstNonEmpty(*configDir, cfg.Server.ConfigDir)
 	serviceLogPath := strings.TrimSpace(*logFile)
 	if serviceLogPath == "" {
-		serviceLogPath = filepath.Join(layout.UnixLogRoot, "server", "service.log")
+		serviceLogPath = defaultServerServiceLogPath(installDir)
 	}
 	if err := os.MkdirAll(filepath.Dir(serviceLogPath), 0o755); err != nil {
 		logging.Error("xp2p server service run: failed to create log directory", "err", err)
@@ -192,10 +193,15 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	defer logWriter.Close()
 	logging.Configure(logging.Options{Output: logWriter})
 
+	xrayLogPath := strings.TrimSpace(*xrayLog)
+	if xrayLogPath == "" {
+		xrayLogPath = defaultServerXrayLogPath(installDir)
+	}
+
 	opts := server.ServiceOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
-		XrayLogPath:  strings.TrimSpace(*xrayLog),
+		XrayLogPath:  xrayLogPath,
 		DiagPort:     cfg.Server.Port,
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
@@ -205,4 +211,23 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		return 1
 	}
 	return 0
+}
+
+func defaultServerServiceLogPath(installDir string) string {
+	return defaultServerLogPath(installDir, "service.log")
+}
+
+func defaultServerXrayLogPath(installDir string) string {
+	return defaultServerLogPath(installDir, "xray-service.log")
+}
+
+func defaultServerLogPath(installDir string, fileName string) string {
+	if runtime.GOOS == "windows" {
+		base := strings.TrimSpace(installDir)
+		if base == "" {
+			base = "."
+		}
+		return filepath.Join(base, layout.LogsDirName, "server", fileName)
+	}
+	return filepath.Join(layout.UnixLogRoot, "server", fileName)
 }

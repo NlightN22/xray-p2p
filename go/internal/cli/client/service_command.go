@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -83,8 +84,8 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.String("path", "", "client installation directory")
 	flags.String("config-dir", "", "client configuration directory name")
-	flags.String("log-file", filepath.Join(layout.UnixLogRoot, "client", "service.log"), "xp2p service log file")
-	flags.String("xray-log-file", filepath.Join(layout.UnixLogRoot, "client", "xray-service.log"), "xray stderr log file")
+	flags.String("log-file", "", "xp2p service log file (default: platform-specific path)")
+	flags.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
 	flags.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	flags.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
 	flags.Bool("heartbeat", true, "enable heartbeat probes")
@@ -164,8 +165,8 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
-	logFile := fs.String("log-file", filepath.Join(layout.UnixLogRoot, "client", "service.log"), "xp2p service log file")
-	xrayLog := fs.String("xray-log-file", filepath.Join(layout.UnixLogRoot, "client", "xray-service.log"), "xray stderr log file")
+	logFile := fs.String("log-file", "", "xp2p service log file (default: platform-specific path)")
+	xrayLog := fs.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
 	maxRestarts := fs.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	restartDelay := fs.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
 	hbEnabled := fs.Bool("heartbeat", true, "enable heartbeat probes")
@@ -190,7 +191,7 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	configDirName := firstNonEmpty(*configDir, cfg.Client.ConfigDir)
 	serviceLogPath := strings.TrimSpace(*logFile)
 	if serviceLogPath == "" {
-		serviceLogPath = filepath.Join(layout.UnixLogRoot, "client", "service.log")
+		serviceLogPath = defaultClientServiceLogPath(installDir)
 	}
 	if err := os.MkdirAll(filepath.Dir(serviceLogPath), 0o755); err != nil {
 		logging.Error("xp2p client service run: failed to create log directory", "err", err)
@@ -210,10 +211,15 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		diagPort = cfg.Server.Port
 	}
 
+	xrayLogPath := strings.TrimSpace(*xrayLog)
+	if xrayLogPath == "" {
+		xrayLogPath = defaultClientXrayLogPath(installDir)
+	}
+
 	opts := client.ServiceOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
-		XrayLogPath:  strings.TrimSpace(*xrayLog),
+		XrayLogPath:  xrayLogPath,
 		DiagPort:     diagPort,
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
@@ -231,4 +237,23 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		return 1
 	}
 	return 0
+}
+
+func defaultClientServiceLogPath(installDir string) string {
+	return defaultClientLogPath(installDir, "service.log")
+}
+
+func defaultClientXrayLogPath(installDir string) string {
+	return defaultClientLogPath(installDir, "xray-service.log")
+}
+
+func defaultClientLogPath(installDir string, fileName string) string {
+	if runtime.GOOS == "windows" {
+		base := strings.TrimSpace(installDir)
+		if base == "" {
+			base = "."
+		}
+		return filepath.Join(base, layout.LogsDirName, "client", fileName)
+	}
+	return filepath.Join(layout.UnixLogRoot, "client", fileName)
 }
