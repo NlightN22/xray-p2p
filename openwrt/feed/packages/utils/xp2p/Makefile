@@ -77,9 +77,10 @@ if [ -n "$$IPKG_INSTROOT" ]; then
 	exit 0
 fi
 
-install -d -m 0755 /etc/xp2p
-install -d -m 0755 /etc/xp2p/bin
-install -d -m 0755 /var/log/xp2p
+mkdir -p /etc/xp2p
+mkdir -p /etc/xp2p/bin
+mkdir -p /var/log/xp2p
+chmod 0755 /etc/xp2p /etc/xp2p/bin /var/log/xp2p
 /etc/init.d/xp2p-client enable >/dev/null 2>&1 || true
 /etc/init.d/xp2p-server enable >/dev/null 2>&1 || true
 exit 0
