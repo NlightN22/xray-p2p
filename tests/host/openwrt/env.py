@@ -166,7 +166,8 @@ def build_ipk(host: Host, target: str) -> None:
         f"cd {shlex.quote(worktree)} && "
         f"./scripts/build/build_openwrt_ipk.sh "
         f"--target {shlex.quote(target)} "
-        f"--output-dir {shlex.quote(output_dir)}"
+        f"--output-dir {shlex.quote(output_dir)} "
+        f"--force-build"
     )
     result = host.run(f"bash -lc {shlex.quote(command)}")
     if result.rc != 0:

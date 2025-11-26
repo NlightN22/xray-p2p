@@ -24,7 +24,7 @@ xp2p_start_service() {
 	if [ ! -x "$XP2P_BIN" ]; then
 		echo "[xp2p] binary $XP2P_BIN not found" >&2
 		return 1
-	}
+	fi
 	[ -n "$config_dir" ] || config_dir="config-${role}"
 	xp2p_prepare_layout "$role"
 
@@ -37,4 +37,3 @@ xp2p_start_service() {
 	xp2p_append_watch "$XP2P_INSTALL_ROOT/$config_dir"
 	procd_close_instance
 }
-

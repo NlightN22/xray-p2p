@@ -23,6 +23,23 @@ LOG_ROOT = linux_helpers.LOG_ROOT
 REVERSE_SUFFIX = linux_helpers.REVERSE_SUFFIX
 XRAY_BINARY = linux_helpers.XRAY_BINARY
 
+
+def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:
+    target = _posix(path)
+    directory = PurePosixPath(target).parent.as_posix()
+    host.run(f"mkdir -p {shlex.quote(directory)}")
+    marker = "XP2P_EOF"
+    command = (
+        f"cat <<'{marker}' > {shlex.quote(target)}\n"
+        f"{content}\n"
+        f"{marker}\n"
+    )
+    result = host.run(command)
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to write remote text {target}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
 cleanup_client_install = linux_helpers.cleanup_client_install
 cleanup_server_install = linux_helpers.cleanup_server_install
 extract_trojan_credential = linux_helpers.extract_trojan_credential

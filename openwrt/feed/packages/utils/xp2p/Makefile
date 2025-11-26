@@ -113,7 +113,16 @@ case "$$1" in
 		;;
 esac
 
-if [ "$$1" = "purge" ] || [ "$${IPKG_FORCE_REMOVE:-0}" != "0" ]; then
+purge_requested=0
+if [ "$$1" = "purge" ] || [ "$${IPKG_FORCE_REMOVE:-0}" != "0" ] || [ "$${OPKG_FORCE_REMOVE:-0}" != "0" ]; then
+	purge_requested=1
+elif [ -n "$$PPID" ] && [ -r "/proc/$$PPID/cmdline" ]; then
+	if tr '\0' '\n' <"/proc/$$PPID/cmdline" | grep -q -- '--force-removal-of-dependent-packages'; then
+		purge_requested=1
+	fi
+fi
+
+if [ "$$purge_requested" -eq 1 ]; then
 	rm -rf /etc/xp2p /var/log/xp2p
 	rm -f /etc/init.d/xp2p-client /etc/init.d/xp2p-server
 fi
