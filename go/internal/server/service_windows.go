@@ -4,12 +4,10 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -22,12 +20,9 @@ func RunService(ctx context.Context, opts ServiceOptions) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if opts.WindowsService {
+	if runningAsWindowsService() {
 		handler := &serverWindowsService{opts: opts}
 		if err := svc.Run("xp2p-server", handler); err != nil {
-			if errors.Is(err, windows.ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
-				return runServerServiceLoop(ctx, opts)
-			}
 			return fmt.Errorf("xp2p server windows service: %w", err)
 		}
 		return handler.err
@@ -120,4 +115,12 @@ func (s *serverWindowsService) Execute(_ []string, r <-chan svc.ChangeRequest, c
 			}
 		}
 	}
+}
+
+func runningAsWindowsService() bool {
+	isService, err := svc.IsWindowsService()
+	if err != nil {
+		return false
+	}
+	return isService
 }

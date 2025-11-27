@@ -66,7 +66,7 @@
                         ErrorControl="normal"
                         Vital="yes"
                         Account="LocalSystem"
-                        Arguments='client service run --path "[INSTALLFOLDER]" --config-dir config-client --log-file "[INSTALLFOLDER]logs\client\service.log" --xray-log-file "[INSTALLFOLDER]logs\client\xray-service.log" --windows-service' />
+                        Arguments='client service run' />
         <ServiceControl Id="SvcControlClient"
                         Name="xp2p-client"
                         Stop="both"
@@ -81,7 +81,7 @@
                         ErrorControl="normal"
                         Vital="yes"
                         Account="LocalSystem"
-                        Arguments='server service run --path "[INSTALLFOLDER]" --config-dir config-server --log-file "[INSTALLFOLDER]logs\server\service.log" --xray-log-file "[INSTALLFOLDER]logs\server\xray-service.log" --windows-service' />
+                        Arguments='server service run' />
         <ServiceControl Id="SvcControlServer"
                         Name="xp2p-server"
                         Stop="both"
