@@ -46,6 +46,7 @@ type ServiceOptions struct {
 	DiagPort     string
 	MaxRestarts  int
 	RestartDelay time.Duration
+	WindowsService bool
 }
 
 // HeartbeatOptions controls background telemetry probes.

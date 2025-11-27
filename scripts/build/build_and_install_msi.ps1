@@ -37,22 +37,34 @@ function Add-ToPath {
     $env:Path = "$Path;$env:Path"
 }
 
+function Get-Xp2pVersion {
+    param([string] $RepoRoot)
+
+    $versionFile = Join-Path $RepoRoot 'go\internal\version\version.go'
+    if (-not (Test-Path $versionFile)) {
+        throw "Version file not found at $versionFile"
+    }
+
+    $match = Select-String -Path $versionFile -Pattern 'var\s+current\s*=\s*"([^"]+)"' -AllMatches |
+        Select-Object -First 1
+    if (-not $match) {
+        throw "Unable to parse xp2p version from $versionFile"
+    }
+
+    return $match.Matches[0].Groups[1].Value
+}
+
 Write-Info "Preparing MSI build directories"
 Ensure-Directory $RepoRoot
 Ensure-Directory $CacheDir
 
-Push-Location $RepoRoot
-$msiPath = $null
-try {
-    Write-Info "Resolving xp2p version"
-    $version = (& go run .\go\cmd\xp2p --version).Trim()
-    if ([string]::IsNullOrWhiteSpace($version)) {
-        throw "xp2p --version returned empty output."
-    }
+$version = Get-Xp2pVersion -RepoRoot $RepoRoot
+$msiPath = Join-Path $CacheDir ("xp2p-$version-windows-$MsiArchLabel.msi")
 
+Push-Location $RepoRoot
+try {
     $ldflags = "-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$version"
     $binaryDir = Join-Path $RepoRoot 'build\msi-bin'
-    $msiPath = Join-Path $CacheDir ("xp2p-$version-windows-$MsiArchLabel.msi")
 
     Write-Info "Cleaning previous build artifacts"
     Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue

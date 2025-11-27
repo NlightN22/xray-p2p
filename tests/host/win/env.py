@@ -1,4 +1,5 @@
 import base64
+import json
 from pathlib import Path
 from typing import Iterable
 
@@ -12,6 +13,7 @@ VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "windows10"
 DEFAULT_SERVER = "win10-server"
 DEFAULT_CLIENT = "win10-client"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
 GUEST_TESTS_ROOT = Path(r"C:\xp2p\tests\guest")
@@ -73,20 +75,36 @@ def _extract_marker(output: str, marker: str) -> str | None:
 
 
 def run_xp2p(host: Host, args: Iterable[str]) -> CommandResult:
-    xp2p_ps = str(XP2P_EXE).replace("\\", "\\\\")
-    arguments = ", ".join(ps_quote(str(arg)) for arg in args)
+    payload = _encode_args_payload(args)
+    return run_guest_script(
+        host,
+        "scripts/run_xp2p_command.ps1",
+        Xp2pPath=str(XP2P_EXE),
+        ArgsBase64=payload,
+    )
+
+
+def _encode_args_payload(args: Iterable[str]) -> str:
+    raw = json.dumps([str(arg) for arg in args])
+    return base64.b64encode(raw.encode("utf-8")).decode("ascii")
+
+
+def _ensure_log_directories(host: Host) -> None:
+    log_dirs = [
+        LOGS_DIR,
+        LOGS_DIR / "client",
+        LOGS_DIR / "server",
+    ]
+    dir_list = ", ".join(ps_quote(str(path)) for path in log_dirs)
     script = f"""
 $ErrorActionPreference = 'Stop'
-$xp2p = '{xp2p_ps}'
-if (-not (Test-Path $xp2p)) {{
-    Write-Output '__XP2P_MISSING__'
-    exit 3
+foreach ($dir in @({dir_list})) {{
+    if (-not (Test-Path $dir)) {{
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }}
 }}
-$arguments = @({arguments})
-& $xp2p @arguments
-exit $LASTEXITCODE
 """
-    return run_powershell(host, script)
+    run_powershell(host, script)
 
 
 def ensure_msi_package(host: Host) -> str:
@@ -127,7 +145,7 @@ $msi = {msi_str}
 if (-not (Test-Path $msi)) {{
     throw "MSI package not found at $msi"
 }}
-$arguments = @('/i', $msi, '/qn', '/norestart')
+$arguments = @('/i', $msi, '/qn', '/norestart', 'XP2P_SKIP_SERVICE_START=1')
 $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -Wait -PassThru
 if ($process.ExitCode -ne 0) {{
     exit $process.ExitCode
@@ -140,6 +158,33 @@ exit 0
             "Failed to install xp2p via MSI.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+
+
+def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -> None:
+    if not force_reinstall and path_exists(host, XP2P_EXE):
+        _ensure_log_directories(host)
+        return
+
+    msi_path = ensure_msi_package(host)
+    install_xp2p_from_msi(host, msi_path)
+
+    if not path_exists(host, XP2P_EXE):
+        raise RuntimeError(
+            f"xp2p.exe not found at {XP2P_EXE} after MSI installation on remote host."
+        )
+    _ensure_log_directories(host)
+
+
+def ensure_admin_token(host: Host) -> None:
+    script = """
+$ErrorActionPreference = 'Stop'
+$path = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System'
+$value = Get-ItemProperty -Path $path -Name 'LocalAccountTokenFilterPolicy' -ErrorAction SilentlyContinue
+if (-not $value -or $value.LocalAccountTokenFilterPolicy -ne 1) {
+    New-ItemProperty -Path $path -Name 'LocalAccountTokenFilterPolicy' -PropertyType DWord -Value 1 -Force | Out-Null
+}
+"""
+    run_powershell(host, script)
 
 
 def get_remote_file_size(host: Host, path: str | Path) -> int:

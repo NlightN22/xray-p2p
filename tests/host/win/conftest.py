@@ -51,9 +51,11 @@ def xp2p_msi_path(server_host: Host) -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def xp2p_program_files_setup(server_host: Host, client_host: Host, xp2p_msi_path: str):
-    win_env.install_xp2p_from_msi(server_host, xp2p_msi_path)
-    win_env.install_xp2p_from_msi(client_host, xp2p_msi_path)
+def xp2p_program_files_setup(server_host: Host, client_host: Host):
+    win_env.ensure_admin_token(server_host)
+    win_env.ensure_admin_token(client_host)
+    win_env.ensure_program_files_install(server_host, force_reinstall=True)
+    win_env.ensure_program_files_install(client_host, force_reinstall=True)
     yield
 
 
@@ -71,6 +73,7 @@ def client_host() -> Host:
 
 @pytest.fixture
 def xp2p_server_service(server_host: Host, xp2p_options: dict):
+    win_env.ensure_program_files_install(server_host)
     port = xp2p_options["port"]
     pid_value: int | None = None
     try:
@@ -138,6 +141,8 @@ exit 0
 
 @pytest.fixture
 def xp2p_client_run_factory(client_host: Host):
+    win_env.ensure_program_files_install(client_host)
+
     def _factory(install_dir: str, config_dir: str, log_relative: str):
         return _client_runtime.xp2p_client_run_session(client_host, install_dir, config_dir, log_relative)
 
@@ -146,6 +151,8 @@ def xp2p_client_run_factory(client_host: Host):
 
 @pytest.fixture
 def xp2p_server_run_factory(server_host: Host):
+    win_env.ensure_program_files_install(server_host)
+
     def _factory(install_dir: str, config_dir: str, log_relative: str):
         return _server_runtime.xp2p_server_run_session(server_host, install_dir, config_dir, log_relative)
 
@@ -156,6 +163,8 @@ def xp2p_server_run_factory(server_host: Host):
 def xp2p_client_runner(
     client_host: Host,
 ) -> Callable[..., CommandResult]:
+    win_env.ensure_program_files_install(client_host)
+
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
@@ -183,6 +192,8 @@ def xp2p_client_runner(
 def xp2p_server_runner(
     server_host: Host,
 ) -> Callable[..., CommandResult]:
+    win_env.ensure_program_files_install(server_host)
+
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":

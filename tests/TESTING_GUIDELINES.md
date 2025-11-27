@@ -26,6 +26,7 @@ guest suites -- the CI and fellow contributors expect these rules.
   helpers).
 - Tests must be **hermetic** -- no dependence on global state beyond what the
   suite fixtures provision (MSI install on Windows, `.deb` install on Linux, etc.).
+- Windows Vagrant VMs run evaluation images; if the license expires Windows License Monitoring Service (`wlms.exe`) shuts the guest down every few hours (Event 1074/User32). Always refresh or re-arm the license before long host test runs, otherwise pytest sessions lose the guest mid-test.
 
 ---
 

@@ -9,6 +9,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Use `go fmt ./...` before sending changes; CI will double-check formatting.
 - Build binaries with `make build`. Supported targets are defined once in `go/internal/buildtarget`, and the helper `go/tools/targets` drives both the Makefile and CI so packages stay in sync. The version is injected via ldflags and binaries keep their platform-specific names (`xp2p`, `xp2p.exe`).
 - When authoring service units or packaging hooks (systemd or procd), run `xp2p ... service run` without extra CLI flags. Services must rely on the default configuration baked into the binary, and packages must manage enabling/disabling them without injecting custom flags so upgrades do not require flag migrations.
+- Windows Vagrant guests ship with evaluation licenses. Once the license expires `wlms.exe` will power off the VM every few hours (Event ID 1074/User32). Refresh or re-arm the license before running Windows host tests to avoid silent shutdowns during pytest.
 
 ## Testing
 

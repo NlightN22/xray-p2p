@@ -93,6 +93,7 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 	flags.Duration("heartbeat-timeout", 2*time.Second, "heartbeat timeout")
 	flags.String("heartbeat-port", "", "diagnostics service port to probe")
 	flags.String("heartbeat-socks", "", "SOCKS5 proxy for heartbeat (optional)")
+	flags.Bool("windows-service", false, "internal flag used when launched by the Windows Service Manager")
 	return cmd
 }
 
@@ -174,6 +175,7 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	hbTimeout := fs.Duration("heartbeat-timeout", 2*time.Second, "heartbeat timeout")
 	hbPort := fs.String("heartbeat-port", cfg.Server.Port, "diagnostics service port to probe")
 	hbSocks := fs.String("heartbeat-socks", cfg.Client.SocksAddress, "SOCKS5 proxy for heartbeat (optional)")
+	windowsSvc := fs.Bool("windows-service", false, "internal flag used when launched by the Windows Service Manager")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -217,12 +219,13 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	}
 
 	opts := client.ServiceOptions{
-		InstallDir:   installDir,
-		ConfigDir:    configDirName,
-		XrayLogPath:  xrayLogPath,
-		DiagPort:     diagPort,
-		MaxRestarts:  *maxRestarts,
-		RestartDelay: *restartDelay,
+		InstallDir:     installDir,
+		ConfigDir:      configDirName,
+		XrayLogPath:    xrayLogPath,
+		DiagPort:       diagPort,
+		MaxRestarts:    *maxRestarts,
+		RestartDelay:   *restartDelay,
+		WindowsService: *windowsSvc,
 		Heartbeat: client.HeartbeatOptions{
 			Enabled:      *hbEnabled,
 			Interval:     *hbInterval,

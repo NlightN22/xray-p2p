@@ -55,6 +55,7 @@ type ServiceOptions struct {
 	DiagPort     string
 	MaxRestarts  int
 	RestartDelay time.Duration
+	WindowsService bool
 }
 
 // RemoveOptions controls removal of the server-side components.

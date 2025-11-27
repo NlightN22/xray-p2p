@@ -4,9 +4,13 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/svc"
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -19,7 +23,20 @@ func RunService(ctx context.Context, opts ServiceOptions) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if opts.WindowsService {
+		handler := &clientWindowsService{opts: opts}
+		if err := svc.Run("xp2p-client", handler); err != nil {
+			if errors.Is(err, windows.ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
+				return runClientServiceLoop(ctx, opts)
+			}
+			return fmt.Errorf("xp2p client windows service: %w", err)
+		}
+		return handler.err
+	}
+	return runClientServiceLoop(ctx, opts)
+}
 
+func runClientServiceLoop(ctx context.Context, opts ServiceOptions) error {
 	installDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
 		return err
@@ -80,4 +97,45 @@ func RunService(ctx context.Context, opts ServiceOptions) error {
 		return fmt.Errorf("xp2p client service: %w", err)
 	}
 	return nil
+}
+
+type clientWindowsService struct {
+	opts ServiceOptions
+	err  error
+}
+
+func (s *clientWindowsService) Execute(_ []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+	const accepts = svc.AcceptStop | svc.AcceptShutdown
+	changes <- svc.Status{State: svc.StartPending}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runClientServiceLoop(ctx, s.opts)
+	}()
+
+	changes <- svc.Status{State: svc.Running, Accepts: accepts}
+
+	for {
+		select {
+		case err := <-errCh:
+			s.err = err
+			if err != nil {
+				logging.Error("xp2p client service failed", "err", err)
+				changes <- svc.Status{State: svc.Stopped}
+				return false, 1
+			}
+			changes <- svc.Status{State: svc.Stopped}
+			return false, 0
+		case change := <-r:
+			switch change.Cmd {
+			case svc.Interrogate:
+				changes <- change.CurrentStatus
+			case svc.Stop, svc.Shutdown:
+				changes <- svc.Status{State: svc.StopPending, Accepts: accepts}
+				cancel()
+			default:
+			}
+		}
+	}
 }

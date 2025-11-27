@@ -87,6 +87,7 @@ func newServerServiceRunCmd(cfg commandConfig) *cobra.Command {
 	flags.String("xray-log-file", filepath.Join(layout.UnixLogRoot, "server", "xray-service.log"), "xray stderr log file")
 	flags.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	flags.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
+	flags.Bool("windows-service", false, "internal flag used when launched by the Windows Service Manager")
 	return cmd
 }
 
@@ -162,6 +163,7 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	xrayLog := fs.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
 	maxRestarts := fs.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	restartDelay := fs.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
+	windowsSvc := fs.Bool("windows-service", false, "internal flag used when launched by the Windows Service Manager")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -199,12 +201,13 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	}
 
 	opts := server.ServiceOptions{
-		InstallDir:   installDir,
-		ConfigDir:    configDirName,
-		XrayLogPath:  xrayLogPath,
-		DiagPort:     cfg.Server.Port,
-		MaxRestarts:  *maxRestarts,
-		RestartDelay: *restartDelay,
+		InstallDir:     installDir,
+		ConfigDir:      configDirName,
+		XrayLogPath:    xrayLogPath,
+		DiagPort:       cfg.Server.Port,
+		MaxRestarts:    *maxRestarts,
+		RestartDelay:   *restartDelay,
+		WindowsService: *windowsSvc,
 	}
 	if err := serverServiceRunFunc(ctx, opts); err != nil {
 		logging.Error("xp2p server service failed", "err", err)

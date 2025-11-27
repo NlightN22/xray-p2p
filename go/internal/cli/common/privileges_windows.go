@@ -27,6 +27,14 @@ func currentUserIsAdmin() (bool, error) {
 	}
 	defer token.Close()
 
+	if user, err := token.GetTokenUser(); err == nil {
+		if systemSID, sidErr := windows.CreateWellKnownSid(windows.WinLocalSystemSid); sidErr == nil {
+			if windows.EqualSid(user.User.Sid, systemSID) {
+				return true, nil
+			}
+		}
+	}
+
 	adminSID, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
 	if err != nil {
 		return false, err

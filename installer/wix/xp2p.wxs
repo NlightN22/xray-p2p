@@ -14,6 +14,7 @@
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="XP2P_CLIENT_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
+    <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" />
 
     <CustomAction Id="SetPerUserInstall" Property="MSIINSTALLPERUSER" Value="1" Execute="immediate" />
     <CustomAction Id="SetPerUserFolder" Property="INSTALLFOLDER" Value="[LocalAppDataFolder]xp2p" Execute="immediate" />
@@ -65,11 +66,9 @@
                         ErrorControl="normal"
                         Vital="yes"
                         Account="LocalSystem"
-                        Arguments='client service run --path "[INSTALLFOLDER]" --config-dir config-client --log-file "[INSTALLFOLDER]logs\client\service.log" --xray-log-file "[INSTALLFOLDER]logs\client\xray-service.log"'
-                        DelayedAutoStart="no" />
+                        Arguments='client service run --path "[INSTALLFOLDER]" --config-dir config-client --log-file "[INSTALLFOLDER]logs\client\service.log" --xray-log-file "[INSTALLFOLDER]logs\client\xray-service.log" --windows-service' />
         <ServiceControl Id="SvcControlClient"
                         Name="xp2p-client"
-                        Start="install"
                         Stop="both"
                         Remove="uninstall"
                         Wait="yes" />
@@ -82,11 +81,9 @@
                         ErrorControl="normal"
                         Vital="yes"
                         Account="LocalSystem"
-                        Arguments='server service run --path "[INSTALLFOLDER]" --config-dir config-server --log-file "[INSTALLFOLDER]logs\server\service.log" --xray-log-file "[INSTALLFOLDER]logs\server\xray-service.log"'
-                        DelayedAutoStart="no" />
+                        Arguments='server service run --path "[INSTALLFOLDER]" --config-dir config-server --log-file "[INSTALLFOLDER]logs\server\service.log" --xray-log-file "[INSTALLFOLDER]logs\server\xray-service.log" --windows-service' />
         <ServiceControl Id="SvcControlServer"
                         Name="xp2p-server"
-                        Start="install"
                         Stop="both"
                         Remove="uninstall"
                         Wait="yes" />
@@ -96,6 +93,24 @@
         <CreateFolder />
         <RemoveFile Id="PurgeInstallDir" On="uninstall" Name="*" Directory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveInstallDir" On="uninstall" Directory="INSTALLFOLDER" />
+      </Component>
+
+      <Component Id="cmpServiceAutostart" Guid="{E0F23327-5C68-4699-98A5-1E4D91550ABA}" Win64="yes">
+        <Condition>NOT XP2P_SKIP_SERVICE_START</Condition>
+        <RegistryValue Root="HKLM"
+                       Key="Software\xp2p"
+                       Name="ServiceAutostart"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+        <ServiceControl Id="SvcControlClientAutoStart"
+                        Name="xp2p-client"
+                        Start="install"
+                        Wait="yes" />
+        <ServiceControl Id="SvcControlServerAutoStart"
+                        Name="xp2p-server"
+                        Start="install"
+                        Wait="yes" />
       </Component>
     </DirectoryRef>
 
@@ -109,6 +124,7 @@
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
       <ComponentRef Id="cmpXrayExe" />
+      <ComponentRef Id="cmpServiceAutostart" />
     </Feature>
   </Product>
 </Wix>
