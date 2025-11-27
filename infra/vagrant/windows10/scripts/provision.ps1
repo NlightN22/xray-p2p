@@ -323,19 +323,6 @@ function Disable-SshHostKeyChecking {
     }
 }
 
-function Enable-RemoteAdminFullToken {
-    $path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
-    Write-Info "Ensuring LocalAccountTokenFilterPolicy=1 for remote administrative sessions"
-    try {
-        New-ItemProperty -Path $path -Name 'LocalAccountTokenFilterPolicy' -PropertyType DWord -Value 1 -Force | Out-Null
-        Write-Info "LocalAccountTokenFilterPolicy enabled (remote sessions receive full admin tokens)."
-    }
-    catch {
-        Write-Info ("Failed to update LocalAccountTokenFilterPolicy: {0}" -f $_.Exception.Message)
-        throw
-    }
-}
-
 $xp2pRole = $env:XP2P_ROLE
 if ([string]::IsNullOrWhiteSpace($xp2pRole)) {
     $xp2pRole = "server"
@@ -374,5 +361,4 @@ else {
 Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
 Disable-FirewallProfiles
 Disable-SshHostKeyChecking -Patterns @("10.0.10.*")
-Enable-RemoteAdminFullToken
 Write-Info "Provisioning completed successfully."
