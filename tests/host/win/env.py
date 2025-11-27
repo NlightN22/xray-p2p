@@ -10,8 +10,8 @@ from tests.host import common
 
 REPO_ROOT = common.REPO_ROOT
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "windows10"
-DEFAULT_SERVER = "win10-server"
-DEFAULT_CLIENT = "win10-client"
+DEFAULT_SERVER = "win10-a"
+DEFAULT_CLIENT = "win10-b"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"

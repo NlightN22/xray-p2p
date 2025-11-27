@@ -156,11 +156,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Build xp2p and execute it on a Windows guest via Vagrant WinRM."
     )
-    parser.add_argument(
-        "--vm",
-        default="win10-server",
-        help="Vagrant VM name to target (default: win10-server).",
-    )
+parser.add_argument(
+    "--vm",
+    default="win10-a",
+    help="Vagrant VM name to target (default: win10-a).",
+)
     parser.set_defaults(build=False, up=False)
     parser.add_argument(
         "--build",

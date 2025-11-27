@@ -16,8 +16,8 @@
   - WinRM (plaintext): server localhost:55985, client localhost:55986 (vagrant/vagrant).
 - Re-run provisioning/tests:
   cd infra/vagrant/windows10
-  vagrant provision win10-server
-  vagrant provision win10-client
+  vagrant provision win10-a
+  vagrant provision win10-b
 - Cleanup (flags --server, --client, --all apply):
   make vagrant-win10-destroy
 - Optional: XP2P_GO_VERSION=1.22.3 make vagrant-win10 --client pins a specific Go toolchain for that VM.

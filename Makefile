@@ -5,8 +5,8 @@ VERSION ?= $(strip $(shell go run ./go/cmd/xp2p --version))
 GO_LDFLAGS := -s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$(VERSION)
 
 VAGRANT_WIN10_DIR := infra/vagrant/windows10
-VAGRANT_WIN10_SERVER_ID := win10-server
-VAGRANT_WIN10_CLIENT_ID := win10-client
+VAGRANT_WIN10_SERVER_ID := win10-a
+VAGRANT_WIN10_CLIENT_ID := win10-b
 
 VAGRANT_DEB12_DIR := infra/vagrant/debian12/deb-test
 
