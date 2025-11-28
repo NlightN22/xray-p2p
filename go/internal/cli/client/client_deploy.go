@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	deployLinkTTL      = 10 * time.Minute
-	socksReadyTimeout  = 30 * time.Second
-	socksProbeInterval = 500 * time.Millisecond
+	deployLinkTTL                 = 10 * time.Minute
+	socksReadyTimeout             = 30 * time.Second
+	socksProbeInterval            = 500 * time.Millisecond
+	deployCompletionNotifyTimeout = 30 * time.Second
 )
 
 type manifestOptions struct {
@@ -66,8 +67,10 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 
 	// Retry handshake until server is ready or timeout elapses.
 	var (
-		res          deployResult
-		handshakeErr error
+		res             deployResult
+		handshakeErr    error
+		notifyComplete  deployCompletionFunc
+		completionState = "FAIL"
 	)
 	deadline := time.Now().Add(10 * time.Minute)
 	backoff := 2 * time.Second
@@ -79,7 +82,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
 			return 1
 		}
-		res, handshakeErr = performDeployHandshake(ctx, opts)
+		res, notifyComplete, handshakeErr = performDeployHandshake(ctx, opts)
 		if handshakeErr == nil {
 			break
 		}
@@ -98,12 +101,23 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			backoff += 1 * time.Second
 		}
 	}
+	if notifyComplete != nil {
+		defer func() {
+			notifyCtx, cancel := context.WithTimeout(context.Background(), deployCompletionNotifyTimeout)
+			defer cancel()
+			if err := notifyComplete(notifyCtx, completionState); err != nil {
+				logging.Warn("xp2p client deploy: completion notify failed", "err", err)
+			}
+		}()
+	}
 
 	if res.ExitCode != 0 {
+		completionState = "FAIL server-install"
 		logging.Error("xp2p client deploy: server install failed", "exit_code", res.ExitCode)
 		return 1
 	}
 	if strings.TrimSpace(res.Link) == "" {
+		completionState = "FAIL server-link"
 		logging.Error("xp2p client deploy: missing trojan link from server")
 		return 1
 	}
@@ -117,6 +131,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 
 	installOpts := buildInstallOptionsFromLink(cfg, tl)
 	if err := clientInstallFunc(ctx, installOpts); err != nil {
+		completionState = "FAIL client-install"
 		logging.Error("xp2p client deploy: local install failed", "err", err)
 		return 1
 	}
@@ -151,8 +166,11 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	if socksAddr != "" {
 		logging.Info("xp2p client deploy: waiting for local SOCKS proxy", "socks_proxy", socksAddr)
 		if err := waitForSocksProxy(runCtx, socksAddr, socksReadyTimeout); err != nil {
+			completionState = "FAIL socks"
 			logging.Error("xp2p client deploy: socks proxy not ready", "err", err)
-			abortLocalClient(runCancel, runErrCh)
+			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
+				logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
+			}
 			return 1
 		}
 
@@ -172,8 +190,11 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			SocksProxy: socksAddr,
 		}
 		if err := ping.Run(ctx, targetHost, pingOpts); err != nil {
+			completionState = "FAIL ping"
 			logging.Error("xp2p client deploy: ping failed", "err", err)
-			abortLocalClient(runCancel, runErrCh)
+			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
+				logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
+			}
 			return 1
 		}
 		logging.Info("xp2p client deploy: ping ok")
@@ -181,11 +202,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Warn("xp2p client deploy: socks proxy address missing; skipping ping")
 	}
 
-	logging.Info("xp2p client deploy: client run active (press Ctrl+C to stop)")
-	if err := <-runErrCh; err != nil && !errors.Is(err, context.Canceled) {
+	if err := stopLocalClient(runCancel, runErrCh); err != nil {
+		completionState = "FAIL client-stop"
 		logging.Error("xp2p client deploy: client run exited", "err", err)
 		return 1
 	}
+	completionState = "OK"
+	logging.Info("xp2p client deploy: completed")
 	return 0
 }
 
@@ -309,14 +332,17 @@ func waitForSocksProxy(ctx context.Context, addr string, timeout time.Duration) 
 	}
 }
 
-func abortLocalClient(cancel context.CancelFunc, runErrCh <-chan error) {
-	cancel()
+func stopLocalClient(cancel context.CancelFunc, runErrCh <-chan error) error {
+	if cancel != nil {
+		cancel()
+	}
 	select {
 	case err := <-runErrCh:
 		if err != nil && !errors.Is(err, context.Canceled) {
-			logging.Warn("xp2p client deploy: local client run exited", "err", err)
+			return err
 		}
+		return nil
 	case <-time.After(5 * time.Second):
-		logging.Warn("xp2p client deploy: timed out waiting for local client to stop")
+		return fmt.Errorf("timeout waiting for local client to stop")
 	}
 }

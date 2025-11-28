@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -20,6 +21,8 @@ const (
 	deployBufferLimit = 64 * 1024 // 64KB cap for OUT/ERR buffers
 )
 
+type deployCompletionFunc func(ctx context.Context, status string) error
+
 type deployResult struct {
 	ExitCode int
 	Link     string
@@ -27,52 +30,67 @@ type deployResult struct {
 	ErrLog   string
 }
 
-func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResult, error) {
+func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResult, deployCompletionFunc, error) {
 	addr := net.JoinHostPort(strings.TrimSpace(opts.runtime.remoteHost), strings.TrimSpace(opts.runtime.deployPort))
 
 	d := &net.Dialer{Timeout: deployDialTimeout}
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return deployResult{}, fmt.Errorf("connect to %s: %w", addr, err)
+		return deployResult{}, nil, fmt.Errorf("connect to %s: %w", addr, err)
 	}
-	defer conn.Close()
+	closeConn := func() {
+		if conn != nil {
+			_ = conn.Close()
+			conn = nil
+		}
+	}
 
 	if err := conn.SetDeadline(time.Now().Add(deployIOTimeout)); err != nil {
-		return deployResult{}, err
+		closeConn()
+		return deployResult{}, nil, err
 	}
 
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 	// AUTH (no token for v2)
 	if _, err := fmt.Fprintf(rw, "AUTH\n"); err != nil {
-		return deployResult{}, fmt.Errorf("send AUTH: %w", err)
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("send AUTH: %w", err)
 	}
 	if err := rw.Flush(); err != nil {
-		return deployResult{}, fmt.Errorf("flush AUTH: %w", err)
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("flush AUTH: %w", err)
 	}
 
 	line, err := readLine(rw)
 	if err != nil {
-		return deployResult{}, fmt.Errorf("read AUTH response: %w", err)
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("read AUTH response: %w", err)
 	}
 	if !strings.HasPrefix(line, "OK") {
 		if strings.HasPrefix(line, "ERR ") {
-			return deployResult{}, fmt.Errorf("server error: %s", strings.TrimSpace(strings.TrimPrefix(line, "ERR ")))
+			closeConn()
+			return deployResult{}, nil, fmt.Errorf("server error: %s", strings.TrimSpace(strings.TrimPrefix(line, "ERR ")))
 		}
-		return deployResult{}, fmt.Errorf("unexpected AUTH response: %q", line)
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("unexpected AUTH response: %q", line)
 	}
 
 	if len(opts.runtime.ciphertext) == 0 {
-		return deployResult{}, fmt.Errorf("encrypted manifest missing")
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("encrypted manifest missing")
 	}
 	if _, err := fmt.Fprintf(rw, "MANIFEST-ENC %d\n", len(opts.runtime.ciphertext)); err != nil {
-		return deployResult{}, fmt.Errorf("send MANIFEST-ENC header: %w", err)
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("send MANIFEST-ENC header: %w", err)
 	}
 	if _, err := rw.Write(opts.runtime.ciphertext); err != nil {
-		return deployResult{}, fmt.Errorf("send MANIFEST-ENC body: %w", err)
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("send MANIFEST-ENC body: %w", err)
 	}
 	if err := rw.Flush(); err != nil {
-		return deployResult{}, fmt.Errorf("flush MANIFEST-ENC: %w", err)
+		closeConn()
+		return deployResult{}, nil, fmt.Errorf("flush MANIFEST-ENC: %w", err)
 	}
 
 	// Process server responses
@@ -88,14 +106,16 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 
 	for {
 		if err := conn.SetDeadline(time.Now().Add(deployIOTimeout)); err != nil {
-			return deployResult{}, err
+			closeConn()
+			return deployResult{}, nil, err
 		}
 		l, err := readLine(rw)
 		if err != nil {
 			if errors.Is(err, errEOF) {
 				break
 			}
-			return deployResult{}, err
+			closeConn()
+			return deployResult{}, nil, err
 		}
 
 		switch {
@@ -113,29 +133,75 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 				logging.Info("server", "out", line)
 				outBuf.appendLine(line)
 			}); err != nil {
-				return deployResult{}, err
+				closeConn()
+				return deployResult{}, nil, err
 			}
 		case l == "ERR-BEGIN":
 			if err := readSegment(rw, "ERR-END", func(line string) {
 				logging.Warn("server", "err", line)
 				errBuf.appendLine(line)
 			}); err != nil {
-				return deployResult{}, err
+				closeConn()
+				return deployResult{}, nil, err
 			}
 		case strings.HasPrefix(l, "LINK "):
 			link = strings.TrimSpace(strings.TrimPrefix(l, "LINK "))
 			logging.Info("xp2p client deploy: trojan link received", "link", link)
 		case l == "DONE":
-			return deployResult{ExitCode: exitCode, Link: link, OutLog: outBuf.String(), ErrLog: errBuf.String()}, nil
+			result := deployResult{ExitCode: exitCode, Link: link, OutLog: outBuf.String(), ErrLog: errBuf.String()}
+			var completeOnce sync.Once
+			completion := func(doneCtx context.Context, status string) error {
+				var completionErr error
+				completeOnce.Do(func() {
+					if doneCtx == nil {
+						doneCtx = context.Background()
+					}
+					if status = strings.TrimSpace(status); status == "" {
+						status = "OK"
+					}
+					deadline := time.Now().Add(deployCompletionNotifyTimeout)
+					if dl, ok := doneCtx.Deadline(); ok {
+						deadline = dl
+					}
+					if err := conn.SetDeadline(deadline); err != nil {
+						completionErr = err
+						closeConn()
+						return
+					}
+					if _, err := fmt.Fprintf(rw, "COMPLETE %s\n", status); err != nil {
+						completionErr = fmt.Errorf("send COMPLETE: %w", err)
+						closeConn()
+						return
+					}
+					if err := rw.Flush(); err != nil {
+						completionErr = fmt.Errorf("flush COMPLETE: %w", err)
+						closeConn()
+						return
+					}
+					reply, err := readLine(rw)
+					closeConn()
+					if err != nil {
+						completionErr = fmt.Errorf("read COMPLETE ack: %w", err)
+						return
+					}
+					if strings.TrimSpace(reply) != "BYE" {
+						completionErr = fmt.Errorf("unexpected COMPLETE ack: %q", reply)
+					}
+				})
+				return completionErr
+			}
+			return result, completion, nil
 		case strings.HasPrefix(l, "ERR "):
-			return deployResult{}, fmt.Errorf("server error: %s", strings.TrimSpace(strings.TrimPrefix(l, "ERR ")))
+			closeConn()
+			return deployResult{}, nil, fmt.Errorf("server error: %s", strings.TrimSpace(strings.TrimPrefix(l, "ERR ")))
 		default:
 			// Unknown line, keep a trace to help debugging but avoid spam.
 			logging.Debug("xp2p client deploy: unhandled line", "line", l)
 		}
 	}
 
-	return deployResult{ExitCode: exitCode, Link: link, OutLog: outBuf.String(), ErrLog: errBuf.String()}, nil
+	closeConn()
+	return deployResult{ExitCode: exitCode, Link: link, OutLog: outBuf.String(), ErrLog: errBuf.String()}, nil, nil
 }
 
 // --- helpers ---

@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	serverDeployIOTimeout = 60 * time.Second
+	serverDeployIOTimeout         = 60 * time.Second
+	serverDeployCompletionTimeout = 5 * time.Minute
 )
 
 func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results chan<- runSignal) {
@@ -103,7 +104,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 	}
 	logging.Info("xp2p server deploy: manifest decrypted", "host", manifest.Host, "install_dir", manifest.InstallDir, "trojan_port", manifest.TrojanPort, "user", manifest.TrojanUser, "expires_at", manifest.ExpiresAt)
 
-	s.proceedInstall(ctx, rw, results, manifest)
+	s.proceedInstall(ctx, conn, rw, results, manifest)
 }
 
 func parseDeployLink(raw string) (deploylink.EncryptedLink, error) {
@@ -166,7 +167,7 @@ func generateSecret(size int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter, results chan<- runSignal, man spec.Manifest) {
+func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bufio.ReadWriter, results chan<- runSignal, man spec.Manifest) {
 	host := strings.TrimSpace(man.Host)
 	if host == "" {
 		host = strings.TrimSpace(s.Expected.Host)
@@ -258,5 +259,29 @@ func (s *deployServer) proceedInstall(ctx context.Context, rw *bufio.ReadWriter,
 	_ = writeLine(rw, "DONE")
 	if results != nil {
 		results <- runSignal{ok: true, installDir: installDir, configDir: configDir}
+	}
+	s.waitForCompletion(conn, rw, results)
+}
+
+func (s *deployServer) waitForCompletion(conn net.Conn, rw *bufio.ReadWriter, results chan<- runSignal) {
+	if conn != nil {
+		_ = conn.SetDeadline(time.Now().Add(serverDeployCompletionTimeout))
+	}
+	line, err := readLine(rw)
+	status := ""
+	if err != nil {
+		logging.Warn("xp2p server deploy: completion wait failed", "err", err)
+		status = "error"
+	} else if !strings.HasPrefix(line, "COMPLETE") {
+		logging.Warn("xp2p server deploy: unexpected completion signal", "line", line)
+		status = strings.TrimSpace(line)
+	} else {
+		status = strings.TrimSpace(strings.TrimPrefix(line, "COMPLETE"))
+		if ackErr := writeLine(rw, "BYE"); ackErr != nil {
+			logging.Warn("xp2p server deploy: completion ack failed", "err", ackErr)
+		}
+	}
+	if results != nil {
+		results <- runSignal{completed: true, status: status}
 	}
 }
