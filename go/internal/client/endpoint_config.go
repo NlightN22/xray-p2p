@@ -9,12 +9,13 @@ import (
 )
 
 type endpointConfig struct {
-	Hostname      string
-	Port          int
-	User          string
-	Password      string
-	ServerName    string
-	AllowInsecure bool
+	Hostname              string
+	Port                  int
+	User                  string
+	Password              string
+	ServerName            string
+	AllowInsecure         bool
+	AllowInsecureOverride bool
 }
 
 func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointConfig, force bool) error {
@@ -29,6 +30,11 @@ func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointCon
 		return err
 	}
 
+	allowValue := endpoint.AllowInsecure
+	if !endpoint.AllowInsecureOverride && len(state.Endpoints) > 0 {
+		allowValue = state.Endpoints[0].AllowInsecure
+	}
+
 	record := clientEndpointRecord{
 		Hostname:      host,
 		Tag:           tag,
@@ -37,7 +43,7 @@ func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointCon
 		User:          endpoint.User,
 		Password:      endpoint.Password,
 		ServerName:    endpoint.ServerName,
-		AllowInsecure: endpoint.AllowInsecure,
+		AllowInsecure: allowValue,
 	}
 
 	if err := state.upsert(record, force); err != nil {
@@ -46,6 +52,10 @@ func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointCon
 
 	if _, err := state.ensureReverseChannel(record.User, record.Hostname, record.Tag); err != nil {
 		return err
+	}
+
+	if endpoint.AllowInsecureOverride {
+		state.applyAllowInsecure(record.AllowInsecure)
 	}
 
 	if err := state.save(stateFile); err != nil {

@@ -3,7 +3,6 @@ package client
 import (
 	"errors"
 	"fmt"
-	"net"
 	"path/filepath"
 	"strings"
 
@@ -183,35 +182,7 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 			Hostname: host,
 		})
 	}
-	for _, ep := range state.Endpoints {
-		defaultCIDR := normalizeEndpointCIDR(ep.Address)
-		if defaultCIDR == "" {
-			continue
-		}
-		addRecord(RedirectRecord{
-			Type:     "CIDR",
-			Value:    defaultCIDR,
-			CIDR:     defaultCIDR,
-			Tag:      ep.Tag,
-			Hostname: ep.Hostname,
-		})
-	}
 	return records, nil
-}
-
-func normalizeEndpointCIDR(address string) string {
-	trimmed := strings.TrimSpace(address)
-	if trimmed == "" {
-		return ""
-	}
-	ip := net.ParseIP(trimmed)
-	if ip == nil {
-		return ""
-	}
-	if v4 := ip.To4(); v4 != nil {
-		return fmt.Sprintf("%s/32", v4.String())
-	}
-	return fmt.Sprintf("%s/128", ip.String())
 }
 
 func resolveRedirectPaths(installDir, configDir string) (redirectPaths, error) {

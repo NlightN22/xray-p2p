@@ -116,3 +116,24 @@ func TestLoadClientInstallStateIgnoresEmptyFile(t *testing.T) {
 		t.Fatalf("expected empty endpoints, got %+v", state.Endpoints)
 	}
 }
+
+func TestClientInstallStateApplyAllowInsecure(t *testing.T) {
+	state := clientInstallState{
+		Endpoints: []clientEndpointRecord{
+			{Hostname: "alpha.example", AllowInsecure: false},
+			{Hostname: "beta.example", AllowInsecure: true},
+		},
+	}
+	state.applyAllowInsecure(true)
+	for _, ep := range state.Endpoints {
+		if !ep.AllowInsecure {
+			t.Fatalf("expected endpoint %s to allow insecure", ep.Hostname)
+		}
+	}
+	state.applyAllowInsecure(false)
+	for _, ep := range state.Endpoints {
+		if ep.AllowInsecure {
+			t.Fatalf("expected endpoint %s to disable insecure mode", ep.Hostname)
+		}
+	}
+}

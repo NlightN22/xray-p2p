@@ -94,29 +94,11 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list redirects: %v", err)
 	}
-	if len(list) != 2 {
+	if len(list) != 1 {
 		t.Fatalf("unexpected list result %+v", list)
 	}
-	foundCustom := false
-	foundDefault := false
-	for _, rec := range list {
-		switch rec.Value {
-		case "10.70.0.0/16":
-			foundCustom = true
-			if rec.Type != "CIDR" || rec.Hostname != "server.example" {
-				t.Fatalf("unexpected custom entry %+v", rec)
-			}
-		case "203.0.113.10/32":
-			foundDefault = true
-			if rec.Type != "CIDR" || rec.Hostname != "server.example" {
-				t.Fatalf("unexpected default entry %+v", rec)
-			}
-		default:
-			t.Fatalf("unexpected list entry %+v", rec)
-		}
-	}
-	if !foundCustom || !foundDefault {
-		t.Fatalf("missing expected list entries %+v", list)
+	if list[0].Value != "10.70.0.0/16" || list[0].Hostname != "server.example" || list[0].Type != "CIDR" {
+		t.Fatalf("unexpected redirect entry %+v", list[0])
 	}
 }
 
@@ -200,29 +182,11 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list redirects: %v", err)
 	}
-	if len(list) != 2 {
+	if len(list) != 1 {
 		t.Fatalf("unexpected list result %+v", list)
 	}
-	foundDomain := false
-	foundDefault := false
-	for _, rec := range list {
-		switch rec.Value {
-		case "app.service.example":
-			foundDomain = true
-			if rec.Type != "domain" {
-				t.Fatalf("unexpected domain entry %+v", rec)
-			}
-		case "203.0.113.10/32":
-			foundDefault = true
-			if rec.Type != "CIDR" {
-				t.Fatalf("unexpected default entry %+v", rec)
-			}
-		default:
-			t.Fatalf("unexpected list entry %+v", rec)
-		}
-	}
-	if !foundDomain || !foundDefault {
-		t.Fatalf("missing list entries %+v", list)
+	if list[0].Value != "app.service.example" || list[0].Type != "domain" || list[0].Hostname != "server.example" {
+		t.Fatalf("unexpected domain entry %+v", list[0])
 	}
 }
 
@@ -285,24 +249,11 @@ func TestRemoveRedirectByTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list redirects: %v", err)
 	}
-	if len(list) != 2 {
-		t.Fatalf("expected 2 list entries, got %d", len(list))
+	if len(list) != 1 {
+		t.Fatalf("expected 1 list entry, got %d", len(list))
 	}
-	expected := map[string]bool{
-		"10.70.0.0/16":    false,
-		"203.0.113.10/32": false,
-	}
-	for _, rec := range list {
-		if _, ok := expected[rec.Value]; ok {
-			expected[rec.Value] = true
-		} else {
-			t.Fatalf("unexpected list entry %+v", rec)
-		}
-	}
-	for value, seen := range expected {
-		if !seen {
-			t.Fatalf("missing list entry for %s", value)
-		}
+	if list[0].Value != "10.70.0.0/16" || list[0].Tag != "proxy-server-example" {
+		t.Fatalf("unexpected list entry %+v", list[0])
 	}
 }
 

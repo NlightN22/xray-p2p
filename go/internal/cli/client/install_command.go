@@ -53,6 +53,9 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	userFlagProvided := false
 	hostProvided := false
 	passwordProvided := false
+	sniFlagProvided := false
+	allowInsecureRequested := false
+	strictTLSRequested := false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "user":
@@ -61,6 +64,12 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 			hostProvided = true
 		case "password":
 			passwordProvided = true
+		case "sni":
+			sniFlagProvided = true
+		case "allow-insecure":
+			allowInsecureRequested = true
+		case "strict-tls":
+			strictTLSRequested = true
 		}
 	})
 
@@ -94,6 +103,10 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	serverNameValue := cfg.Client.ServerName
 	allowInsecureValue := cfg.Client.AllowInsecure
 
+	if sniFlagProvided && !*strictTLS {
+		allowInsecureValue = true
+	}
+
 	if linkValue != "" {
 		serverAddressValue = linkData.ServerAddress
 		serverPortValue = linkData.ServerPort
@@ -111,22 +124,27 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	passwordValue = firstNonEmpty(*password, passwordValue)
 	serverNameValue = firstNonEmpty(*serverName, serverNameValue)
 
+	allowOverride := allowInsecureRequested || strictTLSRequested || (sniFlagProvided && !*strictTLS)
+
 	opts := client.InstallOptions{
-		InstallDir:    installDir,
-		ConfigDir:     configDirName,
-		ServerAddress: serverAddressValue,
-		ServerPort:    serverPortValue,
-		User:          userValue,
-		Password:      passwordValue,
-		ServerName:    serverNameValue,
-		AllowInsecure: allowInsecureValue,
-		Force:         *force,
+		InstallDir:            installDir,
+		ConfigDir:             configDirName,
+		ServerAddress:         serverAddressValue,
+		ServerPort:            serverPortValue,
+		User:                  userValue,
+		Password:              passwordValue,
+		ServerName:            serverNameValue,
+		AllowInsecure:         allowInsecureValue,
+		AllowInsecureOverride: allowOverride,
+		Force:                 *force,
 	}
 	if *allowInsecure {
 		opts.AllowInsecure = true
+		opts.AllowInsecureOverride = true
 	}
 	if *strictTLS {
 		opts.AllowInsecure = false
+		opts.AllowInsecureOverride = true
 	}
 
 	if err := clientInstallFunc(ctx, opts); err != nil {

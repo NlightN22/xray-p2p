@@ -35,7 +35,7 @@ var defaultValues = map[string]any{
 	"client.user":           "",
 	"client.password":       "",
 	"client.server_name":    "",
-	"client.allow_insecure": true,
+	"client.allow_insecure": false,
 	"client.socks_address":  "127.0.0.1:51180",
 }
 

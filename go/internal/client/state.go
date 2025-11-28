@@ -208,6 +208,12 @@ func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) err
 	return nil
 }
 
+func (s *clientInstallState) applyAllowInsecure(value bool) {
+	for idx := range s.Endpoints {
+		s.Endpoints[idx].AllowInsecure = value
+	}
+}
+
 func (s *clientInstallState) addForward(rule forward.Rule) error {
 	s.normalize()
 	for _, existing := range s.Forwards {

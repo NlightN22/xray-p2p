@@ -1,5 +1,6 @@
 import base64
 import json
+import uuid
 from pathlib import Path
 from typing import Iterable
 
@@ -17,6 +18,7 @@ LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
 GUEST_TESTS_ROOT = Path(r"C:\xp2p\tests\guest")
+LOCAL_GUEST_TESTS_ROOT = REPO_ROOT / "tests" / "guest"
 MSI_MARKER = "__MSI_PATH__="
 
 MSI_CACHE_DIR_X64 = Path(r"C:\xp2p\build\msi-cache")
@@ -55,15 +57,55 @@ def _ps_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def run_guest_script(host: Host, relative_path: str, **parameters: object) -> CommandResult:
-    script_path = GUEST_TESTS_ROOT / relative_path
-    ps_path = str(script_path).replace("'", "''")
-    args = "".join(f" -{key} {_ps_quote(str(value))}" for key, value in parameters.items())
-    command = (
-        "powershell -NoProfile -ExecutionPolicy Bypass "
-        f"-Command \"& '{ps_path}'{args}\""
+def _stage_guest_script(host: Host, relative: Path, *, relative_label: str) -> tuple[Path, Path]:
+    local_script = LOCAL_GUEST_TESTS_ROOT / relative
+    if not local_script.exists():
+        raise RuntimeError(f"Guest script {relative_label} not found at {local_script}")
+    staged_path = Path(r"C:\Windows\Temp") / f"xp2p-guest-script-{uuid.uuid4().hex}.ps1"
+    write_text(host, staged_path, local_script.read_text(encoding="utf-8"))
+    return staged_path, staged_path
+
+
+def _missing_script_error(result: CommandResult, script_path: Path) -> bool:
+    combined = f"{result.stdout}\n{result.stderr}".lower()
+    if not combined:
+        return False
+    target = str(script_path).lower()
+    if target not in combined:
+        return False
+    indicators = (
+        "commandnotfoundexception",
+        "not recognized as the name of a cmdlet",
+        "cannot find path",
     )
-    return host.run(command)
+    return any(marker in combined for marker in indicators)
+
+
+def run_guest_script(host: Host, relative_path: str, **parameters: object) -> CommandResult:
+    relative = Path(relative_path)
+    script_path = GUEST_TESTS_ROOT / relative
+    cleanup_path: Path | None = None
+    if not path_exists(host, script_path):
+        script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
+
+    def _invoke(target: Path) -> CommandResult:
+        ps_path = str(target).replace("'", "''")
+        args = "".join(f" -{key} {_ps_quote(str(value))}" for key, value in parameters.items())
+        command = (
+            "powershell -NoProfile -ExecutionPolicy Bypass "
+            f"-Command \"& '{ps_path}'{args}\""
+        )
+        return host.run(command)
+
+    try:
+        result = _invoke(script_path)
+        if result.rc != 0 and cleanup_path is None and _missing_script_error(result, script_path):
+            script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
+            result = _invoke(script_path)
+        return result
+    finally:
+        if cleanup_path is not None:
+            remove_path(host, cleanup_path)
 
 
 def _extract_marker(output: str, marker: str) -> str | None:

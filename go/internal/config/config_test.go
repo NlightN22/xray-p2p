@@ -61,8 +61,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Client.ServerName != "" {
 		t.Fatalf("expected empty client server name by default")
 	}
-	if !cfg.Client.AllowInsecure {
-		t.Fatalf("expected default client allowInsecure to be true")
+	if cfg.Client.AllowInsecure {
+		t.Fatalf("expected default client allowInsecure to be false")
 	}
 }
 

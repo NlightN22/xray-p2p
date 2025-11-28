@@ -18,15 +18,16 @@ var ErrServiceUnsupported = errors.New("xp2p: client service is not supported on
 
 // InstallOptions describes how the client-side components should be provisioned.
 type InstallOptions struct {
-	InstallDir    string
-	ConfigDir     string
-	ServerAddress string
-	ServerPort    string
-	User          string
-	Password      string
-	ServerName    string
-	AllowInsecure bool
-	Force         bool
+	InstallDir            string
+	ConfigDir             string
+	ServerAddress         string
+	ServerPort            string
+	User                  string
+	Password              string
+	ServerName            string
+	AllowInsecure         bool
+	AllowInsecureOverride bool
+	Force                 bool
 }
 
 // RunOptions controls execution of the xray-core client process.

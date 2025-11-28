@@ -162,15 +162,16 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 
 	state := installState{
 		InstallOptions: InstallOptions{
-			InstallDir:    dir,
-			ConfigDir:     opts.ConfigDir,
-			ServerAddress: address,
-			ServerPort:    portStr,
-			User:          user,
-			Password:      password,
-			ServerName:    serverName,
-			AllowInsecure: opts.AllowInsecure,
-			Force:         opts.Force,
+			InstallDir:            dir,
+			ConfigDir:             opts.ConfigDir,
+			ServerAddress:         address,
+			ServerPort:            portStr,
+			User:                  user,
+			Password:              password,
+			ServerName:            serverName,
+			AllowInsecure:         opts.AllowInsecure,
+			AllowInsecureOverride: opts.AllowInsecureOverride,
+			Force:                 opts.Force,
 		},
 		installDir: dir,
 		configDir:  configDir,
@@ -220,12 +221,13 @@ func deployConfiguration(state installState) error {
 	}
 
 	return applyClientEndpointConfig(state.configDir, state.stateFile, endpointConfig{
-		Hostname:      state.serverHost,
-		Port:          state.serverPort,
-		User:          state.User,
-		Password:      state.Password,
-		ServerName:    state.serverName,
-		AllowInsecure: state.AllowInsecure,
+		Hostname:              state.serverHost,
+		Port:                  state.serverPort,
+		User:                  state.User,
+		Password:              state.Password,
+		ServerName:            state.serverName,
+		AllowInsecure:         state.AllowInsecure,
+		AllowInsecureOverride: state.AllowInsecureOverride,
 	}, state.Force)
 }
 
