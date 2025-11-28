@@ -239,36 +239,22 @@ function Ensure-SshdConfigDefaults {
         return $false
     }
 
-    $lines = Get-Content -Path $configPath -ErrorAction Stop
-    if (-not $lines) {
+    $content = Get-Content -Path $configPath -Raw -ErrorAction Stop
+    if (-not $content) {
         return $false
     }
 
-    $changed = $false
-    $matchPattern = '^\s*Match\s+Group\s+administrators\b'
-    $adminKeyPattern = '^\s*AuthorizedKeysFile\s+__PROGRAMDATA__/ssh/administrators_authorized_keys\b'
+    $pattern = '(?im)^\s*Match\s+Group\s+administrators\s*\r?\n\s*AuthorizedKeysFile\s+__PROGRAMDATA__/ssh/administrators_authorized_keys[^\r\n]*'
+    $replacement = "# Match Group administrators`r`n# AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys"
+    $newContent = [Regex]::Replace($content, $pattern, $replacement)
 
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        $line = $lines[$i]
-
-        if ($line -notmatch '^\s*#' -and $line -match $matchPattern) {
-            $lines[$i] = "# Match Group administrators"
-            $changed = $true
-            continue
-        }
-
-        if ($line -notmatch '^\s*#' -and $line -match $adminKeyPattern) {
-            $lines[$i] = "# AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys"
-            $changed = $true
-        }
-    }
-
-    if ($changed) {
-        Set-Content -Path $configPath -Encoding ascii -Value $lines
+    if ($newContent -ne $content) {
+        Set-Content -Path $configPath -Encoding ascii -Value $newContent
         Write-Info ("Commented administrative override entries in {0}" -f $configPath)
+        return $true
     }
 
-    return $changed
+    return $false
 }
 
 function Ensure-VagrantKeys {
