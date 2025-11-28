@@ -19,8 +19,8 @@ CLIENT_STATE_FILES = [
 ]
 CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 HEARTBEAT_STATE_FILE = CLIENT_INSTALL_DIR / "state-heartbeat.json"
-CLIENT_DEPLOY_STDOUT = Path(r"C:\xp2p\logs\client-deploy.log")
-SERVER_DEPLOY_STDOUT = Path(r"C:\xp2p\logs\server-deploy.log")
+CLIENT_DEPLOY_STDOUT = Path(r"C:\xp2p\build\guest-logs\client-deploy.log")
+SERVER_DEPLOY_STDOUT = Path(r"C:\xp2p\build\guest-logs\server-deploy.log")
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
 LOG_WAIT_TIMEOUT = 240
