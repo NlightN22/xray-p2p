@@ -166,7 +166,7 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 		Tag:       r.endpoint.Tag,
 		Host:      r.endpoint.Hostname,
 		User:      r.endpoint.User,
-		ClientIP:  detectLocalIP(),
+		ClientIP:  detectLocalIP(r.endpoint.Hostname),
 		Timestamp: time.Now().UTC(),
 		RTTMillis: result.RTT.Milliseconds(),
 	}
@@ -185,7 +185,14 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 	return nil
 }
 
-func detectLocalIP() string {
+func detectLocalIP(targetHost string) string {
+	targetIP := net.ParseIP(strings.TrimSpace(targetHost))
+	if targetIP != nil {
+		targetIP = targetIP.To4()
+	}
+
+	candidates := make([]string, 0, 4)
+
 	ifaces, err := net.Interfaces()
 	if err == nil {
 		for _, iface := range ifaces {
@@ -194,19 +201,24 @@ func detectLocalIP() string {
 			}
 			addrs, _ := iface.Addrs()
 			for _, addr := range addrs {
-				var ip net.IP
+				var ipnet *net.IPNet
 				switch v := addr.(type) {
 				case *net.IPNet:
-					ip = v.IP
+					ipnet = v
 				case *net.IPAddr:
-					ip = v.IP
+					ipnet = &net.IPNet{IP: v.IP, Mask: net.CIDRMask(32, 32)}
 				}
-				if ip == nil || ip.IsLoopback() {
+				if ipnet == nil || ipnet.IP == nil || ipnet.IP.IsLoopback() {
 					continue
 				}
-				if v4 := ip.To4(); v4 != nil {
-					return v4.String()
+				ip := ipnet.IP.To4()
+				if ip == nil {
+					continue
 				}
+				if targetIP != nil && ipnet.Contains(targetIP) {
+					return ip.String()
+				}
+				candidates = append(candidates, ip.String())
 			}
 		}
 	}
@@ -214,8 +226,43 @@ func detectLocalIP() string {
 	if err == nil {
 		defer conn.Close()
 		if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok && addr.IP != nil {
-			return addr.IP.String()
+			if v4 := addr.IP.To4(); v4 != nil {
+				candidates = append(candidates, v4.String())
+			}
 		}
 	}
+
+	for _, ip := range candidates {
+		if strings.HasPrefix(ip, "10.0.2.") {
+			continue
+		}
+		if isPrivateIPv4(ip) {
+			return ip
+		}
+	}
+	for _, ip := range candidates {
+		if strings.HasPrefix(ip, "169.254.") {
+			continue
+		}
+		return ip
+	}
 	return "127.0.0.1"
+}
+
+func isPrivateIPv4(ip string) bool {
+	if strings.HasPrefix(ip, "10.") {
+		return true
+	}
+	if strings.HasPrefix(ip, "192.168.") {
+		return true
+	}
+	if strings.HasPrefix(ip, "172.") {
+		parts := strings.Split(ip, ".")
+		if len(parts) >= 2 {
+			if oct, err := strconv.Atoi(parts[1]); err == nil && oct >= 16 && oct <= 31 {
+				return true
+			}
+		}
+	}
+	return false
 }

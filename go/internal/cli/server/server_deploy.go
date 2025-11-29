@@ -22,6 +22,7 @@ func runServerDeploy(ctx context.Context, cfg config.Config, opts serverDeployOp
 	if listenAddr == "" {
 		listenAddr = ":62025"
 	}
+	listenAddr = normalizeListenAddr(listenAddr)
 
 	var expected deploylink.EncryptedLink
 	rawLink := strings.TrimSpace(opts.Link)
@@ -57,4 +58,18 @@ func runServerDeploy(ctx context.Context, cfg config.Config, opts serverDeployOp
 	}
 	logging.Info("xp2p server deploy: stopped")
 	return 0
+}
+
+func normalizeListenAddr(addr string) string {
+	trimmed := strings.TrimSpace(addr)
+	if trimmed == "" {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, ":") {
+		return "0.0.0.0" + trimmed
+	}
+	if strings.HasPrefix(trimmed, "*:") {
+		return "0.0.0.0" + trimmed[1:]
+	}
+	return trimmed
 }

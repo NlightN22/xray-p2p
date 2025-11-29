@@ -19,7 +19,11 @@ LEGACY_STATE_FILE = INSTALL_DIR / "install-state.json"
 
 
 def _xp2p_run(host, *args: str, check: bool = False):
-    result = _env.run_xp2p(host, args)
+    cmd = list(args)
+    if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
+        if "--quiet" not in cmd:
+            cmd.append("--quiet")
+    result = _env.run_xp2p(host, cmd)
     stdout = result.stdout or ""
     if "__XP2P_MISSING__" in stdout:
         pytest.skip(
@@ -102,6 +106,64 @@ if (-not (Test-Path {quoted})) {{
     return (result.stdout or "").strip().lower()
 
 
+def _expected_tag(host: str) -> str:
+    cleaned = host.strip().lower()
+    result = []
+    last_dash = False
+    for char in cleaned:
+        if char.isalnum():
+            result.append(char)
+            last_dash = False
+            continue
+        if char == "-":
+            result.append(char)
+            last_dash = False
+            continue
+        if not last_dash:
+            result.append("-")
+            last_dash = True
+    sanitized = "".join(result).strip("-")
+    if not sanitized:
+        sanitized = "endpoint"
+    return f"proxy-{sanitized}"
+
+
+def _find_outbound(data: dict, tag: str) -> dict:
+    for outbound in data.get("outbounds", []):
+        if outbound.get("tag") == tag:
+            return outbound
+    raise AssertionError(f"Expected outbound with tag {tag} to exist")
+
+
+def _assert_outbound_entry(
+    data: dict,
+    host: str,
+    password: str,
+    email: str,
+    server_name: str,
+    *,
+    allow_insecure: bool = False,
+) -> None:
+    tag = _expected_tag(host)
+    outbound = _find_outbound(data, tag)
+    server = outbound["settings"]["servers"][0]
+    assert server["address"] == host
+    assert server["password"] == password
+    assert server["email"] == email
+    tls_settings = outbound["streamSettings"]["tlsSettings"]
+    assert tls_settings["serverName"] == server_name
+    assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+
+
+def _assert_routing_rule(data: dict, host: str) -> None:
+    tag = _expected_tag(host)
+    rules = data.get("routing", {}).get("rules", [])
+    for rule in rules:
+        if rule.get("outboundTag") == tag and host in rule.get("ip", []):
+            return
+    raise AssertionError(f"Expected routing rule for {host} -> {tag}")
+
+
 @pytest.mark.host
 @pytest.mark.win
 def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
@@ -177,6 +239,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             str(INSTALL_DIR),
             "--config-dir",
             CLIENT_CONFIG_DIR,
+            "--all",
             "--ignore-missing",
             check=True,
         )

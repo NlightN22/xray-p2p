@@ -173,6 +173,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			}
 			return 1
 		}
+		logging.Info("xp2p client deploy: client run active", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)
 
 		targetHost := strings.TrimSpace(tl.ServerAddress)
 		if targetHost == "" {
