@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -215,11 +216,15 @@ func detectLocalIP(targetHost string) string {
 				if ip == nil {
 					continue
 				}
-				if targetIP != nil && ipnet.Contains(targetIP) {
-					return ip.String()
-				}
-				candidates = append(candidates, ip.String())
+		if targetIP != nil && ipnet.Contains(targetIP) {
+			if runtime.GOOS == "windows" {
+				return ip.String()
 			}
+			candidates = append(candidates, ip.String())
+			continue
+		}
+		candidates = append(candidates, ip.String())
+	}
 		}
 	}
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -232,8 +237,16 @@ func detectLocalIP(targetHost string) string {
 		}
 	}
 
+	if runtime.GOOS != "windows" {
+		for _, ip := range candidates {
+			if strings.HasPrefix(ip, "10.0.2.") {
+				return ip
+			}
+		}
+	}
+
 	for _, ip := range candidates {
-		if strings.HasPrefix(ip, "10.0.2.") {
+		if runtime.GOOS == "windows" && strings.HasPrefix(ip, "10.0.2.") {
 			continue
 		}
 		if isPrivateIPv4(ip) {
@@ -241,6 +254,9 @@ func detectLocalIP(targetHost string) string {
 		}
 	}
 	for _, ip := range candidates {
+		if runtime.GOOS == "windows" && strings.HasPrefix(ip, "10.0.2.") {
+			continue
+		}
 		if strings.HasPrefix(ip, "169.254.") {
 			continue
 		}

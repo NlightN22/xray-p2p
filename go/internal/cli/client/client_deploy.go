@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +17,8 @@ import (
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 )
@@ -203,6 +207,15 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Warn("xp2p client deploy: socks proxy address missing; skipping ping")
 	}
 
+	if err := waitForHeartbeat(runCtx, filepath.Join(runOpts.InstallDir, layout.HeartbeatStateFileName), 10*time.Second); err != nil {
+		completionState = "FAIL heartbeat"
+		logging.Error("xp2p client deploy: heartbeat missing", "err", err)
+		if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
+			logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
+		}
+		return 1
+	}
+
 	if err := stopLocalClient(runCancel, runErrCh); err != nil {
 		completionState = "FAIL client-stop"
 		logging.Error("xp2p client deploy: client run exited", "err", err)
@@ -346,4 +359,27 @@ func stopLocalClient(cancel context.CancelFunc, runErrCh <-chan error) error {
 	case <-time.After(5 * time.Second):
 		return fmt.Errorf("timeout waiting for local client to stop")
 	}
+}
+
+func waitForHeartbeat(ctx context.Context, statePath string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		state, err := heartbeat.Load(statePath)
+		if err == nil && len(state.Entries) > 0 {
+			return nil
+		}
+		if err != nil && !os.IsNotExist(err) {
+			lastErr = err
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if lastErr != nil {
+		return fmt.Errorf("heartbeat state: %w", lastErr)
+	}
+	return fmt.Errorf("heartbeat state %s not found", statePath)
 }
