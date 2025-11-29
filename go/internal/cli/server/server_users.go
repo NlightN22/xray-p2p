@@ -44,10 +44,6 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 	}
 
 	host := firstNonEmpty(opts.LinkHost, cfg.Server.Host)
-	if strings.TrimSpace(host) == "" {
-		logging.Error("xp2p server user add: --host is required to derive reverse tunnel identifiers")
-		return 2
-	}
 
 	addOpts := server.AddUserOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
@@ -64,26 +60,24 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 
 	logging.Info("xp2p server user add completed", "user_id", strings.TrimSpace(opts.UserID))
 
-	linkOpts := server.UserLinkOptions{
-		InstallDir: addOpts.InstallDir,
-		ConfigDir:  addOpts.ConfigDir,
-		Host:       host,
-		UserID:     opts.UserID,
-	}
-	if link, err := serverUserLinkFunc(ctx, linkOpts); err != nil {
-		logging.Warn("xp2p server user add: unable to build trojan link", "err", err)
-	} else {
-		fmt.Println(link.Link)
+	if strings.TrimSpace(host) != "" {
+		linkOpts := server.UserLinkOptions{
+			InstallDir: addOpts.InstallDir,
+			ConfigDir:  addOpts.ConfigDir,
+			Host:       host,
+			UserID:     opts.UserID,
+		}
+		if link, err := serverUserLinkFunc(ctx, linkOpts); err != nil {
+			logging.Warn("xp2p server user add: unable to build trojan link", "err", err)
+		} else {
+			fmt.Println(link.Link)
+		}
 	}
 	return 0
 }
 
 func runServerUserRemove(ctx context.Context, cfg config.Config, opts serverUserRemoveOptions) int {
 	host := firstNonEmpty(opts.Host, cfg.Server.Host)
-	if strings.TrimSpace(host) == "" {
-		logging.Error("xp2p server user remove: --host is required to clean up reverse tunnels")
-		return 2
-	}
 
 	removeOpts := server.RemoveUserOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),

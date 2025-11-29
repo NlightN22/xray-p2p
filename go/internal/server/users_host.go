@@ -36,9 +36,6 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 	}
 
 	host := strings.TrimSpace(opts.Host)
-	if host == "" {
-		return errors.New("xp2p: host is required to derive reverse identifiers")
-	}
 
 	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
@@ -50,16 +47,23 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		return err
 	}
 
-	channel, err := buildServerReverseChannel(userID, host)
-	if err != nil {
-		return err
-	}
-	store, err := openReverseStore(resolvedInstallDir)
-	if err != nil {
-		return err
-	}
-	if err := store.ensureAvailable(channel); err != nil {
-		return err
+	var (
+		channel serverReverseChannel
+		store   reverseStore
+	)
+	if host != "" {
+		var storeErr error
+		channel, err = buildServerReverseChannel(userID, host)
+		if err != nil {
+			return err
+		}
+		store, storeErr = openReverseStore(resolvedInstallDir)
+		if storeErr != nil {
+			return storeErr
+		}
+		if err := store.ensureAvailable(channel); err != nil {
+			return err
+		}
 	}
 
 	configPath := filepath.Join(configDir, "inbounds.json")
@@ -99,6 +103,9 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 				"user_id", userID,
 				"config", configPath,
 			)
+			if host == "" {
+				return nil
+			}
 			return applyServerReverseChannel(&store, configDir, channel)
 		}
 		clients[idx].Password = password
@@ -124,7 +131,10 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		"config", configPath,
 		"updated", updated,
 	)
-	return applyServerReverseChannel(&store, configDir, channel)
+	if host != "" {
+		return applyServerReverseChannel(&store, configDir, channel)
+	}
+	return nil
 }
 
 // RemoveUser removes the Trojan client with the provided identifier. The operation is idempotent.
@@ -139,9 +149,6 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 	}
 
 	host := strings.TrimSpace(opts.Host)
-	if host == "" {
-		return errors.New("xp2p: host is required to derive reverse identifiers")
-	}
 
 	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
@@ -153,13 +160,19 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		return err
 	}
 
-	channel, err := buildServerReverseChannel(userID, host)
-	if err != nil {
-		return err
-	}
-	store, err := openReverseStore(resolvedInstallDir)
-	if err != nil {
-		return err
+	var (
+		channel serverReverseChannel
+		store   reverseStore
+	)
+	if host != "" {
+		channel, err = buildServerReverseChannel(userID, host)
+		if err != nil {
+			return err
+		}
+		store, err = openReverseStore(resolvedInstallDir)
+		if err != nil {
+			return err
+		}
 	}
 
 	configPath := filepath.Join(configDir, "inbounds.json")
@@ -206,7 +219,10 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 			"user_id", userID,
 			"config", configPath,
 		)
-		return purgeServerReverseChannel(&store, configDir, channel)
+		if host != "" {
+			return purgeServerReverseChannel(&store, configDir, channel)
+		}
+		return nil
 	}
 
 	settings["clients"] = clientsToInterfaces(filtered)
@@ -218,7 +234,10 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		"user_id", userID,
 		"config", configPath,
 	)
-	return purgeServerReverseChannel(&store, configDir, channel)
+	if host != "" {
+		return purgeServerReverseChannel(&store, configDir, channel)
+	}
+	return nil
 }
 
 func resolveUserConfigDir(installDir, configDir string) (string, error) {

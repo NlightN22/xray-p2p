@@ -124,6 +124,12 @@ func detectSocksProxy(cfg config.Config) (string, error) {
 		return "", err
 	}
 
+	if cfg.Client.SocksAddress != "" {
+		if addr, err := normalizeSocksAddress(cfg.Client.SocksAddress); err == nil {
+			return addr, nil
+		}
+	}
+
 	return "", fmt.Errorf("SOCKS proxy not configured; specify --socks host:port or install xp2p client/server")
 }
 

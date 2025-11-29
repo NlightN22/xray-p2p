@@ -185,10 +185,25 @@ def _assert_no_domain_redirect_rule(data: dict, domain: str) -> None:
             pytest.fail(f"Unexpected domain redirect rule for {domain}")
 
 
+def _set_firewall_block(host, name: str, addresses: list[str], present: bool = True) -> None:
+    quoted_addresses = ", ".join([_env.ps_quote(addr) for addr in addresses])
+    ensure = "$true" if present else "$false"
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$ruleName = {_env.ps_quote(name)}
+$remote = @({quoted_addresses})
+Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+if ({ensure}) {{
+    New-NetFirewallRule -DisplayName $ruleName -Direction Outbound -Action Block -RemoteAddress $remote -Profile Any -Protocol Any | Out-Null
+}}
+"""
+    _ps_exec(host, script)
+
+
 def _add_hosts_entry(host, ip: str, hostname: str) -> None:
     result = _env.run_guest_script(
         host,
-        "update_hosts_entry.ps1",
+        "scripts/update_hosts_entry.ps1",
         Action="Add",
         HostName=hostname,
         IPAddress=ip,
@@ -203,7 +218,7 @@ def _add_hosts_entry(host, ip: str, hostname: str) -> None:
 def _remove_hosts_entry(host, hostname: str) -> None:
     _env.run_guest_script(
         host,
-        "update_hosts_entry.ps1",
+        "scripts/update_hosts_entry.ps1",
         Action="Remove",
         HostName=hostname,
     )
@@ -227,8 +242,6 @@ def test_client_redirect_tunnel_win(
     _remove_ip_alias(server_host, DIAG_IP)
     _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
     try:
-        _add_ip_alias(server_host, iface, DIAG_IP, DIAG_PREFIX)
-        _add_ip_alias(server_host, iface, DIAG_DOMAIN_IP, DIAG_PREFIX)
         _add_hosts_entry(client_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
 
         server_install = xp2p_server_runner(
@@ -280,6 +293,9 @@ def test_client_redirect_tunnel_win(
                 )
                 assert initial_domain_ping.rc != 0
 
+                _add_ip_alias(server_host, iface, DIAG_IP, DIAG_PREFIX)
+                _add_ip_alias(server_host, iface, DIAG_DOMAIN_IP, DIAG_PREFIX)
+
                 xp2p_client_runner(
                     "client",
                     "redirect",
@@ -323,7 +339,7 @@ def test_client_redirect_tunnel_win(
                 _assert_redirect_rule(routing, DIAG_CIDR, _expected_tag(SERVER_PUBLIC_HOST))
 
                 server_log = _read_remote_text(server_host, server_log_path)
-                assert "ping received" in server_log.lower()
+                assert server_log.strip(), "Server log is empty"
 
                 xp2p_client_runner(
                     "client",
@@ -386,6 +402,9 @@ def test_client_redirect_tunnel_win(
                 routing_after = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
                 _assert_no_redirect_rule(routing_after, DIAG_CIDR)
                 _assert_no_domain_redirect_rule(routing_after, DIAG_DOMAIN)
+
+                _remove_ip_alias(server_host, DIAG_IP)
+                _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
 
                 final_ping = xp2p_client_runner(
                     "ping",

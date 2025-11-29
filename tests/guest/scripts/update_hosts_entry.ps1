@@ -18,9 +18,9 @@ if (-not (Test-Path $hostsPath)) {
 function Remove-HostEntry {
     param(
         [string[]]$Lines,
-        [string]$Host
+        [string]$EntryHost
     )
-    $target = $Host.ToLower()
+    $target = $EntryHost.ToLower()
     $filtered = @()
     foreach ($line in $Lines) {
         $trimmed = $line.Trim()
@@ -51,7 +51,7 @@ function Remove-HostEntry {
 }
 
 $existing = Get-Content -Path $hostsPath -ErrorAction Stop
-$filtered = Remove-HostEntry -Lines $existing -Host $HostName
+$filtered = Remove-HostEntry -Lines $existing -EntryHost $HostName
 
 if ($Action -eq 'Add') {
     if (-not $IPAddress) {
@@ -60,4 +60,4 @@ if ($Action -eq 'Add') {
     $filtered += "$IPAddress $HostName"
 }
 
-Set-Content -Path $hostsPath -Value $filtered -Encoding ASCII
+Set-Content -Path $hostsPath -Value $filtered -Encoding ASCII -Force
