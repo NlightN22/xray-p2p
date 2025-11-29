@@ -58,6 +58,7 @@ func TestRunClientInstall(t *testing.T) {
 					Password:      "secret",
 					ServerName:    "custom.name",
 					AllowInsecure: true,
+					AllowInsecureOverride: true,
 					Force:         true,
 				}, "install options")
 			},
