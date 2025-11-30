@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra/doc"
 
 	clientcmd "github.com/NlightN22/xray-p2p/go/internal/cli/client"
+	natredirectcmd "github.com/NlightN22/xray-p2p/go/internal/cli/natredirect"
 	servercmd "github.com/NlightN22/xray-p2p/go/internal/cli/server"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -67,6 +68,9 @@ func NewCommand() *cobra.Command {
 		newCompletionCommand(rootCmd),
 		newDocsCommand(rootCmd),
 	)
+	if natCmd := natredirectMaybeAdd(opts); natCmd != nil {
+		rootCmd.AddCommand(natCmd)
+	}
 
 	return rootCmd
 }
@@ -209,6 +213,11 @@ func (o *rootOptions) buildOverrides() map[string]any {
 		overrides["client.allow_insecure"] = false
 	}
 	return overrides
+}
+
+func natredirectMaybeAdd(opts *rootOptions) *cobra.Command {
+	cmd := natredirectcmd.NewCommand(func() config.Config { return opts.cfg })
+	return cmd
 }
 
 func (o *rootOptions) runService(ctx context.Context) error {
