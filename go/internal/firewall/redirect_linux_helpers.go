@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -83,6 +84,9 @@ func applyIPTables(plan Plan) error {
 			return fmt.Errorf("nat redirect: iptables apply: %w", err)
 		}
 	}
+	if err := persistIPTables(); err != nil {
+		return fmt.Errorf("nat redirect: persist iptables: %w", err)
+	}
 	return nil
 }
 
@@ -96,6 +100,27 @@ func selectBackend() string {
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+func persistIPTables() error {
+	if !commandExists("iptables-save") {
+		return fmt.Errorf("iptables-save not available")
+	}
+	out, err := exec.Command("iptables-save").Output()
+	if err != nil {
+		return fmt.Errorf("iptables-save: %w", err)
+	}
+	target := "/etc/iptables/rules.v4"
+	if _, err := os.Stat(filepath.Dir(target)); err != nil {
+		target = "/etc/iptables/iptables.rules"
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return fmt.Errorf("create iptables dir: %w", err)
+	}
+	if err := os.WriteFile(target, out, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", target, err)
+	}
+	return nil
 }
 
 func validateCIDR(value string) error {
