@@ -71,10 +71,6 @@ def _install_marker(marker: str, output: str | None) -> str | None:
 
 
 def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
-    cached = _VERSION_CACHE.get(machine)
-    if cached:
-        return cached
-
     host.run("sudo -n chmod +x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh >/dev/null 2>&1 || true")
 
     result = run_guest_script(host, "scripts/linux/install_xp2p.sh")
