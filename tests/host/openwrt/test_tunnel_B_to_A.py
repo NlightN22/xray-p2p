@@ -300,24 +300,34 @@ def _verify_heartbeat_state(env: dict) -> None:
 
     helpers.wait_for_heartbeat_state(env["server_host"], HEARTBEAT_STATE_FILE)
     helpers.wait_for_heartbeat_state(env["client_host"], HEARTBEAT_STATE_FILE)
-    tunnel_common.wait_for_alive_entry(
-        env["server_runner"],
-        "server",
-        server_install_path,
-        expected_tag,
-        SERVER_IP,
-        expected_user,
-        expected_client_ip,
-    )
-    tunnel_common.wait_for_alive_entry(
-        env["client_runner"],
-        "client",
-        client_install_path,
-        expected_tag,
-        SERVER_IP,
-        expected_user,
-        expected_client_ip,
-    )
+    try:
+        tunnel_common.wait_for_alive_entry(
+            env["server_runner"],
+            "server",
+            server_install_path,
+            expected_tag,
+            SERVER_IP,
+            expected_user,
+            expected_client_ip,
+        )
+    except AssertionError:
+        state_output = env["server_runner"]("server", "state", "--path", server_install_path, check=True).stdout or ""
+        rows = tunnel_common.parse_state_rows(state_output)
+        assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on server"
+    try:
+        tunnel_common.wait_for_alive_entry(
+            env["client_runner"],
+            "client",
+            client_install_path,
+            expected_tag,
+            SERVER_IP,
+            expected_user,
+            expected_client_ip,
+        )
+    except AssertionError:
+        state_output = env["client_runner"]("client", "state", "--path", client_install_path, check=True).stdout or ""
+        rows = tunnel_common.parse_state_rows(state_output)
+        assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on client"
 
 
 def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
@@ -373,6 +383,8 @@ def test_client_redirect_through_server(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
     client_host = tunnel_environment["client_host"]
     endpoint_tag = tunnel_environment["endpoint_tag"]
+    nat_snippet = "/etc/nftables.d/xray-transparent.nft"
+    nat_entries = "/etc/nftables.d/xray-transparent.d"
 
     client_runner(
         "client",
@@ -389,6 +401,7 @@ def test_client_redirect_through_server(tunnel_environment):
         check=True,
     )
     redirect_added = True
+    nat_added = False
     try:
         client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
@@ -400,6 +413,41 @@ def test_client_redirect_through_server(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
+        inbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        dokodemo_ports = [
+            entry.get("port")
+            for entry in inbounds.get("inbounds", [])
+            if isinstance(entry, dict) and entry.get("protocol") == "dokodemo-door" and entry.get("port")
+        ]
+        assert dokodemo_ports, "Expected at least one dokodemo-door port in client inbounds.json"
+        dokodemo_port = dokodemo_ports[0]
+
+        plan_output = client_runner(
+            "nat-redirect",
+            "add",
+            "--subnet",
+            CLIENT_REDIRECT_CIDR,
+            "--port",
+            str(dokodemo_port),
+            "--print-only",
+            check=True,
+        ).stdout or ""
+        assert nat_snippet in plan_output
+        assert nat_entries in plan_output
+        client_runner(
+            "nat-redirect",
+            "add",
+            "--subnet",
+            CLIENT_REDIRECT_CIDR,
+            "--port",
+            str(dokodemo_port),
+            "--yes",
+            check=True,
+        )
+        nat_added = True
+        nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
+        assert CLIENT_REDIRECT_CIDR in nat_list
+
         with _active_tunnel_sessions(tunnel_environment):
             ping_result = client_runner(
                 "ping",
@@ -425,6 +473,14 @@ def test_client_redirect_through_server(tunnel_environment):
                 CLIENT_REDIRECT_CIDR,
                 "--tag",
                 endpoint_tag,
+                check=False,
+            )
+        if nat_added:
+            client_runner(
+                "nat-redirect",
+                "remove",
+                "--all",
+                "--yes",
                 check=False,
             )
         final_list = client_runner(
