@@ -105,8 +105,16 @@ func selectBackend() string {
 }
 
 func commandExists(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
+	if _, err := exec.LookPath(name); err == nil {
+		return true
+	}
+	for _, candidate := range []string{"/usr/sbin", "/sbin", "/usr/bin", "/bin"} {
+		path := filepath.Join(candidate, name)
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func persistIPTables() error {

@@ -50,6 +50,9 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
             host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
             host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+            host.run("nft delete table inet xray_transparent >/dev/null 2>&1 || true")
+            host.run("rm -f /etc/nftables.d/xray-transparent.nft >/dev/null 2>&1 || true")
+            host.run("rm -f /etc/nftables.d/xray-transparent.d/*.entry >/dev/null 2>&1 || true")
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
         for host in (server_host, client_host):
@@ -383,16 +386,23 @@ def test_forward_tunnel_operational(tunnel_environment):
 def test_client_redirect_through_server(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
     client_host = tunnel_environment["client_host"]
+    server_host = tunnel_environment["server_host"]
     endpoint_tag = tunnel_environment["endpoint_tag"]
     nat_snippet = "/etc/nftables.d/xray-transparent.nft"
     nat_entries = "/etc/nftables.d/xray-transparent.d"
     chain_name = "xray_transparent_prerouting"
+    target_alias = f"{CLIENT_REVERSE_TEST_IP}/32"
+    listener_port = DIAGNOSTICS_PORT
 
     def _detect_chain_cmd(host) -> str:
+        candidate_chains = (chain_name, "prerouting")
         for table in ("fw4", "xray_transparent"):
             table_list = host.run(f"nft list table inet {table}")
-            if table_list.rc == 0 and re.search(rf"chain\\s+{chain_name}\\b", table_list.stdout or ""):
-                return f"nft list chain inet {table} {chain_name}"
+            if table_list.rc != 0:
+                continue
+            for candidate in candidate_chains:
+                if re.search(rf"chain\s+{candidate}\b", table_list.stdout or ""):
+                    return f"nft list chain inet {table} {candidate}"
         diag_fw4 = client_host.run("nft list table inet fw4")
         diag_xt = client_host.run("nft list table inet xray_transparent")
         pytest.fail(
@@ -475,20 +485,30 @@ def test_client_redirect_through_server(tunnel_environment):
         nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in nat_list
 
-        initial_packets = _nft_counter_sum(client_host)
-        with _active_tunnel_sessions(tunnel_environment):
-            ping_result = client_runner(
-                "ping",
-                SERVER_IP,
-                "--count",
-                "3",
-                "--proto",
-                "tcp",
-                check=True,
-            )
-            tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
-        final_packets = _nft_counter_sum(client_host)
-        assert final_packets > initial_packets, "nft prerouting counters did not increase after ping"
+        with _ip_alias(server_host, target_alias):
+            listener_pid = None
+            start_listener = server_host.run(f"nc -lp {listener_port} >/dev/null 2>&1 & echo $!")
+            if start_listener.rc == 0 and start_listener.stdout:
+                try:
+                    listener_pid = int(start_listener.stdout.strip().splitlines()[-1])
+                except ValueError:
+                    listener_pid = None
+            initial_packets = _nft_counter_sum(client_host)
+            with _active_tunnel_sessions(tunnel_environment):
+                ping_result = client_runner(
+                    "ping",
+                    CLIENT_REVERSE_TEST_IP,
+                    "--count",
+                    "3",
+                    "--proto",
+                    "tcp",
+                    check=True,
+                )
+                tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
+            final_packets = _nft_counter_sum(client_host)
+            assert final_packets > initial_packets, "nft prerouting counters did not increase after ping"
+            if listener_pid:
+                server_host.run(f"kill {listener_pid} >/dev/null 2>&1 || true")
     finally:
         if redirect_added:
             client_runner(

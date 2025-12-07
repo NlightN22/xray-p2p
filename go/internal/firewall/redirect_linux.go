@@ -4,6 +4,7 @@ package firewall
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -31,11 +32,21 @@ type Manager struct {
 	useFW4      bool
 }
 
+func fw4Available() bool {
+	for _, candidate := range []string{"/usr/sbin/fw4", "/sbin/fw4", "/usr/bin/fw4", "/bin/fw4"} {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return true
+		}
+	}
+	return commandExists("fw4")
+}
+
 func NewManager(snippetPath, entryDir string) Manager {
+	useFW4 := fw4Available()
 	return Manager{
 		snippetPath: strings.TrimSpace(snippetPath),
 		entryDir:    strings.TrimSpace(entryDir),
-		useFW4:      commandExists("fw4") && strings.HasPrefix(strings.TrimSpace(snippetPath), "/etc/nftables.d/"),
+		useFW4:      useFW4 && strings.HasPrefix(strings.TrimSpace(snippetPath), "/etc/nftables.d/"),
 	}
 }
 
