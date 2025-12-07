@@ -25,12 +25,15 @@ func (m Manager) ApplyPlan(plan Plan) (Plan, error) {
 	} else {
 		_ = os.Remove(plan.SnippetPath)
 	}
-	if plan.Backend == "nft" && commandExists("fw4") {
-		if err := exec.Command("fw4", "reload").Run(); err == nil {
-			return plan, nil
+	if plan.Backend == "nft" {
+		if plan.UseFW4 && commandExists("fw4") {
+			if err := exec.Command("fw4", "reload").Run(); err == nil {
+				return plan, nil
+			}
 		}
-	}
-	if plan.Backend == "nft" && commandExists("nft") {
+		if !commandExists("nft") {
+			return plan, fmt.Errorf("nat redirect: nft binary not found")
+		}
 		if plan.Snippet != "" {
 			if err := exec.Command("nft", "-f", plan.SnippetPath).Run(); err != nil {
 				return plan, fmt.Errorf("nat redirect: nft apply: %w", err)

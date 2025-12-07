@@ -22,17 +22,20 @@ type Plan struct {
 	Backend     string
 	RemoveAll   bool
 	Entry       *Entry
+	UseFW4      bool
 }
 
 type Manager struct {
 	snippetPath string
 	entryDir    string
+	useFW4      bool
 }
 
 func NewManager(snippetPath, entryDir string) Manager {
 	return Manager{
 		snippetPath: strings.TrimSpace(snippetPath),
 		entryDir:    strings.TrimSpace(entryDir),
+		useFW4:      commandExists("fw4") && strings.HasPrefix(strings.TrimSpace(snippetPath), "/etc/nftables.d/"),
 	}
 }
 
@@ -64,7 +67,7 @@ func (m Manager) PlanAdd(subnet string, port int) (Plan, error) {
 		return Plan{}, err
 	}
 	updated := upsertEntry(entries, Entry{Subnet: subnet, Port: port})
-	snippet := renderSnippet(updated)
+	snippet := renderSnippetWithFW4(updated, m.useFW4)
 	entryPath := entryPathForSubnet(m.entryDir, subnet)
 	return Plan{
 		Snippet:     snippet,
@@ -73,6 +76,7 @@ func (m Manager) PlanAdd(subnet string, port int) (Plan, error) {
 		IPTables:    renderIPTables(updated),
 		Backend:     selectBackend(),
 		Entry:       &Entry{Subnet: subnet, Port: port},
+		UseFW4:      m.useFW4,
 	}, nil
 }
 
@@ -100,7 +104,7 @@ func (m Manager) PlanRemove(subnet string, all bool) (Plan, error) {
 	default:
 		return Plan{}, fmt.Errorf("nat redirect: subnet or --all required")
 	}
-	snippet := renderSnippet(updated)
+	snippet := renderSnippetWithFW4(updated, m.useFW4)
 	return Plan{
 		Snippet:     snippet,
 		SnippetPath: m.snippetPath,
@@ -108,5 +112,6 @@ func (m Manager) PlanRemove(subnet string, all bool) (Plan, error) {
 		IPTables:    renderIPTables(updated),
 		Backend:     selectBackend(),
 		RemoveAll:   all,
+		UseFW4:      m.useFW4,
 	}, nil
 }
