@@ -80,12 +80,16 @@ func (m Manager) PlanAdd(subnet string, port int) (Plan, error) {
 	updated := upsertEntry(entries, Entry{Subnet: subnet, Port: port})
 	snippet := renderSnippetWithFW4(updated, m.useFW4)
 	entryPath := entryPathForSubnet(m.entryDir, subnet)
+	backend := selectBackend()
+	if m.useFW4 {
+		backend = "fw4"
+	}
 	return Plan{
 		Snippet:     snippet,
 		SnippetPath: m.snippetPath,
 		EntryPath:   entryPath,
 		IPTables:    renderIPTables(updated),
-		Backend:     selectBackend(),
+		Backend:     backend,
 		Entry:       &Entry{Subnet: subnet, Port: port},
 		UseFW4:      m.useFW4,
 	}, nil
@@ -116,12 +120,16 @@ func (m Manager) PlanRemove(subnet string, all bool) (Plan, error) {
 		return Plan{}, fmt.Errorf("nat redirect: subnet or --all required")
 	}
 	snippet := renderSnippetWithFW4(updated, m.useFW4)
+	backend := selectBackend()
+	if m.useFW4 {
+		backend = "fw4"
+	}
 	return Plan{
 		Snippet:     snippet,
 		SnippetPath: m.snippetPath,
 		EntryPath:   entryPath,
 		IPTables:    renderIPTables(updated),
-		Backend:     selectBackend(),
+		Backend:     backend,
 		RemoveAll:   all,
 		UseFW4:      m.useFW4,
 	}, nil

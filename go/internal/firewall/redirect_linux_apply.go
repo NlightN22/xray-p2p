@@ -25,14 +25,18 @@ func (m Manager) ApplyPlan(plan Plan) (Plan, error) {
 	} else {
 		_ = os.Remove(plan.SnippetPath)
 	}
-	if plan.Backend == "nft" {
-		if plan.UseFW4 && fw4Available() {
-			if output, err := exec.Command("fw4", "reload").CombinedOutput(); err == nil {
-				return plan, nil
-			} else {
-				return plan, fmt.Errorf("nat redirect: fw4 reload failed: %w, output: %s", err, string(output))
-			}
+	if plan.Backend == "fw4" {
+		if !commandExists("fw4") {
+			return plan, fmt.Errorf("nat redirect: fw4 binary not found")
 		}
+		cmd := exec.Command("fw4", "reload")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return plan, fmt.Errorf("nat redirect: fw4 reload failed: %w. output: %s", err, string(output))
+		}
+		return plan, nil
+	}
+	if plan.Backend == "nft" {
 		if !commandExists("nft") {
 			return plan, fmt.Errorf("nat redirect: nft binary not found")
 		}

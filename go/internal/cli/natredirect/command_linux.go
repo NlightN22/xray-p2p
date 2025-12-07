@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -17,9 +18,16 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
+var (
+	defaultSnippet  string
+	defaultEntryDir string
+)
+
+func init() {
+	defaultSnippet, defaultEntryDir = detectDefaultPaths()
+}
+
 const (
-	defaultSnippet   = "/etc/nftables.d/xray-transparent.nft"
-	defaultEntryDir  = "/etc/nftables.d/xray-transparent.d"
 	defaultInbounds  = layout.UnixConfigRoot + "/" + layout.ClientConfigDir + "/inbounds.json"
 	promptYesMessage = "This will change local firewall rules for transparent redirect. Continue? [y/N]: "
 )
@@ -286,4 +294,16 @@ func (e exitError) Error() string {
 
 func (e exitError) ExitCode() int {
 	return e.code
+}
+
+func detectDefaultPaths() (string, string) {
+	if commandExists("fw4") {
+		return "/etc/nftables.d/xray-transparent.nft", "/etc/nftables.d/xray-transparent.d"
+	}
+	return "/etc/nftables.d/xray-transparent.nft", "/etc/nftables.d/xray-transparent.d"
+}
+
+func commandExists(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
 }

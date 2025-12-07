@@ -411,9 +411,45 @@ def test_forward_tunnel_operational(tunnel_environment):
 def test_client_redirect_through_server(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
     client_host = tunnel_environment["client_host"]
+    server_host = tunnel_environment["server_host"]
     endpoint_tag = tunnel_environment["endpoint_tag"]
     nat_snippet = "/etc/nftables.d/xray-transparent.nft"
     nat_entries = "/etc/nftables.d/xray-transparent.d"
+    target_alias = "10.200.50.1/32"
+    listener_port = DIAGNOSTICS_PORT
+
+    def _detect_chain_cmd(host) -> str:
+        candidate_chains = ("xray_transparent_prerouting", "prerouting")
+        for table in ("xray_transparent", "fw4"):
+            table_list = host.run(f"sudo -n nft list table inet {table}")
+            if table_list.rc != 0:
+                continue
+            for candidate in candidate_chains:
+                if candidate in (table_list.stdout or ""):
+                    return f"sudo -n nft list chain inet {table} {candidate}"
+        pytest.fail("nat-redirect chains not found in nft tables")
+
+    def _nft_counter_sum(host) -> int:
+        cmd = _detect_chain_cmd(host)
+        result = host.run(cmd)
+        if result.rc != 0:
+            pytest.fail(
+                f"Failed to list nft chain with command: {cmd}\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        values = []
+        for raw in (result.stdout or "").splitlines():
+            raw = raw.strip()
+            if not raw.startswith("counter "):
+                continue
+            parts = raw.split()
+            for idx, token in enumerate(parts):
+                if token == "packets" and idx+1 < len(parts):
+                    try:
+                        values.append(int(parts[idx+1]))
+                    except ValueError:
+                        continue
+        return sum(values)
 
     client_runner(
         "client",
@@ -465,6 +501,7 @@ def test_client_redirect_through_server(tunnel_environment):
         assert nat_snippet in plan_output
         assert nat_entries in plan_output
         assert "iptables" in plan_output.lower()
+        assert "nft" in plan_output.lower()
 
         client_runner(
             "nat-redirect",
@@ -480,17 +517,30 @@ def test_client_redirect_through_server(tunnel_environment):
         nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in nat_list
 
-        with _active_tunnel_sessions(tunnel_environment):
-            ping_result = client_runner(
-                "ping",
-                SERVER_IP,
-                "--count",
-                "3",
-                "--proto",
-                "tcp",
-                check=True,
-            )
-            tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
+        with _ip_alias(server_host, target_alias):
+            listener_pid = None
+            start_listener = server_host.run(f"nc -lp {listener_port} >/dev/null 2>&1 & echo $!")
+            if start_listener.rc == 0 and start_listener.stdout:
+                try:
+                    listener_pid = int(start_listener.stdout.strip().splitlines()[-1])
+                except ValueError:
+                    listener_pid = None
+            initial_packets = _nft_counter_sum(client_host)
+            with _active_tunnel_sessions(tunnel_environment):
+                ping_result = client_runner(
+                    "ping",
+                    target_alias.split("/")[0],
+                    "--count",
+                    "3",
+                    "--proto",
+                    "tcp",
+                    check=True,
+                )
+                tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
+            final_packets = _nft_counter_sum(client_host)
+            assert final_packets > initial_packets, "nft prerouting counters did not increase after ping"
+            if listener_pid:
+                server_host.run(f"kill {listener_pid} >/dev/null 2>&1 || true")
     finally:
         if nat_added:
             client_runner(

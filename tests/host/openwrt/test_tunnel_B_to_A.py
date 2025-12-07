@@ -51,8 +51,10 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
             host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
             host.run("nft delete table inet xray_transparent >/dev/null 2>&1 || true")
-            host.run("rm -f /etc/nftables.d/xray-transparent.nft >/dev/null 2>&1 || true")
-            host.run("rm -f /etc/nftables.d/xray-transparent.d/*.entry >/dev/null 2>&1 || true")
+            host.run("rm -f /etc/nftables.d/xray-transparent.nft /etc/xp2p/nftables/xray-transparent.nft >/dev/null 2>&1 || true")
+            host.run(
+                "rm -f /etc/nftables.d/xray-transparent.d/*.entry /etc/xp2p/nftables/xray-transparent.d/*.entry >/dev/null 2>&1 || true"
+            )
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
         for host in (server_host, client_host):
@@ -396,7 +398,7 @@ def test_client_redirect_through_server(tunnel_environment):
 
     def _detect_chain_cmd(host) -> str:
         candidate_chains = (chain_name, "prerouting")
-        for table in ("fw4", "xray_transparent"):
+        for table in ("xray_transparent", "fw4"):
             table_list = host.run(f"nft list table inet {table}")
             if table_list.rc != 0:
                 continue
