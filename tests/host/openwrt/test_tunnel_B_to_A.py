@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import re
 import shlex
 import time
 
@@ -385,6 +386,16 @@ def test_client_redirect_through_server(tunnel_environment):
     endpoint_tag = tunnel_environment["endpoint_tag"]
     nat_snippet = "/etc/nftables.d/xray-transparent.nft"
     nat_entries = "/etc/nftables.d/xray-transparent.d"
+    prerouting_chain = "xray_transparent_prerouting"
+
+    def _nft_counter_sum(host, chain: str) -> int:
+        result = host.run(f"nft list chain inet fw4 {chain}")
+        if result.rc != 0:
+            pytest.fail(
+                f"Failed to list nft chain {chain}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        matches = re.findall(r"counter packets\\s+(\\d+)", result.stdout or "")
+        return sum(int(value) for value in matches)
 
     client_runner(
         "client",
@@ -448,6 +459,7 @@ def test_client_redirect_through_server(tunnel_environment):
         nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in nat_list
 
+        initial_packets = _nft_counter_sum(client_host, prerouting_chain)
         with _active_tunnel_sessions(tunnel_environment):
             ping_result = client_runner(
                 "ping",
@@ -459,6 +471,8 @@ def test_client_redirect_through_server(tunnel_environment):
                 check=True,
             )
             tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
+        final_packets = _nft_counter_sum(client_host, prerouting_chain)
+        assert final_packets > initial_packets, "nft prerouting counters did not increase after ping"
     finally:
         if redirect_added:
             client_runner(
