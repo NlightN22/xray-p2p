@@ -394,7 +394,7 @@ def test_client_redirect_through_server(tunnel_environment):
     nat_entries = "/etc/nftables.d/xray-transparent.d"
     chain_name = "xray_transparent_prerouting"
     target_alias = f"{CLIENT_REVERSE_TEST_IP}/32"
-    listener_port = DIAGNOSTICS_PORT
+    listener_port = 62023
 
     def _detect_chain_cmd(host) -> str:
         candidate_chains = (chain_name, "prerouting")
@@ -500,6 +500,8 @@ def test_client_redirect_through_server(tunnel_environment):
                 ping_result = client_runner(
                     "ping",
                     CLIENT_REVERSE_TEST_IP,
+                    "--port",
+                    str(listener_port),
                     "--count",
                     "3",
                     "--proto",

@@ -64,6 +64,7 @@ build-ipk:
 
 build-ipk-infra:
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --target linux-amd64 --output-dir /srv/xray-p2p/build/ipk --force-build"
+	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant up --provision
 # swallow extra positional arguments so make does not treat them as targets
 %:
 	@:

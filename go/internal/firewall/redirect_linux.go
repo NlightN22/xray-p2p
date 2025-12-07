@@ -46,7 +46,7 @@ func NewManager(snippetPath, entryDir string) Manager {
 	return Manager{
 		snippetPath: strings.TrimSpace(snippetPath),
 		entryDir:    strings.TrimSpace(entryDir),
-		useFW4:      useFW4 && strings.HasPrefix(strings.TrimSpace(snippetPath), "/etc/nftables.d/"),
+		useFW4:      useFW4 && strings.TrimSpace(snippetPath) != "",
 	}
 }
 
