@@ -214,14 +214,9 @@ def install_ipk_on_host(
     ipk_path: Path,
     *,
     destination: PurePosixPath | None = None,
-    force: bool = False,
+    force: bool = True,
 ) -> PurePosixPath:
     dest = destination or PurePosixPath("/tmp/xp2p.ipk")
-    if not force:
-        binary_check = host.run("test -x /usr/bin/xp2p")
-        status = host.run("opkg status xp2p")
-        if binary_check.rc == 0 and status.rc == 0:
-            return dest
     staged_path = stage_ipk_on_guest(host, ipk_path, dest)
     opkg_remove(host, "xp2p", ignore_missing=True)
     opkg_install_local(host, staged_path)
