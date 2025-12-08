@@ -275,28 +275,47 @@ def xp2p_run_session(
     install_path = _posix(install_dir)
     log_file = _posix(log_path)
     log_dir = str(PurePosixPath(log_file).parent)
+    for port in ("62022", "62023", "52080", "52180", "51080", "51180"):
+        host.run(f"fuser -k {port}/tcp >/dev/null 2>&1 || true")
+        host.run(f"fuser -k {port}/udp >/dev/null 2>&1 || true")
+    host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
+    host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
+    host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
     host.run(f"mkdir -p {shlex.quote(log_dir)}")
     start_cmd = (
         f"setsid /usr/bin/xp2p {role} run "
         f"--path {shlex.quote(install_path)} "
         f"--config-dir {shlex.quote(config_dir)} "
         f"--auto-install "
+        f"--diag-service-mode manual "
         f"--xray-log-file {shlex.quote(log_file)} "
         f"--quiet >/tmp/xp2p-{role}-run.log 2>&1 & echo $!"
     )
-    result = host.run(f"sh -c {shlex.quote(start_cmd)}")
-    if result.rc != 0:
+    last_log = ""
+    pid_value: str | None = None
+    for attempt in range(2):
+        result = host.run(f"sh -c {shlex.quote(start_cmd)}")
+        if result.rc != 0:
+            raise RuntimeError(
+                f"Failed to start xp2p {role} run.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        pid_line = (result.stdout or "").strip().splitlines()
+        if not pid_line:
+            raise RuntimeError("xp2p run did not output PID")
+        pid_value = pid_line[-1].strip()
+        time.sleep(1)
+        alive = host.run(f"kill -0 {pid_value} >/dev/null 2>&1")
+        if alive.rc == 0:
+            break
+        log_read = host.run(f"cat /tmp/xp2p-{role}-run.log 2>/dev/null || true")
+        last_log = log_read.stdout or ""
+        host.run(f"pkill -f 'xp2p {role} run' >/dev/null 2>&1 || true")
+        host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+        time.sleep(1.0)
+    else:
         raise RuntimeError(
-            f"Failed to start xp2p {role} run.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"xp2p {role} run exited prematurely (pid {pid_value}). Log output:\n{last_log}"
         )
-    pid_line = (result.stdout or "").strip().splitlines()
-    if not pid_line:
-        raise RuntimeError("xp2p run did not output PID")
-    pid_value = pid_line[-1].strip()
-    time.sleep(1)
-    alive = host.run(f"kill -0 {pid_value} >/dev/null 2>&1")
-    if alive.rc != 0:
-        raise RuntimeError(f"xp2p {role} run exited prematurely (pid {pid_value}).")
     try:
         yield {"pid": int(pid_value), "log": log_file}
     finally:

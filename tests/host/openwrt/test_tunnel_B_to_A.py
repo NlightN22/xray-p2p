@@ -399,6 +399,20 @@ def test_client_redirect_through_server(tunnel_environment):
     listener_port = 62023
     expected_server_dokodemo_port: int | None = None
 
+    def _dokodemo_ports(config: dict) -> list[int]:
+        ports: list[int] = []
+        for inbound in config.get("inbounds", []) or []:
+            if not isinstance(inbound, dict):
+                continue
+            if inbound.get("protocol") != "dokodemo-door":
+                continue
+            if inbound.get("settings", {}).get("followRedirect") is not True:
+                continue
+            port_val = inbound.get("port")
+            if isinstance(port_val, int):
+                ports.append(port_val)
+        return ports
+
     def _detect_chain_cmd(host) -> str:
         candidate_chains = (chain_name, "prerouting")
         for table in ("xray_transparent", "fw4"):
@@ -457,13 +471,12 @@ def test_client_redirect_through_server(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        inbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
-        dokodemo_ports = [
-            entry.get("port")
-            for entry in inbounds.get("inbounds", [])
-            if isinstance(entry, dict) and entry.get("protocol") == "dokodemo-door" and entry.get("port")
-        ]
-        assert dokodemo_ports, "Expected at least one dokodemo-door port in client inbounds.json"
+        client_inbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        client_dokodemo_ports = _dokodemo_ports(client_inbounds)
+        assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
+        server_inbounds = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        server_dokodemo_ports = _dokodemo_ports(server_inbounds)
+        assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
         plan_output = client_runner(
             "nat-redirect",
@@ -563,7 +576,6 @@ def test_client_redirect_through_server(tunnel_environment):
                 "nat-redirect",
                 "remove",
                 "--all",
-                "--yes",
                 check=False,
             )
         if server_nat_added:
@@ -571,7 +583,6 @@ def test_client_redirect_through_server(tunnel_environment):
                 "nat-redirect",
                 "remove",
                 "--all",
-                "--yes",
                 check=False,
             )
         if server_redirect_added:

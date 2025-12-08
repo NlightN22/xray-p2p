@@ -63,7 +63,7 @@ func newAddCmd() *cobra.Command {
 				printPlan(plan)
 				return nil
 			}
-			if !opts.yes && !promptYes() {
+			if !opts.quiet && !promptYes() {
 				return exitError{code: 1}
 			}
 			result, err := manager.ApplyPlan(plan)
@@ -102,9 +102,6 @@ func newRemoveCmd() *cobra.Command {
 			if opts.printOnly {
 				printPlan(plan)
 				return nil
-			}
-			if !opts.yes && !promptYes() {
-				return exitError{code: 1}
 			}
 			result, err := manager.ApplyPlan(plan)
 			if err != nil {
@@ -151,7 +148,6 @@ type addOptions struct {
 	subnet      string
 	port        int
 	printOnly   bool
-	yes         bool
 	snippetPath string
 	entryDir    string
 	inbounds    string
@@ -162,7 +158,6 @@ type removeOptions struct {
 	subnet      string
 	all         bool
 	printOnly   bool
-	yes         bool
 	snippetPath string
 	entryDir    string
 }
@@ -175,11 +170,15 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 	entryDir, _ := cmd.Flags().GetString("entry-dir")
 	inbounds, _ := cmd.Flags().GetString("inbounds")
 	quiet, _ := cmd.Flags().GetBool("quiet")
+	detectInbounds := inbounds
+	if strings.TrimSpace(inbounds) == defaultInbounds {
+		detectInbounds = ""
+	}
 	if subnet == "" {
 		return addOptions{}, fmt.Errorf("nat-redirect add: --subnet is required")
 	}
 	if port == 0 {
-		candidates, err := autodetectPorts(inbounds, quiet)
+		candidates, err := autodetectPorts(detectInbounds, quiet)
 		if err != nil {
 			return addOptions{}, err
 		}
@@ -189,7 +188,6 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 		subnet:      subnet,
 		port:        port,
 		printOnly:   printOnly,
-		yes:         quiet,
 		snippetPath: fallback(snippet, defaultSnippet),
 		entryDir:    fallback(entryDir, defaultEntryDir),
 		inbounds:    fallback(inbounds, defaultInbounds),
@@ -201,7 +199,6 @@ func parseRemoveOptions(cmd *cobra.Command) (removeOptions, error) {
 	subnet, _ := cmd.Flags().GetString("subnet")
 	all, _ := cmd.Flags().GetBool("all")
 	printOnly, _ := cmd.Flags().GetBool("print-only")
-	yes := true
 	snippet, _ := cmd.Flags().GetString("snippet")
 	entryDir, _ := cmd.Flags().GetString("entry-dir")
 	if subnet == "" && !all {
@@ -211,7 +208,6 @@ func parseRemoveOptions(cmd *cobra.Command) (removeOptions, error) {
 		subnet:      subnet,
 		all:         all,
 		printOnly:   printOnly,
-		yes:         yes,
 		snippetPath: fallback(snippet, defaultSnippet),
 		entryDir:    fallback(entryDir, defaultEntryDir),
 	}, nil
