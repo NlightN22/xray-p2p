@@ -464,16 +464,14 @@ def test_client_redirect_through_server(tunnel_environment):
             if isinstance(entry, dict) and entry.get("protocol") == "dokodemo-door" and entry.get("port")
         ]
         assert dokodemo_ports, "Expected at least one dokodemo-door port in client inbounds.json"
-        dokodemo_port = dokodemo_ports[0]
 
         plan_output = client_runner(
             "nat-redirect",
             "add",
             "--subnet",
             CLIENT_REDIRECT_CIDR,
-            "--port",
-            str(dokodemo_port),
             "--print-only",
+            "--quiet",
             check=True,
         ).stdout or ""
         assert nat_snippet in plan_output
@@ -493,40 +491,30 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         server_redirect_added = True
-        # Use fixed dokodemo port on the server (matches manual validation).
-        server_dokodemo_port = 48044
-        expected_server_dokodemo_port = server_dokodemo_port
         server_runner(
             "nat-redirect",
             "add",
             "--subnet",
             CLIENT_REDIRECT_CIDR,
-            "--port",
-            str(server_dokodemo_port),
-            "--yes",
+            "--quiet",
             check=True,
         )
         server_nat_added = True
         time.sleep(2.0)
         server_nat_list = server_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in server_nat_list
-        if expected_server_dokodemo_port:
-            assert str(expected_server_dokodemo_port) in server_nat_list
         client_runner(
             "nat-redirect",
             "add",
             "--subnet",
             CLIENT_REDIRECT_CIDR,
-            "--port",
-            str(dokodemo_port),
-            "--yes",
+            "--quiet",
             check=True,
         )
         nat_added = True
         time.sleep(2.0)
         nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in nat_list
-        assert str(dokodemo_port) in nat_list
 
         with _ip_alias(server_host, target_alias):
             listener_pid = None

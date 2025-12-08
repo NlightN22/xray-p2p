@@ -78,7 +78,7 @@ func newAddCmd() *cobra.Command {
 	flags.String("subnet", "", "destination subnet in CIDR form")
 	flags.Int("port", 0, "dokodemo-door port to redirect to (auto-detected when omitted)")
 	flags.Bool("print-only", false, "render firewall changes without applying them")
-	flags.Bool("yes", false, "apply without interactive confirmation")
+	flags.Bool("quiet", false, "avoid interactive prompts when auto-selecting dokodemo port")
 	flags.String("snippet", defaultSnippet, "nftables snippet path")
 	flags.String("entry-dir", defaultEntryDir, "entry directory for nftables snippet generation")
 	flags.String("inbounds", defaultInbounds, "path to inbounds.json used for auto port detection")
@@ -119,7 +119,6 @@ func newRemoveCmd() *cobra.Command {
 	flags.String("subnet", "", "destination subnet in CIDR form")
 	flags.Bool("all", false, "remove all transparent redirects")
 	flags.Bool("print-only", false, "render firewall changes without applying them")
-	flags.Bool("yes", false, "apply without interactive confirmation")
 	flags.String("snippet", defaultSnippet, "nftables snippet path")
 	flags.String("entry-dir", defaultEntryDir, "entry directory for nftables snippet generation")
 	return cmd
@@ -156,6 +155,7 @@ type addOptions struct {
 	snippetPath string
 	entryDir    string
 	inbounds    string
+	quiet       bool
 }
 
 type removeOptions struct {
@@ -171,40 +171,29 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 	subnet, _ := cmd.Flags().GetString("subnet")
 	port, _ := cmd.Flags().GetInt("port")
 	printOnly, _ := cmd.Flags().GetBool("print-only")
-	yes, _ := cmd.Flags().GetBool("yes")
 	snippet, _ := cmd.Flags().GetString("snippet")
 	entryDir, _ := cmd.Flags().GetString("entry-dir")
 	inbounds, _ := cmd.Flags().GetString("inbounds")
+	quiet, _ := cmd.Flags().GetBool("quiet")
 	if subnet == "" {
 		return addOptions{}, fmt.Errorf("nat-redirect add: --subnet is required")
 	}
 	if port == 0 {
-		auto, err := firewall.DetectDokodemoPorts(inbounds)
+		candidates, err := autodetectPorts(inbounds, quiet)
 		if err != nil {
 			return addOptions{}, err
 		}
-		if len(auto) == 0 {
-			return addOptions{}, fmt.Errorf("nat-redirect add: no dokodemo-door ports found in %s", inbounds)
-		}
-		if len(auto) == 1 {
-			port = auto[0]
-		} else {
-			fmt.Printf("Detected dokodemo-door ports: %v\n", auto)
-			selected, err := promptSelectPort(auto)
-			if err != nil {
-				return addOptions{}, err
-			}
-			port = selected
-		}
+		port = candidates[0]
 	}
 	return addOptions{
 		subnet:      subnet,
 		port:        port,
 		printOnly:   printOnly,
-		yes:         yes,
+		yes:         quiet,
 		snippetPath: fallback(snippet, defaultSnippet),
 		entryDir:    fallback(entryDir, defaultEntryDir),
 		inbounds:    fallback(inbounds, defaultInbounds),
+		quiet:       quiet,
 	}, nil
 }
 
@@ -212,7 +201,7 @@ func parseRemoveOptions(cmd *cobra.Command) (removeOptions, error) {
 	subnet, _ := cmd.Flags().GetString("subnet")
 	all, _ := cmd.Flags().GetBool("all")
 	printOnly, _ := cmd.Flags().GetBool("print-only")
-	yes, _ := cmd.Flags().GetBool("yes")
+	yes := true
 	snippet, _ := cmd.Flags().GetString("snippet")
 	entryDir, _ := cmd.Flags().GetString("entry-dir")
 	if subnet == "" && !all {
@@ -306,4 +295,51 @@ func detectDefaultPaths() (string, string) {
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+func autodetectPorts(inboundsFlag string, quiet bool) ([]int, error) {
+	seen := map[int]struct{}{}
+	var ports []int
+	candidates := []string{strings.TrimSpace(inboundsFlag)}
+	if strings.TrimSpace(inboundsFlag) == "" {
+		candidates = []string{
+			defaultInbounds,
+			layout.UnixConfigRoot + "/" + layout.ServerConfigDir + "/inbounds.json",
+		}
+	}
+	for _, path := range candidates {
+		trimmed := strings.TrimSpace(path)
+		if trimmed == "" {
+			continue
+		}
+		if info, err := os.Stat(trimmed); err != nil || info.IsDir() {
+			continue
+		}
+		detected, err := firewall.DetectDokodemoPorts(trimmed, true)
+		if err != nil {
+			continue
+		}
+		for _, p := range detected {
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			seen[p] = struct{}{}
+			ports = append(ports, p)
+		}
+	}
+	if len(ports) == 0 {
+		return nil, fmt.Errorf("nat-redirect add: no dokodemo-door ports found")
+	}
+	if len(ports) == 1 {
+		return ports, nil
+	}
+	if quiet {
+		return ports, nil
+	}
+	fmt.Printf("Detected dokodemo-door ports: %v\n", ports)
+	selected, err := promptSelectPort(ports)
+	if err != nil {
+		return nil, err
+	}
+	return []int{selected}, nil
 }

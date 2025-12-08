@@ -145,7 +145,7 @@ func validateCIDR(value string) error {
 	return nil
 }
 
-func DetectDokodemoPorts(path string) ([]int, error) {
+func DetectDokodemoPorts(path string, followOnly bool) ([]int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("nat redirect: read %s: %w", path, err)
@@ -153,6 +153,9 @@ func DetectDokodemoPorts(path string) ([]int, error) {
 	type inbound struct {
 		Protocol string `json:"protocol"`
 		Port     int    `json:"port"`
+		Settings struct {
+			FollowRedirect bool `json:"followRedirect"`
+		} `json:"settings"`
 	}
 	doc := struct {
 		Inbounds []inbound `json:"inbounds"`
@@ -162,9 +165,13 @@ func DetectDokodemoPorts(path string) ([]int, error) {
 	}
 	var ports []int
 	for _, inb := range doc.Inbounds {
-		if strings.TrimSpace(inb.Protocol) == "dokodemo-door" && inb.Port > 0 {
-			ports = append(ports, inb.Port)
+		if strings.TrimSpace(inb.Protocol) != "dokodemo-door" || inb.Port <= 0 {
+			continue
 		}
+		if followOnly && !inb.Settings.FollowRedirect {
+			continue
+		}
+		ports = append(ports, inb.Port)
 	}
 	return ports, nil
 }
