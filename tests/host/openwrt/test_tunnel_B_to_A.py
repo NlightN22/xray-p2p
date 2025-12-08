@@ -389,12 +389,15 @@ def test_client_redirect_through_server(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
     client_host = tunnel_environment["client_host"]
     server_host = tunnel_environment["server_host"]
+    server_runner = tunnel_environment["server_runner"]
+    server_install_path = tunnel_environment["server_install_path"]
     endpoint_tag = tunnel_environment["endpoint_tag"]
     nat_snippet = "/etc/nftables.d/xray-transparent.nft"
     nat_entries = "/etc/nftables.d/xray-transparent.d"
     chain_name = "xray_transparent_prerouting"
-    target_alias = f"{CLIENT_REVERSE_TEST_IP}/32"
+    target_alias = "10.0.102.1/32"
     listener_port = 62023
+    expected_server_dokodemo_port: int | None = None
 
     def _detect_chain_cmd(host) -> str:
         candidate_chains = (chain_name, "prerouting")
@@ -440,6 +443,8 @@ def test_client_redirect_through_server(tunnel_environment):
         check=True,
     )
     redirect_added = True
+    server_redirect_added = False
+    server_nat_added = False
     nat_added = False
     try:
         client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
@@ -473,6 +478,40 @@ def test_client_redirect_through_server(tunnel_environment):
         ).stdout or ""
         assert nat_snippet in plan_output
         assert nat_entries in plan_output
+        server_runner(
+            "server",
+            "redirect",
+            "add",
+            "--path",
+            server_install_path,
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cidr",
+            CLIENT_REDIRECT_CIDR,
+            "--tag",
+            tunnel_environment["reverse_tag"],
+            check=True,
+        )
+        server_redirect_added = True
+        # Use fixed dokodemo port on the server (matches manual validation).
+        server_dokodemo_port = 48044
+        expected_server_dokodemo_port = server_dokodemo_port
+        server_runner(
+            "nat-redirect",
+            "add",
+            "--subnet",
+            CLIENT_REDIRECT_CIDR,
+            "--port",
+            str(server_dokodemo_port),
+            "--yes",
+            check=True,
+        )
+        server_nat_added = True
+        time.sleep(2.0)
+        server_nat_list = server_runner("nat-redirect", "list", check=True).stdout or ""
+        assert CLIENT_REDIRECT_CIDR in server_nat_list
+        if expected_server_dokodemo_port:
+            assert str(expected_server_dokodemo_port) in server_nat_list
         client_runner(
             "nat-redirect",
             "add",
@@ -484,8 +523,10 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         nat_added = True
+        time.sleep(2.0)
         nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in nat_list
+        assert str(dokodemo_port) in nat_list
 
         with _ip_alias(server_host, target_alias):
             listener_pid = None
@@ -499,7 +540,7 @@ def test_client_redirect_through_server(tunnel_environment):
             with _active_tunnel_sessions(tunnel_environment):
                 ping_result = client_runner(
                     "ping",
-                    CLIENT_REVERSE_TEST_IP,
+                    target_alias.split("/")[0],
                     "--port",
                     str(listener_port),
                     "--count",
@@ -535,6 +576,29 @@ def test_client_redirect_through_server(tunnel_environment):
                 "remove",
                 "--all",
                 "--yes",
+                check=False,
+            )
+        if server_nat_added:
+            server_runner(
+                "nat-redirect",
+                "remove",
+                "--all",
+                "--yes",
+                check=False,
+            )
+        if server_redirect_added:
+            server_runner(
+                "server",
+                "redirect",
+                "remove",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--cidr",
+                CLIENT_REDIRECT_CIDR,
+                "--tag",
+                tunnel_environment["reverse_tag"],
                 check=False,
             )
         final_list = client_runner(
