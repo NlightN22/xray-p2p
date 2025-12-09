@@ -18,6 +18,7 @@ CLIENT_IP = "10.63.30.12"
 CLIENT_REVERSE_TEST_IP = "10.0.102.50"
 DIAGNOSTICS_PORT = 62022
 SERVER_FORWARD_PORT = 53341
+CLIENT_FORWARD_PORT = 53331
 CLIENT_REDIRECT_CIDR = "10.0.101.0/24"
 SERVER_REDIRECT_CIDR = "10.0.102.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
@@ -201,8 +202,20 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
     client_runner = env["client_runner"]
     client_host = env["client_host"]
     forward_target = f"{SERVER_IP}:{DIAGNOSTICS_PORT}"
-    listen_port = None
+    listen_port = CLIENT_FORWARD_PORT
     try:
+        client_runner(
+            "client",
+            "forward",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--listen-port",
+            str(listen_port),
+            check=False,
+        )
         client_runner(
             "client",
             "forward",
@@ -215,6 +228,8 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             forward_target,
             "--listen",
             "127.0.0.1",
+            "--listen-port",
+            str(listen_port),
             "--proto",
             "tcp",
             check=True,
@@ -222,6 +237,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
         client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
         entry = tunnel_common.forward_entry_for_target(client_state.get("forwards") or [], SERVER_IP, DIAGNOSTICS_PORT)
         listen_port = tunnel_common.listen_port_from_entry(entry)
+        assert listen_port == CLIENT_FORWARD_PORT
 
         with _active_tunnel_sessions(env):
             ping_result = client_runner(

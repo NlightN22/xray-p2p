@@ -315,6 +315,8 @@ def xp2p_run_session(
     host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
     host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
     host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+    host.run("ps w | grep '/etc/xp2p/bin/xray' | grep -v grep | awk '{print $1}' | xargs -r kill -9 >/dev/null 2>&1 || true")
+    host.run("ps w | grep '/usr/bin/xp2p' | grep -v grep | awk '{print $1}' | xargs -r kill -9 >/dev/null 2>&1 || true")
     host.run(f"mkdir -p {shlex.quote(log_dir)}")
     netstat_before = _netstat_snapshot(host)
     logs_path = PurePosixPath(install_dir) / config_dir / "logs.json"
