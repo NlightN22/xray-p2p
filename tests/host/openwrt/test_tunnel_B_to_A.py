@@ -18,7 +18,8 @@ CLIENT_IP = "10.63.30.12"
 CLIENT_REVERSE_TEST_IP = "10.0.102.50"
 DIAGNOSTICS_PORT = 62022
 SERVER_FORWARD_PORT = 53341
-CLIENT_REDIRECT_CIDR = "10.0.102.0/24"
+CLIENT_REDIRECT_CIDR = "10.0.101.0/24"
+SERVER_REDIRECT_CIDR = "10.0.102.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 HEARTBEAT_STATE_FILE = helpers.HEARTBEAT_STATE_FILE
 
@@ -47,6 +48,7 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
 
     def cleanup():
         for host in (server_host, client_host):
+            openwrt_env._stop_xp2p_services(host)
             host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
             host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
             host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
@@ -395,8 +397,8 @@ def test_client_redirect_through_server(tunnel_environment):
     nat_snippet = "/etc/nftables.d/xray-transparent.nft"
     nat_entries = "/etc/nftables.d/xray-transparent.d"
     chain_name = "xray_transparent_prerouting"
-    target_alias = "10.0.102.1/32"
-    listener_port = 62023
+    target_alias = "10.0.101.50/32"
+    listener_port = DIAGNOSTICS_PORT
     expected_server_dokodemo_port: int | None = None
 
     def _dokodemo_ports(config: dict) -> list[int]:
@@ -413,6 +415,11 @@ def test_client_redirect_through_server(tunnel_environment):
                 ports.append(port_val)
         return ports
 
+    def _safe(text: str | None) -> str:
+        if not text:
+            return ""
+        return text.encode("ascii", "ignore").decode()
+
     def _detect_chain_cmd(host) -> str:
         candidate_chains = (chain_name, "prerouting")
         for table in ("xray_transparent", "fw4"):
@@ -421,7 +428,7 @@ def test_client_redirect_through_server(tunnel_environment):
                 continue
             for candidate in candidate_chains:
                 if re.search(rf"chain\s+{candidate}\b", table_list.stdout or ""):
-                    return f"nft list chain inet {table} {candidate}"
+                    return f"nft list table inet {table}"
         diag_fw4 = client_host.run("nft list table inet fw4")
         diag_xt = client_host.run("nft list table inet xray_transparent")
         pytest.fail(
@@ -439,7 +446,7 @@ def test_client_redirect_through_server(tunnel_environment):
                 f"Failed to list nft chain with command: {cmd}\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
-        matches = re.findall(r"counter packets\\s+(\\d+)", result.stdout or "")
+        matches = re.findall(r"counter packets\s+(\d+)", result.stdout or "")
         return sum(int(value) for value in matches)
 
     client_runner(
@@ -460,6 +467,7 @@ def test_client_redirect_through_server(tunnel_environment):
     server_redirect_added = False
     server_nat_added = False
     nat_added = False
+    server_redirect_cidr: str | None = None
     try:
         client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
@@ -489,33 +497,6 @@ def test_client_redirect_through_server(tunnel_environment):
         ).stdout or ""
         assert nat_snippet in plan_output
         assert nat_entries in plan_output
-        server_runner(
-            "server",
-            "redirect",
-            "add",
-            "--path",
-            server_install_path,
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--cidr",
-            CLIENT_REDIRECT_CIDR,
-            "--tag",
-            tunnel_environment["reverse_tag"],
-            check=True,
-        )
-        server_redirect_added = True
-        server_runner(
-            "nat-redirect",
-            "add",
-            "--subnet",
-            CLIENT_REDIRECT_CIDR,
-            "--quiet",
-            check=True,
-        )
-        server_nat_added = True
-        time.sleep(2.0)
-        server_nat_list = server_runner("nat-redirect", "list", check=True).stdout or ""
-        assert CLIENT_REDIRECT_CIDR in server_nat_list
         client_runner(
             "nat-redirect",
             "add",
@@ -530,18 +511,19 @@ def test_client_redirect_through_server(tunnel_environment):
         assert CLIENT_REDIRECT_CIDR in nat_list
 
         with _ip_alias(server_host, target_alias):
-            listener_pid = None
-            start_listener = server_host.run(f"nc -lp {listener_port} >/dev/null 2>&1 & echo $!")
-            if start_listener.rc == 0 and start_listener.stdout:
-                try:
-                    listener_pid = int(start_listener.stdout.strip().splitlines()[-1])
-                except ValueError:
-                    listener_pid = None
-            initial_packets = _nft_counter_sum(client_host)
             with _active_tunnel_sessions(tunnel_environment):
-                ping_result = client_runner(
+                # baseline: socks ping should work via xray
+                target_ip = target_alias.split("/")[0]
+                server_nat_dump = server_runner("nat-redirect", "list", check=True).stdout or ""
+                client_nat_dump = client_runner("nat-redirect", "list", check=True).stdout or ""
+                server_chain = server_host.run("nft list chain inet fw4 xray_transparent_prerouting")
+                client_chain = client_host.run("nft list chain inet fw4 xray_transparent_prerouting")
+                client_socks_netstat = client_host.run("netstat -lpn 2>/dev/null | grep ':51180' || true")
+                client_processes = client_host.run("ps w | grep -E 'xp2p|xray' | grep -v grep")
+                socks_ping = client_runner(
                     "ping",
-                    target_alias.split("/")[0],
+                    target_ip,
+                    "--socks",
                     "--port",
                     str(listener_port),
                     "--count",
@@ -550,11 +532,67 @@ def test_client_redirect_through_server(tunnel_environment):
                     "tcp",
                     check=True,
                 )
-                tunnel_common.assert_zero_loss(ping_result, "while redirecting through server")
+                tunnel_common.assert_zero_loss(
+                    socks_ping,
+                    f"through SOCKS tunnel before redirect ping. "
+                    f"server_nat:\n{_safe(server_nat_dump)}\nclient_nat:\n{_safe(client_nat_dump)}\n"
+                    f"server_chain:\n{_safe(server_chain.stdout)}\n{_safe(server_chain.stderr)}\n"
+                    f"client_chain:\n{_safe(client_chain.stdout)}\n{_safe(client_chain.stderr)}\n"
+                    f"socks_netstat:\n{_safe(client_socks_netstat.stdout)}\n{_safe(client_socks_netstat.stderr)}\n"
+                    f"client_ps:\n{_safe(client_processes.stdout)}\n{_safe(client_processes.stderr)}\n",
+                )
+            initial_packets = _nft_counter_sum(client_host)
+            with _active_tunnel_sessions(tunnel_environment):
+                ping_result = client_runner(
+                    "ping",
+                    target_ip,
+                    "--port",
+                    str(listener_port),
+                    "--count",
+                    "3",
+                    "--proto",
+                    "tcp",
+                    check=True,
+                )
+                tunnel_common.assert_zero_loss(
+                    ping_result,
+                    f"while redirecting through server. "
+                    f"server_nat:\n{_safe(server_nat_dump)}\nclient_nat:\n{_safe(client_nat_dump)}\n"
+                    f"server_chain:\n{_safe(server_chain.stdout)}\n{_safe(server_chain.stderr)}\n"
+                    f"client_chain:\n{_safe(client_chain.stdout)}\n{_safe(client_chain.stderr)}\n",
+                )
             final_packets = _nft_counter_sum(client_host)
             assert final_packets > initial_packets, "nft prerouting counters did not increase after ping"
-            if listener_pid:
-                server_host.run(f"kill {listener_pid} >/dev/null 2>&1 || true")
+
+        # Server-side nat-redirect sanity (separate CIDR to avoid client loopback)
+        server_redirect_cidr = SERVER_REDIRECT_CIDR
+        server_runner(
+            "server",
+            "redirect",
+            "add",
+            "--path",
+            server_install_path,
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cidr",
+            server_redirect_cidr,
+            "--tag",
+            tunnel_environment["reverse_tag"],
+            check=True,
+        )
+        server_redirect_added = True
+        server_runner(
+            "nat-redirect",
+            "add",
+            "--subnet",
+            server_redirect_cidr,
+            "--quiet",
+            check=True,
+        )
+        server_nat_added = True
+        time.sleep(2.0)
+        server_nat_list = server_runner("nat-redirect", "list", check=True).stdout or ""
+        assert server_redirect_cidr in server_nat_list
     finally:
         if redirect_added:
             client_runner(
@@ -595,7 +633,7 @@ def test_client_redirect_through_server(tunnel_environment):
                 "--config-dir",
                 helpers.SERVER_CONFIG_DIR_NAME,
                 "--cidr",
-                CLIENT_REDIRECT_CIDR,
+                server_redirect_cidr or CLIENT_REDIRECT_CIDR,
                 "--tag",
                 tunnel_environment["reverse_tag"],
                 check=False,

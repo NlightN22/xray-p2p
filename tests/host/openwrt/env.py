@@ -262,6 +262,38 @@ def resolve_target_from_env() -> str:
     return os.environ.get(TARGET_ENV_VAR, DEFAULT_TARGET)
 
 
+def _stop_xp2p_services(host: Host) -> None:
+    for cmd in (
+        "xp2p client service stop --quiet",
+        "xp2p server service stop --quiet",
+        "/etc/init.d/xp2p stop",
+    ):
+        host.run(f"{cmd} >/dev/null 2>&1 || true")
+
+
+def _kill_port_listeners(host: Host, port: str) -> None:
+    kill_cmd = (
+        "pids=$(netstat -lpn 2>/dev/null | grep ':%s ' | awk '{print $7}' | cut -d/ -f1 | tr -d \"-\" ); "
+        "for p in $pids; do [ -n \"$p\" ] && kill -9 \"$p\" >/dev/null 2>&1 || true; done"
+    ) % shlex.quote(port)
+    host.run(f"sh -c {shlex.quote(kill_cmd)}")
+
+
+def _netstat_snapshot(host: Host) -> str:
+    result = host.run(
+        "netstat -lpn 2>/dev/null | egrep '62022|62023|52080|52180|51080|51180' || true"
+    )
+    return result.stdout or ""
+
+
+def _read_file_safe(host: Host, path: PurePosixPath | Path | str) -> str:
+    target = _posix(path)
+    result = host.run(f"cat {shlex.quote(target)} 2>/dev/null || true")
+    if result.rc != 0:
+        return ""
+    return result.stdout or ""
+
+
 @contextmanager
 def xp2p_run_session(
     host: Host,
@@ -275,19 +307,23 @@ def xp2p_run_session(
     install_path = _posix(install_dir)
     log_file = _posix(log_path)
     log_dir = str(PurePosixPath(log_file).parent)
+    _stop_xp2p_services(host)
     for port in ("62022", "62023", "52080", "52180", "51080", "51180"):
         host.run(f"fuser -k {port}/tcp >/dev/null 2>&1 || true")
         host.run(f"fuser -k {port}/udp >/dev/null 2>&1 || true")
+        _kill_port_listeners(host, port)
     host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
     host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
     host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
     host.run(f"mkdir -p {shlex.quote(log_dir)}")
+    netstat_before = _netstat_snapshot(host)
+    logs_path = PurePosixPath(install_dir) / config_dir / "logs.json"
+    logs_config = _read_file_safe(host, logs_path)
     start_cmd = (
         f"setsid /usr/bin/xp2p {role} run "
         f"--path {shlex.quote(install_path)} "
         f"--config-dir {shlex.quote(config_dir)} "
         f"--auto-install "
-        f"--diag-service-mode manual "
         f"--xray-log-file {shlex.quote(log_file)} "
         f"--quiet >/tmp/xp2p-{role}-run.log 2>&1 & echo $!"
     )
@@ -314,7 +350,17 @@ def xp2p_run_session(
         time.sleep(1.0)
     else:
         raise RuntimeError(
-            f"xp2p {role} run exited prematurely (pid {pid_value}). Log output:\n{last_log}"
+            "xp2p {role} run exited prematurely (pid {pid}).\n"
+            "Log output:\n{log}\n"
+            "netstat before start:\n{netstat}\n"
+            "logs.json ({logs_path}):\n{logs_cfg}".format(
+                role=role,
+                pid=pid_value,
+                log=last_log,
+                netstat=netstat_before,
+                logs_path=logs_path.as_posix(),
+                logs_cfg=logs_config,
+            )
         )
     try:
         yield {"pid": int(pid_value), "log": log_file}
