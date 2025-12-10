@@ -66,20 +66,29 @@ func TestDetectDokodemoPorts(t *testing.T) {
 	path := filepath.Join(dir, "inbounds.json")
 	content := `{
 		"inbounds": [
-			{"protocol": "dokodemo-door", "port": 6000},
+			{"protocol": "dokodemo-door", "port": 6000, "settings": {"followRedirect": true}},
 			{"protocol": "socks", "port": 1080},
-			{"protocol": "dokodemo-door", "port": 7000}
+			{"protocol": "dokodemo-door", "port": 7000, "settings": {"followRedirect": false}},
+			{"protocol": "dokodemo-door", "port": 8000, "settings": {"followRedirect": true}}
 		]
 	}`
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("failed to write inbound file: %v", err)
 	}
 
-	ports, err := DetectDokodemoPorts(path)
+	ports, err := DetectDokodemoPorts(path, false)
 	if err != nil {
 		t.Fatalf("DetectDokodemoPorts returned error: %v", err)
 	}
-	if len(ports) != 2 || ports[0] != 6000 || ports[1] != 7000 {
+	if len(ports) != 3 || ports[0] != 6000 || ports[1] != 7000 || ports[2] != 8000 {
 		t.Fatalf("unexpected ports: %v", ports)
+	}
+
+	portsFollow, err := DetectDokodemoPorts(path, true)
+	if err != nil {
+		t.Fatalf("DetectDokodemoPorts follow-only returned error: %v", err)
+	}
+	if len(portsFollow) != 2 || portsFollow[0] != 6000 || portsFollow[1] != 8000 {
+		t.Fatalf("unexpected follow-only ports: %v", portsFollow)
 	}
 }

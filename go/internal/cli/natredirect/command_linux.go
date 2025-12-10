@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -282,6 +283,21 @@ func (e exitError) ExitCode() int {
 }
 
 func detectDefaultPaths() (string, string) {
+	candidates := []string{
+		"/etc/nftables.d",
+		filepath.Join(layout.UnixConfigRoot, "nftables"),
+	}
+	for _, base := range candidates {
+		dir := strings.TrimSpace(base)
+		if dir == "" {
+			continue
+		}
+		// Try to ensure the directory exists so later writes succeed quietly.
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			continue
+		}
+		return filepath.Join(dir, "xray-transparent.nft"), filepath.Join(dir, "xray-transparent.d")
+	}
 	if commandExists("fw4") {
 		return "/etc/nftables.d/xray-transparent.nft", "/etc/nftables.d/xray-transparent.d"
 	}

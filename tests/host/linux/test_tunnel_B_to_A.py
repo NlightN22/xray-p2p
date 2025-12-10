@@ -455,20 +455,23 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         return sum(int(value) for value in matches)
 
     def _iptables_counter_sum(host) -> int:
-        result = host.run("sudo -n /usr/sbin/iptables -t nat -L xray_transparent -v -n")
-        if result.rc != 0:
-            return 0
-        total = 0
-        for line in (result.stdout or "").splitlines():
-            line = line.strip()
-            # Expected columns: pkts bytes target ...
-            parts = line.split()
-            if len(parts) >= 2 and parts[0].isdigit():
-                try:
-                    total += int(parts[0])
-                except ValueError:
-                    continue
-        return total
+        for chain in ("XRAY_TRANSPARENT", "xray_transparent"):
+            result = host.run(f"sudo -n /usr/sbin/iptables -t nat -L {chain} -v -n")
+            if result.rc != 0:
+                continue
+            total = 0
+            for line in (result.stdout or "").splitlines():
+                line = line.strip()
+                # Expected columns: pkts bytes target ...
+                parts = line.split()
+                if len(parts) >= 2 and parts[0].isdigit():
+                    try:
+                        total += int(parts[0])
+                    except ValueError:
+                        continue
+            if total:
+                return total
+        return 0
 
     def _traffic_counter_sum(host) -> int:
         nft_total = _nft_counter_sum(host)
@@ -479,20 +482,21 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         cmd = _detect_chain_cmd(host)
         if cmd:
             res = host.run(cmd)
-            if res.rc == 0 and "counter" in (res.stdout or ""):
+            if res.rc == 0 and ("counter" in (res.stdout or "") or "chain" in (res.stdout or "")):
                 return True
-        check = host.run("sudo -n /usr/sbin/iptables -t nat -L xray_transparent -v -n")
-        if check.rc == 0 and "Chain xray_transparent" in (check.stdout or ""):
-            return True
+        for chain in ("XRAY_TRANSPARENT", "xray_transparent"):
+            check = host.run(f"sudo -n /usr/sbin/iptables -t nat -L {chain} -v -n")
+            if check.rc == 0 and "Chain" in (check.stdout or ""):
+                return True
         return False
 
     def _nat_debug() -> str:
         client_nat_dump = client_runner("nat-redirect", "list", check=False).stdout or ""
         server_nat_dump = server_runner("nat-redirect", "list", check=False).stdout or ""
-        client_chain = client_host.run("sudo -n nft list chain inet fw4 xray_transparent_prerouting")
-        server_chain = server_host.run("sudo -n nft list chain inet fw4 xray_transparent_prerouting")
-        client_iptables = client_host.run("sudo -n /usr/sbin/iptables -t nat -L xray_transparent -v -n")
-        server_iptables = server_host.run("sudo -n /usr/sbin/iptables -t nat -L xray_transparent -v -n")
+        client_chain = client_host.run("sudo -n nft list table inet xray_transparent")
+        server_chain = server_host.run("sudo -n nft list table inet xray_transparent")
+        client_iptables = client_host.run("sudo -n /usr/sbin/iptables -t nat -L XRAY_TRANSPARENT -v -n")
+        server_iptables = server_host.run("sudo -n /usr/sbin/iptables -t nat -L XRAY_TRANSPARENT -v -n")
         sockets = client_host.run("sudo -n netstat -lpn 2>/dev/null | grep '51180|51080|52080|62022|62023' || true")
         processes = client_host.run("ps w | grep -E 'xp2p|xray' | grep -v grep")
         client_inbounds = client_host.run(f"cat {helpers.CLIENT_CONFIG_DIR / 'inbounds.json'} 2>/dev/null || true")
@@ -505,6 +509,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         server_run_log = server_host.run("cat /tmp/xp2p-*-run.log 2>/dev/null || true")
         client_err_log = client_host.run("cat /var/log/xp2p/*.err 2>/dev/null || true")
         server_err_log = server_host.run("cat /var/log/xp2p/*.err 2>/dev/null || true")
+        client_snippet = client_host.run(f"sudo -n cat {nat_snippet} 2>/dev/null || true")
+        server_snippet = server_host.run(f"sudo -n cat {nat_snippet} 2>/dev/null || true")
+        client_entries_ls = client_host.run(f"sudo -n ls -l {nat_entries} 2>/dev/null || true")
+        server_entries_ls = server_host.run(f"sudo -n ls -l {nat_entries} 2>/dev/null || true")
         return (
             f"server_nat:\n{_safe(server_nat_dump)}\nclient_nat:\n{_safe(client_nat_dump)}\n"
             f"server_chain:\n{_safe(server_chain.stdout)}\n{_safe(server_chain.stderr)}\n"
@@ -518,6 +526,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             f"client_logs_json:\n{_safe(client_logs_json.stdout)}\nserver_logs_json:\n{_safe(server_logs_json.stdout)}\n"
             f"client_run_log:\n{_safe(client_run_log.stdout)}\nserver_run_log:\n{_safe(server_run_log.stdout)}\n"
             f"client_err_log:\n{_safe(client_err_log.stdout)}\nserver_err_log:\n{_safe(server_err_log.stdout)}\n"
+            f"client_snippet:\n{_safe(client_snippet.stdout)}\nserver_snippet:\n{_safe(server_snippet.stdout)}\n"
+            f"client_entries_ls:\n{_safe(client_entries_ls.stdout)}\nserver_entries_ls:\n{_safe(server_entries_ls.stdout)}\n"
         )
 
     redirect_added = False
@@ -601,11 +611,12 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     socks_ping,
                     f"through SOCKS tunnel before redirect ping. {_nat_debug()}",
                 )
-                counting_supported = _has_nat_chain(client_host)
-                if _traffic_counter_sum(client_host) == 0:
-                    counting_supported = False
-                if not counting_supported:
-                    pytest.skip("transparent NAT backend not available on client host (no nft/iptables chain)")
+            counting_supported = _has_nat_chain(client_host)
+            if not counting_supported:
+                pytest.fail(
+                    "transparent NAT backend not available on client host (no nft/iptables chain).\n"
+                    f"{_nat_debug()}"
+                    )
                 initial_packets = _traffic_counter_sum(client_host) if counting_supported else 0
                 ping_result = client_runner(
                     "ping",
@@ -676,11 +687,12 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     socks_ping,
                     f"server-side SOCKS ping toward {reverse_ip}. {_nat_debug()}",
                 )
-                counting_supported = _has_nat_chain(server_host)
-                if _traffic_counter_sum(server_host) == 0:
-                    counting_supported = False
-                if not counting_supported:
-                    pytest.skip("transparent NAT backend not available on server host (no nft/iptables chain)")
+            counting_supported = _has_nat_chain(server_host)
+            if not counting_supported:
+                pytest.fail(
+                    "transparent NAT backend not available on server host (no nft/iptables chain).\n"
+                    f"{_nat_debug()}"
+                )
                 initial_server_packets = _traffic_counter_sum(server_host) if counting_supported else 0
                 ping_result = server_runner(
                     "ping",
