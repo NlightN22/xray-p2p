@@ -70,6 +70,7 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 	if err != nil {
 		return ListEntry{}, err
 	}
+	rebind := baseDomain(domain)
 	targetAddr, targetPort, err := parseTarget(opts.Target)
 	if err != nil {
 		return ListEntry{}, err
@@ -98,11 +99,15 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 			ForwardListenPort: rule.ListenPort,
 			ForwardTag:        rule.Tag,
 			AutoForward:       created,
+			RebindDomain:      rebind,
 		})
 	}
 
 	serverValue := fmt.Sprintf("%s#%d", serverIP, serverPort)
 	if err := m.upsertDNSMasq(domain, serverValue); err != nil {
+		return ListEntry{}, err
+	}
+	if err := m.ensureRebindAllowed(rebind); err != nil {
 		return ListEntry{}, err
 	}
 
@@ -177,6 +182,7 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 
 	removedCount := 0
 	for _, domain := range domains {
+		rebind := baseDomain(domain)
 		for name, sec := range sections {
 			if !sec.isManagedDNS() {
 				continue
@@ -201,6 +207,9 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 				})
 			}
 			state.remove(domain)
+		}
+		if !m.rebindInUse(rebind, domains, sections, state) {
+			_ = m.removeRebind(rebind)
 		}
 	}
 	if removedCount == 0 && !opts.All {

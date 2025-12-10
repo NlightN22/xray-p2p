@@ -17,6 +17,7 @@ type stateEntry struct {
 	ForwardListenPort int    `json:"forward_listen_port,omitempty"`
 	ForwardTag        string `json:"forward_tag,omitempty"`
 	AutoForward       bool   `json:"auto_forward,omitempty"`
+	RebindDomain      string `json:"rebind_domain,omitempty"`
 }
 
 func loadState(path string) (state, error) {

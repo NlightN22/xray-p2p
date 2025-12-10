@@ -78,3 +78,15 @@ func dnsSectionName(domain string) string {
 	}, domain)
 	return "xp2p_dns_" + safe
 }
+
+func baseDomain(domain string) string {
+	trimmed := strings.TrimSpace(domain)
+	if trimmed == "" {
+		return ""
+	}
+	idx := strings.Index(trimmed, ".")
+	if idx <= 0 {
+		return trimmed
+	}
+	return trimmed[idx+1:]
+}

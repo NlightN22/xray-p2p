@@ -101,3 +101,117 @@ func (m *Manager) readDNSSections() (map[string]uciSection, error) {
 	sections := parseUCIShow(out)
 	return sections, nil
 }
+
+func (m *Manager) ensureRebindAllowed(domain string) error {
+	if domain == "" {
+		return nil
+	}
+	section, err := m.dnsmasqSection()
+	if err != nil {
+		return err
+	}
+	if m.rebindPresent(section, domain) {
+		return nil
+	}
+	if err := runCommand("uci", "set", fmt.Sprintf("%s.%s.rebind_protection=0", m.dnsConfig, section)); err != nil {
+		return err
+	}
+	return runCommand("uci", "add_list", fmt.Sprintf("%s.%s.rebind_domain=%s", m.dnsConfig, section, domain))
+}
+
+func (m *Manager) removeRebind(domain string) error {
+	if domain == "" {
+		return nil
+	}
+	section, err := m.dnsmasqSection()
+	if err != nil {
+		return err
+	}
+	return runCommand("uci", "del_list", fmt.Sprintf("%s.%s.rebind_domain=%s", m.dnsConfig, section, domain))
+}
+
+func (m *Manager) rebindPresent(section, domain string) bool {
+	out, err := captureCommand("uci", "show", fmt.Sprintf("%s.%s.rebind_domain", m.dnsConfig, section))
+	if err != nil {
+		return false
+	}
+	for _, val := range parseUCIValues(out) {
+		if strings.EqualFold(val, domain) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) rebindInUse(target string, removing []string, sections map[string]uciSection, state state) bool {
+	for _, entry := range sections {
+		if !entry.isManagedDNS() {
+			continue
+		}
+		name := entry.option("name")
+		if name == "" {
+			continue
+		}
+		base := baseDomain(name)
+		if base == "" {
+			continue
+		}
+		if base == target && !contains(removing, name) {
+			return true
+		}
+	}
+	for domain, entry := range state.Entries {
+		if contains(removing, domain) {
+			continue
+		}
+		if baseDomain(domain) == target {
+			return true
+		}
+		if entry.RebindDomain != "" && strings.EqualFold(entry.RebindDomain, target) {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(list []string, value string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) dnsmasqSection() (string, error) {
+	sections, err := m.readDNSSections()
+	if err == nil {
+		for name, sec := range sections {
+			if sec.kind == "dnsmasq" {
+				return name, nil
+			}
+		}
+	}
+	created, err := captureCommand("uci", "add", m.dnsConfig, "dnsmasq")
+	if err != nil {
+		return "", err
+	}
+	if name := strings.TrimSpace(created); name != "" {
+		sections, err = m.readDNSSections()
+		if err == nil {
+			if sec, ok := sections[name]; ok && sec.kind == "dnsmasq" {
+				return name, nil
+			}
+		}
+	}
+	sections, err = m.readDNSSections()
+	if err != nil {
+		return "", err
+	}
+	for name, sec := range sections {
+		if sec.kind == "dnsmasq" {
+			return name, nil
+		}
+	}
+	return "", fmt.Errorf("xp2p: dnsmasq section not found in %s", m.dnsConfig)
+}
