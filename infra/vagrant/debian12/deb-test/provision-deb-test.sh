@@ -9,7 +9,9 @@ APT_PACKAGES="
   curl
   debhelper
   git
+  iptables
   lintian
+  nftables
   pkg-config
   rpm
   rsync
