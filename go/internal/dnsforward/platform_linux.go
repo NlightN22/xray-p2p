@@ -15,6 +15,9 @@ import (
 var domainPattern = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
 
 func detectDNSConfig() (string, error) {
+	if override := strings.TrimSpace(os.Getenv("XP2P_DNSFORWARD_CONFIG")); override != "" {
+		return override, nil
+	}
 	if hasFile("/etc/config/dnsmasq") {
 		return "dnsmasq", nil
 	}
@@ -27,6 +30,9 @@ func detectDNSConfig() (string, error) {
 func ensureOpenWrt() error {
 	if _, err := exec.LookPath("uci"); err != nil {
 		return errors.New("xp2p: uci command not found (OpenWrt required)")
+	}
+	if os.Getenv("XP2P_DNSFORWARD_FORCE_OPENWRT") == "1" {
+		return nil
 	}
 	if hasFile("/etc/openwrt_release") || hasFile("/etc/openwrt_version") {
 		return nil

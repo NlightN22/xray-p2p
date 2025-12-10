@@ -4,6 +4,7 @@ package dnsforward
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -79,7 +80,7 @@ func (m *Manager) commitDNS() error {
 }
 
 func (m *Manager) reloadDNS() error {
-	return runCommand("/etc/init.d/dnsmasq", "reload")
+	return runCommand(dnsmasqServicePath(), "reload")
 }
 
 func (m *Manager) commitFirewall() error {
@@ -90,7 +91,7 @@ func (m *Manager) reloadFirewall() error {
 	if err := runCommand("fw4", "reload"); err == nil {
 		return nil
 	}
-	return runCommand("/etc/init.d/firewall", "reload")
+	return runCommand(firewallServicePath(), "reload")
 }
 
 func (m *Manager) readDNSSections() (map[string]uciSection, error) {
@@ -214,4 +215,18 @@ func (m *Manager) dnsmasqSection() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("xp2p: dnsmasq section not found in %s", m.dnsConfig)
+}
+
+func dnsmasqServicePath() string {
+	if val := strings.TrimSpace(os.Getenv("XP2P_DNSFORWARD_DNSMASQ_SERVICE")); val != "" {
+		return val
+	}
+	return "/etc/init.d/dnsmasq"
+}
+
+func firewallServicePath() string {
+	if val := strings.TrimSpace(os.Getenv("XP2P_DNSFORWARD_FIREWALL_SERVICE")); val != "" {
+		return val
+	}
+	return "/etc/init.d/firewall"
 }
