@@ -193,19 +193,10 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 	state, _ := loadState(m.statePath)
 	stateChanged := false
 
-	sections, err := m.readDNSSections()
-	if err != nil {
-		return nil, err
-	}
-
 	var domains []string
 	if opts.All {
-		for _, sec := range sections {
-			if sec.isManagedDNS() {
-				if name := sec.option("name"); name != "" {
-					domains = append(domains, name)
-				}
-			}
+		for domain := range state.Entries {
+			domains = append(domains, domain)
 		}
 	} else {
 		domain, err := normalizeDomain(opts.Domain)
@@ -220,20 +211,30 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 	}
 
 	removedCount := 0
+	dnsSection, err := m.dnsmasqSection()
+	if err != nil {
+		return nil, err
+	}
 	for _, domain := range domains {
 		rebind := baseDomain(domain)
 		entry, hasState := state.Entries[domain]
-		for name, sec := range sections {
-			if !sec.isManagedDNS() {
-				continue
+
+		// Remove list server entries
+		value := fmt.Sprintf("/%s/%s", domain, entry.Server)
+		_ = runCommand("uci", "del_list", fmt.Sprintf("%s.%s.server=%s", m.dnsConfig, dnsSection, value))
+
+		// Remove legacy per-domain sections if any
+		sections, err := m.readDNSSections()
+		if err == nil {
+			for name, sec := range sections {
+				if !sec.isManagedDNS() {
+					continue
+				}
+				if sec.option("name") != domain {
+					continue
+				}
+				_ = runCommand("uci", "delete", fmt.Sprintf("%s.%s", m.dnsConfig, name))
 			}
-			if sec.option("name") != domain {
-				continue
-			}
-			if err := runCommand("uci", "delete", fmt.Sprintf("%s.%s", m.dnsConfig, name)); err != nil {
-				return nil, err
-			}
-			removedCount++
 		}
 
 		if opts.WithForward && hasState && entry.ForwardListenPort > 0 && entry.AutoForward {
@@ -242,6 +243,7 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 		if hasState {
 			state.remove(domain)
 			stateChanged = true
+			removedCount++
 		}
 		if !m.rebindInUse(rebind, domains, sections, state) {
 			_ = m.removeRebind(rebind)
@@ -281,35 +283,21 @@ func (m *Manager) List() ([]ListEntry, bool, error) {
 	}
 	state, _ := loadState(m.statePath)
 
-	sections, err := m.readDNSSections()
-	if err != nil {
-		return nil, false, err
-	}
-
 	intercept := m.interceptPresent()
 	var entries []ListEntry
-	for _, sec := range sections {
-		if !sec.isManagedDNS() {
-			continue
-		}
-		domain := sec.option("name")
-		server := sec.option("server")
-		if domain == "" || server == "" {
-			continue
-		}
+	for domain, s := range state.Entries {
 		entry := ListEntry{
 			Domain: domain,
-			Server: server,
-			Target: server,
+			Server: s.Server,
+			Target: s.Target,
 			Labels: []string{"xp2p"},
 		}
-		if s, ok := state.Entries[domain]; ok && s.ForwardListenPort > 0 {
+		if s.ForwardListenPort > 0 {
 			if s.AutoForward {
 				entry.Labels = append(entry.Labels, "forward:auto")
 			} else {
 				entry.Labels = append(entry.Labels, "forward:recorded")
 			}
-			entry.Target = s.Target
 		}
 		if intercept {
 			entry.Labels = append(entry.Labels, "intercept")

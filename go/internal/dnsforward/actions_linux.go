@@ -9,20 +9,14 @@ import (
 )
 
 func (m *Manager) upsertDNSMasq(domain, server string) error {
-	section := dnsSectionName(domain)
-	if err := runCommand("uci", "set", fmt.Sprintf("%s.%s=server", m.dnsConfig, section)); err != nil {
+	section, err := m.dnsmasqSection()
+	if err != nil {
 		return err
 	}
-	if err := runCommand("uci", "set", fmt.Sprintf("%s.%s.name=%s", m.dnsConfig, section, domain)); err != nil {
-		return err
-	}
-	if err := runCommand("uci", "set", fmt.Sprintf("%s.%s.server=%s", m.dnsConfig, section, server)); err != nil {
-		return err
-	}
-	if err := runCommand("uci", "set", fmt.Sprintf("%s.%s.xp2p=1", m.dnsConfig, section)); err != nil {
-		return err
-	}
-	return nil
+	value := fmt.Sprintf("/%s/%s", domain, server)
+	// ensure idempotency
+	_ = runCommand("uci", "del_list", fmt.Sprintf("%s.%s.server=%s", m.dnsConfig, section, value))
+	return runCommand("uci", "add_list", fmt.Sprintf("%s.%s.server=%s", m.dnsConfig, section, value))
 }
 
 func (m *Manager) ensureIntercept() error {
