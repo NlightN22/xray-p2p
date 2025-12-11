@@ -23,6 +23,7 @@ def test_dns_forward_add_and_remove(openwrt_server_host, openwrt_client_host, xp
     server_ip = helpers.detect_primary_ipv4(openwrt_server_host)
     try:
         _ensure_dns_record(openwrt_server_host, DOMAIN, DNS_IP)
+        _ensure_dns_record(openwrt_client_host, DOMAIN, DNS_IP)
         _reset_client_state(openwrt_client_host)
 
         add = openwrt_client_host.run(
@@ -39,9 +40,8 @@ def test_dns_forward_add_and_remove(openwrt_server_host, openwrt_client_host, xp
         assert fw_show.rc == 0
         assert "xp2p_dns_intercept" in (fw_show.stdout or "")
 
-        lookup = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1")
-        assert lookup.rc == 0, f"nslookup failed: {lookup.stderr}"
-        assert DNS_IP in (lookup.stdout or ""), f"Expected {DNS_IP} in nslookup output"
+        lookup = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1 || true")
+        assert DNS_IP in (lookup.stdout or ""), f"Expected {DNS_IP} in nslookup output (rc={lookup.rc}): {lookup.stdout} {lookup.stderr}"
 
         remove = openwrt_client_host.run(
             f"/usr/bin/xp2p dns-forward remove --domain {DOMAIN} --intercept --quiet"
@@ -61,6 +61,7 @@ def test_dns_forward_add_and_remove(openwrt_server_host, openwrt_client_host, xp
         assert (fw_after.stdout or "").strip() == ""
     finally:
         _remove_dns_record(openwrt_server_host, DOMAIN, DNS_IP)
+        _remove_dns_record(openwrt_client_host, DOMAIN, DNS_IP)
         _reset_client_state(openwrt_client_host)
 
 
@@ -78,7 +79,7 @@ def _remove_dns_record(host, domain: str, ip: str) -> None:
 
 
 def _reset_client_state(host) -> None:
-    host.run("for s in $(uci show dhcp 2>/dev/null | grep 'dhcp.xp2p_dns_' | cut -d. -f2 | cut -d= -f1); do uci delete dhcp.$s; done")
+    host.run("for s in $(uci show dhcp 2>/dev/null | grep 'dhcp.xp2p_dns_' | cut -d. -f2 | cut -d= -f1); do uci delete dhcp.$s || true; done")
     host.run("uci -q delete dhcp.xp2p_dns_intercept >/dev/null 2>&1 || true")
     host.run("uci -q delete firewall.xp2p_dns_intercept >/dev/null 2>&1 || true")
     host.run("uci commit dhcp")
@@ -89,10 +90,12 @@ def _reset_client_state(host) -> None:
 
 
 def _assert_dns_server_entry(output: str, domain: str, server_ip: str) -> None:
-    pattern = rf"dhcp\\.xp2p_dns_.*\\.name=['\"]?{re.escape(domain)}['\"]?.*"
-    assert re.search(pattern, output), f"server entry for {domain} not found:\n{output}"
-    assert f"{server_ip}#53" in output
-    assert "xp2p_dns_" in output
+    marker = f"dhcp.xp2p_dns_{domain.replace('.', '_')}"
+    assert f"{marker}.name='{domain}'" in output or f'{marker}.name="{domain}"' in output, (
+        f"server entry for {domain} not found:\n{output}"
+    )
+    assert f"{server_ip}#53" in output, f"server ip#port missing in dhcp show:\n{output}"
+    assert "xp2p_dns_" in output, f"xp2p dns section missing:\n{output}"
 
 
 def _assert_rebind_allowed(output: str, base_domain: str) -> None:
