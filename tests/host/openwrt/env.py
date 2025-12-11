@@ -239,9 +239,7 @@ def bootstrap_xp2p_configs(host: Host) -> None:
 
 def cleanup_xp2p(host: Host) -> None:
     _stop_xp2p_services(host)
-    host.run("opkg remove xp2p >/dev/null 2>&1 || true")
-    host.run("rm -rf /etc/xp2p >/dev/null 2>&1 || true")
-    host.run("rm -rf /var/log/xp2p >/dev/null 2>&1 || true")
+    host.run("OPKG_FORCE_REMOVE=1 opkg remove --autoremove xp2p >/dev/null 2>&1 || true")
     host.run("rm -f /tmp/xp2p-client.log /tmp/xp2p-server.log /tmp/xp2p.ipk >/dev/null 2>&1 || true")
     host.run("rm -f /etc/xp2p/dns-forward-state.json >/dev/null 2>&1 || true")
 
