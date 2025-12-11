@@ -223,6 +223,29 @@ def install_ipk_on_host(
     return staged_path
 
 
+def bootstrap_xp2p_configs(host: Host) -> None:
+    # Recreate default configs for both roles (needed after cleanup)
+    for role, config_dir in (("client", "config-client"), ("server", "config-server")):
+        result = host.run(
+            f"/usr/bin/xp2p {role} install --path /etc/xp2p --config-dir {config_dir}"
+        )
+        if result.rc != 0:
+            raise RuntimeError(
+                f"xp2p {role} install failed on {host.backend.hostname} "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+    _assert_default_configs_present(host)
+
+
+def cleanup_xp2p(host: Host) -> None:
+    _stop_xp2p_services(host)
+    host.run("opkg remove xp2p >/dev/null 2>&1 || true")
+    host.run("rm -rf /etc/xp2p >/dev/null 2>&1 || true")
+    host.run("rm -rf /var/log/xp2p >/dev/null 2>&1 || true")
+    host.run("rm -f /tmp/xp2p-client.log /tmp/xp2p-server.log /tmp/xp2p.ipk >/dev/null 2>&1 || true")
+    host.run("rm -f /etc/xp2p/dns-forward-state.json >/dev/null 2>&1 || true")
+
+
 def opkg_remove(host: Host, package: str, ignore_missing: bool = True) -> None:
     status = host.run(f"opkg status {shlex.quote(package)}")
     if status.rc != 0:
@@ -292,6 +315,27 @@ def _read_file_safe(host: Host, path: PurePosixPath | Path | str) -> str:
     if result.rc != 0:
         return ""
     return result.stdout or ""
+
+
+def _assert_default_configs_present(host: Host) -> None:
+    required = [
+        "/etc/xp2p/config-client/inbounds.json",
+        "/etc/xp2p/config-client/outbounds.json",
+        "/etc/xp2p/config-client/routing.json",
+        "/etc/xp2p/config-client/logs.json",
+        "/etc/xp2p/config-server/inbounds.json",
+        "/etc/xp2p/config-server/outbounds.json",
+        "/etc/xp2p/config-server/routing.json",
+        "/etc/xp2p/config-server/logs.json",
+    ]
+    missing: list[str] = []
+    for path in required:
+        if host.run(f"test -f {shlex.quote(path)}").rc != 0:
+            missing.append(path)
+    if missing:
+        raise RuntimeError(
+            f"xp2p default configs are missing on {host.backend.hostname}: {', '.join(missing)}"
+        )
 
 
 @contextmanager

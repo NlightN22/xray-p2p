@@ -15,14 +15,46 @@ DNS_IP = "10.123.45.67"
 
 @pytest.fixture(scope="module")
 def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
+    server_runner = lambda *args: openwrt_env.run_xp2p(openwrt_server_host, *args)
+    client_runner = lambda *args: openwrt_env.run_xp2p(openwrt_client_host, *args)
+
     for host in (openwrt_server_host, openwrt_client_host):
+        openwrt_env.cleanup_xp2p(host)
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk, force=True)
+
+    server_ip = helpers.detect_primary_ipv4(openwrt_server_host)
+    server_install = server_runner(
+        "server",
+        "install",
+        "--path",
+        "/etc/xp2p",
+        "--config-dir",
+        "config-server",
+        "--host",
+        server_ip,
+        "--force",
+    )
+    credential = helpers.extract_trojan_credential(server_install.stdout or "")
+    client_runner(
+        "client",
+        "install",
+        "--path",
+        "/etc/xp2p",
+        "--config-dir",
+        "config-client",
+        "--link",
+        credential["link"],
+        "--force",
+    )
+
     yield xp2p_openwrt_ipk
+
     for host in (openwrt_server_host, openwrt_client_host):
-        host.run("opkg remove xp2p >/dev/null 2>&1 || true")
-        host.run("rm -f /tmp/xp2p-client.log /tmp/xp2p-server.log /tmp/xp2p.ipk >/dev/null 2>&1 || true")
-        host.run("rm -f /etc/xp2p/dns-forward-state.json >/dev/null 2>&1 || true")
-        host.run("rm -rf /etc/xp2p >/dev/null 2>&1 || true")
+        openwrt_env._stop_xp2p_services(host)
+    helpers.cleanup_client_install(openwrt_client_host, client_runner)
+    helpers.cleanup_server_install(openwrt_server_host, server_runner)
+    for host in (openwrt_server_host, openwrt_client_host):
+        openwrt_env.cleanup_xp2p(host)
 
 
 def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_host, xp2p_on_both):
@@ -47,18 +79,31 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         assert "xp2p_dns_intercept" in (fw_show.stdout or "")
 
         forward_port = _detect_forward_port(openwrt_client_host, server_ip)
-        service_pid = _start_client_service(openwrt_client_host)
-        _wait_for_port(openwrt_client_host, forward_port)
+        with openwrt_env.xp2p_run_session(
+            openwrt_server_host,
+            role="server",
+            install_dir="/etc/xp2p",
+            config_dir="config-server",
+            log_path="/tmp/xp2p-server.log",
+        ):
+            with openwrt_env.xp2p_run_session(
+                openwrt_client_host,
+                role="client",
+                install_dir="/etc/xp2p",
+                config_dir="config-client",
+                log_path="/tmp/xp2p-client.log",
+            ):
+                _wait_for_port(openwrt_client_host, forward_port)
 
-        lookup_direct = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1:{forward_port} || true")
-        assert DNS_IP in (lookup_direct.stdout or ""), (
-            f"Expected {DNS_IP} via dokodemo port (rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
-        )
+                lookup_direct = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1:{forward_port} || true")
+                assert DNS_IP in (lookup_direct.stdout or ""), (
+                    f"Expected {DNS_IP} via dokodemo port (rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
+                )
 
-        lookup_intercept = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1 || true")
-        assert DNS_IP in (lookup_intercept.stdout or ""), (
-            f"Expected {DNS_IP} via intercept (rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
-        )
+                lookup_intercept = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1 || true")
+                assert DNS_IP in (lookup_intercept.stdout or ""), (
+                    f"Expected {DNS_IP} via intercept (rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
+                )
 
         remove = openwrt_client_host.run(
             f"/usr/bin/xp2p client dns-forward remove --domain {DOMAIN} --intercept --quiet"
@@ -77,7 +122,6 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         assert fw_after.rc == 0
         assert (fw_after.stdout or "").strip() == ""
     finally:
-        _stop_service(openwrt_client_host, locals().get("service_pid"))
         _remove_dns_record(openwrt_server_host, DOMAIN, DNS_IP)
         _remove_dns_record(openwrt_client_host, DOMAIN, DNS_IP)
         _reset_dnsforward_state(openwrt_client_host)
@@ -86,7 +130,6 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
 def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_host, xp2p_on_both):
     server_ip = helpers.detect_primary_ipv4(openwrt_server_host)
     client_ip = helpers.detect_primary_ipv4(openwrt_client_host)
-    service_pid = None
     try:
         _ensure_dns_record(openwrt_server_host, SERVER_DOMAIN, DNS_IP)
         _ensure_dns_record(openwrt_client_host, SERVER_DOMAIN, DNS_IP)
@@ -107,18 +150,31 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         assert "xp2p_dns_intercept" in (fw_show.stdout or "")
 
         forward_port = _detect_forward_port(openwrt_server_host, client_ip, role="server")
-        service_pid = _start_service(openwrt_server_host, role="server")
-        _wait_for_port(openwrt_server_host, forward_port)
+        with openwrt_env.xp2p_run_session(
+            openwrt_server_host,
+            role="server",
+            install_dir="/etc/xp2p",
+            config_dir="config-server",
+            log_path="/tmp/xp2p-server.log",
+        ):
+            with openwrt_env.xp2p_run_session(
+                openwrt_client_host,
+                role="client",
+                install_dir="/etc/xp2p",
+                config_dir="config-client",
+                log_path="/tmp/xp2p-client.log",
+            ):
+                _wait_for_port(openwrt_server_host, forward_port)
 
-        lookup_direct = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1:{forward_port} || true")
-        assert DNS_IP in (lookup_direct.stdout or ""), (
-            f"Expected {DNS_IP} via dokodemo port (rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
-        )
+                lookup_direct = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1:{forward_port} || true")
+                assert DNS_IP in (lookup_direct.stdout or ""), (
+                    f"Expected {DNS_IP} via dokodemo port (rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
+                )
 
-        lookup_intercept = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1 || true")
-        assert DNS_IP in (lookup_intercept.stdout or ""), (
-            f"Expected {DNS_IP} via intercept (rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
-        )
+                lookup_intercept = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1 || true")
+                assert DNS_IP in (lookup_intercept.stdout or ""), (
+                    f"Expected {DNS_IP} via intercept (rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
+                )
 
         remove = openwrt_server_host.run(
             f"/usr/bin/xp2p server dns-forward remove --domain {SERVER_DOMAIN} --intercept --quiet"
@@ -137,7 +193,6 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         assert fw_after.rc == 0
         assert (fw_after.stdout or "").strip() == ""
     finally:
-        _stop_service(openwrt_server_host, service_pid)
         _remove_dns_record(openwrt_server_host, SERVER_DOMAIN, DNS_IP)
         _remove_dns_record(openwrt_client_host, SERVER_DOMAIN, DNS_IP)
         _reset_dnsforward_state(openwrt_server_host)
@@ -195,25 +250,6 @@ def _detect_forward_port(host, target_ip: str, target_port: int = 53, role: str 
     match = re.search(pattern, output)
     assert match, f"could not detect forward port in output:\n{output}"
     return match.group(1)
-
-
-def _start_client_service(host):
-    return _start_service(host, role="client")
-
-
-def _start_service(host, role: str):
-    start = host.run(
-        f"nohup /usr/bin/xp2p {role} service run --heartbeat=false --max-restarts=0 >/tmp/xp2p-{role}.log 2>&1 & echo $!"
-    )
-    assert start.rc == 0, f"failed to start {role} service: {start.stderr}"
-    return (start.stdout or "").strip()
-
-
-def _stop_service(host, pid):
-    if not pid:
-        return
-    host.run(f"kill {pid} >/dev/null 2>&1 || true")
-    host.run("sleep 1")
 
 
 def _wait_for_port(host, port: str, attempts: int = 15, delay: int = 1) -> None:
