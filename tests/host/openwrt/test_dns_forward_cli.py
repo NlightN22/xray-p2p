@@ -17,7 +17,12 @@ DNS_IP = "10.123.45.67"
 def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
     for host in (openwrt_server_host, openwrt_client_host):
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk, force=True)
-    return xp2p_openwrt_ipk
+    yield xp2p_openwrt_ipk
+    for host in (openwrt_server_host, openwrt_client_host):
+        host.run("opkg remove xp2p >/dev/null 2>&1 || true")
+        host.run("rm -f /tmp/xp2p-client.log /tmp/xp2p-server.log /tmp/xp2p.ipk >/dev/null 2>&1 || true")
+        host.run("rm -f /etc/xp2p/dns-forward-state.json >/dev/null 2>&1 || true")
+        host.run("rm -rf /etc/xp2p >/dev/null 2>&1 || true")
 
 
 def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_host, xp2p_on_both):
