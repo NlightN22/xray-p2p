@@ -11,6 +11,8 @@ DOMAIN = "srv.test.lan"
 SERVER_DOMAIN = "srv-side.test.lan"
 BASE_DOMAIN = "test.lan"
 DNS_IP = "10.123.45.67"
+SERVER_TUN_IP = "10.63.30.11"
+CLIENT_TUN_IP = "10.63.30.12"
 
 
 @pytest.fixture(scope="module")
@@ -22,7 +24,7 @@ def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
         openwrt_env.cleanup_xp2p(host)
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk, force=True)
 
-    server_ip = helpers.detect_primary_ipv4(openwrt_server_host)
+    server_ip = SERVER_TUN_IP
     server_install = server_runner(
         "server",
         "install",
@@ -58,7 +60,7 @@ def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
 
 
 def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_host, xp2p_on_both):
-    server_ip = helpers.detect_primary_ipv4(openwrt_server_host)
+    server_ip = SERVER_TUN_IP
     try:
         _ensure_dns_record(openwrt_server_host, DOMAIN, DNS_IP)
         _ensure_dns_record(openwrt_client_host, DOMAIN, DNS_IP)
@@ -85,25 +87,18 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
             install_dir="/etc/xp2p",
             config_dir="config-server",
             log_path="/tmp/xp2p-server.log",
-        ):
-            with openwrt_env.xp2p_run_session(
-                openwrt_client_host,
-                role="client",
-                install_dir="/etc/xp2p",
-                config_dir="config-client",
-                log_path="/tmp/xp2p-client.log",
             ):
-                _wait_for_port(openwrt_client_host, forward_port)
+                with openwrt_env.xp2p_run_session(
+                    openwrt_client_host,
+                    role="client",
+                    install_dir="/etc/xp2p",
+                    config_dir="config-client",
+                    log_path="/tmp/xp2p-client.log",
+                ):
+                    _wait_for_port(openwrt_client_host, forward_port)
 
-                lookup_direct = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1:{forward_port} || true")
-                assert DNS_IP in (lookup_direct.stdout or ""), (
-                    f"Expected {DNS_IP} via dokodemo port (rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
-                )
-
-                lookup_intercept = openwrt_client_host.run(f"nslookup {DOMAIN} 127.0.0.1 || true")
-                assert DNS_IP in (lookup_intercept.stdout or ""), (
-                    f"Expected {DNS_IP} via intercept (rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
-                )
+                    _assert_dns_response(openwrt_client_host, DOMAIN, DNS_IP, server=f"127.0.0.1:{forward_port}")
+                    _assert_dns_response(openwrt_client_host, DOMAIN, DNS_IP, server="127.0.0.1")
 
         remove = openwrt_client_host.run(
             f"/usr/bin/xp2p client dns-forward remove --domain {DOMAIN} --intercept --quiet"
@@ -128,8 +123,8 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
 
 
 def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_host, xp2p_on_both):
-    server_ip = helpers.detect_primary_ipv4(openwrt_server_host)
-    client_ip = helpers.detect_primary_ipv4(openwrt_client_host)
+    server_ip = SERVER_TUN_IP
+    client_ip = CLIENT_TUN_IP
     try:
         _ensure_dns_record(openwrt_server_host, SERVER_DOMAIN, DNS_IP)
         _ensure_dns_record(openwrt_client_host, SERVER_DOMAIN, DNS_IP)
@@ -223,16 +218,15 @@ def _reset_dnsforward_state(host) -> None:
 
 
 def _assert_dns_server_entry(output: str, domain: str, server_ip: str, role: str = "client") -> None:
-    sanitized = re.sub(r"[^A-Za-z0-9]", "_", domain)
-    marker = f"dhcp.xp2p_dns_{sanitized}"
-    assert f"{marker}.name='{domain}'" in output or f'{marker}.name="{domain}"' in output, (
-        f"server entry for {domain} not found:\n{output}"
-    )
-    server_match = re.search(rf"{marker}\.server='([^']+#\d+)'", output)
-    assert server_match, f"server value missing for {domain}:\n{output}"
-    server_value = server_match.group(1)
-    assert "#" in server_value, f"unexpected server value for {domain}: {server_value}\n{output}"
-    assert "xp2p_dns_" in output, f"xp2p dns section missing:\n{output}"
+    expected = f"/{domain}/127.0.0.1#"
+    found = False
+    for line in (output or "").splitlines():
+        if ".server=" not in line:
+            continue
+        if expected in line:
+            found = True
+            break
+    assert found, f"server entry for {domain} not found in dhcp config:\n{output}"
 
 
 def _assert_rebind_allowed(output: str, base_domain: str) -> None:
@@ -250,6 +244,34 @@ def _detect_forward_port(host, target_ip: str, target_port: int = 53, role: str 
     match = re.search(pattern, output)
     assert match, f"could not detect forward port in output:\n{output}"
     return match.group(1)
+
+
+def _assert_dns_response(host, domain: str, expected_ip: str, *, server: str) -> None:
+    if ":" in server:
+        host_part, port_part = server.rsplit(":", 1)
+        dig_cmd = f"kdig +tcp @{host_part} -p {port_part} {domain} A +short"
+    else:
+        dig_cmd = f"kdig +tcp @{server} {domain} A +short"
+    result = host.run(f"{dig_cmd} || true")
+    stdout = result.stdout or ""
+    if expected_ip in stdout:
+        return
+    logs = host.run(
+        "echo '--- /tmp/xp2p-client.log ---'; "
+        "cat /tmp/xp2p-client.log 2>/dev/null; "
+        "echo '\n--- /tmp/xp2p-server.log ---'; "
+        "cat /tmp/xp2p-server.log 2>/dev/null; "
+        "echo '\n--- /tmp/xp2p-client-run.log ---'; "
+        "cat /tmp/xp2p-client-run.log 2>/dev/null; "
+        "echo '\n--- /tmp/xp2p-server-run.log ---'; "
+        "cat /tmp/xp2p-server-run.log 2>/dev/null || true"
+    )
+    raise AssertionError(
+        f"Expected {expected_ip} from {domain} via {server} (rc={result.rc}).\n"
+        f"Command: {dig_cmd}\n"
+        f"STDOUT:\n{stdout}\nSTDERR:\n{result.stderr}\n"
+        f"XP2P logs:\n{logs.stdout}"
+    )
 
 
 def _wait_for_port(host, port: str, attempts: int = 15, delay: int = 1) -> None:
