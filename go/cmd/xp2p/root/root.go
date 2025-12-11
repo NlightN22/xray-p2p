@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra/doc"
 
 	clientcmd "github.com/NlightN22/xray-p2p/go/internal/cli/client"
-	dnsforwardcmd "github.com/NlightN22/xray-p2p/go/internal/cli/dnsforward"
 	natredirectcmd "github.com/NlightN22/xray-p2p/go/internal/cli/natredirect"
 	servercmd "github.com/NlightN22/xray-p2p/go/internal/cli/server"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -71,9 +70,6 @@ func NewCommand() *cobra.Command {
 	)
 	if natCmd := natredirectMaybeAdd(opts); natCmd != nil {
 		rootCmd.AddCommand(natCmd)
-	}
-	if dnsCmd := dnsforwardMaybeAdd(opts); dnsCmd != nil {
-		rootCmd.AddCommand(dnsCmd)
 	}
 
 	return rootCmd
@@ -221,11 +217,6 @@ func (o *rootOptions) buildOverrides() map[string]any {
 
 func natredirectMaybeAdd(opts *rootOptions) *cobra.Command {
 	cmd := natredirectcmd.NewCommand(func() config.Config { return opts.cfg })
-	return cmd
-}
-
-func dnsforwardMaybeAdd(opts *rootOptions) *cobra.Command {
-	cmd := dnsforwardcmd.NewCommand(func() config.Config { return opts.cfg })
 	return cmd
 }
 

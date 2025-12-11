@@ -14,7 +14,21 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-func NewCommand(cfg func() config.Config) *cobra.Command {
+func NewClientCommand(cfg func() config.Config) *cobra.Command {
+	return newCommand(func() (*dnsforward.Manager, error) {
+		c := cfg()
+		return dnsforward.NewClientManager(c.Client.InstallDir, c.Client.ConfigDir)
+	})
+}
+
+func NewServerCommand(cfg func() config.Config) *cobra.Command {
+	return newCommand(func() (*dnsforward.Manager, error) {
+		c := cfg()
+		return dnsforward.NewServerManager(c.Server.InstallDir, c.Server.ConfigDir)
+	})
+}
+
+func newCommand(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dns-forward",
 		Short: "Manage dnsmasq forward entries on OpenWrt",
@@ -24,14 +38,14 @@ func NewCommand(cfg func() config.Config) *cobra.Command {
 		},
 	}
 	cmd.AddCommand(
-		newAddCmd(cfg),
-		newRemoveCmd(cfg),
-		newListCmd(cfg),
+		newAddCmd(makeMgr),
+		newRemoveCmd(makeMgr),
+		newListCmd(makeMgr),
 	)
 	return cmd
 }
 
-func newAddCmd(cfg func() config.Config) *cobra.Command {
+func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	var domain string
 	var target string
 	var withForward bool
@@ -42,7 +56,7 @@ func newAddCmd(cfg func() config.Config) *cobra.Command {
 		Use:   "add",
 		Short: "Create or update a DNS forward entry",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			manager, err := dnsforward.NewManager(cfg().Client.InstallDir, cfg().Client.ConfigDir)
+			manager, err := makeMgr()
 			if err != nil {
 				logging.Error("xp2p dns-forward add failed", "err", err)
 				return exitError{code: 1}
@@ -80,7 +94,7 @@ func newAddCmd(cfg func() config.Config) *cobra.Command {
 	return cmd
 }
 
-func newRemoveCmd(cfg func() config.Config) *cobra.Command {
+func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	var domain string
 	var withForward bool
 	var intercept bool
@@ -91,7 +105,7 @@ func newRemoveCmd(cfg func() config.Config) *cobra.Command {
 		Use:   "remove",
 		Short: "Remove a DNS forward entry",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			manager, err := dnsforward.NewManager(cfg().Client.InstallDir, cfg().Client.ConfigDir)
+			manager, err := makeMgr()
 			if err != nil {
 				logging.Error("xp2p dns-forward remove failed", "err", err)
 				return exitError{code: 1}
@@ -121,12 +135,12 @@ func newRemoveCmd(cfg func() config.Config) *cobra.Command {
 	return cmd
 }
 
-func newListCmd(cfg func() config.Config) *cobra.Command {
+func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List managed DNS forwards",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			manager, err := dnsforward.NewManager(cfg().Client.InstallDir, cfg().Client.ConfigDir)
+			manager, err := makeMgr()
 			if err != nil {
 				logging.Error("xp2p dns-forward list failed", "err", err)
 				return exitError{code: 1}

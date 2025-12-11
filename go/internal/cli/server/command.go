@@ -60,6 +60,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newServerCertCmd(cfg),
 		newServerDeployCmd(cfg),
 	)
+	dnsForwardMaybeAdd(cmd, cfg)
 
 	return cmd
 }
