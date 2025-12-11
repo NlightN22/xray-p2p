@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -117,10 +116,7 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 		})
 		stateChanged = true
 	} else {
-		forwards, err := client.ListForwards(client.ForwardListOptions{
-			InstallDir: m.installDir,
-			ConfigDir:  m.configDir,
-		})
+		forwards, err := m.listForwards()
 		if err != nil {
 			return ListEntry{}, err
 		}
