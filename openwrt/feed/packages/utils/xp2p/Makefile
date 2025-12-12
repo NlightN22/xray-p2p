@@ -1,8 +1,8 @@
 ﻿include $(TOPDIR)/rules.mk
 
 PKG_NAME:=xp2p
-PKG_VERSION:=0.1.6
-PKG_RELEASE:=1
+ "$($matches[1])$Version" 
+ "$($matches[1])1" 
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=xray-p2p maintainers
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)

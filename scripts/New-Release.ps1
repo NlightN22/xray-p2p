@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Version
+    [string]$Version,
+    [switch]$ReplaceTag
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,13 +29,25 @@ if ($Version -notmatch '^\d+(\.\d+){1,2}$') {
 $Tag = "v$Version"
 
 Write-Section "Checking for existing tag $Tag"
-if ((git rev-parse -q --verify "$Tag" 2>$null)) {
-    Write-Error "Tag $Tag already exists locally"
-    exit 1
-}
-if ((git ls-remote --exit-code origin "refs/tags/$Tag" 2>$null)) {
-    Write-Error "Tag $Tag already exists on origin"
-    exit 1
+$localTagExists = $null -ne (git rev-parse -q --verify "$Tag" 2>$null)
+$remoteTagExists = $null -ne (git ls-remote --exit-code origin "refs/tags/$Tag" 2>$null)
+if (-not $ReplaceTag) {
+    if ($localTagExists) {
+        Write-Error "Tag $Tag already exists locally (use -ReplaceTag to recreate it)"
+        exit 1
+    }
+    if ($remoteTagExists) {
+        Write-Error "Tag $Tag already exists on origin (use -ReplaceTag to recreate it)"
+        exit 1
+    }
+} else {
+    Write-Section "Replacing existing tag $Tag"
+    if ($localTagExists) {
+        git tag -d "$Tag" | Out-Null
+    }
+    if ($remoteTagExists) {
+        git push --delete origin "$Tag" | Out-Null
+    }
 }
 
 $VersionFile = Join-Path -Path (Get-Location) -ChildPath "go/internal/version/version.go"
@@ -65,6 +78,9 @@ if ($original -ne $updated) {
 
 Write-Section "Running go test ./..."
 go test ./...
+
+Write-Section "Running make lint"
+make lint
 
 Write-Section "Running make build"
 make build
