@@ -75,7 +75,7 @@ build-deb:
 	$(MAKE) test-wsl
 	$(MAKE) lint
 	cd $(VAGRANT_DEB12_DIR) && vagrant up deb-test-a
-	cd $(VAGRANT_DEB12_DIR) && vagrant ssh deb-test-a -c "/srv/xray-p2p/scripts/build/build_deb_xp2p.sh --all"
+	cd $(VAGRANT_DEB12_DIR) && vagrant ssh deb-test-a -c "sudo -n /bin/bash /srv/xray-p2p/scripts/build/build_deb_xp2p.sh --all"
 # swallow extra positional arguments so make does not treat them as targets
 %:
 	@:

@@ -21,7 +21,7 @@ if [ "${1:-}" = "--all" ]; then
   list="${1:-$ALL_ARCHES}"
   for arch in $list; do
     echo "==> Building deb for arch=$arch"
-    XP2P_DEB_ARCH="$arch" "$0"
+    XP2P_DEB_ARCH="$arch" /bin/bash "$0"
   done
   exit 0
 fi
@@ -63,12 +63,30 @@ mkdir -p \
   "$STAGING_DIR/usr/share/zsh/vendor-completions" \
   "$STAGING_DIR/usr/share/fish/vendor_completions.d"
 
-echo "==> Building xp2p binary (GOARCH=$PKG_ARCH)"
+GO_BUILD_ARCH="$PKG_ARCH"
+GO_BUILD_ARM=
+case "$PKG_ARCH" in
+  armhf|armv7|armv7l|arm32)
+    GO_BUILD_ARCH="arm"
+    GO_BUILD_ARM="7"
+    ;;
+  armel)
+    GO_BUILD_ARCH="arm"
+    GO_BUILD_ARM="5"
+    ;;
+esac
+
+echo "==> Building xp2p binary (GOARCH=$GO_BUILD_ARCH${GO_BUILD_ARM:+ GOARM=$GO_BUILD_ARM})"
 LDFLAGS="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
 (
   cd "$PROJECT_ROOT"
-  env GOOS=linux GOARCH="$PKG_ARCH" CGO_ENABLED=0 \
-    go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
+  if [ -n "$GO_BUILD_ARM" ]; then
+    env GOOS=linux GOARCH="$GO_BUILD_ARCH" GOARM="$GO_BUILD_ARM" CGO_ENABLED=0 \
+      go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
+  else
+    env GOOS=linux GOARCH="$GO_BUILD_ARCH" CGO_ENABLED=0 \
+      go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
+  fi
 )
 chmod 0755 "$STAGING_DIR/usr/bin/xp2p"
 

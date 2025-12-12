@@ -13,6 +13,7 @@ APT_PACKAGES="
   lintian
   nftables
   pkg-config
+  qemu-user-static
   rpm
   rsync
   ruby
@@ -24,6 +25,13 @@ apt-get update -y
 apt-get install -y --no-install-recommends $APT_PACKAGES
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+
+# Ensure binfmt handlers for cross-built debs (arm64/armhf/386)
+if command -v update-binfmts >/dev/null 2>&1; then
+  update-binfmts --display | grep -q "qemu-aarch64 (enabled)" || update-binfmts --enable qemu-aarch64 || true
+  update-binfmts --display | grep -q "qemu-arm (enabled)" || update-binfmts --enable qemu-arm || true
+  update-binfmts --display | grep -q "qemu-i386 (enabled)" || update-binfmts --enable qemu-i386 || true
+fi
 
 GO_VERSION=${GO_VERSION:-"1.23.3"}
 GO_ARCHIVE="go${GO_VERSION}.linux-amd64.tar.gz"
