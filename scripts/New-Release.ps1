@@ -48,16 +48,20 @@ $pattern = 'var current = ".*"'
 $replacement = "var current = `"$Version`""
 $original = Get-Content -Raw $VersionFile
 $updated = $original -replace $pattern, $replacement
-if ($original -eq $updated) {
+if ($original -notmatch $pattern) {
     Write-Error "Version placeholder not found in $VersionFile"
     exit 1
 }
-[System.IO.File]::WriteAllText(
-    $VersionFile,
-    $updated,
-    [System.Text.Encoding]::UTF8
-)
-& gofmt -w $VersionFile
+if ($original -ne $updated) {
+    [System.IO.File]::WriteAllText(
+        $VersionFile,
+        $updated,
+        [System.Text.Encoding]::UTF8
+    )
+    & gofmt -w $VersionFile
+} else {
+    Write-Section "Version file already set to $Version"
+}
 
 Write-Section "Running go test ./..."
 go test ./...
@@ -72,7 +76,7 @@ if (-not (Test-Path $OpenWrtMakefile)) {
 }
 
 Write-Section "Updating OpenWrt package version"
-$pkgPattern = '^(PKG_VERSION:=)(.*)$'
+$pkgPattern = '(?m)^(PKG_VERSION:=)(.*)$'
 $pkgContent = Get-Content -Raw $OpenWrtMakefile
 $pkgUpdated = $pkgContent -replace $pkgPattern, "`$1$Version"
 if ($pkgContent -eq $pkgUpdated) {
