@@ -8,47 +8,89 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
 
 - A single statically linked CLI (`xp2p`) with Cobra-based help, completions, doc generation, and a background diagnostics service.
 - Server management covering installation, upgrades, TLS deployment, user provisioning, redirect/forward/reverse bridges, and `xray-core` log collection.
-- Client management on Windows, Linux, and OpenWrt including endpoint installs from `trojan://` links, reverse portals, SOCKS autodiscovery, redirects, and DNS-aware forwarding.
+- Client management on Windows, Linux, and OpenWrt including endpoint installs from `trojan://` links, reverse portals, SOCKS autodiscovery, redirects, DNS-aware forwarding, and transparent NAT helpers.
 - Remote deployment handshakes (`xp2p client deploy` + `xp2p server deploy`) that ship ready-to-use manifests over an encrypted link before bootstrapping both sides.
-- Build tooling that emits per-OS packages together with vendor-supplied `xray` binaries, Windows MSI installers, Debian packages, and OpenWrt IPKs.
+- Build tooling that emits per-OS packages together with vendor-supplied `xray` binaries, Windows MSI installers, Debian packages, and OpenWrt IPKs (publishable via `feeds.conf`).
 
 ## Getting xp2p
 
-### Download release archives
+### OpenWrt
 
-Grab pre-built archives from the GitHub Releases page. File names follow `xp2p-<version>-<target>.zip` on Windows and `xp2p-<version>-<target>.tar.gz` on Linux. Each archive contains the `xp2p` binary and the matching `xray` binary staged under the same directory, so unpack it anywhere and add it to `PATH` (or point services at that folder).
+- One-line installer (auto-detects release/arch, adds feed/signing key, installs package):
+  ```sh
+  wget -qO- https://nlightn22.github.io/xray-p2p/install-xp2p.sh | sh
+  ```
+- Services land under `/etc/init.d/xp2p-client` and `/etc/init.d/xp2p-server` and run `xp2p client|server service run` with default flags.
+- Manage lifecycle: `service xp2p-client start|stop|restart|status` or `xp2p client service start|status`; logs live in `/var/log/xp2p/`.
+- Remove: `opkg remove xp2p` (stops services); `opkg remove --force-removal-of-dependent-packages xp2p` purges `/etc/xp2p`, `/var/log/xp2p`, and init scripts.
+- Optional manual feed setup: `echo "src-git xp2p https://github.com/NlightN22/xray-p2p.git;main" >> /etc/opkg/customfeeds.conf && opkg update && opkg install xp2p`.
+- From a local IPK: `opkg install /tmp/xp2p_<version>_<arch>.ipk`.
 
-Release targets:
+### Linux archives
 
-- `windows-amd64` (`.zip`)
-- `windows-386` (`.zip`)
-- `linux-amd64` (`.tar.gz`)
-- `linux-386` (`.tar.gz`)
-- `linux-arm64` (`.tar.gz`)
-- `linux-armhf` (`.tar.gz`)
+- Download `xp2p-<version>-<target>.tar.gz` from Releases (targets: `linux-amd64`, `linux-386`, `linux-arm64`, `linux-armhf`; additional MIPS/RISC-V can be built locally).
+- Unpack and keep `xp2p` next to the bundled `xray` binary, then add the directory to `PATH` or point services to it.
+- Optional packages (`.deb`) and build scripts are described in [`scripts/build/README.md`](scripts/build/README.md).
 
-Additional experimental targets (MIPS softfloat, MIPS64LE, RISC-V) are available via the build tooling but are not uploaded automatically.
+### Windows
 
-Need to build from source or generate packages? Follow the dedicated recipes collected in [`scripts/build/README.md`](scripts/build/README.md).
+- Download `xp2p-<version>-windows-amd64.msi` (or the `.zip` archive).
+- Install MSI with standard commands:
+  ```powershell
+  msiexec /i xp2p-<version>-windows-amd64.msi /qn
+  msiexec /x xp2p-<version>-windows-amd64.msi
+  msiexec /i xp2p-<version>-windows-amd64.msi INSTALLFOLDER="D:\Network\xp2p"
+  ```
+- Optional MSI properties: `XP2P_CLIENT_ARGS` / `XP2P_SERVER_ARGS` to auto-run installs, `MSIINSTALLPERUSER=1` for per-user mode.
+- Services `xp2p-client` and `xp2p-server` wrap `xp2p client|server service run`; manage via `xp2p client service start|stop|status` or the Services snap-in. Logs: `C:\Program Files\xp2p\logs\<role>\`.
 
-### Windows MSI installer
+Need to build from source or generate packages? Follow [`scripts/build/README.md`](scripts/build/README.md).
 
-Every release ships `xp2p-<version>-windows-amd64.msi`. Install it with standard Windows tooling:
+## Platform quick start
 
-```powershell
-msiexec /i xp2p-<version>-windows-amd64.msi
-msiexec /x xp2p-<version>-windows-amd64.msi          # uninstall
-msiexec /i xp2p-<version>-windows-amd64.msi /qn      # silent install
-msiexec /i xp2p-<version>-windows-amd64.msi INSTALLFOLDER="D:\Network\xp2p"
+### OpenWrt
+
+```sh
+opkg update && opkg install xp2p
+xp2p server install --host edge.example.com --port 62022 --config-dir config-server --force
+xp2p client install --host edge.example.com --port 62022 --user office@example.com --password PASS --allow-insecure=true --config-dir config-client --force
+service xp2p-server start
+service xp2p-client start
+xp2p server state --watch --once
 ```
 
-Optional properties such as `XP2P_CLIENT_ARGS` or `XP2P_SERVER_ARGS` let you kick off `xp2p client install ...` or `xp2p server install ...` immediately after setup. Custom MSI builds still live under `installer/wix`; see [`scripts/build/README.md`](scripts/build/README.md) for authoring instructions.
+Use `xp2p server dns-forward add --domain corp.example --address 10.10.10.53` and `xp2p client dns-forward list` to program dnsmasq on OpenWrt; the helpers are idempotent and clean up on remove. `xp2p nat-redirect apply --backend nftables` bootstraps `/etc/nftables.d` (or `/etc/xp2p/nftables` fallback) so NAT snippets come up without manual directories.
 
-The MSI also installs two Windows services (`xp2p-client` and `xp2p-server`) that wrap `xp2p client|server service run` and auto-start on boot. Use `xp2p client service start|stop|status` (or the Services snap-in) to manage them; service logs land under `C:\Program Files\xp2p\logs\<role>\`. Service definitions carry no extra CLI arguments beyond the defaults baked into the binary, so upgrades do not require flag migrations.
+### Linux
 
-### Other packages
+```bash
+tar -xzf xp2p-<version>-linux-amd64.tar.gz -C /usr/local/bin
+xp2p server install --path /etc/xp2p --host edge.example.com --port 62022 --force
+xp2p client install --path /etc/xp2p --host edge.example.com --port 62022 --user office@example.com --password PASS --sni edge.example.com --allow-insecure=false
+xp2p server run --auto-install --xray-log-file /var/log/xp2p/xray-server.log
+xp2p client run --auto-install --xray-log-file /var/log/xp2p/xray-client.log
+```
 
-- Debian packages (`.deb`), OpenWrt feeds, and helper SDK environments are covered in [`scripts/build/README.md`](scripts/build/README.md). OpenWrt IPKs install `/etc/init.d/xp2p-client` and `/etc/init.d/xp2p-server` procd services that run `xp2p client|server service run` without extra flags, stream logs into `/var/log/xp2p`, and restart automatically via package-managed hooks. Use `service xp2p-client start` or `xp2p client service start` to control them; the CLI now delegates to procd on OpenWrt so `service status` and `xp2p ... service status` stay in sync. `opkg remove xp2p` stops the services and `opkg purge xp2p` (or `opkg remove --force-removal-of-dependent-packages xp2p`) removes `/etc/xp2p`, `/var/log/xp2p`, and the init scripts.
+Add CIDR/domain redirects and forwards after install:
+```bash
+xp2p client redirect add --cidr 192.168.10.0/24 --tag proxy-edge
+xp2p client forward add --target 192.0.2.10:22 --listen 127.0.0.1 --listen-port 60022 --remark "ssh jump"
+xp2p client dns-forward add --domain dev.example --address 10.10.10.53
+xp2p nat-redirect apply --backend nftables
+```
+
+### Windows
+
+```powershell
+msiexec /i xp2p-<version>-windows-amd64.msi /qn
+xp2p server install --path "C:\xp2p" --host edge.example.com --port 62022 --force
+xp2p client install --path "C:\xp2p" --host edge.example.com --port 62022 --user office@example.com --password PASS --allow-insecure=true
+xp2p client service start
+xp2p server service start
+xp2p client reverse list
+```
+
+MSI properties `XP2P_CLIENT_ARGS` / `XP2P_SERVER_ARGS` can auto-run the installs during setup.
 
 ## Configuration
 
@@ -93,11 +135,14 @@ xp2p server run --auto-install --xray-log-file C:\xp2p\logs\xray.err
 xp2p server user add --id branch@example.com --password S3cret --host edge.example.com
 xp2p server user list
 xp2p server user remove --id branch@example.com
+xp2p server reverse list
 
 # Networking helpers
 xp2p server redirect add --cidr 10.20.0.0/16 --tag trojan-inbound
 xp2p server forward add --target 192.0.2.10:22 --proto tcp --listen 127.0.0.1 --listen-port 60022
 xp2p server reverse list
+xp2p server dns-forward add --domain corp.example --address 10.10.10.53
+xp2p server dns-forward list
 
 # TLS upkeep
 xp2p server cert set --cert C:\certs\fullchain.pem --key C:\certs\privkey.pem --host edge.example.com --force
@@ -107,7 +152,7 @@ xp2p server cert set --cert C:\certs\fullchain.pem --key C:\certs\privkey.pem --
 
 ### Client lifecycle
 
-Client commands configure Windows workstations, Linux servers, or OpenWrt routers. Release archives already place `xray` next to `xp2p`, so keep both binaries together when copying the installation directory between hosts.
+Client commands configure OpenWrt routers, Linux hosts, or Windows workstations. Release archives already place `xray` next to `xp2p`, so keep both binaries together when copying the installation directory between hosts.
 
 ```bash
 # Install from trojan:// link (auto-populates user, host, password, TLS settings)
@@ -126,17 +171,22 @@ xp2p client list
 xp2p client run --auto-install --xray-log-file /var/log/xp2p/xray.log
 
 # LAN policy helpers
-xp2p client redirect add --cidr 192.168.10.0/24 --host edge.example.com
-xp2p client redirect add --domain "*.corp.example" --tag trojan-inbound
-xp2p client redirect list
+xp2p client redirect add --cidr 192.168.10.0/24 --tag proxy-edge
+xp2p client redirect add --domain "*.corp.example" --tag proxy-edge
 xp2p client redirect remove --cidr 192.168.10.0/24
 
-# Inspect reverse bridges and forwards mirrored from the server
-xp2p client reverse list
+# Forwards and reverse tunnels
+xp2p client forward add --target 192.0.2.10:22 --listen 127.0.0.1 --listen-port 60022 --remark "ssh jump"
 xp2p client forward list
+xp2p client reverse list
+
+# DNS/DHCP helpers
+xp2p client dns-forward add --domain dev.example --address 10.10.10.53
+xp2p client dns-forward list
+xp2p client dns-forward remove --domain dev.example --address 10.10.10.53
 ```
 
-`xp2p client remove --all --keep-files` leaves binaries intact but clears configuration, which is useful when repackaging deployments. SOCKS proxy autodetection feeds diagnostics: `xp2p ping example.com --socks` will read the client/server configuration and probe connectivity through the tunnel.
+`xp2p client remove --all --keep-files` leaves binaries intact but clears configuration, which is useful when repackaging deployments. SOCKS proxy autodetection feeds diagnostics: `xp2p ping example.com --socks` will read the client/server configuration and probe connectivity through the tunnel, and `xp2p nat-redirect apply --backend nftables` bootstraps nftables/iptables snippets if you want transparent interception on Linux/OpenWrt.
 
 ### Remote deploy handshake
 
@@ -153,6 +203,14 @@ xp2p server deploy --link "trojan://PASSWORD@branch-gw.example.com:62022?deploy_
 ```
 
 The server stops listening after the first deploy request. The client encrypts its deploy manifest with a key derived from the trojan link, so only ciphertext crosses the wire. The deploy listener decrypts the payload, verifies it matches the link you supplied, installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
+
+## Diagnostics, routing, and NAT helpers
+
+- Heartbeat/state: `xp2p client state --watch --once` and `xp2p server state --watch` stream heartbeat tables from `state-heartbeat.json` with TTL filtering.
+- SOCKS cascade: `xp2p ping 10.62.10.12 --socks` auto-detects SOCKS from client config, then server, then errors if absent; override with `--socks 127.0.0.1:1080`.
+- Forwarding: `xp2p client forward add|list|remove` and `xp2p server forward add|list|remove` manage explicit forwards alongside managed reverse portals.
+- DNS/DHCP: `xp2p {client,server} dns-forward add|remove|list` manage per-domain entries in dnsmasq (`dhcp.@dnsmasq[0].server`) on OpenWrt and keep state in sync.
+- NAT snippets: `xp2p nat-redirect apply --backend nftables` (or `--backend iptables`) sets up transparent intercept snippets and validates nft/iptables chains; rerun to regenerate directories if missing.
 
 ## Project layout and further docs
 
