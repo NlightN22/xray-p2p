@@ -104,6 +104,7 @@ func (s *clientWindowsService) Execute(_ []string, r <-chan svc.ChangeRequest, c
 	changes <- svc.Status{State: svc.StartPending}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- runClientServiceLoop(ctx, s.opts)

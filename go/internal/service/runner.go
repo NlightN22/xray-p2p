@@ -115,6 +115,8 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 			}
 		}
 
+		cancelChild()
+
 		if restarting {
 			failures = 0
 			if restartPath != "" {
