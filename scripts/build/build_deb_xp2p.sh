@@ -9,11 +9,22 @@ ARTIFACT_DIR="$BUILD_ROOT/artifacts"
 PKG_NAME=${XP2P_DEB_NAME:-xp2p}
 PKG_ARCH=${XP2P_DEB_ARCH:-amd64}
 VERSION_SOURCE=${XP2P_VERSION_SOURCE:-"./go/cmd/xp2p"}
-DEPENDS=${XP2P_DEB_DEPENDS:-""}
+DEPENDS=${XP2P_DEB_DEPENDS:-"adduser ca-certificates"}
 DESCRIPTION=${XP2P_DEB_DESCRIPTION:-"xp2p Trojan tunnel CLI and helpers"}
 HOMEPAGE=${XP2P_DEB_URL:-"https://github.com/NlightN22/xray-p2p"}
 MAINTAINER=${XP2P_DEB_MAINTAINER:-"xp2p maintainers <maintainers@xray-p2p>"}
-LICENSE=${XP2P_DEB_LICENSE:-"Proprietary"}
+LICENSE=${XP2P_DEB_LICENSE:-"MIT"}
+ALL_ARCHES=${XP2P_DEB_ALL_ARCHES:-"amd64 arm64 armhf 386"}
+
+if [ "${1:-}" = "--all" ]; then
+  shift
+  list="${1:-$ALL_ARCHES}"
+  for arch in $list; do
+    echo "==> Building deb for arch=$arch"
+    XP2P_DEB_ARCH="$arch" "$0"
+  done
+  exit 0
+fi
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then

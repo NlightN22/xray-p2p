@@ -10,6 +10,8 @@ Builds the `.deb` package with bundled Go binary and FPM metadata. Preconditions
 ```
 cd /srv/xray-p2p
 ./scripts/build/build_deb_xp2p.sh
+# run all arches after local tests/lint from the host:
+# make build-deb
 ```
 Artifacts land in `/srv/xray-p2p/build/deb/artifacts`. The same script is executed by the Vagrant provisioner (`infra/vagrant/debian12/deb-build/provision-deb-build.sh`).
 

@@ -17,7 +17,7 @@ TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
 .PHONY: run build build-% fmt lint test vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
-	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra
+	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb
 
 build: $(TARGETS:%=build-%)
 
@@ -69,6 +69,13 @@ build-ipk:
 build-ipk-infra:
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --target linux-amd64 --output-dir /srv/xray-p2p/build/ipk --force-build"
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant up --provision
+
+build-deb:
+	$(MAKE) test
+	$(MAKE) test-wsl
+	$(MAKE) lint
+	cd $(VAGRANT_DEB12_DIR) && vagrant up deb-test-a
+	cd $(VAGRANT_DEB12_DIR) && vagrant ssh deb-test-a -c "/srv/xray-p2p/scripts/build/build_deb_xp2p.sh --all"
 # swallow extra positional arguments so make does not treat them as targets
 %:
 	@:
