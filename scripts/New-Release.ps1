@@ -78,7 +78,7 @@ if (-not (Test-Path $OpenWrtMakefile)) {
 Write-Section "Updating OpenWrt package version"
 $pkgPattern = '(?m)^(PKG_VERSION:=)(.*)$'
 $pkgContent = Get-Content -Raw $OpenWrtMakefile
-$pkgUpdated = $pkgContent -replace $pkgPattern, "`$1$Version"
+$pkgUpdated = $pkgContent -replace $pkgPattern, { "$($matches[1])$Version" }
 if ($pkgContent -eq $pkgUpdated) {
     Write-Error "Failed to update PKG_VERSION in $OpenWrtMakefile"
     exit 1

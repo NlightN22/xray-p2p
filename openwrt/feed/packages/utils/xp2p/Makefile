@@ -1,7 +1,7 @@
 ﻿include $(TOPDIR)/rules.mk
 
 PKG_NAME:=xp2p
-$10.1.6
+PKG_VERSION:=0.1.6
 PKG_RELEASE:=2
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=xray-p2p maintainers
