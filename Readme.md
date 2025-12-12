@@ -26,11 +26,14 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
 - Optional manual feed setup: `echo "src-git xp2p https://github.com/NlightN22/xray-p2p.git;main" >> /etc/opkg/customfeeds.conf && opkg update && opkg install xp2p`.
 - From a local IPK: `opkg install /tmp/xp2p_<version>_<arch>.ipk`.
 
-### Linux archives
+### Linux (Debian/Ubuntu packages)
 
-- Download `xp2p-<version>-<target>.tar.gz` from Releases (targets: `linux-amd64`, `linux-386`, `linux-arm64`, `linux-armhf`; additional MIPS/RISC-V can be built locally).
-- Unpack and keep `xp2p` next to the bundled `xray` binary, then add the directory to `PATH` or point services to it.
-- Optional packages (`.deb`) and build scripts are described in [`scripts/build/README.md`](scripts/build/README.md).
+- Grab the `.deb` for your arch from the Release (`xp2p_<version>_amd64.deb`, `xp2p_<version>_arm64.deb`, `xp2p_<version>_armhf.deb`, `xp2p_<version>_386.deb`).
+- Install: `sudo dpkg -i xp2p_<version>_<arch>.deb || sudo apt-get -f install`.
+- Binaries land under `/usr/bin/xp2p`, bundled `xray` under `/etc/xp2p/bin/xray`, configs under `/etc/xp2p/config-{client,server}`, logs under `/var/log/xp2p`.
+- Services: `systemctl enable --now xp2p-client xp2p-server` (wrap `xp2p client|server service run` with default flags).
+- Remove: `sudo dpkg -r xp2p`; purge data with `sudo dpkg -P xp2p`.
+- Alternative (archives): download `xp2p-<version>-<target>.tar.gz`, unpack, keep `xp2p` next to bundled `xray`, and add the directory to `PATH`.
 
 ### Windows
 
@@ -64,11 +67,11 @@ Use `xp2p server dns-forward add --domain corp.example --address 10.10.10.53` an
 ### Linux
 
 ```bash
-tar -xzf xp2p-<version>-linux-amd64.tar.gz -C /usr/local/bin
+sudo dpkg -i xp2p_<version>_amd64.deb || sudo apt-get -f install
 xp2p server install --path /etc/xp2p --host edge.example.com --port 62022 --force
 xp2p client install --path /etc/xp2p --host edge.example.com --port 62022 --user office@example.com --password PASS --sni edge.example.com --allow-insecure=false
-xp2p server run --auto-install --xray-log-file /var/log/xp2p/xray-server.log
-xp2p client run --auto-install --xray-log-file /var/log/xp2p/xray-client.log
+sudo systemctl enable --now xp2p-server xp2p-client
+xp2p server state --once
 ```
 
 Add CIDR/domain redirects and forwards after install:
