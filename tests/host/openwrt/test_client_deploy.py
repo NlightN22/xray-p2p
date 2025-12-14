@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import PurePosixPath
+from urllib import parse
 
 import pytest
 from testinfra.host import Host
@@ -121,6 +122,13 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             timeout=LOG_WAIT_TIMEOUT,
         )
 
+        _assert_link_matches(
+            link,
+            host=server_ip,
+            trojan_port=TROJAN_PORT,
+            trojan_user=trojan_user,
+            trojan_password=trojan_password,
+        )
         _assert_client_install_artifacts(openwrt_client_host, server_ip, trojan_user, trojan_password)
         _assert_client_state(openwrt_client_host, server_ip)
         _assert_client_routing(openwrt_client_host, server_ip)
@@ -250,6 +258,28 @@ def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
     if not link:
         pytest.fail("xp2p client deploy log did not include a deploy link")
     return link
+
+
+def _assert_link_matches(
+    link: str,
+    *,
+    host: str,
+    trojan_port: str,
+    trojan_user: str,
+    trojan_password: str,
+) -> None:
+    parsed = parse.urlparse(link)
+    assert parsed.scheme == "trojan", f"unexpected scheme in link: {parsed.scheme}"
+    assert parsed.hostname == host, f"unexpected host in link (got {parsed.hostname}, want {host})"
+    assert parsed.port == int(trojan_port), f"unexpected port in link (got {parsed.port}, want {trojan_port})"
+    assert parsed.username == trojan_password, "trojan password is not in link userinfo"
+    fragment = parse.unquote(parsed.fragment or "")
+    assert fragment == trojan_user, f"trojan user fragment mismatch (got {fragment}, want {trojan_user})"
+    query = parse.parse_qs(parsed.query)
+    assert query.get("deploy_version") == ["2"], f"deploy_version missing/mismatch: {query}"
+    assert query.get("install_dir") == [helpers.INSTALL_ROOT.as_posix()], f"install_dir mismatch: {query}"
+    assert query.get("security") == ["tls"], f"security param missing: {query}"
+    assert query.get("sni") == [host], f"sni mismatch (got {query.get('sni')}, want {host})"
 
 
 def _wait_for_log_phrase(host: Host, path: PurePosixPath, phrase: str, *, timeout: int) -> None:
