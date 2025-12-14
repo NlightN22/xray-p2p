@@ -2,11 +2,7 @@
 
 package server
 
-import (
-	"errors"
-
-	"github.com/NlightN22/xray-p2p/go/internal/forward"
-)
+import "github.com/NlightN22/xray-p2p/go/internal/forward"
 
 // ForwardAddOptions describes server forward creation.
 type ForwardAddOptions struct {

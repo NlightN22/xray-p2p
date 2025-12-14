@@ -1,20 +1,13 @@
-//go:build !windows && !linux
+//go:build !linux && !windows
 
 package client
 
-import "context"
+import "fmt"
 
-// Install is not supported on non-Windows platforms.
-func Install(_ context.Context, _ InstallOptions) error {
-	return ErrUnsupported
+func resolveInstallDir(_ string) (string, error) {
+	return "", fmt.Errorf("xp2p: client install is not supported on this platform")
 }
 
-// Remove is not supported on non-Windows platforms.
-func Remove(_ context.Context, _ RemoveOptions) error {
-	return ErrUnsupported
-}
-
-// Run is not supported on non-Windows platforms.
-func Run(_ context.Context, _ RunOptions) error {
-	return ErrUnsupported
+func resolveConfigDir(_, _ string) (string, error) {
+	return "", fmt.Errorf("xp2p: client install is not supported on this platform")
 }

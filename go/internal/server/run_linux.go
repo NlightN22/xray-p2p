@@ -121,9 +121,7 @@ func resolveServerLogPath(raw string) (string, error) {
 		return trimmed, nil
 	}
 	rel := filepath.ToSlash(trimmed)
-	if strings.HasPrefix(rel, "logs/") {
-		rel = strings.TrimPrefix(rel, "logs/")
-	}
+	rel = strings.TrimPrefix(rel, "logs/")
 	if rel == "" || rel == "." {
 		rel = "xp2p-server.log"
 	}
