@@ -2,6 +2,21 @@
 
 package server
 
+import "github.com/NlightN22/xray-p2p/go/internal/installstate"
+
+func serverStatePath(string) string {
+	return installstate.FileNameForKind(installstate.KindServer)
+}
+
+func loadServerStateDoc(string) (map[string]any, error) {
+	state := map[string]any{}
+	return state, nil
+}
+
+func writeServerStateDoc(string, map[string]any) error {
+	return nil
+}
+
 func decodeServerReverseState(map[string]any) (serverReverseState, error) {
 	state := serverReverseState{}
 	state.ensure()

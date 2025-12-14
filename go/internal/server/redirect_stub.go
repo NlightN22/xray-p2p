@@ -36,7 +36,10 @@ type ReverseListOptions struct {
 type ReverseRecord struct {
 	Tag    string
 	Host   string
+	User   string
 	Domain string
+	Portal bool
+	RoutingRule bool
 }
 
 // RedirectRecord describes a server redirect.

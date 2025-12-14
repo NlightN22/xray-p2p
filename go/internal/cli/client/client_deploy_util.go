@@ -14,7 +14,10 @@ func normalizeServerPort(cfg config.Config, flagPort string) string {
 	if strings.TrimSpace(flagPort) != "" {
 		return strings.TrimSpace(flagPort)
 	}
-	if cfgPort := strings.TrimSpace(cfg.Server.Port); cfgPort != "" && cfgPort != server.DefaultPort {
+	if cfgPort := strings.TrimSpace(cfg.Server.Port); cfgPort != "" {
+		return cfgPort
+	}
+	if cfgPort := strings.TrimSpace(cfg.Client.ServerPort); cfgPort != "" {
 		return cfgPort
 	}
 	return fmt.Sprintf("%d", server.DefaultTrojanPort)

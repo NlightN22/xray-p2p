@@ -10,3 +10,10 @@ type serverReverseChannel struct {
 }
 
 type serverReverseState map[string]serverReverseChannel
+
+func (s *serverReverseState) ensure() {
+	if s == nil || *s != nil {
+		return
+	}
+	*s = make(serverReverseState)
+}
