@@ -11,6 +11,15 @@ function Write-Section {
     Write-Host "`n=== $Message ===" -ForegroundColor Cyan
 }
 
+function Write-Utf8NoBom {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Content
+    )
+    $encoding = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Error "git is required"
     exit 1
@@ -101,11 +110,7 @@ if ($pkgContent -eq $pkgUpdated) {
     Write-Error "Failed to update PKG_VERSION in $OpenWrtMakefile"
     exit 1
 }
-[System.IO.File]::WriteAllText(
-    $OpenWrtMakefile,
-    $pkgUpdated,
-    [System.Text.Encoding]::UTF8
-)
+Write-Utf8NoBom -Path $OpenWrtMakefile -Content $pkgUpdated
 
 $pending = git status --porcelain
 if (-not $pending) {
