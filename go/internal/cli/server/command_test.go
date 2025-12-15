@@ -96,6 +96,12 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 			stub: expectCertSetCall,
 		},
 		{
+			name: "cert state",
+			cfg:  func(*testing.T) config.Config { return baseCfg() },
+			args: []string{"cert", "state", "--path", `C:\xp2p`, "--config-dir", layout.ServerConfigDir},
+			stub: expectCertStateCall,
+		},
+		{
 			name: "deploy",
 			cfg:  func(*testing.T) config.Config { return baseCfg() },
 			args: []string{"deploy", "--listen", ":62090", "--link", "trojan://secret@host.example.com:62022?security=tls&sni=host.example.com#user"},
@@ -246,6 +252,22 @@ func expectCertSetCall(t *testing.T) func() {
 		cleanup()
 		if called != 1 {
 			t.Fatalf("serverSetCertFunc called %d times", called)
+		}
+	}
+}
+
+func expectCertStateCall(t *testing.T) func() {
+	called := 0
+	cleanup := stubServerCertState(func(server.CertificateStateOptions) (server.CertificateState, error) {
+		called++
+		return server.CertificateState{
+			Status: server.CertificateStatusOK,
+		}, nil
+	})
+	return func() {
+		cleanup()
+		if called != 1 {
+			t.Fatalf("serverCertStateFunc called %d times", called)
 		}
 	}
 }

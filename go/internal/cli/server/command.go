@@ -236,7 +236,10 @@ func newServerCertCmd(cfg commandConfig) *cobra.Command {
 		Short: "Manage TLS certificates",
 	}
 
-	cmd.AddCommand(newServerCertSetCmd(cfg))
+	cmd.AddCommand(
+		newServerCertStateCmd(cfg),
+		newServerCertSetCmd(cfg),
+	)
 	return cmd
 }
 
@@ -258,6 +261,23 @@ func newServerCertSetCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.Key, "key", "", "TLS private key file to deploy")
 	flags.StringVar(&opts.Host, "host", "", "public host name or IP for certificate generation")
 	flags.BoolVar(&opts.Force, "force", false, "overwrite existing TLS configuration without prompting")
+	return cmd
+}
+
+func newServerCertStateCmd(cfg commandConfig) *cobra.Command {
+	var opts serverCertStateOptions
+	cmd := &cobra.Command{
+		Use:   "state",
+		Short: "Show TLS certificate status",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			code := runServerCertState(cfg(), opts)
+			return errorForCode(code)
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVar(&opts.Path, "path", "", "server installation directory")
+	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
 	return cmd
 }
 

@@ -212,31 +212,12 @@ func resolveLinkHost(state trojanState, preferred string) (string, error) {
 }
 
 func inferHostFromCertificate(configDir string, stream map[string]any) (string, error) {
-	tlsSettings, ok := stream["tlsSettings"].(map[string]any)
-	if !ok {
-		return "", errors.New("xp2p: tlsSettings missing in trojan stream settings")
+	certPathValue, _, err := certificatePathsFromStream(stream)
+	if err != nil {
+		return "", err
 	}
 
-	rawCerts, ok := tlsSettings["certificates"].([]any)
-	if !ok || len(rawCerts) == 0 {
-		return "", errors.New("xp2p: no TLS certificates configured")
-	}
-
-	entry, ok := rawCerts[0].(map[string]any)
-	if !ok {
-		return "", errors.New("xp2p: tls certificate entry invalid")
-	}
-
-	rawPath, _ := entry["certificateFile"].(string)
-	certPath := strings.TrimSpace(rawPath)
-	if certPath == "" {
-		return "", errors.New("xp2p: certificateFile missing in TLS configuration")
-	}
-
-	certPath = filepath.FromSlash(certPath)
-	if !filepath.IsAbs(certPath) {
-		certPath = filepath.Join(configDir, certPath)
-	}
+	certPath := resolveCertificatePath(configDir, certPathValue)
 
 	data, err := os.ReadFile(certPath)
 	if err != nil {

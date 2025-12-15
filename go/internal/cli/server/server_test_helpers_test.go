@@ -68,6 +68,17 @@ func stubServerSetCertificate(fn func(context.Context, server.CertificateOptions
 	return func() { serverSetCertFunc = prev }
 }
 
+func stubServerCertState(fn func(server.CertificateStateOptions) (server.CertificateState, error)) func() {
+	prev := serverCertStateFunc
+	if fn == nil {
+		fn = func(server.CertificateStateOptions) (server.CertificateState, error) {
+			return server.CertificateState{}, nil
+		}
+	}
+	serverCertStateFunc = fn
+	return func() { serverCertStateFunc = prev }
+}
+
 func stubPromptYesNo(answer bool, err error) func() {
 	prev := promptYesNoFunc
 	promptYesNoFunc = func(string) (bool, error) { return answer, err }

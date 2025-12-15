@@ -23,6 +23,7 @@ var (
 	serverUserRemoveFunc     = server.RemoveUser
 	detectPublicHostFunc     = netutil.DetectPublicHost
 	serverSetCertFunc        = server.SetCertificate
+	serverCertStateFunc      = server.CertificateStateFromConfig
 	serverUserLinkFunc       = server.GetUserLink
 	serverUserListFunc       = server.ListUsers
 	serverDeployFunc         = runServerDeploy
