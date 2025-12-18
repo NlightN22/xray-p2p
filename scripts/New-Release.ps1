@@ -17,7 +17,14 @@ function Write-Utf8NoBom {
         [Parameter(Mandatory = $true)][string]$Content
     )
     $encoding = New-Object System.Text.UTF8Encoding $false
-    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+    $normalized = $Content -replace "`r`n", "`n" -replace "`r", "`n"
+    [System.IO.File]::WriteAllText($Path, $normalized, $encoding)
+}
+
+function Confirm-Push {
+    param([string]$Target)
+    $answer = Read-Host "Push $Target? [y/N]"
+    return $answer -match '^(?i)y(es)?$'
 }
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -85,14 +92,10 @@ if ($original -ne $updated) {
     Write-Section "Version file already set to $Version"
 }
 
-Write-Section "Running go test ./..."
-go test ./...
+Write-Section "Running make build-deb"
+make build-deb
 
-Write-Section "Running make lint"
-make lint
 
-Write-Section "Running make build"
-make build
 
 $OpenWrtMakefile = Join-Path -Path (Get-Location) -ChildPath "openwrt/feed/packages/utils/xp2p/Makefile"
 if (-not (Test-Path $OpenWrtMakefile)) {
@@ -104,8 +107,8 @@ Write-Section "Updating OpenWrt package version"
 $pkgPattern = '(?m)^(PKG_VERSION:=)(.*)$'
 $releasePattern = '(?m)^(PKG_RELEASE:=)(.*)$'
 $pkgContent = Get-Content -Raw $OpenWrtMakefile
-$pkgUpdated = $pkgContent -replace $pkgPattern, { "$($matches[1])$Version" }
-$pkgUpdated = $pkgUpdated -replace $releasePattern, { "$($matches[1])1" }
+$pkgUpdated = $pkgContent -replace $pkgPattern, "`${1}$Version"
+$pkgUpdated = $pkgUpdated -replace $releasePattern, "`${1}1"
 if ($pkgContent -eq $pkgUpdated) {
     Write-Error "Failed to update PKG_VERSION in $OpenWrtMakefile"
     exit 1
@@ -118,6 +121,9 @@ if (-not $pending) {
     exit 1
 }
 
+Write-Section "Running make build-ipk"
+make build-ipk
+
 Write-Section "Creating release commit"
 git commit -am "chore: release $Tag"
 
@@ -125,10 +131,18 @@ Write-Section "Tagging $Tag"
 git tag $Tag
 
 Write-Section "Pushing branch main"
-git push origin main
+if (Confirm-Push "branch main to origin") {
+    git push origin main
+} else {
+    Write-Host "Skipping push of branch main" -ForegroundColor Yellow
+}
 
 Write-Section "Pushing tag $Tag"
-git push origin $Tag
+if (Confirm-Push "tag $Tag to origin") {
+    git push origin $Tag
+} else {
+    Write-Host "Skipping push of tag $Tag" -ForegroundColor Yellow
+}
 
 Write-Section "Release $Tag complete"
 git status -s
