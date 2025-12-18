@@ -18,6 +18,7 @@ FEED_PATH="$PROJECT_ROOT/openwrt/feed"
 FEED_PACKAGE_PATH="$FEED_PATH/packages/utils/xp2p"
 REPO_ROOT="$PROJECT_ROOT/openwrt/repo"
 DEFAULT_OPENWRT_VERSION="23.05.3"
+DEFAULT_EXTRA_RELEASES=(23.05.0 23.05.2 23.05.4 23.05.5 24.10.0 24.10.1 24.10.2 24.10.3)
 RELEASE_VERSION=${OPENWRT_VERSION:-$DEFAULT_OPENWRT_VERSION}
 EXTRA_RELEASES_VALUE=${OPENWRT_EXTRA_RELEASES:-}
 EXTRA_RELEASES=()
@@ -115,8 +116,12 @@ while [ "${1:-}" != "" ]; do
   esac
 done
 
-if [ ${#EXTRA_RELEASES[@]} -eq 0 ] && [ -n "$EXTRA_RELEASES_VALUE" ]; then
-  parse_extra_releases "$EXTRA_RELEASES_VALUE"
+if [ ${#EXTRA_RELEASES[@]} -eq 0 ]; then
+  if [ -n "$EXTRA_RELEASES_VALUE" ]; then
+    parse_extra_releases "$EXTRA_RELEASES_VALUE"
+  else
+    EXTRA_RELEASES=("${DEFAULT_EXTRA_RELEASES[@]}")
+  fi
 fi
 
 SUPPORTED_TARGETS=(linux-386 linux-amd64 linux-armhf linux-arm64 linux-mipsle-softfloat linux-mips64le)

@@ -63,8 +63,7 @@ build-ipk:
 	$(MAKE) test-wsl
 	$(MAKE) lint
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant up
-	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --all --force-build --release 23.05.3"
-	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --all --force-build --release 24.10.2"
+	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --all --force-build"
 
 build-ipk-infra:
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --target linux-amd64 --output-dir /srv/xray-p2p/build/ipk --force-build"
