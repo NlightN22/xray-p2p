@@ -19,6 +19,8 @@ FEED_PACKAGE_PATH="$FEED_PATH/packages/utils/xp2p"
 REPO_ROOT="$PROJECT_ROOT/openwrt/repo"
 DEFAULT_OPENWRT_VERSION="23.05.3"
 RELEASE_VERSION=${OPENWRT_VERSION:-$DEFAULT_OPENWRT_VERSION}
+EXTRA_RELEASES_VALUE=${OPENWRT_EXTRA_RELEASES:-}
+EXTRA_RELEASES=()
 GOTOOLCHAIN_VERSION=${GOTOOLCHAIN:-go1.21.7}
 FORCE_BUILD=0
 SOURCE_SIGNATURE=""
@@ -38,9 +40,18 @@ Options:
   --build-root <path>      location of prebuilt xp2p/xray/completions (default: /tmp/build)
   --output-dir <path>      store the resulting .ipk/Packages under <path> instead of openwrt/repo/<release>/<arch>
   --openwrt-release <ver>  OpenWrt release to target (default: 23.05.3, env OPENWRT_VERSION)
+  --extra-releases <list>  comma/space-separated extra release versions to mirror artefacts into (env OPENWRT_EXTRA_RELEASES)
   --force-build            always rebuild xp2p binaries even if sources are unchanged
   -h, --help               Show this message
 USAGE
+}
+
+parse_extra_releases() {
+  local raw="$1"
+  local cleaned="${raw//,/ }"
+  for rel in $cleaned; do
+    EXTRA_RELEASES+=("$rel")
+  done
 }
 
 while [ "${1:-}" != "" ]; do
@@ -83,6 +94,11 @@ while [ "${1:-}" != "" ]; do
       RELEASE_VERSION="$2"
       shift 2
       ;;
+    --extra-releases)
+      EXTRA_RELEASES=()
+      parse_extra_releases "$2"
+      shift 2
+      ;;
     --force-build)
       FORCE_BUILD=1
       shift
@@ -98,6 +114,10 @@ while [ "${1:-}" != "" ]; do
       ;;
   esac
 done
+
+if [ ${#EXTRA_RELEASES[@]} -eq 0 ] && [ -n "$EXTRA_RELEASES_VALUE" ]; then
+  parse_extra_releases "$EXTRA_RELEASES_VALUE"
+fi
 
 SUPPORTED_TARGETS=(linux-386 linux-amd64 linux-armhf linux-arm64 linux-mipsle-softfloat linux-mips64le)
 
@@ -397,6 +417,16 @@ run_for_target() {
 
   echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Updating feed index at $DEST_DIR"
   "$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$DEST_DIR"
+
+  if [ -z "$OUTPUT_DIR" ] && [ ${#EXTRA_RELEASES[@]} -gt 0 ]; then
+    for extra_rel in "${EXTRA_RELEASES[@]}"; do
+      local extra_dest="$REPO_ROOT/$extra_rel/$ARCH_DIR"
+      mkdir -p "$extra_dest"
+      cp "$IPK_PATH" "$extra_dest/"
+      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Mirroring artefact into $extra_dest"
+      "$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$extra_dest"
+    done
+  fi
 
   if [ -n "$SOURCE_SIGNATURE" ]; then
     record_ipk_metadata "$target" "$SOURCE_SIGNATURE" "$DEST_DIR/$(basename "$IPK_PATH")"
