@@ -115,12 +115,6 @@ if ($pkgContent -eq $pkgUpdated) {
     Write-Utf8NoBom -Path $OpenWrtMakefile -Content $pkgUpdated
 }
 
-$pending = git status --porcelain
-if (-not $pending) {
-    Write-Error "No changes detected after version bump; aborting."
-    exit 1
-}
-
 Write-Section "Running make build-ipk"
 make build-ipk
 
@@ -138,8 +132,14 @@ if (Test-Path $repoRoot) {
     Write-Host "OpenWrt repo directory $repoRoot not found; skipping staging" -ForegroundColor Yellow
 }
 
-Write-Section "Creating release commit"
-git commit -am "chore: release $Tag"
+$pending = git status --porcelain
+$changesPresent = $pending -ne $null -and $pending.Trim().Length -gt 0
+if ($changesPresent) {
+    Write-Section "Creating release commit"
+    git commit -am "chore: release $Tag"
+} else {
+    Write-Section "No changes to commit; reusing current HEAD for tagging"
+}
 
 Write-Section "Tagging $Tag"
 git tag $Tag

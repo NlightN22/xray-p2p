@@ -39,13 +39,13 @@ Source: /srv/xray-p2p/openwrt/feed/packages/utils/xp2p
 SourceName: xp2p
 License: MIT
 Section: net
-SourceDateEpoch: 1765741664
+SourceDateEpoch: 1766069382
 Maintainer: xray-p2p maintainers
 Architecture: aarch64_generic
 Installed-Size: 40949760
 Filename: xp2p_0.1.7-r1_aarch64_generic.ipk
-Size: 14933622
-SHA256sum: 65a6d99422de1517860b2e63275e2df6561f3b63655a7d94da625d7b8d6cb1f5
+Size: 14933491
+SHA256sum: 941e862711d00ad42810c4407ab55b8a032e03fbf261999e9013b87fe5b7a23c
 Description:  Minimal xp2p CLI packaging helper that reuses a prebuilt binary.
  Build the binary ahead of time and point XP2P_PREBUILT to it when invoking make.
 
