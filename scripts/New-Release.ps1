@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
-    [switch]$ReplaceTag
+    [switch]$ReplaceTag,
+    [switch]$Quiet
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,7 +24,19 @@ function Write-Utf8NoBom {
 
 function Confirm-Push {
     param([string]$Target)
+    if ($Quiet) {
+        return $true
+    }
     $answer = Read-Host "Push $Target? [y/N]"
+    return $answer -match '^(?i)y(es)?$'
+}
+
+function Confirm-Step {
+    param([string]$Message)
+    if ($Quiet) {
+        return $true
+    }
+    $answer = Read-Host "$Message [y/N]"
     return $answer -match '^(?i)y(es)?$'
 }
 
@@ -93,7 +106,11 @@ if ($original -ne $updated) {
 }
 
 Write-Section "Running make build-deb"
-make build-deb
+if (Confirm-Step "Run make build-deb") {
+    make build-deb
+} else {
+    Write-Host "Skipped make build-deb" -ForegroundColor Yellow
+}
 
 
 
@@ -116,7 +133,11 @@ if ($pkgContent -eq $pkgUpdated) {
 }
 
 Write-Section "Running make build-ipk"
-make build-ipk
+if (Confirm-Step "Run make build-ipk") {
+    make build-ipk
+} else {
+    Write-Host "Skipped make build-ipk" -ForegroundColor Yellow
+}
 
 Write-Section "Staging OpenWrt repository artifacts"
 $repoRoot = Join-Path -Path (Get-Location) -ChildPath "openwrt/repo"
