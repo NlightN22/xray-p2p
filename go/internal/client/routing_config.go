@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -207,11 +208,16 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 		filtered = append(filtered, entry)
 	}
 	for _, ep := range endpoints {
-		filtered = append(filtered, map[string]any{
+		rule := map[string]any{
 			"type":        "field",
-			"ip":          []string{ep.Address},
 			"outboundTag": ep.Tag,
-		})
+		}
+		if net.ParseIP(ep.Address) != nil {
+			rule["ip"] = []string{ep.Address}
+		} else {
+			rule["domain"] = []string{"full:" + ep.Address}
+		}
+		filtered = append(filtered, rule)
 	}
 	reverseRules := buildClientReverseRules(reverse)
 	if len(reverseRules) > 0 {
