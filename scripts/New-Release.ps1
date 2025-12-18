@@ -110,10 +110,10 @@ $pkgContent = Get-Content -Raw $OpenWrtMakefile
 $pkgUpdated = $pkgContent -replace $pkgPattern, "`${1}$Version"
 $pkgUpdated = $pkgUpdated -replace $releasePattern, "`${1}1"
 if ($pkgContent -eq $pkgUpdated) {
-    Write-Error "Failed to update PKG_VERSION in $OpenWrtMakefile"
-    exit 1
+    Write-Section "OpenWrt package version already set to $Version"
+} else {
+    Write-Utf8NoBom -Path $OpenWrtMakefile -Content $pkgUpdated
 }
-Write-Utf8NoBom -Path $OpenWrtMakefile -Content $pkgUpdated
 
 $pending = git status --porcelain
 if (-not $pending) {
