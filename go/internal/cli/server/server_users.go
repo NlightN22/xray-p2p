@@ -45,6 +45,30 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 	}
 
 	host := firstNonEmpty(opts.LinkHost, cfg.Server.Host)
+	if strings.TrimSpace(host) == "" {
+		installDir := firstNonEmpty(opts.Path, cfg.Server.InstallDir)
+		configDirName := firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir)
+		configDirPath, err := resolveConfigDirPath(installDir, configDirName)
+		if err != nil {
+			logging.Error("xp2p server user add: resolve config dir failed", "err", err)
+			return 1
+		}
+		candidates, err := server.ResolveLinkHostCandidates(configDirPath, "")
+		if err != nil {
+			logging.Error("xp2p server user add: resolve host failed", "err", err)
+			return 1
+		}
+		if len(candidates) == 1 {
+			host = candidates[0]
+		} else {
+			selected, err := promptChoiceFunc("Select host for reverse portal/link generation:", candidates)
+			if err != nil {
+				logging.Error("xp2p server user add: host selection failed", "err", err)
+				return 1
+			}
+			host = selected
+		}
+	}
 
 	addOpts := server.AddUserOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),

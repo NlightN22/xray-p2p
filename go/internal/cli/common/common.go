@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -34,5 +35,34 @@ func PromptYesNo(question string) (bool, error) {
 	default:
 		fmt.Println("Please answer 'y' or 'n'.")
 		return PromptYesNo(question)
+	}
+}
+
+// PromptChoice displays a list of options and waits for the user to pick one.
+func PromptChoice(question string, options []string) (string, error) {
+	if len(options) == 0 {
+		return "", fmt.Errorf("no options available")
+	}
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Printf("%s\n", question)
+		for idx, option := range options {
+			fmt.Printf("  %d) %s\n", idx+1, option)
+		}
+		fmt.Printf("Select option [1-%d]: ", len(options))
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		answer := strings.TrimSpace(line)
+		if answer == "" {
+			continue
+		}
+		choice, err := strconv.Atoi(answer)
+		if err != nil || choice < 1 || choice > len(options) {
+			fmt.Println("Please enter a valid number.")
+			continue
+		}
+		return options[choice-1], nil
 	}
 }

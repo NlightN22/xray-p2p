@@ -34,6 +34,7 @@ var (
 )
 
 var promptYesNoFunc = clishared.PromptYesNo
+var promptChoiceFunc = clishared.PromptChoice
 
 type serverInstallCommandOptions struct {
 	Path      string

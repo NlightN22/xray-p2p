@@ -201,50 +201,98 @@ func loadTrojanState(configDir string) (trojanState, error) {
 }
 
 func resolveLinkHost(state trojanState, preferred string) (string, error) {
+	candidates, err := resolveLinkHostCandidates(state, preferred)
+	if err != nil {
+		return "", err
+	}
+	return candidates[0], nil
+}
+
+// ResolveLinkHostCandidates returns available host candidates for link/reverse generation.
+func ResolveLinkHostCandidates(configDir, preferred string) ([]string, error) {
+	state, err := loadTrojanState(configDir)
+	if err != nil {
+		return nil, err
+	}
+	return resolveLinkHostCandidates(state, preferred)
+}
+
+func resolveLinkHostCandidates(state trojanState, preferred string) ([]string, error) {
 	host := strings.TrimSpace(preferred)
 	if host != "" {
-		return host, nil
+		return []string{host}, nil
 	}
 	if !state.tlsEnabled {
-		return "", errors.New("xp2p: host is required when TLS is disabled")
+		return nil, errors.New("xp2p: host is required when TLS is disabled")
 	}
-	return inferHostFromCertificate(state.configDir, state.stream)
+	return inferHostsFromCertificate(state.configDir, state.stream)
 }
 
 func inferHostFromCertificate(configDir string, stream map[string]any) (string, error) {
-	certPathValue, _, err := certificatePathsFromStream(stream)
+	candidates, err := inferHostsFromCertificate(configDir, stream)
 	if err != nil {
 		return "", err
+	}
+	return candidates[0], nil
+}
+
+func inferHostsFromCertificate(configDir string, stream map[string]any) ([]string, error) {
+	certPathValue, _, err := certificatePathsFromStream(stream)
+	if err != nil {
+		return nil, err
 	}
 
 	certPath := resolveCertificatePath(configDir, certPathValue)
 
 	data, err := os.ReadFile(certPath)
 	if err != nil {
-		return "", fmt.Errorf("xp2p: read certificate %s: %w", certPath, err)
+		return nil, fmt.Errorf("xp2p: read certificate %s: %w", certPath, err)
 	}
 
 	block, _ := pem.Decode(data)
 	if block == nil || block.Type != "CERTIFICATE" {
-		return "", fmt.Errorf("xp2p: decode certificate %s: invalid PEM data", certPath)
+		return nil, fmt.Errorf("xp2p: decode certificate %s: invalid PEM data", certPath)
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return "", fmt.Errorf("xp2p: parse certificate %s: %w", certPath, err)
+		return nil, fmt.Errorf("xp2p: parse certificate %s: %w", certPath, err)
 	}
 
+	candidates := make([]string, 0, len(cert.DNSNames)+len(cert.IPAddresses)+1)
+	seen := make(map[string]struct{})
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		candidates = append(candidates, value)
+	}
 	if len(cert.DNSNames) > 0 {
-		return cert.DNSNames[0], nil
+		for _, name := range cert.DNSNames {
+			add(name)
+		}
 	}
 	if len(cert.IPAddresses) > 0 {
-		return cert.IPAddresses[0].String(), nil
+		for _, ip := range cert.IPAddresses {
+			if ip == nil {
+				continue
+			}
+			add(ip.String())
+		}
 	}
 	if strings.TrimSpace(cert.Subject.CommonName) != "" {
-		return cert.Subject.CommonName, nil
+		add(cert.Subject.CommonName)
 	}
 
-	return "", errors.New("xp2p: unable to infer host from certificate")
+	if len(candidates) == 0 {
+		return nil, errors.New("xp2p: unable to infer host from certificate")
+	}
+	return candidates, nil
 }
 
 func extractTrojanPort(inbound map[string]any) (int, error) {
