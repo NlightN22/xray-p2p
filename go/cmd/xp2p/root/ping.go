@@ -18,6 +18,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
+	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
 const socksConfigSentinel = "__xp2p_socks_config__"
@@ -86,7 +87,8 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		return 2
 	}
 
-	if socksAddr == "" && (strings.TrimSpace(opts.EndpointTag) != "" || opts.EndpointIndex > 0) {
+	hasEndpointSelector := strings.TrimSpace(opts.EndpointTag) != "" || opts.EndpointIndex > 0
+	if socksAddr == "" && hasEndpointSelector {
 		fmt.Fprintln(os.Stderr, "xp2p ping: --endpoint/--index requires --socks")
 		return 2
 	}
@@ -96,13 +98,26 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 			return 2
 		}
 		markerTarget, err := client.ResolveMarkerTarget(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
-			return 2
+		if err != nil && hasEndpointSelector {
+			if errors.Is(err, client.ErrClientEndpointsMissing) || errors.Is(err, client.ErrClientEndpointNotFound) {
+				markerTarget, err = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, opts.EndpointTag, opts.EndpointIndex)
+			}
 		}
-		host = markerTarget
-		pingOpts.Proto = "tcp"
-		pingOpts.Port = client.DiagnosticsMarkerPort
+		if err != nil && !hasEndpointSelector {
+			if errors.Is(err, client.ErrClientEndpointsMissing) || errors.Is(err, client.ErrClientEndpointNotFound) {
+				err = nil
+			}
+		}
+		if err != nil {
+			if hasEndpointSelector || !isIgnorableServerResolveError(err) {
+				fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
+				return 2
+			}
+		} else {
+			host = markerTarget
+			pingOpts.Proto = "tcp"
+			pingOpts.Port = client.DiagnosticsMarkerPort
+		}
 		pingOpts.SocksProxy = socksAddr
 	} else {
 		pingOpts.SocksProxy = ""
@@ -317,4 +332,11 @@ func validatePort(port string) error {
 		return fmt.Errorf("invalid SOCKS proxy port %q: must be within 1-65535", port)
 	}
 	return nil
+}
+
+func isIgnorableServerResolveError(err error) bool {
+	return errors.Is(err, server.ErrServerReverseMissing) ||
+		errors.Is(err, server.ErrServerReverseNotFound) ||
+		errors.Is(err, server.ErrServerReverseNotSpecified) ||
+		errors.Is(err, server.ErrServerReverseAmbiguous)
 }

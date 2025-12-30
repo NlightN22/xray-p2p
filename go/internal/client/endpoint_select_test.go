@@ -56,3 +56,18 @@ func TestSelectEndpointByHostUsesTag(t *testing.T) {
 		t.Fatalf("unexpected selection: idx=%d tag=%s", idx, ep.Tag)
 	}
 }
+
+func TestSelectEndpointByHostTagIgnoresHost(t *testing.T) {
+	endpoints := []clientEndpointRecord{
+		{Hostname: "edge.example", Tag: "proxy-a"},
+		{Hostname: "other.example", Tag: "proxy-b"},
+	}
+
+	ep, idx, err := selectEndpointByHost(endpoints, "mismatch.example", "proxy-b", 0)
+	if err != nil {
+		t.Fatalf("selectEndpointByHost failed: %v", err)
+	}
+	if idx != 1 || ep.Tag != "proxy-b" {
+		t.Fatalf("unexpected selection: idx=%d tag=%s", idx, ep.Tag)
+	}
+}

@@ -111,6 +111,7 @@ case "$$1" in
 	remove|upgrade|failed-upgrade|abort-install|abort-upgrade)
 		/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true
 		/etc/init.d/xp2p-server disable >/dev/null 2>&1 || true
+		rm -f /etc/xp2p/bin/xray
 		;;
 esac
 

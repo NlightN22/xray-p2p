@@ -109,6 +109,9 @@ func applyServerReverseChannel(store *reverseStore, configDir string, channel se
 		return err
 	}
 	store.put(channel)
+	if err := ensureServerMarkerRules(configDir, store.state); err != nil {
+		return err
+	}
 	return store.save()
 }
 
@@ -117,6 +120,9 @@ func purgeServerReverseChannel(store *reverseStore, configDir string, channel se
 		return err
 	}
 	store.delete(channel.Tag)
+	if err := ensureServerMarkerRules(configDir, store.state); err != nil {
+		return err
+	}
 	return store.save()
 }
 

@@ -45,8 +45,8 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	}
 
 	rules := routingDoc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 1 {
-		t.Fatalf("expected 1 routing rule, got %d", len(rules))
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 routing rules, got %d", len(rules))
 	}
 	rule := rules[0].(map[string]any)
 	if rule["outboundTag"] != "alpha-useredge-example.rev" {
@@ -55,6 +55,10 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	domains := rule["domain"].([]any)
 	if len(domains) != 1 || domains[0] != "full:alpha-useredge-example.rev" {
 		t.Fatalf("unexpected domain match: %+v", rule)
+	}
+	markerRule := rules[1].(map[string]any)
+	if markerRule["outboundTag"] != "alpha-useredge-example.rev" {
+		t.Fatalf("unexpected marker outbound tag: %+v", markerRule)
 	}
 
 	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindServer))

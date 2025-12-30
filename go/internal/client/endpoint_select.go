@@ -9,6 +9,11 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 )
 
+var (
+	ErrClientEndpointsMissing = errors.New("xp2p: no client endpoints found")
+	ErrClientEndpointNotFound = errors.New("xp2p: client endpoint not found")
+)
+
 func ResolveMarkerTarget(installDir, host, tag string, index int) (string, error) {
 	installDir = strings.TrimSpace(installDir)
 	if installDir == "" {
@@ -20,7 +25,7 @@ func ResolveMarkerTarget(installDir, host, tag string, index int) (string, error
 		return "", err
 	}
 	if len(state.Endpoints) == 0 {
-		return "", errors.New("xp2p: no client endpoints found (run xp2p client install first)")
+		return "", endpointsMissingError{}
 	}
 
 	_, selectedIndex, err := selectEndpointByHost(state.Endpoints, host, tag, index)
@@ -54,9 +59,6 @@ func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, in
 	if trimmedTag != "" {
 		for idx, ep := range endpoints {
 			if strings.EqualFold(ep.Tag, trimmedTag) {
-				if !strings.EqualFold(ep.Hostname, trimmedHost) {
-					return ep, idx, fmt.Errorf("xp2p: outbound tag %q does not match host %q", trimmedTag, trimmedHost)
-				}
 				return ep, idx, nil
 			}
 		}
@@ -64,7 +66,7 @@ func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, in
 	}
 
 	if len(matches) == 0 {
-		return clientEndpointRecord{}, -1, fmt.Errorf("xp2p: client endpoint %q not found", trimmedHost)
+		return clientEndpointRecord{}, -1, endpointNotFoundError{host: trimmedHost}
 	}
 
 	if index > 0 {
@@ -82,4 +84,26 @@ func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, in
 type indexedEndpoint struct {
 	index  int
 	record clientEndpointRecord
+}
+
+type endpointNotFoundError struct {
+	host string
+}
+
+func (e endpointNotFoundError) Error() string {
+	return fmt.Sprintf("xp2p: client endpoint %q not found", e.host)
+}
+
+func (e endpointNotFoundError) Is(target error) bool {
+	return target == ErrClientEndpointNotFound
+}
+
+type endpointsMissingError struct{}
+
+func (e endpointsMissingError) Error() string {
+	return "xp2p: no client endpoints found (run xp2p client install first)"
+}
+
+func (e endpointsMissingError) Is(target error) bool {
+	return target == ErrClientEndpointsMissing
 }
