@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 )
@@ -28,6 +29,8 @@ type pingCommandOptions struct {
 	Proto         string
 	Port          int
 	SocksEndpoint string
+	EndpointTag   string
+	EndpointIndex int
 }
 
 func newPingCommand(cfg func() config.Config) *cobra.Command {
@@ -57,6 +60,8 @@ func newPingCommand(cfg func() config.Config) *cobra.Command {
 	flags.StringVar(&opts.Proto, "proto", opts.Proto, "protocol to use (tcp or udp)")
 	flags.IntVar(&opts.Port, "port", opts.Port, "target port (default 62022)")
 	flags.StringVar(&opts.SocksEndpoint, "socks", "", "route ping through SOCKS5 proxy (host:port); omit value to auto-detect from xp2p config (client first, then server)")
+	flags.StringVar(&opts.EndpointTag, "endpoint", "", "endpoint tag to use when multiple endpoints share the same host")
+	flags.IntVar(&opts.EndpointIndex, "index", 0, "endpoint index (1-based) to use when multiple endpoints share the same host")
 	flags.Lookup("socks").NoOptDefVal = socksConfigSentinel
 	return cmd
 }
@@ -80,7 +85,28 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
 		return 2
 	}
-	pingOpts.SocksProxy = socksAddr
+
+	if socksAddr == "" && (strings.TrimSpace(opts.EndpointTag) != "" || opts.EndpointIndex > 0) {
+		fmt.Fprintln(os.Stderr, "xp2p ping: --endpoint/--index requires --socks")
+		return 2
+	}
+	if socksAddr != "" {
+		if !strings.EqualFold(strings.TrimSpace(pingOpts.Proto), "tcp") {
+			fmt.Fprintln(os.Stderr, "xp2p ping: --socks supports only tcp protocol")
+			return 2
+		}
+		markerTarget, err := client.ResolveMarkerTarget(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
+			return 2
+		}
+		host = markerTarget
+		pingOpts.Proto = "tcp"
+		pingOpts.Port = client.DiagnosticsMarkerPort
+		pingOpts.SocksProxy = socksAddr
+	} else {
+		pingOpts.SocksProxy = ""
+	}
 
 	if err := ping.Run(ctx, host, pingOpts); err != nil {
 		fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)

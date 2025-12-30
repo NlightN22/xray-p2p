@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
@@ -77,14 +78,17 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 2 {
-		t.Fatalf("expected 2 routing rules, got %d", len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 3 {
+		t.Fatalf("expected 3 routing rules, got %d", len(doc.Routing.Rules))
 	}
-	if doc.Routing.Rules[0].OutboundTag != "proxy-server-example" || len(doc.Routing.Rules[0].IP) != 1 || doc.Routing.Rules[0].IP[0] != "10.70.0.0/16" {
-		t.Fatalf("unexpected redirect rule %+v", doc.Routing.Rules[0])
+	if !hasIPRule(doc.Routing.Rules, "10.70.0.0/16", "proxy-server-example") {
+		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
 	}
-	if doc.Routing.Rules[1].OutboundTag != "proxy-server-example" || len(doc.Routing.Rules[1].IP) != 1 || doc.Routing.Rules[1].IP[0] != "203.0.113.10" {
-		t.Fatalf("unexpected endpoint rule %+v", doc.Routing.Rules[1])
+	if !hasIPRule(doc.Routing.Rules, "203.0.113.10", "proxy-server-example") {
+		t.Fatalf("missing endpoint rule %+v", doc.Routing.Rules)
+	}
+	if !hasMarkerRule(doc.Routing.Rules) {
+		t.Fatalf("missing marker rule %+v", doc.Routing.Rules)
 	}
 
 	list, err := ListRedirects(RedirectListOptions{
@@ -168,11 +172,11 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 2 {
-		t.Fatalf("expected 2 routing rules, got %d", len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 3 {
+		t.Fatalf("expected 3 routing rules, got %d", len(doc.Routing.Rules))
 	}
-	if doc.Routing.Rules[0].OutboundTag != "proxy-server-example" || len(doc.Routing.Rules[0].Domains) != 1 || doc.Routing.Rules[0].Domains[0] != "app.service.example" {
-		t.Fatalf("unexpected redirect rule %+v", doc.Routing.Rules[0])
+	if !hasDomainRule(doc.Routing.Rules, "app.service.example", "proxy-server-example") {
+		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
 	}
 
 	list, err := ListRedirects(RedirectListOptions{
@@ -322,7 +326,7 @@ func TestRemoveDomainRedirect(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 2 {
+	if len(doc.Routing.Rules) != 3 {
 		t.Fatalf("expected redirect and endpoint rules, got %d", len(doc.Routing.Rules))
 	}
 	for _, rule := range doc.Routing.Rules {
@@ -330,6 +334,57 @@ func TestRemoveDomainRedirect(t *testing.T) {
 			t.Fatalf("found domain rule after removal: %+v", rule)
 		}
 	}
+}
+
+func hasIPRule(rules []struct {
+	Type        string   `json:"type"`
+	IP          []string `json:"ip"`
+	OutboundTag string   `json:"outboundTag"`
+}, ip, tag string) bool {
+	for _, rule := range rules {
+		if rule.OutboundTag != tag {
+			continue
+		}
+		for _, value := range rule.IP {
+			if value == ip {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasDomainRule(rules []struct {
+	Type        string   `json:"type"`
+	Domains     []string `json:"domains"`
+	OutboundTag string   `json:"outboundTag"`
+}, domain, tag string) bool {
+	for _, rule := range rules {
+		if rule.OutboundTag != tag {
+			continue
+		}
+		for _, value := range rule.Domains {
+			if value == domain {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasMarkerRule(rules []struct {
+	Type        string   `json:"type"`
+	IP          []string `json:"ip"`
+	OutboundTag string   `json:"outboundTag"`
+}) bool {
+	for _, rule := range rules {
+		for _, value := range rule.IP {
+			if strings.HasPrefix(value, "127.255.") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestListRedirectsReportsMixedRecords(t *testing.T) {

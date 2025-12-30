@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,13 +53,13 @@ func TestUpdateRoutingConfigManagesReverseRules(t *testing.T) {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 
-	verifyRoutingDocument(t, path, 3, 1)
+	verifyRoutingDocument(t, path, 4, 1)
 
 	// Second update should not duplicate rules/bridges.
 	if err := updateRoutingConfig(path, endpoints, nil, reverse); err != nil {
 		t.Fatalf("second updateRoutingConfig failed: %v", err)
 	}
-	verifyRoutingDocument(t, path, 3, 1)
+	verifyRoutingDocument(t, path, 4, 1)
 }
 
 func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
@@ -73,10 +74,25 @@ func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
 
 	doc := loadRouting(t, path)
 	rules := getRules(t, doc)
-	if len(rules) != 1 {
-		t.Fatalf("expected 1 routing rule, got %d", len(rules))
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 routing rules, got %d", len(rules))
 	}
-	rule := rules[0]
+
+	markerIP, err := markerIPForIndex(0)
+	if err != nil {
+		t.Fatalf("markerIPForIndex failed: %v", err)
+	}
+	markerRule := findRuleWithPort(rules, DiagnosticsMarkerPort)
+	if markerRule == nil {
+		t.Fatalf("expected marker rule, got %+v", rules)
+	}
+	if got := asStrings(markerRule["ip"]); len(got) != 1 || got[0] != markerIP {
+		t.Fatalf("expected marker ip %s, got %v", markerIP, got)
+	}
+	rule := findRuleWithDomain(rules, "full:alpha.example")
+	if rule == nil {
+		t.Fatalf("expected domain rule for alpha.example, got %+v", rules)
+	}
 	if got := asStrings(rule["domain"]); len(got) != 1 || got[0] != "full:alpha.example" {
 		t.Fatalf("expected domain rule for alpha.example, got %v", got)
 	}
@@ -97,10 +113,25 @@ func TestUpdateRoutingConfigUsesIPRuleForAddress(t *testing.T) {
 
 	doc := loadRouting(t, path)
 	rules := getRules(t, doc)
-	if len(rules) != 1 {
-		t.Fatalf("expected 1 routing rule, got %d", len(rules))
+	if len(rules) != 2 {
+		t.Fatalf("expected 2 routing rules, got %d", len(rules))
 	}
-	rule := rules[0]
+
+	markerIP, err := markerIPForIndex(0)
+	if err != nil {
+		t.Fatalf("markerIPForIndex failed: %v", err)
+	}
+	markerRule := findRuleWithPort(rules, DiagnosticsMarkerPort)
+	if markerRule == nil {
+		t.Fatalf("expected marker rule, got %+v", rules)
+	}
+	if got := asStrings(markerRule["ip"]); len(got) != 1 || got[0] != markerIP {
+		t.Fatalf("expected marker ip %s, got %v", markerIP, got)
+	}
+	rule := findRuleWithIP(rules, "192.0.2.10")
+	if rule == nil {
+		t.Fatalf("expected ip rule for 192.0.2.10, got %+v", rules)
+	}
 	if got := asStrings(rule["ip"]); len(got) != 1 || got[0] != "192.0.2.10" {
 		t.Fatalf("expected ip rule for 192.0.2.10, got %v", got)
 	}
@@ -148,6 +179,38 @@ func asStrings(raw any) []string {
 		}
 	}
 	return result
+}
+
+func findRuleWithPort(rules []map[string]any, port int) map[string]any {
+	want := fmt.Sprintf("%d", port)
+	for _, rule := range rules {
+		if fmt.Sprintf("%v", rule["port"]) == want {
+			return rule
+		}
+	}
+	return nil
+}
+
+func findRuleWithDomain(rules []map[string]any, domain string) map[string]any {
+	for _, rule := range rules {
+		for _, value := range asStrings(rule["domain"]) {
+			if value == domain {
+				return rule
+			}
+		}
+	}
+	return nil
+}
+
+func findRuleWithIP(rules []map[string]any, ip string) map[string]any {
+	for _, rule := range rules {
+		for _, value := range asStrings(rule["ip"]) {
+			if value == ip {
+				return rule
+			}
+		}
+	}
+	return nil
 }
 
 func verifyRoutingDocument(t *testing.T, path string, wantRules int, wantBridges int) {

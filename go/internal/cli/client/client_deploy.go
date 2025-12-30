@@ -187,14 +187,25 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			targetHost = strings.TrimSpace(opts.runtime.remoteHost)
 		}
 
-		logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping", "target", targetHost)
+		markerTarget, err := client.ResolveMarkerTarget(installOpts.InstallDir, targetHost, "", 0)
+		if err != nil {
+			completionState = "FAIL marker"
+			logging.Error("xp2p client deploy: marker resolution failed", "err", err)
+			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
+				logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
+			}
+			return 1
+		}
+
+		logging.Info("xp2p client deploy: verifying connectivity via SOCKS ping", "target", targetHost, "marker", markerTarget)
 		pingOpts := ping.Options{
 			Count:      1,
 			Timeout:    3 * time.Second,
 			Proto:      "tcp",
+			Port:       client.DiagnosticsMarkerPort,
 			SocksProxy: socksAddr,
 		}
-		if err := ping.Run(ctx, targetHost, pingOpts); err != nil {
+		if err := ping.Run(ctx, markerTarget, pingOpts); err != nil {
 			completionState = "FAIL ping"
 			logging.Error("xp2p client deploy: ping failed", "err", err)
 			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {

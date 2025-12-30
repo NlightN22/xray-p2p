@@ -114,39 +114,50 @@ func (r *heartbeatRunner) loop(ctx context.Context) {
 }
 
 func (r *heartbeatRunner) runOnce(ctx context.Context) {
-	for _, endpoint := range r.endpoints {
+	for idx, endpoint := range r.endpoints {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
-		r.pingEndpoint(ctx, endpoint)
+		r.pingEndpoint(ctx, endpoint, idx)
 	}
 }
 
-func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEndpointRecord) {
+func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEndpointRecord, index int) {
 	ctx, cancel := context.WithTimeout(parent, r.timeout)
 	defer cancel()
 
 	reporter := newHeartbeatReporter(endpoint, r.store)
+	targetHost := endpoint.Hostname
+	port := r.port
 	opts := ping.Options{
 		Count:    1,
 		Timeout:  r.timeout,
 		Proto:    "tcp",
-		Port:     r.port,
+		Port:     port,
 		Reporter: reporter,
 		Silent:   true,
 	}
 
-	if err := ping.Run(ctx, endpoint.Hostname, opts); err != nil {
-		if r.socks != "" {
-			opts.SocksProxy = r.socks
-			if err := ping.Run(ctx, endpoint.Hostname, opts); err != nil {
-				logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
-			}
-		} else {
+	if r.socks != "" {
+		markerIP, err := markerIPForIndex(index)
+		if err != nil {
+			logging.Warn("client heartbeat marker allocation failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+			return
+		}
+		targetHost = markerIP
+		port = DiagnosticsMarkerPort
+		opts.Port = port
+		opts.SocksProxy = r.socks
+		if err := ping.Run(ctx, targetHost, opts); err != nil {
 			logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 		}
+		return
+	}
+
+	if err := ping.Run(ctx, targetHost, opts); err != nil {
+		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 	}
 }
 
