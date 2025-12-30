@@ -26,6 +26,9 @@ func newClientServiceCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "service",
 		Short: "Manage the xp2p client service",
+		Long: "Manage the xp2p client service.\n\n" +
+			"Note: the hidden \"run\" subcommand is used by service managers " +
+			"to keep the service in the foreground.",
 	}
 
 	cmd.AddCommand(
@@ -72,9 +75,9 @@ func newClientServiceStatusCmd() *cobra.Command {
 
 func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:    "run",
-		Short:  "Run the xp2p client service in the foreground",
-		Hidden: true,
+		Use:   "run",
+		Short: "Run the xp2p client service in the foreground",
+		Long:  "Run the xp2p client service in the foreground (intended for service managers).",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientServiceRun(commandContext(cmd), cfg(), forwarded)
