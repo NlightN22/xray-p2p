@@ -51,7 +51,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		channel serverReverseChannel
 		store   reverseStore
 	)
-	if host != "" {
+	if host != "" && !opts.NoReverse {
 		var storeErr error
 		channel, err = buildServerReverseChannel(userID, host)
 		if err != nil {
@@ -103,7 +103,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 				"user_id", userID,
 				"config", configPath,
 			)
-			if host == "" {
+			if host == "" || opts.NoReverse {
 				return nil
 			}
 			return applyServerReverseChannel(&store, configDir, channel)
@@ -131,7 +131,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		"config", configPath,
 		"updated", updated,
 	)
-	if host != "" {
+	if host != "" && !opts.NoReverse {
 		return applyServerReverseChannel(&store, configDir, channel)
 	}
 	return nil

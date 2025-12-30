@@ -168,6 +168,25 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         second_link = _extract_link(user_add.stdout or "")
         reverse_second = helpers.expected_reverse_tag("client-two@example.com", SERVER_IP)
 
+        server_runner(
+            "server",
+            "user",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--id",
+            "client-norev@example.com",
+            "--password",
+            "client-norev-pass",
+            "--host",
+            SERVER_IP,
+            "--no-reverse",
+            check=True,
+        )
+        reverse_norev = helpers.expected_reverse_tag("client-norev@example.com", SERVER_IP)
+
         server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
         server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         for reverse_tag, user in (
@@ -183,6 +202,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.assert_server_reverse_routing(server_routing, reverse_tag, user=user)
         recorded_server_tags = set((server_state.get("reverse_channels") or {}).keys())
         assert recorded_server_tags == {reverse_default, reverse_second}
+        assert reverse_norev not in recorded_server_tags
         for reverse_tag in (reverse_default, reverse_second):
             helpers.assert_reverse_cli_output(
                 server_runner,

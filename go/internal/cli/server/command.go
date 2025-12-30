@@ -174,7 +174,7 @@ func newServerUserAddCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a Trojan user and reverse portal",
-		Long:  "Add a Trojan user, update inbounds.json, and create a sanitized <user><host>.rev reverse portal/routing entry so clients can mirror the bridge automatically.",
+		Long:  "Add a Trojan user, update inbounds.json, and create a sanitized <user><host>.rev reverse portal/routing entry so clients can mirror the bridge automatically (disable with --no-reverse).",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerUserAdd(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
@@ -188,6 +188,7 @@ func newServerUserAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.Password, "password", "", "Trojan client password or pre-shared key")
 	flags.StringVar(&opts.Key, "key", "", "alias for --password")
 	flags.StringVar(&opts.LinkHost, "host", "", "public host name or IP for generated connection link")
+	flags.BoolVar(&opts.NoReverse, "no-reverse", false, "skip creating reverse portal/routing entries")
 	return cmd
 }
 

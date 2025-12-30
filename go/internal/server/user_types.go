@@ -7,6 +7,7 @@ type AddUserOptions struct {
 	UserID     string
 	Password   string
 	Host       string
+	NoReverse  bool
 }
 
 // RemoveUserOptions describes parameters for removing a Trojan client from the server configuration.

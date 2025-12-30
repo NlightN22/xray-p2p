@@ -108,19 +108,20 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 			if errors.Is(markerErr, client.ErrClientEndpointsMissing) || errors.Is(markerErr, client.ErrClientEndpointNotFound) {
 				markerTarget, markerPort, markerErr = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, host, 0)
 				useMarker = markerErr == nil
+				if markerErr != nil && isIgnorableServerResolveError(markerErr) {
+					markerErr = nil
+				}
 			}
 		}
 		if markerErr != nil {
 			fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", markerErr)
 			return 2
 		}
-		if !useMarker {
-			fmt.Fprintln(os.Stderr, "xp2p ping: unable to resolve tunnel target")
-			return 2
+		if useMarker {
+			host = markerTarget
+			pingOpts.Proto = "tcp"
+			pingOpts.Port = markerPort
 		}
-		host = markerTarget
-		pingOpts.Proto = "tcp"
-		pingOpts.Port = markerPort
 		pingOpts.SocksProxy = socksAddr
 	} else {
 		pingOpts.SocksProxy = ""
@@ -297,6 +298,13 @@ func normalizePortInt(value int, exact bool) (string, error) {
 		return "", fmt.Errorf("invalid SOCKS inbound port %d: must be within 1-65535", value)
 	}
 	return strconv.Itoa(value), nil
+}
+
+func isIgnorableServerResolveError(err error) bool {
+	return errors.Is(err, server.ErrServerReverseMissing) ||
+		errors.Is(err, server.ErrServerReverseNotFound) ||
+		errors.Is(err, server.ErrServerReverseNotSpecified) ||
+		errors.Is(err, server.ErrServerReverseAmbiguous)
 }
 
 func splitHostPort(value string) (string, string, error) {

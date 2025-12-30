@@ -17,6 +17,7 @@ type serverUserAddOptions struct {
 	Password  string
 	Key       string
 	LinkHost  string
+	NoReverse bool
 }
 
 type serverUserRemoveOptions struct {
@@ -51,6 +52,7 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 		UserID:     opts.UserID,
 		Password:   secret,
 		Host:       host,
+		NoReverse:  opts.NoReverse,
 	}
 
 	if err := serverUserAddFunc(ctx, addOpts); err != nil {

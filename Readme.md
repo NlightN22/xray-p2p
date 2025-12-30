@@ -152,6 +152,8 @@ xp2p server cert set --cert C:\certs\fullchain.pem --key C:\certs\privkey.pem --
 xp2p server cert state --path C:\xp2p
 ```
 
+Use `xp2p server user add --no-reverse` to skip creating reverse portal/routing entries.
+
 `xp2p server state` prints the currently installed assets, while `xp2p server remove --keep-files` verifies presence without deleting anything. All server commands honor `--path`/`--config-dir` overrides so you can stage multiple instances side by side.
 `xp2p server cert state` reports the active TLS certificate (paths, SAN, validity) and exits with 0 only when a valid certificate is present.
 
