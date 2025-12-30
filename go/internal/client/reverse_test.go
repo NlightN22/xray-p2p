@@ -39,8 +39,8 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	}
 
 	rules := doc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 4 {
-		t.Fatalf("expected 4 routing rules, got %d", len(rules))
+	if len(rules) != 5 {
+		t.Fatalf("expected 5 routing rules, got %d", len(rules))
 	}
 	domainRule := rules[0].(map[string]any)
 	if domainRule["outboundTag"] != "proxy-server-example" {

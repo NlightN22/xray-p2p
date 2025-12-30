@@ -212,9 +212,16 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 		if err != nil {
 			return fmt.Errorf("xp2p: allocate diagnostics marker for %s: %w", ep.Tag, err)
 		}
+		markerCIDR := markerIP + "/32"
 		filtered = append(filtered, map[string]any{
 			"type":        "field",
-			"ip":          []string{markerIP},
+			"domain":      []string{"full:" + markerIP},
+			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
+			"outboundTag": ep.Tag,
+		})
+		filtered = append(filtered, map[string]any{
+			"type":        "field",
+			"ip":          []string{markerCIDR},
 			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
 			"outboundTag": ep.Tag,
 		})

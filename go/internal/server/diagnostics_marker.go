@@ -3,7 +3,7 @@ package server
 import "fmt"
 
 const (
-	DiagnosticsMarkerPort = 62022
+	DiagnosticsMarkerPort = 62023
 	diagnosticsMarkerMax  = 65535
 )
 

@@ -87,7 +87,7 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 		}
 	}
 
-	cancelDiagnostics := startDiagnostics(ctx, cfg.Server.Port)
+	cancelDiagnostics := startDiagnostics(ctx, cfg.Client.DiagPort)
 	if cancelDiagnostics != nil {
 		defer cancelDiagnostics()
 	}

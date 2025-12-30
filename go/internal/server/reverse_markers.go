@@ -51,9 +51,18 @@ func updateServerMarkerRules(doc map[string]any, state serverReverseState) bool 
 		if err != nil {
 			continue
 		}
+		markerCIDR := markerIP + "/32"
 		filtered = append(filtered, map[string]any{
 			"type":        "field",
-			"ip":          []string{markerIP},
+			"domain":      []string{"full:" + markerIP},
+			"inboundTag":  []string{"socks-in"},
+			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
+			"outboundTag": channel.Tag,
+		})
+		filtered = append(filtered, map[string]any{
+			"type":        "field",
+			"ip":          []string{markerCIDR},
+			"inboundTag":  []string{"socks-in"},
 			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
 			"outboundTag": channel.Tag,
 		})
@@ -78,6 +87,13 @@ func isMarkerRule(rule map[string]any, managed map[string]struct{}) bool {
 	ips := extractStringSlice(rule["ip"])
 	for _, ip := range ips {
 		if strings.HasPrefix(strings.TrimSpace(ip), "127.255.") {
+			return true
+		}
+	}
+	domains := extractStringSlice(rule["domain"])
+	for _, domain := range domains {
+		trimmed := strings.TrimSpace(domain)
+		if strings.HasPrefix(trimmed, "full:127.255.") {
 			return true
 		}
 	}

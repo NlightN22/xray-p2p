@@ -97,26 +97,29 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 			fmt.Fprintln(os.Stderr, "xp2p ping: --socks supports only tcp protocol")
 			return 2
 		}
-		markerTarget, err := client.ResolveMarkerTarget(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex)
-		if err != nil && hasEndpointSelector {
-			if errors.Is(err, client.ErrClientEndpointsMissing) || errors.Is(err, client.ErrClientEndpointNotFound) {
-				markerTarget, err = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, opts.EndpointTag, opts.EndpointIndex)
+		markerTarget, markerPort, markerErr := client.ResolveMarkerTarget(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex)
+		useMarker := markerErr == nil
+		if markerErr != nil && hasEndpointSelector {
+			if errors.Is(markerErr, client.ErrClientEndpointsMissing) || errors.Is(markerErr, client.ErrClientEndpointNotFound) {
+				markerTarget, markerPort, markerErr = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, opts.EndpointTag, opts.EndpointIndex)
+				useMarker = markerErr == nil
 			}
 		}
-		if err != nil && !hasEndpointSelector {
-			if errors.Is(err, client.ErrClientEndpointsMissing) || errors.Is(err, client.ErrClientEndpointNotFound) {
-				err = nil
+		if markerErr != nil && !hasEndpointSelector {
+			if errors.Is(markerErr, client.ErrClientEndpointsMissing) || errors.Is(markerErr, client.ErrClientEndpointNotFound) {
+				markerErr = nil
 			}
 		}
-		if err != nil {
-			if hasEndpointSelector || !isIgnorableServerResolveError(err) {
-				fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
+		if markerErr != nil {
+			if hasEndpointSelector || !isIgnorableServerResolveError(markerErr) {
+				fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", markerErr)
 				return 2
 			}
-		} else {
+		}
+		if useMarker {
 			host = markerTarget
 			pingOpts.Proto = "tcp"
-			pingOpts.Port = client.DiagnosticsMarkerPort
+			pingOpts.Port = markerPort
 		}
 		pingOpts.SocksProxy = socksAddr
 	} else {

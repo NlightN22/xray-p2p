@@ -14,25 +14,29 @@ var (
 	ErrClientEndpointNotFound = errors.New("xp2p: client endpoint not found")
 )
 
-func ResolveMarkerTarget(installDir, host, tag string, index int) (string, error) {
+func ResolveMarkerTarget(installDir, host, tag string, index int) (string, int, error) {
 	installDir = strings.TrimSpace(installDir)
 	if installDir == "" {
-		return "", errors.New("xp2p: client install dir is required to resolve endpoints")
+		return "", 0, errors.New("xp2p: client install dir is required to resolve endpoints")
 	}
 	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if len(state.Endpoints) == 0 {
-		return "", endpointsMissingError{}
+		return "", 0, endpointsMissingError{}
 	}
 
 	_, selectedIndex, err := selectEndpointByHost(state.Endpoints, host, tag, index)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return markerIPForIndex(selectedIndex)
+	target, err := markerIPForIndex(selectedIndex)
+	if err != nil {
+		return "", 0, err
+	}
+	return target, DiagnosticsMarkerPort, nil
 }
 
 func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, index int) (clientEndpointRecord, int, error) {

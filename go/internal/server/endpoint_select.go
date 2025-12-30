@@ -13,31 +13,35 @@ var (
 	ErrServerReverseAmbiguous   = errors.New("xp2p: reverse user matches multiple channels")
 )
 
-func ResolveServerMarkerTarget(installDir, userOrTag string, index int) (string, error) {
+func ResolveServerMarkerTarget(installDir, userOrTag string, index int) (string, int, error) {
 	installDir = strings.TrimSpace(installDir)
 	if installDir == "" {
-		return "", errors.New("xp2p: server install dir is required to resolve reverse channels")
+		return "", 0, errors.New("xp2p: server install dir is required to resolve reverse channels")
 	}
 	if index > 0 {
-		return "", errors.New("xp2p: server reverse selection does not support --index")
+		return "", 0, errors.New("xp2p: server reverse selection does not support --index")
 	}
 	stateDoc, err := loadServerStateDoc(serverStatePath(installDir))
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	reverseState, err := decodeServerReverseState(stateDoc)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if len(reverseState) == 0 {
-		return "", ErrServerReverseMissing
+		return "", 0, ErrServerReverseMissing
 	}
 
 	_, selectedIndex, err := selectReverseChannel(reverseState, userOrTag)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return markerIPForIndex(selectedIndex)
+	target, err := markerIPForIndex(selectedIndex)
+	if err != nil {
+		return "", 0, err
+	}
+	return target, DiagnosticsMarkerPort, nil
 }
 
 func selectReverseChannel(state serverReverseState, userOrTag string) (serverReverseChannel, int, error) {
