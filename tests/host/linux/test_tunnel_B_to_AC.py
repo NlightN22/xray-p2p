@@ -254,7 +254,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                     result = client_runner(
                         "ping",
                         target,
-                        "--socks",
+                        "--tunnel",
                         "--count",
                         "3",
                         check=True,

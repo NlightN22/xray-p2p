@@ -135,7 +135,7 @@ def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, 
         host,
         "--count",
         str(attempts),
-        "--socks",
+        "--tunnel",
     ]
     if port is not None:
         args[2:2] = ["--port", str(port)]

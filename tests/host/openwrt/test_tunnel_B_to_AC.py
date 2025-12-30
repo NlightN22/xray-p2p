@@ -266,7 +266,7 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
                     result = client_runner(
                         "ping",
                         target,
-                        "--socks",
+                        "--tunnel",
                         "--count",
                         "3",
                         check=True,

@@ -21,7 +21,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
-const socksConfigSentinel = "__xp2p_socks_config__"
+const tunnelConfigSentinel = "__xp2p_tunnel_config__"
 
 type pingCommandOptions struct {
 	Host          string
@@ -29,7 +29,7 @@ type pingCommandOptions struct {
 	TimeoutSec    int
 	Proto         string
 	Port          int
-	SocksEndpoint string
+	TunnelEndpoint string
 	EndpointTag   string
 	EndpointIndex int
 }
@@ -60,10 +60,10 @@ func newPingCommand(cfg func() config.Config) *cobra.Command {
 	flags.IntVar(&opts.TimeoutSec, "timeout", opts.TimeoutSec, "per-request timeout in seconds (optional)")
 	flags.StringVar(&opts.Proto, "proto", opts.Proto, "protocol to use (tcp or udp)")
 	flags.IntVar(&opts.Port, "port", opts.Port, "target port (default 62022)")
-	flags.StringVar(&opts.SocksEndpoint, "socks", "", "route ping through SOCKS5 proxy (host:port); omit value to auto-detect from xp2p config (client first, then server)")
+	flags.StringVar(&opts.TunnelEndpoint, "tunnel", "", "route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config")
 	flags.StringVar(&opts.EndpointTag, "endpoint", "", "endpoint tag to use when multiple endpoints share the same host")
 	flags.IntVar(&opts.EndpointIndex, "index", 0, "endpoint index (1-based) to use when multiple endpoints share the same host")
-	flags.Lookup("socks").NoOptDefVal = socksConfigSentinel
+	flags.Lookup("tunnel").NoOptDefVal = tunnelConfigSentinel
 	return cmd
 }
 
@@ -81,7 +81,7 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		Port:    opts.Port,
 	}
 
-	socksAddr, err := resolveSocksAddress(cfg, opts.SocksEndpoint)
+	socksAddr, err := resolveSocksAddress(cfg, opts.TunnelEndpoint)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
 		return 2
@@ -89,12 +89,12 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 
 	hasEndpointSelector := strings.TrimSpace(opts.EndpointTag) != "" || opts.EndpointIndex > 0
 	if socksAddr == "" && hasEndpointSelector {
-		fmt.Fprintln(os.Stderr, "xp2p ping: --endpoint/--index requires --socks")
+		fmt.Fprintln(os.Stderr, "xp2p ping: --endpoint/--index requires --tunnel")
 		return 2
 	}
 	if socksAddr != "" {
 		if !strings.EqualFold(strings.TrimSpace(pingOpts.Proto), "tcp") {
-			fmt.Fprintln(os.Stderr, "xp2p ping: --socks supports only tcp protocol")
+			fmt.Fprintln(os.Stderr, "xp2p ping: --tunnel supports only tcp protocol")
 			return 2
 		}
 		markerTarget, markerPort, markerErr := client.ResolveMarkerTarget(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex)
@@ -104,23 +104,23 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 				markerTarget, markerPort, markerErr = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, opts.EndpointTag, opts.EndpointIndex)
 				useMarker = markerErr == nil
 			}
-		}
-		if markerErr != nil && !hasEndpointSelector {
+		} else if markerErr != nil && !hasEndpointSelector {
 			if errors.Is(markerErr, client.ErrClientEndpointsMissing) || errors.Is(markerErr, client.ErrClientEndpointNotFound) {
-				markerErr = nil
+				markerTarget, markerPort, markerErr = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, host, 0)
+				useMarker = markerErr == nil
 			}
 		}
 		if markerErr != nil {
-			if hasEndpointSelector || !isIgnorableServerResolveError(markerErr) {
-				fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", markerErr)
-				return 2
-			}
+			fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", markerErr)
+			return 2
 		}
-		if useMarker {
-			host = markerTarget
-			pingOpts.Proto = "tcp"
-			pingOpts.Port = markerPort
+		if !useMarker {
+			fmt.Fprintln(os.Stderr, "xp2p ping: unable to resolve tunnel target")
+			return 2
 		}
+		host = markerTarget
+		pingOpts.Proto = "tcp"
+		pingOpts.Port = markerPort
 		pingOpts.SocksProxy = socksAddr
 	} else {
 		pingOpts.SocksProxy = ""
@@ -138,7 +138,7 @@ func resolveSocksAddress(cfg config.Config, flagValue string) (string, error) {
 	switch value {
 	case "":
 		return "", nil
-	case socksConfigSentinel:
+	case tunnelConfigSentinel:
 		return detectSocksProxy(cfg)
 	}
 
@@ -174,7 +174,7 @@ func detectSocksProxy(cfg config.Config) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("SOCKS proxy not configured; specify --socks host:port or install xp2p client/server")
+	return "", fmt.Errorf("tunnel proxy not configured; specify --tunnel host:port or install xp2p client/server")
 }
 
 func loadSocksAddress(installDir, configDir string) (string, error) {
@@ -335,11 +335,4 @@ func validatePort(port string) error {
 		return fmt.Errorf("invalid SOCKS proxy port %q: must be within 1-65535", port)
 	}
 	return nil
-}
-
-func isIgnorableServerResolveError(err error) bool {
-	return errors.Is(err, server.ErrServerReverseMissing) ||
-		errors.Is(err, server.ErrServerReverseNotFound) ||
-		errors.Is(err, server.ErrServerReverseNotSpecified) ||
-		errors.Is(err, server.ErrServerReverseAmbiguous)
 }

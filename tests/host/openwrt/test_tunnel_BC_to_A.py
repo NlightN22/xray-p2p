@@ -303,7 +303,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                             result = runner(
                                 "ping",
                                 SERVER_IP,
-                                "--socks",
+                                "--tunnel",
                                 "--count",
                                 "3",
                                 check=True,

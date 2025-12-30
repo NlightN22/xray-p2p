@@ -289,7 +289,7 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                             result = runner(
                                 "ping",
                                 SERVER_IP,
-                                "--socks",
+                                "--tunnel",
                                 "--count",
                                 "3",
                                 check=True,

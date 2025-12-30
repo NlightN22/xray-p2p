@@ -204,7 +204,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             initial_ping = client_runner(
                 "ping",
                 DIAG_IP,
-                "--socks",
+                "--tunnel",
                 "--count",
                 "3",
                 check=False,
@@ -255,7 +255,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 redirected_ping = client_runner(
                     "ping",
                     DIAG_IP,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=True,
@@ -329,7 +329,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 redirected_domain = client_runner(
                     "ping",
                     DIAG_DOMAIN,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=True,
@@ -496,7 +496,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             redirected_ping = server_runner(
                 "ping",
                 CLIENT_DIAG_IP,
-                f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                f"--tunnel={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
                 "--port",
                 str(CLIENT_DIAGNOSTICS_PORT),
                 "--count",
@@ -555,7 +555,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 redirected_domain = server_runner(
                     "ping",
                     CLIENT_DIAG_DOMAIN,
-                    f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                    f"--tunnel={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
                     "--port",
                     str(CLIENT_DIAGNOSTICS_PORT),
                     "--count",

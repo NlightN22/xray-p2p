@@ -396,7 +396,7 @@ def test_forward_tunnel_operational(tunnel_environment):
         ping_result = client_runner(
             "ping",
             SERVER_IP,
-            "--socks",
+            "--tunnel",
             "--count",
             "3",
             check=True,
@@ -544,7 +544,7 @@ def test_client_redirect_through_server(tunnel_environment):
                 socks_ping = client_runner(
                     "ping",
                     target_ip,
-                    "--socks",
+                    "--tunnel",
                     "--port",
                     str(listener_port),
                     "--count",

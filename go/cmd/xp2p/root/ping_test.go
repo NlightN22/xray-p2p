@@ -31,7 +31,7 @@ func TestResolveSocksAddressAutoPrefersClient(t *testing.T) {
 	writeSocksInbound(t, filepath.Join(cfg.Client.InstallDir, cfg.Client.ConfigDir), "127.0.0.1", 1111)
 	writeSocksInbound(t, filepath.Join(cfg.Server.InstallDir, cfg.Server.ConfigDir), "127.0.0.1", 2222)
 
-	addr, err := resolveSocksAddress(cfg, socksConfigSentinel)
+	addr, err := resolveSocksAddress(cfg, tunnelConfigSentinel)
 	if err != nil {
 		t.Fatalf("resolveSocksAddress returned error: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestResolveSocksAddressAutoFallsBackToServer(t *testing.T) {
 	writeNonSocksInbound(t, filepath.Join(cfg.Client.InstallDir, cfg.Client.ConfigDir))
 	writeSocksInbound(t, filepath.Join(cfg.Server.InstallDir, cfg.Server.ConfigDir), "127.0.0.1", 3333)
 
-	addr, err := resolveSocksAddress(cfg, socksConfigSentinel)
+	addr, err := resolveSocksAddress(cfg, tunnelConfigSentinel)
 	if err != nil {
 		t.Fatalf("resolveSocksAddress returned error: %v", err)
 	}
@@ -65,11 +65,11 @@ func TestResolveSocksAddressAutoMissing(t *testing.T) {
 	cfg.Client.ConfigDir = "config-client"
 	cfg.Server.ConfigDir = "config-server"
 
-	_, err := resolveSocksAddress(cfg, socksConfigSentinel)
+	_, err := resolveSocksAddress(cfg, tunnelConfigSentinel)
 	if err == nil {
 		t.Fatal("expected error when socks proxy cannot be detected")
 	}
-	want := "SOCKS proxy not configured; specify --socks host:port or install xp2p client/server"
+	want := "tunnel proxy not configured; specify --tunnel host:port or install xp2p client/server"
 	if err.Error() != want {
 		t.Fatalf("unexpected error %q (want %q)", err.Error(), want)
 	}

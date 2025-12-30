@@ -277,7 +277,7 @@ def test_client_redirect_tunnel_win(
                 initial_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=False,
@@ -286,7 +286,7 @@ def test_client_redirect_tunnel_win(
                 initial_domain_ping = xp2p_client_runner(
                     "ping",
                     DIAG_DOMAIN,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=False,
@@ -310,7 +310,7 @@ def test_client_redirect_tunnel_win(
                 redirected_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=True,
@@ -320,7 +320,7 @@ def test_client_redirect_tunnel_win(
                 domain_before_rule = xp2p_client_runner(
                     "ping",
                     DIAG_DOMAIN,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=False,
@@ -381,7 +381,7 @@ def test_client_redirect_tunnel_win(
                 redirected_ping_again = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=True,
@@ -409,7 +409,7 @@ def test_client_redirect_tunnel_win(
                 final_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--socks",
+                    "--tunnel",
                     "--count",
                     "3",
                     check=False,
