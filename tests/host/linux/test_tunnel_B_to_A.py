@@ -13,7 +13,8 @@ from tests.host.tunnel import common as tunnel_common
 SERVER_IP = "10.62.10.11"  # deb-test-a (host A)
 CLIENT_IP = "10.62.10.12"  # deb-test-b (host B)
 CLIENT_REVERSE_TEST_IP = "10.0.102.50"
-DIAGNOSTICS_PORT = 62022
+SERVER_DIAGNOSTICS_PORT = 62022
+CLIENT_DIAGNOSTICS_PORT = 62023
 SERVER_FORWARD_PORT = 53341
 CLIENT_FORWARD_PORT = 53331
 CLIENT_REDIRECT_CIDR = "10.0.101.0/24"
@@ -263,7 +264,7 @@ def _ip_alias(host, cidr: str, dev: str = "lo"):
 def _exercise_client_forward_diagnostics(env: dict) -> None:
     client_runner = env["client_runner"]
     client_host = env["client_host"]
-    forward_target = f"{SERVER_IP}:{DIAGNOSTICS_PORT}"
+    forward_target = f"{SERVER_IP}:{SERVER_DIAGNOSTICS_PORT}"
     listen_port = CLIENT_FORWARD_PORT
     try:
         client_runner(
@@ -297,7 +298,9 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             check=True,
         )
         client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
-        entry = tunnel_common.forward_entry_for_target(client_state.get("forwards") or [], SERVER_IP, DIAGNOSTICS_PORT)
+        entry = tunnel_common.forward_entry_for_target(
+            client_state.get("forwards") or [], SERVER_IP, SERVER_DIAGNOSTICS_PORT
+        )
         listen_port = tunnel_common.listen_port_from_entry(entry)
         assert listen_port == CLIENT_FORWARD_PORT
 
@@ -333,7 +336,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
 def _exercise_server_forward_diagnostics(env: dict) -> None:
     server_host = env["server_host"]
     server_runner = env["server_runner"]
-    forward_target = f"{CLIENT_IP}:{DIAGNOSTICS_PORT}"
+    forward_target = f"{CLIENT_IP}:{CLIENT_DIAGNOSTICS_PORT}"
     listen_port = None
     try:
         _server_forward_cmd(
@@ -350,7 +353,9 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             check=True,
         )
         server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
-        entry = tunnel_common.forward_entry_for_target(server_state.get("forward_rules") or [], CLIENT_IP, DIAGNOSTICS_PORT)
+        entry = tunnel_common.forward_entry_for_target(
+            server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
+        )
         listen_port = tunnel_common.listen_port_from_entry(entry)
 
         with _active_tunnel_sessions(env):
@@ -409,7 +414,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     client_target_alias = "10.0.101.50/32"
     server_target_alias = "10.0.102.50/32"
     chain_name = "xray_transparent_prerouting"
-    listener_port = DIAGNOSTICS_PORT
+    client_listener_port = SERVER_DIAGNOSTICS_PORT
+    server_listener_port = CLIENT_DIAGNOSTICS_PORT
 
     def _dokodemo_ports(config: dict) -> list[int]:
         ports: list[int] = []
@@ -600,7 +606,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     target_ip,
                     "--socks",
                     "--port",
-                    str(listener_port),
+                    str(client_listener_port),
                     "--count",
                     "3",
                     "--proto",
@@ -622,7 +628,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     "ping",
                     target_ip,
                     "--port",
-                    str(listener_port),
+                    str(client_listener_port),
                     "--count",
                     "3",
                     "--proto",
@@ -676,7 +682,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     reverse_ip,
                     "--socks",
                     "--port",
-                    str(listener_port),
+                    str(server_listener_port),
                     "--count",
                     "3",
                     "--proto",
@@ -698,7 +704,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     "ping",
                     reverse_ip,
                     "--port",
-                    str(listener_port),
+                    str(server_listener_port),
                     "--count",
                     "3",
                     "--proto",
@@ -825,7 +831,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 "--config-dir",
                 helpers.SERVER_CONFIG_DIR_NAME,
                 "--target",
-                f"{CLIENT_REVERSE_TEST_IP}:{DIAGNOSTICS_PORT}",
+                f"{CLIENT_REVERSE_TEST_IP}:{CLIENT_DIAGNOSTICS_PORT}",
                 "--listen",
                 "127.0.0.1",
                 "--listen-port",
@@ -837,7 +843,9 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             forward_added = True
 
             server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
-            entry = tunnel_common.forward_entry_for_target(server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, DIAGNOSTICS_PORT)
+            entry = tunnel_common.forward_entry_for_target(
+                server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, CLIENT_DIAGNOSTICS_PORT
+            )
             listen_port = tunnel_common.listen_port_from_entry(entry)
             assert listen_port == SERVER_FORWARD_PORT
 

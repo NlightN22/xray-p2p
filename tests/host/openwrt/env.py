@@ -219,6 +219,7 @@ def install_ipk_on_host(
     dest = destination or PurePosixPath("/tmp/xp2p.ipk")
     staged_path = stage_ipk_on_guest(host, ipk_path, dest)
     opkg_remove(host, "xp2p", ignore_missing=True)
+    _purge_xp2p_artifacts(host)
     opkg_install_local(host, staged_path)
     return staged_path
 
@@ -242,6 +243,11 @@ def cleanup_xp2p(host: Host) -> None:
     host.run("OPKG_FORCE_REMOVE=1 opkg remove --autoremove xp2p >/dev/null 2>&1 || true")
     host.run("rm -f /tmp/xp2p-client.log /tmp/xp2p-server.log /tmp/xp2p.ipk >/dev/null 2>&1 || true")
     host.run("rm -f /etc/xp2p/dns-forward-state.json >/dev/null 2>&1 || true")
+    _purge_xp2p_artifacts(host)
+
+
+def _purge_xp2p_artifacts(host: Host) -> None:
+    host.run("rm -rf /etc/xp2p /usr/bin/xp2p /usr/lib/xp2p >/dev/null 2>&1 || true")
 
 
 def opkg_remove(host: Host, package: str, ignore_missing: bool = True) -> None:

@@ -20,7 +20,8 @@ CLIENT_DIAG_IP = "10.0.200.11"
 CLIENT_DIAG_CIDR = f"{CLIENT_DIAG_IP}/32"
 CLIENT_DIAG_DOMAIN = "diag.client.service"
 SOCKS_PORT = 51180
-DIAGNOSTICS_PORT = 62022
+SERVER_DIAGNOSTICS_PORT = 62022
+CLIENT_DIAGNOSTICS_PORT = 62023
 REVERSE_TUNNEL_WARMUP_SECONDS = 2.5
 HEARTBEAT_STATE_FILE = helpers.INSTALL_ROOT / "state-heartbeat.json"
 
@@ -71,6 +72,8 @@ def _stop_xp2p_processes(host) -> None:
     host.run("killall -9 xray >/dev/null 2>&1 || true")
     host.run("fuser -k 62022/tcp >/dev/null 2>&1 || true")
     host.run("fuser -k 62022/udp >/dev/null 2>&1 || true")
+    host.run("fuser -k 62023/tcp >/dev/null 2>&1 || true")
+    host.run("fuser -k 62023/udp >/dev/null 2>&1 || true")
 
 
 def _add_hosts_entry(host, ip: str, domain: str) -> None:
@@ -239,7 +242,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_LOG_FILE,
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
-                _wait_for_port(server_host, DIAGNOSTICS_PORT)
+                _wait_for_port(server_host, SERVER_DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
@@ -313,7 +316,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_LOG_FILE,
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
-                _wait_for_port(server_host, DIAGNOSTICS_PORT)
+                _wait_for_port(server_host, SERVER_DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
@@ -479,7 +482,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.CLIENT_LOG_FILE,
         ):
             _wait_for_port(client_host, SOCKS_PORT)
-            _wait_for_port(client_host, DIAGNOSTICS_PORT)
+            _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
             heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
             helpers.assert_heartbeat_entry(
                 heartbeat_state,
@@ -494,6 +497,8 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 "ping",
                 CLIENT_DIAG_IP,
                 f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                "--port",
+                str(CLIENT_DIAGNOSTICS_PORT),
                 "--count",
                 "3",
                 check=True,
@@ -536,7 +541,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_LOG_FILE,
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
-                _wait_for_port(client_host, DIAGNOSTICS_PORT)
+                _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
@@ -551,6 +556,8 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                     "ping",
                     CLIENT_DIAG_DOMAIN,
                     f"--socks={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                    "--port",
+                    str(CLIENT_DIAGNOSTICS_PORT),
                     "--count",
                     "3",
                     check=True,
