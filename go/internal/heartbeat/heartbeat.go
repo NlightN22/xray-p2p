@@ -156,7 +156,17 @@ func (s State) snapshot(now time.Time, ttl time.Duration) []Snapshot {
 		leftTag := strings.ToLower(results[i].Entry.Tag)
 		rightTag := strings.ToLower(results[j].Entry.Tag)
 		if leftTag == rightTag {
-			return strings.ToLower(results[i].Entry.Host) < strings.ToLower(results[j].Entry.Host)
+			leftHost := strings.ToLower(results[i].Entry.Host)
+			rightHost := strings.ToLower(results[j].Entry.Host)
+			if leftHost == rightHost {
+				leftUser := strings.ToLower(results[i].Entry.User)
+				rightUser := strings.ToLower(results[j].Entry.User)
+				if leftUser == rightUser {
+					return strings.ToLower(results[i].Entry.ClientIP) < strings.ToLower(results[j].Entry.ClientIP)
+				}
+				return leftUser < rightUser
+			}
+			return leftHost < rightHost
 		}
 		return leftTag < rightTag
 	})
@@ -178,12 +188,13 @@ func (s *State) update(payload Payload) (Entry, error) {
 	if host == "" {
 		return Entry{}, ErrHostRequired
 	}
-	key := strings.ToLower(tag)
+	user := strings.TrimSpace(payload.User)
+	key := entryKey(tag, user)
 	entry := s.Entries[key]
 	entry.Tag = tag
 	entry.Host = host
 	if payload.User != "" {
-		entry.User = strings.TrimSpace(payload.User)
+		entry.User = user
 	}
 	if payload.ClientIP != "" {
 		entry.ClientIP = strings.TrimSpace(payload.ClientIP)
@@ -220,6 +231,18 @@ func (s *Store) saveLocked() error {
 		return fmt.Errorf("heartbeat: persist state: %w", err)
 	}
 	return nil
+}
+
+func entryKey(tag, user string) string {
+	key := strings.ToLower(strings.TrimSpace(tag))
+	if key == "" {
+		return ""
+	}
+	user = strings.ToLower(strings.TrimSpace(user))
+	if user == "" {
+		return key
+	}
+	return key + "|" + user
 }
 
 func readState(path string) (State, error) {

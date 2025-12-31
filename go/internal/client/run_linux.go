@@ -41,7 +41,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
-	stopHeartbeat := startHeartbeatLoop(ctx, installDir, opts.Heartbeat)
+	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 
 	xrayPath, err := xray.ResolveBinaryPath()

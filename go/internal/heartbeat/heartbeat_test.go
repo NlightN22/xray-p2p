@@ -83,3 +83,37 @@ func TestSaveCreatesDirectory(t *testing.T) {
 		t.Fatalf("state not written: %v", err)
 	}
 }
+
+func TestStoreKeepsMultipleUsersPerTag(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+
+	ts := time.Date(2025, time.November, 18, 12, 0, 0, 0, time.UTC)
+	payloads := []Payload{
+		{Tag: "proxy-test", Host: "edge.example.org", User: "alice", ClientIP: "10.0.0.5", Timestamp: ts, RTTMillis: 20},
+		{Tag: "proxy-test", Host: "edge.example.org", User: "bob", ClientIP: "10.0.0.6", Timestamp: ts.Add(2 * time.Second), RTTMillis: 25},
+	}
+
+	for _, payload := range payloads {
+		if _, err := store.Update(payload); err != nil {
+			t.Fatalf("Update: %v", err)
+		}
+	}
+
+	state, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(state.Entries) != 2 {
+		t.Fatalf("expected two entries, got %d", len(state.Entries))
+	}
+
+	snapshots := state.snapshot(time.Now().UTC(), 10*time.Second)
+	if len(snapshots) != 2 {
+		t.Fatalf("expected two snapshots, got %d", len(snapshots))
+	}
+}

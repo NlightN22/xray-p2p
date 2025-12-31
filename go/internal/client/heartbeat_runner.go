@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -30,12 +31,12 @@ type heartbeatRunner struct {
 	socks     string
 }
 
-func startHeartbeatLoop(ctx context.Context, installDir string, opts HeartbeatOptions) func() {
+func startHeartbeatLoop(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) func() {
 	if !opts.Enabled {
 		return func() {}
 	}
 
-	runner, err := newHeartbeatRunner(installDir, opts)
+	runner, err := newHeartbeatRunner(installDir, configDir, opts)
 	if err != nil {
 		logging.Warn("client heartbeat disabled", "err", err)
 		return func() {}
@@ -55,7 +56,7 @@ func startHeartbeatLoop(ctx context.Context, installDir string, opts HeartbeatOp
 	}
 }
 
-func newHeartbeatRunner(installDir string, opts HeartbeatOptions) (*heartbeatRunner, error) {
+func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*heartbeatRunner, error) {
 	interval := opts.Interval
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -88,10 +89,12 @@ func newHeartbeatRunner(installDir string, opts HeartbeatOptions) (*heartbeatRun
 	if err != nil {
 		return nil, err
 	}
+	endpoints := append([]clientEndpointRecord(nil), state.Endpoints...)
+	endpoints = fillEndpointUsersFromOutbounds(endpoints, configDir)
 
 	return &heartbeatRunner{
 		store:     store,
-		endpoints: append([]clientEndpointRecord(nil), state.Endpoints...),
+		endpoints: endpoints,
 		interval:  interval,
 		timeout:   timeout,
 		port:      port,
@@ -177,7 +180,7 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 	payload := heartbeat.Payload{
 		Tag:       r.endpoint.Tag,
 		Host:      r.endpoint.Hostname,
-		User:      r.endpoint.User,
+		User:      strings.TrimSpace(r.endpoint.User),
 		ClientIP:  detectLocalIP(r.endpoint.Hostname),
 		Timestamp: time.Now().UTC(),
 		RTTMillis: result.RTT.Milliseconds(),
@@ -195,6 +198,74 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 		}
 	}
 	return nil
+}
+
+func fillEndpointUsersFromOutbounds(endpoints []clientEndpointRecord, configDir string) []clientEndpointRecord {
+	needsUser := false
+	for _, endpoint := range endpoints {
+		if strings.TrimSpace(endpoint.User) == "" {
+			needsUser = true
+			break
+		}
+	}
+	if !needsUser || strings.TrimSpace(configDir) == "" {
+		return endpoints
+	}
+	users, err := loadOutboundUsers(configDir)
+	if err != nil {
+		logging.Warn("client heartbeat: unable to load outbound users", "err", err)
+		return endpoints
+	}
+	updated := make([]clientEndpointRecord, len(endpoints))
+	for i, endpoint := range endpoints {
+		endpoint.User = strings.TrimSpace(endpoint.User)
+		if endpoint.User == "" {
+			if user := users[strings.ToLower(strings.TrimSpace(endpoint.Tag))]; user != "" {
+				endpoint.User = user
+			}
+		}
+		updated[i] = endpoint
+	}
+	return updated
+}
+
+func loadOutboundUsers(configDir string) (map[string]string, error) {
+	path := filepath.Join(configDir, "outbounds.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var doc struct {
+		Outbounds []struct {
+			Tag      string `json:"tag"`
+			Settings struct {
+				Servers []struct {
+					Email string `json:"email"`
+				} `json:"servers"`
+			} `json:"settings"`
+		} `json:"outbounds"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+
+	users := make(map[string]string, len(doc.Outbounds))
+	for _, outbound := range doc.Outbounds {
+		tag := strings.ToLower(strings.TrimSpace(outbound.Tag))
+		if tag == "" {
+			continue
+		}
+		for _, server := range outbound.Settings.Servers {
+			user := strings.TrimSpace(server.Email)
+			if user == "" {
+				continue
+			}
+			users[tag] = user
+			break
+		}
+	}
+	return users, nil
 }
 
 func detectLocalIP(targetHost string) string {
@@ -227,15 +298,15 @@ func detectLocalIP(targetHost string) string {
 				if ip == nil {
 					continue
 				}
-		if targetIP != nil && ipnet.Contains(targetIP) {
-			if runtime.GOOS == "windows" {
-				return ip.String()
+				if targetIP != nil && ipnet.Contains(targetIP) {
+					if runtime.GOOS == "windows" {
+						return ip.String()
+					}
+					candidates = append(candidates, ip.String())
+					continue
+				}
+				candidates = append(candidates, ip.String())
 			}
-			candidates = append(candidates, ip.String())
-			continue
-		}
-		candidates = append(candidates, ip.String())
-	}
 		}
 	}
 	conn, err := net.Dial("udp", "8.8.8.8:80")
