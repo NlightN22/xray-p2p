@@ -164,7 +164,7 @@ def build_ipk(host: Host, target: str) -> None:
     output_dir = IPK_OUTPUT_POSIX.as_posix()
     command = (
         f"cd {shlex.quote(worktree)} && "
-        f"./scripts/build/build_openwrt_ipk.sh "
+        f"bash ./scripts/build/build_openwrt_ipk.sh "
         f"--target {shlex.quote(target)} "
         f"--output-dir {shlex.quote(output_dir)} "
         f"--force-build"

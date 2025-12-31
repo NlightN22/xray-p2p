@@ -258,7 +258,7 @@ ensure_binaries() {
 
   if [ $needs_build -eq 1 ]; then
     echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Building xp2p binaries"
-    GOTOOLCHAIN=$GOTOOLCHAIN_VERSION "$PROJECT_ROOT/scripts/build/build_xp2p_binaries.sh" --target "$target"
+    GOTOOLCHAIN=$GOTOOLCHAIN_VERSION bash "$PROJECT_ROOT/scripts/build/build_xp2p_binaries.sh" --target "$target"
     if [ -n "$SOURCE_SIGNATURE" ]; then
       record_source_signature "$SOURCE_SIGNATURE"
     else
@@ -313,7 +313,7 @@ run_for_target() {
     sdk_release="$DEFAULT_OPENWRT_VERSION"
   fi
   echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Ensuring OpenWrt SDK (release=${sdk_release})"
-  OPENWRT_VERSION="$sdk_release" "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
+  OPENWRT_VERSION="$sdk_release" bash "$PROJECT_ROOT/scripts/build/ensure_openwrt_sdk.sh" "$target"
 
   if [ -n "$sdk_dir_override" ]; then
     sdk_dir="$sdk_dir_override"

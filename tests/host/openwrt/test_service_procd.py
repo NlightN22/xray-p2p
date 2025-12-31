@@ -130,6 +130,34 @@ def test_openwrt_client_service_cli_controls_procd(openwrt_host, xp2p_openwrt_ip
 
 @pytest.mark.host
 @pytest.mark.linux
+def test_openwrt_diag_command_serves_ping(openwrt_host, xp2p_openwrt_ipk):
+    openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
+    runner = lambda *cmd, check=False: _xp2p(openwrt_host, *cmd, check=check)
+    helpers.cleanup_client_install(openwrt_host, runner)
+    helpers.cleanup_server_install(openwrt_host, runner)
+    try:
+        runner("client", "service", "stop")
+        runner("server", "service", "stop")
+        result = openwrt_env.run_guest_script(
+            openwrt_host,
+            "scripts/openwrt/run_diag_ping.sh",
+            "127.0.0.1:62022",
+            "tcp",
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "OpenWrt diagnostics ping failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+    finally:
+        runner("client", "service", "stop")
+        runner("server", "service", "stop")
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.cleanup_server_install(openwrt_host, runner)
+
+
+@pytest.mark.host
+@pytest.mark.linux
 @pytest.mark.parametrize("role", ["client", "server"])
 def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt_ipk, role):
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
