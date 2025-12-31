@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"path/filepath"
@@ -30,6 +31,9 @@ const heartbeatPayloadTimeout = 250 * time.Millisecond
 type Options struct {
 	Port       string
 	InstallDir string
+	ListenAddr string
+	Proto      string
+	Quiet      bool
 }
 
 // StartBackground launches lightweight TCP and UDP responders that can be used
@@ -48,6 +52,19 @@ func StartBackground(ctx context.Context, opts Options) error {
 	port := strings.TrimSpace(opts.Port)
 	if port == "" {
 		port = DefaultPort
+	}
+	listenAddr := strings.TrimSpace(opts.ListenAddr)
+	if listenAddr == "" {
+		listenAddr = ":" + port
+	}
+
+	proto := strings.ToLower(strings.TrimSpace(opts.Proto))
+	switch proto {
+	case "":
+		proto = "both"
+	case "tcp", "udp", "both":
+	default:
+		return fmt.Errorf("xp2p: unsupported diagnostics protocol %q", opts.Proto)
 	}
 
 	storePath := ""
@@ -71,39 +88,45 @@ func StartBackground(ctx context.Context, opts Options) error {
 		})
 	}
 
-	if ln, err := net.Listen("tcp", ":"+port); err != nil {
-		logging.Warn("unable to start TCP listener", "port", port, "err", err)
-	} else {
-		tcpLn = ln
-		started = true
-		go func() {
-			defer tcpLn.Close()
-			for {
-				conn, err := ln.Accept()
-				if err != nil {
-					select {
-					case <-ctx.Done():
-						return
-					default:
-						logging.Warn("tcp accept error", "err", err)
-						continue
+	if proto != "udp" {
+		if ln, err := net.Listen("tcp", listenAddr); err != nil {
+			logging.Warn("unable to start TCP listener", "addr", listenAddr, "err", err)
+		} else {
+			tcpLn = ln
+			started = true
+			go func() {
+				defer tcpLn.Close()
+				for {
+					conn, err := ln.Accept()
+					if err != nil {
+						select {
+						case <-ctx.Done():
+							return
+						default:
+							logging.Warn("tcp accept error", "err", err)
+							continue
+						}
 					}
+					go handleTCP(ctx, conn, hbStore, opts.Quiet)
 				}
-				go handleTCP(ctx, conn, hbStore)
-			}
-		}()
+			}()
+		}
+	} else {
+		tcpLn = nil
 	}
 
-	if pc, err := net.ListenPacket("udp", ":"+port); err != nil {
-		logging.Warn("unable to start UDP listener", "port", port, "err", err)
-	} else {
-		udpConn = pc
-		started = true
-		go handleUDP(ctx, udpConn)
+	if proto != "tcp" {
+		if pc, err := net.ListenPacket("udp", listenAddr); err != nil {
+			logging.Warn("unable to start UDP listener", "addr", listenAddr, "err", err)
+		} else {
+			udpConn = pc
+			started = true
+			go handleUDP(ctx, udpConn, opts.Quiet)
+		}
 	}
 
 	if !started {
-		return errors.New("xp2p: unable to bind TCP/UDP listeners")
+		return errors.New("xp2p: unable to bind diagnostics listeners")
 	}
 
 	go func() {
@@ -114,7 +137,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 	return nil
 }
 
-func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store) {
+func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store, quiet bool) {
 	defer conn.Close()
 	_ = conn.SetDeadline(deadlineFromContext(ctx))
 
@@ -126,15 +149,17 @@ func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store) {
 	if strings.EqualFold(strings.TrimSpace(line), pingRequest) {
 		_, _ = conn.Write([]byte(pingResponse + "\n"))
 		hadHeartbeat := consumeHeartbeatPayload(ctx, reader, conn, store)
-		if !hadHeartbeat {
-			logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
-		} else {
-			logging.Debug("tcp heartbeat received", "remote_addr", conn.RemoteAddr().String())
+		if !quiet {
+			if !hadHeartbeat {
+				logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
+			} else {
+				logging.Debug("tcp heartbeat received", "remote_addr", conn.RemoteAddr().String())
+			}
 		}
 	}
 }
 
-func handleUDP(ctx context.Context, conn net.PacketConn) {
+func handleUDP(ctx context.Context, conn net.PacketConn, quiet bool) {
 	defer conn.Close()
 	buf := make([]byte, 1024)
 	for {
@@ -152,7 +177,9 @@ func handleUDP(ctx context.Context, conn net.PacketConn) {
 
 		msg := strings.TrimSpace(string(buf[:n]))
 		if strings.EqualFold(msg, pingRequest) {
-			logging.Info("udp ping received", "remote_addr", addr.String())
+			if !quiet {
+				logging.Info("udp ping received", "remote_addr", addr.String())
+			}
 			_, _ = conn.WriteTo([]byte(pingResponse+"\n"), addr)
 		}
 	}
