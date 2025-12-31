@@ -1,8 +1,8 @@
-﻿project_root = File.expand_path('../../..', __dir__)
+PROJECT_ROOT = File.expand_path('../../..', __dir__)
 
 BOX_PATH = File.expand_path('../boxes/openwrt-24.10.2.box', __dir__)
 BOX_NAME = 'openwrt-24.10.2'.freeze
-BUILD_OUTPUT = File.join(project_root, 'build', 'ipk')
+BUILD_OUTPUT = File.join(PROJECT_ROOT, 'build', 'ipk')
 HOST_NETMASK = ENV.fetch('OPENWRT_HOST_NETMASK', '255.255.255.0')
 HOST_INTERFACE = ENV.fetch('OPENWRT_HOST_INTERFACE', 'eth1')
 
@@ -30,6 +30,7 @@ def define_clients(config, machines)
       c.vm.box = ALPINE_CLIENT_BOX
       c.vm.box_version = ALPINE_CLIENT_BOX_VERSION if ALPINE_CLIENT_BOX_VERSION
       c.vm.hostname = name
+      c.vm.synced_folder File.join(PROJECT_ROOT, 'build'), '/srv/xray-p2p/build'
 
       c.vm.network 'forwarded_port', guest: 22, host: ssh_host_port, id: 'ssh'
       c.vm.network 'private_network',
@@ -170,3 +171,4 @@ Vagrant.configure('2') do |config|
 
   define_clients(config, MACHINES)
 end
+
