@@ -17,6 +17,7 @@ REPO_ROOT = common.REPO_ROOT
 WORKTREE_POSIX = PurePosixPath("/srv/xray-p2p")
 GUEST_SCRIPTS_ROOT = WORKTREE_POSIX / "tests" / "guest"
 GUEST_SCRIPTS_SOURCE = REPO_ROOT / "tests" / "guest"
+ALPINE_GUEST_SCRIPTS_ROOT = PurePosixPath("/tmp/xray-p2p-tests/guest")
 GUEST_SCRIPTS_HASH_FILE = REPO_ROOT / "build" / ".openwrt_guest_scripts.hash"
 IPK_OUTPUT_DIR = REPO_ROOT / "build" / "ipk"
 IPK_OUTPUT_POSIX = WORKTREE_POSIX / "build" / "ipk"
@@ -24,6 +25,7 @@ BUILDER_VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "debian12" / "ipk-build"
 BUILDER_MACHINE = "deb12-ipk-build"
 OPENWRT_VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "openwrt"
 OPENWRT_MACHINES: tuple[str, ...] = ("openwrt-a", "openwrt-b", "openwrt-c")
+ALPINE_MACHINES: tuple[str, ...] = ("c1", "c2", "c3")
 DEFAULT_OPENWRT_MACHINE = OPENWRT_MACHINES[0]
 TARGET_ENV_VAR = "XP2P_OPENWRT_IPK_TARGET"
 DEFAULT_TARGET = "linux-amd64"
@@ -63,20 +65,20 @@ def _write_cached_scripts_hash(value: str) -> None:
     GUEST_SCRIPTS_HASH_FILE.write_text(value, encoding="utf-8")
 
 
-def _provision_guest_scripts(machine: str) -> None:
+def _provision_guest_scripts(machine: str, destination: PurePosixPath) -> None:
     common.ensure_machine_running(OPENWRT_VAGRANT_DIR, machine)
     command = [
         "vagrant",
         "upload",
         str(GUEST_SCRIPTS_SOURCE),
-        GUEST_SCRIPTS_ROOT.as_posix(),
+        destination.as_posix(),
         machine,
     ]
     try:
         subprocess.run(command, cwd=OPENWRT_VAGRANT_DIR, check=True, text=True, capture_output=True)
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
-            f"Failed to sync guest scripts into OpenWrt host {machine} via Vagrant.\n"
+            f"Failed to sync guest scripts into host {machine} via Vagrant.\n"
             f"STDOUT:\n{exc.stdout}\nSTDERR:\n{exc.stderr}"
         ) from exc
 
@@ -94,7 +96,9 @@ def ensure_guest_scripts_synced() -> None:
         return
     require_openwrt_environment()
     for machine in OPENWRT_MACHINES:
-        _provision_guest_scripts(machine)
+        _provision_guest_scripts(machine, GUEST_SCRIPTS_ROOT)
+    for machine in ALPINE_MACHINES:
+        _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
     if current_hash:
         _write_cached_scripts_hash(current_hash)
     _SCRIPTS_HASH_CACHE = current_hash
@@ -102,6 +106,16 @@ def ensure_guest_scripts_synced() -> None:
 
 def run_guest_script(host: Host, relative_path: str, *args: str):
     script_path = GUEST_SCRIPTS_ROOT / relative_path
+    quoted_script = shlex.quote(script_path.as_posix())
+    quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
+    command = f"/bin/sh {quoted_script}"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    return host.run(command)
+
+
+def run_alpine_guest_script(host: Host, relative_path: str, *args: str):
+    script_path = ALPINE_GUEST_SCRIPTS_ROOT / relative_path
     quoted_script = shlex.quote(script_path.as_posix())
     quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
     command = f"/bin/sh {quoted_script}"
@@ -130,6 +144,13 @@ def get_openwrt_host(machine: str) -> Host:
     return common.get_ssh_host(OPENWRT_VAGRANT_DIR, machine)
 
 
+def get_alpine_host(machine: str) -> Host:
+    if machine not in ALPINE_MACHINES:
+        raise ValueError(f"Unknown Alpine machine id: {machine}")
+    common.ensure_machine_running(OPENWRT_VAGRANT_DIR, machine)
+    return common.get_ssh_host(OPENWRT_VAGRANT_DIR, machine)
+
+
 def host_factory() -> Callable[[str], Host]:
     cache: dict[str, Host] = {}
 
@@ -140,6 +161,21 @@ def host_factory() -> Callable[[str], Host]:
             require_openwrt_environment()
             ensure_guest_scripts_synced()
             cache[machine] = get_openwrt_host(machine)
+        return cache[machine]
+
+    return _get
+
+
+def alpine_host_factory() -> Callable[[str], Host]:
+    cache: dict[str, Host] = {}
+
+    def _get(machine: str) -> Host:
+        if machine not in ALPINE_MACHINES:
+            raise ValueError(f"Unknown Alpine machine id: {machine}")
+        if machine not in cache:
+            require_openwrt_environment()
+            ensure_guest_scripts_synced()
+            cache[machine] = get_alpine_host(machine)
         return cache[machine]
 
     return _get

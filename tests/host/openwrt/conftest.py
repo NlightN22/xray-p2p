@@ -19,6 +19,12 @@ def openwrt_host_factory():
 
 
 @pytest.fixture(scope="session")
+def alpine_host_factory():
+    openwrt_env.require_openwrt_environment()
+    return openwrt_env.alpine_host_factory()
+
+
+@pytest.fixture(scope="session")
 def openwrt_host(openwrt_host_factory) -> Host:
     return openwrt_host_factory(openwrt_env.DEFAULT_OPENWRT_MACHINE)
 
@@ -31,6 +37,16 @@ def openwrt_server_host(openwrt_host_factory) -> Host:
 @pytest.fixture(scope="session")
 def openwrt_client_host(openwrt_host_factory) -> Host:
     return openwrt_host_factory(openwrt_env.OPENWRT_MACHINES[1])
+
+
+@pytest.fixture(scope="session")
+def alpine_c1_host(alpine_host_factory) -> Host:
+    return alpine_host_factory(openwrt_env.ALPINE_MACHINES[0])
+
+
+@pytest.fixture(scope="session")
+def alpine_c2_host(alpine_host_factory) -> Host:
+    return alpine_host_factory(openwrt_env.ALPINE_MACHINES[1])
 
 
 @pytest.fixture(scope="session")
