@@ -106,6 +106,42 @@ def _assert_server_state_reports_user(
     )
 
 
+def _assert_server_state_reports_users(
+    host,
+    expected_users: set[str],
+    *,
+    attempts: int = 10,
+    delay_seconds: float = 3.0,
+):
+    install_path = helpers.INSTALL_ROOT.as_posix()
+    expected = {user.strip().lower() for user in expected_users if user.strip()}
+    if not expected:
+        pytest.fail("expected_users is empty")
+    last_stdout = ""
+    for _ in range(attempts):
+        result = openwrt_env.run_xp2p(
+            host,
+            "server",
+            "state",
+            "--path",
+            install_path,
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p server state --once failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        last_stdout = result.stdout or ""
+        users = {user.strip().lower() for user in _extract_client_users(last_stdout)}
+        if expected.issubset(users):
+            return
+        time.sleep(delay_seconds)
+    pytest.fail(
+        "xp2p server state did not report all expected users "
+        f"{sorted(expected)} after {attempts} attempts.\nLast output:\n{last_stdout}"
+    )
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
@@ -319,6 +355,11 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     )
                     client_c_session.__enter__()
                     try:
+                        helpers.wait_for_heartbeat_state(server_host)
+                        _assert_server_state_reports_users(
+                            server_host,
+                            {default_cred["user"], "client-two@example.com"},
+                        )
                         for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
                             result = runner(
                                 "ping",
