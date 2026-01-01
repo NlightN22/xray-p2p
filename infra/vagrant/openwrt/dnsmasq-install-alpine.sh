@@ -12,12 +12,17 @@ ETH_IFACE="${ETH_IFACE:-eth1}"  # Interface to detect IPv4 from
 LOGFILE="/var/log/dnsmasq.log"
 # ------------------------------
 
-# 0) Require HOST_FQDN as first argument
+# 0) Require HOST name or FQDN as first argument
 if [ "$#" -lt 1 ] || [ -z "$1" ]; then
-  echo "Usage: $0 HOST_FQDN" >&2
+  echo "Usage: $0 HOSTNAME_OR_FQDN" >&2
   exit 1
 fi
-HOST_FQDN=$1
+HOST_INPUT=$1
+HOST_FQDN=$HOST_INPUT
+case "$HOST_INPUT" in
+  *.*) ;;
+  *) HOST_FQDN="${HOST_INPUT}.${ZONE}" ;;
+esac
 
 # 1) Determine privilege escalation helper
 if [ "$(id -u)" -eq 0 ]; then
