@@ -49,6 +49,7 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
     client_host = openwrt_host_factory(CLIENT_MACHINE)
     server_runner = _runner(server_host)
     client_runner = _runner(client_host)
+    client_primary_ip = helpers.detect_primary_ipv4(client_host)
 
     def cleanup():
         for host in (server_host, client_host):
@@ -110,6 +111,8 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             "server_install_path": helpers.INSTALL_ROOT.as_posix(),
             "reverse_tag": reverse_tag,
             "endpoint_tag": endpoint_tag,
+            "client_user": credential["user"],
+            "client_primary_ip": client_primary_ip,
         }
     finally:
         cleanup()
@@ -123,6 +126,8 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
     nat_added = False
     diag_started = False
 
+    _alpine_guest(alpine_c1_host, "scripts/linux/ensure_route.sh", "10.0.102.0/24", C1_LAN_GATEWAY)
+    _alpine_guest(alpine_c2_host, "scripts/linux/ensure_route.sh", "10.0.101.0/24", "10.0.102.1")
     c1_ip = _alpine_guest(alpine_c1_host, "scripts/linux/get_interface_ip.sh", "eth1").stdout.strip()
     _alpine_guest(alpine_c1_host, "scripts/linux/start_xp2p_diag.sh", DIAG_LISTEN, "tcp")
     diag_started = True
@@ -237,9 +242,17 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
                 "1",
             )
             if c2_ping.rc != 0:
+                c2_net_dump = openwrt_env.run_alpine_guest_script(
+                    alpine_c2_host, "scripts/linux/net_dump.sh"
+                )
+                client_nat = client_runner("nat-redirect", "list", check=False).stdout or ""
+                client_chain = chain_environment["client_host"].run("nft list table inet fw4 || true")
                 pytest.fail(
                     "c2 -> c1 ping failed.\n"
                     f"STDOUT:\n{c2_ping.stdout}\nSTDERR:\n{c2_ping.stderr}"
+                    f"\nClient nat-redirect:\n{client_nat}"
+                    f"\nClient nft:\n{client_chain.stdout}\n{client_chain.stderr}"
+                    f"\nC2 net dump:\n{c2_net_dump.stdout}\n{c2_net_dump.stderr}"
                 )
     finally:
         if nat_added:
@@ -261,3 +274,142 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             )
         if diag_started:
             _alpine_guest(alpine_c1_host, "scripts/linux/stop_xp2p_diag.sh")
+
+
+def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_host):
+    server_runner = chain_environment["server_runner"]
+    reverse_tag = chain_environment["reverse_tag"]
+    endpoint_tag = chain_environment["endpoint_tag"]
+    client_user = chain_environment["client_user"]
+    client_primary_ip = chain_environment["client_primary_ip"]
+    server_redirect_cidr = None
+    redirect_added = False
+    nat_added = False
+    diag_started = False
+    server_host = chain_environment["server_host"]
+
+    _alpine_guest(alpine_c1_host, "scripts/linux/ensure_route.sh", "10.0.102.0/24", C1_LAN_GATEWAY)
+    _alpine_guest(alpine_c2_host, "scripts/linux/ensure_route.sh", "10.0.101.0/24", "10.0.102.1")
+    c2_ip = _alpine_guest(alpine_c2_host, "scripts/linux/get_interface_ip.sh", "eth1").stdout.strip()
+    server_redirect_cidr = f"{c2_ip}/32"
+    _alpine_guest(alpine_c2_host, "scripts/linux/start_xp2p_diag.sh", DIAG_LISTEN, "tcp")
+    diag_started = True
+
+    try:
+        base_ping = openwrt_env.run_alpine_guest_script(
+            alpine_c1_host,
+            "scripts/linux/xp2p_ping.sh",
+            c2_ip,
+            "--count",
+            "1",
+        )
+        if base_ping.rc == 0:
+            pytest.fail(
+                "expected ping to fail without reverse redirect.\n"
+                f"STDOUT:\n{base_ping.stdout}\nSTDERR:\n{base_ping.stderr}"
+            )
+
+        server_runner(
+            "server",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cidr",
+            server_redirect_cidr,
+            "--tag",
+            reverse_tag,
+            check=True,
+        )
+        redirect_added = True
+        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        helpers.assert_server_redirect_state(server_state, server_redirect_cidr, reverse_tag)
+        helpers.assert_server_redirect_rule(server_routing, server_redirect_cidr, reverse_tag)
+
+        server_runner(
+            "nat-redirect",
+            "add",
+            "--subnet",
+            server_redirect_cidr,
+            "--quiet",
+            check=True,
+        )
+        nat_added = True
+
+        with openwrt_env.xp2p_run_session(
+            chain_environment["server_host"],
+            "server",
+            chain_environment["server_install_path"],
+            helpers.SERVER_CONFIG_DIR_NAME,
+            helpers.SERVER_LOG_FILE,
+        ), openwrt_env.xp2p_run_session(
+            chain_environment["client_host"],
+            "client",
+            helpers.INSTALL_ROOT.as_posix(),
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            helpers.CLIENT_LOG_FILE,
+        ):
+            time.sleep(2.0)
+            tunnel_common.wait_for_alive_entry(
+                server_runner,
+                "server",
+                chain_environment["server_install_path"],
+                endpoint_tag,
+                SERVER_TUNNEL_IP,
+                client_user,
+                client_primary_ip,
+            )
+
+            c1_ping = openwrt_env.run_alpine_guest_script(
+                alpine_c1_host,
+                "scripts/linux/xp2p_ping.sh",
+                c2_ip,
+                "--count",
+                "1",
+            )
+            if c1_ping.rc != 0:
+                c1_net_dump = openwrt_env.run_alpine_guest_script(
+                    alpine_c1_host, "scripts/linux/net_dump.sh"
+                )
+                server_state_output = server_runner(
+                    "server", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
+                ).stdout or ""
+                client_state_output = chain_environment["client_runner"](
+                    "client", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
+                ).stdout or ""
+                server_nat = server_runner("nat-redirect", "list", check=False).stdout or ""
+                server_chain = server_host.run("nft list table inet fw4 || true")
+                client_chain = chain_environment["client_host"].run("nft list table inet fw4 || true")
+                pytest.fail(
+                    "c1 -> c2 reverse ping failed.\n"
+                    f"STDOUT:\n{c1_ping.stdout}\nSTDERR:\n{c1_ping.stderr}"
+                    f"\nC1 net dump:\n{c1_net_dump.stdout}\n{c1_net_dump.stderr}"
+                    f"\nServer state:\n{server_state_output}"
+                    f"\nClient state:\n{client_state_output}"
+                    f"\nServer nat-redirect:\n{server_nat}"
+                    f"\nServer nft:\n{server_chain.stdout}\n{server_chain.stderr}"
+                    f"\nClient nft:\n{client_chain.stdout}\n{client_chain.stderr}"
+                )
+    finally:
+        if nat_added:
+            server_runner("nat-redirect", "remove", "--all", check=False)
+        if redirect_added:
+            server_runner(
+                "server",
+                "redirect",
+                "remove",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--cidr",
+                server_redirect_cidr,
+                "--tag",
+                reverse_tag,
+                check=False,
+            )
+        if diag_started:
+            _alpine_guest(alpine_c2_host, "scripts/linux/stop_xp2p_diag.sh")

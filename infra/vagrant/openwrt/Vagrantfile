@@ -69,6 +69,39 @@ EOF
         ip route del default dev eth0 2>/dev/null || true
       SHELL
 
+      c.vm.provision 'shell', name: 'Enforce eth1 default route', run: 'always', inline: <<-SHELL
+        set -ex
+        mkdir -p /usr/local/sbin
+        cat <<'EOF' >/usr/local/sbin/xp2p-fix-routes
+#!/bin/sh
+set -eu
+ip route del default dev eth0 2>/dev/null || true
+if ! ip route show default 2>/dev/null | grep -q "dev eth1"; then
+  addr=$(ip -o -4 addr show dev eth1 | awk '{print $4}' | cut -d/ -f1 | head -n1)
+  if [ -n "$addr" ]; then
+    gw=$(echo "$addr" | awk -F. '{print $1 "." $2 "." $3 ".1"}')
+    ip route replace default via "$gw" dev eth1 metric 100 || true
+  fi
+fi
+EOF
+        chmod +x /usr/local/sbin/xp2p-fix-routes
+        ls -l /usr/local/sbin/xp2p-fix-routes
+        mkdir -p /etc/local.d
+        cat <<'EOF' >/etc/local.d/xp2p-routes.start
+#!/bin/sh
+/usr/local/sbin/xp2p-fix-routes || true
+EOF
+        chmod +x /etc/local.d/xp2p-routes.start
+        ls -l /etc/local.d/xp2p-routes.start
+        if command -v rc-update >/dev/null 2>&1; then
+          rc-update add local default || true
+        fi
+        if command -v rc-service >/dev/null 2>&1; then
+          rc-service local restart || true
+        fi
+        /usr/local/sbin/xp2p-fix-routes || true
+      SHELL
+
       c.vm.provision 'shell', name: 'Check default route', run: 'always', inline: <<-SHELL
         set -ex
         routes=$(ip route show | grep default)
