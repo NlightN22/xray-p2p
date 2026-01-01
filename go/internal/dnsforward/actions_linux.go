@@ -20,22 +20,29 @@ func (m *Manager) upsertDNSMasq(domain, server string) error {
 }
 
 func (m *Manager) ensureIntercept() error {
-	if m.interceptPresent() {
-		return nil
-	}
-	name := "xp2p_dns_intercept"
-	if err := runCommand("uci", "set", fmt.Sprintf("firewall.%s=redirect", name)); err != nil {
+	section, err := m.findInterceptSection()
+	if err != nil {
 		return err
 	}
+	if section != "" {
+		return nil
+	}
+	created, err := captureCommand("uci", "add", "firewall", "redirect")
+	if err != nil {
+		return err
+	}
+	section = strings.TrimSpace(created)
+	if section == "" {
+		return fmt.Errorf("xp2p: unable to create firewall redirect section")
+	}
 	commands := []string{
-		fmt.Sprintf("firewall.%s.name=xp2p_dns_intercept", name),
-		fmt.Sprintf("firewall.%s.src=lan", name),
-		fmt.Sprintf("firewall.%s.src_dport=53", name),
-		fmt.Sprintf("firewall.%s.dest_port=53", name),
-		fmt.Sprintf("firewall.%s.dest_ip=127.0.0.1", name),
-		fmt.Sprintf("firewall.%s.proto=tcpudp", name),
-		fmt.Sprintf("firewall.%s.target=DNAT", name),
-		fmt.Sprintf("firewall.%s.xp2p=1", name),
+		fmt.Sprintf("firewall.%s.name=Intercept-DNS", section),
+		fmt.Sprintf("firewall.%s.family=any", section),
+		fmt.Sprintf("firewall.%s.proto=tcp udp", section),
+		fmt.Sprintf("firewall.%s.src=lan", section),
+		fmt.Sprintf("firewall.%s.src_dport=53", section),
+		fmt.Sprintf("firewall.%s.target=DNAT", section),
+		fmt.Sprintf("firewall.%s.dest_port=53", section),
 	}
 	for _, cmd := range commands {
 		if err := runCommand("uci", "set", cmd); err != nil {
@@ -46,27 +53,62 @@ func (m *Manager) ensureIntercept() error {
 }
 
 func (m *Manager) removeIntercept() error {
-	name := "xp2p_dns_intercept"
-	return runCommand("uci", "delete", fmt.Sprintf("firewall.%s", name))
+	sections, err := m.findInterceptSections()
+	if err != nil {
+		return err
+	}
+	for _, section := range sections {
+		if err := runCommand("uci", "delete", fmt.Sprintf("firewall.%s", section)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *Manager) interceptPresent() bool {
-	out, err := captureCommand("uci", "show", "firewall")
+	section, err := m.findInterceptSection()
 	if err != nil {
 		return false
 	}
+	return section != ""
+}
+
+func (m *Manager) findInterceptSection() (string, error) {
+	sections, err := m.findInterceptSections()
+	if err != nil {
+		return "", err
+	}
+	if len(sections) == 0 {
+		return "", nil
+	}
+	return sections[0], nil
+}
+
+func (m *Manager) findInterceptSections() ([]string, error) {
+	out, err := captureCommand("uci", "show", "firewall")
+	if err != nil {
+		return nil, err
+	}
 	lines := strings.Split(out, "\n")
+	sections := make([]string, 0)
 	for _, line := range lines {
-		if strings.Contains(line, "firewall.xp2p_dns_intercept") {
-			if strings.HasSuffix(line, "=redirect") {
-				return true
-			}
+		line = strings.TrimSpace(line)
+		if !strings.Contains(line, ".name=") {
+			continue
 		}
-		if strings.Contains(line, "xp2p_dns_intercept.xp2p='1'") {
-			return true
+		if !strings.HasSuffix(line, "='Intercept-DNS'") && !strings.HasSuffix(line, "=\"Intercept-DNS\"") {
+			continue
+		}
+		prefix := strings.SplitN(line, ".name=", 2)
+		if len(prefix) != 2 {
+			continue
+		}
+		section := strings.TrimPrefix(prefix[0], "firewall.")
+		if section != "" {
+			sections = append(sections, section)
 		}
 	}
-	return false
+	return sections, nil
 }
 
 func (m *Manager) commitDNS() error {

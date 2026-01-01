@@ -51,6 +51,7 @@ func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	var withForward bool
 	var intercept bool
 	var quiet bool
+	var debug bool
 
 	cmd := &cobra.Command{
 		Use:   "add",
@@ -70,7 +71,9 @@ func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 			})
 			if err != nil {
 				logging.Error("xp2p dns-forward add failed", "err", err)
-				logDiagnostics(manager, intercept)
+				if debug {
+					logDiagnostics(manager, intercept)
+				}
 				return exitError{code: 1}
 			}
 			logging.Info("xp2p dns-forward added",
@@ -89,6 +92,7 @@ func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	flags.BoolVar(&withForward, "with-forward", false, "create or reuse a port forward for the target")
 	flags.BoolVar(&intercept, "intercept", false, "install DNS intercept redirect (53/tcp,udp)")
 	flags.BoolVar(&quiet, "quiet", false, "suppress interactive prompts")
+	flags.BoolVar(&debug, "debug", false, "emit diagnostics output on error")
 	_ = cmd.MarkFlagRequired("domain")
 	_ = cmd.MarkFlagRequired("target")
 	return cmd
@@ -100,6 +104,7 @@ func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	var intercept bool
 	var all bool
 	var quiet bool
+	var debug bool
 
 	cmd := &cobra.Command{
 		Use:   "remove",
@@ -119,7 +124,9 @@ func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 			})
 			if err != nil {
 				logging.Error("xp2p dns-forward remove failed", "err", err)
-				logDiagnostics(manager, intercept)
+				if debug {
+					logDiagnostics(manager, intercept)
+				}
 				return exitError{code: 1}
 			}
 			logging.Info("xp2p dns-forward removed", "domains", strings.Join(removed, ","))
@@ -132,10 +139,12 @@ func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	flags.BoolVar(&intercept, "intercept", false, "remove DNS intercept redirect")
 	flags.BoolVar(&all, "all", false, "remove all managed DNS forward entries")
 	flags.BoolVar(&quiet, "quiet", false, "suppress interactive prompts")
+	flags.BoolVar(&debug, "debug", false, "emit diagnostics output on error")
 	return cmd
 }
 
 func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
+	var debug bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List managed DNS forwards",
@@ -148,7 +157,9 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 			entries, _, err := manager.List()
 			if err != nil {
 				logging.Error("xp2p dns-forward list failed", "err", err)
-				logDiagnostics(manager, false)
+				if debug {
+					logDiagnostics(manager, false)
+				}
 				return exitError{code: 1}
 			}
 			if len(entries) == 0 {
@@ -164,6 +175,7 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&debug, "debug", false, "emit diagnostics output on error")
 	return cmd
 }
 
