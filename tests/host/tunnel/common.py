@@ -58,17 +58,17 @@ def parse_state_rows(output: str) -> list[dict[str, str]]:
     return rows
 
 
-def forward_entry_for_target(entries: Iterable[dict], target_ip: str, target_port: int) -> dict:
-    normalized_ip = target_ip.strip()
+def forward_entry_for_target(entries: Iterable[dict], target_host: str, target_port: int) -> dict:
+    normalized_host = target_host.strip()
     normalized_port = int(target_port)
     for entry in entries or []:
         if not isinstance(entry, dict):
             continue
-        recorded_ip = (entry.get("target_ip") or entry.get("targetIP") or "").strip()
+        recorded_host = (entry.get("target_host") or "").strip()
         recorded_port = int(entry.get("target_port") or entry.get("targetPort") or 0)
-        if recorded_ip == normalized_ip and recorded_port == normalized_port:
+        if recorded_host == normalized_host and recorded_port == normalized_port:
             return entry
-    raise AssertionError(f"Forward entry targeting {target_ip}:{target_port} not found in state")
+    raise AssertionError(f"Forward entry targeting {target_host}:{target_port} not found in state")
 
 
 def listen_port_from_entry(entry: dict) -> int:

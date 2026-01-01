@@ -19,14 +19,14 @@ func (m *Manager) ensureForward(addr netip.Addr, port int, state state) (forward
 	}
 
 	for _, rule := range forwards {
-		if rule.TargetIP == addr.String() && rule.TargetPort == port && rule.Protocol.RequiresUDP() {
+		if rule.TargetHost == addr.String() && rule.TargetPort == port && rule.Protocol.RequiresUDP() {
 			return rule, false, nil
 		}
 	}
 
 	if existing, ok := stateEntryForTarget(state, addr, port); ok {
 		for _, rule := range forwards {
-			if rule.ListenPort == existing.ForwardListenPort && rule.TargetIP == addr.String() && rule.Protocol.RequiresUDP() {
+			if rule.ListenPort == existing.ForwardListenPort && rule.TargetHost == addr.String() && rule.Protocol.RequiresUDP() {
 				return rule, false, nil
 			}
 		}

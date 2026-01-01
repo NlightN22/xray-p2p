@@ -49,7 +49,7 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 		t.Fatalf("expected 1 forward entry, got %d", len(state.Forwards))
 	}
 	entry := state.Forwards[0]
-	if entry.TargetIP != "192.0.2.10" || entry.TargetPort != 8080 {
+	if entry.TargetHost != "192.0.2.10" || entry.TargetPort != 8080 {
 		t.Fatalf("unexpected target %+v", entry)
 	}
 	if entry.Protocol != forward.ProtocolTCP {

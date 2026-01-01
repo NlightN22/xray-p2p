@@ -143,7 +143,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             forwards,
             listen_port=FORWARD_BASE_PORT,
             listen_address="127.0.0.1",
-            target_ip=first_target_ip,
+            target_host=first_target_ip,
             target_port=first_target_port,
             protocol="both",
         )
@@ -154,7 +154,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             client_inbounds,
             first_port,
             listen_address="127.0.0.1",
-            target_ip=first_target_ip,
+            target_host=first_target_ip,
             target_port=first_target_port,
             protocol="both",
         )
@@ -191,7 +191,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             forwards,
             listen_port=explicit_port,
             listen_address="127.0.0.1",
-            target_ip=explicit_target_ip,
+            target_host=explicit_target_ip,
             target_port=explicit_target_port,
             protocol="tcp",
         )
@@ -201,7 +201,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             client_inbounds,
             explicit_port,
             listen_address="127.0.0.1",
-            target_ip=explicit_target_ip,
+            target_host=explicit_target_ip,
             target_port=explicit_target_port,
             protocol="tcp",
         )
@@ -228,7 +228,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             forwards,
             listen_port=second_port,
             listen_address="127.0.0.1",
-            target_ip=second_target_ip,
+            target_host=second_target_ip,
             target_port=second_target_port,
             protocol="udp",
         )
@@ -237,7 +237,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             client_inbounds,
             second_port,
             listen_address="127.0.0.1",
-            target_ip=second_target_ip,
+            target_host=second_target_ip,
             target_port=second_target_port,
             protocol="udp",
         )
@@ -323,7 +323,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             forwards,
             listen_port=FORWARD_BASE_PORT,
             listen_address="127.0.0.1",
-            target_ip=first_target_ip,
+            target_host=first_target_ip,
             target_port=first_target_port,
             protocol="both",
         )
@@ -334,7 +334,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             server_inbounds,
             first_port,
             listen_address="127.0.0.1",
-            target_ip=first_target_ip,
+            target_host=first_target_ip,
             target_port=first_target_port,
             protocol="both",
         )
@@ -361,7 +361,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             forwards,
             listen_port=explicit_port,
             listen_address="127.0.0.1",
-            target_ip=explicit_target_ip,
+            target_host=explicit_target_ip,
             target_port=explicit_target_port,
             protocol="tcp",
         )
@@ -371,7 +371,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             server_inbounds,
             explicit_port,
             listen_address="127.0.0.1",
-            target_ip=explicit_target_ip,
+            target_host=explicit_target_ip,
             target_port=explicit_target_port,
             protocol="tcp",
         )
@@ -398,7 +398,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             forwards,
             listen_port=second_port,
             listen_address="127.0.0.1",
-            target_ip=second_target_ip,
+            target_host=second_target_ip,
             target_port=second_target_port,
             protocol="udp",
         )
@@ -407,7 +407,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             server_inbounds,
             second_port,
             listen_address="127.0.0.1",
-            target_ip=second_target_ip,
+            target_host=second_target_ip,
             target_port=second_target_port,
             protocol="udp",
         )

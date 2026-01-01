@@ -5,6 +5,8 @@ package server
 import (
 	"errors"
 	"fmt"
+	"net/netip"
+	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 )
@@ -41,7 +43,7 @@ type ForwardListOptions struct {
 
 // AddForward registers a dokodemo-door forward in server configuration.
 func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
-	targetAddr, targetPort, err := forward.ParseTarget(opts.Target)
+	targetHost, targetPort, err := forward.ParseTarget(opts.Target)
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
@@ -95,11 +97,11 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	rule := forward.Rule{
 		ListenAddress: listenAddr,
 		ListenPort:    listenPort,
-		TargetIP:      targetAddr.String(),
+		TargetHost:    targetHost,
 		TargetPort:    targetPort,
 		Protocol:      proto,
 		Tag:           forward.TagForPort(listenPort),
-		Remark:        forward.BuildRemark(targetAddr.String(), targetPort),
+		Remark:        forward.BuildRemark(targetHost, targetPort),
 	}
 	if err := store.add(rule); err != nil {
 		return ForwardAddResult{}, err
@@ -109,6 +111,11 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	}
 	if err := store.saveForwards(); err != nil {
 		return ForwardAddResult{}, err
+	}
+
+	var targetAddr netip.Addr
+	if parsed, err := netip.ParseAddr(strings.TrimSpace(targetHost)); err == nil {
+		targetAddr = parsed
 	}
 
 	return ForwardAddResult{

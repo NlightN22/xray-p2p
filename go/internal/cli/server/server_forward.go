@@ -52,7 +52,7 @@ func newServerForwardAddCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.String("path", "", "server installation directory")
 	flags.String("config-dir", "", "server configuration directory name or absolute path")
-	flags.String("target", "", "target IP:port to forward traffic to")
+	flags.String("target", "", "target host:port to forward traffic to")
 	flags.String("listen", "", "local listen address (default 127.0.0.1)")
 	flags.Int("listen-port", 0, "local listen port (auto-select when omitted)")
 	flags.String("proto", "", "protocol to forward (tcp, udp, both)")
@@ -103,7 +103,7 @@ func runServerForwardAdd(_ context.Context, cfg config.Config, args []string) in
 
 	path := fs.String("path", "", "server installation directory")
 	configDir := fs.String("config-dir", "", "server configuration directory name or absolute path")
-	target := fs.String("target", "", "target IP:port to forward traffic to")
+	target := fs.String("target", "", "target host:port to forward traffic to")
 	listen := fs.String("listen", "", "local listen address")
 	listenPort := fs.Int("listen-port", 0, "local listen port")
 	proto := fs.String("proto", "", "protocol to forward (tcp, udp, both)")
@@ -245,8 +245,8 @@ func runServerForwardList(_ context.Context, cfg config.Config, args []string) i
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(writer, "LISTEN\tPROTOCOLS\tTARGET\tREMARK")
 	for _, rule := range rules {
-		fmt.Fprintf(writer, "%s:%d\t%s\t%s:%d\t%s\n",
-			rule.ListenAddress, rule.ListenPort, rule.NetworkValue(), rule.TargetIP, rule.TargetPort, rule.Remark)
+		fmt.Fprintf(writer, "%s:%d\t%s\t%s\t%s\n",
+			rule.ListenAddress, rule.ListenPort, rule.NetworkValue(), rule.Target(), rule.Remark)
 	}
 	_ = writer.Flush()
 	return 0

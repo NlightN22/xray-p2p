@@ -32,7 +32,7 @@ const (
 type Rule struct {
 	ListenAddress string   `json:"listen_address"`
 	ListenPort    int      `json:"listen_port"`
-	TargetIP      string   `json:"target_ip"`
+	TargetHost    string   `json:"target_host"`
 	TargetPort    int      `json:"target_port"`
 	Protocol      Protocol `json:"protocol"`
 	Tag           string   `json:"tag"`
@@ -84,7 +84,7 @@ func (r Rule) InboundMap() map[string]any {
 		"port":     r.ListenPort,
 		"protocol": "dokodemo-door",
 		"settings": map[string]any{
-			"address":        r.TargetIP,
+			"address":        r.TargetHost,
 			"port":           r.TargetPort,
 			"network":        r.NetworkValue(),
 			"followRedirect": false,
@@ -104,14 +104,14 @@ func (r Rule) NetworkValue() string {
 	}
 }
 
-// Target renders the target IP:port combination.
+// Target renders the target host:port combination.
 func (r Rule) Target() string {
-	return net.JoinHostPort(r.TargetIP, strconv.Itoa(r.TargetPort))
+	return net.JoinHostPort(r.TargetHost, strconv.Itoa(r.TargetPort))
 }
 
 // BuildRemark renders the canonical remark for a forward entry.
-func BuildRemark(ip string, port int) string {
-	return fmt.Sprintf("forward:%s:%d", ip, port)
+func BuildRemark(host string, port int) string {
+	return fmt.Sprintf("forward:%s:%d", host, port)
 }
 
 // TagForPort renders the canonical inbound tag.
@@ -119,17 +119,25 @@ func TagForPort(port int) string {
 	return fmt.Sprintf("in_%d", port)
 }
 
-// ParseTarget validates IP:port syntax and returns normalized components.
-func ParseTarget(value string) (netip.Addr, int, error) {
+// ParseTarget validates host:port syntax and returns normalized components.
+func ParseTarget(value string) (string, int, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return netip.Addr{}, 0, errors.New("xp2p: --target is required")
+		return "", 0, errors.New("xp2p: --target is required")
 	}
-	addrPort, err := netip.ParseAddrPort(trimmed)
+	host, portValue, err := net.SplitHostPort(trimmed)
 	if err != nil {
-		return netip.Addr{}, 0, fmt.Errorf("xp2p: invalid --target %q: %w", value, err)
+		return "", 0, fmt.Errorf("xp2p: invalid --target %q: %w", value, err)
 	}
-	return addrPort.Addr(), int(addrPort.Port()), nil
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return "", 0, errors.New("xp2p: --target host is required")
+	}
+	port, err := strconv.Atoi(portValue)
+	if err != nil || port < 1 || port > 65535 {
+		return "", 0, fmt.Errorf("xp2p: invalid --target port %q", portValue)
+	}
+	return host, port, nil
 }
 
 // NormalizeListenAddress validates the listen address or falls back to default.

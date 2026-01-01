@@ -241,9 +241,9 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
         )
         client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
         for entry in client_state.get("forwards") or []:
-            recorded_ip = (entry.get("target_ip") or entry.get("targetIP") or "").strip()
+            recorded_host = (entry.get("target_host") or "").strip()
             recorded_port = int(entry.get("target_port") or entry.get("targetPort") or 0)
-            if recorded_ip in {SERVER_IP, SERVER_DOMAIN} and recorded_port == SERVER_DIAGNOSTICS_PORT:
+            if recorded_host in {SERVER_IP, SERVER_DOMAIN} and recorded_port == SERVER_DIAGNOSTICS_PORT:
                 listen_port = tunnel_common.listen_port_from_entry(entry)
                 break
         assert listen_port == CLIENT_FORWARD_PORT

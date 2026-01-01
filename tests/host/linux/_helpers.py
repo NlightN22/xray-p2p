@@ -491,10 +491,10 @@ def expected_forward_tag(port: int) -> str:
     return f"in_{int(port)}"
 
 
-def expected_forward_remark(ip: str, port: int) -> str:
-    trimmed = ip.strip()
+def expected_forward_remark(host: str, port: int) -> str:
+    trimmed = host.strip()
     if not trimmed:
-        raise AssertionError("Target IP is empty")
+        raise AssertionError("Target host is empty")
     return f"forward:{trimmed}:{int(port)}"
 
 
@@ -512,13 +512,13 @@ def assert_forward_rule_entry(
     listen_port: int,
     *,
     listen_address: str,
-    target_ip: str,
+    target_host: str,
     target_port: int,
     protocol: str,
 ) -> dict:
     listen = listen_port
     addr = listen_address.strip()
-    ip = target_ip.strip()
+    host = target_host.strip()
     proto = (protocol or "").strip().lower() or "both"
     for entry in entries or []:
         if not isinstance(entry, dict):
@@ -527,19 +527,19 @@ def assert_forward_rule_entry(
         if recorded_port != listen:
             continue
         recorded_addr = (entry.get("listen_address") or entry.get("listenAddress") or "").strip()
-        recorded_ip = (entry.get("target_ip") or entry.get("targetIP") or "").strip()
+        recorded_host = (entry.get("target_host") or "").strip()
         recorded_port_target = int(entry.get("target_port") or entry.get("targetPort") or 0)
         recorded_proto = (entry.get("protocol") or "").strip().lower()
         if recorded_addr != addr:
             continue
-        if recorded_ip != ip:
+        if recorded_host != host:
             continue
         if recorded_port_target != target_port:
             continue
         if recorded_proto != proto:
             continue
         return entry
-    raise AssertionError(f"Forward entry on {addr}:{listen} targeting {ip}:{target_port} not found")
+    raise AssertionError(f"Forward entry on {addr}:{listen} targeting {host}:{target_port} not found")
 
 
 def assert_no_forward_rule_entry(entries: list[dict], listen_port: int) -> None:
@@ -556,12 +556,12 @@ def assert_forward_inbound_entry(
     listen_port: int,
     *,
     listen_address: str,
-    target_ip: str,
+    target_host: str,
     target_port: int,
     protocol: str,
 ) -> None:
     listen = listen_address.strip()
-    ip = target_ip.strip()
+    host = target_host.strip()
     network = forward_network_value(protocol)
     for entry in data.get("inbounds", []) or []:
         if not isinstance(entry, dict):
@@ -574,10 +574,10 @@ def assert_forward_inbound_entry(
         if recorded_listen != listen:
             continue
         settings = entry.get("settings") or {}
-        recorded_ip = (settings.get("address") or "").strip()
+        recorded_host = (settings.get("address") or "").strip()
         recorded_port = int(settings.get("port") or 0)
         recorded_network = (settings.get("network") or "").strip().lower()
-        if recorded_ip == ip and recorded_port == target_port and recorded_network == network:
+        if recorded_host == host and recorded_port == target_port and recorded_network == network:
             return
     raise AssertionError(f"dokodemo-door inbound on {listen}:{listen_port} not found")
 

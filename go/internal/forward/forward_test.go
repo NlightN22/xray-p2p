@@ -49,7 +49,7 @@ func TestRuleHelpers(t *testing.T) {
 	rule := Rule{
 		ListenAddress: "127.0.0.1",
 		ListenPort:    60022,
-		TargetIP:      "192.0.2.10",
+		TargetHost:    "192.0.2.10",
 		TargetPort:    22,
 		Protocol:      ProtocolBoth,
 		Tag:           "in_60022",
@@ -58,7 +58,7 @@ func TestRuleHelpers(t *testing.T) {
 	if v := rule.Target(); v != "192.0.2.10:22" {
 		t.Fatalf("Target() = %s", v)
 	}
-	if BuildRemark(rule.TargetIP, rule.TargetPort) != "forward:192.0.2.10:22" {
+	if BuildRemark(rule.TargetHost, rule.TargetPort) != "forward:192.0.2.10:22" {
 		t.Fatalf("BuildRemark mismatch")
 	}
 	if TagForPort(12345) != "in_12345" {
@@ -81,12 +81,12 @@ func TestRuleHelpers(t *testing.T) {
 }
 
 func TestParseTarget(t *testing.T) {
-	addr, port, err := ParseTarget("192.0.2.10:443")
+	host, port, err := ParseTarget("edge.example.test:443")
 	if err != nil {
 		t.Fatalf("ParseTarget error: %v", err)
 	}
-	if addr.String() != "192.0.2.10" || port != 443 {
-		t.Fatalf("ParseTarget mismatch %s %d", addr, port)
+	if host != "edge.example.test" || port != 443 {
+		t.Fatalf("ParseTarget mismatch %s %d", host, port)
 	}
 	if _, _, err := ParseTarget("not-a-port"); err == nil {
 		t.Fatalf("expected error for invalid target")

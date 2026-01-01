@@ -489,13 +489,13 @@ def _assert_rebind_allowed(output: str, base_domain: str) -> None:
     assert base_domain in output
 
 
-def _detect_forward_port(host, target_ip: str, target_port: int = 53, role: str = "client") -> str:
+def _detect_forward_port(host, target_host: str, target_port: int = 53, role: str = "client") -> str:
     cmd = "/usr/bin/xp2p client forward list" if role == "client" else "/usr/bin/xp2p server forward list"
     list_res = host.run(cmd)
     assert list_res.rc == 0, f"forward list failed: {list_res.stderr}"
     output = list_res.stdout or ""
-    # Expect a line like: "127.0.0.1:53331  tcp   <target_ip>:<port>"
-    pattern = rf"127\.0\.0\.1:(\d+)\s+\S+\s+{re.escape(target_ip)}:{target_port}"
+    # Expect a line like: "127.0.0.1:53331  tcp   <target_host>:<port>"
+    pattern = rf"127\.0\.0\.1:(\d+)\s+\S+\s+{re.escape(target_host)}:{target_port}"
     match = re.search(pattern, output)
     assert match, f"could not detect forward port in output:\n{output}"
     return match.group(1)

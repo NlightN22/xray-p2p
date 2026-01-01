@@ -321,7 +321,7 @@ func selectForward(forwards []forward.Rule, quiet bool) (forward.Rule, bool, err
 
 	fmt.Println("Select a forward to use for DNS:")
 	for i, fwd := range forwards {
-		fmt.Printf("%d) %s:%d -> %s:%d (%s)\n", i+1, fwd.ListenAddress, fwd.ListenPort, fwd.TargetIP, fwd.TargetPort, fwd.NetworkValue())
+		fmt.Printf("%d) %s:%d -> %s (%s)\n", i+1, fwd.ListenAddress, fwd.ListenPort, fwd.Target(), fwd.NetworkValue())
 	}
 	reader := bufio.NewReader(os.Stdin)
 	for {

@@ -29,7 +29,7 @@ func TestRunServerForwardAddSuccess(t *testing.T) {
 			Rule: forward.Rule{
 				ListenAddress: "0.0.0.0",
 				ListenPort:    60022,
-				TargetIP:      "192.0.2.10",
+				TargetHost:    "192.0.2.10",
 				TargetPort:    22,
 				Remark:        "ssh",
 				Protocol:      forward.ProtocolTCP,
@@ -86,7 +86,7 @@ func TestRunServerForwardListOutputs(t *testing.T) {
 			{
 				ListenAddress: "127.0.0.1",
 				ListenPort:    60022,
-				TargetIP:      "192.0.2.10",
+				TargetHost:    "192.0.2.10",
 				TargetPort:    22,
 				Protocol:      forward.ProtocolTCP,
 				Remark:        "ssh",
