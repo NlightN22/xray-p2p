@@ -6,6 +6,7 @@ import pytest
 
 from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
+from tests.host.tunnel import common as tunnel_common
 
 DOMAIN = "srv.test.lan"
 SERVER_DOMAIN = "srv-side.test.lan"
@@ -13,6 +14,10 @@ BASE_DOMAIN = "test.lan"
 DNS_IP = "10.123.45.67"
 SERVER_TUN_IP = "10.63.30.11"
 CLIENT_TUN_IP = "10.63.30.12"
+CORP_DOMAIN = "corp.test.com"
+C1_FQDN = "c1.corp.test.com"
+C1_DNS_IP = "10.0.101.132"
+C1_DIAG_LISTEN = "0.0.0.0:62022"
 
 
 @pytest.fixture(scope="module")
@@ -191,6 +196,89 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         _remove_dns_record(openwrt_server_host, SERVER_DOMAIN, DNS_IP)
         _remove_dns_record(openwrt_client_host, SERVER_DOMAIN, DNS_IP)
         _reset_dnsforward_state(openwrt_server_host)
+
+
+def test_dns_forward_openwrt_b_with_c1_c2(
+    openwrt_server_host,
+    openwrt_client_host,
+    alpine_c1_host,
+    alpine_c2_host,
+    xp2p_on_both,
+):
+    dns_forward_added = False
+    diag_started = False
+    dnsmasq_ready = False
+    try:
+        _alpine_guest(alpine_c1_host, "scripts/linux/setup_dnsmasq_alpine.sh", C1_FQDN)
+        dnsmasq_ready = True
+        _alpine_guest(alpine_c1_host, "scripts/linux/start_xp2p_diag.sh", C1_DIAG_LISTEN, "tcp")
+        diag_started = True
+
+        lookup_direct = openwrt_server_host.run(f"nslookup {C1_FQDN} {C1_DNS_IP} || true")
+        assert C1_DNS_IP in (lookup_direct.stdout or ""), (
+            f"Expected {C1_DNS_IP} from {C1_FQDN} via {C1_DNS_IP} "
+            f"(rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
+        )
+
+        _reset_dnsforward_state(openwrt_client_host)
+        add = openwrt_client_host.run(
+            f"/usr/bin/xp2p client dns-forward add --domain {CORP_DOMAIN} --target {C1_DNS_IP}:53 --intercept --with-forward --quiet"
+        )
+        assert add.rc == 0, f"add command failed: {add.stderr}"
+        dns_forward_added = True
+
+        forward_port = _detect_forward_port(openwrt_client_host, C1_DNS_IP)
+        with openwrt_env.xp2p_run_session(
+            openwrt_server_host,
+            role="server",
+            install_dir="/etc/xp2p",
+            config_dir="config-server",
+            log_path="/tmp/xp2p-server.log",
+        ), openwrt_env.xp2p_run_session(
+            openwrt_client_host,
+            role="client",
+            install_dir="/etc/xp2p",
+            config_dir="config-client",
+            log_path="/tmp/xp2p-client.log",
+        ):
+            _wait_for_port(openwrt_client_host, forward_port)
+            _assert_dns_response(openwrt_client_host, C1_FQDN, C1_DNS_IP, server=f"127.0.0.1:{forward_port}")
+
+            lookup_intercept = openwrt_client_host.run(f"nslookup {C1_FQDN} || true")
+            assert C1_DNS_IP in (lookup_intercept.stdout or ""), (
+                f"Expected {C1_DNS_IP} from {C1_FQDN} via intercept "
+                f"(rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
+            )
+
+            c2_lookup = _alpine_guest(alpine_c2_host, "scripts/linux/nslookup.sh", C1_FQDN)
+            assert C1_DNS_IP in (c2_lookup.stdout or ""), (
+                f"Expected {C1_DNS_IP} from {C1_FQDN} on c2:\n{c2_lookup.stdout}\n{c2_lookup.stderr}"
+            )
+
+            c2_ping = _alpine_guest(
+                alpine_c2_host, "scripts/linux/xp2p_ping.sh", C1_FQDN, "--count", "1"
+            )
+            tunnel_common.assert_zero_loss(c2_ping, f"to {C1_FQDN}")
+    finally:
+        if dns_forward_added:
+            openwrt_client_host.run(
+                f"/usr/bin/xp2p client dns-forward remove --domain {CORP_DOMAIN} --intercept --quiet"
+            )
+        _reset_dnsforward_state(openwrt_client_host)
+        if diag_started:
+            _alpine_guest(alpine_c1_host, "scripts/linux/stop_xp2p_diag.sh")
+        if dnsmasq_ready:
+            _alpine_guest(alpine_c1_host, "scripts/linux/cleanup_dnsmasq_alpine.sh")
+
+
+def _alpine_guest(host, script: str, *args: str):
+    result = openwrt_env.run_alpine_guest_script(host, script, *args)
+    if result.rc != 0:
+        pytest.fail(
+            "guest script failed "
+            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result
 
 
 def _ensure_dns_record(host, domain: str, ip: str) -> None:
