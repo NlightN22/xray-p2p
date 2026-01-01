@@ -236,7 +236,7 @@ func probeTCP(listen string, port int) error {
 	addr := net.JoinHostPort(listen, strconv.Itoa(port))
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		if isAddrInUse(err) {
+		if isAddrUnavailable(err) {
 			return ErrPortUnavailable
 		}
 		return fmt.Errorf("xp2p: bind TCP %s: %w", addr, err)
@@ -252,7 +252,7 @@ func probeUDP(listen string, port int) error {
 	addr := &net.UDPAddr{IP: ip, Port: port}
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		if isAddrInUse(err) {
+		if isAddrUnavailable(err) {
 			return ErrPortUnavailable
 		}
 		return fmt.Errorf("xp2p: bind UDP %s: %w", addr.String(), err)
@@ -273,6 +273,37 @@ func isAddrInUse(err error) bool {
 		return false
 	}
 	return errors.Is(syscallErr.Err, syscall.EADDRINUSE)
+}
+
+func isAddrUnavailable(err error) bool {
+	if isAddrInUse(err) {
+		return true
+	}
+	if errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+		return true
+	}
+	if errno, ok := unwrapSyscallErrno(err); ok && errno == 10013 {
+		return true
+	}
+	return false
+}
+
+func unwrapSyscallErrno(err error) (syscall.Errno, bool) {
+	if err == nil {
+		return 0, false
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		err = opErr.Err
+	}
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) {
+		err = syscallErr.Err
+	}
+	if errno, ok := err.(syscall.Errno); ok {
+		return errno, true
+	}
+	return 0, false
 }
 
 // MatchesRedirect reports whether any redirect rule routes the supplied IP.
