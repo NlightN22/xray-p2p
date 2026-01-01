@@ -154,7 +154,7 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 				logging.Error("xp2p dns-forward list failed", "err", err)
 				return exitError{code: 1}
 			}
-			entries, _, err := manager.List()
+			entries, intercept, err := manager.List()
 			if err != nil {
 				logging.Error("xp2p dns-forward list failed", "err", err)
 				if debug {
@@ -164,6 +164,9 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 			}
 			if len(entries) == 0 {
 				fmt.Println("No dns-forward entries configured.")
+				if intercept {
+					fmt.Println("DNS intercept is enabled.")
+				}
 				return nil
 			}
 			writer := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
@@ -172,6 +175,9 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 				fmt.Fprintf(writer, "%s\t%s\t%s\n", entry.Domain, entry.Server, strings.Join(entry.Labels, ","))
 			}
 			_ = writer.Flush()
+			if intercept {
+				fmt.Fprintln(cmd.OutOrStdout(), "DNS intercept is enabled.")
+			}
 			return nil
 		},
 	}
