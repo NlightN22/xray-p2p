@@ -89,10 +89,14 @@ def ensure_guest_scripts_synced() -> None:
         return
     current_hash = _compute_guest_scripts_hash()
     if _SCRIPTS_HASH_CACHE == current_hash:
+        for machine in ALPINE_MACHINES:
+            _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
         return
     cached = _read_cached_scripts_hash()
     if cached == current_hash and cached is not None:
         _SCRIPTS_HASH_CACHE = current_hash
+        for machine in ALPINE_MACHINES:
+            _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
         return
     require_openwrt_environment()
     for machine in OPENWRT_MACHINES:
