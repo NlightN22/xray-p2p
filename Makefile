@@ -67,7 +67,7 @@ build-ipk:
 
 build-ipk-infra:
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --target linux-amd64 --output-dir /srv/xray-p2p/build/ipk --force-build"
-	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant up --provision
+	cd $(VAGRANT_OWRT_DIR) && vagrant up --provision
 
 build-deb:
 	$(MAKE) test
