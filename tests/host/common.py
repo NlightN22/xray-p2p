@@ -4,13 +4,63 @@ from __future__ import annotations
 import shutil
 import subprocess
 from functools import lru_cache
+import functools
+import os
 from pathlib import Path
 
 import pytest
 import testinfra
+import testinfra.backend
+import testinfra.backend.paramiko as paramiko_backend
 from testinfra.host import Host
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
+    @functools.cached_property
+    def client(self) -> "paramiko_backend.paramiko.SSHClient":
+        client = paramiko_backend.paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko_backend.paramiko.WarningPolicy())
+        cfg = {
+            "hostname": self.host.name,
+            "port": int(self.host.port) if self.host.port else 22,
+            "username": self.host.user,
+            "timeout": self.timeout,
+            "password": self.host.password,
+            "look_for_keys": False,
+            "allow_agent": False,
+        }
+        if self.ssh_config:
+            ssh_config_dir = os.path.dirname(self.ssh_config)
+
+            with open(self.ssh_config) as f:
+                ssh_config = paramiko_backend.paramiko.SSHConfig()
+                ssh_config.parse(f)
+                self._load_ssh_config(client, cfg, ssh_config, ssh_config_dir)
+        else:
+            default_ssh_config = os.path.join(os.path.expanduser("~"), ".ssh", "config")
+            ssh_config_dir = os.path.dirname(default_ssh_config)
+
+            try:
+                with open(default_ssh_config) as f:
+                    ssh_config = paramiko_backend.paramiko.SSHConfig()
+                    ssh_config.parse(f)
+            except OSError:
+                pass
+            else:
+                self._load_ssh_config(client, cfg, ssh_config, ssh_config_dir)
+
+        if self.ssh_identity_file:
+            cfg["key_filename"] = self.ssh_identity_file
+        client.connect(**cfg)  # type: ignore[arg-type]
+        return client
+
+
+def _patch_paramiko_backend() -> None:
+    if testinfra.backend.BACKENDS.get("paramiko") == "tests.host.common.PatchedParamikoBackend":
+        return
+    testinfra.backend.BACKENDS["paramiko"] = "tests.host.common.PatchedParamikoBackend"
 
 
 def require_vagrant_environment(vagrant_dir: Path) -> None:
@@ -86,6 +136,7 @@ def _ssh_config(vagrant_dir: Path, machine: str) -> str:
 
 def get_ssh_host(vagrant_dir: Path, machine: str) -> Host:
     ensure_machine_running(vagrant_dir, machine)
+    _patch_paramiko_backend()
     raw = _ssh_config(vagrant_dir, machine)
     config = parse_ssh_config(raw)
     return testinfra.get_host(

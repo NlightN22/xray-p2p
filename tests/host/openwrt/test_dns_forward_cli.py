@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
+import time
 
 import pytest
 
@@ -18,6 +20,8 @@ CORP_DOMAIN = "corp.test.com"
 C1_FQDN = "c1.corp.test.com"
 C1_DNS_IP = "10.0.101.132"
 C1_DIAG_LISTEN = "0.0.0.0:62022"
+C1_LAN_GATEWAY = "10.0.101.1"
+C2_LAN_GATEWAY = "10.0.102.1"
 
 
 @pytest.fixture(scope="module")
@@ -81,9 +85,9 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         _assert_dns_server_entry(dhcp_show.stdout or "", DOMAIN, server_ip)
         _assert_rebind_allowed(dhcp_show.stdout or "", BASE_DOMAIN)
 
-        fw_show = openwrt_client_host.run("uci show firewall | grep xp2p_dns_intercept || true")
+        fw_show = openwrt_client_host.run("uci show firewall | grep Intercept-DNS || true")
         assert fw_show.rc == 0
-        assert "xp2p_dns_intercept" in (fw_show.stdout or "")
+        assert "Intercept-DNS" in (fw_show.stdout or "")
 
         forward_port = _detect_forward_port(openwrt_client_host, server_ip)
         with openwrt_env.xp2p_run_session(
@@ -118,7 +122,7 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         assert rebind_after.rc == 0
         assert BASE_DOMAIN not in (rebind_after.stdout or "")
 
-        fw_after = openwrt_client_host.run("uci show firewall | grep xp2p_dns_intercept || true")
+        fw_after = openwrt_client_host.run("uci show firewall | grep Intercept-DNS || true")
         assert fw_after.rc == 0
         assert (fw_after.stdout or "").strip() == ""
     finally:
@@ -145,9 +149,9 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         _assert_dns_server_entry(dhcp_show.stdout or "", SERVER_DOMAIN, client_ip, role="server")
         _assert_rebind_allowed(dhcp_show.stdout or "", BASE_DOMAIN)
 
-        fw_show = openwrt_server_host.run("uci show firewall | grep xp2p_dns_intercept || true")
+        fw_show = openwrt_server_host.run("uci show firewall | grep Intercept-DNS || true")
         assert fw_show.rc == 0
-        assert "xp2p_dns_intercept" in (fw_show.stdout or "")
+        assert "Intercept-DNS" in (fw_show.stdout or "")
 
         forward_port = _detect_forward_port(openwrt_server_host, client_ip, role="server")
         with openwrt_env.xp2p_run_session(
@@ -189,7 +193,7 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         assert rebind_after.rc == 0
         assert BASE_DOMAIN not in (rebind_after.stdout or "")
 
-        fw_after = openwrt_server_host.run("uci show firewall | grep xp2p_dns_intercept || true")
+        fw_after = openwrt_server_host.run("uci show firewall | grep Intercept-DNS || true")
         assert fw_after.rc == 0
         assert (fw_after.stdout or "").strip() == ""
     finally:
@@ -208,13 +212,31 @@ def test_dns_forward_openwrt_b_with_c1_c2(
     dns_forward_added = False
     diag_started = False
     dnsmasq_ready = False
+    redirect_added = False
+    nat_added = False
+    client_runner = lambda *args: openwrt_env.run_xp2p(openwrt_client_host, *args)
+    endpoint_tag = helpers.expected_proxy_tag(SERVER_TUN_IP)
     try:
+        _alpine_guest(alpine_c1_host, "scripts/linux/ensure_route.sh", "10.0.102.0/24", C1_LAN_GATEWAY)
+        _alpine_guest(alpine_c2_host, "scripts/linux/ensure_route.sh", "10.0.101.0/24", C2_LAN_GATEWAY)
         _alpine_guest(alpine_c1_host, "scripts/linux/setup_dnsmasq_alpine.sh", C1_FQDN)
         dnsmasq_ready = True
         _alpine_guest(alpine_c1_host, "scripts/linux/start_xp2p_diag.sh", C1_DIAG_LISTEN, "tcp")
         diag_started = True
 
-        lookup_direct = openwrt_server_host.run(f"nslookup {C1_FQDN} {C1_DNS_IP} || true")
+        direct_ping = openwrt_env.run_xp2p(openwrt_server_host, "ping", C1_DNS_IP, "--count", "1")
+        if direct_ping.rc != 0:
+            debug = _dump_dns_forward_debug(
+                openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+            )
+            raise AssertionError(
+                "openwrt-a -> c1 ping failed.\n"
+                f"STDOUT:\n{direct_ping.stdout}\nSTDERR:\n{direct_ping.stderr}\n\n"
+                f"DNS forward debug:\n{debug}"
+            )
+        tunnel_common.assert_zero_loss(direct_ping, "openwrt-a to c1")
+
+        lookup_direct = _openwrt_nslookup(openwrt_server_host, C1_FQDN, server=C1_DNS_IP)
         assert C1_DNS_IP in (lookup_direct.stdout or ""), (
             f"Expected {C1_DNS_IP} from {C1_FQDN} via {C1_DNS_IP} "
             f"(rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
@@ -226,6 +248,24 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
         dns_forward_added = True
+
+        redirect = client_runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
+            "/etc/xp2p",
+            "--config-dir",
+            "config-client",
+            "--cidr",
+            "10.0.101.0/24",
+            "--tag",
+            endpoint_tag,
+        )
+        assert redirect.rc == 0, f"redirect add failed: {redirect.stderr}"
+        redirect_added = True
+        routing = helpers.read_json(openwrt_client_host, "/etc/xp2p/config-client/routing.json")
+        helpers.assert_redirect_rule(routing, "10.0.101.0/24", endpoint_tag)
 
         forward_port = _detect_forward_port(openwrt_client_host, C1_DNS_IP)
         with openwrt_env.xp2p_run_session(
@@ -241,10 +281,39 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             config_dir="config-client",
             log_path="/tmp/xp2p-client.log",
         ):
-            _wait_for_port(openwrt_client_host, forward_port)
-            _assert_dns_response(openwrt_client_host, C1_FQDN, C1_DNS_IP, server=f"127.0.0.1:{forward_port}")
+            time.sleep(2.0)
+            tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
+            if tunnel_ping.rc != 0:
+                debug = _dump_dns_forward_debug(
+                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+                )
+                raise AssertionError(
+                    "openwrt-b tunnel ping failed.\n"
+                    f"STDOUT:\n{tunnel_ping.stdout}\nSTDERR:\n{tunnel_ping.stderr}\n\n"
+                    f"DNS forward debug:\n{debug}"
+                )
+            tunnel_common.assert_zero_loss(tunnel_ping, f"tunnel to {SERVER_TUN_IP}")
 
-            lookup_intercept = openwrt_client_host.run(f"nslookup {C1_FQDN} || true")
+            nat_port = _detect_dokodemo_port(openwrt_client_host, "/etc/xp2p/config-client/inbounds.json")
+            nat = client_runner(
+                "nat-redirect",
+                "add",
+                "--subnet",
+                "10.0.101.0/24",
+                "--port",
+                str(nat_port),
+                "--quiet",
+            )
+            assert nat.rc == 0, f"nat-redirect add failed: {nat.stderr}"
+            nat_added = True
+            time.sleep(2.0)
+
+            _wait_for_port(openwrt_client_host, forward_port)
+            _assert_dns_response(
+                openwrt_client_host, C1_FQDN, C1_DNS_IP, server=f"127.0.0.1:{forward_port}"
+            )
+
+            lookup_intercept = _openwrt_nslookup(openwrt_client_host, C1_FQDN)
             assert C1_DNS_IP in (lookup_intercept.stdout or ""), (
                 f"Expected {C1_DNS_IP} from {C1_FQDN} via intercept "
                 f"(rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
@@ -255,14 +324,44 @@ def test_dns_forward_openwrt_b_with_c1_c2(
                 f"Expected {C1_DNS_IP} from {C1_FQDN} on c2:\n{c2_lookup.stdout}\n{c2_lookup.stderr}"
             )
 
-            c2_ping = _alpine_guest(
+            c2_ping = openwrt_env.run_alpine_guest_script(
                 alpine_c2_host, "scripts/linux/xp2p_ping.sh", C1_FQDN, "--count", "1"
             )
+            if c2_ping.rc != 0:
+                debug = _dump_dns_forward_debug(
+                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+                )
+                raise AssertionError(
+                    "xp2p ping from c2 failed.\n"
+                    f"STDOUT:\n{c2_ping.stdout}\nSTDERR:\n{c2_ping.stderr}\n\n"
+                    f"DNS forward debug:\n{debug}"
+                )
             tunnel_common.assert_zero_loss(c2_ping, f"to {C1_FQDN}")
+    except AssertionError as exc:
+        debug = _dump_dns_forward_debug(
+            openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+        )
+        raise AssertionError(f"{exc}\n\nDNS forward debug:\n{debug}") from exc
     finally:
         if dns_forward_added:
             openwrt_client_host.run(
                 f"/usr/bin/xp2p client dns-forward remove --domain {CORP_DOMAIN} --intercept --quiet"
+            )
+        if nat_added:
+            client_runner("nat-redirect", "remove", "--all")
+        if redirect_added:
+            client_runner(
+                "client",
+                "redirect",
+                "remove",
+                "--path",
+                "/etc/xp2p",
+                "--config-dir",
+                "config-client",
+                "--cidr",
+                "10.0.101.0/24",
+                "--tag",
+                endpoint_tag,
             )
         _reset_dnsforward_state(openwrt_client_host)
         if diag_started:
@@ -281,6 +380,74 @@ def _alpine_guest(host, script: str, *args: str):
     return result
 
 
+def _openwrt_nslookup(host, name: str, *, server: str | None = None):
+    timeout = "5"
+    retry = "1"
+    if server:
+        cmd = f"nslookup -timeout={timeout} -retry={retry} {name} {server} || true"
+    else:
+        cmd = f"nslookup -timeout={timeout} -retry={retry} {name} || true"
+    return host.run(cmd)
+
+
+def _detect_dokodemo_port(host, path: str) -> int:
+    raw = helpers.read_text(host, path)
+    doc = json.loads(raw or "{}")
+    for inbound in doc.get("inbounds") or []:
+        if (inbound.get("protocol") or "").strip() != "dokodemo-door":
+            continue
+        settings = inbound.get("settings") or {}
+        if not settings.get("followRedirect"):
+            continue
+        port = int(inbound.get("port") or 0)
+        if port > 0:
+            return port
+    raise AssertionError(f"Expected dokodemo-door inbound with followRedirect in {path}")
+
+
+def _dump_dns_forward_debug(
+    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+) -> str:
+    parts: list[str] = []
+    parts.append("--- openwrt-b xp2p redirect list ---")
+    parts.append((openwrt_client_host.run("/usr/bin/xp2p client redirect list || true").stdout or "").strip())
+    parts.append("--- openwrt-b nat-redirect list ---")
+    parts.append((openwrt_client_host.run("/usr/bin/xp2p nat-redirect list || true").stdout or "").strip())
+    parts.append("--- openwrt-b xp2p forward list ---")
+    parts.append((openwrt_client_host.run("/usr/bin/xp2p client forward list || true").stdout or "").strip())
+    parts.append("--- openwrt-b nft xray_transparent ---")
+    parts.append((openwrt_client_host.run("nft list table inet xray_transparent 2>/dev/null || true").stdout or "").strip())
+    parts.append("--- openwrt-b nft fw4 ---")
+    parts.append((openwrt_client_host.run("nft list table inet fw4 2>/dev/null || true").stdout or "").strip())
+    parts.append("--- openwrt-b inbounds.json ---")
+    parts.append((openwrt_client_host.run("cat /etc/xp2p/config-client/inbounds.json 2>/dev/null || true").stdout or "").strip())
+    parts.append("--- openwrt-b routing.json ---")
+    parts.append((openwrt_client_host.run("cat /etc/xp2p/config-client/routing.json 2>/dev/null || true").stdout or "").strip())
+    parts.append("--- openwrt-b xp2p client log ---")
+    parts.append((openwrt_client_host.run("cat /tmp/xp2p-client.log 2>/dev/null || true").stdout or "").strip())
+    parts.append("--- openwrt-a xp2p server log ---")
+    parts.append((openwrt_server_host.run("cat /tmp/xp2p-server.log 2>/dev/null || true").stdout or "").strip())
+    parts.append("--- openwrt-b uci dhcp ---")
+    parts.append((openwrt_client_host.run("uci show dhcp || true").stdout or "").strip())
+    parts.append("--- openwrt-b firewall ---")
+    parts.append((openwrt_client_host.run("uci show firewall || true").stdout or "").strip())
+    parts.append("--- openwrt-a nslookup ---")
+    parts.append((_openwrt_nslookup(openwrt_server_host, C1_FQDN, server=C1_DNS_IP).stdout or "").strip())
+    parts.append("--- c1 dnsmasq log ---")
+    parts.append(
+        (alpine_c1_host.run("tail -n 200 /var/log/dnsmasq.log 2>/dev/null || true").stdout or "").strip()
+    )
+    parts.append("--- c1 netstat ---")
+    parts.append(
+        (alpine_c1_host.run("netstat -ltnup 2>/dev/null | grep ':53 ' || true").stdout or "").strip()
+    )
+    parts.append("--- c1 routes ---")
+    parts.append((alpine_c1_host.run("ip route show || true").stdout or "").strip())
+    parts.append("--- c2 routes ---")
+    parts.append((alpine_c2_host.run("ip route show || true").stdout or "").strip())
+    return "\n".join(part for part in parts if part)
+
+
 def _ensure_dns_record(host, domain: str, ip: str) -> None:
     host.run(f"uci del_list dhcp.@dnsmasq[0].address='/{domain}/{ip}' >/dev/null 2>&1 || true")
     host.run(f"uci add_list dhcp.@dnsmasq[0].address='/{domain}/{ip}'")
@@ -297,7 +464,7 @@ def _remove_dns_record(host, domain: str, ip: str) -> None:
 def _reset_dnsforward_state(host) -> None:
     host.run("for s in $(uci show dhcp 2>/dev/null | grep 'dhcp.xp2p_dns_' | cut -d. -f2 | cut -d= -f1); do uci delete dhcp.$s || true; done")
     host.run("uci -q delete dhcp.xp2p_dns_intercept >/dev/null 2>&1 || true")
-    host.run("uci -q delete firewall.xp2p_dns_intercept >/dev/null 2>&1 || true")
+    host.run("for s in $(uci show firewall 2>/dev/null | grep '=redirect' | cut -d. -f2 | cut -d= -f1); do name=$(uci -q get firewall.$s.name); if [ \"$name\" = \"Intercept-DNS\" ]; then uci delete firewall.$s || true; fi; done")
     host.run("uci commit dhcp")
     host.run("uci commit firewall")
     host.run("/etc/init.d/dnsmasq reload")

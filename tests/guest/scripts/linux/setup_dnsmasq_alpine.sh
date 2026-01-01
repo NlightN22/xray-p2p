@@ -8,6 +8,11 @@ fi
 
 host_name="$1"
 installer=""
+timeout_cmd=""
+
+if command -v timeout >/dev/null 2>&1; then
+  timeout_cmd="timeout ${DNSMASQ_INSTALL_TIMEOUT:-300}"
+fi
 
 for candidate in \
   "/srv/xray-p2p/build/linux-amd64/dnsmasq-install-alpine.sh" \
@@ -27,4 +32,9 @@ if [ -z "$installer" ]; then
 fi
 
 chmod +x "$installer"
+
+echo "Using dnsmasq installer: $installer"
+if [ -n "$timeout_cmd" ]; then
+  exec $timeout_cmd "$installer" "$host_name"
+fi
 exec "$installer" "$host_name"
