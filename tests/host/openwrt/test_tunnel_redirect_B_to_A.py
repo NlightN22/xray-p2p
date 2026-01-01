@@ -61,6 +61,7 @@ def _remove_ip_alias(host, iface: str, cidr: str) -> None:
 
 
 def _stop_xp2p_processes(host) -> None:
+    openwrt_env._stop_xp2p_services(host)
     host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
     host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
     host.run("pkill -f 'xp2p diag' >/dev/null 2>&1 || true")
@@ -70,6 +71,9 @@ def _stop_xp2p_processes(host) -> None:
     host.run("killall -9 xp2p >/dev/null 2>&1 || true")
     host.run("killall xray >/dev/null 2>&1 || true")
     host.run("killall -9 xray >/dev/null 2>&1 || true")
+    for port in ("52080", "52180", "51080", "51180"):
+        host.run(f"fuser -k {port}/tcp >/dev/null 2>&1 || true")
+        host.run(f"fuser -k {port}/udp >/dev/null 2>&1 || true")
     host.run("fuser -k 62022/tcp >/dev/null 2>&1 || true")
     host.run("fuser -k 62022/udp >/dev/null 2>&1 || true")
     host.run("fuser -k 62023/tcp >/dev/null 2>&1 || true")
