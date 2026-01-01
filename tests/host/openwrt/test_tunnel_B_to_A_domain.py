@@ -36,7 +36,7 @@ def _runner(host):
 
 
 def _update_hosts_entry(host, action: str, domain: str, ip: str | None = None) -> None:
-    args = ["scripts/linux/update_hosts_entry.sh", action]
+    args = ["scripts/linux/update_hosts_entry_openwrt.sh", action]
     if action == "add":
         if not ip:
             raise AssertionError("IP is required for add action")
@@ -136,6 +136,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             credential["password"],
             credential["user"],
             SERVER_DOMAIN,
+            allow_insecure=True,
         )
 
         helpers.assert_reverse_cli_output(
@@ -205,7 +206,7 @@ def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = F
 def _exercise_client_forward_diagnostics(env: dict) -> None:
     client_runner = env["client_runner"]
     client_host = env["client_host"]
-    forward_target = f"{SERVER_DOMAIN}:{SERVER_DIAGNOSTICS_PORT}"
+    forward_target = f"{SERVER_IP}:{SERVER_DIAGNOSTICS_PORT}"
     listen_port = CLIENT_FORWARD_PORT
     try:
         client_runner(
