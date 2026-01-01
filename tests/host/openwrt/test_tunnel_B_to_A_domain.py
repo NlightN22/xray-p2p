@@ -206,7 +206,7 @@ def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = F
 def _exercise_client_forward_diagnostics(env: dict) -> None:
     client_runner = env["client_runner"]
     client_host = env["client_host"]
-    forward_target = f"{SERVER_IP}:{SERVER_DIAGNOSTICS_PORT}"
+    forward_target = f"{SERVER_DOMAIN}:{SERVER_DIAGNOSTICS_PORT}"
     listen_port = CLIENT_FORWARD_PORT
     try:
         client_runner(
@@ -243,7 +243,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
         for entry in client_state.get("forwards") or []:
             recorded_host = (entry.get("target_host") or "").strip()
             recorded_port = int(entry.get("target_port") or entry.get("targetPort") or 0)
-            if recorded_host in {SERVER_IP, SERVER_DOMAIN} and recorded_port == SERVER_DIAGNOSTICS_PORT:
+            if recorded_host == SERVER_DOMAIN and recorded_port == SERVER_DIAGNOSTICS_PORT:
                 listen_port = tunnel_common.listen_port_from_entry(entry)
                 break
         assert listen_port == CLIENT_FORWARD_PORT
