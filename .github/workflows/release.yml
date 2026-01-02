@@ -318,10 +318,18 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum * > SHA256SUMS
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.prepare_latest_artifacts.outputs.release_files }}
+          files: |
+            ${{ steps.prepare_latest_artifacts.outputs.release_files }}
+            release/SHA256SUMS
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
