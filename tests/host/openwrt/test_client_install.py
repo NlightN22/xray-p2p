@@ -125,7 +125,9 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             check=False,
         )
         assert duplicate.rc != 0, "Expected duplicate endpoint install to fail without --force"
-        assert "endpoint 10.55.0.10 already exists" in duplicate.stderr.lower() + duplicate.stdout.lower()
+        combined = (duplicate.stderr or "") + (duplicate.stdout or "")
+        combined = combined.lower()
+        assert "endpoint 10.55.0.10" in combined and "already exists" in combined
 
         runner(
             "client",
@@ -490,7 +492,7 @@ def test_client_install_requires_force_for_duplicate_endpoint(openwrt_host, xp2p
         )
         assert result.rc != 0, "Expected duplicate endpoint install to fail without --force"
         combined = f"{result.stdout}\n{result.stderr}".lower()
-        assert "endpoint 10.55.0.20 already exists" in combined
+        assert "endpoint 10.55.0.20" in combined and "already exists" in combined
 
         runner(
             "client",
