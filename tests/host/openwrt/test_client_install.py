@@ -1,29 +1,46 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
-
 import pytest
 
-from tests.host.linux import _helpers as helpers
-from tests.host.linux import env as linux_env
+from tests.host.openwrt import _helpers as helpers
+from tests.host.openwrt import env as openwrt_env
 from tests.host.tunnel import common as tunnel_common
 
 CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
-CLIENT_LOG_PATH = helpers.CLIENT_LOG_FILE
 CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_STATE_FILE = helpers.CLIENT_STATE_FILES[0]
 
+pytestmark = [pytest.mark.host, pytest.mark.linux]
 
-def _cleanup(client_host, xp2p_client_runner) -> None:
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
+
+def _runner(host):
+    def _run(*args: str, check: bool = False):
+        result = openwrt_env.run_xp2p(host, *args)
+        if check and result.rc != 0:
+            pytest.fail(
+                "xp2p command failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        return result
+
+    return _run
+
+
+def _prepare_host(openwrt_host, xp2p_openwrt_ipk):
+    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
+    openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk)
+    runner = _runner(openwrt_host)
+    helpers.cleanup_client_install(openwrt_host, runner)
+    helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
+    return runner
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
+def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -39,7 +56,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             check=True,
         )
 
-        data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data,
             "10.55.0.10",
@@ -48,7 +65,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "10.55.0.10",
         )
 
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -66,7 +83,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             check=True,
         )
 
-        updated = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        updated = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             updated,
             "10.55.0.10",
@@ -84,15 +101,15 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             allow_insecure=False,
         )
 
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.read_json(openwrt_host, CLIENT_ROUTING)
         helpers.assert_routing_rule(routing, "10.55.0.10")
         helpers.assert_routing_rule(routing, "10.55.0.11")
 
-        state = helpers.read_json(client_host, CLIENT_STATE_FILE)
+        state = helpers.read_json(openwrt_host, CLIENT_STATE_FILE)
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
         assert recorded_hosts == {"10.55.0.10", "10.55.0.11"}
 
-        duplicate = xp2p_client_runner(
+        duplicate = runner(
             "client",
             "install",
             "--path",
@@ -110,7 +127,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         assert duplicate.rc != 0, "Expected duplicate endpoint install to fail without --force"
         assert "endpoint 10.55.0.10 already exists" in duplicate.stderr.lower() + duplicate.stdout.lower()
 
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -129,7 +146,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             check=True,
         )
 
-        refreshed = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        refreshed = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             refreshed,
             "10.55.0.10",
@@ -147,21 +164,20 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             allow_insecure=False,
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
-        if helpers.path_exists(client_host, helpers.HEARTBEAT_STATE_FILE):
-            helpers.remove_path(client_host, helpers.HEARTBEAT_STATE_FILE)
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_install_from_link(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
+def test_client_install_from_link(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
         link = (
             "trojan://linkpass@link.example.test:62022?"
             "allowInsecure=1&security=tls&sni=link.example.test#link@example.com"
         )
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -173,24 +189,25 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
             "--force",
             check=True,
         )
-        data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=True
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_install_from_link_without_allow_insecure(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
+def test_client_install_from_link_without_allow_insecure(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
         link = (
             "trojan://linkpass@link.example.test:62022?"
             "security=tls&sni=link.example.test#link@example.com"
         )
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -202,20 +219,21 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
             "--force",
             check=True,
         )
-        data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
+def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -234,7 +252,7 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
             "trojan://statepass@link.example.test:62022?"
             "allowInsecure=1&security=tls&sni=link.example.test#state-two@example.com"
         )
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -246,10 +264,10 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
             check=True,
         )
 
-        if helpers.path_exists(client_host, helpers.HEARTBEAT_STATE_FILE):
-            helpers.remove_path(client_host, helpers.HEARTBEAT_STATE_FILE)
+        if helpers.path_exists(openwrt_host, helpers.HEARTBEAT_STATE_FILE):
+            helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
 
-        result = xp2p_client_runner(
+        result = runner(
             "client",
             "state",
             "--path",
@@ -266,7 +284,8 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         assert {row["TAG"] for row in rows} == expected_tags
         assert {row["HOST"] for row in rows} == expected_hosts
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
 
 
 def _assert_no_endpoint(host: str, data: dict):
@@ -278,10 +297,10 @@ def _assert_no_endpoint(host: str, data: dict):
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
+def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -296,7 +315,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             "delta-pass",
             check=True,
         )
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -312,7 +331,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             check=True,
         )
 
-        list_result = xp2p_client_runner(
+        list_result = runner(
             "client",
             "list",
             "--path",
@@ -327,7 +346,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
 
         redirect_cidr = "10.200.0.0/16"
         host_tag = helpers.expected_proxy_tag("10.66.0.10")
-        xp2p_client_runner(
+        runner(
             "client",
             "redirect",
             "add",
@@ -341,7 +360,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             host_tag,
             check=True,
         )
-        redirect_list = xp2p_client_runner(
+        redirect_list = runner(
             "client",
             "redirect",
             "list",
@@ -353,7 +372,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         ).stdout or ""
         assert redirect_cidr in redirect_list
 
-        xp2p_client_runner(
+        runner(
             "client",
             "remove",
             "--path",
@@ -364,7 +383,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             check=True,
         )
 
-        outbounds = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        outbounds = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             outbounds,
             "10.66.0.11",
@@ -374,14 +393,14 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         )
         _assert_no_endpoint("10.66.0.10", outbounds)
 
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.read_json(openwrt_host, CLIENT_ROUTING)
         helpers.assert_routing_rule(routing, "10.66.0.11")
 
-        state = helpers.read_json(client_host, CLIENT_STATE_FILE)
+        state = helpers.read_json(openwrt_host, CLIENT_STATE_FILE)
         hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert hosts == {"10.66.0.11"}
 
-        redirect_list_after = xp2p_client_runner(
+        redirect_list_after = runner(
             "client",
             "redirect",
             "list",
@@ -393,7 +412,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         ).stdout or ""
         assert redirect_cidr not in redirect_list_after
 
-        list_after = xp2p_client_runner(
+        list_after = runner(
             "client",
             "list",
             "--path",
@@ -405,7 +424,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         assert "10.66.0.11" in list_after
         assert "10.66.0.10" not in list_after
 
-        xp2p_client_runner(
+        runner(
             "client",
             "remove",
             "--path",
@@ -416,7 +435,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             check=True,
         )
 
-        final_list = xp2p_client_runner(
+        final_list = runner(
             "client",
             "list",
             "--path",
@@ -427,15 +446,16 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         ).stdout or ""
         assert "No client endpoints configured." in final_list
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
+def test_client_install_requires_force_for_duplicate_endpoint(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -451,7 +471,7 @@ def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_
             check=True,
         )
 
-        result = xp2p_client_runner(
+        result = runner(
             "client",
             "install",
             "--path",
@@ -470,7 +490,7 @@ def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_
         combined = f"{result.stdout}\n{result.stderr}".lower()
         assert "endpoint 10.55.0.20 already exists" in combined
 
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -487,15 +507,16 @@ def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_
             check=True,
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_install_recovers_without_state_marker(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
+def test_client_install_recovers_without_state_marker(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -513,10 +534,10 @@ def test_client_install_recovers_without_state_marker(client_host, xp2p_client_r
         )
 
         for state_file in helpers.CLIENT_STATE_FILES:
-            helpers.remove_path(client_host, state_file)
-            assert not helpers.path_exists(client_host, state_file)
+            helpers.remove_path(openwrt_host, state_file)
+            assert not helpers.path_exists(openwrt_host, state_file)
 
-        xp2p_client_runner(
+        runner(
             "client",
             "install",
             "--path",
@@ -532,8 +553,9 @@ def test_client_install_recovers_without_state_marker(client_host, xp2p_client_r
             check=True,
         )
 
-        assert any(helpers.path_exists(client_host, path) for path in helpers.CLIENT_STATE_FILES), (
+        assert any(helpers.path_exists(openwrt_host, path) for path in helpers.CLIENT_STATE_FILES), (
             "Expected client install-state markers to be recreated"
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)

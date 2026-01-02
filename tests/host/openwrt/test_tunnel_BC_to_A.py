@@ -7,6 +7,7 @@ import pytest
 
 from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
+from tests.host.tunnel import common as tunnel_common
 
 SERVER_MACHINE = openwrt_env.OPENWRT_MACHINES[0]
 CLIENT_B_MACHINE = openwrt_env.OPENWRT_MACHINES[1]
@@ -141,6 +142,46 @@ def _assert_server_state_reports_users(
         f"{sorted(expected)} after {attempts} attempts.\nLast output:\n{last_stdout}"
     )
 
+
+def _assert_server_state_reports_users_alive(
+    host,
+    expected_users: set[str],
+    *,
+    attempts: int = 10,
+    delay_seconds: float = 3.0,
+):
+    install_path = helpers.INSTALL_ROOT.as_posix()
+    expected = {user.strip().lower() for user in expected_users if user.strip()}
+    if not expected:
+        pytest.fail("expected_users is empty")
+    last_stdout = ""
+    for _ in range(attempts):
+        result = openwrt_env.run_xp2p(
+            host,
+            "server",
+            "state",
+            "--path",
+            install_path,
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p server state --once failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        last_stdout = result.stdout or ""
+        rows = tunnel_common.parse_state_rows(last_stdout)
+        alive_users = {
+            (row.get("CLIENT_USER") or "").strip().lower()
+            for row in rows
+            if (row.get("STATUS") or "").strip().lower() == "alive"
+        }
+        if expected.issubset(alive_users):
+            return
+        time.sleep(delay_seconds)
+    pytest.fail(
+        "xp2p server state did not report all expected users as alive "
+        f"{sorted(expected)} after {attempts} attempts.\nLast output:\n{last_stdout}"
+    )
 
 @pytest.mark.host
 @pytest.mark.linux
@@ -355,15 +396,19 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     )
                     client_c_session.__enter__()
                     try:
-                        helpers.wait_for_heartbeat_state(server_host)
-                        _assert_server_state_reports_users(
-                            server_host,
-                            {default_cred["user"], "client-two@example.com"},
-                        )
-                        for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
-                            result = runner(
-                                "ping",
-                                SERVER_IP,
+                    helpers.wait_for_heartbeat_state(server_host)
+                    _assert_server_state_reports_users(
+                        server_host,
+                        {default_cred["user"], "client-two@example.com"},
+                    )
+                    _assert_server_state_reports_users_alive(
+                        server_host,
+                        {default_cred["user"], "client-two@example.com"},
+                    )
+                    for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
+                        result = runner(
+                            "ping",
+                            SERVER_IP,
                                 "--tunnel",
                                 "--count",
                                 "3",
