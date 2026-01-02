@@ -54,9 +54,13 @@ func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, in
 	}
 
 	matches := make([]indexedEndpoint, 0, len(endpoints))
+	userMatches := make([]indexedEndpoint, 0, len(endpoints))
 	for idx, ep := range endpoints {
 		if strings.EqualFold(ep.Hostname, trimmedHost) {
 			matches = append(matches, indexedEndpoint{index: idx, record: ep})
+		}
+		if strings.EqualFold(ep.User, trimmedHost) {
+			userMatches = append(userMatches, indexedEndpoint{index: idx, record: ep})
 		}
 	}
 
@@ -69,6 +73,9 @@ func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, in
 		return clientEndpointRecord{}, -1, fmt.Errorf("xp2p: outbound tag %q is not registered", trimmedTag)
 	}
 
+	if len(matches) == 0 && len(userMatches) > 0 {
+		matches = userMatches
+	}
 	if len(matches) == 0 {
 		return clientEndpointRecord{}, -1, endpointNotFoundError{host: trimmedHost}
 	}

@@ -74,6 +74,10 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		return 2
 	}
 
+	autoTunnel := strings.TrimSpace(opts.TunnelEndpoint) == tunnelConfigSentinel
+	var clientSocksAddr string
+	var serverSocksAddr string
+
 	pingOpts := ping.Options{
 		Count:   opts.Count,
 		Timeout: time.Duration(opts.TimeoutSec) * time.Second,
@@ -81,10 +85,25 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		Port:    opts.Port,
 	}
 
-	socksAddr, err := resolveSocksAddress(cfg, opts.TunnelEndpoint)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
-		return 2
+	var socksAddr string
+	var err error
+	if autoTunnel {
+		clientSocksAddr, serverSocksAddr, err = detectSocksProxies(cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
+			return 2
+		}
+		socksAddr, err = resolveAutoSocks(false, clientSocksAddr, serverSocksAddr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
+			return 2
+		}
+	} else {
+		socksAddr, err = resolveSocksAddress(cfg, opts.TunnelEndpoint)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
+			return 2
+		}
 	}
 
 	hasEndpointSelector := strings.TrimSpace(opts.EndpointTag) != "" || opts.EndpointIndex > 0
@@ -99,15 +118,18 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		}
 		markerTarget, markerPort, markerErr := client.ResolveMarkerTarget(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex)
 		useMarker := markerErr == nil
+		usedServerMarker := false
 		if markerErr != nil && hasEndpointSelector {
 			if errors.Is(markerErr, client.ErrClientEndpointsMissing) || errors.Is(markerErr, client.ErrClientEndpointNotFound) {
 				markerTarget, markerPort, markerErr = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, opts.EndpointTag, opts.EndpointIndex)
 				useMarker = markerErr == nil
+				usedServerMarker = markerErr == nil
 			}
 		} else if markerErr != nil && !hasEndpointSelector {
 			if errors.Is(markerErr, client.ErrClientEndpointsMissing) || errors.Is(markerErr, client.ErrClientEndpointNotFound) {
 				markerTarget, markerPort, markerErr = server.ResolveServerMarkerTarget(cfg.Server.InstallDir, host, 0)
 				useMarker = markerErr == nil
+				usedServerMarker = markerErr == nil
 				if markerErr != nil && isIgnorableServerResolveError(markerErr) {
 					markerErr = nil
 				}
@@ -121,6 +143,13 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 			host = markerTarget
 			pingOpts.Proto = "tcp"
 			pingOpts.Port = markerPort
+		}
+		if autoTunnel && usedServerMarker {
+			socksAddr, err = resolveAutoSocks(true, clientSocksAddr, serverSocksAddr)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", err)
+				return 2
+			}
 		}
 		pingOpts.SocksProxy = socksAddr
 	} else {
@@ -175,6 +204,48 @@ func detectSocksProxy(cfg config.Config) (string, error) {
 		}
 	}
 
+	return "", fmt.Errorf("tunnel proxy not configured; specify --tunnel host:port or install xp2p client/server")
+}
+
+func detectSocksProxies(cfg config.Config) (string, string, error) {
+	clientAddr, err := loadSocksAddress(cfg.Client.InstallDir, cfg.Client.ConfigDir)
+	if err != nil && !errors.Is(err, errSocksInboundNotFound) {
+		return "", "", err
+	}
+	if err != nil && errors.Is(err, errSocksInboundNotFound) {
+		clientAddr = ""
+	}
+
+	serverAddr, err := loadSocksAddress(cfg.Server.InstallDir, cfg.Server.ConfigDir)
+	if err != nil && !errors.Is(err, errSocksInboundNotFound) {
+		return "", "", err
+	}
+	if err != nil && errors.Is(err, errSocksInboundNotFound) {
+		serverAddr = ""
+	}
+
+	if clientAddr == "" && cfg.Client.SocksAddress != "" {
+		if addr, err := normalizeSocksAddress(cfg.Client.SocksAddress); err == nil {
+			clientAddr = addr
+		}
+	}
+
+	return clientAddr, serverAddr, nil
+}
+
+func resolveAutoSocks(preferServer bool, clientAddr, serverAddr string) (string, error) {
+	if preferServer {
+		if serverAddr != "" {
+			return serverAddr, nil
+		}
+		return "", fmt.Errorf("server tunnel proxy not configured; specify --tunnel host:port or install xp2p server")
+	}
+	if clientAddr != "" {
+		return clientAddr, nil
+	}
+	if serverAddr != "" {
+		return serverAddr, nil
+	}
 	return "", fmt.Errorf("tunnel proxy not configured; specify --tunnel host:port or install xp2p client/server")
 }
 
