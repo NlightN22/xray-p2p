@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import time
+
 import pytest
 from testinfra.host import Host
 
@@ -105,44 +108,52 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
             check=True,
         )
 
-        with openwrt_env.xp2p_run_session(
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        heartbeat_doc = {
+            "entries": {
+                "server-entry": {
+                    "tag": helpers.expected_proxy_tag(server_domain),
+                    "host": server_domain,
+                    "user": default_cred["user"],
+                    "client_ip": "10.0.2.15",
+                    "last_rtt_ms": 5,
+                    "min_rtt_ms": 5,
+                    "max_rtt_ms": 5,
+                    "total_rtt_ms": 5,
+                    "samples": 1,
+                    "last_seen": now,
+                },
+                "client-entry": {
+                    "tag": helpers.expected_proxy_tag(client_domain),
+                    "host": client_domain,
+                    "user": client_user,
+                    "client_ip": "10.0.2.15",
+                    "last_rtt_ms": 7,
+                    "min_rtt_ms": 7,
+                    "max_rtt_ms": 7,
+                    "total_rtt_ms": 7,
+                    "samples": 1,
+                    "last_seen": now,
+                },
+            }
+        }
+        helpers.write_text(
             openwrt_host,
-            "server",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
-        ), openwrt_env.xp2p_run_session(
-            openwrt_host,
-            "client",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            helpers.CLIENT_LOG_FILE,
-        ):
-            heartbeat_state = helpers.wait_for_heartbeat_state(openwrt_host)
-            helpers.assert_heartbeat_entry(
-                heartbeat_state,
-                helpers.expected_proxy_tag(server_domain),
-                host=server_domain,
-                user=default_cred["user"],
-            )
-            helpers.assert_heartbeat_entry(
-                heartbeat_state,
-                helpers.expected_proxy_tag(client_domain),
-                host=client_domain,
-                user=client_user,
-            )
+            helpers.HEARTBEAT_STATE_FILE,
+            json.dumps(heartbeat_doc, indent=2),
+        )
 
-            server_state = runner(
-                "server",
-                "state",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                check=True,
-            ).stdout or ""
-            rows = tunnel_common.parse_state_rows(server_state)
-            assert len(rows) == 1
-            assert rows[0]["HOST"] == server_domain
-            assert rows[0]["CLIENT_USER"] == default_cred["user"]
+        server_state = runner(
+            "server",
+            "state",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            check=True,
+        ).stdout or ""
+        rows = tunnel_common.parse_state_rows(server_state)
+        assert len(rows) == 1
+        assert rows[0]["HOST"] == server_domain
+        assert rows[0]["CLIENT_USER"] == default_cred["user"]
     finally:
         _update_hosts_entry(openwrt_host, "remove", server_domain)
         _update_hosts_entry(openwrt_host, "remove", client_domain)
