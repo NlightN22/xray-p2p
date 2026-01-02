@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{2A0AB5BE-8EAA-4FBE-91E9-987F93F0E1C5}">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x86" />
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x86" Description="xp2p tunnel service" />
 
     <MajorUpgrade Schedule="afterInstallValidate"
                   AllowDowngrades="no"
@@ -11,6 +11,11 @@
     <MediaTemplate EmbedCab="yes" />
 
     <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPCONTACT" Value="xp2p maintainers" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/NlightN22/xray-p2p" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/NlightN22/xray-p2p/issues" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/NlightN22/xray-p2p/releases" />
+    <Property Id="ARPCOMMENTS" Value="Minimal Trojan tunnel based on xray-core." />
     <Property Id="XP2P_CLIENT_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" Value="1" />

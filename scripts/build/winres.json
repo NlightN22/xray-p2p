@@ -1,0 +1,11 @@
+{
+  "RT_VERSION": {
+    "ProductName": "xp2p",
+    "ProductVersion": "0.0.0",
+    "FileDescription": "xp2p tunnel service",
+    "FileVersion": "0.0.0",
+    "CompanyName": "xp2p maintainers",
+    "LegalCopyright": "Copyright (c) xp2p maintainers",
+    "OriginalFilename": "xp2p.exe"
+  }
+}

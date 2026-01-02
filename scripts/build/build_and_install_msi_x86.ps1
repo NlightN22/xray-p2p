@@ -58,6 +58,18 @@ try {
     Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue
     Ensure-Directory $binaryDir
 
+    Write-Info "Generating Windows version resources"
+    $winresConfig = Join-Path $RepoRoot 'scripts\build\winres.json'
+    if (-not (Test-Path $winresConfig)) {
+        throw "winres config missing at $winresConfig"
+    }
+    $rsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
+    Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
+    go run github.com/tc-hib/go-winres@v0.2.0 make --in $winresConfig --out $rsrcPrefix --arch 386 --product-version $version --file-version $version
+    if ($LASTEXITCODE -ne 0) {
+        throw "go-winres failed with exit code $LASTEXITCODE"
+    }
+
     Write-Info "Building xp2p.exe (x86)"
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'
     $env:GOARCH = '386'
