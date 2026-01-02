@@ -148,9 +148,21 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
 
         updated_outbounds = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbound_entry(updated_outbounds, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10", allow_insecure=True)
         _assert_outbound_entry(
-            updated_outbounds, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local", allow_insecure=True
+            updated_outbounds,
+            "10.0.10.10",
+            "test_password123",
+            "alpha@example.com",
+            "10.0.10.10",
+            allow_insecure=False,
+        )
+        _assert_outbound_entry(
+            updated_outbounds,
+            "10.0.10.11",
+            "override_password456",
+            "beta@example.com",
+            "vpn.example.local",
+            allow_insecure=False,
         )
 
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
@@ -192,8 +204,22 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
 
         refreshed = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbound_entry(refreshed, "10.0.10.10", "force-password", "gamma@example.com", "override.example", allow_insecure=True)
-        _assert_outbound_entry(refreshed, "10.0.10.11", "override_password456", "beta@example.com", "vpn.example.local", allow_insecure=True)
+        _assert_outbound_entry(
+            refreshed,
+            "10.0.10.10",
+            "force-password",
+            "gamma@example.com",
+            "override.example",
+            allow_insecure=False,
+        )
+        _assert_outbound_entry(
+            refreshed,
+            "10.0.10.11",
+            "override_password456",
+            "beta@example.com",
+            "vpn.example.local",
+            allow_insecure=False,
+        )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
@@ -219,6 +245,32 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry(
             data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=True
+        )
+    finally:
+        _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_client_install_from_link_without_allow_insecure(client_host, xp2p_client_runner, xp2p_msi_path):
+    _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
+    try:
+        link = (
+            "trojan://linkpass@link.example.test:62022?"
+            "security=tls&sni=link.example.test#link@example.com"
+        )
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--link",
+            link,
+            "--force",
+            check=True,
+        )
+
+        data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        _assert_outbound_entry(
+            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
         )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

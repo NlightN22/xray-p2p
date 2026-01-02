@@ -15,6 +15,7 @@ type trojanLink struct {
 	ServerName    string
 	ServerNameSet bool
 	AllowInsecure bool
+	AllowInsecureSet bool
 }
 
 func parseTrojanLink(raw string) (trojanLink, error) {
@@ -64,7 +65,9 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 
 	query := parsed.Query()
 	allowInsecure := false
+	allowInsecureSet := false
 	if rawAllow := strings.TrimSpace(query.Get("allowInsecure")); rawAllow != "" {
+		allowInsecureSet = true
 		val, convErr := parseBoolFlag(rawAllow)
 		if convErr != nil {
 			return trojanLink{}, fmt.Errorf("invalid allowInsecure value %q", rawAllow)
@@ -96,6 +99,7 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 		ServerName:    serverName,
 		ServerNameSet: serverNameSet,
 		AllowInsecure: allowInsecure,
+		AllowInsecureSet: allowInsecureSet,
 	}, nil
 }
 

@@ -64,6 +64,26 @@ func TestRunClientInstall(t *testing.T) {
 			},
 		},
 		{
+			name: "sni does not enable allow insecure",
+			cfg:  defaultCfg,
+			args: []string{
+				"--host", "example.org",
+				"--user", "user@example.com",
+				"--password", "secret",
+				"--sni", "custom.name",
+			},
+			wantCode:   0,
+			wantCalled: true,
+			check: func(t *testing.T, opts client.InstallOptions) {
+				if opts.AllowInsecure {
+					t.Fatalf("expected allow insecure to remain false when only sni is provided")
+				}
+				if opts.AllowInsecureOverride {
+					t.Fatalf("expected allow insecure override to remain false when only sni is provided")
+				}
+			},
+		},
+		{
 			name:       "install error surfaces",
 			cfg:        defaultCfg,
 			args:       []string{"--host", "host", "--user", "user@example.com", "--password", "secret"},

@@ -53,7 +53,6 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	userFlagProvided := false
 	hostProvided := false
 	passwordProvided := false
-	sniFlagProvided := false
 	allowInsecureRequested := false
 	strictTLSRequested := false
 	fs.Visit(func(f *flag.Flag) {
@@ -64,8 +63,6 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 			hostProvided = true
 		case "password":
 			passwordProvided = true
-		case "sni":
-			sniFlagProvided = true
 		case "allow-insecure":
 			allowInsecureRequested = true
 		case "strict-tls":
@@ -103,10 +100,6 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	serverNameValue := cfg.Client.ServerName
 	allowInsecureValue := cfg.Client.AllowInsecure
 
-	if sniFlagProvided && !*strictTLS {
-		allowInsecureValue = true
-	}
-
 	if linkValue != "" {
 		serverAddressValue = linkData.ServerAddress
 		serverPortValue = linkData.ServerPort
@@ -124,7 +117,10 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	passwordValue = firstNonEmpty(*password, passwordValue)
 	serverNameValue = firstNonEmpty(*serverName, serverNameValue)
 
-	allowOverride := allowInsecureRequested || strictTLSRequested || (sniFlagProvided && !*strictTLS)
+	allowOverride := allowInsecureRequested || strictTLSRequested
+	if linkValue != "" && linkData.AllowInsecureSet {
+		allowOverride = true
+	}
 
 	opts := client.InstallOptions{
 		InstallDir:            installDir,

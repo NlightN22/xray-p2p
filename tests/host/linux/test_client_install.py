@@ -72,7 +72,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "test_password123",
             "alpha@example.com",
             "10.55.0.10",
-            allow_insecure=True,
+            allow_insecure=False,
         )
         helpers.assert_outbound(
             updated,
@@ -80,7 +80,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "override_password456",
             "beta@example.com",
             "vpn.example.local",
-            allow_insecure=True,
+            allow_insecure=False,
         )
 
         routing = helpers.read_json(client_host, CLIENT_ROUTING)
@@ -135,7 +135,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "forcepass",
             "gamma@example.com",
             "override.linux",
-            allow_insecure=True,
+            allow_insecure=False,
         )
         helpers.assert_outbound(
             refreshed,
@@ -143,7 +143,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "override_password456",
             "beta@example.com",
             "vpn.example.local",
-            allow_insecure=True,
+            allow_insecure=False,
         )
     finally:
         _cleanup(client_host, xp2p_client_runner)
@@ -173,6 +173,35 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
         data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=True
+        )
+    finally:
+        _cleanup(client_host, xp2p_client_runner)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_client_install_from_link_without_allow_insecure(client_host, xp2p_client_runner):
+    _cleanup(client_host, xp2p_client_runner)
+    try:
+        link = (
+            "trojan://linkpass@link.example.test:62022?"
+            "security=tls&sni=link.example.test#link@example.com"
+        )
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--link",
+            link,
+            "--force",
+            check=True,
+        )
+        data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        helpers.assert_outbound(
+            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
         )
     finally:
         _cleanup(client_host, xp2p_client_runner)
