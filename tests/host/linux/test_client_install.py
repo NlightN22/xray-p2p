@@ -45,7 +45,6 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "test_password123",
             "alpha@example.com",
             "10.55.0.10",
-            allow_insecure=True,
         )
 
         xp2p_client_runner(
@@ -73,7 +72,6 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             "test_password123",
             "alpha@example.com",
             "10.55.0.10",
-            allow_insecure=True,
         )
         helpers.assert_outbound(
             updated,
@@ -281,7 +279,6 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             "echo-pass",
             "echo@example.com",
             "10.66.0.11",
-            allow_insecure=True,
         )
         _assert_no_endpoint("10.66.0.10", outbounds)
 
