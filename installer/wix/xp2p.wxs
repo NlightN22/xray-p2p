@@ -14,7 +14,7 @@
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="XP2P_CLIENT_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
-    <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" />
+    <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" Value="1" />
 
     <CustomAction Id="SetPerUserInstall" Property="MSIINSTALLPERUSER" Value="1" Execute="immediate" />
     <CustomAction Id="SetPerUserFolder" Property="INSTALLFOLDER" Value="[LocalAppDataFolder]xp2p" Execute="immediate" />
@@ -96,7 +96,7 @@
       </Component>
 
       <Component Id="cmpServiceAutostart" Guid="{E0F23327-5C68-4699-98A5-1E4D91550ABA}" Win64="yes">
-        <Condition>NOT XP2P_SKIP_SERVICE_START</Condition>
+        <Condition>XP2P_SKIP_SERVICE_START="0"</Condition>
         <RegistryValue Root="HKLM"
                        Key="Software\xp2p"
                        Name="ServiceAutostart"
