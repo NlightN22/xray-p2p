@@ -147,7 +147,8 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
     helpers.cleanup_server_install(server_host, server_runner)
     helpers.cleanup_client_install(client_b, client_b_runner)
     helpers.cleanup_client_install(client_c, client_c_runner)
-    for host in (server_host, client_b, client_c):
+    helpers.remove_path(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
+    for host in (client_b, client_c):
         helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
 
     try:
@@ -327,7 +328,10 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                 client_b_session.__enter__()
                 client_c_session = None
                 try:
-                    helpers.wait_for_heartbeat_state(server_host)
+                    helpers.wait_for_heartbeat_state(
+                        server_host,
+                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                    )
                     _assert_server_state_reports_user(server_host, default_cred["user"])
                     client_c_session = linux_env.xp2p_run_session(
                         client_c,
@@ -338,7 +342,10 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                     )
                     client_c_session.__enter__()
                     try:
-                        helpers.wait_for_heartbeat_state(server_host)
+                        helpers.wait_for_heartbeat_state(
+                            server_host,
+                            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                        )
                         _assert_server_state_reports_users(
                             server_host,
                             {default_cred["user"], "client-two@example.com"},
@@ -361,7 +368,10 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                         pass
                     client_b_session.__exit__(None, None, None)
                     client_b_session = None
-                    helpers.wait_for_heartbeat_state(server_host)
+                    helpers.wait_for_heartbeat_state(
+                        server_host,
+                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                    )
                     _assert_server_state_reports_user(server_host, "client-two@example.com")
                 finally:
                     if client_c_session is not None:
@@ -421,5 +431,6 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
         helpers.cleanup_client_install(client_b, client_b_runner)
         helpers.cleanup_client_install(client_c, client_c_runner)
         helpers.cleanup_server_install(server_host, server_runner)
-        for host in (server_host, client_b, client_c):
+        helpers.remove_path(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
+        for host in (client_b, client_c):
             helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)

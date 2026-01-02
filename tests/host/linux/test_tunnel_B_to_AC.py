@@ -67,8 +67,9 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
         helpers.cleanup_server_install(server_a, server_a_runner)
         helpers.cleanup_server_install(server_c, server_c_runner)
         helpers.cleanup_client_install(client_b, client_runner)
-        for host in (server_a, server_c, client_b):
-            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+        for host in (server_a, server_c):
+            helpers.remove_path(host, helpers.SERVER_HEARTBEAT_STATE_FILE)
+        helpers.remove_path(client_b, helpers.CLIENT_HEARTBEAT_STATE_FILE)
 
     cleanup()
     try:
@@ -265,7 +266,10 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                         f"{result.stdout}"
                     )
                 for entry in server_entries:
-                    heartbeat_state = helpers.wait_for_heartbeat_state(entry["host"])
+                    heartbeat_state = helpers.wait_for_heartbeat_state(
+                        entry["host"],
+                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                    )
                     helpers.assert_heartbeat_entry(
                         heartbeat_state,
                         helpers.expected_proxy_tag(entry["ip"]),

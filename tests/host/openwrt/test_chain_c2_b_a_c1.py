@@ -65,8 +65,8 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
         client_runner("nat-redirect", "remove", "--all", check=False)
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
-        for host in (server_host, client_host):
-            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+        helpers.remove_path(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
+        helpers.remove_path(client_host, helpers.CLIENT_HEARTBEAT_STATE_FILE)
 
     cleanup()
     openwrt_env.sync_build_output(SERVER_MACHINE)

@@ -23,7 +23,8 @@ SOCKS_PORT = 51180
 SERVER_DIAGNOSTICS_PORT = 62022
 CLIENT_DIAGNOSTICS_PORT = 62023
 REVERSE_TUNNEL_WARMUP_SECONDS = 2.5
-HEARTBEAT_STATE_FILE = helpers.INSTALL_ROOT / "state-heartbeat.json"
+SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
+CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
 
 
 def _runner(host):
@@ -132,8 +133,8 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             _stop_xp2p_processes(host)
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
-        for host in (server_host, client_host):
-            helpers.remove_path(host, HEARTBEAT_STATE_FILE)
+        helpers.remove_path(server_host, SERVER_HEARTBEAT_STATE_FILE)
+        helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
         if iface:
             _remove_ip_alias(server_host, iface, DIAG_CIDR)
         _remove_hosts_entry(server_host, DIAG_DOMAIN)
@@ -247,7 +248,10 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
                 _wait_for_port(server_host, SERVER_DIAGNOSTICS_PORT)
-                heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
+                heartbeat_state = helpers.wait_for_heartbeat_state(
+                    server_host,
+                    path=SERVER_HEARTBEAT_STATE_FILE,
+                )
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
                     endpoint_tag,
@@ -321,7 +325,10 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
                 _wait_for_port(server_host, SERVER_DIAGNOSTICS_PORT)
-                heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
+                heartbeat_state = helpers.wait_for_heartbeat_state(
+                    server_host,
+                    path=SERVER_HEARTBEAT_STATE_FILE,
+                )
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
                     endpoint_tag,
@@ -373,8 +380,8 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             _stop_xp2p_processes(host)
         helpers.cleanup_server_install(server_host, _runner(server_host))
         helpers.cleanup_client_install(client_host, _runner(client_host))
-        for host in (server_host, client_host):
-            helpers.remove_path(host, HEARTBEAT_STATE_FILE)
+        helpers.remove_path(server_host, SERVER_HEARTBEAT_STATE_FILE)
+        helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
         _remove_ip_alias(client_host, client_iface, CLIENT_DIAG_CIDR)
         if reverse_tag:
             server_cleanup = _runner(server_host)(
@@ -487,7 +494,10 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
         ):
             _wait_for_port(client_host, SOCKS_PORT)
             _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
-            heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
+            heartbeat_state = helpers.wait_for_heartbeat_state(
+                server_host,
+                path=SERVER_HEARTBEAT_STATE_FILE,
+            )
             helpers.assert_heartbeat_entry(
                 heartbeat_state,
                 endpoint_tag,
@@ -546,7 +556,10 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             ):
                 _wait_for_port(client_host, SOCKS_PORT)
                 _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
-                heartbeat_state = helpers.wait_for_heartbeat_state(server_host)
+                heartbeat_state = helpers.wait_for_heartbeat_state(
+                    server_host,
+                    path=SERVER_HEARTBEAT_STATE_FILE,
+                )
                 helpers.assert_heartbeat_entry(
                     heartbeat_state,
                     endpoint_tag,

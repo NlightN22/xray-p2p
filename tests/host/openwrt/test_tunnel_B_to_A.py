@@ -23,7 +23,8 @@ CLIENT_FORWARD_PORT = 53331
 CLIENT_REDIRECT_CIDR = "10.0.101.0/24"
 SERVER_REDIRECT_CIDR = "10.0.102.0/24"
 pytestmark = [pytest.mark.host, pytest.mark.linux]
-HEARTBEAT_STATE_FILE = helpers.HEARTBEAT_STATE_FILE
+SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
+CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
 
 
 def _runner(host):
@@ -61,8 +62,8 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             )
         helpers.cleanup_server_install(server_host, server_runner)
         helpers.cleanup_client_install(client_host, client_runner)
-        for host in (server_host, client_host):
-            helpers.remove_path(host, HEARTBEAT_STATE_FILE)
+        helpers.remove_path(server_host, SERVER_HEARTBEAT_STATE_FILE)
+        helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
 
     cleanup()
     openwrt_env.sync_build_output(SERVER_MACHINE)
@@ -327,8 +328,8 @@ def _verify_heartbeat_state(env: dict) -> None:
     server_install_path = env["server_install_path"]
     client_install_path = helpers.INSTALL_ROOT.as_posix()
 
-    helpers.wait_for_heartbeat_state(env["server_host"], HEARTBEAT_STATE_FILE)
-    helpers.wait_for_heartbeat_state(env["client_host"], HEARTBEAT_STATE_FILE)
+    helpers.wait_for_heartbeat_state(env["server_host"], SERVER_HEARTBEAT_STATE_FILE)
+    helpers.wait_for_heartbeat_state(env["client_host"], CLIENT_HEARTBEAT_STATE_FILE)
     try:
         tunnel_common.wait_for_alive_entry(
             env["server_runner"],
