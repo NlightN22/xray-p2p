@@ -1,11 +1,24 @@
 {
   "RT_VERSION": {
-    "ProductName": "xp2p",
-    "ProductVersion": "0.0.0",
-    "FileDescription": "xp2p tunnel service",
-    "FileVersion": "0.0.0",
-    "CompanyName": "xp2p maintainers",
-    "LegalCopyright": "Copyright (c) xp2p maintainers",
-    "OriginalFilename": "xp2p.exe"
+    "#1": {
+      "0000": {
+        "fixed": {
+          "file_version": "0.0.0.0",
+          "product_version": "0.0.0.0"
+        },
+        "info": {
+          "0409": {
+            "CompanyName": "xp2p maintainers",
+            "FileDescription": "xp2p tunnel service",
+            "FileVersion": "0.0.0",
+            "InternalName": "xp2p",
+            "LegalCopyright": "Copyright (c) xp2p maintainers",
+            "OriginalFilename": "xp2p.exe",
+            "ProductName": "xp2p",
+            "ProductVersion": "0.0.0"
+          }
+        }
+      }
+    }
   }
 }
