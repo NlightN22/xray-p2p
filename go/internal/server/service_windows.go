@@ -53,10 +53,12 @@ func runServerServiceLoop(ctx context.Context, opts ServiceOptions) error {
 	}
 
 	watchPaths := []string{
-		installDir,
+		filepath.Join(installDir, "bin"),
 		configDirPath,
 	}
 	ignorePaths := []string{
+		filepath.Join(installDir, layout.ClientHeartbeatStateFileName),
+		filepath.Join(installDir, layout.HeartbeatStateFileName),
 		filepath.Join(installDir, layout.ServerHeartbeatStateFileName),
 	}
 
