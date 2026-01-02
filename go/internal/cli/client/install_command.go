@@ -101,10 +101,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	userValue := cfg.Client.User
 	passwordValue := cfg.Client.Password
 	serverNameValue := cfg.Client.ServerName
-	allowInsecureValue := true
-	if cfg.Client.AllowInsecure {
-		allowInsecureValue = true
-	}
+	allowInsecureValue := cfg.Client.AllowInsecure
 
 	if sniFlagProvided && !*strictTLS {
 		allowInsecureValue = true
