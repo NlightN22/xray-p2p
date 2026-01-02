@@ -50,6 +50,8 @@ def parse_state_rows(output: str) -> list[dict[str, str]]:
             continue
         if not header:
             continue
+        if len(cells) == len(header) - 1 and header[-1] == "CLIENT_IP":
+            cells.append("-")
         if len(cells) != len(header):
             continue
         if all(cell.strip() == "-" for cell in cells):
