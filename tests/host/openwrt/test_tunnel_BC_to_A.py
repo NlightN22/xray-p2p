@@ -183,6 +183,7 @@ def _assert_server_state_reports_users_alive(
         f"{sorted(expected)} after {attempts} attempts.\nLast output:\n{last_stdout}"
     )
 
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
@@ -396,19 +397,19 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     )
                     client_c_session.__enter__()
                     try:
-                    helpers.wait_for_heartbeat_state(server_host)
-                    _assert_server_state_reports_users(
-                        server_host,
-                        {default_cred["user"], "client-two@example.com"},
-                    )
-                    _assert_server_state_reports_users_alive(
-                        server_host,
-                        {default_cred["user"], "client-two@example.com"},
-                    )
-                    for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
-                        result = runner(
-                            "ping",
-                            SERVER_IP,
+                        helpers.wait_for_heartbeat_state(server_host)
+                        _assert_server_state_reports_users(
+                            server_host,
+                            {default_cred["user"], "client-two@example.com"},
+                        )
+                        _assert_server_state_reports_users_alive(
+                            server_host,
+                            {default_cred["user"], "client-two@example.com"},
+                        )
+                        for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
+                            result = runner(
+                                "ping",
+                                SERVER_IP,
                                 "--tunnel",
                                 "--count",
                                 "3",
