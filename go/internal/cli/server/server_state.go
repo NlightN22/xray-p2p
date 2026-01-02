@@ -2,7 +2,9 @@ package servercmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/stateview"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
@@ -63,7 +66,9 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 	}
 
 	if opts.Watch {
-		err := stateview.Watch(ctx, statePath, interval, ttl)
+		err := stateview.WatchWithSnapshots(ctx, func() ([]heartbeat.Snapshot, error) {
+			return snapshotServerState(statePath, installDir, ttl)
+		}, interval)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logging.Error("xp2p server state: watch failed", "err", err)
 			return 1
@@ -71,9 +76,87 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 		return 0
 	}
 
-	if err := stateview.Print(statePath, ttl); err != nil {
+	if err := stateview.PrintWithSnapshots(func() ([]heartbeat.Snapshot, error) {
+		return snapshotServerState(statePath, installDir, ttl)
+	}); err != nil {
 		logging.Error("xp2p server state: failed to render state", "err", err)
 		return 1
 	}
 	return 0
+}
+
+func snapshotServerState(statePath, installDir string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
+	reversePairs, err := loadServerReversePairs(installDir)
+	if err != nil {
+		return nil, err
+	}
+	if len(reversePairs) == 0 {
+		return []heartbeat.Snapshot{}, nil
+	}
+	snapshots, err := stateview.Snapshot(statePath, ttl)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]heartbeat.Snapshot, 0, len(snapshots))
+	for _, snap := range snapshots {
+		user := strings.TrimSpace(snap.Entry.User)
+		host := strings.TrimSpace(snap.Entry.Host)
+		if user == "" || host == "" {
+			continue
+		}
+		key := strings.ToLower(user) + "|" + strings.ToLower(host)
+		if _, ok := reversePairs[key]; ok {
+			filtered = append(filtered, snap)
+		}
+	}
+	return filtered, nil
+}
+
+func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
+	candidates := []string{
+		filepath.Join(installDir, layout.ServerStateFileName),
+		filepath.Join(installDir, layout.StateFileName),
+	}
+	var doc map[string]any
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, err
+		}
+		if len(strings.TrimSpace(string(data))) == 0 {
+			continue
+		}
+		if err := json.Unmarshal(data, &doc); err != nil {
+			return nil, err
+		}
+		break
+	}
+	if len(doc) == 0 {
+		return map[string]struct{}{}, nil
+	}
+	raw := doc["reverse_channels"]
+	channels, ok := raw.(map[string]any)
+	if !ok || len(channels) == 0 {
+		return map[string]struct{}{}, nil
+	}
+	pairs := make(map[string]struct{}, len(channels))
+	for _, value := range channels {
+		entry, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		user, _ := entry["user_id"].(string)
+		host, _ := entry["host"].(string)
+		user = strings.TrimSpace(user)
+		host = strings.TrimSpace(host)
+		if user == "" || host == "" {
+			continue
+		}
+		key := strings.ToLower(user) + "|" + strings.ToLower(host)
+		pairs[key] = struct{}{}
+	}
+	return pairs, nil
 }
