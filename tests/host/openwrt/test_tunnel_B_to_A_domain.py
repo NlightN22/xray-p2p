@@ -71,6 +71,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
         helpers.cleanup_client_install(client_host, client_runner)
         helpers.remove_path(server_host, SERVER_HEARTBEAT_STATE_FILE)
         helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
+        for host in (server_host, client_host):
             _update_hosts_entry(host, "remove", SERVER_DOMAIN)
 
     cleanup()
