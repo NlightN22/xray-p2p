@@ -380,6 +380,7 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             "10.66.0.10",
+            "--quiet",
             check=True,
         )
 
@@ -432,6 +433,7 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--all",
+            "--quiet",
             check=True,
         )
 
