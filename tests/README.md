@@ -42,9 +42,11 @@
 - Prerequisites:
   - Windows: boot both guests (make vagrant-win10) so that C:\\xp2p is available inside each VM.
   - Linux: boot all three Debian guests from infra/vagrant/debian12/deb-test and wait for provisioning to finish.
+  - OpenWrt: boot the OpenWrt guests from infra/vagrant/openwrt and the IPK builder from infra/vagrant/debian12/ipk-build.
 - Execution:
   - Windows suite: pytest tests/host/win. These tests build MSI packages inside the guests, install xp2p into `C:\Program Files\xp2p`, manage services, and exercise client/server install/update flows via WinRM.
   - Linux suite: pytest tests/host/linux. The helpers connect over SSH, work directly from `/srv/xray-p2p`, invoke `scripts/build/build_deb_xp2p.sh` to build a `.deb`, install it via `dpkg` (placing `xp2p` into `/usr/bin`), and then run integration scenarios mirroring the Windows coverage (client install flows, server install + TLS management, dual-role installs, server user CRUD).
+  - OpenWrt suite: pytest tests/host/openwrt. The helpers build IPK packages on the debian12 ipk-build VM, sync artifacts into the OpenWrt/Alpine guests, install via opkg, and run deploy/forward/redirect scenarios.
   - Forward CLI coverage: `tests/host/linux/test_forward_cli.py` drives `xp2p client/server forward {add,remove,list}` end to end, checking auto-port selection (start at 53331 and skip busy ports), list/table output, removal via listen-port/tag/remark, and the warning emitted when no redirect matches the forward target.
   - Reverse tunnel validation: `tests/host/linux/test_tunnel_B_to_A.py` now provisions real `xp2p client forward`/`xp2p server forward` listeners inside the running tunnel, relies on the built-in diagnostics ping to hit the forwarded ports, and confirms traffic reaches the remote diagnostic service before cleaning up both rules.
 - Both suites rely on the shared helpers under tests/host/common.py for Vagrant orchestration.

@@ -31,9 +31,6 @@ func applyClientEndpointConfig(configDir, stateFile string, endpoint endpointCon
 	}
 
 	allowValue := endpoint.AllowInsecure
-	if !endpoint.AllowInsecureOverride && len(state.Endpoints) > 0 {
-		allowValue = state.Endpoints[0].AllowInsecure
-	}
 
 	record := clientEndpointRecord{
 		Hostname:      host,

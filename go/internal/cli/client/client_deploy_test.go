@@ -12,6 +12,7 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 	opts := deployOptions{
 		manifest: manifestOptions{
 			installDir:     "/srv/xp2p",
+			installDirSet:  true,
 			trojanPort:     "65001",
 			trojanUser:     "user@example.invalid",
 			trojanPassword: "p@ssw0rd",

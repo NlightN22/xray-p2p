@@ -34,6 +34,7 @@ const (
 type manifestOptions struct {
 	remoteHost     string
 	installDir     string
+	installDirSet  bool
 	trojanPort     string
 	trojanUser     string
 	trojanPassword string
@@ -95,6 +96,10 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		res, notifyComplete, handshakeErr = performDeployHandshake(ctx, opts)
 		if handshakeErr == nil {
 			break
+		}
+		if isServerDeployError(handshakeErr) {
+			logging.Error("xp2p client deploy: server rejected deploy request", "err", handshakeErr)
+			return 1
 		}
 		if time.Now().After(deadline) {
 			logging.Error("xp2p client deploy: handshake timeout", "err", handshakeErr)
@@ -249,6 +254,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 
 	hostFlag := fs.String("host", "", "deploy host name or address")
 	deployPort := fs.String("port", "62025", "deploy port (default 62025)")
+	installDir := fs.String("install-dir", "", "server install directory override")
 	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
 	trojanPort := fs.String("trojan-port", "", "Trojan service port")
@@ -288,10 +294,18 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		passwordValue = gen
 	}
 
+	installDirSet := false
+	fs.Visit(func(flag *flag.Flag) {
+		if flag.Name == "install-dir" {
+			installDirSet = true
+		}
+	})
+
 	return deployOptions{
 		manifest: manifestOptions{
 			remoteHost:     host,
-			installDir:     strings.TrimSpace(cfg.Server.InstallDir),
+			installDir:     strings.TrimSpace(*installDir),
+			installDirSet:  installDirSet,
 			trojanPort:     serverPortValue,
 			trojanUser:     strings.TrimSpace(userValue),
 			trojanPassword: strings.TrimSpace(passwordValue),
@@ -305,10 +319,14 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 }
 
 func buildDeployLink(opts *deployOptions) (string, error) {
+	installDir := ""
+	if opts.manifest.installDirSet {
+		installDir = strings.TrimSpace(opts.manifest.installDir)
+	}
 	manifest := spec.Manifest{
 		Host:           strings.TrimSpace(opts.runtime.serverHost),
 		Version:        2,
-		InstallDir:     strings.TrimSpace(opts.manifest.installDir),
+		InstallDir:     installDir,
 		TrojanPort:     strings.TrimSpace(opts.manifest.trojanPort),
 		TrojanUser:     strings.TrimSpace(opts.manifest.trojanUser),
 		TrojanPassword: strings.TrimSpace(opts.manifest.trojanPassword),

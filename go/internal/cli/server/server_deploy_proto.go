@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -179,6 +180,11 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 	}
 
 	installDir := strings.TrimSpace(man.InstallDir)
+	if err := validateWindowsDeployInstallDir(installDir); err != nil {
+		_ = writeLine(rw, "ERR "+err.Error())
+		notifyFailure(results)
+		return
+	}
 	if installDir == "" {
 		installDir = strings.TrimSpace(s.Cfg.Server.InstallDir)
 	}
@@ -284,4 +290,18 @@ func (s *deployServer) waitForCompletion(conn net.Conn, rw *bufio.ReadWriter, re
 	if results != nil {
 		results <- runSignal{completed: true, status: status}
 	}
+}
+
+func validateWindowsDeployInstallDir(installDir string) error {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
+	installDir = strings.TrimSpace(installDir)
+	if installDir == "" {
+		return nil
+	}
+	if strings.HasPrefix(installDir, "/") && !strings.HasPrefix(installDir, "//") {
+		return fmt.Errorf("invalid install_dir for Windows: %q", installDir)
+	}
+	return nil
 }

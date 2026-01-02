@@ -70,7 +70,7 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 	if !strings.HasPrefix(line, "OK") {
 		if strings.HasPrefix(line, "ERR ") {
 			closeConn()
-			return deployResult{}, nil, fmt.Errorf("server error: %s", strings.TrimSpace(strings.TrimPrefix(line, "ERR ")))
+			return deployResult{}, nil, serverDeployError{msg: strings.TrimSpace(strings.TrimPrefix(line, "ERR "))}
 		}
 		closeConn()
 		return deployResult{}, nil, fmt.Errorf("unexpected AUTH response: %q", line)
@@ -193,7 +193,7 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 			return result, completion, nil
 		case strings.HasPrefix(l, "ERR "):
 			closeConn()
-			return deployResult{}, nil, fmt.Errorf("server error: %s", strings.TrimSpace(strings.TrimPrefix(l, "ERR ")))
+			return deployResult{}, nil, serverDeployError{msg: strings.TrimSpace(strings.TrimPrefix(l, "ERR "))}
 		default:
 			// Unknown line, keep a trace to help debugging but avoid spam.
 			logging.Debug("xp2p client deploy: unhandled line", "line", l)
@@ -241,6 +241,19 @@ func readSegment(rw *bufio.ReadWriter, end string, onLine func(string)) error {
 type boundedBuffer struct {
 	data  []byte
 	limit int
+}
+
+type serverDeployError struct {
+	msg string
+}
+
+func (e serverDeployError) Error() string {
+	return "server error: " + e.msg
+}
+
+func isServerDeployError(err error) bool {
+	var target serverDeployError
+	return errors.As(err, &target)
 }
 
 func (b *boundedBuffer) appendLine(line string) {

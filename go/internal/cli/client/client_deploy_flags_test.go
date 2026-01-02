@@ -57,6 +57,30 @@ func TestParseDeployFlagsRequiresRemoteHost(t *testing.T) {
 	}
 }
 
+func TestParseDeployFlagsInstallDirFlag(t *testing.T) {
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			InstallDir: `C:\xp2p-default`,
+		},
+	}
+
+	opts, err := parseDeployFlags(cfg, []string{"--host", "deploy.example.com"})
+	if err != nil {
+		t.Fatalf("parseDeployFlags returned error: %v", err)
+	}
+	if opts.manifest.installDir != "" || opts.manifest.installDirSet {
+		t.Fatalf("expected install dir to be unset, got %q (set=%v)", opts.manifest.installDir, opts.manifest.installDirSet)
+	}
+
+	opts, err = parseDeployFlags(cfg, []string{"--host", "deploy.example.com", "--install-dir", `D:\xp2p-custom`})
+	if err != nil {
+		t.Fatalf("parseDeployFlags returned error: %v", err)
+	}
+	if !opts.manifest.installDirSet || opts.manifest.installDir != `D:\xp2p-custom` {
+		t.Fatalf("expected install dir flag to be set, got %q (set=%v)", opts.manifest.installDir, opts.manifest.installDirSet)
+	}
+}
+
 func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	cfg := config.Config{
 		Client: config.ClientConfig{

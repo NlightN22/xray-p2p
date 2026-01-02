@@ -277,7 +277,9 @@ def _assert_link_matches(
     assert fragment == trojan_user, f"trojan user fragment mismatch (got {fragment}, want {trojan_user})"
     query = parse.parse_qs(parsed.query)
     assert query.get("deploy_version") == ["2"], f"deploy_version missing/mismatch: {query}"
-    assert query.get("install_dir") == [helpers.INSTALL_ROOT.as_posix()], f"install_dir mismatch: {query}"
+    install_dir = query.get("install_dir")
+    if install_dir is not None:
+        assert install_dir == [helpers.INSTALL_ROOT.as_posix()], f"install_dir mismatch: {query}"
     assert query.get("security") == ["tls"], f"security param missing: {query}"
     assert query.get("sni") == [host], f"sni mismatch (got {query.get('sni')}, want {host})"
 
