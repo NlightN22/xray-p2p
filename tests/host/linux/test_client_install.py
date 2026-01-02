@@ -6,6 +6,7 @@ import pytest
 
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
+from tests.host.tunnel import common as tunnel_common
 
 CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_LOG_PATH = helpers.CLIENT_LOG_FILE
@@ -203,6 +204,65 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
         helpers.assert_outbound(
             data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
         )
+    finally:
+        _cleanup(client_host, xp2p_client_runner)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner):
+    _cleanup(client_host, xp2p_client_runner)
+    try:
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--host",
+            "10.55.0.40",
+            "--user",
+            "state-one@example.com",
+            "--password",
+            "state-pass-one",
+            check=True,
+        )
+        link = (
+            "trojan://statepass@link.example.test:62022?"
+            "allowInsecure=1&security=tls&sni=link.example.test#state-two@example.com"
+        )
+        xp2p_client_runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--link",
+            link,
+            check=True,
+        )
+
+        if helpers.path_exists(client_host, helpers.HEARTBEAT_STATE_FILE):
+            helpers.remove_path(client_host, helpers.HEARTBEAT_STATE_FILE)
+
+        result = xp2p_client_runner(
+            "client",
+            "state",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            check=True,
+        )
+        rows = tunnel_common.parse_state_rows(result.stdout or "")
+        expected_tags = {
+            helpers.expected_proxy_tag("10.55.0.40"),
+            helpers.expected_proxy_tag("link.example.test"),
+        }
+        expected_hosts = {"10.55.0.40", "link.example.test"}
+        assert len(rows) == 2
+        assert {row["TAG"] for row in rows} == expected_tags
+        assert {row["HOST"] for row in rows} == expected_hosts
     finally:
         _cleanup(client_host, xp2p_client_runner)
 

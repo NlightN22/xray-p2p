@@ -3,6 +3,7 @@ package clientcmd
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,7 +11,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/stateview"
+	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
@@ -61,8 +64,13 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 		interval = 2 * time.Second
 	}
 
+	configDir := strings.TrimSpace(cfg.Client.ConfigDir)
+	stateProvider := func() ([]heartbeat.Snapshot, error) {
+		return snapshotClientState(installDir, configDir, statePath, ttl)
+	}
+
 	if opts.Watch {
-		err := stateview.Watch(ctx, statePath, interval, ttl)
+		err := stateview.WatchWithSnapshots(ctx, stateProvider, interval)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logging.Error("xp2p client state: watch failed", "err", err)
 			return 1
@@ -70,9 +78,68 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 		return 0
 	}
 
-	if err := stateview.Print(statePath, ttl); err != nil {
+	if err := stateview.PrintWithSnapshots(stateProvider); err != nil {
 		logging.Error("xp2p client state: failed to render state", "err", err)
 		return 1
 	}
 	return 0
+}
+
+func snapshotClientState(installDir, configDir, statePath string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
+	state, err := heartbeat.Load(statePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			state = heartbeat.State{}
+		} else {
+			return nil, err
+		}
+	}
+	if state.Entries == nil {
+		state.Entries = make(map[string]heartbeat.Entry)
+	}
+
+	endpoints, err := client.ListEndpoints(client.ListOptions{
+		InstallDir: installDir,
+		ConfigDir:  configDir,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, endpoint := range endpoints {
+		key := heartbeatEntryKey(endpoint.Tag, endpoint.User)
+		if key == "" {
+			continue
+		}
+		entry, exists := state.Entries[key]
+		if !exists {
+			state.Entries[key] = heartbeat.Entry{
+				Tag:  endpoint.Tag,
+				Host: endpoint.Hostname,
+				User: endpoint.User,
+			}
+			continue
+		}
+		if entry.Host == "" {
+			entry.Host = endpoint.Hostname
+		}
+		if entry.User == "" {
+			entry.User = endpoint.User
+		}
+		state.Entries[key] = entry
+	}
+
+	return state.Snapshot(time.Now(), ttl), nil
+}
+
+func heartbeatEntryKey(tag, user string) string {
+	trimmedTag := strings.ToLower(strings.TrimSpace(tag))
+	if trimmedTag == "" {
+		return ""
+	}
+	trimmedUser := strings.ToLower(strings.TrimSpace(user))
+	if trimmedUser == "" {
+		return trimmedTag
+	}
+	return trimmedTag + "|" + trimmedUser
 }

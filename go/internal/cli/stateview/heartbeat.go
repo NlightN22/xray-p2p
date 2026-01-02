@@ -13,6 +13,9 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 )
 
+// SnapshotProvider returns snapshots to render.
+type SnapshotProvider func() ([]heartbeat.Snapshot, error)
+
 // Snapshot loads heartbeat state from disk and returns annotated entries.
 func Snapshot(path string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
 	state, err := heartbeat.Load(path)
@@ -23,6 +26,16 @@ func Snapshot(path string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
 		return nil, err
 	}
 	return state.Snapshot(time.Now(), ttl), nil
+}
+
+// PrintWithSnapshots renders snapshots from a provider to stdout.
+func PrintWithSnapshots(provider SnapshotProvider) error {
+	snapshots, err := provider()
+	if err != nil {
+		return err
+	}
+	RenderTable(os.Stdout, snapshots)
+	return nil
 }
 
 // RenderTable prints the heartbeat snapshot as a tabular report.
@@ -65,20 +78,24 @@ func safeClientUser(value string) string {
 
 // Print renders the current state to stdout.
 func Print(path string, ttl time.Duration) error {
-	snapshots, err := Snapshot(path, ttl)
-	if err != nil {
-		return err
-	}
-	RenderTable(os.Stdout, snapshots)
-	return nil
+	return PrintWithSnapshots(func() ([]heartbeat.Snapshot, error) {
+		return Snapshot(path, ttl)
+	})
 }
 
 // Watch repeatedly prints the state until the context is cancelled.
 func Watch(ctx context.Context, path string, interval, ttl time.Duration) error {
+	return WatchWithSnapshots(ctx, func() ([]heartbeat.Snapshot, error) {
+		return Snapshot(path, ttl)
+	}, interval)
+}
+
+// WatchWithSnapshots repeatedly prints snapshots until the context is cancelled.
+func WatchWithSnapshots(ctx context.Context, provider SnapshotProvider, interval time.Duration) error {
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
-	if err := printWithClear(path, ttl); err != nil {
+	if err := printSnapshotsWithClear(provider); err != nil {
 		return err
 	}
 	ticker := time.NewTicker(interval)
@@ -89,16 +106,16 @@ func Watch(ctx context.Context, path string, interval, ttl time.Duration) error 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if err := printWithClear(path, ttl); err != nil {
+			if err := printSnapshotsWithClear(provider); err != nil {
 				return err
 			}
 		}
 	}
 }
 
-func printWithClear(path string, ttl time.Duration) error {
+func printSnapshotsWithClear(provider SnapshotProvider) error {
 	clearTerminal(os.Stdout)
-	return Print(path, ttl)
+	return PrintWithSnapshots(provider)
 }
 
 func clearTerminal(w io.Writer) {
