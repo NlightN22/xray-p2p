@@ -93,32 +93,36 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 	}
 
 	updated := false
+	found := false
 	for idx := range clients {
 		client := clients[idx]
 		if !strings.EqualFold(client.Email, userID) {
 			continue
 		}
-		if client.Password == password {
-			logging.Info("xp2p server user add skipped; client already up-to-date",
-				"user_id", userID,
-				"config", configPath,
-			)
-			if host == "" || opts.NoReverse {
-				return nil
-			}
-			return applyServerReverseChannel(&store, configDir, channel)
+		found = true
+		if !opts.Force {
+			return fmt.Errorf("xp2p: user %s already exists (use --force to update)", userID)
 		}
-		clients[idx].Password = password
-		updated = true
+		if client.Password != password {
+			clients[idx].Password = password
+			updated = true
+		}
 		break
 	}
 
-	if !updated {
+	if !updated && !found {
 		clients = append(clients, trojanClient{
 			Email:    userID,
 			Password: password,
 		})
 		updated = true
+	}
+
+	if found && !updated {
+		if host == "" || opts.NoReverse {
+			return nil
+		}
+		return applyServerReverseChannel(&store, configDir, channel)
 	}
 
 	settings["clients"] = clientsToInterfaces(clients)

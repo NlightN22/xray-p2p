@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,6 +62,11 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	// Build and print deploy link (v2 encrypted), then run handshake
+	if err := ensureDeployTargetAvailable(cfg, opts); err != nil {
+		logging.Error("xp2p client deploy: endpoint already exists", "err", err)
+		return 1
+	}
+
 	linkURL, err := buildDeployLink(&opts)
 	if err != nil {
 		logging.Error("xp2p client deploy: build link failed", "err", err)
@@ -313,6 +319,38 @@ func buildDeployLink(opts *deployOptions) (string, error) {
 	}
 	opts.runtime.ciphertext = enc.Ciphertext
 	return linkURL, nil
+}
+
+func ensureDeployTargetAvailable(cfg config.Config, opts deployOptions) error {
+	host := strings.TrimSpace(opts.runtime.serverHost)
+	if host == "" {
+		host = strings.TrimSpace(opts.runtime.remoteHost)
+	}
+	if host == "" {
+		return fmt.Errorf("xp2p: deploy host is required")
+	}
+	portStr := strings.TrimSpace(opts.manifest.trojanPort)
+	if portStr == "" {
+		return nil
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port <= 0 || port > 65535 {
+		return fmt.Errorf("xp2p: invalid trojan port %q", portStr)
+	}
+
+	records, err := clientListFunc(client.ListOptions{
+		InstallDir: strings.TrimSpace(cfg.Client.InstallDir),
+		ConfigDir:  strings.TrimSpace(cfg.Client.ConfigDir),
+	})
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		if strings.EqualFold(record.Hostname, host) && record.Port == port {
+			return fmt.Errorf("xp2p: endpoint %s:%d already exists", host, port)
+		}
+	}
+	return nil
 }
 
 // buildInstallOptionsFromLink converts a parsed trojan link into client install options,

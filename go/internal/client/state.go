@@ -193,6 +193,14 @@ func (s *clientInstallState) removeReverseChannelsByTag(tag string) {
 func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) error {
 	for idx, existing := range s.Endpoints {
 		sameHost := strings.EqualFold(existing.Hostname, record.Hostname)
+		samePort := existing.Port == record.Port
+		if sameHost && samePort {
+			if !force {
+				return fmt.Errorf("xp2p: endpoint %s:%d already exists (use --force to update)", record.Hostname, record.Port)
+			}
+			s.Endpoints[idx] = record
+			return nil
+		}
 		if sameHost {
 			if !force {
 				return fmt.Errorf("xp2p: endpoint %s already exists (use --force to update)", record.Hostname)

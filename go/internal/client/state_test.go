@@ -137,3 +137,23 @@ func TestClientInstallStateApplyAllowInsecure(t *testing.T) {
 		}
 	}
 }
+
+func TestClientInstallStateRejectsDuplicateHostPort(t *testing.T) {
+	state := clientInstallState{
+		Endpoints: []clientEndpointRecord{
+			{
+				Hostname: "edge.example",
+				Tag:      "proxy-edge",
+				Port:     8443,
+			},
+		},
+	}
+	err := state.upsert(clientEndpointRecord{
+		Hostname: "edge.example",
+		Tag:      "proxy-edge",
+		Port:     8443,
+	}, false)
+	if err == nil {
+		t.Fatalf("expected duplicate host:port to be rejected")
+	}
+}

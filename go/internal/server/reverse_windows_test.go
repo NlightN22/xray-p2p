@@ -146,6 +146,73 @@ func TestAddUserDetectsReverseConflicts(t *testing.T) {
 	}
 }
 
+func TestAddUserRejectsDuplicateUser(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config-server")
+	prepareTrojanConfig(t, configDir, true, false)
+	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
+
+	if err := AddUser(context.Background(), AddUserOptions{
+		InstallDir: dir,
+		ConfigDir:  "config-server",
+		UserID:     "alpha.user",
+		Password:   "secret",
+		Host:       reverseHost,
+	}); err != nil {
+		t.Fatalf("AddUser: %v", err)
+	}
+
+	err := AddUser(context.Background(), AddUserOptions{
+		InstallDir: dir,
+		ConfigDir:  "config-server",
+		UserID:     "alpha.user",
+		Password:   "secret-2",
+		Host:       "other.example",
+	})
+	if err == nil {
+		t.Fatalf("expected duplicate user to be rejected")
+	}
+}
+
+func TestAddUserAllowsForceUpdate(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, "config-server")
+	prepareTrojanConfig(t, configDir, true, false)
+	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
+
+	if err := AddUser(context.Background(), AddUserOptions{
+		InstallDir: dir,
+		ConfigDir:  "config-server",
+		UserID:     "alpha.user",
+		Password:   "secret",
+		Host:       reverseHost,
+	}); err != nil {
+		t.Fatalf("AddUser: %v", err)
+	}
+
+	if err := AddUser(context.Background(), AddUserOptions{
+		InstallDir: dir,
+		ConfigDir:  "config-server",
+		UserID:     "alpha.user",
+		Password:   "secret-2",
+		Host:       reverseHost,
+		Force:      true,
+	}); err != nil {
+		t.Fatalf("AddUser force: %v", err)
+	}
+
+	state, err := loadTrojanState(configDir)
+	if err != nil {
+		t.Fatalf("loadTrojanState: %v", err)
+	}
+	if len(state.clients) != 1 {
+		t.Fatalf("expected 1 trojan user, got %d", len(state.clients))
+	}
+	if state.clients[0].Email != "alpha.user" || state.clients[0].Password != "secret-2" {
+		t.Fatalf("unexpected user state: %+v", state.clients[0])
+	}
+}
+
 func writeEmptyRouting(t *testing.T, path string) {
 	t.Helper()
 	data := []byte(`{"reverse":{"portals":[]},"routing":{"domainStrategy":"AsIs","rules":[]}}`)

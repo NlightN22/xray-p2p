@@ -3,6 +3,7 @@ package clientcmd
 import (
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/client"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 )
@@ -48,5 +49,29 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 
 	if got != want {
 		t.Fatalf("manifest mismatch: got %#v want %#v", got, want)
+	}
+}
+
+func TestEnsureDeployTargetAvailableRejectsDuplicateHostPort(t *testing.T) {
+	restore := stubClientList(func(opts client.ListOptions) ([]client.EndpointRecord, error) {
+		return []client.EndpointRecord{
+			{Hostname: "edge.local", Port: 62070},
+		}, nil
+	})
+	defer restore()
+
+	cfg := clientCfg("/etc/xp2p", "config-client")
+	opts := deployOptions{
+		manifest: manifestOptions{
+			trojanPort: "62070",
+		},
+		runtime: runtimeOptions{
+			serverHost: "edge.local",
+			remoteHost: "deploy.local",
+		},
+	}
+
+	if err := ensureDeployTargetAvailable(cfg, opts); err == nil {
+		t.Fatalf("expected duplicate deploy target to be rejected")
 	}
 }
