@@ -202,6 +202,30 @@ exit 0
         )
 
 
+def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path) -> None:
+    msi_str = ps_quote(str(msi_path))
+    install_dir = ps_quote(str(PROGRAM_FILES_INSTALL_DIR))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$msi = {msi_str}
+$arguments = @('/x', $msi, '/qn', '/norestart')
+$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -Wait -PassThru
+if ($process.ExitCode -ne 0) {{
+    exit $process.ExitCode
+}}
+if (Test-Path {install_dir}) {{
+    Remove-Item {install_dir} -Force -Recurse -ErrorAction SilentlyContinue
+}}
+exit 0
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to uninstall xp2p via MSI.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -> None:
     if not force_reinstall and path_exists(host, XP2P_EXE):
         _ensure_log_directories(host)

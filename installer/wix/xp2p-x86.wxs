@@ -5,6 +5,7 @@
 
     <MajorUpgrade Schedule="afterInstallValidate"
                   AllowDowngrades="no"
+                  AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer version of xp2p is already installed." />
 
     <MediaTemplate EmbedCab="yes" />

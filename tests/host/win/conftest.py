@@ -57,6 +57,9 @@ def xp2p_program_files_setup(server_host: Host, client_host: Host):
     win_env.ensure_program_files_install(server_host, force_reinstall=True)
     win_env.ensure_program_files_install(client_host, force_reinstall=True)
     yield
+    msi_path = win_env.ensure_msi_package(server_host)
+    win_env.uninstall_xp2p_from_msi(server_host, msi_path)
+    win_env.uninstall_xp2p_from_msi(client_host, msi_path)
 
 
 @pytest.fixture(scope="session")
