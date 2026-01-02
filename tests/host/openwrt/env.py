@@ -18,6 +18,7 @@ WORKTREE_POSIX = PurePosixPath("/srv/xray-p2p")
 GUEST_SCRIPTS_ROOT = WORKTREE_POSIX / "tests" / "guest"
 GUEST_SCRIPTS_SOURCE = REPO_ROOT / "tests" / "guest"
 ALPINE_GUEST_SCRIPTS_ROOT = PurePosixPath("/tmp/xray-p2p-tests/guest")
+ALPINE_DNSMASQ_INSTALLER = REPO_ROOT / "infra" / "vagrant" / "openwrt" / "dnsmasq-install-alpine.sh"
 GUEST_SCRIPTS_HASH_FILE = REPO_ROOT / "build" / ".openwrt_guest_scripts.hash"
 IPK_OUTPUT_DIR = REPO_ROOT / "build" / "ipk"
 IPK_OUTPUT_POSIX = WORKTREE_POSIX / "build" / "ipk"
@@ -83,6 +84,24 @@ def _provision_guest_scripts(machine: str, destination: PurePosixPath) -> None:
         ) from exc
 
 
+def _provision_file(machine: str, source: Path, destination: PurePosixPath) -> None:
+    common.ensure_machine_running(OPENWRT_VAGRANT_DIR, machine)
+    command = [
+        "vagrant",
+        "upload",
+        str(source),
+        destination.as_posix(),
+        machine,
+    ]
+    try:
+        subprocess.run(command, cwd=OPENWRT_VAGRANT_DIR, check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Failed to upload {source} into host {machine} via Vagrant.\n"
+            f"STDOUT:\n{exc.stdout}\nSTDERR:\n{exc.stderr}"
+        ) from exc
+
+
 def ensure_guest_scripts_synced() -> None:
     global _SCRIPTS_HASH_CACHE
     if not GUEST_SCRIPTS_SOURCE.exists():
@@ -91,18 +110,24 @@ def ensure_guest_scripts_synced() -> None:
     if _SCRIPTS_HASH_CACHE == current_hash:
         for machine in ALPINE_MACHINES:
             _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
+            if ALPINE_DNSMASQ_INSTALLER.exists():
+                _provision_file(machine, ALPINE_DNSMASQ_INSTALLER, PurePosixPath("/tmp/dnsmasq-install-alpine.sh"))
         return
     cached = _read_cached_scripts_hash()
     if cached == current_hash and cached is not None:
         _SCRIPTS_HASH_CACHE = current_hash
         for machine in ALPINE_MACHINES:
             _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
+            if ALPINE_DNSMASQ_INSTALLER.exists():
+                _provision_file(machine, ALPINE_DNSMASQ_INSTALLER, PurePosixPath("/tmp/dnsmasq-install-alpine.sh"))
         return
     require_openwrt_environment()
     for machine in OPENWRT_MACHINES:
         _provision_guest_scripts(machine, GUEST_SCRIPTS_ROOT)
     for machine in ALPINE_MACHINES:
         _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
+        if ALPINE_DNSMASQ_INSTALLER.exists():
+            _provision_file(machine, ALPINE_DNSMASQ_INSTALLER, PurePosixPath("/tmp/dnsmasq-install-alpine.sh"))
     if current_hash:
         _write_cached_scripts_hash(current_hash)
     _SCRIPTS_HASH_CACHE = current_hash
@@ -334,6 +359,8 @@ def _stop_xp2p_services(host: Host) -> None:
         "xp2p client service stop --quiet",
         "xp2p server service stop --quiet",
         "/etc/init.d/xp2p stop",
+        "/etc/init.d/xp2p-client stop",
+        "/etc/init.d/xp2p-server stop",
     ):
         host.run(f"{cmd} >/dev/null 2>&1 || true")
 
