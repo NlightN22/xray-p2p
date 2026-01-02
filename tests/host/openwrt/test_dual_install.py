@@ -39,6 +39,46 @@ def _read_roles(host) -> dict:
     return roles
 
 
+def _update_hosts_entry(host, action: str, domain: str, ip: str | None = None) -> None:
+    args = ["scripts/linux/update_hosts_entry_openwrt.sh", action]
+    if action == "add":
+        if not ip:
+            raise AssertionError("IP is required for add action")
+        args.extend([ip, domain])
+    else:
+        args.append(domain)
+    result = openwrt_env.run_guest_script(host, *args)
+    if result.rc != 0:
+        pytest.fail(
+            "guest script failed "
+            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _extract_link(output: str) -> str:
+    for raw in (output or "").splitlines():
+        stripped = raw.strip()
+        if stripped.startswith("trojan://"):
+            return stripped
+    pytest.fail(f"xp2p server user add did not emit trojan link.\nSTDOUT:\n{output}")
+
+
+def _ensure_allow_insecure(link: str) -> str:
+    if "allowInsecure=" in link:
+        return link
+    if "#" in link:
+        base, frag = link.split("#", 1)
+    else:
+        base, frag = link, ""
+    if "?" in base:
+        base = f"{base}&allowInsecure=1"
+    else:
+        base = f"{base}?allowInsecure=1"
+    if frag:
+        return f"{base}#{frag}"
+    return base
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_client_and_server_share_install_dir(openwrt_host, xp2p_openwrt_ipk):
@@ -205,3 +245,121 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
     finally:
         helpers.cleanup_server_install(openwrt_host, run, config_dir=custom_server_config)
         helpers.cleanup_client_install(openwrt_host, run, config_dir=custom_client_config)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwrt_ipk):
+    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
+    openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
+    run = lambda *cmd, check=False: _xp2p_run(openwrt_host, *cmd, check=check)
+    server_domain_a = "srv-a.local"
+    server_domain_b = "srv-b.local"
+    server_port = "62070"
+    user_b = "state-b@example.com"
+    pass_b = "state-pass-b"
+    try:
+        helpers.cleanup_client_install(openwrt_host, run)
+        helpers.cleanup_server_install(openwrt_host, run)
+        primary_ip = helpers.detect_primary_ipv4(openwrt_host)
+        _update_hosts_entry(openwrt_host, "add", server_domain_a, primary_ip)
+        _update_hosts_entry(openwrt_host, "add", server_domain_b, primary_ip)
+
+        server_install = run(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            server_port,
+            "--host",
+            server_domain_a,
+            "--force",
+            check=True,
+        )
+        default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
+        link_a = _ensure_allow_insecure(default_cred["link"])
+
+        user_add = run(
+            "server",
+            "user",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--id",
+            user_b,
+            "--password",
+            pass_b,
+            "--host",
+            server_domain_b,
+            check=True,
+        )
+        link_b = _ensure_allow_insecure(_extract_link(user_add.stdout or ""))
+
+        client_install_a = run(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--link",
+            link_a,
+            "--force",
+            check=True,
+        )
+        client_install_b = run(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--link",
+            link_b,
+            check=True,
+        )
+        expected_tags = {
+            helpers.expected_proxy_tag(server_domain_a),
+            helpers.expected_proxy_tag(server_domain_b),
+        }
+        expected_users = {default_cred["user"], user_b}
+
+        client_state = helpers.read_first_existing_json(openwrt_host, helpers.CLIENT_STATE_FILES)
+        recorded_hosts = {entry.get("hostname") for entry in client_state.get("endpoints", [])}
+        recorded_tags = {entry.get("tag") for entry in client_state.get("endpoints", [])}
+        recorded_users = {entry.get("user") for entry in client_state.get("endpoints", [])}
+        assert recorded_hosts == {server_domain_a, server_domain_b}
+        assert recorded_tags == expected_tags
+        assert recorded_users == expected_users
+
+        server_state = helpers.read_first_existing_json(openwrt_host, helpers.SERVER_STATE_FILES)
+        reverse_channels = server_state.get("reverse_channels", {})
+        if not isinstance(reverse_channels, dict):
+            pytest.fail("Server install-state missing reverse_channels map")
+        recorded_server_users = {
+            entry.get("user_id")
+            for entry in reverse_channels.values()
+            if isinstance(entry, dict)
+        }
+        assert recorded_server_users == expected_users
+
+        added_links = {link_a, link_b}
+        installed_links = {
+            default_cred["link"],
+            _extract_link(user_add.stdout or ""),
+        }
+        assert installed_links == added_links, (
+            "Client install links should match server user links.\n"
+            f"client: {client_install_a.stdout}\n{client_install_b.stdout}\n"
+            f"server: {server_install.stdout}\n{user_add.stdout}"
+        )
+    finally:
+        _update_hosts_entry(openwrt_host, "remove", server_domain_a)
+        _update_hosts_entry(openwrt_host, "remove", server_domain_b)
+        helpers.cleanup_server_install(openwrt_host, run)
+        helpers.cleanup_client_install(openwrt_host, run)

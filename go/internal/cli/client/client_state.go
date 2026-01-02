@@ -106,6 +106,7 @@ func snapshotClientState(installDir, configDir, statePath string, ttl time.Durat
 		return nil, err
 	}
 
+	filtered := make(map[string]heartbeat.Entry, len(endpoints))
 	for _, endpoint := range endpoints {
 		key := heartbeatEntryKey(endpoint.Tag, endpoint.User)
 		if key == "" {
@@ -113,12 +114,10 @@ func snapshotClientState(installDir, configDir, statePath string, ttl time.Durat
 		}
 		entry, exists := state.Entries[key]
 		if !exists {
-			state.Entries[key] = heartbeat.Entry{
-				Tag:  endpoint.Tag,
-				Host: endpoint.Hostname,
-				User: endpoint.User,
-			}
-			continue
+			entry = heartbeat.Entry{}
+		}
+		if entry.Tag == "" {
+			entry.Tag = endpoint.Tag
 		}
 		if entry.Host == "" {
 			entry.Host = endpoint.Hostname
@@ -126,9 +125,10 @@ func snapshotClientState(installDir, configDir, statePath string, ttl time.Durat
 		if entry.User == "" {
 			entry.User = endpoint.User
 		}
-		state.Entries[key] = entry
+		filtered[key] = entry
 	}
 
+	state.Entries = filtered
 	return state.Snapshot(time.Now(), ttl), nil
 }
 

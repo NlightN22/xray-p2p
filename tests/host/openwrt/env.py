@@ -416,6 +416,8 @@ def xp2p_run_session(
     install_dir: str | Path | PurePosixPath,
     config_dir: str,
     log_path: str | Path | PurePosixPath,
+    *,
+    extra_args: list[str] | None = None,
 ):
     if role not in {"server", "client"}:
         raise ValueError(f"Unsupported role: {role}")
@@ -436,13 +438,16 @@ def xp2p_run_session(
     netstat_before = _netstat_snapshot(host)
     logs_path = PurePosixPath(install_dir) / config_dir / "logs.json"
     logs_config = _read_file_safe(host, logs_path)
+    extra = ""
+    if extra_args:
+        extra = " " + " ".join(shlex.quote(str(arg)) for arg in extra_args)
     start_cmd = (
         f"setsid /usr/bin/xp2p {role} run "
         f"--path {shlex.quote(install_path)} "
         f"--config-dir {shlex.quote(config_dir)} "
         f"--auto-install "
         f"--xray-log-file {shlex.quote(log_file)} "
-        f"--quiet >/tmp/xp2p-{role}-run.log 2>&1 & echo $!"
+        f"--quiet{extra} >/tmp/xp2p-{role}-run.log 2>&1 & echo $!"
     )
     last_log = ""
     pid_value: str | None = None
