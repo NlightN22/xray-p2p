@@ -224,7 +224,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Warn("xp2p client deploy: socks proxy address missing; skipping ping")
 	}
 
-	if err := waitForHeartbeat(runCtx, filepath.Join(runOpts.InstallDir, layout.HeartbeatStateFileName), 10*time.Second); err != nil {
+	if err := waitForHeartbeat(runCtx, filepath.Join(runOpts.InstallDir, layout.ClientHeartbeatStateFileName), 10*time.Second); err != nil {
 		completionState = "FAIL heartbeat"
 		logging.Error("xp2p client deploy: heartbeat missing", "err", err)
 		if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {

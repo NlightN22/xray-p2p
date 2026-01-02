@@ -62,7 +62,7 @@ func RunService(ctx context.Context, opts ServiceOptions) error {
 		configDirPath,
 	}
 	ignorePaths := []string{
-		filepath.Join(installDir, layout.HeartbeatStateFileName),
+		filepath.Join(installDir, layout.ServerHeartbeatStateFileName),
 	}
 
 	runnerOpts := service.Options{

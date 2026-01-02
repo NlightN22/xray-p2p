@@ -162,7 +162,7 @@ func TestHeartbeatPayloadIsPersisted(t *testing.T) {
 		t.Fatalf("write payload: %v", err)
 	}
 
-	statePath := filepath.Join(dir, layout.HeartbeatStateFileName)
+	statePath := filepath.Join(dir, layout.ServerHeartbeatStateFileName)
 	testutil.WaitForCondition(t, time.Second, func() bool {
 		_, err := os.Stat(statePath)
 		return err == nil

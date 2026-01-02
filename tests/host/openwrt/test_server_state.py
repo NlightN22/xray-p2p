@@ -57,7 +57,7 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
     try:
         helpers.cleanup_client_install(openwrt_host, runner)
         helpers.cleanup_server_install(openwrt_host, runner)
-        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
+        helpers.remove_path(openwrt_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
 
         primary_ip = helpers.detect_primary_ipv4(openwrt_host)
         _update_hosts_entry(openwrt_host, "add", server_domain, primary_ip)
@@ -139,7 +139,7 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
         }
         helpers.write_text(
             openwrt_host,
-            helpers.HEARTBEAT_STATE_FILE,
+            helpers.SERVER_HEARTBEAT_STATE_FILE,
             json.dumps(heartbeat_doc, indent=2),
         )
 
@@ -159,4 +159,4 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
         _update_hosts_entry(openwrt_host, "remove", client_domain)
         helpers.cleanup_server_install(openwrt_host, runner)
         helpers.cleanup_client_install(openwrt_host, runner)
-        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
+        helpers.remove_path(openwrt_host, helpers.SERVER_HEARTBEAT_STATE_FILE)

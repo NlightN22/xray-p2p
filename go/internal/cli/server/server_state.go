@@ -55,7 +55,7 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 		logging.Error("xp2p server state: install directory is required (use --path or configure server.install_dir)")
 		return 2
 	}
-	statePath := filepath.Join(installDir, layout.HeartbeatStateFileName)
+	statePath := filepath.Join(installDir, layout.ServerHeartbeatStateFileName)
 	ttl := opts.TTL
 	if ttl <= 0 {
 		ttl = defaultHeartbeatTTL

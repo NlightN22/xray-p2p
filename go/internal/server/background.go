@@ -69,7 +69,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 
 	storePath := ""
 	if dir := strings.TrimSpace(opts.InstallDir); dir != "" {
-		storePath = filepath.Join(dir, layout.HeartbeatStateFileName)
+		storePath = filepath.Join(dir, layout.ServerHeartbeatStateFileName)
 	}
 	hbStore, storeErr = heartbeat.NewStore(storePath)
 	if storeErr != nil {

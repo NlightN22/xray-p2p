@@ -20,7 +20,9 @@ SERVER_STATE_FILES = [
     INSTALL_ROOT / "install-state-server.json",
     INSTALL_ROOT / "install-state.json",
 ]
-HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat.json"
+CLIENT_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-client.json"
+SERVER_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-server.json"
+HEARTBEAT_STATE_FILE = CLIENT_HEARTBEAT_STATE_FILE
 LOG_ROOT = PurePosixPath("/var/log/xp2p")
 CLIENT_LOG_FILE = LOG_ROOT / "client.err"
 SERVER_LOG_FILE = LOG_ROOT / "server.err"

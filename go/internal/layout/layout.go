@@ -16,8 +16,12 @@ const (
 	ClientStateFileName = "install-state-client.json"
 	// ServerStateFileName is the canonical server marker name.
 	ServerStateFileName = "install-state-server.json"
-	// HeartbeatStateFileName captures live tunnel telemetry snapshots.
+	// HeartbeatStateFileName is retained for legacy shared heartbeat storage.
 	HeartbeatStateFileName = "state-heartbeat.json"
+	// ClientHeartbeatStateFileName stores client-side heartbeat snapshots.
+	ClientHeartbeatStateFileName = "state-heartbeat-client.json"
+	// ServerHeartbeatStateFileName stores server-side heartbeat snapshots.
+	ServerHeartbeatStateFileName = "state-heartbeat-server.json"
 	// UnixConfigRoot is the default configuration root on Linux/OpenWrt.
 	UnixConfigRoot = "/etc/xp2p"
 	// UnixLogRoot is the default log root on Linux/OpenWrt.
