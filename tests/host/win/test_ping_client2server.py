@@ -2,7 +2,7 @@ import pytest
 
 from tests.host.win import env as _env
 
-CLIENT_SUBNET_HOST = "10.0.10.20"
+CLIENT_SUBNET_HOST = "10.62.10.22"
 FIREWALL_RULE_NAME = "xp2p-test-block-client"
 FIREWALL_PROFILES = "Domain,Private,Public"
 

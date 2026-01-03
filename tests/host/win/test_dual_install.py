@@ -203,7 +203,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "--config-dir",
             CLIENT_CONFIG_DIR,
             "--host",
-            "10.0.10.210",
+            "10.62.10.210",
             "--user",
             "dual@example.com",
             "--password",
@@ -279,7 +279,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
 
     custom_client_config = "config-client-max"
     custom_server_config = "config-server-max"
-    client_host = "10.0.10.220"
+    client_host = "10.62.10.220"
     client_port = "62105"
     client_user = "max_win@example.com"
     client_password = "max-win-pass"

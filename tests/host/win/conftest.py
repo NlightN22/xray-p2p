@@ -12,7 +12,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption(
         "--xp2p-target",
         action="store",
-        default="10.0.10.10",
+        default="10.62.10.21",
         help="Target address for xp2p guest ping probes.",
     )
     group.addoption(

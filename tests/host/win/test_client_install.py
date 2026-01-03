@@ -122,7 +122,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "client",
             "install",
             "--host",
-            "10.0.10.10",
+            "10.62.10.10",
             "--user",
             "alpha@example.com",
             "--password",
@@ -131,13 +131,13 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbound_entry(data, "10.0.10.10", "test_password123", "alpha@example.com", "10.0.10.10")
+        _assert_outbound_entry(data, "10.62.10.10", "test_password123", "alpha@example.com", "10.62.10.10")
 
         xp2p_client_runner(
             "client",
             "install",
             "--host",
-            "10.0.10.11",
+            "10.62.10.11",
             "--user",
             "beta@example.com",
             "--password",
@@ -150,15 +150,15 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         updated_outbounds = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry(
             updated_outbounds,
-            "10.0.10.10",
+            "10.62.10.10",
             "test_password123",
             "alpha@example.com",
-            "10.0.10.10",
+            "10.62.10.10",
             allow_insecure=False,
         )
         _assert_outbound_entry(
             updated_outbounds,
-            "10.0.10.11",
+            "10.62.10.11",
             "override_password456",
             "beta@example.com",
             "vpn.example.local",
@@ -166,18 +166,18 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
 
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-        _assert_routing_rule(routing, "10.0.10.10")
-        _assert_routing_rule(routing, "10.0.10.11")
+        _assert_routing_rule(routing, "10.62.10.10")
+        _assert_routing_rule(routing, "10.62.10.11")
 
         state = _read_remote_json(client_host, CLIENT_STATE_FILE)
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
-        assert recorded_hosts == {"10.0.10.10", "10.0.10.11"}
+        assert recorded_hosts == {"10.62.10.10", "10.62.10.11"}
 
         duplicate = xp2p_client_runner(
             "client",
             "install",
             "--host",
-            "10.0.10.10",
+            "10.62.10.10",
             "--user",
             "gamma@example.com",
             "--password",
@@ -186,13 +186,13 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
         assert duplicate.rc != 0, "Expected duplicate endpoint install to fail without --force"
         combined = f"{duplicate.stdout}\n{duplicate.stderr}".lower()
-        assert "endpoint 10.0.10.10 already exists" in combined
+        assert "endpoint 10.62.10.10 already exists" in combined
 
         xp2p_client_runner(
             "client",
             "install",
             "--host",
-            "10.0.10.10",
+            "10.62.10.10",
             "--user",
             "gamma@example.com",
             "--password",
@@ -206,7 +206,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         refreshed = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry(
             refreshed,
-            "10.0.10.10",
+            "10.62.10.10",
             "force-password",
             "gamma@example.com",
             "override.example",
@@ -214,7 +214,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
         _assert_outbound_entry(
             refreshed,
-            "10.0.10.11",
+            "10.62.10.11",
             "override_password456",
             "beta@example.com",
             "vpn.example.local",
@@ -287,7 +287,7 @@ def test_client_run_starts_xray_core(
             "client",
             "install",
             "--host",
-            "10.0.10.10",
+            "10.62.10.10",
             "--user",
             "gamma@example.com",
             "--password",
@@ -325,7 +325,7 @@ def test_client_install_requires_force_for_existing_endpoint(
             "client",
             "install",
             "--host",
-            "10.0.10.50",
+            "10.62.10.50",
             "--user",
             "state@example.com",
             "--password",
@@ -337,7 +337,7 @@ def test_client_install_requires_force_for_existing_endpoint(
             "client",
             "install",
             "--host",
-            "10.0.10.50",
+            "10.62.10.50",
             "--user",
             "state2@example.com",
             "--password",
@@ -346,13 +346,13 @@ def test_client_install_requires_force_for_existing_endpoint(
         )
         assert result.rc != 0, "Expected install to fail when endpoint exists without --force"
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
-        assert "endpoint 10.0.10.50 already exists" in combined
+        assert "endpoint 10.62.10.50 already exists" in combined
 
         xp2p_client_runner(
             "client",
             "install",
             "--host",
-            "10.0.10.50",
+            "10.62.10.50",
             "--user",
             "state2@example.com",
             "--password",
@@ -375,7 +375,7 @@ def test_client_install_succeeds_without_state_marker(
             "client",
             "install",
             "--host",
-            "10.0.10.60",
+            "10.62.10.60",
             "--user",
             "nostate@example.com",
             "--password",
@@ -394,7 +394,7 @@ def test_client_install_succeeds_without_state_marker(
             "client",
             "install",
             "--host",
-            "10.0.10.61",
+            "10.62.10.61",
             "--user",
             "nostate2@example.com",
             "--password",

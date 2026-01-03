@@ -7,7 +7,7 @@ import pytest
 
 from tests.host.win import env as _env
 
-SERVER_PUBLIC_HOST = "10.0.10.10"
+SERVER_PUBLIC_HOST = "10.62.10.21"
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR = "config-server"
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
