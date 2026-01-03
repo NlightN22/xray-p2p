@@ -54,6 +54,9 @@ guest suites -- the CI and fellow contributors expect these rules.
    - When capturing logs/configs, store them under the synced root so the host
      can read them (e.g. `C:\xp2p\artifacts\...` on Windows,
      `/srv/xray-p2p/artifacts/...` on Linux).
+   - Use the synced `build` tree for temporary files and test-run logs
+     (e.g. `C:\xp2p\build\artifacts\...`, `/srv/xray-p2p/build/artifacts/...`);
+     reserve `artifacts` for long-lived outputs that must be kept after a run.
 - **OpenWrt reverse tunnel redirects**
   - Add redirect rules only on the ingress side of the tunnel. For client->server
     flows (B->A) this means `xp2p client redirect add --domain ...` on the client
