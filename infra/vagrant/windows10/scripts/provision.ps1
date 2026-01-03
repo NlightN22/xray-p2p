@@ -46,7 +46,7 @@ function Wait-TcpPort {
 
 function Set-PrivateNetworkProfile {
     param(
-        [string] $AddressPrefixPattern = "10.0.10.",
+        [string] $AddressPrefixPattern = "10.62.10.",
         [int] $TimeoutSeconds = 60
     )
 
@@ -269,7 +269,7 @@ function Ensure-WiX {
 function Disable-SshHostKeyChecking {
     param(
         [string] $TargetUser = "vagrant",
-        [string[]] $Patterns = @("10.0.10.*")
+        [string[]] $Patterns = @("10.62.10.*")
     )
 
     if (-not $Patterns -or $Patterns.Count -eq 0) {
@@ -340,8 +340,8 @@ Write-Info ("Provisioning role detected: {0}" -f $xp2pRole)
 
 $hostOnlyAlias = if ($env:XP2P_HOSTONLY_ALIAS) { $env:XP2P_HOSTONLY_ALIAS } else { "Ethernet 2" }
 $hostOnlyAddress = switch ($xp2pRole) {
-    "server" { "10.0.10.10" }
-    "client" { "10.0.10.20" }
+    "server" { "10.62.10.21" }
+    "client" { "10.62.10.22" }
 }
 
 Ensure-IsElevated
@@ -358,7 +358,7 @@ if ($configuredAddress) {
 else {
     Write-Info "Warning: host-only interface '$hostOnlyAlias' did not report expected IP $hostOnlyAddress."
 }
-Set-PrivateNetworkProfile -AddressPrefixPattern "10.0.10."
+Set-PrivateNetworkProfile -AddressPrefixPattern "10.62.10."
 Disable-FirewallProfiles
-Disable-SshHostKeyChecking -Patterns @("10.0.10.*")
+Disable-SshHostKeyChecking -Patterns @("10.62.10.*")
 Write-Info "Provisioning completed successfully."
