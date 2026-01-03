@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
@@ -128,58 +127,22 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 	if err != nil {
 		return installState{}, err
 	}
-
-	address := strings.TrimSpace(opts.ServerAddress)
-	if address == "" {
-		return installState{}, errors.New("xp2p: client server address is required")
-	}
-
-	portStr := strings.TrimSpace(opts.ServerPort)
-	if portStr == "" {
-		portStr = "8443"
-	}
-	portVal, err := strconv.Atoi(portStr)
-	if err != nil || portVal <= 0 || portVal > 65535 {
-		return installState{}, fmt.Errorf("xp2p: invalid client server port %q", portStr)
-	}
-
-	password := strings.TrimSpace(opts.Password)
-	if password == "" {
-		return installState{}, errors.New("xp2p: client password is required")
-	}
-
-	user := strings.TrimSpace(opts.User)
-	if user == "" {
-		return installState{}, errors.New("xp2p: client user email is required")
-	}
-
-	serverName := strings.TrimSpace(opts.ServerName)
-	if serverName == "" {
-		serverName = address
+	base, err := buildClientInstallBase(dir, configDir, opts)
+	if err != nil {
+		return installState{}, err
 	}
 
 	logsDir := filepath.Join(layout.UnixLogRoot, "client")
 
 	state := installState{
-		InstallOptions: InstallOptions{
-			InstallDir:            dir,
-			ConfigDir:             opts.ConfigDir,
-			ServerAddress:         address,
-			ServerPort:            portStr,
-			User:                  user,
-			Password:              password,
-			ServerName:            serverName,
-			AllowInsecure:         opts.AllowInsecure,
-			AllowInsecureOverride: opts.AllowInsecureOverride,
-			Force:                 opts.Force,
-		},
-		installDir: dir,
-		configDir:  configDir,
-		logsDir:    logsDir,
-		serverPort: portVal,
-		serverName: serverName,
-		serverHost: address,
-		stateFile:  filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient)),
+		InstallOptions: base.installOpts,
+		installDir:     base.installDir,
+		configDir:      base.configDir,
+		logsDir:        logsDir,
+		serverPort:     base.portVal,
+		serverName:     base.serverName,
+		serverHost:     base.address,
+		stateFile:      base.stateFile,
 	}
 
 	return state, nil

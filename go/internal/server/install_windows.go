@@ -12,7 +12,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -159,67 +158,25 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 	if err != nil {
 		return installState{}, err
 	}
-
-	host := strings.TrimSpace(opts.Host)
-	if host == "" {
-		return installState{}, errors.New("xp2p: host is required")
-	}
-	if err := validateCertificateHost(host); err != nil {
+	base, err := buildServerInstallBase(dir, configDir, opts)
+	if err != nil {
 		return installState{}, err
 	}
 
-	portStr := strings.TrimSpace(opts.Port)
-	if portStr == "" {
-		portStr = strconv.Itoa(DefaultTrojanPort)
-	}
-	portVal, err := strconv.Atoi(portStr)
-	if err != nil || portVal <= 0 || portVal > 65535 {
-		return installState{}, fmt.Errorf("xp2p: invalid port %q", portStr)
-	}
-
-	certSource := strings.TrimSpace(opts.CertificateFile)
-	keySource := strings.TrimSpace(opts.KeyFile)
-
-	if certSource != "" {
-		if err := ensureFileExists(certSource); err != nil {
-			return installState{}, fmt.Errorf("xp2p: certificate: %w", err)
-		}
-		if keySource != "" {
-			if err := ensureFileExists(keySource); err != nil {
-				return installState{}, fmt.Errorf("xp2p: key: %w", err)
-			}
-		}
-	}
-
-	if certSource == "" && keySource != "" {
-		return installState{}, errors.New("xp2p: key file provided without certificate file")
-	}
-
 	state := installState{
-		InstallOptions: InstallOptions{
-			InstallDir:      dir,
-			ConfigDir:       opts.ConfigDir,
-			Port:            portStr,
-			CertificateFile: certSource,
-			KeyFile:         keySource,
-			Host:            host,
-			Force:           opts.Force,
-		},
-		installDir: dir,
-		binDir:     filepath.Join(dir, layout.BinDirName),
-		logsDir:    filepath.Join(dir, layout.LogsDirName),
-		configDir:  configDir,
-		xrayPath:   filepath.Join(dir, layout.BinDirName, "xray.exe"),
-		portValue:  portVal,
+		InstallOptions: base.installOpts,
+		installDir:     base.installDir,
+		binDir:         filepath.Join(dir, layout.BinDirName),
+		logsDir:        filepath.Join(dir, layout.LogsDirName),
+		configDir:      base.configDir,
+		xrayPath:       filepath.Join(dir, layout.BinDirName, "xray.exe"),
+		portValue:      base.portVal,
+		selfSigned:     base.selfSigned,
 	}
 
 	state.certDest = filepath.Join(state.configDir, "cert.pem")
 	state.keyDest = filepath.Join(state.configDir, "key.pem")
 	state.stateFile = filepath.Join(state.installDir, installstate.FileNameForKind(installstate.KindServer))
-
-	if certSource == "" {
-		state.selfSigned = true
-	}
 
 	return state, nil
 }
