@@ -5,14 +5,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
 
 	"golang.org/x/sys/windows/svc"
 
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	"github.com/NlightN22/xray-p2p/go/internal/service"
 )
 
 // RunService launches the managed server service loop on Windows.
@@ -31,51 +27,7 @@ func RunService(ctx context.Context, opts ServiceOptions) error {
 }
 
 func runServerServiceLoop(ctx context.Context, opts ServiceOptions) error {
-	installDir, err := resolveInstallDir(opts.InstallDir)
-	if err != nil {
-		return err
-	}
-
-	configDirName := strings.TrimSpace(opts.ConfigDir)
-	if configDirName == "" {
-		configDirName = DefaultServerConfigDir
-	}
-
-	configDirPath, err := resolveConfigDir(installDir, configDirName)
-	if err != nil {
-		return err
-	}
-
-	runOpts := RunOptions{
-		InstallDir:   installDir,
-		ConfigDir:    configDirName,
-		ErrorLogPath: strings.TrimSpace(opts.XrayLogPath),
-	}
-
-	watchPaths := []string{
-		filepath.Join(installDir, "bin"),
-		configDirPath,
-	}
-	ignorePaths := []string{
-		filepath.Join(installDir, layout.ClientHeartbeatStateFileName),
-		filepath.Join(installDir, layout.HeartbeatStateFileName),
-		filepath.Join(installDir, layout.ServerHeartbeatStateFileName),
-	}
-
-	runnerOpts := service.Options{
-		Name:         "server",
-		WatchPaths:   watchPaths,
-		IgnorePaths:  ignorePaths,
-		MaxRestarts:  opts.MaxRestarts,
-		RestartDelay: opts.RestartDelay,
-	}
-
-	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
-		return Run(runCtx, runOpts)
-	}); err != nil {
-		return fmt.Errorf("xp2p server service: %w", err)
-	}
-	return nil
+	return runServerServiceCommon(ctx, opts)
 }
 
 type serverWindowsService struct {
