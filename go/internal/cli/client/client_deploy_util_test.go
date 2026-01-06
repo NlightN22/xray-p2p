@@ -19,25 +19,25 @@ func TestNormalizeServerPortPrefersFlag(t *testing.T) {
 	}
 }
 
-func TestNormalizeServerPortPrefersServerConfig(t *testing.T) {
+func TestNormalizeServerPortPrefersClientConfig(t *testing.T) {
 	cfg := config.Config{
 		Server: config.ServerConfig{Port: "8443"},
 		Client: config.ClientConfig{ServerPort: "62022"},
 	}
 	got := normalizeServerPort(cfg, "")
-	if got != "8443" {
-		t.Fatalf("expected server port, got %q", got)
+	if got != "62022" {
+		t.Fatalf("expected client server_port, got %q", got)
 	}
 }
 
-func TestNormalizeServerPortFallsBackToClientConfig(t *testing.T) {
+func TestNormalizeServerPortFallsBackToServerConfig(t *testing.T) {
 	cfg := config.Config{
-		Server: config.ServerConfig{Port: ""},
-		Client: config.ClientConfig{ServerPort: "62022"},
+		Server: config.ServerConfig{Port: "62022"},
+		Client: config.ClientConfig{ServerPort: ""},
 	}
 	got := normalizeServerPort(cfg, "")
 	if got != "62022" {
-		t.Fatalf("expected client server_port, got %q", got)
+		t.Fatalf("expected server port, got %q", got)
 	}
 }
 
