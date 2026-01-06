@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from collections.abc import Iterator
 from pathlib import Path, PurePosixPath
+from typing import TypedDict
 from urllib import parse
 
 import pytest
@@ -29,6 +30,12 @@ WINDOWS_SERVER_LOG = WINDOWS_ARTIFACT_ROOT / "windows-server-deploy.log"
 DEFAULT_WINDOWS_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 DEFAULT_LINUX_INSTALL_DIR = PurePosixPath("/etc/xp2p")
 WINDOWS_HEARTBEAT_STATE_FILE = DEFAULT_WINDOWS_INSTALL_DIR / "state-heartbeat.json"
+
+
+class WindowsProcInfo(TypedDict):
+    pid: int
+    stdout: Path
+    stderr: Path
 
 
 @pytest.fixture(scope="session")
@@ -184,7 +191,7 @@ def _start_windows_client_deploy(
     trojan_password: str,
     trojan_port: str,
     install_dir: str | None = None,
-) -> dict[str, int | Path]:
+) -> WindowsProcInfo:
     parameters: dict[str, object] = {
         "Xp2pPath": str(win_env.XP2P_EXE),
         "LogPath": str(log_path),
@@ -219,7 +226,7 @@ def _start_windows_server_deploy(
     log_path: Path,
     listen_addr: str,
     deploy_link: str,
-) -> dict[str, int | Path]:
+) -> WindowsProcInfo:
     result = win_env.run_guest_script(
         host,
         "scripts/start_xp2p_server_deploy.ps1",
@@ -273,9 +280,9 @@ def _read_optional_windows_text(host: Host, path: Path) -> str:
     return win_env.read_text(host, path)
 
 
-def _read_combined_windows_logs(host: Host, proc_info: dict[str, int | Path]) -> str:
-    stdout_text = _read_optional_windows_text(host, Path(proc_info["stdout"]))
-    stderr_text = _read_optional_windows_text(host, Path(proc_info["stderr"]))
+def _read_combined_windows_logs(host: Host, proc_info: WindowsProcInfo) -> str:
+    stdout_text = _read_optional_windows_text(host, proc_info["stdout"])
+    stderr_text = _read_optional_windows_text(host, proc_info["stderr"])
     return "\n".join(filter(None, [stdout_text, stderr_text]))
 
 
@@ -303,7 +310,7 @@ def _wait_for_log_value_linux(
 
 def _wait_for_log_value_windows(
     host: Host,
-    proc_info: dict[str, int | Path],
+    proc_info: WindowsProcInfo,
     *,
     extractor,
     description: str,
@@ -341,7 +348,7 @@ def _wait_for_log_phrase_linux(host: Host, path: PurePosixPath, phrase: str, *, 
     )
 
 
-def _wait_for_log_phrase_windows(host: Host, proc_info: dict[str, int | Path], phrase: str, *, timeout: int) -> None:
+def _wait_for_log_phrase_windows(host: Host, proc_info: WindowsProcInfo, phrase: str, *, timeout: int) -> None:
     expected_variants = (phrase, f"xp2p: {phrase}")
 
     def _matcher(text: str) -> bool | None:
@@ -381,7 +388,7 @@ def _wait_for_client_link_linux(host: Host, log_path: PurePosixPath) -> str:
     return link
 
 
-def _wait_for_client_link_windows(host: Host, proc_info: dict[str, int | Path]) -> str:
+def _wait_for_client_link_windows(host: Host, proc_info: WindowsProcInfo) -> str:
     def _extract_link(text: str) -> str | None:
         for line in text.splitlines():
             if "client deploy: link generated" not in line:
@@ -484,7 +491,7 @@ def _wait_for_error_phrase_linux(host: Host, path: PurePosixPath, phrase: str) -
     )
 
 
-def _wait_for_error_phrase_windows(host: Host, proc_info: dict[str, int | Path], phrase: str) -> None:
+def _wait_for_error_phrase_windows(host: Host, proc_info: WindowsProcInfo, phrase: str) -> None:
     def _matcher(text: str) -> bool | None:
         if phrase in text:
             return True
@@ -518,7 +525,7 @@ def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
 
     def _run_scenario(install_dir: str | None, expect_error: bool) -> None:
         client_pid = None
-        server_proc: dict[str, int | Path] | None = None
+        server_proc: WindowsProcInfo | None = None
         _reset_linux_logs(client_host, LINUX_CLIENT_LOG)
         _reset_windows_logs(server_host, WINDOWS_SERVER_LOG)
         try:
@@ -620,7 +627,7 @@ def test_cross_deploy_windows_client_linux_server(linux_hosts, windows_hosts):
     trojan_password = "deploy-cross-pass"
 
     def _run_scenario(install_dir: str | None) -> None:
-        client_proc: dict[str, int | Path] | None = None
+        client_proc: WindowsProcInfo | None = None
         server_pid: int | None = None
         _reset_windows_logs(client_host, WINDOWS_CLIENT_LOG)
         _reset_linux_logs(server_host, LINUX_SERVER_LOG)
