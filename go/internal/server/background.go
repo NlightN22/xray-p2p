@@ -225,9 +225,7 @@ func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net
 		logging.Warn("invalid heartbeat payload", "remote_addr", conn.RemoteAddr().String(), "err", err)
 		return true
 	}
-	if payload.Timestamp.IsZero() {
-		payload.Timestamp = time.Now().UTC()
-	}
+	payload.Timestamp = time.Time{}
 	if _, err := store.Update(payload); err != nil {
 		logging.Warn("unable to persist heartbeat", "tag", payload.Tag, "err", err)
 		return true

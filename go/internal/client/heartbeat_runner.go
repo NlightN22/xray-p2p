@@ -193,7 +193,9 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 		return err
 	}
 	if r.store != nil {
-		if _, err := r.store.Update(payload); err != nil {
+		payloadLocal := payload
+		payloadLocal.Timestamp = time.Time{}
+		if _, err := r.store.Update(payloadLocal); err != nil {
 			logging.Warn("client heartbeat: failed to update local store", "tag", payload.Tag, "err", err)
 		}
 	}
