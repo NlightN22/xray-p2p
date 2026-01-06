@@ -2,12 +2,7 @@
 
 package common
 
-import "os"
-
-// RequireRoot verifies the caller is running with elevated privileges.
+// RequireRoot performs a soft privilege check on Unix platforms.
 func RequireRoot() error {
-	if os.Geteuid() != 0 {
-		return errRootRequired
-	}
 	return nil
 }

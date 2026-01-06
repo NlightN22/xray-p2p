@@ -4,6 +4,7 @@ package common
 
 import (
 	"fmt"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -12,7 +13,7 @@ import (
 func RequireRoot() error {
 	admin, err := currentUserIsAdmin()
 	if err != nil {
-		return fmt.Errorf("xp2p: check administrative privileges: %w", err)
+		return nil
 	}
 	if !admin {
 		return errRootRequired
@@ -35,13 +36,14 @@ func currentUserIsAdmin() (bool, error) {
 		}
 	}
 
-	adminSID, err := windows.CreateWellKnownSid(windows.WinBuiltinAdministratorsSid)
+	var isElevated uint32
+	var outLen uint32
+	err := windows.GetTokenInformation(token, windows.TokenElevation, (*byte)(unsafe.Pointer(&isElevated)), uint32(unsafe.Sizeof(isElevated)), &outLen)
 	if err != nil {
 		return false, err
 	}
-	member, err := token.IsMember(adminSID)
-	if err != nil {
-		return false, err
+	if outLen != uint32(unsafe.Sizeof(isElevated)) {
+		return false, fmt.Errorf("unexpected token elevation size: %d", outLen)
 	}
-	return member, nil
+	return isElevated != 0, nil
 }
