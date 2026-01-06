@@ -202,7 +202,7 @@ def _start_windows_client_deploy(
         "TrojanPort": trojan_port,
     }
     if install_dir:
-        parameters["AdditionalArgs"] = ["--install-dir", install_dir]
+        parameters["InstallDir"] = install_dir
     result = win_env.run_guest_script(host, "scripts/start_xp2p_client_deploy.ps1", **parameters)
     if result.rc != 0:
         pytest.fail(
@@ -445,6 +445,23 @@ $addresses
     return addresses[0]
 
 
+def _detect_linux_ipv4_non_nat(host: Host) -> str:
+    command = "ip -o -4 addr show scope global | awk '{print $4}' | cut -d/ -f1"
+    result = host.run(command)
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to detect IPv4 addresses.\n"
+            f"CMD: {command}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    addresses = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not addresses:
+        pytest.fail("No IPv4 addresses found on host")
+    for addr in addresses:
+        if not addr.startswith("10.0.2."):
+            return addr
+    return addresses[0]
+
+
 def _extract_marker(output: str | None, marker: str) -> str | None:
     for raw in (output or "").splitlines():
         line = raw.strip()
@@ -506,6 +523,36 @@ def _wait_for_error_phrase_windows(host: Host, proc_info: WindowsProcInfo, phras
     )
 
 
+def _assert_windows_tcp_reachable(host: Host, target: str, port: int, *, timeout_seconds: int = 3) -> None:
+    target_quoted = win_env.ps_quote(target)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target_quoted}
+$port = {port}
+$timeoutMs = {timeout_seconds * 1000}
+$client = New-Object System.Net.Sockets.TcpClient
+try {{
+    $async = $client.BeginConnect($target, $port, $null, $null)
+    if (-not $async.AsyncWaitHandle.WaitOne($timeoutMs)) {{
+        exit 3
+    }}
+    $client.EndConnect($async)
+    exit 0
+}} catch {{
+    exit 4
+}} finally {{
+    $client.Close()
+}}
+"""
+    result = win_env.run_powershell(host, script)
+    if result.rc != 0:
+        pytest.fail(
+            "Windows client cannot reach Linux server deploy port.\n"
+            f"Target: {target}:{port}\n"
+            f"RC: {result.rc}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 @pytest.mark.host
 @pytest.mark.cross
 def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
@@ -526,6 +573,7 @@ def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
     def _run_scenario(install_dir: str | None, expect_error: bool) -> None:
         client_pid = None
         server_proc: WindowsProcInfo | None = None
+        success = False
         _reset_linux_logs(client_host, LINUX_CLIENT_LOG)
         _reset_windows_logs(server_host, WINDOWS_SERVER_LOG)
         try:
@@ -552,6 +600,7 @@ def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
             if expect_error:
                 _wait_for_error_phrase_linux(client_host, LINUX_CLIENT_LOG, "server rejected deploy request")
                 _wait_for_error_phrase_linux(client_host, LINUX_CLIENT_LOG, "invalid install_dir for Windows")
+                success = True
                 return
 
             _wait_for_log_phrase_windows(
@@ -592,6 +641,7 @@ def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
             )
 
             _assert_windows_server_install_dir(server_host, DEFAULT_WINDOWS_INSTALL_DIR)
+            success = True
         finally:
             if client_pid:
                 linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
@@ -601,8 +651,9 @@ def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
             _cleanup_windows_server_install(server_host, win_server_runner, DEFAULT_WINDOWS_INSTALL_DIR)
             linux_helpers.remove_path(client_host, linux_helpers.HEARTBEAT_STATE_FILE)
             win_env.remove_path(server_host, WINDOWS_HEARTBEAT_STATE_FILE)
-            _reset_linux_logs(client_host, LINUX_CLIENT_LOG)
-            _reset_windows_logs(server_host, WINDOWS_SERVER_LOG)
+            if success:
+                _reset_linux_logs(client_host, LINUX_CLIENT_LOG)
+                _reset_windows_logs(server_host, WINDOWS_SERVER_LOG)
 
     _run_scenario(install_dir=None, expect_error=False)
     _run_scenario(install_dir=str(DEFAULT_WINDOWS_INSTALL_DIR), expect_error=False)
@@ -622,13 +673,14 @@ def test_cross_deploy_windows_client_linux_server(linux_hosts, windows_hosts):
     win_env.remove_path(client_host, WINDOWS_HEARTBEAT_STATE_FILE)
     linux_helpers.remove_path(server_host, linux_helpers.HEARTBEAT_STATE_FILE)
 
-    server_ip = linux_helpers.detect_primary_ipv4(server_host)
+    server_ip = _detect_linux_ipv4_non_nat(server_host)
     trojan_user = "deploy-cross@example.com"
     trojan_password = "deploy-cross-pass"
 
     def _run_scenario(install_dir: str | None) -> None:
         client_proc: WindowsProcInfo | None = None
         server_pid: int | None = None
+        success = False
         _reset_windows_logs(client_host, WINDOWS_CLIENT_LOG)
         _reset_linux_logs(server_host, LINUX_SERVER_LOG)
         try:
@@ -651,6 +703,13 @@ def test_cross_deploy_windows_client_linux_server(linux_hosts, windows_hosts):
                 listen_addr=f":{DEPLOY_PORT}",
                 deploy_link=link,
             )
+            _wait_for_log_phrase_linux(
+                server_host,
+                LINUX_SERVER_LOG,
+                "server deploy: starting listener",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
+            _assert_windows_tcp_reachable(client_host, server_ip, int(DEPLOY_PORT))
 
             _wait_for_log_phrase_linux(
                 server_host,
@@ -690,6 +749,7 @@ def test_cross_deploy_windows_client_linux_server(linux_hosts, windows_hosts):
             )
 
             _assert_linux_server_install_dir(server_host, DEFAULT_LINUX_INSTALL_DIR)
+            success = True
         finally:
             if client_proc:
                 _stop_windows_process(client_host, int(client_proc["pid"]))
@@ -699,8 +759,9 @@ def test_cross_deploy_windows_client_linux_server(linux_hosts, windows_hosts):
             linux_helpers.cleanup_server_install(server_host, linux_server_runner)
             win_env.remove_path(client_host, WINDOWS_HEARTBEAT_STATE_FILE)
             linux_helpers.remove_path(server_host, linux_helpers.HEARTBEAT_STATE_FILE)
-            _reset_windows_logs(client_host, WINDOWS_CLIENT_LOG)
-            _reset_linux_logs(server_host, LINUX_SERVER_LOG)
+            if success:
+                _reset_windows_logs(client_host, WINDOWS_CLIENT_LOG)
+                _reset_linux_logs(server_host, LINUX_SERVER_LOG)
 
     _run_scenario(install_dir=None)
     _run_scenario(install_dir=str(DEFAULT_LINUX_INSTALL_DIR))

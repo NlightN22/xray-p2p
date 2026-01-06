@@ -19,6 +19,8 @@ param(
 
     [string] $TrojanPort,
 
+    [string] $InstallDir,
+
     [string[]] $AdditionalArgs
 )
 
@@ -60,6 +62,9 @@ $arguments = @(
 
 if ($TrojanPort) {
     $arguments += @('--trojan-port', $TrojanPort)
+}
+if ($InstallDir) {
+    $arguments += @('--install-dir', $InstallDir)
 }
 if ($AdditionalArgs) {
     $arguments += $AdditionalArgs
