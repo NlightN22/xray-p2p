@@ -7,6 +7,7 @@ from typing import TypedDict
 from urllib import parse
 
 import pytest
+from paramiko.ssh_exception import SSHException
 from testinfra.host import Host
 
 from tests.host.linux import _helpers as linux_helpers
@@ -49,14 +50,45 @@ def linux_hosts() -> dict[str, Host]:
     return {"client": client, "server": server}
 
 
+def _wait_for_windows_ssh(host: Host, *, timeout_seconds: int = 60) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        try:
+            result = host.run("cmd /c echo ready")
+            if result.rc == 0:
+                return
+        except SSHException as exc:
+            last_error = exc
+        time.sleep(2)
+    if last_error:
+        pytest.fail(f"SSH not ready for Windows host {host.backend.hostname}: {last_error}")
+    pytest.fail(f"SSH not ready for Windows host {host.backend.hostname}")
+
+
+def _ensure_windows_ready(host: Host) -> None:
+    _wait_for_windows_ssh(host)
+    last_error: Exception | None = None
+    for _ in range(3):
+        try:
+            win_env.ensure_admin_token(host)
+            win_env.ensure_program_files_install(host, force_reinstall=True)
+            return
+        except SSHException as exc:
+            last_error = exc
+            time.sleep(2)
+    if last_error:
+        pytest.fail(f"Failed to prepare Windows host {host.backend.hostname}: {last_error}")
+    pytest.fail(f"Failed to prepare Windows host {host.backend.hostname}")
+
+
 @pytest.fixture(scope="session")
 def windows_hosts() -> Iterator[dict[str, Host]]:
     win_env.require_vagrant_environment()
     server = win_env.get_ssh_host(win_env.DEFAULT_SERVER)
     client = win_env.get_ssh_host(win_env.DEFAULT_CLIENT)
     for host in (server, client):
-        win_env.ensure_admin_token(host)
-        win_env.ensure_program_files_install(host, force_reinstall=True)
+        _ensure_windows_ready(host)
     yield {"client": client, "server": server}
     msi_path = win_env.ensure_msi_package(server)
     win_env.uninstall_xp2p_from_msi(server, msi_path)
