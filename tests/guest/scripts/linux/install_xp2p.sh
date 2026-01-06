@@ -47,7 +47,34 @@ if [ -z "$LATEST_PKG" ]; then
   emit_versions ""
   exit 3
 fi
-sudo dpkg -i "$LATEST_PKG" >/dev/null
+
+install_package() {
+  local attempts=0
+  local max_attempts=30
+  local log_file
+  log_file=$(mktemp)
+  while true; do
+    if sudo dpkg -i "$LATEST_PKG" >"$log_file" 2>&1; then
+      rm -f "$log_file"
+      return 0
+    fi
+    if grep -qi "frontend lock" "$log_file"; then
+      attempts=$((attempts + 1))
+      if [ "$attempts" -ge "$max_attempts" ]; then
+        cat "$log_file" >&2
+        rm -f "$log_file"
+        return 1
+      fi
+      sleep 2
+      continue
+    fi
+    cat "$log_file" >&2
+    rm -f "$log_file"
+    return 1
+  done
+}
+
+install_package
 INSTALLED_VERSION=$("$INSTALL_BIN" --version | tr -d '\r')
 
 emit_versions "$SOURCE_VERSION" "$INSTALLED_VERSION"

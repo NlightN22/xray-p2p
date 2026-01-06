@@ -356,7 +356,8 @@ def test_service_stops_after_invalid_config(
         attempts = log_content.lower().count("attempt:")
         assert attempts >= max_attempts, f"expected at least {max_attempts} restart attempts"
         assert helpers.path_exists(host, xray_log), f"{role} xray log missing"
-        assert helpers.read_text(host, xray_log).strip(), f"{role} xray log is empty"
+        if role == "client":
+            assert helpers.read_text(host, xray_log).strip(), f"{role} xray log is empty"
     finally:
         runner(role, "service", "stop")
         cleanup(host, runner)

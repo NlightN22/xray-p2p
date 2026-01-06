@@ -78,7 +78,7 @@ def test_server_install_provisions_default_user(server_host, xp2p_server_runner)
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
+def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_server_runner):
     _cleanup(server_host, xp2p_server_runner)
     try:
         host = "srv-add.xp2p.test"
@@ -105,7 +105,7 @@ def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
         first = _trojan_clients(server_host)
         assert len(first) == 1 and first[0]["password"] == "secret-one"
 
-        xp2p_server_runner(
+        result = xp2p_server_runner(
             "server",
             "user",
             "add",
@@ -119,12 +119,14 @@ def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
             "secret-one",
             "--host",
             host,
-            check=True,
+            check=False,
         )
+        assert result.rc != 0, "Expected duplicate user add without --force to fail"
+        assert "already exists" in (result.stderr or "").lower()
         second = _trojan_clients(server_host)
         assert len(second) == 1 and second[0]["password"] == "secret-one"
 
-        xp2p_server_runner(
+        result = xp2p_server_runner(
             "server",
             "user",
             "add",
@@ -132,6 +134,7 @@ def test_server_user_add_is_idempotent(server_host, xp2p_server_runner):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
+            "--force",
             "--id",
             "alpha",
             "--password",

@@ -15,6 +15,7 @@ CLIENT_IP = "10.62.10.12"  # deb-test-b (host B)
 CLIENT_REVERSE_TEST_IP = "10.0.102.50"
 SERVER_DIAGNOSTICS_PORT = 62022
 CLIENT_DIAGNOSTICS_PORT = 62023
+SOCKS_PORT = 51180
 SERVER_FORWARD_PORT = 53341
 CLIENT_FORWARD_PORT = 53331
 CLIENT_REDIRECT_CIDR = "10.0.101.0/24"
@@ -99,6 +100,29 @@ def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
     )
     assert header_count >= 2, "xp2p server state --watch did not refresh multiple times"
     assert header_count <= 5, "xp2p server state --watch produced unexpected amount of output"
+
+
+def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: float = 1.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        check = host.run(f"sudo -n ss -lnt | grep -q ':{port} '")
+        if check.rc == 0:
+            return
+        time.sleep(interval)
+    pytest.fail(f"Port {port} did not open on {host.backend.hostname} within {timeout_seconds}s")
+
+
+def _socks_port(host, config_path: PurePosixPath) -> int:
+    data = helpers.read_json(host, config_path)
+    for inbound in data.get("inbounds", []) or []:
+        if not isinstance(inbound, dict):
+            continue
+        if inbound.get("protocol") != "socks":
+            continue
+        port_val = inbound.get("port")
+        if isinstance(port_val, int):
+            return port_val
+    return SOCKS_PORT
 
 
 @pytest.fixture(scope="module")
@@ -229,6 +253,10 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_LOG_FILE,
     ):
         time.sleep(2.0)
+        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        _wait_for_port(env["server_host"], server_socks_port)
+        _wait_for_port(env["client_host"], client_socks_port)
         yield
 
 
@@ -417,6 +445,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     chain_name = "xray_transparent_prerouting"
     client_listener_port = SERVER_DIAGNOSTICS_PORT
     server_listener_port = CLIENT_DIAGNOSTICS_PORT
+    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_CONFIG_DIR / 'inbounds.json')}"
 
     def _dokodemo_ports(config: dict) -> list[int]:
         ports: list[int] = []
@@ -681,7 +710,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                 socks_ping = server_runner(
                     "ping",
                     reverse_ip,
-                    "--tunnel",
+                    f"--tunnel={server_socks_addr}",
                     "--port",
                     str(server_listener_port),
                     "--count",

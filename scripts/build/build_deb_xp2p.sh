@@ -134,7 +134,11 @@ PACKAGE_PATH="$ARTIFACT_DIR/${PKG_NAME}_${VERSION}_${PKG_ARCH}.deb"
 
 if [ -e "$PACKAGE_PATH" ]; then
   echo "==> Removing existing package at $PACKAGE_PATH"
-  rm -f "$PACKAGE_PATH"
+  if ! rm -f "$PACKAGE_PATH"; then
+    suffix=$(date +%Y%m%d%H%M%S)
+    PACKAGE_PATH="$ARTIFACT_DIR/${PKG_NAME}_${VERSION}_${suffix}_${PKG_ARCH}.deb"
+    echo "==> Existing package busy; using $PACKAGE_PATH instead"
+  fi
 fi
 
 echo "==> Packaging $PACKAGE_PATH"
