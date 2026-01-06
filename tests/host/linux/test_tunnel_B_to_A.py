@@ -78,6 +78,43 @@ def _verify_heartbeat_state(env: dict) -> None:
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on client"
 
 
+def _wait_for_dead_entry(
+    env: dict,
+    *,
+    ttl: str = "3s",
+    timeout_seconds: float = 45.0,
+    poll_interval: float = 2.0,
+) -> dict:
+    expected_tag = env["endpoint_tag"]
+    expected_host = SERVER_IP
+    install_path = env["server_install_path"]
+    deadline = time.time() + timeout_seconds
+    last_stdout = ""
+    while time.time() < deadline:
+        result = env["server_runner"](
+            "server",
+            "state",
+            "--path",
+            install_path,
+            "--ttl",
+            ttl,
+            check=True,
+        )
+        last_stdout = result.stdout or ""
+        for row in tunnel_common.parse_state_rows(last_stdout):
+            if row.get("TAG", "").strip() != expected_tag:
+                continue
+            if row.get("HOST", "").strip() != expected_host:
+                continue
+            if row.get("STATUS", "").strip().lower() == "dead":
+                return row
+        time.sleep(poll_interval)
+    raise AssertionError(
+        "Dead heartbeat entry not observed for "
+        f"{expected_tag}@{expected_host}. Last xp2p server state output:\n{last_stdout}"
+    )
+
+
 def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
     server_host = env["server_host"]
     install_path = env["server_install_path"]
@@ -427,6 +464,7 @@ def test_forward_tunnel_operational(tunnel_environment):
         tunnel_common.assert_zero_loss(ping_result, "through SOCKS tunnel")
         _verify_heartbeat_state(tunnel_environment)
         _run_server_state_watch(tunnel_environment)
+    _wait_for_dead_entry(tunnel_environment)
     _exercise_client_forward_diagnostics(tunnel_environment)
     _exercise_server_forward_diagnostics(tunnel_environment)
 
