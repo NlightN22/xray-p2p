@@ -18,7 +18,10 @@ CLIENT_STATE_FILES = [
     CLIENT_INSTALL_DIR / "install-state.json",
 ]
 CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
-HEARTBEAT_STATE_FILE = CLIENT_INSTALL_DIR / "state-heartbeat.json"
+HEARTBEAT_STATE_FILES = [
+    CLIENT_INSTALL_DIR / "state-heartbeat-client.json",
+    CLIENT_INSTALL_DIR / "state-heartbeat.json",
+]
 CLIENT_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\client-deploy.log")
 SERVER_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\server-deploy.log")
 DEPLOY_PORT = "62125"
@@ -41,7 +44,8 @@ def test_windows_client_deploy_end_to_end(
     win_env.install_xp2p_from_msi(server_host, xp2p_msi_path)
 
     for host in (client_host, server_host):
-        _remove_remote_path(host, HEARTBEAT_STATE_FILE)
+        for path in HEARTBEAT_STATE_FILES:
+            _remove_remote_path(host, path)
     _remove_remote_path(client_host, CLIENT_DEPLOY_STDOUT)
     _remove_remote_path(server_host, SERVER_DEPLOY_STDOUT)
     _remove_remote_path(client_host, Path(str(CLIENT_DEPLOY_STDOUT) + ".err"))
@@ -129,7 +133,8 @@ def test_windows_client_deploy_end_to_end(
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
         for host in (client_host, server_host):
-            _remove_remote_path(host, HEARTBEAT_STATE_FILE)
+            for path in HEARTBEAT_STATE_FILES:
+                _remove_remote_path(host, path)
 
 
 def _start_client_deploy(
@@ -417,11 +422,12 @@ def _wait_for_heartbeat_state(host, *, timeout: int) -> dict:
     deadline = time.time() + timeout
     last_error: Exception | None = None
     while time.time() < deadline:
-        if _remote_path_exists(host, HEARTBEAT_STATE_FILE):
-            try:
-                return _read_remote_json(host, HEARTBEAT_STATE_FILE)
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
+        for path in HEARTBEAT_STATE_FILES:
+            if _remote_path_exists(host, path):
+                try:
+                    return _read_remote_json(host, path)
+                except Exception as exc:  # noqa: BLE001
+                    last_error = exc
         time.sleep(1)
     if last_error:
         raise AssertionError(f"Failed to read heartbeat state: {last_error}") from last_error

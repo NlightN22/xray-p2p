@@ -186,7 +186,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         )
         assert duplicate.rc != 0, "Expected duplicate endpoint install to fail without --force"
         combined = f"{duplicate.stdout}\n{duplicate.stderr}".lower()
-        assert "endpoint 10.62.10.10 already exists" in combined
+        assert "endpoint 10.62.10.10:8443 already exists" in combined
 
         xp2p_client_runner(
             "client",
@@ -346,7 +346,7 @@ def test_client_install_requires_force_for_existing_endpoint(
         )
         assert result.rc != 0, "Expected install to fail when endpoint exists without --force"
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
-        assert "endpoint 10.62.10.50 already exists" in combined
+        assert "endpoint 10.62.10.50:8443 already exists" in combined
 
         xp2p_client_runner(
             "client",

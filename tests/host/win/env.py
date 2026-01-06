@@ -188,7 +188,11 @@ if (-not (Test-Path $msi)) {{
     throw "MSI package not found at $msi"
 }}
 $arguments = @('/i', $msi, '/qn', '/norestart', 'XP2P_SKIP_SERVICE_START=1')
-$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -Wait -PassThru
+$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
+if (-not $process.WaitForExit(300000)) {{
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    exit 124
+}}
 if ($process.ExitCode -ne 0) {{
     exit $process.ExitCode
 }}
@@ -209,7 +213,11 @@ def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path) -> None:
 $ErrorActionPreference = 'Stop'
 $msi = {msi_str}
 $arguments = @('/x', $msi, '/qn', '/norestart')
-$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -Wait -PassThru
+$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
+if (-not $process.WaitForExit(300000)) {{
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    exit 124
+}}
 if ($process.ExitCode -ne 0) {{
     exit $process.ExitCode
 }}

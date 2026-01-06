@@ -109,7 +109,6 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "alpha",
             "--password",
             "secret-one",
-            check=True,
         )
 
         first_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
@@ -118,7 +117,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
         assert first_clients[0].get("email") == "alpha"
         assert first_clients[0].get("password") == "secret-one"
 
-        xp2p_server_runner(
+        duplicate = xp2p_server_runner(
             "server",
             "user",
             "add",
@@ -130,8 +129,8 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "alpha",
             "--password",
             "secret-one",
-            check=True,
         )
+        assert duplicate.rc != 0, "Expected failure when adding duplicate user without --force"
 
         second_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         second_clients = _trojan_clients(second_inbounds)
@@ -150,6 +149,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "alpha",
             "--password",
             "secret-two",
+            "--force",
             check=True,
         )
 
