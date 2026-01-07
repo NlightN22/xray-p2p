@@ -72,6 +72,7 @@ func newClientForwardRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.String("tag", "", "forward tag")
 	flags.String("remark", "", "forward remark")
 	flags.Bool("ignore-missing", false, "do not fail when the forward rule does not exist")
+	flags.Bool("cleanup", false, "remove state entry even when config is missing")
 	return cmd
 }
 
@@ -159,6 +160,7 @@ func runClientForwardRemove(_ context.Context, cfg config.Config, args []string)
 	tag := fs.String("tag", "", "forward tag filter")
 	remark := fs.String("remark", "", "forward remark filter")
 	ignoreMissing := fs.Bool("ignore-missing", false, "do not fail when missing")
+	cleanup := fs.Bool("cleanup", false, "remove state entry when config is missing")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -186,6 +188,7 @@ func runClientForwardRemove(_ context.Context, cfg config.Config, args []string)
 		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
 		Selector:   selector,
+		Cleanup:    *cleanup,
 	})
 	if err != nil {
 		if *ignoreMissing {

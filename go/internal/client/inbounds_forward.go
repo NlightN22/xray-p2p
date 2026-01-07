@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 )
+
+var errForwardInboundMissing = errors.New("xp2p: forward inbound not found")
 
 func addClientForwardInbound(configDir string, rule forward.Rule) error {
 	path := filepath.Join(configDir, "inbounds.json")
@@ -68,7 +71,7 @@ func removeClientForwardInbound(configDir string, rule forward.Rule) error {
 		filtered = append(filtered, entry)
 	}
 	if !removed {
-		return fmt.Errorf("xp2p: forward inbound %s not found", rule.Tag)
+		return fmt.Errorf("%w: %s", errForwardInboundMissing, rule.Tag)
 	}
 	root["inbounds"] = filtered
 	return writeClientInbounds(path, root)

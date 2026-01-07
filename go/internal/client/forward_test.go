@@ -115,6 +115,51 @@ func TestRemoveForwardCleansState(t *testing.T) {
 	}
 }
 
+func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
+	dir := t.TempDir()
+	configDir := filepath.Join(dir, DefaultClientConfigDir)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config: %v", err)
+	}
+	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
+
+	reserved := map[int]struct{}{}
+	listenPort := findAvailablePort(t, reserved)
+
+	if _, err := AddForward(ForwardAddOptions{
+		InstallDir:    dir,
+		ConfigDir:     DefaultClientConfigDir,
+		Target:        "192.0.2.30:7000",
+		ListenAddress: "127.0.0.1",
+		ListenPort:    listenPort,
+		Protocol:      forward.ProtocolTCP,
+	}); err != nil {
+		t.Fatalf("AddForward returned error: %v", err)
+	}
+
+	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
+
+	if _, err := RemoveForward(ForwardRemoveOptions{
+		InstallDir: dir,
+		ConfigDir:  DefaultClientConfigDir,
+		Selector: forward.Selector{
+			ListenPort: listenPort,
+		},
+		Cleanup: true,
+	}); err != nil {
+		t.Fatalf("RemoveForward returned error: %v", err)
+	}
+
+	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	state, err := loadClientInstallState(statePath)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if len(state.Forwards) != 0 {
+		t.Fatalf("expected forwards cleared, got %+v", state.Forwards)
+	}
+}
+
 func writeEmptyInbounds(t *testing.T, path string) {
 	t.Helper()
 	doc := map[string]any{

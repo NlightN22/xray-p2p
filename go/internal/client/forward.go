@@ -33,6 +33,7 @@ type ForwardRemoveOptions struct {
 	InstallDir string
 	ConfigDir  string
 	Selector   forward.Selector
+	Cleanup    bool
 }
 
 // ForwardListOptions configures forward enumeration.
@@ -144,8 +145,10 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 	}
 
 	if err := removeClientForwardInbound(paths.configDir, rule); err != nil {
-		state.insertForwardAt(rule, idx)
-		return forward.Rule{}, err
+		if !(opts.Cleanup && errors.Is(err, errForwardInboundMissing)) {
+			state.insertForwardAt(rule, idx)
+			return forward.Rule{}, err
+		}
 	}
 	if err := state.save(paths.stateFile); err != nil {
 		state.insertForwardAt(rule, idx)
