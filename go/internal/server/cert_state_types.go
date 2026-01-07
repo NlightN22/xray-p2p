@@ -26,6 +26,7 @@ type CertificateState struct {
 	NotBefore     time.Time
 	NotAfter      time.Time
 	Status        CertificateStatus
+	SelfSigned    bool
 	RemainingDays int
 	Issues        []string
 }

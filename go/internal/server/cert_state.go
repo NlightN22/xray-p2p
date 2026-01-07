@@ -57,6 +57,7 @@ func CertificateStateFromConfig(opts CertificateStateOptions) (CertificateState,
 		state.NotBefore = cert.NotBefore
 		state.NotAfter = cert.NotAfter
 		state.RemainingDays = daysUntil(cert.NotAfter)
+		state.SelfSigned = isCertificateSelfSigned(cert)
 	}
 
 	if keyIssue := probeKeyFile(state.KeyPath); keyIssue != nil {
@@ -111,4 +112,14 @@ func probeKeyFile(path string) error {
 
 func daysUntil(ts time.Time) int {
 	return int(math.Floor(time.Until(ts).Hours() / 24))
+}
+
+func isCertificateSelfSigned(cert *x509.Certificate) bool {
+	if cert == nil {
+		return false
+	}
+	if cert.Subject.String() != cert.Issuer.String() {
+		return false
+	}
+	return cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature) == nil
 }

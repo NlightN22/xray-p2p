@@ -25,6 +25,7 @@ func TestServerCertStateCommand(t *testing.T) {
 		notBefore  time.Time
 		notAfter   time.Time
 		wantStatus string
+		wantSigned string
 		wantCode   int
 	}{
 		{
@@ -32,6 +33,7 @@ func TestServerCertStateCommand(t *testing.T) {
 			notBefore:  now.Add(-time.Hour),
 			notAfter:   now.Add(24 * time.Hour),
 			wantStatus: "Status:      OK",
+			wantSigned: "Self-signed: yes",
 			wantCode:   0,
 		},
 		{
@@ -39,6 +41,7 @@ func TestServerCertStateCommand(t *testing.T) {
 			notBefore:  now.Add(-48 * time.Hour),
 			notAfter:   now.Add(-time.Hour),
 			wantStatus: "Status:      EXPIRED",
+			wantSigned: "Self-signed: yes",
 			wantCode:   1,
 		},
 	}
@@ -68,6 +71,9 @@ func TestServerCertStateCommand(t *testing.T) {
 			}
 			if !strings.Contains(output, tt.wantStatus) {
 				t.Fatalf("output did not include status %q\noutput:\n%s", tt.wantStatus, output)
+			}
+			if !strings.Contains(output, tt.wantSigned) {
+				t.Fatalf("output did not include self-signed line %q\noutput:\n%s", tt.wantSigned, output)
 			}
 			if !strings.Contains(output, certPath) {
 				t.Fatalf("output missing cert path %s", certPath)

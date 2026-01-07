@@ -100,13 +100,22 @@ func TestCertificateStateStatuses(t *testing.T) {
 				if state.RemainingDays < 1 {
 					t.Fatalf("expected positive remaining days, got %d", state.RemainingDays)
 				}
+				if !state.SelfSigned {
+					t.Fatalf("expected self-signed certificate")
+				}
 			case CertificateStatusExpired:
 				if state.RemainingDays >= 0 {
 					t.Fatalf("expected negative remaining days for expired certificate")
 				}
+				if !state.SelfSigned {
+					t.Fatalf("expected self-signed certificate")
+				}
 			case CertificateStatusMissing, CertificateStatusParseError:
 				if len(state.Issues) == 0 {
 					t.Fatalf("expected issues for status %s", state.Status)
+				}
+				if state.SelfSigned {
+					t.Fatalf("did not expect self-signed certificate")
 				}
 			}
 		})

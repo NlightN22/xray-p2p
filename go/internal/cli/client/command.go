@@ -73,7 +73,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 
-	flags := cmd.LocalFlags()
+	flags := cmd.Flags()
 	flags.String("path", "", "client installation directory")
 	flags.String("config-dir", "", "client configuration directory name")
 	flags.String("host", "", "remote server host")
@@ -175,8 +175,12 @@ func forwardFlags(cmd *cobra.Command, args []string) []string {
 	}
 
 	flags := cmd.Flags()
+	localFlags := cmd.LocalFlags()
 	forwarded := make([]string, 0, len(args)+flags.NFlag())
 	flags.Visit(func(f *pflag.Flag) {
+		if localFlags.Lookup(f.Name) == nil {
+			return
+		}
 		if _, skip := disallowed[f.Name]; skip {
 			return
 		}

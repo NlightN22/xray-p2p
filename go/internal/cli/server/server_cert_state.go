@@ -42,6 +42,7 @@ func renderCertificateState(state server.CertificateState) {
 	if san := formatSAN(state); san != "" {
 		fmt.Printf("SAN:         %s\n", san)
 	}
+	fmt.Printf("Self-signed: %s\n", formatYesNo(state.SelfSigned))
 	if !state.NotBefore.IsZero() && !state.NotAfter.IsZero() {
 		fmt.Printf("Validity:    %s -> %s\n", state.NotBefore.UTC().Format(time.RFC3339), state.NotAfter.UTC().Format(time.RFC3339))
 	}
@@ -55,6 +56,13 @@ func renderCertificateState(state server.CertificateState) {
 	for _, issue := range state.Issues {
 		fmt.Printf("Warning:     %s\n", issue)
 	}
+}
+
+func formatYesNo(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
 }
 
 func formatSAN(state server.CertificateState) string {
