@@ -207,11 +207,11 @@ func isSafeInstallDir(path string) bool {
 }
 
 func deployConfiguration(state installState) error {
-	if err := writeEmbeddedFile("assets/templates/inbounds.json", filepath.Join(state.configDir, "inbounds.json"), 0o644); err != nil {
+	if err := writeEmbeddedFileIfMissing(clientTemplates, "assets/templates/inbounds.json", filepath.Join(state.configDir, "inbounds.json"), 0o644); err != nil {
 		return err
 	}
 
-	if err := writeEmbeddedFile("assets/templates/logs.json", filepath.Join(state.configDir, "logs.json"), 0o644); err != nil {
+	if err := writeEmbeddedFileIfMissing(clientTemplates, "assets/templates/logs.json", filepath.Join(state.configDir, "logs.json"), 0o644); err != nil {
 		return err
 	}
 
@@ -224,17 +224,6 @@ func deployConfiguration(state installState) error {
 		AllowInsecure:         state.AllowInsecure,
 		AllowInsecureOverride: state.AllowInsecureOverride,
 	}, state.Force)
-}
-
-func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
-	content, err := clientTemplates.ReadFile(name)
-	if err != nil {
-		return fmt.Errorf("xp2p: load template %s: %w", name, err)
-	}
-	if err := os.WriteFile(dest, content, perm); err != nil {
-		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
-	}
-	return nil
 }
 
 func ensureXrayBinaryPresent(binDir string) error {

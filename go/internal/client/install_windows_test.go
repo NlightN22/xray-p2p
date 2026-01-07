@@ -85,3 +85,59 @@ func TestInstallFailsWhenXrayMissing(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestInstallPreservesExistingInboundsAndLogs(t *testing.T) {
+	dir := t.TempDir()
+
+	binDir := filepath.Join(dir, layout.BinDirName)
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin: %v", err)
+	}
+	xrayPath := filepath.Join(binDir, "xray.exe")
+	if err := os.WriteFile(xrayPath, []byte("stub"), 0o755); err != nil {
+		t.Fatalf("write stub xray: %v", err)
+	}
+
+	configDir := filepath.Join(dir, DefaultClientConfigDir)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config: %v", err)
+	}
+	inboundsPath := filepath.Join(configDir, "inbounds.json")
+	logsPath := filepath.Join(configDir, "logs.json")
+	inboundsContents := []byte("{\"custom\": \"inbounds\"}\n")
+	logsContents := []byte("{\"custom\": \"logs\"}\n")
+	if err := os.WriteFile(inboundsPath, inboundsContents, 0o644); err != nil {
+		t.Fatalf("write inbounds: %v", err)
+	}
+	if err := os.WriteFile(logsPath, logsContents, 0o644); err != nil {
+		t.Fatalf("write logs: %v", err)
+	}
+
+	opts := InstallOptions{
+		InstallDir:    dir,
+		ConfigDir:     DefaultClientConfigDir,
+		ServerAddress: "edge.example.com",
+		ServerPort:    "62022",
+		User:          "user@example.com",
+		Password:      "secret",
+		ServerName:    "edge.example.com",
+	}
+	if err := Install(context.Background(), opts); err != nil {
+		t.Fatalf("Install returned error: %v", err)
+	}
+
+	gotInbounds, err := os.ReadFile(inboundsPath)
+	if err != nil {
+		t.Fatalf("read inbounds: %v", err)
+	}
+	if string(gotInbounds) != string(inboundsContents) {
+		t.Fatalf("inbounds changed: got %q want %q", gotInbounds, inboundsContents)
+	}
+	gotLogs, err := os.ReadFile(logsPath)
+	if err != nil {
+		t.Fatalf("read logs: %v", err)
+	}
+	if string(gotLogs) != string(logsContents) {
+		t.Fatalf("logs changed: got %q want %q", gotLogs, logsContents)
+	}
+}
