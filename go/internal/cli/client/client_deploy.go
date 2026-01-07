@@ -253,7 +253,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	fs.SetOutput(io.Discard)
 
 	hostFlag := fs.String("host", "", "deploy host name or address")
-	deployPort := fs.String("port", "62025", "deploy port (default 62025)")
+	deployPort := fs.String("port", "62025", "deploy port")
 	installDir := fs.String("install-dir", "", "server install directory override")
 	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")

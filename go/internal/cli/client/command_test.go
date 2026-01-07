@@ -16,9 +16,9 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 	dummyCfg := func() config.Config { return config.Config{} }
 	makeCmd := func(builder func(commandConfig) *cobra.Command) *cobra.Command {
 		cmd := builder(dummyCfg)
-		cmd.Flags().String("diag-service-port", "", "")
-		cmd.Flags().String("diag-service-mode", "", "")
-		cmd.Flags().String("client-install-dir", "", "")
+		cmd.PersistentFlags().String("diag-service-port", "", "")
+		cmd.PersistentFlags().String("diag-service-mode", "", "")
+		cmd.PersistentFlags().String("client-install-dir", "", "")
 		return cmd
 	}
 
@@ -69,12 +69,11 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 			},
 		},
 		{
-			name:           "persistent overrides forwarded",
+			name:           "persistent overrides skipped",
 			builder:        newClientInstallCmd,
 			persistentArgs: []string{"--client-install-dir", `E:\xp2p`},
 			localArgs:      []string{"--host", "10.0.10.10", "--user", "demo@example.com", "--password", "p@ss"},
 			wantFlags: []string{
-				"--client-install-dir=E:\\xp2p",
 				"--password=p@ss",
 				"--host=10.0.10.10",
 				"--user=demo@example.com",
@@ -87,8 +86,8 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Helper()
 			cmd := makeCmd(tc.builder)
-			applyArgs(t, cmd.Flags(), []string{"--diag-service-port=62023", "--diag-service-mode=manual"})
-			applyArgs(t, cmd.Flags(), tc.persistentArgs)
+			applyArgs(t, cmd.PersistentFlags(), []string{"--diag-service-port=62023", "--diag-service-mode=manual"})
+			applyArgs(t, cmd.PersistentFlags(), tc.persistentArgs)
 			applyArgs(t, cmd.Flags(), tc.localArgs)
 			got := forwardFlags(cmd, tc.passArgs)
 			for _, entry := range got {
