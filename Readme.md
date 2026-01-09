@@ -189,7 +189,7 @@ xp2p client dns-forward remove --domain dev.example --address 10.10.10.53
 
 ### Remote deploy handshake
 
-`xp2p client deploy` bootstraps a remote host over SSH/RDP-less channels. It emits a single `trojan://` deploy link (with user/password and extra tokens), waits for the server-side listener, pushes state, and then installs the local client using the generated `trojan://` link:
+`xp2p client deploy` bootstraps a remote host over SSH/RDP-less channels. It emits a single `trojan://` deploy link (with user/password and extra tokens), waits for the server-side listener (default port `62025`), pushes state, and then installs the local client using the generated `trojan://` link:
 
 ```bash
 xp2p client deploy --host branch-gw.example.com --user branch@example.com
@@ -201,11 +201,19 @@ On the server, run:
 xp2p server deploy --link "trojan://PASSWORD@branch-gw.example.com:62022?deploy_version=2&exp=1763743202&security=tls&sni=branch-gw.example.com#branch@example.com"
 ```
 
+To use a custom deploy port, pass it on both sides:
+
+```bash
+xp2p client deploy --host branch-gw.example.com --user branch@example.com --port 62030
+xp2p server deploy --link "trojan://PASSWORD@branch-gw.example.com:62022?deploy_version=2&exp=1763743202&security=tls&sni=branch-gw.example.com#branch@example.com" --listen :62030
+```
+
 The server stops listening after the first deploy request. The client encrypts its deploy manifest with a key derived from the trojan link, so only ciphertext crosses the wire. The deploy listener decrypts the payload, verifies it matches the link you supplied, installs or updates the remote server, and returns a signed client link. Handshakes default to a 10-minute TTL and retry automatically until the server comes online.
 
 ## Diagnostics, routing, and NAT helpers
 
 - Heartbeat/state: `xp2p client state --watch` and `xp2p server state --watch` stream heartbeat tables from `state-heartbeat.json` with TTL filtering.
+- Diagnostics responder: `xp2p diag` starts a foreground listener for `xp2p ping`; override with `xp2p diag --listen 0.0.0.0:62025 --proto udp` if you need a custom port/protocol.
 - Tunnel cascade: `xp2p ping 10.62.10.12 --tunnel` auto-detects SOCKS from client config, then server, then errors if absent; override with `--tunnel 127.0.0.1:1080`. Use `--endpoint <tag>` on the client to force a specific outbound regardless of host, or pass the reverse user/tag (or `--endpoint <user>`) on the server to select a reverse channel.
 - Forwarding: `xp2p client forward add|list|remove` and `xp2p server forward add|list|remove` manage explicit forwards alongside managed reverse portals.
 - DNS/DHCP: `xp2p {client,server} dns-forward add|remove|list` manage per-domain entries in dnsmasq (`dhcp.@dnsmasq[0].server`) on OpenWrt and keep state in sync.
