@@ -1,0 +1,92 @@
+# frozen_string_literal: true
+
+BOX_NAME              = "gusztavvargadr/windows-server-2022-standard".freeze
+BOX_VERSION           = "2511.0.0".freeze
+SERVER_ID             = "win2022-a".freeze
+CLIENT_ID             = "win2022-b".freeze
+SERVER_VM_NAME        = "win2022-a".freeze
+CLIENT_VM_NAME        = "win2022-b".freeze
+SERVER_PRIVATE_IP     = "10.62.10.31".freeze
+CLIENT_PRIVATE_IP     = "10.62.10.32".freeze
+HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
+PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
+OPENSSH_SCRIPT        = File.expand_path("scripts/openssh.ps1", __dir__)
+DEFAULT_WINRM_PORT    = 5985
+SERVER_WINRM_HOSTPORT = 56985
+CLIENT_WINRM_HOSTPORT = 56986
+
+def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm_host_port:)
+  config.vm.define machine_id do |machine|
+    machine.vm.box = BOX_NAME
+    machine.vm.box_version = BOX_VERSION
+    machine.vm.guest = :windows
+    machine.vm.boot_timeout = 400
+    machine.vm.communicator = "winrm"
+    machine.vm.hostname = vb_name
+
+    machine.vm.synced_folder ".", "/vagrant", disabled: true
+    machine.vm.synced_folder HOST_SYNCED_ROOT, "C:/xp2p", type: "virtualbox"
+
+    machine.winrm.username = "vagrant"
+    machine.winrm.password = "vagrant"
+    machine.winrm.transport = :plaintext
+    machine.winrm.basic_auth_only = true
+    machine.winrm.timeout = 60
+    machine.winrm.retry_limit = 10
+
+    machine.vm.network "forwarded_port",
+                       guest: DEFAULT_WINRM_PORT,
+                       host: winrm_host_port,
+                       protocol: "tcp",
+                       id: "#{machine_id}-winrm",
+                       auto_correct: true
+
+    machine.vm.network "private_network",
+                       ip: private_ip
+
+    machine.vm.provider "virtualbox" do |vb|
+      vb.name = vb_name
+      vb.memory = 8192
+      vb.cpus = 6
+      vb.gui = false
+    end
+
+    shared_env = {
+      "XP2P_ROLE" => role,
+      "XP2P_MACHINE_ID" => machine_id,
+      "XP2P_SYNC_ROOT" => "C:/xp2p"
+    }
+
+    machine.vm.provision "shell",
+                         name: "openssh",
+                         path: OPENSSH_SCRIPT,
+                         privileged: true,
+                         env: shared_env
+
+    machine.vm.provision "shell",
+                         name: "common",
+                         path: PROVISION_SCRIPT,
+                         privileged: true,
+                         env: shared_env
+  end
+end
+
+Vagrant.configure("2") do |config|
+  define_xp2p_machine(
+    config,
+    machine_id: SERVER_ID,
+    vb_name: SERVER_VM_NAME,
+    role: "server",
+    private_ip: SERVER_PRIVATE_IP,
+    winrm_host_port: SERVER_WINRM_HOSTPORT
+  )
+
+  define_xp2p_machine(
+    config,
+    machine_id: CLIENT_ID,
+    vb_name: CLIENT_VM_NAME,
+    role: "client",
+    private_ip: CLIENT_PRIVATE_IP,
+    winrm_host_port: CLIENT_WINRM_HOSTPORT
+  )
+end
