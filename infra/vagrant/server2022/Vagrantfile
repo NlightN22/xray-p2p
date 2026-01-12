@@ -11,7 +11,7 @@ CLIENT_PRIVATE_IP     = "10.62.10.32".freeze
 HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
 PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
 OPENSSH_SCRIPT        = File.expand_path("scripts/openssh.ps1", __dir__)
-DEFAULT_WINRM_PORT    = 5985
+DEFAULT_WINRM_PORT    = 5986
 SERVER_WINRM_HOSTPORT = 56985
 CLIENT_WINRM_HOSTPORT = 56986
 
@@ -20,7 +20,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
     machine.vm.guest = :windows
-    machine.vm.boot_timeout = 400
+    machine.vm.boot_timeout = 1200
     machine.vm.communicator = "winrm"
     machine.vm.hostname = vb_name
 
@@ -29,8 +29,9 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
 
     machine.winrm.username = "vagrant"
     machine.winrm.password = "vagrant"
-    machine.winrm.transport = :plaintext
+    machine.winrm.transport = :ssl
     machine.winrm.basic_auth_only = true
+    machine.winrm.ssl_peer_verification = false
     machine.winrm.timeout = 60
     machine.winrm.retry_limit = 10
 
