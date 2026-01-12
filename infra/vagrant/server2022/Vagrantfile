@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-BOX_NAME              = "gusztavvargadr/windows-server-2022-standard".freeze
-BOX_VERSION           = "2511.0.0".freeze
+BOX_NAME              = "jborean93/WindowsServer2022".freeze
+BOX_VERSION           = "1.2.0".freeze
 SERVER_ID             = "win2022-a".freeze
 CLIENT_ID             = "win2022-b".freeze
 SERVER_VM_NAME        = "win2022-a".freeze
