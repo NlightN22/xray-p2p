@@ -131,6 +131,25 @@ function Register-SshdServiceManual {
     & sc.exe description sshd "OpenSSH SSH Server" | Out-Null
 }
 
+function Wait-ForServiceDeletion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ServiceName,
+
+        [int] $TimeoutSeconds = 30
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if (-not $svc) {
+            return $true
+        }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
 function Ensure-SshdRegistered {
     $desiredExePattern = [System.IO.Path]::Combine($env:SystemRoot, "System32\OpenSSH\sshd.exe")
     $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='sshd'" -ErrorAction SilentlyContinue
@@ -153,6 +172,9 @@ function Ensure-SshdRegistered {
         }
 
         & sc.exe delete sshd | Out-Null
+        if (-not (Wait-ForServiceDeletion -ServiceName "sshd")) {
+            Write-Info "sshd service deletion is still pending; continuing with registration."
+        }
     }
 
     $installScript = Join-Path $env:SystemRoot "System32\OpenSSH\Install-SSHD.ps1"
@@ -189,23 +211,39 @@ function Ensure-SshdRegistered {
 
 function Ensure-SshdService {
     $serviceName = "sshd"
-    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if (-not $service) {
-        throw "Service '$serviceName' is missing. Ensure OpenSSH is installed correctly."
-    }
+    $attempts = 0
+    while ($attempts -lt 5) {
+        $attempts++
+        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if (-not $service) {
+            throw "Service '$serviceName' is missing. Ensure OpenSSH is installed correctly."
+        }
 
-    if ($service.StartType -ne "Automatic") {
-        Write-Info "Setting service 'sshd' startup type to Automatic."
-        Set-Service -Name $serviceName -StartupType Automatic -ErrorAction Stop
-    }
+        if ($service.StartType -ne "Automatic") {
+            Write-Info "Setting service 'sshd' startup type to Automatic."
+            try {
+                Set-Service -Name $serviceName -StartupType Automatic -ErrorAction Stop
+            }
+            catch {
+                if ($_.Exception.Message -match "marked for deletion") {
+                    Write-Info "sshd is marked for deletion; waiting before retry."
+                    Start-Sleep -Seconds 2
+                    continue
+                }
+                throw
+            }
+        }
 
-    if ($service.Status -ne "Running") {
-        Write-Info "Starting service 'sshd'."
-        Start-Service -Name $serviceName -ErrorAction Stop
+        if ($service.Status -ne "Running") {
+            Write-Info "Starting service 'sshd'."
+            Start-Service -Name $serviceName -ErrorAction Stop
+        }
+        else {
+            Write-Info "Service 'sshd' already running."
+        }
+        return
     }
-    else {
-        Write-Info "Service 'sshd' already running."
-    }
+    throw "Service '$serviceName' is still pending deletion after multiple retries."
 }
 
 function Restart-SshdService {
