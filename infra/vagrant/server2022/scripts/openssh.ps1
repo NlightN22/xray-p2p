@@ -131,6 +131,44 @@ function Register-SshdServiceManual {
     & sc.exe description sshd "OpenSSH SSH Server" | Out-Null
 }
 
+function Force-RemoveSshdService {
+    $serviceName = "sshd"
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if (-not $service) {
+        return
+    }
+
+    Write-Info "Stopping sshd service and processes before delete."
+    try {
+        Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+    }
+    catch {
+        Write-Info ("Failed to stop service 'sshd': {0}" -f $_.Exception.Message)
+    }
+
+    try {
+        Get-Process -Name "sshd" -ErrorAction SilentlyContinue | Stop-Process -Force
+    }
+    catch {
+        Write-Info ("Failed to stop sshd.exe: {0}" -f $_.Exception.Message)
+    }
+
+    & sc.exe delete $serviceName | Out-Null
+    if (Wait-ForServiceDeletion -ServiceName $serviceName -TimeoutSeconds 60) {
+        return
+    }
+
+    Write-Info "sshd service still pending deletion; removing service registry key."
+    try {
+        Remove-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Services\sshd" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    catch {
+        Write-Info ("Failed to remove sshd registry key: {0}" -f $_.Exception.Message)
+    }
+
+    [void](Wait-ForServiceDeletion -ServiceName $serviceName -TimeoutSeconds 30)
+}
+
 function Wait-ForServiceDeletion {
     param(
         [Parameter(Mandatory = $true)]
@@ -171,8 +209,8 @@ function Ensure-SshdRegistered {
             Write-Info ("Failed to stop service 'sshd': {0}" -f $_.Exception.Message)
         }
 
-        & sc.exe delete sshd | Out-Null
-        if (-not (Wait-ForServiceDeletion -ServiceName "sshd")) {
+        Force-RemoveSshdService
+        if (Get-Service -Name "sshd" -ErrorAction SilentlyContinue) {
             Write-Info "sshd service deletion is still pending; continuing with registration."
         }
     }
@@ -212,7 +250,7 @@ function Ensure-SshdRegistered {
 function Ensure-SshdService {
     $serviceName = "sshd"
     $attempts = 0
-    while ($attempts -lt 5) {
+    while ($attempts -lt 12) {
         $attempts++
         $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if (-not $service) {
@@ -227,6 +265,7 @@ function Ensure-SshdService {
             catch {
                 if ($_.Exception.Message -match "marked for deletion") {
                     Write-Info "sshd is marked for deletion; waiting before retry."
+                    Wait-ForServiceDeletion -ServiceName $serviceName -TimeoutSeconds 60 | Out-Null
                     Start-Sleep -Seconds 2
                     continue
                 }
@@ -243,7 +282,7 @@ function Ensure-SshdService {
         }
         return
     }
-    throw "Service '$serviceName' is still pending deletion after multiple retries."
+    Write-Info "Service 'sshd' is still pending deletion after multiple retries; skipping startup."
 }
 
 function Restart-SshdService {
