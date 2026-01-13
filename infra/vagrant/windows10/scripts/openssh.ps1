@@ -269,13 +269,20 @@ function Ensure-SshdService {
                     Start-Sleep -Seconds 2
                     continue
                 }
-                throw
+                Write-Info ("Failed to set service 'sshd' startup type: {0}" -f $_.Exception.Message)
+                return
             }
         }
 
         if ($service.Status -ne "Running") {
             Write-Info "Starting service 'sshd'."
-            Start-Service -Name $serviceName -ErrorAction Stop
+            try {
+                Start-Service -Name $serviceName -ErrorAction Stop
+            }
+            catch {
+                Write-Info ("Failed to start service 'sshd': {0}" -f $_.Exception.Message)
+                return
+            }
         }
         else {
             Write-Info "Service 'sshd' already running."

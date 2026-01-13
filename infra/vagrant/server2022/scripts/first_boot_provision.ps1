@@ -1,6 +1,6 @@
 param(
     [int] $WinrmPollSeconds = 15,
-    [int] $WinrmTimeoutMinutes = 60
+    [int] $WinrmTimeoutMinutes = 10
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,7 +19,11 @@ function Invoke-Vagrant {
         [Parameter(Mandatory = $true)]
         [string[]] $Args
     )
-    & vagrant @Args
+    Write-Info ("Running: vagrant {0}" -f ($Args -join " "))
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & vagrant @Args 2>&1 | ForEach-Object { Write-Host $_ }
+    $ErrorActionPreference = $prev
     return $LASTEXITCODE
 }
 
@@ -52,12 +56,21 @@ function Wait-ForWinRM {
     )
 
     $deadline = (Get-Date).AddMinutes($WinrmTimeoutMinutes)
+    $attempt = 0
     while ((Get-Date) -lt $deadline) {
-        $exitCode = Invoke-Vagrant -Args @("winrm", $Machine, "-c", "cmd /c echo ready")
-        if ($exitCode -eq 0) {
+        $attempt++
+        Write-Info ("Running: vagrant winrm {0} -c 'cmd /c echo ready'" -f $Machine)
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $output = & vagrant winrm $Machine -c "cmd /c echo ready" 2>&1
+        $output | ForEach-Object { Write-Host $_ }
+        $ErrorActionPreference = $prev
+        $exitCode = $LASTEXITCODE
+        if ($exitCode -eq 0 -and ($output -match "ready")) {
             Write-Info ("WinRM ready for {0}." -f $Machine)
             return $true
         }
+        Write-Info ("WinRM probe {0} for {1} failed (exit {2})." -f $attempt, $Machine, $exitCode)
         Start-Sleep -Seconds $WinrmPollSeconds
     }
     return $false
