@@ -7,7 +7,7 @@ BUILDER_VM_NAME    = "win2019-msi".freeze
 BUILDER_PRIVATE_IP = "10.62.10.41".freeze
 HOST_SYNCED_ROOT   = File.expand_path("../../../..", __dir__)
 SHARED_SCRIPTS_ROOT = File.expand_path("../../scripts/win", __dir__)
-PROVISION_SCRIPT    = File.expand_path("provision.ps1", SHARED_SCRIPTS_ROOT)
+PROVISION_SCRIPT    = File.expand_path("builder_provision.ps1", SHARED_SCRIPTS_ROOT)
 OPENSSH_SCRIPT      = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
 NETWORK_SETUP_SCRIPT = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
 
