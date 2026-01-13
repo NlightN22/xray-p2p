@@ -109,6 +109,7 @@ function Ensure-Xp2pSshdConfig {
         throw "OpenSSH sshd.exe not found at $exePath"
     }
 
+    $systemSshDir = Join-Path $env:ProgramData "ssh"
     if (-not (Test-Path $Xp2pSshConfigDir)) {
         Write-Info ("Creating xp2p ssh config directory at {0}" -f $Xp2pSshConfigDir)
         New-Item -ItemType Directory -Path $Xp2pSshConfigDir -Force | Out-Null
@@ -120,22 +121,25 @@ function Ensure-Xp2pSshdConfig {
     $rsaKey = Join-Path $Xp2pSshConfigDir "ssh_host_rsa_key"
     $hostKeys = @()
 
-    if (-not (Test-Path $ed25519Key) -and (Test-Path $sshKeygen)) {
-        Write-Info "Generating ed25519 host key."
-        & $sshKeygen -t ed25519 -f $ed25519Key -N "" | Out-Null
+    $systemEd25519 = Join-Path $systemSshDir "ssh_host_ed25519_key"
+    $systemRsa = Join-Path $systemSshDir "ssh_host_rsa_key"
+    if (Test-Path $systemEd25519) {
+        $hostKeys += $systemEd25519
+    }
+    if (Test-Path $systemRsa) {
+        $hostKeys += $systemRsa
+    }
+    if ($hostKeys.Count -eq 0 -and (Test-Path $sshKeygen)) {
+        Write-Info "No system host keys found; generating keys under xp2p-ssh."
+        & $sshKeygen -t ed25519 -f $ed25519Key -N '""' | Out-Null
+        & $sshKeygen -t rsa -b 4096 -f $rsaKey -N '""' | Out-Null
         $changed = $true
-    }
-    if (Test-Path $ed25519Key) {
-        $hostKeys += $ed25519Key
-    }
-
-    if (-not (Test-Path $rsaKey) -and (Test-Path $sshKeygen)) {
-        Write-Info "Generating rsa host key."
-        & $sshKeygen -t rsa -b 4096 -f $rsaKey -N "" | Out-Null
-        $changed = $true
-    }
-    if (Test-Path $rsaKey) {
-        $hostKeys += $rsaKey
+        if (Test-Path $ed25519Key) {
+            $hostKeys += $ed25519Key
+        }
+        if (Test-Path $rsaKey) {
+            $hostKeys += $rsaKey
+        }
     }
 
     if ($hostKeys.Count -eq 0) {
@@ -148,7 +152,9 @@ function Ensure-Xp2pSshdConfig {
 
     $config = @(
         "Port $Xp2pSshPort",
-        "Protocol 2"
+        "Protocol 2",
+        "PubkeyAcceptedKeyTypes +ssh-rsa",
+        "HostKeyAlgorithms +ssh-rsa"
     ) + $hostKeyLines + @(
         "AuthorizedKeysFile $authorizedKeys",
         "PasswordAuthentication no",
@@ -199,6 +205,29 @@ function Ensure-Xp2pSshdService {
     }
     catch {
         Write-Info ("Failed to start service '{0}': {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
+        Write-Info "Service status (sc query):"
+        & sc.exe query $Xp2pSshServiceName | ForEach-Object { Write-Host $_ }
+        Write-Info "Service config (sc qc):"
+        & sc.exe qc $Xp2pSshServiceName | ForEach-Object { Write-Host $_ }
+        if (Test-Path $logPath) {
+            Write-Info ("sshd log tail ({0}):" -f $logPath)
+            Get-Content -Path $logPath -Tail 50 | ForEach-Object { Write-Host $_ }
+        }
+    }
+}
+
+function Ensure-Xp2pSshFirewall {
+    $ruleName = "xp2p-sshd"
+    $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+    if ($existing) {
+        return
+    }
+    try {
+        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Xp2pSshPort | Out-Null
+        Write-Info ("Firewall rule '{0}' added for port {1}." -f $ruleName, $Xp2pSshPort)
+    }
+    catch {
+        Write-Info ("Failed to add firewall rule '{0}': {1}" -f $ruleName, $_.Exception.Message)
     }
 }
 
@@ -215,6 +244,8 @@ function Restart-Xp2pSshdService {
     }
     catch {
         Write-Info ("Failed to restart service '{0}': {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
+        Write-Info "Service status (sc query):"
+        & sc.exe query $Xp2pSshServiceName | ForEach-Object { Write-Host $_ }
     }
 }
 
@@ -356,6 +387,7 @@ $keysChanged = Ensure-VagrantKeys
 $defaultShellChanged = Ensure-DefaultOpenSshShell
 $configChanged = Ensure-Xp2pSshdConfig
 Ensure-Xp2pSshdService
+Ensure-Xp2pSshFirewall
 if ($configChanged -or $keysChanged) {
     Restart-Xp2pSshdService
 }
