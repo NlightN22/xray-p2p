@@ -9,8 +9,10 @@ CLIENT_VM_NAME        = "win2022-b".freeze
 SERVER_PRIVATE_IP     = "10.62.10.31".freeze
 CLIENT_PRIVATE_IP     = "10.62.10.32".freeze
 HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
-PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
-OPENSSH_SCRIPT        = File.expand_path("scripts/openssh.ps1", __dir__)
+SHARED_SCRIPTS_ROOT   = File.expand_path("../scripts/win", __dir__)
+PROVISION_SCRIPT      = File.expand_path("provision.ps1", SHARED_SCRIPTS_ROOT)
+OPENSSH_SCRIPT        = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
+NETWORK_SETUP_SCRIPT  = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
 DEFAULT_WINRM_PORT    = 5986
 SERVER_WINRM_HOSTPORT = 56985
 CLIENT_WINRM_HOSTPORT = 56986
@@ -66,6 +68,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
       vb.name = vb_name
       vb.memory = 8192
       vb.cpus = 6
+      vb.linked_clone = false
       vb.gui = false
     end
 
@@ -79,6 +82,13 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
                          name: "openssh",
                          path: OPENSSH_SCRIPT,
                          privileged: true,
+                         env: shared_env
+
+    machine.vm.provision "shell",
+                         name: "network-setup",
+                         path: NETWORK_SETUP_SCRIPT,
+                         privileged: true,
+                         args: [private_ip],
                          env: shared_env
 
     machine.vm.provision "shell",

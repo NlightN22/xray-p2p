@@ -1,0 +1,86 @@
+# frozen_string_literal: true
+
+BOX_NAME           = "jborean93/WindowsServer2019".freeze
+BOX_VERSION        = "1.2.0".freeze
+BUILDER_ID         = "win2019-msi".freeze
+BUILDER_VM_NAME    = "win2019-msi".freeze
+BUILDER_PRIVATE_IP = "10.62.10.41".freeze
+HOST_SYNCED_ROOT   = File.expand_path("../../../..", __dir__)
+SHARED_SCRIPTS_ROOT = File.expand_path("../../scripts/win", __dir__)
+PROVISION_SCRIPT    = File.expand_path("provision.ps1", SHARED_SCRIPTS_ROOT)
+OPENSSH_SCRIPT      = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
+NETWORK_SETUP_SCRIPT = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
+
+DEFAULT_WINRM_PORT = 5986
+WINRM_HOSTPORT     = 56975
+SSH_GUEST_PORT     = 2222
+SSH_HOSTPORT       = 52212
+
+Vagrant.configure("2") do |config|
+  config.vm.define BUILDER_ID do |machine|
+    machine.vm.box = BOX_NAME
+    machine.vm.box_version = BOX_VERSION
+    machine.vm.guest = :windows
+    machine.vm.boot_timeout = 800
+    machine.vm.communicator = "winrm"
+    machine.vm.hostname = BUILDER_VM_NAME
+
+    machine.vm.synced_folder ".", "/vagrant", disabled: true
+    machine.vm.synced_folder HOST_SYNCED_ROOT, "C:/xp2p", type: "virtualbox"
+
+    machine.winrm.username = "vagrant"
+    machine.winrm.password = "vagrant"
+    machine.winrm.transport = :ssl
+    machine.winrm.basic_auth_only = true
+    machine.winrm.ssl_peer_verification = false
+    machine.winrm.timeout = 120
+    machine.winrm.retry_delay = 10
+    machine.winrm.retry_limit = 20
+
+    machine.ssh.username = "vagrant"
+    machine.ssh.private_key_path = ["~/.vagrant.d/insecure_private_key"]
+    machine.ssh.host = "127.0.0.1"
+    machine.ssh.port = SSH_HOSTPORT
+    machine.ssh.insert_key = false
+
+    machine.vm.network "forwarded_port",
+                       guest: DEFAULT_WINRM_PORT,
+                       host: WINRM_HOSTPORT,
+                       protocol: "tcp",
+                       id: "winrm",
+                       auto_correct: true
+
+    machine.vm.network "forwarded_port",
+                       guest: SSH_GUEST_PORT,
+                       host: SSH_HOSTPORT,
+                       protocol: "tcp",
+                       id: "ssh",
+                       auto_correct: true
+
+    machine.vm.network "private_network",
+                       ip: BUILDER_PRIVATE_IP
+
+    machine.vm.provider "virtualbox" do |vb|
+      vb.name = BUILDER_VM_NAME
+      vb.memory = 6144
+      vb.cpus = 4
+      vb.gui = false
+    end
+
+    machine.vm.provision "shell",
+                         name: "openssh",
+                         path: OPENSSH_SCRIPT,
+                         privileged: true
+
+    machine.vm.provision "shell",
+                         name: "network-setup",
+                         path: NETWORK_SETUP_SCRIPT,
+                         privileged: true,
+                         args: [BUILDER_PRIVATE_IP]
+
+    machine.vm.provision "shell",
+                         name: "msi-deps",
+                         path: PROVISION_SCRIPT,
+                         privileged: true
+  end
+end

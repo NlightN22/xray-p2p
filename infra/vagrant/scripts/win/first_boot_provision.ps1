@@ -1,6 +1,7 @@
 param(
     [int] $WinrmPollSeconds = 15,
-    [int] $WinrmTimeoutMinutes = 10
+    [int] $WinrmTimeoutMinutes = 10,
+    [string[]] $Machines
 )
 
 $ErrorActionPreference = "Stop"
@@ -47,6 +48,25 @@ function Get-MachineState {
         }
     }
     return "unknown"
+}
+
+function Get-DefinedMachines {
+    $lines = & vagrant status --machine-readable
+    $machines = @()
+    foreach ($line in $lines) {
+        $parts = $line -split ",", 4
+        if ($parts.Length -lt 4) {
+            continue
+        }
+        if ($parts[2] -ne "state") {
+            continue
+        }
+        if (-not [string]::IsNullOrWhiteSpace($parts[1])) {
+            $machines += $parts[1]
+        }
+    }
+
+    return $machines | Sort-Object -Unique
 }
 
 function Wait-ForWinRM {
@@ -106,6 +126,18 @@ function Ensure-Machine {
 }
 
 Write-Info "Sequential first-boot orchestration started."
-Ensure-Machine -Machine "win2022-a"
-Ensure-Machine -Machine "win2022-b"
+
+$targetMachines = $Machines
+if (-not $targetMachines -or $targetMachines.Count -eq 0) {
+    $targetMachines = Get-DefinedMachines
+}
+
+if (-not $targetMachines -or $targetMachines.Count -eq 0) {
+    throw "No Vagrant machines detected. Run this script from a Vagrant directory or pass -Machines."
+}
+
+foreach ($machine in $targetMachines) {
+    Ensure-Machine -Machine $machine
+}
+
 Write-Info "All machines provisioned."
