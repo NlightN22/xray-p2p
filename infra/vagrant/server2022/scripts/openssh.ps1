@@ -7,6 +7,10 @@ if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Adm
     throw "OpenSSH provisioning requires administrative privileges. Rerun this script from an elevated PowerShell session."
 }
 
+$Xp2pSshServiceName = "xp2p-sshd"
+$Xp2pSshPort = 2222
+$Xp2pSshConfigDir = Join-Path $env:ProgramData "xp2p-ssh"
+
 function Write-Info {
     param(
         [Parameter(Mandatory = $true)]
@@ -98,240 +102,120 @@ function Ensure-AclRules {
     return $true
 }
 
-function Register-SshdServiceManual {
+function Ensure-Xp2pSshdConfig {
+    $changed = $false
     $exePath = Join-Path $env:SystemRoot "System32\OpenSSH\sshd.exe"
     if (-not (Test-Path $exePath)) {
-        throw "Cannot manually register sshd: executable not found at $exePath"
+        throw "OpenSSH sshd.exe not found at $exePath"
     }
 
-    $configDir = Join-Path $env:ProgramData "ssh"
-    if (-not (Test-Path $configDir)) {
-        Write-Info ("Creating ssh configuration directory at {0}" -f $configDir)
-        New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+    if (-not (Test-Path $Xp2pSshConfigDir)) {
+        Write-Info ("Creating xp2p ssh config directory at {0}" -f $Xp2pSshConfigDir)
+        New-Item -ItemType Directory -Path $Xp2pSshConfigDir -Force | Out-Null
+        $changed = $true
     }
 
-    $defaultConfig = Join-Path (Split-Path $exePath) "sshd_config_default"
-    $configPath = Join-Path $configDir "sshd_config"
-    if (-not (Test-Path $configPath) -and (Test-Path $defaultConfig)) {
-        Write-Info "Seeding sshd_config from default template."
-        Copy-Item -Path $defaultConfig -Destination $configPath -Force
+    $sshKeygen = Join-Path (Split-Path $exePath) "ssh-keygen.exe"
+    $ed25519Key = Join-Path $Xp2pSshConfigDir "ssh_host_ed25519_key"
+    $rsaKey = Join-Path $Xp2pSshConfigDir "ssh_host_rsa_key"
+    $hostKeys = @()
+
+    if (-not (Test-Path $ed25519Key) -and (Test-Path $sshKeygen)) {
+        Write-Info "Generating ed25519 host key."
+        & $sshKeygen -t ed25519 -f $ed25519Key -N "" | Out-Null
+        $changed = $true
+    }
+    if (Test-Path $ed25519Key) {
+        $hostKeys += $ed25519Key
     }
 
-    $hostKey = Join-Path $configDir "ssh_host_ed25519_key"
-    if (-not (Test-Path $hostKey)) {
-        $sshKeygen = Join-Path (Split-Path $exePath) "ssh-keygen.exe"
-        if (Test-Path $sshKeygen) {
-            Write-Info "Generating host keys via ssh-keygen -A."
-            & $sshKeygen -A | Out-Null
-        }
+    if (-not (Test-Path $rsaKey) -and (Test-Path $sshKeygen)) {
+        Write-Info "Generating rsa host key."
+        & $sshKeygen -t rsa -b 4096 -f $rsaKey -N "" | Out-Null
+        $changed = $true
+    }
+    if (Test-Path $rsaKey) {
+        $hostKeys += $rsaKey
     }
 
-    Write-Info "Creating sshd service manually."
-    & sc.exe create sshd binPath= $exePath start= auto DisplayName= "OpenSSH SSH Server" | Out-Null
-    & sc.exe description sshd "OpenSSH SSH Server" | Out-Null
-}
-
-function Force-RemoveSshdService {
-    $serviceName = "sshd"
-    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if (-not $service) {
-        return
+    if ($hostKeys.Count -eq 0) {
+        Write-Info "No host keys available; xp2p-sshd may fail to start."
     }
 
-    Write-Info "Stopping sshd service and processes before delete."
-    try {
-        Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
-    }
-    catch {
-        Write-Info ("Failed to stop service 'sshd': {0}" -f $_.Exception.Message)
-    }
+    $authorizedKeys = "C:/Users/vagrant/.ssh/authorized_keys"
+    $sftpPath = (Join-Path $env:SystemRoot "System32\OpenSSH\sftp-server.exe") -replace "\\", "/"
+    $hostKeyLines = $hostKeys | ForEach-Object { ("HostKey {0}" -f ($_.ToString() -replace "\\", "/")) }
 
-    try {
-        Get-Process -Name "sshd" -ErrorAction SilentlyContinue | Stop-Process -Force
-    }
-    catch {
-        Write-Info ("Failed to stop sshd.exe: {0}" -f $_.Exception.Message)
-    }
-
-    & sc.exe delete $serviceName | Out-Null
-    if (Wait-ForServiceDeletion -ServiceName $serviceName -TimeoutSeconds 60) {
-        return
-    }
-
-    Write-Info "sshd service still pending deletion; removing service registry key."
-    try {
-        Remove-Item -Path "HKLM:\SYSTEM\CurrentControlSet\Services\sshd" -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    catch {
-        Write-Info ("Failed to remove sshd registry key: {0}" -f $_.Exception.Message)
-    }
-
-    [void](Wait-ForServiceDeletion -ServiceName $serviceName -TimeoutSeconds 30)
-}
-
-function Wait-ForServiceDeletion {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string] $ServiceName,
-
-        [int] $TimeoutSeconds = 30
+    $config = @(
+        "Port $Xp2pSshPort",
+        "Protocol 2"
+    ) + $hostKeyLines + @(
+        "AuthorizedKeysFile $authorizedKeys",
+        "PasswordAuthentication no",
+        "PubkeyAuthentication yes",
+        "Subsystem sftp $sftpPath"
     )
+    $configText = ($config -join "`r`n") + "`r`n"
 
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-        if (-not $svc) {
-            return $true
-        }
-        Start-Sleep -Seconds 1
+    $configPath = Join-Path $Xp2pSshConfigDir "sshd_config"
+    $existing = ""
+    if (Test-Path $configPath) {
+        $existing = Get-Content -Path $configPath -Raw -ErrorAction SilentlyContinue
     }
-    return $false
+
+    if ($existing -ne $configText) {
+        Set-Content -Path $configPath -Encoding ascii -Value $configText
+        Write-Info ("Updated xp2p sshd_config at {0}" -f $configPath)
+        $changed = $true
+    }
+
+    return $changed
 }
 
-function Ensure-SshdRegistered {
-    $desiredExePattern = [System.IO.Path]::Combine($env:SystemRoot, "System32\OpenSSH\sshd.exe")
-    $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='sshd'" -ErrorAction SilentlyContinue
+function Ensure-Xp2pSshdService {
+    $exePath = Join-Path $env:SystemRoot "System32\OpenSSH\sshd.exe"
+    $configPath = Join-Path $Xp2pSshConfigDir "sshd_config"
+    $logPath = Join-Path $Xp2pSshConfigDir "sshd.log"
 
-    if ($service -and $service.PathName) {
-        $normalizedPath = $service.PathName.Trim('"')
-        if ($normalizedPath -like "*$desiredExePattern*") {
-            Write-Info "sshd service already registered against built-in OpenSSH."
-            return
-        }
+    $service = Get-CimInstance -ClassName Win32_Service -Filter ("Name='{0}'" -f $Xp2pSshServiceName) -ErrorAction SilentlyContinue
+    $binPath = "`"$exePath`" -f `"$configPath`" -E `"$logPath`""
 
-        Write-Info "Removing existing sshd service registration."
-        try {
-            if ($service.State -ne "Stopped") {
-                Stop-Service -Name "sshd" -Force -ErrorAction SilentlyContinue
-            }
-        }
-        catch {
-            Write-Info ("Failed to stop service 'sshd': {0}" -f $_.Exception.Message)
-        }
-
-        Force-RemoveSshdService
-        if (Get-Service -Name "sshd" -ErrorAction SilentlyContinue) {
-            Write-Info "sshd service deletion is still pending; continuing with registration."
-        }
-    }
-
-    $installScript = Join-Path $env:SystemRoot "System32\OpenSSH\Install-SSHD.ps1"
-    if (-not (Test-Path $installScript)) {
-        Write-Info "System Install-SSHD.ps1 missing. Reinstalling OpenSSH optional features."
-        foreach ($cap in @("OpenSSH.Client~~~~0.0.1.0", "OpenSSH.Server~~~~0.0.1.0")) {
-            try {
-                Remove-WindowsCapability -Online -Name $cap -ErrorAction SilentlyContinue | Out-Null
-            }
-            catch {
-                Write-Info ("Failed to remove capability '{0}': {1}" -f $cap, $_.Exception.Message)
-            }
-            Write-Info ("Reinstalling Windows capability '{0}'" -f $cap)
-            Add-WindowsCapability -Online -Name $cap -ErrorAction Stop | Out-Null
-        }
-
-        if (-not (Test-Path $installScript)) {
-            $bundleInstaller = Join-Path $PSScriptRoot "OpenSSH-Win64\install-sshd.ps1"
-            if (-not (Test-Path $bundleInstaller)) {
-                Write-Info "Bundled installer missing; performing manual sshd service registration."
-                Register-SshdServiceManual
-                return
-            }
-
-            Write-Info "System Install-SSHD.ps1 still missing. Using bundled installer."
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bundleInstaller
-            return
-        }
-    }
-
-    Write-Info "Registering sshd service using Install-SSHD.ps1"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installScript
-}
-
-function Ensure-SshdService {
-    $serviceName = "sshd"
-    $attempts = 0
-    while ($attempts -lt 12) {
-        $attempts++
-        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if (-not $service) {
-            throw "Service '$serviceName' is missing. Ensure OpenSSH is installed correctly."
-        }
-
-        if ($service.StartType -ne "Automatic") {
-            Write-Info "Setting service 'sshd' startup type to Automatic."
-            try {
-                Set-Service -Name $serviceName -StartupType Automatic -ErrorAction Stop
-            }
-            catch {
-                if ($_.Exception.Message -match "marked for deletion") {
-                    Write-Info "sshd is marked for deletion; waiting before retry."
-                    Wait-ForServiceDeletion -ServiceName $serviceName -TimeoutSeconds 60 | Out-Null
-                    Start-Sleep -Seconds 2
-                    continue
-                }
-                throw
-            }
-        }
-
-        if ($service.Status -ne "Running") {
-            Write-Info "Starting service 'sshd'."
-            Start-Service -Name $serviceName -ErrorAction Stop
-        }
-        else {
-            Write-Info "Service 'sshd' already running."
-        }
-        return
-    }
-    Write-Info "Service 'sshd' is still pending deletion after multiple retries; skipping startup."
-}
-
-function Restart-SshdService {
-    $serviceName = "sshd"
-    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if (-not $service) {
-        Write-Info "Service 'sshd' not present; skipping restart."
+        Write-Info ("Creating service '{0}'." -f $Xp2pSshServiceName)
+        & sc.exe create $Xp2pSshServiceName binPath= $binPath start= auto DisplayName= "xp2p OpenSSH Server" | Out-Null
+        & sc.exe description $Xp2pSshServiceName "xp2p OpenSSH Server" | Out-Null
+    }
+
+    try {
+        Set-Service -Name $Xp2pSshServiceName -StartupType Automatic -ErrorAction Stop
+    }
+    catch {
+        Write-Info ("Failed to set service '{0}' startup type: {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
         return
     }
 
     try {
-        Restart-Service -Name $serviceName -Force -ErrorAction Stop
-        Write-Info "Service 'sshd' restarted to apply changes."
+        Start-Service -Name $Xp2pSshServiceName -ErrorAction Stop
     }
     catch {
-        Write-Info ("Failed to restart service 'sshd': {0}" -f $_.Exception.Message)
-        try {
-            Start-Service -Name $serviceName -ErrorAction Stop
-            Write-Info "Service 'sshd' started."
-        }
-        catch {
-            Write-Info ("Failed to start service 'sshd': {0}" -f $_.Exception.Message)
-        }
+        Write-Info ("Failed to start service '{0}': {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
     }
 }
 
-function Ensure-SshdConfigDefaults {
-    $configPath = Join-Path $env:ProgramData "ssh\sshd_config"
-    if (-not (Test-Path $configPath)) {
-        Write-Info ("sshd_config not found at {0}; skipping config cleanup." -f $configPath)
-        return $false
+function Restart-Xp2pSshdService {
+    $service = Get-Service -Name $Xp2pSshServiceName -ErrorAction SilentlyContinue
+    if (-not $service) {
+        Write-Info ("Service '{0}' not present; skipping restart." -f $Xp2pSshServiceName)
+        return
     }
 
-    $content = Get-Content -Path $configPath -Raw -ErrorAction Stop
-    if (-not $content) {
-        return $false
+    try {
+        Restart-Service -Name $Xp2pSshServiceName -Force -ErrorAction Stop
+        Write-Info ("Service '{0}' restarted to apply changes." -f $Xp2pSshServiceName)
     }
-
-    $pattern = '(?im)^\s*Match\s+Group\s+administrators\s*\r?\n\s*AuthorizedKeysFile\s+__PROGRAMDATA__/ssh/administrators_authorized_keys[^\r\n]*'
-    $replacement = "# Match Group administrators`r`n# AuthorizedKeysFile __PROGRAMDATA__/ssh/administrators_authorized_keys"
-    $newContent = [Regex]::Replace($content, $pattern, $replacement)
-
-    if ($newContent -ne $content) {
-        Set-Content -Path $configPath -Encoding ascii -Value $newContent
-        Write-Info ("Commented administrative override entries in {0}" -f $configPath)
-        return $true
+    catch {
+        Write-Info ("Failed to restart service '{0}': {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
     }
-
-    return $false
 }
 
 function Ensure-VagrantKeys {
@@ -468,15 +352,14 @@ function Ensure-DefaultOpenSshShell {
 }
 
 Ensure-OpenSshFeature
-Ensure-SshdRegistered
-$configChanged = Ensure-SshdConfigDefaults
 $keysChanged = Ensure-VagrantKeys
 $defaultShellChanged = Ensure-DefaultOpenSshShell
-Ensure-SshdService
+$configChanged = Ensure-Xp2pSshdConfig
+Ensure-Xp2pSshdService
 if ($configChanged -or $keysChanged) {
-    Restart-SshdService
+    Restart-Xp2pSshdService
 }
 else {
-    Write-Info "Service 'sshd' restart not required."
+    Write-Info ("Service '{0}' restart not required." -f $Xp2pSshServiceName)
 }
 Write-Info "OpenSSH provisioning completed."
