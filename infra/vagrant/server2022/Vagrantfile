@@ -20,7 +20,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
     machine.vm.guest = :windows
-    machine.vm.boot_timeout = 1200
+    machine.vm.boot_timeout = 400
     machine.vm.communicator = "winrm"
     machine.vm.hostname = vb_name
 
@@ -33,6 +33,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.winrm.basic_auth_only = true
     machine.winrm.ssl_peer_verification = false
     machine.winrm.timeout = 60
+    machine.winrm.retry_delay = 10
     machine.winrm.retry_limit = 10
 
     machine.vm.network "forwarded_port",

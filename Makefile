@@ -41,6 +41,11 @@ up-win10:
 halt-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant halt
 
+up-win22:
+	cd $(VAGRANT_WIN10_DIR) && vagrant up
+halt-win22:
+	cd $(VAGRANT_WIN10_DIR) && vagrant halt
+
 up-deb12:
 	cd $(VAGRANT_DEB12_DIR) && vagrant up
 halt-deb12:
