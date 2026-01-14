@@ -4,6 +4,8 @@ run:
 VERSION ?= $(strip $(shell go run ./go/cmd/xp2p --version))
 GO_LDFLAGS := -s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=$(VERSION)
 
+VAGRANT_WINMSI_DIR := infra/vagrant/win-msi
+
 VAGRANT_WIN10_DIR := infra/vagrant/windows10
 VAGRANT_WIN10_SERVER_ID := win10-a
 VAGRANT_WIN10_CLIENT_ID := win10-b
@@ -37,13 +39,17 @@ test-wsl:
 	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
 
 up-win10:
+	cd $(VAGRANT_WINMSI_DIR) && vagrant up
 	cd $(VAGRANT_WIN10_DIR) && vagrant up
 halt-win10:
+	cd $(VAGRANT_WINMSI_DIR) && vagrant halt
 	cd $(VAGRANT_WIN10_DIR) && vagrant halt
 
 up-win22:
+	cd $(VAGRANT_WINMSI_DIR) && vagrant up
 	cd $(VAGRANT_WIN10_DIR) && vagrant up
 halt-win22:
+	cd $(VAGRANT_WINMSI_DIR) && vagrant halt
 	cd $(VAGRANT_WIN10_DIR) && vagrant halt
 
 up-deb12:
