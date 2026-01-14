@@ -96,6 +96,27 @@ function Wait-ForWinRM {
     return $false
 }
 
+function Test-SyncedFolder {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Machine,
+        [string] $Path = "C:\\xp2p"
+    )
+
+    Write-Info ("Checking synced folder on {0}: {1}" -f $Machine, $Path)
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $escaped = $Path.Replace("'", "''")
+    $psScript = "if (Test-Path '$escaped') { Write-Output 'sync-ok'; exit 0 } else { Write-Output 'sync-missing'; exit 3 }"
+    $bytes = [System.Text.Encoding]::Unicode.GetBytes($psScript)
+    $encoded = [System.Convert]::ToBase64String($bytes)
+    $cmd = "powershell -NoProfile -EncodedCommand $encoded"
+    $output = & vagrant winrm $Machine -c $cmd 2>&1
+    $output | ForEach-Object { Write-Host $_ }
+    $ErrorActionPreference = $prev
+    return $LASTEXITCODE -eq 0
+}
+
 function Ensure-Machine {
     param(
         [Parameter(Mandatory = $true)]
@@ -116,6 +137,18 @@ function Ensure-Machine {
     Write-Info ("Waiting for WinRM on {0}." -f $Machine)
     if (-not (Wait-ForWinRM -Machine $Machine)) {
         throw ("Timed out waiting for WinRM on {0} after {1} minutes." -f $Machine, $WinrmTimeoutMinutes)
+    }
+
+    if (-not (Test-SyncedFolder -Machine $Machine)) {
+        Write-Info ("Synced folder missing on {0}; reloading with provision." -f $Machine)
+        $exitCode = Invoke-Vagrant -Args @("reload", $Machine, "--provision", "--force")
+        if ($exitCode -ne 0) {
+            throw ("Reload/provision failed for {0} (exit {1})." -f $Machine, $exitCode)
+        }
+        if (-not (Test-SyncedFolder -Machine $Machine)) {
+            throw ("Synced folder still missing on {0} after reload/provision." -f $Machine)
+        }
+        return
     }
 
     Write-Info ("Provisioning {0}." -f $Machine)
