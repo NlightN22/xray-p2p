@@ -29,6 +29,38 @@ MSI_LATEST_FILENAME = "latest.txt"
 MSI_LATEST_PATH_X64 = MSI_ARTIFACTS_DIR_X64 / MSI_LATEST_FILENAME
 MSI_LATEST_PATH_X86 = MSI_ARTIFACTS_DIR_X86 / MSI_LATEST_FILENAME
 
+WIN_STACKS = {
+    "win10": {
+        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "windows10",
+        "server": "win10-a",
+        "client": "win10-b",
+    },
+    "win2022": {
+        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2022",
+        "server": "win2022-a",
+        "client": "win2022-b",
+    },
+}
+
+_CURRENT_WIN_STACK = "win10"
+
+
+def available_win_stacks() -> list[str]:
+    return sorted(WIN_STACKS.keys())
+
+
+def set_win_stack(name: str) -> None:
+    global _CURRENT_WIN_STACK, VAGRANT_DIR, DEFAULT_SERVER, DEFAULT_CLIENT
+    if name not in WIN_STACKS:
+        raise ValueError(
+            f"Unknown win stack '{name}'. Available: {', '.join(available_win_stacks())}"
+        )
+    config = WIN_STACKS[name]
+    _CURRENT_WIN_STACK = name
+    VAGRANT_DIR = config["vagrant_dir"]
+    DEFAULT_SERVER = config["server"]
+    DEFAULT_CLIENT = config["client"]
+
 
 def require_vagrant_environment() -> None:
     common.require_vagrant_environment(VAGRANT_DIR)
