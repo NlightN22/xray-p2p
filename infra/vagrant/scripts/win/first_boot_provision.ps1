@@ -128,11 +128,15 @@ function Ensure-Machine {
 Write-Info "Sequential first-boot orchestration started."
 
 $targetMachines = $Machines
-if (-not $targetMachines -or $targetMachines.Count -eq 0) {
+if ($targetMachines -and $targetMachines -is [string]) {
+    $targetMachines = @($targetMachines)
+}
+
+if (-not $targetMachines -or ($targetMachines | Measure-Object).Count -eq 0) {
     $targetMachines = Get-DefinedMachines
 }
 
-if (-not $targetMachines -or $targetMachines.Count -eq 0) {
+if (-not $targetMachines -or ($targetMachines | Measure-Object).Count -eq 0) {
     throw "No Vagrant machines detected. Run this script from a Vagrant directory or pass -Machines."
 }
 
