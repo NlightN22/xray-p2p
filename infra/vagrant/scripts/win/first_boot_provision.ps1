@@ -143,12 +143,15 @@ function Ensure-Machine {
         Write-Info ("Synced folder missing on {0}; reloading with provision." -f $Machine)
         $exitCode = Invoke-Vagrant -Args @("reload", $Machine, "--provision", "--force")
         if ($exitCode -ne 0) {
-            throw ("Reload/provision failed for {0} (exit {1})." -f $Machine, $exitCode)
+            Write-Info ("Reload/provision failed for {0} (exit {1}); continuing with manual wait/provision." -f $Machine, $exitCode)
+        }
+        Write-Info ("Waiting for WinRM on {0} after reload." -f $Machine)
+        if (-not (Wait-ForWinRM -Machine $Machine)) {
+            throw ("Timed out waiting for WinRM on {0} after reload." -f $Machine)
         }
         if (-not (Test-SyncedFolder -Machine $Machine)) {
             throw ("Synced folder still missing on {0} after reload/provision." -f $Machine)
         }
-        return
     }
 
     Write-Info ("Provisioning {0}." -f $Machine)
