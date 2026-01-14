@@ -139,7 +139,7 @@ def run_guest_script(host: Host, relative_path: str, **parameters: object) -> Co
         args = "".join(f" -{key} {_ps_quote(str(value))}" for key, value in parameters.items())
         command = (
             "powershell -NoProfile -ExecutionPolicy Bypass "
-            f"-Command \"& '{ps_path}'{args}\""
+            f"-File \"{ps_path}\"{args}"
         )
         return host.run(command)
 

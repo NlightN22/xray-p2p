@@ -38,10 +38,15 @@ function Resolve-MsiScript {
     }
 }
 
+$repoRootPath = $RepoRoot
+if (-not (Test-Path $repoRootPath)) {
+    throw "Shared repo root not found at $repoRootPath. Re-mount the synced folder (try 'vagrant reload --provision')."
+}
+
 $scriptInfo = Resolve-MsiScript -Arch $Architecture
 $scriptPath = Join-Path $RepoRoot $scriptInfo.Script
 if (-not (Test-Path $scriptPath)) {
-    throw "MSI build script not found at $scriptPath"
+    throw "MSI build script not found at $scriptPath. Re-mount the synced folder (try 'vagrant reload --provision')."
 }
 
 $arguments = @{

@@ -19,7 +19,7 @@ TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
 .PHONY: run build build-% fmt lint test vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
-	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb
+	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi
 
 build: $(TARGETS:%=build-%)
 
@@ -86,6 +86,10 @@ build-deb:
 	$(MAKE) lint
 	cd $(VAGRANT_DEB12_DIR) && vagrant up deb-test-a
 	cd $(VAGRANT_DEB12_DIR) && vagrant ssh deb-test-a -c "sudo -n /bin/bash /srv/xray-p2p/scripts/build/build_deb_xp2p.sh --all"
+
+build-msi:
+	cd $(VAGRANT_WINMSI_DIR) && vagrant up
+	cd $(VAGRANT_WINMSI_DIR) && vagrant winrm -c "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\xp2p\\tests\\guest\\scripts\\build_msi_package.ps1 -Architecture amd64 -CacheDir C:\\xp2p\\build\\msi-artifacts -WixSource installer\\wix\\xp2p.wxs"
 # swallow extra positional arguments so make does not treat them as targets
 %:
 	@:

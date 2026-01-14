@@ -37,6 +37,47 @@ function Add-ToPath {
     $env:Path = "$Path;$env:Path"
 }
 
+function Invoke-GoCommand {
+    param([string[]] $CommandArgs)
+
+    $cmdArgs = @($CommandArgs | Where-Object { $_ -ne $null -and $_ -ne "" })
+    if ($cmdArgs.Count -eq 0) {
+        throw "Invoke-GoCommand called with empty arguments."
+    }
+    Write-Info ("Running go {0}" -f ($cmdArgs -join " "))
+
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $output = & go @cmdArgs 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    return @{
+        Output = $output
+        ExitCode = $exitCode
+    }
+}
+
+function Ensure-GoToolchain {
+    if (Get-Command -Name go.exe -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $candidates = @(
+        "C:\Program Files\Go\bin\go.exe",
+        "C:\tools\go\bin\go.exe"
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            Add-ToPath (Split-Path $candidate -Parent)
+            break
+        }
+    }
+
+    if (-not (Get-Command -Name go.exe -ErrorAction SilentlyContinue)) {
+        throw "go.exe not found. Install Go or ensure it is on PATH."
+    }
+}
+
 function Get-Xp2pVersion {
     param([string] $RepoRoot)
 
@@ -57,6 +98,7 @@ function Get-Xp2pVersion {
 Write-Info "Preparing MSI build directories"
 Ensure-Directory $RepoRoot
 Ensure-Directory $CacheDir
+Ensure-GoToolchain
 
 $version = Get-Xp2pVersion -RepoRoot $RepoRoot
 $msiPath = Join-Path $CacheDir ("xp2p-$version-windows-$MsiArchLabel.msi")
@@ -77,14 +119,34 @@ try {
     }
     $rsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
     Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
-    go run github.com/tc-hib/go-winres@v0.2.0 make --in $winresConfig --out $rsrcPrefix --arch amd64 --product-version $version --file-version $version
-    if ($LASTEXITCODE -ne 0) {
-        throw "go-winres failed with exit code $LASTEXITCODE"
+    $goWinres = Invoke-GoCommand -CommandArgs @(
+        "run",
+        "github.com/tc-hib/go-winres@v0.2.0",
+        "make",
+        "--in", $winresConfig,
+        "--out", $rsrcPrefix,
+        "--arch", "amd64",
+        "--product-version", $version,
+        "--file-version", $version
+    )
+    $goWinres.Output | ForEach-Object { Write-Host $_ }
+    if ($goWinres.ExitCode -ne 0) {
+        throw "go-winres failed with exit code $($goWinres.ExitCode)"
     }
 
     Write-Info "Building xp2p.exe"
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'
-    go build -trimpath -ldflags $ldflags -o $binaryOut .\go\cmd\xp2p
+    $goBuild = Invoke-GoCommand -CommandArgs @(
+        "build",
+        "-trimpath",
+        "-ldflags", $ldflags,
+        "-o", $binaryOut,
+        ".\\go\\cmd\\xp2p"
+    )
+    $goBuild.Output | ForEach-Object { Write-Host $_ }
+    if ($goBuild.ExitCode -ne 0) {
+        throw "go build failed with exit code $($goBuild.ExitCode)"
+    }
 
     if (-not (Test-Path $binaryOut)) {
         throw "xp2p binary missing at $binaryOut"

@@ -102,6 +102,23 @@ function Ensure-AclRules {
     return $true
 }
 
+function Repair-HostKeyPermissions {
+    param([string] $KeyPath)
+
+    if (-not (Test-Path $KeyPath)) {
+        return
+    }
+
+    & icacls $KeyPath /inheritance:r | Out-Null
+    & icacls $KeyPath /grant:r "SYSTEM:F" "Administrators:F" | Out-Null
+
+    $pubPath = "$KeyPath.pub"
+    if (Test-Path $pubPath) {
+        & icacls $pubPath /inheritance:r | Out-Null
+        & icacls $pubPath /grant:r "SYSTEM:F" "Administrators:F" "Everyone:R" | Out-Null
+    }
+}
+
 function Ensure-Xp2pSshdConfig {
     $changed = $false
     $exePath = Join-Path $env:SystemRoot "System32\OpenSSH\sshd.exe"
@@ -140,6 +157,10 @@ function Ensure-Xp2pSshdConfig {
         if (Test-Path $rsaKey) {
             $hostKeys += $rsaKey
         }
+    }
+
+    foreach ($hostKey in $hostKeys) {
+        Repair-HostKeyPermissions -KeyPath $hostKey
     }
 
     if ($hostKeys.Count -eq 0) {
