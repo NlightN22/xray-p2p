@@ -21,7 +21,7 @@ CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--all", "--ignore-missing")
-    _env.install_xp2p_from_msi(client_host, msi_path)
+    _env.install_xp2p_from_latest(client_host, msi_path, force=True)
 
 
 def _read_remote_json(client_host, path: Path) -> dict:

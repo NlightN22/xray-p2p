@@ -35,7 +35,7 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
         str(SERVER_INSTALL_DIR),
         "--ignore-missing",
     )
-    _env.install_xp2p_from_msi(server_host, msi_path)
+    _env.install_xp2p_from_latest(server_host, msi_path, force=True)
 
 
 def _remote_path_exists(host, path: Path) -> bool:

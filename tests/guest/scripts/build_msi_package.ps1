@@ -53,4 +53,36 @@ $arguments = @{
     BuildOnly = $true
 }
 
-& $scriptPath @arguments
+$output = & $scriptPath @arguments 2>&1
+$msiPath = $null
+foreach ($line in $output) {
+    if ($null -eq $line) {
+        continue
+    }
+    $text = $line.ToString().Trim()
+    if ($text.StartsWith($Marker)) {
+        $msiPath = $text.Substring($Marker.Length).Trim()
+    }
+    Write-Output $line
+}
+
+if (-not $msiPath) {
+    throw "MSI build script did not emit marker $Marker"
+}
+if (-not (Test-Path $msiPath)) {
+    throw "MSI package not found at $msiPath"
+}
+
+$fileName = [System.IO.Path]::GetFileName($msiPath)
+if ($fileName -notmatch '^xp2p-(.+)-windows-') {
+    throw "Unable to parse xp2p version from MSI filename '$fileName'"
+}
+$version = $Matches[1]
+$hash = (Get-FileHash -Algorithm SHA256 -Path $msiPath).Hash.ToLowerInvariant()
+$latestPath = Join-Path $CacheDir 'latest.txt'
+$latestContent = @(
+    "version=$version"
+    "sha256=$hash"
+    "msi_path=$msiPath"
+) -join "`n"
+Set-Content -Path $latestPath -Value $latestContent -Encoding ASCII

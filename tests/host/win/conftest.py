@@ -46,18 +46,19 @@ def xp2p_options(pytestconfig: pytest.Config) -> dict:
 
 
 @pytest.fixture(scope="session")
-def xp2p_msi_path(server_host: Host) -> str:
-    return win_env.ensure_msi_package(server_host)
+def xp2p_msi_path() -> str:
+    return str(win_env.MSI_LATEST_PATH_X64)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def xp2p_program_files_setup(server_host: Host, client_host: Host):
+def xp2p_program_files_setup(builder_host: Host, server_host: Host, client_host: Host):
     win_env.ensure_admin_token(server_host)
     win_env.ensure_admin_token(client_host)
-    win_env.ensure_program_files_install(server_host, force_reinstall=True)
-    win_env.ensure_program_files_install(client_host, force_reinstall=True)
+    latest_path = win_env.ensure_msi_package(builder_host)
+    win_env.install_xp2p_from_latest(server_host, latest_path, force=True)
+    win_env.install_xp2p_from_latest(client_host, latest_path, force=True)
     yield
-    msi_path = win_env.ensure_msi_package(server_host)
+    msi_path = win_env.get_msi_path_from_latest(server_host, win_env.MSI_LATEST_PATH_X64)
     win_env.uninstall_xp2p_from_msi(server_host, msi_path)
     win_env.uninstall_xp2p_from_msi(client_host, msi_path)
 
@@ -72,6 +73,12 @@ def server_host() -> Host:
 def client_host() -> Host:
     win_env.require_vagrant_environment()
     return win_env.get_ssh_host(win_env.DEFAULT_CLIENT)
+
+
+@pytest.fixture(scope="session")
+def builder_host() -> Host:
+    win_env.require_builder_environment()
+    return win_env.get_builder_host()
 
 
 @pytest.fixture

@@ -44,7 +44,7 @@ def _cleanup_server_install(
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
-    _env.install_xp2p_from_msi(server_host, msi_path)
+    _env.install_xp2p_from_latest(server_host, msi_path, force=True)
     if purge and install_dir is not None:
         _remove_remote_path(server_host, install_dir)
 
@@ -56,7 +56,7 @@ def _cleanup_client_install(
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
-    _env.install_xp2p_from_msi(client_host, msi_path)
+    _env.install_xp2p_from_latest(client_host, msi_path, force=True)
     if purge and install_dir is not None:
         _remove_remote_path(client_host, install_dir)
 
