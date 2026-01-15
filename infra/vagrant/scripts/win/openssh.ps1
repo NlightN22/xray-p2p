@@ -10,6 +10,7 @@ if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Adm
 $Xp2pSshServiceName = "xp2p-sshd"
 $Xp2pSshPort = 2222
 $Xp2pSshConfigDir = Join-Path $env:ProgramData "xp2p-ssh"
+$script:OpenSshBinDir = Join-Path $Xp2pSshConfigDir "bin"
 
 function Write-Info {
     param(
@@ -20,22 +21,23 @@ function Write-Info {
     Write-Host "==> $Message"
 }
 
-function Ensure-OpenSshFeature {
-    $capabilities = @(
-        "OpenSSH.Client~~~~0.0.1.0",
-        "OpenSSH.Server~~~~0.0.1.0"
-    )
-
-    foreach ($capability in $capabilities) {
-        $current = Get-WindowsCapability -Online -Name $capability -ErrorAction SilentlyContinue
-        if ($current -and $current.State -eq "Installed") {
-            Write-Info ("Windows capability '{0}' already installed." -f $capability)
-            continue
-        }
-
-        Write-Info ("Installing Windows capability '{0}'" -f $capability)
-        Add-WindowsCapability -Online -Name $capability -ErrorAction Stop | Out-Null
+function Ensure-OpenSshBundle {
+    if (-not $env:XP2P_SYNC_ROOT) {
+        throw "XP2P_SYNC_ROOT is not set; OpenSSH bundle cannot be located."
     }
+
+    $bundledSource = Join-Path $env:XP2P_SYNC_ROOT "infra\OpenSSH"
+    $sshdSource = Join-Path $bundledSource "sshd.exe"
+    if (-not (Test-Path $sshdSource)) {
+        throw "Bundled OpenSSH not found at $bundledSource"
+    }
+
+    $script:OpenSshBinDir = Join-Path $Xp2pSshConfigDir "bin"
+    if (-not (Test-Path $script:OpenSshBinDir)) {
+        New-Item -ItemType Directory -Path $script:OpenSshBinDir -Force | Out-Null
+    }
+    Copy-Item -Path (Join-Path $bundledSource "*") -Destination $script:OpenSshBinDir -Force
+    Write-Info ("Using bundled OpenSSH from {0}" -f $script:OpenSshBinDir)
 }
 
 function Ensure-AclRules {
@@ -121,26 +123,23 @@ function Repair-HostKeyPermissions {
 
 function Ensure-Xp2pSshdConfig {
     $changed = $false
-    $exePath = Join-Path $env:SystemRoot "System32\OpenSSH\sshd.exe"
+    $exePath = Join-Path $script:OpenSshBinDir "sshd.exe"
     if (-not (Test-Path $exePath)) {
         throw "OpenSSH sshd.exe not found at $exePath"
     }
 
-    $systemSshDir = Join-Path $env:ProgramData "ssh"
     if (-not (Test-Path $Xp2pSshConfigDir)) {
         Write-Info ("Creating xp2p ssh config directory at {0}" -f $Xp2pSshConfigDir)
         New-Item -ItemType Directory -Path $Xp2pSshConfigDir -Force | Out-Null
         $changed = $true
     }
 
-    $sshKeygen = Join-Path (Split-Path $exePath) "ssh-keygen.exe"
+    $sshKeygen = Join-Path $script:OpenSshBinDir "ssh-keygen.exe"
     $ed25519Key = Join-Path $Xp2pSshConfigDir "ssh_host_ed25519_key"
     $rsaKey = Join-Path $Xp2pSshConfigDir "ssh_host_rsa_key"
     $hostKeys = @()
 
-    $systemEd25519 = Join-Path $systemSshDir "ssh_host_ed25519_key"
-    $systemRsa = Join-Path $systemSshDir "ssh_host_rsa_key"
-    $candidateKeys = @($systemEd25519, $systemRsa, $ed25519Key, $rsaKey)
+    $candidateKeys = @($ed25519Key, $rsaKey)
     foreach ($candidate in $candidateKeys) {
         if (Test-Path $candidate) {
             Write-Info ("Found host key: {0}" -f $candidate)
@@ -181,7 +180,7 @@ function Ensure-Xp2pSshdConfig {
     }
 
     $authorizedKeys = "C:/Users/vagrant/.ssh/authorized_keys"
-    $sftpPath = (Join-Path $env:SystemRoot "System32\OpenSSH\sftp-server.exe") -replace "\\", "/"
+    $sftpPath = (Join-Path $script:OpenSshBinDir "sftp-server.exe") -replace "\\", "/"
     $hostKeyLines = $hostKeys | ForEach-Object { ("HostKey {0}" -f ($_.ToString() -replace "\\", "/")) }
 
     $config = @(
@@ -209,16 +208,37 @@ function Ensure-Xp2pSshdConfig {
         $changed = $true
     }
 
+    $testOutput = & $exePath -t -f $configPath 2>&1
+    $testExit = $LASTEXITCODE
+    if ($testOutput) {
+        Write-Info "sshd.exe -t output:"
+        $testOutput | ForEach-Object { Write-Host $_ }
+    }
+    if ($testExit -ne 0) {
+        Write-Info ("sshd.exe -t failed with exit code {0}" -f $testExit)
+        Write-Info "Host keys in xp2p-ssh:"
+        Get-ChildItem -Path $Xp2pSshConfigDir -Filter "ssh_host_*" -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host (" - {0}" -f $_.FullName)
+        }
+    }
+
     return $changed
 }
 
 function Ensure-Xp2pSshdService {
-    $exePath = Join-Path $env:SystemRoot "System32\OpenSSH\sshd.exe"
+    $exePath = Join-Path $script:OpenSshBinDir "sshd.exe"
     $configPath = Join-Path $Xp2pSshConfigDir "sshd_config"
     $logPath = Join-Path $Xp2pSshConfigDir "sshd.log"
 
     $service = Get-CimInstance -ClassName Win32_Service -Filter ("Name='{0}'" -f $Xp2pSshServiceName) -ErrorAction SilentlyContinue
     $binPath = "`"$exePath`" -f `"$configPath`" -E `"$logPath`""
+
+    if ($service -and $service.PathName -ne $binPath) {
+        Write-Info ("Updating service '{0}' binPath to bundled OpenSSH." -f $Xp2pSshServiceName)
+        & sc.exe stop $Xp2pSshServiceName | Out-Null
+        & sc.exe delete $Xp2pSshServiceName | Out-Null
+        $service = $null
+    }
 
     if (-not $service) {
         Write-Info ("Creating service '{0}'." -f $Xp2pSshServiceName)
@@ -416,7 +436,7 @@ function Ensure-DefaultOpenSshShell {
     return $true
 }
 
-Ensure-OpenSshFeature
+Ensure-OpenSshBundle
 $keysChanged = Ensure-VagrantKeys
 $defaultShellChanged = Ensure-DefaultOpenSshShell
 $configChanged = Ensure-Xp2pSshdConfig
