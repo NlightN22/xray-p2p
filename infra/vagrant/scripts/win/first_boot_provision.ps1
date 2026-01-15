@@ -1,7 +1,8 @@
 param(
     [int] $WinrmPollSeconds = 15,
     [int] $WinrmTimeoutMinutes = 10,
-    [string[]] $Machines
+    [string[]] $Machines,
+    [string] $Machine
 )
 
 $ErrorActionPreference = "Stop"
@@ -164,6 +165,9 @@ function Ensure-Machine {
 Write-Info "Sequential first-boot orchestration started."
 
 $targetMachines = $Machines
+if ($Machine) {
+    $targetMachines = @($Machine)
+}
 if ($targetMachines -and $targetMachines -is [string]) {
     $targetMachines = @($targetMachines)
 }

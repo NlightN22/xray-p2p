@@ -140,26 +140,39 @@ function Ensure-Xp2pSshdConfig {
 
     $systemEd25519 = Join-Path $systemSshDir "ssh_host_ed25519_key"
     $systemRsa = Join-Path $systemSshDir "ssh_host_rsa_key"
-    if (Test-Path $systemEd25519) {
-        $hostKeys += $systemEd25519
-    }
-    if (Test-Path $systemRsa) {
-        $hostKeys += $systemRsa
+    $candidateKeys = @($systemEd25519, $systemRsa, $ed25519Key, $rsaKey)
+    foreach ($candidate in $candidateKeys) {
+        if (Test-Path $candidate) {
+            Write-Info ("Found host key: {0}" -f $candidate)
+            $hostKeys += $candidate
+        }
+        else {
+            Write-Info ("Host key missing: {0}" -f $candidate)
+        }
     }
     if ($hostKeys.Count -eq 0 -and (Test-Path $sshKeygen)) {
-        Write-Info "No system host keys found; generating keys under xp2p-ssh."
-        & $sshKeygen -t ed25519 -f $ed25519Key -N '""' | Out-Null
-        & $sshKeygen -t rsa -b 4096 -f $rsaKey -N '""' | Out-Null
+        Write-Info "No host keys found; generating keys under xp2p-ssh."
+        & $sshKeygen -t ed25519 -f $ed25519Key -N "" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "ssh-keygen failed to create $ed25519Key"
+        }
+        & $sshKeygen -t rsa -b 4096 -f $rsaKey -N "" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "ssh-keygen failed to create $rsaKey"
+        }
         $changed = $true
         if (Test-Path $ed25519Key) {
+            Write-Info ("Generated host key: {0}" -f $ed25519Key)
             $hostKeys += $ed25519Key
         }
         if (Test-Path $rsaKey) {
+            Write-Info ("Generated host key: {0}" -f $rsaKey)
             $hostKeys += $rsaKey
         }
     }
 
     foreach ($hostKey in $hostKeys) {
+        Write-Info ("Repairing host key permissions: {0}" -f $hostKey)
         Repair-HostKeyPermissions -KeyPath $hostKey
     }
 

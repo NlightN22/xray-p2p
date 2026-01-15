@@ -13,7 +13,7 @@ Local state file used to compare version and sha256.
 #>
 param(
     [string] $LatestPath = 'C:\xp2p\build\msi-artifacts\latest.txt',
-    [bool] $Force = $false,
+    [string] $Force = "false",
     [string] $StatePath = 'C:\ProgramData\xp2p\msi-install-state.txt'
 )
 
@@ -36,7 +36,7 @@ function Read-KeyValueFile {
         }
         $parts = $trimmed.Split("=", 2)
         if ($parts.Count -ne 2) {
-            throw "Invalid line in $Path: $trimmed"
+            throw "Invalid line in ${Path}: $trimmed"
         }
         $data[$parts[0].Trim().ToLowerInvariant()] = $parts[1].Trim()
     }
@@ -65,8 +65,18 @@ if (-not (Test-Path $msiPath)) {
     throw "MSI package not found at $msiPath"
 }
 
+$forceValue = $false
+if ($Force) {
+    try {
+        $forceValue = [System.Convert]::ToBoolean($Force)
+    }
+    catch {
+        throw "Invalid Force value: $Force"
+    }
+}
+
 $state = Read-KeyValueFile -Path $StatePath
-$needsInstall = $Force -or -not $state
+$needsInstall = $forceValue -or -not $state
 if (-not $needsInstall) {
     if ($state["version"] -ne $version -or $state["sha256"] -ne $sha256) {
         $needsInstall = $true

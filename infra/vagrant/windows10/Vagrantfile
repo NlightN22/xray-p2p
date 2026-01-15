@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-BOX_NAME              = "stefanscherer/windows_10".freeze
-BOX_VERSION           = "2021.12.09".freeze
+BOX_NAME              = "gusztavvargadr/windows-10-22h2-enterprise".freeze
+BOX_VERSION           = "2511.0.0".freeze
 SERVER_ID             = "win10-a".freeze
 CLIENT_ID             = "win10-b".freeze
 SERVER_VM_NAME        = "win10-a".freeze
@@ -24,7 +24,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
     machine.vm.guest = :windows
-    machine.vm.boot_timeout = 400
+    machine.vm.boot_timeout = 600
     machine.vm.communicator = "winrm"
     machine.vm.hostname = vb_name
 
@@ -35,7 +35,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.winrm.password = "vagrant"
     machine.winrm.transport = :plaintext
     machine.winrm.basic_auth_only = true
-    machine.winrm.timeout = 30
+    machine.winrm.timeout = 60
     machine.winrm.retry_limit = 5
 
     machine.ssh.username = "vagrant"
