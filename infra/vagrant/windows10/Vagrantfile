@@ -35,8 +35,9 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.winrm.password = "vagrant"
     machine.winrm.transport = :plaintext
     machine.winrm.basic_auth_only = true
-    machine.winrm.timeout = 60
-    machine.winrm.retry_limit = 5
+    machine.winrm.timeout = 400
+    machine.winrm.retry_delay = 60
+    machine.winrm.retry_limit = 10
 
     machine.ssh.username = "vagrant"
     machine.ssh.private_key_path = ["~/.vagrant.d/insecure_private_key"]

@@ -7,10 +7,10 @@ if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Adm
     throw "OpenSSH provisioning requires administrative privileges. Rerun this script from an elevated PowerShell session."
 }
 
-$Xp2pSshServiceName = "xp2p-sshd"
-$Xp2pSshPort = 2222
-$Xp2pSshConfigDir = Join-Path $env:ProgramData "xp2p-ssh"
-$script:OpenSshBinDir = Join-Path $Xp2pSshConfigDir "bin"
+$SshdServiceName = "sshd"
+$SshdPort = 2222
+$SshConfigDir = Join-Path $env:ProgramData "ssh"
+$OpenSshBinDir = Join-Path $env:SystemRoot "System32\OpenSSH"
 
 function Write-Info {
     param(
@@ -21,23 +21,22 @@ function Write-Info {
     Write-Host "==> $Message"
 }
 
-function Ensure-OpenSshBundle {
-    if (-not $env:XP2P_SYNC_ROOT) {
-        throw "XP2P_SYNC_ROOT is not set; OpenSSH bundle cannot be located."
-    }
+function Ensure-OpenSshCapability {
+    $caps = @(
+        "OpenSSH.Client~~~~0.0.1.0",
+        "OpenSSH.Server~~~~0.0.1.0"
+    )
 
-    $bundledSource = Join-Path $env:XP2P_SYNC_ROOT "infra\OpenSSH"
-    $sshdSource = Join-Path $bundledSource "sshd.exe"
-    if (-not (Test-Path $sshdSource)) {
-        throw "Bundled OpenSSH not found at $bundledSource"
+    foreach ($cap in $caps) {
+        $state = (Get-WindowsCapability -Online -Name $cap -ErrorAction SilentlyContinue).State
+        if ($state -ne "Installed") {
+            Write-Info ("Installing Windows capability '{0}'." -f $cap)
+            Add-WindowsCapability -Online -Name $cap | Out-Null
+        }
+        else {
+            Write-Info ("Windows capability '{0}' already installed." -f $cap)
+        }
     }
-
-    $script:OpenSshBinDir = Join-Path $Xp2pSshConfigDir "bin"
-    if (-not (Test-Path $script:OpenSshBinDir)) {
-        New-Item -ItemType Directory -Path $script:OpenSshBinDir -Force | Out-Null
-    }
-    Copy-Item -Path (Join-Path $bundledSource "*") -Destination $script:OpenSshBinDir -Force
-    Write-Info ("Using bundled OpenSSH from {0}" -f $script:OpenSshBinDir)
 }
 
 function Ensure-AclRules {
@@ -121,52 +120,44 @@ function Repair-HostKeyPermissions {
     }
 }
 
-function Ensure-Xp2pSshdConfig {
+function Ensure-SshdConfig {
     $changed = $false
-    $exePath = Join-Path $script:OpenSshBinDir "sshd.exe"
+    $exePath = Join-Path $OpenSshBinDir "sshd.exe"
     if (-not (Test-Path $exePath)) {
         throw "OpenSSH sshd.exe not found at $exePath"
     }
 
-    if (-not (Test-Path $Xp2pSshConfigDir)) {
-        Write-Info ("Creating xp2p ssh config directory at {0}" -f $Xp2pSshConfigDir)
-        New-Item -ItemType Directory -Path $Xp2pSshConfigDir -Force | Out-Null
+    if (-not (Test-Path $SshConfigDir)) {
+        Write-Info ("Creating ssh config directory at {0}" -f $SshConfigDir)
+        New-Item -ItemType Directory -Path $SshConfigDir -Force | Out-Null
         $changed = $true
     }
 
-    $sshKeygen = Join-Path $script:OpenSshBinDir "ssh-keygen.exe"
-    $ed25519Key = Join-Path $Xp2pSshConfigDir "ssh_host_ed25519_key"
-    $rsaKey = Join-Path $Xp2pSshConfigDir "ssh_host_rsa_key"
+    $sshKeygen = Join-Path $OpenSshBinDir "ssh-keygen.exe"
+    $ed25519Key = Join-Path $SshConfigDir "ssh_host_ed25519_key"
+    $rsaKey = Join-Path $SshConfigDir "ssh_host_rsa_key"
     $hostKeys = @()
 
-    $candidateKeys = @($ed25519Key, $rsaKey)
-    foreach ($candidate in $candidateKeys) {
+    foreach ($candidate in @($ed25519Key, $rsaKey)) {
         if (Test-Path $candidate) {
             Write-Info ("Found host key: {0}" -f $candidate)
             $hostKeys += $candidate
         }
-        else {
-            Write-Info ("Host key missing: {0}" -f $candidate)
-        }
     }
-    if ($hostKeys.Count -eq 0 -and (Test-Path $sshKeygen)) {
-        Write-Info "No host keys found; generating keys under xp2p-ssh."
-        & $sshKeygen -t ed25519 -f $ed25519Key -N "" | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "ssh-keygen failed to create $ed25519Key"
+
+    if ($hostKeys.Count -eq 0) {
+        Write-Info "No host keys found; generating system host keys."
+        if (-not (Test-Path $sshKeygen)) {
+            throw "ssh-keygen.exe not found at $sshKeygen"
         }
-        & $sshKeygen -t rsa -b 4096 -f $rsaKey -N "" | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "ssh-keygen failed to create $rsaKey"
-        }
+        & $sshKeygen -A | Out-Null
         $changed = $true
-        if (Test-Path $ed25519Key) {
-            Write-Info ("Generated host key: {0}" -f $ed25519Key)
-            $hostKeys += $ed25519Key
-        }
-        if (Test-Path $rsaKey) {
-            Write-Info ("Generated host key: {0}" -f $rsaKey)
-            $hostKeys += $rsaKey
+
+        foreach ($candidate in @($ed25519Key, $rsaKey)) {
+            if (Test-Path $candidate) {
+                Write-Info ("Generated host key: {0}" -f $candidate)
+                $hostKeys += $candidate
+            }
         }
     }
 
@@ -176,27 +167,56 @@ function Ensure-Xp2pSshdConfig {
     }
 
     if ($hostKeys.Count -eq 0) {
-        Write-Info "No host keys available; xp2p-sshd may fail to start."
+        throw "No host keys available after generation attempts."
     }
 
-    $authorizedKeys = "C:/Users/vagrant/.ssh/authorized_keys"
-    $sftpPath = (Join-Path $script:OpenSshBinDir "sftp-server.exe") -replace "\\", "/"
-    $hostKeyLines = $hostKeys | ForEach-Object { ("HostKey {0}" -f ($_.ToString() -replace "\\", "/")) }
+    $defaultConfig = Join-Path $OpenSshBinDir "sshd_config_default"
+    $configLines = @()
+    if (Test-Path $defaultConfig) {
+        $configLines = Get-Content -Path $defaultConfig -ErrorAction SilentlyContinue
+    }
 
-    $config = @(
-        "Port $Xp2pSshPort",
-        "Protocol 2",
+    $hasSubsystem = $false
+    foreach ($line in $configLines) {
+        if ($line -match '^\s*Subsystem\s+sftp\b') {
+            $hasSubsystem = $true
+            break
+        }
+    }
+
+    $override = @(
+        "Port $SshdPort",
+        "PermitTTY yes",
+        "StrictModes no",
         "PubkeyAcceptedKeyTypes +ssh-rsa",
-        "HostKeyAlgorithms +ssh-rsa"
-    ) + $hostKeyLines + @(
-        "AuthorizedKeysFile $authorizedKeys",
+        "HostKeyAlgorithms +ssh-rsa",
+        "AuthorizedKeysFile .ssh/authorized_keys",
         "PasswordAuthentication no",
-        "PubkeyAuthentication yes",
-        "Subsystem sftp $sftpPath"
+        "PubkeyAuthentication yes"
     )
-    $configText = ($config -join "`r`n") + "`r`n"
+    if (-not $hasSubsystem) {
+        $override += "Subsystem sftp sftp-server.exe"
+    }
 
-    $configPath = Join-Path $Xp2pSshConfigDir "sshd_config"
+    $finalLines = @()
+    $inserted = $false
+    foreach ($line in $configLines) {
+        if (-not $inserted -and $line -match '^\s*Match\s+') {
+            $finalLines += ""
+            $finalLines += $override
+            $finalLines += ""
+            $inserted = $true
+        }
+        $finalLines += $line
+    }
+    if (-not $inserted) {
+        $finalLines += ""
+        $finalLines += $override
+        $finalLines += ""
+    }
+
+    $configText = ($finalLines -join "`r`n") + "`r`n"
+    $configPath = Join-Path $SshConfigDir "sshd_config"
     $existing = ""
     if (Test-Path $configPath) {
         $existing = Get-Content -Path $configPath -Raw -ErrorAction SilentlyContinue
@@ -204,7 +224,7 @@ function Ensure-Xp2pSshdConfig {
 
     if ($existing -ne $configText) {
         Set-Content -Path $configPath -Encoding ascii -Value $configText
-        Write-Info ("Updated xp2p sshd_config at {0}" -f $configPath)
+        Write-Info ("Updated sshd_config at {0}" -f $configPath)
         $changed = $true
     }
 
@@ -215,91 +235,103 @@ function Ensure-Xp2pSshdConfig {
         $testOutput | ForEach-Object { Write-Host $_ }
     }
     if ($testExit -ne 0) {
-        Write-Info ("sshd.exe -t failed with exit code {0}" -f $testExit)
-        Write-Info "Host keys in xp2p-ssh:"
-        Get-ChildItem -Path $Xp2pSshConfigDir -Filter "ssh_host_*" -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Host (" - {0}" -f $_.FullName)
-        }
+        throw "sshd.exe -t failed with exit code $testExit"
     }
 
     return $changed
 }
 
-function Ensure-Xp2pSshdService {
-    $exePath = Join-Path $script:OpenSshBinDir "sshd.exe"
-    $configPath = Join-Path $Xp2pSshConfigDir "sshd_config"
-    $logPath = Join-Path $Xp2pSshConfigDir "sshd.log"
-
-    $service = Get-CimInstance -ClassName Win32_Service -Filter ("Name='{0}'" -f $Xp2pSshServiceName) -ErrorAction SilentlyContinue
-    $binPath = "`"$exePath`" -f `"$configPath`" -E `"$logPath`""
-
-    if ($service -and $service.PathName -ne $binPath) {
-        Write-Info ("Updating service '{0}' binPath to bundled OpenSSH." -f $Xp2pSshServiceName)
-        & sc.exe stop $Xp2pSshServiceName | Out-Null
-        & sc.exe delete $Xp2pSshServiceName | Out-Null
-        $service = $null
-    }
-
+function Ensure-SshdService {
+    $service = Get-Service -Name $SshdServiceName -ErrorAction SilentlyContinue
     if (-not $service) {
-        Write-Info ("Creating service '{0}'." -f $Xp2pSshServiceName)
-        & sc.exe create $Xp2pSshServiceName binPath= $binPath start= auto DisplayName= "xp2p OpenSSH Server" | Out-Null
-        & sc.exe description $Xp2pSshServiceName "xp2p OpenSSH Server" | Out-Null
+        throw "OpenSSH service '$SshdServiceName' not found; install OpenSSH first."
     }
 
     try {
-        Set-Service -Name $Xp2pSshServiceName -StartupType Automatic -ErrorAction Stop
+        Set-Service -Name $SshdServiceName -StartupType Automatic -ErrorAction Stop
     }
     catch {
-        Write-Info ("Failed to set service '{0}' startup type: {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
+        Write-Info ("Failed to set service '{0}' startup type: {1}" -f $SshdServiceName, $_.Exception.Message)
         return
-    }
-
-    try {
-        Start-Service -Name $Xp2pSshServiceName -ErrorAction Stop
-    }
-    catch {
-        Write-Info ("Failed to start service '{0}': {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
-        Write-Info "Service status (sc query):"
-        & sc.exe query $Xp2pSshServiceName | ForEach-Object { Write-Host $_ }
-        Write-Info "Service config (sc qc):"
-        & sc.exe qc $Xp2pSshServiceName | ForEach-Object { Write-Host $_ }
-        if (Test-Path $logPath) {
-            Write-Info ("sshd log tail ({0}):" -f $logPath)
-            Get-Content -Path $logPath -Tail 50 | ForEach-Object { Write-Host $_ }
-        }
     }
 }
 
-function Ensure-Xp2pSshFirewall {
+function Ensure-SshFirewall {
     $ruleName = "xp2p-sshd"
     $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
     if ($existing) {
         return
     }
     try {
-        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Xp2pSshPort | Out-Null
-        Write-Info ("Firewall rule '{0}' added for port {1}." -f $ruleName, $Xp2pSshPort)
+        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $SshdPort | Out-Null
+        Write-Info ("Firewall rule '{0}' added for port {1}." -f $ruleName, $SshdPort)
     }
     catch {
         Write-Info ("Failed to add firewall rule '{0}': {1}" -f $ruleName, $_.Exception.Message)
     }
 }
 
-function Restart-Xp2pSshdService {
-    $service = Get-Service -Name $Xp2pSshServiceName -ErrorAction SilentlyContinue
+function Restart-SshdService {
+    param(
+        [bool] $ForceRestart = $false
+    )
+
+    $service = Get-Service -Name $SshdServiceName -ErrorAction SilentlyContinue
     if (-not $service) {
-        Write-Info ("Service '{0}' not present; skipping restart." -f $Xp2pSshServiceName)
+        Write-Info ("Service '{0}' not present; skipping restart." -f $SshdServiceName)
         return
     }
 
     try {
-        Restart-Service -Name $Xp2pSshServiceName -Force -ErrorAction Stop
-        Write-Info ("Service '{0}' restarted to apply changes." -f $Xp2pSshServiceName)
+        if ($ForceRestart -and $service.Status -ne "Stopped") {
+            Stop-Service -Name $SshdServiceName -Force -ErrorAction Stop
+            Start-Sleep -Seconds 2
+        }
     }
     catch {
-        Write-Info ("Failed to restart service '{0}': {1}" -f $Xp2pSshServiceName, $_.Exception.Message)
+        Write-Info ("Failed to stop service '{0}': {1}" -f $SshdServiceName, $_.Exception.Message)
+    }
+
+    $service = Get-Service -Name $SshdServiceName -ErrorAction SilentlyContinue
+    if (-not $service) {
+        Write-Info ("Service '{0}' not present after stop; skipping start." -f $SshdServiceName)
+        return
+    }
+
+    if ($service.Status -ne "Running") {
+        $started = $false
+        for ($attempt = 1; $attempt -le 3; $attempt += 1) {
+            try {
+                Start-Service -Name $SshdServiceName -ErrorAction Stop
+                Start-Sleep -Seconds 2
+                $service = Get-Service -Name $SshdServiceName -ErrorAction SilentlyContinue
+                if ($service -and $service.Status -eq "Running") {
+                    $started = $true
+                    break
+                }
+            }
+            catch {
+                Write-Info ("Start attempt {0} failed: {1}" -f $attempt, $_.Exception.Message)
+                Start-Sleep -Seconds 2
+            }
+        }
+
+        if ($started) {
+            Write-Info ("Service '{0}' started." -f $SshdServiceName)
+            return
+        }
+
+        Write-Info ("Failed to start service '{0}'." -f $SshdServiceName)
         Write-Info "Service status (sc query):"
-        & sc.exe query $Xp2pSshServiceName | ForEach-Object { Write-Host $_ }
+        & sc.exe query $SshdServiceName | ForEach-Object { Write-Host $_ }
+        return
+    }
+
+    if ($ForceRestart) {
+        Write-Info ("Service '{0}' restarted to apply changes." -f $SshdServiceName)
+    }
+    else {
+        Write-Info ("Service '{0}' already running." -f $SshdServiceName)
     }
 }
 
@@ -403,6 +435,31 @@ function Ensure-VagrantKeys {
         }
     }
 
+    $adminKeysPath = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+    $adminExisting = @()
+    if (Test-Path $adminKeysPath) {
+        $adminExisting = Get-Content -Path $adminKeysPath -ErrorAction SilentlyContinue
+    }
+
+    foreach ($key in $keys) {
+        if ($adminExisting -and ($adminExisting | ForEach-Object { $_.Trim() }) -contains $key) {
+            continue
+        }
+
+        if (-not (Test-Path $adminKeysPath)) {
+            Set-Content -Path $adminKeysPath -Value $key -Encoding ascii
+        }
+        else {
+            Add-Content -Path $adminKeysPath -Value $key -Encoding ascii
+        }
+        $changes = $true
+    }
+
+    if (Test-Path $adminKeysPath) {
+        & icacls $adminKeysPath /inheritance:r | Out-Null
+        & icacls $adminKeysPath /grant:r "Administrators:F" "SYSTEM:F" | Out-Null
+    }
+
     return $changes
 }
 
@@ -413,39 +470,44 @@ function Ensure-DefaultOpenSshShell {
 
     $regPath = "HKLM:\SOFTWARE\OpenSSH"
     $name = "DefaultShell"
+    $optionName = "DefaultShellCommandOption"
 
     $current = $null
+    $currentOption = $null
     try {
-        $current = (Get-ItemProperty -Path $regPath -Name $name -ErrorAction Stop).$name
+        $props = Get-ItemProperty -Path $regPath -ErrorAction Stop
+        $current = $props.$name
+        $currentOption = $props.$optionName
     }
     catch {
         # Property missing; will create it below.
     }
 
-    if ($current -and ($current.Trim()) -eq $ShellPath) {
-        Write-Info ("Default OpenSSH shell already set to '{0}'." -f $ShellPath)
+    $desiredOption = "-Command"
+    if ($ShellPath -match "cmd\.exe$") {
+        $desiredOption = "/c"
+    }
+
+    if ($current -and ($current.Trim()) -eq $ShellPath -and $currentOption -and ($currentOption.Trim()) -eq $desiredOption) {
+        Write-Info ("Default OpenSSH shell already set to '{0}' with option '{1}'." -f $ShellPath, $desiredOption)
         return $false
     }
 
-    Write-Info ("Setting OpenSSH default shell to '{0}'." -f $ShellPath)
+    Write-Info ("Setting OpenSSH default shell to '{0}' with option '{1}'." -f $ShellPath, $desiredOption)
     if (-not (Test-Path $regPath)) {
         New-Item -Path $regPath -Force | Out-Null
     }
 
     New-ItemProperty -Path $regPath -Name $name -Value $ShellPath -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $regPath -Name $optionName -Value $desiredOption -PropertyType String -Force | Out-Null
     return $true
 }
 
-Ensure-OpenSshBundle
+Ensure-OpenSshCapability
 $keysChanged = Ensure-VagrantKeys
 $defaultShellChanged = Ensure-DefaultOpenSshShell
-$configChanged = Ensure-Xp2pSshdConfig
-Ensure-Xp2pSshdService
-Ensure-Xp2pSshFirewall
-if ($configChanged -or $keysChanged) {
-    Restart-Xp2pSshdService
-}
-else {
-    Write-Info ("Service '{0}' restart not required." -f $Xp2pSshServiceName)
-}
+$configChanged = Ensure-SshdConfig
+Ensure-SshdService
+Ensure-SshFirewall
+Restart-SshdService -ForceRestart:($configChanged -or $keysChanged)
 Write-Info "OpenSSH provisioning completed."

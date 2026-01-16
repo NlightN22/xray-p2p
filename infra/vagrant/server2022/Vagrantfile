@@ -36,8 +36,8 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.winrm.transport = :ssl
     machine.winrm.basic_auth_only = true
     machine.winrm.ssl_peer_verification = false
-    machine.winrm.timeout = 60
-    machine.winrm.retry_delay = 10
+    machine.winrm.timeout = 400
+    machine.winrm.retry_delay = 60
     machine.winrm.retry_limit = 10
 
     machine.ssh.username = "vagrant"
