@@ -11,6 +11,7 @@ $SshdServiceName = "sshd"
 $SshdPort = 2222
 $SshConfigDir = Join-Path $env:ProgramData "ssh"
 $OpenSshBinDir = Join-Path $env:SystemRoot "System32\OpenSSH"
+$script:OpenSshRestartRequired = $false
 
 function Write-Info {
     param(
@@ -31,7 +32,10 @@ function Ensure-OpenSshCapability {
         $state = (Get-WindowsCapability -Online -Name $cap -ErrorAction SilentlyContinue).State
         if ($state -ne "Installed") {
             Write-Info ("Installing Windows capability '{0}'." -f $cap)
-            Add-WindowsCapability -Online -Name $cap | Out-Null
+            $result = Add-WindowsCapability -Online -Name $cap
+            if ($result -and $result.RestartNeeded) {
+                $script:OpenSshRestartRequired = $true
+            }
         }
         else {
             Write-Info ("Windows capability '{0}' already installed." -f $cap)
@@ -504,6 +508,10 @@ function Ensure-DefaultOpenSshShell {
 }
 
 Ensure-OpenSshCapability
+if ($script:OpenSshRestartRequired) {
+    Write-Info "OpenSSH capability install requires a reboot; re-run provisioning after restart."
+    exit 0
+}
 $keysChanged = Ensure-VagrantKeys
 $defaultShellChanged = Ensure-DefaultOpenSshShell
 $configChanged = Ensure-SshdConfig
