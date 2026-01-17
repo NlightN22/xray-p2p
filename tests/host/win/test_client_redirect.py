@@ -19,7 +19,7 @@ INVALID_CIDR = "10.999.0.0/33"
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--all", "--ignore-missing")
-    _env.install_xp2p_from_latest(client_host, msi_path, force=True)
+    _env.install_xp2p_from_msi(client_host, msi_path)
 
 
 def _install_endpoint(runner, host: str, user: str, password: str) -> None:

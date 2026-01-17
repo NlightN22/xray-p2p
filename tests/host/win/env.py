@@ -11,10 +11,8 @@ from tests.host import common
 
 REPO_ROOT = common.REPO_ROOT
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "windows10"
-VAGRANT_BUILDER_DIR = REPO_ROOT / "infra" / "vagrant" / "win-msi"
 DEFAULT_SERVER = "win10-a"
 DEFAULT_CLIENT = "win10-b"
-BUILDER_MACHINE = "win-msi"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
@@ -23,67 +21,23 @@ GUEST_TESTS_ROOT = Path(r"C:\xp2p\tests\guest")
 LOCAL_GUEST_TESTS_ROOT = REPO_ROOT / "tests" / "guest"
 MSI_MARKER = "__MSI_PATH__="
 
-MSI_ARTIFACTS_DIR_X64 = Path(r"C:\xp2p\build\msi-artifacts")
-MSI_ARTIFACTS_DIR_X86 = Path(r"C:\xp2p\build\msi-artifacts-x86")
-MSI_LATEST_FILENAME = "latest.txt"
-MSI_LATEST_PATH_X64 = MSI_ARTIFACTS_DIR_X64 / MSI_LATEST_FILENAME
-MSI_LATEST_PATH_X86 = MSI_ARTIFACTS_DIR_X86 / MSI_LATEST_FILENAME
+MSI_CACHE_DIR_X64 = Path(r"C:\xp2p\build\msi-cache")
+MSI_CACHE_DIR_X86 = Path(r"C:\xp2p\build\msi-cache-x86")
 
-WIN_STACKS = {
-    "win10": {
-        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "windows10",
-        "server": "win10-a",
-        "client": "win10-b",
-    },
-    "win2022": {
-        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2022",
-        "server": "win2022-a",
-        "client": "win2022-b",
-    },
-}
-
-_CURRENT_WIN_STACK = "win10"
-
-
-def available_win_stacks() -> list[str]:
-    return sorted(WIN_STACKS.keys())
-
-
-def set_win_stack(name: str) -> None:
-    global _CURRENT_WIN_STACK, VAGRANT_DIR, DEFAULT_SERVER, DEFAULT_CLIENT
-    if name not in WIN_STACKS:
-        raise ValueError(
-            f"Unknown win stack '{name}'. Available: {', '.join(available_win_stacks())}"
-        )
-    config = WIN_STACKS[name]
-    _CURRENT_WIN_STACK = name
-    VAGRANT_DIR = config["vagrant_dir"]
-    DEFAULT_SERVER = config["server"]
-    DEFAULT_CLIENT = config["client"]
+_MSI_CACHE_PATH_X64: str | None = None
+_MSI_CACHE_PATH_X86: str | None = None
 
 
 def require_vagrant_environment() -> None:
     common.require_vagrant_environment(VAGRANT_DIR)
 
 
-def require_builder_environment() -> None:
-    common.require_vagrant_environment(VAGRANT_BUILDER_DIR)
-
-
 def ensure_machine_running(machine: str) -> None:
     common.ensure_machine_running(VAGRANT_DIR, machine)
 
 
-def ensure_builder_running() -> None:
-    common.ensure_machine_running(VAGRANT_BUILDER_DIR, BUILDER_MACHINE)
-
-
 def get_ssh_host(machine: str) -> Host:
     return common.get_ssh_host(VAGRANT_DIR, machine)
-
-
-def get_builder_host() -> Host:
-    return common.get_ssh_host(VAGRANT_BUILDER_DIR, BUILDER_MACHINE)
 
 
 def encode_powershell(script: str) -> str:
@@ -139,7 +93,7 @@ def run_guest_script(host: Host, relative_path: str, **parameters: object) -> Co
         args = "".join(f" -{key} {_ps_quote(str(value))}" for key, value in parameters.items())
         command = (
             "powershell -NoProfile -ExecutionPolicy Bypass "
-            f"-File \"{ps_path}\"{args}"
+            f"-Command \"& '{ps_path}'{args}\""
         )
         return host.run(command)
 
@@ -160,35 +114,6 @@ def _extract_marker(output: str, marker: str) -> str | None:
         if stripped.startswith(marker):
             return stripped[len(marker):].strip()
     return None
-
-
-def parse_latest_content(content: str) -> dict[str, str]:
-    data: dict[str, str] = {}
-    for raw_line in (content or "").splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        parts = line.split("=", 1)
-        if len(parts) != 2:
-            raise RuntimeError(f"Invalid latest.txt line: {raw_line!r}")
-        key = parts[0].strip().lower()
-        value = parts[1].strip()
-        data[key] = value
-    required = {"version", "sha256", "msi_path"}
-    missing = required.difference(data)
-    if missing:
-        raise RuntimeError(f"latest.txt missing keys: {sorted(missing)}")
-    return data
-
-
-def read_msi_latest(host: Host, latest_path: str | Path) -> dict[str, str]:
-    content = read_text(host, latest_path)
-    return parse_latest_content(content)
-
-
-def get_msi_path_from_latest(host: Host, latest_path: str | Path) -> str:
-    info = read_msi_latest(host, latest_path)
-    return info["msi_path"]
 
 
 def run_xp2p(host: Host, args: Iterable[str]) -> CommandResult:
@@ -225,32 +150,55 @@ foreach ($dir in @({dir_list})) {{
 
 
 def ensure_msi_package(host: Host) -> str:
-    _build_msi_package(
+    global _MSI_CACHE_PATH_X64
+    if _MSI_CACHE_PATH_X64:
+        return _MSI_CACHE_PATH_X64
+
+    path = _build_msi_package(
         host,
         architecture="amd64",
-        cache_dir=MSI_ARTIFACTS_DIR_X64,
+        cache_dir=MSI_CACHE_DIR_X64,
         wix_source=r"installer\wix\xp2p.wxs",
     )
-    return str(MSI_LATEST_PATH_X64)
+    _MSI_CACHE_PATH_X64 = path
+    return path
 
 
 def ensure_msi_package_x86(host: Host) -> str:
-    _build_msi_package(
+    global _MSI_CACHE_PATH_X86
+    if _MSI_CACHE_PATH_X86:
+        return _MSI_CACHE_PATH_X86
+
+    path = _build_msi_package(
         host,
         architecture="x86",
-        cache_dir=MSI_ARTIFACTS_DIR_X86,
+        cache_dir=MSI_CACHE_DIR_X86,
         wix_source=r"installer\wix\xp2p-x86.wxs",
     )
-    return str(MSI_LATEST_PATH_X86)
+    _MSI_CACHE_PATH_X86 = path
+    return path
 
 
-def install_xp2p_from_latest(host: Host, latest_path: str | Path, *, force: bool = False) -> None:
-    result = run_guest_script(
-        host,
-        "scripts/install_msi.ps1",
-        LatestPath=str(latest_path),
-        Force=str(force).lower(),
-    )
+def install_xp2p_from_msi(host: Host, msi_path: str | Path) -> None:
+    msi_str = ps_quote(str(msi_path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$msi = {msi_str}
+if (-not (Test-Path $msi)) {{
+    throw "MSI package not found at $msi"
+}}
+$arguments = @('/i', $msi, '/qn', '/norestart', 'XP2P_SKIP_SERVICE_START=1')
+$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
+if (-not $process.WaitForExit(300000)) {{
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    exit 124
+}}
+if ($process.ExitCode -ne 0) {{
+    exit $process.ExitCode
+}}
+exit 0
+"""
+    result = run_powershell(host, script)
     if result.rc != 0:
         raise RuntimeError(
             "Failed to install xp2p via MSI.\n"
@@ -291,7 +239,8 @@ def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -
         _ensure_log_directories(host)
         return
 
-    install_xp2p_from_latest(host, MSI_LATEST_PATH_X64, force=force_reinstall)
+    msi_path = ensure_msi_package(host)
+    install_xp2p_from_msi(host, msi_path)
 
     if not path_exists(host, XP2P_EXE):
         raise RuntimeError(

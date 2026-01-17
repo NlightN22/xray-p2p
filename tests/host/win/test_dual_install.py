@@ -167,7 +167,7 @@ def _assert_routing_rule(data: dict, host: str) -> None:
 @pytest.mark.host
 @pytest.mark.win
 def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
-    _env.install_xp2p_from_latest(server_host, xp2p_msi_path, force=True)
+    _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
 
     def run(*cmd: str, check: bool = False):
         return _xp2p_run(server_host, *cmd, check=check)
@@ -272,7 +272,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
 @pytest.mark.host
 @pytest.mark.win
 def test_client_and_server_install_support_extended_arguments(server_host, xp2p_msi_path):
-    _env.install_xp2p_from_latest(server_host, xp2p_msi_path, force=True)
+    _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
 
     def run(*cmd: str, check: bool = False):
         return _xp2p_run(server_host, *cmd, check=check)

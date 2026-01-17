@@ -40,8 +40,8 @@ def test_windows_client_deploy_end_to_end(
 ):
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
     xp2p_server_runner("server", "remove", "--ignore-missing")
-    win_env.install_xp2p_from_latest(client_host, xp2p_msi_path, force=True)
-    win_env.install_xp2p_from_latest(server_host, xp2p_msi_path, force=True)
+    win_env.install_xp2p_from_msi(client_host, xp2p_msi_path)
+    win_env.install_xp2p_from_msi(server_host, xp2p_msi_path)
 
     for host in (client_host, server_host):
         for path in HEARTBEAT_STATE_FILES:

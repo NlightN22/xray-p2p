@@ -24,12 +24,12 @@ DIAG_DOMAIN = "diag.service.internal"
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
     runner("server", "remove", "--ignore-missing")
-    _env.install_xp2p_from_latest(server_host, msi_path, force=True)
+    _env.install_xp2p_from_msi(server_host, msi_path)
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--all", "--ignore-missing")
-    _env.install_xp2p_from_latest(client_host, msi_path, force=True)
+    _env.install_xp2p_from_msi(client_host, msi_path)
 
 
 def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
