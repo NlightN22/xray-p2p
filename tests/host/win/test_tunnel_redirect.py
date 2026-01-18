@@ -6,8 +6,6 @@ import json
 import pytest
 
 from tests.host.win import env as _env
-
-SERVER_PUBLIC_HOST = "10.62.10.21"
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR = "config-server"
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
@@ -28,6 +26,10 @@ CLIENT_STATE_FILES = [
     CLIENT_INSTALL_DIR / "install-state-client.json",
     CLIENT_INSTALL_DIR / "install-state.json",
 ]
+
+
+def _server_public_host() -> str:
+    return _env.DEFAULT_TARGET
 
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
@@ -253,8 +255,9 @@ def test_client_redirect_tunnel_win(
 ):
     _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
+    server_public_host = _server_public_host()
     server_log_path = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
-    iface = _get_interface_alias(server_host, SERVER_PUBLIC_HOST)
+    iface = _get_interface_alias(server_host, server_public_host)
     _remove_ip_alias(server_host, DIAG_IP)
     _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
     try:
@@ -262,7 +265,7 @@ def test_client_redirect_tunnel_win(
 
         server_install = xp2p_server_runner(
             "--server-host",
-            SERVER_PUBLIC_HOST,
+            server_public_host,
             "server",
             "install",
             "--force",
@@ -319,7 +322,7 @@ def test_client_redirect_tunnel_win(
                     "--cidr",
                     DIAG_CIDR,
                     "--host",
-                    SERVER_PUBLIC_HOST,
+                    server_public_host,
                     check=True,
                 )
 
@@ -352,7 +355,7 @@ def test_client_redirect_tunnel_win(
                 assert DIAG_CIDR in redirect_list
 
                 routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-                _assert_redirect_rule(routing, DIAG_CIDR, _expected_tag(SERVER_PUBLIC_HOST))
+                _assert_redirect_rule(routing, DIAG_CIDR, _expected_tag(server_public_host))
 
                 server_log = _read_remote_text(server_host, server_log_path)
                 assert server_log.strip(), "Server log is empty"
@@ -364,7 +367,7 @@ def test_client_redirect_tunnel_win(
                     "--domain",
                     DIAG_DOMAIN,
                     "--host",
-                    SERVER_PUBLIC_HOST,
+                    server_public_host,
                     check=True,
                 )
 
@@ -377,7 +380,7 @@ def test_client_redirect_tunnel_win(
                 assert DIAG_DOMAIN in redirect_list
 
                 routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-                _assert_domain_redirect_rule(routing, DIAG_DOMAIN, _expected_tag(SERVER_PUBLIC_HOST))
+                _assert_domain_redirect_rule(routing, DIAG_DOMAIN, _expected_tag(server_public_host))
 
                 xp2p_client_runner(
                     "client",
@@ -386,12 +389,12 @@ def test_client_redirect_tunnel_win(
                     "--domain",
                     DIAG_DOMAIN,
                     "--host",
-                    SERVER_PUBLIC_HOST,
+                    server_public_host,
                     check=True,
                 )
 
                 routing_after_domain = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-                _assert_redirect_rule(routing_after_domain, DIAG_CIDR, _expected_tag(SERVER_PUBLIC_HOST))
+                _assert_redirect_rule(routing_after_domain, DIAG_CIDR, _expected_tag(server_public_host))
                 _assert_no_domain_redirect_rule(routing_after_domain, DIAG_DOMAIN)
 
                 redirected_ping_again = xp2p_client_runner(
@@ -411,7 +414,7 @@ def test_client_redirect_tunnel_win(
                     "--cidr",
                     DIAG_CIDR,
                     "--host",
-                    SERVER_PUBLIC_HOST,
+                    server_public_host,
                     check=True,
                 )
 

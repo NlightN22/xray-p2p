@@ -5,8 +5,6 @@ from pathlib import Path
 import pytest
 
 from tests.host.win import env as _env
-
-SERVER_PUBLIC_HOST = "10.62.10.21"
 DEFAULT_SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 DEFAULT_SERVER_CONFIG_NAME = "config-server"
 DEFAULT_CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
@@ -24,6 +22,10 @@ CUSTOM_SERVER_HOST = "xp2p-integration.local"
 CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 XRAY_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\xray.exe")
+
+
+def _server_public_host() -> str:
+    return _env.DEFAULT_TARGET
 
 
 def _remove_remote_path(host, path: Path) -> None:
@@ -179,9 +181,10 @@ def test_install_server_and_client_default(
     _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path, DEFAULT_SERVER_INSTALL_DIR)
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, DEFAULT_CLIENT_INSTALL_DIR)
     try:
+        server_public_host = _server_public_host()
         server_install = xp2p_server_runner(
             "--server-host",
-            SERVER_PUBLIC_HOST,
+            server_public_host,
             "server",
             "install",
             "--force",
@@ -213,7 +216,7 @@ def test_install_server_and_client_default(
                 CLIENT_LOG_RELATIVE,
             ) as client_session:
                 assert client_session["pid"] > 0
-                ping_result = _run_ping_via_socks(xp2p_client_runner, SERVER_PUBLIC_HOST)
+                ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path, DEFAULT_CLIENT_INSTALL_DIR)
@@ -239,6 +242,7 @@ def test_install_server_and_client_nodefault(
     )
     try:
         _stage_xray_binary(server_host, CUSTOM_SERVER_INSTALL_DIR)
+        server_public_host = _server_public_host()
         server_install = xp2p_server_runner(
             "server",
             "install",
@@ -275,7 +279,7 @@ def test_install_server_and_client_nodefault(
                 "--config-dir",
                 CUSTOM_CLIENT_CONFIG_NAME,
                 "--host",
-                SERVER_PUBLIC_HOST,
+                server_public_host,
                 "--port",
                 str(CUSTOM_SERVER_PORT),
                 "--user",
@@ -295,7 +299,7 @@ def test_install_server_and_client_nodefault(
                 CLIENT_LOG_RELATIVE,
             ) as client_session:
                 assert client_session["pid"] > 0
-                ping_result = _run_ping_via_socks(xp2p_client_runner, SERVER_PUBLIC_HOST)
+                ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)
     finally:
         _cleanup_client_install(
