@@ -54,7 +54,36 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         if self.ssh_identity_file:
             cfg["key_filename"] = self.ssh_identity_file
         client.connect(**cfg)  # type: ignore[arg-type]
+        transport = client.get_transport()
+        if transport is not None:
+            transport.set_keepalive(30)
         return client
+
+    def _reset_client(self) -> None:
+        cached = self.__dict__.get("client")
+        if cached is not None:
+            try:
+                cached.close()
+            except Exception:
+                pass
+        self.__dict__.pop("client", None)
+
+    def run(self, command: str, **kwargs):  # type: ignore[override]
+        try:
+            return super().run(command, **kwargs)
+        except EOFError:
+            self._reset_client()
+            return super().run(command, **kwargs)
+        except paramiko_backend.paramiko.SSHException:
+            self._reset_client()
+            return super().run(command, **kwargs)
+        except OSError as exc:
+            winerror = getattr(exc, "winerror", None)
+            err_no = getattr(exc, "errno", None)
+            if winerror not in (10054,) and err_no not in (104,):
+                raise
+            self._reset_client()
+            return super().run(command, **kwargs)
 
 
 def _patch_paramiko_backend() -> None:

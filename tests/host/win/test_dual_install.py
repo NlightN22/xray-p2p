@@ -16,6 +16,11 @@ STATE_FILES = {
     "server": INSTALL_DIR / "install-state-server.json",
 }
 LEGACY_STATE_FILE = INSTALL_DIR / "install-state.json"
+ALL_STATE_FILES = [
+    INSTALL_DIR / "install-state-client.json",
+    INSTALL_DIR / "install-state-server.json",
+    INSTALL_DIR / "install-state.json",
+]
 
 
 def _xp2p_run(host, *args: str, check: bool = False):
@@ -167,7 +172,11 @@ def _assert_routing_rule(data: dict, host: str) -> None:
 @pytest.mark.host
 @pytest.mark.win
 def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
-    _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+    _env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[INSTALL_DIR / CLIENT_CONFIG_DIR, INSTALL_DIR / SERVER_CONFIG_DIR],
+        state_files=ALL_STATE_FILES,
+    )
 
     def run(*cmd: str, check: bool = False):
         return _xp2p_run(server_host, *cmd, check=check)
@@ -272,7 +281,11 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
 @pytest.mark.host
 @pytest.mark.win
 def test_client_and_server_install_support_extended_arguments(server_host, xp2p_msi_path):
-    _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+    _env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[INSTALL_DIR / CLIENT_CONFIG_DIR, INSTALL_DIR / SERVER_CONFIG_DIR],
+        state_files=ALL_STATE_FILES,
+    )
 
     def run(*cmd: str, check: bool = False):
         return _xp2p_run(server_host, *cmd, check=check)

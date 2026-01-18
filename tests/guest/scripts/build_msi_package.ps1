@@ -38,6 +38,34 @@ function Resolve-MsiScript {
     }
 }
 
+function Test-GoAvailable {
+    return $null -ne (Get-Command -Name go.exe -ErrorAction SilentlyContinue)
+}
+
+function Test-WixAvailable {
+    $wixDirs = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" -Directory -ErrorAction SilentlyContinue
+    if (-not $wixDirs) {
+        return $false
+    }
+    $latest = $wixDirs | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    $binPath = Join-Path $latest.FullName "bin"
+    return (Test-Path (Join-Path $binPath "candle.exe")) -and (Test-Path (Join-Path $binPath "light.exe"))
+}
+
+function Ensure-MsiDependencies {
+    if ((Test-GoAvailable) -and (Test-WixAvailable)) {
+        return
+    }
+
+    $provisionScript = Join-Path $RepoRoot "infra\vagrant\scripts\win\builder_provision.ps1"
+    if (-not (Test-Path $provisionScript)) {
+        throw "MSI dependencies missing and provision script not found at $provisionScript."
+    }
+
+    Write-Host "==> Installing MSI build dependencies (Go/WiX)"
+    & $provisionScript 2>&1 | ForEach-Object { Write-Output $_ }
+}
+
 $repoRootPath = $RepoRoot
 if (-not (Test-Path $repoRootPath)) {
     throw "Shared repo root not found at $repoRootPath. Re-mount the synced folder (try 'vagrant reload --provision')."
@@ -48,6 +76,8 @@ $scriptPath = Join-Path $RepoRoot $scriptInfo.Script
 if (-not (Test-Path $scriptPath)) {
     throw "MSI build script not found at $scriptPath. Re-mount the synced folder (try 'vagrant reload --provision')."
 }
+
+Ensure-MsiDependencies
 
 $arguments = @{
     RepoRoot = $RepoRoot

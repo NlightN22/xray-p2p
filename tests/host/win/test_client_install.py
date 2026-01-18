@@ -21,7 +21,12 @@ CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--all", "--ignore-missing")
-    _env.install_xp2p_from_msi(client_host, msi_path)
+    _env.cleanup_xp2p_install(
+        client_host,
+        config_dirs=[CLIENT_CONFIG_DIR],
+        state_files=CLIENT_STATE_FILES,
+        extra_paths=[CLIENT_LOG_FILE],
+    )
 
 
 def _read_remote_json(client_host, path: Path) -> dict:
@@ -384,11 +389,10 @@ def test_client_install_succeeds_without_state_marker(
             check=True,
         )
 
-        for state_file in CLIENT_STATE_FILES:
-            _remove_remote_path(client_host, state_file)
-        assert all(
-            not _remote_path_exists(client_host, path) for path in CLIENT_STATE_FILES
-        ), "Expected client state files to be removed before re-install"
+        _env.remove_paths(client_host, CLIENT_STATE_FILES)
+        assert not _env.paths_exist(client_host, CLIENT_STATE_FILES), (
+            "Expected client state files to be removed before re-install"
+        )
 
         xp2p_client_runner(
             "client",
@@ -402,8 +406,8 @@ def test_client_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert any(
-            _remote_path_exists(client_host, path) for path in CLIENT_STATE_FILES
-        ), "Expected client install-state file to be recreated"
+        assert _env.paths_exist(client_host, CLIENT_STATE_FILES), (
+            "Expected client install-state file to be recreated"
+        )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

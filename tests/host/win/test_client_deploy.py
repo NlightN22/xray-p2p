@@ -18,6 +18,13 @@ CLIENT_STATE_FILES = [
     CLIENT_INSTALL_DIR / "install-state.json",
 ]
 CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
+SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+SERVER_CONFIG_DIR_NAME = "config-server"
+SERVER_CONFIG_DIR = SERVER_INSTALL_DIR / SERVER_CONFIG_DIR_NAME
+SERVER_STATE_FILES = [
+    SERVER_INSTALL_DIR / "install-state-server.json",
+    SERVER_INSTALL_DIR / "install-state.json",
+]
 HEARTBEAT_STATE_FILES = [
     CLIENT_INSTALL_DIR / "state-heartbeat-client.json",
     CLIENT_INSTALL_DIR / "state-heartbeat.json",
@@ -40,16 +47,33 @@ def test_windows_client_deploy_end_to_end(
 ):
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
     xp2p_server_runner("server", "remove", "--ignore-missing")
-    win_env.install_xp2p_from_msi(client_host, xp2p_msi_path)
-    win_env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+    win_env.cleanup_xp2p_install(
+        client_host,
+        config_dirs=[CLIENT_CONFIG_DIR],
+        state_files=CLIENT_STATE_FILES,
+    )
+    win_env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[SERVER_CONFIG_DIR],
+        state_files=SERVER_STATE_FILES,
+    )
 
     for host in (client_host, server_host):
-        for path in HEARTBEAT_STATE_FILES:
-            _remove_remote_path(host, path)
-    _remove_remote_path(client_host, CLIENT_DEPLOY_STDOUT)
-    _remove_remote_path(server_host, SERVER_DEPLOY_STDOUT)
-    _remove_remote_path(client_host, Path(str(CLIENT_DEPLOY_STDOUT) + ".err"))
-    _remove_remote_path(server_host, Path(str(SERVER_DEPLOY_STDOUT) + ".err"))
+        win_env.remove_paths(host, HEARTBEAT_STATE_FILES)
+    win_env.remove_paths(
+        client_host,
+        [
+            CLIENT_DEPLOY_STDOUT,
+            Path(str(CLIENT_DEPLOY_STDOUT) + ".err"),
+        ],
+    )
+    win_env.remove_paths(
+        server_host,
+        [
+            SERVER_DEPLOY_STDOUT,
+            Path(str(SERVER_DEPLOY_STDOUT) + ".err"),
+        ],
+    )
 
     server_host_ip = _detect_host_ipv4(server_host)
     client_host_ip = _detect_host_ipv4(client_host)
@@ -133,8 +157,7 @@ def test_windows_client_deploy_end_to_end(
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
         for host in (client_host, server_host):
-            for path in HEARTBEAT_STATE_FILES:
-                _remove_remote_path(host, path)
+            win_env.remove_paths(host, HEARTBEAT_STATE_FILES)
 
 
 def _start_client_deploy(

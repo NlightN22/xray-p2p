@@ -95,6 +95,9 @@ guest suites -- the CI and fellow contributors expect these rules.
   helper scripts from `scripts/build/` and stage artefacts via the synced folder.
 - Cache results when practical: leverage the `lru_cache` helpers in `_env.py`
   so we do not spam `vagrant status` or `ssh-config`.
+- Batch related guest operations into a single `run_powershell` call whenever
+  possible (e.g. remove multiple paths or check several files in one script).
+  Avoid per-path SSH round-trips for cleanup or state checks.
 
 ---
 

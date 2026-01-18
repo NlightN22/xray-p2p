@@ -27,14 +27,27 @@ XRAY_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\xray.exe")
 
 
 def _remove_remote_path(host, path: Path) -> None:
-    quoted = _env.ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (Test-Path {quoted}) {{
-    Remove-Item {quoted} -Force -Recurse -ErrorAction SilentlyContinue
-}}
-"""
-    _env.run_powershell(host, script)
+    _env.remove_paths(host, [path])
+
+
+def _resolve_server_config_dir(install_dir: Path | None) -> Path:
+    if install_dir == CUSTOM_SERVER_INSTALL_DIR:
+        return install_dir / CUSTOM_SERVER_CONFIG_NAME
+    return DEFAULT_SERVER_INSTALL_DIR / DEFAULT_SERVER_CONFIG_NAME
+
+
+def _resolve_client_config_dir(install_dir: Path | None) -> Path:
+    if install_dir == CUSTOM_CLIENT_INSTALL_DIR:
+        return install_dir / CUSTOM_CLIENT_CONFIG_NAME
+    return DEFAULT_CLIENT_INSTALL_DIR / DEFAULT_CLIENT_CONFIG_NAME
+
+
+def _state_files_for(install_dir: Path) -> list[Path]:
+    return [
+        install_dir / "install-state-client.json",
+        install_dir / "install-state-server.json",
+        install_dir / "install-state.json",
+    ]
 
 
 def _cleanup_server_install(
@@ -44,7 +57,12 @@ def _cleanup_server_install(
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
-    _env.install_xp2p_from_msi(server_host, msi_path)
+    target_dir = install_dir or DEFAULT_SERVER_INSTALL_DIR
+    _env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[_resolve_server_config_dir(target_dir)],
+        state_files=_state_files_for(target_dir),
+    )
     if purge and install_dir is not None:
         _remove_remote_path(server_host, install_dir)
 
@@ -56,7 +74,12 @@ def _cleanup_client_install(
     if install_dir is not None:
         args.extend(["--path", str(install_dir)])
     runner(*args)
-    _env.install_xp2p_from_msi(client_host, msi_path)
+    target_dir = install_dir or DEFAULT_CLIENT_INSTALL_DIR
+    _env.cleanup_xp2p_install(
+        client_host,
+        config_dirs=[_resolve_client_config_dir(target_dir)],
+        state_files=_state_files_for(target_dir),
+    )
     if purge and install_dir is not None:
         _remove_remote_path(client_host, install_dir)
 

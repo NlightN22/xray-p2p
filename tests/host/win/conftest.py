@@ -10,9 +10,15 @@ from . import _client_runtime, _server_runtime, env as win_env
 def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("xp2p", "xp2p guest orchestration options")
     group.addoption(
+        "--win-stack",
+        action="store",
+        default="win10",
+        help="Windows Vagrant stack to target (win10, win2019, win2022).",
+    )
+    group.addoption(
         "--xp2p-target",
         action="store",
-        default="10.62.10.21",
+        default=None,
         help="Target address for xp2p guest ping probes.",
     )
     group.addoption(
@@ -32,6 +38,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 @pytest.fixture(scope="session")
 def xp2p_options(pytestconfig: pytest.Config) -> dict:
+    target = pytestconfig.getoption("xp2p_target")
+    if not target:
+        target = win_env.DEFAULT_TARGET
+
     port_option = pytestconfig.getoption("xp2p_port")
     try:
         port = int(port_option)
@@ -39,10 +49,19 @@ def xp2p_options(pytestconfig: pytest.Config) -> dict:
         pytest.fail(f"Invalid xp2p port value: {port_option!r}")
 
     return {
-        "target": pytestconfig.getoption("xp2p_target"),
+        "target": target,
         "port": port,
         "attempts": pytestconfig.getoption("xp2p_attempts"),
     }
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _configure_win_stack(pytestconfig: pytest.Config) -> None:
+    name = pytestconfig.getoption("win_stack")
+    try:
+        win_env.set_win_stack(name)
+    except ValueError as exc:
+        pytest.fail(str(exc))
 
 
 @pytest.fixture(scope="session")

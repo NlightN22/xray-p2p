@@ -35,7 +35,12 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
         str(SERVER_INSTALL_DIR),
         "--ignore-missing",
     )
-    _env.install_xp2p_from_msi(server_host, msi_path)
+    _env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[SERVER_CONFIG_DIR],
+        state_files=SERVER_STATE_FILES,
+        extra_paths=[SERVER_LOG_FILE],
+    )
 
 
 def _remote_path_exists(host, path: Path) -> bool:
@@ -89,14 +94,7 @@ $text = [System.Text.Encoding]::UTF8.GetString($data)
 
 
 def _remove_remote_path(host, path: Path) -> None:
-    quoted = _env.ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (Test-Path {quoted}) {{
-    Remove-Item {quoted} -Force -Recurse -ErrorAction SilentlyContinue
-}}
-"""
-    _env.run_powershell(host, script)
+    _env.remove_paths(host, [path])
 
 
 def _expect_tls_paths() -> tuple[str, str]:
@@ -240,8 +238,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         assert second_key_content in key_content
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
-        _remove_remote_path(server_host, cert_source)
-        _remove_remote_path(server_host, key_source)
+        _env.remove_paths(server_host, [cert_source, key_source])
 
 
 @pytest.mark.host
@@ -363,7 +360,7 @@ def test_server_run_starts_xray_core(
         assert "Failed to start" not in log_content
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
-        _remove_remote_path(server_host, SERVER_LOG_FILE)
+        _env.remove_paths(server_host, [SERVER_LOG_FILE])
 
 
 @pytest.mark.host
@@ -430,11 +427,10 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        for state_file in SERVER_STATE_FILES:
-            _remove_remote_path(server_host, state_file)
-        assert all(
-            not _remote_path_exists(server_host, path) for path in SERVER_STATE_FILES
-        ), "Expected server state files to be removed before re-install"
+        _env.remove_paths(server_host, SERVER_STATE_FILES)
+        assert not _env.paths_exist(server_host, SERVER_STATE_FILES), (
+            "Expected server state files to be removed before re-install"
+        )
 
         xp2p_server_runner(
             "server",
@@ -450,8 +446,8 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert any(
-            _remote_path_exists(server_host, path) for path in SERVER_STATE_FILES
-        ), "Expected server install-state file to be recreated"
+        assert _env.paths_exist(server_host, SERVER_STATE_FILES), (
+            "Expected server install-state file to be recreated"
+        )
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

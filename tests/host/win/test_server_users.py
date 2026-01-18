@@ -6,6 +6,7 @@ from .test_server_install import (
     SERVER_CONFIG_DIR_NAME,
     SERVER_INBOUNDS,
     SERVER_INSTALL_DIR,
+    SERVER_STATE_FILES,
     _read_remote_json,
     _trojan_inbound,
 )
@@ -286,4 +287,8 @@ def _reset_server_install(server_host, runner, msi_path: str) -> None:
         str(SERVER_INSTALL_DIR),
         "--ignore-missing",
     )
-    _env.install_xp2p_from_msi(server_host, msi_path)
+    _env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[SERVER_INSTALL_DIR / SERVER_CONFIG_DIR_NAME],
+        state_files=SERVER_STATE_FILES,
+    )

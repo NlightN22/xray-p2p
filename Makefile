@@ -39,17 +39,15 @@ test-wsl:
 	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
 
 up-win10:
-	cd $(VAGRANT_WINMSI_DIR) && vagrant up
 	cd $(VAGRANT_WIN10_DIR) && vagrant up
+	
 halt-win10:
-	cd $(VAGRANT_WINMSI_DIR) && vagrant halt
 	cd $(VAGRANT_WIN10_DIR) && vagrant halt
 
 up-win22:
-	cd $(VAGRANT_WINMSI_DIR) && vagrant up
 	cd $(VAGRANT_WIN10_DIR) && vagrant up
+
 halt-win22:
-	cd $(VAGRANT_WINMSI_DIR) && vagrant halt
 	cd $(VAGRANT_WIN10_DIR) && vagrant halt
 
 up-deb12:
@@ -87,9 +85,6 @@ build-deb:
 	cd $(VAGRANT_DEB12_DIR) && vagrant up deb-test-a
 	cd $(VAGRANT_DEB12_DIR) && vagrant ssh deb-test-a -c "sudo -n /bin/bash /srv/xray-p2p/scripts/build/build_deb_xp2p.sh --all"
 
-build-msi:
-	cd $(VAGRANT_WINMSI_DIR) && vagrant up
-	cd $(VAGRANT_WINMSI_DIR) && vagrant winrm -c "powershell -NoProfile -ExecutionPolicy Bypass -File C:\\xp2p\\tests\\guest\\scripts\\build_msi_package.ps1 -Architecture amd64 -CacheDir C:\\xp2p\\build\\msi-artifacts -WixSource installer\\wix\\xp2p.wxs"
 # swallow extra positional arguments so make does not treat them as targets
 %:
 	@:

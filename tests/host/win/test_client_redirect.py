@@ -10,6 +10,10 @@ CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
 CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_STATE_FILE = CLIENT_INSTALL_DIR / "install-state-client.json"
+CLIENT_STATE_FILES = [
+    CLIENT_INSTALL_DIR / "install-state-client.json",
+    CLIENT_INSTALL_DIR / "install-state.json",
+]
 PRIMARY_HOST = "10.120.0.10"
 SECONDARY_HOST = "10.120.0.11"
 REDIRECT_CIDR = "10.123.0.0/16"
@@ -19,7 +23,11 @@ INVALID_CIDR = "10.999.0.0/33"
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--all", "--ignore-missing")
-    _env.install_xp2p_from_msi(client_host, msi_path)
+    _env.cleanup_xp2p_install(
+        client_host,
+        config_dirs=[CLIENT_CONFIG_DIR],
+        state_files=CLIENT_STATE_FILES,
+    )
 
 
 def _install_endpoint(runner, host: str, user: str, password: str) -> None:

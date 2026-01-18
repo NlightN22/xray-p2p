@@ -30,7 +30,7 @@ if (-not ($arguments -is [System.Collections.IEnumerable])) {
     $arguments = @()
 }
 
-$runtimeRoot = Join-Path ([System.IO.Path]::GetTempPath()) 'xp2p-runner'
+$runtimeRoot = Join-Path $env:WINDIR 'Temp\xp2p-runner'
 if (-not (Test-Path $runtimeRoot)) {
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
 }
@@ -41,6 +41,7 @@ $scriptPath = Join-Path $runtimeRoot "$taskId.ps1"
 $outPath = Join-Path $runtimeRoot "$taskId.out"
 $errPath = Join-Path $runtimeRoot "$taskId.err"
 $codePath = Join-Path $runtimeRoot "$taskId.code"
+$timingPath = Join-Path $runtimeRoot "$taskId.timing"
 
 function Remove-TemporaryFile {
     param([string]$Path)
@@ -54,6 +55,7 @@ function Cleanup {
     Remove-TemporaryFile -Path $outPath
     Remove-TemporaryFile -Path $errPath
     Remove-TemporaryFile -Path $codePath
+    Remove-TemporaryFile -Path $timingPath
 }
 
 $escapedXp2p = $Xp2pPath -replace "'", "''"
@@ -92,13 +94,17 @@ if (`$encodedArgs) {
     }
 }
 try {
-    `$formatted = @()
+`$formatted = @()
     foreach (`$arg in `$arguments) {
         `$formatted += Format-Xp2pArgument -Value (`$arg -as [string])
     }
     `$argumentLiteral = [string]::Join(' ', `$formatted)
+    `$start = Get-Date
     `$process = Start-Process -FilePath `$xp2p -ArgumentList `$argumentLiteral -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput '$outPath' -RedirectStandardError '$errPath'
     `$code = `$process.ExitCode
+    `$end = Get-Date
+    `$elapsed = `$end - `$start
+    "start=`$start; end=`$end; elapsed_ms=`$([int]`$elapsed.TotalMilliseconds)" | Out-File -FilePath '$timingPath' -Encoding ASCII
 } catch {
     `$\_.Exception.Message | Out-File -FilePath '$errPath' -Encoding UTF8
     `$code = 1
@@ -111,11 +117,13 @@ Set-Content -Path $scriptPath -Value $taskScript -Encoding UTF8
 Import-Module ScheduledTasks -ErrorAction SilentlyContinue | Out-Null
 
 try {
+    $scheduleStart = Get-Date
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
     $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(5))
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -Force -User 'SYSTEM' | Out-Null
     Start-ScheduledTask -TaskName $taskName
 
+    $waitStart = Get-Date
     $deadline = (Get-Date).AddMinutes(5)
     while ($true) {
         Start-Sleep -Seconds 1
@@ -128,6 +136,7 @@ try {
             throw "xp2p scheduled task $taskName timed out."
         }
     }
+    $waitEnd = Get-Date
 } finally {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
 }
@@ -144,6 +153,14 @@ if (Test-Path $outPath) {
 }
 if (Test-Path $errPath) {
     Get-Content -Path $errPath | ForEach-Object { Write-Error $_ }
+}
+if (Test-Path $timingPath) {
+    Get-Content -Path $timingPath | ForEach-Object { Write-Output "TIMING: $_" }
+}
+if ($scheduleStart -and $waitStart -and $waitEnd) {
+    $queueMs = [int](($waitStart - $scheduleStart).TotalMilliseconds)
+    $waitMs = [int](($waitEnd - $waitStart).TotalMilliseconds)
+    Write-Output "TIMING: schedule_ms=$queueMs; wait_ms=$waitMs"
 }
 
 Cleanup

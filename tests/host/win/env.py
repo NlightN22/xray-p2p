@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 import uuid
 from pathlib import Path
 from typing import Iterable
@@ -13,6 +14,7 @@ REPO_ROOT = common.REPO_ROOT
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "windows10"
 DEFAULT_SERVER = "win10-a"
 DEFAULT_CLIENT = "win10-b"
+DEFAULT_TARGET = "10.62.10.21"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
@@ -26,6 +28,47 @@ MSI_CACHE_DIR_X86 = Path(r"C:\xp2p\build\msi-cache-x86")
 
 _MSI_CACHE_PATH_X64: str | None = None
 _MSI_CACHE_PATH_X86: str | None = None
+
+WIN_STACKS = {
+    "win10": {
+        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "windows10",
+        "server": "win10-a",
+        "client": "win10-b",
+        "target": "10.62.10.21",
+    },
+    "win2019": {
+        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2019",
+        "server": "win2019-a",
+        "client": "win2019-b",
+        "target": "10.62.10.11",
+    },
+    "win2022": {
+        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2022",
+        "server": "win2022-a",
+        "client": "win2022-b",
+        "target": "10.62.10.31",
+    },
+}
+
+_CURRENT_WIN_STACK = "win10"
+
+
+def available_win_stacks() -> list[str]:
+    return sorted(WIN_STACKS.keys())
+
+
+def set_win_stack(name: str) -> None:
+    global _CURRENT_WIN_STACK, VAGRANT_DIR, DEFAULT_SERVER, DEFAULT_CLIENT, DEFAULT_TARGET
+    if name not in WIN_STACKS:
+        raise ValueError(
+            f"Unknown win stack '{name}'. Available: {', '.join(available_win_stacks())}"
+        )
+    config = WIN_STACKS[name]
+    _CURRENT_WIN_STACK = name
+    VAGRANT_DIR = config["vagrant_dir"]
+    DEFAULT_SERVER = config["server"]
+    DEFAULT_CLIENT = config["client"]
+    DEFAULT_TARGET = config["target"]
 
 
 def require_vagrant_environment() -> None:
@@ -46,7 +89,12 @@ def encode_powershell(script: str) -> str:
 
 def run_powershell(host: Host, script: str) -> CommandResult:
     encoded = encode_powershell(script)
-    return host.run(f"powershell -NoProfile -EncodedCommand {encoded}")
+    started = time.monotonic()
+    result = host.run(f"powershell -NoProfile -NonInteractive -NoLogo -EncodedCommand {encoded}")
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    if elapsed_ms > 2000:
+        print(f"TIMING: powershell_ms={elapsed_ms}")
+    return result
 
 
 def ps_quote(value: str) -> str:
@@ -118,12 +166,16 @@ def _extract_marker(output: str, marker: str) -> str | None:
 
 def run_xp2p(host: Host, args: Iterable[str]) -> CommandResult:
     payload = _encode_args_payload(args)
-    return run_guest_script(
+    result = run_guest_script(
         host,
         "scripts/run_xp2p_command.ps1",
         Xp2pPath=str(XP2P_EXE),
         ArgsBase64=payload,
     )
+    for line in (result.stdout or "").splitlines():
+        if line.startswith("TIMING:"):
+            print(line)
+    return result
 
 
 def _encode_args_payload(args: Iterable[str]) -> str:
@@ -218,7 +270,8 @@ if (-not $process.WaitForExit(300000)) {{
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     exit 124
 }}
-if ($process.ExitCode -ne 0) {{
+$successCodes = @(0, 1605, 1614, 3010)
+if ($successCodes -notcontains $process.ExitCode) {{
     exit $process.ExitCode
 }}
 if (Test-Path {install_dir}) {{
@@ -329,6 +382,59 @@ if (Test-Path {target}) {{
 }}
 """
     run_powershell(host, script)
+
+
+def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:
+    targets = [ps_quote(str(path)) for path in paths]
+    if not targets:
+        return
+    target_list = ", ".join(targets)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+foreach ($target in @({target_list})) {{
+    if (Test-Path $target) {{
+        Remove-Item $target -Force -Recurse -ErrorAction SilentlyContinue
+    }}
+}}
+"""
+    run_powershell(host, script)
+
+
+def cleanup_xp2p_install(
+    host: Host,
+    *,
+    config_dirs: Iterable[Path],
+    state_files: Iterable[Path],
+    extra_paths: Iterable[Path] = (),
+) -> None:
+    remove_paths(
+        host,
+        [*config_dirs, *state_files, *extra_paths],
+    )
+
+
+def paths_exist(host: Host, paths: Iterable[Path | str]) -> set[str]:
+    targets = [ps_quote(str(path)) for path in paths]
+    if not targets:
+        return set()
+    target_list = ", ".join(targets)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$existing = @()
+foreach ($target in @({target_list})) {{
+    if (Test-Path $target) {{
+        $existing += $target
+    }}
+}}
+$existing
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to check remote paths.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return {line.strip().strip("'") for line in (result.stdout or "").splitlines() if line.strip()}
 
 
 def read_text(host: Host, path: Path | str) -> str:

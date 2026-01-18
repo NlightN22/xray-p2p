@@ -20,16 +20,32 @@ DIAG_CIDR = f"{DIAG_IP}/32"
 DIAG_PREFIX = 32
 DIAG_DOMAIN_IP = "10.77.0.2"
 DIAG_DOMAIN = "diag.service.internal"
+SERVER_STATE_FILES = [
+    SERVER_INSTALL_DIR / "install-state-server.json",
+    SERVER_INSTALL_DIR / "install-state.json",
+]
+CLIENT_STATE_FILES = [
+    CLIENT_INSTALL_DIR / "install-state-client.json",
+    CLIENT_INSTALL_DIR / "install-state.json",
+]
 
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
     runner("server", "remove", "--ignore-missing")
-    _env.install_xp2p_from_msi(server_host, msi_path)
+    _env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[SERVER_INSTALL_DIR / SERVER_CONFIG_DIR],
+        state_files=SERVER_STATE_FILES,
+    )
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--all", "--ignore-missing")
-    _env.install_xp2p_from_msi(client_host, msi_path)
+    _env.cleanup_xp2p_install(
+        client_host,
+        config_dirs=[CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR],
+        state_files=CLIENT_STATE_FILES,
+    )
 
 
 def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
