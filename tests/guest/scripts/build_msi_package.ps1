@@ -8,6 +8,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $WixSource,
 
+    [string] $BuildId,
+
     [string] $RepoRoot = 'C:\xp2p',
     [string] $Marker = '__MSI_PATH__='
 )
@@ -79,6 +81,25 @@ if (-not (Test-Path $scriptPath)) {
 
 Ensure-MsiDependencies
 
+$buildIdPath = Join-Path $CacheDir 'build-id.txt'
+$latestPath = Join-Path $CacheDir 'latest.txt'
+if ($BuildId) {
+    if ((Test-Path $buildIdPath) -and (Test-Path $latestPath)) {
+        $cachedBuildId = (Get-Content -Raw -Path $buildIdPath).Trim()
+        if ($cachedBuildId -eq $BuildId) {
+            $latest = Get-Content -Path $latestPath -ErrorAction SilentlyContinue
+            $msiLine = $latest | Where-Object { $_ -like 'msi_path=*' } | Select-Object -First 1
+            if ($msiLine) {
+                $cachedPath = $msiLine.Substring('msi_path='.Length).Trim()
+                if ($cachedPath -and (Test-Path $cachedPath)) {
+                    Write-Output ("{0}{1}" -f $Marker, $cachedPath)
+                    exit 0
+                }
+            }
+        }
+    }
+}
+
 $arguments = @{
     RepoRoot = $RepoRoot
     CacheDir = $CacheDir
@@ -114,10 +135,12 @@ if ($fileName -notmatch '^xp2p-(.+)-windows-') {
 }
 $version = $Matches[1]
 $hash = (Get-FileHash -Algorithm SHA256 -Path $msiPath).Hash.ToLowerInvariant()
-$latestPath = Join-Path $CacheDir 'latest.txt'
 $latestContent = @(
     "version=$version"
     "sha256=$hash"
     "msi_path=$msiPath"
 ) -join "`n"
 Set-Content -Path $latestPath -Value $latestContent -Encoding ASCII
+if ($BuildId) {
+    Set-Content -Path $buildIdPath -Value $BuildId -Encoding ASCII
+}

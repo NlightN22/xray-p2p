@@ -28,6 +28,7 @@ MSI_CACHE_DIR_X86 = Path(r"C:\xp2p\build\msi-cache-x86")
 
 _MSI_CACHE_PATH_X64: str | None = None
 _MSI_CACHE_PATH_X86: str | None = None
+_MSI_BUILD_ID: str | None = None
 
 WIN_STACKS = {
     "win10": {
@@ -69,6 +70,11 @@ def set_win_stack(name: str) -> None:
     DEFAULT_SERVER = config["server"]
     DEFAULT_CLIENT = config["client"]
     DEFAULT_TARGET = config["target"]
+
+
+def set_msi_build_id(build_id: str | None) -> None:
+    global _MSI_BUILD_ID
+    _MSI_BUILD_ID = build_id
 
 
 def require_vagrant_environment() -> None:
@@ -350,6 +356,7 @@ def _build_msi_package(
         Architecture=architecture,
         CacheDir=str(cache_dir),
         WixSource=wix_source,
+        BuildId=_MSI_BUILD_ID or "",
         Marker=MSI_MARKER,
     )
     if result.rc != 0:

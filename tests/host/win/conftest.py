@@ -1,3 +1,4 @@
+import uuid
 from typing import Callable
 
 import pytest
@@ -62,6 +63,16 @@ def _configure_win_stack(pytestconfig: pytest.Config) -> None:
         win_env.set_win_stack(name)
     except ValueError as exc:
         pytest.fail(str(exc))
+
+
+@pytest.fixture(scope="session")
+def xp2p_build_id() -> str:
+    return uuid.uuid4().hex
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _configure_msi_build_id(xp2p_build_id: str) -> None:
+    win_env.set_msi_build_id(xp2p_build_id)
 
 
 @pytest.fixture(scope="session")

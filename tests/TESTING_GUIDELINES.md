@@ -19,6 +19,10 @@ guest suites -- the CI and fellow contributors expect these rules.
 - Windows MSI builds from host tests must execute `tests/guest/scripts/build_msi_package.ps1`,
   which wraps the canonical scripts under `scripts/build/`. Keep the MSI build
   pipeline there instead of duplicating commands inside host helpers.
+- Prefer shared provisioning scripts under `infra/vagrant/scripts/win`, but
+  **OpenSSH is allowed to be local per-VM** when the base image needs special
+  handling. Use `infra/vagrant/<vm>/scripts/openssh.ps1` for image-specific
+  quirks and keep the rest of the provisioner shared.
 - **Never introduce new WinRM logic.** We route everything through SSH
   (`testinfra` Paramiko backend) for performance and stability, even on Windows.
 - Keep tests **idempotent and clean**. Leave the guest in the same state you
@@ -98,6 +102,10 @@ guest suites -- the CI and fellow contributors expect these rules.
 - Batch related guest operations into a single `run_powershell` call whenever
   possible (e.g. remove multiple paths or check several files in one script).
   Avoid per-path SSH round-trips for cleanup or state checks.
+- Use the PowerShell startup benchmark to spot guest slowness:
+  `python scripts/bench/measure_win_powershell_start.py --vagrant-dir infra/vagrant/windows10 --machine win10-a --samples 5`.
+  Record the avg/p95 output when comparing images or provisioning changes; the
+  target should be ~300ms, otherwise host tests will become very slow.
 
 ---
 
@@ -120,6 +128,13 @@ guest suites -- the CI and fellow contributors expect these rules.
   `test_server_users.py`) for patterns.
 - Ask in code review or update this document if you introduce a new pattern
   that others should reuse.
+
+---
+
+## 7. Running Windows Host Tests on Specific Stacks
+- Use `--win-stack` to target a specific Vagrant stack.
+  Example: `pytest tests/host/win -vv --win-stack win2022`
+- Available stacks: `win10`, `win2019`, `win2022`.
 
 Following these guidelines keeps the suite fast, maintainable, and friendly to
 everyone running it locally or in CI. Thanks for sticking to them!

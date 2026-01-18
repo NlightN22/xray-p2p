@@ -43,6 +43,88 @@ function Ensure-OpenSshCapability {
     }
 }
 
+function Register-SshdServiceManual {
+    $exePath = Join-Path $env:SystemRoot "System32\OpenSSH\sshd.exe"
+    if (-not (Test-Path $exePath)) {
+        throw "Cannot manually register sshd: executable not found at $exePath"
+    }
+
+    $configDir = Join-Path $env:ProgramData "ssh"
+    if (-not (Test-Path $configDir)) {
+        Write-Info ("Creating ssh configuration directory at {0}" -f $configDir)
+        New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+    }
+
+    $defaultConfig = Join-Path (Split-Path $exePath) "sshd_config_default"
+    $configPath = Join-Path $configDir "sshd_config"
+    if (-not (Test-Path $configPath) -and (Test-Path $defaultConfig)) {
+        Write-Info "Seeding sshd_config from default template."
+        Copy-Item -Path $defaultConfig -Destination $configPath -Force
+    }
+
+    $hostKey = Join-Path $configDir "ssh_host_ed25519_key"
+    if (-not (Test-Path $hostKey)) {
+        $sshKeygen = Join-Path (Split-Path $exePath) "ssh-keygen.exe"
+        if (Test-Path $sshKeygen) {
+            Write-Info "Generating host keys via ssh-keygen -A."
+            & $sshKeygen -A | Out-Null
+        }
+    }
+
+    Write-Info "Creating sshd service manually."
+    & sc.exe create sshd binPath= $exePath start= auto DisplayName= "OpenSSH SSH Server" | Out-Null
+    & sc.exe description sshd "OpenSSH SSH Server" | Out-Null
+}
+
+function Ensure-SshdRegistered {
+    $desiredExePattern = [System.IO.Path]::Combine($env:SystemRoot, "System32\OpenSSH\sshd.exe")
+    $service = Get-CimInstance -ClassName Win32_Service -Filter "Name='sshd'" -ErrorAction SilentlyContinue
+
+    if ($service -and $service.PathName) {
+        $normalizedPath = $service.PathName.Trim('"')
+        if ($normalizedPath -like "*$desiredExePattern*") {
+            Write-Info "sshd service already registered against built-in OpenSSH."
+            return
+        }
+
+        Write-Info "Removing existing sshd service registration."
+        try {
+            if ($service.State -ne "Stopped") {
+                Stop-Service -Name "sshd" -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch {
+            Write-Info ("Failed to stop service 'sshd': {0}" -f $_.Exception.Message)
+        }
+
+        & sc.exe delete sshd | Out-Null
+    }
+
+    $installScript = Join-Path $env:SystemRoot "System32\OpenSSH\Install-SSHD.ps1"
+    if (-not (Test-Path $installScript)) {
+        Write-Info "System Install-SSHD.ps1 missing. Reinstalling OpenSSH optional features."
+        foreach ($cap in @("OpenSSH.Client~~~~0.0.1.0", "OpenSSH.Server~~~~0.0.1.0")) {
+            try {
+                Remove-WindowsCapability -Online -Name $cap -ErrorAction SilentlyContinue | Out-Null
+            }
+            catch {
+                Write-Info ("Failed to remove capability '{0}': {1}" -f $cap, $_.Exception.Message)
+            }
+            Write-Info ("Reinstalling Windows capability '{0}'" -f $cap)
+            Add-WindowsCapability -Online -Name $cap -ErrorAction Stop | Out-Null
+        }
+
+        if (-not (Test-Path $installScript)) {
+            Write-Info "System Install-SSHD.ps1 still missing. Using manual sshd service registration."
+            Register-SshdServiceManual
+            return
+        }
+    }
+
+    Write-Info "Registering sshd service using Install-SSHD.ps1"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installScript
+}
+
 function Ensure-AclRules {
     param(
         [Parameter(Mandatory = $true)]
@@ -512,6 +594,7 @@ if ($script:OpenSshRestartRequired) {
     Write-Info "OpenSSH capability install requires a reboot; re-run provisioning after restart."
     exit 0
 }
+Ensure-SshdRegistered
 $keysChanged = Ensure-VagrantKeys
 $defaultShellChanged = Ensure-DefaultOpenSshShell
 $configChanged = Ensure-SshdConfig
