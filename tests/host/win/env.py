@@ -43,6 +43,12 @@ WIN_STACKS = {
         "client": "win2019-b",
         "target": "10.62.10.41",
     },
+    "win2016": {
+        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2016",
+        "server": "win2016-a",
+        "client": "win2016-b",
+        "target": "10.62.10.51",
+    },
     "win2022": {
         "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2022",
         "server": "win2022-a",
@@ -143,11 +149,11 @@ def run_guest_script(host: Host, relative_path: str, **parameters: object) -> Co
         script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
 
     def _invoke(target: Path) -> CommandResult:
-        ps_path = str(target).replace("'", "''")
+        ps_path = str(target).replace('"', '""')
         args = "".join(f" -{key} {_ps_quote(str(value))}" for key, value in parameters.items())
         command = (
             "powershell -NoProfile -ExecutionPolicy Bypass "
-            f"-Command \"& '{ps_path}'{args}\""
+            f"-File \"{ps_path}\"{args}"
         )
         return host.run(command)
 
