@@ -9,18 +9,12 @@ CLIENT_VM_NAME        = "win10-legacy-b".freeze
 SERVER_PRIVATE_IP     = "10.62.10.61".freeze
 CLIENT_PRIVATE_IP     = "10.62.10.62".freeze
 HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
-SHARED_SCRIPTS_ROOT   = File.expand_path("../scripts/win", __dir__)
-OPENSSH_SCRIPT        = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
-NETWORK_SETUP_SCRIPT  = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
-PROVISION_SCRIPT      = File.expand_path("builder_provision.ps1", SHARED_SCRIPTS_ROOT)
+OPENSSH_SCRIPT        = File.expand_path("scripts/openssh.ps1", __dir__)
+PROVISION_SCRIPT      = File.expand_path("scripts/provision.ps1", __dir__)
 DEFAULT_WINRM_PORT    = 5985
 SERVER_WINRM_HOSTPORT = 55995
 CLIENT_WINRM_HOSTPORT = 55996
-SSH_GUEST_PORT        = 2222
-SERVER_SSH_HOSTPORT   = 52132
-CLIENT_SSH_HOSTPORT   = 52133
-
-def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm_host_port:, ssh_host_port:)
+def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm_host_port:)
   config.vm.define machine_id do |machine|
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
@@ -41,24 +35,11 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.winrm.timeout = 60
     machine.winrm.retry_limit = 10
 
-    machine.ssh.username = "vagrant"
-    machine.ssh.private_key_path = ["~/.vagrant.d/insecure_private_key"]
-    machine.ssh.host = private_ip
-    machine.ssh.port = SSH_GUEST_PORT
-    machine.ssh.insert_key = false
-
     machine.vm.network "forwarded_port",
                        guest: DEFAULT_WINRM_PORT,
                        host: winrm_host_port,
                        protocol: "tcp",
                        id: "#{machine_id}-winrm",
-                       auto_correct: true
-
-    machine.vm.network "forwarded_port",
-                       guest: SSH_GUEST_PORT,
-                       host: ssh_host_port,
-                       protocol: "tcp",
-                       id: "#{machine_id}-ssh",
                        auto_correct: true
 
     machine.vm.network "private_network",
@@ -84,14 +65,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
                          env: shared_env
 
     machine.vm.provision "shell",
-                         name: "network-setup",
-                         path: NETWORK_SETUP_SCRIPT,
-                         privileged: true,
-                         args: [private_ip],
-                         env: shared_env
-
-    machine.vm.provision "shell",
-                         name: "msi-deps",
+                         name: "common",
                          path: PROVISION_SCRIPT,
                          privileged: true,
                          env: shared_env
@@ -105,8 +79,7 @@ Vagrant.configure("2") do |config|
       vb_name: SERVER_VM_NAME,
       role: "server",
       private_ip: SERVER_PRIVATE_IP,
-      winrm_host_port: SERVER_WINRM_HOSTPORT,
-      ssh_host_port: SERVER_SSH_HOSTPORT
+      winrm_host_port: SERVER_WINRM_HOSTPORT
     )
 
     define_xp2p_machine(
@@ -115,7 +88,6 @@ Vagrant.configure("2") do |config|
       vb_name: CLIENT_VM_NAME,
       role: "client",
       private_ip: CLIENT_PRIVATE_IP,
-      winrm_host_port: CLIENT_WINRM_HOSTPORT,
-      ssh_host_port: CLIENT_SSH_HOSTPORT
+      winrm_host_port: CLIENT_WINRM_HOSTPORT
     )
 end
