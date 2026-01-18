@@ -41,7 +41,7 @@ WIN_STACKS = {
         "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2019",
         "server": "win2019-a",
         "client": "win2019-b",
-        "target": "10.62.10.11",
+        "target": "10.62.10.41",
     },
     "win2022": {
         "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2022",

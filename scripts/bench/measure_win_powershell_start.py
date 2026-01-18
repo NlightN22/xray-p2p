@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import statistics
 from pathlib import Path
 
@@ -13,11 +14,16 @@ from tests.host import common  # noqa: E402
 
 
 def measure(host, samples: int) -> list[float]:
-    cmd = (
-        "powershell -NoProfile -NonInteractive -NoLogo -Command "
-        "\"Measure-Command { powershell -NoProfile -NonInteractive -NoLogo -Command '1' } "
-        "| Select-Object -ExpandProperty TotalMilliseconds\""
+    ps_script = "\n".join(
+        [
+            "$sw = [System.Diagnostics.Stopwatch]::StartNew()",
+            "powershell -NoProfile -NonInteractive -NoLogo -Command 1 | Out-Null",
+            "$sw.Stop()",
+            "$sw.Elapsed.TotalMilliseconds",
+        ]
     )
+    encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
+    cmd = f"powershell -NoProfile -NonInteractive -NoLogo -EncodedCommand {encoded}"
     values: list[float] = []
     for _ in range(samples):
         result = host.run(cmd)
