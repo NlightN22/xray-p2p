@@ -1,5 +1,3 @@
-import re
-
 import pytest
 
 from tests.host.win import env as _env
@@ -31,10 +29,6 @@ def _initial_install_client(server_host) -> dict:
     assert isinstance(default.get("email"), str) and default["email"].startswith("client-")
     assert isinstance(default.get("password"), str) and default["password"]
     return default
-
-
-def _is_unreserved(value: str) -> bool:
-    return re.fullmatch(r"[A-Za-z0-9._~-]+", value or "") is not None
 
 
 def _remove_initial_install_client(server_host, xp2p_server_runner):
@@ -255,7 +249,7 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
-        xp2p_server_runner(
+        missing_password = xp2p_server_runner(
             "server",
             "user",
             "add",
@@ -265,14 +259,8 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             SERVER_CONFIG_DIR_NAME,
             "--id",
             "charlie",
-            check=True,
         )
-
-        current_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
-        clients = _trojan_clients(current_inbounds)
-        assert len(clients) == 1
-        assert clients[0].get("email") == "charlie"
-        assert _is_unreserved(clients[0].get("password") or "")
+        assert missing_password.rc != 0, "Expected failure when password is missing"
 
         invalid_password = xp2p_server_runner(
             "server",
@@ -303,9 +291,7 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
         assert missing_id.rc != 0, "Expected failure when identifier is missing"
 
         current_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
-        clients = _trojan_clients(current_inbounds)
-        assert len(clients) == 1
-        assert clients[0].get("email") == "charlie"
+        assert _trojan_clients(current_inbounds) == []
     finally:
         _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 def _reset_server_install(server_host, runner, msi_path: str) -> None:
