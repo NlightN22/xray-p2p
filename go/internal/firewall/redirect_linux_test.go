@@ -23,11 +23,11 @@ func TestPlanAddProducesSnippetAndEntryPath(t *testing.T) {
 	if plan.EntryPath == "" || !strings.Contains(plan.EntryPath, "xray_redirect_10_0_0_0_24") {
 		t.Fatalf("unexpected entry path: %s", plan.EntryPath)
 	}
-	if plan.Entry == nil || plan.Entry.Port != 12345 || plan.Entry.Subnet != "10.0.0.0/24" {
+	if plan.Entry == nil || plan.Entry.Port != 12345 || plan.Entry.CIDR != "10.0.0.0/24" {
 		t.Fatalf("plan entry not populated: %+v", plan.Entry)
 	}
 	if plan.Snippet == "" || !strings.Contains(plan.Snippet, "10.0.0.0/24") {
-		t.Fatalf("snippet missing expected subnet:\n%s", plan.Snippet)
+		t.Fatalf("snippet missing expected cidr:\n%s", plan.Snippet)
 	}
 	if len(plan.IPTables) == 0 {
 		t.Fatalf("expected iptables commands")
@@ -41,7 +41,7 @@ func TestPlanRemoveRespectsExistingEntry(t *testing.T) {
 		t.Fatalf("failed to create entries dir: %v", err)
 	}
 	entryPath := filepath.Join(entryDir, "xray_redirect_10_0_0_0_24.entry")
-	if err := os.WriteFile(entryPath, []byte("SUBNET=\"10.0.0.0/24\"\nPORT=\"12345\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(entryPath, []byte("CIDR=\"10.0.0.0/24\"\nPORT=\"12345\"\n"), 0o644); err != nil {
 		t.Fatalf("failed to seed entry file: %v", err)
 	}
 
@@ -54,7 +54,7 @@ func TestPlanRemoveRespectsExistingEntry(t *testing.T) {
 		t.Fatalf("expected empty snippet after removal, got: %s", plan.Snippet)
 	}
 	if plan.RemoveAll {
-		t.Fatalf("expected RemoveAll=false for single subnet")
+		t.Fatalf("expected RemoveAll=false for single cidr")
 	}
 	if len(plan.IPTables) == 0 {
 		t.Fatalf("expected iptables cleanup commands")

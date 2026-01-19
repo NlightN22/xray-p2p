@@ -75,10 +75,10 @@ func (m Manager) persistEntries(plan Plan) error {
 	if plan.Entry == nil {
 		return os.Remove(plan.EntryPath)
 	}
-	if plan.Entry.Port <= 0 || plan.Entry.Subnet == "" {
+	if plan.Entry.Port <= 0 || plan.Entry.CIDR == "" {
 		return fmt.Errorf("nat redirect: missing entry details")
 	}
-	content := fmt.Sprintf("SUBNET=\"%s\"\nPORT=\"%d\"\n", plan.Entry.Subnet, plan.Entry.Port)
+	content := fmt.Sprintf("CIDR=\"%s\"\nPORT=\"%d\"\n", plan.Entry.CIDR, plan.Entry.Port)
 	if err := os.WriteFile(plan.EntryPath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("nat redirect: write entry: %w", err)
 	}
@@ -88,8 +88,8 @@ func (m Manager) persistEntries(plan Plan) error {
 	return nil
 }
 
-func entryPathForSubnet(dir, subnet string) string {
-	clean := strings.ToLower(subnet)
+func entryPathForCIDR(dir, cidr string) string {
+	clean := strings.ToLower(cidr)
 	clean = strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
 			return r
@@ -107,8 +107,8 @@ func readEntry(path string) (Entry, error) {
 	lines := strings.Split(string(data), "\n")
 	entry := Entry{}
 	for _, line := range lines {
-		if strings.HasPrefix(line, "SUBNET=") {
-			entry.Subnet = strings.Trim(strings.TrimPrefix(line, "SUBNET="), "\"")
+		if strings.HasPrefix(line, "CIDR=") {
+			entry.CIDR = strings.Trim(strings.TrimPrefix(line, "CIDR="), "\"")
 		}
 		if strings.HasPrefix(line, "PORT=") {
 			val := strings.Trim(strings.TrimPrefix(line, "PORT="), "\"")
@@ -122,7 +122,7 @@ func upsertEntry(entries []Entry, add Entry) []Entry {
 	var updated []Entry
 	found := false
 	for _, e := range entries {
-		if e.Subnet == add.Subnet {
+		if e.CIDR == add.CIDR {
 			updated = append(updated, add)
 			found = true
 			continue

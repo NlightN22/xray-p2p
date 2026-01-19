@@ -11,7 +11,7 @@
   Each guest uses the gusztavvargadr/windows-10 box (version 2202.0.2505), syncs the repo into C:\\xp2p, installs Go/xp2p, and finishes provisioning with the smoke test (xp2p ping 127.0.0.1 --port 62022).
 - Networking:
   - NAT interface remains for outbound internet access.
-  - Host-only subnet 10.0.10.0/24: server 10.0.10.1, client 10.0.10.10. The profile is forced to Private and firewall rules for XP2P are pre-created.
+  - Host-only CIDR 10.0.10.0/24: server 10.0.10.1, client 10.0.10.10. The profile is forced to Private and firewall rules for XP2P are pre-created.
 - Host access:
   - WinRM (plaintext): server localhost:55985, client localhost:55986 (vagrant/vagrant).
 - Re-run provisioning/tests:
@@ -29,7 +29,7 @@
   cd infra/vagrant/debian12/deb-test
   vagrant up
 
-  The Vagrantfile defines `deb-test-a/b/c`. Each guest uses `generic/debian12` (4.3.12), gets 4 vCPUs / 4 GB RAM, attaches the repo as `/srv/xray-p2p`, and receives a host-only address in the 10.62.10.0/24 subnet.
+  The Vagrantfile defines `deb-test-a/b/c`. Each guest uses `generic/debian12` (4.3.12), gets 4 vCPUs / 4 GB RAM, attaches the repo as `/srv/xray-p2p`, and receives a host-only address in the 10.62.10.0/24 CIDR.
 - Provisioning installs build prerequisites (Go, build-essential, rsync, etc.), ensures the shared repo is available under `/srv/xray-p2p`, and leaves xp2p installation/testing to the host-side pytest suite so different scenarios can reuse the machines without reprovisioning.
 - Build/test scripts (both manual and pytest-driven) work directly out of `/srv/xray-p2p`, so any changes on the host immediately appear inside the guests without rerunning provisioning.
 - Re-run provisioning per machine if needed:

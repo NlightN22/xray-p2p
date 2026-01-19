@@ -12,6 +12,12 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
 - Remote deployment handshakes (`xp2p client deploy` + `xp2p server deploy`) that ship ready-to-use manifests over an encrypted link before bootstrapping both sides.
 - Build tooling that emits per-OS packages together with vendor-supplied `xray` binaries, Windows MSI installers, Debian packages, and OpenWrt IPKs (publishable via `feeds.conf`).
 
+## Terminology
+
+- `cidr`: Network in CIDR format (for example, `10.0.0.0/24`), used for redirect and NAT rules.
+- `host`: DNS name or IP address of a node/server.
+- `target`: Destination address in `host:port` form (for example, `192.0.2.10:22`), used for forwarding and dns-forward operations.
+
 ## Getting xp2p
 
 ### OpenWrt
@@ -131,7 +137,7 @@ xp2p server run
 
 # Manage users and reverse bridges
 xp2p server user add --id branch@example.com --password S3cret
-# Omit --password to auto-generate one.
+# Omit --password/--key to auto-generate one; --key is an alias for --password.
 xp2p server user list
 xp2p server user remove --id branch@example.com
 xp2p server reverse list

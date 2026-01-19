@@ -646,7 +646,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         plan_output = client_runner(
             "nat-redirect",
             "add",
-            "--subnet",
+            "--cidr",
             CLIENT_REDIRECT_CIDR,
             "--print-only",
             "--quiet",
@@ -657,7 +657,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         client_runner(
             "nat-redirect",
             "add",
-            "--subnet",
+            "--cidr",
             CLIENT_REDIRECT_CIDR,
             "--quiet",
             check=True,
@@ -733,7 +733,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         server_runner(
             "nat-redirect",
             "add",
-            "--subnet",
+            "--cidr",
             SERVER_REDIRECT_CIDR,
             "--quiet",
             check=True,

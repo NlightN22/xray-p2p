@@ -298,7 +298,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             nat = client_runner(
                 "nat-redirect",
                 "add",
-                "--subnet",
+                "--cidr",
                 "10.0.101.0/24",
                 "--port",
                 str(nat_port),

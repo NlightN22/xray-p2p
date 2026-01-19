@@ -208,7 +208,7 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             client_runner(
                 "nat-redirect",
                 "add",
-                "--subnet",
+                "--cidr",
                 C1_LAN_CIDR,
                 "--quiet",
                 check=True,
@@ -332,7 +332,7 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
         server_runner(
             "nat-redirect",
             "add",
-            "--subnet",
+            "--cidr",
             server_redirect_cidr,
             "--quiet",
             check=True,

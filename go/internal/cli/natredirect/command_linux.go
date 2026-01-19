@@ -49,14 +49,14 @@ func NewCommand(cfg func() config.Config) *cobra.Command {
 func newAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
-		Short: "Add transparent redirect rules for a subnet",
+		Short: "Add transparent redirect rules for a CIDR",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts, err := parseAddOptions(cmd)
 			if err != nil {
 				return err
 			}
 			manager := firewall.NewManager(opts.snippetPath, opts.entryDir)
-			plan, err := manager.PlanAdd(opts.subnet, opts.port)
+			plan, err := manager.PlanAdd(opts.cidr, opts.port)
 			if err != nil {
 				return err
 			}
@@ -71,12 +71,12 @@ func newAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			logging.Info("nat redirect applied", "subnet", opts.subnet, "port", opts.port, "backend", result.Backend)
+			logging.Info("nat redirect applied", "cidr", opts.cidr, "port", opts.port, "backend", result.Backend)
 			return nil
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("subnet", "", "destination subnet in CIDR form")
+	flags.String("cidr", "", "destination CIDR")
 	flags.Int("port", 0, "dokodemo-door port to redirect to (auto-detected when omitted)")
 	flags.Bool("print-only", false, "render firewall changes without applying them")
 	flags.Bool("quiet", false, "avoid interactive prompts when auto-selecting dokodemo port")
@@ -96,7 +96,7 @@ func newRemoveCmd() *cobra.Command {
 				return err
 			}
 			manager := firewall.NewManager(opts.snippetPath, opts.entryDir)
-			plan, err := manager.PlanRemove(opts.subnet, opts.all)
+			plan, err := manager.PlanRemove(opts.cidr, opts.all)
 			if err != nil {
 				return err
 			}
@@ -114,7 +114,7 @@ func newRemoveCmd() *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("subnet", "", "destination subnet in CIDR form")
+	flags.String("cidr", "", "destination CIDR")
 	flags.Bool("all", false, "remove all transparent redirects")
 	flags.Bool("print-only", false, "render firewall changes without applying them")
 	flags.String("snippet", defaultSnippet, "nftables snippet path")
@@ -136,9 +136,9 @@ func newListCmd() *cobra.Command {
 				fmt.Println("No transparent redirects configured.")
 				return nil
 			}
-			fmt.Println("Subnet\tPort")
+			fmt.Println("CIDR\tPort")
 			for _, e := range entries {
-				fmt.Printf("%s\t%d\n", e.Subnet, e.Port)
+				fmt.Printf("%s\t%d\n", e.CIDR, e.Port)
 			}
 			return nil
 		},
@@ -146,7 +146,7 @@ func newListCmd() *cobra.Command {
 }
 
 type addOptions struct {
-	subnet      string
+	cidr        string
 	port        int
 	printOnly   bool
 	snippetPath string
@@ -156,7 +156,7 @@ type addOptions struct {
 }
 
 type removeOptions struct {
-	subnet      string
+	cidr        string
 	all         bool
 	printOnly   bool
 	snippetPath string
@@ -164,7 +164,7 @@ type removeOptions struct {
 }
 
 func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
-	subnet, _ := cmd.Flags().GetString("subnet")
+	cidr, _ := cmd.Flags().GetString("cidr")
 	port, _ := cmd.Flags().GetInt("port")
 	printOnly, _ := cmd.Flags().GetBool("print-only")
 	snippet, _ := cmd.Flags().GetString("snippet")
@@ -175,8 +175,8 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 	if strings.TrimSpace(inbounds) == defaultInbounds {
 		detectInbounds = ""
 	}
-	if subnet == "" {
-		return addOptions{}, fmt.Errorf("nat-redirect add: --subnet is required")
+	if cidr == "" {
+		return addOptions{}, fmt.Errorf("nat-redirect add: --cidr is required")
 	}
 	if port == 0 {
 		candidates, err := autodetectPorts(detectInbounds, quiet)
@@ -186,7 +186,7 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 		port = candidates[0]
 	}
 	return addOptions{
-		subnet:      subnet,
+		cidr:        cidr,
 		port:        port,
 		printOnly:   printOnly,
 		snippetPath: fallback(snippet, defaultSnippet),
@@ -197,16 +197,16 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 }
 
 func parseRemoveOptions(cmd *cobra.Command) (removeOptions, error) {
-	subnet, _ := cmd.Flags().GetString("subnet")
+	cidr, _ := cmd.Flags().GetString("cidr")
 	all, _ := cmd.Flags().GetBool("all")
 	printOnly, _ := cmd.Flags().GetBool("print-only")
 	snippet, _ := cmd.Flags().GetString("snippet")
 	entryDir, _ := cmd.Flags().GetString("entry-dir")
-	if subnet == "" && !all {
-		return removeOptions{}, fmt.Errorf("nat-redirect remove: --subnet or --all is required")
+	if cidr == "" && !all {
+		return removeOptions{}, fmt.Errorf("nat-redirect remove: --cidr or --all is required")
 	}
 	return removeOptions{
-		subnet:      subnet,
+		cidr:        cidr,
 		all:         all,
 		printOnly:   printOnly,
 		snippetPath: fallback(snippet, defaultSnippet),
@@ -259,7 +259,7 @@ func removeTarget(opts removeOptions) string {
 	if opts.all {
 		return "all"
 	}
-	return opts.subnet
+	return opts.cidr
 }
 
 func fallback(value, def string) string {

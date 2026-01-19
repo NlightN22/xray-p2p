@@ -11,8 +11,8 @@ import (
 )
 
 type Entry struct {
-	Subnet string
-	Port   int
+	CIDR string
+	Port int
 }
 
 type Plan struct {
@@ -59,15 +59,15 @@ func (m Manager) List() ([]Entry, error) {
 	var entries []Entry
 	for _, p := range paths {
 		e, err := readEntry(p)
-		if err == nil && e.Subnet != "" && e.Port > 0 {
+		if err == nil && e.CIDR != "" && e.Port > 0 {
 			entries = append(entries, e)
 		}
 	}
 	return entries, nil
 }
 
-func (m Manager) PlanAdd(subnet string, port int) (Plan, error) {
-	if err := validateCIDR(subnet); err != nil {
+func (m Manager) PlanAdd(cidr string, port int) (Plan, error) {
+	if err := validateCIDR(cidr); err != nil {
 		return Plan{}, err
 	}
 	if port <= 0 || port > 65535 {
@@ -77,9 +77,9 @@ func (m Manager) PlanAdd(subnet string, port int) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	updated := upsertEntry(entries, Entry{Subnet: subnet, Port: port})
+	updated := upsertEntry(entries, Entry{CIDR: cidr, Port: port})
 	snippet := renderSnippetWithFW4(updated, m.useFW4)
-	entryPath := entryPathForSubnet(m.entryDir, subnet)
+	entryPath := entryPathForCIDR(m.entryDir, cidr)
 	backend := selectBackend()
 	if m.useFW4 {
 		backend = "fw4"
@@ -90,12 +90,12 @@ func (m Manager) PlanAdd(subnet string, port int) (Plan, error) {
 		EntryPath:   entryPath,
 		IPTables:    renderIPTables(updated),
 		Backend:     backend,
-		Entry:       &Entry{Subnet: subnet, Port: port},
+		Entry:       &Entry{CIDR: cidr, Port: port},
 		UseFW4:      m.useFW4,
 	}, nil
 }
 
-func (m Manager) PlanRemove(subnet string, all bool) (Plan, error) {
+func (m Manager) PlanRemove(cidr string, all bool) (Plan, error) {
 	entries, err := m.List()
 	if err != nil {
 		return Plan{}, err
@@ -106,18 +106,18 @@ func (m Manager) PlanRemove(subnet string, all bool) (Plan, error) {
 	case all:
 		updated = nil
 		entryPath = ""
-	case subnet != "":
-		if err := validateCIDR(subnet); err != nil {
+	case cidr != "":
+		if err := validateCIDR(cidr); err != nil {
 			return Plan{}, err
 		}
-		entryPath = entryPathForSubnet(m.entryDir, subnet)
+		entryPath = entryPathForCIDR(m.entryDir, cidr)
 		for _, e := range entries {
-			if e.Subnet != subnet {
+			if e.CIDR != cidr {
 				updated = append(updated, e)
 			}
 		}
 	default:
-		return Plan{}, fmt.Errorf("nat redirect: subnet or --all required")
+		return Plan{}, fmt.Errorf("nat redirect: cidr or --all required")
 	}
 	snippet := renderSnippetWithFW4(updated, m.useFW4)
 	backend := selectBackend()
