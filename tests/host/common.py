@@ -68,22 +68,22 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
                 pass
         self.__dict__.pop("client", None)
 
-    def run(self, command: str, **kwargs):  # type: ignore[override]
+    def run(self, command: str, *args: str, **kwargs):  # type: ignore[override]
         try:
-            return super().run(command, **kwargs)
+            return super().run(command, *args, **kwargs)
         except EOFError:
             self._reset_client()
-            return super().run(command, **kwargs)
+            return super().run(command, *args, **kwargs)
         except paramiko_backend.paramiko.SSHException:
             self._reset_client()
-            return super().run(command, **kwargs)
+            return super().run(command, *args, **kwargs)
         except OSError as exc:
             winerror = getattr(exc, "winerror", None)
             err_no = getattr(exc, "errno", None)
             if winerror not in (10054,) and err_no not in (104,):
                 raise
             self._reset_client()
-            return super().run(command, **kwargs)
+            return super().run(command, *args, **kwargs)
 
 
 def _patch_paramiko_backend() -> None:

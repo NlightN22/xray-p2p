@@ -42,7 +42,6 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 		logging.Error("xp2p server user add: conflicting values for --password and --key")
 		return 2
 	}
-
 	secret := firstNonEmpty(passwordValue, keyValue)
 	generated := false
 	if strings.TrimSpace(secret) == "" {

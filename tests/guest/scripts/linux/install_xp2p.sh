@@ -25,6 +25,9 @@ fi
 
 export PATH="/usr/local/go/bin:$PATH"
 cd "$WORK_TREE"
+sudo -n systemctl stop xp2p-client xp2p-server >/dev/null 2>&1 || true
+sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true
+sudo -n pkill -f '/srv/xray-p2p/build/deb/staging/etc/xp2p/bin/xray' >/dev/null 2>&1 || true
 
 SOURCE_VERSION=$(go run ./go/cmd/xp2p --version | tr -d '\r')
 if [ -z "$SOURCE_VERSION" ]; then

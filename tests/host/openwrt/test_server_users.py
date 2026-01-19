@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 from testinfra.host import Host
 
@@ -41,6 +43,10 @@ def _read_trojan_users(host: Host) -> dict[str, str]:
                 users[str(user_id)] = str(password)
         return users
     return {}
+
+
+def _is_unreserved(value: str) -> bool:
+    return re.fullmatch(r"[A-Za-z0-9._~-]+", value or "") is not None
 
 
 @pytest.mark.host
@@ -125,5 +131,72 @@ def test_openwrt_server_user_add_requires_force_for_duplicate(openwrt_host, xp2p
 
         users = _read_trojan_users(openwrt_host)
         assert users.get("alpha@example.com") == "alpha-pass-2"
+    finally:
+        helpers.cleanup_server_install(openwrt_host, runner)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_openwrt_server_user_add_validates_password(openwrt_host, xp2p_openwrt_ipk):
+    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
+    openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
+
+    runner = _runner(openwrt_host)
+    try:
+        helpers.cleanup_server_install(openwrt_host, runner)
+
+        runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--host",
+            "srv-validate.local",
+            "--port",
+            "62091",
+            "--force",
+            check=True,
+        )
+
+        runner(
+            "server",
+            "user",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--id",
+            "charlie@example.com",
+            "--host",
+            "srv-validate.local",
+            check=True,
+        )
+        users = _read_trojan_users(openwrt_host)
+        assert users.get("charlie@example.com")
+        assert _is_unreserved(users.get("charlie@example.com"))
+
+        invalid_password = runner(
+            "server",
+            "user",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--id",
+            "delta@example.com",
+            "--password",
+            "bad+pass",
+            "--host",
+            "srv-validate.local",
+            check=False,
+        )
+        assert invalid_password.rc != 0, "Expected invalid password to fail"
+        users = _read_trojan_users(openwrt_host)
+        assert "charlie@example.com" in users
+        assert "delta@example.com" not in users
     finally:
         helpers.cleanup_server_install(openwrt_host, runner)
