@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.host import config_files
 from tests.host.win import env as _env
 
 MSI_CACHE_DIR_X64 = _env.MSI_CACHE_DIR_X64
@@ -49,6 +50,70 @@ def test_windows_installer_places_xray_binary(server_host, xp2p_msi_path):
     )
 
 
+@pytest.mark.host
+@pytest.mark.win
+def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp2p_server_runner):
+    install_dir = _env.PROGRAM_FILES_INSTALL_DIR
+    client_dir = install_dir / "config-client"
+    server_dir = install_dir / "config-server"
+    state_files = [
+        install_dir / "install-state-client.json",
+        install_dir / "install-state-server.json",
+        install_dir / "install-state.json",
+    ]
+    _env.cleanup_xp2p_install(
+        server_host,
+        config_dirs=[client_dir, server_dir],
+        state_files=state_files,
+    )
+
+    xp2p_server_runner(
+        "client",
+        "install",
+        "--path",
+        str(install_dir),
+        "--config-dir",
+        "config-client",
+        "--host",
+        "10.55.10.10",
+        "--user",
+        "cfg-client@example.com",
+        "--password",
+        "cfg-client-secret",
+        "--force",
+        check=True,
+    )
+    xp2p_server_runner(
+        "server",
+        "install",
+        "--path",
+        str(install_dir),
+        "--config-dir",
+        "config-server",
+        "--port",
+        "62122",
+        "--host",
+        "cfg-server.example.com",
+        "--force",
+        check=True,
+    )
+
+    client_files = config_files.config_paths(client_dir, config_files.CLIENT_CONFIG_FILES)
+    server_files = config_files.config_paths(server_dir, config_files.SERVER_CONFIG_FILES)
+    _assert_paths_exist(server_host, client_files + server_files)
+
+    try:
+        _env.uninstall_xp2p_from_msi(server_host, xp2p_msi_path, purge_files=False)
+        _assert_paths_exist(server_host, client_files + server_files)
+    finally:
+        _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+        _env.cleanup_xp2p_install(
+            server_host,
+            config_dirs=[client_dir, server_dir],
+            state_files=state_files,
+        )
+
+
 def _remote_path_exists(host, path: Path) -> bool:
     quoted = _env.ps_quote(str(path))
     script = f"""
@@ -60,3 +125,12 @@ exit 3
 """
     result = _env.run_powershell(host, script)
     return result.rc == 0
+
+
+def _assert_paths_exist(host, paths: list[Path]) -> None:
+    expected = {str(path) for path in paths}
+    existing = _env.paths_exist(host, paths)
+    missing = sorted(expected - existing)
+    if missing:
+        rendered = "\n".join(missing)
+        pytest.fail(f"Expected config files to exist:\n{rendered}")

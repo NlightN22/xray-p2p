@@ -270,7 +270,7 @@ exit 0
         )
 
 
-def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path) -> None:
+def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path, *, purge_files: bool = True) -> None:
     msi_str = ps_quote(str(msi_path))
     install_dir = ps_quote(str(PROGRAM_FILES_INSTALL_DIR))
     script = f"""
@@ -286,9 +286,14 @@ $successCodes = @(0, 1605, 1614, 3010)
 if ($successCodes -notcontains $process.ExitCode) {{
     exit $process.ExitCode
 }}
+"""
+    if purge_files:
+        script += f"""
 if (Test-Path {install_dir}) {{
     Remove-Item {install_dir} -Force -Recurse -ErrorAction SilentlyContinue
 }}
+"""
+    script += """
 exit 0
 """
     result = run_powershell(host, script)

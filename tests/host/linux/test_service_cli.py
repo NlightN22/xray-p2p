@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from tests.host import config_files
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 
@@ -415,3 +416,77 @@ def test_package_uninstall_removes_services(server_host):
                 "Failed to reinstall xp2p package "
                 f"(exit {reinstall.rc}).\nSTDOUT:\n{reinstall.stdout}\nSTDERR:\n{reinstall.stderr}"
             )
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_package_remove_keeps_config_files(server_host, xp2p_server_runner):
+    client_paths = config_files.config_paths(helpers.CLIENT_CONFIG_DIR, config_files.CLIENT_CONFIG_FILES)
+    server_paths = config_files.config_paths(helpers.SERVER_CONFIG_DIR, config_files.SERVER_CONFIG_FILES)
+    state_paths = helpers.CLIENT_STATE_FILES + helpers.SERVER_STATE_FILES
+
+    def _assert_paths_exist(paths: list[PurePosixPath]) -> None:
+        missing = [path for path in paths if not helpers.path_exists(server_host, path)]
+        if missing:
+            rendered = "\n".join(path.as_posix() for path in missing)
+            pytest.fail(f"Expected config files to exist:\n{rendered}")
+
+    helpers.cleanup_client_install(server_host, xp2p_server_runner)
+    helpers.cleanup_server_install(server_host, xp2p_server_runner)
+    for path in state_paths:
+        if helpers.path_exists(server_host, path):
+            helpers.remove_path(server_host, path)
+    try:
+        xp2p_server_runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--host",
+            "10.55.120.10",
+            "--user",
+            "cfg-client@example.com",
+            "--password",
+            "cfg-client-secret",
+            "--force",
+            check=True,
+        )
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62135",
+            "--host",
+            "cfg-server.example.com",
+            "--force",
+            check=True,
+        )
+
+        _assert_paths_exist(client_paths + server_paths)
+
+        remove_result = server_host.run("sudo -n dpkg -r xp2p")
+        if remove_result.rc != 0:
+            pytest.fail(
+                "dpkg remove failed "
+                f"(exit {remove_result.rc}).\nSTDOUT:\n{remove_result.stdout}\nSTDERR:\n{remove_result.stderr}"
+            )
+
+        _assert_paths_exist(client_paths + server_paths)
+    finally:
+        reinstall = linux_env.run_guest_script(server_host, "scripts/linux/install_xp2p.sh")
+        if reinstall.rc != 0:
+            pytest.fail(
+                "Failed to reinstall xp2p package "
+                f"(exit {reinstall.rc}).\nSTDOUT:\n{reinstall.stdout}\nSTDERR:\n{reinstall.stderr}"
+            )
+        helpers.cleanup_client_install(server_host, xp2p_server_runner)
+        helpers.cleanup_server_install(server_host, xp2p_server_runner)
+        for path in state_paths:
+            if helpers.path_exists(server_host, path):
+                helpers.remove_path(server_host, path)

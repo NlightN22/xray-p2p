@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 
 import pytest
 
+from tests.host import config_files
 from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
 
@@ -381,6 +382,8 @@ def test_openwrt_opkg_removal_and_purge_cleanup(openwrt_host, xp2p_openwrt_ipk):
     runner = lambda *cmd, check=False: _xp2p(openwrt_host, *cmd, check=check)
     helpers.cleanup_client_install(openwrt_host, runner)
     helpers.cleanup_server_install(openwrt_host, runner)
+    client_paths = config_files.config_paths(helpers.CLIENT_CONFIG_DIR, config_files.CLIENT_CONFIG_FILES)
+    server_paths = config_files.config_paths(helpers.SERVER_CONFIG_DIR, config_files.SERVER_CONFIG_FILES)
 
     def _install_roles():
         runner(
@@ -414,8 +417,15 @@ def test_openwrt_opkg_removal_and_purge_cleanup(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
+    def _assert_paths_exist(paths: list[PurePosixPath]) -> None:
+        missing = [path for path in paths if not helpers.path_exists(openwrt_host, path)]
+        if missing:
+            rendered = "\n".join(path.as_posix() for path in missing)
+            pytest.fail(f"Expected config files to exist:\n{rendered}")
+
     _install_roles()
     try:
+        _assert_paths_exist(client_paths + server_paths)
         remove_result = openwrt_host.run("opkg remove xp2p")
         if remove_result.rc != 0:
             pytest.fail(
@@ -424,6 +434,7 @@ def test_openwrt_opkg_removal_and_purge_cleanup(openwrt_host, xp2p_openwrt_ipk):
         assert not helpers.path_exists(openwrt_host, PurePosixPath("/usr/bin/xp2p"))
         assert helpers.path_exists(openwrt_host, helpers.INSTALL_ROOT), "/etc/xp2p should persist after remove"
         assert helpers.path_exists(openwrt_host, helpers.LOG_ROOT), "/var/log/xp2p should persist after remove"
+        _assert_paths_exist(client_paths + server_paths)
 
         # Reinstall to test purge scenario
         openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
