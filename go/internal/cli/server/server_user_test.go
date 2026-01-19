@@ -2,6 +2,7 @@ package servercmd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -35,6 +36,41 @@ func TestRunServerUserCommands(t *testing.T) {
 		})
 		if !strings.Contains(output, "trojan://secret@example.test:62022") {
 			t.Fatalf("expected link in output, got %q", output)
+		}
+	})
+
+	t.Run("user add generates password when missing", func(t *testing.T) {
+		cfg := serverCfg(`C:\xp2p`, "config-server", "example.test")
+		var captured server.AddUserOptions
+		restoreAdd := stubServerUserAdd(func(_ context.Context, opts server.AddUserOptions) error {
+			captured = opts
+			return nil
+		})
+		defer restoreAdd()
+		restoreLink := stubServerUserLink(func(context.Context, server.UserLinkOptions) (server.UserLink, error) {
+			return server.UserLink{
+				UserID:   "alpha",
+				Password: captured.Password,
+				Link:     fmt.Sprintf("trojan://%s@example.test:62022?allowInsecure=1&security=tls&sni=example.test#alpha", captured.Password),
+			}, nil
+		})
+		defer restoreLink()
+
+		output := captureStdout(t, func() {
+			code := runServerUserAdd(context.Background(), cfg, serverUserAddOptions{
+				Path:      `C:\xp2p`,
+				ConfigDir: "config-server",
+				UserID:    "alpha",
+			})
+			if code != 0 {
+				t.Fatalf("exit code: %d", code)
+			}
+		})
+		if strings.TrimSpace(captured.Password) == "" {
+			t.Fatalf("expected generated password to be set")
+		}
+		if !strings.Contains(output, captured.Password) {
+			t.Fatalf("expected generated password in output, got %q", output)
 		}
 	})
 

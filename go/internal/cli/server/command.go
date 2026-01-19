@@ -185,7 +185,7 @@ func newServerUserAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVar(&opts.Path, "path", "", "server installation directory")
 	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
 	flags.StringVar(&opts.UserID, "id", "", "Trojan client identifier (derives the <id><host>.rev reverse tag)")
-	flags.StringVar(&opts.Password, "password", "", "Trojan client password or pre-shared key")
+	flags.StringVar(&opts.Password, "password", "", "Trojan client password or pre-shared key (auto-generated when omitted)")
 	flags.StringVar(&opts.Key, "key", "", "alias for --password")
 	flags.StringVar(&opts.LinkHost, "host", "", "public host name or IP for generated connection link")
 	flags.BoolVar(&opts.NoReverse, "no-reverse", false, "skip creating reverse portal/routing entries")

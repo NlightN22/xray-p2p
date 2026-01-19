@@ -35,14 +35,23 @@ type serverUserListOptions struct {
 }
 
 func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAddOptions) int {
-	secret := firstNonEmpty(opts.Password, opts.Key)
-	if strings.TrimSpace(secret) == "" {
-		logging.Error("xp2p server user add: --password (or --key) is required")
-		return 2
-	}
-	if strings.TrimSpace(opts.Password) != "" && strings.TrimSpace(opts.Key) != "" && strings.TrimSpace(opts.Password) != strings.TrimSpace(opts.Key) {
+	passwordValue := strings.TrimSpace(opts.Password)
+	keyValue := strings.TrimSpace(opts.Key)
+	if passwordValue != "" && keyValue != "" && passwordValue != keyValue {
 		logging.Error("xp2p server user add: conflicting values for --password and --key")
 		return 2
+	}
+
+	secret := firstNonEmpty(passwordValue, keyValue)
+	generated := false
+	if strings.TrimSpace(secret) == "" {
+		secretValue, err := generateRandomSecret(18)
+		if err != nil {
+			logging.Error("xp2p server user add: generate password failed", "err", err)
+			return 1
+		}
+		secret = secretValue
+		generated = true
 	}
 
 	host := firstNonEmpty(opts.LinkHost, cfg.Server.Host)
@@ -86,6 +95,9 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 		return 1
 	}
 
+	if generated {
+		logging.Info("xp2p server user add: generated password", "user_id", strings.TrimSpace(opts.UserID), "password", secret)
+	}
 	logging.Info("xp2p server user add completed", "user_id", strings.TrimSpace(opts.UserID))
 
 	if strings.TrimSpace(host) != "" {

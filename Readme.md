@@ -131,6 +131,7 @@ xp2p server run
 
 # Manage users and reverse bridges
 xp2p server user add --id branch@example.com --password S3cret
+# Omit --password to auto-generate one.
 xp2p server user list
 xp2p server user remove --id branch@example.com
 xp2p server reverse list
