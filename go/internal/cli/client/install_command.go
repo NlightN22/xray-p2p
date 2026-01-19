@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -117,10 +116,6 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	userValue = firstNonEmpty(*userEmail, userValue)
 	passwordValue = firstNonEmpty(*password, passwordValue)
 	serverNameValue = firstNonEmpty(*serverName, serverNameValue)
-	if err := clishared.ValidateRFC3986Unreserved(passwordValue); err != nil {
-		logging.Error("xp2p client install: invalid password", "err", err)
-		return 2
-	}
 
 	allowOverride := allowInsecureRequested || strictTLSRequested
 	if linkValue != "" && linkData.AllowInsecureSet {

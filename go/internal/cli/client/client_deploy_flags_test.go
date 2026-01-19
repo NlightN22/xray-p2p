@@ -81,6 +81,17 @@ func TestParseDeployFlagsInstallDirFlag(t *testing.T) {
 	}
 }
 
+func TestParseDeployFlagsRejectsInvalidPassword(t *testing.T) {
+	_, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"--user", "branch@example.com",
+		"--password", "bad+pass",
+	})
+	if err == nil {
+		t.Fatalf("expected error for invalid password")
+	}
+}
+
 func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	cfg := config.Config{
 		Client: config.ClientConfig{

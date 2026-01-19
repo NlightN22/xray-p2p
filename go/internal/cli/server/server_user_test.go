@@ -74,6 +74,29 @@ func TestRunServerUserCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("user add rejects invalid password", func(t *testing.T) {
+		cfg := serverCfg(`C:\xp2p`, "config-server", "example.test")
+		called := false
+		restoreAdd := stubServerUserAdd(func(context.Context, server.AddUserOptions) error {
+			called = true
+			return nil
+		})
+		defer restoreAdd()
+
+		code := runServerUserAdd(context.Background(), cfg, serverUserAddOptions{
+			Path:      `C:\xp2p`,
+			ConfigDir: "config-server",
+			UserID:    "alpha",
+			Password:  "bad+pass",
+		})
+		if code != 2 {
+			t.Fatalf("exit code: %d", code)
+		}
+		if called {
+			t.Fatalf("expected server user add not to be called")
+		}
+	})
+
 	t.Run("user list prints links", func(t *testing.T) {
 		cfg := serverCfg(`C:\xp2p`, "config-server", "")
 		restoreList := stubServerUserList(func(context.Context, server.ListUsersOptions) ([]server.UserLink, error) {
