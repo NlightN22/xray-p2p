@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
+	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
@@ -292,6 +293,9 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 			return deployOptions{}, fmt.Errorf("generate password: %w", err)
 		}
 		passwordValue = gen
+	}
+	if err := clishared.ValidateRFC3986Unreserved(passwordValue); err != nil {
+		return deployOptions{}, fmt.Errorf("invalid password: %w", err)
 	}
 
 	installDirSet := false

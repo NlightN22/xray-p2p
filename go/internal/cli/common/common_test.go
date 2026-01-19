@@ -31,3 +31,15 @@ func TestPromptYesNo(t *testing.T) {
 		t.Fatalf("PromptYesNo expected yes, got %v %v", ok, err)
 	}
 }
+
+func TestValidateRFC3986Unreserved(t *testing.T) {
+	if err := ValidateRFC3986Unreserved("Az09-._~"); err != nil {
+		t.Fatalf("expected valid value, got %v", err)
+	}
+	if err := ValidateRFC3986Unreserved("a b"); err == nil {
+		t.Fatalf("expected invalid value with space")
+	}
+	if err := ValidateRFC3986Unreserved("bad+plus"); err == nil {
+		t.Fatalf("expected invalid value with plus")
+	}
+}

@@ -15,7 +15,7 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 			installDirSet:  true,
 			trojanPort:     "65001",
 			trojanUser:     "user@example.invalid",
-			trojanPassword: "p@ssw0rd",
+			trojanPassword: "passw0rd",
 		},
 		runtime: runtimeOptions{
 			remoteHost: "deploy.gw.local",
@@ -43,7 +43,7 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 		InstallDir:     "/srv/xp2p",
 		TrojanPort:     "65001",
 		TrojanUser:     "user@example.invalid",
-		TrojanPassword: "p@ssw0rd",
+		TrojanPassword: "passw0rd",
 	}
 	got := gotManifest
 	got.ExpiresAt = 0

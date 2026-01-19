@@ -66,3 +66,31 @@ func PromptChoice(question string, options []string) (string, error) {
 		return options[choice-1], nil
 	}
 }
+
+// ValidateRFC3986Unreserved ensures the value only uses RFC 3986 unreserved characters.
+func ValidateRFC3986Unreserved(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("value is empty")
+	}
+	for idx, r := range value {
+		if r >= 'a' && r <= 'z' {
+			continue
+		}
+		if r >= 'A' && r <= 'Z' {
+			continue
+		}
+		if r >= '0' && r <= '9' {
+			continue
+		}
+		switch r {
+		case '-', '.', '_', '~':
+			continue
+		default:
+			if r > 127 {
+				return fmt.Errorf("invalid non-ASCII character at position %d", idx+1)
+			}
+			return fmt.Errorf("invalid character %q at position %d", r, idx+1)
+		}
+	}
+	return nil
+}

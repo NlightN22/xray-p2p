@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -52,6 +53,10 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 		}
 		secret = secretValue
 		generated = true
+	}
+	if err := clishared.ValidateRFC3986Unreserved(secret); err != nil {
+		logging.Error("xp2p server user add: invalid password", "err", err)
+		return 2
 	}
 
 	host := firstNonEmpty(opts.LinkHost, cfg.Server.Host)

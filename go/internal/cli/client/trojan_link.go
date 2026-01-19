@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 )
 
 type trojanLink struct {
@@ -56,6 +58,9 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 	}
 	if password == "" {
 		return trojanLink{}, fmt.Errorf("empty password in trojan link")
+	}
+	if err := clishared.ValidateRFC3986Unreserved(password); err != nil {
+		return trojanLink{}, fmt.Errorf("invalid trojan password: %w", err)
 	}
 
 	user, err := decodeTrojanUser(parsed)

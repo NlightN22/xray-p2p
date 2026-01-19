@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -234,6 +235,11 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 			return
 		}
 		password = secret
+	}
+	if err := clishared.ValidateRFC3986Unreserved(password); err != nil {
+		_ = writeLine(rw, "ERR invalid password")
+		notifyFailure(results)
+		return
 	}
 
 	if err := server.AddUser(ctx, server.AddUserOptions{InstallDir: installDir, ConfigDir: configDir, UserID: userID, Password: password, Host: host}); err != nil {
