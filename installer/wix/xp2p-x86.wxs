@@ -95,8 +95,6 @@
 
       <Component Id="cmpInstallRoot" Guid="{F7F77E38-B7FB-4B5B-8995-20FE8F5DCB68}" KeyPath="yes">
         <CreateFolder />
-        <RemoveFile Id="PurgeInstallDir" On="uninstall" Name="*" Directory="INSTALLFOLDER" />
-        <RemoveFolder Id="RemoveInstallDir" On="uninstall" Directory="INSTALLFOLDER" />
       </Component>
 
       <Component Id="cmpServiceAutostart" Guid="{10F0A609-1BCD-43DD-9D33-FE6ED7E65CF3}">
