@@ -2,8 +2,6 @@
 
 XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. The Go-based `xp2p` CLI owns server and client provisioning, state tracking, TLS assets, and helper routes on Windows, Linux, and OpenWrt so you no longer need to depend on the original shell automation.
 
-> Need the legacy shell workflow? The archived text lives in [Readme-old.md](Readme-old.md).
-
 ## What xp2p provides
 
 - A single statically linked CLI (`xp2p`) with Cobra-based help, completions, doc generation, and a background diagnostics service.

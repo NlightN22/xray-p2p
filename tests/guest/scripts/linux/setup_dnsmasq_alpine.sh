@@ -17,8 +17,7 @@ fi
 for candidate in \
   "/srv/xray-p2p/build/linux-amd64/dnsmasq-install-alpine.sh" \
   "/tmp/dnsmasq-install-alpine.sh" \
-  "/srv/xray-p2p/infra/vagrant/openwrt/dnsmasq-install-alpine.sh" \
-  "/srv/xray-p2p/infra/vagrant/openwrt-scripts/dnsmasq-install-alpine.sh"
+  "/srv/xray-p2p/infra/vagrant/openwrt/dnsmasq-install-alpine.sh"
 do
   if [ -f "$candidate" ]; then
     installer="$candidate"
