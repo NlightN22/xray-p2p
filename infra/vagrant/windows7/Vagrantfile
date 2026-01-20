@@ -1,24 +1,24 @@
 # frozen_string_literal: true
 
-BOX_NAME              = "jborean93/WindowsServer2019".freeze
-BOX_VERSION           = "1.2.0".freeze
-SERVER_ID             = "win2019-a".freeze
-CLIENT_ID             = "win2019-b".freeze
-SERVER_VM_NAME        = "win2019-a".freeze
-CLIENT_VM_NAME        = "win2019-b".freeze
-SERVER_PRIVATE_IP     = "10.62.10.41".freeze
-CLIENT_PRIVATE_IP     = "10.62.10.42".freeze
+BOX_NAME              = "gusztavvargadr/windows-7".freeze
+BOX_VERSION           = "2302.0.0".freeze
+SERVER_ID             = "win7-a".freeze
+CLIENT_ID             = "win7-b".freeze
+SERVER_VM_NAME        = "win7-a".freeze
+CLIENT_VM_NAME        = "win7-b".freeze
+SERVER_PRIVATE_IP     = "10.62.10.61".freeze
+CLIENT_PRIVATE_IP     = "10.62.10.62".freeze
 HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
 SHARED_SCRIPTS_ROOT   = File.expand_path("../scripts/win", __dir__)
 OPENSSH_SCRIPT        = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
 NETWORK_SETUP_SCRIPT  = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
 PROVISION_SCRIPT      = File.expand_path("builder_provision.ps1", SHARED_SCRIPTS_ROOT)
 DEFAULT_WINRM_PORT    = 5986
-SERVER_WINRM_HOSTPORT = 56885
-CLIENT_WINRM_HOSTPORT = 56886
+SERVER_WINRM_HOSTPORT = 56895
+CLIENT_WINRM_HOSTPORT = 56896
 SSH_GUEST_PORT        = 2222
-SERVER_SSH_HOSTPORT   = 52112
-CLIENT_SSH_HOSTPORT   = 52113
+SERVER_SSH_HOSTPORT   = 52122
+CLIENT_SSH_HOSTPORT   = 52123
 
 def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm_host_port:, ssh_host_port:)
   config.vm.define machine_id do |machine|
@@ -68,8 +68,8 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
 
     machine.vm.provider "virtualbox" do |vb|
       vb.name = vb_name
-      vb.memory = 6144
-      vb.cpus = 4
+      vb.memory = 4096
+      vb.cpus = 2
       vb.linked_clone = false
       vb.gui = false
     end

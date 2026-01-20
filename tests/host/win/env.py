@@ -31,17 +31,17 @@ _MSI_CACHE_PATH_X86: str | None = None
 _MSI_BUILD_ID: str | None = None
 
 WIN_STACKS = {
+    "win7": {
+        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "windows7",
+        "server": "win7-a",
+        "client": "win7-b",
+        "target": "10.62.10.61",
+    },
     "win10": {
         "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "windows10",
         "server": "win10-a",
         "client": "win10-b",
         "target": "10.62.10.21",
-    },
-    "win2019": {
-        "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2019",
-        "server": "win2019-a",
-        "client": "win2019-b",
-        "target": "10.62.10.41",
     },
     "win2016": {
         "vagrant_dir": REPO_ROOT / "infra" / "vagrant" / "server2016",

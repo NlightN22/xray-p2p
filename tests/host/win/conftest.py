@@ -14,7 +14,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--win-stack",
         action="store",
         default="win10",
-        help="Windows Vagrant stack to target (win10, win2016, win2019, win2022).",
+        help="Windows Vagrant stack to target (win7, win10, win2016, win2022).",
     )
     group.addoption(
         "--xp2p-target",

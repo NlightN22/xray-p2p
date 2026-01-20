@@ -134,7 +134,7 @@ guest suites -- the CI and fellow contributors expect these rules.
 ## 7. Running Windows Host Tests on Specific Stacks
 - Use `--win-stack` to target a specific Vagrant stack.
   Example: `pytest tests/host/win -vv --win-stack win2022`
-- Available stacks: `win10`, `win2019`, `win2022`.
+- Available stacks: `win7`, `win10`, `win2016`, `win2022`.
 
 Following these guidelines keeps the suite fast, maintainable, and friendly to
 everyone running it locally or in CI. Thanks for sticking to them!
