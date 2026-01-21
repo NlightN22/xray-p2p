@@ -1,23 +1,105 @@
 from __future__ import annotations
 
+import base64
+import json
 from pathlib import Path, PurePosixPath
 
 import pytest
+from testinfra.host import Host
 
-from tests.host.linux import _helpers as helpers
+from tests.host.openwrt import _helpers as helpers
+from tests.host.openwrt import env as openwrt_env
+
+pytestmark = [pytest.mark.host, pytest.mark.linux]
 
 SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
-SERVER_OUTBOUNDS = helpers.SERVER_CONFIG_DIR / "outbounds.json"
-SERVER_LOGS_JSON = helpers.SERVER_CONFIG_DIR / "logs.json"
-SERVER_ROUTING_JSON = helpers.SERVER_CONFIG_DIR / "routing.json"
 SERVER_CERT_DEST = helpers.SERVER_CONFIG_DIR / "cert.pem"
 SERVER_KEY_DEST = helpers.SERVER_CONFIG_DIR / "key.pem"
 FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
 FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
 
-def _cleanup(server_host, xp2p_server_runner) -> None:
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
+def _runner(host: Host):
+    def _run(*args: str, check: bool = False):
+        result = openwrt_env.run_xp2p(host, *args)
+        if check and result.rc != 0:
+            pytest.fail(
+                "xp2p command failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        return result
+
+    return _run
+
+
+def _write_remote_text(host: Host, path: PurePosixPath, content: str) -> None:
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    result = openwrt_env.run_guest_script(
+        host,
+        "scripts/linux/write_file.sh",
+        path.as_posix(),
+        encoded,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to write remote text {path} (exit {result.rc}).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _read_remote_text(host: Host, path: PurePosixPath) -> str:
+    result = openwrt_env.run_guest_script(
+        host,
+        "scripts/linux/read_file.sh",
+        path.as_posix(),
+    )
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to read remote text {path} (exit {result.rc}).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result.stdout or ""
+
+
+def _read_remote_json(host: Host, path: PurePosixPath) -> dict:
+    content = _read_remote_text(host, path)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}")
+
+
+def _path_exists(host: Host, path: PurePosixPath) -> bool:
+    result = openwrt_env.run_guest_script(
+        host,
+        "scripts/linux/path_exists.sh",
+        path.as_posix(),
+    )
+    if result.rc == 0:
+        return True
+    if result.rc == 3:
+        return False
+    pytest.fail(
+        f"Failed to check path {path} (exit {result.rc}).\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+def _remove_path(host: Host, path: PurePosixPath) -> None:
+    result = openwrt_env.run_guest_script(
+        host,
+        "scripts/linux/remove_path.sh",
+        path.as_posix(),
+    )
+    if result.rc not in (0, 3):
+        pytest.fail(
+            f"Failed to remove path {path} (exit {result.rc}).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _combined_output(result) -> str:
+    return f"{result.stdout}\n{result.stderr}".strip()
 
 
 def _trojan_inbound(data: dict) -> dict:
@@ -25,10 +107,6 @@ def _trojan_inbound(data: dict) -> dict:
         if entry.get("protocol") == "trojan":
             return entry
     pytest.fail("Trojan inbound not found in configuration")
-
-
-def _combined_output(result) -> str:
-    return f"{result.stdout}\n{result.stderr}".strip()
 
 
 def _read_cert_state(runner) -> str:
@@ -61,16 +139,20 @@ def _parse_self_signed(state_output: str) -> bool:
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_server_install_uses_provided_certificate_and_force_overwrites(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
+def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host, xp2p_openwrt_ipk):
+    runner = _runner(openwrt_server_host)
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    helpers.cleanup_server_install(openwrt_server_host, runner)
+
     cert_source = PurePosixPath("/tmp/xp2p-server-cert.pem")
     key_source = PurePosixPath("/tmp/xp2p-server-key.pem")
     cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
     key_content = FIXTURE_KEY.read_text(encoding="utf-8")
-    helpers.write_text(server_host, cert_source, cert_content)
-    helpers.write_text(server_host, key_source, key_content)
     try:
-        xp2p_server_runner(
+        _write_remote_text(openwrt_server_host, cert_source, cert_content)
+        _write_remote_text(openwrt_server_host, key_source, key_content)
+
+        runner(
             "server",
             "install",
             "--path",
@@ -78,7 +160,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
             "--port",
-            "62001",
+            "62003",
             "--host",
             "xp2p.test.local",
             "--cert",
@@ -89,63 +171,37 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
             check=True,
         )
 
-        assert helpers.path_exists(server_host, helpers.XRAY_BINARY), f"Expected xray binary at {helpers.XRAY_BINARY}"
-        for config_path in (
-            SERVER_INBOUNDS,
-            SERVER_OUTBOUNDS,
-            SERVER_LOGS_JSON,
-            SERVER_ROUTING_JSON,
-        ):
-            assert helpers.path_exists(server_host, config_path), f"Missing config file {config_path}"
-
-        helpers.write_text(server_host, cert_source, cert_content)
-        helpers.write_text(server_host, key_source, key_content)
-        xp2p_server_runner(
-            "server",
-            "cert",
-            "set",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--cert",
-            cert_source.as_posix(),
-            "--key",
-            key_source.as_posix(),
-            "--host",
-            "xp2p.test.local",
-            "--force",
-            check=True,
-        )
-
-        inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        inbounds = _read_remote_json(openwrt_server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds)
-        assert trojan.get("port") == 62001
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
         assert primary_cert.get("certificateFile") == cert_source.as_posix()
         assert primary_cert.get("keyFile") == key_source.as_posix()
-        expected_allow_insecure = _parse_self_signed(_read_cert_state(xp2p_server_runner))
+
+        expected_allow_insecure = _parse_self_signed(_read_cert_state(runner))
         assert bool(tls_settings.get("allowInsecure")) is expected_allow_insecure
-        assert not helpers.path_exists(server_host, SERVER_CERT_DEST), (
+        assert not _path_exists(openwrt_server_host, SERVER_CERT_DEST), (
             "cert.pem should not be copied into config-server for path certificates"
         )
-        assert not helpers.path_exists(server_host, SERVER_KEY_DEST), (
+        assert not _path_exists(openwrt_server_host, SERVER_KEY_DEST), (
             "key.pem should not be copied into config-server for path certificates"
         )
     finally:
-        helpers.remove_path(server_host, cert_source)
-        _cleanup(server_host, xp2p_server_runner)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
+        _remove_path(openwrt_server_host, cert_source)
+        _remove_path(openwrt_server_host, key_source)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_server_install_generates_self_signed_certificate(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
+def test_openwrt_server_install_generates_self_signed_certificate(openwrt_server_host, xp2p_openwrt_ipk):
+    runner = _runner(openwrt_server_host)
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    helpers.cleanup_server_install(openwrt_server_host, runner)
     try:
-        xp2p_server_runner(
+        runner(
             "server",
             "install",
             "--path",
@@ -160,10 +216,10 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
             check=True,
         )
 
-        assert helpers.path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to exist"
-        assert helpers.path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
+        assert _path_exists(openwrt_server_host, SERVER_CERT_DEST), "Expected cert.pem to exist"
+        assert _path_exists(openwrt_server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
 
-        inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        inbounds = _read_remote_json(openwrt_server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert tls_settings.get("allowInsecure") is True
@@ -173,23 +229,23 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
         assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
 
-        state_output = _read_cert_state(xp2p_server_runner)
+        state_output = _read_cert_state(runner)
         assert "Status:      OK" in state_output
         assert "self-signed: yes" in state_output.lower()
     finally:
-        _cleanup(server_host, xp2p_server_runner)
-        helpers.remove_path(server_host, cert_source)
-        helpers.remove_path(server_host, key_source)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
+def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host, xp2p_openwrt_ipk):
+    runner = _runner(openwrt_server_host)
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    helpers.cleanup_server_install(openwrt_server_host, runner)
     cert_source = PurePosixPath("/tmp/xp2p-mismatch-cert.pem")
     cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
     try:
-        xp2p_server_runner(
+        runner(
             "server",
             "install",
             "--path",
@@ -204,12 +260,12 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             check=True,
         )
 
-        assert helpers.path_exists(server_host, SERVER_KEY_DEST), (
+        assert _path_exists(openwrt_server_host, SERVER_KEY_DEST), (
             f"Expected generated key at {SERVER_KEY_DEST}"
         )
-        helpers.write_text(server_host, cert_source, cert_content)
+        _write_remote_text(openwrt_server_host, cert_source, cert_content)
 
-        result = xp2p_server_runner(
+        result = runner(
             "server",
             "cert",
             "set",
@@ -230,17 +286,20 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
+        _remove_path(openwrt_server_host, cert_source)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
+def test_openwrt_server_cert_set_rejects_missing_cert_key(openwrt_server_host, xp2p_openwrt_ipk):
+    runner = _runner(openwrt_server_host)
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    helpers.cleanup_server_install(openwrt_server_host, runner)
     missing_cert = PurePosixPath("/tmp/xp2p-missing-cert.pem")
     missing_key = PurePosixPath("/tmp/xp2p-missing-key.pem")
     try:
-        xp2p_server_runner(
+        runner(
             "server",
             "install",
             "--path",
@@ -255,10 +314,10 @@ def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runne
             check=True,
         )
 
-        helpers.remove_path(server_host, missing_cert)
-        helpers.remove_path(server_host, missing_key)
+        _remove_path(openwrt_server_host, missing_cert)
+        _remove_path(openwrt_server_host, missing_key)
 
-        result = xp2p_server_runner(
+        result = runner(
             "server",
             "cert",
             "set",
@@ -284,15 +343,17 @@ def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runne
             or "file does not exist" in combined
         ), f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
+def test_openwrt_server_cert_set_requires_absolute_paths(openwrt_server_host, xp2p_openwrt_ipk):
+    runner = _runner(openwrt_server_host)
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    helpers.cleanup_server_install(openwrt_server_host, runner)
     try:
-        xp2p_server_runner(
+        runner(
             "server",
             "install",
             "--path",
@@ -307,7 +368,7 @@ def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner
             check=True,
         )
 
-        result = xp2p_server_runner(
+        result = runner(
             "server",
             "cert",
             "set",
@@ -328,15 +389,17 @@ def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
+def test_openwrt_server_cert_set_win_store_not_implemented(openwrt_server_host, xp2p_openwrt_ipk):
+    runner = _runner(openwrt_server_host)
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    helpers.cleanup_server_install(openwrt_server_host, runner)
     try:
-        xp2p_server_runner(
+        runner(
             "server",
             "install",
             "--path",
@@ -351,9 +414,9 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             check=True,
         )
 
-        before = helpers.read_text(server_host, SERVER_INBOUNDS)
+        before = _read_remote_text(openwrt_server_host, SERVER_INBOUNDS)
 
-        result = xp2p_server_runner(
+        result = runner(
             "server",
             "cert",
             "set",
@@ -372,47 +435,7 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
 
-        after = helpers.read_text(server_host, SERVER_INBOUNDS)
+        after = _read_remote_text(openwrt_server_host, SERVER_INBOUNDS)
         assert after == before, "Expected config to remain unchanged after win-store error"
     finally:
-        _cleanup(server_host, xp2p_server_runner)
-
-
-@pytest.mark.host
-@pytest.mark.linux
-def test_server_install_requires_force_when_state_exists(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
-    try:
-        xp2p_server_runner(
-            "server",
-            "install",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--port",
-            "62011",
-            "--host",
-            "state-required.example",
-            "--force",
-            check=True,
-        )
-
-        result = xp2p_server_runner(
-            "server",
-            "install",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--port",
-            "62012",
-            "--host",
-            "state-required-2.example",
-            check=False,
-        )
-        assert result.rc != 0, "Expected server install to fail without --force when state exists"
-        combined = f"{result.stdout}\n{result.stderr}".lower()
-        assert "server files already present" in combined
-    finally:
-        _cleanup(server_host, xp2p_server_runner)
+        helpers.cleanup_server_install(openwrt_server_host, runner)

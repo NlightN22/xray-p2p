@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import PurePosixPath
 from urllib import parse
@@ -57,11 +58,7 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
     ):
         helpers.remove_path(host, log_path)
         helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
-        host.run("pkill -f 'xp2p client run' >/dev/null 2>&1 || true")
-        host.run("pkill -f 'xp2p server run' >/dev/null 2>&1 || true")
-        host.run("pkill -f 'xp2p client deploy' >/dev/null 2>&1 || true")
-        host.run("pkill -f 'xp2p server deploy' >/dev/null 2>&1 || true")
-        host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+        openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
 
     client_pid = None
     server_pid = None
@@ -145,9 +142,19 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
         )
     finally:
         if client_pid:
-            openwrt_client_host.run(f"kill {client_pid} >/dev/null 2>&1 || true")
+            openwrt_env.run_guest_script(
+                openwrt_client_host,
+                "scripts/linux/stop_process.sh",
+                str(client_pid),
+            )
         if server_pid:
-            openwrt_server_host.run(f"kill {server_pid} >/dev/null 2>&1 || true")
+            openwrt_env.run_guest_script(
+                openwrt_server_host,
+                "scripts/linux/stop_process.sh",
+                str(server_pid),
+            )
+        for host in (openwrt_client_host, openwrt_server_host):
+            openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         helpers.cleanup_client_install(openwrt_client_host, client_runner)
         helpers.cleanup_server_install(openwrt_server_host, server_runner)
         for host, log_path in (
@@ -156,6 +163,131 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
         ):
             helpers.remove_path(host, log_path)
             helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
+    openwrt_server_host,
+    openwrt_client_host,
+    xp2p_openwrt_ipk,
+):
+    server_runner = _runner(openwrt_server_host)
+    client_runner = _runner(openwrt_client_host)
+
+    openwrt_env.sync_build_output(openwrt_env.OPENWRT_MACHINES[0])
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    openwrt_env.sync_build_output(openwrt_env.OPENWRT_MACHINES[1])
+    openwrt_env.install_ipk_on_host(openwrt_client_host, xp2p_openwrt_ipk, force=True)
+
+    helpers.cleanup_client_install(openwrt_client_host, client_runner)
+    helpers.cleanup_server_install(openwrt_server_host, server_runner)
+
+    server_ip = _detect_host_ipv4(openwrt_server_host)
+    trojan_user = "deploy-invalid-cert@example.com"
+    trojan_password = "deploy-invalid-cert-pass"
+    bad_cert = PurePosixPath("/tmp/xp2p-invalid-cert.pem")
+    bad_key = PurePosixPath("/tmp/xp2p-invalid-key.pem")
+
+    for host, log_path in (
+        (openwrt_client_host, CLIENT_DEPLOY_LOG),
+        (openwrt_server_host, SERVER_DEPLOY_LOG),
+    ):
+        _remove_path(host, log_path)
+        _remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+        openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        _remove_path(host, bad_cert)
+        _remove_path(host, bad_key)
+
+    client_pid = None
+    server_pid = None
+    try:
+        client_pid = _start_client_deploy(
+            openwrt_client_host,
+            log_path=CLIENT_DEPLOY_LOG,
+            remote_host=server_ip,
+            deploy_port=DEPLOY_PORT,
+            trojan_user=trojan_user,
+            trojan_password=trojan_password,
+            trojan_port=TROJAN_PORT,
+        )
+        link = _wait_for_client_link(openwrt_client_host, CLIENT_DEPLOY_LOG)
+
+        server_pid = _start_server_deploy_with_args(
+            openwrt_server_host,
+            log_path=SERVER_DEPLOY_LOG,
+            listen_addr=f":{DEPLOY_PORT}",
+            deploy_link=link,
+            extra_args=[
+                "--server-cert",
+                bad_cert.as_posix(),
+                "--server-key",
+                bad_key.as_posix(),
+            ],
+        )
+
+        _wait_for_log_phrase(
+            openwrt_server_host,
+            SERVER_DEPLOY_LOG,
+            "server deploy: manifest decrypted",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            openwrt_server_host,
+            SERVER_DEPLOY_LOG,
+            "server deploy: certificate validation failed, using self-signed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            openwrt_server_host,
+            SERVER_DEPLOY_LOG,
+            "server deploy: starting xray-core",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            openwrt_client_host,
+            CLIENT_DEPLOY_LOG,
+            "client deploy: local install completed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+
+        cert_path = helpers.SERVER_CONFIG_DIR / "cert.pem"
+        key_path = helpers.SERVER_CONFIG_DIR / "key.pem"
+        assert _path_exists(openwrt_server_host, cert_path), f"Expected cert at {cert_path}"
+        assert _path_exists(openwrt_server_host, key_path), f"Expected key at {key_path}"
+
+        inbounds = _read_json(openwrt_server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        trojan = _find_trojan_inbound(inbounds)
+        tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
+        assert tls_settings.get("allowInsecure") is True
+        certificates = tls_settings.get("certificates", [])
+        assert certificates, "Expected TLS certificates after deploy fallback"
+        primary = certificates[0]
+        assert primary.get("certificateFile") == cert_path.as_posix()
+        assert primary.get("keyFile") == key_path.as_posix()
+    finally:
+        if client_pid:
+            openwrt_env.run_guest_script(
+                openwrt_client_host,
+                "scripts/linux/stop_process.sh",
+                str(client_pid),
+            )
+        if server_pid:
+            openwrt_env.run_guest_script(
+                openwrt_server_host,
+                "scripts/linux/stop_process.sh",
+                str(server_pid),
+            )
+        for host in (openwrt_client_host, openwrt_server_host):
+            openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        helpers.cleanup_client_install(openwrt_client_host, client_runner)
+        helpers.cleanup_server_install(openwrt_server_host, server_runner)
+        for host, log_path in (
+            (openwrt_client_host, CLIENT_DEPLOY_LOG),
+            (openwrt_server_host, SERVER_DEPLOY_LOG),
+        ):
+            _remove_path(host, log_path)
+            _remove_path(host, helpers.HEARTBEAT_STATE_FILE)
 
 
 def _start_client_deploy(
@@ -193,13 +325,31 @@ def _start_client_deploy(
 
 
 def _start_server_deploy(host: Host, *, log_path: PurePosixPath, listen_addr: str, deploy_link: str) -> int:
-    result = openwrt_env.run_guest_script(
+    return _start_server_deploy_with_args(
         host,
+        log_path=log_path,
+        listen_addr=listen_addr,
+        deploy_link=deploy_link,
+    )
+
+
+def _start_server_deploy_with_args(
+    host: Host,
+    *,
+    log_path: PurePosixPath,
+    listen_addr: str,
+    deploy_link: str,
+    extra_args: list[str] | None = None,
+) -> int:
+    args = [
         "scripts/openwrt/start_xp2p_server_deploy.sh",
         log_path.as_posix(),
         listen_addr,
         deploy_link,
-    )
+    ]
+    if extra_args:
+        args.extend(extra_args)
+    result = openwrt_env.run_guest_script(host, *args)
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p server deploy.\n"
@@ -236,6 +386,52 @@ def _assert_client_state(host: Host, server_ip: str) -> None:
 def _assert_client_routing(host: Host, server_ip: str) -> None:
     routing = helpers.read_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
     helpers.assert_routing_rule(routing, server_ip)
+
+
+def _read_text(host: Host, path: PurePosixPath) -> str:
+    result = openwrt_env.run_guest_script(host, "scripts/linux/read_file.sh", path.as_posix())
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to read remote text {path} (exit {result.rc}).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result.stdout or ""
+
+
+def _read_json(host: Host, path: PurePosixPath) -> dict:
+    content = _read_text(host, path)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}")
+
+
+def _path_exists(host: Host, path: PurePosixPath) -> bool:
+    result = openwrt_env.run_guest_script(host, "scripts/linux/path_exists.sh", path.as_posix())
+    if result.rc == 0:
+        return True
+    if result.rc == 3:
+        return False
+    pytest.fail(
+        f"Failed to check path {path} (exit {result.rc}).\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
+
+
+def _remove_path(host: Host, path: PurePosixPath) -> None:
+    result = openwrt_env.run_guest_script(host, "scripts/linux/remove_path.sh", path.as_posix())
+    if result.rc not in (0, 3):
+        pytest.fail(
+            f"Failed to remove path {path} (exit {result.rc}).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _find_trojan_inbound(data: dict) -> dict:
+    for inbound in data.get("inbounds", []):
+        if inbound.get("protocol") == "trojan":
+            return inbound
+    raise AssertionError("Expected trojan inbound in server configuration")
 
 
 def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
@@ -325,9 +521,9 @@ def _wait_for_log_value(
 
 
 def _read_optional_log(host: Host, path: PurePosixPath) -> str:
-    if not helpers.path_exists(host, path):
+    if not _path_exists(host, path):
         return ""
-    return helpers.read_text(host, path)
+    return _read_text(host, path)
 
 
 def _extract_marker(output: str | None, marker: str) -> str | None:
@@ -339,12 +535,11 @@ def _extract_marker(output: str | None, marker: str) -> str | None:
 
 
 def _detect_host_ipv4(host: Host) -> str:
-    command = "ip -o -4 addr show scope global | awk '{print $4}' | cut -d/ -f1"
-    result = host.run(command)
+    result = openwrt_env.run_guest_script(host, "scripts/linux/get_primary_ipv4.sh")
     if result.rc != 0:
         pytest.fail(
             "Failed to detect IPv4 addresses.\n"
-            f"CMD: {command}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     addresses = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
     if not addresses:
