@@ -14,8 +14,10 @@ type serverInstallBase struct {
 	portStr     string
 	portVal     int
 	certSource  string
-	keySource   string
+	certPath    string
+	keyPath     string
 	selfSigned  bool
+	certStore   string
 	installOpts InstallOptions
 }
 
@@ -37,22 +39,9 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 		return serverInstallBase{}, fmt.Errorf("xp2p: invalid port %q", portStr)
 	}
 
-	certSource := strings.TrimSpace(opts.CertificateFile)
-	keySource := strings.TrimSpace(opts.KeyFile)
-
-	if certSource != "" {
-		if err := ensureFileExists(certSource); err != nil {
-			return serverInstallBase{}, fmt.Errorf("xp2p: certificate: %w", err)
-		}
-		if keySource != "" {
-			if err := ensureFileExists(keySource); err != nil {
-				return serverInstallBase{}, fmt.Errorf("xp2p: key: %w", err)
-			}
-		}
-	}
-
-	if certSource == "" && keySource != "" {
-		return serverInstallBase{}, errors.New("xp2p: key file provided without certificate file")
+	inputs, err := resolveCertificateInputs(opts.CertificateStore, opts.CertificateFile, opts.KeyFile, opts.RelaxedPathValidation)
+	if err != nil {
+		return serverInstallBase{}, err
 	}
 
 	return serverInstallBase{
@@ -61,17 +50,21 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 		host:       host,
 		portStr:    portStr,
 		portVal:    portVal,
-		certSource: certSource,
-		keySource:  keySource,
-		selfSigned: certSource == "",
+		certSource: inputs.source,
+		certPath:   inputs.certPath,
+		keyPath:    inputs.keyPath,
+		selfSigned: inputs.selfSigned,
+		certStore:  strings.TrimSpace(opts.CertificateStore),
 		installOpts: InstallOptions{
 			InstallDir:      installDir,
 			ConfigDir:       opts.ConfigDir,
 			Port:            portStr,
-			CertificateFile: certSource,
-			KeyFile:         keySource,
+			CertificateStore: strings.TrimSpace(opts.CertificateStore),
+			CertificateFile: inputs.certPath,
+			KeyFile:         inputs.keyPath,
 			Host:            host,
 			Force:           opts.Force,
+			RelaxedPathValidation: opts.RelaxedPathValidation,
 		},
 	}, nil
 }

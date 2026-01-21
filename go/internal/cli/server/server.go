@@ -40,6 +40,7 @@ type serverInstallCommandOptions struct {
 	Path      string
 	ConfigDir string
 	Port      string
+	CertStore string
 	Cert      string
 	Key       string
 	Host      string
@@ -149,6 +150,7 @@ func buildInstallOptions(ctx context.Context, cfg config.Config, opts serverInst
 		InstallDir:      clishared.FirstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:       clishared.FirstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		Port:            portValue,
+		CertificateStore: clishared.FirstNonEmpty(opts.CertStore, cfg.Server.CertificateStore),
 		CertificateFile: clishared.FirstNonEmpty(opts.Cert, cfg.Server.CertificateFile),
 		KeyFile:         clishared.FirstNonEmpty(opts.Key, cfg.Server.KeyFile),
 		Host:            hostValue,

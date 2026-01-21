@@ -69,14 +69,14 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 
 	logFields := []any{
 		"config_dir", state.configDir,
-		"cert_path", state.certDest,
+		"cert_path", state.certPath,
 	}
-	if state.sourceCertificate != "" {
-		logging.Info("xp2p server cert set deployed provided certificate", logFields...)
-	} else {
+	if state.generateSelfSigned {
 		logging.Info("xp2p server cert set generated self-signed certificate",
 			append(logFields, "host", state.host, "valid_years", 10)...,
 		)
+	} else {
+		logging.Info("xp2p server cert set configured certificate paths", logFields...)
 	}
 	return nil
 }
@@ -85,11 +85,12 @@ type certificateState struct {
 	configDir          string
 	certDest           string
 	keyDest            string
-	sourceCertificate  string
-	sourceKey          string
+	certPath           string
+	keyPath            string
 	host               string
 	force              bool
 	generateSelfSigned bool
+	certSource         string
 }
 
 var errHostRequired = errors.New("xp2p: host required")
@@ -113,24 +114,13 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 		return certificateState{}, err
 	}
 
-	certSource := strings.TrimSpace(opts.CertificateFile)
-	keySource := strings.TrimSpace(opts.KeyFile)
+	inputs, err := resolveCertificateInputs(opts.CertificateStore, opts.CertificateFile, opts.KeyFile, opts.RelaxedPathValidation)
+	if err != nil {
+		return certificateState{}, err
+	}
 	host := strings.TrimSpace(opts.Host)
 
-	if certSource == "" && keySource != "" {
-		return certificateState{}, errors.New("xp2p: key file provided without certificate file")
-	}
-
-	if certSource != "" {
-		if err := ensureFileExists(certSource); err != nil {
-			return certificateState{}, fmt.Errorf("xp2p: certificate: %w", err)
-		}
-		if keySource != "" {
-			if err := ensureFileExists(keySource); err != nil {
-				return certificateState{}, fmt.Errorf("xp2p: key: %w", err)
-			}
-		}
-	} else {
+	if inputs.selfSigned {
 		if host == "" {
 			return certificateState{}, errHostRequired
 		}
@@ -145,15 +135,23 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 		}
 	}
 
+	certPath := inputs.certPath
+	keyPath := inputs.keyPath
+	if inputs.selfSigned {
+		certPath = filepath.Join(configDir, "cert.pem")
+		keyPath = filepath.Join(configDir, "key.pem")
+	}
+
 	return certificateState{
 		configDir:          configDir,
 		certDest:           filepath.Join(configDir, "cert.pem"),
 		keyDest:            filepath.Join(configDir, "key.pem"),
-		sourceCertificate:  certSource,
-		sourceKey:          keySource,
+		certPath:           certPath,
+		keyPath:            keyPath,
 		host:               host,
 		force:              opts.Force,
-		generateSelfSigned: certSource == "",
+		generateSelfSigned: inputs.selfSigned,
+		certSource:         inputs.source,
 	}, nil
 }
 
@@ -199,19 +197,6 @@ func provisionCertificateFiles(state certificateState) error {
 		)
 		return generateSelfSignedCertificate(state.host, state.certDest, state.keyDest)
 	}
-
-	mode := os.FileMode(0o644)
-	if err := copyFile(state.sourceCertificate, state.certDest, mode); err != nil {
-		return fmt.Errorf("xp2p: copy certificate: %w", err)
-	}
-
-	keySource := state.sourceKey
-	if keySource == "" {
-		keySource = state.sourceCertificate
-	}
-	if err := copyFile(keySource, state.keyDest, 0o600); err != nil {
-		return fmt.Errorf("xp2p: copy key: %w", err)
-	}
 	return nil
 }
 
@@ -224,8 +209,8 @@ func updateStreamSettings(stream map[string]any, state certificateState) {
 	}
 
 	certEntry := map[string]any{
-		"certificateFile": filepath.ToSlash(state.certDest),
-		"keyFile":         filepath.ToSlash(state.keyDest),
+		"certificateFile": filepath.ToSlash(state.certPath),
+		"keyFile":         filepath.ToSlash(state.keyPath),
 	}
 	tlsSettings["certificates"] = []any{certEntry}
 	if state.generateSelfSigned {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -10,8 +10,8 @@ SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
 SERVER_OUTBOUNDS = helpers.SERVER_CONFIG_DIR / "outbounds.json"
 SERVER_LOGS_JSON = helpers.SERVER_CONFIG_DIR / "logs.json"
 SERVER_ROUTING_JSON = helpers.SERVER_CONFIG_DIR / "routing.json"
-SERVER_CERT_DEST = helpers.SERVER_CONFIG_DIR / "cert.pem"
-SERVER_KEY_DEST = helpers.SERVER_CONFIG_DIR / "key.pem"
+FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
+FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
 
 def _cleanup(server_host, xp2p_server_runner) -> None:
@@ -31,12 +31,10 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
     _cleanup(server_host, xp2p_server_runner)
     cert_source = PurePosixPath("/tmp/xp2p-server-cert.pem")
     key_source = PurePosixPath("/tmp/xp2p-server-key.pem")
-    first_cert = "CERTIFICATE-DATA-ONE"
-    second_cert = "CERTIFICATE-DATA-TWO"
-    first_key = "KEY-DATA-ONE"
-    second_key = "KEY-DATA-TWO"
-    helpers.write_text(server_host, cert_source, first_cert)
-    helpers.write_text(server_host, key_source, first_key)
+    cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
+    key_content = FIXTURE_KEY.read_text(encoding="utf-8")
+    helpers.write_text(server_host, cert_source, cert_content)
+    helpers.write_text(server_host, key_source, key_content)
     try:
         xp2p_server_runner(
             "server",
@@ -66,8 +64,8 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
         ):
             assert helpers.path_exists(server_host, config_path), f"Missing config file {config_path}"
 
-        helpers.write_text(server_host, cert_source, second_cert)
-        helpers.write_text(server_host, key_source, second_key)
+        helpers.write_text(server_host, cert_source, cert_content)
+        helpers.write_text(server_host, key_source, key_content)
         xp2p_server_runner(
             "server",
             "cert",
@@ -93,10 +91,8 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
-        assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
-        assert helpers.read_text(server_host, SERVER_CERT_DEST).strip() == second_cert
-        assert helpers.read_text(server_host, SERVER_KEY_DEST).strip() == second_key
+        assert primary_cert.get("certificateFile") == cert_source.as_posix()
+        assert primary_cert.get("keyFile") == key_source.as_posix()
     finally:
         _cleanup(server_host, xp2p_server_runner)
 

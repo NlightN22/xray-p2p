@@ -83,6 +83,7 @@ type rootOptions struct {
 	serverInstallDir    string
 	serverConfigDir     string
 	serverMode          string
+	serverCertStore     string
 	serverCert          string
 	serverKey           string
 	serverHost          string
@@ -129,6 +130,7 @@ func (o *rootOptions) bindServerOverrideFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
 	flags.StringVarP(&o.serverInstallDir, "server-install-dir", "I", "", "server installation directory (Windows)")
 	flags.StringVarP(&o.serverConfigDir, "server-config-dir", "D", "", "server configuration directory name")
+	flags.StringVarP(&o.serverCertStore, "server-cert-store", "S", "", "TLS certificate store reference (win-store)")
 	flags.StringVarP(&o.serverCert, "server-cert", "E", "", "path to TLS certificate file (PEM)")
 	flags.StringVarP(&o.serverKey, "server-key", "K", "", "path to TLS private key file (PEM)")
 	flags.StringVarP(&o.serverHost, "server-host", "H", "", "public host name or IP for server certificate and links")
@@ -176,6 +178,9 @@ func (o *rootOptions) buildOverrides() map[string]any {
 	}
 	if mode := strings.TrimSpace(o.serverMode); mode != "" {
 		overrides["server.mode"] = mode
+	}
+	if store := strings.TrimSpace(o.serverCertStore); store != "" {
+		overrides["server.cert_store"] = store
 	}
 	if cert := strings.TrimSpace(o.serverCert); cert != "" {
 		overrides["server.certificate"] = cert

@@ -40,6 +40,7 @@ type installState struct {
 	portValue  int
 	selfSigned bool
 	stateFile  string
+	certSource string
 }
 
 // Install deploys server configuration files.
@@ -172,6 +173,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		xrayPath:       filepath.Join(dir, layout.BinDirName, "xray.exe"),
 		portValue:      base.portVal,
 		selfSigned:     base.selfSigned,
+		certSource:     base.certSource,
 	}
 
 	state.certDest = filepath.Join(state.configDir, "cert.pem")
@@ -260,22 +262,14 @@ func deployConfiguration(state installState) error {
 				return err
 			}
 			allowInsecure = true
-		} else {
-			mode := os.FileMode(0o644)
-			if err := copyFile(state.CertificateFile, state.certDest, mode); err != nil {
-				return fmt.Errorf("xp2p: copy certificate: %w", err)
-			}
-
-			keySource := state.KeyFile
-			if keySource == "" {
-				keySource = state.CertificateFile
-			}
-			if err := copyFile(keySource, state.keyDest, 0o600); err != nil {
-				return fmt.Errorf("xp2p: copy key: %w", err)
-			}
+		} else if state.certSource == CertificateSourcePath {
+			certPath = filepath.ToSlash(state.CertificateFile)
+			keyPath = filepath.ToSlash(state.KeyFile)
 		}
-		certPath = filepath.ToSlash(state.certDest)
-		keyPath = filepath.ToSlash(state.keyDest)
+		if certPath == "" && keyPath == "" {
+			certPath = filepath.ToSlash(state.certDest)
+			keyPath = filepath.ToSlash(state.keyDest)
+		}
 	}
 
 	data := struct {

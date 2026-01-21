@@ -24,6 +24,7 @@ var defaultValues = map[string]any{
 	"server.install_dir":    "",
 	"server.config_dir":     "config-server",
 	"server.mode":           "auto",
+	"server.cert_store":     "",
 	"server.certificate":    "",
 	"server.key":            "",
 	"server.host":           "",
@@ -64,6 +65,7 @@ type ServerConfig struct {
 	InstallDir      string `koanf:"install_dir"`
 	ConfigDir       string `koanf:"config_dir"`
 	Mode            string `koanf:"mode"`
+	CertificateStore string `koanf:"cert_store"`
 	CertificateFile string `koanf:"certificate"`
 	KeyFile         string `koanf:"key"`
 	Host            string `koanf:"host"`
@@ -223,6 +225,11 @@ func normalize(cfg *Config) {
 	cfg.Server.Mode = strings.TrimSpace(strings.ToLower(cfg.Server.Mode))
 	if cfg.Server.Mode == "" {
 		cfg.Server.Mode = defaultValues["server.mode"].(string)
+	}
+
+	cfg.Server.CertificateStore = strings.TrimSpace(cfg.Server.CertificateStore)
+	if cfg.Server.CertificateStore == "" {
+		cfg.Server.CertificateStore = defaultValues["server.cert_store"].(string)
 	}
 
 	cfg.Server.CertificateFile = strings.TrimSpace(cfg.Server.CertificateFile)

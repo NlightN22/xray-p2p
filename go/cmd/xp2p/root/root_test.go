@@ -32,6 +32,9 @@ func TestEnsureRuntimeDefaults(t *testing.T) {
 	if cfg.Server.Mode != "auto" {
 		t.Fatalf("expected default mode auto, got %s", cfg.Server.Mode)
 	}
+	if cfg.Server.CertificateStore != "" {
+		t.Fatalf("expected empty certificate store, got %s", cfg.Server.CertificateStore)
+	}
 	if cfg.Server.CertificateFile != "" {
 		t.Fatalf("expected empty certificate path, got %s", cfg.Server.CertificateFile)
 	}
@@ -74,6 +77,9 @@ func TestEnsureRuntimeWithOverrides(t *testing.T) {
 	}
 	if cfg.Server.Mode != "manual" {
 		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
+	}
+	if cfg.Server.CertificateStore != "" {
+		t.Fatalf("expected empty certificate store, got %s", cfg.Server.CertificateStore)
 	}
 	if cfg.Server.CertificateFile != `D:\certs\cert.pem` {
 		t.Fatalf("expected certificate D:\\certs\\cert.pem, got %s", cfg.Server.CertificateFile)
@@ -122,6 +128,9 @@ server:
 	}
 	if cfg.Server.Mode != "manual" {
 		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
+	}
+	if cfg.Server.CertificateStore != "" {
+		t.Fatalf("expected empty certificate store, got %s", cfg.Server.CertificateStore)
 	}
 	if cfg.Server.CertificateFile != `C:\certs\server.pem` {
 		t.Fatalf("expected cert C:\\certs\\server.pem, got %s", cfg.Server.CertificateFile)

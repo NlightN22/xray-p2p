@@ -13,6 +13,7 @@ import (
 type serverCertSetOptions struct {
 	Path      string
 	ConfigDir string
+	CertStore string
 	Cert      string
 	Key       string
 	Host      string
@@ -21,16 +22,23 @@ type serverCertSetOptions struct {
 
 func runServerCertSet(ctx context.Context, cfg config.Config, opts serverCertSetOptions) int {
 	explicitHost := strings.TrimSpace(opts.Host)
+	certStore := firstNonEmpty(opts.CertStore, cfg.Server.CertificateStore)
+	hasPath := strings.TrimSpace(opts.Cert) != "" || strings.TrimSpace(opts.Key) != ""
+	hasStore := strings.TrimSpace(certStore) != ""
 	hostValue := explicitHost
 	autoDetected := false
-	if hostValue == "" && strings.TrimSpace(opts.Cert) == "" {
-		value, detected, err := determineInstallHost(ctx, "", cfg.Server.Host)
-		if err != nil {
-			logging.Error("xp2p server cert set: failed to resolve public host", "err", err)
-			return 1
+	if hostValue == "" && !hasPath {
+		if hasStore {
+			hostValue = ""
+		} else {
+			value, detected, err := determineInstallHost(ctx, "", cfg.Server.Host)
+			if err != nil {
+				logging.Error("xp2p server cert set: failed to resolve public host", "err", err)
+				return 1
+			}
+			hostValue = value
+			autoDetected = detected
 		}
-		hostValue = value
-		autoDetected = detected
 	}
 	if autoDetected {
 		logging.Info("xp2p server cert set: detected public host", "host", hostValue)
@@ -39,6 +47,7 @@ func runServerCertSet(ctx context.Context, cfg config.Config, opts serverCertSet
 	certOpts := server.CertificateOptions{
 		InstallDir:      firstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:       firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		CertificateStore: certStore,
 		CertificateFile: strings.TrimSpace(opts.Cert),
 		KeyFile:         strings.TrimSpace(opts.Key),
 		Host:            hostValue,

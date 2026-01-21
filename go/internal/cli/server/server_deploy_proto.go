@@ -207,13 +207,28 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 	}
 
 	inst := server.InstallOptions{
-		InstallDir: installDir,
-		ConfigDir:  configDir,
-		Port:       port,
-		Host:       host,
-		Force:      true,
+		InstallDir:             installDir,
+		ConfigDir:              configDir,
+		Port:                   port,
+		CertificateStore:       strings.TrimSpace(s.Cfg.Server.CertificateStore),
+		CertificateFile:        strings.TrimSpace(s.Cfg.Server.CertificateFile),
+		KeyFile:                strings.TrimSpace(s.Cfg.Server.KeyFile),
+		Host:                   host,
+		Force:                  true,
+		RelaxedPathValidation:  true,
 	}
 	if err := server.Install(ctx, inst); err != nil {
+		if server.IsCertificateValidationError(err) {
+			logging.Warn("xp2p server deploy: certificate validation failed, using self-signed", "err", err)
+			inst.CertificateStore = ""
+			inst.CertificateFile = ""
+			inst.KeyFile = ""
+			if retryErr := server.Install(ctx, inst); retryErr == nil {
+				goto installDone
+			} else {
+				err = retryErr
+			}
+		}
 		_ = writeLine(rw, "EXIT 1")
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
@@ -221,6 +236,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		notifyFailure(results)
 		return
 	}
+installDone:
 
 	userID := strings.TrimSpace(man.TrojanUser)
 	if userID == "" {

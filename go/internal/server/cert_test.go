@@ -56,7 +56,7 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 	}
 
 	configPath := filepath.Join(configDir, "inbounds.json")
-	assertTLSConfigUpdated(t, configPath)
+	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(certPath), filepath.ToSlash(keyPath))
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -84,7 +84,7 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 	}
 }
 
-func TestSetCertificateCopiesProvidedFiles(t *testing.T) {
+func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, false, false)
@@ -104,29 +104,8 @@ func TestSetCertificateCopiesProvidedFiles(t *testing.T) {
 		t.Fatalf("SetCertificate failed: %v", err)
 	}
 
-	destCert := filepath.Join(configDir, "cert.pem")
-	destKey := filepath.Join(configDir, "key.pem")
-
-	destCertData, err := os.ReadFile(destCert)
-	if err != nil {
-		t.Fatalf("read dest cert: %v", err)
-	}
-	srcCertData, _ := os.ReadFile(srcCert)
-	if string(destCertData) != string(srcCertData) {
-		t.Fatalf("expected certificate contents to match source")
-	}
-
-	destKeyData, err := os.ReadFile(destKey)
-	if err != nil {
-		t.Fatalf("read dest key: %v", err)
-	}
-	srcKeyData, _ := os.ReadFile(srcKey)
-	if string(destKeyData) != string(srcKeyData) {
-		t.Fatalf("expected key contents to match source")
-	}
-
 	configPath := filepath.Join(configDir, "inbounds.json")
-	assertTLSConfigUpdated(t, configPath)
+	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(srcCert), filepath.ToSlash(srcKey))
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -243,7 +222,7 @@ func pemContainsBlock(data []byte, blockType string) bool {
 	}
 }
 
-func assertTLSConfigUpdated(t *testing.T, path string) {
+func assertTLSConfigUpdated(t *testing.T, path, expectedCert, expectedKey string) {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -273,9 +252,6 @@ func assertTLSConfigUpdated(t *testing.T, path string) {
 		t.Fatalf("expected certificates entry")
 	}
 	entry, _ := certs[0].(map[string]any)
-	configDir := filepath.Dir(path)
-	expectedCert := filepath.ToSlash(filepath.Join(configDir, "cert.pem"))
-	expectedKey := filepath.ToSlash(filepath.Join(configDir, "key.pem"))
 	if entry["certificateFile"] != expectedCert {
 		t.Fatalf("unexpected certificateFile: %v", entry["certificateFile"])
 	}

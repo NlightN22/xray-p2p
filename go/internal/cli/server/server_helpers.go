@@ -63,6 +63,9 @@ func performInstall(ctx context.Context, cfg config.Config, installDir, configDi
 		Port:       resolveInstallPort(cfg, ""),
 		Host:       hostValue,
 	}
+	if cfg.Server.CertificateStore != "" {
+		opts.CertificateStore = cfg.Server.CertificateStore
+	}
 	if cfg.Server.CertificateFile != "" {
 		opts.CertificateFile = cfg.Server.CertificateFile
 	}

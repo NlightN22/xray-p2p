@@ -25,6 +25,8 @@ SERVER_STATE_FILES = [
     SERVER_INSTALL_DIR / "install-state-server.json",
     SERVER_INSTALL_DIR / "install-state.json",
 ]
+FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
+FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
@@ -130,13 +132,11 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
     _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     cert_source = Path(r"C:\Users\vagrant\AppData\Local\Temp\xp2p-server-cert.pem")
     key_source = Path(r"C:\Users\vagrant\AppData\Local\Temp\xp2p-server-key.pem")
-    first_cert_content = "CERTIFICATE-DATA-ONE"
-    second_cert_content = "CERTIFICATE-DATA-TWO"
-    first_key_content = "KEY-DATA-ONE"
-    second_key_content = "KEY-DATA-TWO"
+    cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
+    key_content = FIXTURE_KEY.read_text(encoding="utf-8")
     try:
-        _write_remote_text(server_host, cert_source, first_cert_content)
-        _write_remote_text(server_host, key_source, first_key_content)
+        _write_remote_text(server_host, cert_source, cert_content)
+        _write_remote_text(server_host, key_source, key_content)
 
         xp2p_server_runner(
             "server",
@@ -193,13 +193,14 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         assert not tls_settings.get("allowInsecure")
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates in configuration"
-        expected_cert, expected_key = _expect_tls_paths()
+        expected_cert = str(cert_source).replace("\\", "/")
+        expected_key = str(key_source).replace("\\", "/")
         primary_cert = certificates[0]
         assert primary_cert.get("certificateFile") == expected_cert
         assert primary_cert.get("keyFile") == expected_key
 
-        _write_remote_text(server_host, cert_source, second_cert_content)
-        _write_remote_text(server_host, key_source, second_key_content)
+        _write_remote_text(server_host, cert_source, cert_content)
+        _write_remote_text(server_host, key_source, key_content)
 
         xp2p_server_runner(
             "server",
@@ -231,11 +232,6 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         updated_primary = updated_certificates[0]
         assert updated_primary.get("certificateFile") == expected_cert
         assert updated_primary.get("keyFile") == expected_key
-
-        cert_content = _read_remote_text(server_host, SERVER_CERT_DEST)
-        key_content = _read_remote_text(server_host, SERVER_KEY_DEST)
-        assert second_cert_content in cert_content
-        assert second_key_content in key_content
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
         _env.remove_paths(server_host, [cert_source, key_source])

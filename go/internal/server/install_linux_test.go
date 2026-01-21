@@ -3,7 +3,6 @@
 package server
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,14 +12,7 @@ import (
 
 func TestNormalizeInstallOptionsLinux(t *testing.T) {
 	tempDir := t.TempDir()
-	certPath := filepath.Join(tempDir, "cert.pem")
-	keyPath := filepath.Join(tempDir, "key.pem")
-	if err := os.WriteFile(certPath, []byte("CERT"), 0o644); err != nil {
-		t.Fatalf("write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, []byte("KEY"), 0o644); err != nil {
-		t.Fatalf("write key: %v", err)
-	}
+	certPath, keyPath := writeTestCertificateFiles(t, tempDir, "vpn.example")
 
 	opts := InstallOptions{
 		InstallDir:      tempDir,
