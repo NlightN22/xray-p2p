@@ -278,3 +278,11 @@ func publicKeysMatch(certKey, key any) (bool, error) {
 	}
 	return bytes.Equal(certBytes, keyBytes), nil
 }
+
+func isSelfSignedCertificatePath(path string) (bool, error) {
+	cert, err := loadCertificateFromFile(path)
+	if err != nil {
+		return false, err
+	}
+	return isCertificateSelfSigned(cert), nil
+}

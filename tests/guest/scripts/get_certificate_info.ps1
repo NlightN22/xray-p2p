@@ -20,6 +20,7 @@ try {
         $false
     )
     $notAfter = $cert.NotAfter.ToUniversalTime().ToString("o")
+    $selfSigned = $cert.Subject -eq $cert.Issuer
 
     $sanEntries = @()
     $sanExt = $cert.Extensions | Where-Object { $_.Oid.Value -eq "2.5.29.17" }
@@ -43,6 +44,7 @@ try {
         SubjectCN      = $subjectCN
         NotAfter       = $notAfter
         SubjectAltName = $sanEntries
+        SelfSigned     = $selfSigned
     }
     $result | ConvertTo-Json -Compress
     exit 0

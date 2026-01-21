@@ -127,8 +127,9 @@ func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 	if tlsSettings == nil {
 		t.Fatalf("expected tlsSettings")
 	}
-	if _, ok := tlsSettings["allowInsecure"]; ok {
-		t.Fatalf("did not expect allowInsecure for provided certificate")
+	value, _ := tlsSettings["allowInsecure"].(bool)
+	if !value {
+		t.Fatalf("expected allowInsecure true for self-signed certificate")
 	}
 }
 

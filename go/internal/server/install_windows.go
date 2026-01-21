@@ -263,6 +263,11 @@ func deployConfiguration(state installState) error {
 			}
 			allowInsecure = true
 		} else if state.certSource == CertificateSourcePath {
+			selfSigned, err := isSelfSignedCertificatePath(state.CertificateFile)
+			if err != nil {
+				return err
+			}
+			allowInsecure = selfSigned
 			certPath = filepath.ToSlash(state.CertificateFile)
 			keyPath = filepath.ToSlash(state.KeyFile)
 		}

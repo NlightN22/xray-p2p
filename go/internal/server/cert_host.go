@@ -91,6 +91,7 @@ type certificateState struct {
 	force              bool
 	generateSelfSigned bool
 	certSource         string
+	allowInsecure      bool
 }
 
 var errHostRequired = errors.New("xp2p: host required")
@@ -142,6 +143,15 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 		keyPath = filepath.Join(configDir, "key.pem")
 	}
 
+	allowInsecure := inputs.selfSigned
+	if !inputs.selfSigned && inputs.source == CertificateSourcePath {
+		selfSigned, err := isSelfSignedCertificatePath(inputs.certPath)
+		if err != nil {
+			return certificateState{}, err
+		}
+		allowInsecure = selfSigned
+	}
+
 	return certificateState{
 		configDir:          configDir,
 		certDest:           filepath.Join(configDir, "cert.pem"),
@@ -152,6 +162,7 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 		force:              opts.Force,
 		generateSelfSigned: inputs.selfSigned,
 		certSource:         inputs.source,
+		allowInsecure:      allowInsecure,
 	}, nil
 }
 
@@ -213,7 +224,7 @@ func updateStreamSettings(stream map[string]any, state certificateState) {
 		"keyFile":         filepath.ToSlash(state.keyPath),
 	}
 	tlsSettings["certificates"] = []any{certEntry}
-	if state.generateSelfSigned {
+	if state.allowInsecure {
 		tlsSettings["allowInsecure"] = true
 	} else {
 		delete(tlsSettings, "allowInsecure")

@@ -190,7 +190,9 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         stream_settings = trojan.get("streamSettings", {})
         assert stream_settings.get("security") == "tls"
         tls_settings = stream_settings.get("tlsSettings", {})
-        assert not tls_settings.get("allowInsecure")
+        cert_info = _decode_remote_certificate(server_host, cert_source)
+        expected_allow_insecure = bool(cert_info.get("SelfSigned"))
+        assert bool(tls_settings.get("allowInsecure")) is expected_allow_insecure
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates in configuration"
         expected_cert = str(cert_source).replace("\\", "/")
@@ -226,7 +228,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         updated_stream = updated_trojan.get("streamSettings", {})
         assert updated_stream.get("security") == "tls"
         updated_tls = updated_stream.get("tlsSettings", {})
-        assert not updated_tls.get("allowInsecure")
+        assert bool(updated_tls.get("allowInsecure")) is expected_allow_insecure
         updated_certificates = updated_tls.get("certificates", [])
         assert updated_certificates, "Expected TLS certificates after certificate update"
         updated_primary = updated_certificates[0]
