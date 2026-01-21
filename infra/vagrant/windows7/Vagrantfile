@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-BOX_NAME              = "gusztavvargadr/windows-7".freeze
-BOX_VERSION           = "2302.0.0".freeze
+BOX_NAME              = "senglin/win-7-enterprise".freeze
+BOX_VERSION           = "1.0.0".freeze
 SERVER_ID             = "win7-a".freeze
 CLIENT_ID             = "win7-b".freeze
 SERVER_VM_NAME        = "win7-a".freeze
@@ -13,7 +13,7 @@ SHARED_SCRIPTS_ROOT   = File.expand_path("../scripts/win", __dir__)
 OPENSSH_SCRIPT        = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
 NETWORK_SETUP_SCRIPT  = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
 PROVISION_SCRIPT      = File.expand_path("builder_provision.ps1", SHARED_SCRIPTS_ROOT)
-DEFAULT_WINRM_PORT    = 5986
+DEFAULT_WINRM_PORT    = 5985
 SERVER_WINRM_HOSTPORT = 56895
 CLIENT_WINRM_HOSTPORT = 56896
 SSH_GUEST_PORT        = 2222
@@ -29,18 +29,18 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.communicator = "winrm"
     machine.vm.hostname = vb_name
 
+    machine.winrm.shell = "cmd"
+    machine.winrm.shell_args = ["/c"]
     machine.vm.synced_folder ".", "/vagrant", disabled: true
     machine.vm.synced_folder HOST_SYNCED_ROOT, "C:/xp2p", type: "virtualbox"
 
     machine.winrm.username = "vagrant"
     machine.winrm.password = "vagrant"
-    machine.winrm.transport = :ssl
+    machine.winrm.transport = :plaintext
     machine.winrm.basic_auth_only = true
-    machine.winrm.ssl_peer_verification = false
     machine.winrm.host = "127.0.0.1"
     machine.winrm.port = winrm_host_port
-    machine.winrm.timeout = 400
-    machine.winrm.retry_delay = 60
+    machine.winrm.timeout = 60
     machine.winrm.retry_limit = 10
 
     machine.ssh.username = "vagrant"
