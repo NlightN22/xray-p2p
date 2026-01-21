@@ -2,6 +2,7 @@ import base64
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Iterable
 
 import pytest
 
@@ -27,6 +28,8 @@ SERVER_STATE_FILES = [
 ]
 FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
 FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
+FIXTURE_CERT_GUEST = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
+FIXTURE_KEY_GUEST = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
@@ -37,35 +40,38 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
         str(SERVER_INSTALL_DIR),
         "--ignore-missing",
     )
-    _env.cleanup_xp2p_install(
+    _remove_remote_paths(
         server_host,
-        config_dirs=[SERVER_CONFIG_DIR],
-        state_files=SERVER_STATE_FILES,
-        extra_paths=[SERVER_LOG_FILE],
+        [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_LOG_FILE],
     )
 
 
 def _remote_path_exists(host, path: Path) -> bool:
-    quoted = _env.ps_quote(str(path))
-    script = f"if (Test-Path {quoted}) {{ exit 0 }} else {{ exit 3 }}"
-    result = _env.run_powershell(host, script)
-    return result.rc == 0
+    result = _env.run_guest_script(
+        host,
+        "scripts/path_exists.ps1",
+        Path=str(path),
+    )
+    if result.rc == 0:
+        return True
+    if result.rc == 3:
+        return False
+    pytest.fail(
+        f"Failed to check remote path {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
 
 
 def _read_remote_text(host, path: Path) -> str:
-    quoted = _env.ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path {quoted})) {{
-    exit 3
-}}
-Get-Content -Raw {quoted}
-"""
-    result = _env.run_powershell(host, script)
-    assert result.rc == 0, (
-        f"Failed to read remote text {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    result = _env.run_guest_script(
+        host,
+        "scripts/read_file.ps1",
+        Path=str(path),
     )
-    return result.stdout
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to read remote text {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result.stdout or ""
 
 
 def _read_remote_json(host, path: Path) -> dict:
@@ -78,25 +84,36 @@ def _read_remote_json(host, path: Path) -> dict:
 
 def _write_remote_text(host, path: Path, content: str) -> None:
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    target = _env.ps_quote(str(path))
-    parent = _env.ps_quote(str(path.parent))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path {parent})) {{
-    New-Item -ItemType Directory -Path {parent} -Force | Out-Null
-}}
-$data = [System.Convert]::FromBase64String('{encoded}')
-$text = [System.Text.Encoding]::UTF8.GetString($data)
-[System.IO.File]::WriteAllText({target}, $text)
-"""
-    result = _env.run_powershell(host, script)
-    assert result.rc == 0, (
-        f"Failed to write remote text {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    result = _env.run_guest_script(
+        host,
+        "scripts/write_file.ps1",
+        Path=str(path),
+        ContentBase64=encoded,
     )
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to write remote text {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _remove_remote_path(host, path: Path) -> None:
-    _env.remove_paths(host, [path])
+    _remove_remote_paths(host, [path])
+
+
+def _remove_remote_paths(host, paths: Iterable[Path]) -> None:
+    payload = base64.b64encode(
+        json.dumps([str(path) for path in paths]).encode("utf-8")
+    ).decode("ascii")
+    result = _env.run_guest_script(
+        host,
+        "scripts/remove_paths.ps1",
+        PathsBase64=payload,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to remove remote paths.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _expect_tls_paths() -> tuple[str, str]:
@@ -122,6 +139,10 @@ def _decode_remote_certificate(host, path: Path) -> dict:
         f"Failed to decode certificate {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
     return json.loads(result.stdout)
+
+
+def _combined_output(result) -> str:
+    return f"{result.stdout}\n{result.stderr}".strip()
 
 
 @pytest.mark.host
@@ -236,7 +257,62 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         assert updated_primary.get("keyFile") == expected_key
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
-        _env.remove_paths(server_host, [cert_source, key_source])
+        _remove_remote_paths(server_host, [cert_source, key_source])
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_server_install_uses_path_certificate_source(server_host, xp2p_server_runner, xp2p_msi_path):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    cert_source = FIXTURE_CERT_GUEST
+    key_source = FIXTURE_KEY_GUEST
+    try:
+        assert _remote_path_exists(server_host, cert_source), (
+            f"Expected fixture certificate at {cert_source}"
+        )
+        assert _remote_path_exists(server_host, key_source), (
+            f"Expected fixture key at {key_source}"
+        )
+
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62003",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--cert",
+            str(cert_source),
+            "--key",
+            str(key_source),
+            "--force",
+            check=True,
+        )
+
+        inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
+        trojan = _trojan_inbound(inbounds_data)
+        tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
+        cert_info = _decode_remote_certificate(server_host, cert_source)
+        expected_allow_insecure = bool(cert_info.get("SelfSigned"))
+        assert bool(tls_settings.get("allowInsecure")) is expected_allow_insecure
+        certificates = tls_settings.get("certificates", [])
+        assert certificates, "Expected TLS certificates in configuration"
+        primary_cert = certificates[0]
+        assert primary_cert.get("certificateFile") == str(cert_source).replace("\\", "/")
+        assert primary_cert.get("keyFile") == str(key_source).replace("\\", "/")
+
+        assert not _remote_path_exists(server_host, SERVER_CERT_DEST), (
+            "cert.pem should not be copied into config-server for path certificates"
+        )
+        assert not _remote_path_exists(server_host, SERVER_KEY_DEST), (
+            "key.pem should not be copied into config-server for path certificates"
+        )
+    finally:
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
 
 @pytest.mark.host
@@ -319,6 +395,223 @@ def test_server_install_generates_self_signed_certificate(
         cert_ref = certificates[0]
         assert cert_ref.get("certificateFile") == expected_cert
         assert cert_ref.get("keyFile") == expected_key
+
+        state = xp2p_server_runner(
+            "server",
+            "cert",
+            "state",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            check=False,
+        )
+        assert state.rc == 0, (
+            f"Expected cert state to succeed, rc={state.rc}\n"
+            f"STDOUT:\n{state.stdout}\nSTDERR:\n{state.stderr}"
+        )
+        assert "Status:      OK" in state.stdout
+        assert f"Subject:     CN={SERVER_HOST_VALUE}" in state.stdout
+        assert f"Certificate: {SERVER_CERT_DEST}" in state.stdout
+        assert f"Key:         {SERVER_KEY_DEST}" in state.stdout
+    finally:
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_runner, xp2p_msi_path):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62005",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        assert _remote_path_exists(server_host, SERVER_KEY_DEST), (
+            f"Expected generated key at {SERVER_KEY_DEST}"
+        )
+
+        result = xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--cert",
+            str(FIXTURE_CERT_GUEST),
+            "--key",
+            str(SERVER_KEY_DEST),
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=False,
+        )
+        assert result.rc != 0, "Expected mismatched certificate/key to fail"
+        combined = _combined_output(result).lower()
+        assert "certificate and key do not match" in combined, (
+            f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        )
+    finally:
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runner, xp2p_msi_path):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    missing_cert = Path(r"C:\Windows\Temp\xp2p-missing-cert.pem")
+    missing_key = Path(r"C:\Windows\Temp\xp2p-missing-key.pem")
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62007",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        _remove_remote_paths(server_host, [missing_cert, missing_key])
+
+        result = xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--cert",
+            str(missing_cert),
+            "--key",
+            str(missing_key),
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=False,
+        )
+        assert result.rc != 0, "Expected missing certificate/key to fail"
+        combined = _combined_output(result).lower()
+        assert "certificate file" in combined, (
+            f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        )
+        assert (
+            "cannot find the file" in combined
+            or "no such file" in combined
+            or "file does not exist" in combined
+        ), f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+    finally:
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner, xp2p_msi_path):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62009",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        result = xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--cert",
+            r"tests\fixtures\tls\integration-cert.pem",
+            "--key",
+            r"tests\fixtures\tls\integration-key.pem",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=False,
+        )
+        assert result.rc != 0, "Expected relative certificate/key paths to fail"
+        combined = _combined_output(result).lower()
+        assert "path must be absolute" in combined, (
+            f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        )
+    finally:
+        _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runner, xp2p_msi_path):
+    _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62013",
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        before = _read_remote_text(server_host, SERVER_INBOUNDS)
+
+        result = xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--cert-store",
+            "MY",
+            "--force",
+            check=False,
+        )
+        assert result.rc != 0, "Expected win-store to be not implemented"
+        combined = _combined_output(result).lower()
+        assert "not implemented" in combined, (
+            f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        )
+
+        after = _read_remote_text(server_host, SERVER_INBOUNDS)
+        assert after == before, "Expected config to remain unchanged after win-store error"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
@@ -358,7 +651,7 @@ def test_server_run_starts_xray_core(
         assert "Failed to start" not in log_content
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
-        _env.remove_paths(server_host, [SERVER_LOG_FILE])
+        _remove_remote_paths(server_host, [SERVER_LOG_FILE])
 
 
 @pytest.mark.host
@@ -425,8 +718,8 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        _env.remove_paths(server_host, SERVER_STATE_FILES)
-        assert not _env.paths_exist(server_host, SERVER_STATE_FILES), (
+        _remove_remote_paths(server_host, SERVER_STATE_FILES)
+        assert not any(_remote_path_exists(server_host, path) for path in SERVER_STATE_FILES), (
             "Expected server state files to be removed before re-install"
         )
 
@@ -444,7 +737,7 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert _env.paths_exist(server_host, SERVER_STATE_FILES), (
+        assert all(_remote_path_exists(server_host, path) for path in SERVER_STATE_FILES), (
             "Expected server install-state file to be recreated"
         )
     finally:

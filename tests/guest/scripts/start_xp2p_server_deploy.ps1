@@ -11,7 +11,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $DeployLink,
 
-    [string[]] $AdditionalArgs
+    [string[]] $AdditionalArgs,
+
+    [string] $AdditionalArgsBase64
 )
 
 $ErrorActionPreference = 'Stop'
@@ -49,8 +51,27 @@ $arguments = @(
     '--link', $DeployLink
 )
 
+$extraArgs = @()
 if ($AdditionalArgs) {
-    $arguments += $AdditionalArgs
+    $extraArgs += $AdditionalArgs
+}
+if ($AdditionalArgsBase64) {
+    $decoded = [System.Text.Encoding]::UTF8.GetString(
+        [System.Convert]::FromBase64String($AdditionalArgsBase64)
+    )
+    if ($decoded) {
+        $parsed = ConvertFrom-Json -InputObject $decoded -ErrorAction Stop
+        if ($parsed -is [string]) {
+            $extraArgs += $parsed
+        } elseif ($parsed -is [System.Collections.IEnumerable]) {
+            foreach ($item in $parsed) {
+                $extraArgs += $item
+            }
+        }
+    }
+}
+if ($extraArgs) {
+    $arguments += $extraArgs
 }
 
 $escapedArgs = $arguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }

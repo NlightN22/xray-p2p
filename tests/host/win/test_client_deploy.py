@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import time
 from pathlib import Path
@@ -21,6 +22,9 @@ CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR_NAME = "config-server"
 SERVER_CONFIG_DIR = SERVER_INSTALL_DIR / SERVER_CONFIG_DIR_NAME
+SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
+SERVER_CERT_DEST = SERVER_CONFIG_DIR / "cert.pem"
+SERVER_KEY_DEST = SERVER_CONFIG_DIR / "key.pem"
 SERVER_STATE_FILES = [
     SERVER_INSTALL_DIR / "install-state-server.json",
     SERVER_INSTALL_DIR / "install-state.json",
@@ -47,27 +51,19 @@ def test_windows_client_deploy_end_to_end(
 ):
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
     xp2p_server_runner("server", "remove", "--ignore-missing")
-    win_env.cleanup_xp2p_install(
-        client_host,
-        config_dirs=[CLIENT_CONFIG_DIR],
-        state_files=CLIENT_STATE_FILES,
-    )
-    win_env.cleanup_xp2p_install(
-        server_host,
-        config_dirs=[SERVER_CONFIG_DIR],
-        state_files=SERVER_STATE_FILES,
-    )
+    _remove_paths(client_host, [CLIENT_CONFIG_DIR, *CLIENT_STATE_FILES])
+    _remove_paths(server_host, [SERVER_CONFIG_DIR, *SERVER_STATE_FILES])
 
     for host in (client_host, server_host):
-        win_env.remove_paths(host, HEARTBEAT_STATE_FILES)
-    win_env.remove_paths(
+        _remove_paths(host, HEARTBEAT_STATE_FILES)
+    _remove_paths(
         client_host,
         [
             CLIENT_DEPLOY_STDOUT,
             Path(str(CLIENT_DEPLOY_STDOUT) + ".err"),
         ],
     )
-    win_env.remove_paths(
+    _remove_paths(
         server_host,
         [
             SERVER_DEPLOY_STDOUT,
@@ -157,8 +153,123 @@ def test_windows_client_deploy_end_to_end(
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
         for host in (client_host, server_host):
-            win_env.remove_paths(host, HEARTBEAT_STATE_FILES)
+            _remove_paths(host, HEARTBEAT_STATE_FILES)
 
+
+@pytest.mark.host
+@pytest.mark.win
+def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
+    client_host,
+    server_host,
+    xp2p_client_runner,
+    xp2p_server_runner,
+    xp2p_msi_path,
+):
+    xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+    xp2p_server_runner("server", "remove", "--ignore-missing")
+    _remove_paths(client_host, [CLIENT_CONFIG_DIR, *CLIENT_STATE_FILES])
+    _remove_paths(server_host, [SERVER_CONFIG_DIR, *SERVER_STATE_FILES])
+
+    for host in (client_host, server_host):
+        _remove_paths(host, HEARTBEAT_STATE_FILES)
+    _remove_paths(
+        client_host,
+        [
+            CLIENT_DEPLOY_STDOUT,
+            Path(str(CLIENT_DEPLOY_STDOUT) + ".err"),
+        ],
+    )
+    _remove_paths(
+        server_host,
+        [
+            SERVER_DEPLOY_STDOUT,
+            Path(str(SERVER_DEPLOY_STDOUT) + ".err"),
+        ],
+    )
+
+    server_host_ip = _detect_host_ipv4(server_host)
+    trojan_user = "deploy-invalid-cert@example.com"
+    trojan_password = "deploy-invalid-cert-pass"
+    bad_cert = Path(r"C:\Windows\Temp\xp2p-invalid-cert.pem")
+    bad_key = Path(r"C:\Windows\Temp\xp2p-invalid-key.pem")
+
+    client_proc = None
+    server_proc = None
+    try:
+        _remove_remote_path(server_host, bad_cert)
+        _remove_remote_path(server_host, bad_key)
+
+        client_proc = _start_client_deploy(
+            client_host,
+            remote_host=server_host_ip,
+            deploy_port=DEPLOY_PORT,
+            trojan_user=trojan_user,
+            trojan_password=trojan_password,
+            trojan_port=TROJAN_PORT,
+        )
+        link = _wait_for_client_link(client_host, client_proc)
+
+        server_proc = _start_server_deploy_with_args(
+            server_host,
+            listen_addr=f":{DEPLOY_PORT}",
+            deploy_link=link,
+            additional_args=[
+                "--server-cert",
+                str(bad_cert),
+                "--server-key",
+                str(bad_key),
+            ],
+        )
+
+        _wait_for_log_phrase(
+            server_host,
+            server_proc,
+            "server deploy: manifest decrypted",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            server_host,
+            server_proc,
+            "server deploy: certificate validation failed, using self-signed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            server_host,
+            server_proc,
+            "server deploy: starting xray-core",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            client_host,
+            client_proc,
+            "client deploy: local install completed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+
+        assert _remote_path_exists(server_host, SERVER_CERT_DEST), (
+            f"Expected server cert at {SERVER_CERT_DEST}"
+        )
+        assert _remote_path_exists(server_host, SERVER_KEY_DEST), (
+            f"Expected server key at {SERVER_KEY_DEST}"
+        )
+        inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
+        trojan = _find_trojan_inbound(inbounds)
+        tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
+        assert tls_settings.get("allowInsecure") is True
+        certificates = tls_settings.get("certificates", [])
+        assert certificates, "Expected TLS certificates after deploy fallback"
+        primary = certificates[0]
+        assert primary.get("certificateFile") == str(SERVER_CERT_DEST).replace("\\", "/")
+        assert primary.get("keyFile") == str(SERVER_KEY_DEST).replace("\\", "/")
+    finally:
+        if client_proc:
+            _stop_process(client_host, client_proc["pid"])
+        if server_proc:
+            _stop_process(server_host, server_proc["pid"])
+        xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+        xp2p_server_runner("server", "remove", "--ignore-missing")
+        for host in (client_host, server_host):
+            _remove_paths(host, HEARTBEAT_STATE_FILES)
 
 def _start_client_deploy(
     host,
@@ -197,13 +308,28 @@ def _start_client_deploy(
 
 
 def _start_server_deploy(host, *, listen_addr: str, deploy_link: str) -> dict[str, str | int]:
+    return _start_server_deploy_with_args(host, listen_addr=listen_addr, deploy_link=deploy_link)
+
+
+def _start_server_deploy_with_args(
+    host,
+    *,
+    listen_addr: str,
+    deploy_link: str,
+    additional_args: list[str] | None = None,
+) -> dict[str, str | int]:
+    parameters: dict[str, object] = {
+        "Xp2pPath": str(win_env.XP2P_EXE),
+        "LogPath": str(SERVER_DEPLOY_STDOUT),
+        "ListenAddress": listen_addr,
+        "DeployLink": deploy_link,
+    }
+    if additional_args:
+        parameters["AdditionalArgsBase64"] = _encode_args_payload(additional_args)
     result = win_env.run_guest_script(
         host,
         "scripts/start_xp2p_server_deploy.ps1",
-        Xp2pPath=str(win_env.XP2P_EXE),
-        LogPath=str(SERVER_DEPLOY_STDOUT),
-        ListenAddress=listen_addr,
-        DeployLink=deploy_link,
+        **parameters,
     )
     if result.rc != 0:
         pytest.fail(
@@ -221,16 +347,21 @@ def _start_server_deploy(host, *, listen_addr: str, deploy_link: str) -> dict[st
     return {"pid": int(pid), "stdout": Path(stdout_path), "stderr": Path(stderr_path)}
 
 
+def _encode_args_payload(args: list[str]) -> str:
+    raw = json.dumps([str(arg) for arg in args])
+    return base64.b64encode(raw.encode("utf-8")).decode("ascii")
+
+
 def _stop_process(host, pid: int) -> None:
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$proc = Get-Process -Id {pid} -ErrorAction SilentlyContinue
-if ($proc) {{
-    Stop-Process -Id $proc.Id -Force
-}}
-exit 0
-"""
-    win_env.run_powershell(host, script)
+    result = win_env.run_guest_script(
+        host,
+        "scripts/stop_process.ps1",
+        Pid=str(pid),
+    )
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to stop process {pid}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _assert_client_install_artifacts(host, server_ip: str, user: str, password: str) -> None:
@@ -321,15 +452,11 @@ def _read_combined_logs(host, proc_info: dict[str, str | int]) -> str:
 
 def _read_optional_text(host, path_value) -> str:
     path = Path(path_value)
-    quoted = win_env.ps_quote(str(path))
-    script = f"""
-$target = {quoted}
-if (-not (Test-Path $target)) {{
-    exit 3
-}}
-Get-Content -Raw $target
-"""
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_guest_script(
+        host,
+        "scripts/read_file.ps1",
+        Path=str(path),
+    )
     if result.rc == 0:
         return result.stdout or ""
     if result.rc == 3:
@@ -340,15 +467,11 @@ Get-Content -Raw $target
 
 
 def _read_remote_json(client_host, path: Path) -> dict:
-    quoted = win_env.ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path {quoted})) {{
-    exit 3
-}}
-Get-Content -Raw {quoted}
-"""
-    result = win_env.run_powershell(client_host, script)
+    result = win_env.run_guest_script(
+        client_host,
+        "scripts/read_file.ps1",
+        Path=str(path),
+    )
     if result.rc != 0:
         pytest.fail(
             f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -367,21 +490,38 @@ def _read_first_existing_json(host, paths: list[Path]) -> dict:
 
 
 def _remote_path_exists(client_host, path: Path) -> bool:
-    quoted = win_env.ps_quote(str(path))
-    script = f"if (Test-Path {quoted}) {{ exit 0 }} else {{ exit 3 }}"
-    result = win_env.run_powershell(client_host, script)
-    return result.rc == 0
+    result = win_env.run_guest_script(
+        client_host,
+        "scripts/path_exists.ps1",
+        Path=str(path),
+    )
+    if result.rc == 0:
+        return True
+    if result.rc == 3:
+        return False
+    pytest.fail(
+        f"Failed to check remote path {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
 
 
 def _remove_remote_path(client_host, path: Path) -> None:
-    quoted = win_env.ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (Test-Path {quoted}) {{
-    Remove-Item {quoted} -Force -Recurse -ErrorAction SilentlyContinue
-}}
-"""
-    win_env.run_powershell(client_host, script)
+    _remove_paths(client_host, [path])
+
+
+def _remove_paths(client_host, paths: list[Path]) -> None:
+    payload = base64.b64encode(
+        json.dumps([str(path) for path in paths]).encode("utf-8")
+    ).decode("ascii")
+    result = win_env.run_guest_script(
+        client_host,
+        "scripts/remove_paths.ps1",
+        PathsBase64=payload,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to remove remote paths.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _expected_tag(host: str) -> str:
@@ -404,6 +544,13 @@ def _expected_tag(host: str) -> str:
     if not sanitized:
         sanitized = "endpoint"
     return f"proxy-{sanitized}"
+
+
+def _find_trojan_inbound(data: dict) -> dict:
+    for inbound in data.get("inbounds", []):
+        if inbound.get("protocol") == "trojan":
+            return inbound
+    raise AssertionError("Expected trojan inbound in server configuration")
 
 
 def _assert_outbound_entry(
@@ -498,17 +645,10 @@ def _assert_heartbeat_entry(
 
 
 def _detect_host_ipv4(host) -> str:
-    script = """
-$ErrorActionPreference = 'Stop'
-$addresses = Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin (@('Dhcp', 'Manual')) `
-    | Where-Object { $_.IPAddress -ne '127.0.0.1' } `
-    | Select-Object -ExpandProperty IPAddress
-if (-not $addresses) {
-    exit 3
-}
-$addresses
-"""
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_guest_script(
+        host,
+        "scripts/get_ipv4_addresses.ps1",
+    )
     if result.rc != 0:
         pytest.fail(
             "Failed to detect IPv4 addresses.\n"
