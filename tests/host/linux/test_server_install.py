@@ -178,8 +178,6 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         assert "self-signed: yes" in state_output.lower()
     finally:
         _cleanup(server_host, xp2p_server_runner)
-        helpers.remove_path(server_host, cert_source)
-        helpers.remove_path(server_host, key_source)
 
 
 @pytest.mark.host
