@@ -15,7 +15,7 @@ CLIENT_DEPLOY_LOG = PurePosixPath("/tmp/xp2p-client-deploy.log")
 SERVER_DEPLOY_LOG = PurePosixPath("/tmp/xp2p-server-deploy.log")
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
-LOG_WAIT_TIMEOUT = 180
+LOG_WAIT_TIMEOUT = 30
 
 
 @pytest.mark.host

@@ -37,7 +37,7 @@ CLIENT_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\client-deploy.log"
 SERVER_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\server-deploy.log")
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
-LOG_WAIT_TIMEOUT = 240
+LOG_WAIT_TIMEOUT = 30
 
 
 @pytest.mark.host

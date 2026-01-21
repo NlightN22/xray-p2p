@@ -15,7 +15,7 @@ pytestmark = [pytest.mark.host, pytest.mark.cross]
 
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
-LOG_WAIT_TIMEOUT = 20
+LOG_WAIT_TIMEOUT = 30
 
 LINUX_ARTIFACT_ROOT = PurePosixPath("/srv/xray-p2p/build/artifacts/deploy")
 WINDOWS_ARTIFACT_ROOT = Path(r"C:\xp2p\build\artifacts\deploy")
