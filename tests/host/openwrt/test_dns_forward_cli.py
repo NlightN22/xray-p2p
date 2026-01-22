@@ -18,7 +18,6 @@ SERVER_TUN_IP = "10.63.30.11"
 CLIENT_TUN_IP = "10.63.30.12"
 CORP_DOMAIN = "corp.test.com"
 C1_FQDN = "c1.corp.test.com"
-C1_DNS_IP = "10.0.101.132"
 C1_DIAG_LISTEN = "0.0.0.0:62022"
 C1_LAN_GATEWAY = "10.0.101.1"
 C2_LAN_GATEWAY = "10.0.102.1"
@@ -217,6 +216,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
     client_runner = lambda *args: openwrt_env.run_xp2p(openwrt_client_host, *args)
     endpoint_tag = helpers.expected_proxy_tag(SERVER_TUN_IP)
     try:
+        c1_dns_ip = _detect_alpine_ipv4(alpine_c1_host)
         _alpine_guest(alpine_c1_host, "scripts/linux/ensure_route.sh", "10.0.102.0/24", C1_LAN_GATEWAY)
         _alpine_guest(alpine_c2_host, "scripts/linux/ensure_route.sh", "10.0.101.0/24", C2_LAN_GATEWAY)
         _alpine_guest(alpine_c1_host, "scripts/linux/setup_dnsmasq_alpine.sh", C1_FQDN)
@@ -224,10 +224,10 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         _alpine_guest(alpine_c1_host, "scripts/linux/start_xp2p_diag.sh", C1_DIAG_LISTEN, "tcp")
         diag_started = True
 
-        direct_ping = openwrt_env.run_xp2p(openwrt_server_host, "ping", C1_DNS_IP, "--count", "1")
+        direct_ping = openwrt_env.run_xp2p(openwrt_server_host, "ping", c1_dns_ip, "--count", "1")
         if direct_ping.rc != 0:
             debug = _dump_dns_forward_debug(
-                openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+                openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
             )
             raise AssertionError(
                 "openwrt-a -> c1 ping failed.\n"
@@ -236,15 +236,15 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             )
         tunnel_common.assert_zero_loss(direct_ping, "openwrt-a to c1")
 
-        lookup_direct = _openwrt_nslookup(openwrt_server_host, C1_FQDN, server=C1_DNS_IP)
-        assert C1_DNS_IP in (lookup_direct.stdout or ""), (
-            f"Expected {C1_DNS_IP} from {C1_FQDN} via {C1_DNS_IP} "
+        lookup_direct = _openwrt_nslookup(openwrt_server_host, C1_FQDN, server=c1_dns_ip)
+        assert c1_dns_ip in (lookup_direct.stdout or ""), (
+            f"Expected {c1_dns_ip} from {C1_FQDN} via {c1_dns_ip} "
             f"(rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
         )
 
         _reset_dnsforward_state(openwrt_client_host)
         add = openwrt_client_host.run(
-            f"/usr/bin/xp2p client dns-forward add --domain {CORP_DOMAIN} --target {C1_DNS_IP}:53 --intercept --with-forward --quiet"
+            f"/usr/bin/xp2p client dns-forward add --domain {CORP_DOMAIN} --target {c1_dns_ip}:53 --intercept --with-forward --quiet"
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
         dns_forward_added = True
@@ -267,7 +267,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         routing = helpers.read_json(openwrt_client_host, "/etc/xp2p/config-client/routing.json")
         helpers.assert_redirect_rule(routing, "10.0.101.0/24", endpoint_tag)
 
-        forward_port = _detect_forward_port(openwrt_client_host, C1_DNS_IP)
+        forward_port = _detect_forward_port(openwrt_client_host, c1_dns_ip)
         with openwrt_env.xp2p_run_session(
             openwrt_server_host,
             role="server",
@@ -285,7 +285,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
             if tunnel_ping.rc != 0:
                 debug = _dump_dns_forward_debug(
-                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
                 )
                 raise AssertionError(
                     "openwrt-b tunnel ping failed.\n"
@@ -310,18 +310,18 @@ def test_dns_forward_openwrt_b_with_c1_c2(
 
             _wait_for_port(openwrt_client_host, forward_port)
             _assert_dns_response(
-                openwrt_client_host, C1_FQDN, C1_DNS_IP, server=f"127.0.0.1:{forward_port}"
+                openwrt_client_host, C1_FQDN, c1_dns_ip, server=f"127.0.0.1:{forward_port}"
             )
 
             lookup_intercept = _openwrt_nslookup(openwrt_client_host, C1_FQDN)
-            assert C1_DNS_IP in (lookup_intercept.stdout or ""), (
-                f"Expected {C1_DNS_IP} from {C1_FQDN} via intercept "
+            assert c1_dns_ip in (lookup_intercept.stdout or ""), (
+                f"Expected {c1_dns_ip} from {C1_FQDN} via intercept "
                 f"(rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
             )
 
             c2_lookup = _alpine_guest(alpine_c2_host, "scripts/linux/nslookup.sh", C1_FQDN)
-            assert C1_DNS_IP in (c2_lookup.stdout or ""), (
-                f"Expected {C1_DNS_IP} from {C1_FQDN} on c2:\n{c2_lookup.stdout}\n{c2_lookup.stderr}"
+            assert c1_dns_ip in (c2_lookup.stdout or ""), (
+                f"Expected {c1_dns_ip} from {C1_FQDN} on c2:\n{c2_lookup.stdout}\n{c2_lookup.stderr}"
             )
 
             c2_ping = openwrt_env.run_alpine_guest_script(
@@ -329,7 +329,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             )
             if c2_ping.rc != 0:
                 debug = _dump_dns_forward_debug(
-                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
                 )
                 raise AssertionError(
                     "xp2p ping from c2 failed.\n"
@@ -339,7 +339,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             tunnel_common.assert_zero_loss(c2_ping, f"to {C1_FQDN}")
     except AssertionError as exc:
         debug = _dump_dns_forward_debug(
-            openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+            openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
         )
         raise AssertionError(f"{exc}\n\nDNS forward debug:\n{debug}") from exc
     finally:
@@ -406,7 +406,11 @@ def _detect_dokodemo_port(host, path: str) -> int:
 
 
 def _dump_dns_forward_debug(
-    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host
+    openwrt_client_host,
+    openwrt_server_host,
+    alpine_c1_host,
+    alpine_c2_host,
+    c1_dns_ip: str,
 ) -> str:
     parts: list[str] = []
     parts.append("--- openwrt-b xp2p redirect list ---")
@@ -432,7 +436,7 @@ def _dump_dns_forward_debug(
     parts.append("--- openwrt-b firewall ---")
     parts.append((openwrt_client_host.run("uci show firewall || true").stdout or "").strip())
     parts.append("--- openwrt-a nslookup ---")
-    parts.append((_openwrt_nslookup(openwrt_server_host, C1_FQDN, server=C1_DNS_IP).stdout or "").strip())
+    parts.append((_openwrt_nslookup(openwrt_server_host, C1_FQDN, server=c1_dns_ip).stdout or "").strip())
     parts.append("--- c1 dnsmasq log ---")
     parts.append(
         (alpine_c1_host.run("tail -n 200 /var/log/dnsmasq.log 2>/dev/null || true").stdout or "").strip()
@@ -538,3 +542,16 @@ def _wait_for_port(host, port: str, attempts: int = 15, delay: int = 1) -> None:
     )
     res = host.run(check_cmd)
     assert res.rc == 0, f"port {port} did not open:\n{res.stdout}\n{res.stderr}"
+
+
+def _detect_alpine_ipv4(host) -> str:
+    result = openwrt_env.run_alpine_guest_script(host, "scripts/linux/get_primary_ipv4.sh")
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to detect Alpine IPv4 address.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    addresses = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not addresses:
+        pytest.fail("No IPv4 addresses found on Alpine host")
+    return addresses[0]
