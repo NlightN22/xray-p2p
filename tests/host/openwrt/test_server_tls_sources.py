@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import base64
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
 import pytest
 from testinfra.host import Host
@@ -15,8 +14,6 @@ pytestmark = [pytest.mark.host, pytest.mark.linux]
 SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
 SERVER_CERT_DEST = helpers.SERVER_CONFIG_DIR / "cert.pem"
 SERVER_KEY_DEST = helpers.SERVER_CONFIG_DIR / "key.pem"
-FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
-FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
 
 def _runner(host: Host):
@@ -32,19 +29,21 @@ def _runner(host: Host):
     return _run
 
 
-def _write_remote_text(host: Host, path: PurePosixPath, content: str) -> None:
-    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+def _copy_remote_file(host: Host, source: PurePosixPath, dest: PurePosixPath) -> None:
     result = openwrt_env.run_guest_script(
         host,
-        "scripts/linux/write_file.sh",
-        path.as_posix(),
-        encoded,
+        "scripts/linux/copy_file.sh",
+        source.as_posix(),
+        dest.as_posix(),
     )
-    if result.rc != 0:
-        pytest.fail(
-            f"Failed to write remote text {path} (exit {result.rc}).\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
+    if result.rc == 0:
+        return
+    if result.rc == 3:
+        pytest.fail(f"Failed to copy missing file {source} to {dest}")
+    pytest.fail(
+        f"Failed to copy file {source} to {dest} (exit {result.rc}).\n"
+        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    )
 
 
 def _read_remote_text(host: Host, path: PurePosixPath) -> str:
@@ -146,11 +145,24 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
 
     cert_source = PurePosixPath("/tmp/xp2p-server-cert.pem")
     key_source = PurePosixPath("/tmp/xp2p-server-key.pem")
-    cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
-    key_content = FIXTURE_KEY.read_text(encoding="utf-8")
     try:
-        _write_remote_text(openwrt_server_host, cert_source, cert_content)
-        _write_remote_text(openwrt_server_host, key_source, key_content)
+        runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62002",
+            "--host",
+            "prep-path-cert.local",
+            "--force",
+            check=True,
+        )
+        _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_source)
+        _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_source)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
 
         runner(
             "server",
@@ -243,7 +255,8 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
     openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
     helpers.cleanup_server_install(openwrt_server_host, runner)
     cert_source = PurePosixPath("/tmp/xp2p-mismatch-cert.pem")
-    cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
+    key_source = PurePosixPath("/tmp/xp2p-mismatch-key.pem")
+    alt_key_source = PurePosixPath("/tmp/xp2p-mismatch-key-alt.pem")
     try:
         runner(
             "server",
@@ -255,15 +268,46 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
             "--port",
             "62005",
             "--host",
-            "xp2p.test.local",
+            "prep-mismatch-a.local",
             "--force",
             check=True,
         )
 
-        assert _path_exists(openwrt_server_host, SERVER_KEY_DEST), (
-            f"Expected generated key at {SERVER_KEY_DEST}"
+        _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_source)
+        _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_source)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
+
+        runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62006",
+            "--host",
+            "prep-mismatch-b.local",
+            "--force",
+            check=True,
         )
-        _write_remote_text(openwrt_server_host, cert_source, cert_content)
+        _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, alt_key_source)
+        helpers.cleanup_server_install(openwrt_server_host, runner)
+
+        runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62007",
+            "--host",
+            "xp2p.test.local",
+            "--force",
+            check=True,
+        )
 
         result = runner(
             "server",
@@ -276,7 +320,7 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
             "--cert",
             cert_source.as_posix(),
             "--key",
-            SERVER_KEY_DEST.as_posix(),
+            alt_key_source.as_posix(),
             "--force",
             check=False,
         )
@@ -288,6 +332,8 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
     finally:
         helpers.cleanup_server_install(openwrt_server_host, runner)
         _remove_path(openwrt_server_host, cert_source)
+        _remove_path(openwrt_server_host, key_source)
+        _remove_path(openwrt_server_host, alt_key_source)
 
 
 @pytest.mark.host
