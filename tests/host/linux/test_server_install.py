@@ -378,6 +378,57 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
 
 @pytest.mark.host
 @pytest.mark.linux
+def test_server_cert_set_rejects_directory_paths(server_host, xp2p_server_runner):
+    _cleanup(server_host, xp2p_server_runner)
+    cert_dir = PurePosixPath("/tmp/xp2p-cert-dir")
+    key_dir = PurePosixPath("/tmp/xp2p-key-dir")
+    try:
+        xp2p_server_runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62017",
+            "--host",
+            "xp2p.test.local",
+            "--force",
+            check=True,
+        )
+
+        helpers.write_text(server_host, cert_dir / "dummy.txt", "cert")
+        helpers.write_text(server_host, key_dir / "dummy.txt", "key")
+
+        result = xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cert",
+            cert_dir.as_posix(),
+            "--key",
+            key_dir.as_posix(),
+            "--force",
+            check=False,
+        )
+        assert result.rc != 0, "Expected directory certificate/key to fail"
+        combined = _combined_output(result).lower()
+        assert "is a directory" in combined, (
+            f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        )
+    finally:
+        helpers.remove_path(server_host, cert_dir)
+        helpers.remove_path(server_host, key_dir)
+        _cleanup(server_host, xp2p_server_runner)
+
+
+@pytest.mark.host
+@pytest.mark.linux
 def test_server_install_requires_force_when_state_exists(server_host, xp2p_server_runner):
     _cleanup(server_host, xp2p_server_runner)
     try:

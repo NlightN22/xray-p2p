@@ -485,3 +485,71 @@ def test_openwrt_server_cert_set_win_store_not_implemented(openwrt_server_host, 
         assert after == before, "Expected config to remain unchanged after win-store error"
     finally:
         helpers.cleanup_server_install(openwrt_server_host, runner)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_openwrt_server_cert_set_rejects_directory_paths(openwrt_server_host, xp2p_openwrt_ipk):
+    runner = _runner(openwrt_server_host)
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    helpers.cleanup_server_install(openwrt_server_host, runner)
+    cert_dir = PurePosixPath("/tmp/xp2p-cert-dir")
+    key_dir = PurePosixPath("/tmp/xp2p-key-dir")
+    try:
+        runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62017",
+            "--host",
+            "xp2p.test.local",
+            "--force",
+            check=True,
+        )
+        _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_dir / "dummy.txt")
+        _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_dir / "dummy.txt")
+        helpers.cleanup_server_install(openwrt_server_host, runner)
+
+        runner(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62018",
+            "--host",
+            "xp2p.test.local",
+            "--force",
+            check=True,
+        )
+
+        result = runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cert",
+            cert_dir.as_posix(),
+            "--key",
+            key_dir.as_posix(),
+            "--force",
+            check=False,
+        )
+        assert result.rc != 0, "Expected directory certificate/key to fail"
+        combined = _combined_output(result).lower()
+        assert "is a directory" in combined, (
+            f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
+        )
+    finally:
+        helpers.cleanup_server_install(openwrt_server_host, runner)
+        _remove_path(openwrt_server_host, cert_dir)
+        _remove_path(openwrt_server_host, key_dir)
