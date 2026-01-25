@@ -204,4 +204,3 @@ Vagrant.configure('2') do |config|
 
   define_clients(config, MACHINES)
 end
-

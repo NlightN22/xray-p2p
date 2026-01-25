@@ -506,12 +506,8 @@ def _detect_forward_port(host, target_host: str, target_port: int = 53, role: st
 
 
 def _assert_dns_response(host, domain: str, expected_ip: str, *, server: str) -> None:
-    if ":" in server:
-        host_part, port_part = server.rsplit(":", 1)
-        dig_cmd = f"kdig +tcp @{host_part} -p {port_part} {domain} A +short"
-    else:
-        dig_cmd = f"kdig +tcp @{server} {domain} A +short"
-    result = host.run(f"{dig_cmd} || true")
+    server_arg = server
+    result = openwrt_env.run_guest_script(host, "scripts/linux/nslookup.sh", domain, server_arg)
     stdout = result.stdout or ""
     if expected_ip in stdout:
         return
@@ -527,7 +523,7 @@ def _assert_dns_response(host, domain: str, expected_ip: str, *, server: str) ->
     )
     raise AssertionError(
         f"Expected {expected_ip} from {domain} via {server} (rc={result.rc}).\n"
-        f"Command: {dig_cmd}\n"
+        f"Command: nslookup {domain} {server_arg}\n"
         f"STDOUT:\n{stdout}\nSTDERR:\n{result.stderr}\n"
         f"XP2P logs:\n{logs.stdout}"
     )

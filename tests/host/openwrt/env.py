@@ -15,7 +15,7 @@ from tests.host import common
 
 REPO_ROOT = common.REPO_ROOT
 WORKTREE_POSIX = PurePosixPath("/srv/xray-p2p")
-GUEST_SCRIPTS_ROOT = WORKTREE_POSIX / "tests" / "guest"
+GUEST_SCRIPTS_ROOT = PurePosixPath("/tmp/xray-p2p-tests/guest")
 GUEST_SCRIPTS_SOURCE = REPO_ROOT / "tests" / "guest"
 ALPINE_GUEST_SCRIPTS_ROOT = PurePosixPath("/tmp/xray-p2p-tests/guest")
 ALPINE_DNSMASQ_INSTALLER = REPO_ROOT / "infra" / "vagrant" / "openwrt" / "dnsmasq-install-alpine.sh"
@@ -108,6 +108,8 @@ def ensure_guest_scripts_synced() -> None:
         return
     current_hash = _compute_guest_scripts_hash()
     if _SCRIPTS_HASH_CACHE == current_hash:
+        for machine in OPENWRT_MACHINES:
+            _provision_guest_scripts(machine, GUEST_SCRIPTS_ROOT)
         for machine in ALPINE_MACHINES:
             _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
             if ALPINE_DNSMASQ_INSTALLER.exists():
@@ -116,6 +118,8 @@ def ensure_guest_scripts_synced() -> None:
     cached = _read_cached_scripts_hash()
     if cached == current_hash and cached is not None:
         _SCRIPTS_HASH_CACHE = current_hash
+        for machine in OPENWRT_MACHINES:
+            _provision_guest_scripts(machine, GUEST_SCRIPTS_ROOT)
         for machine in ALPINE_MACHINES:
             _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
             if ALPINE_DNSMASQ_INSTALLER.exists():
