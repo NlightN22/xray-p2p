@@ -12,6 +12,10 @@ guest suites -- the CI and fellow contributors expect these rules.
 - **All guest logic lives under `tests/guest/`** (PowerShell/Bash/Go helpers,
   etc.). Host fixtures merely trigger those entrypoints; do not inline ad-hoc
   scripts inside Python.
+- **OpenWrt guests are minimal.** Do not change tests to rely on extra packages
+  that are not present on OpenWrt (for example `kdig` or `base64`). If a Linux
+  test requires additional tooling, add it to the Linux provisioning scripts
+  instead of bending OpenWrt tests to match.
 - **Build automation stays under `scripts/build/`**. Tests may invoke those
   helpers from guests or hosts, but must not duplicate or relocate build logic
   inside `tests/guest` (e.g., no alternative OpenWrt/DEB/MSI builders under
