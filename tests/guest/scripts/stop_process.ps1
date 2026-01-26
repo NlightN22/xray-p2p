@@ -1,16 +1,16 @@
 param(
     [Parameter(Mandatory = $true)]
-    [int] $Pid
+    [int] $ProcessId
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-if ($Pid -le 0) {
+if ($ProcessId -le 0) {
     exit 0
 }
 
-$proc = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+$proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
 if ($proc) {
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 }

@@ -356,7 +356,7 @@ def _stop_process(host, pid: int) -> None:
     result = win_env.run_guest_script(
         host,
         "scripts/stop_process.ps1",
-        Pid=str(pid),
+        ProcessId=str(pid),
     )
     if result.rc != 0:
         pytest.fail(
