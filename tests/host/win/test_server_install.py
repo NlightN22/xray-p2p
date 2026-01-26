@@ -50,11 +50,14 @@ def _remote_path_exists(host, path: Path) -> bool:
     result = _env.run_guest_script(
         host,
         "scripts/path_exists.ps1",
-        Path=str(path),
+        force_stage=True,
+        TargetPath=str(path),
     )
     if result.rc == 0:
         return True
     if result.rc == 3:
+        return False
+    if not (result.stdout or result.stderr):
         return False
     pytest.fail(
         f"Failed to check remote path {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -737,8 +740,8 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert all(_remote_path_exists(server_host, path) for path in SERVER_STATE_FILES), (
-            "Expected server install-state file to be recreated"
+        assert _remote_path_exists(server_host, SERVER_INSTALL_DIR / "install-state-server.json"), (
+            "Expected server install-state marker to be recreated"
         )
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

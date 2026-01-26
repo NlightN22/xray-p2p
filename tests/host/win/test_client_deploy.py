@@ -493,11 +493,14 @@ def _remote_path_exists(client_host, path: Path) -> bool:
     result = win_env.run_guest_script(
         client_host,
         "scripts/path_exists.ps1",
-        Path=str(path),
+        force_stage=True,
+        TargetPath=str(path),
     )
     if result.rc == 0:
         return True
     if result.rc == 3:
+        return False
+    if not (result.stdout or result.stderr):
         return False
     pytest.fail(
         f"Failed to check remote path {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

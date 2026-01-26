@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import time
 import uuid
@@ -117,6 +118,23 @@ def _ps_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _remote_sha256(host: Host, path: Path) -> str | None:
+    target = ps_quote(str(path))
+    script = (
+        f"if (Test-Path {target}) {{ "
+        f"(Get-FileHash -Algorithm SHA256 -Path {target}).Hash "
+        "}"
+    )
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        return None
+    return (result.stdout or "").strip() or None
+
+
 def _stage_guest_script(host: Host, relative: Path, *, relative_label: str) -> tuple[Path, Path]:
     local_script = LOCAL_GUEST_TESTS_ROOT / relative
     if not local_script.exists():
@@ -141,12 +159,24 @@ def _missing_script_error(result: CommandResult, script_path: Path) -> bool:
     return any(marker in combined for marker in indicators)
 
 
-def run_guest_script(host: Host, relative_path: str, **parameters: object) -> CommandResult:
+def run_guest_script(
+    host: Host,
+    relative_path: str,
+    *,
+    force_stage: bool = False,
+    **parameters: object,
+) -> CommandResult:
     relative = Path(relative_path)
     script_path = GUEST_TESTS_ROOT / relative
     cleanup_path: Path | None = None
-    if not path_exists(host, script_path):
+    local_script = LOCAL_GUEST_TESTS_ROOT / relative
+    local_hash = _sha256_bytes(local_script.read_bytes())
+    if force_stage or not path_exists(host, script_path):
         script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
+    else:
+        remote_hash = _remote_sha256(host, script_path)
+        if not remote_hash or remote_hash.lower() != local_hash.lower():
+            script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
 
     def _invoke(target: Path) -> CommandResult:
         ps_path = str(target).replace('"', '""')
