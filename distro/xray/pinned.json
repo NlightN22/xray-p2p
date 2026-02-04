@@ -1,0 +1,104 @@
+{
+  "version": "25.10.15",
+  "targets": {
+    "linux/arm32": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "8970dad93db5a075013e8b8fab61314510917bacec09d7479035d00d606e3752",
+          "required": true
+        }
+      ]
+    },
+    "linux/arm64": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "1451c813a240ea6c9dc066bb1718ffbb1768fad041578dfd6944dbc4e78b0b30",
+          "required": true
+        }
+      ]
+    },
+    "linux/mips32le": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "109eb8b212ed030952a10dcd82bda388a196b76628f49dd616af613401a746c6",
+          "required": true
+        }
+      ]
+    },
+    "linux/mips64le": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "0d78cb68b87f51306954d1e28871b5de6e7d18ae636d5bc676c20671a724e614",
+          "required": true
+        }
+      ]
+    },
+    "linux/riscv64": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "7f6ea65b7deed57313a568678a11f045a08911dc5db6827dcfb140de6918cab4",
+          "required": true
+        }
+      ]
+    },
+    "linux/x86": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "350d88d78eebf65942d16de32c069c6973f1c11af37e6ea61a1264d62544d60a",
+          "required": true
+        }
+      ]
+    },
+    "linux/x86_64": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "1d6b0fb6f2348683d59304c9f0bbf3611daa068527159b749374f12da252e78c",
+          "required": true
+        }
+      ]
+    },
+    "macos/arm64": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "f44d97731a43deeace8ebf197db23d9a66efac4230a51a8aa9d3dfe205c8780a",
+          "required": true
+        }
+      ]
+    },
+    "macos/x86_64": {
+      "files": [
+        {
+          "name": "xray",
+          "sha256": "b6895f4348a3babe7f4d2f36462d39e3f1cd5be1e59d7595231cb0b19ce02291",
+          "required": true
+        }
+      ]
+    },
+    "windows/x86": {
+      "files": [
+        {
+          "name": "xray.exe",
+          "sha256": "6026e93389be8d935803d1102301ab659676216b8d32713169007f6c1fa3c242",
+          "required": true
+        }
+      ]
+    },
+    "windows/x86_64": {
+      "files": [
+        {
+          "name": "xray.exe",
+          "sha256": "dac61b3e9b3f201d6e4af19b3d8ac510d9e5ab3f383b89ad15c76d0b613ad8ab",
+          "required": true
+        }
+      ]
+    }
+  }
+}

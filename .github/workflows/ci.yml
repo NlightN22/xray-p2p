@@ -12,6 +12,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check pinned xray assets
+        run: |
+          set -euo pipefail
+          ./scripts/ci/check_xray_pins.sh
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -23,3 +28,12 @@ jobs:
         run: |
           set -euo pipefail
           go test ./...
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check pinned xray assets
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/check_xray_pins.ps1

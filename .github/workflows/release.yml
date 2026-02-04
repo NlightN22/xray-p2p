@@ -22,6 +22,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check pinned xray assets
+        run: |
+          set -euo pipefail
+          ./scripts/ci/check_xray_pins.sh
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -158,6 +163,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Check pinned xray assets
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/check_xray_pins.ps1
 
       - name: Setup Go
         uses: actions/setup-go@v5
