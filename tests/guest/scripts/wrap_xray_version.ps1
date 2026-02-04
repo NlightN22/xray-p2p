@@ -91,4 +91,4 @@ class Program {
 }
 "@
 
-Add-Type -TypeDefinition $source -OutputAssembly $XrayPath -CompilerOptions "/target:exe /platform:anycpu" | Out-Null
+Add-Type -TypeDefinition $source -Language CSharp -OutputAssembly $XrayPath -OutputType ConsoleApplication | Out-Null
