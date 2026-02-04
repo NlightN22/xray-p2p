@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
-PIN_FILE="$PROJECT_ROOT/distro/xray/pinned.json"
+PIN_FILE="$PROJECT_ROOT/go/internal/xray/pinned.json"
 
 if [ ! -f "$PIN_FILE" ]; then
   echo "ERROR: pinned file not found at $PIN_FILE" >&2

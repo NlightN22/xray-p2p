@@ -117,14 +117,23 @@ BUNDLE_ARCH=$(map_xray_bundle_arch "$PKG_ARCH") || {
   echo "Unsupported XP2P_DEB_ARCH=$PKG_ARCH (no xray bundle mapping)" >&2
   exit 1
 }
-XRAY_SOURCE="$PROJECT_ROOT/distro/linux/bundle/$BUNDLE_ARCH/xray"
-if [ ! -f "$XRAY_SOURCE" ]; then
-  echo "xray binary not found at $XRAY_SOURCE" >&2
+BUNDLE_DIR="$PROJECT_ROOT/distro/linux/bundle/$BUNDLE_ARCH"
+if [ ! -d "$BUNDLE_DIR" ] || [ ! -f "$BUNDLE_DIR/xray" ]; then
+  echo "xray bundle not found at $BUNDLE_DIR" >&2
   exit 1
 fi
-echo "==> Staging xray binary from $XRAY_SOURCE"
-rm -f "$STAGING_DIR/etc/xp2p/bin/xray"
-install -m 0755 "$XRAY_SOURCE" "$STAGING_DIR/etc/xp2p/bin/xray"
+echo "==> Staging xray bundle from $BUNDLE_DIR"
+rm -f "$STAGING_DIR/etc/xp2p/bin/"*
+for src in "$BUNDLE_DIR"/*; do
+  name=$(basename "$src")
+  [ "$name" = ".gitkeep" ] && continue
+  [ -f "$src" ] || continue
+  if [ "$name" = "xray" ]; then
+    install -m 0755 "$src" "$STAGING_DIR/etc/xp2p/bin/$name"
+  else
+    install -m 0644 "$src" "$STAGING_DIR/etc/xp2p/bin/$name"
+  fi
+done
 
 echo "==> Staging systemd unit files"
 install -m 0644 "$PROJECT_ROOT/distro/linux/systemd/xp2p-client.service" "$STAGING_DIR/lib/systemd/system/xp2p-client.service"

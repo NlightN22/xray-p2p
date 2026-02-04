@@ -24,7 +24,7 @@ The resulting package installs `xp2p` under `/usr/bin` and drops shell completio
 
 ## MSI (Windows installer)
 
-Two PowerShell helpers exist: `build_and_install_msi.ps1` (amd64) and `build_and_install_msi_x86.ps1` (32-bit). Both compile xp2p.exe, copy `distro/windows/bundle/<arch>/xray.exe`, drive WiX (`installer/wix/xp2p*.wxs`), and optionally install the resulting MSI.
+Two PowerShell helpers exist: `build_and_install_msi.ps1` (amd64) and `build_and_install_msi_x86.ps1` (32-bit). Both compile xp2p.exe, copy the full `distro/windows/bundle/<arch>/` contents (xray + optional data files), drive WiX (`installer/wix/xp2p*.wxs`), and optionally install the resulting MSI.
 
 ### Run on Windows host or Vagrant guest
 ```
@@ -52,7 +52,7 @@ Override the defaults with `OPENWRT_VERSION`, `OPENWRT_MIRROR`, or `OPENWRT_SDK_
 
 ## Bare xp2p binaries
 
-`build_xp2p_binaries.sh` cross-compiles the CLI using Go's native toolchain and writes artefacts into `/tmp/build/<target>` (change via `XP2P_BUILD_ROOT`). Targets are mandatory (`--targets` / `--target` or `XP2P_TARGETS` env). By default binaries are stripped with `-s -w`, embed the `version.Current()` value, disable CGO (`CGO_ENABLED=0`), leave `GOEXPERIMENT` empty (override via `XP2P_GOEXPERIMENT`), run `strip --strip-unneeded`, copy the matching `distro/linux/bundle/<arch>/xray` into the target directory when available, and generate bash/zsh/fish completion scripts under `<target>/completions`.
+`build_xp2p_binaries.sh` cross-compiles the CLI using Go's native toolchain and writes artefacts into `/tmp/build/<target>` (change via `XP2P_BUILD_ROOT`). Targets are mandatory (`--targets` / `--target` or `XP2P_TARGETS` env). By default binaries are stripped with `-s -w`, embed the `version.Current()` value, disable CGO (`CGO_ENABLED=0`), leave `GOEXPERIMENT` empty (override via `XP2P_GOEXPERIMENT`), run `strip --strip-unneeded`, copy the matching `distro/linux/bundle/<arch>/` contents into the target directory, and generate bash/zsh/fish completion scripts under `<target>/completions`.
 
 ```
 # build linux-amd64 and linux-arm64
@@ -65,7 +65,7 @@ XP2P_TARGETS=linux-mipsle-softfloat XP2P_BUILD_ROOT=/tmp/xp2p \
 
 ## OpenWrt ipk orchestrator
 
-`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index. It reuses `ensure_openwrt_sdk.sh` and `build_xp2p_binaries.sh`, so all prerequisites for them apply (Go 1.21.7 toolchain, distro bundles, etc.). The canonical package recipe lives in `openwrt/feed/packages/utils/xp2p/Makefile`; the script leaves it in place and only references the feed when wiring the SDK. Release artefacts are copied into `openwrt/repo/<release>/<arch>/`, where `arch` is read from the resulting `.ipk` and `<release>` defaults to the value stored in `~/.xp2p-openwrt-version` (or `OPENWRT_VERSION` when set), so the repository doubles as the GitHub Pages feed. Pass `--output-dir build/ipk` (or any other folder) when you need the resulting `.ipk` and `Packages`/`Packages.gz` in a custom destination; this is what the OpenWrt Vagrant boxes use during provisioning. The script fingerprints the Go sources (`go/`, `go.mod`, `go.sum`, etc.) and reuses the cached binaries stored under `--build-root` while the fingerprint stays the same; when an identical fingerprint already produced an `.ipk`, the script reuses the cached artefact (recorded under `--build-root/.xp2p_ipk_cache`) instead of rerunning the OpenWrt toolchain. Use `--force-build` to discard the cache intentionally.
+`build_openwrt_ipk.sh` automates the full OpenWrt pipeline: ensures the SDK exists, builds xp2p/xray/completions, installs the feed, applies diffconfig, compiles the ipk, and refreshes the local feed index. It reuses `ensure_openwrt_sdk.sh` and `build_xp2p_binaries.sh`, so all prerequisites for them apply (Go 1.21.7 toolchain, distro bundles, etc.). The canonical package recipe lives in `openwrt/feed/packages/utils/xp2p/Makefile`; the script leaves it in place and only references the feed when wiring the SDK. Release artefacts are copied into `openwrt/repo/<release>/<arch>/`, where `arch` is read from the resulting `.ipk` and `<release>` defaults to the value stored in `~/.xp2p-openwrt-version` (or `OPENWRT_VERSION` when set), so the repository doubles as the GitHub Pages feed. Pass `--output-dir build/ipk` (or any other folder) when you need the resulting `.ipk` and `Packages`/`Packages.gz` in a custom destination; this is what the OpenWrt Vagrant boxes use during provisioning. The script fingerprints the Go sources (`go/`, `go.mod`, `go.sum`, etc.) and reuses the cached binaries stored under `--build-root` while the fingerprint stays the same; when an identical fingerprint already produced an `.ipk`, the script reuses the cached artefact (recorded under `--build-root/.xp2p_ipk_cache`) instead of rerunning the OpenWrt toolchain. Use `--force-build` to discard the cache intentionally. Bundled xray assets are read from `distro/<os>/bundle/<arch>/` and validated against `go/internal/xray/pinned.json` in CI.
 
 ```
 # build linux-amd64 ipk and update openwrt/<release>/<arch>

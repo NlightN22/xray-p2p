@@ -105,7 +105,7 @@ var targets = []Target{
 		BinaryExt: ".exe",
 		OutDir:    "windows-amd64",
 		Dependencies: []Dependency{
-			xrayDependency("windows", "x86_64", "xray.exe", false),
+			bundleDependency("windows", "x86_64", false),
 		},
 		release: true,
 	},
@@ -116,7 +116,7 @@ var targets = []Target{
 		BinaryExt: ".exe",
 		OutDir:    "windows-386",
 		Dependencies: []Dependency{
-			xrayDependency("windows", "x86", "xray.exe", true),
+			bundleDependency("windows", "x86", true),
 		},
 		release: true,
 	},
@@ -126,7 +126,7 @@ var targets = []Target{
 		Archive: ArchiveTarGz,
 		OutDir:  "linux-amd64",
 		Dependencies: []Dependency{
-			xrayDependency("linux", "x86_64", "xray", true),
+			bundleDependency("linux", "x86_64", true),
 		},
 		release: true,
 	},
@@ -136,7 +136,7 @@ var targets = []Target{
 		Archive: ArchiveTarGz,
 		OutDir:  "linux-386",
 		Dependencies: []Dependency{
-			xrayDependency("linux", "x86", "xray", true),
+			bundleDependency("linux", "x86", true),
 		},
 		release: true,
 	},
@@ -146,7 +146,7 @@ var targets = []Target{
 		Archive: ArchiveTarGz,
 		OutDir:  "linux-arm64",
 		Dependencies: []Dependency{
-			xrayDependency("linux", "arm64", "xray", true),
+			bundleDependency("linux", "arm64", true),
 		},
 		release: true,
 	},
@@ -159,7 +159,7 @@ var targets = []Target{
 		},
 		OutDir: "linux-armhf",
 		Dependencies: []Dependency{
-			xrayDependency("linux", "armhf", "xray", true),
+			bundleDependency("linux", "armhf", true),
 		},
 		release: true,
 	},
@@ -172,7 +172,7 @@ var targets = []Target{
 		},
 		OutDir: "linux-mipsle-softfloat",
 		Dependencies: []Dependency{
-			xrayDependency("linux", "mipsel", "xray", true),
+			bundleDependency("linux", "mipsel", true),
 		},
 	},
 	{
@@ -181,7 +181,7 @@ var targets = []Target{
 		Archive: ArchiveTarGz,
 		OutDir:  "linux-mips64le",
 		Dependencies: []Dependency{
-			xrayDependency("linux", "mips64el", "xray", true),
+			bundleDependency("linux", "mips64el", true),
 		},
 	},
 	{
@@ -190,16 +190,15 @@ var targets = []Target{
 		Archive: ArchiveTarGz,
 		OutDir:  "linux-riscv64",
 		Dependencies: []Dependency{
-			xrayDependency("linux", "riscv64", "xray", true),
+			bundleDependency("linux", "riscv64", true),
 		},
 	},
 }
 
-func xrayDependency(osDir, archDir, fileName string, optional bool) Dependency {
-	path := filepath.ToSlash(filepath.Join("distro", osDir, "bundle", archDir, fileName))
+func bundleDependency(osDir, archDir string, optional bool) Dependency {
+	path := filepath.ToSlash(filepath.Join("distro", osDir, "bundle", archDir))
 	return Dependency{
-		Source:      path,
-		Destination: fileName,
+		Source:   path,
 		Optional:    optional,
 	}
 }

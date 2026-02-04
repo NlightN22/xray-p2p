@@ -152,12 +152,16 @@ try {
         throw "xp2p binary missing at $binaryOut"
     }
 
-    $xraySource = Join-Path $RepoRoot 'distro\windows\bundle\x86_64\xray.exe'
-    if (-not (Test-Path $xraySource)) {
-        throw "xray binary missing at $xraySource (place the Windows bundle before building the MSI)."
+    $bundleSourceDir = Join-Path $RepoRoot 'distro\windows\bundle\x86_64'
+    $bundleSourceXray = Join-Path $bundleSourceDir 'xray.exe'
+    if (-not (Test-Path $bundleSourceXray)) {
+        throw "xray binary missing at $bundleSourceXray (place the Windows bundle before building the MSI)."
     }
-    $xrayOut = Join-Path $binaryDir 'xray.exe'
-    Copy-Item $xraySource $xrayOut -Force
+    $bundleDir = Join-Path $binaryDir 'bundle'
+    Ensure-Directory $bundleDir
+    Get-ChildItem -Path $bundleSourceDir -File | Where-Object { $_.Name -ne '.gitkeep' } | ForEach-Object {
+        Copy-Item $_.FullName $bundleDir -Force
+    }
 
     Write-Info "Locating WiX Toolset"
     $wixDir = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" -Directory |
@@ -167,11 +171,19 @@ try {
         throw "WiX Toolset installation directory not found."
     }
     $candle = Join-Path $wixDir.FullName 'bin\candle.exe'
+    $heat = Join-Path $wixDir.FullName 'bin\heat.exe'
     $light = Join-Path $wixDir.FullName 'bin\light.exe'
+
+    Write-Info "Harvesting xray bundle"
+    $bundleWxs = Join-Path $binaryDir 'xp2p-bundle.wxs'
+    & $heat dir $bundleDir -dr BinFolder -cg Xp2pBundleGroup -gg -srd -var var.BundleDir -out $bundleWxs
+    if ($LASTEXITCODE -ne 0) {
+        throw "heat.exe failed with exit code $LASTEXITCODE"
+    }
 
     Write-Info "Running candle.exe"
     $wixObj = Join-Path $binaryDir 'xp2p.wixobj'
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dXrayBinary=$xrayOut" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative)
+    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative) $bundleWxs
     if ($LASTEXITCODE -ne 0) {
         throw "candle.exe failed with exit code $LASTEXITCODE"
     }

@@ -116,16 +116,10 @@
       </Component>
     </DirectoryRef>
 
-    <DirectoryRef Id="BinFolder">
-      <Component Id="cmpXrayExe" Guid="{7F7B9A61-4E5E-47B0-BA85-8A5D09C42C78}">
-        <File Id="fileXrayExe" Source="$(var.XrayBinary)" KeyPath="yes" Checksum="yes" />
-      </Component>
-    </DirectoryRef>
-
     <Feature Id="MainFeature" Title="xp2p" Level="1">
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
-      <ComponentRef Id="cmpXrayExe" />
+      <ComponentGroupRef Id="Xp2pBundleGroup" />
       <ComponentRef Id="cmpServiceAutostart" />
     </Feature>
   </Product>

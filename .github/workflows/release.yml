@@ -184,18 +184,22 @@ jobs:
 
       - name: Stage xray binary
         run: |
-          $source = "distro/windows/bundle/x86_64/xray.exe"
+          $sourceDir = "distro/windows/bundle/x86_64"
+          $source = Join-Path $sourceDir "xray.exe"
           if (!(Test-Path $source)) {
             throw "xray binary not found at $source"
           }
-          $dest = "build/windows-amd64/xray.exe"
-          New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
-          Copy-Item $source $dest -Force
+          $destDir = "build/windows-amd64/bundle"
+          New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+          Get-ChildItem -Path $sourceDir -File | Where-Object { $_.Name -ne '.gitkeep' } | ForEach-Object {
+            Copy-Item $_.FullName $destDir -Force
+          }
 
       - name: Build MSI
         run: |
           $binary = "build/windows-amd64/xp2p.exe"
-          $xray = "build/windows-amd64/xray.exe"
+          $bundleDir = "build/windows-amd64/bundle"
+          $xray = Join-Path $bundleDir "xray.exe"
           if (!(Test-Path $binary)) {
             throw "xp2p binary not found at $binary"
           }
@@ -207,8 +211,14 @@ jobs:
             throw "WiX Toolset installation directory was not found"
           }
           $candle = Join-Path $wixRoot.FullName "bin\\candle.exe"
+          $heat = Join-Path $wixRoot.FullName "bin\\heat.exe"
           $light = Join-Path $wixRoot.FullName "bin\\light.exe"
-          & $candle "-dProductVersion=$env:VERSION" "-dXp2pBinary=$binary" "-dXrayBinary=$xray" "-out" "installer/wix/xp2p.wixobj" "installer/wix/xp2p.wxs"
+          $bundleWxs = "installer/wix/xp2p-bundle.wxs"
+          & $heat dir $bundleDir -dr BinFolder -cg Xp2pBundleGroup -gg -srd -var var.BundleDir -out $bundleWxs
+          if ($LASTEXITCODE -ne 0) {
+            throw "heat failed"
+          }
+          & $candle "-dProductVersion=$env:VERSION" "-dXp2pBinary=$binary" "-dBundleDir=$bundleDir" "-out" "installer/wix/xp2p.wixobj" "installer/wix/xp2p.wxs" $bundleWxs
           if ($LASTEXITCODE -ne 0) {
             throw "candle failed"
           }
@@ -341,6 +351,35 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Append pinned xray version to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: |
+          set -euo pipefail
+          pinned=$(python3 - <<'PY'
+import json
+with open("go/internal/xray/pinned.json", "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+print(data.get("version", "").strip())
+PY
+          )
+          if [ -z "$pinned" ]; then
+            echo "Pinned version not found; skipping."
+            exit 0
+          fi
+          existing=$(gh release view "$TAG" --json body -q .body)
+          note="Pinned xray version: $pinned"
+          if printf '%s' "$existing" | grep -Fq "$note"; then
+            exit 0
+          fi
+          if [ -n "$existing" ]; then
+            updated="${existing}\n\n${note}"
+          else
+            updated="$note"
+          fi
+          gh release edit "$TAG" --notes "$updated"
 
       - name: Update latest tag
         env:

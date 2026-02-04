@@ -13,15 +13,15 @@ GOEXPERIMENT_OPT=${XP2P_GOEXPERIMENT:-""}
 completion_helper=""
 completion_helper_dir=""
 
-bundle_path_for_target() {
+bundle_dir_for_target() {
   case "$1" in
-    linux-amd64) echo "$PROJECT_ROOT/distro/linux/bundle/x86_64/xray" ;;
-    linux-386) echo "$PROJECT_ROOT/distro/linux/bundle/x86/xray" ;;
-    linux-arm64) echo "$PROJECT_ROOT/distro/linux/bundle/arm64/xray" ;;
-    linux-armhf) echo "$PROJECT_ROOT/distro/linux/bundle/arm32/xray" ;;
-    linux-mipsle-softfloat) echo "$PROJECT_ROOT/distro/linux/bundle/mips32le/xray" ;;
-    linux-mips64le) echo "$PROJECT_ROOT/distro/linux/bundle/mips64le/xray" ;;
-    linux-riscv64) echo "$PROJECT_ROOT/distro/linux/bundle/riscv64/xray" ;;
+    linux-amd64) echo "$PROJECT_ROOT/distro/linux/bundle/x86_64" ;;
+    linux-386) echo "$PROJECT_ROOT/distro/linux/bundle/x86" ;;
+    linux-arm64) echo "$PROJECT_ROOT/distro/linux/bundle/arm64" ;;
+    linux-armhf) echo "$PROJECT_ROOT/distro/linux/bundle/arm32" ;;
+    linux-mipsle-softfloat) echo "$PROJECT_ROOT/distro/linux/bundle/mips32le" ;;
+    linux-mips64le) echo "$PROJECT_ROOT/distro/linux/bundle/mips64le" ;;
+    linux-riscv64) echo "$PROJECT_ROOT/distro/linux/bundle/riscv64" ;;
     *) return 1 ;;
   esac
 }
@@ -154,12 +154,21 @@ for target in $TARGETS; do
     fi
   fi
 
-  if bundle_path=$(bundle_path_for_target "$target"); then
-    if [ -f "$bundle_path" ]; then
-      cp "$bundle_path" "$out_dir/xray"
-      chmod 0755 "$out_dir/xray"
+  if bundle_dir=$(bundle_dir_for_target "$target"); then
+    if [ -d "$bundle_dir" ] && [ -f "$bundle_dir/xray" ]; then
+      for src in "$bundle_dir"/*; do
+        name=$(basename "$src")
+        [ "$name" = ".gitkeep" ] && continue
+        [ -f "$src" ] || continue
+        cp "$src" "$out_dir/$name"
+        if [ "$name" = "xray" ]; then
+          chmod 0755 "$out_dir/$name"
+        else
+          chmod 0644 "$out_dir/$name"
+        fi
+      done
     else
-      echo "ERROR: xray bundle for $target not found at $bundle_path" >&2
+      echo "ERROR: xray bundle for $target not found at $bundle_dir" >&2
       exit 1
     fi
   fi

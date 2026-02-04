@@ -240,12 +240,35 @@ func runDeps(args []string) {
 
 func stageDependency(repoRoot, destDir string, dep buildtarget.Dependency) error {
 	src := filepath.Join(repoRoot, filepath.FromSlash(dep.Source))
-	if _, err := os.Stat(src); err != nil {
+	info, err := os.Stat(src)
+	if err != nil {
 		if os.IsNotExist(err) && dep.Optional {
 			log.Printf("warning: optional dependency %s not found, skipping", dep.Source)
 			return nil
 		}
 		return fmt.Errorf("stat source: %w", err)
+	}
+
+	if info.IsDir() {
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			return fmt.Errorf("read dir %s: %w", src, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if name == ".gitkeep" {
+				continue
+			}
+			srcPath := filepath.Join(src, name)
+			dst := filepath.Join(destDir, name)
+			if err := copyFile(srcPath, dst); err != nil {
+				return fmt.Errorf("copy %s to %s: %w", srcPath, dst, err)
+			}
+		}
+		return nil
 	}
 
 	destName := dep.Destination

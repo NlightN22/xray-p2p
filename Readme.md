@@ -9,6 +9,7 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
 - Client management on Windows, Linux, and OpenWrt including endpoint installs from `trojan://` links, reverse portals, SOCKS autodiscovery, redirects, DNS-aware forwarding, and transparent NAT helpers.
 - Remote deployment handshakes (`xp2p client deploy` + `xp2p server deploy`) that ship ready-to-use manifests over an encrypted link before bootstrapping both sides.
 - Build tooling that emits per-OS packages together with vendor-supplied `xray` binaries, Windows MSI installers, Debian packages, and OpenWrt IPKs (publishable via `feeds.conf`).
+- Pinned xray assets tracked in `go/internal/xray/pinned.json` with CI checksums and runtime version validation.
 
 ## Terminology
 
@@ -35,6 +36,7 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
 - Grab the `.deb` for your arch from the Release (`xp2p_<version>_amd64.deb`, `xp2p_<version>_arm64.deb`, `xp2p_<version>_armhf.deb`, `xp2p_<version>_386.deb`).
 - Install: `sudo dpkg -i xp2p_<version>_<arch>.deb || sudo apt-get -f install`.
 - Binaries land under `/usr/bin/xp2p`, bundled `xray` under `/etc/xp2p/bin/xray`, configs under `/etc/xp2p/config-{client,server}`, logs under `/var/log/xp2p`.
+  Additional bundled files (for example `geoip.dat`, `geosite.dat`) live next to the `xray` binary when present.
 - Services: `systemctl enable --now xp2p-client xp2p-server` (wrap `xp2p client|server service run` with default flags).
 - Remove: `sudo dpkg -r xp2p`; purge data with `sudo dpkg -P xp2p`.
 - Alternative (archives): download `xp2p-<version>-<target>.tar.gz`, unpack, keep `xp2p` next to bundled `xray`, and add the directory to `PATH`.
@@ -120,6 +122,7 @@ client:
 ```
 
 Every command shares global flags such as `--config`, `--log-level`, `--log-json`, `--diag-service-port`, and `--diag-service-mode`. Run `xp2p completion <shell>` to install shell completions or `xp2p docs --dir ./docs/cli` to generate a Markdown command reference straight from the Cobra tree.
+Runtime checks validate the pinned xray version before launch. Override with `XP2P_XRAY_SKIP_VERSION_CHECK=1` to skip the check or `XP2P_XRAY_ALLOW_MISMATCH=1` to warn and continue on mismatches.
 
 By default the xp2p server diagnostics responder listens on TCP/UDP port `62022`, while the client-side diagnostics service uses `62023` to avoid conflicts on hosts that run both roles. Override them through the configuration (`server.port` / `client.diag_port`) or environment variables when needed.
 

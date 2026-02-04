@@ -56,12 +56,12 @@ func TestTargetsFiltersAndLookup(t *testing.T) {
 	}
 }
 
-func TestXrayDependency(t *testing.T) {
-	dep := xrayDependency("linux", "amd64", "xray", true)
-	if !strings.Contains(dep.Source, "distro/linux/bundle/amd64/xray") {
+func TestBundleDependency(t *testing.T) {
+	dep := bundleDependency("linux", "x86_64", true)
+	if !strings.Contains(dep.Source, "distro/linux/bundle/x86_64") {
 		t.Fatalf("unexpected dependency source %s", dep.Source)
 	}
-	if dep.Destination != "xray" || !dep.Optional {
+	if dep.Destination != "" || !dep.Optional {
 		t.Fatalf("unexpected dependency fields: %+v", dep)
 	}
 }

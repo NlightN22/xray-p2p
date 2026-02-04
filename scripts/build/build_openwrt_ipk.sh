@@ -388,10 +388,12 @@ run_for_target() {
   echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Building xp2p ipk"
   XP2P_PREBUILT="$xp2p_bin" \
   XP2P_XRAY="$xray_bin" \
+  XP2P_BUNDLE_DIR="$output_dir" \
   XP2P_COMPLETIONS="$completions_dir" \
     make package/xp2p/clean V=sc >/dev/null 2>&1 || true
   XP2P_PREBUILT="$xp2p_bin" \
   XP2P_XRAY="$xray_bin" \
+  XP2P_BUNDLE_DIR="$output_dir" \
   XP2P_COMPLETIONS="$completions_dir" \
     make package/xp2p/compile V=sc
 

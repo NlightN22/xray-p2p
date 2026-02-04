@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/xray"
 )
 
 type logPathResolver func(string) (string, error)
@@ -25,6 +26,10 @@ func runXrayWithConfig(
 	resolveLogPath logPathResolver,
 	configureCmd cmdConfigurator,
 ) error {
+	if err := xray.VerifyPinnedVersion(ctx, xrayPath); err != nil {
+		return err
+	}
+
 	var errorWriter io.Writer
 	var errorFile *os.File
 	if raw := strings.TrimSpace(errorLogPath); raw != "" {

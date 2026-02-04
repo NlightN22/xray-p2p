@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $projectRoot = Resolve-Path (Join-Path $scriptDir '..\..')
-$pinFile = Join-Path $projectRoot 'distro\xray\pinned.json'
+$pinFile = Join-Path $projectRoot 'go\internal\xray\pinned.json'
 
 if (-not (Test-Path $pinFile)) {
     throw "Pinned file not found at $pinFile"
