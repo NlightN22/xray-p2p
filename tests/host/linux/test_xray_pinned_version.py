@@ -74,18 +74,24 @@ def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_cl
     return credential
 
 
-def _patch_xray(host, expected: str, replacement: str) -> None:
-    linux_env.run_guest_script(
+def _patch_xray(host, replacement: str) -> None:
+    linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+    result = linux_env.run_guest_script(
         host,
-        "scripts/linux/patch_xray_version.sh",
+        "scripts/linux/wrap_xray_version.sh",
         helpers.XRAY_BINARY.as_posix(),
         XRAY_BACKUP.as_posix(),
-        expected,
         replacement,
     )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to wrap xray version.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _restore_xray(host) -> None:
+    linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
     if linux_env.path_exists(host, XRAY_BACKUP):
         linux_env.run_guest_script(
             host,
@@ -99,7 +105,9 @@ def _restore_xray(host) -> None:
 def _assert_mismatch_logged(host, role: str) -> None:
     log_path = RUN_LOG_SERVER if role == "server" else RUN_LOG_CLIENT
     content = linux_env.read_text(host, log_path).lower()
-    assert "xray version mismatch" in content, f"Expected version mismatch in {role} run log:\n{content}"
+    assert "xray version mismatch" in content, (
+        f"Expected version mismatch in {role} run log:\n{content}"
+    )
 
 
 def _assert_mismatch_warned(host, role: str) -> None:
@@ -150,27 +158,31 @@ def test_xray_pinned_version_rejects_mismatch(
     linux_env.remove_path(client_host, RUN_LOG_CLIENT)
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
-        _patch_xray(server_host, pinned, mismatch)
-        _patch_xray(client_host, pinned, mismatch)
+        _patch_xray(server_host, mismatch)
+        _patch_xray(client_host, mismatch)
 
         server_result = linux_env.run_guest_script(
             server_host,
-            "scripts/linux/start_xp2p_run.sh",
+            "scripts/linux/start_xp2p_run_with_env.sh",
             "server",
             helpers.INSTALL_ROOT.as_posix(),
             helpers.SERVER_CONFIG_DIR_NAME,
             helpers.SERVER_LOG_FILE.as_posix(),
+            "0",
+            "0",
         )
         assert server_result.rc != 0, "Expected server run to fail with mismatched xray"
         _assert_mismatch_logged(server_host, "server")
 
         client_result = linux_env.run_guest_script(
             client_host,
-            "scripts/linux/start_xp2p_run.sh",
+            "scripts/linux/start_xp2p_run_with_env.sh",
             "client",
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
             helpers.CLIENT_LOG_FILE.as_posix(),
+            "0",
+            "0",
         )
         assert client_result.rc != 0, "Expected client run to fail with mismatched xray"
         _assert_mismatch_logged(client_host, "client")
@@ -192,8 +204,8 @@ def test_xray_pinned_version_allows_override(
     linux_env.remove_path(client_host, RUN_LOG_CLIENT)
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
-        _patch_xray(server_host, pinned, mismatch)
-        _patch_xray(client_host, pinned, mismatch)
+        _patch_xray(server_host, mismatch)
+        _patch_xray(client_host, mismatch)
 
         with linux_env.xp2p_run_session_with_env(
             server_host,
@@ -202,6 +214,7 @@ def test_xray_pinned_version_allows_override(
             helpers.SERVER_CONFIG_DIR_NAME,
             helpers.SERVER_LOG_FILE,
             allow_mismatch=True,
+            auto_install=False,
         ) as server_session:
             assert server_session["pid"] > 0
             with linux_env.xp2p_run_session_with_env(
@@ -211,6 +224,7 @@ def test_xray_pinned_version_allows_override(
                 helpers.CLIENT_CONFIG_DIR_NAME,
                 helpers.CLIENT_LOG_FILE,
                 allow_mismatch=True,
+                auto_install=False,
             ) as client_session:
                 assert client_session["pid"] > 0
             time.sleep(1)

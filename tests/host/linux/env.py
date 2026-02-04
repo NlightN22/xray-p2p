@@ -215,10 +215,12 @@ def xp2p_run_session_with_env(
     log_path: str | Path | PurePosixPath,
     *,
     allow_mismatch: bool = False,
+    auto_install: bool = True,
 ):
     install_arg = _posix(install_dir)
     log_arg = _posix(log_path)
     allow_arg = "1" if allow_mismatch else "0"
+    auto_arg = "1" if auto_install else "0"
     result = run_guest_script(
         host,
         "scripts/linux/start_xp2p_run_with_env.sh",
@@ -227,6 +229,7 @@ def xp2p_run_session_with_env(
         config_dir,
         log_arg,
         allow_arg,
+        auto_arg,
     )
     if result.rc != 0:
         raise RuntimeError(

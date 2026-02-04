@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ "$#" -lt 5 ]; then
-  echo "Usage: start_xp2p_run_with_env.sh <role> <install_dir> <config_dir> <log_path> <allow_mismatch> [extra...]" >&2
+if [ "$#" -lt 6 ]; then
+  echo "Usage: start_xp2p_run_with_env.sh <role> <install_dir> <config_dir> <log_path> <allow_mismatch> <auto_install> [extra...]" >&2
   exit 2
 fi
 
@@ -11,7 +11,8 @@ INSTALL_DIR=$2
 CONFIG_DIR=$3
 LOG_PATH=$4
 ALLOW_MISMATCH=$5
-shift 5 || true
+AUTO_INSTALL=$6
+shift 6 || true
 
 if [ "$ROLE" != "server" ] && [ "$ROLE" != "client" ]; then
   echo "Unsupported role: $ROLE" >&2
@@ -21,7 +22,12 @@ fi
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$(dirname "$LOG_PATH")"
 
-CMD=(/usr/bin/xp2p "$ROLE" run --path "$INSTALL_DIR" --config-dir "$CONFIG_DIR" --auto-install --xray-log-file "$LOG_PATH" --quiet)
+CMD=(/usr/bin/xp2p "$ROLE" run --path "$INSTALL_DIR" --config-dir "$CONFIG_DIR" --xray-log-file "$LOG_PATH" --quiet)
+if [ "$AUTO_INSTALL" = "1" ]; then
+  CMD+=(--auto-install)
+else
+  CMD+=(--auto-install=false)
+fi
 if [ "$#" -gt 0 ]; then
   CMD+=("$@")
 fi
