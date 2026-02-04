@@ -104,25 +104,38 @@ def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_cl
     return credential
 
 
-def _patch_xray(server_host, client_host, expected: str, replacement: str) -> None:
+def _stop_xray(host) -> None:
+    script = """
+$xray = Get-Process -Name xray -ErrorAction SilentlyContinue
+if ($xray) {
+    foreach ($item in $xray) {
+        try { Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue } catch { }
+    }
+}
+"""
+    win_env.run_powershell(host, script)
+
+
+def _wrap_xray(server_host, client_host, fake_version: str) -> None:
     for host in (server_host, client_host):
+        _stop_xray(host)
         result = win_env.run_guest_script(
             host,
-            "scripts/patch_xray_version.ps1",
+            "scripts/wrap_xray_version.ps1",
             XrayPath=str(XRAY_PATH),
             BackupPath=str(XRAY_BACKUP),
-            ExpectedVersion=expected,
-            ReplacementVersion=replacement,
+            FakeVersion=fake_version,
         )
         if result.rc != 0:
             pytest.fail(
-                "Failed to patch xray version.\n"
+                "Failed to wrap xray version.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
 
 
 def _restore_xray(server_host, client_host) -> None:
     for host in (server_host, client_host):
+        _stop_xray(host)
         if win_env.path_exists(host, XRAY_BACKUP):
             win_env.run_guest_script(
                 host,
@@ -181,7 +194,7 @@ def test_xray_pinned_version_rejects_mismatch(
     win_env.remove_paths(client_host, [CLIENT_RUN_OUTPUT])
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
-        _patch_xray(server_host, client_host, pinned, mismatch)
+        _wrap_xray(server_host, client_host, mismatch)
 
         server_result = win_env.run_guest_script(
             server_host,
@@ -230,7 +243,7 @@ def test_xray_pinned_version_allows_override(
     win_env.remove_paths(client_host, [CLIENT_RUN_OUTPUT])
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
-        _patch_xray(server_host, client_host, pinned, mismatch)
+        _wrap_xray(server_host, client_host, mismatch)
 
         with _server_runtime.xp2p_server_run_session_with_env(
             server_host,
