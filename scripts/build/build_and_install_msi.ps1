@@ -180,16 +180,24 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "heat.exe failed with exit code $LASTEXITCODE"
     }
+    $bundleContent = Get-Content -Path $bundleWxs -Raw
+    $bundleContent = [regex]::Replace($bundleContent, '<Component(\s+)(?![^>]*\bWin64=)', '<Component Win64="yes"$1')
+    Set-Content -Path $bundleWxs -Value $bundleContent
 
     Write-Info "Running candle.exe"
     $wixObj = Join-Path $binaryDir 'xp2p.wixobj'
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative) $bundleWxs
+    $bundleObj = Join-Path $binaryDir 'xp2p-bundle.wixobj'
+    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative)
+    if ($LASTEXITCODE -ne 0) {
+        throw "candle.exe failed with exit code $LASTEXITCODE"
+    }
+    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $bundleObj $bundleWxs
     if ($LASTEXITCODE -ne 0) {
         throw "candle.exe failed with exit code $LASTEXITCODE"
     }
 
     Write-Info "Running light.exe"
-    & $light "-out" $msiPath $wixObj
+    & $light "-out" $msiPath $wixObj $bundleObj
     if ($LASTEXITCODE -ne 0) {
         throw "light.exe failed with exit code $LASTEXITCODE"
     }

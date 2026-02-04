@@ -218,13 +218,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "heat failed"
           }
-          & $candle "-dProductVersion=$env:VERSION" "-dXp2pBinary=$binary" "-dBundleDir=$bundleDir" "-out" "installer/wix/xp2p.wixobj" "installer/wix/xp2p.wxs" $bundleWxs
+          $bundleContent = Get-Content -Path $bundleWxs -Raw
+          $bundleContent = [regex]::Replace($bundleContent, '<Component(\\s+)(?![^>]*\\bWin64=)', '<Component Win64=\"yes\"$1')
+          Set-Content -Path $bundleWxs -Value $bundleContent
+          $wixObj = "installer/wix/xp2p.wixobj"
+          $bundleObj = "installer/wix/xp2p-bundle.wixobj"
+          & $candle "-dProductVersion=$env:VERSION" "-dXp2pBinary=$binary" "-dBundleDir=$bundleDir" "-out" $wixObj "installer/wix/xp2p.wxs"
+          if ($LASTEXITCODE -ne 0) {
+            throw "candle failed"
+          }
+          & $candle "-dProductVersion=$env:VERSION" "-dXp2pBinary=$binary" "-dBundleDir=$bundleDir" "-out" $bundleObj $bundleWxs
           if ($LASTEXITCODE -ne 0) {
             throw "candle failed"
           }
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           $msiPath = "dist/${{ env.RELEASE_NAME }}-$($env:VERSION)-windows-amd64.msi"
-          & $light "-out" $msiPath "installer/wix/xp2p.wixobj"
+          & $light "-out" $msiPath $wixObj $bundleObj
           if ($LASTEXITCODE -ne 0) {
             throw "light failed"
           }
@@ -358,13 +367,7 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
         run: |
           set -euo pipefail
-          pinned=$(python3 - <<'PY'
-import json
-with open("go/internal/xray/pinned.json", "r", encoding="utf-8") as handle:
-    data = json.load(handle)
-print(data.get("version", "").strip())
-PY
-          )
+          pinned=$(python3 -c 'import json; data=json.load(open("go/internal/xray/pinned.json", "r", encoding="utf-8")); print(data.get("version", "").strip())')
           if [ -z "$pinned" ]; then
             echo "Pinned version not found; skipping."
             exit 0
