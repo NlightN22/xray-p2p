@@ -14,7 +14,11 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $LogPath,
 
-    [int] $StabilizeSeconds = 6
+    [int] $StabilizeSeconds = 6,
+
+    [string] $AllowMismatch = "",
+
+    [string] $OutputLogPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -50,6 +54,27 @@ if (Test-Path $LogPath) {
 }
 
 $commandLine = "`"$Xp2pPath`" server run --quiet --path `"$InstallDir`" --config-dir `"$ConfigDir`" --xray-log-file `"$LogRelative`""
+$envPrefix = ""
+if ($AllowMismatch -and $AllowMismatch -ne "0") {
+    $envPrefix = "set XP2P_XRAY_ALLOW_MISMATCH=1&& "
+}
+
+$redirect = ""
+if ($OutputLogPath) {
+    $outputDir = Split-Path -Parent $OutputLogPath
+    if ($outputDir -and -not (Test-Path $outputDir)) {
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    }
+    if (Test-Path $OutputLogPath) {
+        Remove-Item $OutputLogPath -Force -ErrorAction SilentlyContinue
+    }
+    $redirect = " > `"$OutputLogPath`" 2>&1"
+}
+
+if ($envPrefix -or $redirect) {
+    $wrapped = $envPrefix + $commandLine + $redirect
+    $commandLine = "cmd.exe /c `"$wrapped`""
+}
 $workingDir = Split-Path $Xp2pPath
 $createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $commandLine; CurrentDirectory = $workingDir }
 if ($createResult.ReturnValue -ne 0 -or -not $createResult.ProcessId) {

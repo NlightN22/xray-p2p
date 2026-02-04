@@ -9,7 +9,15 @@ from . import env as _env
 CLIENT_RUN_STABILIZE_SECONDS = 6
 
 
-def _start_xp2p_client_run(host: Host, install_dir: str, config_dir: str, log_relative: str) -> int:
+def _start_xp2p_client_run(
+    host: Host,
+    install_dir: str,
+    config_dir: str,
+    log_relative: str,
+    *,
+    allow_mismatch: bool = False,
+    output_log_path: str | None = None,
+) -> int:
     log_abs = str(Path(install_dir) / Path(log_relative))
     result = _env.run_guest_script(
         host,
@@ -20,6 +28,8 @@ def _start_xp2p_client_run(host: Host, install_dir: str, config_dir: str, log_re
         LogRelative=log_relative,
         LogPath=log_abs,
         StabilizeSeconds=str(CLIENT_RUN_STABILIZE_SECONDS),
+        AllowMismatch="1" if allow_mismatch else "0",
+        OutputLogPath=output_log_path or "",
     )
     stdout = (result.stdout or "").strip()
 
@@ -88,6 +98,33 @@ def xp2p_client_run_session(host: Host, install_dir: str, config_dir: str, log_r
     pid_value = None
     try:
         pid_value = _start_xp2p_client_run(host, install_dir, config_dir, log_relative)
+        log_file = str(Path(install_dir) / Path(log_relative))
+        yield {"pid": pid_value, "log_path": log_file}
+    finally:
+        if pid_value is not None:
+            _stop_process(host, pid_value, install_dir, log_relative)
+
+
+@contextmanager
+def xp2p_client_run_session_with_env(
+    host: Host,
+    install_dir: str,
+    config_dir: str,
+    log_relative: str,
+    *,
+    allow_mismatch: bool = False,
+    output_log_path: str | None = None,
+):
+    pid_value = None
+    try:
+        pid_value = _start_xp2p_client_run(
+            host,
+            install_dir,
+            config_dir,
+            log_relative,
+            allow_mismatch=allow_mismatch,
+            output_log_path=output_log_path,
+        )
         log_file = str(Path(install_dir) / Path(log_relative))
         yield {"pid": pid_value, "log_path": log_file}
     finally:

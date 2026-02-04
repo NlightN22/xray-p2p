@@ -204,3 +204,41 @@ def xp2p_run_session(
         yield {"pid": int(pid_value), "log": log_arg}
     finally:
         run_guest_script(host, "scripts/linux/stop_process.sh", pid_value)
+
+
+@contextmanager
+def xp2p_run_session_with_env(
+    host: Host,
+    role: str,
+    install_dir: str | Path | PurePosixPath,
+    config_dir: str,
+    log_path: str | Path | PurePosixPath,
+    *,
+    allow_mismatch: bool = False,
+):
+    install_arg = _posix(install_dir)
+    log_arg = _posix(log_path)
+    allow_arg = "1" if allow_mismatch else "0"
+    result = run_guest_script(
+        host,
+        "scripts/linux/start_xp2p_run_with_env.sh",
+        role,
+        install_arg,
+        config_dir,
+        log_arg,
+        allow_arg,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to start xp2p {role} run with env (exit {result.rc}).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    pid_value = _install_marker("__XP2P_PID__=", result.stdout)
+    if not pid_value:
+        raise RuntimeError(
+            f"xp2p {role} run script did not emit PID marker.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    try:
+        yield {"pid": int(pid_value), "log": log_arg}
+    finally:
+        run_guest_script(host, "scripts/linux/stop_process.sh", pid_value)
