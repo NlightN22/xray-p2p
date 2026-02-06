@@ -49,6 +49,8 @@ def test_windows_client_deploy_end_to_end(
     xp2p_server_runner,
     xp2p_msi_path,
 ):
+    _stop_xp2p_processes(client_host)
+    _stop_xp2p_processes(server_host)
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
     xp2p_server_runner("server", "remove", "--ignore-missing")
     _remove_paths(client_host, [CLIENT_CONFIG_DIR, *CLIENT_STATE_FILES])
@@ -150,6 +152,8 @@ def test_windows_client_deploy_end_to_end(
             _stop_process(client_host, client_proc["pid"])
         if server_proc:
             _stop_process(server_host, server_proc["pid"])
+        _stop_xp2p_processes(client_host)
+        _stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
         for host in (client_host, server_host):
@@ -165,6 +169,8 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     xp2p_server_runner,
     xp2p_msi_path,
 ):
+    _stop_xp2p_processes(client_host)
+    _stop_xp2p_processes(server_host)
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
     xp2p_server_runner("server", "remove", "--ignore-missing")
     _remove_paths(client_host, [CLIENT_CONFIG_DIR, *CLIENT_STATE_FILES])
@@ -266,6 +272,8 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             _stop_process(client_host, client_proc["pid"])
         if server_proc:
             _stop_process(server_host, server_proc["pid"])
+        _stop_xp2p_processes(client_host)
+        _stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
         for host in (client_host, server_host):
@@ -361,6 +369,18 @@ def _stop_process(host, pid: int) -> None:
     if result.rc != 0:
         pytest.fail(
             f"Failed to stop process {pid}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _stop_xp2p_processes(host) -> None:
+    result = win_env.run_guest_script(
+        host,
+        "scripts/kill_xp2p_processes.ps1",
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to stop xp2p processes.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 
 

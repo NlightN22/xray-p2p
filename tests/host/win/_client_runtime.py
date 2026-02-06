@@ -19,17 +19,23 @@ def _start_xp2p_client_run(
     output_log_path: str | None = None,
 ) -> int:
     log_abs = str(Path(install_dir) / Path(log_relative))
+    parameters: dict[str, object] = {
+        "Xp2pPath": str(_env.XP2P_EXE),
+        "InstallDir": install_dir,
+        "ConfigDir": config_dir,
+        "LogRelative": log_relative,
+        "LogPath": log_abs,
+        "StabilizeSeconds": str(CLIENT_RUN_STABILIZE_SECONDS),
+    }
+    if allow_mismatch:
+        parameters["AllowMismatch"] = "1"
+    if output_log_path:
+        parameters["OutputLogPath"] = output_log_path
+
     result = _env.run_guest_script(
         host,
         "scripts/start_xp2p_client_run.ps1",
-        Xp2pPath=str(_env.XP2P_EXE),
-        InstallDir=install_dir,
-        ConfigDir=config_dir,
-        LogRelative=log_relative,
-        LogPath=log_abs,
-        StabilizeSeconds=str(CLIENT_RUN_STABILIZE_SECONDS),
-        AllowMismatch="1" if allow_mismatch else "0",
-        OutputLogPath=output_log_path or "",
+        **parameters,
     )
     stdout = (result.stdout or "").strip()
 
