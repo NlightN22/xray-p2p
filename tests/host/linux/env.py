@@ -84,7 +84,6 @@ def _install_marker(marker: str, output: str | None) -> str | None:
 
 def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     global _DEB_BUILD_READY
-    print(f"[xp2p] ensure install start: {machine}")
     host.run("sudo -n chmod +x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh >/dev/null 2>&1 || true")
 
     if _DEB_BUILD_READY:
@@ -109,7 +108,6 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     versions = {"source": source_version, "installed": installed_version}
     _VERSION_CACHE[machine] = versions
     _DEB_BUILD_READY = True
-    print(f"[xp2p] ensure install done: {machine} source={source_version} installed={installed_version}")
     return versions
 
 

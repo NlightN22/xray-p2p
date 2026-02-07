@@ -101,6 +101,8 @@ guest suites -- the CI and fellow contributors expect these rules.
 - Platform fixtures already install xp2p (MSI on Windows, `.deb` on Debian). Skip
   extra copying unless a test requires a custom build; in that case, use the
   helper scripts from `scripts/build/` and stage artefacts via the synced folder.
+- For Linux host suites, build the `.deb` package only once per pytest session
+  and reuse it across guests; avoid rebuilding per machine in the same test run.
 - Cache results when practical: leverage the `lru_cache` helpers in `_env.py`
   so we do not spam `vagrant status` or `ssh-config`.
 - Batch related guest operations into a single `run_powershell` call whenever
