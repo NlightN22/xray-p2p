@@ -44,6 +44,19 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 		return serverInstallBase{}, err
 	}
 
+	tunEnabled := opts.TunEnabled
+	if !opts.TunEnabledSet {
+		tunEnabled = true
+	}
+	tunName := strings.TrimSpace(opts.TunName)
+	if tunName == "" {
+		tunName = "xp2ps"
+	}
+	tunMTU := opts.TunMTU
+	if tunMTU <= 0 {
+		tunMTU = 1500
+	}
+
 	return serverInstallBase{
 		installDir: installDir,
 		configDir:  configDir,
@@ -65,6 +78,10 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 			Host:            host,
 			Force:           opts.Force,
 			RelaxedPathValidation: opts.RelaxedPathValidation,
+			TunEnabled:      tunEnabled,
+			TunEnabledSet:   opts.TunEnabledSet,
+			TunName:         tunName,
+			TunMTU:          tunMTU,
 		},
 	}, nil
 }

@@ -30,6 +30,10 @@ type InstallOptions struct {
 	Host            string
 	Force           bool
 	RelaxedPathValidation bool
+	TunEnabled      bool
+	TunEnabledSet   bool
+	TunName         string
+	TunMTU          int
 }
 
 // CertificateOptions describes how TLS material should be provisioned for an existing installation.
@@ -42,6 +46,10 @@ type CertificateOptions struct {
 	Host            string
 	Force           bool
 	RelaxedPathValidation bool
+	TunEnabled      bool
+	TunEnabledSet   bool
+	TunName         string
+	TunMTU          int
 }
 
 // RunOptions controls execution of the xray-core process.

@@ -20,6 +20,9 @@ func TestRunClientInstall(t *testing.T) {
 			Password:      "default-password",
 			ServerName:    "default.name",
 			AllowInsecure: false,
+			TunEnabled:    true,
+			TunName:       "xp2pc",
+			TunMTU:        1500,
 		},
 	}
 
@@ -60,6 +63,10 @@ func TestRunClientInstall(t *testing.T) {
 					AllowInsecure:         true,
 					AllowInsecureOverride: true,
 					Force:                 true,
+					TunEnabled:            true,
+					TunEnabledSet:         true,
+					TunName:               "xp2pc",
+					TunMTU:                1500,
 				}, "install options")
 			},
 		},

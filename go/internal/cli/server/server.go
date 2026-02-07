@@ -155,6 +155,10 @@ func buildInstallOptions(ctx context.Context, cfg config.Config, opts serverInst
 		KeyFile:         clishared.FirstNonEmpty(opts.Key, cfg.Server.KeyFile),
 		Host:            hostValue,
 		Force:           opts.Force,
+		TunEnabled:      cfg.Server.TunEnabled,
+		TunEnabledSet:   true,
+		TunName:         cfg.Server.TunName,
+		TunMTU:          cfg.Server.TunMTU,
 	}, nil
 }
 

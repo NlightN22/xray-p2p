@@ -133,6 +133,10 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		AllowInsecure:         allowInsecureValue,
 		AllowInsecureOverride: allowOverride,
 		Force:                 *force,
+		TunEnabled:            cfg.Client.TunEnabled,
+		TunEnabledSet:         true,
+		TunName:               cfg.Client.TunName,
+		TunMTU:                cfg.Client.TunMTU,
 	}
 	if *allowInsecure {
 		opts.AllowInsecure = true

@@ -175,8 +175,22 @@ func resolveConfigDir(base, cfg string) (string, error) {
 }
 
 func deployConfiguration(state installState) error {
-	if err := writeEmbeddedFileIfMissing(clientTemplates, "assets/templates/inbounds.json", filepath.Join(state.configDir, "inbounds.json"), 0o644); err != nil {
-		return err
+	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
+	if state.TunEnabled {
+		data := struct {
+			TunName string
+			TunMTU  int
+		}{
+			TunName: state.TunName,
+			TunMTU:  state.TunMTU,
+		}
+		if err := renderEmbeddedTemplateIfMissing(clientTemplates, "assets/templates/inbounds.tun.json.tmpl", inboundsPath, data); err != nil {
+			return err
+		}
+	} else {
+		if err := writeEmbeddedFileIfMissing(clientTemplates, "assets/templates/inbounds.proxy.json", inboundsPath, 0o644); err != nil {
+			return err
+		}
 	}
 
 	if err := writeEmbeddedFileIfMissing(clientTemplates, "assets/templates/logs.json", filepath.Join(state.configDir, "logs.json"), 0o644); err != nil {

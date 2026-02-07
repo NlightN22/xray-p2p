@@ -1,15 +1,6 @@
 {
     "inbounds": [
         {
-            "tag": "tun-in",
-            "port": 0,
-            "protocol": "tun",
-            "settings": {
-                "name": "xp2ps",
-                "mtu": 1500
-            }
-        },
-        {
             "tag": "socks-in",
             "protocol": "socks",
             "listen": "127.0.0.1",

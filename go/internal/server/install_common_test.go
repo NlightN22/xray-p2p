@@ -41,6 +41,15 @@ func TestBuildServerInstallBaseDefaults(t *testing.T) {
 	if base.installOpts.ConfigDir != "config-server" {
 		t.Fatalf("installOpts configDir = %s", base.installOpts.ConfigDir)
 	}
+	if !base.installOpts.TunEnabled {
+		t.Fatalf("expected tun enabled by default")
+	}
+	if base.installOpts.TunName != "xp2ps" {
+		t.Fatalf("expected tun name xp2ps, got %s", base.installOpts.TunName)
+	}
+	if base.installOpts.TunMTU != 1500 {
+		t.Fatalf("expected tun MTU 1500, got %d", base.installOpts.TunMTU)
+	}
 }
 
 func TestBuildServerInstallBaseRejectsKeyWithoutCert(t *testing.T) {

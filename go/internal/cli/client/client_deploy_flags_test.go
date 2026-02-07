@@ -97,6 +97,9 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 		Client: config.ClientConfig{
 			InstallDir: `C:\xp2p`,
 			ConfigDir:  "cfg-client",
+			TunEnabled: true,
+			TunName:    "xp2pc",
+			TunMTU:     1500,
 		},
 	}
 
@@ -117,5 +120,11 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	}
 	if !opts.AllowInsecure {
 		t.Fatalf("expected allow insecure")
+	}
+	if !opts.TunEnabled || !opts.TunEnabledSet {
+		t.Fatalf("expected tun enabled defaults")
+	}
+	if opts.TunName != "xp2pc" || opts.TunMTU != 1500 {
+		t.Fatalf("unexpected tun defaults: %+v", opts)
 	}
 }

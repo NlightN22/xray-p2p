@@ -45,6 +45,10 @@ func TestRunServerInstall(t *testing.T) {
 					KeyFile:         `C:\certs\server.key`,
 					Host:            "custom.example.test",
 					Force:           true,
+					TunEnabled:      true,
+					TunEnabledSet:   true,
+					TunName:         "xp2ps",
+					TunMTU:          1500,
 				}, "install options")
 			},
 		},

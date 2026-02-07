@@ -5,8 +5,8 @@
             "port": 0,
             "protocol": "tun",
             "settings": {
-                "name": "xp2pc",
-                "mtu": 1500
+                "name": "{{ .TunName }}",
+                "mtu": {{ .TunMTU }}
             }
         },
         {

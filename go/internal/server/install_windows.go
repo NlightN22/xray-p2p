@@ -285,6 +285,8 @@ func deployConfiguration(state installState) error {
 		AllowInsecure   bool
 		CertificateFile string
 		KeyFile         string
+		TunName         string
+		TunMTU          int
 	}{
 		TrojanPort:      state.portValue,
 		SocksPort:       socksInboundPort,
@@ -293,9 +295,15 @@ func deployConfiguration(state installState) error {
 		AllowInsecure:   allowInsecure,
 		CertificateFile: certPath,
 		KeyFile:         keyPath,
+		TunName:         state.TunName,
+		TunMTU:          state.TunMTU,
 	}
 
-	if err := renderTemplateToFile("assets/templates/inbounds.json.tmpl", filepath.Join(state.configDir, "inbounds.json"), data); err != nil {
+	inboundsTemplate := "assets/templates/inbounds.json.tmpl"
+	if state.TunEnabled {
+		inboundsTemplate = "assets/templates/inbounds.tun.json.tmpl"
+	}
+	if err := renderTemplateToFile(inboundsTemplate, filepath.Join(state.configDir, "inbounds.json"), data); err != nil {
 		return err
 	}
 	staticFiles := map[string]string{

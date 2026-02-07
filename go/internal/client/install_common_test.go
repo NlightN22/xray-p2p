@@ -28,6 +28,15 @@ func TestBuildClientInstallBaseDefaults(t *testing.T) {
 	if base.stateFile != filepath.Join(installDir, "install-state-client.json") {
 		t.Fatalf("stateFile = %s", base.stateFile)
 	}
+	if !base.installOpts.TunEnabled {
+		t.Fatalf("expected tun enabled by default")
+	}
+	if base.installOpts.TunName != "xp2pc" {
+		t.Fatalf("expected tun name xp2pc, got %s", base.installOpts.TunName)
+	}
+	if base.installOpts.TunMTU != 1500 {
+		t.Fatalf("expected tun MTU 1500, got %d", base.installOpts.TunMTU)
+	}
 }
 
 func TestBuildClientInstallBaseRequiresInputs(t *testing.T) {

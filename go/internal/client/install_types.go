@@ -28,6 +28,10 @@ type InstallOptions struct {
 	AllowInsecure         bool
 	AllowInsecureOverride bool
 	Force                 bool
+	TunEnabled            bool
+	TunEnabledSet         bool
+	TunName               string
+	TunMTU                int
 }
 
 // RunOptions controls execution of the xray-core client process.

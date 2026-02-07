@@ -97,6 +97,44 @@ xp2p server service start
 xp2p client reverse list
 ```
 
+## TUN setup
+
+TUN interfaces default to `xp2pc` (client) and `xp2ps` (server). When you change the names or MTU values, update the OS network configuration and re-run `xp2p {client,server} install`.
+
+### OpenWrt
+
+Client example:
+```sh
+uci -q delete network.xp2pc
+uci set network.xp2pc='interface'
+uci set network.xp2pc.device='xp2pc'
+uci set network.xp2pc.proto='static'
+uci add_list network.xp2pc.ipaddr='198.18.0.1/30'
+uci commit network
+/etc/init.d/network restart
+ip a show dev xp2pc
+```
+
+Server example:
+```sh
+uci -q delete network.xp2ps
+uci set network.xp2ps='interface'
+uci set network.xp2ps.device='xp2ps'
+uci set network.xp2ps.proto='static'
+uci add_list network.xp2ps.ipaddr='198.18.0.5/30'
+uci commit network
+/etc/init.d/network restart
+ip a show dev xp2ps
+```
+
+### Linux (systemd-networkd)
+
+Use the sample files in `distro/linux/systemd/90-xp2pc.network` and `distro/linux/systemd/90-xp2ps.network`. They configure policy routing for the TUN interfaces and are applied when the interfaces appear.
+
+### Windows
+
+Place `wintun.dll` next to `xp2p.exe` and `xray.exe` (for MSI installs this is the `bin` directory). The TUN interface is created automatically when Xray starts.
+
 ## Configuration
 
 `xp2p` reads configuration in the following order: built-in defaults > optional file > environment variables > CLI overrides. By default it scans for `xp2p.yaml|yml|toml` in the current directory, or you can pass `--config path/to/file`. Settings map 1:1 to environment variables via the `XP2P_` prefix (`XP2P_SERVER_INSTALL_DIR`, `XP2P_CLIENT_SERVER_ADDRESS`, etc.). See `config_templates/xp2p.example.yaml` for a starting point:
@@ -111,6 +149,9 @@ server:
   install_dir: C:\xp2p
   config_dir: config-server
   host: edge.example.com
+  tun_enabled: true
+  tun_name: xp2ps
+  tun_mtu: 1500
 
 client:
   install_dir: C:\xp2p
@@ -119,12 +160,16 @@ client:
   server_port: 8443
   diag_port: 62023
   allow_insecure: true
+  tun_enabled: true
+  tun_name: xp2pc
+  tun_mtu: 1500
 ```
 
 Every command shares global flags such as `--config`, `--log-level`, `--log-json`, `--diag-service-port`, and `--diag-service-mode`. Run `xp2p completion <shell>` to install shell completions or `xp2p docs --dir ./docs/cli` to generate a Markdown command reference straight from the Cobra tree.
 Runtime checks validate the pinned xray version before launch. Override with `XP2P_XRAY_SKIP_VERSION_CHECK=1` to skip the check or `XP2P_XRAY_ALLOW_MISMATCH=1` to warn and continue on mismatches.
 
 By default the xp2p server diagnostics responder listens on TCP/UDP port `62022`, while the client-side diagnostics service uses `62023` to avoid conflicts on hosts that run both roles. Override them through the configuration (`server.port` / `client.diag_port`) or environment variables when needed.
+TUN inbounds are enabled by default for both roles. Disable them by setting `client.tun_enabled=false` and/or `server.tun_enabled=false` and re-running the install.
 
 ## Typical workflows
 

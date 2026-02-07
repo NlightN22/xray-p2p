@@ -1,0 +1,17 @@
+[Match]
+Name = xp2ps
+
+[Network]
+KeepConfiguration = yes
+
+[Link]
+ActivationPolicy = manual
+RequiredForOnline = no
+
+[Route]
+Table = 1002
+Destination = 0.0.0.0/0
+
+[RoutingPolicyRule]
+From = 192.168.1.0/24
+Table = 1002

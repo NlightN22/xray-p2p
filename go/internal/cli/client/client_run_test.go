@@ -35,6 +35,9 @@ func TestRunClientRun(t *testing.T) {
 						Password:      "secret",
 						ServerName:    "sni.example.org",
 						AllowInsecure: false,
+						TunEnabled:    true,
+						TunName:       "xp2pc",
+						TunMTU:        1500,
 					},
 				}
 			},
@@ -69,6 +72,9 @@ func TestRunClientRun(t *testing.T) {
 						ConfigDir:     client.DefaultClientConfigDir,
 						SocksAddress:  "127.0.0.1:5555",
 						ServerAddress: "edge.example.org",
+						TunEnabled:    true,
+						TunName:       "xp2pc",
+						TunMTU:        1500,
 					},
 					Server: config.ServerConfig{
 						Port: "63000",
@@ -101,6 +107,9 @@ func TestRunClientRun(t *testing.T) {
 					Client: config.ClientConfig{
 						InstallDir: filepath.Join(t.TempDir(), "client"),
 						ConfigDir:  client.DefaultClientConfigDir,
+						TunEnabled: true,
+						TunName:    "xp2pc",
+						TunMTU:     1500,
 					},
 				}
 			},

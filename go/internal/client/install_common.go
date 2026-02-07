@@ -53,6 +53,19 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 		serverName = address
 	}
 
+	tunEnabled := opts.TunEnabled
+	if !opts.TunEnabledSet {
+		tunEnabled = true
+	}
+	tunName := strings.TrimSpace(opts.TunName)
+	if tunName == "" {
+		tunName = "xp2pc"
+	}
+	tunMTU := opts.TunMTU
+	if tunMTU <= 0 {
+		tunMTU = 1500
+	}
+
 	return clientInstallBase{
 		installDir: installDir,
 		configDir:  configDir,
@@ -74,6 +87,10 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			AllowInsecure:         opts.AllowInsecure,
 			AllowInsecureOverride: opts.AllowInsecureOverride,
 			Force:                 opts.Force,
+			TunEnabled:            tunEnabled,
+			TunEnabledSet:         opts.TunEnabledSet,
+			TunName:               tunName,
+			TunMTU:                tunMTU,
 		},
 	}, nil
 }

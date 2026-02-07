@@ -16,7 +16,16 @@ import (
 )
 
 func serverCfg(installDir, configDir, host string) config.Config {
-	return config.Config{Server: config.ServerConfig{InstallDir: installDir, ConfigDir: configDir, Host: host}}
+	return config.Config{
+		Server: config.ServerConfig{
+			InstallDir: installDir,
+			ConfigDir:  configDir,
+			Host:       host,
+			TunEnabled: true,
+			TunName:    "xp2ps",
+			TunMTU:     1500,
+		},
+	}
 }
 
 func requireEqual[T comparable](t *testing.T, got, want T, label string) {

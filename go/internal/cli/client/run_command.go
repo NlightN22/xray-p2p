@@ -123,6 +123,10 @@ func performClientInstall(ctx context.Context, cfg config.Config, installDir, co
 		Password:      cfg.Client.Password,
 		ServerName:    cfg.Client.ServerName,
 		AllowInsecure: cfg.Client.AllowInsecure,
+		TunEnabled:    cfg.Client.TunEnabled,
+		TunEnabledSet: true,
+		TunName:       cfg.Client.TunName,
+		TunMTU:        cfg.Client.TunMTU,
 	}
 	return clientInstallFunc(ctx, opts)
 }

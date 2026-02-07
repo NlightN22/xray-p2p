@@ -216,6 +216,10 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		Host:                   host,
 		Force:                  true,
 		RelaxedPathValidation:  true,
+		TunEnabled:             s.Cfg.Server.TunEnabled,
+		TunEnabledSet:          true,
+		TunName:                s.Cfg.Server.TunName,
+		TunMTU:                 s.Cfg.Server.TunMTU,
 	}
 	if err := server.Install(ctx, inst); err != nil {
 		if server.IsCertificateValidationError(err) {

@@ -19,6 +19,9 @@ func clientCfg(installDir, configDir string) config.Config {
 		Client: config.ClientConfig{
 			InstallDir: installDir,
 			ConfigDir:  configDir,
+			TunEnabled: true,
+			TunName:    "xp2pc",
+			TunMTU:     1500,
 		},
 	}
 }
