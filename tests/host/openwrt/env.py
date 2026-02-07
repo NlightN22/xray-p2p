@@ -354,6 +354,11 @@ def run_xp2p(host: Host, *args: str):
     return host.run(command)
 
 
+def run_xp2p_with_env(host: Host, env_vars: dict[str, str], *args: str):
+    assignments = [f"{key}={value}" for key, value in env_vars.items()]
+    return run_guest_script(host, "scripts/openwrt/run_xp2p_with_env.sh", *assignments, "--", *args)
+
+
 def resolve_target_from_env() -> str:
     return os.environ.get(TARGET_ENV_VAR, DEFAULT_TARGET)
 

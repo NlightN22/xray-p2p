@@ -37,6 +37,69 @@ def _prepare_host(openwrt_host, xp2p_openwrt_ipk):
 
 @pytest.mark.host
 @pytest.mark.linux
+def test_client_install_default_creates_tun_inbound(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
+    try:
+        runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--host",
+            "10.55.0.12",
+            "--user",
+            "tun-default@example.com",
+            "--password",
+            "tun-default-pass",
+            check=True,
+        )
+
+        inbounds = helpers.read_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        helpers.assert_tun_inbound(inbounds, "xp2pc")
+    finally:
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_client_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
+    try:
+        result = openwrt_env.run_xp2p_with_env(
+            openwrt_host,
+            {"XP2P_CLIENT_TUN_ENABLED": "false"},
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--host",
+            "10.55.0.13",
+            "--user",
+            "tun-disabled@example.com",
+            "--password",
+            "tun-disabled-pass",
+            "--force",
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p command failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+
+        inbounds = helpers.read_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        helpers.assert_no_tun_inbound(inbounds)
+    finally:
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
+
+
+@pytest.mark.host
+@pytest.mark.linux
 def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:

@@ -32,6 +32,7 @@ type InstallOptions struct {
 	TunEnabledSet         bool
 	TunName               string
 	TunMTU                int
+	TunAddr               string
 }
 
 // RunOptions controls execution of the xray-core client process.
@@ -68,4 +69,5 @@ type RemoveOptions struct {
 	ConfigDir     string
 	KeepFiles     bool
 	IgnoreMissing bool
+	TunName       string
 }

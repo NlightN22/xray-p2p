@@ -56,6 +56,10 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 	if tunMTU <= 0 {
 		tunMTU = 1500
 	}
+	tunAddr := strings.TrimSpace(opts.TunAddr)
+	if tunAddr == "" {
+		tunAddr = "198.18.0.5/30"
+	}
 
 	return serverInstallBase{
 		installDir: installDir,
@@ -69,19 +73,20 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 		selfSigned: inputs.selfSigned,
 		certStore:  strings.TrimSpace(opts.CertificateStore),
 		installOpts: InstallOptions{
-			InstallDir:      installDir,
-			ConfigDir:       opts.ConfigDir,
-			Port:            portStr,
-			CertificateStore: strings.TrimSpace(opts.CertificateStore),
-			CertificateFile: inputs.certPath,
-			KeyFile:         inputs.keyPath,
-			Host:            host,
-			Force:           opts.Force,
+			InstallDir:            installDir,
+			ConfigDir:             opts.ConfigDir,
+			Port:                  portStr,
+			CertificateStore:      strings.TrimSpace(opts.CertificateStore),
+			CertificateFile:       inputs.certPath,
+			KeyFile:               inputs.keyPath,
+			Host:                  host,
+			Force:                 opts.Force,
 			RelaxedPathValidation: opts.RelaxedPathValidation,
-			TunEnabled:      tunEnabled,
-			TunEnabledSet:   opts.TunEnabledSet,
-			TunName:         tunName,
-			TunMTU:          tunMTU,
+			TunEnabled:            tunEnabled,
+			TunEnabledSet:         opts.TunEnabledSet,
+			TunName:               tunName,
+			TunMTU:                tunMTU,
+			TunAddr:               tunAddr,
 		},
 	}, nil
 }

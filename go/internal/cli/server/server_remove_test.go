@@ -23,6 +23,7 @@ func TestRunServerRemove(t *testing.T) {
 			wantOpts: server.RemoveOptions{
 				InstallDir: `C:\xp2p`,
 				ConfigDir:  server.DefaultServerConfigDir,
+				TunName:    "xp2ps",
 			},
 		},
 		{
@@ -35,6 +36,7 @@ func TestRunServerRemove(t *testing.T) {
 				ConfigDir:     "srv-cfg",
 				KeepFiles:     true,
 				IgnoreMissing: true,
+				TunName:       "xp2ps",
 			},
 		},
 	}

@@ -37,6 +37,9 @@ func TestBuildClientInstallBaseDefaults(t *testing.T) {
 	if base.installOpts.TunMTU != 1500 {
 		t.Fatalf("expected tun MTU 1500, got %d", base.installOpts.TunMTU)
 	}
+	if base.installOpts.TunAddr != "198.18.0.1/30" {
+		t.Fatalf("expected tun addr 198.18.0.1/30, got %s", base.installOpts.TunAddr)
+	}
 }
 
 func TestBuildClientInstallBaseRequiresInputs(t *testing.T) {

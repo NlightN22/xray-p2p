@@ -14,6 +14,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 )
 
 //go:embed assets/templates/*
@@ -59,6 +60,11 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := deployConfiguration(state); err != nil {
 		return err
 	}
+	if state.TunEnabled {
+		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
+			return err
+		}
+	}
 
 	logging.Info("xp2p client install completed", "install_dir", state.installDir)
 	return nil
@@ -82,6 +88,9 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	configDir, err := resolveConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
+		return err
+	}
+	if err := openwrt.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
 		return err
 	}
 

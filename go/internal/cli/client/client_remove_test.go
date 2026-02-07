@@ -24,6 +24,7 @@ func TestRunClientRemoveAll(t *testing.T) {
 		ConfigDir:     cfg.Client.ConfigDir,
 		KeepFiles:     true,
 		IgnoreMissing: true,
+		TunName:       "xp2pc",
 	}
 	requireEqual(t, capture.removeOpts, want, "remove options")
 	if capture.endpointCalled {

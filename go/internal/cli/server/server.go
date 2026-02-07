@@ -90,6 +90,7 @@ func runServerRemove(ctx context.Context, cfg config.Config, opts serverRemoveCo
 		ConfigDir:     clishared.FirstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		KeepFiles:     opts.KeepFiles,
 		IgnoreMissing: opts.IgnoreMissing,
+		TunName:       cfg.Server.TunName,
 	}
 
 	if !opts.Quiet {
@@ -147,18 +148,19 @@ func buildInstallOptions(ctx context.Context, cfg config.Config, opts serverInst
 	}
 
 	return server.InstallOptions{
-		InstallDir:      clishared.FirstNonEmpty(opts.Path, cfg.Server.InstallDir),
-		ConfigDir:       clishared.FirstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
-		Port:            portValue,
+		InstallDir:       clishared.FirstNonEmpty(opts.Path, cfg.Server.InstallDir),
+		ConfigDir:        clishared.FirstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		Port:             portValue,
 		CertificateStore: clishared.FirstNonEmpty(opts.CertStore, cfg.Server.CertificateStore),
-		CertificateFile: clishared.FirstNonEmpty(opts.Cert, cfg.Server.CertificateFile),
-		KeyFile:         clishared.FirstNonEmpty(opts.Key, cfg.Server.KeyFile),
-		Host:            hostValue,
-		Force:           opts.Force,
-		TunEnabled:      cfg.Server.TunEnabled,
-		TunEnabledSet:   true,
-		TunName:         cfg.Server.TunName,
-		TunMTU:          cfg.Server.TunMTU,
+		CertificateFile:  clishared.FirstNonEmpty(opts.Cert, cfg.Server.CertificateFile),
+		KeyFile:          clishared.FirstNonEmpty(opts.Key, cfg.Server.KeyFile),
+		Host:             hostValue,
+		Force:            opts.Force,
+		TunEnabled:       cfg.Server.TunEnabled,
+		TunEnabledSet:    true,
+		TunName:          cfg.Server.TunName,
+		TunMTU:           cfg.Server.TunMTU,
+		TunAddr:          cfg.Server.TunAddr,
 	}, nil
 }
 

@@ -127,6 +127,7 @@ func performClientInstall(ctx context.Context, cfg config.Config, installDir, co
 		TunEnabledSet: true,
 		TunName:       cfg.Client.TunName,
 		TunMTU:        cfg.Client.TunMTU,
+		TunAddr:       cfg.Client.TunAddr,
 	}
 	return clientInstallFunc(ctx, opts)
 }

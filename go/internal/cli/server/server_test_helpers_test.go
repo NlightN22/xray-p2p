@@ -24,6 +24,7 @@ func serverCfg(installDir, configDir, host string) config.Config {
 			TunEnabled: true,
 			TunName:    "xp2ps",
 			TunMTU:     1500,
+			TunAddr:    "198.18.0.5/30",
 		},
 	}
 }

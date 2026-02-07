@@ -62,6 +62,29 @@ assert_no_redirect_rule = linux_helpers.assert_no_redirect_rule
 assert_outbound = linux_helpers.assert_outbound
 
 
+def find_tun_inbound(data: dict) -> dict | None:
+    for inbound in data.get("inbounds", []) or []:
+        if isinstance(inbound, dict) and inbound.get("protocol") == "tun":
+            return inbound
+    return None
+
+
+def assert_tun_inbound(data: dict, expected_name: str) -> None:
+    inbound = find_tun_inbound(data)
+    if not inbound:
+        raise AssertionError("Expected tun inbound not found")
+    settings = inbound.get("settings") or {}
+    recorded_name = (settings.get("name") or "").strip()
+    if recorded_name != expected_name:
+        raise AssertionError(f"Expected tun inbound name {expected_name}, got {recorded_name}")
+
+
+def assert_no_tun_inbound(data: dict) -> None:
+    inbound = find_tun_inbound(data)
+    if inbound:
+        raise AssertionError(f"Unexpected tun inbound present: {inbound}")
+
+
 def _posix(value: PurePosixPath | Path | str) -> str:
     if isinstance(value, (PurePosixPath, Path)):
         return value.as_posix()

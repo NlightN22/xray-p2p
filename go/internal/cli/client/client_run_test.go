@@ -38,6 +38,7 @@ func TestRunClientRun(t *testing.T) {
 						TunEnabled:    true,
 						TunName:       "xp2pc",
 						TunMTU:        1500,
+						TunAddr:       "198.18.0.1/30",
 					},
 				}
 			},
@@ -75,6 +76,7 @@ func TestRunClientRun(t *testing.T) {
 						TunEnabled:    true,
 						TunName:       "xp2pc",
 						TunMTU:        1500,
+						TunAddr:       "198.18.0.1/30",
 					},
 					Server: config.ServerConfig{
 						Port: "63000",
@@ -110,6 +112,7 @@ func TestRunClientRun(t *testing.T) {
 						TunEnabled: true,
 						TunName:    "xp2pc",
 						TunMTU:     1500,
+						TunAddr:    "198.18.0.1/30",
 					},
 				}
 			},

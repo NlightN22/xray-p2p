@@ -34,6 +34,7 @@ type InstallOptions struct {
 	TunEnabledSet   bool
 	TunName         string
 	TunMTU          int
+	TunAddr         string
 }
 
 // CertificateOptions describes how TLS material should be provisioned for an existing installation.
@@ -50,6 +51,7 @@ type CertificateOptions struct {
 	TunEnabledSet   bool
 	TunName         string
 	TunMTU          int
+	TunAddr         string
 }
 
 // RunOptions controls execution of the xray-core process.
@@ -75,4 +77,5 @@ type RemoveOptions struct {
 	ConfigDir     string
 	KeepFiles     bool
 	IgnoreMissing bool
+	TunName       string
 }

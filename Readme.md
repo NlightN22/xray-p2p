@@ -99,31 +99,35 @@ xp2p client reverse list
 
 ## TUN setup
 
-TUN interfaces default to `xp2pc` (client) and `xp2ps` (server). When you change the names or MTU values, update the OS network configuration and re-run `xp2p {client,server} install`.
+TUN interfaces default to `xp2pc` (client) and `xp2ps` (server). When you change the names, MTU values, or addresses, update the OS network configuration and re-run `xp2p {client,server} install`.
 
 ### OpenWrt
 
-Client example:
+On OpenWrt, `xp2p` provisions the UCI network interface for you when TUN is enabled and removes it on `xp2p {client,server} remove`. Use the commands below only when you need manual overrides or recovery.
+
+Client example (manual override):
 ```sh
 uci -q delete network.xp2pc
 uci set network.xp2pc='interface'
 uci set network.xp2pc.device='xp2pc'
 uci set network.xp2pc.proto='static'
 uci add_list network.xp2pc.ipaddr='198.18.0.1/30'
+uci set network.xp2pc.xp2p_managed='1'
 uci commit network
-/etc/init.d/network restart
+/etc/init.d/network reload
 ip a show dev xp2pc
 ```
 
-Server example:
+Server example (manual override):
 ```sh
 uci -q delete network.xp2ps
 uci set network.xp2ps='interface'
 uci set network.xp2ps.device='xp2ps'
 uci set network.xp2ps.proto='static'
 uci add_list network.xp2ps.ipaddr='198.18.0.5/30'
+uci set network.xp2ps.xp2p_managed='1'
 uci commit network
-/etc/init.d/network restart
+/etc/init.d/network reload
 ip a show dev xp2ps
 ```
 
@@ -152,6 +156,7 @@ server:
   tun_enabled: true
   tun_name: xp2ps
   tun_mtu: 1500
+  tun_addr: 198.18.0.5/30
 
 client:
   install_dir: C:\xp2p
@@ -163,6 +168,7 @@ client:
   tun_enabled: true
   tun_name: xp2pc
   tun_mtu: 1500
+  tun_addr: 198.18.0.1/30
 ```
 
 Every command shares global flags such as `--config`, `--log-level`, `--log-json`, `--diag-service-port`, and `--diag-service-mode`. Run `xp2p completion <shell>` to install shell completions or `xp2p docs --dir ./docs/cli` to generate a Markdown command reference straight from the Cobra tree.

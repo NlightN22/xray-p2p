@@ -100,6 +100,7 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 			TunEnabled: true,
 			TunName:    "xp2pc",
 			TunMTU:     1500,
+			TunAddr:    "198.18.0.1/30",
 		},
 	}
 
@@ -124,7 +125,7 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	if !opts.TunEnabled || !opts.TunEnabledSet {
 		t.Fatalf("expected tun enabled defaults")
 	}
-	if opts.TunName != "xp2pc" || opts.TunMTU != 1500 {
+	if opts.TunName != "xp2pc" || opts.TunMTU != 1500 || opts.TunAddr != "198.18.0.1/30" {
 		t.Fatalf("unexpected tun defaults: %+v", opts)
 	}
 }

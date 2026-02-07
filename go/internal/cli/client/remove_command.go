@@ -73,6 +73,7 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 			ConfigDir:     configDirName,
 			KeepFiles:     *keepFiles,
 			IgnoreMissing: *ignoreMissing,
+			TunName:       cfg.Client.TunName,
 		}
 
 		if err := clientRemoveFunc(ctx, opts); err != nil {

@@ -58,14 +58,15 @@ func performInstall(ctx context.Context, cfg config.Config, installDir, configDi
 	}
 
 	opts := server.InstallOptions{
-		InstallDir: installDir,
-		ConfigDir:  configDirName,
-		Port:       resolveInstallPort(cfg, ""),
-		Host:       hostValue,
-		TunEnabled:  cfg.Server.TunEnabled,
+		InstallDir:    installDir,
+		ConfigDir:     configDirName,
+		Port:          resolveInstallPort(cfg, ""),
+		Host:          hostValue,
+		TunEnabled:    cfg.Server.TunEnabled,
 		TunEnabledSet: true,
-		TunName:     cfg.Server.TunName,
-		TunMTU:      cfg.Server.TunMTU,
+		TunName:       cfg.Server.TunName,
+		TunMTU:        cfg.Server.TunMTU,
+		TunAddr:       cfg.Server.TunAddr,
 	}
 	if cfg.Server.CertificateStore != "" {
 		opts.CertificateStore = cfg.Server.CertificateStore

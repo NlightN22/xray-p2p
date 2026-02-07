@@ -137,6 +137,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		TunEnabledSet:         true,
 		TunName:               cfg.Client.TunName,
 		TunMTU:                cfg.Client.TunMTU,
+		TunAddr:               cfg.Client.TunAddr,
 	}
 	if *allowInsecure {
 		opts.AllowInsecure = true

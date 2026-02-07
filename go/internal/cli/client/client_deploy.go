@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NlightN22/xray-p2p/go/internal/client"
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
+	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
@@ -392,6 +392,7 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 		TunEnabledSet: true,
 		TunName:       cfg.Client.TunName,
 		TunMTU:        cfg.Client.TunMTU,
+		TunAddr:       cfg.Client.TunAddr,
 	}
 }
 

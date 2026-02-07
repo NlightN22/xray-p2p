@@ -166,6 +166,56 @@ def test_openwrt_client_and_server_share_install_dir(openwrt_host, xp2p_openwrt_
 
 @pytest.mark.host
 @pytest.mark.linux
+def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_openwrt_ipk):
+    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
+    openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
+    run = lambda *cmd, check=False: _xp2p_run(openwrt_host, *cmd, check=check)
+    try:
+        helpers.cleanup_client_install(openwrt_host, run)
+        helpers.cleanup_server_install(openwrt_host, run)
+
+        run(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--host",
+            "10.66.0.20",
+            "--user",
+            "dual-tun@example.com",
+            "--password",
+            "dual-tun-pass",
+            "--force",
+            check=True,
+        )
+        run(
+            "server",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--port",
+            "62557",
+            "--host",
+            "dual-tun.openwrt.test",
+            "--force",
+            check=True,
+        )
+
+        client_inbounds = helpers.read_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        server_inbounds = helpers.read_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        helpers.assert_tun_inbound(client_inbounds, "xp2pc")
+        helpers.assert_tun_inbound(server_inbounds, "xp2ps")
+    finally:
+        helpers.cleanup_server_install(openwrt_host, run)
+        helpers.cleanup_client_install(openwrt_host, run)
+
+
+@pytest.mark.host
+@pytest.mark.linux
 def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_host, xp2p_openwrt_ipk):
     openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)

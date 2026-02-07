@@ -31,6 +31,7 @@ var defaultValues = map[string]any{
 	"server.tun_enabled":    true,
 	"server.tun_name":       "xp2ps",
 	"server.tun_mtu":        1500,
+	"server.tun_addr":       "198.18.0.5/30",
 	"client.install_dir":    "",
 	"client.config_dir":     "config-client",
 	"client.server_address": "",
@@ -44,6 +45,7 @@ var defaultValues = map[string]any{
 	"client.tun_enabled":    true,
 	"client.tun_name":       "xp2pc",
 	"client.tun_mtu":        1500,
+	"client.tun_addr":       "198.18.0.1/30",
 }
 
 var defaultCandidates = []string{
@@ -78,6 +80,7 @@ type ServerConfig struct {
 	TunEnabled      bool   `koanf:"tun_enabled"`
 	TunName         string `koanf:"tun_name"`
 	TunMTU          int    `koanf:"tun_mtu"`
+	TunAddr         string `koanf:"tun_addr"`
 }
 
 // ClientConfig holds client installation settings.
@@ -95,6 +98,7 @@ type ClientConfig struct {
 	TunEnabled    bool   `koanf:"tun_enabled"`
 	TunName       string `koanf:"tun_name"`
 	TunMTU        int    `koanf:"tun_mtu"`
+	TunAddr       string `koanf:"tun_addr"`
 }
 
 // Options control configuration loading behaviour.
@@ -268,6 +272,11 @@ func normalize(cfg *Config) {
 		cfg.Server.TunMTU = defaultValues["server.tun_mtu"].(int)
 	}
 
+	cfg.Server.TunAddr = strings.TrimSpace(cfg.Server.TunAddr)
+	if cfg.Server.TunAddr == "" {
+		cfg.Server.TunAddr = defaultValues["server.tun_addr"].(string)
+	}
+
 	cfg.Client.InstallDir = strings.TrimSpace(cfg.Client.InstallDir)
 	if cfg.Client.InstallDir == "" {
 		cfg.Client.InstallDir = defaultInstallDir()
@@ -320,6 +329,11 @@ func normalize(cfg *Config) {
 
 	if cfg.Client.TunMTU <= 0 {
 		cfg.Client.TunMTU = defaultValues["client.tun_mtu"].(int)
+	}
+
+	cfg.Client.TunAddr = strings.TrimSpace(cfg.Client.TunAddr)
+	if cfg.Client.TunAddr == "" {
+		cfg.Client.TunAddr = defaultValues["client.tun_addr"].(string)
 	}
 
 	// AllowInsecure is a boolean and defaults through the map loader.

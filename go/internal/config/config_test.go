@@ -49,6 +49,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.TunMTU != 1500 {
 		t.Fatalf("expected server tun MTU 1500, got %d", cfg.Server.TunMTU)
 	}
+	if cfg.Server.TunAddr != "198.18.0.5/30" {
+		t.Fatalf("expected server tun addr 198.18.0.5/30, got %s", cfg.Server.TunAddr)
+	}
 	if cfg.Client.InstallDir == "" {
 		t.Fatalf("expected non-empty client install dir")
 	}
@@ -82,6 +85,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Client.TunMTU != 1500 {
 		t.Fatalf("expected client tun MTU 1500, got %d", cfg.Client.TunMTU)
 	}
+	if cfg.Client.TunAddr != "198.18.0.1/30" {
+		t.Fatalf("expected client tun addr 198.18.0.1/30, got %s", cfg.Client.TunAddr)
+	}
 }
 
 func TestLoadFromFile(t *testing.T) {
@@ -102,6 +108,7 @@ server:
   tun_enabled: false
   tun_name: server-tun
   tun_mtu: 1400
+  tun_addr: 198.18.0.9/30
 client:
   install_dir: D:\xp2p-client
   config_dir: cfg-client
@@ -114,6 +121,7 @@ client:
   tun_enabled: true
   tun_name: client-tun
   tun_mtu: 1300
+  tun_addr: 198.18.0.13/30
 `)
 
 	cfg, err := Load(Options{})
@@ -156,6 +164,9 @@ client:
 	if cfg.Server.TunMTU != 1400 {
 		t.Fatalf("expected server tun MTU 1400, got %d", cfg.Server.TunMTU)
 	}
+	if cfg.Server.TunAddr != "198.18.0.9/30" {
+		t.Fatalf("expected server tun addr 198.18.0.9/30, got %s", cfg.Server.TunAddr)
+	}
 	if cfg.Client.InstallDir != `D:\xp2p-client` {
 		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -189,6 +200,9 @@ client:
 	if cfg.Client.TunMTU != 1300 {
 		t.Fatalf("expected client tun MTU 1300, got %d", cfg.Client.TunMTU)
 	}
+	if cfg.Client.TunAddr != "198.18.0.13/30" {
+		t.Fatalf("expected client tun addr 198.18.0.13/30, got %s", cfg.Client.TunAddr)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -205,6 +219,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_SERVER_TUN_ENABLED", "false")
 	t.Setenv("XP2P_SERVER_TUN_NAME", "server-env")
 	t.Setenv("XP2P_SERVER_TUN_MTU", "1450")
+	t.Setenv("XP2P_SERVER_TUN_ADDR", "198.18.0.17/30")
 	t.Setenv("XP2P_CLIENT_INSTALL_DIR", `E:\xp2p-client`)
 	t.Setenv("XP2P_CLIENT_CONFIG_DIR", "cfg-client")
 	t.Setenv("XP2P_CLIENT_SERVER_ADDRESS", "remote.env")
@@ -216,6 +231,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_CLIENT_TUN_ENABLED", "true")
 	t.Setenv("XP2P_CLIENT_TUN_NAME", "client-env")
 	t.Setenv("XP2P_CLIENT_TUN_MTU", "1350")
+	t.Setenv("XP2P_CLIENT_TUN_ADDR", "198.18.0.21/30")
 
 	cfg, err := Load(Options{})
 	if err != nil {
@@ -254,6 +270,9 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Server.TunMTU != 1450 {
 		t.Fatalf("expected server tun MTU 1450, got %d", cfg.Server.TunMTU)
 	}
+	if cfg.Server.TunAddr != "198.18.0.17/30" {
+		t.Fatalf("expected server tun addr 198.18.0.17/30, got %s", cfg.Server.TunAddr)
+	}
 	if cfg.Client.InstallDir != `E:\xp2p-client` {
 		t.Fatalf("expected client install dir E:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -287,6 +306,9 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Client.TunMTU != 1350 {
 		t.Fatalf("expected client tun MTU 1350, got %d", cfg.Client.TunMTU)
 	}
+	if cfg.Client.TunAddr != "198.18.0.21/30" {
+		t.Fatalf("expected client tun addr 198.18.0.21/30, got %s", cfg.Client.TunAddr)
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
@@ -307,6 +329,7 @@ func TestLoadOverrides(t *testing.T) {
 			"server.tun_enabled":    false,
 			"server.tun_name":       "server-override",
 			"server.tun_mtu":        1420,
+			"server.tun_addr":       "198.18.0.25/30",
 			"client.install_dir":    `F:\xp2p-client`,
 			"client.config_dir":     "cfg-client-override",
 			"client.server_address": "remote.override",
@@ -318,6 +341,7 @@ func TestLoadOverrides(t *testing.T) {
 			"client.tun_enabled":    true,
 			"client.tun_name":       "client-override",
 			"client.tun_mtu":        1320,
+			"client.tun_addr":       "198.18.0.29/30",
 		},
 	})
 	if err != nil {
@@ -356,6 +380,9 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.Server.TunMTU != 1420 {
 		t.Fatalf("expected server tun MTU 1420, got %d", cfg.Server.TunMTU)
 	}
+	if cfg.Server.TunAddr != "198.18.0.25/30" {
+		t.Fatalf("expected server tun addr 198.18.0.25/30, got %s", cfg.Server.TunAddr)
+	}
 	if cfg.Client.InstallDir != `F:\xp2p-client` {
 		t.Fatalf("expected client install dir F:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -389,6 +416,9 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.Client.TunMTU != 1320 {
 		t.Fatalf("expected client tun MTU 1320, got %d", cfg.Client.TunMTU)
 	}
+	if cfg.Client.TunAddr != "198.18.0.29/30" {
+		t.Fatalf("expected client tun addr 198.18.0.29/30, got %s", cfg.Client.TunAddr)
+	}
 }
 
 func TestLoadWithExplicitPath(t *testing.T) {
@@ -411,6 +441,7 @@ host = "custom.example.test"
 tun_enabled = false
 tun_name = "server-toml"
 tun_mtu = 1410
+tun_addr = "198.18.0.33/30"
 
 [client]
 install_dir = "D:\\xp2p-client"
@@ -424,6 +455,7 @@ allow_insecure = false
 tun_enabled = true
 tun_name = "client-toml"
 tun_mtu = 1310
+tun_addr = "198.18.0.37/30"
 `)
 
 	cfg, err := Load(Options{Path: cfgPath})
@@ -466,6 +498,9 @@ tun_mtu = 1310
 	if cfg.Server.TunMTU != 1410 {
 		t.Fatalf("expected server tun MTU 1410, got %d", cfg.Server.TunMTU)
 	}
+	if cfg.Server.TunAddr != "198.18.0.33/30" {
+		t.Fatalf("expected server tun addr 198.18.0.33/30, got %s", cfg.Server.TunAddr)
+	}
 	if cfg.Client.InstallDir != `D:\xp2p-client` {
 		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -498,6 +533,9 @@ tun_mtu = 1310
 	}
 	if cfg.Client.TunMTU != 1310 {
 		t.Fatalf("expected client tun MTU 1310, got %d", cfg.Client.TunMTU)
+	}
+	if cfg.Client.TunAddr != "198.18.0.37/30" {
+		t.Fatalf("expected client tun addr 198.18.0.37/30, got %s", cfg.Client.TunAddr)
 	}
 }
 

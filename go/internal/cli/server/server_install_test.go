@@ -49,6 +49,7 @@ func TestRunServerInstall(t *testing.T) {
 					TunEnabledSet:   true,
 					TunName:         "xp2ps",
 					TunMTU:          1500,
+					TunAddr:         "198.18.0.5/30",
 				}, "install options")
 			},
 		},

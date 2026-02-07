@@ -65,6 +65,10 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 	if tunMTU <= 0 {
 		tunMTU = 1500
 	}
+	tunAddr := strings.TrimSpace(opts.TunAddr)
+	if tunAddr == "" {
+		tunAddr = "198.18.0.1/30"
+	}
 
 	return clientInstallBase{
 		installDir: installDir,
@@ -91,6 +95,7 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			TunEnabledSet:         opts.TunEnabledSet,
 			TunName:               tunName,
 			TunMTU:                tunMTU,
+			TunAddr:               tunAddr,
 		},
 	}, nil
 }
