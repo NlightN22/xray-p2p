@@ -27,6 +27,7 @@ INSTALL_PATH = PurePosixPath("/usr/bin/xp2p")
 GUEST_SCRIPTS_ROOT = WORK_TREE / "tests" / "guest"
 
 _VERSION_CACHE: dict[str, dict[str, str]] = {}
+_DEB_BUILD_READY = False
 
 
 def require_vagrant_environment() -> None:
@@ -62,6 +63,17 @@ def run_guest_script(host: Host, relative_path: str, *args: str) -> CommandResul
     return host.run(command)
 
 
+def run_guest_script_with_env(host: Host, relative_path: str, env: dict[str, str], *args: str) -> CommandResult:
+    script_path = GUEST_SCRIPTS_ROOT / relative_path
+    quoted_script = shlex.quote(script_path.as_posix())
+    quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
+    env_parts = " ".join(f"{key}={shlex.quote(str(value))}" for key, value in env.items())
+    command = f"sudo -n env {env_parts} /bin/bash {quoted_script}"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    return host.run(command)
+
+
 def _install_marker(marker: str, output: str | None) -> str | None:
     for line in (output or "").splitlines():
         line = line.strip()
@@ -71,9 +83,14 @@ def _install_marker(marker: str, output: str | None) -> str | None:
 
 
 def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
+    global _DEB_BUILD_READY
+    print(f"[xp2p] ensure install start: {machine}")
     host.run("sudo -n chmod +x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh >/dev/null 2>&1 || true")
 
-    result = run_guest_script(host, "scripts/linux/install_xp2p.sh")
+    if _DEB_BUILD_READY:
+        result = run_guest_script_with_env(host, "scripts/linux/install_xp2p.sh", {"XP2P_SKIP_BUILD": "1"})
+    else:
+        result = run_guest_script(host, "scripts/linux/install_xp2p.sh")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to build and install xp2p on guest "
@@ -91,6 +108,8 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
 
     versions = {"source": source_version, "installed": installed_version}
     _VERSION_CACHE[machine] = versions
+    _DEB_BUILD_READY = True
+    print(f"[xp2p] ensure install done: {machine} source={source_version} installed={installed_version}")
     return versions
 
 

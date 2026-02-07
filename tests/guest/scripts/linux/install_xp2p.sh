@@ -36,15 +36,29 @@ if [ -z "$SOURCE_VERSION" ]; then
   emit_versions ""
   exit 3
 fi
-bash "$BUILD_SCRIPT"
 ARCH=$(dpkg --print-architecture)
-shopt -s nullglob
+EXPECTED_PKG="$ARTIFACT_DIR/xp2p_${SOURCE_VERSION}_${ARCH}.deb"
+SKIP_BUILD="${XP2P_SKIP_BUILD:-0}"
 LATEST_PKG=""
-for pkg in "$ARTIFACT_DIR"/xp2p_*_"$ARCH".deb; do
-  if [ -z "$LATEST_PKG" ] || [ "$pkg" -nt "$LATEST_PKG" ]; then
-    LATEST_PKG="$pkg"
+if [ "$SKIP_BUILD" = "1" ]; then
+  if [ ! -f "$EXPECTED_PKG" ]; then
+    echo "Expected cached package not found: $EXPECTED_PKG" >&2
+    emit_versions ""
+    exit 3
   fi
-done
+  echo "==> Using cached package $EXPECTED_PKG"
+  LATEST_PKG="$EXPECTED_PKG"
+else
+  bash "$BUILD_SCRIPT"
+fi
+shopt -s nullglob
+if [ -z "$LATEST_PKG" ]; then
+  for pkg in "$ARTIFACT_DIR"/xp2p_*_"$ARCH".deb; do
+    if [ -z "$LATEST_PKG" ] || [ "$pkg" -nt "$LATEST_PKG" ]; then
+      LATEST_PKG="$pkg"
+    fi
+  done
+fi
 shopt -u nullglob
 if [ -z "$LATEST_PKG" ]; then
   echo "xp2p package not found in $ARTIFACT_DIR for arch $ARCH" >&2
