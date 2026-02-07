@@ -1,104 +1,114 @@
 {
-  "version": "25.10.15",
-  "targets": {
-    "linux/arm32": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "8970dad93db5a075013e8b8fab61314510917bacec09d7479035d00d606e3752",
-          "required": true
+    "version": "26.2.6",
+    "targets": {
+        "linux/arm32": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "a4c1f2f033449eecc7e3cf575b9a016f9fd42e76141a1952a493e0110efbe2be",
+                    "required": true
+                }
+            ]
+        },
+        "linux/arm64": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "0f4b7cbaab8964beebffa0c226185326a35af560ecfed9da0b2ad9bc2ff9ded3",
+                    "required": true
+                }
+            ]
+        },
+        "linux/mips32le": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "3d2588c5ef770a6a7e1bfdd5db511130fb3acd79eb91bfcb108753b3e1dda1f6",
+                    "required": true
+                }
+            ]
+        },
+        "linux/mips64le": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "6a972d25b24ac4f0c4677161667a48e1cd9816f30ab3e9792f3ea92d20c8ce4c",
+                    "required": true
+                }
+            ]
+        },
+        "linux/riscv64": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "ee1ae44e4eaceb7c75fbbb5109a23cf32f67047584d1f89d595e267154946033",
+                    "required": true
+                }
+            ]
+        },
+        "linux/x86": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "8b9a54b6c32c1ec4babf3c5526455f58d5906b861818710ca907302fc341a9fa",
+                    "required": true
+                }
+            ]
+        },
+        "linux/x86_64": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "3f650abf1fc4a4fbf5abe7fc9990a2658020907cd984214e9c075b4b00989fea",
+                    "required": true
+                }
+            ]
+        },
+        "macos/arm64": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "76fea3ec3610c2cc462ef39422ddc00e6d306b0c90223c983eaced6b12c8dee8",
+                    "required": true
+                }
+            ]
+        },
+        "macos/x86_64": {
+            "files": [
+                {
+                    "name": "xray",
+                    "sha256": "c9f5f35e8ad3649a03c75291278eab2c470573bd0e0d34da506bab3a09673172",
+                    "required": true
+                }
+            ]
+        },
+        "windows/x86": {
+            "files": [
+                {
+                    "name": "xray.exe",
+                    "sha256": "2381ecd6ff2251e9a7d5f5ecedbe3bd1c41d6157545a1aaf75b4a0e909689d12",
+                    "required": true
+                },
+                {
+                    "name": "wintun.dll",
+                    "sha256": "d694fa46ab4cfebcb2632d094c7aa97278eef2f8052438621766d863ae98a931",
+                    "required": true
+                }
+            ]
+        },
+        "windows/x86_64": {
+            "files": [
+                {
+                    "name": "xray.exe",
+                    "sha256": "103da2750f4348a266ae61632c322f95cf3e18dce99eb588e685379f041e97c5",
+                    "required": true
+                },
+                {
+                    "name": "wintun.dll",
+                    "sha256": "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce",
+                    "required": true
+                }
+            ]
         }
-      ]
-    },
-    "linux/arm64": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "1451c813a240ea6c9dc066bb1718ffbb1768fad041578dfd6944dbc4e78b0b30",
-          "required": true
-        }
-      ]
-    },
-    "linux/mips32le": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "109eb8b212ed030952a10dcd82bda388a196b76628f49dd616af613401a746c6",
-          "required": true
-        }
-      ]
-    },
-    "linux/mips64le": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "0d78cb68b87f51306954d1e28871b5de6e7d18ae636d5bc676c20671a724e614",
-          "required": true
-        }
-      ]
-    },
-    "linux/riscv64": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "7f6ea65b7deed57313a568678a11f045a08911dc5db6827dcfb140de6918cab4",
-          "required": true
-        }
-      ]
-    },
-    "linux/x86": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "350d88d78eebf65942d16de32c069c6973f1c11af37e6ea61a1264d62544d60a",
-          "required": true
-        }
-      ]
-    },
-    "linux/x86_64": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "1d6b0fb6f2348683d59304c9f0bbf3611daa068527159b749374f12da252e78c",
-          "required": true
-        }
-      ]
-    },
-    "macos/arm64": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "f44d97731a43deeace8ebf197db23d9a66efac4230a51a8aa9d3dfe205c8780a",
-          "required": true
-        }
-      ]
-    },
-    "macos/x86_64": {
-      "files": [
-        {
-          "name": "xray",
-          "sha256": "b6895f4348a3babe7f4d2f36462d39e3f1cd5be1e59d7595231cb0b19ce02291",
-          "required": true
-        }
-      ]
-    },
-    "windows/x86": {
-      "files": [
-        {
-          "name": "xray.exe",
-          "sha256": "6026e93389be8d935803d1102301ab659676216b8d32713169007f6c1fa3c242",
-          "required": true
-        }
-      ]
-    },
-    "windows/x86_64": {
-      "files": [
-        {
-          "name": "xray.exe",
-          "sha256": "dac61b3e9b3f201d6e4af19b3d8ac510d9e5ab3f383b89ad15c76d0b613ad8ab",
-          "required": true
-        }
-      ]
     }
-  }
 }
