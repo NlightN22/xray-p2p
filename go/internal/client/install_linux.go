@@ -51,6 +51,15 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		"allow_insecure", state.AllowInsecure,
 	)
 
+	if state.TunEnabled {
+		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
+			return err
+		}
+		if err := linuxnet.EnsureTunInterface(state.TunName, state.TunAddr, state.TunMTU); err != nil {
+			return err
+		}
+	}
+
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
@@ -61,15 +70,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := deployConfiguration(state); err != nil {
 		return err
 	}
-	if state.TunEnabled {
-		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
-			return err
-		}
-		if err := linuxnet.EnsureTunInterface(state.TunName, state.TunAddr, state.TunMTU); err != nil {
-			return err
-		}
-	}
-
 	logging.Info("xp2p client install completed", "install_dir", state.installDir)
 	return nil
 }

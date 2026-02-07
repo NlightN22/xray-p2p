@@ -232,6 +232,10 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 			Port:         firstNonEmpty(strings.TrimSpace(*hbPort), cfg.Server.Port),
 			SocksAddress: firstNonEmpty(strings.TrimSpace(*hbSocks), cfg.Client.SocksAddress),
 		},
+		TunEnabled: cfg.Client.TunEnabled,
+		TunName:    cfg.Client.TunName,
+		TunMTU:     cfg.Client.TunMTU,
+		TunAddr:    cfg.Client.TunAddr,
 	}
 
 	if err := clientServiceRunFunc(ctx, opts); err != nil {

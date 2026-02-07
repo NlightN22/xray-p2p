@@ -41,6 +41,10 @@ type RunOptions struct {
 	ConfigDir    string
 	ErrorLogPath string
 	Heartbeat    HeartbeatOptions
+	TunEnabled   bool
+	TunName      string
+	TunMTU       int
+	TunAddr      string
 }
 
 // ServiceOptions controls execution of the managed client service.
@@ -52,6 +56,10 @@ type ServiceOptions struct {
 	DiagPort     string
 	MaxRestarts  int
 	RestartDelay time.Duration
+	TunEnabled   bool
+	TunName      string
+	TunMTU       int
+	TunAddr      string
 }
 
 // HeartbeatOptions controls background telemetry probes.

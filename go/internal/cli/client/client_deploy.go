@@ -171,6 +171,10 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			Port:         cfg.Server.Port,
 			SocksAddress: cfg.Client.SocksAddress,
 		},
+		TunEnabled: cfg.Client.TunEnabled,
+		TunName:    cfg.Client.TunName,
+		TunMTU:     cfg.Client.TunMTU,
+		TunAddr:    cfg.Client.TunAddr,
 	}
 	runErrCh := make(chan error, 1)
 	logging.Info("xp2p client deploy: starting local client run", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)

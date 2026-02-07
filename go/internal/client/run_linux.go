@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
+	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
 )
 
@@ -35,6 +37,15 @@ func Run(ctx context.Context, opts RunOptions) error {
 			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", configDir, err)
 		}
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
+	}
+
+	if opts.TunEnabled {
+		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
+			return err
+		}
+		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+			return err
+		}
 	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)

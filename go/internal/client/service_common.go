@@ -49,6 +49,10 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		ConfigDir:    configDirName,
 		ErrorLogPath: strings.TrimSpace(opts.XrayLogPath),
 		Heartbeat:    opts.Heartbeat,
+		TunEnabled:   opts.TunEnabled,
+		TunName:      opts.TunName,
+		TunMTU:       opts.TunMTU,
+		TunAddr:      opts.TunAddr,
 	}
 
 	watchPaths := []string{

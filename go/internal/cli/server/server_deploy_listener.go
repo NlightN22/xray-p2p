@@ -99,7 +99,14 @@ func (s *deployServer) Run(ctx context.Context) error {
 				runDoneCh = runDone
 				logging.Info("xp2p server deploy: starting xray-core", "install_dir", sig.installDir, "config_dir", sig.configDir)
 				go func(installDir, configDir string) {
-					runDone <- server.Run(runCtx, server.RunOptions{InstallDir: installDir, ConfigDir: configDir})
+					runDone <- server.Run(runCtx, server.RunOptions{
+						InstallDir: installDir,
+						ConfigDir:  configDir,
+						TunEnabled: s.Cfg.Server.TunEnabled,
+						TunName:    s.Cfg.Server.TunName,
+						TunMTU:     s.Cfg.Server.TunMTU,
+						TunAddr:    s.Cfg.Server.TunAddr,
+					})
 				}(sig.installDir, sig.configDir)
 			}
 		case err := <-runDoneCh:

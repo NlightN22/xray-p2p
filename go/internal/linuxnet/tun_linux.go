@@ -135,7 +135,7 @@ func reloadNetworkd() error {
 	if _, err := execLookPath("systemctl"); err != nil {
 		return nil
 	}
-	return runCommand("systemctl", "reload", "systemd-networkd")
+	return runCommand("systemctl", "try-reload-or-restart", "systemd-networkd")
 }
 
 func isOpenWrtSystem() bool {

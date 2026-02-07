@@ -59,6 +59,10 @@ type RunOptions struct {
 	InstallDir   string
 	ConfigDir    string
 	ErrorLogPath string
+	TunEnabled   bool
+	TunName      string
+	TunMTU       int
+	TunAddr      string
 }
 
 // ServiceOptions controls execution of the managed server service.
@@ -69,6 +73,10 @@ type ServiceOptions struct {
 	DiagPort     string
 	MaxRestarts  int
 	RestartDelay time.Duration
+	TunEnabled   bool
+	TunName      string
+	TunMTU       int
+	TunAddr      string
 }
 
 // RemoveOptions controls removal of the server-side components.

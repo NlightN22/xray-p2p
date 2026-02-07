@@ -207,6 +207,10 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		DiagPort:     cfg.Server.Port,
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
+		TunEnabled:   cfg.Server.TunEnabled,
+		TunName:      cfg.Server.TunName,
+		TunMTU:       cfg.Server.TunMTU,
+		TunAddr:      cfg.Server.TunAddr,
 	}
 	if err := serverServiceRunFunc(ctx, opts); err != nil {
 		logging.Error("xp2p server service failed", "err", err)

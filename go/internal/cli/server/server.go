@@ -184,6 +184,10 @@ func prepareRunOptions(ctx context.Context, cfg config.Config, opts serverRunCom
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
 		ErrorLogPath: strings.TrimSpace(opts.XrayLogFile),
+		TunEnabled:   cfg.Server.TunEnabled,
+		TunName:      cfg.Server.TunName,
+		TunMTU:       cfg.Server.TunMTU,
+		TunAddr:      cfg.Server.TunAddr,
 	}, nil
 }
 
