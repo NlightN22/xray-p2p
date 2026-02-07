@@ -40,6 +40,15 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.Host != "" {
 		t.Fatalf("expected empty server host by default, got %s", cfg.Server.Host)
 	}
+	if !cfg.Server.TunEnabled {
+		t.Fatalf("expected server tun enabled by default")
+	}
+	if cfg.Server.TunName != "xp2ps" {
+		t.Fatalf("expected server tun name xp2ps, got %s", cfg.Server.TunName)
+	}
+	if cfg.Server.TunMTU != 1500 {
+		t.Fatalf("expected server tun MTU 1500, got %d", cfg.Server.TunMTU)
+	}
 	if cfg.Client.InstallDir == "" {
 		t.Fatalf("expected non-empty client install dir")
 	}
@@ -64,6 +73,15 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Client.AllowInsecure {
 		t.Fatalf("expected default client allowInsecure to be false")
 	}
+	if !cfg.Client.TunEnabled {
+		t.Fatalf("expected client tun enabled by default")
+	}
+	if cfg.Client.TunName != "xp2pc" {
+		t.Fatalf("expected client tun name xp2pc, got %s", cfg.Client.TunName)
+	}
+	if cfg.Client.TunMTU != 1500 {
+		t.Fatalf("expected client tun MTU 1500, got %d", cfg.Client.TunMTU)
+	}
 }
 
 func TestLoadFromFile(t *testing.T) {
@@ -81,6 +99,9 @@ server:
   certificate: C:\certs\server.pem
   key: C:\certs\server.key
   host: server.example.test
+  tun_enabled: false
+  tun_name: server-tun
+  tun_mtu: 1400
 client:
   install_dir: D:\xp2p-client
   config_dir: cfg-client
@@ -90,6 +111,9 @@ client:
   password: strongpass
   server_name: sni.example.com
   allow_insecure: false
+  tun_enabled: true
+  tun_name: client-tun
+  tun_mtu: 1300
 `)
 
 	cfg, err := Load(Options{})
@@ -123,6 +147,15 @@ client:
 	if cfg.Server.Host != "server.example.test" {
 		t.Fatalf("expected server host server.example.test, got %s", cfg.Server.Host)
 	}
+	if cfg.Server.TunEnabled {
+		t.Fatalf("expected server tun enabled false from file")
+	}
+	if cfg.Server.TunName != "server-tun" {
+		t.Fatalf("expected server tun name server-tun, got %s", cfg.Server.TunName)
+	}
+	if cfg.Server.TunMTU != 1400 {
+		t.Fatalf("expected server tun MTU 1400, got %d", cfg.Server.TunMTU)
+	}
 	if cfg.Client.InstallDir != `D:\xp2p-client` {
 		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -147,6 +180,15 @@ client:
 	if cfg.Client.AllowInsecure {
 		t.Fatalf("expected client allowInsecure false from file")
 	}
+	if !cfg.Client.TunEnabled {
+		t.Fatalf("expected client tun enabled true from file")
+	}
+	if cfg.Client.TunName != "client-tun" {
+		t.Fatalf("expected client tun name client-tun, got %s", cfg.Client.TunName)
+	}
+	if cfg.Client.TunMTU != 1300 {
+		t.Fatalf("expected client tun MTU 1300, got %d", cfg.Client.TunMTU)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -160,6 +202,9 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_SERVER_MODE", "AUTO")
 	t.Setenv("XP2P_SERVER_CERTIFICATE", `D:\certs\cert.pem`)
 	t.Setenv("XP2P_SERVER_KEY", `D:\certs\cert.key`)
+	t.Setenv("XP2P_SERVER_TUN_ENABLED", "false")
+	t.Setenv("XP2P_SERVER_TUN_NAME", "server-env")
+	t.Setenv("XP2P_SERVER_TUN_MTU", "1450")
 	t.Setenv("XP2P_CLIENT_INSTALL_DIR", `E:\xp2p-client`)
 	t.Setenv("XP2P_CLIENT_CONFIG_DIR", "cfg-client")
 	t.Setenv("XP2P_CLIENT_SERVER_ADDRESS", "remote.env")
@@ -168,6 +213,9 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_CLIENT_PASSWORD", "envpass")
 	t.Setenv("XP2P_CLIENT_SERVER_NAME", "env.example.com")
 	t.Setenv("XP2P_CLIENT_ALLOW_INSECURE", "false")
+	t.Setenv("XP2P_CLIENT_TUN_ENABLED", "true")
+	t.Setenv("XP2P_CLIENT_TUN_NAME", "client-env")
+	t.Setenv("XP2P_CLIENT_TUN_MTU", "1350")
 
 	cfg, err := Load(Options{})
 	if err != nil {
@@ -197,6 +245,15 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Server.KeyFile != `D:\certs\cert.key` {
 		t.Fatalf("expected key D:\\certs\\cert.key, got %s", cfg.Server.KeyFile)
 	}
+	if cfg.Server.TunEnabled {
+		t.Fatalf("expected server tun enabled false from env")
+	}
+	if cfg.Server.TunName != "server-env" {
+		t.Fatalf("expected server tun name server-env, got %s", cfg.Server.TunName)
+	}
+	if cfg.Server.TunMTU != 1450 {
+		t.Fatalf("expected server tun MTU 1450, got %d", cfg.Server.TunMTU)
+	}
 	if cfg.Client.InstallDir != `E:\xp2p-client` {
 		t.Fatalf("expected client install dir E:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -221,6 +278,15 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Client.AllowInsecure {
 		t.Fatalf("expected client allowInsecure false from env")
 	}
+	if !cfg.Client.TunEnabled {
+		t.Fatalf("expected client tun enabled true from env")
+	}
+	if cfg.Client.TunName != "client-env" {
+		t.Fatalf("expected client tun name client-env, got %s", cfg.Client.TunName)
+	}
+	if cfg.Client.TunMTU != 1350 {
+		t.Fatalf("expected client tun MTU 1350, got %d", cfg.Client.TunMTU)
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
@@ -238,6 +304,9 @@ func TestLoadOverrides(t *testing.T) {
 			"server.mode":           "MANUAL",
 			"server.certificate":    `E:\certs\cert.pem`,
 			"server.key":            `E:\certs\cert.key`,
+			"server.tun_enabled":    false,
+			"server.tun_name":       "server-override",
+			"server.tun_mtu":        1420,
 			"client.install_dir":    `F:\xp2p-client`,
 			"client.config_dir":     "cfg-client-override",
 			"client.server_address": "remote.override",
@@ -246,6 +315,9 @@ func TestLoadOverrides(t *testing.T) {
 			"client.password":       "overridepass",
 			"client.server_name":    "override.example.com",
 			"client.allow_insecure": false,
+			"client.tun_enabled":    true,
+			"client.tun_name":       "client-override",
+			"client.tun_mtu":        1320,
 		},
 	})
 	if err != nil {
@@ -275,6 +347,15 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.Server.KeyFile != `E:\certs\cert.key` {
 		t.Fatalf("expected key E:\\certs\\cert.key, got %s", cfg.Server.KeyFile)
 	}
+	if cfg.Server.TunEnabled {
+		t.Fatalf("expected server tun enabled false from overrides")
+	}
+	if cfg.Server.TunName != "server-override" {
+		t.Fatalf("expected server tun name server-override, got %s", cfg.Server.TunName)
+	}
+	if cfg.Server.TunMTU != 1420 {
+		t.Fatalf("expected server tun MTU 1420, got %d", cfg.Server.TunMTU)
+	}
 	if cfg.Client.InstallDir != `F:\xp2p-client` {
 		t.Fatalf("expected client install dir F:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -299,6 +380,15 @@ func TestLoadOverrides(t *testing.T) {
 	if cfg.Client.AllowInsecure {
 		t.Fatalf("expected client allowInsecure false from overrides")
 	}
+	if !cfg.Client.TunEnabled {
+		t.Fatalf("expected client tun enabled true from overrides")
+	}
+	if cfg.Client.TunName != "client-override" {
+		t.Fatalf("expected client tun name client-override, got %s", cfg.Client.TunName)
+	}
+	if cfg.Client.TunMTU != 1320 {
+		t.Fatalf("expected client tun MTU 1320, got %d", cfg.Client.TunMTU)
+	}
 }
 
 func TestLoadWithExplicitPath(t *testing.T) {
@@ -318,6 +408,9 @@ mode = "Manual"
 certificate = "C:\\certs\\server.pem"
 key = "C:\\certs\\server.key"
 host = "custom.example.test"
+tun_enabled = false
+tun_name = "server-toml"
+tun_mtu = 1410
 
 [client]
 install_dir = "D:\\xp2p-client"
@@ -328,6 +421,9 @@ user = "client.toml@example.com"
 password = "tomlpass"
 server_name = "toml.example.com"
 allow_insecure = false
+tun_enabled = true
+tun_name = "client-toml"
+tun_mtu = 1310
 `)
 
 	cfg, err := Load(Options{Path: cfgPath})
@@ -361,6 +457,15 @@ allow_insecure = false
 	if cfg.Server.Host != "custom.example.test" {
 		t.Fatalf("expected server host custom.example.test, got %s", cfg.Server.Host)
 	}
+	if cfg.Server.TunEnabled {
+		t.Fatalf("expected server tun enabled false from toml")
+	}
+	if cfg.Server.TunName != "server-toml" {
+		t.Fatalf("expected server tun name server-toml, got %s", cfg.Server.TunName)
+	}
+	if cfg.Server.TunMTU != 1410 {
+		t.Fatalf("expected server tun MTU 1410, got %d", cfg.Server.TunMTU)
+	}
 	if cfg.Client.InstallDir != `D:\xp2p-client` {
 		t.Fatalf("expected client install dir D:\\xp2p-client, got %s", cfg.Client.InstallDir)
 	}
@@ -384,6 +489,15 @@ allow_insecure = false
 	}
 	if cfg.Client.AllowInsecure {
 		t.Fatalf("expected client allowInsecure false from file")
+	}
+	if !cfg.Client.TunEnabled {
+		t.Fatalf("expected client tun enabled true from toml")
+	}
+	if cfg.Client.TunName != "client-toml" {
+		t.Fatalf("expected client tun name client-toml, got %s", cfg.Client.TunName)
+	}
+	if cfg.Client.TunMTU != 1310 {
+		t.Fatalf("expected client tun MTU 1310, got %d", cfg.Client.TunMTU)
 	}
 }
 

@@ -28,6 +28,9 @@ var defaultValues = map[string]any{
 	"server.certificate":    "",
 	"server.key":            "",
 	"server.host":           "",
+	"server.tun_enabled":    true,
+	"server.tun_name":       "xp2ps",
+	"server.tun_mtu":        1500,
 	"client.install_dir":    "",
 	"client.config_dir":     "config-client",
 	"client.server_address": "",
@@ -38,6 +41,9 @@ var defaultValues = map[string]any{
 	"client.server_name":    "",
 	"client.allow_insecure": false,
 	"client.socks_address":  "127.0.0.1:51180",
+	"client.tun_enabled":    true,
+	"client.tun_name":       "xp2pc",
+	"client.tun_mtu":        1500,
 }
 
 var defaultCandidates = []string{
@@ -69,6 +75,9 @@ type ServerConfig struct {
 	CertificateFile string `koanf:"certificate"`
 	KeyFile         string `koanf:"key"`
 	Host            string `koanf:"host"`
+	TunEnabled      bool   `koanf:"tun_enabled"`
+	TunName         string `koanf:"tun_name"`
+	TunMTU          int    `koanf:"tun_mtu"`
 }
 
 // ClientConfig holds client installation settings.
@@ -83,6 +92,9 @@ type ClientConfig struct {
 	ServerName    string `koanf:"server_name"`
 	AllowInsecure bool   `koanf:"allow_insecure"`
 	SocksAddress  string `koanf:"socks_address"`
+	TunEnabled    bool   `koanf:"tun_enabled"`
+	TunName       string `koanf:"tun_name"`
+	TunMTU        int    `koanf:"tun_mtu"`
 }
 
 // Options control configuration loading behaviour.
@@ -247,6 +259,15 @@ func normalize(cfg *Config) {
 		cfg.Server.Host = defaultValues["server.host"].(string)
 	}
 
+	cfg.Server.TunName = strings.TrimSpace(cfg.Server.TunName)
+	if cfg.Server.TunName == "" {
+		cfg.Server.TunName = defaultValues["server.tun_name"].(string)
+	}
+
+	if cfg.Server.TunMTU <= 0 {
+		cfg.Server.TunMTU = defaultValues["server.tun_mtu"].(int)
+	}
+
 	cfg.Client.InstallDir = strings.TrimSpace(cfg.Client.InstallDir)
 	if cfg.Client.InstallDir == "" {
 		cfg.Client.InstallDir = defaultInstallDir()
@@ -290,6 +311,15 @@ func normalize(cfg *Config) {
 	cfg.Client.SocksAddress = strings.TrimSpace(cfg.Client.SocksAddress)
 	if cfg.Client.SocksAddress == "" {
 		cfg.Client.SocksAddress = defaultValues["client.socks_address"].(string)
+	}
+
+	cfg.Client.TunName = strings.TrimSpace(cfg.Client.TunName)
+	if cfg.Client.TunName == "" {
+		cfg.Client.TunName = defaultValues["client.tun_name"].(string)
+	}
+
+	if cfg.Client.TunMTU <= 0 {
+		cfg.Client.TunMTU = defaultValues["client.tun_mtu"].(int)
 	}
 
 	// AllowInsecure is a boolean and defaults through the map loader.
