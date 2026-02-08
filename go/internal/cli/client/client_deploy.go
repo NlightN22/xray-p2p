@@ -489,6 +489,9 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 	if err != nil {
 		return err
 	}
+	if _, err := config.EnsureTunSettings("", "client", tunEnabled, cfg.Client.TunName, cfg.Client.TunMTU, cfg.Client.TunAddr); err != nil {
+		return err
+	}
 	logging.Info("xp2p client deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
 
 	err = client.ApplyMode(client.ModeOptions{

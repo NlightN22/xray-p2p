@@ -35,7 +35,11 @@ func UpdateTunEnabled(path string, role string, enabled bool) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return "", fmt.Errorf("config: create directory %s: %w", filepath.Dir(configPath), err)
 	}
-	if err := os.WriteFile(configPath, []byte(tree.String()), 0o644); err != nil {
+	data, err := encodeToml(tree)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(configPath, data, 0o644); err != nil {
 		return "", fmt.Errorf("config: write %s: %w", configPath, err)
 	}
 	return configPath, nil
@@ -85,7 +89,11 @@ func EnsureTunSettings(path string, role string, enabled bool, name string, mtu 
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return "", fmt.Errorf("config: create directory %s: %w", filepath.Dir(configPath), err)
 	}
-	if err := os.WriteFile(configPath, []byte(tree.String()), 0o644); err != nil {
+	data, err := encodeToml(tree)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(configPath, data, 0o644); err != nil {
 		return "", fmt.Errorf("config: write %s: %w", configPath, err)
 	}
 	return configPath, nil
@@ -128,4 +136,15 @@ func loadOrCreateToml(path string) (*toml.Tree, error) {
 		return nil, fmt.Errorf("config: parse %s: %w", path, err)
 	}
 	return tree, nil
+}
+
+func encodeToml(tree *toml.Tree) ([]byte, error) {
+	if tree == nil {
+		return nil, errors.New("config: toml tree is nil")
+	}
+	data, err := toml.Marshal(tree.ToMap())
+	if err != nil {
+		return nil, fmt.Errorf("config: encode toml: %w", err)
+	}
+	return data, nil
 }

@@ -188,6 +188,9 @@ func (s *deployServer) applyMode(installDir, configDir string, tunEnabled bool) 
 	if err != nil {
 		return err
 	}
+	if _, err := config.EnsureTunSettings("", "server", tunEnabled, s.Cfg.Server.TunName, s.Cfg.Server.TunMTU, s.Cfg.Server.TunAddr); err != nil {
+		return err
+	}
 	logging.Info("xp2p server deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
 	err = server.ApplyMode(server.ModeOptions{
 		InstallDir: installDir,
