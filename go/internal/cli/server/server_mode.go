@@ -2,6 +2,7 @@ package servercmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
@@ -46,6 +48,15 @@ func runServerMode(_ context.Context, cfg config.Config, args []string) int {
 		}
 		logging.Error("xp2p server mode: failed to parse arguments", "err", err)
 		return 2
+	}
+	if fs.NArg() == 0 {
+		mode, err := resolveServerMode(cfg)
+		if err != nil {
+			logging.Error("xp2p server mode: failed to resolve current mode", "err", err)
+			return 1
+		}
+		logging.Info("xp2p server mode: current mode", "mode", mode)
+		return 0
 	}
 	if fs.NArg() != 1 {
 		logging.Error("xp2p server mode: specify tun or proxy")
@@ -91,6 +102,38 @@ func runServerMode(_ context.Context, cfg config.Config, args []string) int {
 
 	logging.Info("xp2p server mode updated", "mode", mode, "config", updatedPath)
 	return 0
+}
+
+func resolveServerMode(cfg config.Config) (string, error) {
+	path := config.ConfigPath(layout.ServerAppliedStateFileName)
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if mode := parseModeFromState(data); mode != "" {
+			return mode, nil
+		}
+	}
+	if cfg.Server.TunEnabled {
+		return "tun", nil
+	}
+	return "proxy", nil
+}
+
+func parseModeFromState(data []byte) string {
+	var state struct {
+		Mode       string `json:"mode"`
+		TunEnabled bool   `json:"tun_enabled"`
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return ""
+	}
+	mode := strings.ToLower(strings.TrimSpace(state.Mode))
+	if mode == "tun" || mode == "proxy" {
+		return mode
+	}
+	if state.TunEnabled {
+		return "tun"
+	}
+	return "proxy"
 }
 
 func parseMode(value string) (bool, error) {
