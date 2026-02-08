@@ -77,6 +77,42 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 	return fmt.Errorf("xp2p: tun interface %s not found", name)
 }
 
+func EnsureRoute(name, cidr string) error {
+	name = strings.TrimSpace(name)
+	cidr = strings.TrimSpace(cidr)
+	if name == "" || cidr == "" {
+		return nil
+	}
+	if isOpenWrtSystem() {
+		return nil
+	}
+	if _, err := execLookPath("ip"); err != nil {
+		return errors.New("xp2p: ip command not found")
+	}
+	return runCommand("ip", "route", "replace", cidr, "dev", name)
+}
+
+func RemoveRoute(name, cidr string) error {
+	name = strings.TrimSpace(name)
+	cidr = strings.TrimSpace(cidr)
+	if name == "" || cidr == "" {
+		return nil
+	}
+	if isOpenWrtSystem() {
+		return nil
+	}
+	if _, err := execLookPath("ip"); err != nil {
+		return errors.New("xp2p: ip command not found")
+	}
+	if err := runCommand("ip", "route", "del", cidr, "dev", name); err != nil {
+		if isMissingRouteError(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func tableForName(name string) int {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "xp2ps":
@@ -147,4 +183,12 @@ func captureCommand(name string, args ...string) (string, error) {
 		return strings.TrimSpace(buf.String()), err
 	}
 	return strings.TrimSpace(buf.String()), nil
+}
+
+func isMissingRouteError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "no such process") || strings.Contains(lower, "not found")
 }

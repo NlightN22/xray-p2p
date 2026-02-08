@@ -158,6 +158,8 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 		Domain:     *domain,
 		Tag:        tagValue,
 		Hostname:   hostValue,
+		TunEnabled: cfg.Client.TunEnabled,
+		TunName:    cfg.Client.TunName,
 	}
 	if err := clientRedirectAddFunc(opts); err != nil {
 		logging.Error("xp2p client redirect add failed", "err", err)
@@ -236,6 +238,8 @@ func runClientRedirectRemove(_ context.Context, cfg config.Config, args []string
 		Domain:     *domain,
 		Tag:        tagValue,
 		Hostname:   hostValue,
+		TunEnabled: cfg.Client.TunEnabled,
+		TunName:    cfg.Client.TunName,
 	}
 	if err := clientRedirectRemoveFunc(opts); err != nil {
 		logging.Error("xp2p client redirect remove failed", "err", err)

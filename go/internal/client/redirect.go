@@ -19,6 +19,8 @@ type RedirectAddOptions struct {
 	Domain     string
 	Tag        string
 	Hostname   string
+	TunEnabled bool
+	TunName    string
 }
 
 // RedirectRemoveOptions controls redirect removal.
@@ -29,6 +31,8 @@ type RedirectRemoveOptions struct {
 	Domain     string
 	Tag        string
 	Hostname   string
+	TunEnabled bool
+	TunName    string
 }
 
 // RedirectListOptions configures listing.
@@ -92,7 +96,15 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err := state.save(paths.stateFile); err != nil {
 		return err
 	}
-	return updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse)
+	if err := updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
+		return err
+	}
+	if opts.TunEnabled && ruleTarget.Kind == redirect.KindCIDR {
+		if err := ensureRedirectRoute(opts.TunName, ruleTarget.Value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RemoveRedirect deletes redirect rules.
@@ -133,7 +145,15 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	if err := state.save(paths.stateFile); err != nil {
 		return err
 	}
-	return updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse)
+	if err := updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
+		return err
+	}
+	if opts.TunEnabled && ruleTarget.Kind == redirect.KindCIDR {
+		if err := removeRedirectRouteIfUnused(opts.TunName, ruleTarget.Value, state.Redirects); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ListRedirects returns configured redirect entries.

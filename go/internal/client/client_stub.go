@@ -72,6 +72,8 @@ type (
 		Domain     string
 		Tag        string
 		Hostname   string
+		TunEnabled bool
+		TunName    string
 	}
 	RedirectRemoveOptions struct {
 		InstallDir string
@@ -80,6 +82,8 @@ type (
 		Domain     string
 		Tag        string
 		Hostname   string
+		TunEnabled bool
+		TunName    string
 	}
 	RedirectListOptions struct {
 		InstallDir string

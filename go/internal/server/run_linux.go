@@ -47,6 +47,13 @@ func Run(ctx context.Context, opts RunOptions) error {
 		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
 			return err
 		}
+		store, err := openServerRedirectStore(installDir)
+		if err != nil {
+			return err
+		}
+		if err := applyRedirectRoutes(opts.TunName, store.redirects); err != nil {
+			return err
+		}
 	}
 
 	xrayPath, err := xray.ResolveBinaryPath()

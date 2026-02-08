@@ -3,12 +3,7 @@
 package natredirect
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -42,17 +37,20 @@ func NewCommand(cfg func() config.Config) *cobra.Command {
 			return exitError{code: 1}
 		},
 	}
-	cmd.AddCommand(newAddCmd(), newRemoveCmd(), newListCmd())
+	cmd.AddCommand(newAddCmd(cfg), newRemoveCmd(cfg), newListCmd(cfg))
 	return cmd
 }
 
-func newAddCmd() *cobra.Command {
+func newAddCmd(cfg func() config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add transparent redirect rules for a CIDR",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts, err := parseAddOptions(cmd)
 			if err != nil {
+				return err
+			}
+			if err := ensureProxyMode(cfg(), opts.inbounds); err != nil {
 				return err
 			}
 			manager := firewall.NewManager(opts.snippetPath, opts.entryDir)
@@ -86,13 +84,16 @@ func newAddCmd() *cobra.Command {
 	return cmd
 }
 
-func newRemoveCmd() *cobra.Command {
+func newRemoveCmd(cfg func() config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove",
 		Short: "Remove transparent redirect rules",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			opts, err := parseRemoveOptions(cmd)
 			if err != nil {
+				return err
+			}
+			if err := ensureProxyMode(cfg(), defaultInbounds); err != nil {
 				return err
 			}
 			manager := firewall.NewManager(opts.snippetPath, opts.entryDir)
@@ -122,11 +123,14 @@ func newRemoveCmd() *cobra.Command {
 	return cmd
 }
 
-func newListCmd() *cobra.Command {
+func newListCmd(cfg func() config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List transparent redirect entries",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := ensureProxyMode(cfg(), defaultInbounds); err != nil {
+				return err
+			}
 			manager := firewall.NewManager(defaultSnippet, defaultEntryDir)
 			entries, err := manager.List()
 			if err != nil {
@@ -212,146 +216,4 @@ func parseRemoveOptions(cmd *cobra.Command) (removeOptions, error) {
 		snippetPath: fallback(snippet, defaultSnippet),
 		entryDir:    fallback(entryDir, defaultEntryDir),
 	}, nil
-}
-
-func promptYes() bool {
-	fmt.Print(promptYesMessage)
-	reader := bufio.NewReader(os.Stdin)
-	line, _ := reader.ReadString('\n')
-	line = strings.TrimSpace(strings.ToLower(line))
-	return line == "y" || line == "yes"
-}
-
-func promptSelectPort(ports []int) (int, error) {
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("Select port number: ")
-		raw, _ := reader.ReadString('\n')
-		raw = strings.TrimSpace(raw)
-		val, err := strconv.Atoi(raw)
-		if err == nil {
-			for _, p := range ports {
-				if p == val {
-					return val, nil
-				}
-			}
-		}
-		fmt.Println("Invalid selection.")
-	}
-}
-
-func printPlan(plan firewall.Plan) {
-	if len(plan.Snippet) > 0 {
-		fmt.Printf("Planned nftables snippet (%s):\n%s\n", plan.SnippetPath, plan.Snippet)
-	}
-	if len(plan.IPTables) > 0 {
-		fmt.Println("Planned iptables commands:")
-		for _, line := range plan.IPTables {
-			fmt.Println(line)
-		}
-	}
-	if plan.EntryPath != "" {
-		fmt.Printf("Entry file would be written to %s\n", plan.EntryPath)
-	}
-}
-
-func removeTarget(opts removeOptions) string {
-	if opts.all {
-		return "all"
-	}
-	return opts.cidr
-}
-
-func fallback(value, def string) string {
-	trim := strings.TrimSpace(value)
-	if trim == "" {
-		return def
-	}
-	return trim
-}
-
-type exitError struct {
-	code int
-}
-
-func (e exitError) Error() string {
-	return fmt.Sprintf("exit %d", e.code)
-}
-
-func (e exitError) ExitCode() int {
-	return e.code
-}
-
-func detectDefaultPaths() (string, string) {
-	candidates := []string{
-		"/etc/nftables.d",
-		filepath.Join(layout.UnixConfigRoot, "nftables"),
-	}
-	for _, base := range candidates {
-		dir := strings.TrimSpace(base)
-		if dir == "" {
-			continue
-		}
-		// Try to ensure the directory exists so later writes succeed quietly.
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			continue
-		}
-		return filepath.Join(dir, "xray-transparent.nft"), filepath.Join(dir, "xray-transparent.d")
-	}
-	if commandExists("fw4") {
-		return "/etc/nftables.d/xray-transparent.nft", "/etc/nftables.d/xray-transparent.d"
-	}
-	return "/etc/nftables.d/xray-transparent.nft", "/etc/nftables.d/xray-transparent.d"
-}
-
-func commandExists(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
-}
-
-func autodetectPorts(inboundsFlag string, quiet bool) ([]int, error) {
-	seen := map[int]struct{}{}
-	var ports []int
-	candidates := []string{strings.TrimSpace(inboundsFlag)}
-	if strings.TrimSpace(inboundsFlag) == "" {
-		candidates = []string{
-			defaultInbounds,
-			layout.UnixConfigRoot + "/" + layout.ServerConfigDir + "/inbounds.json",
-		}
-	}
-	for _, path := range candidates {
-		trimmed := strings.TrimSpace(path)
-		if trimmed == "" {
-			continue
-		}
-		if info, err := os.Stat(trimmed); err != nil || info.IsDir() {
-			continue
-		}
-		detected, err := firewall.DetectDokodemoPorts(trimmed, true)
-		if err != nil {
-			continue
-		}
-		for _, p := range detected {
-			if _, ok := seen[p]; ok {
-				continue
-			}
-			seen[p] = struct{}{}
-			ports = append(ports, p)
-		}
-	}
-	if len(ports) == 0 {
-		return nil, fmt.Errorf("nat-redirect add: no dokodemo-door ports found")
-	}
-	if len(ports) == 1 {
-		return ports, nil
-	}
-	if quiet {
-		return ports, nil
-	}
-	fmt.Printf("Detected dokodemo-door ports: %v\n", ports)
-	selected, err := promptSelectPort(ports)
-	if err != nil {
-		return nil, err
-	}
-	return []int{selected}, nil
 }

@@ -10,6 +10,8 @@ type RedirectAddOptions struct {
 	Domain     string
 	Tag        string
 	Hostname   string
+	TunEnabled bool
+	TunName    string
 }
 
 // RedirectRemoveOptions controls server redirect deletion.
@@ -20,6 +22,8 @@ type RedirectRemoveOptions struct {
 	Domain     string
 	Tag        string
 	Hostname   string
+	TunEnabled bool
+	TunName    string
 }
 
 // RedirectListOptions controls redirect enumeration.
@@ -34,11 +38,11 @@ type ReverseListOptions struct {
 }
 
 type ReverseRecord struct {
-	Tag    string
-	Host   string
-	User   string
-	Domain string
-	Portal bool
+	Tag         string
+	Host        string
+	User        string
+	Domain      string
+	Portal      bool
 	RoutingRule bool
 }
 

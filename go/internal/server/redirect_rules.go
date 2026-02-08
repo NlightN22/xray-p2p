@@ -22,6 +22,8 @@ type RedirectAddOptions struct {
 	Domain     string
 	Tag        string
 	Hostname   string
+	TunEnabled bool
+	TunName    string
 }
 
 // RedirectRemoveOptions controls server redirect deletion.
@@ -32,6 +34,8 @@ type RedirectRemoveOptions struct {
 	Domain     string
 	Tag        string
 	Hostname   string
+	TunEnabled bool
+	TunName    string
 }
 
 // RedirectListOptions controls redirect enumeration.
@@ -170,7 +174,15 @@ func AddRedirect(opts RedirectAddOptions) error {
 	}
 
 	routingPath := filepath.Join(configDir, "routing.json")
-	return updateServerRedirectRouting(routingPath, store.redirects)
+	if err := updateServerRedirectRouting(routingPath, store.redirects); err != nil {
+		return err
+	}
+	if opts.TunEnabled && target.Kind == redirect.KindCIDR {
+		if err := ensureRedirectRoute(opts.TunName, target.Value); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RemoveRedirect removes a server redirect rule.
@@ -217,7 +229,15 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	}
 
 	routingPath := filepath.Join(configDir, "routing.json")
-	return updateServerRedirectRouting(routingPath, store.redirects)
+	if err := updateServerRedirectRouting(routingPath, store.redirects); err != nil {
+		return err
+	}
+	if opts.TunEnabled && target.Kind == redirect.KindCIDR {
+		if err := removeRedirectRouteIfUnused(opts.TunName, target.Value, store.redirects); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ListRedirects lists configured server redirects.

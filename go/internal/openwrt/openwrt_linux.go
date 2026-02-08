@@ -80,6 +80,42 @@ func EnsureTunInterface(name, addr string) error {
 	return nil
 }
 
+func EnsureTunRoute(name, cidr string) error {
+	name = strings.TrimSpace(name)
+	cidr = strings.TrimSpace(cidr)
+	if name == "" || cidr == "" {
+		return nil
+	}
+	if !isOpenWrtSystem() {
+		return nil
+	}
+	if _, err := exec.LookPath("ip"); err != nil {
+		return errors.New("xp2p: ip command not found (OpenWrt required)")
+	}
+	return runCommand("ip", "route", "replace", cidr, "dev", name)
+}
+
+func RemoveTunRoute(name, cidr string) error {
+	name = strings.TrimSpace(name)
+	cidr = strings.TrimSpace(cidr)
+	if name == "" || cidr == "" {
+		return nil
+	}
+	if !isOpenWrtSystem() {
+		return nil
+	}
+	if _, err := exec.LookPath("ip"); err != nil {
+		return errors.New("xp2p: ip command not found (OpenWrt required)")
+	}
+	if err := runCommand("ip", "route", "del", cidr, "dev", name); err != nil {
+		if isMissingRouteError(err) {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func RemoveTunInterfaceIfManaged(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -220,4 +256,12 @@ func captureCommand(name string, args ...string) (string, error) {
 	cmd.Stderr = &buf
 	err := cmd.Run()
 	return strings.TrimSpace(buf.String()), err
+}
+
+func isMissingRouteError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "no such process") || strings.Contains(lower, "not found")
 }

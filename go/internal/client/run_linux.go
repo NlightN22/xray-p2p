@@ -47,6 +47,17 @@ func Run(ctx context.Context, opts RunOptions) error {
 		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
 			return err
 		}
+		paths, err := resolveClientPaths(installDir, opts.ConfigDir)
+		if err != nil {
+			return err
+		}
+		state, err := loadClientInstallState(paths.stateFile)
+		if err != nil {
+			return err
+		}
+		if err := applyRedirectRoutes(opts.TunName, state.Redirects); err != nil {
+			return err
+		}
 	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
