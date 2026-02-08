@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pelletier/go-toml"
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/stateview"
@@ -113,6 +114,53 @@ func snapshotServerState(statePath, installDir string, ttl time.Duration) ([]hea
 }
 
 func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
+	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if doc, found, err := loadServerConfigDoc(configPath); err != nil {
+		return nil, err
+	} else if found {
+		return extractServerReversePairs(doc), nil
+	}
+
+	legacyDoc, err := loadLegacyServerStateDoc(installDir)
+	if err != nil {
+		return nil, err
+	}
+	return extractServerReversePairs(legacyDoc), nil
+}
+
+func loadServerConfigDoc(path string) (map[string]any, bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return map[string]any{}, true, nil
+	}
+	tree, err := toml.LoadBytes(data)
+	if err != nil {
+		return nil, false, err
+	}
+	raw := tree.GetPath([]string{"server"})
+	if raw == nil {
+		return map[string]any{}, true, nil
+	}
+	switch value := raw.(type) {
+	case *toml.Tree:
+		raw = value.ToMap()
+	case map[string]any:
+		raw = value
+	}
+	doc, ok := raw.(map[string]any)
+	if !ok {
+		return map[string]any{}, true, nil
+	}
+	return doc, true, nil
+}
+
+func loadLegacyServerStateDoc(installDir string) (map[string]any, error) {
 	candidates := []string{
 		filepath.Join(installDir, layout.ServerStateFileName),
 		filepath.Join(installDir, layout.StateFileName),
@@ -135,12 +183,19 @@ func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
 		break
 	}
 	if len(doc) == 0 {
-		return map[string]struct{}{}, nil
+		return map[string]any{}, nil
+	}
+	return doc, nil
+}
+
+func extractServerReversePairs(doc map[string]any) map[string]struct{} {
+	if len(doc) == 0 {
+		return map[string]struct{}{}
 	}
 	raw := doc["reverse_channels"]
 	channels, ok := raw.(map[string]any)
 	if !ok || len(channels) == 0 {
-		return map[string]struct{}{}, nil
+		return map[string]struct{}{}
 	}
 	pairs := make(map[string]struct{}, len(channels))
 	for _, value := range channels {
@@ -158,5 +213,5 @@ func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
 		key := strings.ToLower(user) + "|" + strings.ToLower(host)
 		pairs[key] = struct{}{}
 	}
-	return pairs, nil
+	return pairs
 }

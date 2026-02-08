@@ -39,6 +39,21 @@ def _runner(host):
     return _run
 
 
+def _nat_runner(host, *, role: str):
+    env = {"XP2P_CLIENT_TUN_ENABLED": "false", "XP2P_SERVER_TUN_ENABLED": "false"}
+
+    def _run(*args: str, check: bool = False):
+        result = linux_env.run_xp2p_with_env(host, env, *args)
+        if check and result.rc != 0:
+            pytest.fail(
+                "xp2p command failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        return result
+
+    return _run
+
+
 def _verify_heartbeat_state(env: dict) -> None:
     expected_tag = env["endpoint_tag"]
     expected_user = env["client_user"]
@@ -485,6 +500,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     client_listener_port = SERVER_DIAGNOSTICS_PORT
     server_listener_port = CLIENT_DIAGNOSTICS_PORT
     server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_CONFIG_DIR / 'inbounds.json')}"
+    client_nat_runner = _nat_runner(client_host, role="client")
+    server_nat_runner = _nat_runner(server_host, role="server")
 
     def _dokodemo_ports(config: dict) -> list[int]:
         ports: list[int] = []
@@ -517,6 +534,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         return None
 
     def _nft_counter_sum(host) -> int:
+        table_result = host.run("sudo -n nft list table inet xray_transparent")
+        if table_result.rc == 0:
+            matches = re.findall(r"counter packets\s+(\d+)", table_result.stdout or "")
+            return sum(int(value) for value in matches)
         cmd = _detect_chain_cmd(host)
         if not cmd:
             return 0
@@ -566,8 +587,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         return False
 
     def _nat_debug() -> str:
-        client_nat_dump = client_runner("nat-redirect", "list", check=False).stdout or ""
-        server_nat_dump = server_runner("nat-redirect", "list", check=False).stdout or ""
+        client_nat_dump = client_nat_runner("nat-redirect", "list", check=False).stdout or ""
+        server_nat_dump = server_nat_runner("nat-redirect", "list", check=False).stdout or ""
         client_chain = client_host.run("sudo -n nft list table inet xray_transparent")
         server_chain = server_host.run("sudo -n nft list table inet xray_transparent")
         client_iptables = client_host.run("sudo -n /usr/sbin/iptables -t nat -L XRAY_TRANSPARENT -v -n")
@@ -609,7 +630,31 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     nat_added = False
     server_nat_added = False
     server_redirect_added = False
+    client_proxy_mode = False
+    server_proxy_mode = False
     try:
+        client_runner(
+            "client",
+            "mode",
+            "proxy",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        )
+        client_proxy_mode = True
+        server_runner(
+            "server",
+            "mode",
+            "proxy",
+            "--path",
+            server_install_path,
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            check=True,
+        )
+        server_proxy_mode = True
         client_runner(
             "client",
             "redirect",
@@ -643,7 +688,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
-        plan_output = client_runner(
+        plan_output = client_nat_runner(
             "nat-redirect",
             "add",
             "--cidr",
@@ -654,7 +699,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         ).stdout or ""
         assert nat_snippet in plan_output
         assert nat_entries in plan_output
-        client_runner(
+        client_nat_runner(
             "nat-redirect",
             "add",
             "--cidr",
@@ -664,7 +709,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         )
         nat_added = True
         time.sleep(2.0)
-        nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
+        nat_list = client_nat_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in nat_list
 
         with _ip_alias(server_host, client_target_alias):
@@ -686,12 +731,12 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     socks_ping,
                     f"through SOCKS tunnel before redirect ping. {_nat_debug()}",
                 )
-            counting_supported = _has_nat_chain(client_host)
-            if not counting_supported:
-                pytest.fail(
-                    "transparent NAT backend not available on client host (no nft/iptables chain).\n"
-                    f"{_nat_debug()}"
-                    )
+                counting_supported = _has_nat_chain(client_host)
+                if not counting_supported:
+                    pytest.fail(
+                        "transparent NAT backend not available on client host (no nft/iptables chain).\n"
+                        f"{_nat_debug()}"
+                        )
                 initial_packets = _traffic_counter_sum(client_host) if counting_supported else 0
                 ping_result = client_runner(
                     "ping",
@@ -730,7 +775,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             check=True,
         )
         server_redirect_added = True
-        server_runner(
+        server_nat_runner(
             "nat-redirect",
             "add",
             "--cidr",
@@ -740,7 +785,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         )
         server_nat_added = True
         time.sleep(2.0)
-        server_nat_list = server_runner("nat-redirect", "list", check=True).stdout or ""
+        server_nat_list = server_nat_runner("nat-redirect", "list", check=True).stdout or ""
         assert SERVER_REDIRECT_CIDR in server_nat_list
 
         with _ip_alias(client_host, server_target_alias):
@@ -762,12 +807,12 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                     socks_ping,
                     f"server-side SOCKS ping toward {reverse_ip}. {_nat_debug()}",
                 )
-            counting_supported = _has_nat_chain(server_host)
-            if not counting_supported:
-                pytest.fail(
-                    "transparent NAT backend not available on server host (no nft/iptables chain).\n"
-                    f"{_nat_debug()}"
-                )
+                counting_supported = _has_nat_chain(server_host)
+                if not counting_supported:
+                    pytest.fail(
+                        "transparent NAT backend not available on server host (no nft/iptables chain).\n"
+                        f"{_nat_debug()}"
+                    )
                 initial_server_packets = _traffic_counter_sum(server_host) if counting_supported else 0
                 ping_result = server_runner(
                     "ping",
@@ -791,8 +836,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                         f"initial={initial_server_packets} final={final_server_packets}. {_nat_debug()}"
                     )
     finally:
-        client_runner("nat-redirect", "remove", "--all", "--quiet", check=False)
-        server_runner("nat-redirect", "remove", "--all", "--quiet", check=False)
+        client_nat_runner("nat-redirect", "remove", "--all", check=False)
+        server_nat_runner("nat-redirect", "remove", "--all", check=False)
         if redirect_added:
             client_runner(
                 "client",
@@ -823,6 +868,28 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                 "--tag",
                 reverse_tag,
                 "--quiet",
+                check=False,
+            )
+        if client_proxy_mode:
+            client_runner(
+                "client",
+                "mode",
+                "tun",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                check=False,
+            )
+        if server_proxy_mode:
+            server_runner(
+                "server",
+                "mode",
+                "tun",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
                 check=False,
             )
         client_redirect_list = client_runner(

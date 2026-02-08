@@ -15,6 +15,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -116,6 +117,20 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	if err := os.RemoveAll(configDir); err != nil {
 		return fmt.Errorf("xp2p: remove server config dir: %w", err)
+	}
+
+	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if err := os.Remove(configPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove server config file: %w", err)
+		}
+	}
+
+	appliedPath := filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName))
+	if err := os.Remove(appliedPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove server applied state: %w", err)
+		}
 	}
 
 	statePaths := []string{

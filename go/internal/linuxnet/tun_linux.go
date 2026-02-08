@@ -24,7 +24,15 @@ func EnsureTunInterface(name, addr string, mtu int) error {
 	if isOpenWrtSystem() {
 		return nil
 	}
-	return nil
+	if _, err := execLookPath("ip"); err != nil {
+		return errors.New("xp2p: ip command not found")
+	}
+	if !linkExists(name) {
+		if err := runCommand("ip", "tuntap", "add", "dev", name, "mode", "tun"); err != nil {
+			return err
+		}
+	}
+	return EnsureTunAddress(name, addr, mtu)
 }
 
 func RemoveTunInterfaceIfManaged(name string) error {
@@ -35,7 +43,10 @@ func RemoveTunInterfaceIfManaged(name string) error {
 	if isOpenWrtSystem() {
 		return nil
 	}
-	return nil
+	if !linkExists(name) {
+		return nil
+	}
+	return runCommand("ip", "link", "del", name)
 }
 
 func EnsureTunAddress(name, addr string, mtu int) error {
