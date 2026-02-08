@@ -6,10 +6,9 @@ from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
 
 STATE_FILES = {
-    "client": helpers.INSTALL_ROOT / "install-state-client.json",
-    "server": helpers.INSTALL_ROOT / "install-state-server.json",
+    "client": helpers.CLIENT_CONFIG_FILE,
+    "server": helpers.SERVER_CONFIG_FILE,
 }
-LEGACY_STATE = helpers.INSTALL_ROOT / "install-state.json"
 
 
 def _xp2p_run(host, *args: str, check: bool = False):
@@ -26,16 +25,7 @@ def _read_roles(host) -> dict:
     roles: dict[str, dict] = {}
     for role, path in STATE_FILES.items():
         if helpers.path_exists(host, path):
-            roles[role] = helpers.read_json(host, path)
-    if roles:
-        return roles
-    if helpers.path_exists(host, LEGACY_STATE):
-        data = helpers.read_json(host, LEGACY_STATE)
-        nested = data.get("roles")
-        if nested:
-            return nested
-        if kind := data.get("kind"):
-            roles[kind] = data
+            roles[role] = helpers.read_toml(host, path).get(role) or {}
     return roles
 
 
@@ -267,7 +257,7 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
         )
         routing = helpers.read_json(openwrt_host, client_config_path / "routing.json")
         helpers.assert_routing_rule(routing, client_host)
-        state = helpers.read_first_existing_json(openwrt_host, helpers.CLIENT_STATE_FILES)
+        state = helpers.read_client_config(openwrt_host)
         recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert recorded_hosts == {client_host}
 
@@ -379,7 +369,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
         }
         expected_users = {default_cred["user"], user_b}
 
-        client_state = helpers.read_first_existing_json(openwrt_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(openwrt_host)
         recorded_hosts = {entry.get("hostname") for entry in client_state.get("endpoints", [])}
         recorded_tags = {entry.get("tag") for entry in client_state.get("endpoints", [])}
         recorded_users = {entry.get("user") for entry in client_state.get("endpoints", [])}
@@ -387,10 +377,10 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
         assert recorded_tags == expected_tags
         assert recorded_users == expected_users
 
-        server_state = helpers.read_first_existing_json(openwrt_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(openwrt_host)
         reverse_channels = server_state.get("reverse_channels", {})
         if not isinstance(reverse_channels, dict):
-            pytest.fail("Server install-state missing reverse_channels map")
+            pytest.fail("Server config missing reverse_channels map")
         recorded_server_users = {
             entry.get("user_id")
             for entry in reverse_channels.values()

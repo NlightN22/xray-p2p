@@ -23,8 +23,8 @@ SERVER_LOG_RELATIVE = r"logs\server.err"
 SERVER_LOG_FILE = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
 SERVER_HOST_VALUE = "xp2p.test.local"
 SERVER_STATE_FILES = [
-    SERVER_INSTALL_DIR / "install-state-server.json",
-    SERVER_INSTALL_DIR / "install-state.json",
+    _env.CONFIG_ROOT / "xp2p-server.toml",
+    _env.CONFIG_ROOT / "xp2p-server.state.json",
 ]
 FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
 FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
@@ -740,8 +740,11 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert _remote_path_exists(server_host, SERVER_INSTALL_DIR / "install-state-server.json"), (
-            "Expected server install-state marker to be recreated"
-        )
+        expected_paths = [
+            _env.CONFIG_ROOT / "xp2p-server.toml",
+            _env.CONFIG_ROOT / "xp2p-server.state.json",
+        ]
+        missing = [path for path in expected_paths if not _remote_path_exists(server_host, path)]
+        assert not missing, f"Expected server config/state files to be recreated: {missing}"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

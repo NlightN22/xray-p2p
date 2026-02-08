@@ -19,12 +19,12 @@ DIAG_PREFIX = 32
 DIAG_DOMAIN_IP = "10.77.0.2"
 DIAG_DOMAIN = "diag.service.internal"
 SERVER_STATE_FILES = [
-    SERVER_INSTALL_DIR / "install-state-server.json",
-    SERVER_INSTALL_DIR / "install-state.json",
+    _env.CONFIG_ROOT / "xp2p-server.toml",
+    _env.CONFIG_ROOT / "xp2p-server.state.json",
 ]
 CLIENT_STATE_FILES = [
-    CLIENT_INSTALL_DIR / "install-state-client.json",
-    CLIENT_INSTALL_DIR / "install-state.json",
+    _env.CONFIG_ROOT / "xp2p-client.toml",
+    _env.CONFIG_ROOT / "xp2p-client.state.json",
 ]
 
 

@@ -12,11 +12,12 @@ CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
 CLIENT_LOG_FILE = CLIENT_INSTALL_DIR / CLIENT_LOG_RELATIVE
+CLIENT_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-client.toml"
+CLIENT_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-client.state.json"
 CLIENT_STATE_FILES = [
-    CLIENT_INSTALL_DIR / "install-state-client.json",
-    CLIENT_INSTALL_DIR / "install-state.json",
+    CLIENT_CONFIG_FILE,
+    CLIENT_APPLIED_STATE_FILE,
 ]
-CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
@@ -174,7 +175,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
         _assert_routing_rule(routing, "10.62.10.10")
         _assert_routing_rule(routing, "10.62.10.11")
 
-        state = _read_remote_json(client_host, CLIENT_STATE_FILE)
+        state = _env.read_toml(client_host, CLIENT_CONFIG_FILE).get("client") or {}
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
         assert recorded_hosts == {"10.62.10.10", "10.62.10.11"}
 
@@ -406,8 +407,8 @@ def test_client_install_succeeds_without_state_marker(
             check=True,
         )
 
-        assert _env.paths_exist(client_host, CLIENT_STATE_FILES), (
-            "Expected client install-state file to be recreated"
-        )
+        existing = _env.paths_exist(client_host, CLIENT_STATE_FILES)
+        expected = {str(path) for path in CLIENT_STATE_FILES}
+        assert expected <= existing, "Expected client config/state files to be recreated"
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

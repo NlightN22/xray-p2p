@@ -11,15 +11,19 @@ INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
 SERVER_CONFIG_DIR = "config-server"
 XRAY_BINARY = INSTALL_DIR / "bin" / "xray.exe"
+CLIENT_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-client.toml"
+SERVER_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-server.toml"
+CLIENT_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-client.state.json"
+SERVER_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-server.state.json"
 STATE_FILES = {
-    "client": INSTALL_DIR / "install-state-client.json",
-    "server": INSTALL_DIR / "install-state-server.json",
+    "client": CLIENT_CONFIG_FILE,
+    "server": SERVER_CONFIG_FILE,
 }
-LEGACY_STATE_FILE = INSTALL_DIR / "install-state.json"
 ALL_STATE_FILES = [
-    INSTALL_DIR / "install-state-client.json",
-    INSTALL_DIR / "install-state-server.json",
-    INSTALL_DIR / "install-state.json",
+    CLIENT_CONFIG_FILE,
+    SERVER_CONFIG_FILE,
+    CLIENT_APPLIED_STATE_FILE,
+    SERVER_APPLIED_STATE_FILE,
 ]
 
 
@@ -80,18 +84,10 @@ Get-Content -Raw {quoted}
 def _read_roles(host) -> dict:
     roles: dict[str, dict] = {}
     for role, path in STATE_FILES.items():
-        data, ok = _read_remote_json_optional(host, path)
-        if ok and data is not None:
-            roles[role] = data
-    if roles:
-        return roles
-    legacy, ok = _read_remote_json_optional(host, LEGACY_STATE_FILE)
-    if not ok or legacy is None:
-        return roles
-    if nested := legacy.get("roles"):
-        return nested
-    if kind := legacy.get("kind"):
-        roles[kind] = legacy
+        if not _env.path_exists(host, path):
+            continue
+        data = _env.read_toml(host, path).get(role) or {}
+        roles[role] = data
     return roles
 
 

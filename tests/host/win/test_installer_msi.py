@@ -57,9 +57,10 @@ def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp
     client_dir = install_dir / "config-client"
     server_dir = install_dir / "config-server"
     state_files = [
-        install_dir / "install-state-client.json",
-        install_dir / "install-state-server.json",
-        install_dir / "install-state.json",
+        _env.CONFIG_ROOT / "xp2p-client.toml",
+        _env.CONFIG_ROOT / "xp2p-server.toml",
+        _env.CONFIG_ROOT / "xp2p-client.state.json",
+        _env.CONFIG_ROOT / "xp2p-server.state.json",
     ]
     _env.cleanup_xp2p_install(
         server_host,

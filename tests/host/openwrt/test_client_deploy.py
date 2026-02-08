@@ -378,7 +378,7 @@ def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, pass
 
 
 def _assert_client_state(host: Host, server_ip: str) -> None:
-    state = helpers.read_first_existing_json(host, helpers.CLIENT_STATE_FILES)
+    state = helpers.read_client_config(host)
     recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
     assert recorded_hosts == {server_ip}, f"Unexpected endpoint entries recorded: {recorded_hosts}"
 

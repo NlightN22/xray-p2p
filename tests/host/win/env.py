@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import os
 import time
 import uuid
 from pathlib import Path
@@ -11,12 +12,18 @@ from testinfra.host import Host
 
 from tests.host import common
 
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - fallback for older runtimes.
+    import tomli as tomllib
+
 REPO_ROOT = common.REPO_ROOT
 VAGRANT_DIR = REPO_ROOT / "infra" / "vagrant" / "windows10"
 DEFAULT_SERVER = "win10-a"
 DEFAULT_CLIENT = "win10-b"
 DEFAULT_TARGET = "10.62.10.21"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+CONFIG_ROOT = Path(os.environ.get("XP2P_CONFIG_ROOT", str(PROGRAM_FILES_INSTALL_DIR)))
 LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
@@ -500,6 +507,14 @@ Get-Content -Raw {target}
             f"Failed to read remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     return result.stdout or ""
+
+
+def read_toml(host: Host, path: Path | str) -> dict:
+    content = read_text(host, path)
+    try:
+        return tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
 
 
 def write_text(host: Host, path: Path | str, content: str) -> None:

@@ -186,7 +186,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             check=True,
         )
 
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
@@ -443,7 +443,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             check=True,
         )
 
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)

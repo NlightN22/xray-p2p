@@ -137,7 +137,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             f"{first_target_ip}:{first_target_port}",
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         forwards = client_state.get("forwards") or []
         first_entry = helpers.assert_forward_rule_entry(
             forwards,
@@ -185,7 +185,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             "tcp",
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         forwards = client_state.get("forwards") or []
         explicit_entry = helpers.assert_forward_rule_entry(
             forwards,
@@ -219,7 +219,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             "udp",
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         forwards = client_state.get("forwards") or []
         second_entry = forwards[-1]
         second_port = int(second_entry.get("listen_port") or 0)
@@ -256,7 +256,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             str(first_port),
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         helpers.assert_no_forward_rule_entry(client_state.get("forwards") or [], first_port)
         client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
         helpers.assert_no_forward_inbound_entry(client_inbounds, first_port)
@@ -271,7 +271,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             explicit_tag,
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         helpers.assert_no_forward_rule_entry(client_state.get("forwards") or [], explicit_port)
         client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
         helpers.assert_no_forward_inbound_entry(client_inbounds, explicit_port)
@@ -289,7 +289,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             second_remark,
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         helpers.assert_no_forward_rule_entry(client_state.get("forwards") or [], second_port)
         client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
         helpers.assert_no_forward_inbound_entry(client_inbounds, second_port)
@@ -317,7 +317,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             f"{first_target_ip}:{first_target_port}",
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         forwards = server_state.get("forward_rules") or []
         first_entry = helpers.assert_forward_rule_entry(
             forwards,
@@ -355,7 +355,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             "tcp",
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         forwards = server_state.get("forward_rules") or []
         explicit_entry = helpers.assert_forward_rule_entry(
             forwards,
@@ -389,7 +389,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             "udp",
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         forwards = server_state.get("forward_rules") or []
         second_entry = forwards[-1]
         second_port = int(second_entry.get("listen_port") or 0)
@@ -422,7 +422,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             str(first_port),
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         helpers.assert_no_forward_rule_entry(server_state.get("forward_rules") or [], first_port)
         server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
         helpers.assert_no_forward_inbound_entry(server_inbounds, first_port)
@@ -437,7 +437,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             explicit_tag,
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         helpers.assert_no_forward_rule_entry(server_state.get("forward_rules") or [], explicit_port)
         server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
         helpers.assert_no_forward_inbound_entry(server_inbounds, explicit_port)
@@ -455,7 +455,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             second_remark,
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         helpers.assert_no_forward_rule_entry(server_state.get("forward_rules") or [], second_port)
         server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
         helpers.assert_no_forward_inbound_entry(server_inbounds, second_port)
@@ -481,7 +481,7 @@ def test_client_forward_add_warns_without_redirect(client_host, xp2p_client_runn
         )
         stderr = (result.stderr or "").lower()
         assert "client forward has no matching redirect" in stderr
-        forwards = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES).get("forwards") or []
+        forwards = helpers.read_client_config(client_host).get("forwards") or []
         assert forwards, "Expected client forward entry recorded"
         listen_port = forwards[-1].get("listen_port")
         assert listen_port, "Client forward listen port missing from state"
@@ -515,7 +515,7 @@ def test_server_forward_add_warns_without_redirect(server_host, xp2p_server_runn
         )
         stderr = (result.stderr or "").lower()
         assert "server forward has no matching redirect" in stderr
-        forwards = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES).get("forward_rules") or []
+        forwards = helpers.read_server_config(server_host).get("forward_rules") or []
         assert forwards, "Expected server forward entry recorded"
         listen_port = forwards[-1].get("listen_port")
         assert listen_port, "Server forward listen port missing from state"

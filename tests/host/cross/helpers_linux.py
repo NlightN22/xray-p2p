@@ -202,7 +202,7 @@ def reset_linux_logs(host: Host, path: PurePosixPath) -> None:
 
 
 def assert_linux_server_install_dir(host: Host, install_dir: PurePosixPath) -> None:
-    state_path = install_dir / "install-state-server.json"
+    state_path = linux_helpers.SERVER_APPLIED_STATE_FILE
     config_dir = install_dir / linux_helpers.SERVER_CONFIG_DIR_NAME
     assert linux_helpers.path_exists(host, state_path), f"server install state missing: {state_path}"
     assert linux_helpers.path_exists(host, config_dir), f"server config dir missing: {config_dir}"

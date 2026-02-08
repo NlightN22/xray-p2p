@@ -211,7 +211,7 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
         assert credential["link"], "Expected trojan link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
 
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_reverse_state(
             server_state,
@@ -233,7 +233,7 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
             "--force",
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
@@ -364,7 +364,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         entry = tunnel_common.forward_entry_for_target(
             client_state.get("forwards") or [], SERVER_IP, SERVER_DIAGNOSTICS_PORT
         )
@@ -419,7 +419,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         entry = tunnel_common.forward_entry_for_target(
             server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
         )
@@ -626,7 +626,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             check=True,
         )
         redirect_added = True
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_redirect_rule(client_routing, CLIENT_REDIRECT_CIDR, endpoint_tag)
         helpers.assert_client_reverse_state(
@@ -886,7 +886,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             ).stdout or ""
             assert alias_cidr in list_output, f"Server redirect list missing {alias_cidr}"
 
-            server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+            server_state = helpers.read_server_config(server_host)
             server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
             helpers.assert_server_redirect_state(server_state, alias_cidr, reverse_tag)
             helpers.assert_server_redirect_rule(server_routing, alias_cidr, reverse_tag)
@@ -911,7 +911,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             )
             forward_added = True
 
-            server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+            server_state = helpers.read_server_config(server_host)
             entry = tunnel_common.forward_entry_for_target(
                 server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, CLIENT_DIAGNOSTICS_PORT
             )

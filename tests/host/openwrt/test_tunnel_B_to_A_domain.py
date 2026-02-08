@@ -98,7 +98,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
         assert SERVER_DOMAIN in credential["link"], "Expected domain in trojan link"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_DOMAIN)
 
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_reverse_state(
             server_state,
@@ -120,7 +120,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         client_outbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_DOMAIN)
@@ -241,7 +241,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        client_state = helpers.read_first_existing_json(client_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_host)
         for entry in client_state.get("forwards") or []:
             recorded_host = (entry.get("target_host") or "").strip()
             recorded_port = int(entry.get("target_port") or entry.get("targetPort") or 0)
@@ -298,7 +298,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         entry = tunnel_common.forward_entry_for_target(
             server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
         )

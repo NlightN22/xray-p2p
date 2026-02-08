@@ -9,10 +9,11 @@ CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
 CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
-CLIENT_STATE_FILE = CLIENT_INSTALL_DIR / "install-state-client.json"
+CLIENT_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-client.toml"
+CLIENT_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-client.state.json"
 CLIENT_STATE_FILES = [
-    CLIENT_INSTALL_DIR / "install-state-client.json",
-    CLIENT_INSTALL_DIR / "install-state.json",
+    CLIENT_CONFIG_FILE,
+    CLIENT_APPLIED_STATE_FILE,
 ]
 PRIMARY_HOST = "10.120.0.10"
 SECONDARY_HOST = "10.120.0.11"
@@ -353,7 +354,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
         _assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
         _assert_routing_rule(routing, PRIMARY_HOST)
 
-        state = _read_remote_json(client_host, CLIENT_STATE_FILE)
+        state = _env.read_toml(client_host, CLIENT_CONFIG_FILE).get("client") or {}
         assert not state.get("redirects")
         remaining_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert remaining_hosts == {PRIMARY_HOST}

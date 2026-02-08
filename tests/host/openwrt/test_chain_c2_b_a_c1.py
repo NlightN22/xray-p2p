@@ -324,7 +324,7 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
             check=True,
         )
         redirect_added = True
-        server_state = helpers.read_first_existing_json(server_host, helpers.SERVER_STATE_FILES)
+        server_state = helpers.read_server_config(server_host)
         server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_redirect_state(server_state, server_redirect_cidr, reverse_tag)
         helpers.assert_server_redirect_rule(server_routing, server_redirect_cidr, reverse_tag)

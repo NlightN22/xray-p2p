@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import PurePosixPath
 import time
 
@@ -7,19 +8,23 @@ from testinfra.host import Host
 
 from tests.host.linux import env as linux_env
 
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - fallback for older runtimes.
+    import tomli as tomllib
+
 INSTALL_ROOT = PurePosixPath("/etc/xp2p")
+CONFIG_ROOT = PurePosixPath(os.environ.get("XP2P_CONFIG_ROOT", "/etc/xp2p"))
 CLIENT_CONFIG_DIR_NAME = "config-client"
 SERVER_CONFIG_DIR_NAME = "config-server"
 CLIENT_CONFIG_DIR = INSTALL_ROOT / CLIENT_CONFIG_DIR_NAME
 SERVER_CONFIG_DIR = INSTALL_ROOT / SERVER_CONFIG_DIR_NAME
-CLIENT_STATE_FILES = [
-    INSTALL_ROOT / "install-state-client.json",
-    INSTALL_ROOT / "install-state.json",
-]
-SERVER_STATE_FILES = [
-    INSTALL_ROOT / "install-state-server.json",
-    INSTALL_ROOT / "install-state.json",
-]
+CLIENT_CONFIG_FILE = CONFIG_ROOT / "xp2p-client.toml"
+SERVER_CONFIG_FILE = CONFIG_ROOT / "xp2p-server.toml"
+CLIENT_APPLIED_STATE_FILE = CONFIG_ROOT / "xp2p-client.state.json"
+SERVER_APPLIED_STATE_FILE = CONFIG_ROOT / "xp2p-server.state.json"
+CLIENT_STATE_FILES = [CLIENT_CONFIG_FILE, CLIENT_APPLIED_STATE_FILE]
+SERVER_STATE_FILES = [SERVER_CONFIG_FILE, SERVER_APPLIED_STATE_FILE]
 CLIENT_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-client.json"
 SERVER_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-server.json"
 HEARTBEAT_STATE_FILE = CLIENT_HEARTBEAT_STATE_FILE
@@ -97,6 +102,14 @@ def read_json(host: Host, path: PurePosixPath) -> dict:
     return linux_env.read_json(host, path)
 
 
+def read_toml(host: Host, path: PurePosixPath) -> dict:
+    content = read_text(host, path)
+    try:
+        return tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
+
+
 def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
     for path in paths:
         if linux_env.path_exists(host, path):
@@ -122,6 +135,22 @@ def write_text(host: Host, path: PurePosixPath, content: str) -> None:
 
 def file_sha256(host: Host, path: PurePosixPath) -> str:
     return linux_env.file_sha256(host, path)
+
+
+def read_client_config(host: Host) -> dict:
+    return read_toml(host, CLIENT_CONFIG_FILE).get("client") or {}
+
+
+def read_server_config(host: Host) -> dict:
+    return read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+
+
+def read_client_applied_state(host: Host) -> dict:
+    return read_json(host, CLIENT_APPLIED_STATE_FILE)
+
+
+def read_server_applied_state(host: Host) -> dict:
+    return read_json(host, SERVER_APPLIED_STATE_FILE)
 
 
 def detect_primary_ipv4(host: Host) -> str:
@@ -350,7 +379,7 @@ def assert_no_domain_redirect_rule(data: dict, domain: str, tag: str | None = No
 def assert_server_reverse_state(state: dict, reverse_tag: str, *, user: str | None = None, host: str | None = None) -> None:
     channels = state.get("reverse_channels")
     if not isinstance(channels, dict):
-        raise AssertionError("Server install-state is missing reverse_channels")
+        raise AssertionError("Server config is missing reverse_channels")
     entry = channels.get(reverse_tag)
     if not isinstance(entry, dict):
         raise AssertionError(f"Reverse entry {reverse_tag} not recorded in server state")
@@ -438,7 +467,7 @@ def assert_client_reverse_state(
 ) -> None:
     reverse = state.get("reverse")
     if not isinstance(reverse, dict):
-        raise AssertionError("Client install-state is missing reverse map")
+        raise AssertionError("Client config is missing reverse map")
     entry = reverse.get(reverse_tag)
     if not isinstance(entry, dict):
         raise AssertionError(f"Reverse entry {reverse_tag} not recorded in client state")
@@ -472,7 +501,7 @@ def assert_server_redirect_rule(routing: dict, target: str, outbound_tag: str) -
 def assert_server_redirect_state(state: dict, target: str, outbound_tag: str) -> None:
     redirects = state.get("server_redirects")
     if not isinstance(redirects, list):
-        raise AssertionError("Server install-state is missing server_redirects list")
+        raise AssertionError("Server config is missing server_redirects list")
     normalized = target.strip().lower()
     for entry in redirects:
         if not isinstance(entry, dict):

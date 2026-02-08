@@ -41,9 +41,10 @@ def _mismatch_version(pinned: str) -> str:
 
 def _state_files_for(install_dir: Path) -> list[Path]:
     return [
-        install_dir / "install-state-client.json",
-        install_dir / "install-state-server.json",
-        install_dir / "install-state.json",
+        _env.CONFIG_ROOT / "xp2p-client.toml",
+        _env.CONFIG_ROOT / "xp2p-server.toml",
+        _env.CONFIG_ROOT / "xp2p-client.state.json",
+        _env.CONFIG_ROOT / "xp2p-server.state.json",
     ]
 
 

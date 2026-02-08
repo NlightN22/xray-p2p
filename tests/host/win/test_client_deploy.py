@@ -14,20 +14,23 @@ CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
 CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
+CLIENT_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-client.toml"
+CLIENT_APPLIED_STATE_FILE = win_env.CONFIG_ROOT / "xp2p-client.state.json"
 CLIENT_STATE_FILES = [
-    CLIENT_INSTALL_DIR / "install-state-client.json",
-    CLIENT_INSTALL_DIR / "install-state.json",
+    CLIENT_CONFIG_FILE,
+    CLIENT_APPLIED_STATE_FILE,
 ]
-CLIENT_STATE_FILE = CLIENT_STATE_FILES[0]
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR_NAME = "config-server"
 SERVER_CONFIG_DIR = SERVER_INSTALL_DIR / SERVER_CONFIG_DIR_NAME
 SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
 SERVER_CERT_DEST = SERVER_CONFIG_DIR / "cert.pem"
 SERVER_KEY_DEST = SERVER_CONFIG_DIR / "key.pem"
+SERVER_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-server.toml"
+SERVER_APPLIED_STATE_FILE = win_env.CONFIG_ROOT / "xp2p-server.state.json"
 SERVER_STATE_FILES = [
-    SERVER_INSTALL_DIR / "install-state-server.json",
-    SERVER_INSTALL_DIR / "install-state.json",
+    SERVER_CONFIG_FILE,
+    SERVER_APPLIED_STATE_FILE,
 ]
 HEARTBEAT_STATE_FILES = [
     CLIENT_INSTALL_DIR / "state-heartbeat-client.json",
@@ -398,7 +401,7 @@ def _assert_client_install_artifacts(host, server_ip: str, user: str, password: 
 
 
 def _assert_client_state(host, server_ip: str) -> None:
-    state = _read_first_existing_json(host, CLIENT_STATE_FILES)
+    state = win_env.read_toml(host, CLIENT_CONFIG_FILE).get("client") or {}
     recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
     assert recorded_hosts == {server_ip}, f"Unexpected endpoint entries recorded: {recorded_hosts}"
 

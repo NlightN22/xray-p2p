@@ -5,7 +5,7 @@ import pytest
 from tests.host.linux import _helpers as helpers
 
 CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
-CLIENT_STATE_FILE = helpers.CLIENT_STATE_FILES[0]
+CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
 INSTALL_PATH = helpers.INSTALL_ROOT.as_posix()
 CONFIG_DIR = helpers.CLIENT_CONFIG_DIR_NAME
 PRIMARY_HOST = "10.240.0.10"
@@ -272,7 +272,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         helpers.assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
         helpers.assert_routing_rule(routing, PRIMARY_HOST)
 
-        state = helpers.read_json(client_host, CLIENT_STATE_FILE)
+        state = helpers.read_client_config(client_host)
         redirects = state.get("redirects") or []
         assert redirects == []
         remaining_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}

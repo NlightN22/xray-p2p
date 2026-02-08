@@ -10,10 +10,15 @@ from testinfra.host import Host
 from tests.host.linux import _helpers as linux_helpers
 
 INSTALL_ROOT = linux_helpers.INSTALL_ROOT
+CONFIG_ROOT = linux_helpers.CONFIG_ROOT
 CLIENT_CONFIG_DIR_NAME = linux_helpers.CLIENT_CONFIG_DIR_NAME
 SERVER_CONFIG_DIR_NAME = linux_helpers.SERVER_CONFIG_DIR_NAME
 CLIENT_CONFIG_DIR = linux_helpers.CLIENT_CONFIG_DIR
 SERVER_CONFIG_DIR = linux_helpers.SERVER_CONFIG_DIR
+CLIENT_CONFIG_FILE = linux_helpers.CLIENT_CONFIG_FILE
+SERVER_CONFIG_FILE = linux_helpers.SERVER_CONFIG_FILE
+CLIENT_APPLIED_STATE_FILE = linux_helpers.CLIENT_APPLIED_STATE_FILE
+SERVER_APPLIED_STATE_FILE = linux_helpers.SERVER_APPLIED_STATE_FILE
 CLIENT_STATE_FILES = linux_helpers.CLIENT_STATE_FILES
 SERVER_STATE_FILES = linux_helpers.SERVER_STATE_FILES
 CLIENT_HEARTBEAT_STATE_FILE = linux_helpers.CLIENT_HEARTBEAT_STATE_FILE
@@ -119,6 +124,14 @@ def read_json(host: Host, path: PurePosixPath | Path | str) -> dict:
         raise RuntimeError(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}") from exc
 
 
+def read_toml(host: Host, path: PurePosixPath | Path | str) -> dict:
+    content = read_text(host, path)
+    try:
+        return linux_helpers.tomllib.loads(content)
+    except linux_helpers.tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
+
+
 def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
     for candidate in paths:
         if path_exists(host, candidate):
@@ -135,6 +148,22 @@ def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
 def remove_path(host: Host, path: PurePosixPath | Path | str) -> None:
     target = _posix(path)
     host.run(f"rm -rf {shlex.quote(target)} >/dev/null 2>&1 || true")
+
+
+def read_client_config(host: Host) -> dict:
+    return read_toml(host, CLIENT_CONFIG_FILE).get("client") or {}
+
+
+def read_server_config(host: Host) -> dict:
+    return read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+
+
+def read_client_applied_state(host: Host) -> dict:
+    return read_json(host, CLIENT_APPLIED_STATE_FILE)
+
+
+def read_server_applied_state(host: Host) -> dict:
+    return read_json(host, SERVER_APPLIED_STATE_FILE)
 
 
 def wait_for_heartbeat_state(

@@ -6,10 +6,9 @@ from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 
 STATE_FILES = {
-    "client": helpers.INSTALL_ROOT / "install-state-client.json",
-    "server": helpers.INSTALL_ROOT / "install-state-server.json",
+    "client": helpers.CLIENT_CONFIG_FILE,
+    "server": helpers.SERVER_CONFIG_FILE,
 }
-LEGACY_STATE = helpers.INSTALL_ROOT / "install-state.json"
 
 
 def _xp2p_run(host, *args: str, check: bool = False):
@@ -26,16 +25,7 @@ def _read_roles(host) -> dict:
     roles: dict[str, dict] = {}
     for role, path in STATE_FILES.items():
         if linux_env.path_exists(host, path):
-            roles[role] = linux_env.read_json(host, path)
-    if roles:
-        return roles
-    if linux_env.path_exists(host, LEGACY_STATE):
-        data = linux_env.read_json(host, LEGACY_STATE)
-        nested = data.get("roles")
-        if nested:
-            return nested
-        if kind := data.get("kind"):
-            roles[kind] = data
+            roles[role] = helpers.read_toml(host, path).get(role) or {}
     return roles
 
 
@@ -173,7 +163,7 @@ def test_client_and_server_install_support_extended_arguments(server_host):
         )
         routing = helpers.read_json(server_host, client_config_path / "routing.json")
         helpers.assert_routing_rule(routing, client_host)
-        client_state = helpers.read_first_existing_json(server_host, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(server_host)
         recorded_hosts = {entry.get("hostname") for entry in client_state.get("endpoints", [])}
         assert recorded_hosts == {client_host}
 

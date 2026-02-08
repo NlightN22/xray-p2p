@@ -8,7 +8,7 @@ from tests.host.tunnel import common as tunnel_common
 
 CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
-CLIENT_STATE_FILE = helpers.CLIENT_STATE_FILES[0]
+CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
 
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 
@@ -168,7 +168,7 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
         helpers.assert_routing_rule(routing, "10.55.0.10")
         helpers.assert_routing_rule(routing, "10.55.0.11")
 
-        state = helpers.read_json(openwrt_host, CLIENT_STATE_FILE)
+        state = helpers.read_client_config(openwrt_host)
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
         assert recorded_hosts == {"10.55.0.10", "10.55.0.11"}
 
@@ -462,7 +462,7 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
         routing = helpers.read_json(openwrt_host, CLIENT_ROUTING)
         helpers.assert_routing_rule(routing, "10.66.0.11")
 
-        state = helpers.read_json(openwrt_host, CLIENT_STATE_FILE)
+        state = helpers.read_client_config(openwrt_host)
         hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert hosts == {"10.66.0.11"}
 
@@ -620,8 +620,8 @@ def test_client_install_recovers_without_state_marker(openwrt_host, xp2p_openwrt
             check=True,
         )
 
-        assert any(helpers.path_exists(openwrt_host, path) for path in helpers.CLIENT_STATE_FILES), (
-            "Expected client install-state markers to be recreated"
+        assert all(helpers.path_exists(openwrt_host, path) for path in helpers.CLIENT_STATE_FILES), (
+            "Expected client config/state files to be recreated"
         )
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)

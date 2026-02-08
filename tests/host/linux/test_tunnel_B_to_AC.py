@@ -93,7 +93,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             },
         ]
         for entry in server_entries:
-            server_state = helpers.read_first_existing_json(entry["host"], helpers.SERVER_STATE_FILES)
+            server_state = helpers.read_server_config(entry["host"])
             server_routing = helpers.read_json(entry["host"], helpers.SERVER_CONFIG_DIR / "routing.json")
             helpers.assert_server_reverse_state(
                 server_state,
@@ -135,7 +135,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
             check=True,
         )
 
-        client_state = helpers.read_first_existing_json(client_b, helpers.CLIENT_STATE_FILES)
+        client_state = helpers.read_client_config(client_b)
         client_routing = helpers.read_json(client_b, CLIENT_ROUTING)
 
         outbounds = helpers.read_json(client_b, CLIENT_OUTBOUNDS)
@@ -227,7 +227,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                 assert redirect_domain in list_output.lower(), (
                     f"Server redirect list missing {redirect_domain} for {entry['ip']}"
                 )
-                server_state = helpers.read_first_existing_json(entry["host"], helpers.SERVER_STATE_FILES)
+                server_state = helpers.read_server_config(entry["host"])
                 server_routing = helpers.read_json(entry["host"], helpers.SERVER_CONFIG_DIR / "routing.json")
                 helpers.assert_server_redirect_state(server_state, redirect_domain, entry["reverse_tag"])
                 helpers.assert_server_redirect_rule(server_routing, redirect_domain, entry["reverse_tag"])
