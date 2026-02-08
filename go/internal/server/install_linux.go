@@ -151,15 +151,71 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		}
 	}
 
+	serverHeartbeatPath := filepath.Join(installDir, layout.ServerHeartbeatStateFileName)
+	if err := os.Remove(serverHeartbeatPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("xp2p: remove server heartbeat state: %w", err)
+	}
+
 	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer))
 	if err := installstate.Remove(statePath, installstate.KindServer); err != nil {
 		if !(opts.IgnoreMissing && (errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled))) {
 			return fmt.Errorf("xp2p: remove server state file: %w", err)
 		}
 	}
+	legacyStatePath := filepath.Join(installDir, layout.StateFileName)
+	if err := installstate.Remove(legacyStatePath, installstate.KindServer); err != nil {
+		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, installstate.ErrRoleNotInstalled) {
+			return fmt.Errorf("xp2p: remove legacy server state: %w", err)
+		}
+	}
+
+	if !opts.KeepFiles {
+		if err := removeInstallDirIfUnused(installDir); err != nil {
+			return err
+		}
+	}
 
 	logging.Info("xp2p server configuration removed", "install_dir", installDir, "config_dir", configDir)
 	return nil
+}
+
+func removeInstallDirIfUnused(installDir string) error {
+	clientStatePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient))
+	if installedRole(clientStatePath, installstate.KindClient) {
+		return nil
+	}
+	serverStatePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer))
+	if installedRole(serverStatePath, installstate.KindServer) {
+		return nil
+	}
+	legacyStatePath := filepath.Join(installDir, layout.StateFileName)
+	if legacyHasRoles(legacyStatePath) {
+		return nil
+	}
+	if err := os.RemoveAll(installDir); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("xp2p: remove install dir: %w", err)
+	}
+	return nil
+}
+
+func installedRole(path string, kind installstate.Kind) bool {
+	if _, err := installstate.Read(path, kind); err == nil {
+		return true
+	} else if errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled) {
+		return false
+	}
+	return true
+}
+
+func legacyHasRoles(path string) bool {
+	roles, err := installstate.Roles(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false
+		}
+		return true
+	}
+	return len(roles) > 0
 }
 
 func normalizeInstallOptions(opts InstallOptions) (installState, error) {
