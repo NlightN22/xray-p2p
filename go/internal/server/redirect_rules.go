@@ -279,6 +279,31 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 }
 
 func resolveServerRedirectBinding(tag, host string, bindings []redirect.Binding) (redirect.Binding, error) {
+	trimmedTag := strings.TrimSpace(tag)
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedTag != "" {
+		var matched redirect.Binding
+		found := false
+		for _, binding := range bindings {
+			if strings.EqualFold(binding.Tag, trimmedTag) {
+				matched = binding
+				found = true
+				break
+			}
+		}
+		if !found {
+			return redirect.Binding{}, fmt.Errorf("xp2p: outbound tag %q is not registered", trimmedTag)
+		}
+		if trimmedHost != "" && !strings.EqualFold(strings.TrimSpace(matched.Host), trimmedHost) {
+			resolvedHost := matched.Host
+			if strings.TrimSpace(resolvedHost) == "" {
+				resolvedHost = trimmedHost
+			}
+			return redirect.Binding{}, fmt.Errorf("xp2p: tag %q does not match reverse host %q", trimmedTag, resolvedHost)
+		}
+		return matched, nil
+	}
+
 	binding, err := redirect.ResolveBinding(tag, host, bindings)
 	if err != nil {
 		switch {
