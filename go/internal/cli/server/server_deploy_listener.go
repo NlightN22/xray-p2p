@@ -2,6 +2,7 @@ package servercmd
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 type deployServer struct {
@@ -44,6 +46,9 @@ func (s *deployServer) Run(ctx context.Context) error {
 		runCancel  context.CancelFunc
 		diagCancel context.CancelFunc
 		runDoneCh  chan error
+		lastInstallDir string
+		lastConfigDir  string
+		switchToTun    bool
 	)
 
 	for {
@@ -75,13 +80,31 @@ func (s *deployServer) Run(ctx context.Context) error {
 				}
 				if runCancel != nil {
 					runCancel()
+					switchToTun = true
 				} else if s.Once {
+					s.applyTunAndStartService(ctx, lastInstallDir, lastConfigDir)
 					return nil
+				}
+				if runCancel == nil && switchToTun {
+					s.applyTunAndStartService(ctx, lastInstallDir, lastConfigDir)
+					switchToTun = false
+					if s.Once {
+						return nil
+					}
 				}
 			case sig.ok:
 				if runDoneCh != nil {
 					logging.Warn("xp2p server deploy: xray-core already running; ignoring duplicate request")
 					continue
+				}
+				if sig.installDir != "" {
+					lastInstallDir = sig.installDir
+				}
+				if sig.configDir != "" {
+					lastConfigDir = sig.configDir
+				}
+				if err := s.applyMode(sig.installDir, sig.configDir, false); err != nil {
+					logging.Warn("xp2p server deploy: proxy mode setup failed", "err", err)
 				}
 				diagCtx, diagStop := context.WithCancel(ctx)
 				if err := server.StartBackground(diagCtx, server.Options{
@@ -102,7 +125,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 					runDone <- server.Run(runCtx, server.RunOptions{
 						InstallDir: installDir,
 						ConfigDir:  configDir,
-						TunEnabled: s.Cfg.Server.TunEnabled,
+						TunEnabled: false,
 						TunName:    s.Cfg.Server.TunName,
 						TunMTU:     s.Cfg.Server.TunMTU,
 						TunAddr:    s.Cfg.Server.TunAddr,
@@ -115,6 +138,13 @@ func (s *deployServer) Run(ctx context.Context) error {
 			if diagCancel != nil {
 				diagCancel()
 				diagCancel = nil
+			}
+			if switchToTun {
+				s.applyTunAndStartService(ctx, lastInstallDir, lastConfigDir)
+				switchToTun = false
+				if s.Once {
+					return nil
+				}
 			}
 			if err != nil {
 				logging.Error("xp2p server deploy: xray-core start failed", "err", err)
@@ -147,4 +177,56 @@ func (s *deployServer) Run(ctx context.Context) error {
 
 		go s.handleConn(ctx, conn, results)
 	}
+}
+
+func (s *deployServer) applyMode(installDir, configDir string, tunEnabled bool) error {
+	modeLabel := "proxy"
+	if tunEnabled {
+		modeLabel = "tun"
+	}
+	updatedPath, err := config.UpdateTunEnabled("", "server", tunEnabled)
+	if err != nil {
+		return err
+	}
+	logging.Info("xp2p server deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
+	err = server.ApplyMode(server.ModeOptions{
+		InstallDir: installDir,
+		ConfigDir:  configDir,
+		TunEnabled: tunEnabled,
+		TunName:    s.Cfg.Server.TunName,
+		TunMTU:     s.Cfg.Server.TunMTU,
+		TunAddr:    s.Cfg.Server.TunAddr,
+	})
+	if err == nil {
+		return nil
+	}
+	if isPermissionError(err) {
+		logging.Warn("xp2p server deploy: mode apply skipped due to permissions", "mode", modeLabel, "err", err)
+		return nil
+	}
+	return err
+}
+
+func (s *deployServer) applyTunAndStartService(ctx context.Context, installDir, configDir string) {
+	if err := s.applyMode(installDir, configDir, true); err != nil {
+		logging.Warn("xp2p server deploy: tun mode setup failed", "err", err)
+	}
+	ctrl := servicecontrol.Default()
+	if err := ctrl.Start(ctx, servicecontrol.RoleServer); err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Warn("xp2p server deploy: service start is not supported on this platform")
+			return
+		}
+		logging.Warn("xp2p server deploy: server service start failed", "err", err)
+		return
+	}
+	logging.Info("xp2p server deploy: server service started")
+}
+
+func isPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied")
 }

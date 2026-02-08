@@ -23,6 +23,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 const (
@@ -153,6 +154,12 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 	logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 
+	if err := applyClientDeployMode(installOpts, cfg, false); err != nil {
+		completionState = "FAIL client-mode-proxy"
+		logging.Error("xp2p client deploy: proxy mode setup failed", "err", err)
+		return 1
+	}
+
 	cancelDiagnostics := startDiagnostics(ctx, cfg.Client.DiagPort)
 	if cancelDiagnostics != nil {
 		defer cancelDiagnostics()
@@ -171,7 +178,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			Port:         cfg.Server.Port,
 			SocksAddress: cfg.Client.SocksAddress,
 		},
-		TunEnabled: cfg.Client.TunEnabled,
+		TunEnabled: false,
 		TunName:    cfg.Client.TunName,
 		TunMTU:     cfg.Client.TunMTU,
 		TunAddr:    cfg.Client.TunAddr,
@@ -248,6 +255,15 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Error("xp2p client deploy: client run exited", "err", err)
 		return 1
 	}
+
+	if err := applyClientDeployMode(installOpts, cfg, true); err != nil {
+		completionState = "FAIL client-mode-tun"
+		logging.Error("xp2p client deploy: tun mode setup failed", "err", err)
+		return 1
+	}
+
+	startClientDeployService(ctx)
+
 	completionState = "OK"
 	logging.Info("xp2p client deploy: completed")
 	return 0
@@ -392,7 +408,7 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 		ServerName:    link.ServerName,
 		AllowInsecure: link.AllowInsecure,
 		Force:         true,
-		TunEnabled:    cfg.Client.TunEnabled,
+		TunEnabled:    false,
 		TunEnabledSet: true,
 		TunName:       cfg.Client.TunName,
 		TunMTU:        cfg.Client.TunMTU,
@@ -462,4 +478,54 @@ func waitForHeartbeat(ctx context.Context, statePath string, timeout time.Durati
 		return fmt.Errorf("heartbeat state: %w", lastErr)
 	}
 	return fmt.Errorf("heartbeat state %s not found", statePath)
+}
+
+func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config, tunEnabled bool) error {
+	modeLabel := "proxy"
+	if tunEnabled {
+		modeLabel = "tun"
+	}
+	updatedPath, err := config.UpdateTunEnabled("", "client", tunEnabled)
+	if err != nil {
+		return err
+	}
+	logging.Info("xp2p client deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
+
+	err = client.ApplyMode(client.ModeOptions{
+		InstallDir: installOpts.InstallDir,
+		ConfigDir:  installOpts.ConfigDir,
+		TunEnabled: tunEnabled,
+		TunName:    cfg.Client.TunName,
+		TunMTU:     cfg.Client.TunMTU,
+		TunAddr:    cfg.Client.TunAddr,
+	})
+	if err == nil {
+		return nil
+	}
+	if isPermissionError(err) {
+		logging.Warn("xp2p client deploy: mode apply skipped due to permissions", "mode", modeLabel, "err", err)
+		return nil
+	}
+	return err
+}
+
+func startClientDeployService(ctx context.Context) {
+	ctrl := servicecontrol.Default()
+	if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Warn("xp2p client deploy: service start is not supported on this platform")
+			return
+		}
+		logging.Warn("xp2p client deploy: client service start failed", "err", err)
+		return
+	}
+	logging.Info("xp2p client deploy: client service started")
+}
+
+func isPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied")
 }

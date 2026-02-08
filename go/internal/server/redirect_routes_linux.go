@@ -67,6 +67,10 @@ func applyRedirectRoutes(tunName string, redirects []redirect.Rule) error {
 		}
 		seen[key] = struct{}{}
 		if err := ensureRedirectRoute(tunName, value); err != nil {
+			if linuxnet.IsTunPermissionError(err) {
+				logging.Warn("xp2p: redirect route setup skipped (permission denied)", "cidr", value, "err", err)
+				continue
+			}
 			return err
 		}
 	}
