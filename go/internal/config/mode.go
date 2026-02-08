@@ -41,6 +41,56 @@ func UpdateTunEnabled(path string, role string, enabled bool) (string, error) {
 	return configPath, nil
 }
 
+// EnsureTunSettings stores tun defaults in the role config when missing.
+func EnsureTunSettings(path string, role string, enabled bool, name string, mtu int, addr string) (string, error) {
+	trimmedRole := strings.ToLower(strings.TrimSpace(role))
+	if trimmedRole != "client" && trimmedRole != "server" {
+		return "", fmt.Errorf("config: unsupported role %q", role)
+	}
+
+	configPath, err := resolveConfigPath(path, trimmedRole)
+	if err != nil {
+		return "", err
+	}
+	if strings.ToLower(filepath.Ext(configPath)) != ".toml" {
+		return "", fmt.Errorf("config: only toml files are supported for tun settings")
+	}
+
+	tree, err := loadOrCreateToml(configPath)
+	if err != nil {
+		return "", err
+	}
+
+	changed := false
+	if tree.GetPath([]string{trimmedRole, "tun_enabled"}) == nil {
+		tree.SetPath([]string{trimmedRole, "tun_enabled"}, enabled)
+		changed = true
+	}
+	if tree.GetPath([]string{trimmedRole, "tun_name"}) == nil {
+		tree.SetPath([]string{trimmedRole, "tun_name"}, strings.TrimSpace(name))
+		changed = true
+	}
+	if tree.GetPath([]string{trimmedRole, "tun_mtu"}) == nil {
+		tree.SetPath([]string{trimmedRole, "tun_mtu"}, mtu)
+		changed = true
+	}
+	if tree.GetPath([]string{trimmedRole, "tun_addr"}) == nil {
+		tree.SetPath([]string{trimmedRole, "tun_addr"}, strings.TrimSpace(addr))
+		changed = true
+	}
+
+	if !changed {
+		return configPath, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		return "", fmt.Errorf("config: create directory %s: %w", filepath.Dir(configPath), err)
+	}
+	if err := os.WriteFile(configPath, []byte(tree.String()), 0o644); err != nil {
+		return "", fmt.Errorf("config: write %s: %w", configPath, err)
+	}
+	return configPath, nil
+}
+
 func resolveConfigPath(explicit, role string) (string, error) {
 	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
 		return filepath.Clean(trimmed), nil

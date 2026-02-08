@@ -91,6 +91,9 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := os.MkdirAll(state.logsDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create log directory: %w", err)
 	}
+	if _, err := config.EnsureTunSettings("", "server", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
+		return err
+	}
 
 	if err := deployConfiguration(state); err != nil {
 		return err

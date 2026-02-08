@@ -80,6 +80,10 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
 
+	if _, err := config.EnsureTunSettings("", "server", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
+		return err
+	}
+
 	if err := ensureXrayBinaryPresent(state.xrayPath); err != nil {
 		return err
 	}
