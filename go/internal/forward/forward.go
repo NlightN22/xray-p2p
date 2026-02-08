@@ -30,13 +30,13 @@ const (
 
 // Rule stores all metadata required to manage dokodemo-door forwards.
 type Rule struct {
-	ListenAddress string   `json:"listen_address"`
-	ListenPort    int      `json:"listen_port"`
-	TargetHost    string   `json:"target_host"`
-	TargetPort    int      `json:"target_port"`
-	Protocol      Protocol `json:"protocol"`
-	Tag           string   `json:"tag"`
-	Remark        string   `json:"remark"`
+	ListenAddress string   `json:"listen_address" toml:"listen_address"`
+	ListenPort    int      `json:"listen_port" toml:"listen_port"`
+	TargetHost    string   `json:"target_host" toml:"target_host"`
+	TargetPort    int      `json:"target_port" toml:"target_port"`
+	Protocol      Protocol `json:"protocol" toml:"protocol"`
+	Tag           string   `json:"tag" toml:"tag"`
+	Remark        string   `json:"remark" toml:"remark"`
 }
 
 // Selector allows lookups using listen port, tag, or remark.

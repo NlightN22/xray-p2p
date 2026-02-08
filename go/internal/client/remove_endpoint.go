@@ -33,7 +33,7 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 		return err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 		})
 	}
 
-	if err := state.save(paths.stateFile); err != nil {
+	if err := state.save(paths.configFile); err != nil {
 		return err
 	}
 	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), state.Endpoints); err != nil {

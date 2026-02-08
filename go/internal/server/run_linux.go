@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -48,15 +49,31 @@ func Run(ctx context.Context, opts RunOptions) error {
 			return err
 		}
 	}
-	if err := applyServerMode(installDir, configDir, ModeOptions{
-		InstallDir: installDir,
-		ConfigDir:  opts.ConfigDir,
-		TunEnabled: opts.TunEnabled,
-		TunName:    opts.TunName,
-		TunMTU:     opts.TunMTU,
-		TunAddr:    opts.TunAddr,
-	}); err != nil {
+	desired, err := loadServerDesiredConfig(installDir)
+	if err != nil {
 		return err
+	}
+	applied, err := loadServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName))
+	if err != nil {
+		return err
+	}
+	if !applied.matches(desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
+		if err := applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, ModeOptions{
+			InstallDir: installDir,
+			ConfigDir:  opts.ConfigDir,
+			TunEnabled: opts.TunEnabled,
+			TunName:    opts.TunName,
+			TunMTU:     opts.TunMTU,
+			TunAddr:    opts.TunAddr,
+		}); err != nil {
+			return err
+		}
+		if err := modemgr.ApplyNatRedirectMode(modeLabel(opts.TunEnabled)); err != nil {
+			return err
+		}
+		if err := saveServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+			return err
+		}
 	}
 
 	xrayPath, err := xray.ResolveBinaryPath()

@@ -14,10 +14,6 @@ var (
 )
 
 func ResolveServerMarkerTarget(installDir, userOrTag string, index int) (string, int, error) {
-	installDir = strings.TrimSpace(installDir)
-	if installDir == "" {
-		return "", 0, errors.New("xp2p: server install dir is required to resolve reverse channels")
-	}
 	if index > 0 {
 		return "", 0, errors.New("xp2p: server reverse selection does not support --index")
 	}

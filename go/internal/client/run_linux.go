@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -52,15 +53,31 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := applyClientMode(paths, ModeOptions{
-		InstallDir: installDir,
-		ConfigDir:  opts.ConfigDir,
-		TunEnabled: opts.TunEnabled,
-		TunName:    opts.TunName,
-		TunMTU:     opts.TunMTU,
-		TunAddr:    opts.TunAddr,
-	}); err != nil {
+	desired, err := loadClientInstallState(paths.configFile)
+	if err != nil {
 		return err
+	}
+	applied, err := loadClientAppliedState(paths.stateFile)
+	if err != nil {
+		return err
+	}
+	if !applied.matches(desired, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
+		if err := applyClientDesiredConfig(paths, desired, ModeOptions{
+			InstallDir: installDir,
+			ConfigDir:  opts.ConfigDir,
+			TunEnabled: opts.TunEnabled,
+			TunName:    opts.TunName,
+			TunMTU:     opts.TunMTU,
+			TunAddr:    opts.TunAddr,
+		}); err != nil {
+			return err
+		}
+		if err := modemgr.ApplyNatRedirectMode(modeLabel(opts.TunEnabled)); err != nil {
+			return err
+		}
+		if err := saveClientAppliedState(paths.stateFile, desired, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+			return err
+		}
 	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)

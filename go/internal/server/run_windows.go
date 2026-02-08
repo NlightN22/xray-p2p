@@ -42,6 +42,30 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
+	desired, err := loadServerDesiredConfig(installDir)
+	if err != nil {
+		return err
+	}
+	applied, err := loadServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName))
+	if err != nil {
+		return err
+	}
+	if !applied.matches(desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
+		if err := applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, ModeOptions{
+			InstallDir: installDir,
+			ConfigDir:  opts.ConfigDir,
+			TunEnabled: opts.TunEnabled,
+			TunName:    opts.TunName,
+			TunMTU:     opts.TunMTU,
+			TunAddr:    opts.TunAddr,
+		}); err != nil {
+			return err
+		}
+		if err := saveServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+			return err
+		}
+	}
+
 	resolveLogPath := func(raw string) (string, error) {
 		path := strings.TrimSpace(raw)
 		if path == "" {

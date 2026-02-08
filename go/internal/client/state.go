@@ -2,12 +2,15 @@ package client
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/knadh/koanf/providers/confmap"
+	"github.com/knadh/koanf/v2"
+	"github.com/pelletier/go-toml"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/naming"
@@ -15,29 +18,29 @@ import (
 )
 
 type clientInstallState struct {
-	Endpoints []clientEndpointRecord          `json:"endpoints"`
-	Redirects []redirect.Rule                 `json:"redirects,omitempty"`
-	Reverse   map[string]clientReverseChannel `json:"reverse,omitempty"`
-	Forwards  []forward.Rule                  `json:"forwards,omitempty"`
+	Endpoints []clientEndpointRecord          `json:"endpoints" toml:"endpoints"`
+	Redirects []redirect.Rule                 `json:"redirects,omitempty" toml:"redirects"`
+	Reverse   map[string]clientReverseChannel `json:"reverse,omitempty" toml:"reverse"`
+	Forwards  []forward.Rule                  `json:"forwards,omitempty" toml:"forwards"`
 }
 
 type clientEndpointRecord struct {
-	Hostname      string `json:"hostname"`
-	Tag           string `json:"tag"`
-	Address       string `json:"address"`
-	Port          int    `json:"port"`
-	User          string `json:"user"`
-	Password      string `json:"password"`
-	ServerName    string `json:"server_name"`
-	AllowInsecure bool   `json:"allow_insecure"`
+	Hostname      string `json:"hostname" toml:"hostname"`
+	Tag           string `json:"tag" toml:"tag"`
+	Address       string `json:"address" toml:"address"`
+	Port          int    `json:"port" toml:"port"`
+	User          string `json:"user" toml:"user"`
+	Password      string `json:"password" toml:"password"`
+	ServerName    string `json:"server_name" toml:"server_name"`
+	AllowInsecure bool   `json:"allow_insecure" toml:"allow_insecure"`
 }
 
 type clientReverseChannel struct {
-	UserID      string `json:"user_id"`
-	Host        string `json:"host"`
-	Tag         string `json:"tag"`
-	Domain      string `json:"domain"`
-	EndpointTag string `json:"endpoint_tag"`
+	UserID      string `json:"user_id" toml:"user_id"`
+	Host        string `json:"host" toml:"host"`
+	Tag         string `json:"tag" toml:"tag"`
+	Domain      string `json:"domain" toml:"domain"`
+	EndpointTag string `json:"endpoint_tag" toml:"endpoint_tag"`
 }
 
 func loadClientInstallState(path string) (clientInstallState, error) {
@@ -46,16 +49,24 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return clientInstallState{}, nil
 		}
-		return clientInstallState{}, fmt.Errorf("xp2p: read client state %s: %w", path, err)
+		return clientInstallState{}, fmt.Errorf("xp2p: read client config %s: %w", path, err)
 	}
 
 	if len(bytes.TrimSpace(data)) == 0 {
 		return clientInstallState{}, nil
 	}
 
+	tree, err := toml.LoadBytes(data)
+	if err != nil {
+		return clientInstallState{}, fmt.Errorf("xp2p: parse client config %s: %w", path, err)
+	}
+	k := koanf.New(".")
+	if err := k.Load(confmap.Provider(tree.ToMap(), "."), nil); err != nil {
+		return clientInstallState{}, fmt.Errorf("xp2p: decode client config %s: %w", path, err)
+	}
 	var state clientInstallState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return clientInstallState{}, fmt.Errorf("xp2p: parse client state %s: %w", path, err)
+	if err := k.Unmarshal("client", &state); err != nil {
+		return clientInstallState{}, fmt.Errorf("xp2p: decode client config %s: %w", path, err)
 	}
 	state.normalize()
 	return state, nil
@@ -77,17 +88,33 @@ func (s *clientInstallState) normalize() {
 }
 
 func (s clientInstallState) save(path string) error {
-	data, err := json.MarshalIndent(s, "", "  ")
+	tree, err := loadOrCreateToml(path)
 	if err != nil {
-		return fmt.Errorf("xp2p: encode client state %s: %w", path, err)
+		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure client state dir %s: %w", filepath.Dir(path), err)
+	s.normalize()
+
+	if len(s.Endpoints) == 0 {
+		tree.DeletePath([]string{"client", "endpoints"})
+	} else {
+		tree.SetPath([]string{"client", "endpoints"}, s.Endpoints)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write client state %s: %w", path, err)
+	if len(s.Redirects) == 0 {
+		tree.DeletePath([]string{"client", "redirects"})
+	} else {
+		tree.SetPath([]string{"client", "redirects"}, s.Redirects)
 	}
-	return nil
+	if len(s.Forwards) == 0 {
+		tree.DeletePath([]string{"client", "forwards"})
+	} else {
+		tree.SetPath([]string{"client", "forwards"}, s.Forwards)
+	}
+	if len(s.Reverse) == 0 {
+		tree.DeletePath([]string{"client", "reverse"})
+	} else {
+		tree.SetPath([]string{"client", "reverse"}, s.Reverse)
+	}
+	return writeTomlTree(path, tree)
 }
 
 func (s *clientInstallState) addRedirect(rule redirect.Rule) error {
@@ -264,4 +291,35 @@ func (s *clientInstallState) insertForwardAt(rule forward.Rule, idx int) {
 		return
 	}
 	s.Forwards = append(s.Forwards[:idx], append([]forward.Rule{rule}, s.Forwards[idx:]...)...)
+}
+
+func loadOrCreateToml(path string) (*toml.Tree, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return toml.TreeFromMap(map[string]any{}), nil
+		}
+		return nil, fmt.Errorf("xp2p: read client config %s: %w", path, err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return toml.TreeFromMap(map[string]any{}), nil
+	}
+	tree, err := toml.LoadBytes(data)
+	if err != nil {
+		return nil, fmt.Errorf("xp2p: parse client config %s: %w", path, err)
+	}
+	return tree, nil
+}
+
+func writeTomlTree(path string, tree *toml.Tree) error {
+	if tree == nil {
+		return errors.New("xp2p: config tree is nil")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("xp2p: ensure client config dir %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(tree.String()), 0o644); err != nil {
+		return fmt.Errorf("xp2p: write client config %s: %w", path, err)
+	}
+	return nil
 }

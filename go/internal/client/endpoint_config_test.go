@@ -3,12 +3,14 @@ package client
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestApplyClientEndpointConfigDoesNotInheritAllowInsecure(t *testing.T) {
 	baseDir := t.TempDir()
 	configDir := filepath.Join(baseDir, "config-client")
-	statePath := filepath.Join(baseDir, "install-state-client.json")
+	configPath := filepath.Join(baseDir, layout.ClientConfigFileName)
 
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
@@ -24,11 +26,11 @@ func TestApplyClientEndpointConfigDoesNotInheritAllowInsecure(t *testing.T) {
 			},
 		},
 	}
-	if err := state.save(statePath); err != nil {
+	if err := state.save(configPath); err != nil {
 		t.Fatalf("save state: %v", err)
 	}
 
-	if err := applyClientEndpointConfig(configDir, statePath, endpointConfig{
+	if _, err := applyClientEndpointConfig(configDir, configPath, endpointConfig{
 		Hostname:              "beta.example",
 		Port:                  443,
 		User:                  "beta@example.com",
@@ -40,7 +42,7 @@ func TestApplyClientEndpointConfigDoesNotInheritAllowInsecure(t *testing.T) {
 		t.Fatalf("apply endpoint config: %v", err)
 	}
 
-	updated, err := loadClientInstallState(statePath)
+	updated, err := loadClientInstallState(configPath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
 	}

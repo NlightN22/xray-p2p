@@ -141,7 +141,7 @@ Place `wintun.dll` next to `xp2p.exe` and `xray.exe` (for MSI installs this is t
 
 ## Configuration
 
-`xp2p` reads configuration in the following order: built-in defaults > optional file > environment variables > CLI overrides. By default it scans for `xp2p.yaml|yml|toml` in the current directory, or you can pass `--config path/to/file`. Settings map 1:1 to environment variables via the `XP2P_` prefix (`XP2P_SERVER_INSTALL_DIR`, `XP2P_CLIENT_SERVER_ADDRESS`, etc.). See `config_templates/xp2p.example.yaml` for a starting point:
+`xp2p` reads configuration in the following order: built-in defaults > optional file(s) > environment variables > CLI overrides. By default it loads `xp2p-client.toml` and `xp2p-server.toml` from the current directory, or you can pass `--config path/to/file`. Settings map 1:1 to environment variables via the `XP2P_` prefix (`XP2P_SERVER_INSTALL_DIR`, `XP2P_CLIENT_SERVER_ADDRESS`, etc.). See `config_templates/xp2p.example.yaml` for a starting point:
 
 ```yaml
 logging:

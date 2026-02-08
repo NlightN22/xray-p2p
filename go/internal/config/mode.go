@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/pelletier/go-toml"
 )
 
@@ -17,7 +18,7 @@ func UpdateTunEnabled(path string, role string, enabled bool) (string, error) {
 		return "", fmt.Errorf("config: unsupported role %q", role)
 	}
 
-	configPath, err := resolveConfigPath(path)
+	configPath, err := resolveConfigPath(path, trimmedRole)
 	if err != nil {
 		return "", err
 	}
@@ -40,16 +41,17 @@ func UpdateTunEnabled(path string, role string, enabled bool) (string, error) {
 	return configPath, nil
 }
 
-func resolveConfigPath(explicit string) (string, error) {
+func resolveConfigPath(explicit, role string) (string, error) {
 	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
 		return filepath.Clean(trimmed), nil
 	}
-	for _, candidate := range defaultCandidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return filepath.Clean(candidate), nil
-		}
+	if strings.EqualFold(strings.TrimSpace(role), "client") {
+		return filepath.Clean(layout.ClientConfigFileName), nil
 	}
-	return filepath.Clean(defaultCandidates[0]), nil
+	if strings.EqualFold(strings.TrimSpace(role), "server") {
+		return filepath.Clean(layout.ServerConfigFileName), nil
+	}
+	return "", fmt.Errorf("config: unsupported role %q", role)
 }
 
 func loadOrCreateToml(path string) (*toml.Tree, error) {

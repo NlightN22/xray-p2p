@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -38,7 +37,7 @@ func TestNormalizeInstallOptionsLinux(t *testing.T) {
 		t.Fatalf("logsDir mismatch: got %s want %s", state.logsDir, expectedLogDir)
 	}
 
-	expectedState := filepath.Join(tempDir, installstate.FileNameForKind(installstate.KindClient))
+	expectedState := filepath.Clean(layout.ClientAppliedStateFileName)
 	if state.stateFile != expectedState {
 		t.Fatalf("stateFile mismatch: got %s want %s", state.stateFile, expectedState)
 	}

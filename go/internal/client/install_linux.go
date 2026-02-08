@@ -29,6 +29,7 @@ type installState struct {
 	serverPort int
 	serverName string
 	serverHost string
+	configFile string
 	stateFile  string
 }
 
@@ -158,7 +159,8 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		serverPort:     base.portVal,
 		serverName:     base.serverName,
 		serverHost:     base.address,
-		stateFile:      base.stateFile,
+		configFile:     base.configFile,
+		stateFile:      base.appliedStateFile,
 	}
 
 	return state, nil
@@ -213,7 +215,7 @@ func deployConfiguration(state installState) error {
 		return err
 	}
 
-	return applyClientEndpointConfig(state.configDir, state.stateFile, endpointConfig{
+	cfg, err := applyClientEndpointConfig(state.configDir, state.configFile, endpointConfig{
 		Hostname:              state.serverHost,
 		Port:                  state.serverPort,
 		User:                  state.User,
@@ -222,4 +224,8 @@ func deployConfiguration(state installState) error {
 		AllowInsecure:         state.AllowInsecure,
 		AllowInsecureOverride: state.AllowInsecureOverride,
 	}, state.Force)
+	if err != nil {
+		return err
+	}
+	return saveClientAppliedState(state.stateFile, cfg, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr)
 }

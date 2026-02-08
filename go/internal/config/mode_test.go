@@ -4,12 +4,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/pelletier/go-toml"
 )
 
 func TestUpdateTunEnabledWritesValue(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "xp2p.toml")
+	path := filepath.Join(dir, layout.ClientConfigFileName)
 	updated, err := UpdateTunEnabled(path, "client", true)
 	if err != nil {
 		t.Fatalf("UpdateTunEnabled failed: %v", err)

@@ -15,7 +15,6 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
@@ -75,7 +74,7 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		return nil, fmt.Errorf("invalid heartbeat port %q", portStr)
 	}
 
-	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(layout.ClientConfigFileName)
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err

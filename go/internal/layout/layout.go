@@ -16,6 +16,14 @@ const (
 	ClientStateFileName = "install-state-client.json"
 	// ServerStateFileName is the canonical server marker name.
 	ServerStateFileName = "install-state-server.json"
+	// ClientConfigFileName stores client configuration in the working directory.
+	ClientConfigFileName = "xp2p-client.toml"
+	// ServerConfigFileName stores server configuration in the working directory.
+	ServerConfigFileName = "xp2p-server.toml"
+	// ClientAppliedStateFileName stores applied client state in the working directory.
+	ClientAppliedStateFileName = "xp2p-client.state.json"
+	// ServerAppliedStateFileName stores applied server state in the working directory.
+	ServerAppliedStateFileName = "xp2p-server.state.json"
 	// HeartbeatStateFileName is retained for legacy shared heartbeat storage.
 	HeartbeatStateFileName = "state-heartbeat.json"
 	// ClientHeartbeatStateFileName stores client-side heartbeat snapshots.

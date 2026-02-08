@@ -112,3 +112,79 @@ func extractClientInbounds(root map[string]any) ([]any, error) {
 	}
 	return entries, nil
 }
+
+func syncClientForwardInbounds(configDir string, rules []forward.Rule) error {
+	path := filepath.Join(configDir, "inbounds.json")
+	root, err := loadClientInbounds(path)
+	if err != nil {
+		return err
+	}
+	entries, err := extractClientInbounds(root)
+	if err != nil {
+		return err
+	}
+
+	desiredByTag := make(map[string]forward.Rule, len(rules))
+	desiredByRemark := make(map[string]forward.Rule, len(rules))
+	remaining := make(map[string]forward.Rule, len(rules))
+	for _, rule := range rules {
+		tagKey := strings.ToLower(strings.TrimSpace(rule.Tag))
+		remarkKey := strings.ToLower(strings.TrimSpace(rule.Remark))
+		if tagKey != "" {
+			desiredByTag[tagKey] = rule
+			remaining[tagKey] = rule
+		}
+		if remarkKey != "" {
+			desiredByRemark[remarkKey] = rule
+		}
+	}
+
+	filtered := make([]any, 0, len(entries))
+	for _, raw := range entries {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			filtered = append(filtered, raw)
+			continue
+		}
+		if !isForwardInbound(entry) {
+			filtered = append(filtered, entry)
+			continue
+		}
+
+		tag, _ := entry["tag"].(string)
+		remark, _ := entry["remark"].(string)
+		tagKey := strings.ToLower(strings.TrimSpace(tag))
+		remarkKey := strings.ToLower(strings.TrimSpace(remark))
+
+		if rule, ok := desiredByTag[tagKey]; ok {
+			filtered = append(filtered, rule.InboundMap())
+			delete(remaining, tagKey)
+			continue
+		}
+		if rule, ok := desiredByRemark[remarkKey]; ok {
+			filtered = append(filtered, rule.InboundMap())
+			tagKey = strings.ToLower(strings.TrimSpace(rule.Tag))
+			delete(remaining, tagKey)
+			continue
+		}
+	}
+
+	for _, rule := range remaining {
+		filtered = append(filtered, rule.InboundMap())
+	}
+	root["inbounds"] = filtered
+	return writeClientInbounds(path, root)
+}
+
+func isForwardInbound(entry map[string]any) bool {
+	proto, _ := entry["protocol"].(string)
+	if !strings.EqualFold(strings.TrimSpace(proto), "dokodemo-door") {
+		return false
+	}
+	remark, _ := entry["remark"].(string)
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(remark)), "forward:") {
+		return true
+	}
+	tag, _ := entry["tag"].(string)
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(tag)), "in_")
+}

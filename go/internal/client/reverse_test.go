@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
@@ -13,7 +15,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}
-	stateFile := filepath.Join(dir, "install-state-client.json")
+	configFile := filepath.Join(dir, layout.ClientConfigFileName)
 
 	endpoint := endpointConfig{
 		Hostname:   "server.example",
@@ -22,7 +24,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		Password:   "secret",
 		ServerName: "server.example",
 	}
-	if err := applyClientEndpointConfig(configDir, stateFile, endpoint, true); err != nil {
+	if _, err := applyClientEndpointConfig(configDir, configFile, endpoint, true); err != nil {
 		t.Fatalf("applyClientEndpointConfig: %v", err)
 	}
 
@@ -58,7 +60,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		t.Fatalf("unexpected inbound tag: %+v", inbound)
 	}
 
-	state, err := loadClientInstallState(stateFile)
+	state, err := loadClientInstallState(configFile)
 	if err != nil {
 		t.Fatalf("load client state: %v", err)
 	}

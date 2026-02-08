@@ -7,20 +7,21 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 type clientInstallBase struct {
-	installDir  string
-	configDir   string
-	address     string
-	portStr     string
-	portVal     int
-	password    string
-	user        string
-	serverName  string
-	stateFile   string
-	installOpts InstallOptions
+	installDir       string
+	configDir        string
+	address          string
+	portStr          string
+	portVal          int
+	password         string
+	user             string
+	serverName       string
+	configFile       string
+	appliedStateFile string
+	installOpts      InstallOptions
 }
 
 func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (clientInstallBase, error) {
@@ -79,7 +80,8 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 		password:   password,
 		user:       user,
 		serverName: serverName,
-		stateFile:  filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient)),
+		configFile: filepath.Clean(layout.ClientConfigFileName),
+		appliedStateFile: filepath.Clean(layout.ClientAppliedStateFileName),
 		installOpts: InstallOptions{
 			InstallDir:            installDir,
 			ConfigDir:             opts.ConfigDir,

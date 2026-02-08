@@ -17,9 +17,9 @@ const (
 
 // Rule captures a redirect rule persisted in state files.
 type Rule struct {
-	CIDR        string `json:"cidr,omitempty"`
-	Domain      string `json:"domain,omitempty"`
-	OutboundTag string `json:"outbound_tag"`
+	CIDR        string `json:"cidr,omitempty" toml:"cidr"`
+	Domain      string `json:"domain,omitempty" toml:"domain"`
+	OutboundTag string `json:"outbound_tag" toml:"outbound_tag"`
 }
 
 // Target identifies the normalized redirect selector.

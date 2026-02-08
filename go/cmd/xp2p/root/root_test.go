@@ -91,18 +91,19 @@ func TestEnsureRuntimeWithOverrides(t *testing.T) {
 
 func TestEnsureRuntimeWithConfigFile(t *testing.T) {
 	chdirTemp(t)
-	cfgPath := filepath.Join(".", "xp2p.yaml")
+	cfgPath := filepath.Join(".", "xp2p-server.toml")
 	writeFile(t, cfgPath, `
-logging:
-  level: warn
-  format: json
-server:
-  port: 65011
-  install_dir: C:\xp2p
-  config_dir: cfg-config
-  mode: manual
-  certificate: C:\certs\server.pem
-  key: C:\certs\server.key
+[logging]
+level = "warn"
+format = "json"
+
+[server]
+port = "65011"
+install_dir = "C:\\xp2p"
+config_dir = "cfg-config"
+mode = "manual"
+certificate = "C:\\certs\\server.pem"
+key = "C:\\certs\\server.key"
 `)
 
 	opts := &rootOptions{configPath: cfgPath}

@@ -93,35 +93,38 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadFromFile(t *testing.T) {
 	dir := chdirTemp(t)
 
-	writeFile(t, filepath.Join(dir, "xp2p.yaml"), `
-logging:
-  level: warn
-  format: json
-server:
-  port: 65001
-  install_dir: C:\xp2p-test
-  config_dir: cfg-test
-  mode: manual
-  certificate: C:\certs\server.pem
-  key: C:\certs\server.key
-  host: server.example.test
-  tun_enabled: false
-  tun_name: server-tun
-  tun_mtu: 1400
-  tun_addr: 198.18.0.9/30
-client:
-  install_dir: D:\xp2p-client
-  config_dir: cfg-client
-  server_address: remote.example.com
-  server_port: 9343
-  user: client@example.com
-  password: strongpass
-  server_name: sni.example.com
-  allow_insecure: false
-  tun_enabled: true
-  tun_name: client-tun
-  tun_mtu: 1300
-  tun_addr: 198.18.0.13/30
+	writeFile(t, filepath.Join(dir, "xp2p-client.toml"), `
+[client]
+install_dir = "D:\\xp2p-client"
+config_dir = "cfg-client"
+server_address = "remote.example.com"
+server_port = "9343"
+user = "client@example.com"
+password = "strongpass"
+server_name = "sni.example.com"
+allow_insecure = false
+tun_enabled = true
+tun_name = "client-tun"
+tun_mtu = 1300
+tun_addr = "198.18.0.13/30"
+`)
+	writeFile(t, filepath.Join(dir, "xp2p-server.toml"), `
+[logging]
+level = "warn"
+format = "json"
+
+[server]
+port = "65001"
+install_dir = "C:\\xp2p-test"
+config_dir = "cfg-test"
+mode = "manual"
+certificate = "C:\\certs\\server.pem"
+key = "C:\\certs\\server.key"
+host = "server.example.test"
+tun_enabled = false
+tun_name = "server-tun"
+tun_mtu = 1400
+tun_addr = "198.18.0.9/30"
 `)
 
 	cfg, err := Load(Options{})

@@ -42,6 +42,34 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
+	paths, err := resolveClientPaths(installDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+	desired, err := loadClientInstallState(paths.configFile)
+	if err != nil {
+		return err
+	}
+	applied, err := loadClientAppliedState(paths.stateFile)
+	if err != nil {
+		return err
+	}
+	if !applied.matches(desired, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
+		if err := applyClientDesiredConfig(paths, desired, ModeOptions{
+			InstallDir: installDir,
+			ConfigDir:  opts.ConfigDir,
+			TunEnabled: opts.TunEnabled,
+			TunName:    opts.TunName,
+			TunMTU:     opts.TunMTU,
+			TunAddr:    opts.TunAddr,
+		}); err != nil {
+			return err
+		}
+		if err := saveClientAppliedState(paths.stateFile, desired, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+			return err
+		}
+	}
+
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 

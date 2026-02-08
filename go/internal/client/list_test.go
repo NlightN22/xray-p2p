@@ -1,10 +1,10 @@
 package client
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -12,7 +12,18 @@ func TestListEndpoints(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(oldWD)
+	})
+
+	configPath := filepath.Join(dir, layout.ClientConfigFileName)
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -35,8 +46,8 @@ func TestListEndpoints(t *testing.T) {
 			},
 		},
 	}
-	if err := initial.save(statePath); err != nil {
-		t.Fatalf("save state: %v", err)
+	if err := initial.save(configPath); err != nil {
+		t.Fatalf("save config: %v", err)
 	}
 
 	records, err := ListEndpoints(ListOptions{

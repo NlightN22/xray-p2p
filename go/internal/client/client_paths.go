@@ -3,12 +3,13 @@ package client
 import (
 	"path/filepath"
 
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 type clientPaths struct {
 	installDir string
 	configDir  string
+	configFile string
 	stateFile  string
 }
 
@@ -24,6 +25,7 @@ func resolveClientPaths(installDir, configDir string) (clientPaths, error) {
 	return clientPaths{
 		installDir: dir,
 		configDir:  cfgDir,
-		stateFile:  filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient)),
+		configFile: filepath.Clean(layout.ClientConfigFileName),
+		stateFile:  filepath.Clean(layout.ClientAppliedStateFileName),
 	}, nil
 }

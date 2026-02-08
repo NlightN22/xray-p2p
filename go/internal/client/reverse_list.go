@@ -37,7 +37,7 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 		return nil, err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return nil, err
 	}

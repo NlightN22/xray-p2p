@@ -63,7 +63,7 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 		return ForwardAddResult{}, err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
@@ -108,7 +108,7 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err := addClientForwardInbound(paths.configDir, rule); err != nil {
 		return ForwardAddResult{}, err
 	}
-	if err := state.save(paths.stateFile); err != nil {
+	if err := state.save(paths.configFile); err != nil {
 		return ForwardAddResult{}, err
 	}
 
@@ -134,7 +134,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return forward.Rule{}, err
 	}
@@ -150,7 +150,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 			return forward.Rule{}, err
 		}
 	}
-	if err := state.save(paths.stateFile); err != nil {
+	if err := state.save(paths.configFile); err != nil {
 		state.insertForwardAt(rule, idx)
 		return forward.Rule{}, err
 	}
@@ -164,7 +164,7 @@ func ListForwards(opts ForwardListOptions) ([]forward.Rule, error) {
 		return nil, err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return nil, err
 	}

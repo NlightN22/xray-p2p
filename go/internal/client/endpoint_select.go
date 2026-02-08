@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 var (
@@ -15,11 +15,7 @@ var (
 )
 
 func ResolveMarkerTarget(installDir, host, tag string, index int) (string, int, error) {
-	installDir = strings.TrimSpace(installDir)
-	if installDir == "" {
-		return "", 0, errors.New("xp2p: client install dir is required to resolve endpoints")
-	}
-	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(layout.ClientConfigFileName)
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return "", 0, err

@@ -10,20 +10,56 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func applyServerMode(installDir, configDir string, opts ModeOptions) error {
-	if err := updateServerInbounds(configDir, opts.TunEnabled, opts.TunName, opts.TunMTU); err != nil {
-		return err
-	}
-	store, err := openServerRedirectStore(installDir)
+	desired, err := loadServerDesiredConfig(installDir)
 	if err != nil {
 		return err
 	}
-	if opts.TunEnabled {
-		return applyRedirectRoutes(opts.TunName, store.redirects)
+	applied, err := loadServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName))
+	if err != nil {
+		return err
 	}
-	return removeRedirectRoutes(opts.TunName, store.redirects)
+	if err := applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, opts); err != nil {
+		return err
+	}
+	return saveServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr)
+}
+
+func applyServerDesiredConfig(installDir, configDir string, desired desiredServerConfig, previousReverse serverReverseState, opts ModeOptions) error {
+	previousReverse = normalizeReverse(previousReverse)
+	if err := updateServerInbounds(configDir, opts.TunEnabled, opts.TunName, opts.TunMTU); err != nil {
+		return err
+	}
+	if err := syncServerForwardInbounds(configDir, desired.Forwards); err != nil {
+		return err
+	}
+	for tag, channel := range previousReverse {
+		if _, ok := desired.Reverse[tag]; ok {
+			continue
+		}
+		if err := removeServerRoutingConfig(configDir, channel); err != nil {
+			return err
+		}
+	}
+	for _, channel := range desired.Reverse {
+		if err := ensureServerRoutingConfig(configDir, channel); err != nil {
+			return err
+		}
+	}
+	if err := ensureServerMarkerRules(configDir, desired.Reverse); err != nil {
+		return err
+	}
+	if err := updateServerRedirectRouting(filepath.Join(configDir, "routing.json"), desired.Redirects); err != nil {
+		return err
+	}
+	if opts.TunEnabled {
+		return applyRedirectRoutes(opts.TunName, desired.Redirects)
+	}
+	return removeRedirectRoutes(opts.TunName, desired.Redirects)
 }
 
 func updateServerInbounds(configDir string, tunEnabled bool, tunName string, tunMTU int) error {

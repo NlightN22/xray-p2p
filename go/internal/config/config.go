@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
@@ -46,12 +47,6 @@ var defaultValues = map[string]any{
 	"client.tun_name":       "xp2pc",
 	"client.tun_mtu":        1500,
 	"client.tun_addr":       "198.18.0.1/30",
-}
-
-var defaultCandidates = []string{
-	"xp2p.yaml",
-	"xp2p.yml",
-	"xp2p.toml",
 }
 
 // Config represents the top-level application configuration.
@@ -154,9 +149,15 @@ func loadFileIfPresent(k *koanf.Koanf, explicitPath string) error {
 		return loadFile(k, explicitPath)
 	}
 
-	for _, candidate := range defaultCandidates {
+	roleFiles := []string{
+		layout.ClientConfigFileName,
+		layout.ServerConfigFileName,
+	}
+	for _, candidate := range roleFiles {
 		if _, err := os.Stat(candidate); err == nil {
-			return loadFile(k, candidate)
+			if err := loadFile(k, candidate); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

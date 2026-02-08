@@ -63,7 +63,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err := state.addRedirect(rule); err != nil {
 		return err
 	}
-	if err := state.save(paths.stateFile); err != nil {
+	if err := state.save(paths.configFile); err != nil {
 		return err
 	}
 	if err := updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
@@ -114,7 +114,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return err
 	}
@@ -142,7 +142,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return fmt.Errorf("xp2p: redirect %s not found", ruleTarget.Describe())
 	}
 	state.Redirects = updated
-	if err := state.save(paths.stateFile); err != nil {
+	if err := state.save(paths.configFile); err != nil {
 		return err
 	}
 	if err := updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
@@ -163,7 +163,7 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 		return nil, err
 	}
 
-	state, err := loadClientInstallState(paths.stateFile)
+	state, err := loadClientInstallState(paths.configFile)
 	if err != nil {
 		return nil, err
 	}
