@@ -42,14 +42,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
-	if opts.TunEnabled {
-		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
-			return err
-		}
-		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
-			return err
-		}
-	}
 	desired, err := loadServerDesiredConfig(installDir)
 	if err != nil {
 		return err
@@ -58,21 +50,38 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	if !applied.matches(desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
+
+	tunEnabled := opts.TunEnabled
+	if tunEnabled {
+		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
+			if !fallbackToProxyMode(&tunEnabled, err, "server run") {
+				return tunSetupError("server run", err)
+			}
+		}
+		if tunEnabled {
+			if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+				if !fallbackToProxyMode(&tunEnabled, err, "server run") {
+					return tunSetupError("server run", err)
+				}
+			}
+		}
+	}
+
+	if !applied.matches(desired.Reverse, desired.Redirects, desired.Forwards, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
 		if err := applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, ModeOptions{
 			InstallDir: installDir,
 			ConfigDir:  opts.ConfigDir,
-			TunEnabled: opts.TunEnabled,
+			TunEnabled: tunEnabled,
 			TunName:    opts.TunName,
 			TunMTU:     opts.TunMTU,
 			TunAddr:    opts.TunAddr,
 		}); err != nil {
 			return err
 		}
-		if err := modemgr.ApplyNatRedirectMode(modeLabel(opts.TunEnabled)); err != nil {
+		if err := modemgr.ApplyNatRedirectMode(modeLabel(tunEnabled)); err != nil {
 			return err
 		}
-		if err := saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+		if err := saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
 			return err
 		}
 	}
@@ -90,7 +99,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		resolveServerLogPath,
 		nil,
 		func() {
-			if !opts.TunEnabled {
+			if !tunEnabled {
 				return
 			}
 			go func() {

@@ -55,10 +55,16 @@ func Install(ctx context.Context, opts InstallOptions) error {
 
 	if state.TunEnabled {
 		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
-			return err
+			if !fallbackToProxyMode(&state.TunEnabled, err, "client install") {
+				return tunSetupError("client install", err)
+			}
 		}
-		if err := linuxnet.EnsureTunInterface(state.TunName, state.TunAddr, state.TunMTU); err != nil {
-			return err
+		if state.TunEnabled {
+			if err := linuxnet.EnsureTunInterface(state.TunName, state.TunAddr, state.TunMTU); err != nil {
+				if !fallbackToProxyMode(&state.TunEnabled, err, "client install") {
+					return tunSetupError("client install", err)
+				}
+			}
 		}
 	}
 

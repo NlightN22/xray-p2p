@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
@@ -27,9 +28,20 @@ func removeRedirectRoute(tunName, cidr string) error {
 		return nil
 	}
 	if err := openwrt.RemoveTunRoute(tun, cidr); err != nil {
+		if linuxnet.IsTunPermissionError(err) {
+			logging.Warn("xp2p: redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
+			return nil
+		}
 		return err
 	}
-	return linuxnet.RemoveRoute(tun, cidr)
+	if err := linuxnet.RemoveRoute(tun, cidr); err != nil {
+		if linuxnet.IsTunPermissionError(err) {
+			logging.Warn("xp2p: redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func removeRedirectRouteIfUnused(tunName, cidr string, redirects []redirect.Rule) error {

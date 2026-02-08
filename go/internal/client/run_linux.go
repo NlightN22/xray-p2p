@@ -41,14 +41,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: %s is not a directory", configDir)
 	}
 
-	if opts.TunEnabled {
-		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
-			return err
-		}
-		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
-			return err
-		}
-	}
 	paths, err := resolveClientPaths(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
@@ -61,21 +53,38 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	if !applied.matches(desired, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
+
+	tunEnabled := opts.TunEnabled
+	if tunEnabled {
+		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
+			if !fallbackToProxyMode(&tunEnabled, err, "client run") {
+				return tunSetupError("client run", err)
+			}
+		}
+		if tunEnabled {
+			if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+				if !fallbackToProxyMode(&tunEnabled, err, "client run") {
+					return tunSetupError("client run", err)
+				}
+			}
+		}
+	}
+
+	if !applied.matches(desired, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
 		if err := applyClientDesiredConfig(paths, desired, ModeOptions{
 			InstallDir: installDir,
 			ConfigDir:  opts.ConfigDir,
-			TunEnabled: opts.TunEnabled,
+			TunEnabled: tunEnabled,
 			TunName:    opts.TunName,
 			TunMTU:     opts.TunMTU,
 			TunAddr:    opts.TunAddr,
 		}); err != nil {
 			return err
 		}
-		if err := modemgr.ApplyNatRedirectMode(modeLabel(opts.TunEnabled)); err != nil {
+		if err := modemgr.ApplyNatRedirectMode(modeLabel(tunEnabled)); err != nil {
 			return err
 		}
-		if err := saveClientAppliedState(paths.stateFile, desired, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+		if err := saveClientAppliedState(paths.stateFile, desired, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
 			return err
 		}
 	}
@@ -96,7 +105,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		resolveClientLogPath,
 		nil,
 		func() {
-			if !opts.TunEnabled {
+			if !tunEnabled {
 				return
 			}
 			go func() {
