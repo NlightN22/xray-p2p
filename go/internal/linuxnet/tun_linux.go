@@ -35,9 +35,6 @@ func RemoveTunInterfaceIfManaged(name string) error {
 	if isOpenWrtSystem() {
 		return nil
 	}
-	if err := removeTunRouting(name); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -64,7 +61,7 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 			continue
 		}
 		if addrPresent(name, addr) {
-			return ensureTunRouting(name)
+			return nil
 		}
 		if mtu > 0 {
 			_ = runCommand("ip", "link", "set", "dev", name, "mtu", fmt.Sprintf("%d", mtu))
@@ -75,7 +72,7 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 		if err := runCommand("ip", "link", "set", "dev", name, "up"); err != nil {
 			return err
 		}
-		return ensureTunRouting(name)
+		return nil
 	}
 	return fmt.Errorf("xp2p: tun interface %s not found", name)
 }
@@ -150,71 +147,4 @@ func captureCommand(name string, args ...string) (string, error) {
 		return strings.TrimSpace(buf.String()), err
 	}
 	return strings.TrimSpace(buf.String()), nil
-}
-
-func ensureTunRouting(name string) error {
-	table := tableForName(name)
-	if err := ensureRouteTable(table, name); err != nil {
-		return err
-	}
-	return ensureRuleTable(table)
-}
-
-func ensureRouteTable(table int, name string) error {
-	return runCommand(
-		"ip",
-		"route",
-		"replace",
-		"default",
-		"dev",
-		name,
-		"table",
-		fmt.Sprintf("%d", table),
-	)
-}
-
-func ensureRuleTable(table int) error {
-	err := runCommand(
-		"ip",
-		"rule",
-		"add",
-		"pref",
-		fmt.Sprintf("%d", table),
-		"table",
-		fmt.Sprintf("%d", table),
-	)
-	if err == nil {
-		return nil
-	}
-	if strings.Contains(err.Error(), "File exists") {
-		return nil
-	}
-	return err
-}
-
-func removeTunRouting(name string) error {
-	table := tableForName(name)
-	_ = runCommand(
-		"ip",
-		"route",
-		"flush",
-		"table",
-		fmt.Sprintf("%d", table),
-	)
-	err := runCommand(
-		"ip",
-		"rule",
-		"del",
-		"pref",
-		fmt.Sprintf("%d", table),
-		"table",
-		fmt.Sprintf("%d", table),
-	)
-	if err == nil {
-		return nil
-	}
-	if strings.Contains(err.Error(), "No such file") {
-		return nil
-	}
-	return err
 }
