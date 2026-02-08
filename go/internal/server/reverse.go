@@ -79,7 +79,7 @@ func (s *reverseStore) delete(tag string) {
 
 func (s *reverseStore) save() error {
 	if len(s.state) == 0 {
-		delete(s.doc, serverReverseStateKey)
+		s.doc[serverReverseStateKey] = nil
 	} else {
 		s.doc[serverReverseStateKey] = s.state
 	}

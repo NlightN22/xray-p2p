@@ -60,7 +60,7 @@ func decodeServerForwardRules(doc map[string]any) ([]forward.Rule, error) {
 
 func (s *serverForwardStore) saveForwards() error {
 	if len(s.forwards) == 0 {
-		delete(s.doc, serverForwardRulesKey)
+		s.doc[serverForwardRulesKey] = nil
 	} else {
 		s.doc[serverForwardRulesKey] = s.forwards
 	}

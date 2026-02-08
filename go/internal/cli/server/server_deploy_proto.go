@@ -5,17 +5,23 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
+	"github.com/NlightN22/xray-p2p/go/internal/installstate"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -206,6 +212,26 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		fmt.Sprintf("host=%s", host),
 	}
 
+	installed := false
+	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer))
+	if _, err := installstate.Read(statePath, installstate.KindServer); err == nil {
+		installed = true
+	} else if err != nil && !errors.Is(err, installstate.ErrRoleNotInstalled) && !errors.Is(err, os.ErrNotExist) {
+		logging.Warn("xp2p server deploy: install state read failed", "err", err)
+	}
+	if installed {
+		inboundsPath := filepath.Join(configDir, "inbounds.json")
+		if _, err := os.Stat(inboundsPath); err != nil {
+			installed = false
+		}
+	}
+	if !installed {
+		configPath := filepath.Join(installDir, layout.ServerConfigFileName)
+		if _, err := os.Stat(configPath); err == nil {
+			installed = true
+		}
+	}
+
 	inst := server.InstallOptions{
 		InstallDir:            installDir,
 		ConfigDir:             configDir,
@@ -221,6 +247,10 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		TunName:               s.Cfg.Server.TunName,
 		TunMTU:                s.Cfg.Server.TunMTU,
 		TunAddr:               s.Cfg.Server.TunAddr,
+	}
+	if installed {
+		logging.Info("xp2p server deploy: install already present, skipping", "config", config.ConfigPath(layout.ServerConfigFileName))
+		goto installDone
 	}
 	if err := server.Install(ctx, inst); err != nil {
 		if server.IsCertificateValidationError(err) {

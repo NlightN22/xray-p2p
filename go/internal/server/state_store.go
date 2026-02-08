@@ -54,7 +54,21 @@ func writeServerStateDoc(path string, doc map[string]any) error {
 	if doc == nil {
 		doc = make(map[string]any)
 	}
-	tree.SetPath([]string{"server"}, doc)
+	existing := make(map[string]any)
+	switch raw := tree.GetPath([]string{"server"}).(type) {
+	case *toml.Tree:
+		existing = raw.ToMap()
+	case map[string]any:
+		existing = raw
+	}
+	for key, value := range doc {
+		if value == nil {
+			delete(existing, key)
+			continue
+		}
+		existing[key] = value
+	}
+	tree.SetPath([]string{"server"}, existing)
 	return writeServerTomlTree(path, tree)
 }
 

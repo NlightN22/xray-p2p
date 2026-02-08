@@ -104,7 +104,7 @@ func (s *serverRedirectStore) saveRedirects() error {
 		s.doc = make(map[string]any)
 	}
 	if len(s.redirects) == 0 {
-		delete(s.doc, serverRedirectRulesKey)
+		s.doc[serverRedirectRulesKey] = nil
 	} else {
 		s.doc[serverRedirectRulesKey] = s.redirects
 	}

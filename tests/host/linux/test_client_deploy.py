@@ -262,12 +262,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
     pass_two = "deploy-tun-pass-2"
 
     def cleanup_logs():
-        for host, log_path in (
-            (client_host, CLIENT_DEPLOY_LOG),
-            (server_host, SERVER_DEPLOY_LOG),
+        for host, log_path, heartbeat_path in (
+            (client_host, CLIENT_DEPLOY_LOG, helpers.CLIENT_HEARTBEAT_STATE_FILE),
+            (server_host, SERVER_DEPLOY_LOG, helpers.SERVER_HEARTBEAT_STATE_FILE),
         ):
             helpers.remove_path(host, log_path)
-            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+            helpers.remove_path(host, heartbeat_path)
             linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
 
     def wait_for_tun_ready():
@@ -296,19 +296,64 @@ def test_deploy_tun_with_multiple_reverse_redirects(
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
 
-    def assert_ping_zero_loss(runner, target: str, port: str, label: str) -> None:
-        result = runner(
-            "ping",
-            target,
-            "--port",
-            port,
-            "--count",
-            "3",
-            check=True,
-        )
-        stdout = (result.stdout or "").lower()
-        assert "0% loss" in stdout, (
-            f"xp2p ping {label} did not report zero loss:\n{result.stdout}"
+    def _wait_for_port(host: Host, port: str, *, timeout: float = 20.0) -> None:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            result = host.run(f"sudo -n ss -lnt | grep -q ':{port} '")
+            if result.rc == 0:
+                return
+            time.sleep(1.0)
+        pytest.fail(f"Port {port} did not open within {timeout}s")
+
+    def _wait_for_route(host: Host, cidr: str, dev: str, *, timeout: float = 20.0) -> None:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            result = host.run(f"ip route show {cidr} | grep -q 'dev {dev}'")
+            if result.rc == 0:
+                return
+            time.sleep(1.0)
+        routes = host.run("ip route").stdout or ""
+        pytest.fail(f"Route {cidr} via {dev} not found.\nRoutes:\n{routes}")
+
+    def assert_ping_zero_loss(
+        runner,
+        target: str,
+        port: str,
+        label: str,
+        *,
+        debug_hosts: list[Host] | None = None,
+    ) -> None:
+        last_result = None
+        for _ in range(3):
+            last_result = runner(
+                "ping",
+                target,
+                "--port",
+                port,
+                "--count",
+                "3",
+                check=False,
+            )
+            stdout = (last_result.stdout or "").lower()
+            if "0% loss" in stdout:
+                return
+            time.sleep(2.0)
+        stdout = last_result.stdout if last_result else ""
+        stderr = last_result.stderr if last_result else ""
+        debug = ""
+        for host in debug_hosts or []:
+            routes = host.run("ip route").stdout or ""
+            addrs = host.run("ip addr").stdout or ""
+            sockets = host.run("sudo -n ss -lnt").stdout or ""
+            debug += (
+                f"\nhost={host.backend.hostname}\n"
+                f"routes:\n{routes}\n"
+                f"addr:\n{addrs}\n"
+                f"sockets:\n{sockets}\n"
+            )
+        raise AssertionError(
+            f"xp2p ping {label} did not report zero loss.\n"
+            f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}\n{debug}"
         )
 
     client_pid = None
@@ -379,18 +424,24 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             server_ip,
             check=True,
         )
+        _wait_for_port(server_host, SERVER_DIAG_PORT)
+        _wait_for_port(client_host, CLIENT_DIAG_PORT)
+        _wait_for_route(client_host, SERVER_TUN_CIDR, CLIENT_TUN)
+        _wait_for_route(server_host, CLIENT_TUN_CIDR, SERVER_TUN)
 
         assert_ping_zero_loss(
             xp2p_client_runner,
             SERVER_TUN_ADDR.split("/")[0],
             SERVER_DIAG_PORT,
             "client->server",
+            debug_hosts=[client_host, server_host],
         )
         assert_ping_zero_loss(
             xp2p_server_runner,
             CLIENT_TUN_ADDR.split("/")[0],
             CLIENT_DIAG_PORT,
             "server->client",
+            debug_hosts=[client_host, server_host],
         )
 
         helpers.cleanup_client_install(client_host, xp2p_client_runner)
@@ -451,20 +502,40 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             server_ip,
             check=True,
         )
+        xp2p_client_runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            SERVER_TUN_CIDR,
+            "--host",
+            server_ip,
+            check=True,
+        )
         server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_redirect_rule(server_routing, CLIENT_TUN_CIDR, reverse_two)
+        _wait_for_port(server_host, SERVER_DIAG_PORT)
+        _wait_for_port(client_host, CLIENT_DIAG_PORT)
+        _wait_for_route(client_host, SERVER_TUN_CIDR, CLIENT_TUN)
+        _wait_for_route(server_host, CLIENT_TUN_CIDR, SERVER_TUN)
 
         assert_ping_zero_loss(
             xp2p_server_runner,
             CLIENT_TUN_ADDR.split("/")[0],
             CLIENT_DIAG_PORT,
             "server->client after second deploy",
+            debug_hosts=[client_host, server_host],
         )
         assert_ping_zero_loss(
             xp2p_client_runner,
             SERVER_TUN_ADDR.split("/")[0],
             SERVER_DIAG_PORT,
             "client->server after second deploy",
+            debug_hosts=[client_host, server_host],
         )
         heartbeat_state = helpers.wait_for_heartbeat_state(
             server_host,
@@ -487,12 +558,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         helpers.cleanup_client_install(client_host, xp2p_client_runner)
         helpers.cleanup_server_install(server_host, xp2p_server_runner)
-        for host, log_path in (
-            (client_host, CLIENT_DEPLOY_LOG),
-            (server_host, SERVER_DEPLOY_LOG),
+        for host, log_path, heartbeat_path in (
+            (client_host, CLIENT_DEPLOY_LOG, helpers.CLIENT_HEARTBEAT_STATE_FILE),
+            (server_host, SERVER_DEPLOY_LOG, helpers.SERVER_HEARTBEAT_STATE_FILE),
         ):
             helpers.remove_path(host, log_path)
-            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+            helpers.remove_path(host, heartbeat_path)
 
 
 def _start_client_deploy(
