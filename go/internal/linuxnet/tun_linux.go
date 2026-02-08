@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
@@ -59,6 +60,45 @@ func RemoveTunInterfaceIfManaged(name string) error {
 	return nil
 }
 
+func EnsureTunAddress(name, addr string, mtu int) error {
+	name = strings.TrimSpace(name)
+	addr = strings.TrimSpace(addr)
+	if name == "" {
+		return errors.New("xp2p: tun name is required for Linux setup")
+	}
+	if addr == "" {
+		return errors.New("xp2p: tun address is required for Linux setup")
+	}
+	if isOpenWrtSystem() {
+		return nil
+	}
+	if _, err := execLookPath("ip"); err != nil {
+		return errors.New("xp2p: ip command not found")
+	}
+
+	deadline := time.Now().Add(12 * time.Second)
+	for time.Now().Before(deadline) {
+		if !linkExists(name) {
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		if addrPresent(name, addr) {
+			return nil
+		}
+		if mtu > 0 {
+			_ = runCommand("ip", "link", "set", "dev", name, "mtu", fmt.Sprintf("%d", mtu))
+		}
+		if err := runCommand("ip", "addr", "replace", addr, "dev", name); err != nil {
+			return err
+		}
+		if err := runCommand("ip", "link", "set", "dev", name, "up"); err != nil {
+			return err
+		}
+		return nil
+	}
+	return fmt.Errorf("xp2p: tun interface %s not found", name)
+}
+
 func writeNetworkdConfig(name, addr string, mtu int) error {
 	dir := "/etc/systemd/network"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -102,6 +142,7 @@ func buildNetworkdConfig(name, addr string, mtu int, table int) string {
 	builder.WriteString(name)
 	builder.WriteString("\n\n[Network]\n")
 	builder.WriteString("KeepConfiguration = yes\n")
+	builder.WriteString("ConfigureWithoutCarrier = yes\n")
 	builder.WriteString("Address = ")
 	builder.WriteString(addr)
 	builder.WriteString("\n\n[Link]\n")
@@ -173,4 +214,28 @@ func runCommand(name string, args ...string) error {
 		return fmt.Errorf("xp2p: %s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return nil
+}
+
+func linkExists(name string) bool {
+	cmd := exec.Command("ip", "link", "show", "dev", name)
+	return cmd.Run() == nil
+}
+
+func addrPresent(name, addr string) bool {
+	output, err := captureCommand("ip", "-4", "addr", "show", "dev", name)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(output, addr)
+}
+
+func captureCommand(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return strings.TrimSpace(buf.String()), err
+	}
+	return strings.TrimSpace(buf.String()), nil
 }

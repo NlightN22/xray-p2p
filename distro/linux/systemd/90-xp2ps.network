@@ -3,6 +3,7 @@ Name = xp2ps
 
 [Network]
 KeepConfiguration = yes
+ConfigureWithoutCarrier = yes
 
 [Link]
 ActivationPolicy = manual

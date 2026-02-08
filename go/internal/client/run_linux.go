@@ -12,6 +12,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
 )
@@ -63,6 +64,16 @@ func Run(ctx context.Context, opts RunOptions) error {
 		opts.ErrorLogPath,
 		resolveClientLogPath,
 		nil,
+		func() {
+			if !opts.TunEnabled {
+				return
+			}
+			go func() {
+				if err := linuxnet.EnsureTunAddress(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+					logging.Warn("xp2p: tun address setup failed", "interface", opts.TunName, "err", err)
+				}
+			}()
+		},
 	)
 }
 

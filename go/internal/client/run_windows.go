@@ -71,5 +71,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		opts.ErrorLogPath,
 		resolveLogPath,
 		configureCmd,
+		nil,
 	)
 }

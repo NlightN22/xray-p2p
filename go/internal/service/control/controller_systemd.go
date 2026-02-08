@@ -5,6 +5,7 @@ package control
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -38,7 +39,8 @@ func (systemdController) Status(ctx context.Context, role Role) (Status, error) 
 	state := strings.TrimSpace(stateOut)
 	active := state == "active"
 	if stateErr != nil {
-		if exitErr, ok := stateErr.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(stateErr, &exitErr) {
 			// systemctl is-active returns 3 when inactive.
 			if exitErr.ExitCode() != 3 {
 				return Status{}, fmt.Errorf("systemctl is-active %s: %w", unit, stateErr)
@@ -50,7 +52,8 @@ func (systemdController) Status(ctx context.Context, role Role) (Status, error) 
 
 	detailOut, detailErr := runSystemctlOutput(ctx, "status", "--no-pager", "--lines=0", unit)
 	if detailErr != nil {
-		if exitErr, ok := detailErr.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(detailErr, &exitErr) {
 			switch exitErr.ExitCode() {
 			case 3, 4:
 				// inactive or unknown; keep detail output if any

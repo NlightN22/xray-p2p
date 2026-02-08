@@ -16,6 +16,7 @@ import (
 
 type logPathResolver func(string) (string, error)
 type cmdConfigurator func(*exec.Cmd)
+type startHook func()
 
 func runXrayWithConfig(
 	ctx context.Context,
@@ -25,6 +26,7 @@ func runXrayWithConfig(
 	errorLogPath string,
 	resolveLogPath logPathResolver,
 	configureCmd cmdConfigurator,
+	onStart startHook,
 ) error {
 	if err := xray.VerifyPinnedVersion(ctx, xrayPath); err != nil {
 		return err
@@ -71,6 +73,9 @@ func runXrayWithConfig(
 	}
 
 	logging.Info("xray-core process started", "path", xrayPath)
+	if onStart != nil {
+		onStart()
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
