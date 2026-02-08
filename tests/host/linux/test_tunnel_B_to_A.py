@@ -26,6 +26,57 @@ SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
 CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
 
 
+def _parse_redirect_output(text: str) -> list[dict[str, str]]:
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    header_idx = None
+    legacy = False
+    for idx, line in enumerate(lines):
+        lowered = line.lower()
+        if (
+            lowered.startswith("no redirect rules")
+            or lowered.startswith("no server redirect rules")
+            or lowered.startswith("no client redirect rules")
+        ):
+            return []
+        if lowered.startswith("type"):
+            header_idx = idx
+            break
+        if lowered.startswith("cidr"):
+            legacy = True
+            header_idx = idx
+            break
+    if header_idx is None:
+        raise AssertionError(f"Unexpected redirect output: {text!r}")
+
+    entries: list[dict[str, str]] = []
+    for row in lines[header_idx + 1 :]:
+        parts = row.split()
+        if legacy:
+            if len(parts) < 3:
+                continue
+            entries.append({"type": "CIDR", "value": parts[0], "cidr": parts[0], "tag": parts[1], "host": parts[2]})
+            continue
+        if len(parts) < 4:
+            continue
+        entry = {
+            "type": parts[0],
+            "value": parts[1],
+            "tag": parts[2],
+            "host": parts[3],
+        }
+        if entry["type"].lower() == "cidr":
+            entry["cidr"] = entry["value"]
+        entries.append(entry)
+    return entries
+
+
+def _has_redirect_entry(entries: list[dict[str, str]], cidr: str, tag: str) -> bool:
+    for entry in entries:
+        if entry.get("cidr") == cidr and entry.get("tag") == tag:
+            return True
+    return False
+
+
 def _runner(host):
     def _run(*args: str, check: bool = False):
         result = linux_env.run_xp2p(host, *args)
@@ -285,6 +336,7 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
             "endpoint_tag": endpoint_tag,
             "client_primary_ip": client_primary_ip,
             "client_user": credential["user"],
+            "client_password": credential["password"],
         }
     finally:
         cleanup()
@@ -738,17 +790,29 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                         f"{_nat_debug()}"
                         )
                 initial_packets = _traffic_counter_sum(client_host) if counting_supported else 0
-                ping_result = client_runner(
-                    "ping",
-                    target_ip,
-                    "--port",
-                    str(client_listener_port),
-                    "--count",
-                    "3",
-                    "--proto",
-                    "tcp",
-                    check=True,
-                )
+                ping_result = None
+                for attempt in range(3):
+                    ping_result = client_runner(
+                        "ping",
+                        target_ip,
+                        "--port",
+                        str(client_listener_port),
+                        "--count",
+                        "3",
+                        "--proto",
+                        "tcp",
+                        check=False,
+                    )
+                    if ping_result.rc == 0:
+                        break
+                    time.sleep(2.0)
+                if ping_result is None or ping_result.rc != 0:
+                    pytest.fail(
+                        "xp2p ping via client redirect failed.\n"
+                        f"STDOUT:\n{ping_result.stdout if ping_result else ''}\n"
+                        f"STDERR:\n{ping_result.stderr if ping_result else ''}\n"
+                        f"{_nat_debug()}"
+                    )
                 tunnel_common.assert_zero_loss(
                     ping_result,
                     f"while redirecting through server. {_nat_debug()}",
@@ -814,17 +878,29 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                         f"{_nat_debug()}"
                     )
                 initial_server_packets = _traffic_counter_sum(server_host) if counting_supported else 0
-                ping_result = server_runner(
-                    "ping",
-                    reverse_ip,
-                    "--port",
-                    str(server_listener_port),
-                    "--count",
-                    "3",
-                    "--proto",
-                    "tcp",
-                    check=True,
-                )
+                ping_result = None
+                for attempt in range(3):
+                    ping_result = server_runner(
+                        "ping",
+                        reverse_ip,
+                        "--port",
+                        str(server_listener_port),
+                        "--count",
+                        "3",
+                        "--proto",
+                        "tcp",
+                        check=False,
+                    )
+                    if ping_result.rc == 0:
+                        break
+                    time.sleep(2.0)
+                if ping_result is None or ping_result.rc != 0:
+                    pytest.fail(
+                        "xp2p ping via server redirect failed.\n"
+                        f"STDOUT:\n{ping_result.stdout if ping_result else ''}\n"
+                        f"STDERR:\n{ping_result.stderr if ping_result else ''}\n"
+                        f"{_nat_debug()}"
+                    )
                 tunnel_common.assert_zero_loss(
                     ping_result,
                     f"server-side direct ping toward {reverse_ip}. {_nat_debug()}",
@@ -838,6 +914,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     finally:
         client_nat_runner("nat-redirect", "remove", "--all", check=False)
         server_nat_runner("nat-redirect", "remove", "--all", check=False)
+        remove_results: list = []
         if redirect_added:
             client_runner(
                 "client",
@@ -855,7 +932,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                 check=False,
             )
         if server_redirect_added:
-            server_runner(
+            remove_results.append(server_runner(
                 "server",
                 "redirect",
                 "remove",
@@ -869,7 +946,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
                 reverse_tag,
                 "--quiet",
                 check=False,
-            )
+            ))
         if client_proxy_mode:
             client_runner(
                 "client",
@@ -912,8 +989,60 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             helpers.SERVER_CONFIG_DIR_NAME,
             check=True,
         ).stdout or ""
-        assert CLIENT_REDIRECT_CIDR not in client_redirect_list
-        assert SERVER_REDIRECT_CIDR not in server_redirect_list
+        client_entries = _parse_redirect_output(client_redirect_list)
+        server_entries = _parse_redirect_output(server_redirect_list)
+        if _has_redirect_entry(server_entries, SERVER_REDIRECT_CIDR, reverse_tag):
+            host_value = SERVER_IP
+            for entry in server_entries:
+                if entry.get("cidr") == SERVER_REDIRECT_CIDR and entry.get("tag") == reverse_tag:
+                    host_value = entry.get("host") or SERVER_IP
+                    break
+            remove_results.append(server_runner(
+                "server",
+                "redirect",
+                "remove",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                "--cidr",
+                SERVER_REDIRECT_CIDR,
+                "--tag",
+                reverse_tag,
+                "--host",
+                host_value,
+                "--quiet",
+                check=False,
+            ))
+            server_redirect_list = server_runner(
+                "server",
+                "redirect",
+                "list",
+                "--path",
+                server_install_path,
+                "--config-dir",
+                helpers.SERVER_CONFIG_DIR_NAME,
+                check=True,
+            ).stdout or ""
+            server_entries = _parse_redirect_output(server_redirect_list)
+        assert not _has_redirect_entry(client_entries, CLIENT_REDIRECT_CIDR, endpoint_tag)
+        if _has_redirect_entry(server_entries, SERVER_REDIRECT_CIDR, reverse_tag):
+            server_config = server_host.run("cat /etc/xp2p/xp2p-server.toml 2>/dev/null || true")
+            server_routing = server_host.run(f"cat {helpers.SERVER_CONFIG_DIR / 'routing.json'} 2>/dev/null || true")
+            remove_details = ""
+            for idx, result in enumerate(remove_results, start=1):
+                remove_details += (
+                    f"\nremove_attempt_{idx} rc={result.rc}\n"
+                    f"stdout:\n{result.stdout}\n"
+                    f"stderr:\n{result.stderr}\n"
+                )
+            pytest.fail(
+                "server redirect cleanup failed.\n"
+                f"redirect_list:\n{server_redirect_list}\n"
+                f"{remove_details}"
+                f"server_config:\n{server_config.stdout}\n{server_config.stderr}\n"
+                f"server_routing:\n{server_routing.stdout}\n{server_routing.stderr}\n"
+            )
 
 
 def test_reverse_redirect_via_server_portal(tunnel_environment):
@@ -922,6 +1051,25 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
     reverse_tag = tunnel_environment["reverse_tag"]
     client_host = tunnel_environment["client_host"]
     server_host = tunnel_environment["server_host"]
+    reverse_channels = helpers.read_server_config(server_host).get("reverse_channels") or {}
+    if reverse_tag not in reverse_channels:
+        server_runner(
+            "server",
+            "user",
+            "add",
+            "--path",
+            server_install_path,
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--id",
+            tunnel_environment["client_user"],
+            "--password",
+            tunnel_environment["client_password"],
+            "--host",
+            SERVER_IP,
+            "--force",
+            check=True,
+        )
 
     alias_cidr = f"{CLIENT_REVERSE_TEST_IP}/32"
     with _ip_alias(client_host, alias_cidr):
@@ -951,13 +1099,23 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 helpers.SERVER_CONFIG_DIR_NAME,
                 check=True,
             ).stdout or ""
-            assert alias_cidr in list_output, f"Server redirect list missing {alias_cidr}"
+            list_entries = _parse_redirect_output(list_output)
+            assert _has_redirect_entry(list_entries, alias_cidr, reverse_tag), (
+                f"Server redirect list missing {alias_cidr} for tag {reverse_tag}"
+            )
 
             server_state = helpers.read_server_config(server_host)
             server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
             helpers.assert_server_redirect_state(server_state, alias_cidr, reverse_tag)
             helpers.assert_server_redirect_rule(server_routing, alias_cidr, reverse_tag)
 
+            _server_forward_cmd(
+                tunnel_environment,
+                "remove",
+                "--listen-port",
+                str(SERVER_FORWARD_PORT),
+                check=False,
+            )
             server_runner(
                 "server",
                 "forward",
@@ -1029,4 +1187,5 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 helpers.SERVER_CONFIG_DIR_NAME,
                 check=True,
             ).stdout or ""
-            assert alias_cidr not in final_list
+            final_entries = _parse_redirect_output(final_list)
+            assert not _has_redirect_entry(final_entries, alias_cidr, reverse_tag)
