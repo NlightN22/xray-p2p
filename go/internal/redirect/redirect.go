@@ -39,6 +39,7 @@ var (
 	ErrBindingHostNotFound = errors.New("redirect: host binding not found")
 	ErrBindingTagNotFound  = errors.New("redirect: outbound tag not found")
 	ErrBindingTagMismatch  = errors.New("redirect: tag does not match host binding")
+	ErrRuleExists          = errors.New("redirect: rule already exists")
 )
 
 // ResolveBinding selects the outbound tag and host combination matching the provided filters.
@@ -194,7 +195,7 @@ func AddRule(rules []Rule, rule Rule) ([]Rule, error) {
 			continue
 		}
 		if strings.EqualFold(existing.OutboundTag, trimmedTag) {
-			return rules, fmt.Errorf("xp2p: redirect %s via %s already exists", Describe(kind, value), trimmedTag)
+			return rules, fmt.Errorf("xp2p: redirect %s via %s already exists: %w", Describe(kind, value), trimmedTag, ErrRuleExists)
 		}
 	}
 	rule.OutboundTag = trimmedTag

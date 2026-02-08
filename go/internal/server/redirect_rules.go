@@ -164,15 +164,16 @@ func AddRedirect(opts RedirectAddOptions) error {
 		rule.CIDR = target.Value
 	}
 
-	updated, err := redirect.AddRule(store.redirects, rule)
-	if err != nil {
-		return err
+	updated, addErr := redirect.AddRule(store.redirects, rule)
+	if addErr != nil && !errors.Is(addErr, redirect.ErrRuleExists) {
+		return addErr
 	}
-	store.redirects = updated
-	if err := store.saveRedirects(); err != nil {
-		return err
+	if !errors.Is(addErr, redirect.ErrRuleExists) {
+		store.redirects = updated
+		if err := store.saveRedirects(); err != nil {
+			return err
+		}
 	}
-
 	routingPath := filepath.Join(configDir, "routing.json")
 	if err := updateServerRedirectRouting(routingPath, store.redirects); err != nil {
 		return err

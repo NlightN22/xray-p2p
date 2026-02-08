@@ -90,11 +90,14 @@ func AddRedirect(opts RedirectAddOptions) error {
 	default:
 		rule.CIDR = ruleTarget.Value
 	}
-	if err := state.addRedirect(rule); err != nil {
-		return err
+	addErr := state.addRedirect(rule)
+	if addErr != nil && !errors.Is(addErr, redirect.ErrRuleExists) {
+		return addErr
 	}
-	if err := state.save(paths.configFile); err != nil {
-		return err
+	if !errors.Is(addErr, redirect.ErrRuleExists) {
+		if err := state.save(paths.configFile); err != nil {
+			return err
+		}
 	}
 	if err := updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		return err
