@@ -97,6 +97,14 @@ type (
 		Tag      string
 		Hostname string
 	}
+	ModeOptions struct {
+		InstallDir string
+		ConfigDir  string
+		TunEnabled bool
+		TunName    string
+		TunMTU     int
+		TunAddr    string
+	}
 )
 
 func Install(_ context.Context, _ InstallOptions) error {
@@ -145,4 +153,8 @@ func RemoveRedirect(_ RedirectRemoveOptions) error {
 
 func ListRedirects(_ RedirectListOptions) ([]RedirectRecord, error) {
 	return nil, ErrUnsupported
+}
+
+func ApplyMode(_ ModeOptions) error {
+	return ErrUnsupported
 }

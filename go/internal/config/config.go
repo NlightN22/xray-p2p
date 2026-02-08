@@ -69,18 +69,18 @@ type LoggingConfig struct {
 
 // ServerConfig holds diagnostics server settings.
 type ServerConfig struct {
-	Port            string `koanf:"port"`
-	InstallDir      string `koanf:"install_dir"`
-	ConfigDir       string `koanf:"config_dir"`
-	Mode            string `koanf:"mode"`
+	Port             string `koanf:"port"`
+	InstallDir       string `koanf:"install_dir"`
+	ConfigDir        string `koanf:"config_dir"`
+	Mode             string `koanf:"mode"`
 	CertificateStore string `koanf:"cert_store"`
-	CertificateFile string `koanf:"certificate"`
-	KeyFile         string `koanf:"key"`
-	Host            string `koanf:"host"`
-	TunEnabled      bool   `koanf:"tun_enabled"`
-	TunName         string `koanf:"tun_name"`
-	TunMTU          int    `koanf:"tun_mtu"`
-	TunAddr         string `koanf:"tun_addr"`
+	CertificateFile  string `koanf:"certificate"`
+	KeyFile          string `koanf:"key"`
+	Host             string `koanf:"host"`
+	TunEnabled       bool   `koanf:"tun_enabled"`
+	TunName          string `koanf:"tun_name"`
+	TunMTU           int    `koanf:"tun_mtu"`
+	TunAddr          string `koanf:"tun_addr"`
 }
 
 // ClientConfig holds client installation settings.

@@ -15,3 +15,7 @@ func removeRedirectRouteIfUnused(string, string, []redirect.Rule) error {
 func applyRedirectRoutes(string, []redirect.Rule) error {
 	return nil
 }
+
+func removeRedirectRoutes(string, []redirect.Rule) error {
+	return nil
+}

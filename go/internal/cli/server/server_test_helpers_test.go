@@ -142,6 +142,15 @@ func stubServerRedirectAdd(fn func(server.RedirectAddOptions) error) func() {
 	return func() { serverRedirectAddFunc = prev }
 }
 
+func stubServerMode(fn func(server.ModeOptions) error) func() {
+	prev := serverModeFunc
+	if fn == nil {
+		fn = func(server.ModeOptions) error { return nil }
+	}
+	serverModeFunc = fn
+	return func() { serverModeFunc = prev }
+}
+
 func stubServerForwardAdd(fn func(server.ForwardAddOptions) (server.ForwardAddResult, error)) func() {
 	prev := serverAddForwardFunc
 	if fn == nil {

@@ -61,6 +61,28 @@ func applyRedirectRoutes(tunName string, redirects []redirect.Rule) error {
 	return nil
 }
 
+func removeRedirectRoutes(tunName string, redirects []redirect.Rule) error {
+	seen := make(map[string]struct{}, len(redirects))
+	for _, rule := range redirects {
+		if rule.Kind() != redirect.KindCIDR {
+			continue
+		}
+		value := strings.TrimSpace(rule.Value())
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if err := removeRedirectRoute(tunName, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func hasRedirectCIDR(cidr string, redirects []redirect.Rule) bool {
 	trimmed := strings.TrimSpace(cidr)
 	if trimmed == "" {
