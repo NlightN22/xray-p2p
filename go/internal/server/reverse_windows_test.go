@@ -8,14 +8,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 )
 
 const reverseHost = "edge.example"
 
 func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, false)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
@@ -67,8 +66,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 		t.Fatalf("expected 2 marker rules, got %d", markerCount)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindServer))
-	stateDoc := loadJSONFile(t, statePath)
+	stateDoc := readServerStateDoc(t, serverStatePath(""))
 	channels := stateDoc["reverse_channels"].(map[string]any)
 	if _, ok := channels["alpha-useredge-example.rev"]; !ok {
 		t.Fatalf("expected reverse channel entry, got %v", channels)
@@ -77,6 +75,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 
 func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, false)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
@@ -111,8 +110,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 		t.Fatalf("expected rules to be empty, got %d", len(rules))
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindServer))
-	stateDoc := loadJSONFile(t, statePath)
+	stateDoc := readServerStateDoc(t, serverStatePath(""))
 	if _, ok := stateDoc["reverse_channels"]; ok {
 		t.Fatalf("expected reverse_channels to be removed, got %v", stateDoc)
 	}
@@ -120,6 +118,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 
 func TestAddUserDetectsReverseConflicts(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, false)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
@@ -148,6 +147,7 @@ func TestAddUserDetectsReverseConflicts(t *testing.T) {
 
 func TestAddUserRejectsDuplicateUser(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, false)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
@@ -176,6 +176,7 @@ func TestAddUserRejectsDuplicateUser(t *testing.T) {
 
 func TestAddUserAllowsForceUpdate(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, false)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))

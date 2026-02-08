@@ -21,37 +21,37 @@ var ErrServiceUnsupported = errors.New("xp2p: server service is not supported on
 
 // InstallOptions describes how the server-side components should be provisioned.
 type InstallOptions struct {
-	InstallDir      string
-	ConfigDir       string
-	Port            string
-	CertificateStore string
-	CertificateFile string
-	KeyFile         string
-	Host            string
-	Force           bool
+	InstallDir            string
+	ConfigDir             string
+	Port                  string
+	CertificateStore      string
+	CertificateFile       string
+	KeyFile               string
+	Host                  string
+	Force                 bool
 	RelaxedPathValidation bool
-	TunEnabled      bool
-	TunEnabledSet   bool
-	TunName         string
-	TunMTU          int
-	TunAddr         string
+	TunEnabled            bool
+	TunEnabledSet         bool
+	TunName               string
+	TunMTU                int
+	TunAddr               string
 }
 
 // CertificateOptions describes how TLS material should be provisioned for an existing installation.
 type CertificateOptions struct {
-	InstallDir      string
-	ConfigDir       string
-	CertificateStore string
-	CertificateFile string
-	KeyFile         string
-	Host            string
-	Force           bool
+	InstallDir            string
+	ConfigDir             string
+	CertificateStore      string
+	CertificateFile       string
+	KeyFile               string
+	Host                  string
+	Force                 bool
 	RelaxedPathValidation bool
-	TunEnabled      bool
-	TunEnabledSet   bool
-	TunName         string
-	TunMTU          int
-	TunAddr         string
+	TunEnabled            bool
+	TunEnabledSet         bool
+	TunName               string
+	TunMTU                int
+	TunAddr               string
 }
 
 // RunOptions controls execution of the xray-core process.

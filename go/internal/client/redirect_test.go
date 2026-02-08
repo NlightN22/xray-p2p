@@ -2,27 +2,27 @@ package client
 
 import (
 	"encoding/json"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
 	configDirPath := filepath.Join(dir, configDirName)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -107,16 +107,16 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 }
 
 func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
 	configDirPath := filepath.Join(dir, configDirName)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -195,16 +195,16 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 }
 
 func TestRemoveRedirectByTag(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
 	configDirPath := filepath.Join(dir, configDirName)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -262,16 +262,16 @@ func TestRemoveRedirectByTag(t *testing.T) {
 }
 
 func TestRemoveDomainRedirect(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
 	configDirPath := filepath.Join(dir, configDirName)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -388,15 +388,15 @@ func hasMarkerRule(rules []struct {
 }
 
 func TestListRedirectsReportsMixedRecords(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
 	if err := os.MkdirAll(filepath.Join(dir, configDirName), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{Hostname: "server-a.example", Tag: "proxy-server-a"},

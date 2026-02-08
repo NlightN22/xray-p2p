@@ -150,8 +150,8 @@ func loadFileIfPresent(k *koanf.Koanf, explicitPath string) error {
 	}
 
 	roleFiles := []string{
-		layout.ClientConfigFileName,
-		layout.ServerConfigFileName,
+		ConfigPath(layout.ClientConfigFileName),
+		ConfigPath(layout.ServerConfigFileName),
 	}
 	for _, candidate := range roleFiles {
 		if _, err := os.Stat(candidate); err == nil {

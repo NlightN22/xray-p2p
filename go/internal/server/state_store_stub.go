@@ -2,10 +2,13 @@
 
 package server
 
-import "github.com/NlightN22/xray-p2p/go/internal/layout"
+import (
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
+)
 
 func serverStatePath(string) string {
-	return layout.ServerConfigFileName
+	return config.ConfigPath(layout.ServerConfigFileName)
 }
 
 func loadServerStateDoc(string) (map[string]any, error) {

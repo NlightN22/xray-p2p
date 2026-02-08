@@ -45,13 +45,13 @@ func runServerCertSet(ctx context.Context, cfg config.Config, opts serverCertSet
 	}
 
 	certOpts := server.CertificateOptions{
-		InstallDir:      firstNonEmpty(opts.Path, cfg.Server.InstallDir),
-		ConfigDir:       firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		InstallDir:       firstNonEmpty(opts.Path, cfg.Server.InstallDir),
+		ConfigDir:        firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		CertificateStore: certStore,
-		CertificateFile: strings.TrimSpace(opts.Cert),
-		KeyFile:         strings.TrimSpace(opts.Key),
-		Host:            hostValue,
-		Force:           opts.Force,
+		CertificateFile:  strings.TrimSpace(opts.Cert),
+		KeyFile:          strings.TrimSpace(opts.Key),
+		Host:             hostValue,
+		Force:            opts.Force,
 	}
 
 	return applyServerCertificate(ctx, certOpts)

@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,11 +12,12 @@ import (
 
 func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-client")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}
-	configFile := filepath.Join(dir, layout.ClientConfigFileName)
+	configFile := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
 	endpoint := endpointConfig{
 		Hostname:   "server.example",

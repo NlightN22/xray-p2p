@@ -3,6 +3,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -72,16 +73,16 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 	}
 
 	return clientInstallBase{
-		installDir: installDir,
-		configDir:  configDir,
-		address:    address,
-		portStr:    portStr,
-		portVal:    portVal,
-		password:   password,
-		user:       user,
-		serverName: serverName,
-		configFile: filepath.Clean(layout.ClientConfigFileName),
-		appliedStateFile: filepath.Clean(layout.ClientAppliedStateFileName),
+		installDir:       installDir,
+		configDir:        configDir,
+		address:          address,
+		portStr:          portStr,
+		portVal:          portVal,
+		password:         password,
+		user:             user,
+		serverName:       serverName,
+		configFile:       filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
+		appliedStateFile: filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)),
 		installOpts: InstallOptions{
 			InstallDir:            installDir,
 			ConfigDir:             opts.ConfigDir,

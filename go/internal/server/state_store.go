@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 
@@ -16,7 +17,7 @@ import (
 )
 
 func serverStatePath(string) string {
-	return filepath.Clean(layout.ServerConfigFileName)
+	return filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 }
 
 func loadServerStateDoc(path string) (map[string]any, error) {
@@ -80,12 +81,20 @@ func loadOrCreateServerToml(path string) (*toml.Tree, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return toml.TreeFromMap(map[string]any{}), nil
+			tree, err := toml.TreeFromMap(map[string]any{})
+			if err != nil {
+				return nil, fmt.Errorf("xp2p: create empty server config tree: %w", err)
+			}
+			return tree, nil
 		}
 		return nil, fmt.Errorf("xp2p: read server config %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
-		return toml.TreeFromMap(map[string]any{}), nil
+		tree, err := toml.TreeFromMap(map[string]any{})
+		if err != nil {
+			return nil, fmt.Errorf("xp2p: create empty server config tree: %w", err)
+		}
+		return tree, nil
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
@@ -98,10 +107,14 @@ func writeServerTomlTree(path string, tree *toml.Tree) error {
 	if tree == nil {
 		return errors.New("xp2p: config tree is nil")
 	}
+	data, err := toml.Marshal(tree.ToMap())
+	if err != nil {
+		return fmt.Errorf("xp2p: encode server config %s: %w", path, err)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("xp2p: ensure server config dir %s: %w", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(tree.String()), 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("xp2p: write server config %s: %w", path, err)
 	}
 	return nil

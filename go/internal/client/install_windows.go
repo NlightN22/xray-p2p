@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -97,9 +98,28 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return fmt.Errorf("xp2p: remove client config dir: %w", err)
 	}
 
+	stateRemoved := false
+
+	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if err := os.Remove(configPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove client config file: %w", err)
+		}
+	} else {
+		stateRemoved = true
+	}
+
+	appliedPath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
+	if err := os.Remove(appliedPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove client applied state: %w", err)
+		}
+	} else {
+		stateRemoved = true
+	}
+
 	clientStatePath := filepath.Join(installDir, layout.ClientStateFileName)
 	legacyStatePath := filepath.Join(installDir, layout.StateFileName)
-	stateRemoved := false
 
 	if err := os.Remove(clientStatePath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {

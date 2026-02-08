@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 )
 
 func TestServerAddForwardUpdatesState(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, DefaultServerConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
@@ -38,14 +38,10 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 		t.Fatalf("expected Routed=false without redirect rules")
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindServer))
-	data, err := os.ReadFile(statePath)
+	statePath := serverStatePath(dir)
+	doc, err := loadServerStateDoc(statePath)
 	if err != nil {
-		t.Fatalf("read state: %v", err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse state: %v", err)
+		t.Fatalf("load state: %v", err)
 	}
 	rawRules, ok := doc[serverForwardRulesKey].([]any)
 	if !ok || len(rawRules) != 1 {
@@ -61,6 +57,7 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 
 func TestServerRemoveForwardClearsState(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, DefaultServerConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
@@ -89,14 +86,10 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 		t.Fatalf("RemoveForward returned error: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindServer))
-	data, err := os.ReadFile(statePath)
+	statePath := serverStatePath(dir)
+	doc, err := loadServerStateDoc(statePath)
 	if err != nil {
-		t.Fatalf("read state: %v", err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse state: %v", err)
+		t.Fatalf("load state: %v", err)
 	}
 	if _, ok := doc[serverForwardRulesKey]; ok {
 		t.Fatalf("expected forward rules to be removed, got %v", doc[serverForwardRulesKey])

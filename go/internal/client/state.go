@@ -2,14 +2,13 @@ package client
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/knadh/koanf/providers/confmap"
-	"github.com/knadh/koanf/v2"
 	"github.com/pelletier/go-toml"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
@@ -60,12 +59,24 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 	if err != nil {
 		return clientInstallState{}, fmt.Errorf("xp2p: parse client config %s: %w", path, err)
 	}
-	k := koanf.New(".")
-	if err := k.Load(confmap.Provider(tree.ToMap(), "."), nil); err != nil {
-		return clientInstallState{}, fmt.Errorf("xp2p: decode client config %s: %w", path, err)
+	raw := tree.GetPath([]string{"client"})
+	if raw == nil {
+		state := clientInstallState{}
+		state.normalize()
+		return state, nil
+	}
+	switch value := raw.(type) {
+	case *toml.Tree:
+		raw = value.ToMap()
+	case map[string]any:
+		raw = value
+	}
+	buf, err := json.Marshal(raw)
+	if err != nil {
+		return clientInstallState{}, fmt.Errorf("xp2p: encode client config %s: %w", path, err)
 	}
 	var state clientInstallState
-	if err := k.Unmarshal("client", &state); err != nil {
+	if err := json.Unmarshal(buf, &state); err != nil {
 		return clientInstallState{}, fmt.Errorf("xp2p: decode client config %s: %w", path, err)
 	}
 	state.normalize()
@@ -297,12 +308,20 @@ func loadOrCreateToml(path string) (*toml.Tree, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return toml.TreeFromMap(map[string]any{}), nil
+			tree, err := toml.TreeFromMap(map[string]any{})
+			if err != nil {
+				return nil, fmt.Errorf("xp2p: create empty client config tree: %w", err)
+			}
+			return tree, nil
 		}
 		return nil, fmt.Errorf("xp2p: read client config %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
-		return toml.TreeFromMap(map[string]any{}), nil
+		tree, err := toml.TreeFromMap(map[string]any{})
+		if err != nil {
+			return nil, fmt.Errorf("xp2p: create empty client config tree: %w", err)
+		}
+		return tree, nil
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
@@ -315,10 +334,14 @@ func writeTomlTree(path string, tree *toml.Tree) error {
 	if tree == nil {
 		return errors.New("xp2p: config tree is nil")
 	}
+	data, err := toml.Marshal(tree.ToMap())
+	if err != nil {
+		return fmt.Errorf("xp2p: encode client config %s: %w", path, err)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("xp2p: ensure client config dir %s: %w", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, []byte(tree.String()), 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("xp2p: write client config %s: %w", path, err)
 	}
 	return nil

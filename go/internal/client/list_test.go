@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,9 +10,9 @@ import (
 )
 
 func TestListEndpoints(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	oldWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -23,7 +24,7 @@ func TestListEndpoints(t *testing.T) {
 		_ = os.Chdir(oldWD)
 	})
 
-	configPath := filepath.Join(dir, layout.ClientConfigFileName)
+	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{

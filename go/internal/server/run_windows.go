@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,7 +47,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	applied, err := loadServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName))
+	applied, err := loadServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)))
 	if err != nil {
 		return err
 	}
@@ -61,7 +62,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}); err != nil {
 			return err
 		}
-		if err := saveServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+		if err := saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
 			return err
 		}
 	}

@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	ErrServerReverseMissing     = errors.New("xp2p: no server reverse channels found")
-	ErrServerReverseNotFound    = errors.New("xp2p: server reverse channel not found")
+	ErrServerReverseMissing      = errors.New("xp2p: no server reverse channels found")
+	ErrServerReverseNotFound     = errors.New("xp2p: server reverse channel not found")
 	ErrServerReverseNotSpecified = errors.New("xp2p: reverse user or tag is required")
-	ErrServerReverseAmbiguous   = errors.New("xp2p: reverse user matches multiple channels")
+	ErrServerReverseAmbiguous    = errors.New("xp2p: reverse user matches multiple channels")
 )
 
 func ResolveServerMarkerTarget(installDir, userOrTag string, index int) (string, int, error) {

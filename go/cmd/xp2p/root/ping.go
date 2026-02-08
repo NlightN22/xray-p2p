@@ -24,14 +24,14 @@ import (
 const tunnelConfigSentinel = "__xp2p_tunnel_config__"
 
 type pingCommandOptions struct {
-	Host          string
-	Count         int
-	TimeoutSec    int
-	Proto         string
-	Port          int
+	Host           string
+	Count          int
+	TimeoutSec     int
+	Proto          string
+	Port           int
 	TunnelEndpoint string
-	EndpointTag   string
-	EndpointIndex int
+	EndpointTag    string
+	EndpointIndex  int
 }
 
 func newPingCommand(cfg func() config.Config) *cobra.Command {

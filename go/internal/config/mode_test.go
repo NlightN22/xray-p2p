@@ -10,7 +10,8 @@ import (
 
 func TestUpdateTunEnabledWritesValue(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, layout.ClientConfigFileName)
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	path := filepath.Clean(ConfigPath(layout.ClientConfigFileName))
 	updated, err := UpdateTunEnabled(path, "client", true)
 	if err != nil {
 		t.Fatalf("UpdateTunEnabled failed: %v", err)

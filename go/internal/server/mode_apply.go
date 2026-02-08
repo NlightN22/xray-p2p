@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,14 +20,14 @@ func applyServerMode(installDir, configDir string, opts ModeOptions) error {
 	if err != nil {
 		return err
 	}
-	applied, err := loadServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName))
+	applied, err := loadServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)))
 	if err != nil {
 		return err
 	}
 	if err := applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, opts); err != nil {
 		return err
 	}
-	return saveServerAppliedState(filepath.Clean(layout.ServerAppliedStateFileName), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr)
+	return saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr)
 }
 
 func applyServerDesiredConfig(installDir, configDir string, desired desiredServerConfig, previousReverse serverReverseState, opts ModeOptions) error {

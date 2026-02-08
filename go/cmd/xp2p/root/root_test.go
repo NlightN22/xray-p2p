@@ -151,6 +151,7 @@ func chdirTemp(t *testing.T) {
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatalf("chdir: %v", err)
 	}
+	t.Setenv("XP2P_CONFIG_ROOT", tmp)
 	t.Cleanup(func() {
 		_ = os.Chdir(oldWD)
 	})

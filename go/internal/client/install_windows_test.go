@@ -4,17 +4,18 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestInstallCreatesConfigAndState(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 
 	// Prepare stub xray binary so the installer can proceed.
 	binDir := filepath.Join(dir, layout.BinDirName)
@@ -46,14 +47,10 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 		}
 	}
 
-	statePath := filepath.Join(dir, layout.ClientStateFileName)
-	data, err := os.ReadFile(statePath)
+	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	state, err := loadClientInstallState(configPath)
 	if err != nil {
-		t.Fatalf("read state file: %v", err)
-	}
-	var state clientInstallState
-	if err := json.Unmarshal(data, &state); err != nil {
-		t.Fatalf("decode client state: %v", err)
+		t.Fatalf("read config state: %v", err)
 	}
 	if len(state.Endpoints) != 1 {
 		t.Fatalf("expected 1 endpoint, got %d", len(state.Endpoints))
@@ -65,10 +62,23 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 	if ep.User != "user@example.com" || ep.Password != "secret" {
 		t.Fatalf("unexpected credentials: %+v", ep)
 	}
+
+	appliedPath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
+	applied, err := loadClientAppliedState(appliedPath)
+	if err != nil {
+		t.Fatalf("read applied state: %v", err)
+	}
+	if applied.Mode != "tun" {
+		t.Fatalf("unexpected applied mode: %s", applied.Mode)
+	}
+	if len(applied.Config.Endpoints) != 1 {
+		t.Fatalf("expected 1 applied endpoint, got %d", len(applied.Config.Endpoints))
+	}
 }
 
 func TestInstallFailsWhenXrayMissing(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	opts := InstallOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultClientConfigDir,
@@ -88,6 +98,7 @@ func TestInstallFailsWhenXrayMissing(t *testing.T) {
 
 func TestInstallPreservesExistingInboundsAndLogs(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 
 	binDir := filepath.Join(dir, layout.BinDirName)
 	if err := os.MkdirAll(binDir, 0o755); err != nil {

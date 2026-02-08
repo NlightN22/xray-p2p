@@ -199,6 +199,6 @@ func bundleDependency(osDir, archDir string, optional bool) Dependency {
 	path := filepath.ToSlash(filepath.Join("distro", osDir, "bundle", archDir))
 	return Dependency{
 		Source:   path,
-		Optional:    optional,
+		Optional: optional,
 	}
 }

@@ -2,17 +2,19 @@ package client
 
 import (
 	"encoding/json"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
-	"github.com/NlightN22/xray-p2p/go/internal/installstate"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
 
 func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, DefaultClientConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
@@ -40,7 +42,7 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 		t.Fatalf("expected Routed=false when no redirect rules")
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -69,6 +71,7 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 
 func TestRemoveForwardCleansState(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, DefaultClientConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
@@ -99,7 +102,7 @@ func TestRemoveForwardCleansState(t *testing.T) {
 		t.Fatalf("RemoveForward returned error: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -117,6 +120,7 @@ func TestRemoveForwardCleansState(t *testing.T) {
 
 func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, DefaultClientConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
@@ -150,7 +154,7 @@ func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 		t.Fatalf("RemoveForward returned error: %v", err)
 	}
 
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -199,7 +203,8 @@ func findAvailablePort(t *testing.T, reserved map[int]struct{}) int {
 
 func TestListForwardsReturnsCopyOfState(t *testing.T) {
 	dir := t.TempDir()
-	statePath := filepath.Join(dir, installstate.FileNameForKind(installstate.KindClient))
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
 	state := clientInstallState{
 		Forwards: []forward.Rule{

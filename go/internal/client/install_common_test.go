@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"path/filepath"
 	"testing"
 
@@ -27,10 +28,10 @@ func TestBuildClientInstallBaseDefaults(t *testing.T) {
 	if base.serverName != "edge.example.com" {
 		t.Fatalf("serverName = %s", base.serverName)
 	}
-	if base.configFile != filepath.Clean(layout.ClientConfigFileName) {
+	if base.configFile != filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)) {
 		t.Fatalf("configFile = %s", base.configFile)
 	}
-	if base.appliedStateFile != filepath.Clean(layout.ClientAppliedStateFileName) {
+	if base.appliedStateFile != filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)) {
 		t.Fatalf("appliedStateFile = %s", base.appliedStateFile)
 	}
 	if !base.installOpts.TunEnabled {

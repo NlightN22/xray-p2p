@@ -8,13 +8,13 @@ import (
 )
 
 type trojanLink struct {
-	ServerAddress string
-	ServerPort    string
-	User          string
-	Password      string
-	ServerName    string
-	ServerNameSet bool
-	AllowInsecure bool
+	ServerAddress    string
+	ServerPort       string
+	User             string
+	Password         string
+	ServerName       string
+	ServerNameSet    bool
+	AllowInsecure    bool
 	AllowInsecureSet bool
 }
 
@@ -92,13 +92,13 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 	}
 
 	return trojanLink{
-		ServerAddress: address,
-		ServerPort:    portValue,
-		User:          user,
-		Password:      password,
-		ServerName:    serverName,
-		ServerNameSet: serverNameSet,
-		AllowInsecure: allowInsecure,
+		ServerAddress:    address,
+		ServerPort:       portValue,
+		User:             user,
+		Password:         password,
+		ServerName:       serverName,
+		ServerNameSet:    serverNameSet,
+		AllowInsecure:    allowInsecure,
 		AllowInsecureSet: allowInsecureSet,
 	}, nil
 }

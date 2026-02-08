@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"path/filepath"
 	"testing"
 
@@ -9,8 +10,9 @@ import (
 
 func TestApplyClientEndpointConfigDoesNotInheritAllowInsecure(t *testing.T) {
 	baseDir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", baseDir)
 	configDir := filepath.Join(baseDir, "config-client")
-	configPath := filepath.Join(baseDir, layout.ClientConfigFileName)
+	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{

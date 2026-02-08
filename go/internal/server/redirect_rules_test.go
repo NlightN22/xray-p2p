@@ -11,9 +11,9 @@ import (
 )
 
 func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
@@ -38,7 +38,7 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	}
 
 	statePath := serverStatePath(dir)
-	stateDoc := readJSONFile(t, statePath)
+	stateDoc := readServerStateDoc(t, statePath)
 	rawRules, ok := stateDoc[serverRedirectRulesKey].([]any)
 	if !ok || len(rawRules) != 1 {
 		t.Fatalf("expected redirect entry, got %+v", stateDoc[serverRedirectRulesKey])
@@ -72,9 +72,9 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 }
 
 func TestServerRemoveRedirectCleansState(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
@@ -106,7 +106,7 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 		t.Fatalf("RemoveRedirect failed: %v", err)
 	}
 
-	stateDoc := readJSONFile(t, serverStatePath(dir))
+	stateDoc := readServerStateDoc(t, serverStatePath(dir))
 	if _, ok := stateDoc[serverRedirectRulesKey]; ok {
 		t.Fatalf("expected redirect rules cleared, got %+v", stateDoc[serverRedirectRulesKey])
 	}
@@ -120,9 +120,9 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 }
 
 func TestServerAddRedirectFailsWithoutReverse(t *testing.T) {
-	t.Parallel()
 
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
@@ -149,11 +149,7 @@ func writeServerStateFile(t *testing.T, installDir string, reverse map[string]se
 	if len(redirects) > 0 {
 		doc[serverRedirectRulesKey] = redirects
 	}
-	data, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal state: %v", err)
-	}
-	if err := os.WriteFile(serverStatePath(installDir), data, 0o644); err != nil {
+	if err := writeServerStateDoc(serverStatePath(installDir), doc); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 }
@@ -170,6 +166,15 @@ func readJSONFile(t *testing.T, path string) map[string]any {
 	var doc map[string]any
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse %s: %v", path, err)
+	}
+	return doc
+}
+
+func readServerStateDoc(t *testing.T, path string) map[string]any {
+	t.Helper()
+	doc, err := loadServerStateDoc(path)
+	if err != nil {
+		t.Fatalf("read server state: %v", err)
 	}
 	return doc
 }

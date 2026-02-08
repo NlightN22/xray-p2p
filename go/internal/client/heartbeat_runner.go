@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"net"
 	"os"
 	"path/filepath"
@@ -74,7 +75,7 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		return nil, fmt.Errorf("invalid heartbeat port %q", portStr)
 	}
 
-	statePath := filepath.Clean(layout.ClientConfigFileName)
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err

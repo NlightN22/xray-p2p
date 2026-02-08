@@ -49,14 +49,14 @@ func updateClientInbounds(configDir string, tunEnabled bool, tunName string, tun
 		return err
 	}
 	if !ok {
-		return writeClientInbounds(path, tunEnabled, tunName, tunMTU)
+		return writeClientInboundsTemplate(path, tunEnabled, tunName, tunMTU)
 	}
 	updated := updateTunInbounds(extractInterfaces(doc["inbounds"]), tunEnabled, tunName, tunMTU)
 	doc["inbounds"] = updated
 	return writeJSONDoc(path, doc)
 }
 
-func writeClientInbounds(path string, tunEnabled bool, tunName string, tunMTU int) error {
+func writeClientInboundsTemplate(path string, tunEnabled bool, tunName string, tunMTU int) error {
 	if tunEnabled {
 		data := struct {
 			TunName string

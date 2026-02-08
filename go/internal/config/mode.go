@@ -46,10 +46,10 @@ func resolveConfigPath(explicit, role string) (string, error) {
 		return filepath.Clean(trimmed), nil
 	}
 	if strings.EqualFold(strings.TrimSpace(role), "client") {
-		return filepath.Clean(layout.ClientConfigFileName), nil
+		return filepath.Clean(ConfigPath(layout.ClientConfigFileName)), nil
 	}
 	if strings.EqualFold(strings.TrimSpace(role), "server") {
-		return filepath.Clean(layout.ServerConfigFileName), nil
+		return filepath.Clean(ConfigPath(layout.ServerConfigFileName)), nil
 	}
 	return "", fmt.Errorf("config: unsupported role %q", role)
 }
@@ -58,12 +58,20 @@ func loadOrCreateToml(path string) (*toml.Tree, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return toml.TreeFromMap(map[string]any{}), nil
+			tree, err := toml.TreeFromMap(map[string]any{})
+			if err != nil {
+				return nil, fmt.Errorf("config: create empty toml tree: %w", err)
+			}
+			return tree, nil
 		}
 		return nil, fmt.Errorf("config: read %s: %w", path, err)
 	}
 	if strings.TrimSpace(string(data)) == "" {
-		return toml.TreeFromMap(map[string]any{}), nil
+		tree, err := toml.TreeFromMap(map[string]any{})
+		if err != nil {
+			return nil, fmt.Errorf("config: create empty toml tree: %w", err)
+		}
+		return tree, nil
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
