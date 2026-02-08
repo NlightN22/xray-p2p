@@ -131,9 +131,9 @@ uci commit network
 ip a show dev xp2ps
 ```
 
-### Linux (systemd-networkd)
+### Linux (routing)
 
-On Linux, `xp2p` writes `/etc/systemd/network/90-<tun>.network` for each role when TUN is enabled and reloads `systemd-networkd`. The default policy route table is `20090` for `xp2pc` and `20091` for `xp2ps`. Use the sample files in `distro/linux/systemd/90-xp2pc.network` and `distro/linux/systemd/90-xp2ps.network` to customize routing policy rules when needed.
+On Linux, `xp2p` configures TUN routing at runtime using `ip rule` and `ip route`. The default policy route table is `20090` for `xp2pc` and `20091` for `xp2ps`.
 
 ### Windows
 

@@ -8,14 +8,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
-
-const managedMarker = "xp2p-managed"
 
 func EnsureTunInterface(name, addr string, mtu int) error {
 	name = strings.TrimSpace(name)
@@ -29,15 +24,6 @@ func EnsureTunInterface(name, addr string, mtu int) error {
 	if isOpenWrtSystem() {
 		return nil
 	}
-
-	if err := writeNetworkdConfig(name, addr, mtu); err != nil {
-		return err
-	}
-	if err := reloadNetworkd(); err != nil {
-		logging.Warn("xp2p: systemd-networkd reload failed", "err", err)
-	}
-
-	logging.Info("xp2p: Linux networkd config ensured", "interface", name, "addr", addr)
 	return nil
 }
 
@@ -49,14 +35,9 @@ func RemoveTunInterfaceIfManaged(name string) error {
 	if isOpenWrtSystem() {
 		return nil
 	}
-
-	if err := removeNetworkdConfig(name); err != nil {
+	if err := removeTunRouting(name); err != nil {
 		return err
 	}
-	if err := reloadNetworkd(); err != nil {
-		logging.Warn("xp2p: systemd-networkd reload failed", "err", err)
-	}
-	logging.Info("xp2p: Linux networkd config removed", "interface", name)
 	return nil
 }
 
@@ -83,7 +64,7 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 			continue
 		}
 		if addrPresent(name, addr) {
-			return nil
+			return ensureTunRouting(name)
 		}
 		if mtu > 0 {
 			_ = runCommand("ip", "link", "set", "dev", name, "mtu", fmt.Sprintf("%d", mtu))
@@ -94,71 +75,9 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 		if err := runCommand("ip", "link", "set", "dev", name, "up"); err != nil {
 			return err
 		}
-		return nil
+		return ensureTunRouting(name)
 	}
 	return fmt.Errorf("xp2p: tun interface %s not found", name)
-}
-
-func writeNetworkdConfig(name, addr string, mtu int) error {
-	dir := "/etc/systemd/network"
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create networkd dir: %w", err)
-	}
-	path := filepath.Join(dir, fmt.Sprintf("90-%s.network", name))
-	table := tableForName(name)
-	content := buildNetworkdConfig(name, addr, mtu, table)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("xp2p: write networkd config: %w", err)
-	}
-	return nil
-}
-
-func removeNetworkdConfig(name string) error {
-	path := filepath.Join("/etc/systemd/network", fmt.Sprintf("90-%s.network", name))
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("xp2p: read networkd config: %w", err)
-	}
-	if !strings.Contains(string(data), managedMarker) {
-		logging.Info("xp2p: networkd config not managed; skipping cleanup", "path", path)
-		return nil
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove networkd config: %w", err)
-	}
-	return nil
-}
-
-func buildNetworkdConfig(name, addr string, mtu int, table int) string {
-	builder := strings.Builder{}
-	builder.WriteString("# ")
-	builder.WriteString(managedMarker)
-	builder.WriteString("\n")
-	builder.WriteString("[Match]\n")
-	builder.WriteString("Name = ")
-	builder.WriteString(name)
-	builder.WriteString("\n\n[Network]\n")
-	builder.WriteString("KeepConfiguration = yes\n")
-	builder.WriteString("ConfigureWithoutCarrier = yes\n")
-	builder.WriteString("Address = ")
-	builder.WriteString(addr)
-	builder.WriteString("\n\n[Link]\n")
-	if mtu > 0 {
-		builder.WriteString("MTUBytes = ")
-		builder.WriteString(fmt.Sprintf("%d", mtu))
-		builder.WriteString("\n")
-	}
-	builder.WriteString("ActivationPolicy = manual\n")
-	builder.WriteString("RequiredForOnline = no\n\n")
-	builder.WriteString("[Route]\n")
-	builder.WriteString("Table = ")
-	builder.WriteString(fmt.Sprintf("%d", table))
-	builder.WriteString("\n")
-	builder.WriteString("Destination = 0.0.0.0/0\n")
-	return builder.String()
 }
 
 func tableForName(name string) int {
@@ -170,13 +89,6 @@ func tableForName(name string) int {
 	default:
 		return 20090
 	}
-}
-
-func reloadNetworkd() error {
-	if _, err := execLookPath("systemctl"); err != nil {
-		return nil
-	}
-	return runCommand("systemctl", "try-reload-or-restart", "systemd-networkd")
 }
 
 func isOpenWrtSystem() bool {
@@ -238,4 +150,71 @@ func captureCommand(name string, args ...string) (string, error) {
 		return strings.TrimSpace(buf.String()), err
 	}
 	return strings.TrimSpace(buf.String()), nil
+}
+
+func ensureTunRouting(name string) error {
+	table := tableForName(name)
+	if err := ensureRouteTable(table, name); err != nil {
+		return err
+	}
+	return ensureRuleTable(table)
+}
+
+func ensureRouteTable(table int, name string) error {
+	return runCommand(
+		"ip",
+		"route",
+		"replace",
+		"default",
+		"dev",
+		name,
+		"table",
+		fmt.Sprintf("%d", table),
+	)
+}
+
+func ensureRuleTable(table int) error {
+	err := runCommand(
+		"ip",
+		"rule",
+		"add",
+		"pref",
+		fmt.Sprintf("%d", table),
+		"table",
+		fmt.Sprintf("%d", table),
+	)
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "File exists") {
+		return nil
+	}
+	return err
+}
+
+func removeTunRouting(name string) error {
+	table := tableForName(name)
+	_ = runCommand(
+		"ip",
+		"route",
+		"flush",
+		"table",
+		fmt.Sprintf("%d", table),
+	)
+	err := runCommand(
+		"ip",
+		"rule",
+		"del",
+		"pref",
+		fmt.Sprintf("%d", table),
+		"table",
+		fmt.Sprintf("%d", table),
+	)
+	if err == nil {
+		return nil
+	}
+	if strings.Contains(err.Error(), "No such file") {
+		return nil
+	}
+	return err
 }
