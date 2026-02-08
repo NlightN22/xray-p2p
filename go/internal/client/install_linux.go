@@ -187,10 +187,21 @@ func removeInstallDirIfUnused(installDir string) error {
 	if legacyHasRoles(legacyStatePath) {
 		return nil
 	}
+	if dirHasFiles(filepath.Join(installDir, layout.BinDirName)) {
+		return nil
+	}
 	if err := os.RemoveAll(installDir); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("xp2p: remove install dir: %w", err)
 	}
 	return nil
+}
+
+func dirHasFiles(path string) bool {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return false
+	}
+	return len(entries) > 0
 }
 
 func installedRole(path string, kind installstate.Kind) bool {
