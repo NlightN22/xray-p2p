@@ -16,6 +16,14 @@ SERVER_DEPLOY_LOG = PurePosixPath("/tmp/xp2p-server-deploy.log")
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
 LOG_WAIT_TIMEOUT = 30
+CLIENT_TUN = "xp2pc"
+SERVER_TUN = "xp2ps"
+CLIENT_TUN_ADDR = "198.18.0.1/30"
+SERVER_TUN_ADDR = "198.18.0.5/30"
+CLIENT_TUN_CIDR = "198.18.0.0/30"
+SERVER_TUN_CIDR = "198.18.0.4/30"
+SERVER_DIAG_PORT = "62022"
+CLIENT_DIAG_PORT = "62023"
 
 
 @pytest.mark.host
@@ -219,6 +227,257 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         primary = certificates[0]
         assert primary.get("certificateFile") == cert_path.as_posix()
         assert primary.get("keyFile") == key_path.as_posix()
+    finally:
+        if client_pid:
+            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+        if server_pid:
+            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+        for host in (client_host, server_host):
+            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        helpers.cleanup_client_install(client_host, xp2p_client_runner)
+        helpers.cleanup_server_install(server_host, xp2p_server_runner)
+        for host, log_path in (
+            (client_host, CLIENT_DEPLOY_LOG),
+            (server_host, SERVER_DEPLOY_LOG),
+        ):
+            helpers.remove_path(host, log_path)
+            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_deploy_tun_with_multiple_reverse_redirects(
+    client_host,
+    server_host,
+    xp2p_client_runner,
+    xp2p_server_runner,
+):
+    helpers.cleanup_client_install(client_host, xp2p_client_runner)
+    helpers.cleanup_server_install(server_host, xp2p_server_runner)
+    server_ip = _detect_host_ipv4(server_host)
+    client_ip = helpers.detect_primary_ipv4(client_host)
+    user_one = "deploy-tun-one@example.com"
+    pass_one = "deploy-tun-pass-1"
+    user_two = "deploy-tun-two@example.com"
+    pass_two = "deploy-tun-pass-2"
+
+    def cleanup_logs():
+        for host, log_path in (
+            (client_host, CLIENT_DEPLOY_LOG),
+            (server_host, SERVER_DEPLOY_LOG),
+        ):
+            helpers.remove_path(host, log_path)
+            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+
+    def wait_for_tun_ready():
+        result = linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/assert_tun_addr.sh",
+            CLIENT_TUN,
+            CLIENT_TUN_ADDR,
+            "20",
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "Client TUN not ready.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        result = linux_env.run_guest_script(
+            server_host,
+            "scripts/linux/assert_tun_addr.sh",
+            SERVER_TUN,
+            SERVER_TUN_ADDR,
+            "20",
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "Server TUN not ready.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+
+    def assert_ping_zero_loss(runner, target: str, port: str, label: str) -> None:
+        result = runner(
+            "ping",
+            target,
+            "--port",
+            port,
+            "--count",
+            "3",
+            check=True,
+        )
+        stdout = (result.stdout or "").lower()
+        assert "0% loss" in stdout, (
+            f"xp2p ping {label} did not report zero loss:\n{result.stdout}"
+        )
+
+    client_pid = None
+    server_pid = None
+    try:
+        cleanup_logs()
+        xp2p_server_runner("server", "service", "stop")
+
+        client_pid = _start_client_deploy(
+            client_host,
+            log_path=CLIENT_DEPLOY_LOG,
+            remote_host=server_ip,
+            deploy_port=DEPLOY_PORT,
+            trojan_user=user_one,
+            trojan_password=pass_one,
+            trojan_port=TROJAN_PORT,
+        )
+        link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
+        server_pid = _start_server_deploy(
+            server_host,
+            log_path=SERVER_DEPLOY_LOG,
+            listen_addr=f":{DEPLOY_PORT}",
+            deploy_link=link,
+        )
+
+        _wait_for_log_phrase(
+            client_host,
+            CLIENT_DEPLOY_LOG,
+            "client deploy: completed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            server_host,
+            SERVER_DEPLOY_LOG,
+            "server deploy: server service started",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        wait_for_tun_ready()
+
+        reverse_one = helpers.expected_reverse_tag(user_one, server_ip)
+        xp2p_client_runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            SERVER_TUN_CIDR,
+            "--host",
+            server_ip,
+            check=True,
+        )
+        xp2p_server_runner(
+            "server",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cidr",
+            CLIENT_TUN_CIDR,
+            "--tag",
+            reverse_one,
+            "--host",
+            server_ip,
+            check=True,
+        )
+
+        assert_ping_zero_loss(
+            xp2p_client_runner,
+            SERVER_TUN_ADDR.split("/")[0],
+            SERVER_DIAG_PORT,
+            "client->server",
+        )
+        assert_ping_zero_loss(
+            xp2p_server_runner,
+            CLIENT_TUN_ADDR.split("/")[0],
+            CLIENT_DIAG_PORT,
+            "server->client",
+        )
+
+        helpers.cleanup_client_install(client_host, xp2p_client_runner)
+        linux_env.run_guest_script(client_host, "scripts/linux/kill_xp2p_processes.sh")
+
+        cleanup_logs()
+        xp2p_server_runner("server", "service", "stop")
+
+        client_pid = _start_client_deploy(
+            client_host,
+            log_path=CLIENT_DEPLOY_LOG,
+            remote_host=server_ip,
+            deploy_port=DEPLOY_PORT,
+            trojan_user=user_two,
+            trojan_password=pass_two,
+            trojan_port=TROJAN_PORT,
+        )
+        link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
+        server_pid = _start_server_deploy(
+            server_host,
+            log_path=SERVER_DEPLOY_LOG,
+            listen_addr=f":{DEPLOY_PORT}",
+            deploy_link=link,
+        )
+
+        _wait_for_log_phrase(
+            client_host,
+            CLIENT_DEPLOY_LOG,
+            "client deploy: completed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            server_host,
+            SERVER_DEPLOY_LOG,
+            "server deploy: server service started",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        wait_for_tun_ready()
+
+        reverse_two = helpers.expected_reverse_tag(user_two, server_ip)
+        server_state = helpers.read_server_config(server_host)
+        helpers.assert_server_reverse_state(server_state, reverse_one, user=user_one, host=server_ip)
+        helpers.assert_server_reverse_state(server_state, reverse_two, user=user_two, host=server_ip)
+
+        xp2p_server_runner(
+            "server",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cidr",
+            CLIENT_TUN_CIDR,
+            "--tag",
+            reverse_two,
+            "--host",
+            server_ip,
+            check=True,
+        )
+        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        helpers.assert_server_redirect_rule(server_routing, CLIENT_TUN_CIDR, reverse_two)
+
+        assert_ping_zero_loss(
+            xp2p_server_runner,
+            CLIENT_TUN_ADDR.split("/")[0],
+            CLIENT_DIAG_PORT,
+            "server->client after second deploy",
+        )
+        assert_ping_zero_loss(
+            xp2p_client_runner,
+            SERVER_TUN_ADDR.split("/")[0],
+            SERVER_DIAG_PORT,
+            "client->server after second deploy",
+        )
+        heartbeat_state = helpers.wait_for_heartbeat_state(
+            server_host,
+            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+            timeout_seconds=LOG_WAIT_TIMEOUT,
+        )
+        helpers.assert_heartbeat_entry(
+            heartbeat_state,
+            helpers.expected_proxy_tag(server_ip),
+            host=server_ip,
+            user=user_two,
+            client_ip=client_ip,
+        )
     finally:
         if client_pid:
             linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
