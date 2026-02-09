@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -73,10 +74,32 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		RestartDelay: opts.RestartDelay,
 	}
 
+	if err := ensureLogFile(runOpts.ErrorLogPath); err != nil {
+		return err
+	}
+
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
 		return Run(runCtx, runOpts)
 	}); err != nil {
 		return fmt.Errorf("xp2p client service: %w", err)
+	}
+	return nil
+}
+
+func ensureLogFile(path string) error {
+	logPath := strings.TrimSpace(path)
+	if logPath == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
+		return fmt.Errorf("xp2p: create log directory %s: %w", filepath.Dir(logPath), err)
+	}
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("xp2p: open xray log file %s: %w", logPath, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("xp2p: close xray log file %s: %w", logPath, err)
 	}
 	return nil
 }

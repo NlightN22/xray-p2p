@@ -111,6 +111,9 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err := linuxnet.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
 		return err
 	}
+	if err := removeNetworkdConfig(opts.TunName); err != nil {
+		return err
+	}
 
 	if err := os.RemoveAll(configDir); err != nil {
 		return fmt.Errorf("xp2p: remove client config dir: %w", err)
@@ -202,6 +205,18 @@ func dirHasFiles(path string) bool {
 		return false
 	}
 	return len(entries) > 0
+}
+
+func removeNetworkdConfig(tunName string) error {
+	name := strings.TrimSpace(tunName)
+	if name == "" {
+		return nil
+	}
+	path := filepath.Join("/etc/systemd/network", fmt.Sprintf("90-%s.network", name))
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("xp2p: remove networkd config: %w", err)
+	}
+	return nil
 }
 
 func installedRole(path string, kind installstate.Kind) bool {

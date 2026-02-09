@@ -28,10 +28,6 @@ func runXrayWithConfig(
 	configureCmd cmdConfigurator,
 	onStart startHook,
 ) error {
-	if err := xray.VerifyPinnedVersion(ctx, xrayPath); err != nil {
-		return err
-	}
-
 	var errorWriter io.Writer
 	var errorFile *os.File
 	if raw := strings.TrimSpace(errorLogPath); raw != "" {
@@ -50,6 +46,10 @@ func runXrayWithConfig(
 		errorWriter = file
 		defer func() { _ = errorFile.Close() }()
 		logging.Info("xray-core stderr redirected to file", "path", logPath)
+	}
+
+	if err := xray.VerifyPinnedVersion(ctx, xrayPath); err != nil {
+		return err
 	}
 
 	args := []string{"-confdir", configDir}
