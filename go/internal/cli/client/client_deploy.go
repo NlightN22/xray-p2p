@@ -408,7 +408,7 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 		ServerName:    link.ServerName,
 		AllowInsecure: link.AllowInsecure,
 		Force:         true,
-		TunEnabled:    false,
+		TunEnabled:    cfg.Client.TunEnabled,
 		TunEnabledSet: true,
 		TunName:       cfg.Client.TunName,
 		TunMTU:        cfg.Client.TunMTU,
