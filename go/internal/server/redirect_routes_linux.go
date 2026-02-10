@@ -44,13 +44,6 @@ func removeRedirectRoute(tunName, cidr string) error {
 	return nil
 }
 
-func removeRedirectRouteIfUnused(tunName, cidr string, redirects []redirect.Rule) error {
-	if hasRedirectCIDR(cidr, redirects) {
-		return nil
-	}
-	return removeRedirectRoute(tunName, cidr)
-}
-
 func applyRedirectRoutes(tunName string, redirects []redirect.Rule) error {
 	seen := make(map[string]struct{}, len(redirects))
 	for _, rule := range redirects {
@@ -97,20 +90,4 @@ func removeRedirectRoutes(tunName string, redirects []redirect.Rule) error {
 		}
 	}
 	return nil
-}
-
-func hasRedirectCIDR(cidr string, redirects []redirect.Rule) bool {
-	trimmed := strings.TrimSpace(cidr)
-	if trimmed == "" {
-		return false
-	}
-	for _, rule := range redirects {
-		if rule.Kind() != redirect.KindCIDR {
-			continue
-		}
-		if strings.EqualFold(rule.Value(), trimmed) {
-			return true
-		}
-	}
-	return false
 }
