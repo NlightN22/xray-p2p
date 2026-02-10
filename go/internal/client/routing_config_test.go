@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
 func TestWriteOutboundsConfigIncludesEndpointsAndFreedom(t *testing.T) {
@@ -15,7 +17,7 @@ func TestWriteOutboundsConfigIncludesEndpointsAndFreedom(t *testing.T) {
 		{Hostname: "beta.example", Tag: "proxy-beta", Address: "beta.example", Port: 9443, User: "beta", Password: "other", ServerName: "beta.example"},
 	}
 
-	if err := writeOutboundsConfig(path, endpoints); err != nil {
+	if err := writeOutboundsConfig(path, xrayconfig.DefaultClientConfig().DirectOutbound, endpoints); err != nil {
 		t.Fatalf("writeOutboundsConfig failed: %v", err)
 	}
 
@@ -49,14 +51,14 @@ func TestUpdateRoutingConfigManagesReverseRules(t *testing.T) {
 		"alphaalpha-example.rev": {UserID: "alpha", Host: "alpha.example", Tag: "alphaalpha-example.rev", Domain: "alphaalpha-example.rev", EndpointTag: "proxy-alpha"},
 	}
 
-	if err := updateRoutingConfig(path, endpoints, nil, reverse); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, reverse); err != nil {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 
 	verifyRoutingDocument(t, path, 5, 1)
 
 	// Second update should not duplicate rules/bridges.
-	if err := updateRoutingConfig(path, endpoints, nil, reverse); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, reverse); err != nil {
 		t.Fatalf("second updateRoutingConfig failed: %v", err)
 	}
 	verifyRoutingDocument(t, path, 5, 1)
@@ -68,7 +70,7 @@ func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
 		{Hostname: "alpha.example", Tag: "proxy-alpha", Address: "alpha.example"},
 	}
 
-	if err := updateRoutingConfig(path, endpoints, nil, nil); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, nil); err != nil {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 
@@ -116,7 +118,7 @@ func TestUpdateRoutingConfigUsesIPRuleForAddress(t *testing.T) {
 		{Hostname: "192.0.2.10", Tag: "proxy-alpha", Address: "192.0.2.10"},
 	}
 
-	if err := updateRoutingConfig(path, endpoints, nil, nil); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, nil); err != nil {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 

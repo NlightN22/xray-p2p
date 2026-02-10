@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -174,8 +173,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 			return err
 		}
 	}
-	routingPath := filepath.Join(configDir, "routing.json")
-	if err := updateServerRedirectRouting(routingPath, store.redirects); err != nil {
+	if err := rebuildServerRouting(installDir, configDir); err != nil {
 		return err
 	}
 	if opts.TunEnabled && target.Kind == redirect.KindCIDR {
@@ -229,8 +227,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return err
 	}
 
-	routingPath := filepath.Join(configDir, "routing.json")
-	if err := updateServerRedirectRouting(routingPath, store.redirects); err != nil {
+	if err := rebuildServerRouting(installDir, configDir); err != nil {
 		return err
 	}
 	if opts.TunEnabled && target.Kind == redirect.KindCIDR {
@@ -338,7 +335,7 @@ func updateServerRedirectRouting(path string, rules []redirect.Rule) error {
 		filtered = append(filtered, buildServerRedirectRule(rule))
 	}
 	routing["rules"] = filtered
-	return writeServerRouting(path, doc)
+	return writeServerRoutingDoc(path, doc)
 }
 
 func filterServerRedirectRules(rules []any) []any {

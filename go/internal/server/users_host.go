@@ -122,7 +122,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		if host == "" || opts.NoReverse {
 			return nil
 		}
-		return applyServerReverseChannel(&store, configDir, channel)
+			return applyServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
 	}
 
 	settings["clients"] = clientsToInterfaces(clients)
@@ -136,7 +136,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		"updated", updated,
 	)
 	if host != "" && !opts.NoReverse {
-		return applyServerReverseChannel(&store, configDir, channel)
+		return applyServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
 	}
 	return nil
 }
@@ -224,7 +224,7 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 			"config", configPath,
 		)
 		if host != "" {
-			return purgeServerReverseChannel(&store, configDir, channel)
+			return purgeServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
 		}
 		return nil
 	}
@@ -239,7 +239,7 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		"config", configPath,
 	)
 	if host != "" {
-		return purgeServerReverseChannel(&store, configDir, channel)
+		return purgeServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
 	}
 	return nil
 }

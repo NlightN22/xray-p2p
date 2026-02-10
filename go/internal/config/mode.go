@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/pelletier/go-toml"
 )
@@ -32,15 +33,14 @@ func UpdateTunEnabled(path string, role string, enabled bool) (string, error) {
 	}
 	tree.SetPath([]string{trimmedRole, "tun_enabled"}, enabled)
 
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
-		return "", fmt.Errorf("config: create directory %s: %w", filepath.Dir(configPath), err)
-	}
 	data, err := encodeToml(tree)
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
-		return "", fmt.Errorf("config: write %s: %w", configPath, err)
+	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
+		AuditPath: ConfigPath(layout.AuditLogFileName),
+	}); err != nil {
+		return "", err
 	}
 	return configPath, nil
 }
@@ -86,15 +86,14 @@ func EnsureTunSettings(path string, role string, enabled bool, name string, mtu 
 	if !changed {
 		return configPath, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
-		return "", fmt.Errorf("config: create directory %s: %w", filepath.Dir(configPath), err)
-	}
 	data, err := encodeToml(tree)
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(configPath, data, 0o644); err != nil {
-		return "", fmt.Errorf("config: write %s: %w", configPath, err)
+	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
+		AuditPath: ConfigPath(layout.AuditLogFileName),
+	}); err != nil {
+		return "", err
 	}
 	return configPath, nil
 }

@@ -2,11 +2,11 @@ package client
 
 import (
 	"encoding/json"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/testutil"
@@ -60,12 +60,8 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 
 	inbounds := readInbounds(t, filepath.Join(configDir, "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
-	if len(items) != 1 {
-		t.Fatalf("expected 1 inbound entry, got %d", len(items))
-	}
-	obj := items[0].(map[string]any)
-	if obj["remark"] != entry.Remark {
-		t.Fatalf("expected remark %s, got %v", entry.Remark, obj["remark"])
+	if !hasInboundTag(items, entry.Tag) {
+		t.Fatalf("expected forward inbound tag %q to be present", entry.Tag)
 	}
 }
 
@@ -113,8 +109,8 @@ func TestRemoveForwardCleansState(t *testing.T) {
 
 	inbounds := readInbounds(t, filepath.Join(configDir, "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
-	if len(items) != 0 {
-		t.Fatalf("expected inbounds cleared, got %d", len(items))
+	if hasInboundTag(items, forward.TagForPort(listenPort)) {
+		t.Fatalf("expected forward inbound tag %q to be removed", forward.TagForPort(listenPort))
 	}
 }
 
@@ -199,6 +195,19 @@ func findAvailablePort(t *testing.T, reserved map[int]struct{}) int {
 		reserved[port] = struct{}{}
 	}
 	return port
+}
+
+func hasInboundTag(items []any, tag string) bool {
+	for _, raw := range items {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if entryTag, ok := entry["tag"].(string); ok && entryTag == tag {
+			return true
+		}
+	}
+	return false
 }
 
 func TestListForwardsReturnsCopyOfState(t *testing.T) {

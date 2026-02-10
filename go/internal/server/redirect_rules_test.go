@@ -48,15 +48,8 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	routingDoc := readJSONFile(t, routingPath)
 	routingObj, _ := routingDoc["routing"].(map[string]any)
 	rules := extractInterfaceSlice(routingObj["rules"])
-	if len(rules) != 1 {
-		t.Fatalf("expected single routing rule, got %d", len(rules))
-	}
-	ruleMap, _ := rules[0].(map[string]any)
-	if got := extractStringSlice(ruleMap["domains"]); len(got) != 1 || got[0] != "svc.example.net" {
-		t.Fatalf("unexpected domain routing rule: %+v", ruleMap)
-	}
-	if tag := ruleMap["outboundTag"]; tag != "alphaedge-example.rev" {
-		t.Fatalf("unexpected outbound tag %v", tag)
+	if !hasRedirectRule(rules, "alphaedge-example.rev", "svc.example.net", "") {
+		t.Fatalf("expected redirect rule for svc.example.net, got %v", rules)
 	}
 
 	records, err := ListRedirects(RedirectListOptions{
@@ -114,8 +107,8 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 	routingDoc := readJSONFile(t, filepath.Join(configDir, "routing.json"))
 	routingObj, _ := routingDoc["routing"].(map[string]any)
 	rules := extractInterfaceSlice(routingObj["rules"])
-	if len(rules) != 0 {
-		t.Fatalf("expected routing rules cleared, got %+v", rules)
+	if hasRedirectRule(rules, "", "10.50.0.0/16", "10.50.0.0/16") {
+		t.Fatalf("expected redirect rule to be removed, got %+v", rules)
 	}
 }
 
@@ -177,4 +170,41 @@ func readServerStateDoc(t *testing.T, path string) map[string]any {
 		t.Fatalf("read server state: %v", err)
 	}
 	return doc
+}
+
+func hasRedirectRule(rules []any, outboundTag string, domain string, cidr string) bool {
+	wantTag := strings.TrimSpace(outboundTag)
+	wantDomain := strings.TrimSpace(domain)
+	wantCIDR := strings.TrimSpace(cidr)
+	for _, raw := range rules {
+		ruleMap, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if wantTag != "" {
+			if tag, _ := ruleMap["outboundTag"].(string); tag != wantTag {
+				continue
+			}
+		}
+		if wantDomain != "" {
+			domains := extractStringSlice(ruleMap["domains"])
+			if len(domains) == 0 {
+				domains = extractStringSlice(ruleMap["domain"])
+			}
+			for _, value := range domains {
+				if strings.EqualFold(value, wantDomain) {
+					return true
+				}
+			}
+			continue
+		}
+		if wantCIDR != "" {
+			for _, value := range extractStringSlice(ruleMap["ip"]) {
+				if strings.EqualFold(value, wantCIDR) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

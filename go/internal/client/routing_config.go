@@ -1,20 +1,19 @@
 package client
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/configio"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
-func writeOutboundsConfig(path string, endpoints []clientEndpointRecord) error {
+func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, endpoints []clientEndpointRecord) error {
 	out := struct {
 		Outbounds []any `json:"outbounds"`
 	}{
@@ -25,17 +24,12 @@ func writeOutboundsConfig(path string, endpoints []clientEndpointRecord) error {
 		out.Outbounds = append(out.Outbounds, trojanOutbound(ep))
 	}
 
-	out.Outbounds = append(out.Outbounds, freedomOutbound())
-
-	data, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return fmt.Errorf("xp2p: encode outbounds %s: %w", path, err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure outbounds dir %s: %w", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write outbounds %s: %w", path, err)
+	out.Outbounds = append(out.Outbounds, freedomOutbound(direct))
+	if err := configio.WriteJSON(path, out, configio.WriteOptions{
+		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		KeepLastKnownGood: true,
+	}); err != nil {
+		return err
 	}
 	return nil
 }
@@ -134,17 +128,17 @@ type tcpRequest struct {
 	Headers map[string][]string `json:"headers"`
 }
 
-func freedomOutbound() any {
+func freedomOutbound(direct xrayconfig.DirectOutboundConfig) any {
 	return struct {
 		Protocol string          `json:"protocol"`
 		Settings freedomSettings `json:"settings"`
 		Tag      string          `json:"tag"`
 	}{
-		Protocol: "freedom",
+		Protocol: direct.Protocol,
 		Settings: freedomSettings{
-			DomainStrategy: "UseIP",
+			DomainStrategy: direct.DomainStrategy,
 		},
-		Tag: "direct",
+		Tag: direct.Tag,
 	}
 }
 
@@ -152,33 +146,14 @@ type freedomSettings struct {
 	DomainStrategy string `json:"domainStrategy"`
 }
 
-func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel) error {
-	var document map[string]any
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: read routing config %s: %w", path, err)
-		}
-		document = make(map[string]any)
-	} else if len(bytes.TrimSpace(data)) > 0 {
-		if err := json.Unmarshal(data, &document); err != nil {
-			return fmt.Errorf("xp2p: parse routing config %s: %w", path, err)
-		}
-	} else {
-		document = make(map[string]any)
-	}
-
-	if document == nil {
-		document = make(map[string]any)
-	}
-
+func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel) error {
+	document := make(map[string]any)
 	routing := ensureObject(document, "routing")
-	if strategy, ok := routing["domainStrategy"].(string); !ok || strings.TrimSpace(strategy) == "" {
-		routing["domainStrategy"] = "IPOnDemand"
+	routing["domainStrategy"] = strings.TrimSpace(cfg.DomainStrategy)
+	existing := []any{}
+	for _, rule := range cfg.Rules {
+		existing = append(existing, rule)
 	}
-
-	existing := extractRuleSlice(routing["rules"])
 	managed := managedOutboundTags(endpoints, redirects)
 	for _, rule := range existing {
 		ruleMap, ok := rule.(map[string]any)
@@ -247,15 +222,11 @@ func updateRoutingConfig(path string, endpoints []clientEndpointRecord, redirect
 	reverseObj := ensureObject(document, "reverse")
 	updateReverseBridges(reverseObj, sortedReverseChannels(reverse))
 
-	encoded, err := json.MarshalIndent(document, "", "  ")
-	if err != nil {
-		return fmt.Errorf("xp2p: encode routing config %s: %w", path, err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure routing dir %s: %w", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, encoded, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write routing config %s: %w", path, err)
+	if err := configio.WriteJSON(path, document, configio.WriteOptions{
+		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		KeepLastKnownGood: true,
+	}); err != nil {
+		return err
 	}
 	return nil
 }

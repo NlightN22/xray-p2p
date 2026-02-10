@@ -105,7 +105,15 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err := state.addForward(rule); err != nil {
 		return ForwardAddResult{}, err
 	}
-	if err := addClientForwardInbound(paths.configDir, rule); err != nil {
+	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	tunEnabled, tunName, tunMTU, err := loadClientTunSettings(paths.configFile)
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	if err := writeClientInboundsConfig(paths.configDir, xrayCfg, tunEnabled, tunName, tunMTU, state.Forwards); err != nil {
 		return ForwardAddResult{}, err
 	}
 	if err := state.save(paths.configFile); err != nil {
@@ -144,11 +152,19 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, fmt.Errorf("xp2p: forward rule not found")
 	}
 
-	if err := removeClientForwardInbound(paths.configDir, rule); err != nil {
-		if !(opts.Cleanup && errors.Is(err, errForwardInboundMissing)) {
-			state.insertForwardAt(rule, idx)
-			return forward.Rule{}, err
-		}
+	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
+	if err != nil {
+		state.insertForwardAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	tunEnabled, tunName, tunMTU, err := loadClientTunSettings(paths.configFile)
+	if err != nil {
+		state.insertForwardAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	if err := writeClientInboundsConfig(paths.configDir, xrayCfg, tunEnabled, tunName, tunMTU, state.Forwards); err != nil {
+		state.insertForwardAt(rule, idx)
+		return forward.Rule{}, err
 	}
 	if err := state.save(paths.configFile); err != nil {
 		state.insertForwardAt(rule, idx)

@@ -16,7 +16,7 @@ func ensureServerMarkerRules(configDir string, state serverReverseState) error {
 	if !changed {
 		return nil
 	}
-	return writeServerRouting(path, doc)
+	return writeServerRoutingDoc(path, doc)
 }
 
 func updateServerMarkerRules(doc map[string]any, state serverReverseState) bool {

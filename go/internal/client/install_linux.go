@@ -4,7 +4,6 @@ package client
 
 import (
 	"context"
-	"embed"
 	"errors"
 	"fmt"
 	"os"
@@ -12,15 +11,13 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 )
-
-//go:embed assets/templates/*
-var clientTemplates embed.FS
 
 type installState struct {
 	InstallOptions
@@ -298,25 +295,23 @@ func resolveConfigDir(base, cfg string) (string, error) {
 }
 
 func deployConfiguration(state installState) error {
-	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
-	if state.TunEnabled {
-		data := struct {
-			TunName string
-			TunMTU  int
-		}{
-			TunName: state.TunName,
-			TunMTU:  state.TunMTU,
-		}
-		if err := renderEmbeddedTemplateIfMissing(clientTemplates, "assets/templates/inbounds.tun.json.tmpl", inboundsPath, data); err != nil {
-			return err
-		}
-	} else {
-		if err := writeEmbeddedFileIfMissing(clientTemplates, "assets/templates/inbounds.proxy.json", inboundsPath, 0o644); err != nil {
-			return err
-		}
+	xrayCfg, err := ensureClientXrayConfig(state.configFile)
+	if err != nil {
+		return err
 	}
 
-	if err := writeEmbeddedFileIfMissing(clientTemplates, "assets/templates/logs.json", filepath.Join(state.configDir, "logs.json"), 0o644); err != nil {
+	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
+	if err := configio.WriteJSON(inboundsPath, buildClientInbounds(xrayCfg, state.TunEnabled, state.TunName, state.TunMTU), configio.WriteOptions{
+		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		KeepLastKnownGood: true,
+	}); err != nil {
+		return err
+	}
+
+	if err := configio.WriteJSON(filepath.Join(state.configDir, "logs.json"), buildLogs(xrayCfg.Logs), configio.WriteOptions{
+		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		KeepLastKnownGood: true,
+	}); err != nil {
 		return err
 	}
 

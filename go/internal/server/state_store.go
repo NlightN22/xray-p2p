@@ -7,12 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 
 	"github.com/pelletier/go-toml"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -128,8 +129,10 @@ func writeServerTomlTree(path string, tree *toml.Tree) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("xp2p: ensure server config dir %s: %w", filepath.Dir(path), err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write server config %s: %w", path, err)
+	if err := configio.WriteBytes(path, data, configio.WriteOptions{
+		AuditPath: config.ConfigPath(layout.AuditLogFileName),
+	}); err != nil {
+		return err
 	}
 	return nil
 }

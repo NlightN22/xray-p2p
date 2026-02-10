@@ -58,10 +58,14 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	if err := state.save(configFile); err != nil {
 		return clientInstallState{}, err
 	}
-	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), state.Endpoints); err != nil {
+	xrayCfg, err := ensureClientXrayConfig(configFile)
+	if err != nil {
 		return clientInstallState{}, err
 	}
-	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), state.Endpoints, state.Redirects, state.Reverse); err != nil {
+	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints); err != nil {
+		return clientInstallState{}, err
+	}
+	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		return clientInstallState{}, err
 	}
 	return state, nil

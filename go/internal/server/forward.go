@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 // ForwardAddOptions describes server forward creation.
@@ -106,10 +109,30 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err := store.add(rule); err != nil {
 		return ForwardAddResult{}, err
 	}
-	if err := addServerForwardInbound(configDir, rule); err != nil {
+	if err := store.saveForwards(); err != nil {
 		return ForwardAddResult{}, err
 	}
-	if err := store.saveForwards(); err != nil {
+	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	tunEnabled, tunName, tunMTU, err := loadServerTunSettings(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName)})
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	certPath := filepath.Join(configDir, "cert.pem")
+	keyPath := filepath.Join(configDir, "key.pem")
+	if strings.TrimSpace(cfg.Server.CertificateFile) != "" {
+		certPath = cfg.Server.CertificateFile
+	}
+	if strings.TrimSpace(cfg.Server.KeyFile) != "" {
+		keyPath = cfg.Server.KeyFile
+	}
+	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.Port, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
 		return ForwardAddResult{}, err
 	}
 
@@ -150,11 +173,34 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, fmt.Errorf("xp2p: forward rule not found")
 	}
 
-	if err := removeServerForwardInbound(configDir, rule); err != nil {
+	if err := store.saveForwards(); err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}
-	if err := store.saveForwards(); err != nil {
+	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	if err != nil {
+		store.insertAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	tunEnabled, tunName, tunMTU, err := loadServerTunSettings(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	if err != nil {
+		store.insertAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName)})
+	if err != nil {
+		store.insertAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	certPath := filepath.Join(configDir, "cert.pem")
+	keyPath := filepath.Join(configDir, "key.pem")
+	if strings.TrimSpace(cfg.Server.CertificateFile) != "" {
+		certPath = cfg.Server.CertificateFile
+	}
+	if strings.TrimSpace(cfg.Server.KeyFile) != "" {
+		keyPath = cfg.Server.KeyFile
+	}
+	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.Port, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}

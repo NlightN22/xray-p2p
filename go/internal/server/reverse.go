@@ -104,26 +104,20 @@ func buildServerReverseChannel(userID, host string) (serverReverseChannel, error
 	}, nil
 }
 
-func applyServerReverseChannel(store *reverseStore, configDir string, channel serverReverseChannel) error {
-	if err := ensureServerRoutingConfig(configDir, channel); err != nil {
-		return err
-	}
+func applyServerReverseChannel(store *reverseStore, installDir string, configDir string, channel serverReverseChannel) error {
 	store.put(channel)
-	if err := ensureServerMarkerRules(configDir, store.state); err != nil {
+	if err := store.save(); err != nil {
 		return err
 	}
-	return store.save()
+	return rebuildServerRouting(installDir, configDir)
 }
 
-func purgeServerReverseChannel(store *reverseStore, configDir string, channel serverReverseChannel) error {
-	if err := removeServerRoutingConfig(configDir, channel); err != nil {
-		return err
-	}
+func purgeServerReverseChannel(store *reverseStore, installDir string, configDir string, channel serverReverseChannel) error {
 	store.delete(channel.Tag)
-	if err := ensureServerMarkerRules(configDir, store.state); err != nil {
+	if err := store.save(); err != nil {
 		return err
 	}
-	return store.save()
+	return rebuildServerRouting(installDir, configDir)
 }
 
 func ensureServerRoutingConfig(configDir string, channel serverReverseChannel) error {
@@ -139,7 +133,7 @@ func ensureServerRoutingConfig(configDir string, channel serverReverseChannel) e
 	if !changed {
 		return nil
 	}
-	return writeServerRouting(path, doc)
+	return writeServerRoutingDoc(path, doc)
 }
 
 func removeServerRoutingConfig(configDir string, channel serverReverseChannel) error {
@@ -158,7 +152,7 @@ func removeServerRoutingConfig(configDir string, channel serverReverseChannel) e
 	if !changed {
 		return nil
 	}
-	return writeServerRouting(path, doc)
+	return writeServerRoutingDoc(path, doc)
 }
 
 func loadServerRouting(path string) (map[string]any, error) {
@@ -179,7 +173,7 @@ func loadServerRouting(path string) (map[string]any, error) {
 	return doc, nil
 }
 
-func writeServerRouting(path string, doc map[string]any) error {
+func writeServerRoutingDoc(path string, doc map[string]any) error {
 	data, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return fmt.Errorf("xp2p: encode routing %s: %w", path, err)

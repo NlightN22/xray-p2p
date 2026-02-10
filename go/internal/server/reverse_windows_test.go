@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 )
 
@@ -44,25 +45,10 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	}
 
 	rules := routingDoc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 3 {
-		t.Fatalf("expected 3 routing rules, got %d", len(rules))
+	if !hasReverseRule(rules, "alpha-useredge-example.rev") {
+		t.Fatalf("expected reverse rule for alpha-useredge-example.rev, got %v", rules)
 	}
-	rule := rules[0].(map[string]any)
-	if rule["outboundTag"] != "alpha-useredge-example.rev" {
-		t.Fatalf("unexpected outbound tag: %+v", rule)
-	}
-	domains := rule["domain"].([]any)
-	if len(domains) != 1 || domains[0] != "full:alpha-useredge-example.rev" {
-		t.Fatalf("unexpected domain match: %+v", rule)
-	}
-	markerCount := 0
-	for _, raw := range rules[1:] {
-		markerRule := raw.(map[string]any)
-		if markerRule["outboundTag"] == "alpha-useredge-example.rev" {
-			markerCount++
-		}
-	}
-	if markerCount != 2 {
+	if markerCount := countMarkerRules(rules, "alpha-useredge-example.rev"); markerCount != 2 {
 		t.Fatalf("expected 2 marker rules, got %d", markerCount)
 	}
 
@@ -233,4 +219,44 @@ func loadJSONFile(t *testing.T, path string) map[string]any {
 		t.Fatalf("parse %s: %v", path, err)
 	}
 	return doc
+}
+
+func hasReverseRule(rules []any, tag string) bool {
+	target := "full:" + tag
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if outbound, _ := rule["outboundTag"].(string); outbound != tag {
+			continue
+		}
+		for _, domain := range extractStringSlice(rule["domain"]) {
+			if domain == target {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func countMarkerRules(rules []any, tag string) int {
+	count := 0
+	expectedPort := strconv.Itoa(DiagnosticsMarkerPort)
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if outbound, _ := rule["outboundTag"].(string); outbound != tag {
+			continue
+		}
+		if len(extractStringSlice(rule["inboundTag"])) == 0 {
+			continue
+		}
+		if port, ok := rule["port"].(string); ok && port == expectedPort {
+			count++
+		}
+	}
+	return count
 }

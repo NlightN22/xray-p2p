@@ -50,8 +50,8 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 
 	inbounds := readServerInboundsDoc(t, filepath.Join(configDir, "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
-	if len(items) != 1 {
-		t.Fatalf("expected 1 inbound entry, got %d", len(items))
+	if !hasInboundTag(items, result.Rule.Tag) {
+		t.Fatalf("expected forward inbound tag %q to be present", result.Rule.Tag)
 	}
 }
 
@@ -97,8 +97,8 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 
 	inbounds := readServerInboundsDoc(t, filepath.Join(configDir, "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
-	if len(items) != 0 {
-		t.Fatalf("expected no inbound entries after removal")
+	if hasInboundTag(items, addRes.Rule.Tag) {
+		t.Fatalf("expected forward inbound tag %q to be removed", addRes.Rule.Tag)
 	}
 }
 
@@ -128,4 +128,17 @@ func readServerInboundsDoc(t *testing.T, path string) map[string]any {
 		t.Fatalf("parse inbounds: %v", err)
 	}
 	return doc
+}
+
+func hasInboundTag(items []any, tag string) bool {
+	for _, raw := range items {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if entryTag, ok := entry["tag"].(string); ok && entryTag == tag {
+			return true
+		}
+	}
+	return false
 }

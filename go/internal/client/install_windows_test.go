@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,7 +97,7 @@ func TestInstallFailsWhenXrayMissing(t *testing.T) {
 	}
 }
 
-func TestInstallPreservesExistingInboundsAndLogs(t *testing.T) {
+func TestInstallRewritesInboundsAndLogs(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 
@@ -141,14 +142,26 @@ func TestInstallPreservesExistingInboundsAndLogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read inbounds: %v", err)
 	}
-	if string(gotInbounds) != string(inboundsContents) {
-		t.Fatalf("inbounds changed: got %q want %q", gotInbounds, inboundsContents)
+	var inboundsDoc map[string]any
+	if err := json.Unmarshal(gotInbounds, &inboundsDoc); err != nil {
+		t.Fatalf("parse inbounds: %v", err)
+	}
+	rawInbounds, ok := inboundsDoc["inbounds"].([]any)
+	if !ok || len(rawInbounds) == 0 {
+		t.Fatalf("expected generated inbounds, got %v", inboundsDoc)
 	}
 	gotLogs, err := os.ReadFile(logsPath)
 	if err != nil {
 		t.Fatalf("read logs: %v", err)
 	}
-	if string(gotLogs) != string(logsContents) {
-		t.Fatalf("logs changed: got %q want %q", gotLogs, logsContents)
+	var logsDoc map[string]any
+	if err := json.Unmarshal(gotLogs, &logsDoc); err != nil {
+		t.Fatalf("parse logs: %v", err)
+	}
+	if _, ok := logsDoc["log"]; !ok {
+		t.Fatalf("expected logs to include log settings, got %v", logsDoc)
+	}
+	if _, ok := logsDoc["api"]; !ok {
+		t.Fatalf("expected logs to include api settings, got %v", logsDoc)
 	}
 }

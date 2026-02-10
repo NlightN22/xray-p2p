@@ -59,8 +59,12 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 	if err := state.save(paths.configFile); err != nil {
 		return err
 	}
-	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), state.Endpoints); err != nil {
+	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
+	if err != nil {
 		return err
 	}
-	return updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), state.Endpoints, state.Redirects, state.Reverse)
+	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints); err != nil {
+		return err
+	}
+	return updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse)
 }

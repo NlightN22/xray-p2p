@@ -99,7 +99,11 @@ func AddRedirect(opts RedirectAddOptions) error {
 			return err
 		}
 	}
-	if err := updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
+	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
+	if err != nil {
+		return err
+	}
+	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		return err
 	}
 	if opts.TunEnabled && ruleTarget.Kind == redirect.KindCIDR {
@@ -148,7 +152,11 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	if err := state.save(paths.configFile); err != nil {
 		return err
 	}
-	if err := updateRoutingConfig(paths.routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
+	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
+	if err != nil {
+		return err
+	}
+	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		return err
 	}
 	if opts.TunEnabled && ruleTarget.Kind == redirect.KindCIDR {

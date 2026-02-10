@@ -19,11 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-)
-
-const (
-	socksInboundPort    = 51080
-	dokodemoInboundPort = 48044
+	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
 //go:embed assets/templates/*
@@ -296,44 +292,28 @@ func deployConfiguration(state installState) error {
 		}
 	}
 
-	data := struct {
-		TrojanPort      int
-		SocksPort       int
-		DokodemoPort    int
-		TLS             bool
-		AllowInsecure   bool
-		CertificateFile string
-		KeyFile         string
-		TunName         string
-		TunMTU          int
-	}{
-		TrojanPort:      state.portValue,
-		SocksPort:       socksInboundPort,
-		DokodemoPort:    dokodemoInboundPort,
-		TLS:             certPath != "",
-		AllowInsecure:   allowInsecure,
-		CertificateFile: certPath,
-		KeyFile:         keyPath,
-		TunName:         state.TunName,
-		TunMTU:          state.TunMTU,
-	}
-
-	inboundsTemplate := "assets/templates/inbounds.json.tmpl"
-	if state.TunEnabled {
-		inboundsTemplate = "assets/templates/inbounds.tun.json.tmpl"
-	}
-	if err := renderTemplateToFile(inboundsTemplate, filepath.Join(state.configDir, "inbounds.json"), data); err != nil {
+	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	if err != nil {
 		return err
 	}
-	staticFiles := map[string]string{
-		"assets/templates/logs.json":      filepath.Join(state.configDir, "logs.json"),
-		"assets/templates/outbounds.json": filepath.Join(state.configDir, "outbounds.json"),
-		"assets/templates/routing.json":   filepath.Join(state.configDir, "routing.json"),
-	}
-	for src, dst := range staticFiles {
-		if err := writeEmbeddedFile(src, dst, 0o644); err != nil {
+	if allowInsecure && !xrayCfg.Inbounds.Trojan.AllowInsecure {
+		xrayCfg.Inbounds.Trojan.AllowInsecure = true
+		if err := xrayconfig.SaveServerConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)), config.ConfigPath(layout.AuditLogFileName), xrayCfg); err != nil {
 			return err
 		}
+	}
+
+	if err := writeServerInboundsConfig(state.configDir, xrayCfg, state.TunEnabled, state.TunName, state.TunMTU, state.portValue, certPath, keyPath, allowInsecure, nil); err != nil {
+		return err
+	}
+	if err := writeServerLogs(state.configDir, xrayCfg.Logs); err != nil {
+		return err
+	}
+	if err := writeServerOutbounds(state.configDir, xrayCfg.DirectOutbound); err != nil {
+		return err
+	}
+	if err := writeServerRouting(state.configDir, xrayCfg, nil, nil); err != nil {
+		return err
 	}
 	return nil
 }

@@ -12,6 +12,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/configio"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 var (
@@ -128,15 +132,10 @@ func clientsToInterfaces(clients []trojanClient) []any {
 }
 
 func writeInbounds(path string, root map[string]any) error {
-	data, err := json.MarshalIndent(root, "", "    ")
-	if err != nil {
-		return fmt.Errorf("xp2p: render inbounds.json: %w", err)
-	}
-	data = append(data, '\n')
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write %s: %w", path, err)
-	}
-	return nil
+	return configio.WriteJSON(path, root, configio.WriteOptions{
+		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		KeepLastKnownGood: true,
+	})
 }
 
 func loadTrojanState(configDir string) (trojanState, error) {
