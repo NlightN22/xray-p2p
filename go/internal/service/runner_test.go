@@ -71,6 +71,52 @@ func TestRunRestartsOnWatchEvent(t *testing.T) {
 	}
 }
 
+func TestRunRestartsOnWatchFile(t *testing.T) {
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	configPath := filepath.Join(dir, "xp2p-client.toml")
+	if err := os.WriteFile(configPath, []byte("init = true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	startCh := make(chan struct{}, 4)
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- Run(ctx, Options{
+			Name:          "file-watcher",
+			WatchFiles:    []string{configPath},
+			WatchDebounce: 10 * time.Millisecond,
+			RestartDelay:  10 * time.Millisecond,
+		}, func(runCtx context.Context) error {
+			startCh <- struct{}{}
+			<-runCtx.Done()
+			return runCtx.Err()
+		})
+	}()
+
+	waitForStart(t, startCh)
+
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("ts=%d\n", time.Now().UnixNano())), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	waitForStart(t, startCh)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("service returned error: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for service shutdown")
+	}
+}
+
 func waitForStart(t *testing.T, ch <-chan struct{}) {
 	t.Helper()
 	select {

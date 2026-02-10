@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -24,8 +26,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		configDirName = DefaultClientConfigDir
 	}
 
-	configDirPath, err := resolveConfigDir(installDir, configDirName)
-	if err != nil {
+	if _, err := resolveConfigDir(installDir, configDirName); err != nil {
 		return err
 	}
 
@@ -58,7 +59,9 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 
 	watchPaths := []string{
 		filepath.Join(installDir, "bin"),
-		configDirPath,
+	}
+	watchFiles := []string{
+		filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
 	}
 	ignorePaths := []string{
 		filepath.Join(installDir, layout.HeartbeatStateFileName),
@@ -69,6 +72,8 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	runnerOpts := service.Options{
 		Name:         "client",
 		WatchPaths:   watchPaths,
+		WatchFiles:   watchFiles,
+		WatchDebounce: 400 * time.Millisecond,
 		IgnorePaths:  ignorePaths,
 		MaxRestarts:  opts.MaxRestarts,
 		RestartDelay: opts.RestartDelay,

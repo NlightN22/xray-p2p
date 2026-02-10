@@ -19,6 +19,10 @@ type Options struct {
 	Name string
 	// WatchPaths lists directories whose modifications should trigger graceful restarts.
 	WatchPaths []string
+	// WatchFiles lists specific files to monitor for changes.
+	WatchFiles []string
+	// WatchDebounce delays file change handling to collapse rapid updates.
+	WatchDebounce time.Duration
 	// IgnorePaths lists exact paths that should not trigger restarts when changed.
 	IgnorePaths []string
 	// MaxRestarts overrides the default restart limit. Zero or negative keeps the default.
@@ -52,6 +56,7 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 	}
 
 	var watcher *pathWatcher
+	var fileWatcher *fileWatcher
 	var err error
 	if len(opts.WatchPaths) > 0 {
 		watcher, err = newPathWatcher(opts.WatchPaths)
@@ -60,10 +65,21 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 		}
 		defer watcher.Close()
 	}
+	if len(opts.WatchFiles) > 0 {
+		fileWatcher, err = newFileWatcher(opts.WatchFiles, opts.WatchDebounce)
+		if err != nil {
+			return fmt.Errorf("service %s: watch file setup failed: %w", name, err)
+		}
+		defer fileWatcher.Close()
+	}
 
 	var watchCh <-chan string
 	if watcher != nil {
 		watchCh = watcher.Events()
+	}
+	var fileWatchCh <-chan string
+	if fileWatcher != nil {
+		fileWatchCh = fileWatcher.Events()
 	}
 
 	ignored := make(map[string]struct{}, len(opts.IgnorePaths))
@@ -102,6 +118,19 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 			case path, ok := <-watchCh:
 				if !ok {
 					watchCh = nil
+					continue
+				}
+				if shouldIgnoreEvent(path, ignored) {
+					continue
+				}
+				restarting = true
+				restartPath = path
+				cancelChild()
+				runErr = <-errCh
+				break waitLoop
+			case path, ok := <-fileWatchCh:
+				if !ok {
+					fileWatchCh = nil
 					continue
 				}
 				if shouldIgnoreEvent(path, ignored) {
