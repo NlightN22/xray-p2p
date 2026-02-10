@@ -90,15 +90,6 @@ func stubClientRedirectAdd(fn func(client.RedirectAddOptions) error) func() {
 	return func() { clientRedirectAddFunc = prev }
 }
 
-func stubClientMode(fn func(client.ModeOptions) error) func() {
-	prev := clientModeFunc
-	if fn == nil {
-		fn = func(client.ModeOptions) error { return nil }
-	}
-	clientModeFunc = fn
-	return func() { clientModeFunc = prev }
-}
-
 func stubClientRedirectPromptReader(reader io.Reader) func() {
 	prev := clientRedirectPromptReader
 	clientRedirectPromptReader = func() io.Reader {

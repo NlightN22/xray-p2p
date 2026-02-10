@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -92,11 +91,6 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 		TunAddr:    cfg.Client.TunAddr,
 	}); err != nil {
 		logging.Error("xp2p client mode: apply failed", "err", err)
-		return 1
-	}
-
-	if err := modemgr.ApplyNatRedirectMode(mode); err != nil {
-		logging.Error("xp2p client mode: nat-redirect update failed", "err", err)
 		return 1
 	}
 

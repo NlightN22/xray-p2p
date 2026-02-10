@@ -68,13 +68,13 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}
 
 	runnerOpts := service.Options{
-		Name:         "server",
-		WatchPaths:   watchPaths,
-		WatchFiles:   watchFiles,
+		Name:          "server",
+		WatchPaths:    watchPaths,
+		WatchFiles:    watchFiles,
 		WatchDebounce: 400 * time.Millisecond,
-		IgnorePaths:  ignorePaths,
-		MaxRestarts:  opts.MaxRestarts,
-		RestartDelay: opts.RestartDelay,
+		IgnorePaths:   ignorePaths,
+		MaxRestarts:   opts.MaxRestarts,
+		RestartDelay:  opts.RestartDelay,
 	}
 
 	if err := ensureLogFile(runOpts.ErrorLogPath); err != nil {

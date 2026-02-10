@@ -6,12 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -54,16 +54,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 	tunEnabled := opts.TunEnabled
 	if tunEnabled {
 		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
-			if !fallbackToProxyMode(&tunEnabled, err, "server run") {
-				return tunSetupError("server run", err)
-			}
+			return tunSetupErrorWithHint("server run", err)
 		}
-		if tunEnabled {
-			if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
-				if !fallbackToProxyMode(&tunEnabled, err, "server run") {
-					return tunSetupError("server run", err)
-				}
-			}
+		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+			return tunSetupErrorWithHint("server run", err)
 		}
 	}
 
@@ -75,7 +69,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 			TunName:    opts.TunName,
 			TunMTU:     opts.TunMTU,
 			TunAddr:    opts.TunAddr,
-		}); err != nil {
+		}, true); err != nil {
 			return err
 		}
 		if err := modemgr.ApplyNatRedirectMode(modeLabel(tunEnabled)); err != nil {
@@ -109,6 +103,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 			}()
 		},
 	)
+}
+
+func tunSetupErrorWithHint(action string, err error) error {
+	return fmt.Errorf("xp2p: tun setup failed during %s: %w (set XP2P_SERVER_TUN_ENABLED=false or run \"xp2p server mode proxy\")", action, err)
 }
 
 func resolveServerLogPath(raw string) (string, error) {

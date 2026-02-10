@@ -57,16 +57,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 	tunEnabled := opts.TunEnabled
 	if tunEnabled {
 		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
-			if !fallbackToProxyMode(&tunEnabled, err, "client run") {
-				return tunSetupError("client run", err)
-			}
+			return tunSetupErrorWithHint("client run", err)
 		}
-		if tunEnabled {
-			if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
-				if !fallbackToProxyMode(&tunEnabled, err, "client run") {
-					return tunSetupError("client run", err)
-				}
-			}
+		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+			return tunSetupErrorWithHint("client run", err)
 		}
 	}
 
@@ -78,7 +72,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 			TunName:    opts.TunName,
 			TunMTU:     opts.TunMTU,
 			TunAddr:    opts.TunAddr,
-		}); err != nil {
+		}, true); err != nil {
 			return err
 		}
 		if err := modemgr.ApplyNatRedirectMode(modeLabel(tunEnabled)); err != nil {
@@ -117,6 +111,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 	)
 }
 
+func tunSetupErrorWithHint(action string, err error) error {
+	return fmt.Errorf("xp2p: tun setup failed during %s: %w (set XP2P_CLIENT_TUN_ENABLED=false or run \"xp2p client mode proxy\")", action, err)
+}
+
 func resolveClientLogPath(raw string) (string, error) {
 	if strings.TrimSpace(raw) == "" {
 		return "", errors.New("xp2p: log path is empty")
@@ -130,9 +128,7 @@ func resolveClientLogPath(raw string) (string, error) {
 	}
 
 	rel := filepath.ToSlash(trimmed)
-	if strings.HasPrefix(rel, "logs/") {
-		rel = strings.TrimPrefix(rel, "logs/")
-	}
+	rel = strings.TrimPrefix(rel, "logs/")
 	if rel == "" || rel == "." {
 		rel = "xp2p-client.log"
 	}

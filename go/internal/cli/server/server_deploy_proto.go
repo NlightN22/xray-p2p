@@ -216,7 +216,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer))
 	if _, err := installstate.Read(statePath, installstate.KindServer); err == nil {
 		installed = true
-	} else if err != nil && !errors.Is(err, installstate.ErrRoleNotInstalled) && !errors.Is(err, os.ErrNotExist) {
+	} else if !errors.Is(err, installstate.ErrRoleNotInstalled) && !errors.Is(err, os.ErrNotExist) {
 		logging.Warn("xp2p server deploy: install state read failed", "err", err)
 	}
 	if installed {

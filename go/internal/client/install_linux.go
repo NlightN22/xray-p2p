@@ -14,9 +14,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
-	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 )
 
 type installState struct {
@@ -49,21 +47,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		"server_port", state.serverPort,
 		"allow_insecure", state.AllowInsecure,
 	)
-
-	if state.TunEnabled {
-		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
-			if !fallbackToProxyMode(&state.TunEnabled, err, "client install") {
-				return tunSetupError("client install", err)
-			}
-		}
-		if state.TunEnabled {
-			if err := linuxnet.EnsureTunInterface(state.TunName, state.TunAddr, state.TunMTU); err != nil {
-				if !fallbackToProxyMode(&state.TunEnabled, err, "client install") {
-					return tunSetupError("client install", err)
-				}
-			}
-		}
-	}
 
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
@@ -100,12 +83,6 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	configDir, err := resolveConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
-		return err
-	}
-	if err := openwrt.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
-		return err
-	}
-	if err := linuxnet.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
 		return err
 	}
 	if err := removeNetworkdConfig(opts.TunName); err != nil {

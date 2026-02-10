@@ -87,10 +87,10 @@ type TCPRequest struct {
 }
 
 type LogsConfig struct {
-	Level        string      `json:"level" toml:"level"`
-	Access       string      `json:"access" toml:"access"`
-	API          APIConfig   `json:"api" toml:"api"`
-	StatsEnabled *bool       `json:"stats_enabled,omitempty" toml:"stats_enabled"`
+	Level        string       `json:"level" toml:"level"`
+	Access       string       `json:"access" toml:"access"`
+	API          APIConfig    `json:"api" toml:"api"`
+	StatsEnabled *bool        `json:"stats_enabled,omitempty" toml:"stats_enabled"`
 	Policy       PolicyConfig `json:"policy" toml:"policy"`
 }
 

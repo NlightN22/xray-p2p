@@ -43,9 +43,9 @@ func (s *deployServer) Run(ctx context.Context) error {
 	defer idleTimer.Stop()
 
 	var (
-		runCancel  context.CancelFunc
-		diagCancel context.CancelFunc
-		runDoneCh  chan error
+		runCancel      context.CancelFunc
+		diagCancel     context.CancelFunc
+		runDoneCh      chan error
 		lastInstallDir string
 		lastConfigDir  string
 		switchToTun    bool

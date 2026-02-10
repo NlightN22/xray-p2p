@@ -122,7 +122,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		if host == "" || opts.NoReverse {
 			return nil
 		}
-			return applyServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
+		return applyServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
 	}
 
 	settings["clients"] = clientsToInterfaces(clients)

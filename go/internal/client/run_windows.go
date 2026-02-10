@@ -62,7 +62,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 			TunName:    opts.TunName,
 			TunMTU:     opts.TunMTU,
 			TunAddr:    opts.TunAddr,
-		}); err != nil {
+		}, true); err != nil {
 			return err
 		}
 		if err := saveClientAppliedState(paths.stateFile, desired, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {

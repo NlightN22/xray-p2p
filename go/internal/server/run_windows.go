@@ -59,7 +59,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 			TunName:    opts.TunName,
 			TunMTU:     opts.TunMTU,
 			TunAddr:    opts.TunAddr,
-		}); err != nil {
+		}, true); err != nil {
 			return err
 		}
 		if err := saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {

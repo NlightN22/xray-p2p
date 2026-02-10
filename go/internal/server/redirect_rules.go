@@ -176,11 +176,6 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err := rebuildServerRouting(installDir, configDir); err != nil {
 		return err
 	}
-	if opts.TunEnabled && target.Kind == redirect.KindCIDR {
-		if err := ensureRedirectRoute(opts.TunName, target.Value); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -229,11 +224,6 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 
 	if err := rebuildServerRouting(installDir, configDir); err != nil {
 		return err
-	}
-	if opts.TunEnabled && target.Kind == redirect.KindCIDR {
-		if err := removeRedirectRouteIfUnused(opts.TunName, target.Value, store.redirects); err != nil {
-			return err
-		}
 	}
 	return nil
 }

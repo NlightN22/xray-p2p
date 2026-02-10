@@ -106,11 +106,6 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		return err
 	}
-	if opts.TunEnabled && ruleTarget.Kind == redirect.KindCIDR {
-		if err := ensureRedirectRoute(opts.TunName, ruleTarget.Value); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -158,11 +153,6 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	}
 	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
 		return err
-	}
-	if opts.TunEnabled && ruleTarget.Kind == redirect.KindCIDR {
-		if err := removeRedirectRouteIfUnused(opts.TunName, ruleTarget.Value, state.Redirects); err != nil {
-			return err
-		}
 	}
 	return nil
 }

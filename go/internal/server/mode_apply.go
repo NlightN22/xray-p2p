@@ -19,13 +19,10 @@ func applyServerMode(installDir, configDir string, opts ModeOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, opts); err != nil {
-		return err
-	}
-	return saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr)
+	return applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, opts, false)
 }
 
-func applyServerDesiredConfig(installDir, configDir string, desired desiredServerConfig, previousReverse serverReverseState, opts ModeOptions) error {
+func applyServerDesiredConfig(installDir, configDir string, desired desiredServerConfig, previousReverse serverReverseState, opts ModeOptions, applyRoutes bool) error {
 	previousReverse = normalizeReverse(previousReverse)
 
 	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
@@ -58,6 +55,9 @@ func applyServerDesiredConfig(installDir, configDir string, desired desiredServe
 		return err
 	}
 
+	if !applyRoutes {
+		return nil
+	}
 	if opts.TunEnabled {
 		return applyRedirectRoutes(opts.TunName, desired.Redirects)
 	}

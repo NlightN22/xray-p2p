@@ -201,16 +201,6 @@ func asStrings(raw any) []string {
 	return result
 }
 
-func findRuleWithPort(rules []map[string]any, port int) map[string]any {
-	want := fmt.Sprintf("%d", port)
-	for _, rule := range rules {
-		if fmt.Sprintf("%v", rule["port"]) == want {
-			return rule
-		}
-	}
-	return nil
-}
-
 func findRuleWithDomain(rules []map[string]any, domain string) map[string]any {
 	for _, rule := range rules {
 		for _, value := range asStrings(rule["domain"]) {
