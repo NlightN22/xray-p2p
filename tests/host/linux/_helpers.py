@@ -55,6 +55,7 @@ def cleanup_client_install(
         "--quiet",
     )
     linux_env.remove_path(host, LOG_ROOT)
+    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
 
 
 def cleanup_server_install(
@@ -76,6 +77,7 @@ def cleanup_server_install(
         "--quiet",
     )
     linux_env.remove_path(host, LOG_ROOT)
+    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
 
 
 def assert_reverse_cli_output(

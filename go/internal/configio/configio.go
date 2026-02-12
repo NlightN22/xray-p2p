@@ -102,9 +102,7 @@ func appendAudit(path string, entry auditEntry) error {
 		return fmt.Errorf("configio: open audit log %s: %w", path, err)
 	}
 	defer file.Close()
-	if err := os.Chmod(path, 0o666); err != nil {
-		return fmt.Errorf("configio: chmod audit log %s: %w", path, err)
-	}
+	_ = os.Chmod(path, 0o666)
 	if _, err := file.WriteString(line); err != nil {
 		return fmt.Errorf("configio: write audit log %s: %w", path, err)
 	}

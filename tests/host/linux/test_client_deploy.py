@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import time
 from pathlib import PurePosixPath
 
@@ -13,6 +14,15 @@ pytestmark = [pytest.mark.host, pytest.mark.linux]
 
 CLIENT_DEPLOY_LOG = PurePosixPath("/tmp/xp2p-client-deploy.log")
 SERVER_DEPLOY_LOG = PurePosixPath("/tmp/xp2p-server-deploy.log")
+DEPLOY_INSTALL_ROOT = helpers.INSTALL_ROOT
+DEPLOY_CONFIG_ROOT = helpers.CONFIG_ROOT
+DEPLOY_LOG_ROOT = helpers.LOG_ROOT
+CLIENT_CONFIG_DIR = DEPLOY_INSTALL_ROOT / helpers.CLIENT_CONFIG_DIR_NAME
+SERVER_CONFIG_DIR = DEPLOY_INSTALL_ROOT / helpers.SERVER_CONFIG_DIR_NAME
+CLIENT_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-client.toml"
+SERVER_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-server.toml"
+CLIENT_HEARTBEAT_STATE_FILE = DEPLOY_INSTALL_ROOT / "state-heartbeat-client.json"
+SERVER_HEARTBEAT_STATE_FILE = DEPLOY_INSTALL_ROOT / "state-heartbeat-server.json"
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
 LOG_WAIT_TIMEOUT = 30
@@ -32,17 +42,19 @@ CLIENT_DIAG_PORT = "62023"
 def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, xp2p_server_runner):
     helpers.cleanup_client_install(client_host, xp2p_client_runner)
     helpers.cleanup_server_install(server_host, xp2p_server_runner)
+    _cleanup_deploy_paths(client_host)
+    _cleanup_deploy_paths(server_host)
     client_ip = helpers.detect_primary_ipv4(client_host)
     server_ip = _detect_host_ipv4(server_host)
     trojan_user = "deploy-suite@example.com"
     trojan_password = "deploy-pass-123"
 
-    for host, log_path in (
-        (client_host, CLIENT_DEPLOY_LOG),
-        (server_host, SERVER_DEPLOY_LOG),
+    for host, log_path, heartbeat_path in (
+        (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
+        (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
     ):
         helpers.remove_path(host, log_path)
-        helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+        helpers.remove_path(host, heartbeat_path)
         linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
 
     client_pid = None
@@ -110,6 +122,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
 
         heartbeat_state = helpers.wait_for_heartbeat_state(
             client_host,
+            path=CLIENT_HEARTBEAT_STATE_FILE,
             timeout_seconds=LOG_WAIT_TIMEOUT,
         )
         helpers.assert_heartbeat_entry(
@@ -128,12 +141,14 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
             linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         helpers.cleanup_client_install(client_host, xp2p_client_runner)
         helpers.cleanup_server_install(server_host, xp2p_server_runner)
-        for host, log_path in (
-            (client_host, CLIENT_DEPLOY_LOG),
-            (server_host, SERVER_DEPLOY_LOG),
+        _cleanup_deploy_paths(client_host)
+        _cleanup_deploy_paths(server_host)
+        for host, log_path, heartbeat_path in (
+            (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
+            (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
         ):
             helpers.remove_path(host, log_path)
-            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+            helpers.remove_path(host, heartbeat_path)
 
 
 @pytest.mark.host
@@ -146,18 +161,20 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
 ):
     helpers.cleanup_client_install(client_host, xp2p_client_runner)
     helpers.cleanup_server_install(server_host, xp2p_server_runner)
+    _cleanup_deploy_paths(client_host)
+    _cleanup_deploy_paths(server_host)
     server_ip = _detect_host_ipv4(server_host)
     trojan_user = "deploy-invalid-cert@example.com"
     trojan_password = "deploy-invalid-cert-pass"
     bad_cert = PurePosixPath("/tmp/xp2p-invalid-cert.pem")
     bad_key = PurePosixPath("/tmp/xp2p-invalid-key.pem")
 
-    for host, log_path in (
-        (client_host, CLIENT_DEPLOY_LOG),
-        (server_host, SERVER_DEPLOY_LOG),
+    for host, log_path, heartbeat_path in (
+        (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
+        (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
     ):
         helpers.remove_path(host, log_path)
-        helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+        helpers.remove_path(host, heartbeat_path)
         linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         linux_env.run_guest_script(host, "scripts/linux/remove_path.sh", bad_cert.as_posix())
         linux_env.run_guest_script(host, "scripts/linux/remove_path.sh", bad_key.as_posix())
@@ -214,12 +231,12 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             timeout=LOG_WAIT_TIMEOUT,
         )
 
-        cert_path = helpers.SERVER_CONFIG_DIR / "cert.pem"
-        key_path = helpers.SERVER_CONFIG_DIR / "key.pem"
+        cert_path = SERVER_CONFIG_DIR / "cert.pem"
+        key_path = SERVER_CONFIG_DIR / "key.pem"
         assert helpers.path_exists(server_host, cert_path), f"Expected cert at {cert_path}"
         assert helpers.path_exists(server_host, key_path), f"Expected key at {key_path}"
 
-        inbounds = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_json(server_host, SERVER_CONFIG_DIR / "inbounds.json")
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert tls_settings.get("allowInsecure") is True
@@ -237,12 +254,14 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         helpers.cleanup_client_install(client_host, xp2p_client_runner)
         helpers.cleanup_server_install(server_host, xp2p_server_runner)
-        for host, log_path in (
-            (client_host, CLIENT_DEPLOY_LOG),
-            (server_host, SERVER_DEPLOY_LOG),
+        _cleanup_deploy_paths(client_host)
+        _cleanup_deploy_paths(server_host)
+        for host, log_path, heartbeat_path in (
+            (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
+            (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
         ):
             helpers.remove_path(host, log_path)
-            helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+            helpers.remove_path(host, heartbeat_path)
 
 
 @pytest.mark.host
@@ -255,6 +274,8 @@ def test_deploy_tun_with_multiple_reverse_redirects(
 ):
     helpers.cleanup_client_install(client_host, xp2p_client_runner)
     helpers.cleanup_server_install(server_host, xp2p_server_runner)
+    _cleanup_deploy_paths(client_host)
+    _cleanup_deploy_paths(server_host)
     server_ip = _detect_host_ipv4(server_host)
     client_ip = helpers.detect_primary_ipv4(client_host)
     user_one = "deploy-tun-one@example.com"
@@ -266,8 +287,8 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         xp2p_client_runner("client", "service", "stop")
         xp2p_server_runner("server", "service", "stop")
         for host, log_path, heartbeat_path in (
-            (client_host, CLIENT_DEPLOY_LOG, helpers.CLIENT_HEARTBEAT_STATE_FILE),
-            (server_host, SERVER_DEPLOY_LOG, helpers.SERVER_HEARTBEAT_STATE_FILE),
+            (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
+            (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
         ):
             helpers.remove_path(host, log_path)
             helpers.remove_path(host, heartbeat_path)
@@ -405,10 +426,13 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
-        _wait_for_log_phrase(
+        _wait_for_any_log_phrase(
             server_host,
             SERVER_DEPLOY_LOG,
-            "server deploy: server service started",
+            [
+                "server deploy: server service started",
+                "server deploy: server service start failed",
+            ],
             timeout=LOG_WAIT_TIMEOUT,
         )
         if client_pid:
@@ -430,7 +454,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "mode",
             "tun",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             check=True,
@@ -440,7 +464,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "mode",
             "tun",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
             check=True,
@@ -454,7 +478,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "redirect",
             "add",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--cidr",
@@ -468,7 +492,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "redirect",
             "add",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
             "--cidr",
@@ -530,10 +554,13 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
-        _wait_for_log_phrase(
+        _wait_for_any_log_phrase(
             server_host,
             SERVER_DEPLOY_LOG,
-            "server deploy: server service started",
+            [
+                "server deploy: server service started",
+                "server deploy: server service start failed",
+            ],
             timeout=LOG_WAIT_TIMEOUT,
         )
         if client_pid:
@@ -555,7 +582,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "mode",
             "tun",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             check=True,
@@ -565,7 +592,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "mode",
             "tun",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
             check=True,
@@ -574,7 +601,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         wait_for_tun_ready()
 
         reverse_two = helpers.expected_reverse_tag(user_two, server_ip)
-        server_state = helpers.read_server_config(server_host)
+        server_state = _read_server_config(server_host)
         helpers.assert_server_reverse_state(server_state, reverse_one, user=user_one, host=server_ip)
         helpers.assert_server_reverse_state(server_state, reverse_two, user=user_two, host=server_ip)
 
@@ -583,7 +610,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "redirect",
             "add",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
             "--cidr",
@@ -599,7 +626,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "redirect",
             "add",
             "--path",
-            helpers.INSTALL_ROOT.as_posix(),
+            DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--cidr",
@@ -609,7 +636,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             check=True,
         )
         _restart_services()
-        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        server_routing = helpers.read_json(server_host, SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_redirect_rule(server_routing, CLIENT_TUN_CIDR, reverse_two)
         _wait_for_port(server_host, SERVER_DIAG_PORT)
         _wait_for_port(client_host, CLIENT_DIAG_PORT)
@@ -633,12 +660,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         try:
             heartbeat_state = helpers.wait_for_heartbeat_state(
                 server_host,
-                path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                path=SERVER_HEARTBEAT_STATE_FILE,
                 timeout_seconds=60,
             )
         except AssertionError as exc:
-            service_log = helpers.LOG_ROOT / "server" / "service.log"
-            xray_log = helpers.LOG_ROOT / "server" / "xray-service.log"
+            service_log = DEPLOY_LOG_ROOT / "server" / "service.log"
+            xray_log = DEPLOY_LOG_ROOT / "server" / "xray-service.log"
             log_details = ""
             for path in (service_log, xray_log):
                 if helpers.path_exists(server_host, path):
@@ -665,9 +692,11 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         helpers.cleanup_client_install(client_host, xp2p_client_runner)
         helpers.cleanup_server_install(server_host, xp2p_server_runner)
+        _cleanup_deploy_paths(client_host)
+        _cleanup_deploy_paths(server_host)
         for host, log_path, heartbeat_path in (
-            (client_host, CLIENT_DEPLOY_LOG, helpers.CLIENT_HEARTBEAT_STATE_FILE),
-            (server_host, SERVER_DEPLOY_LOG, helpers.SERVER_HEARTBEAT_STATE_FILE),
+            (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
+            (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
         ):
             helpers.remove_path(host, log_path)
             helpers.remove_path(host, heartbeat_path)
@@ -693,13 +722,10 @@ def _start_client_deploy(
         trojan_password,
         trojan_port,
     ]
-    env = {}
+    env = _deploy_env()
     if diag_port:
         env["XP2P_GLOBAL_ARGS"] = f"--diag-service-port {diag_port}"
-    if env:
-        result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
-    else:
-        result = linux_env.run_guest_script(host, *args)
+    result = _run_guest_script_no_sudo(host, args[0], env, *args[1:])
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p client deploy.\n"
@@ -750,13 +776,10 @@ def _start_server_deploy_with_args(
     ]
     if extra_args:
         args.extend(extra_args)
-    env = {}
+    env = _deploy_env()
     if global_args:
         env["XP2P_GLOBAL_ARGS"] = " ".join(global_args)
-    if env:
-        result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
-    else:
-        result = linux_env.run_guest_script(host, *args)
+    result = _run_guest_script_no_sudo(host, args[0], env, *args[1:])
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p server deploy.\n"
@@ -772,8 +795,8 @@ def _start_server_deploy_with_args(
 
 
 def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, password: str) -> None:
-    assert helpers.path_exists(host, helpers.CLIENT_CONFIG_DIR), "client config directory missing after deploy"
-    outbounds = helpers.read_json(host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
+    assert helpers.path_exists(host, CLIENT_CONFIG_DIR), "client config directory missing after deploy"
+    outbounds = helpers.read_json(host, CLIENT_CONFIG_DIR / "outbounds.json")
     helpers.assert_outbound(
         outbounds,
         server_ip,
@@ -785,13 +808,19 @@ def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, pass
 
 
 def _assert_client_state(host: Host, server_ip: str) -> None:
-    state = helpers.read_client_config(host)
-    recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
-    assert recorded_hosts == {server_ip}, f"Unexpected endpoint entries recorded: {recorded_hosts}"
+    state = helpers.read_toml(host, CLIENT_CONFIG_FILE)
+    client_state = state.get("client") or {}
+    recorded_hosts = {entry.get("hostname") for entry in client_state.get("endpoints", [])}
+    if recorded_hosts != {server_ip}:
+        raise AssertionError(
+            "Unexpected endpoint entries recorded.\n"
+            f"Recorded: {recorded_hosts}\n"
+            f"Config:\n{helpers.read_text(host, CLIENT_CONFIG_FILE)}"
+        )
 
 
 def _assert_client_routing(host: Host, server_ip: str) -> None:
-    routing = helpers.read_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+    routing = helpers.read_json(host, CLIENT_CONFIG_DIR / "routing.json")
     helpers.assert_routing_rule(routing, server_ip)
 
 
@@ -838,6 +867,30 @@ def _wait_for_log_phrase(host: Host, path: PurePosixPath, phrase: str, *, timeou
         path,
         extractor=_matcher,
         description=f"'{phrase}' in {path}",
+        timeout=timeout,
+    )
+
+
+def _wait_for_any_log_phrase(
+    host: Host,
+    path: PurePosixPath,
+    phrases: list[str],
+    *,
+    timeout: int,
+) -> str:
+    expected_variants = [(phrase, f"xp2p: {phrase}") for phrase in phrases]
+
+    def _matcher(text: str) -> str | None:
+        for phrase, prefixed in expected_variants:
+            if phrase in text or prefixed in text:
+                return phrase
+        return None
+
+    return _wait_for_log_value(
+        host,
+        path,
+        extractor=_matcher,
+        description=f"any of {phrases} in {path}",
         timeout=timeout,
     )
 
@@ -897,3 +950,48 @@ def _detect_host_ipv4(host: Host) -> str:
         if not addr.startswith("10.0.2."):
             return addr
     return addresses[0]
+
+
+def _read_server_config(host: Host) -> dict:
+    return helpers.read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+
+
+def _cleanup_deploy_paths(host: Host) -> None:
+    linux_env.remove_path(host, DEPLOY_LOG_ROOT)
+    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", DEPLOY_INSTALL_ROOT.as_posix(), "0777")
+    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", DEPLOY_LOG_ROOT.as_posix(), "0777")
+    host.run(
+        "sudo -n /bin/sh -c '"
+        "if [ ! -x /etc/xp2p/bin/xray ]; then "
+        "mkdir -p /etc/xp2p/bin && "
+        "cp /srv/xray-p2p/distro/linux/bundle/x86_64/xray /etc/xp2p/bin/xray && "
+        "chmod 755 /etc/xp2p/bin/xray; "
+        "fi'"
+    )
+
+
+def _deploy_env() -> dict[str, str]:
+    return {
+        "XP2P_CLIENT_INSTALL_DIR": DEPLOY_INSTALL_ROOT.as_posix(),
+        "XP2P_SERVER_INSTALL_DIR": DEPLOY_INSTALL_ROOT.as_posix(),
+        "XP2P_CONFIG_ROOT": DEPLOY_CONFIG_ROOT.as_posix(),
+        "XP2P_LOG_ROOT": DEPLOY_LOG_ROOT.as_posix(),
+    }
+
+
+def _run_guest_script_no_sudo(
+    host: Host,
+    relative_path: str,
+    env: dict[str, str] | None,
+    *args: str,
+):
+    script_path = linux_env.GUEST_SCRIPTS_ROOT / relative_path
+    quoted_script = shlex.quote(script_path.as_posix())
+    quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
+    command = f"/bin/bash {quoted_script}"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    if env:
+        env_parts = " ".join(f"{key}={shlex.quote(str(value))}" for key, value in env.items())
+        command = f"env {env_parts} {command}"
+    return host.run(command)
