@@ -56,6 +56,15 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 		logging.Error("xp2p server state: install directory is required (use --path or configure server.install_dir)")
 		return 2
 	}
+	installed, err := serverStateInstallPresent(installDir)
+	if err != nil {
+		logging.Error("xp2p server state: failed to check install status", "err", err)
+		return 1
+	}
+	if !installed {
+		logging.Info("xp2p server state: server is not installed")
+		return 1
+	}
 	statePath := filepath.Join(installDir, layout.ServerHeartbeatStateFileName)
 	ttl := opts.TTL
 	if ttl <= 0 {
@@ -84,6 +93,35 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 		return 1
 	}
 	return 0
+}
+
+func serverStateInstallPresent(installDir string) (bool, error) {
+	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if found, err := pathExists(configPath); err != nil {
+		return false, err
+	} else if found {
+		return true, nil
+	}
+	for _, name := range []string{layout.ServerStateFileName, layout.StateFileName} {
+		path := filepath.Join(installDir, name)
+		if found, err := pathExists(path); err != nil {
+			return false, err
+		} else if found {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func pathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
 
 func snapshotServerState(statePath, installDir string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
