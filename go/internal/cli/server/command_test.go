@@ -26,7 +26,7 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 				InstallDir: `C:\xp2p`,
 				ConfigDir:  layout.ServerConfigDir,
 				Host:       "srv.example.com",
-				Port:       "62022",
+				Port:       "58443",
 			},
 			Client: config.ClientConfig{
 				User:     "user@example.com",
@@ -61,7 +61,7 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 					Server: config.ServerConfig{
 						InstallDir: dir,
 						ConfigDir:  layout.ServerConfigDir,
-						Port:       "62022",
+						Port:       "58443",
 					},
 				}
 			},
@@ -104,7 +104,7 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 		{
 			name: "deploy",
 			cfg:  func(*testing.T) config.Config { return baseCfg() },
-			args: []string{"deploy", "--listen", ":62090", "--link", "trojan://secret@host.example.com:62022?security=tls&sni=host.example.com#user"},
+			args: []string{"deploy", "--listen", ":62090", "--link", "trojan://secret@host.example.com:58443?security=tls&sni=host.example.com#user"},
 			stub: expectDeployCall,
 		},
 	}

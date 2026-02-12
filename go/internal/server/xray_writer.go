@@ -14,14 +14,21 @@ import (
 )
 
 func writeServerInboundsConfig(configDir string, cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, allowInsecure bool, forwards []forward.Rule) error {
-	doc := buildServerInbounds(cfg, tunEnabled, tunName, tunMTU, trojanPort, certPath, keyPath, allowInsecure, forwards)
+	clients := []trojanClient{}
+	if state, err := loadTrojanState(configDir); err == nil {
+		clients = state.clients
+		if state.allowInsecure {
+			allowInsecure = true
+		}
+	}
+	doc := buildServerInbounds(cfg, tunEnabled, tunName, tunMTU, trojanPort, certPath, keyPath, allowInsecure, forwards, clients)
 	return configio.WriteJSON(filepath.Join(configDir, "inbounds.json"), doc, configio.WriteOptions{
 		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
 		KeepLastKnownGood: true,
 	})
 }
 
-func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, allowInsecure bool, forwards []forward.Rule) map[string]any {
+func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, allowInsecure bool, forwards []forward.Rule, clients []trojanClient) map[string]any {
 	inbounds := make([]any, 0, 4+len(forwards))
 	if tunEnabled {
 		inbounds = append(inbounds, map[string]any{
@@ -56,7 +63,7 @@ func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunNa
 			},
 		},
 	)
-	inbounds = append(inbounds, buildTrojanInbound(cfg, trojanPort, certPath, keyPath, allowInsecure))
+	inbounds = append(inbounds, buildTrojanInbound(cfg, trojanPort, certPath, keyPath, allowInsecure, clients))
 	for _, rule := range forwards {
 		inbounds = append(inbounds, rule.InboundMap())
 	}
@@ -65,7 +72,7 @@ func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunNa
 	}
 }
 
-func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPath string, keyPath string, forceAllowInsecure bool) map[string]any {
+func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPath string, keyPath string, forceAllowInsecure bool, clients []trojanClient) map[string]any {
 	security := strings.TrimSpace(cfg.Inbounds.Trojan.Security)
 	if security == "" {
 		if certPath == "" {
@@ -111,7 +118,7 @@ func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPat
 		"listen":   cfg.Inbounds.Trojan.Listen,
 		"protocol": cfg.Inbounds.Trojan.Protocol,
 		"settings": map[string]any{
-			"clients": []any{},
+			"clients": clientsToInterfaces(clients),
 		},
 		"streamSettings": stream,
 	}

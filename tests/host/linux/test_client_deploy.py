@@ -22,6 +22,7 @@ CLIENT_TUN_ADDR = "198.18.0.1/30"
 SERVER_TUN_ADDR = "198.18.0.5/30"
 CLIENT_TUN_CIDR = "198.18.0.0/30"
 SERVER_TUN_CIDR = "198.18.0.4/30"
+SERVER_DEPLOY_DIAG_PORT = "62032"
 SERVER_DIAG_PORT = "62022"
 CLIENT_DIAG_PORT = "62023"
 
@@ -262,6 +263,8 @@ def test_deploy_tun_with_multiple_reverse_redirects(
     pass_two = "deploy-tun-pass-2"
 
     def cleanup_logs():
+        xp2p_client_runner("client", "service", "stop")
+        xp2p_server_runner("server", "service", "stop")
         for host, log_path, heartbeat_path in (
             (client_host, CLIENT_DEPLOY_LOG, helpers.CLIENT_HEARTBEAT_STATE_FILE),
             (server_host, SERVER_DEPLOY_LOG, helpers.SERVER_HEARTBEAT_STATE_FILE),
@@ -269,6 +272,10 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             helpers.remove_path(host, log_path)
             helpers.remove_path(host, heartbeat_path)
             linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+            host.run(
+                "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
+                "62032/tcp 62032/udp >/dev/null 2>&1 || true"
+            )
 
     def wait_for_tun_ready():
         result = linux_env.run_guest_script(
@@ -356,6 +363,18 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}\n{debug}"
         )
 
+    def _restart_services() -> None:
+        xp2p_client_runner("client", "service", "stop")
+        xp2p_server_runner("server", "service", "stop")
+        for host in (client_host, server_host):
+            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        server_host.run(
+            "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
+            "62032/tcp 62032/udp >/dev/null 2>&1 || true"
+        )
+        xp2p_client_runner("client", "service", "start", check=True)
+        xp2p_server_runner("server", "service", "start", check=True)
+
     client_pid = None
     server_pid = None
     try:
@@ -377,12 +396,13 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
+            global_args=["--diag-service-port", SERVER_DEPLOY_DIAG_PORT],
         )
 
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "client deploy: completed",
+            "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
@@ -391,6 +411,41 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "server deploy: server service started",
             timeout=LOG_WAIT_TIMEOUT,
         )
+        if client_pid:
+            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+            client_pid = None
+        if server_pid:
+            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+            server_pid = None
+        xp2p_client_runner("client", "service", "stop")
+        xp2p_server_runner("server", "service", "stop")
+        for host in (client_host, server_host):
+            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        server_host.run(
+            "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
+            "62032/tcp 62032/udp >/dev/null 2>&1 || true"
+        )
+        xp2p_client_runner(
+            "client",
+            "mode",
+            "tun",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        )
+        xp2p_server_runner(
+            "server",
+            "mode",
+            "tun",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            check=True,
+        )
+        _restart_services()
         wait_for_tun_ready()
 
         reverse_one = helpers.expected_reverse_tag(user_one, server_ip)
@@ -424,6 +479,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             server_ip,
             check=True,
         )
+        _restart_services()
         _wait_for_port(server_host, SERVER_DIAG_PORT)
         _wait_for_port(client_host, CLIENT_DIAG_PORT)
         _wait_for_route(client_host, SERVER_TUN_CIDR, CLIENT_TUN)
@@ -465,12 +521,13 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
+            global_args=["--diag-service-port", SERVER_DEPLOY_DIAG_PORT],
         )
 
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "client deploy: completed",
+            "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
@@ -479,6 +536,41 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "server deploy: server service started",
             timeout=LOG_WAIT_TIMEOUT,
         )
+        if client_pid:
+            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+            client_pid = None
+        if server_pid:
+            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+            server_pid = None
+        xp2p_client_runner("client", "service", "stop")
+        xp2p_server_runner("server", "service", "stop")
+        for host in (client_host, server_host):
+            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        server_host.run(
+            "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
+            "62032/tcp 62032/udp >/dev/null 2>&1 || true"
+        )
+        xp2p_client_runner(
+            "client",
+            "mode",
+            "tun",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        )
+        xp2p_server_runner(
+            "server",
+            "mode",
+            "tun",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            check=True,
+        )
+        _restart_services()
         wait_for_tun_ready()
 
         reverse_two = helpers.expected_reverse_tag(user_two, server_ip)
@@ -516,6 +608,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             server_ip,
             check=True,
         )
+        _restart_services()
         server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_redirect_rule(server_routing, CLIENT_TUN_CIDR, reverse_two)
         _wait_for_port(server_host, SERVER_DIAG_PORT)
@@ -537,11 +630,25 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "client->server after second deploy",
             debug_hosts=[client_host, server_host],
         )
-        heartbeat_state = helpers.wait_for_heartbeat_state(
-            server_host,
-            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-            timeout_seconds=LOG_WAIT_TIMEOUT,
-        )
+        try:
+            heartbeat_state = helpers.wait_for_heartbeat_state(
+                server_host,
+                path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                timeout_seconds=60,
+            )
+        except AssertionError as exc:
+            service_log = helpers.LOG_ROOT / "server" / "service.log"
+            xray_log = helpers.LOG_ROOT / "server" / "xray-service.log"
+            log_details = ""
+            for path in (service_log, xray_log):
+                if helpers.path_exists(server_host, path):
+                    tail = "\n".join((helpers.read_text(server_host, path) or "").splitlines()[-40:])
+                    log_details += f"\n{path}:\n{tail}\n"
+            raise AssertionError(
+                "Server heartbeat state was not observed.\n"
+                f"Service status:\n{xp2p_server_runner('server', 'service', 'status').stdout or ''}\n"
+                f"{log_details}"
+            ) from exc
         helpers.assert_heartbeat_entry(
             heartbeat_state,
             helpers.expected_proxy_tag(server_ip),
@@ -575,9 +682,9 @@ def _start_client_deploy(
     trojan_user: str,
     trojan_password: str,
     trojan_port: str,
+    diag_port: str | None = None,
 ) -> int:
-    result = linux_env.run_guest_script(
-        host,
+    args = [
         "scripts/linux/start_xp2p_client_deploy.sh",
         log_path.as_posix(),
         remote_host,
@@ -585,7 +692,14 @@ def _start_client_deploy(
         trojan_user,
         trojan_password,
         trojan_port,
-    )
+    ]
+    env = {}
+    if diag_port:
+        env["XP2P_GLOBAL_ARGS"] = f"--diag-service-port {diag_port}"
+    if env:
+        result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
+    else:
+        result = linux_env.run_guest_script(host, *args)
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p client deploy.\n"
@@ -600,12 +714,22 @@ def _start_client_deploy(
     return int(pid)
 
 
-def _start_server_deploy(host: Host, *, log_path: PurePosixPath, listen_addr: str, deploy_link: str) -> int:
+def _start_server_deploy(
+    host: Host,
+    *,
+    log_path: PurePosixPath,
+    listen_addr: str,
+    deploy_link: str,
+    extra_args: list[str] | None = None,
+    global_args: list[str] | None = None,
+) -> int:
     return _start_server_deploy_with_args(
         host,
         log_path=log_path,
         listen_addr=listen_addr,
         deploy_link=deploy_link,
+        extra_args=extra_args,
+        global_args=global_args,
     )
 
 
@@ -616,6 +740,7 @@ def _start_server_deploy_with_args(
     listen_addr: str,
     deploy_link: str,
     extra_args: list[str] | None = None,
+    global_args: list[str] | None = None,
 ) -> int:
     args = [
         "scripts/linux/start_xp2p_server_deploy.sh",
@@ -625,7 +750,13 @@ def _start_server_deploy_with_args(
     ]
     if extra_args:
         args.extend(extra_args)
-    result = linux_env.run_guest_script(host, *args)
+    env = {}
+    if global_args:
+        env["XP2P_GLOBAL_ARGS"] = " ".join(global_args)
+    if env:
+        result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
+    else:
+        result = linux_env.run_guest_script(host, *args)
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p server deploy.\n"

@@ -10,8 +10,8 @@ import (
 
 func TestNormalizeServerPortPrefersFlag(t *testing.T) {
 	cfg := config.Config{
-		Server: config.ServerConfig{Port: "8443"},
-		Client: config.ClientConfig{ServerPort: "62022"},
+		Server: config.ServerConfig{TrojanPort: "8443"},
+		Client: config.ClientConfig{ServerPort: "58443"},
 	}
 	got := normalizeServerPort(cfg, "12345")
 	if got != "12345" {
@@ -21,22 +21,22 @@ func TestNormalizeServerPortPrefersFlag(t *testing.T) {
 
 func TestNormalizeServerPortPrefersClientConfig(t *testing.T) {
 	cfg := config.Config{
-		Server: config.ServerConfig{Port: "8443"},
-		Client: config.ClientConfig{ServerPort: "62022"},
+		Server: config.ServerConfig{TrojanPort: "8443"},
+		Client: config.ClientConfig{ServerPort: "58443"},
 	}
 	got := normalizeServerPort(cfg, "")
-	if got != "62022" {
+	if got != "58443" {
 		t.Fatalf("expected client server_port, got %q", got)
 	}
 }
 
 func TestNormalizeServerPortFallsBackToServerConfig(t *testing.T) {
 	cfg := config.Config{
-		Server: config.ServerConfig{Port: "62022"},
+		Server: config.ServerConfig{TrojanPort: "58443"},
 		Client: config.ClientConfig{ServerPort: ""},
 	}
 	got := normalizeServerPort(cfg, "")
-	if got != "62022" {
+	if got != "58443" {
 		t.Fatalf("expected server port, got %q", got)
 	}
 }

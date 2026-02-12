@@ -160,7 +160,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
     _cleanup(client_host, xp2p_client_runner)
     try:
         link = (
-            "trojan://linkpass@link.example.test:62022?"
+            "trojan://linkpass@link.example.test:58443?"
             "allowInsecure=1&security=tls&sni=link.example.test#link@example.com"
         )
         xp2p_client_runner(
@@ -189,7 +189,7 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
     _cleanup(client_host, xp2p_client_runner)
     try:
         link = (
-            "trojan://linkpass@link.example.test:62022?"
+            "trojan://linkpass@link.example.test:58443?"
             "security=tls&sni=link.example.test#link@example.com"
         )
         xp2p_client_runner(
@@ -233,7 +233,7 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
             check=True,
         )
         link = (
-            "trojan://statepass@link.example.test:62022?"
+            "trojan://statepass@link.example.test:58443?"
             "allowInsecure=1&security=tls&sni=link.example.test#state-two@example.com"
         )
         xp2p_client_runner(

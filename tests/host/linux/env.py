@@ -53,17 +53,30 @@ def _posix(value: str | Path | PurePosixPath) -> str:
     return str(value)
 
 
-def run_guest_script(host: Host, relative_path: str, *args: str) -> CommandResult:
+def run_guest_script(
+    host: Host,
+    relative_path: str,
+    *args: str,
+    timeout: int | None = None,
+) -> CommandResult:
     script_path = GUEST_SCRIPTS_ROOT / relative_path
     quoted_script = shlex.quote(script_path.as_posix())
     quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
     command = f"sudo -n /bin/bash {quoted_script}"
     if quoted_args:
         command = f"{command} {quoted_args}"
-    return host.run(command)
+    if timeout is None:
+        return host.run(command)
+    return host.run(command, timeout=timeout)
 
 
-def run_guest_script_with_env(host: Host, relative_path: str, env: dict[str, str], *args: str) -> CommandResult:
+def run_guest_script_with_env(
+    host: Host,
+    relative_path: str,
+    env: dict[str, str],
+    *args: str,
+    timeout: int | None = None,
+) -> CommandResult:
     script_path = GUEST_SCRIPTS_ROOT / relative_path
     quoted_script = shlex.quote(script_path.as_posix())
     quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
@@ -71,7 +84,9 @@ def run_guest_script_with_env(host: Host, relative_path: str, env: dict[str, str
     command = f"sudo -n env {env_parts} /bin/bash {quoted_script}"
     if quoted_args:
         command = f"{command} {quoted_args}"
-    return host.run(command)
+    if timeout is None:
+        return host.run(command)
+    return host.run(command, timeout=timeout)
 
 
 def _install_marker(marker: str, output: str | None) -> str | None:
@@ -86,10 +101,20 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     global _DEB_BUILD_READY
     host.run("sudo -n chmod +x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh >/dev/null 2>&1 || true")
 
+    install_timeout = 900
     if _DEB_BUILD_READY:
-        result = run_guest_script_with_env(host, "scripts/linux/install_xp2p.sh", {"XP2P_SKIP_BUILD": "1"})
+        result = run_guest_script_with_env(
+            host,
+            "scripts/linux/install_xp2p.sh",
+            {"XP2P_SKIP_BUILD": "1"},
+            timeout=install_timeout,
+        )
     else:
-        result = run_guest_script(host, "scripts/linux/install_xp2p.sh")
+        result = run_guest_script(
+            host,
+            "scripts/linux/install_xp2p.sh",
+            timeout=install_timeout,
+        )
     if result.rc != 0:
         raise RuntimeError(
             "Failed to build and install xp2p on guest "

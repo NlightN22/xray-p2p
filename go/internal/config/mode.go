@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
@@ -86,6 +87,43 @@ func EnsureTunSettings(path string, role string, enabled bool, name string, mtu 
 	if !changed {
 		return configPath, nil
 	}
+	data, err := encodeToml(tree)
+	if err != nil {
+		return "", err
+	}
+	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
+		AuditPath: ConfigPath(layout.AuditLogFileName),
+	}); err != nil {
+		return "", err
+	}
+	return configPath, nil
+}
+
+// UpdateServerTrojanPort updates server.trojan_port in the specified config file and returns the path used.
+func UpdateServerTrojanPort(path string, port string) (string, error) {
+	port = strings.TrimSpace(port)
+	if port == "" {
+		return "", fmt.Errorf("config: server trojan port is required")
+	}
+	portValue, err := strconv.Atoi(port)
+	if err != nil || portValue <= 0 || portValue > 65535 {
+		return "", fmt.Errorf("config: invalid server trojan port %q", port)
+	}
+
+	configPath, err := resolveConfigPath(path, "server")
+	if err != nil {
+		return "", err
+	}
+	if strings.ToLower(filepath.Ext(configPath)) != ".toml" {
+		return "", fmt.Errorf("config: only toml files are supported for server trojan port updates")
+	}
+
+	tree, err := loadOrCreateToml(configPath)
+	if err != nil {
+		return "", err
+	}
+	tree.SetPath([]string{"server", "trojan_port"}, port)
+
 	data, err := encodeToml(tree)
 	if err != nil {
 		return "", err

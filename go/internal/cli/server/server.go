@@ -77,6 +77,12 @@ func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstall
 
 	logging.Info("xp2p server installed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 
+	if port := strings.TrimSpace(installOpts.Port); port != "" {
+		if _, err := config.UpdateServerTrojanPort("", port); err != nil {
+			logging.Warn("xp2p server install: failed to update server trojan port", "err", err)
+		}
+	}
+
 	if strings.TrimSpace(cfg.Client.User) == "" && strings.TrimSpace(cfg.Client.Password) == "" {
 		if err := generateDefaultServerCredential(ctx, installOpts, installOpts.Host); err != nil {
 			logging.Warn("xp2p server install: failed to generate trojan credential", "err", err)
@@ -196,7 +202,7 @@ func resolveInstallPort(cfg config.Config, flagPort string) string {
 	if value := strings.TrimSpace(flagPort); value != "" {
 		return value
 	}
-	if cfgPort := strings.TrimSpace(cfg.Server.Port); cfgPort != "" && cfgPort != server.DefaultPort {
+	if cfgPort := strings.TrimSpace(cfg.Server.TrojanPort); cfgPort != "" {
 		return cfgPort
 	}
 	return strconv.Itoa(server.DefaultTrojanPort)

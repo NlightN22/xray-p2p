@@ -18,7 +18,7 @@ func TestRunServerUserCommands(t *testing.T) {
 			return server.UserLink{
 				UserID:   "alpha",
 				Password: "secret",
-				Link:     "trojan://secret@example.test:62022?allowInsecure=1&security=tls&sni=example.test#alpha",
+				Link:     "trojan://secret@example.test:58443?allowInsecure=1&security=tls&sni=example.test#alpha",
 			}, nil
 		})
 		defer restoreLink()
@@ -34,7 +34,7 @@ func TestRunServerUserCommands(t *testing.T) {
 				t.Fatalf("exit code: %d", code)
 			}
 		})
-		if !strings.Contains(output, "trojan://secret@example.test:62022") {
+		if !strings.Contains(output, "trojan://secret@example.test:58443") {
 			t.Fatalf("expected link in output, got %q", output)
 		}
 	})
@@ -51,7 +51,7 @@ func TestRunServerUserCommands(t *testing.T) {
 			return server.UserLink{
 				UserID:   "alpha",
 				Password: captured.Password,
-				Link:     fmt.Sprintf("trojan://%s@example.test:62022?allowInsecure=1&security=tls&sni=example.test#alpha", captured.Password),
+				Link:     fmt.Sprintf("trojan://%s@example.test:58443?allowInsecure=1&security=tls&sni=example.test#alpha", captured.Password),
 			}, nil
 		})
 		defer restoreLink()

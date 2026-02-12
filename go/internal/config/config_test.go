@@ -22,6 +22,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.Port != "62022" {
 		t.Fatalf("unexpected server port: %s", cfg.Server.Port)
 	}
+	if cfg.Server.TrojanPort != "58443" {
+		t.Fatalf("unexpected server trojan port: %s", cfg.Server.TrojanPort)
+	}
 	if cfg.Server.InstallDir == "" {
 		t.Fatalf("expected non-empty install dir")
 	}
@@ -115,6 +118,7 @@ format = "json"
 
 [server]
 port = "65001"
+trojan_port = "58444"
 install_dir = "C:\\xp2p-test"
 config_dir = "cfg-test"
 mode = "manual"
@@ -139,6 +143,9 @@ tun_addr = "198.18.0.9/30"
 	}
 	if cfg.Server.Port != "65001" {
 		t.Fatalf("expected port 65001, got %s", cfg.Server.Port)
+	}
+	if cfg.Server.TrojanPort != "58444" {
+		t.Fatalf("expected trojan port 58444, got %s", cfg.Server.TrojanPort)
 	}
 	if cfg.Server.InstallDir != `C:\xp2p-test` {
 		t.Fatalf("expected install dir C:\\xp2p-test, got %s", cfg.Server.InstallDir)
@@ -214,6 +221,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_LOGGING_LEVEL", "DEBUG")
 	t.Setenv("XP2P_LOGGING_FORMAT", "JSON")
 	t.Setenv("XP2P_SERVER_PORT", "65002")
+	t.Setenv("XP2P_SERVER_TROJAN_PORT", "58445")
 	t.Setenv("XP2P_SERVER_INSTALL_DIR", `D:\xp2p`)
 	t.Setenv("XP2P_SERVER_CONFIG_DIR", "cfg-dir")
 	t.Setenv("XP2P_SERVER_MODE", "AUTO")
@@ -248,6 +256,9 @@ func TestLoadFromEnv(t *testing.T) {
 	}
 	if cfg.Server.Port != "65002" {
 		t.Fatalf("expected port 65002, got %s", cfg.Server.Port)
+	}
+	if cfg.Server.TrojanPort != "58445" {
+		t.Fatalf("expected trojan port 58445, got %s", cfg.Server.TrojanPort)
 	}
 	if cfg.Server.InstallDir != `D:\xp2p` {
 		t.Fatalf("expected install dir D:\\xp2p, got %s", cfg.Server.InstallDir)
@@ -324,6 +335,7 @@ func TestLoadOverrides(t *testing.T) {
 			"logging.level":         "error",
 			"logging.format":        "json",
 			"server.port":           "65003",
+			"server.trojan_port":    "58446",
 			"server.install_dir":    `E:\xp2p`,
 			"server.config_dir":     "cfg-override",
 			"server.mode":           "MANUAL",
@@ -358,6 +370,9 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.Server.Port != "65003" {
 		t.Fatalf("expected port 65003, got %s", cfg.Server.Port)
+	}
+	if cfg.Server.TrojanPort != "58446" {
+		t.Fatalf("expected trojan port 58446, got %s", cfg.Server.TrojanPort)
 	}
 	if cfg.Server.InstallDir != `E:\xp2p` {
 		t.Fatalf("expected install dir E:\\xp2p, got %s", cfg.Server.InstallDir)
@@ -435,6 +450,7 @@ format = "json"
 
 [server]
 port = "65004"
+trojan_port = "58447"
 install_dir = "C:\\xp2p-custom"
 config_dir = "config-alt"
 mode = "Manual"
@@ -473,6 +489,9 @@ tun_addr = "198.18.0.37/30"
 	}
 	if cfg.Server.Port != "65004" {
 		t.Fatalf("expected port 65004, got %s", cfg.Server.Port)
+	}
+	if cfg.Server.TrojanPort != "58447" {
+		t.Fatalf("expected trojan port 58447, got %s", cfg.Server.TrojanPort)
 	}
 	if cfg.Server.InstallDir != `C:\xp2p-custom` {
 		t.Fatalf("expected install dir C:\\xp2p-custom, got %s", cfg.Server.InstallDir)

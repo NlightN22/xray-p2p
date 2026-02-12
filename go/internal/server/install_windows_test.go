@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -17,7 +18,7 @@ func TestNormalizeInstallOptionsRequiresHost(t *testing.T) {
 	_, err := normalizeInstallOptions(InstallOptions{
 		InstallDir: filepath.Join(t.TempDir(), "srv"),
 		ConfigDir:  "cfg",
-		Port:       "62022",
+		Port:       strconv.Itoa(DefaultTrojanPort),
 	})
 	if err == nil {
 		t.Fatalf("expected error when host is missing")
@@ -32,7 +33,7 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 	opts := InstallOptions{
 		InstallDir: installDir,
 		ConfigDir:  "config-server",
-		Port:       "62022",
+		Port:       strconv.Itoa(DefaultTrojanPort),
 		Host:       "example.test",
 	}
 
@@ -83,7 +84,7 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 	opts := InstallOptions{
 		InstallDir: installDir,
 		ConfigDir:  "config-server",
-		Port:       "62022",
+		Port:       strconv.Itoa(DefaultTrojanPort),
 		Host:       host,
 	}
 

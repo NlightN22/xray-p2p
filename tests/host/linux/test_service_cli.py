@@ -13,8 +13,8 @@ CLIENT_SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 CLIENT_XRAY_LOG = helpers.LOG_ROOT / "client" / "xray-service.log"
 SERVER_SERVICE_LOG = helpers.LOG_ROOT / "server" / "service.log"
 SERVER_XRAY_LOG = helpers.LOG_ROOT / "server" / "xray-service.log"
-CLIENT_INBOUNDS = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
-SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
+CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
+SERVER_CONFIG = helpers.SERVER_CONFIG_FILE
 CLIENT_DIAG_PORT = "62023"
 SERVER_DIAG_PORT = "62022"
 
@@ -134,6 +134,34 @@ def _wait_for_log_entry(host, path, substring: str, timeout: float = 60.0) -> No
     raise AssertionError(f"Log {path} did not contain {substring!r}. Last content:\n{last_content}")
 
 
+def _current_mode(host, role: str) -> str:
+    state = helpers.read_client_config(host) if role == "client" else helpers.read_server_config(host)
+    tun_enabled = state.get("tun_enabled")
+    if not isinstance(tun_enabled, bool):
+        raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")
+    return "tun" if tun_enabled else "proxy"
+
+
+def _set_mode(runner, role: str, config_dir: str, mode: str) -> None:
+    runner(
+        role,
+        "mode",
+        mode,
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        config_dir,
+        check=True,
+    )
+
+
+def _toggle_mode(host, runner, role: str, config_dir: str) -> str:
+    previous = _current_mode(host, role)
+    target = "proxy" if previous == "tun" else "tun"
+    _set_mode(runner, role, config_dir, target)
+    return previous
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_service_cli_controls_systemd(client_host, xp2p_client_runner):
@@ -194,42 +222,23 @@ def test_service_restarts_when_config_changes(
         service_log = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
         diag_port = CLIENT_DIAG_PORT
+        config_dir = helpers.CLIENT_CONFIG_DIR_NAME
         base_host = "10.55.10.60"
-        redirect_cidr = "198.18.0.0/15"
+        original_mode: str | None = None
         install_fn = lambda: _install_client_endpoint(
             xp2p_client_runner,
             base_host,
             "svc-change@example.com",
             "svc-change-secret",
         )
-        change_fn = lambda: xp2p_client_runner(
-            "client",
-            "redirect",
-            "add",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            "--cidr",
-            redirect_cidr,
-            "--host",
-            base_host,
-            check=True,
-        )
-        revert_fn = lambda: xp2p_client_runner(
-            "client",
-            "redirect",
-            "remove",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            "--cidr",
-            redirect_cidr,
-            "--host",
-            base_host,
-            check=True,
-        )
+
+        def change_fn():
+            nonlocal original_mode
+            original_mode = _toggle_mode(host, runner, role, config_dir)
+
+        def revert_fn():
+            if original_mode:
+                _set_mode(runner, role, config_dir, original_mode)
     else:
         host = server_host
         runner = xp2p_server_runner
@@ -237,47 +246,22 @@ def test_service_restarts_when_config_changes(
         service_log = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
         diag_port = SERVER_DIAG_PORT
+        config_dir = helpers.SERVER_CONFIG_DIR_NAME
+        original_mode: str | None = None
         install_fn = lambda: _install_server_instance(
             xp2p_server_runner,
             host,
             host_name="svc-server.example.com",
             port="62125",
         )
-        user_id = "svc-restart@example.com"
 
         def change_fn():
-            xp2p_server_runner(
-                "server",
-                "user",
-                "add",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
-                "--id",
-                user_id,
-                "--password",
-                "SvcRestart123",
-                "--host",
-                "svc-server.example.com",
-                check=True,
-            )
+            nonlocal original_mode
+            original_mode = _toggle_mode(host, runner, role, config_dir)
 
         def revert_fn():
-            xp2p_server_runner(
-                "server",
-                "user",
-                "remove",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
-                "--id",
-                user_id,
-                "--host",
-                "svc-server.example.com",
-                check=True,
-            )
+            if original_mode:
+                _set_mode(runner, role, config_dir, original_mode)
 
     cleanup(host, runner)
     try:
@@ -285,16 +269,12 @@ def test_service_restarts_when_config_changes(
         _clear_logs(host, service_log, xray_log)
         _start_service(role, runner, host, diag_port)
 
-        change_applied = False
+        change_fn()
         try:
-            change_fn()
-            change_applied = True
+            _wait_for_log_entry(host, service_log, "service configuration change detected")
+            _wait_for_service_state(runner, role, expected_active=True)
         finally:
-            if change_applied:
-                revert_fn()
-
-        _wait_for_log_entry(host, service_log, "service configuration change detected")
-        _wait_for_service_state(runner, role, expected_active=True)
+            revert_fn()
     finally:
         _stop_service(role, runner)
         cleanup(host, runner)
@@ -318,7 +298,8 @@ def test_service_stops_after_invalid_config(
         cleanup = helpers.cleanup_client_install
         service_log = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
-        config_path = CLIENT_INBOUNDS
+        config_path = CLIENT_CONFIG
+        invalid_config = "[client]\nendpoints = \"invalid\"\n"
         diag_port = CLIENT_DIAG_PORT
         install_fn = lambda: _install_client_endpoint(
             xp2p_client_runner,
@@ -332,7 +313,8 @@ def test_service_stops_after_invalid_config(
         cleanup = helpers.cleanup_server_install
         service_log = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
-        config_path = SERVER_INBOUNDS
+        config_path = SERVER_CONFIG
+        invalid_config = "[server]\nserver_redirects = \"invalid\"\n"
         diag_port = SERVER_DIAG_PORT
         install_fn = lambda: _install_server_instance(
             xp2p_server_runner,
@@ -342,14 +324,15 @@ def test_service_stops_after_invalid_config(
         )
 
     cleanup(host, runner)
+    original_config = None
     try:
         install_fn()
+        original_config = helpers.read_text(host, config_path)
         _clear_logs(host, service_log, xray_log)
+        _start_service(role, runner, host, diag_port)
 
-        runner(role, "service", "stop")
-        helpers.write_text(host, config_path, "INVALID-CONFIG")
-        runner(role, "service", "start")
-
+        helpers.write_text(host, config_path, invalid_config)
+        _wait_for_log_entry(host, service_log, "service configuration change detected")
         _wait_for_log_entry(host, service_log, "exceeded restart limit")
         _wait_for_service_state(runner, role, expected_active=False)
 
@@ -360,6 +343,8 @@ def test_service_stops_after_invalid_config(
         if role == "client":
             assert helpers.read_text(host, xray_log).strip(), f"{role} xray log is empty"
     finally:
+        if original_config is not None:
+            helpers.write_text(host, config_path, original_config)
         runner(role, "service", "stop")
         cleanup(host, runner)
         _clear_logs(host, service_log, xray_log)

@@ -18,7 +18,12 @@ mkdir -p "$(dirname "$LOG_PATH")"
 touch "$LOG_PATH"
 chmod 600 "$LOG_PATH"
 
-CMD=(/usr/bin/xp2p client deploy --host "$REMOTE_HOST" --port "$DEPLOY_PORT" --user "$TROJAN_USER" --password "$TROJAN_PASSWORD")
+GLOBAL_ARGS=()
+if [ -n "${XP2P_GLOBAL_ARGS:-}" ]; then
+  read -r -a GLOBAL_ARGS <<<"$XP2P_GLOBAL_ARGS"
+fi
+
+CMD=(/usr/bin/xp2p "${GLOBAL_ARGS[@]}" client deploy --host "$REMOTE_HOST" --port "$DEPLOY_PORT" --user "$TROJAN_USER" --password "$TROJAN_PASSWORD")
 if [ -n "$TROJAN_PORT" ]; then
   CMD+=("--trojan-port" "$TROJAN_PORT")
 fi

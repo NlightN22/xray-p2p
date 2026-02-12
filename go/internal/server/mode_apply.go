@@ -42,7 +42,7 @@ func applyServerDesiredConfig(installDir, configDir string, desired desiredServe
 		keyPath = cfg.Server.KeyFile
 	}
 
-	if err := writeServerInboundsConfig(configDir, xrayCfg, opts.TunEnabled, opts.TunName, opts.TunMTU, parsePortOrDefault(cfg.Server.Port, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, desired.Forwards); err != nil {
+	if err := writeServerInboundsConfig(configDir, xrayCfg, opts.TunEnabled, opts.TunName, opts.TunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, desired.Forwards); err != nil {
 		return err
 	}
 	if err := writeServerLogs(configDir, xrayCfg.Logs); err != nil {

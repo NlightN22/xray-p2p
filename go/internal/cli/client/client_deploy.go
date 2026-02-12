@@ -228,7 +228,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			Port:       markerPort,
 			SocksProxy: socksAddr,
 		}
-		if err := ping.Run(ctx, markerTarget, pingOpts); err != nil {
+		if err := waitForPing(ctx, markerTarget, pingOpts, 15*time.Second); err != nil {
 			completionState = "FAIL ping"
 			logging.Error("xp2p client deploy: ping failed", "err", err)
 			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
@@ -454,6 +454,28 @@ func stopLocalClient(cancel context.CancelFunc, runErrCh <-chan error) error {
 		return nil
 	case <-time.After(5 * time.Second):
 		return fmt.Errorf("timeout waiting for local client to stop")
+	}
+}
+
+func waitForPing(ctx context.Context, host string, opts ping.Options, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := ping.Run(ctx, host, opts); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if time.Now().After(deadline) {
+			if lastErr != nil {
+				return lastErr
+			}
+			return fmt.Errorf("ping timeout after %s", timeout)
+		}
+		time.Sleep(1 * time.Second)
 	}
 }
 

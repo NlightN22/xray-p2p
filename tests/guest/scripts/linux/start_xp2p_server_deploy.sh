@@ -15,7 +15,12 @@ mkdir -p "$(dirname "$LOG_PATH")"
 touch "$LOG_PATH"
 chmod 600 "$LOG_PATH"
 
-CMD=(/usr/bin/xp2p server deploy --listen "$LISTEN_ADDR" --link "$DEPLOY_LINK")
+GLOBAL_ARGS=()
+if [ -n "${XP2P_GLOBAL_ARGS:-}" ]; then
+  read -r -a GLOBAL_ARGS <<<"$XP2P_GLOBAL_ARGS"
+fi
+
+CMD=(/usr/bin/xp2p "${GLOBAL_ARGS[@]}" server deploy --listen "$LISTEN_ADDR" --link "$DEPLOY_LINK")
 if [ "$#" -gt 0 ]; then
   CMD+=("$@")
 fi

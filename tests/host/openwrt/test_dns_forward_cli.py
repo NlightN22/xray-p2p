@@ -249,6 +249,32 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         assert add.rc == 0, f"add command failed: {add.stderr}"
         dns_forward_added = True
 
+        with openwrt_env.xp2p_run_session(
+            openwrt_server_host,
+            role="server",
+            install_dir="/etc/xp2p",
+            config_dir="config-server",
+            log_path="/tmp/xp2p-server.log",
+        ), openwrt_env.xp2p_run_session(
+            openwrt_client_host,
+            role="client",
+            install_dir="/etc/xp2p",
+            config_dir="config-client",
+            log_path="/tmp/xp2p-client.log",
+        ):
+            time.sleep(2.0)
+            tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
+            if tunnel_ping.rc != 0:
+                debug = _dump_dns_forward_debug(
+                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
+                )
+                raise AssertionError(
+                    "openwrt-b tunnel ping failed.\n"
+                    f"STDOUT:\n{tunnel_ping.stdout}\nSTDERR:\n{tunnel_ping.stderr}\n\n"
+                    f"DNS forward debug:\n{debug}"
+                )
+            tunnel_common.assert_zero_loss(tunnel_ping, f"tunnel to {SERVER_TUN_IP}")
+
         redirect = client_runner(
             "client",
             "redirect",
@@ -281,19 +307,6 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             config_dir="config-client",
             log_path="/tmp/xp2p-client.log",
         ):
-            time.sleep(2.0)
-            tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
-            if tunnel_ping.rc != 0:
-                debug = _dump_dns_forward_debug(
-                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
-                )
-                raise AssertionError(
-                    "openwrt-b tunnel ping failed.\n"
-                    f"STDOUT:\n{tunnel_ping.stdout}\nSTDERR:\n{tunnel_ping.stderr}\n\n"
-                    f"DNS forward debug:\n{debug}"
-                )
-            tunnel_common.assert_zero_loss(tunnel_ping, f"tunnel to {SERVER_TUN_IP}")
-
             nat_port = _detect_dokodemo_port(openwrt_client_host, "/etc/xp2p/config-client/inbounds.json")
             nat = client_runner(
                 "nat-redirect",

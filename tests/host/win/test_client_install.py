@@ -236,7 +236,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
         link = (
-            "trojan://linkpass@link.example.test:62022?"
+            "trojan://linkpass@link.example.test:58443?"
             "allowInsecure=1&security=tls&sni=link.example.test#link@example.com"
         )
         xp2p_client_runner(
@@ -262,7 +262,7 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     try:
         link = (
-            "trojan://linkpass@link.example.test:62022?"
+            "trojan://linkpass@link.example.test:58443?"
             "security=tls&sni=link.example.test#link@example.com"
         )
         xp2p_client_runner(

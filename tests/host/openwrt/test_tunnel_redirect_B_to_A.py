@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import re
 import time
 
@@ -38,6 +39,24 @@ def _runner(host):
         return result
 
     return _run
+
+
+@contextmanager
+def _run_sessions(server_host, client_host):
+    with openwrt_env.xp2p_run_session(
+        server_host,
+        "server",
+        helpers.INSTALL_ROOT.as_posix(),
+        helpers.SERVER_CONFIG_DIR_NAME,
+        helpers.SERVER_LOG_FILE,
+    ), openwrt_env.xp2p_run_session(
+        client_host,
+        "client",
+        helpers.INSTALL_ROOT.as_posix(),
+        helpers.CLIENT_CONFIG_DIR_NAME,
+        helpers.CLIENT_LOG_FILE,
+    ):
+        yield
 
 
 def _find_interface_for_ip(host, ip: str) -> str:
@@ -206,15 +225,16 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         )
 
         try:
-            initial_ping = client_runner(
-                "ping",
-                DIAG_IP,
-                "--tunnel",
-                "--count",
-                "3",
-                check=False,
-            )
-            assert initial_ping.rc != 0
+            with _run_sessions(server_host, client_host):
+                initial_ping = client_runner(
+                    "ping",
+                    DIAG_IP,
+                    "--tunnel",
+                    "--count",
+                    "3",
+                    check=False,
+                )
+                assert initial_ping.rc != 0
 
             _add_ip_alias(server_host, iface_name, DIAG_CIDR)
 
@@ -233,19 +253,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 check=True,
             )
 
-            with openwrt_env.xp2p_run_session(
-                server_host,
-                "server",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            ), openwrt_env.xp2p_run_session(
-                client_host,
-                "client",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                helpers.CLIENT_LOG_FILE,
-            ):
+            with _run_sessions(server_host, client_host):
                 _wait_for_port(client_host, SOCKS_PORT)
                 _wait_for_port(server_host, SERVER_DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(
@@ -304,25 +312,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             )
             domain_redirect_added = True
 
-            for host in (server_host, client_host):
-                _stop_xp2p_processes(host)
-
-            for host in (server_host, client_host):
-                _stop_xp2p_processes(host)
-
-            with openwrt_env.xp2p_run_session(
-                server_host,
-                "server",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            ), openwrt_env.xp2p_run_session(
-                client_host,
-                "client",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                helpers.CLIENT_LOG_FILE,
-            ):
+            with _run_sessions(server_host, client_host):
                 _wait_for_port(client_host, SOCKS_PORT)
                 _wait_for_port(server_host, SERVER_DIAGNOSTICS_PORT)
                 heartbeat_state = helpers.wait_for_heartbeat_state(

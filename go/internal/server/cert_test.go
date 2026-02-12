@@ -179,7 +179,7 @@ func prepareTrojanConfig(t *testing.T, configDir string, withTLS bool, allowInse
 		"inbounds": []any{
 			map[string]any{
 				"protocol":       "trojan",
-				"port":           62022,
+				"port":           DefaultTrojanPort,
 				"streamSettings": streamSettings,
 				"settings": map[string]any{
 					"clients": []any{},

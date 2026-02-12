@@ -239,7 +239,7 @@ def test_client_install_from_link(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
         link = (
-            "trojan://linkpass@link.example.test:62022?"
+            "trojan://linkpass@link.example.test:58443?"
             "allowInsecure=1&security=tls&sni=link.example.test#link@example.com"
         )
         runner(
@@ -269,7 +269,7 @@ def test_client_install_from_link_without_allow_insecure(openwrt_host, xp2p_open
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
         link = (
-            "trojan://linkpass@link.example.test:62022?"
+            "trojan://linkpass@link.example.test:58443?"
             "security=tls&sni=link.example.test#link@example.com"
         )
         runner(
@@ -314,7 +314,7 @@ def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk)
             check=True,
         )
         link = (
-            "trojan://statepass@link.example.test:62022?"
+            "trojan://statepass@link.example.test:58443?"
             "allowInsecure=1&security=tls&sni=link.example.test#state-two@example.com"
         )
         runner(

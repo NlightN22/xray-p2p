@@ -55,6 +55,72 @@ def _strip_ansi(value: str | None) -> str:
     return ANSI_ESCAPE_RE.sub("", value)
 
 
+def _reset_host(host) -> None:
+    host.run("sudo -n xp2p client service stop --quiet >/dev/null 2>&1 || true")
+    host.run("sudo -n xp2p server service stop --quiet >/dev/null 2>&1 || true")
+    host.run("sudo -n /etc/init.d/xp2p stop >/dev/null 2>&1 || true")
+    host.run(
+        "for p in 62022 62023 52080 52180 51080 51180; "
+        "do sudo -n fuser -k ${p}/tcp ${p}/udp >/dev/null 2>&1 || true; done"
+    )
+    host.run("sudo -n pkill -f '/usr/bin/xp2p' >/dev/null 2>&1 || true")
+    host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+    host.run("sudo -n nft delete table inet xray_transparent >/dev/null 2>&1 || true")
+    host.run("sudo -n rm -f /etc/nftables.d/xray-transparent.nft /etc/xp2p/nftables/xray-transparent.nft >/dev/null 2>&1 || true")
+    host.run(
+        "sudo -n rm -f /etc/nftables.d/xray-transparent.d/*.entry /etc/xp2p/nftables/xray-transparent.d/*.entry >/dev/null 2>&1 || true"
+    )
+
+
+def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: float = 1.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        check = host.run(f"sudo -n ss -lnt | grep -q ':{port} '")
+        if check.rc == 0:
+            return
+        time.sleep(interval)
+    pytest.fail(f"Port {port} did not open on {host.backend.hostname} within {timeout_seconds}s")
+
+
+def _tail_log(host, path: str, *, lines: int = 200) -> str:
+    return host.run(f"sudo -n tail -n {lines} {path} 2>/dev/null || true").stdout or ""
+
+
+def _heartbeat_debug(server_host, client_hosts) -> str:
+    server_run_log = _tail_log(server_host, "/tmp/xp2p-server-run.log")
+    server_err_log = _tail_log(server_host, helpers.SERVER_LOG_FILE.as_posix())
+    server_listen = server_host.run("sudo -n ss -lntp | grep -E ':(62022|51080|52080) ' || true").stdout or ""
+    server_inbounds = server_host.run("sudo -n cat /etc/xp2p/config-server/inbounds.json 2>/dev/null || true").stdout or ""
+    client_logs = []
+    listen_cmd = "sudo -n ss -lntp | grep -E ':(51180|52180) ' || true"
+    marker_cmd = "sudo -n grep -n '127\\.255' /etc/xp2p/config-client/routing.json 2>/dev/null || true"
+    outbounds_cmd = "sudo -n cat /etc/xp2p/config-client/outbounds.json 2>/dev/null || true"
+    for host in client_hosts:
+        listening = host.run(listen_cmd).stdout or ""
+        marker_rules = host.run(marker_cmd).stdout or ""
+        outbounds = host.run(outbounds_cmd).stdout or ""
+        client_logs.append(
+            "\n".join(
+                [
+                    f"host={host.backend.hostname}",
+                    f"/tmp/xp2p-client-run.log:\n{_tail_log(host, '/tmp/xp2p-client-run.log')}",
+                    f"/var/log/xp2p/client.err:\n{_tail_log(host, helpers.CLIENT_LOG_FILE.as_posix())}",
+                    f"listening:\n{listening}",
+                    f"routing markers:\n{marker_rules}",
+                    f"outbounds.json:\n{outbounds}",
+                ]
+            )
+        )
+    return (
+        "Heartbeat debug:\n"
+        f"server listen:\n{server_listen}\n"
+        f"server run log:\n{server_run_log}\n"
+        f"server err log:\n{server_err_log}\n"
+        f"server inbounds.json:\n{server_inbounds}\n"
+        + "\n".join(client_logs)
+    )
+
+
 def _extract_client_users(output: str) -> set[str]:
     cleaned = _strip_ansi(output)
     users: set[str] = set()
@@ -147,6 +213,8 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
     helpers.cleanup_server_install(server_host, server_runner)
     helpers.cleanup_client_install(client_b, client_b_runner)
     helpers.cleanup_client_install(client_c, client_c_runner)
+    for host in (server_host, client_b, client_c):
+        _reset_host(host)
     helpers.remove_path(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
     for host in (client_b, client_c):
         helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
@@ -328,10 +396,29 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                 client_b_session.__enter__()
                 client_c_session = None
                 try:
-                    helpers.wait_for_heartbeat_state(
-                        server_host,
-                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                    _wait_for_port(server_host, 62022)
+                    _wait_for_port(client_b, 51180)
+                    ping_result = client_b_runner(
+                        "ping",
+                        SERVER_IP,
+                        "--tunnel",
+                        "--count",
+                        "1",
+                        check=False,
                     )
+                    if ping_result.rc != 0:
+                        pytest.fail(
+                            "xp2p ping from client-b failed before heartbeat check.\n"
+                            f"STDOUT:\n{ping_result.stdout}\nSTDERR:\n{ping_result.stderr}\n"
+                            f"{_heartbeat_debug(server_host, [client_b])}"
+                        )
+                    try:
+                        helpers.wait_for_heartbeat_state(
+                            server_host,
+                            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                        )
+                    except AssertionError as exc:
+                        pytest.fail(f"{exc}\n{_heartbeat_debug(server_host, [client_b])}")
                     _assert_server_state_reports_user(server_host, default_cred["user"])
                     client_c_session = linux_env.xp2p_run_session(
                         client_c,
@@ -342,10 +429,14 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                     )
                     client_c_session.__enter__()
                     try:
-                        helpers.wait_for_heartbeat_state(
-                            server_host,
-                            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-                        )
+                        _wait_for_port(client_c, 51180)
+                        try:
+                            helpers.wait_for_heartbeat_state(
+                                server_host,
+                                path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                            )
+                        except AssertionError as exc:
+                            pytest.fail(f"{exc}\n{_heartbeat_debug(server_host, [client_b, client_c])}")
                         _assert_server_state_reports_users(
                             server_host,
                             {default_cred["user"], "client-two@example.com"},
@@ -368,10 +459,13 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                         pass
                     client_b_session.__exit__(None, None, None)
                     client_b_session = None
-                    helpers.wait_for_heartbeat_state(
-                        server_host,
-                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-                    )
+                    try:
+                        helpers.wait_for_heartbeat_state(
+                            server_host,
+                            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                        )
+                    except AssertionError as exc:
+                        pytest.fail(f"{exc}\n{_heartbeat_debug(server_host, [client_c])}")
                     _assert_server_state_reports_user(server_host, "client-two@example.com")
                 finally:
                     if client_c_session is not None:
@@ -428,6 +522,8 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
             ).stdout or ""
             assert "no server redirect rules configured" in final_list.lower()
     finally:
+        for host in (server_host, client_b, client_c):
+            _reset_host(host)
         helpers.cleanup_client_install(client_b, client_b_runner)
         helpers.cleanup_client_install(client_c, client_c_runner)
         helpers.cleanup_server_install(server_host, server_runner)

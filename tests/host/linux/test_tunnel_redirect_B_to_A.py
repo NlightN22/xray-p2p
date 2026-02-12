@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 import pytest
 
 from tests.host.linux import _helpers as helpers
@@ -26,6 +27,24 @@ def _runner(host):
         return result
 
     return _run
+
+
+@contextmanager
+def _run_sessions(server_host, client_host):
+    with linux_env.xp2p_run_session(
+        server_host,
+        "server",
+        helpers.INSTALL_ROOT.as_posix(),
+        helpers.SERVER_CONFIG_DIR_NAME,
+        helpers.SERVER_LOG_FILE,
+    ), linux_env.xp2p_run_session(
+        client_host,
+        "client",
+        helpers.INSTALL_ROOT.as_posix(),
+        helpers.CLIENT_CONFIG_DIR_NAME,
+        helpers.CLIENT_LOG_FILE,
+    ):
+        yield
 
 
 def _find_interface_for_ip(host, ip: str) -> str:
@@ -153,174 +172,163 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
             reverse_tag,
         )
 
-        with linux_env.xp2p_run_session(
-            server_host,
-            "server",
+        with _run_sessions(server_host, client_host):
+            baseline_log = helpers.read_text(server_host, helpers.SERVER_LOG_FILE)
+            baseline_count = baseline_log.lower().count("ping received")
+
+            initial_ping = client_runner(
+                "ping",
+                DIAG_IP,
+                "--tunnel",
+                "--count",
+                "3",
+                check=False,
+            )
+            initial_log = helpers.read_text(server_host, helpers.SERVER_LOG_FILE)
+            assert initial_log.lower().count("ping received") == baseline_count
+            initial_domain_ping = client_runner(
+                "ping",
+                DIAG_DOMAIN,
+                "--tunnel",
+                "--count",
+                "3",
+                check=False,
+            )
+            assert initial_domain_ping.rc != 0
+
+        client_runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
             helpers.INSTALL_ROOT.as_posix(),
-            helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
-        ):
-            with linux_env.xp2p_run_session(
-                client_host,
-                "client",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                helpers.CLIENT_LOG_FILE,
-            ):
-                baseline_log = helpers.read_text(server_host, helpers.SERVER_LOG_FILE)
-                baseline_count = baseline_log.lower().count("ping received")
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            DIAG_CIDR,
+            "--host",
+            SERVER_IP,
+            check=True,
+        )
 
-                initial_ping = client_runner(
-                    "ping",
-                    DIAG_IP,
-                    "--tunnel",
-                    "--count",
-                    "3",
-                    check=False,
-                )
-                initial_log = helpers.read_text(server_host, helpers.SERVER_LOG_FILE)
-                assert initial_log.lower().count("ping received") == baseline_count
-                initial_domain_ping = client_runner(
-                    "ping",
-                    DIAG_DOMAIN,
-                    "--tunnel",
-                    "--count",
-                    "3",
-                    check=False,
-                )
-                assert initial_domain_ping.rc != 0
+        with _run_sessions(server_host, client_host):
+            redirected_ping = client_runner(
+                "ping",
+                DIAG_IP,
+                "--tunnel",
+                "--count",
+                "3",
+                check=True,
+            )
+            assert "0% loss" in _combined_output(redirected_ping)
 
-                client_runner(
-                    "client",
-                    "redirect",
-                    "add",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    "--cidr",
-                    DIAG_CIDR,
-                    "--host",
-                    SERVER_IP,
-                    check=True,
-                )
+            domain_before_rule = client_runner(
+                "ping",
+                DIAG_DOMAIN,
+                "--tunnel",
+                "--count",
+                "3",
+                check=False,
+            )
+            assert domain_before_rule.rc != 0
 
-                redirected_ping = client_runner(
-                    "ping",
-                    DIAG_IP,
-                    "--tunnel",
-                    "--count",
-                    "3",
-                    check=True,
-                )
-                assert "0% loss" in _combined_output(redirected_ping)
+        redirect_list = client_runner(
+            "client",
+            "redirect",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert DIAG_CIDR in redirect_list
 
-                domain_before_rule = client_runner(
-                    "ping",
-                    DIAG_DOMAIN,
-                    "--tunnel",
-                    "--count",
-                    "3",
-                    check=False,
-                )
-                assert domain_before_rule.rc != 0
+        routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        helpers.assert_redirect_rule(routing, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
 
-                redirect_list = client_runner(
-                    "client",
-                    "redirect",
-                    "list",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    check=True,
-                ).stdout or ""
-                assert DIAG_CIDR in redirect_list
+        client_runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--domain",
+            DIAG_DOMAIN,
+            "--host",
+            SERVER_IP,
+            check=True,
+        )
 
-                routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
-                helpers.assert_redirect_rule(routing, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
+        redirect_list = client_runner(
+            "client",
+            "redirect",
+            "list",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert DIAG_DOMAIN in redirect_list
 
-                client_runner(
-                    "client",
-                    "redirect",
-                    "add",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    "--domain",
-                    DIAG_DOMAIN,
-                    "--host",
-                    SERVER_IP,
-                    check=True,
-                )
+        routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        helpers.assert_domain_redirect_rule(routing, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP))
 
-                redirect_list = client_runner(
-                    "client",
-                    "redirect",
-                    "list",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    check=True,
-                ).stdout or ""
-                assert DIAG_DOMAIN in redirect_list
+        client_runner(
+            "client",
+            "redirect",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--domain",
+            DIAG_DOMAIN,
+            "--host",
+            SERVER_IP,
+            check=True,
+        )
 
-                routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
-                helpers.assert_domain_redirect_rule(routing, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP))
+        routing_after_domain_removal = helpers.read_json(
+            client_host, helpers.CLIENT_CONFIG_DIR / "routing.json"
+        )
+        helpers.assert_redirect_rule(routing_after_domain_removal, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
+        helpers.assert_no_domain_redirect_rule(
+            routing_after_domain_removal, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP)
+        )
 
-                client_runner(
-                    "client",
-                    "redirect",
-                    "remove",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    "--domain",
-                    DIAG_DOMAIN,
-                    "--host",
-                    SERVER_IP,
-                    check=True,
-                )
+        with _run_sessions(server_host, client_host):
+            redirected_ping_after_domain = client_runner(
+                "ping",
+                DIAG_IP,
+                "--tunnel",
+                "--count",
+                "3",
+                check=True,
+            )
+            assert "0% loss" in _combined_output(redirected_ping_after_domain)
 
-                routing_after_domain_removal = helpers.read_json(
-                    client_host, helpers.CLIENT_CONFIG_DIR / "routing.json"
-                )
-                helpers.assert_redirect_rule(routing_after_domain_removal, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
-                helpers.assert_no_domain_redirect_rule(
-                    routing_after_domain_removal, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP)
-                )
+        client_runner(
+            "client",
+            "redirect",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            DIAG_CIDR,
+            "--host",
+            SERVER_IP,
+            check=True,
+        )
 
-                redirected_ping_after_domain = client_runner(
-                    "ping",
-                    DIAG_IP,
-                    "--tunnel",
-                    "--count",
-                    "3",
-                    check=True,
-                )
-                assert "0% loss" in _combined_output(redirected_ping_after_domain)
-
-                client_runner(
-                    "client",
-                    "redirect",
-                    "remove",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    "--cidr",
-                    DIAG_CIDR,
-                    "--host",
-                    SERVER_IP,
-                    check=True,
-                )
-
-                routing_after_remove = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
-                helpers.assert_no_redirect_rule(routing_after_remove, DIAG_CIDR)
-                helpers.assert_no_domain_redirect_rule(routing_after_remove, DIAG_DOMAIN)
+        routing_after_remove = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        helpers.assert_no_redirect_rule(routing_after_remove, DIAG_CIDR)
+        helpers.assert_no_domain_redirect_rule(routing_after_remove, DIAG_DOMAIN)
 
         final_list = client_runner(
             "client",

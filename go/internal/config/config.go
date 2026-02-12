@@ -22,6 +22,7 @@ var defaultValues = map[string]any{
 	"logging.level":         "info",
 	"logging.format":        "text",
 	"server.port":           "62022",
+	"server.trojan_port":    "58443",
 	"server.install_dir":    "",
 	"server.config_dir":     "config-server",
 	"server.mode":           "auto",
@@ -62,9 +63,10 @@ type LoggingConfig struct {
 	Format string `koanf:"format"`
 }
 
-// ServerConfig holds diagnostics server settings.
+// ServerConfig holds server settings.
 type ServerConfig struct {
 	Port             string `koanf:"port"`
+	TrojanPort       string `koanf:"trojan_port"`
 	InstallDir       string `koanf:"install_dir"`
 	ConfigDir        string `koanf:"config_dir"`
 	Mode             string `koanf:"mode"`
@@ -227,6 +229,10 @@ func normalize(cfg *Config) {
 	cfg.Server.Port = strings.TrimSpace(cfg.Server.Port)
 	if cfg.Server.Port == "" {
 		cfg.Server.Port = defaultValues["server.port"].(string)
+	}
+	cfg.Server.TrojanPort = strings.TrimSpace(cfg.Server.TrojanPort)
+	if cfg.Server.TrojanPort == "" {
+		cfg.Server.TrojanPort = defaultValues["server.trojan_port"].(string)
 	}
 
 	cfg.Server.InstallDir = strings.TrimSpace(cfg.Server.InstallDir)

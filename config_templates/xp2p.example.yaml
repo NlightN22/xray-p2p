@@ -4,6 +4,7 @@ logging:
 
 server:
   port: 62022
+  trojan_port: 58443
   tun_enabled: true
   tun_name: xp2ps
   tun_mtu: 1500

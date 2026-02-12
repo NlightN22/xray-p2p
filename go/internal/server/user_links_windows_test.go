@@ -48,7 +48,7 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	if users[0].Password != "secret" {
 		t.Fatalf("unexpected password: %s", users[0].Password)
 	}
-	if want := "trojan://secret@links.example.test:62022?security=tls&sni=links.example.test#alpha"; users[0].Link != want {
+	if want := "trojan://secret@links.example.test:58443?security=tls&sni=links.example.test#alpha"; users[0].Link != want {
 		t.Fatalf("unexpected link: %s", users[0].Link)
 	}
 }
@@ -86,7 +86,7 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserLink: %v", err)
 	}
-	if link.Link != "trojan://secret@example.internal:62022?security=none#beta" {
+	if link.Link != "trojan://secret@example.internal:58443?security=none#beta" {
 		t.Fatalf("unexpected link: %s", link.Link)
 	}
 }
@@ -124,7 +124,7 @@ func TestListUsersSelfSignedIncludesAllowInsecure(t *testing.T) {
 	if len(users) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(users))
 	}
-	want := "trojan://secret@self.example.test:62022?allowInsecure=1&security=tls&sni=self.example.test#alpha"
+	want := "trojan://secret@self.example.test:58443?allowInsecure=1&security=tls&sni=self.example.test#alpha"
 	if users[0].Link != want {
 		t.Fatalf("unexpected link: %s", users[0].Link)
 	}

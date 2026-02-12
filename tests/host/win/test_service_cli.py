@@ -53,6 +53,35 @@ def _wait_for_log_entry(host, path: Path, phrase: str) -> None:
     pytest.fail(f"Log {path} did not contain {phrase!r}. Last content:\n{last_content}")
 
 
+def _current_mode(host, role: str) -> str:
+    path = CLIENT_CONFIG_FILE if role == "client" else SERVER_CONFIG_FILE
+    state = win_env.read_toml(host, path).get(role) or {}
+    tun_enabled = state.get("tun_enabled")
+    if not isinstance(tun_enabled, bool):
+        raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")
+    return "tun" if tun_enabled else "proxy"
+
+
+def _set_mode(runner, role: str, mode: str) -> None:
+    runner(
+        role,
+        "mode",
+        mode,
+        "--path",
+        str(INSTALL_ROOT),
+        "--config-dir",
+        f"config-{role}",
+        check=True,
+    )
+
+
+def _toggle_mode(host, runner, role: str) -> str:
+    previous = _current_mode(host, role)
+    target = "proxy" if previous == "tun" else "tun"
+    _set_mode(runner, role, target)
+    return previous
+
+
 def _clear_paths(host, *paths: Path) -> None:
     for path in paths:
         win_env.remove_path(host, path)
@@ -123,6 +152,7 @@ def test_windows_service_restarts_when_config_changes(
         runner = xp2p_client_runner
         log_path = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
+        original_mode: str | None = None
         install_fn = lambda: _install_client(
             runner,
             "10.70.0.20",
@@ -131,82 +161,32 @@ def test_windows_service_restarts_when_config_changes(
         )
 
         def change_fn():
-            runner(
-                "client",
-                "redirect",
-                "add",
-                "--path",
-                str(INSTALL_ROOT),
-                "--config-dir",
-                "config-client",
-                "--cidr",
-                "198.18.0.0/15",
-                "--host",
-                "10.70.0.20",
-                check=True,
-            )
+            nonlocal original_mode
+            original_mode = _toggle_mode(host, runner, role)
 
         def revert_fn():
-            runner(
-                "client",
-                "redirect",
-                "remove",
-                "--path",
-                str(INSTALL_ROOT),
-                "--config-dir",
-                "config-client",
-                "--cidr",
-                "198.18.0.0/15",
-                "--host",
-                "10.70.0.20",
-                check=True,
-            )
+            if original_mode:
+                _set_mode(runner, role, original_mode)
 
     else:
         host = server_host
         runner = xp2p_server_runner
         log_path = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
+        original_mode: str | None = None
         install_fn = lambda: _install_server(
             runner,
             "svc-server.example.com",
             "62180",
         )
-        user_id = "svc-restart@example.com"
 
         def change_fn():
-            runner(
-                "server",
-                "user",
-                "add",
-                "--path",
-                str(INSTALL_ROOT),
-                "--config-dir",
-                "config-server",
-                "--id",
-                user_id,
-                "--password",
-                "SvcRestart123",
-                "--host",
-                "svc-server.example.com",
-                check=True,
-            )
+            nonlocal original_mode
+            original_mode = _toggle_mode(host, runner, role)
 
         def revert_fn():
-            runner(
-                "server",
-                "user",
-                "remove",
-                "--path",
-                str(INSTALL_ROOT),
-                "--config-dir",
-                "config-server",
-                "--id",
-                user_id,
-                "--host",
-                "svc-server.example.com",
-                check=True,
-            )
+            if original_mode:
+                _set_mode(runner, role, original_mode)
 
     runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
     install_fn()

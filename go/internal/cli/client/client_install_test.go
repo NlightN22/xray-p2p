@@ -104,7 +104,7 @@ func TestRunClientInstall(t *testing.T) {
 			name: "install from link",
 			cfg:  defaultCfg,
 			args: []string{
-				"--link", "trojan://secret@links.example.test:62022?allowInsecure=1&security=tls&sni=links.example.test#alpha@example.com",
+				"--link", "trojan://secret@links.example.test:58443?allowInsecure=1&security=tls&sni=links.example.test#alpha@example.com",
 			},
 			wantCode:   0,
 			wantCalled: true,
@@ -112,7 +112,7 @@ func TestRunClientInstall(t *testing.T) {
 				if opts.ServerAddress != "links.example.test" {
 					t.Fatalf("unexpected server address: %s", opts.ServerAddress)
 				}
-				if opts.ServerPort != "62022" {
+				if opts.ServerPort != "58443" {
 					t.Fatalf("unexpected server port: %s", opts.ServerPort)
 				}
 				if opts.User != "alpha@example.com" {
@@ -133,7 +133,7 @@ func TestRunClientInstall(t *testing.T) {
 			name: "link email query",
 			cfg:  config.Config{},
 			args: []string{
-				"--link", "trojan://secret@links.example.test:62022?allowInsecure=1&email=alpha@example.com",
+				"--link", "trojan://secret@links.example.test:58443?allowInsecure=1&email=alpha@example.com",
 			},
 			wantCode:   0,
 			wantCalled: true,
@@ -150,7 +150,7 @@ func TestRunClientInstall(t *testing.T) {
 			name: "link user decoding",
 			cfg:  config.Config{},
 			args: []string{
-				"--link", "trojan://secret@links.example.test:62022#alpha%40example.com",
+				"--link", "trojan://secret@links.example.test:58443#alpha%40example.com",
 			},
 			wantCode:   0,
 			wantCalled: true,

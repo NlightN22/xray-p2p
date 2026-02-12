@@ -69,6 +69,34 @@ def _wait_for_log_entry(host, path: PurePosixPath, phrase: str, timeout: float =
     raise AssertionError(f"{path} missing phrase {phrase!r}. Last content:\n{last}")
 
 
+def _current_mode(host, role: str) -> str:
+    state = helpers.read_client_config(host) if role == "client" else helpers.read_server_config(host)
+    tun_enabled = state.get("tun_enabled")
+    if not isinstance(tun_enabled, bool):
+        raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")
+    return "tun" if tun_enabled else "proxy"
+
+
+def _set_mode(runner, role: str, config_dir: str, mode: str) -> None:
+    runner(
+        role,
+        "mode",
+        mode,
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        config_dir,
+        check=True,
+    )
+
+
+def _toggle_mode(host, runner, role: str, config_dir: str) -> str:
+    previous = _current_mode(host, role)
+    target = "proxy" if previous == "tun" else "tun"
+    _set_mode(runner, role, config_dir, target)
+    return previous
+
+
 def _wait_for_diag_listener(host, port: str) -> None:
     deadline = time.time() + SERVICE_TIMEOUT
     while time.time() < deadline:
@@ -169,6 +197,8 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
         service_log = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
         diag_port = CLIENT_DIAG_PORT
+        config_dir = helpers.CLIENT_CONFIG_DIR_NAME
+        original_mode: str | None = None
 
         def install_fn():
             runner(
@@ -189,42 +219,20 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
             )
 
         def change_fn():
-            runner(
-                "client",
-                "redirect",
-                "add",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                "--cidr",
-                "198.18.0.0/15",
-                "--host",
-                "10.55.55.60",
-                check=True,
-            )
+            nonlocal original_mode
+            original_mode = _toggle_mode(openwrt_host, runner, role, config_dir)
 
         def revert_fn():
-            runner(
-                "client",
-                "redirect",
-                "remove",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                "--cidr",
-                "198.18.0.0/15",
-                "--host",
-                "10.55.55.60",
-                check=True,
-            )
+            if original_mode:
+                _set_mode(runner, role, config_dir, original_mode)
 
     else:
         helpers.cleanup_server_install(openwrt_host, runner)
         service_log = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
         diag_port = SERVER_DIAG_PORT
+        config_dir = helpers.SERVER_CONFIG_DIR_NAME
+        original_mode: str | None = None
 
         def install_fn():
             runner(
@@ -242,41 +250,13 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
                 check=True,
             )
 
-        user_id = "svc-restart@example.com"
-
         def change_fn():
-            runner(
-                "server",
-                "user",
-                "add",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
-                "--id",
-                user_id,
-                "--password",
-                "SvcRestart123",
-                "--host",
-                "svc-server.example.com",
-                check=True,
-            )
+            nonlocal original_mode
+            original_mode = _toggle_mode(openwrt_host, runner, role, config_dir)
 
         def revert_fn():
-            runner(
-                "server",
-                "user",
-                "remove",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
-                "--id",
-                user_id,
-                "--host",
-                "svc-server.example.com",
-                check=True,
-            )
+            if original_mode:
+                _set_mode(runner, role, config_dir, original_mode)
 
     install_fn()
     try:

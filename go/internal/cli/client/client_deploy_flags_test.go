@@ -10,7 +10,7 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 	cfg := config.Config{
 		Server: config.ServerConfig{
 			Host: "srv.example.com",
-			Port: "62022",
+			Port: "58443",
 		},
 		Client: config.ClientConfig{
 			User:     "default@example.com",
@@ -106,7 +106,7 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 
 	opts := buildInstallOptionsFromLink(cfg, trojanLink{
 		ServerAddress: "edge.example.com",
-		ServerPort:    "62022",
+		ServerPort:    "58443",
 		User:          "user@example.com",
 		Password:      "secret",
 		ServerName:    "edge.example.com",
@@ -116,7 +116,7 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	if opts.InstallDir != `C:\xp2p` || opts.ConfigDir != "cfg-client" {
 		t.Fatalf("unexpected install paths: %+v", opts)
 	}
-	if opts.ServerAddress != "edge.example.com" || opts.ServerPort != "62022" {
+	if opts.ServerAddress != "edge.example.com" || opts.ServerPort != "58443" {
 		t.Fatalf("unexpected target: %+v", opts)
 	}
 	if !opts.AllowInsecure {

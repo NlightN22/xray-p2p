@@ -132,7 +132,7 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if strings.TrimSpace(cfg.Server.KeyFile) != "" {
 		keyPath = cfg.Server.KeyFile
 	}
-	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.Port, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
+	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
 		return ForwardAddResult{}, err
 	}
 
@@ -200,7 +200,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 	if strings.TrimSpace(cfg.Server.KeyFile) != "" {
 		keyPath = cfg.Server.KeyFile
 	}
-	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.Port, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
+	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}

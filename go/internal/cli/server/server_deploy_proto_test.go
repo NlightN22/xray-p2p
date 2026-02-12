@@ -19,7 +19,7 @@ func TestDeployServerHandleConnUnauthorized(t *testing.T) {
 		Host:           "10.0.0.1",
 		Version:        2,
 		InstallDir:     "/srv/xp2p",
-		TrojanPort:     "62022",
+		TrojanPort:     "58443",
 		TrojanUser:     "user@example.com",
 		TrojanPassword: "secret",
 	}
@@ -75,7 +75,7 @@ func TestDeployServerHandleConnExpired(t *testing.T) {
 		Host:           "10.0.0.1",
 		Version:        2,
 		InstallDir:     "/srv/xp2p",
-		TrojanPort:     "62022",
+		TrojanPort:     "58443",
 		TrojanUser:     "user@example.com",
 		TrojanPassword: "secret",
 		ExpiresAt:      time.Now().Add(-time.Minute).Unix(),

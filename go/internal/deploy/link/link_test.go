@@ -50,7 +50,7 @@ func TestCanonicalLinkRequiresCredentials(t *testing.T) {
 	_, err := CanonicalLink(spec.Manifest{
 		Host:       "10.0.0.1",
 		Version:    2,
-		TrojanPort: "62022",
+		TrojanPort: "58443",
 	})
 	if err == nil {
 		t.Fatal("expected error for missing credentials")
@@ -61,10 +61,10 @@ func TestParseRejectsMissingParts(t *testing.T) {
 	if _, err := Parse(""); err != nil {
 		t.Fatalf("empty link should return zero value: %v", err)
 	}
-	if _, err := Parse("trojan://@host:62022"); err == nil {
+	if _, err := Parse("trojan://@host:58443"); err == nil {
 		t.Fatal("expected error for missing password")
 	}
-	if _, err := Parse("https://host:62022"); err == nil {
+	if _, err := Parse("https://host:58443"); err == nil {
 		t.Fatal("expected error for wrong scheme")
 	}
 }

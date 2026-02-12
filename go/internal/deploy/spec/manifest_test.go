@@ -42,7 +42,7 @@ func TestReadWrite(t *testing.T) {
 		Host:           "example.internal",
 		Version:        2,
 		InstallDir:     `D:\custom-xp2p`,
-		TrojanPort:     "62022",
+		TrojanPort:     "58443",
 		TrojanUser:     "client@example.internal",
 		TrojanPassword: "secret",
 		ExpiresAt:      1893458400,

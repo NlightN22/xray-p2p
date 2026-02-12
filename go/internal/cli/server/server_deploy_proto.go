@@ -272,6 +272,11 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		return
 	}
 installDone:
+	if _, err := config.UpdateServerTrojanPort("", port); err != nil {
+		_ = writeLine(rw, "ERR "+err.Error())
+		notifyFailure(results)
+		return
+	}
 
 	userID := strings.TrimSpace(man.TrojanUser)
 	if userID == "" {
