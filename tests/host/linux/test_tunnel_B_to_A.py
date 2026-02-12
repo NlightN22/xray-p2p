@@ -187,7 +187,7 @@ def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
     xp2p_binary = linux_env.INSTALL_PATH.as_posix()
     timeout_arg = f"{duration_seconds:.0f}s"
     command = (
-        f"timeout -k 1s {timeout_arg} sudo -n {xp2p_binary} server state "
+        f"timeout -k 1s {timeout_arg} {xp2p_binary} server state "
         f"--watch --interval 2s --path {install_path}"
     )
     result = server_host.run(command)

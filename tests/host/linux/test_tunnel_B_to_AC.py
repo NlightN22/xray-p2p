@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePosixPath
+import time
 from typing import Any, Callable
 
 import pytest
@@ -34,6 +36,28 @@ def _runner(host):
         return result
 
     return _run
+
+
+def _socks_port(host, config_path: PurePosixPath) -> int:
+    data = helpers.read_json(host, config_path)
+    for inbound in data.get("inbounds", []):
+        if inbound.get("protocol") != "socks":
+            continue
+        port = inbound.get("port")
+        if not port:
+            continue
+        return int(port)
+    raise AssertionError(f"Socks inbound not found in {config_path}")
+
+
+def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: float = 1.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        check = host.run(f"sudo -n ss -lnt | grep -q ':{port} '")
+        if check.rc == 0:
+            return
+        time.sleep(interval)
+    raise AssertionError(f"Port {port} did not open within {timeout_seconds}s")
 
 
 def _install_server(host, runner, host_ip: str):
@@ -251,6 +275,8 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                 helpers.CLIENT_CONFIG_DIR_NAME,
                 helpers.CLIENT_LOG_FILE,
             ):
+                client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+                _wait_for_port(client_b, client_socks_port)
                 for target in (SERVER_A_IP, SERVER_C_IP):
                     result = client_runner(
                         "ping",
