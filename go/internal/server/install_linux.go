@@ -285,6 +285,13 @@ func serverArtifactsPresent(state installState) (bool, string, error) {
 		}
 		return false, "", fmt.Errorf("xp2p: read server state: %w", err)
 	}
+	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
+	if _, err := os.Stat(inboundsPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, "", nil
+		}
+		return false, "", fmt.Errorf("xp2p: stat %s: %w", inboundsPath, err)
+	}
 	return true, fmt.Sprintf("state file %s", state.stateFile), nil
 }
 
