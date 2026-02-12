@@ -28,7 +28,7 @@ SERVER_STATE_FILES = [SERVER_CONFIG_FILE, SERVER_APPLIED_STATE_FILE]
 CLIENT_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-client.json"
 SERVER_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-server.json"
 HEARTBEAT_STATE_FILE = CLIENT_HEARTBEAT_STATE_FILE
-LOG_ROOT = PurePosixPath("/var/log/xp2p")
+LOG_ROOT = PurePosixPath(os.environ.get("XP2P_LOG_ROOT", "/var/log/xp2p"))
 CLIENT_LOG_FILE = LOG_ROOT / "client.err"
 SERVER_LOG_FILE = LOG_ROOT / "server.err"
 XRAY_BINARY = INSTALL_ROOT / "bin" / "xray"
@@ -54,6 +54,7 @@ def cleanup_client_install(
         "--ignore-missing",
         "--quiet",
     )
+    linux_env.remove_path(host, LOG_ROOT)
 
 
 def cleanup_server_install(
@@ -74,6 +75,7 @@ def cleanup_server_install(
         "--ignore-missing",
         "--quiet",
     )
+    linux_env.remove_path(host, LOG_ROOT)
 
 
 def assert_reverse_cli_output(

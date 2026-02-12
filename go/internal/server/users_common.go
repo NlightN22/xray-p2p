@@ -15,7 +15,6 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 var (
@@ -133,7 +132,7 @@ func clientsToInterfaces(clients []trojanClient) []any {
 
 func writeInbounds(path string, root map[string]any) error {
 	return configio.WriteJSON(path, root, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	})
 }

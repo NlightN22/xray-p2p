@@ -6,7 +6,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
@@ -64,7 +63,7 @@ func writeClientInboundsConfig(configDir string, cfg xrayconfig.ClientXrayConfig
 	path := filepath.Join(configDir, "inbounds.json")
 	doc := buildClientInboundsWithForwards(cfg, tunEnabled, tunName, tunMTU, forwards)
 	return configio.WriteJSON(path, doc, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	})
 }

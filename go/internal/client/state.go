@@ -14,7 +14,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/naming"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
@@ -345,7 +344,7 @@ func writeTomlTree(path string, tree *toml.Tree) error {
 		return fmt.Errorf("xp2p: ensure client config dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := configio.WriteBytes(path, data, configio.WriteOptions{
-		AuditPath: config.ConfigPath(layout.AuditLogFileName),
+		AuditPath: config.AuditLogPath(),
 	}); err != nil {
 		return err
 	}

@@ -298,7 +298,7 @@ func deployConfiguration(state installState) error {
 	}
 	if allowInsecure && !xrayCfg.Inbounds.Trojan.AllowInsecure {
 		xrayCfg.Inbounds.Trojan.AllowInsecure = true
-		if err := xrayconfig.SaveServerConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)), config.ConfigPath(layout.AuditLogFileName), xrayCfg); err != nil {
+		if err := xrayconfig.SaveServerConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)), config.AuditLogPath(), xrayCfg); err != nil {
 			return err
 		}
 	}

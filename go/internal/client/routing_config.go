@@ -8,7 +8,6 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
@@ -26,7 +25,7 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 
 	out.Outbounds = append(out.Outbounds, freedomOutbound(direct))
 	if err := configio.WriteJSON(path, out, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	}); err != nil {
 		return err
@@ -223,7 +222,7 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	updateReverseBridges(reverseObj, sortedReverseChannels(reverse))
 
 	if err := configio.WriteJSON(path, document, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	}); err != nil {
 		return err

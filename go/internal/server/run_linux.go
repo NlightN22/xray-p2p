@@ -125,5 +125,5 @@ func resolveServerLogPath(raw string) (string, error) {
 	if rel == "" || rel == "." {
 		rel = "xp2p-server.log"
 	}
-	return filepath.Join(layout.UnixLogRoot, rel), nil
+	return filepath.Join(config.LogRoot(), rel), nil
 }

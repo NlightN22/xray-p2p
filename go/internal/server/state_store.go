@@ -130,7 +130,7 @@ func writeServerTomlTree(path string, tree *toml.Tree) error {
 		return fmt.Errorf("xp2p: ensure server config dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := configio.WriteBytes(path, data, configio.WriteOptions{
-		AuditPath: config.ConfigPath(layout.AuditLogFileName),
+		AuditPath: config.AuditLogPath(),
 	}); err != nil {
 		return err
 	}

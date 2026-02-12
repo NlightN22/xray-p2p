@@ -39,7 +39,7 @@ func UpdateTunEnabled(path string, role string, enabled bool) (string, error) {
 		return "", err
 	}
 	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
-		AuditPath: ConfigPath(layout.AuditLogFileName),
+		AuditPath: AuditLogPath(),
 	}); err != nil {
 		return "", err
 	}
@@ -92,7 +92,7 @@ func EnsureTunSettings(path string, role string, enabled bool, name string, mtu 
 		return "", err
 	}
 	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
-		AuditPath: ConfigPath(layout.AuditLogFileName),
+		AuditPath: AuditLogPath(),
 	}); err != nil {
 		return "", err
 	}
@@ -101,6 +101,20 @@ func EnsureTunSettings(path string, role string, enabled bool, name string, mtu 
 
 // UpdateServerTrojanPort updates server.trojan_port in the specified config file and returns the path used.
 func UpdateServerTrojanPort(path string, port string) (string, error) {
+	return updateServerTrojanPort(path, port, configio.WriteOptions{
+		AuditPath: AuditLogPath(),
+	})
+}
+
+// UpdateServerTrojanPortBestEffort updates server.trojan_port and ignores audit log errors.
+func UpdateServerTrojanPortBestEffort(path string, port string) (string, error) {
+	return updateServerTrojanPort(path, port, configio.WriteOptions{
+		AuditPath:         AuditLogPath(),
+		IgnoreAuditErrors: true,
+	})
+}
+
+func updateServerTrojanPort(path string, port string, opts configio.WriteOptions) (string, error) {
 	port = strings.TrimSpace(port)
 	if port == "" {
 		return "", fmt.Errorf("config: server trojan port is required")
@@ -128,9 +142,7 @@ func UpdateServerTrojanPort(path string, port string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
-		AuditPath: ConfigPath(layout.AuditLogFileName),
-	}); err != nil {
+	if err := configio.WriteBytes(configPath, data, opts); err != nil {
 		return "", err
 	}
 	return configPath, nil

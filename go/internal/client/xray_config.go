@@ -2,12 +2,11 @@ package client
 
 import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
 func ensureClientXrayConfig(configFile string) (xrayconfig.ClientXrayConfig, error) {
-	return xrayconfig.EnsureClientConfig(configFile, config.ConfigPath(layout.AuditLogFileName))
+	return xrayconfig.EnsureClientConfig(configFile, config.AuditLogPath())
 }
 
 func loadClientTunSettings(configFile string) (bool, string, int, error) {

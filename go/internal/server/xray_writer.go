@@ -8,7 +8,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
@@ -23,7 +22,7 @@ func writeServerInboundsConfig(configDir string, cfg xrayconfig.ServerXrayConfig
 	}
 	doc := buildServerInbounds(cfg, tunEnabled, tunName, tunMTU, trojanPort, certPath, keyPath, allowInsecure, forwards, clients)
 	return configio.WriteJSON(filepath.Join(configDir, "inbounds.json"), doc, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	})
 }
@@ -127,7 +126,7 @@ func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPat
 func writeServerLogs(configDir string, cfg xrayconfig.LogsConfig) error {
 	doc := buildLogs(cfg)
 	return configio.WriteJSON(filepath.Join(configDir, "logs.json"), doc, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	})
 }
@@ -177,7 +176,7 @@ func writeServerOutbounds(configDir string, cfg xrayconfig.DirectOutboundConfig)
 		},
 	}
 	return configio.WriteJSON(filepath.Join(configDir, "outbounds.json"), doc, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	})
 }
@@ -185,7 +184,7 @@ func writeServerOutbounds(configDir string, cfg xrayconfig.DirectOutboundConfig)
 func writeServerRouting(configDir string, cfg xrayconfig.ServerXrayConfig, reverse serverReverseState, redirects []redirect.Rule) error {
 	doc := buildServerRouting(cfg, reverse, redirects)
 	return configio.WriteJSON(filepath.Join(configDir, "routing.json"), doc, configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	})
 }

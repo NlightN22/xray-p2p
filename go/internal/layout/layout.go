@@ -25,7 +25,7 @@ const (
 	// ServerAppliedStateFileName stores applied server state in the default config root.
 	ServerAppliedStateFileName = "xp2p-server.state.json"
 	// AuditLogFileName stores configuration change audit logs.
-	AuditLogFileName = "xp2p-audit.log"
+	AuditLogFileName = "audit.log"
 	// HeartbeatStateFileName is retained for legacy shared heartbeat storage.
 	HeartbeatStateFileName = "state-heartbeat.json"
 	// ClientHeartbeatStateFileName stores client-side heartbeat snapshots.

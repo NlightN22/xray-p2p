@@ -261,5 +261,5 @@ func defaultClientLogPath(installDir string, fileName string) string {
 		}
 		return filepath.Join(base, layout.LogsDirName, "client", fileName)
 	}
-	return filepath.Join(layout.UnixLogRoot, "client", fileName)
+	return filepath.Join(config.LogRoot(), "client", fileName)
 }

@@ -272,7 +272,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		return
 	}
 installDone:
-	if _, err := config.UpdateServerTrojanPort("", port); err != nil {
+	if _, err := config.UpdateServerTrojanPortBestEffort("", port); err != nil {
 		_ = writeLine(rw, "ERR "+err.Error())
 		notifyFailure(results)
 		return

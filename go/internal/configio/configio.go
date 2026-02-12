@@ -17,6 +17,7 @@ import (
 type WriteOptions struct {
 	AuditPath         string
 	KeepLastKnownGood bool
+	IgnoreAuditErrors bool
 }
 
 func WriteJSON(path string, doc any, opts WriteOptions) error {
@@ -61,6 +62,9 @@ func WriteBytes(path string, data []byte, opts WriteOptions) error {
 			NewSize:   int64(len(data)),
 		}
 		if err := appendAudit(opts.AuditPath, entry); err != nil {
+			if opts.IgnoreAuditErrors {
+				return nil
+			}
 			return err
 		}
 	}
@@ -93,11 +97,14 @@ func appendAudit(path string, entry auditEntry) error {
 		entry.NewSize,
 		entry.Command,
 	)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
 	if err != nil {
 		return fmt.Errorf("configio: open audit log %s: %w", path, err)
 	}
 	defer file.Close()
+	if err := os.Chmod(path, 0o666); err != nil {
+		return fmt.Errorf("configio: chmod audit log %s: %w", path, err)
+	}
 	if _, err := file.WriteString(line); err != nil {
 		return fmt.Errorf("configio: write audit log %s: %w", path, err)
 	}

@@ -237,14 +237,14 @@ func deployConfiguration(state installState) error {
 
 	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
 	if err := configio.WriteJSON(inboundsPath, buildClientInbounds(xrayCfg, state.TunEnabled, state.TunName, state.TunMTU), configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	}); err != nil {
 		return err
 	}
 
 	if err := configio.WriteJSON(filepath.Join(state.configDir, "logs.json"), buildLogs(xrayCfg.Logs), configio.WriteOptions{
-		AuditPath:         config.ConfigPath(layout.AuditLogFileName),
+		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	}); err != nil {
 		return err
