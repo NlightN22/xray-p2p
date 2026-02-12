@@ -213,22 +213,16 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 	}
 
 	installed := false
-	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer))
-	if _, err := installstate.Read(statePath, installstate.KindServer); err == nil {
+	inboundsPath := filepath.Join(configDir, "inbounds.json")
+	if _, err := os.Stat(inboundsPath); err == nil {
 		installed = true
-	} else if !errors.Is(err, installstate.ErrRoleNotInstalled) && !errors.Is(err, os.ErrNotExist) {
-		logging.Warn("xp2p server deploy: install state read failed", "err", err)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		logging.Warn("xp2p server deploy: inbounds stat failed", "err", err)
 	}
 	if installed {
-		inboundsPath := filepath.Join(configDir, "inbounds.json")
-		if _, err := os.Stat(inboundsPath); err != nil {
-			installed = false
-		}
-	}
-	if !installed {
-		configPath := filepath.Join(installDir, layout.ServerConfigFileName)
-		if _, err := os.Stat(configPath); err == nil {
-			installed = true
+		statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer))
+		if _, err := installstate.Read(statePath, installstate.KindServer); err != nil && !errors.Is(err, installstate.ErrRoleNotInstalled) && !errors.Is(err, os.ErrNotExist) {
+			logging.Warn("xp2p server deploy: install state read failed", "err", err)
 		}
 	}
 
@@ -298,7 +292,7 @@ installDone:
 		return
 	}
 
-	if err := server.AddUser(ctx, server.AddUserOptions{InstallDir: installDir, ConfigDir: configDir, UserID: userID, Password: password, Host: host}); err != nil {
+	if err := server.AddUser(ctx, server.AddUserOptions{InstallDir: installDir, ConfigDir: configDir, UserID: userID, Password: password, Host: host, Force: true}); err != nil {
 		_ = writeLine(rw, "EXIT 1")
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
