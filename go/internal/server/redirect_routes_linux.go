@@ -18,7 +18,7 @@ func ensureRedirectRoute(tunName, cidr string) error {
 	}
 	if err := openwrt.EnsureTunRoute(tun, cidr); err != nil {
 		if isMissingDeviceError(err) {
-			logging.Warn("xp2p: redirect route setup skipped (tun missing)", "cidr", cidr, "err", err)
+			logging.Warn("xp2p: redirect route setup deferred (tun missing)", "cidr", cidr, "err", err)
 			return nil
 		}
 		return err
@@ -81,6 +81,7 @@ func isMissingDeviceError(err error) bool {
 	lower := strings.ToLower(err.Error())
 	return strings.Contains(lower, "can't find device") || strings.Contains(lower, "cannot find device")
 }
+
 
 func removeRedirectRoutes(tunName string, redirects []redirect.Rule) error {
 	seen := make(map[string]struct{}, len(redirects))

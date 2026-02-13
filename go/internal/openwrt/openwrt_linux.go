@@ -96,7 +96,7 @@ func EnsureTunRoute(name, cidr string) error {
 		return errors.New("xp2p: ip command not found (OpenWrt required)")
 	}
 	var lastErr error
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := 0; attempt < 17; attempt++ {
 		if err := runCommand("ip", "route", "replace", cidr, "dev", name); err != nil {
 			lastErr = err
 			if isMissingDeviceError(err) {
