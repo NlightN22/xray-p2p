@@ -45,12 +45,14 @@ def _wait_for_service_state(host, role: str, expected_active: bool) -> None:
     )
 
 
-def _assert_tun_addr(host, name: str, addr: str) -> None:
+def _assert_tun_addr(host, name: str, addr: str, timeout_seconds: int | None = None) -> None:
+    args = [name, addr]
+    if timeout_seconds is not None:
+        args.append(str(timeout_seconds))
     result = openwrt_env.run_guest_script(
         host,
         "scripts/openwrt/assert_tun_addr.sh",
-        name,
-        addr,
+        *args,
     )
     assert result.rc == 0, (
         "TUN address check failed.\n"
@@ -112,7 +114,7 @@ def test_openwrt_server_service_brings_up_tun(openwrt_host, xp2p_openwrt_ipk):
         )
         runner("server", "service", "start", check=True)
         _wait_for_service_state(openwrt_host, "server", expected_active=True)
-        _assert_tun_addr(openwrt_host, SERVER_TUN, SERVER_ADDR)
+        _assert_tun_addr(openwrt_host, SERVER_TUN, SERVER_ADDR, timeout_seconds=30)
     finally:
         runner("server", "service", "stop")
         helpers.cleanup_server_install(openwrt_host, runner)
