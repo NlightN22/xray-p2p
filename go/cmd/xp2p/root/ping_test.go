@@ -75,6 +75,31 @@ func TestResolveSocksAddressAutoMissing(t *testing.T) {
 	}
 }
 
+func TestDetectSocksProxiesIgnoresDefaultClientWhenMissingConfig(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", tmp)
+
+	cfg := config.Config{}
+	cfg.Client.InstallDir = filepath.Join(tmp, "client")
+	cfg.Client.ConfigDir = "config-client"
+	cfg.Client.SocksAddress = "127.0.0.1:51180"
+	cfg.Server.InstallDir = filepath.Join(tmp, "server")
+	cfg.Server.ConfigDir = "config-server"
+
+	writeSocksInbound(t, filepath.Join(cfg.Server.InstallDir, cfg.Server.ConfigDir), "127.0.0.1", 51080)
+
+	clientAddr, serverAddr, err := detectSocksProxies(cfg)
+	if err != nil {
+		t.Fatalf("detectSocksProxies returned error: %v", err)
+	}
+	if clientAddr != "" {
+		t.Fatalf("expected empty client socks addr, got %q", clientAddr)
+	}
+	if serverAddr != "127.0.0.1:51080" {
+		t.Fatalf("expected server socks addr, got %q", serverAddr)
+	}
+}
+
 func TestResolveSocksAddressInvalid(t *testing.T) {
 	cfg := config.Config{}
 	if _, err := resolveSocksAddress(cfg, "bad-port"); err == nil {

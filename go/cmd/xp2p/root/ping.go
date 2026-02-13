@@ -18,6 +18,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -224,13 +225,19 @@ func detectSocksProxies(cfg config.Config) (string, string, error) {
 		serverAddr = ""
 	}
 
-	if clientAddr == "" && cfg.Client.SocksAddress != "" {
+	if clientAddr == "" && cfg.Client.SocksAddress != "" && clientConfigPresent() {
 		if addr, err := normalizeSocksAddress(cfg.Client.SocksAddress); err == nil {
 			clientAddr = addr
 		}
 	}
 
 	return clientAddr, serverAddr, nil
+}
+
+func clientConfigPresent() bool {
+	path := config.ConfigPath(layout.ClientConfigFileName)
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func resolveAutoSocks(preferServer bool, clientAddr, serverAddr string) (string, error) {
