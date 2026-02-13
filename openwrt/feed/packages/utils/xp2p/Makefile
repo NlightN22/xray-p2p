@@ -47,29 +47,22 @@ define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
 	cp "$(XP2P_PREBUILT)" $(PKG_BUILD_DIR)/xp2p
 	if [ -n "$(XP2P_BUNDLE_DIR)" ]; then \
-		for f in "$(XP2P_BUNDLE_DIR)"/*; do \
-			base=$$(basename "$$f"); \
-			[ "$$base" = ".gitkeep" ] && continue; \
-			[ -f "$$f" ] || continue; \
-			cp "$$f" $(PKG_BUILD_DIR)/"$$base"; \
-		done; \
+		cp -R "$(XP2P_BUNDLE_DIR)/." $(PKG_BUILD_DIR)/; \
+		rm -f $(PKG_BUILD_DIR)/.gitkeep; \
 	else \
 		cp "$(XP2P_XRAY)" $(PKG_BUILD_DIR)/xray; \
 	fi
+	if [ ! -f "$(PKG_BUILD_DIR)/xray" ] && [ -n "$(XP2P_XRAY)" ] && [ -f "$(XP2P_XRAY)" ]; then \
+		cp "$(XP2P_XRAY)" $(PKG_BUILD_DIR)/xray; \
+	fi
+	[ -f "$(PKG_BUILD_DIR)/xray" ] || { echo "ERROR: bundled xray missing in build directory" >&2; exit 1; }
 	mkdir -p $(PKG_BUILD_DIR)/completions
 	cp "$(XP2P_COMPLETIONS)/bash/xp2p" $(PKG_BUILD_DIR)/completions/xp2p.bash
 	cp "$(XP2P_COMPLETIONS)/zsh/_xp2p" $(PKG_BUILD_DIR)/completions/_xp2p
 	cp "$(XP2P_COMPLETIONS)/fish/xp2p.fish" $(PKG_BUILD_DIR)/completions/xp2p.fish
 	chmod 0755 $(PKG_BUILD_DIR)/xp2p
 	[ -f $(PKG_BUILD_DIR)/xray ] && chmod 0755 $(PKG_BUILD_DIR)/xray || true
-	for f in $(PKG_BUILD_DIR)/*; do \
-		[ -f "$$f" ] || continue; \
-		base=$$(basename "$$f"); \
-		if [ "$$base" = "xray" ] || [ "$$base" = "xp2p" ]; then \
-			continue; \
-		fi; \
-		chmod 0644 "$$f"; \
-	done
+	find $(PKG_BUILD_DIR) -maxdepth 1 -type f ! -name 'xray' ! -name 'xp2p' -exec chmod 0644 {} +
 endef
 
 define Build/Compile
@@ -85,18 +78,10 @@ define Package/xp2p/install
 	$(INSTALL_DIR) $(1)/usr/lib/xp2p
 	$(INSTALL_DIR) $(1)/var/log/xp2p
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/xp2p $(1)/usr/bin/xp2p
-	for f in $(PKG_BUILD_DIR)/*; do \
-		[ -f "$$f" ] || continue; \
-		base=$$(basename "$$f"); \
-		if [ "$$base" = "xp2p" ]; then \
-			continue; \
-		fi; \
-		if [ "$$base" = "xray" ]; then \
-			$(INSTALL_BIN) "$$f" $(1)/etc/xp2p/bin/xray; \
-			continue; \
-		fi; \
-		$(INSTALL_DATA) "$$f" $(1)/etc/xp2p/bin/"$$base"; \
-	done
+	if [ -f $(PKG_BUILD_DIR)/xray ]; then \
+		$(INSTALL_BIN) $(PKG_BUILD_DIR)/xray $(1)/etc/xp2p/bin/xray; \
+	fi
+	find $(PKG_BUILD_DIR) -maxdepth 1 -type f ! -name 'xp2p' ! -name 'xray' -exec $(INSTALL_DATA) {} $(1)/etc/xp2p/bin/ \;
 	$(INSTALL_BIN) ./files/etc/init.d/xp2p-client $(1)/etc/init.d/xp2p-client
 	$(INSTALL_BIN) ./files/etc/init.d/xp2p-server $(1)/etc/init.d/xp2p-server
 	$(INSTALL_DATA) ./files/usr/lib/xp2p/procd-service.sh $(1)/usr/lib/xp2p/procd-service.sh

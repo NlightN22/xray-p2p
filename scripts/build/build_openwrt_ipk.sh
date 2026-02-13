@@ -22,7 +22,25 @@ DEFAULT_EXTRA_RELEASES=(23.05.0 23.05.2 23.05.4 23.05.5 24.10.0 24.10.1 24.10.2 
 RELEASE_VERSION=${OPENWRT_VERSION:-$DEFAULT_OPENWRT_VERSION}
 EXTRA_RELEASES_VALUE=${OPENWRT_EXTRA_RELEASES:-}
 EXTRA_RELEASES=()
-GOTOOLCHAIN_VERSION=${GOTOOLCHAIN:-go1.21.7}
+resolve_go_toolchain() {
+  local toolchain=""
+  local version=""
+  if [ -f "$PROJECT_ROOT/go.mod" ]; then
+    toolchain=$(awk '$1 == "toolchain" {print $2; exit}' "$PROJECT_ROOT/go.mod" || true)
+    version=$(awk '$1 == "go" {print $2; exit}' "$PROJECT_ROOT/go.mod" || true)
+  fi
+  if [ -n "$toolchain" ]; then
+    echo "$toolchain"
+    return 0
+  fi
+  if [ -n "$version" ]; then
+    echo "go${version}"
+    return 0
+  fi
+  echo "go1.25.7"
+}
+
+GOTOOLCHAIN_VERSION=${GOTOOLCHAIN:-$(resolve_go_toolchain)}
 FORCE_BUILD=0
 SOURCE_SIGNATURE=""
 SOURCE_TRACK_PATHS=(go cmd internal pkg go.mod go.sum)

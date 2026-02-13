@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
@@ -51,8 +52,10 @@ func EnsureTunInterface(name, addr string) error {
 		logging.Warn("xp2p: OpenWrt interface exists and is not managed; overwriting", "interface", name)
 	}
 
-	if err := runCommand("uci", "-q", "delete", "network."+name); err != nil {
-		return err
+	if exists {
+		if err := runCommand("uci", "-q", "delete", "network."+name); err != nil {
+			return err
+		}
 	}
 	if err := runCommand("uci", "set", fmt.Sprintf("network.%s=interface", name)); err != nil {
 		return err
@@ -92,7 +95,22 @@ func EnsureTunRoute(name, cidr string) error {
 	if _, err := exec.LookPath("ip"); err != nil {
 		return errors.New("xp2p: ip command not found (OpenWrt required)")
 	}
-	return runCommand("ip", "route", "replace", cidr, "dev", name)
+	var lastErr error
+	for attempt := 0; attempt < 10; attempt++ {
+		if err := runCommand("ip", "route", "replace", cidr, "dev", name); err != nil {
+			lastErr = err
+			if isMissingDeviceError(err) {
+				time.Sleep(300 * time.Millisecond)
+				continue
+			}
+			return err
+		}
+		return nil
+	}
+	if lastErr != nil {
+		return lastErr
+	}
+	return nil
 }
 
 func RemoveTunRoute(name, cidr string) error {
@@ -263,5 +281,16 @@ func isMissingRouteError(err error) bool {
 		return false
 	}
 	lower := strings.ToLower(err.Error())
-	return strings.Contains(lower, "no such process") || strings.Contains(lower, "not found")
+	return strings.Contains(lower, "no such process") ||
+		strings.Contains(lower, "not found") ||
+		strings.Contains(lower, "can't find device") ||
+		strings.Contains(lower, "cannot find device")
+}
+
+func isMissingDeviceError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "can't find device") || strings.Contains(lower, "cannot find device")
 }

@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from testinfra.host import Host
 
 from tests.host.linux import _helpers as linux_helpers
+from tests.host.openwrt import env as openwrt_env
 
 INSTALL_ROOT = linux_helpers.INSTALL_ROOT
 CONFIG_ROOT = linux_helpers.CONFIG_ROOT
@@ -47,8 +48,6 @@ def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> No
             f"Failed to write remote text {target}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 
-cleanup_client_install = linux_helpers.cleanup_client_install
-cleanup_server_install = linux_helpers.cleanup_server_install
 extract_trojan_credential = linux_helpers.extract_trojan_credential
 expected_proxy_tag = linux_helpers.expected_proxy_tag
 expected_reverse_tag = linux_helpers.expected_reverse_tag
@@ -65,6 +64,51 @@ assert_server_redirect_rule = linux_helpers.assert_server_redirect_rule
 assert_redirect_rule = linux_helpers.assert_redirect_rule
 assert_no_redirect_rule = linux_helpers.assert_no_redirect_rule
 assert_outbound = linux_helpers.assert_outbound
+
+
+def cleanup_client_install(
+    host: Host,
+    runner,
+    install_dir: PurePosixPath | None = None,
+    config_dir: str | None = None,
+) -> None:
+    install_path = (install_dir or INSTALL_ROOT).as_posix()
+    config_name = config_dir or CLIENT_CONFIG_DIR_NAME
+    runner(
+        "client",
+        "remove",
+        "--path",
+        install_path,
+        "--config-dir",
+        config_name,
+        "--all",
+        "--ignore-missing",
+        "--quiet",
+    )
+    remove_path(host, LOG_ROOT)
+    openwrt_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
+
+
+def cleanup_server_install(
+    host: Host,
+    runner,
+    install_dir: PurePosixPath | None = None,
+    config_dir: str | None = None,
+) -> None:
+    install_path = (install_dir or INSTALL_ROOT).as_posix()
+    config_name = config_dir or SERVER_CONFIG_DIR_NAME
+    runner(
+        "server",
+        "remove",
+        "--path",
+        install_path,
+        "--config-dir",
+        config_name,
+        "--ignore-missing",
+        "--quiet",
+    )
+    remove_path(host, LOG_ROOT)
+    openwrt_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
 
 
 def find_tun_inbound(data: dict) -> dict | None:

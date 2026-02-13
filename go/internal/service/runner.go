@@ -204,11 +204,15 @@ func considerPathList(paths []string) []string {
 }
 
 func shouldIgnoreEvent(path string, ignored map[string]struct{}) bool {
-	if len(ignored) == 0 {
-		return false
-	}
 	clean := filepath.Clean(strings.TrimSpace(path))
 	if clean == "" {
+		return false
+	}
+	base := filepath.Base(clean)
+	if strings.HasSuffix(base, ".lkg") || strings.HasPrefix(base, ".tmp-") {
+		return true
+	}
+	if len(ignored) == 0 {
 		return false
 	}
 	_, skip := ignored[clean]

@@ -43,6 +43,39 @@ def _alpine_guest(host, script: str, *args: str):
     return result
 
 
+def _current_mode(host, role: str) -> str:
+    if role == "server":
+        config = helpers.read_server_config(host)
+    elif role == "client":
+        config = helpers.read_client_config(host)
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    tun_enabled = config.get("tun_enabled")
+    if not isinstance(tun_enabled, bool):
+        raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")
+    return "tun" if tun_enabled else "proxy"
+
+
+def _set_mode(runner, role: str, config_dir: str, mode: str) -> None:
+    runner(
+        role,
+        "mode",
+        mode,
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        config_dir,
+        check=True,
+    )
+
+
+def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
+    current = _current_mode(host, role)
+    if current != mode:
+        _set_mode(runner, role, config_dir, mode)
+    return current
+
+
 @pytest.fixture(scope="module")
 def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
     server_host = openwrt_host_factory(SERVER_MACHINE)
@@ -125,6 +158,10 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
     redirect_added = False
     nat_added = False
     diag_started = False
+    client_host = chain_environment["client_host"]
+    previous_client_mode = None
+    server_host = chain_environment["server_host"]
+    previous_server_mode = None
 
     _alpine_guest(alpine_c1_host, "scripts/linux/ensure_route.sh", "10.0.102.0/24", C1_LAN_GATEWAY)
     _alpine_guest(alpine_c2_host, "scripts/linux/ensure_route.sh", "10.0.101.0/24", "10.0.102.1")
@@ -133,6 +170,12 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
     diag_started = True
 
     try:
+        previous_server_mode = _ensure_mode(
+            server_host, server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, "proxy"
+        )
+        previous_client_mode = _ensure_mode(
+            client_host, client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy"
+        )
         initial_ping = server_runner(
             "ping",
             c1_ip,
@@ -255,6 +298,10 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
                     f"\nC2 net dump:\n{c2_net_dump.stdout}\n{c2_net_dump.stderr}"
                 )
     finally:
+        if previous_server_mode and previous_server_mode != "proxy":
+            _set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, previous_server_mode)
+        if previous_client_mode and previous_client_mode != "proxy":
+            _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, previous_client_mode)
         if nat_added:
             client_runner("nat-redirect", "remove", "--all", check=False)
         if redirect_added:
@@ -278,6 +325,7 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
 
 def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_host):
     server_runner = chain_environment["server_runner"]
+    client_runner = chain_environment["client_runner"]
     reverse_tag = chain_environment["reverse_tag"]
     endpoint_tag = chain_environment["endpoint_tag"]
     client_user = chain_environment["client_user"]
@@ -287,6 +335,9 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
     nat_added = False
     diag_started = False
     server_host = chain_environment["server_host"]
+    client_host = chain_environment["client_host"]
+    previous_server_mode = None
+    previous_client_mode = None
 
     _alpine_guest(alpine_c1_host, "scripts/linux/ensure_route.sh", "10.0.102.0/24", C1_LAN_GATEWAY)
     _alpine_guest(alpine_c2_host, "scripts/linux/ensure_route.sh", "10.0.101.0/24", "10.0.102.1")
@@ -296,6 +347,12 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
     diag_started = True
 
     try:
+        previous_server_mode = _ensure_mode(
+            server_host, server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, "proxy"
+        )
+        previous_client_mode = _ensure_mode(
+            client_host, client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy"
+        )
         base_ping = openwrt_env.run_alpine_guest_script(
             alpine_c1_host,
             "scripts/linux/xp2p_ping.sh",
@@ -394,6 +451,10 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
                     f"\nClient nft:\n{client_chain.stdout}\n{client_chain.stderr}"
                 )
     finally:
+        if previous_server_mode and previous_server_mode != "proxy":
+            _set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, previous_server_mode)
+        if previous_client_mode and previous_client_mode != "proxy":
+            _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, previous_client_mode)
         if nat_added:
             server_runner("nat-redirect", "remove", "--all", check=False)
         if redirect_added:

@@ -201,5 +201,8 @@ func isMissingRouteError(err error) bool {
 		return false
 	}
 	lower := strings.ToLower(err.Error())
-	return strings.Contains(lower, "no such process") || strings.Contains(lower, "not found")
+	return strings.Contains(lower, "no such process") ||
+		strings.Contains(lower, "not found") ||
+		strings.Contains(lower, "can't find device") ||
+		strings.Contains(lower, "cannot find device")
 }

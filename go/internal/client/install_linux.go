@@ -15,6 +15,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 )
 
 type installState struct {
@@ -67,6 +68,11 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if _, err := config.EnsureTunSettings("", "client", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
 		return err
 	}
+	if state.TunEnabled {
+		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
+			return err
+		}
+	}
 
 	if err := deployConfiguration(state); err != nil {
 		return err
@@ -96,6 +102,9 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return err
 	}
 	if err := removeNetworkdConfig(opts.TunName); err != nil {
+		return err
+	}
+	if err := openwrt.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
 		return err
 	}
 

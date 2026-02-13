@@ -28,6 +28,13 @@ func loadServerDesiredConfig(installDir string) (desiredServerConfig, error) {
 	if err != nil {
 		return desiredServerConfig{}, err
 	}
+	reverse = normalizeReverse(reverse)
+	if redirects == nil {
+		redirects = []redirect.Rule{}
+	}
+	if forwards == nil {
+		forwards = []forward.Rule{}
+	}
 	return desiredServerConfig{
 		Reverse:   reverse,
 		Redirects: redirects,

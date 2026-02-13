@@ -23,6 +23,43 @@ C1_LAN_GATEWAY = "10.0.101.1"
 C2_LAN_GATEWAY = "10.0.102.1"
 
 
+def _current_mode(host, role: str) -> str:
+    if role == "client":
+        config = helpers.read_client_config(host)
+    elif role == "server":
+        config = helpers.read_server_config(host)
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    tun_enabled = config.get("tun_enabled")
+    if not isinstance(tun_enabled, bool):
+        raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")
+    return "tun" if tun_enabled else "proxy"
+
+
+def _set_mode(runner, role: str, config_dir: str, mode: str) -> None:
+    result = runner(
+        role,
+        "mode",
+        mode,
+        "--path",
+        "/etc/xp2p",
+        "--config-dir",
+        config_dir,
+    )
+    if result.rc != 0:
+        raise AssertionError(
+            "xp2p command failed "
+            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
+    current = _current_mode(host, role)
+    if current != mode:
+        _set_mode(runner, role, config_dir, mode)
+    return current
+
+
 @pytest.fixture(scope="module")
 def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
     server_runner = lambda *args: openwrt_env.run_xp2p(openwrt_server_host, *args)
@@ -213,6 +250,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
     dnsmasq_ready = False
     redirect_added = False
     nat_added = False
+    previous_client_mode = None
     client_runner = lambda *args: openwrt_env.run_xp2p(openwrt_client_host, *args)
     endpoint_tag = helpers.expected_proxy_tag(SERVER_TUN_IP)
     try:
@@ -294,6 +332,13 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         helpers.assert_redirect_rule(routing, "10.0.101.0/24", endpoint_tag)
 
         forward_port = _detect_forward_port(openwrt_client_host, c1_dns_ip)
+        previous_client_mode = _ensure_mode(
+            openwrt_client_host,
+            client_runner,
+            "client",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "proxy",
+        )
         with openwrt_env.xp2p_run_session(
             openwrt_server_host,
             role="server",
@@ -361,7 +406,11 @@ def test_dns_forward_openwrt_b_with_c1_c2(
                 f"/usr/bin/xp2p client dns-forward remove --domain {CORP_DOMAIN} --intercept --quiet"
             )
         if nat_added:
+            if previous_client_mode and previous_client_mode != "proxy":
+                _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy")
             client_runner("nat-redirect", "remove", "--all")
+            if previous_client_mode and previous_client_mode != "proxy":
+                _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, previous_client_mode)
         if redirect_added:
             client_runner(
                 "client",

@@ -40,6 +40,39 @@ def _runner(host):
     return _run
 
 
+def _current_mode(host, role: str) -> str:
+    if role == "client":
+        config = helpers.read_client_config(host)
+    elif role == "server":
+        config = helpers.read_server_config(host)
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    tun_enabled = config.get("tun_enabled")
+    if not isinstance(tun_enabled, bool):
+        raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")
+    return "tun" if tun_enabled else "proxy"
+
+
+def _set_mode(runner, role: str, config_dir: str, mode: str) -> None:
+    runner(
+        role,
+        "mode",
+        mode,
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        config_dir,
+        check=True,
+    )
+
+
+def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
+    current = _current_mode(host, role)
+    if current != mode:
+        _set_mode(runner, role, config_dir, mode)
+    return current
+
+
 @pytest.fixture(scope="module")
 def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
     server_host = openwrt_server_host
@@ -170,6 +203,16 @@ def _active_tunnel_sessions(env: dict):
         yield
 
 
+def _wait_for_listen_port(host, port: int, *, timeout_seconds: float = 20.0, interval: float = 1.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        result = host.run(f"netstat -ltn 2>/dev/null | grep ':{port} '")
+        if result.rc == 0:
+            return
+        time.sleep(interval)
+    pytest.fail(f"Port {port} did not start listening on {host.backend.hostname} within {timeout_seconds}s")
+
+
 def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = False):
     args = [
         "server",
@@ -298,6 +341,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
         listen_port = tunnel_common.listen_port_from_entry(entry)
 
         with _active_tunnel_sessions(env):
+            _wait_for_listen_port(server_host, listen_port)
             ping_result = server_runner(
                 "ping",
                 "127.0.0.1",
@@ -422,6 +466,8 @@ def test_client_redirect_through_server(tunnel_environment):
     target_alias = "10.0.101.50/32"
     listener_port = SERVER_DIAGNOSTICS_PORT
     expected_server_dokodemo_port: int | None = None
+    previous_client_mode = None
+    previous_server_mode = None
 
     def _dokodemo_ports(config: dict) -> list[int]:
         ports: list[int] = []
@@ -491,6 +537,12 @@ def test_client_redirect_through_server(tunnel_environment):
     nat_added = False
     server_redirect_cidr: str | None = None
     try:
+        previous_server_mode = _ensure_mode(
+            server_host, server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, "proxy"
+        )
+        previous_client_mode = _ensure_mode(
+            client_host, client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy"
+        )
         client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_redirect_rule(client_routing, CLIENT_REDIRECT_CIDR, endpoint_tag)
@@ -671,6 +723,10 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         ).stdout or ""
         assert CLIENT_REDIRECT_CIDR not in final_list
+        if previous_server_mode and previous_server_mode != "proxy":
+            _set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, previous_server_mode)
+        if previous_client_mode and previous_client_mode != "proxy":
+            _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, previous_client_mode)
 
 
 def test_reverse_redirect_via_server_portal(tunnel_environment):
@@ -743,6 +799,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             assert listen_port == SERVER_FORWARD_PORT
 
             with _active_tunnel_sessions(tunnel_environment):
+                _wait_for_listen_port(server_host, SERVER_FORWARD_PORT)
                 ping_result = server_runner(
                     "ping",
                     "127.0.0.1",

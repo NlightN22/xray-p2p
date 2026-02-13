@@ -20,7 +20,7 @@
   vagrant provision win10-b
 - Cleanup (flags --server, --client, --all apply):
   make vagrant-win10-destroy
-- Optional: XP2P_GO_VERSION=1.22.3 make vagrant-win10 --client pins a specific Go toolchain for that VM.
+- Optional: XP2P_GO_VERSION=1.25.7 make vagrant-win10 --client pins a specific Go toolchain for that VM.
 
 ## Debian deb-test VM trio
 

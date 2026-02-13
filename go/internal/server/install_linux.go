@@ -19,6 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
@@ -83,12 +84,33 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if _, err := config.EnsureTunSettings("", "server", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
 		return err
 	}
+	if state.TunEnabled {
+		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
+			return err
+		}
+	}
 
 	if err := deployConfiguration(state); err != nil {
 		return err
 	}
 	if err := installstate.Write(state.stateFile, installstate.KindServer); err != nil {
 		return fmt.Errorf("xp2p: write server state: %w", err)
+	}
+	desired, err := loadServerDesiredConfig(state.installDir)
+	if err != nil {
+		return err
+	}
+	if err := saveServerAppliedState(
+		filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)),
+		desired.Reverse,
+		desired.Redirects,
+		desired.Forwards,
+		state.TunEnabled,
+		state.TunName,
+		state.TunMTU,
+		state.TunAddr,
+	); err != nil {
+		return err
 	}
 
 	logging.Info("xp2p server install completed", "install_dir", state.installDir)
@@ -116,6 +138,9 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return err
 	}
 	if err := removeNetworkdConfig(opts.TunName); err != nil {
+		return err
+	}
+	if err := openwrt.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
 		return err
 	}
 

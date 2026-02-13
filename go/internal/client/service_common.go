@@ -26,7 +26,8 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		configDirName = DefaultClientConfigDir
 	}
 
-	if _, err := resolveConfigDir(installDir, configDirName); err != nil {
+	configDir, err := resolveConfigDir(installDir, configDirName)
+	if err != nil {
 		return err
 	}
 
@@ -59,6 +60,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 
 	watchPaths := []string{
 		filepath.Join(installDir, "bin"),
+		configDir,
 	}
 	watchFiles := []string{
 		filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),

@@ -111,6 +111,13 @@ def _stop_service(role: str, runner) -> None:
     runner(role, "service", "stop")
 
 
+def _prime_service_state(host, role: str, runner) -> None:
+    runner(role, "service", "start", check=True)
+    _wait_for_service_state(host, role, expected_active=True)
+    runner(role, "service", "stop", check=True)
+    _wait_for_service_state(host, role, expected_active=False)
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_client_service_cli_controls_procd(openwrt_host, xp2p_openwrt_ipk):
@@ -333,6 +340,7 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
             "--force",
             check=True,
         )
+        _prime_service_state(openwrt_host, role, runner)
 
     try:
         _clear_logs(openwrt_host, service_log, xray_log)

@@ -12,7 +12,15 @@ apt-get install -y --no-install-recommends $APT_PACKAGES
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
-GO_VERSION=${GO_VERSION:-"1.23.3"}
+if [ -z "${GO_VERSION:-}" ]; then
+  if [ -f /srv/xray-p2p/go.mod ]; then
+    GO_VERSION=$(awk '$1 == "toolchain" {print $2; exit}' /srv/xray-p2p/go.mod | sed 's/^go//')
+    if [ -z "$GO_VERSION" ]; then
+      GO_VERSION=$(awk '$1 == "go" {print $2; exit}' /srv/xray-p2p/go.mod)
+    fi
+  fi
+fi
+GO_VERSION=${GO_VERSION:-"1.25.7"}
 GO_ARCHIVE="go${GO_VERSION}.linux-amd64.tar.gz"
 TMP_GO_DIR=$(mktemp -d)
 
