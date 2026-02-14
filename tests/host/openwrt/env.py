@@ -32,6 +32,7 @@ TARGET_ENV_VAR = "XP2P_OPENWRT_IPK_TARGET"
 DEFAULT_TARGET = "linux-amd64"
 
 _SCRIPTS_HASH_CACHE: str | None = None
+_SCRIPTS_SYNCED: bool = False
 
 
 def _posix(value: PurePosixPath | Path | str) -> str:
@@ -104,29 +105,29 @@ def _provision_file(machine: str, source: Path, destination: PurePosixPath) -> N
 
 def ensure_guest_scripts_synced() -> None:
     start = time.perf_counter()
+    global _SCRIPTS_SYNCED
     global _SCRIPTS_HASH_CACHE
     if not GUEST_SCRIPTS_SOURCE.exists():
         return
     current_hash = _compute_guest_scripts_hash()
-    if _SCRIPTS_HASH_CACHE == current_hash:
-        for machine in OPENWRT_MACHINES:
-            _provision_guest_scripts(machine, GUEST_SCRIPTS_ROOT)
-        for machine in ALPINE_MACHINES:
-            _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
-            if ALPINE_DNSMASQ_INSTALLER.exists():
-                _provision_file(machine, ALPINE_DNSMASQ_INSTALLER, PurePosixPath("/tmp/dnsmasq-install-alpine.sh"))
+    if _SCRIPTS_HASH_CACHE == current_hash and _SCRIPTS_SYNCED:
         elapsed = time.perf_counter() - start
         print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
         return
     cached = _read_cached_scripts_hash()
     if cached == current_hash and cached is not None:
         _SCRIPTS_HASH_CACHE = current_hash
+        if _SCRIPTS_SYNCED:
+            elapsed = time.perf_counter() - start
+            print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
+            return
         for machine in OPENWRT_MACHINES:
             _provision_guest_scripts(machine, GUEST_SCRIPTS_ROOT)
         for machine in ALPINE_MACHINES:
             _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
             if ALPINE_DNSMASQ_INSTALLER.exists():
                 _provision_file(machine, ALPINE_DNSMASQ_INSTALLER, PurePosixPath("/tmp/dnsmasq-install-alpine.sh"))
+        _SCRIPTS_SYNCED = True
         elapsed = time.perf_counter() - start
         print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
         return
@@ -140,6 +141,7 @@ def ensure_guest_scripts_synced() -> None:
     if current_hash:
         _write_cached_scripts_hash(current_hash)
     _SCRIPTS_HASH_CACHE = current_hash
+    _SCRIPTS_SYNCED = True
     elapsed = time.perf_counter() - start
     print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
 
