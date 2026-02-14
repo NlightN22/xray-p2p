@@ -45,7 +45,6 @@ def _update_hosts_entry(host: Host, action: str, domain: str, ip: str | None = N
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
 
     runner = _runner(openwrt_host)

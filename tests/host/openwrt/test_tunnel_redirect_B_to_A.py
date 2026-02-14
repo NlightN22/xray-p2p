@@ -132,6 +132,60 @@ def _warmup_reverse_tunnel():
     time.sleep(REVERSE_TUNNEL_WARMUP_SECONDS)
 
 
+def _wait_for_alive_entries(
+    server_runner,
+    client_runner,
+    *,
+    install_path: str,
+    expected_tag: str,
+    expected_host: str,
+    expected_user: str,
+    expected_client_ip: str,
+    timeout_seconds: float = 10.0,
+) -> None:
+    tunnel_common.wait_for_alive_entry(
+        server_runner,
+        "server",
+        install_path,
+        expected_tag,
+        expected_host,
+        expected_user,
+        expected_client_ip,
+        timeout_seconds=timeout_seconds,
+    )
+    tunnel_common.wait_for_alive_entry(
+        client_runner,
+        "client",
+        helpers.INSTALL_ROOT.as_posix(),
+        expected_tag,
+        expected_host,
+        expected_user,
+        expected_client_ip,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+def _wait_for_server_redirect_apply(
+    server_host,
+    *,
+    target: str,
+    outbound_tag: str,
+    timeout_seconds: float = 20.0,
+    poll_interval: float = 1.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        try:
+            state = helpers.read_server_applied_state(server_host)
+            helpers.assert_server_redirect_state(state, target, outbound_tag)
+            return
+        except Exception as exc:
+            last_error = exc
+        time.sleep(poll_interval)
+    raise AssertionError(f"Timed out waiting for server redirect apply: {last_error}")
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
@@ -141,7 +195,6 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
     reverse_tag: str | None = None
     endpoint_tag: str | None = None
     for machine, host in ((SERVER_MACHINE, server_host), (CLIENT_MACHINE, client_host)):
-        openwrt_env.sync_build_output(machine)
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk)
 
     server_runner = _runner(server_host)
@@ -363,6 +416,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
     client_host = openwrt_host_factory(CLIENT_MACHINE)
     reverse_tag: str | None = None
     endpoint_tag: str | None = None
+    client_primary_ip: str | None = None
     client_iface = _find_interface_for_ip(client_host, CLIENT_TUNNEL_IP)
 
     def cleanup():
@@ -397,7 +451,6 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
 
     cleanup()
     for machine, host in ((SERVER_MACHINE, server_host), (CLIENT_MACHINE, client_host)):
-        openwrt_env.sync_build_output(machine)
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk)
 
     server_runner = _runner(server_host)
@@ -436,6 +489,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
         client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
+        client_primary_ip = helpers.detect_primary_ipv4(client_host)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_state,
@@ -493,7 +547,16 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 endpoint_tag,
                 host=SERVER_IP,
                 user=credential["user"],
-                client_ip=helpers.detect_primary_ipv4(client_host),
+                client_ip=client_primary_ip,
+            )
+            _wait_for_alive_entries(
+                server_runner,
+                client_runner,
+                install_path=helpers.INSTALL_ROOT.as_posix(),
+                expected_tag=endpoint_tag,
+                expected_host=SERVER_IP,
+                expected_user=credential["user"],
+                expected_client_ip=client_primary_ip,
             )
             _warmup_reverse_tunnel()
 
@@ -555,7 +618,21 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                     endpoint_tag,
                     host=SERVER_IP,
                     user=credential["user"],
-                    client_ip=helpers.detect_primary_ipv4(client_host),
+                    client_ip=client_primary_ip,
+                )
+                _wait_for_alive_entries(
+                    server_runner,
+                    client_runner,
+                    install_path=helpers.INSTALL_ROOT.as_posix(),
+                    expected_tag=endpoint_tag,
+                    expected_host=SERVER_IP,
+                    expected_user=credential["user"],
+                    expected_client_ip=client_primary_ip,
+                )
+                _wait_for_server_redirect_apply(
+                    server_host,
+                    target=CLIENT_DIAG_DOMAIN,
+                    outbound_tag=reverse_tag,
                 )
                 _warmup_reverse_tunnel()
 

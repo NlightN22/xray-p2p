@@ -52,7 +52,6 @@ def _is_unreserved(value: str) -> bool:
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_server_user_add_requires_force_for_duplicate(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
 
     runner = _runner(openwrt_host)
@@ -138,7 +137,6 @@ def test_openwrt_server_user_add_requires_force_for_duplicate(openwrt_host, xp2p
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_server_user_add_validates_password(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
 
     runner = _runner(openwrt_host)

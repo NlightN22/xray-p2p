@@ -22,6 +22,7 @@ SERVER_FORWARD_PORT = 53341
 CLIENT_FORWARD_PORT = 53331
 CLIENT_REDIRECT_CIDR = "10.0.101.0/24"
 SERVER_REDIRECT_CIDR = "10.0.102.0/24"
+CLIENT_SOCKS_PORT = 51180
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
 CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
@@ -99,9 +100,7 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
         helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
 
     cleanup()
-    openwrt_env.sync_build_output(SERVER_MACHINE)
     openwrt_env.install_ipk_on_host(server_host, xp2p_openwrt_ipk)
-    openwrt_env.sync_build_output(CLIENT_MACHINE)
     openwrt_env.install_ipk_on_host(client_host, xp2p_openwrt_ipk)
     try:
         server_install = server_runner(
@@ -200,6 +199,7 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_LOG_FILE,
     ):
         time.sleep(2.0)
+        _wait_for_listen_port(env["client_host"], CLIENT_SOCKS_PORT)
         yield
 
 
@@ -438,6 +438,7 @@ def test_forward_tunnel_operational(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
 
     with _active_tunnel_sessions(tunnel_environment):
+        _verify_heartbeat_state(tunnel_environment)
         ping_result = client_runner(
             "ping",
             SERVER_IP,
@@ -447,7 +448,6 @@ def test_forward_tunnel_operational(tunnel_environment):
             check=True,
         )
         tunnel_common.assert_zero_loss(ping_result, "through SOCKS tunnel")
-        _verify_heartbeat_state(tunnel_environment)
         _run_server_state_watch(tunnel_environment)
     _exercise_client_forward_diagnostics(tunnel_environment)
     _exercise_server_forward_diagnostics(tunnel_environment)
@@ -800,6 +800,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
 
             with _active_tunnel_sessions(tunnel_environment):
                 _wait_for_listen_port(server_host, SERVER_FORWARD_PORT)
+                _verify_heartbeat_state(tunnel_environment)
                 ping_result = server_runner(
                     "ping",
                     "127.0.0.1",

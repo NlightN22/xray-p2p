@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 from testinfra.host import Host
 
@@ -57,10 +59,16 @@ def openwrt_ipk_target() -> str:
 @pytest.fixture(scope="session")
 def xp2p_openwrt_ipk(ipk_builder_host, openwrt_ipk_target):
     openwrt_env.IPK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    build_start = time.perf_counter()
     openwrt_env.build_ipk(ipk_builder_host, openwrt_ipk_target)
+    build_elapsed = time.perf_counter() - build_start
+    print(f"TIMING: openwrt ipk build: {build_elapsed:.2f}s")
     artifact = openwrt_env.latest_local_ipk()
     assert artifact, "Expected build/ipk to contain a freshly built xp2p ipk"
     openwrt_env.ensure_packages_index_present()
+    sync_start = time.perf_counter()
     for machine in openwrt_env.OPENWRT_MACHINES:
         openwrt_env.sync_build_output(machine)
+    sync_elapsed = time.perf_counter() - sync_start
+    print(f"TIMING: openwrt build output sync: {sync_elapsed:.2f}s")
     return artifact

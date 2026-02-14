@@ -27,7 +27,6 @@ def _runner(host):
 
 
 def _prepare_host(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk)
     runner = _runner(openwrt_host)
     helpers.cleanup_client_install(openwrt_host, runner)

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from functools import lru_cache
 import functools
 import os
@@ -120,11 +121,14 @@ def ensure_machine_running(vagrant_dir: Path, machine: str) -> None:
 
 @lru_cache(maxsize=32)
 def machine_state(vagrant_dir: Path, machine: str) -> str | None:
+    start = time.perf_counter()
     output = subprocess.check_output(
         ["vagrant", "status", machine, "--machine-readable"],
         cwd=vagrant_dir,
         text=True,
     )
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: vagrant status {machine}: {elapsed:.2f}s")
     for line in output.splitlines():
         parts = line.split(",")
         if len(parts) >= 4 and parts[2] == "state":
@@ -156,11 +160,15 @@ def parse_ssh_config(raw: str) -> dict[str, str]:
 
 @lru_cache(maxsize=32)
 def _ssh_config(vagrant_dir: Path, machine: str) -> str:
-    return subprocess.check_output(
+    start = time.perf_counter()
+    output = subprocess.check_output(
         ["vagrant", "ssh-config", machine],
         cwd=vagrant_dir,
         text=True,
     )
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: vagrant ssh-config {machine}: {elapsed:.2f}s")
+    return output
 
 
 def get_ssh_host(vagrant_dir: Path, machine: str) -> Host:

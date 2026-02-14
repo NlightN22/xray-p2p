@@ -76,7 +76,6 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
 
     cleanup()
     for machine, host in ((SERVER_MACHINE, server_host), (CLIENT_MACHINE, client_host)):
-        openwrt_env.sync_build_output(machine)
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk)
 
     for host in (server_host, client_host):

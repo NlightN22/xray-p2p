@@ -103,6 +103,7 @@ def _provision_file(machine: str, source: Path, destination: PurePosixPath) -> N
 
 
 def ensure_guest_scripts_synced() -> None:
+    start = time.perf_counter()
     global _SCRIPTS_HASH_CACHE
     if not GUEST_SCRIPTS_SOURCE.exists():
         return
@@ -114,6 +115,8 @@ def ensure_guest_scripts_synced() -> None:
             _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
             if ALPINE_DNSMASQ_INSTALLER.exists():
                 _provision_file(machine, ALPINE_DNSMASQ_INSTALLER, PurePosixPath("/tmp/dnsmasq-install-alpine.sh"))
+        elapsed = time.perf_counter() - start
+        print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
         return
     cached = _read_cached_scripts_hash()
     if cached == current_hash and cached is not None:
@@ -124,6 +127,8 @@ def ensure_guest_scripts_synced() -> None:
             _provision_guest_scripts(machine, ALPINE_GUEST_SCRIPTS_ROOT)
             if ALPINE_DNSMASQ_INSTALLER.exists():
                 _provision_file(machine, ALPINE_DNSMASQ_INSTALLER, PurePosixPath("/tmp/dnsmasq-install-alpine.sh"))
+        elapsed = time.perf_counter() - start
+        print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
         return
     require_openwrt_environment()
     for machine in OPENWRT_MACHINES:
@@ -135,6 +140,8 @@ def ensure_guest_scripts_synced() -> None:
     if current_hash:
         _write_cached_scripts_hash(current_hash)
     _SCRIPTS_HASH_CACHE = current_hash
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
 
 
 def run_guest_script(host: Host, relative_path: str, *args: str):

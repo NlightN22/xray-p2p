@@ -72,7 +72,6 @@ def _ensure_allow_insecure(link: str) -> str:
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_client_and_server_share_install_dir(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
     run = lambda *cmd, check=False: _xp2p_run(openwrt_host, *cmd, check=check)
     try:
@@ -157,7 +156,6 @@ def test_openwrt_client_and_server_share_install_dir(openwrt_host, xp2p_openwrt_
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
     run = lambda *cmd, check=False: _xp2p_run(openwrt_host, *cmd, check=check)
     try:
@@ -207,7 +205,6 @@ def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_op
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
     run = lambda *cmd, check=False: _xp2p_run(openwrt_host, *cmd, check=check)
     custom_client_config = "config-client-max"
@@ -290,7 +287,6 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
     run = lambda *cmd, check=False: _xp2p_run(openwrt_host, *cmd, check=check)
     server_domain_a = "srv-a.local"

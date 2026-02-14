@@ -91,7 +91,6 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
         (SERVER_C_MACHINE, server_c),
         (CLIENT_MACHINE, client_b),
     ):
-        openwrt_env.sync_build_output(machine)
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk)
 
     server_a_runner = _runner(server_a)

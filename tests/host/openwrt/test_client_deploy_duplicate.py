@@ -28,7 +28,6 @@ def _runner(host: Host):
 @pytest.mark.host
 @pytest.mark.linux
 def test_openwrt_client_deploy_rejects_duplicate_endpoint(openwrt_host, xp2p_openwrt_ipk):
-    openwrt_env.sync_build_output(openwrt_env.DEFAULT_OPENWRT_MACHINE)
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
 
     runner = _runner(openwrt_host)

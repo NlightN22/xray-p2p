@@ -39,9 +39,7 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
     server_runner = _runner(openwrt_server_host)
     client_runner = _runner(openwrt_client_host)
 
-    openwrt_env.sync_build_output(openwrt_env.OPENWRT_MACHINES[0])
     openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
-    openwrt_env.sync_build_output(openwrt_env.OPENWRT_MACHINES[1])
     openwrt_env.install_ipk_on_host(openwrt_client_host, xp2p_openwrt_ipk, force=True)
 
     helpers.cleanup_client_install(openwrt_client_host, client_runner)
@@ -175,9 +173,7 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     server_runner = _runner(openwrt_server_host)
     client_runner = _runner(openwrt_client_host)
 
-    openwrt_env.sync_build_output(openwrt_env.OPENWRT_MACHINES[0])
     openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
-    openwrt_env.sync_build_output(openwrt_env.OPENWRT_MACHINES[1])
     openwrt_env.install_ipk_on_host(openwrt_client_host, xp2p_openwrt_ipk, force=True)
 
     helpers.cleanup_client_install(openwrt_client_host, client_runner)
