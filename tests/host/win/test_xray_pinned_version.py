@@ -41,10 +41,10 @@ def _mismatch_version(pinned: str) -> str:
 
 def _state_files_for(install_dir: Path) -> list[Path]:
     return [
-        _env.CONFIG_ROOT / "xp2p-client.toml",
-        _env.CONFIG_ROOT / "xp2p-server.toml",
-        _env.CONFIG_ROOT / "xp2p-client.state.json",
-        _env.CONFIG_ROOT / "xp2p-server.state.json",
+        win_env.CONFIG_ROOT / "xp2p-client.toml",
+        win_env.CONFIG_ROOT / "xp2p-server.toml",
+        win_env.CONFIG_ROOT / "xp2p-client.state.json",
+        win_env.CONFIG_ROOT / "xp2p-server.state.json",
     ]
 
 

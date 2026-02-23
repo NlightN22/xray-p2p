@@ -33,6 +33,7 @@ MSI_MARKER = "__MSI_PATH__="
 
 MSI_CACHE_DIR_X64 = Path(r"C:\xp2p\build\msi-cache")
 MSI_CACHE_DIR_X86 = Path(r"C:\xp2p\build\msi-cache-x86")
+PROJECT_SYNC_MARKER = Path(r"C:\xp2p\scripts\build\build_and_install_msi.ps1")
 
 _MSI_CACHE_PATH_X64: str | None = None
 _MSI_CACHE_PATH_X86: str | None = None
@@ -252,9 +253,10 @@ foreach ($dir in @({dir_list})) {{
 
 def ensure_msi_package(host: Host) -> str:
     global _MSI_CACHE_PATH_X64
-    if _MSI_CACHE_PATH_X64:
+    if _MSI_CACHE_PATH_X64 and path_exists(host, _MSI_CACHE_PATH_X64):
         return _MSI_CACHE_PATH_X64
 
+    ensure_project_synced(host)
     path = _build_msi_package(
         host,
         architecture="amd64",
@@ -267,9 +269,10 @@ def ensure_msi_package(host: Host) -> str:
 
 def ensure_msi_package_x86(host: Host) -> str:
     global _MSI_CACHE_PATH_X86
-    if _MSI_CACHE_PATH_X86:
+    if _MSI_CACHE_PATH_X86 and path_exists(host, _MSI_CACHE_PATH_X86):
         return _MSI_CACHE_PATH_X86
 
+    ensure_project_synced(host)
     path = _build_msi_package(
         host,
         architecture="x86",
@@ -313,13 +316,29 @@ def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path, *, purge_files: bo
     script = f"""
 $ErrorActionPreference = 'Stop'
 $msi = {msi_str}
-$arguments = @('/x', $msi, '/qn', '/norestart')
-$process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
-if (-not $process.WaitForExit(300000)) {{
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-    exit 124
+$services = @('xp2p-client', 'xp2p-server')
+foreach ($svc in $services) {{
+    $service = Get-Service -Name $svc -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -ne 'Stopped') {{
+        Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+    }}
 }}
-$successCodes = @(0, 1605, 1614, 3010)
+Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+$arguments = @('/x', $msi, '/qn', '/norestart')
+$attempt = 0
+do {{
+    $attempt++
+    $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
+    if (-not $process.WaitForExit(300000)) {{
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        exit 124
+    }}
+    $successCodes = @(0, 1605, 1614, 3010)
+    if ($successCodes -contains $process.ExitCode) {{
+        break
+    }}
+    Start-Sleep -Seconds 2
+}} while ($attempt -lt 2)
 if ($successCodes -notcontains $process.ExitCode) {{
     exit $process.ExitCode
 }}
@@ -437,6 +456,34 @@ if (Test-Path {target}) {{
 }}
 """
     run_powershell(host, script)
+
+
+def ensure_project_synced(
+    host: Host,
+    *,
+    timeout: int = 60,
+    machine: str | None = None,
+) -> None:
+    if _wait_for_sync_marker(host, timeout=timeout):
+        return
+    hint = ""
+    if machine:
+        hint = f" Re-mount the synced folder (try 'vagrant reload --provision {machine}')."
+    raise RuntimeError(
+        "Project sync not ready on guest. "
+        f"Expected {PROJECT_SYNC_MARKER} to exist.{hint}"
+    )
+
+
+def _wait_for_sync_marker(host: Host, *, timeout: int) -> bool:
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        if path_exists(host, PROJECT_SYNC_MARKER):
+            return True
+        time.sleep(2)
+    return False
+
+
 
 
 def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -52,105 +53,129 @@ def test_windows_client_deploy_end_to_end(
     xp2p_server_runner,
     xp2p_msi_path,
 ):
-    _stop_xp2p_processes(client_host)
-    _stop_xp2p_processes(server_host)
-    xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
-    xp2p_server_runner("server", "remove", "--ignore-missing")
-    _remove_paths(client_host, [CLIENT_CONFIG_DIR, *CLIENT_STATE_FILES])
-    _remove_paths(server_host, [SERVER_CONFIG_DIR, *SERVER_STATE_FILES])
+    test_start = time.perf_counter()
+    with _timed("cleanup xp2p processes (client)"):
+        _stop_xp2p_processes(client_host)
+    with _timed("cleanup xp2p processes (server)"):
+        _stop_xp2p_processes(server_host)
+    with _timed("xp2p client remove"):
+        xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+    with _timed("xp2p server remove"):
+        xp2p_server_runner("server", "remove", "--ignore-missing")
+    with _timed("remove client config/state"):
+        _remove_paths(client_host, [CLIENT_CONFIG_DIR, *CLIENT_STATE_FILES])
+    with _timed("remove server config/state"):
+        _remove_paths(server_host, [SERVER_CONFIG_DIR, *SERVER_STATE_FILES])
 
-    for host in (client_host, server_host):
-        _remove_paths(host, HEARTBEAT_STATE_FILES)
-    _remove_paths(
-        client_host,
-        [
-            CLIENT_DEPLOY_STDOUT,
-            Path(str(CLIENT_DEPLOY_STDOUT) + ".err"),
-        ],
-    )
-    _remove_paths(
-        server_host,
-        [
-            SERVER_DEPLOY_STDOUT,
-            Path(str(SERVER_DEPLOY_STDOUT) + ".err"),
-        ],
-    )
+    with _timed("remove heartbeat state"):
+        for host in (client_host, server_host):
+            _remove_paths(host, HEARTBEAT_STATE_FILES)
+    with _timed("remove deploy logs (client)"):
+        _remove_paths(
+            client_host,
+            [
+                CLIENT_DEPLOY_STDOUT,
+                Path(str(CLIENT_DEPLOY_STDOUT) + ".err"),
+            ],
+        )
+    with _timed("remove deploy logs (server)"):
+        _remove_paths(
+            server_host,
+            [
+                SERVER_DEPLOY_STDOUT,
+                Path(str(SERVER_DEPLOY_STDOUT) + ".err"),
+            ],
+        )
 
-    server_host_ip = _detect_host_ipv4(server_host)
-    client_host_ip = _detect_host_ipv4(client_host)
+    with _timed("detect server IPv4"):
+        server_host_ip = _detect_host_ipv4(server_host)
+    with _timed("detect client IPv4"):
+        client_host_ip = _detect_host_ipv4(client_host)
     trojan_user = "deploy-suite@example.com"
     trojan_password = "deploy-pass-123"
 
     client_proc = None
     server_proc = None
     try:
-        client_proc = _start_client_deploy(
-            client_host,
-            remote_host=server_host_ip,
-            deploy_port=DEPLOY_PORT,
-            trojan_user=trojan_user,
-            trojan_password=trojan_password,
-            trojan_port=TROJAN_PORT,
-        )
-        link = _wait_for_client_link(client_host, client_proc)
+        with _timed("start client deploy"):
+            client_proc = _start_client_deploy(
+                client_host,
+                remote_host=server_host_ip,
+                deploy_port=DEPLOY_PORT,
+                trojan_user=trojan_user,
+                trojan_password=trojan_password,
+                trojan_port=TROJAN_PORT,
+            )
+        with _timed("wait client deploy link"):
+            link = _wait_for_client_link(client_host, client_proc)
         assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
 
-        server_proc = _start_server_deploy(
-            server_host,
-            listen_addr=f":{DEPLOY_PORT}",
-            deploy_link=link,
-        )
+        with _timed("start server deploy"):
+            server_proc = _start_server_deploy(
+                server_host,
+                listen_addr=f":{DEPLOY_PORT}",
+                deploy_link=link,
+            )
 
-        _wait_for_log_phrase(
-            server_host,
-            server_proc,
-            "server deploy: manifest decrypted",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            server_host,
-            server_proc,
-            "server deploy: starting xray-core",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            client_host,
-            client_proc,
-            "client deploy: trojan link received",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            client_host,
-            client_proc,
-            "client deploy: local install completed",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            client_host,
-            client_proc,
-            "client deploy: ping ok",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            client_host,
-            client_proc,
-            "client deploy: client run active",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
+        with _timed("wait server deploy logs"):
+            _wait_for_log_phrase(
+                server_host,
+                server_proc,
+                "server deploy: manifest decrypted",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
+            _wait_for_log_phrase(
+                server_host,
+                server_proc,
+                "server deploy: starting xray-core",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
+        with _timed("wait client deploy logs"):
+            _wait_for_log_phrase(
+                client_host,
+                client_proc,
+                "client deploy: trojan link received",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
+            _wait_for_log_phrase(
+                client_host,
+                client_proc,
+                "client deploy: local install completed",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
+            _wait_for_log_phrase(
+                client_host,
+                client_proc,
+                "client deploy: ping ok",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
+            _wait_for_log_phrase(
+                client_host,
+                client_proc,
+                "client deploy: client run active",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
 
-        _assert_client_install_artifacts(client_host, server_host_ip, trojan_user, trojan_password)
-        _assert_client_state(client_host, server_host_ip)
-        _assert_client_routing(client_host, server_host_ip)
+        with _timed("assert client artifacts"):
+            _assert_client_install_artifacts(client_host, server_host_ip, trojan_user, trojan_password)
+        with _timed("assert client state"):
+            _assert_client_state(client_host, server_host_ip)
+        with _timed("assert client routing"):
+            _assert_client_routing(client_host, server_host_ip)
 
-        heartbeat = _wait_for_heartbeat_state(client_host, timeout=LOG_WAIT_TIMEOUT)
-        _assert_heartbeat_entry(
-            heartbeat,
-            _expected_tag(server_host_ip),
-            host=server_host_ip,
-            user=trojan_user,
-            client_ip=client_host_ip,
-        )
+        with _timed("wait heartbeat state"):
+            heartbeat = _wait_for_heartbeat_state(client_host, timeout=LOG_WAIT_TIMEOUT)
+        with _timed("assert heartbeat entry"):
+            _assert_heartbeat_entry(
+                heartbeat,
+                _expected_tag(server_host_ip),
+                host=server_host_ip,
+                user=trojan_user,
+                client_ip=client_host_ip,
+            )
     finally:
+        total = time.perf_counter() - test_start
+        print(f"TIMING: test_windows_client_deploy_end_to_end total: {total:.2f}s")
         if client_proc:
             _stop_process(client_host, client_proc["pid"])
         if server_proc:
@@ -268,8 +293,8 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
-        assert primary.get("certificateFile") == str(SERVER_CERT_DEST).replace("\\", "/")
-        assert primary.get("keyFile") == str(SERVER_KEY_DEST).replace("\\", "/")
+        assert _normalize_windows_path(primary.get("certificateFile")) == str(SERVER_CERT_DEST).replace("\\", "/")
+        assert _normalize_windows_path(primary.get("keyFile")) == str(SERVER_KEY_DEST).replace("\\", "/")
     finally:
         if client_proc:
             _stop_process(client_host, client_proc["pid"])
@@ -356,6 +381,16 @@ def _start_server_deploy_with_args(
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     return {"pid": int(pid), "stdout": Path(stdout_path), "stderr": Path(stderr_path)}
+
+
+@contextmanager
+def _timed(label: str):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        print(f"TIMING: {label}: {elapsed:.2f}s")
 
 
 def _encode_args_payload(args: list[str]) -> str:
@@ -577,6 +612,10 @@ def _find_trojan_inbound(data: dict) -> dict:
         if inbound.get("protocol") == "trojan":
             return inbound
     raise AssertionError("Expected trojan inbound in server configuration")
+
+
+def _normalize_windows_path(value: str | None) -> str:
+    return (value or "").replace("\\", "/")
 
 
 def _assert_outbound_entry(

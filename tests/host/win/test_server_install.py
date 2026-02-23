@@ -1,5 +1,6 @@
 import base64
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
@@ -22,6 +23,7 @@ XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
 SERVER_LOG_RELATIVE = r"logs\server.err"
 SERVER_LOG_FILE = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
 SERVER_HOST_VALUE = "xp2p.test.local"
+SERVER_INSTALL_STATE = SERVER_INSTALL_DIR / "install-state-server.json"
 SERVER_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-server.toml",
     _env.CONFIG_ROOT / "xp2p-server.state.json",
@@ -42,7 +44,7 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
     )
     _remove_remote_paths(
         server_host,
-        [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_LOG_FILE],
+        [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_LOG_FILE, SERVER_INSTALL_STATE],
     )
 
 
@@ -721,8 +723,11 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
         )
 
-        _remove_remote_paths(server_host, SERVER_STATE_FILES)
-        assert not any(_remote_path_exists(server_host, path) for path in SERVER_STATE_FILES), (
+        _remove_remote_paths(server_host, [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_INSTALL_STATE])
+        assert not any(
+            _remote_path_exists(server_host, path)
+            for path in [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_INSTALL_STATE]
+        ), (
             "Expected server state files to be removed before re-install"
         )
 
@@ -742,9 +747,15 @@ def test_server_install_succeeds_without_state_marker(
 
         expected_paths = [
             _env.CONFIG_ROOT / "xp2p-server.toml",
-            _env.CONFIG_ROOT / "xp2p-server.state.json",
+            SERVER_INSTALL_STATE,
         ]
-        missing = [path for path in expected_paths if not _remote_path_exists(server_host, path)]
+        deadline = time.time() + 10.0
+        missing: list[Path] = []
+        while time.time() < deadline:
+            missing = [path for path in expected_paths if not _remote_path_exists(server_host, path)]
+            if not missing:
+                break
+            time.sleep(1.0)
         assert not missing, f"Expected server config/state files to be recreated: {missing}"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

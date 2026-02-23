@@ -1,4 +1,6 @@
+import time
 import uuid
+from contextlib import contextmanager
 from typing import Callable
 
 import pytest
@@ -6,6 +8,16 @@ from testinfra.backend.base import CommandResult
 from testinfra.host import Host
 
 from . import _client_runtime, _server_runtime, env as win_env
+
+
+@contextmanager
+def _timed(label: str):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        print(f"TIMING: {label}: {elapsed:.2f}s")
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -77,31 +89,45 @@ def _configure_msi_build_id(xp2p_build_id: str) -> None:
 
 @pytest.fixture(scope="session")
 def xp2p_msi_path(server_host: Host) -> str:
-    return win_env.ensure_msi_package(server_host)
+    with _timed("ensure_msi_package"):
+        return win_env.ensure_msi_package(server_host)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def xp2p_program_files_setup(server_host: Host, client_host: Host):
-    win_env.ensure_admin_token(server_host)
-    win_env.ensure_admin_token(client_host)
-    win_env.ensure_program_files_install(server_host, force_reinstall=True)
-    win_env.ensure_program_files_install(client_host, force_reinstall=True)
+    with _timed("ensure_admin_token (server)"):
+        win_env.ensure_admin_token(server_host)
+    with _timed("ensure_admin_token (client)"):
+        win_env.ensure_admin_token(client_host)
+    with _timed("ensure_project_synced (server)"):
+        win_env.ensure_project_synced(server_host, machine=win_env.DEFAULT_SERVER)
+    with _timed("ensure_project_synced (client)"):
+        win_env.ensure_project_synced(client_host, machine=win_env.DEFAULT_CLIENT)
+    with _timed("ensure_program_files_install (server)"):
+        win_env.ensure_program_files_install(server_host, force_reinstall=True)
+    with _timed("ensure_program_files_install (client)"):
+        win_env.ensure_program_files_install(client_host, force_reinstall=True)
     yield
-    msi_path = win_env.ensure_msi_package(server_host)
-    win_env.uninstall_xp2p_from_msi(server_host, msi_path)
-    win_env.uninstall_xp2p_from_msi(client_host, msi_path)
+    with _timed("ensure_msi_package (teardown)"):
+        msi_path = win_env.ensure_msi_package(server_host)
+    with _timed("uninstall_xp2p_from_msi (server)"):
+        win_env.uninstall_xp2p_from_msi(server_host, msi_path)
+    with _timed("uninstall_xp2p_from_msi (client)"):
+        win_env.uninstall_xp2p_from_msi(client_host, msi_path)
 
 
 @pytest.fixture(scope="session")
 def server_host() -> Host:
     win_env.require_vagrant_environment()
-    return win_env.get_ssh_host(win_env.DEFAULT_SERVER)
+    with _timed("get_ssh_host (server)"):
+        return win_env.get_ssh_host(win_env.DEFAULT_SERVER)
 
 
 @pytest.fixture(scope="session")
 def client_host() -> Host:
     win_env.require_vagrant_environment()
-    return win_env.get_ssh_host(win_env.DEFAULT_CLIENT)
+    with _timed("get_ssh_host (client)"):
+        return win_env.get_ssh_host(win_env.DEFAULT_CLIENT)
 
 
 @pytest.fixture

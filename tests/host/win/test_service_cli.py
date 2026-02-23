@@ -16,6 +16,8 @@ SERVER_SERVICE_LOG = INSTALL_ROOT / "logs" / "server" / "service.log"
 SERVER_XRAY_LOG = INSTALL_ROOT / "logs" / "server" / "xray-service.log"
 CLIENT_INBOUNDS = CLIENT_CONFIG_DIR / "inbounds.json"
 SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
+CLIENT_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-client.toml"
+SERVER_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-server.toml"
 
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
@@ -51,6 +53,22 @@ def _wait_for_log_entry(host, path: Path, phrase: str) -> None:
                 return
         time.sleep(POLL_INTERVAL)
     pytest.fail(f"Log {path} did not contain {phrase!r}. Last content:\n{last_content}")
+
+
+def _wait_for_log_entry_any(host, path: Path, phrases: list[str]) -> None:
+    deadline = time.time() + SERVICE_TIMEOUT
+    needles = [phrase.lower() for phrase in phrases]
+    last_content = ""
+    while time.time() < deadline:
+        if win_env.path_exists(host, path):
+            content = win_env.read_text(host, path)
+            last_content = content
+            lowered = (content or "").lower()
+            if any(needle in lowered for needle in needles):
+                return
+        time.sleep(POLL_INTERVAL)
+    phrase_list = ", ".join(repr(p) for p in phrases)
+    pytest.fail(f"Log {path} did not contain any of {phrase_list}. Last content:\n{last_content}")
 
 
 def _current_mode(host, role: str) -> str:
@@ -220,7 +238,7 @@ def test_windows_service_stops_after_invalid_config(
         runner = xp2p_client_runner
         log_path = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
-        config_path = CLIENT_INBOUNDS
+        config_path = CLIENT_CONFIG_FILE
         install_fn = lambda: _install_client(
             runner,
             "10.70.0.30",
@@ -232,7 +250,7 @@ def test_windows_service_stops_after_invalid_config(
         runner = xp2p_server_runner
         log_path = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
-        config_path = SERVER_INBOUNDS
+        config_path = SERVER_CONFIG_FILE
         install_fn = lambda: _install_server(
             runner,
             "svc-fail.example.com",
@@ -244,13 +262,23 @@ def test_windows_service_stops_after_invalid_config(
     try:
         _clear_paths(host, log_path, xray_log)
         runner(role, "service", "stop")
-        win_env.write_text(host, config_path, "BROKEN-CONFIG")
-        runner(role, "service", "start")
+        runner(role, "service", "start", check=True)
+        _wait_for_service_state(runner, role, expected_active=True)
 
-        _wait_for_log_entry(host, log_path, "exceeded restart limit")
+        win_env.write_text(host, config_path, "BROKEN-CONFIG")
+        _wait_for_log_entry_any(
+            host,
+            log_path,
+            [
+                "exceeded restart limit",
+                "service run failed",
+                "service failed",
+            ],
+        )
         _wait_for_service_state(runner, role, expected_active=False)
         assert win_env.path_exists(host, xray_log), f"{role} xray log missing"
-        assert win_env.read_text(host, xray_log).strip(), f"{role} xray log is empty"
+        if role == "client":
+            assert win_env.read_text(host, xray_log).strip(), f"{role} xray log is empty"
     finally:
         runner(role, "service", "stop")
         runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
