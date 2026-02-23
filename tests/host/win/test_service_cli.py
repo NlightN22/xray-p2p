@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -132,6 +134,37 @@ def _clear_paths(host, *paths: Path) -> None:
         win_env.remove_path(host, path)
 
 
+def _cleanup_role(
+    host,
+    role: str,
+    *,
+    remove_config: bool,
+    log_paths: list[Path] | None = None,
+) -> None:
+    parameters: dict[str, object] = {
+        "Xp2pPath": str(win_env.XP2P_EXE),
+        "Role": role,
+        "InstallRoot": str(INSTALL_ROOT),
+        "ConfigDir": f"config-{role}",
+        "RemoveConfig": str(remove_config).lower(),
+    }
+    if log_paths:
+        payload = base64.b64encode(
+            json.dumps([str(path) for path in log_paths]).encode("utf-8")
+        ).decode("ascii")
+        parameters["LogPathsBase64"] = payload
+    result = win_env.run_guest_script(
+        host,
+        "scripts/xp2p_service_cleanup.ps1",
+        **parameters,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to cleanup xp2p service state.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def _install_client(runner, host: str, user: str, password: str) -> None:
     runner(
         "client",
@@ -172,9 +205,12 @@ def _install_server(runner, host: str, port: str) -> None:
 def test_windows_client_service_cli_controls_service(client_host, xp2p_client_runner):
     runner = xp2p_client_runner
     with _timed("clear client logs"):
-        _clear_paths(client_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG)
-    with _timed("client service stop"):
-        runner("client", "service", "stop")
+        _cleanup_role(
+            client_host,
+            "client",
+            remove_config=False,
+            log_paths=[CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG],
+        )
 
     with _timed("client install"):
         _install_client(runner, "10.70.0.10", "svc-client@example.com", "SvcClientSecret")
@@ -238,15 +274,23 @@ def test_windows_service_restarts_when_config_changes(
             if original_mode:
                 _set_mode(runner, role, original_mode)
 
-    with _timed(f"{role} remove (pre)"):
-        runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+    with _timed(f"{role} cleanup (pre)"):
+        _cleanup_role(
+            host,
+            role,
+            remove_config=True,
+            log_paths=[log_path, xray_log],
+        )
     with _timed(f"{role} install"):
         install_fn()
     try:
         with _timed(f"{role} clear logs"):
-            _clear_paths(host, log_path, xray_log)
-        with _timed(f"{role} service stop"):
-            runner(role, "service", "stop")
+            _cleanup_role(
+                host,
+                role,
+                remove_config=False,
+                log_paths=[log_path, xray_log],
+            )
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
@@ -259,10 +303,13 @@ def test_windows_service_restarts_when_config_changes(
         _wait_for_log_entry(host, log_path, "service configuration change detected")
         _wait_for_service_state(runner, role, expected_active=True)
     finally:
-        with _timed(f"{role} service stop (final)"):
-            runner(role, "service", "stop")
-        with _timed(f"{role} remove (final)"):
-            runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+        with _timed(f"{role} cleanup (final)"):
+            _cleanup_role(
+                host,
+                role,
+                remove_config=True,
+                log_paths=None,
+            )
 
 
 @pytest.mark.host
@@ -298,15 +345,23 @@ def test_windows_service_stops_after_invalid_config(
             "62190",
         )
 
-    with _timed(f"{role} remove (pre)"):
-        runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+    with _timed(f"{role} cleanup (pre)"):
+        _cleanup_role(
+            host,
+            role,
+            remove_config=True,
+            log_paths=[log_path, xray_log],
+        )
     with _timed(f"{role} install"):
         install_fn()
     try:
         with _timed(f"{role} clear logs"):
-            _clear_paths(host, log_path, xray_log)
-        with _timed(f"{role} service stop"):
-            runner(role, "service", "stop")
+            _cleanup_role(
+                host,
+                role,
+                remove_config=False,
+                log_paths=[log_path, xray_log],
+            )
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
@@ -327,7 +382,10 @@ def test_windows_service_stops_after_invalid_config(
         if role == "client":
             assert win_env.read_text(host, xray_log).strip(), f"{role} xray log is empty"
     finally:
-        with _timed(f"{role} service stop (final)"):
-            runner(role, "service", "stop")
-        with _timed(f"{role} remove (final)"):
-            runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+        with _timed(f"{role} cleanup (final)"):
+            _cleanup_role(
+                host,
+                role,
+                remove_config=True,
+                log_paths=None,
+            )
