@@ -351,8 +351,14 @@ func deployConfiguration(state installState) error {
 				return err
 			}
 			allowInsecure = selfSigned
-			certPath = filepath.ToSlash(state.CertificateFile)
-			keyPath = filepath.ToSlash(state.KeyFile)
+			if err := copyFile(state.CertificateFile, state.certDest, 0o644); err != nil {
+				return fmt.Errorf("xp2p: copy certificate: %w", err)
+			}
+			if err := copyFile(state.KeyFile, state.keyDest, 0o600); err != nil {
+				return fmt.Errorf("xp2p: copy key: %w", err)
+			}
+			certPath = filepath.ToSlash(state.certDest)
+			keyPath = filepath.ToSlash(state.keyDest)
 		}
 		if certPath == "" && keyPath == "" {
 			certPath = filepath.ToSlash(state.certDest)

@@ -19,6 +19,8 @@ def _start_xp2p_server_run(
     output_log_path: str | None = None,
 ) -> int:
     log_abs = str(Path(install_dir) / Path(log_relative))
+    if output_log_path is None:
+        output_log_path = str(Path(install_dir) / "logs" / "xp2p-server-run.out")
     parameters: dict[str, object] = {
         "Xp2pPath": str(_env.XP2P_EXE),
         "InstallDir": install_dir,
@@ -29,8 +31,7 @@ def _start_xp2p_server_run(
     }
     if allow_mismatch:
         parameters["AllowMismatch"] = "1"
-    if output_log_path:
-        parameters["OutputLogPath"] = output_log_path
+    parameters["OutputLogPath"] = output_log_path
 
     result = _env.run_guest_script(
         host,
@@ -38,6 +39,19 @@ def _start_xp2p_server_run(
         **parameters,
     )
     stdout = (result.stdout or "").strip()
+
+    def _read_log(path: str) -> str:
+        if _env.path_exists(host, path):
+            return _env.read_text(host, path)
+        return "<missing>"
+
+    def _format_logs() -> str:
+        xp2p_log = _read_log(output_log_path)
+        xray_log = _read_log(log_abs)
+        return (
+            f"xp2p run log ({output_log_path}):\n{xp2p_log}\n"
+            f"xray log ({log_abs}):\n{xray_log}"
+        )
 
     if result.rc != 0:
         if "__XP2P_MISSING__" in stdout:
@@ -48,21 +62,21 @@ def _start_xp2p_server_run(
         if "__XP2P_CREATE_FAIL__" in stdout:
             pytest.fail(
                 "Failed to spawn xp2p server run via Win32_Process.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
             )
         if "__XP2P_EXIT__" in stdout:
             pytest.fail(
                 "xp2p server run exited before stabilization period elapsed.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
             )
         if "__XP2P_TIMEOUT__" in stdout:
             pytest.fail(
                 "xp2p server run did not start xray-core in time.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
             )
         pytest.fail(
             "Failed to start xp2p server run on "
-            f"{_env.DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"{_env.DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
         )
 
     pid_value: int | None = None

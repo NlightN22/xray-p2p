@@ -22,6 +22,7 @@ CUSTOM_SERVER_HOST = "xp2p-integration.local"
 CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 XRAY_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\xray.exe")
+WINTUN_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\wintun.dll")
 
 
 def _server_public_host() -> str:
@@ -91,14 +92,20 @@ def _stage_xray_binary(host, install_dir: Path) -> None:
     target_dir = install_dir / "bin"
     script = f"""
 $ErrorActionPreference = 'Stop'
-$source = {_env.ps_quote(str(XRAY_SOURCE_X64))}
-if (-not (Test-Path $source)) {{
-    throw "xray.exe not found at $source"
+$xraySource = {_env.ps_quote(str(XRAY_SOURCE_X64))}
+$wintunSource = {_env.ps_quote(str(WINTUN_SOURCE_X64))}
+if (-not (Test-Path $xraySource)) {{
+    throw "xray.exe not found at $xraySource"
+}}
+if (-not (Test-Path $wintunSource)) {{
+    throw "wintun.dll not found at $wintunSource"
 }}
 $destDir = {_env.ps_quote(str(target_dir))}
-$destPath = Join-Path $destDir 'xray.exe'
+$xrayDest = Join-Path $destDir 'xray.exe'
+$wintunDest = Join-Path $destDir 'wintun.dll'
 New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-Copy-Item -Path $source -Destination $destPath -Force
+Copy-Item -Path $xraySource -Destination $xrayDest -Force
+Copy-Item -Path $wintunSource -Destination $wintunDest -Force
 """
     result = _env.run_powershell(host, script)
     if result.rc != 0:
