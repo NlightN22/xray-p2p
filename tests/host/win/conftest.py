@@ -130,6 +130,18 @@ def client_host() -> Host:
         return win_env.get_ssh_host(win_env.DEFAULT_CLIENT)
 
 
+@pytest.fixture(scope="session")
+def server_host_ipv4(server_host: Host) -> str:
+    with _timed("detect server IPv4 (session)"):
+        return win_env.get_host_ipv4(server_host)
+
+
+@pytest.fixture(scope="session")
+def client_host_ipv4(client_host: Host) -> str:
+    with _timed("detect client IPv4 (session)"):
+        return win_env.get_host_ipv4(client_host)
+
+
 @pytest.fixture
 def xp2p_server_service(server_host: Host, xp2p_options: dict):
     win_env.ensure_program_files_install(server_host)

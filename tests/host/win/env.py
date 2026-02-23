@@ -484,6 +484,25 @@ def _wait_for_sync_marker(host: Host, *, timeout: int) -> bool:
     return False
 
 
+def get_host_ipv4(host: Host) -> str:
+    result = run_guest_script(
+        host,
+        "scripts/get_ipv4_addresses.ps1",
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to detect IPv4 addresses.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    addresses = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not addresses:
+        raise RuntimeError("No IPv4 addresses found on host")
+    for addr in addresses:
+        if not addr.startswith("10.0.2."):
+            return addr
+    return addresses[0]
+
+
 
 
 def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:

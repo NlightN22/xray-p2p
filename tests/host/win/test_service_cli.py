@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,19 @@ SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
 
 
+@contextmanager
+def _timed(label: str):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        print(f"TIMING: {label}: {elapsed:.2f}s")
+
+
 def _wait_for_service_state(runner, role: str, expected_active: bool) -> None:
+    wait_label = f"wait service {role} -> {'active' if expected_active else 'inactive'}"
+    start = time.perf_counter()
     deadline = time.time() + SERVICE_TIMEOUT
     last_stdout = ""
     last_stderr = ""
@@ -33,15 +46,20 @@ def _wait_for_service_state(runner, role: str, expected_active: bool) -> None:
         last_stdout = result.stdout or ""
         last_stderr = result.stderr or ""
         if active == expected_active:
+            elapsed = time.perf_counter() - start
+            print(f"TIMING: {wait_label}: {elapsed:.2f}s")
             return
         time.sleep(POLL_INTERVAL)
     state = "active" if expected_active else "inactive"
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: {wait_label} timeout: {elapsed:.2f}s")
     pytest.fail(
         f"xp2p {role} service did not reach {state} state.\nSTDOUT:\n{last_stdout}\nSTDERR:\n{last_stderr}"
     )
 
 
 def _wait_for_log_entry(host, path: Path, phrase: str) -> None:
+    start = time.perf_counter()
     deadline = time.time() + SERVICE_TIMEOUT
     needle = phrase.lower()
     last_content = ""
@@ -50,12 +68,17 @@ def _wait_for_log_entry(host, path: Path, phrase: str) -> None:
             content = win_env.read_text(host, path)
             last_content = content
             if needle in (content or "").lower():
+                elapsed = time.perf_counter() - start
+                print(f"TIMING: wait log '{phrase}': {elapsed:.2f}s")
                 return
         time.sleep(POLL_INTERVAL)
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: wait log '{phrase}' timeout: {elapsed:.2f}s")
     pytest.fail(f"Log {path} did not contain {phrase!r}. Last content:\n{last_content}")
 
 
 def _wait_for_log_entry_any(host, path: Path, phrases: list[str]) -> None:
+    start = time.perf_counter()
     deadline = time.time() + SERVICE_TIMEOUT
     needles = [phrase.lower() for phrase in phrases]
     last_content = ""
@@ -65,9 +88,13 @@ def _wait_for_log_entry_any(host, path: Path, phrases: list[str]) -> None:
             last_content = content
             lowered = (content or "").lower()
             if any(needle in lowered for needle in needles):
+                elapsed = time.perf_counter() - start
+                print(f"TIMING: wait log any ({len(phrases)}): {elapsed:.2f}s")
                 return
         time.sleep(POLL_INTERVAL)
     phrase_list = ", ".join(repr(p) for p in phrases)
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: wait log any timeout: {elapsed:.2f}s")
     pytest.fail(f"Log {path} did not contain any of {phrase_list}. Last content:\n{last_content}")
 
 
@@ -144,15 +171,20 @@ def _install_server(runner, host: str, port: str) -> None:
 @pytest.mark.host
 def test_windows_client_service_cli_controls_service(client_host, xp2p_client_runner):
     runner = xp2p_client_runner
-    _clear_paths(client_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG)
-    runner("client", "service", "stop")
+    with _timed("clear client logs"):
+        _clear_paths(client_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG)
+    with _timed("client service stop"):
+        runner("client", "service", "stop")
 
-    _install_client(runner, "10.70.0.10", "svc-client@example.com", "SvcClientSecret")
-    runner("client", "service", "start", check=True)
+    with _timed("client install"):
+        _install_client(runner, "10.70.0.10", "svc-client@example.com", "SvcClientSecret")
+    with _timed("client service start"):
+        runner("client", "service", "start", check=True)
     _wait_for_service_state(runner, "client", expected_active=True)
     assert win_env.path_exists(client_host, CLIENT_SERVICE_LOG), "client service log not created"
 
-    runner("client", "service", "stop", check=True)
+    with _timed("client service stop (final)"):
+        runner("client", "service", "stop", check=True)
     _wait_for_service_state(runner, "client", expected_active=False)
 
 
@@ -206,22 +238,31 @@ def test_windows_service_restarts_when_config_changes(
             if original_mode:
                 _set_mode(runner, role, original_mode)
 
-    runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
-    install_fn()
+    with _timed(f"{role} remove (pre)"):
+        runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+    with _timed(f"{role} install"):
+        install_fn()
     try:
-        _clear_paths(host, log_path, xray_log)
-        runner(role, "service", "stop")
-        runner(role, "service", "start", check=True)
+        with _timed(f"{role} clear logs"):
+            _clear_paths(host, log_path, xray_log)
+        with _timed(f"{role} service stop"):
+            runner(role, "service", "stop")
+        with _timed(f"{role} service start"):
+            runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
 
-        change_fn()
-        revert_fn()
+        with _timed(f"{role} change config"):
+            change_fn()
+        with _timed(f"{role} revert config"):
+            revert_fn()
 
         _wait_for_log_entry(host, log_path, "service configuration change detected")
         _wait_for_service_state(runner, role, expected_active=True)
     finally:
-        runner(role, "service", "stop")
-        runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+        with _timed(f"{role} service stop (final)"):
+            runner(role, "service", "stop")
+        with _timed(f"{role} remove (final)"):
+            runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
 
 
 @pytest.mark.host
@@ -257,15 +298,21 @@ def test_windows_service_stops_after_invalid_config(
             "62190",
         )
 
-    runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
-    install_fn()
+    with _timed(f"{role} remove (pre)"):
+        runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+    with _timed(f"{role} install"):
+        install_fn()
     try:
-        _clear_paths(host, log_path, xray_log)
-        runner(role, "service", "stop")
-        runner(role, "service", "start", check=True)
+        with _timed(f"{role} clear logs"):
+            _clear_paths(host, log_path, xray_log)
+        with _timed(f"{role} service stop"):
+            runner(role, "service", "stop")
+        with _timed(f"{role} service start"):
+            runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
 
-        win_env.write_text(host, config_path, "BROKEN-CONFIG")
+        with _timed(f"{role} write broken config"):
+            win_env.write_text(host, config_path, "BROKEN-CONFIG")
         _wait_for_log_entry_any(
             host,
             log_path,
@@ -280,5 +327,7 @@ def test_windows_service_stops_after_invalid_config(
         if role == "client":
             assert win_env.read_text(host, xray_log).strip(), f"{role} xray log is empty"
     finally:
-        runner(role, "service", "stop")
-        runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")
+        with _timed(f"{role} service stop (final)"):
+            runner(role, "service", "stop")
+        with _timed(f"{role} remove (final)"):
+            runner(role, "remove", "--path", str(INSTALL_ROOT), "--config-dir", f"config-{role}")

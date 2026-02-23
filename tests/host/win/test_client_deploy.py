@@ -49,6 +49,8 @@ LOG_WAIT_TIMEOUT = 30
 def test_windows_client_deploy_end_to_end(
     client_host,
     server_host,
+    client_host_ipv4,
+    server_host_ipv4,
     xp2p_client_runner,
     xp2p_server_runner,
     xp2p_msi_path,
@@ -87,10 +89,8 @@ def test_windows_client_deploy_end_to_end(
             ],
         )
 
-    with _timed("detect server IPv4"):
-        server_host_ip = _detect_host_ipv4(server_host)
-    with _timed("detect client IPv4"):
-        client_host_ip = _detect_host_ipv4(client_host)
+    server_host_ip = server_host_ipv4
+    client_host_ip = client_host_ipv4
     trojan_user = "deploy-suite@example.com"
     trojan_password = "deploy-pass-123"
 
@@ -193,6 +193,7 @@ def test_windows_client_deploy_end_to_end(
 def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     client_host,
     server_host,
+    server_host_ipv4,
     xp2p_client_runner,
     xp2p_server_runner,
     xp2p_msi_path,
@@ -221,7 +222,7 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         ],
     )
 
-    server_host_ip = _detect_host_ipv4(server_host)
+    server_host_ip = server_host_ipv4
     trojan_user = "deploy-invalid-cert@example.com"
     trojan_password = "deploy-invalid-cert-pass"
     bad_cert = Path(r"C:\Windows\Temp\xp2p-invalid-cert.pem")
