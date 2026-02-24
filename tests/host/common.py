@@ -16,6 +16,8 @@ import testinfra.backend.paramiko as paramiko_backend
 from testinfra.host import Host
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+SSH_CONNECT_TIMEOUT = 15
+SSH_COMMAND_TIMEOUT = 120
 
 
 class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
@@ -70,21 +72,33 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         self.__dict__.pop("client", None)
 
     def run(self, command: str, *args: str, **kwargs):  # type: ignore[override]
+        kwargs.setdefault("timeout", SSH_COMMAND_TIMEOUT)
         try:
             return super().run(command, *args, **kwargs)
+        except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
+            self._reset_client()
+            pytest.skip(f"Guest SSH unavailable: {exc}")
         except EOFError:
             self._reset_client()
             return super().run(command, *args, **kwargs)
         except paramiko_backend.paramiko.SSHException:
             self._reset_client()
-            return super().run(command, *args, **kwargs)
+            try:
+                return super().run(command, *args, **kwargs)
+            except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
+                self._reset_client()
+                pytest.skip(f"Guest SSH unavailable: {exc}")
         except OSError as exc:
             winerror = getattr(exc, "winerror", None)
             err_no = getattr(exc, "errno", None)
             if winerror not in (10054,) and err_no not in (104,):
                 raise
             self._reset_client()
-            return super().run(command, *args, **kwargs)
+            try:
+                return super().run(command, *args, **kwargs)
+            except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
+                self._reset_client()
+                pytest.skip(f"Guest SSH unavailable: {exc}")
 
 
 def _patch_paramiko_backend() -> None:
@@ -179,4 +193,5 @@ def get_ssh_host(vagrant_dir: Path, machine: str) -> Host:
     return testinfra.get_host(
         f"paramiko://{config['user']}@{config['hostname']}:{config['port']}",
         ssh_identity_file=config["identityfile"],
+        timeout=SSH_CONNECT_TIMEOUT,
     )

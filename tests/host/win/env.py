@@ -23,6 +23,7 @@ DEFAULT_SERVER = "win10-a"
 DEFAULT_CLIENT = "win10-b"
 DEFAULT_TARGET = "10.62.10.21"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
+PROGRAM_FILES_X86_INSTALL_DIR = Path(r"C:\Program Files (x86)\xp2p")
 CONFIG_ROOT = Path(os.environ.get("XP2P_CONFIG_ROOT", str(PROGRAM_FILES_INSTALL_DIR)))
 LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
@@ -108,10 +109,18 @@ def encode_powershell(script: str) -> str:
     return base64.b64encode(script.encode("utf-16le")).decode("ascii")
 
 
-def run_powershell(host: Host, script: str) -> CommandResult:
+DEFAULT_POWERSHELL_TIMEOUT = 120
+DEFAULT_GUEST_SCRIPT_TIMEOUT = 900
+
+
+def run_powershell(host: Host, script: str, timeout: int | float | None = None) -> CommandResult:
     encoded = encode_powershell(script)
     started = time.monotonic()
-    result = host.run(f"powershell -NoProfile -NonInteractive -NoLogo -EncodedCommand {encoded}")
+    effective_timeout = DEFAULT_POWERSHELL_TIMEOUT if timeout is None else timeout
+    result = host.run(
+        f"powershell -NoProfile -NonInteractive -NoLogo -EncodedCommand {encoded}",
+        timeout=effective_timeout,
+    )
     elapsed_ms = int((time.monotonic() - started) * 1000)
     if elapsed_ms > 2000:
         print(f"TIMING: powershell_ms={elapsed_ms}")
@@ -172,6 +181,7 @@ def run_guest_script(
     relative_path: str,
     *,
     force_stage: bool = False,
+    timeout: int | float | None = None,
     **parameters: object,
 ) -> CommandResult:
     relative = Path(relative_path)
@@ -193,7 +203,8 @@ def run_guest_script(
             "powershell -NoProfile -ExecutionPolicy Bypass "
             f"-File \"{ps_path}\"{args}"
         )
-        return host.run(command)
+        effective_timeout = DEFAULT_GUEST_SCRIPT_TIMEOUT if timeout is None else timeout
+        return host.run(command, timeout=effective_timeout)
 
     try:
         result = _invoke(script_path)
@@ -312,7 +323,7 @@ exit 0
 
 def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path, *, purge_files: bool = True) -> None:
     msi_str = ps_quote(str(msi_path))
-    install_dir = ps_quote(str(PROGRAM_FILES_INSTALL_DIR))
+    install_dir = ps_quote(str(get_program_files_install_dir(host)))
     script = f"""
 $ErrorActionPreference = 'Stop'
 $msi = {msi_str}
@@ -361,18 +372,154 @@ exit 0
 
 
 def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -> None:
-    if not force_reinstall and path_exists(host, XP2P_EXE):
-        _ensure_log_directories(host)
-        return
+    if not force_reinstall:
+        detected = _detect_xp2p_exe(host)
+        if detected is not None:
+            _set_install_paths_from_exe(detected)
+            _ensure_log_directories(host)
+            return
 
     msi_path = ensure_msi_package(host)
     install_xp2p_from_msi(host, msi_path)
 
-    if not path_exists(host, XP2P_EXE):
+    detected = _detect_xp2p_exe(host)
+    if detected is None:
         raise RuntimeError(
-            f"xp2p.exe not found at {XP2P_EXE} after MSI installation on remote host."
+            "xp2p.exe not found after MSI installation on remote host. "
+            f"Checked: {PROGRAM_FILES_INSTALL_DIR} and {PROGRAM_FILES_X86_INSTALL_DIR}."
         )
+    _set_install_paths_from_exe(detected)
     _ensure_log_directories(host)
+
+
+def get_program_files_install_dir(host: Host) -> Path:
+    detected = _detect_xp2p_exe(host)
+    if detected is not None:
+        return _set_install_paths_from_exe(detected)
+    return PROGRAM_FILES_INSTALL_DIR
+
+
+def _set_install_paths_from_exe(exe_path: Path) -> Path:
+    global PROGRAM_FILES_INSTALL_DIR, CONFIG_ROOT, LOGS_DIR, XP2P_EXE
+    install_dir = exe_path.parent
+    if install_dir.name.lower() == "bin" and install_dir.parent:
+        install_dir = install_dir.parent
+    PROGRAM_FILES_INSTALL_DIR = install_dir
+    if "XP2P_CONFIG_ROOT" not in os.environ:
+        CONFIG_ROOT = Path(str(PROGRAM_FILES_INSTALL_DIR))
+    LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
+    XP2P_EXE = exe_path
+    return PROGRAM_FILES_INSTALL_DIR
+
+
+def _detect_xp2p_exe(host: Host) -> Path | None:
+    candidates = [
+        PROGRAM_FILES_INSTALL_DIR / "xp2p.exe",
+        PROGRAM_FILES_INSTALL_DIR / "bin" / "xp2p.exe",
+        PROGRAM_FILES_X86_INSTALL_DIR / "xp2p.exe",
+        PROGRAM_FILES_X86_INSTALL_DIR / "bin" / "xp2p.exe",
+    ]
+    for candidate in candidates:
+        if path_exists(host, candidate):
+            return candidate
+
+    install_root = _query_install_location(host)
+    if install_root:
+        for candidate in (
+            install_root / "xp2p.exe",
+            install_root / "bin" / "xp2p.exe",
+        ):
+            if path_exists(host, candidate):
+                return candidate
+
+    search_roots = [
+        Path(r"C:\Program Files"),
+        Path(r"C:\Program Files (x86)"),
+        Path(r"C:\ProgramData"),
+    ]
+    roots = ", ".join(ps_quote(str(root)) for root in search_roots)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$roots = @({roots})
+foreach ($root in $roots) {{
+    if (-not (Test-Path $root)) {{
+        continue
+    }}
+    $found = Get-ChildItem -Path $root -Filter xp2p.exe -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1 -ExpandProperty FullName
+    if ($found) {{
+        Write-Output $found
+        exit 0
+    }}
+}}
+exit 3
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        return _search_user_programs(host)
+    value = (result.stdout or "").strip().splitlines()
+    if not value:
+        return _search_user_programs(host)
+    return Path(value[-1].strip())
+
+
+def _search_user_programs(host: Host) -> Path | None:
+    script = """
+$ErrorActionPreference = 'Stop'
+$usersRoot = 'C:\\Users'
+if (-not (Test-Path $usersRoot)) {
+    exit 3
+}
+$users = Get-ChildItem -Path $usersRoot -Directory -ErrorAction SilentlyContinue
+foreach ($user in $users) {
+    $root = Join-Path $user.FullName 'AppData\\Local\\Programs'
+    if (-not (Test-Path $root)) {
+        continue
+    }
+    $found = Get-ChildItem -Path $root -Filter xp2p.exe -Recurse -ErrorAction SilentlyContinue |
+        Select-Object -First 1 -ExpandProperty FullName
+    if ($found) {
+        Write-Output $found
+        exit 0
+    }
+}
+exit 3
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        return None
+    value = (result.stdout or "").strip().splitlines()
+    if not value:
+        return None
+    return Path(value[-1].strip())
+
+
+def _query_install_location(host: Host) -> Path | None:
+    script = """
+$ErrorActionPreference = 'SilentlyContinue'
+$roots = @(
+    'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+    'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+    'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
+)
+$items = Get-ItemProperty -Path $roots | Where-Object {
+    $_.DisplayName -and $_.DisplayName -like 'xp2p*'
+}
+foreach ($item in $items) {
+    if ($item.InstallLocation) {
+        Write-Output $item.InstallLocation
+        exit 0
+    }
+}
+exit 3
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        return None
+    value = (result.stdout or "").strip().splitlines()
+    if not value:
+        return None
+    return Path(value[-1].strip())
 
 
 def ensure_admin_token(host: Host) -> None:

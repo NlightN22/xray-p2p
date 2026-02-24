@@ -8,13 +8,10 @@ import pytest
 from tests.host.win import _client_runtime, _server_runtime, env as win_env
 
 PINNED_JSON = Path("go/internal/xray/pinned.json")
-INSTALL_DIR = win_env.PROGRAM_FILES_INSTALL_DIR
 SERVER_CONFIG_NAME = "config-server"
 CLIENT_CONFIG_NAME = "config-client"
 SERVER_LOG_RELATIVE = r"logs\server.err"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
-XRAY_PATH = INSTALL_DIR / "bin" / "xray.exe"
-XRAY_BACKUP = INSTALL_DIR / "bin" / "xray.pinned.bak"
 RUN_OUTPUT_DIR = Path(r"C:\xp2p\build\artifacts\pinned-version")
 SERVER_RUN_OUTPUT = RUN_OUTPUT_DIR / "server-run.log"
 CLIENT_RUN_OUTPUT = RUN_OUTPUT_DIR / "client-run.log"
@@ -51,15 +48,17 @@ def _state_files_for(install_dir: Path) -> list[Path]:
 def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> None:
     xp2p_server_runner("server", "remove", "--ignore-missing", "--quiet")
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing", "--quiet")
+    server_install_dir = _install_dir(server_host)
+    client_install_dir = _install_dir(client_host)
     win_env.cleanup_xp2p_install(
         server_host,
-        config_dirs=[INSTALL_DIR / SERVER_CONFIG_NAME],
-        state_files=_state_files_for(INSTALL_DIR),
+        config_dirs=[server_install_dir / SERVER_CONFIG_NAME],
+        state_files=_state_files_for(server_install_dir),
     )
     win_env.cleanup_xp2p_install(
         client_host,
-        config_dirs=[INSTALL_DIR / CLIENT_CONFIG_NAME],
-        state_files=_state_files_for(INSTALL_DIR),
+        config_dirs=[client_install_dir / CLIENT_CONFIG_NAME],
+        state_files=_state_files_for(client_install_dir),
     )
 
 
@@ -123,8 +122,8 @@ def _wrap_xray(server_host, client_host, fake_version: str) -> None:
         result = win_env.run_guest_script(
             host,
             "scripts/wrap_xray_version.ps1",
-            XrayPath=str(XRAY_PATH),
-            BackupPath=str(XRAY_BACKUP),
+            XrayPath=str(_xray_path(host)),
+            BackupPath=str(_xray_backup(host)),
             FakeVersion=fake_version,
         )
         if result.rc != 0:
@@ -137,14 +136,15 @@ def _wrap_xray(server_host, client_host, fake_version: str) -> None:
 def _restore_xray(server_host, client_host) -> None:
     for host in (server_host, client_host):
         _stop_xray(host)
-        if win_env.path_exists(host, XRAY_BACKUP):
+        backup = _xray_backup(host)
+        if win_env.path_exists(host, backup):
             win_env.run_guest_script(
                 host,
                 "scripts/copy_file.ps1",
-                Source=str(XRAY_BACKUP),
-                Destination=str(XRAY_PATH),
+                Source=str(backup),
+                Destination=str(_xray_path(host)),
             )
-            win_env.remove_path(host, XRAY_BACKUP)
+            win_env.remove_path(host, backup)
 
 
 def _assert_mismatch_logged(host, path: Path, role: str) -> None:
@@ -170,11 +170,21 @@ def test_xray_pinned_version_allows_matching(
     xp2p_client_run_factory,
 ):
     _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
+    server_install_dir = _install_dir(server_host)
+    client_install_dir = _install_dir(client_host)
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
-        with xp2p_server_run_factory(str(INSTALL_DIR), SERVER_CONFIG_NAME, SERVER_LOG_RELATIVE) as server_session:
+        with xp2p_server_run_factory(
+            str(server_install_dir),
+            SERVER_CONFIG_NAME,
+            SERVER_LOG_RELATIVE,
+        ) as server_session:
             assert server_session["pid"] > 0
-            with xp2p_client_run_factory(str(INSTALL_DIR), CLIENT_CONFIG_NAME, CLIENT_LOG_RELATIVE) as client_session:
+            with xp2p_client_run_factory(
+                str(client_install_dir),
+                CLIENT_CONFIG_NAME,
+                CLIENT_LOG_RELATIVE,
+            ) as client_session:
                 assert client_session["pid"] > 0
     finally:
         _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
@@ -193,6 +203,8 @@ def test_xray_pinned_version_rejects_mismatch(
     _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
     win_env.remove_paths(server_host, [SERVER_RUN_OUTPUT])
     win_env.remove_paths(client_host, [CLIENT_RUN_OUTPUT])
+    server_install_dir = _install_dir(server_host)
+    client_install_dir = _install_dir(client_host)
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
         _wrap_xray(server_host, client_host, mismatch)
@@ -201,10 +213,10 @@ def test_xray_pinned_version_rejects_mismatch(
             server_host,
             "scripts/start_xp2p_server_run.ps1",
             Xp2pPath=str(win_env.XP2P_EXE),
-            InstallDir=str(INSTALL_DIR),
+            InstallDir=str(server_install_dir),
             ConfigDir=SERVER_CONFIG_NAME,
             LogRelative=SERVER_LOG_RELATIVE,
-            LogPath=str(INSTALL_DIR / SERVER_LOG_RELATIVE),
+            LogPath=str(_log_path(server_install_dir, SERVER_LOG_RELATIVE)),
             StabilizeSeconds="6",
             OutputLogPath=str(SERVER_RUN_OUTPUT),
         )
@@ -215,10 +227,10 @@ def test_xray_pinned_version_rejects_mismatch(
             client_host,
             "scripts/start_xp2p_client_run.ps1",
             Xp2pPath=str(win_env.XP2P_EXE),
-            InstallDir=str(INSTALL_DIR),
+            InstallDir=str(client_install_dir),
             ConfigDir=CLIENT_CONFIG_NAME,
             LogRelative=CLIENT_LOG_RELATIVE,
-            LogPath=str(INSTALL_DIR / CLIENT_LOG_RELATIVE),
+            LogPath=str(_log_path(client_install_dir, CLIENT_LOG_RELATIVE)),
             StabilizeSeconds="6",
             OutputLogPath=str(CLIENT_RUN_OUTPUT),
         )
@@ -242,13 +254,15 @@ def test_xray_pinned_version_allows_override(
     _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
     win_env.remove_paths(server_host, [SERVER_RUN_OUTPUT])
     win_env.remove_paths(client_host, [CLIENT_RUN_OUTPUT])
+    server_install_dir = _install_dir(server_host)
+    client_install_dir = _install_dir(client_host)
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
         _wrap_xray(server_host, client_host, mismatch)
 
         with _server_runtime.xp2p_server_run_session_with_env(
             server_host,
-            str(INSTALL_DIR),
+            str(server_install_dir),
             SERVER_CONFIG_NAME,
             SERVER_LOG_RELATIVE,
             allow_mismatch=True,
@@ -257,7 +271,7 @@ def test_xray_pinned_version_allows_override(
             assert server_session["pid"] > 0
             with _client_runtime.xp2p_client_run_session_with_env(
                 client_host,
-                str(INSTALL_DIR),
+                str(client_install_dir),
                 CLIENT_CONFIG_NAME,
                 CLIENT_LOG_RELATIVE,
                 allow_mismatch=True,
@@ -270,3 +284,19 @@ def test_xray_pinned_version_allows_override(
     finally:
         _restore_xray(server_host, client_host)
         _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
+
+
+def _install_dir(host) -> Path:
+    return win_env.get_program_files_install_dir(host)
+
+
+def _xray_path(host) -> Path:
+    return _install_dir(host) / "bin" / "xray.exe"
+
+
+def _xray_backup(host) -> Path:
+    return _install_dir(host) / "bin" / "xray.pinned.bak"
+
+
+def _log_path(install_dir: Path, relative: str) -> Path:
+    return install_dir / Path(relative)

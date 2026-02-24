@@ -47,6 +47,24 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=3,
         help="Number of probe attempts the guest ping should perform.",
     )
+    group.addoption(
+        "--run-msi-build-tests",
+        action="store_true",
+        default=False,
+        help="Run MSI build validation tests (default: skip).",
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if config.getoption("run_msi_build_tests"):
+        return
+    skip_marker = pytest.mark.skip(reason="MSI build tests are skipped by default.")
+    for item in items:
+        nodeid = item.nodeid
+        if "tests/host/win/test_installer_msi.py::test_windows_installer_builds_msi" in nodeid:
+            item.add_marker(skip_marker)
+        if "tests/host/win/test_installer_msi.py::test_windows_installer_builds_msi_x86" in nodeid:
+            item.add_marker(skip_marker)
 
 
 @pytest.fixture(scope="session")

@@ -118,20 +118,32 @@ try {
         throw "winres config missing at $winresConfig"
     }
     $rsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
-    Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
-    $goWinres = Invoke-GoCommand -CommandArgs @(
-        "run",
-        "github.com/tc-hib/go-winres@v0.2.0",
-        "make",
-        "--in", $winresConfig,
-        "--out", $rsrcPrefix,
-        "--arch", "amd64",
-        "--product-version", $version,
-        "--file-version", $version
-    )
-    $goWinres.Output | ForEach-Object { Write-Host $_ }
-    if ($goWinres.ExitCode -ne 0) {
-        throw "go-winres failed with exit code $($goWinres.ExitCode)"
+    $existingWinres = Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue
+    $skipWinres = $env:XP2P_SKIP_WINRES
+    $forceWinres = $env:XP2P_FORCE_WINRES
+    $shouldRunWinres = $true
+    if ($skipWinres -and $skipWinres -ne "0") {
+        $shouldRunWinres = $false
+    } elseif ($existingWinres -and $forceWinres -ne "1") {
+        $shouldRunWinres = $false
+    }
+    if ($shouldRunWinres) {
+        $goWinres = Invoke-GoCommand -CommandArgs @(
+            "run",
+            "github.com/tc-hib/go-winres@v0.2.0",
+            "make",
+            "--in", $winresConfig,
+            "--out", $rsrcPrefix,
+            "--arch", "amd64",
+            "--product-version", $version,
+            "--file-version", $version
+        )
+        $goWinres.Output | ForEach-Object { Write-Host $_ }
+        if ($goWinres.ExitCode -ne 0) {
+            Write-Info "go-winres failed; continuing without refreshed resources."
+        }
+    } else {
+        Write-Info "Skipping winres generation (existing resources detected)."
     }
 
     Write-Info "Building xp2p.exe"

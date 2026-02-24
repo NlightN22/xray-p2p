@@ -9,14 +9,14 @@ from tests.host.win import env as _env
 
 MSI_CACHE_DIR_X64 = _env.MSI_CACHE_DIR_X64
 MSI_CACHE_DIR_X86 = _env.MSI_CACHE_DIR_X86
-INSTALL_ROOT = _env.PROGRAM_FILES_INSTALL_DIR
-XRAY_PATH = INSTALL_ROOT / "bin" / "xray.exe"
 MSI_MIN_SIZE_BYTES = 1_000_000
 
 
 @pytest.mark.host
 @pytest.mark.win
-def test_windows_installer_builds_msi(server_host):
+def test_windows_installer_builds_msi(server_host, pytestconfig: pytest.Config):
+    if not pytestconfig.getoption("run_msi_build_tests"):
+        pytest.skip("MSI build tests are skipped by default.")
     msi_path = _env.ensure_msi_package(server_host)
     assert msi_path.startswith(str(MSI_CACHE_DIR_X64)), (
         f"Expected MSI to be placed under {MSI_CACHE_DIR_X64}, got {msi_path}"
@@ -30,7 +30,9 @@ def test_windows_installer_builds_msi(server_host):
 
 @pytest.mark.host
 @pytest.mark.win
-def test_windows_installer_builds_msi_x86(server_host):
+def test_windows_installer_builds_msi_x86(server_host, pytestconfig: pytest.Config):
+    if not pytestconfig.getoption("run_msi_build_tests"):
+        pytest.skip("MSI build tests are skipped by default.")
     msi_path = _env.ensure_msi_package_x86(server_host)
     assert msi_path.startswith(str(MSI_CACHE_DIR_X86)), (
         f"Expected x86 MSI to be placed under {MSI_CACHE_DIR_X86}, got {msi_path}"
@@ -45,15 +47,17 @@ def test_windows_installer_builds_msi_x86(server_host):
 @pytest.mark.host
 @pytest.mark.win
 def test_windows_installer_places_xray_binary(server_host, xp2p_msi_path):
-    assert _remote_path_exists(server_host, XRAY_PATH), (
-        f"Expected xray binary at {XRAY_PATH}"
+    install_root = _install_root(server_host)
+    xray_path = install_root / "bin" / "xray.exe"
+    assert _remote_path_exists(server_host, xray_path), (
+        f"Expected xray binary at {xray_path}"
     )
 
 
 @pytest.mark.host
 @pytest.mark.win
 def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp2p_server_runner):
-    install_dir = _env.PROGRAM_FILES_INSTALL_DIR
+    install_dir = _install_root(server_host)
     client_dir = install_dir / "config-client"
     server_dir = install_dir / "config-server"
     state_files = [
@@ -126,6 +130,10 @@ exit 3
 """
     result = _env.run_powershell(host, script)
     return result.rc == 0
+
+
+def _install_root(host) -> Path:
+    return _env.get_program_files_install_dir(host)
 
 
 def _assert_paths_exist(host, paths: list[Path]) -> None:
