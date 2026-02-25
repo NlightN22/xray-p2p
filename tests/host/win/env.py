@@ -379,10 +379,16 @@ def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -
             _ensure_log_directories(host)
             return
 
+    start = time.perf_counter()
     msi_path = ensure_msi_package(host)
+    print(f"TIMING: ensure_msi_package: {time.perf_counter() - start:.2f}s")
+    start = time.perf_counter()
     install_xp2p_from_msi(host, msi_path)
+    print(f"TIMING: install_xp2p_from_msi: {time.perf_counter() - start:.2f}s")
 
+    start = time.perf_counter()
     detected = _detect_xp2p_exe(host)
+    print(f"TIMING: detect_xp2p_exe: {time.perf_counter() - start:.2f}s")
     if detected is None:
         raise RuntimeError(
             "xp2p.exe not found after MSI installation on remote host. "

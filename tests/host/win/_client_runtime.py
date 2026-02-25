@@ -39,6 +39,26 @@ def _start_xp2p_client_run(
     )
     stdout = (result.stdout or "").strip()
 
+    def _read_log(path: str) -> str:
+        if not path:
+            return "<missing>"
+        if _env.path_exists(host, path):
+            try:
+                return _env.read_text(host, path)
+            except RuntimeError as exc:
+                return f"<failed to read: {exc}>"
+        return "<missing>"
+
+    def _format_logs() -> str:
+        if not output_log_path:
+            return ""
+        xp2p_log = _read_log(output_log_path)
+        xray_log = _read_log(log_abs)
+        return (
+            f"\nXP2P run log ({output_log_path}):\n{xp2p_log}\n"
+            f"Xray log ({log_abs}):\n{xray_log}"
+        )
+
     if result.rc != 0:
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
@@ -48,16 +68,16 @@ def _start_xp2p_client_run(
         if "__XP2P_CREATE_FAIL__" in stdout:
             pytest.fail(
                 "Failed to spawn xp2p client run via Win32_Process.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}{_format_logs()}"
             )
         if "__XP2P_EXIT__" in stdout:
             pytest.fail(
                 "xp2p client run exited before stabilization period elapsed.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}{_format_logs()}"
             )
         pytest.fail(
             "Failed to start xp2p client run on "
-            f"{_env.DEFAULT_CLIENT}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"{_env.DEFAULT_CLIENT}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}{_format_logs()}"
         )
 
     pid_value: int | None = None

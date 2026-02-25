@@ -81,13 +81,16 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         except EOFError:
             self._reset_client()
             return super().run(command, *args, **kwargs)
-        except paramiko_backend.paramiko.SSHException:
+        except paramiko_backend.paramiko.SSHException as exc:
             self._reset_client()
             try:
                 return super().run(command, *args, **kwargs)
             except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
                 self._reset_client()
                 pytest.skip(f"Guest SSH unavailable: {exc}")
+            except paramiko_backend.paramiko.SSHException as exc_retry:
+                self._reset_client()
+                pytest.skip(f"Guest SSH unavailable: {exc_retry}")
         except OSError as exc:
             winerror = getattr(exc, "winerror", None)
             err_no = getattr(exc, "errno", None)
@@ -99,6 +102,9 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
             except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
                 self._reset_client()
                 pytest.skip(f"Guest SSH unavailable: {exc}")
+            except paramiko_backend.paramiko.SSHException as exc_retry:
+                self._reset_client()
+                pytest.skip(f"Guest SSH unavailable: {exc_retry}")
 
 
 def _patch_paramiko_backend() -> None:

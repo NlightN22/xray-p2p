@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
+from contextlib import contextmanager
 
 import pytest
 
@@ -23,6 +25,16 @@ CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 XRAY_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\xray.exe")
 WINTUN_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\wintun.dll")
+
+
+@contextmanager
+def _timed(label: str):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        print(f"TIMING: {label}: {elapsed:.2f}s")
 
 
 def _server_public_host() -> str:
@@ -57,35 +69,37 @@ def _state_files_for(install_dir: Path) -> list[Path]:
 def _cleanup_server_install(
     server_host, runner, msi_path: str, install_dir: Path | None = None, purge: bool = False
 ) -> None:
-    args = ["server", "remove", "--ignore-missing"]
-    if install_dir is not None:
-        args.extend(["--path", str(install_dir)])
-    runner(*args)
-    target_dir = install_dir or DEFAULT_SERVER_INSTALL_DIR
-    _env.cleanup_xp2p_install(
-        server_host,
-        config_dirs=[_resolve_server_config_dir(target_dir)],
-        state_files=_state_files_for(target_dir),
-    )
-    if purge and install_dir is not None:
-        _remove_remote_path(server_host, install_dir)
+    with _timed("cleanup server install"):
+        args = ["server", "remove", "--ignore-missing"]
+        if install_dir is not None:
+            args.extend(["--path", str(install_dir)])
+        runner(*args)
+        target_dir = install_dir or DEFAULT_SERVER_INSTALL_DIR
+        _env.cleanup_xp2p_install(
+            server_host,
+            config_dirs=[_resolve_server_config_dir(target_dir)],
+            state_files=_state_files_for(target_dir),
+        )
+        if purge and install_dir is not None:
+            _remove_remote_path(server_host, install_dir)
 
 
 def _cleanup_client_install(
     client_host, runner, msi_path: str, install_dir: Path | None = None, purge: bool = False
 ) -> None:
-    args = ["client", "remove", "--all", "--ignore-missing"]
-    if install_dir is not None:
-        args.extend(["--path", str(install_dir)])
-    runner(*args)
-    target_dir = install_dir or DEFAULT_CLIENT_INSTALL_DIR
-    _env.cleanup_xp2p_install(
-        client_host,
-        config_dirs=[_resolve_client_config_dir(target_dir)],
-        state_files=_state_files_for(target_dir),
-    )
-    if purge and install_dir is not None:
-        _remove_remote_path(client_host, install_dir)
+    with _timed("cleanup client install"):
+        args = ["client", "remove", "--all", "--ignore-missing"]
+        if install_dir is not None:
+            args.extend(["--path", str(install_dir)])
+        runner(*args)
+        target_dir = install_dir or DEFAULT_CLIENT_INSTALL_DIR
+        _env.cleanup_xp2p_install(
+            client_host,
+            config_dirs=[_resolve_client_config_dir(target_dir)],
+            state_files=_state_files_for(target_dir),
+        )
+        if purge and install_dir is not None:
+            _remove_remote_path(client_host, install_dir)
 
 
 def _stage_xray_binary(host, install_dir: Path) -> None:
@@ -107,12 +121,13 @@ New-Item -ItemType Directory -Path $destDir -Force | Out-Null
 Copy-Item -Path $xraySource -Destination $xrayDest -Force
 Copy-Item -Path $wintunSource -Destination $wintunDest -Force
 """
-    result = _env.run_powershell(host, script)
-    if result.rc != 0:
-        pytest.fail(
-            "Failed to stage xray.exe prior to custom install.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
+    with _timed("stage xray binary"):
+        result = _env.run_powershell(host, script)
+        if result.rc != 0:
+            pytest.fail(
+                "Failed to stage xray.exe prior to custom install.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
 
 
 def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
@@ -163,16 +178,17 @@ def _assert_ping_success(result) -> None:
 
 
 def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, attempts: int = 3):
-    args = [
-        "ping",
-        host,
-        "--count",
-        str(attempts),
-        "--tunnel",
-    ]
-    if port is not None:
-        args[2:2] = ["--port", str(port)]
-    return xp2p_client_runner(*args, check=True)
+    with _timed("ping via socks"):
+        args = [
+            "ping",
+            host,
+            "--count",
+            str(attempts),
+            "--tunnel",
+        ]
+        if port is not None:
+            args[2:2] = ["--port", str(port)]
+        return xp2p_client_runner(*args, check=True)
 
 
 @pytest.mark.host
@@ -202,11 +218,12 @@ def test_install_server_and_client_default(
         assert credential["link"], "Trojan link was not emitted for default install"
         assert credential["link"].startswith("trojan://")
 
-        with xp2p_server_run_factory(
+        server_session_cm = xp2p_server_run_factory(
             str(DEFAULT_SERVER_INSTALL_DIR),
             DEFAULT_SERVER_CONFIG_NAME,
             SERVER_LOG_RELATIVE,
-        ) as server_session:
+        )
+        with server_session_cm as server_session:
             assert server_session["pid"] > 0
 
             xp2p_client_runner(
@@ -218,11 +235,12 @@ def test_install_server_and_client_default(
                 check=True,
             )
 
-            with xp2p_client_run_factory(
+            client_session_cm = xp2p_client_run_factory(
                 str(DEFAULT_CLIENT_INSTALL_DIR),
                 DEFAULT_CLIENT_CONFIG_NAME,
                 CLIENT_LOG_RELATIVE,
-            ) as client_session:
+            )
+            with client_session_cm as client_session:
                 assert client_session["pid"] > 0
                 ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)
@@ -271,11 +289,12 @@ def test_install_server_and_client_nodefault(
         )
         credential = _extract_generated_credential(server_install.stdout or "")
 
-        with xp2p_server_run_factory(
+        server_session_cm = xp2p_server_run_factory(
             str(CUSTOM_SERVER_INSTALL_DIR),
             CUSTOM_SERVER_CONFIG_NAME,
             SERVER_LOG_RELATIVE,
-        ) as server_session:
+        )
+        with server_session_cm as server_session:
             assert server_session["pid"] > 0
 
             _stage_xray_binary(client_host, CUSTOM_CLIENT_INSTALL_DIR)
@@ -301,11 +320,12 @@ def test_install_server_and_client_nodefault(
                 check=True,
             )
 
-            with xp2p_client_run_factory(
+            client_session_cm = xp2p_client_run_factory(
                 str(CUSTOM_CLIENT_INSTALL_DIR),
                 CUSTOM_CLIENT_CONFIG_NAME,
                 CLIENT_LOG_RELATIVE,
-            ) as client_session:
+            )
+            with client_session_cm as client_session:
                 assert client_session["pid"] > 0
                 ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)

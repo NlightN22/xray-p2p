@@ -58,6 +58,7 @@ if ($OutputLogPath) {
     if (Test-Path $OutputLogPath) {
         Remove-Item $OutputLogPath -Force -ErrorAction SilentlyContinue
     }
+    New-Item -ItemType File -Path $OutputLogPath -Force | Out-Null
     $redirect = " > `"$OutputLogPath`" 2>&1"
 }
 
