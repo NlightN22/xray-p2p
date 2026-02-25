@@ -11,7 +11,7 @@ from tests.host.win import env as _env
 
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR_NAME = "config-server"
-SERVER_CONFIG_DIR = SERVER_INSTALL_DIR / SERVER_CONFIG_DIR_NAME
+SERVER_CONFIG_DIR = _env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME
 SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
 SERVER_LOGS_JSON = SERVER_CONFIG_DIR / "logs.json"
 SERVER_OUTBOUNDS_JSON = SERVER_CONFIG_DIR / "outbounds.json"
@@ -21,9 +21,9 @@ SERVER_KEY_DEST = SERVER_CONFIG_DIR / "key.pem"
 SERVER_BIN_DIR = SERVER_INSTALL_DIR / "bin"
 XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
 SERVER_LOG_RELATIVE = r"logs\server.err"
-SERVER_LOG_FILE = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
+SERVER_LOG_FILE = _env.LOGS_DIR / "server.err"
 SERVER_HOST_VALUE = "xp2p.test.local"
-SERVER_INSTALL_STATE = SERVER_INSTALL_DIR / "install-state-server.json"
+SERVER_INSTALL_STATE = _env.CONFIG_ROOT / "install-state-server.json"
 SERVER_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-server.toml",
     _env.CONFIG_ROOT / "xp2p-server.state.json",

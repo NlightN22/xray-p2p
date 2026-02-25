@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 func TestNormalizeInstallOptionsRequiresHost(t *testing.T) {
@@ -28,6 +30,10 @@ func TestNormalizeInstallOptionsRequiresHost(t *testing.T) {
 func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 	t.Helper()
 
+	configRoot := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", configRoot)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(configRoot, "logs"))
+
 	installDir := filepath.Join(t.TempDir(), "srv-domain")
 	stageTestXrayBinary(t, installDir)
 	opts := InstallOptions{
@@ -41,7 +47,7 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 		t.Fatalf("Install failed: %v", err)
 	}
 
-	certPath := filepath.Join(installDir, "config-server", "cert.pem")
+	certPath := filepath.Join(config.ConfigRoot(), "config-server", "cert.pem")
 	cert := loadCertificate(t, certPath)
 	if len(cert.DNSNames) != 1 || cert.DNSNames[0] != "example.test" {
 		t.Fatalf("expected certificate DNSNames to contain example.test, got %v", cert.DNSNames)
@@ -54,7 +60,7 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 		t.Fatalf("expected certificate validity of approximately 10 years, got %v", cert.NotAfter.Sub(cert.NotBefore))
 	}
 
-	configPath := filepath.Join(installDir, "config-server", "inbounds.json")
+	configPath := filepath.Join(config.ConfigRoot(), "config-server", "inbounds.json")
 	root, err := parseInbounds(readFile(t, configPath))
 	if err != nil {
 		t.Fatalf("parse inbounds: %v", err)
@@ -78,6 +84,10 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 }
 
 func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
+	configRoot := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", configRoot)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(configRoot, "logs"))
+
 	installDir := filepath.Join(t.TempDir(), "srv-ip")
 	stageTestXrayBinary(t, installDir)
 	host := "203.0.113.5"
@@ -92,7 +102,7 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 		t.Fatalf("Install failed: %v", err)
 	}
 
-	certPath := filepath.Join(installDir, "config-server", "cert.pem")
+	certPath := filepath.Join(config.ConfigRoot(), "config-server", "cert.pem")
 	cert := loadCertificate(t, certPath)
 	if len(cert.DNSNames) != 0 {
 		t.Fatalf("expected no DNS names for IP host, got %v", cert.DNSNames)
@@ -109,7 +119,7 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 		t.Fatalf("expected certificate to contain IP %s, got %v", host, cert.IPAddresses)
 	}
 
-	configPath := filepath.Join(installDir, "config-server", "inbounds.json")
+	configPath := filepath.Join(config.ConfigRoot(), "config-server", "inbounds.json")
 	root, err := parseInbounds(readFile(t, configPath))
 	if err != nil {
 		t.Fatalf("parse inbounds: %v", err)

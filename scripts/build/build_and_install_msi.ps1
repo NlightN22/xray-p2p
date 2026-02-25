@@ -199,17 +199,17 @@ try {
     Write-Info "Running candle.exe"
     $wixObj = Join-Path $binaryDir 'xp2p.wixobj'
     $bundleObj = Join-Path $binaryDir 'xp2p-bundle.wixobj'
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative)
+    & $candle "-ext" "WixUtilExtension" "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative)
     if ($LASTEXITCODE -ne 0) {
         throw "candle.exe failed with exit code $LASTEXITCODE"
     }
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $bundleObj $bundleWxs
+    & $candle "-ext" "WixUtilExtension" "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $bundleObj $bundleWxs
     if ($LASTEXITCODE -ne 0) {
         throw "candle.exe failed with exit code $LASTEXITCODE"
     }
 
     Write-Info "Running light.exe"
-    & $light "-out" $msiPath $wixObj $bundleObj
+    & $light "-ext" "WixUtilExtension" "-out" $msiPath $wixObj $bundleObj
     if ($LASTEXITCODE -ne 0) {
         throw "light.exe failed with exit code $LASTEXITCODE"
     }

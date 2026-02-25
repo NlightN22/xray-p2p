@@ -170,7 +170,7 @@ def _assert_routing_rule(data: dict, host: str) -> None:
 def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
     _env.cleanup_xp2p_install(
         server_host,
-        config_dirs=[INSTALL_DIR / CLIENT_CONFIG_DIR, INSTALL_DIR / SERVER_CONFIG_DIR],
+        config_dirs=[_env.CONFIG_ROOT / CLIENT_CONFIG_DIR, _env.CONFIG_ROOT / SERVER_CONFIG_DIR],
         state_files=ALL_STATE_FILES,
     )
 
@@ -279,7 +279,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
 def test_client_and_server_install_support_extended_arguments(server_host, xp2p_msi_path):
     _env.cleanup_xp2p_install(
         server_host,
-        config_dirs=[INSTALL_DIR / CLIENT_CONFIG_DIR, INSTALL_DIR / SERVER_CONFIG_DIR],
+        config_dirs=[_env.CONFIG_ROOT / CLIENT_CONFIG_DIR, _env.CONFIG_ROOT / SERVER_CONFIG_DIR],
         state_files=ALL_STATE_FILES,
     )
 
@@ -341,7 +341,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             check=True,
         )
 
-        client_config_path = INSTALL_DIR / custom_client_config
+        client_config_path = _env.CONFIG_ROOT / custom_client_config
         outbounds = _read_remote_json(server_host, client_config_path / "outbounds.json")
         _assert_outbound_entry(
             outbounds,

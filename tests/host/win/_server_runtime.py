@@ -18,9 +18,12 @@ def _start_xp2p_server_run(
     allow_mismatch: bool = False,
     output_log_path: str | None = None,
 ) -> int:
-    log_abs = str(Path(install_dir) / Path(log_relative))
+    rel = Path(log_relative).as_posix()
+    if rel.lower().startswith("logs/"):
+        rel = rel[5:]
+    log_abs = str(_env.LOGS_DIR / rel)
     if output_log_path is None:
-        output_log_path = str(Path(install_dir) / "logs" / "xp2p-server-run.out")
+        output_log_path = str(_env.LOGS_DIR / "xp2p-server-run.out")
     parameters: dict[str, object] = {
         "Xp2pPath": str(_env.XP2P_EXE),
         "InstallDir": install_dir,
@@ -123,7 +126,10 @@ def xp2p_server_run_session(host: Host, install_dir: str, config_dir: str, log_r
     pid_value = None
     try:
         pid_value = _start_xp2p_server_run(host, install_dir, config_dir, log_relative)
-        log_file = str(Path(install_dir) / Path(log_relative))
+        rel = Path(log_relative).as_posix()
+        if rel.lower().startswith("logs/"):
+            rel = rel[5:]
+        log_file = str(_env.LOGS_DIR / rel)
         yield {"pid": pid_value, "log_path": log_file}
     finally:
         if pid_value is not None:
@@ -150,7 +156,10 @@ def xp2p_server_run_session_with_env(
             allow_mismatch=allow_mismatch,
             output_log_path=output_log_path,
         )
-        log_file = str(Path(install_dir) / Path(log_relative))
+        rel = Path(log_relative).as_posix()
+        if rel.lower().startswith("logs/"):
+            rel = rel[5:]
+        log_file = str(_env.LOGS_DIR / rel)
         yield {"pid": pid_value, "log_path": log_file}
     finally:
         if pid_value is not None:

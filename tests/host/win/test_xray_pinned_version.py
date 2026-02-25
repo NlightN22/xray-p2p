@@ -52,12 +52,12 @@ def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_r
     client_install_dir = _install_dir(client_host)
     win_env.cleanup_xp2p_install(
         server_host,
-        config_dirs=[server_install_dir / SERVER_CONFIG_NAME],
+        config_dirs=[win_env.CONFIG_ROOT / SERVER_CONFIG_NAME],
         state_files=_state_files_for(server_install_dir),
     )
     win_env.cleanup_xp2p_install(
         client_host,
-        config_dirs=[client_install_dir / CLIENT_CONFIG_NAME],
+        config_dirs=[win_env.CONFIG_ROOT / CLIENT_CONFIG_NAME],
         state_files=_state_files_for(client_install_dir),
     )
 
@@ -299,4 +299,7 @@ def _xray_backup(host) -> Path:
 
 
 def _log_path(install_dir: Path, relative: str) -> Path:
-    return install_dir / Path(relative)
+    rel = Path(relative).as_posix()
+    if rel.lower().startswith("logs/"):
+        rel = rel[5:]
+    return win_env.LOGS_DIR / rel

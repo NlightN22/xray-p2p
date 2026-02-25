@@ -134,8 +134,8 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	statePaths := []string{
-		filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer)),
-		filepath.Join(installDir, layout.StateFileName),
+		filepath.Clean(config.ConfigPath(layout.ServerStateFileName)),
+		filepath.Clean(config.ConfigPath(layout.StateFileName)),
 	}
 	var lastErr error
 	for idx, statePath := range statePaths {
@@ -183,7 +183,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		InstallOptions: base.installOpts,
 		installDir:     base.installDir,
 		binDir:         filepath.Join(dir, layout.BinDirName),
-		logsDir:        filepath.Join(dir, layout.LogsDirName),
+		logsDir:        config.LogRoot(),
 		configDir:      base.configDir,
 		xrayPath:       filepath.Join(dir, layout.BinDirName, "xray.exe"),
 		portValue:      base.portVal,
@@ -193,7 +193,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 
 	state.certDest = filepath.Join(state.configDir, "cert.pem")
 	state.keyDest = filepath.Join(state.configDir, "key.pem")
-	state.stateFile = filepath.Join(state.installDir, installstate.FileNameForKind(installstate.KindServer))
+	state.stateFile = filepath.Clean(config.ConfigPath(layout.ServerStateFileName))
 
 	return state, nil
 }
@@ -223,7 +223,7 @@ func resolveConfigDir(base, cfg string) (string, error) {
 	if filepath.IsAbs(cfg) {
 		return cfg, nil
 	}
-	return filepath.Join(base, cfg), nil
+	return filepath.Join(config.ConfigRoot(), cfg), nil
 }
 
 func serverArtifactsPresent(state installState) (bool, string, error) {

@@ -68,15 +68,22 @@ func Run(ctx context.Context, opts RunOptions) error {
 	}
 
 	resolveLogPath := func(raw string) (string, error) {
-		path := strings.TrimSpace(raw)
-		if path == "" {
+		if strings.TrimSpace(raw) == "" {
 			return "", fmt.Errorf("xp2p: log path is empty")
 		}
-		logPath := path
-		if !filepath.IsAbs(logPath) {
-			logPath = filepath.Join(installDir, logPath)
+		trimmed := strings.TrimSpace(filepath.Clean(raw))
+		if trimmed == "" || trimmed == "." {
+			return "", fmt.Errorf("xp2p: log path is empty")
 		}
-		return logPath, nil
+		if filepath.IsAbs(trimmed) {
+			return trimmed, nil
+		}
+		rel := filepath.ToSlash(trimmed)
+		rel = strings.TrimPrefix(rel, "logs/")
+		if rel == "" || rel == "." {
+			rel = "xp2p-server.log"
+		}
+		return filepath.Join(config.LogRoot(), rel), nil
 	}
 
 	configureCmd := func(cmd *exec.Cmd) {

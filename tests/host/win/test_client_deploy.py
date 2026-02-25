@@ -12,7 +12,7 @@ from tests.host.win import env as win_env
 
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
-CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
+CLIENT_CONFIG_DIR = win_env.CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
 CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-client.toml"
@@ -23,7 +23,7 @@ CLIENT_STATE_FILES = [
 ]
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR_NAME = "config-server"
-SERVER_CONFIG_DIR = SERVER_INSTALL_DIR / SERVER_CONFIG_DIR_NAME
+SERVER_CONFIG_DIR = win_env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME
 SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
 SERVER_CERT_DEST = SERVER_CONFIG_DIR / "cert.pem"
 SERVER_KEY_DEST = SERVER_CONFIG_DIR / "key.pem"
@@ -34,8 +34,8 @@ SERVER_STATE_FILES = [
     SERVER_APPLIED_STATE_FILE,
 ]
 HEARTBEAT_STATE_FILES = [
-    CLIENT_INSTALL_DIR / "state-heartbeat-client.json",
-    CLIENT_INSTALL_DIR / "state-heartbeat.json",
+    win_env.CONFIG_ROOT / "state-heartbeat-client.json",
+    win_env.CONFIG_ROOT / "state-heartbeat.json",
 ]
 CLIENT_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\client-deploy.log")
 SERVER_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\server-deploy.log")

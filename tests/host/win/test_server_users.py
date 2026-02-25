@@ -318,6 +318,6 @@ def _reset_server_install(server_host, runner, msi_path: str) -> None:
     )
     _env.cleanup_xp2p_install(
         server_host,
-        config_dirs=[SERVER_INSTALL_DIR / SERVER_CONFIG_DIR_NAME],
+        config_dirs=[_env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME],
         state_files=SERVER_STATE_FILES,
     )

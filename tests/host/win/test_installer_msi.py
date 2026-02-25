@@ -58,8 +58,8 @@ def test_windows_installer_places_xray_binary(server_host, xp2p_msi_path):
 @pytest.mark.win
 def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp2p_server_runner):
     install_dir = _install_root(server_host)
-    client_dir = install_dir / "config-client"
-    server_dir = install_dir / "config-server"
+    client_dir = _env.CONFIG_ROOT / "config-client"
+    server_dir = _env.CONFIG_ROOT / "config-server"
     state_files = [
         _env.CONFIG_ROOT / "xp2p-client.toml",
         _env.CONFIG_ROOT / "xp2p-server.toml",

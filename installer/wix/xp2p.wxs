@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{E99A193E-D6A9-4743-93D8-EB45053E517A}">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x64" Description="xp2p tunnel service" />
 
@@ -55,6 +56,13 @@
       <Directory Id="ProgramFiles64Folder">
         <Directory Id="INSTALLFOLDER" Name="xp2p">
           <Directory Id="BinFolder" Name="bin" />
+        </Directory>
+      </Directory>
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="Xp2pDataFolder" Name="xp2p">
+          <Directory Id="Xp2pConfigClientFolder" Name="config-client" />
+          <Directory Id="Xp2pConfigServerFolder" Name="config-server" />
+          <Directory Id="Xp2pLogsFolder" Name="logs" />
         </Directory>
       </Directory>
       <Directory Id="LocalAppDataFolder" />
@@ -118,9 +126,45 @@
       </Component>
     </DirectoryRef>
 
+    <DirectoryRef Id="Xp2pDataFolder">
+      <Component Id="cmpXp2pDataRoot" Guid="{CB9F9DB5-76DD-49E0-9A77-5F7A4E2BDCA0}" Win64="yes" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="Xp2pConfigClientFolder">
+      <Component Id="cmpXp2pConfigClient" Guid="{B0A5E1C6-56AA-4F1E-88F7-9A9C5A32339A}" Win64="yes" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="Xp2pConfigServerFolder">
+      <Component Id="cmpXp2pConfigServer" Guid="{F8E8A0A4-7B6B-4D0B-9A9A-0B0D86C1DFA7}" Win64="yes" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="Xp2pLogsFolder">
+      <Component Id="cmpXp2pLogsRoot" Guid="{E3E83E72-3F2B-4C3B-A3A4-9EA6E6110A21}" Win64="yes" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
     <Feature Id="MainFeature" Title="xp2p" Level="1">
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
+      <ComponentRef Id="cmpXp2pDataRoot" />
+      <ComponentRef Id="cmpXp2pConfigClient" />
+      <ComponentRef Id="cmpXp2pConfigServer" />
+      <ComponentRef Id="cmpXp2pLogsRoot" />
       <ComponentGroupRef Id="Xp2pBundleGroup" />
       <ComponentRef Id="cmpServiceAutostart" />
     </Feature>

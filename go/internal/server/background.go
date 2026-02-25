@@ -9,10 +9,12 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -68,8 +70,12 @@ func StartBackground(ctx context.Context, opts Options) error {
 	}
 
 	storePath := ""
-	if dir := strings.TrimSpace(opts.InstallDir); dir != "" {
-		storePath = filepath.Join(dir, layout.ServerHeartbeatStateFileName)
+	storeRoot := strings.TrimSpace(opts.InstallDir)
+	if runtime.GOOS == "windows" {
+		storeRoot = config.ConfigRoot()
+	}
+	if storeRoot != "" {
+		storePath = filepath.Join(storeRoot, layout.ServerHeartbeatStateFileName)
 	}
 	hbStore, storeErr = heartbeat.NewStore(storePath)
 	if storeErr != nil {

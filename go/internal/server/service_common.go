@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -63,10 +64,14 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	watchFiles := []string{
 		filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
 	}
+	stateRoot := installDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
 	ignorePaths := []string{
-		filepath.Join(installDir, layout.ClientHeartbeatStateFileName),
-		filepath.Join(installDir, layout.HeartbeatStateFileName),
-		filepath.Join(installDir, layout.ServerHeartbeatStateFileName),
+		filepath.Join(stateRoot, layout.ClientHeartbeatStateFileName),
+		filepath.Join(stateRoot, layout.HeartbeatStateFileName),
+		filepath.Join(stateRoot, layout.ServerHeartbeatStateFileName),
 	}
 
 	runnerOpts := service.Options{

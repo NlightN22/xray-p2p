@@ -84,7 +84,11 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		return nil, fmt.Errorf("no client endpoints configured")
 	}
 
-	storePath := filepath.Join(installDir, layout.ClientHeartbeatStateFileName)
+	storeRoot := installDir
+	if runtime.GOOS == "windows" {
+		storeRoot = config.ConfigRoot()
+	}
+	storePath := filepath.Join(storeRoot, layout.ClientHeartbeatStateFileName)
 	store, err := heartbeat.NewStore(storePath)
 	if err != nil {
 		return nil, err

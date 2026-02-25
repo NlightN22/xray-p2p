@@ -15,7 +15,7 @@ func ConfigRoot() string {
 	if override := strings.TrimSpace(os.Getenv("XP2P_CONFIG_ROOT")); override != "" {
 		return override
 	}
-	return defaultInstallDir()
+	return defaultConfigRoot()
 }
 
 // ConfigPath returns the full path inside the configuration root.
@@ -32,7 +32,7 @@ func LogRoot() string {
 	if override := strings.TrimSpace(os.Getenv(envLogRoot)); override != "" {
 		return filepath.Clean(override)
 	}
-	return filepath.Clean(layout.UnixLogRoot)
+	return defaultLogRoot()
 }
 
 // LogPath returns the full path inside the log root.

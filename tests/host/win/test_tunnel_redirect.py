@@ -12,7 +12,7 @@ CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
 SERVER_LOG_RELATIVE = r"logs\server.err"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
-CLIENT_ROUTING_JSON = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR / "routing.json"
+CLIENT_ROUTING_JSON = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR / "routing.json"
 DIAG_IP = "10.77.0.1"
 DIAG_CIDR = f"{DIAG_IP}/32"
 DIAG_PREFIX = 32
@@ -36,7 +36,7 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
     runner("server", "remove", "--ignore-missing")
     _env.cleanup_xp2p_install(
         server_host,
-        config_dirs=[SERVER_INSTALL_DIR / SERVER_CONFIG_DIR],
+        config_dirs=[_env.CONFIG_ROOT / SERVER_CONFIG_DIR],
         state_files=SERVER_STATE_FILES,
     )
 
@@ -45,7 +45,7 @@ def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     runner("client", "remove", "--all", "--ignore-missing")
     _env.cleanup_xp2p_install(
         client_host,
-        config_dirs=[CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR],
+        config_dirs=[_env.CONFIG_ROOT / CLIENT_CONFIG_DIR],
         state_files=CLIENT_STATE_FILES,
     )
 
@@ -256,7 +256,7 @@ def test_client_redirect_tunnel_win(
     _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     server_public_host = _server_public_host()
-    server_log_path = SERVER_INSTALL_DIR / SERVER_LOG_RELATIVE
+    server_log_path = _env.LOGS_DIR / "server.err"
     iface = _get_interface_alias(server_host, server_public_host)
     _remove_ip_alias(server_host, DIAG_IP)
     _remove_ip_alias(server_host, DIAG_DOMAIN_IP)

@@ -47,14 +47,14 @@ def _remove_remote_path(host, path: Path) -> None:
 
 def _resolve_server_config_dir(install_dir: Path | None) -> Path:
     if install_dir == CUSTOM_SERVER_INSTALL_DIR:
-        return install_dir / CUSTOM_SERVER_CONFIG_NAME
-    return DEFAULT_SERVER_INSTALL_DIR / DEFAULT_SERVER_CONFIG_NAME
+        return _env.CONFIG_ROOT / CUSTOM_SERVER_CONFIG_NAME
+    return _env.CONFIG_ROOT / DEFAULT_SERVER_CONFIG_NAME
 
 
 def _resolve_client_config_dir(install_dir: Path | None) -> Path:
     if install_dir == CUSTOM_CLIENT_INSTALL_DIR:
-        return install_dir / CUSTOM_CLIENT_CONFIG_NAME
-    return DEFAULT_CLIENT_INSTALL_DIR / DEFAULT_CLIENT_CONFIG_NAME
+        return _env.CONFIG_ROOT / CUSTOM_CLIENT_CONFIG_NAME
+    return _env.CONFIG_ROOT / DEFAULT_CLIENT_CONFIG_NAME
 
 
 def _state_files_for(install_dir: Path) -> list[Path]:

@@ -11,12 +11,12 @@ import pytest
 from tests.host.win import env as win_env
 
 INSTALL_ROOT = Path(r"C:\Program Files\xp2p")
-CLIENT_CONFIG_DIR = INSTALL_ROOT / "config-client"
-SERVER_CONFIG_DIR = INSTALL_ROOT / "config-server"
-CLIENT_SERVICE_LOG = INSTALL_ROOT / "logs" / "client" / "service.log"
-CLIENT_XRAY_LOG = INSTALL_ROOT / "logs" / "client" / "xray-service.log"
-SERVER_SERVICE_LOG = INSTALL_ROOT / "logs" / "server" / "service.log"
-SERVER_XRAY_LOG = INSTALL_ROOT / "logs" / "server" / "xray-service.log"
+CLIENT_CONFIG_DIR = win_env.CONFIG_ROOT / "config-client"
+SERVER_CONFIG_DIR = win_env.CONFIG_ROOT / "config-server"
+CLIENT_SERVICE_LOG = win_env.LOGS_DIR / "client" / "service.log"
+CLIENT_XRAY_LOG = win_env.LOGS_DIR / "client" / "xray-service.log"
+SERVER_SERVICE_LOG = win_env.LOGS_DIR / "server" / "service.log"
+SERVER_XRAY_LOG = win_env.LOGS_DIR / "server" / "xray-service.log"
 CLIENT_INBOUNDS = CLIENT_CONFIG_DIR / "inbounds.json"
 SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
 CLIENT_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-client.toml"

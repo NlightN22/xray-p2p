@@ -19,7 +19,10 @@ function Write-Info {
 $source = 'C:\xp2p\build\windows-amd64\xp2p.exe'
 $installRoot = 'C:\Program Files\xp2p'
 $binDir = Join-Path $installRoot 'bin'
-$logsDir = Join-Path $installRoot 'logs'
+$dataRoot = Join-Path $env:ProgramData 'xp2p'
+$configClientDir = Join-Path $dataRoot 'config-client'
+$configServerDir = Join-Path $dataRoot 'config-server'
+$logsDir = Join-Path $dataRoot 'logs'
 
 if (-not (Test-Path $source)) {
     throw "xp2p build binary not found at $source"
@@ -56,6 +59,15 @@ New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
 Write-Info "Creating bin directory $binDir"
 New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 
+Write-Info "Creating data directory $dataRoot"
+New-Item -ItemType Directory -Path $dataRoot -Force | Out-Null
+
+Write-Info "Creating client config directory $configClientDir"
+New-Item -ItemType Directory -Path $configClientDir -Force | Out-Null
+
+Write-Info "Creating server config directory $configServerDir"
+New-Item -ItemType Directory -Path $configServerDir -Force | Out-Null
+
 Write-Info "Creating logs directory $logsDir"
 New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 
@@ -65,5 +77,8 @@ Copy-Item $source $xp2pTarget -Force
 
 Write-Info "Granting Modify rights to vagrant on $installRoot"
 icacls $installRoot /grant 'vagrant:(OI)(CI)M' /t /c | Out-Null
+
+Write-Info "Granting Modify rights to vagrant on $dataRoot"
+icacls $dataRoot /grant 'vagrant:(OI)(CI)M' /t /c | Out-Null
 
 Write-Info "Program Files xp2p preparation complete."

@@ -130,7 +130,11 @@ func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 		}
 	}
 
-	configDir := filepath.Join(installDir, configDirName)
+	configRoot := installDir
+	if runtime.GOOS == "windows" {
+		configRoot = config.ConfigRoot()
+	}
+	configDir := filepath.Join(configRoot, configDirName)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", configDir, err)
 	}

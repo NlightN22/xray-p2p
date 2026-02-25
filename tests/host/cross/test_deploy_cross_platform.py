@@ -27,7 +27,7 @@ WINDOWS_SERVER_LOG = WINDOWS_ARTIFACT_ROOT / "windows-server-deploy.log"
 
 DEFAULT_WINDOWS_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 DEFAULT_LINUX_INSTALL_DIR = PurePosixPath("/etc/xp2p")
-WINDOWS_HEARTBEAT_STATE_FILE = DEFAULT_WINDOWS_INSTALL_DIR / "state-heartbeat.json"
+WINDOWS_HEARTBEAT_STATE_FILE = win_env.CONFIG_ROOT / "state-heartbeat.json"
 
 
 @pytest.fixture(scope="session")

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -63,7 +64,11 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 		logging.Info("xp2p client state: client is not installed")
 		return 1
 	}
-	statePath := filepath.Join(installDir, layout.ClientHeartbeatStateFileName)
+	stateRoot := installDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
+	statePath := filepath.Join(stateRoot, layout.ClientHeartbeatStateFileName)
 	ttl := opts.TTL
 	if ttl <= 0 {
 		ttl = defaultHeartbeatTTL
@@ -101,8 +106,12 @@ func clientStateInstallPresent(installDir string) (bool, error) {
 	} else if found {
 		return true, nil
 	}
+	stateRoot := installDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
 	for _, name := range []string{layout.ClientStateFileName, layout.StateFileName} {
-		path := filepath.Join(installDir, name)
+		path := filepath.Join(stateRoot, name)
 		if found, err := pathExists(path); err != nil {
 			return false, err
 		} else if found {

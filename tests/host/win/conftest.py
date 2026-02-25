@@ -9,6 +9,8 @@ from testinfra.host import Host
 
 from . import _client_runtime, _server_runtime, env as win_env
 
+_LAST_TEST_END: float | None = None
+
 
 @contextmanager
 def _timed(label: str):
@@ -65,6 +67,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_marker)
         if "tests/host/win/test_installer_msi.py::test_windows_installer_builds_msi_x86" in nodeid:
             item.add_marker(skip_marker)
+
+
+@pytest.fixture(autouse=True)
+def _timed_test(request: pytest.FixtureRequest):
+    global _LAST_TEST_END
+    start = time.perf_counter()
+    if _LAST_TEST_END is not None:
+        gap = start - _LAST_TEST_END
+        if gap >= 0.5:
+            print(f"TIMING: gap before {request.node.nodeid}: {gap:.2f}s")
+    try:
+        yield
+    finally:
+        elapsed = time.perf_counter() - start
+        print(f"TIMING: test {request.node.nodeid} total: {elapsed:.2f}s")
+        _LAST_TEST_END = time.perf_counter()
 
 
 @pytest.fixture(scope="session")

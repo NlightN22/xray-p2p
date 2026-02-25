@@ -24,8 +24,9 @@ DEFAULT_CLIENT = "win10-b"
 DEFAULT_TARGET = "10.62.10.21"
 PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 PROGRAM_FILES_X86_INSTALL_DIR = Path(r"C:\Program Files (x86)\xp2p")
-CONFIG_ROOT = Path(os.environ.get("XP2P_CONFIG_ROOT", str(PROGRAM_FILES_INSTALL_DIR)))
-LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
+PROGRAM_DATA_ROOT = Path(os.environ.get("ProgramData", r"C:\ProgramData")) / "xp2p"
+CONFIG_ROOT = Path(os.environ.get("XP2P_CONFIG_ROOT", str(PROGRAM_DATA_ROOT)))
+LOGS_DIR = Path(os.environ.get("XP2P_LOG_ROOT", str(CONFIG_ROOT / "logs")))
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
 GUEST_TESTS_ROOT = Path(r"C:\xp2p\tests\guest")
@@ -184,6 +185,7 @@ def run_guest_script(
     timeout: int | float | None = None,
     **parameters: object,
 ) -> CommandResult:
+    start = time.perf_counter()
     relative = Path(relative_path)
     script_path = GUEST_TESTS_ROOT / relative
     cleanup_path: Path | None = None
@@ -213,6 +215,9 @@ def run_guest_script(
             result = _invoke(script_path)
         return result
     finally:
+        elapsed = time.perf_counter() - start
+        if elapsed > 2.0:
+            print(f"TIMING: run_guest_script {relative_path}: {elapsed:.2f}s")
         if cleanup_path is not None:
             remove_path(host, cleanup_path)
 
@@ -412,8 +417,9 @@ def _set_install_paths_from_exe(exe_path: Path) -> Path:
         install_dir = install_dir.parent
     PROGRAM_FILES_INSTALL_DIR = install_dir
     if "XP2P_CONFIG_ROOT" not in os.environ:
-        CONFIG_ROOT = Path(str(PROGRAM_FILES_INSTALL_DIR))
-    LOGS_DIR = PROGRAM_FILES_INSTALL_DIR / "logs"
+        CONFIG_ROOT = PROGRAM_DATA_ROOT
+    if "XP2P_LOG_ROOT" not in os.environ:
+        LOGS_DIR = CONFIG_ROOT / "logs"
     XP2P_EXE = exe_path
     return PROGRAM_FILES_INSTALL_DIR
 

@@ -11,6 +11,8 @@ import (
 
 func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, false)
 
@@ -55,6 +57,8 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 
 func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, false, false)
 
@@ -93,6 +97,8 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 
 func TestListUsersSelfSignedIncludesAllowInsecure(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, true)
 

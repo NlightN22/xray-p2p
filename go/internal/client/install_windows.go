@@ -119,8 +119,8 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		stateRemoved = true
 	}
 
-	clientStatePath := filepath.Join(installDir, layout.ClientStateFileName)
-	legacyStatePath := filepath.Join(installDir, layout.StateFileName)
+	clientStatePath := filepath.Clean(config.ConfigPath(layout.ClientStateFileName))
+	legacyStatePath := filepath.Clean(config.ConfigPath(layout.StateFileName))
 
 	if err := os.Remove(clientStatePath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -165,7 +165,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		InstallOptions: base.installOpts,
 		installDir:     base.installDir,
 		binDir:         filepath.Join(dir, layout.BinDirName),
-		logsDir:        filepath.Join(dir, layout.LogsDirName),
+		logsDir:        config.LogRoot(),
 		configDir:      base.configDir,
 		serverPort:     base.portVal,
 		serverName:     base.serverName,
@@ -202,7 +202,7 @@ func resolveConfigDir(base, cfg string) (string, error) {
 	if filepath.IsAbs(cfg) {
 		return cfg, nil
 	}
-	return filepath.Join(base, cfg), nil
+	return filepath.Join(config.ConfigRoot(), cfg), nil
 }
 
 func isSafeInstallDir(path string) bool {

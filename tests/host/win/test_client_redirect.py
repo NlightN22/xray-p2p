@@ -7,7 +7,7 @@ from tests.host.win import env as _env
 
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
-CLIENT_CONFIG_DIR = CLIENT_INSTALL_DIR / CLIENT_CONFIG_DIR_NAME
+CLIENT_CONFIG_DIR = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
 CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-client.toml"
 CLIENT_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-client.state.json"

@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -241,7 +242,11 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Warn("xp2p client deploy: socks proxy address missing; skipping ping")
 	}
 
-	if err := waitForHeartbeat(runCtx, filepath.Join(runOpts.InstallDir, layout.ClientHeartbeatStateFileName), 10*time.Second); err != nil {
+	stateRoot := runOpts.InstallDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
+	if err := waitForHeartbeat(runCtx, filepath.Join(stateRoot, layout.ClientHeartbeatStateFileName), 10*time.Second); err != nil {
 		completionState = "FAIL heartbeat"
 		logging.Error("xp2p client deploy: heartbeat missing", "err", err)
 		if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {

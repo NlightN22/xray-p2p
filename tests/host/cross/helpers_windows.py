@@ -292,7 +292,7 @@ def reset_windows_logs(host: Host, path: Path) -> None:
 
 def assert_windows_server_install_dir(host: Host, install_dir: Path) -> None:
     state_path = win_env.CONFIG_ROOT / "xp2p-server.state.json"
-    config_dir = install_dir / linux_helpers.SERVER_CONFIG_DIR_NAME
+    config_dir = win_env.CONFIG_ROOT / linux_helpers.SERVER_CONFIG_DIR_NAME
     assert win_env.path_exists(host, state_path), f"server install state missing: {state_path}"
     assert win_env.path_exists(host, config_dir), f"server config dir missing: {config_dir}"
 

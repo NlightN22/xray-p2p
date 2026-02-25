@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -65,7 +66,11 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 		logging.Info("xp2p server state: server is not installed")
 		return 1
 	}
-	statePath := filepath.Join(installDir, layout.ServerHeartbeatStateFileName)
+	stateRoot := installDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
+	statePath := filepath.Join(stateRoot, layout.ServerHeartbeatStateFileName)
 	ttl := opts.TTL
 	if ttl <= 0 {
 		ttl = defaultHeartbeatTTL
@@ -102,8 +107,12 @@ func serverStateInstallPresent(installDir string) (bool, error) {
 	} else if found {
 		return true, nil
 	}
+	stateRoot := installDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
 	for _, name := range []string{layout.ServerStateFileName, layout.StateFileName} {
-		path := filepath.Join(installDir, name)
+		path := filepath.Join(stateRoot, name)
 		if found, err := pathExists(path); err != nil {
 			return false, err
 		} else if found {
@@ -199,9 +208,13 @@ func loadServerConfigDoc(path string) (map[string]any, bool, error) {
 }
 
 func loadLegacyServerStateDoc(installDir string) (map[string]any, error) {
+	stateRoot := installDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
 	candidates := []string{
-		filepath.Join(installDir, layout.ServerStateFileName),
-		filepath.Join(installDir, layout.StateFileName),
+		filepath.Join(stateRoot, layout.ServerStateFileName),
+		filepath.Join(stateRoot, layout.StateFileName),
 	}
 	var doc map[string]any
 	for _, path := range candidates {

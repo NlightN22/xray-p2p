@@ -17,6 +17,7 @@ import (
 func TestInstallCreatesConfigAndState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 
 	// Prepare stub xray binary so the installer can proceed.
 	binDir := filepath.Join(dir, layout.BinDirName)
@@ -80,6 +81,7 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 func TestInstallFailsWhenXrayMissing(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	opts := InstallOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultClientConfigDir,
@@ -100,6 +102,7 @@ func TestInstallFailsWhenXrayMissing(t *testing.T) {
 func TestInstallRewritesInboundsAndLogs(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 
 	binDir := filepath.Join(dir, layout.BinDirName)
 	if err := os.MkdirAll(binDir, 0o755); err != nil {

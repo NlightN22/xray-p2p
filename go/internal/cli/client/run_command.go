@@ -183,5 +183,8 @@ func resolveClientConfigDirPath(installDir, configDir string) (string, error) {
 	if filepath.IsAbs(cfgDir) {
 		return cfgDir, nil
 	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(config.ConfigRoot(), cfgDir), nil
+	}
 	return filepath.Join(installDir, cfgDir), nil
 }

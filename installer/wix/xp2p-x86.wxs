@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{2A0AB5BE-8EAA-4FBE-91E9-987F93F0E1C5}">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x86" Description="xp2p tunnel service" />
 
@@ -55,6 +56,13 @@
           <Directory Id="BinFolder" Name="bin" />
         </Directory>
       </Directory>
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="Xp2pDataFolder" Name="xp2p">
+          <Directory Id="Xp2pConfigClientFolder" Name="config-client" />
+          <Directory Id="Xp2pConfigServerFolder" Name="config-server" />
+          <Directory Id="Xp2pLogsFolder" Name="logs" />
+        </Directory>
+      </Directory>
       <Directory Id="LocalAppDataFolder" />
     </Directory>
 
@@ -70,7 +78,7 @@
                         ErrorControl="normal"
                         Vital="yes"
                         Account="LocalSystem"
-                        Arguments='client service run --path "[INSTALLFOLDER]" --config-dir config-client --log-file "[INSTALLFOLDER]logs\client\service.log" --xray-log-file "[INSTALLFOLDER]logs\client\xray-service.log"' />
+                        Arguments='client service run' />
         <ServiceControl Id="SvcControlClient"
                         Name="xp2p-client"
                         Stop="both"
@@ -85,7 +93,7 @@
                         ErrorControl="normal"
                         Vital="yes"
                         Account="LocalSystem"
-                        Arguments='server service run --path "[INSTALLFOLDER]" --config-dir config-server --log-file "[INSTALLFOLDER]logs\server\service.log" --xray-log-file "[INSTALLFOLDER]logs\server\xray-service.log"' />
+                        Arguments='server service run' />
         <ServiceControl Id="SvcControlServer"
                         Name="xp2p-server"
                         Stop="both"
@@ -116,9 +124,45 @@
       </Component>
     </DirectoryRef>
 
+    <DirectoryRef Id="Xp2pDataFolder">
+      <Component Id="cmpXp2pDataRoot" Guid="{3A6EBAE9-35F8-4B88-A455-8E7D0D33BFE3}" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="Xp2pConfigClientFolder">
+      <Component Id="cmpXp2pConfigClient" Guid="{A7951FC6-7B6C-4F36-AC1D-4B52C6B720C1}" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="Xp2pConfigServerFolder">
+      <Component Id="cmpXp2pConfigServer" Guid="{E2A4DD4A-1DE4-4B6D-8D52-7B2AC5D052B4}" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="Xp2pLogsFolder">
+      <Component Id="cmpXp2pLogsRoot" Guid="{9E729D75-4F90-4E25-9D08-4A0A23C0EF8D}" KeyPath="yes">
+        <CreateFolder>
+          <util:PermissionEx User="Users" Modify="yes" />
+        </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
     <Feature Id="MainFeature" Title="xp2p" Level="1">
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
+      <ComponentRef Id="cmpXp2pDataRoot" />
+      <ComponentRef Id="cmpXp2pConfigClient" />
+      <ComponentRef Id="cmpXp2pConfigServer" />
+      <ComponentRef Id="cmpXp2pLogsRoot" />
       <ComponentGroupRef Id="Xp2pBundleGroup" />
       <ComponentRef Id="cmpServiceAutostart" />
     </Feature>

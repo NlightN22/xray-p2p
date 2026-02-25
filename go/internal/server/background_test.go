@@ -8,10 +8,12 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -114,6 +116,10 @@ func TestHeartbeatPayloadIsPersisted(t *testing.T) {
 	})
 
 	dir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		t.Setenv("XP2P_CONFIG_ROOT", dir)
+		t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
+	}
 	portStr, _ := testutil.FreePort(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -162,7 +168,11 @@ func TestHeartbeatPayloadIsPersisted(t *testing.T) {
 		t.Fatalf("write payload: %v", err)
 	}
 
-	statePath := filepath.Join(dir, layout.ServerHeartbeatStateFileName)
+	stateRoot := dir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
+	statePath := filepath.Join(stateRoot, layout.ServerHeartbeatStateFileName)
 	testutil.WaitForCondition(t, time.Second, func() bool {
 		_, err := os.Stat(statePath)
 		return err == nil
