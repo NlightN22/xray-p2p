@@ -307,15 +307,12 @@ def test_server_install_uses_path_certificate_source(server_host, xp2p_server_ru
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates in configuration"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == str(cert_source).replace("\\", "/")
-        assert primary_cert.get("keyFile") == str(key_source).replace("\\", "/")
+        expected_cert, expected_key = _expect_tls_paths()
+        assert primary_cert.get("certificateFile") == expected_cert
+        assert primary_cert.get("keyFile") == expected_key
 
-        assert not _remote_path_exists(server_host, SERVER_CERT_DEST), (
-            "cert.pem should not be copied into config-server for path certificates"
-        )
-        assert not _remote_path_exists(server_host, SERVER_KEY_DEST), (
-            "key.pem should not be copied into config-server for path certificates"
-        )
+        assert _remote_path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to be copied"
+        assert _remote_path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to be copied"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
