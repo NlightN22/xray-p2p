@@ -50,6 +50,7 @@ func TestServerCertStateCommand(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
+			t.Setenv("XP2P_CONFIG_ROOT", dir)
 			configDir := filepath.Join(dir, layout.ServerConfigDir)
 			writeTLSConfigFile(t, configDir)
 

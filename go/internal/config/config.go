@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +18,8 @@ import (
 )
 
 const defaultEnvPrefix = "XP2P_"
+
+var ErrConfigParse = errors.New("config: parse error")
 
 var defaultValues = map[string]any{
 	"logging.level":         "info",
@@ -107,6 +110,8 @@ type Options struct {
 	EnvPrefix string
 	// Overrides contains final in-memory values applied after all other sources.
 	Overrides map[string]any
+	// AllowInvalid allows ignoring configuration parse errors.
+	AllowInvalid bool
 }
 
 // Load constructs the configuration by merging defaults, optional file, environment, and overrides.
@@ -117,7 +122,7 @@ func Load(opts Options) (Config, error) {
 		return Config{}, fmt.Errorf("config: load defaults: %w", err)
 	}
 
-	if err := loadFileIfPresent(k, opts.Path); err != nil {
+	if err := loadFileIfPresent(k, opts.Path, opts.AllowInvalid); err != nil {
 		return Config{}, err
 	}
 
@@ -146,9 +151,9 @@ func Load(opts Options) (Config, error) {
 	return cfg, nil
 }
 
-func loadFileIfPresent(k *koanf.Koanf, explicitPath string) error {
+func loadFileIfPresent(k *koanf.Koanf, explicitPath string, allowInvalid bool) error {
 	if explicitPath != "" {
-		return loadFile(k, explicitPath)
+		return loadFile(k, explicitPath, allowInvalid)
 	}
 
 	roleFiles := []string{
@@ -157,7 +162,7 @@ func loadFileIfPresent(k *koanf.Koanf, explicitPath string) error {
 	}
 	for _, candidate := range roleFiles {
 		if _, err := os.Stat(candidate); err == nil {
-			if err := loadFile(k, candidate); err != nil {
+			if err := loadFile(k, candidate, allowInvalid); err != nil {
 				return err
 			}
 		}
@@ -165,7 +170,7 @@ func loadFileIfPresent(k *koanf.Koanf, explicitPath string) error {
 	return nil
 }
 
-func loadFile(k *koanf.Koanf, path string) error {
+func loadFile(k *koanf.Koanf, path string, allowInvalid bool) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("config: read %s: %w", path, err)
@@ -180,7 +185,10 @@ func loadFile(k *koanf.Koanf, path string) error {
 	}
 
 	if err := k.Load(file.Provider(path), parser); err != nil {
-		return fmt.Errorf("config: parse %s: %w", path, err)
+		if allowInvalid {
+			return nil
+		}
+		return fmt.Errorf("%w: %s: %v", ErrConfigParse, path, err)
 	}
 	return nil
 }

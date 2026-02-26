@@ -60,7 +60,17 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if _, err := config.EnsureTunSettings("", "client", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
-		return err
+		if state.Force && errors.Is(err, config.ErrConfigParse) {
+			configPath := config.ConfigPath(layout.ClientConfigFileName)
+			if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				return removeErr
+			}
+			if _, retryErr := config.EnsureTunSettings("", "client", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); retryErr != nil {
+				return retryErr
+			}
+		} else {
+			return err
+		}
 	}
 
 	if err := ensureXrayBinaryPresent(state.binDir); err != nil {
@@ -230,7 +240,7 @@ func isSafeInstallDir(path string) bool {
 }
 
 func deployConfiguration(state installState) error {
-	xrayCfg, err := ensureClientXrayConfig(state.configFile)
+	xrayCfg, err := ensureClientXrayConfigForce(state.configFile, state.Force)
 	if err != nil {
 		return err
 	}

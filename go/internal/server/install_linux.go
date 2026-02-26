@@ -82,7 +82,17 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		logging.Warn("xp2p: chmod log directory failed", "path", state.logsDir, "err", err)
 	}
 	if _, err := config.EnsureTunSettings("", "server", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
-		return err
+		if state.Force && errors.Is(err, config.ErrConfigParse) {
+			configPath := config.ConfigPath(layout.ServerConfigFileName)
+			if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				return removeErr
+			}
+			if _, retryErr := config.EnsureTunSettings("", "server", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); retryErr != nil {
+				return retryErr
+			}
+		} else {
+			return err
+		}
 	}
 	if state.TunEnabled {
 		if err := openwrt.EnsureTunInterface(state.TunName, state.TunAddr); err != nil {
@@ -366,7 +376,7 @@ func deployConfiguration(state installState) error {
 		}
 	}
 
-	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	xrayCfg, err := ensureServerXrayConfigForce(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)), state.Force)
 	if err != nil {
 		return err
 	}

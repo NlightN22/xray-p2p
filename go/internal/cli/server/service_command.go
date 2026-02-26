@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/NlightN22/xray-p2p/go/internal/service"
@@ -228,12 +226,5 @@ func defaultServerXrayLogPath(installDir string) string {
 }
 
 func defaultServerLogPath(installDir string, fileName string) string {
-	if runtime.GOOS == "windows" {
-		base := strings.TrimSpace(installDir)
-		if base == "" {
-			base = "."
-		}
-		return filepath.Join(base, layout.LogsDirName, "server", fileName)
-	}
 	return filepath.Join(config.LogRoot(), "server", fileName)
 }

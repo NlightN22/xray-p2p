@@ -57,6 +57,7 @@ func TestCertificateStateStatuses(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
+			t.Setenv("XP2P_CONFIG_ROOT", dir)
 			configDir := filepath.Join(dir, "config-server")
 			writeTLSConfig(t, configDir, "cert.pem", "key.pem")
 

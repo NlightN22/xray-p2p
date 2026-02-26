@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/naming"
 )
 
@@ -27,7 +28,16 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	tag := buildProxyTag(host)
 	state, err := loadClientInstallState(configFile)
 	if err != nil {
-		return clientInstallState{}, err
+		if force && errors.Is(err, ErrClientConfigParse) {
+			logging.Warn(
+				"xp2p: invalid client config ignored due to --force",
+				"path", configFile,
+				"error", err,
+			)
+			state = clientInstallState{}
+		} else {
+			return clientInstallState{}, err
+		}
 	}
 
 	allowValue := endpoint.AllowInsecure

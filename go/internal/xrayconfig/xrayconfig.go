@@ -14,6 +14,8 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 )
 
+var ErrConfigParse = errors.New("xrayconfig: parse error")
+
 type ClientXrayConfig struct {
 	Inbounds       ClientInboundsConfig `json:"inbounds" toml:"inbounds"`
 	Logs           LogsConfig           `json:"logs" toml:"logs"`
@@ -783,7 +785,7 @@ func loadOrCreateToml(path string) (*toml.Tree, error) {
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
-		return nil, fmt.Errorf("xrayconfig: parse %s: %w", path, err)
+		return nil, fmt.Errorf("%w: %s: %v", ErrConfigParse, path, err)
 	}
 	return tree, nil
 }

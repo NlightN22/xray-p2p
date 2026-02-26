@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
-     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{2A0AB5BE-8EAA-4FBE-91E9-987F93F0E1C5}">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x86" Description="xp2p tunnel service" />
 
@@ -127,7 +126,7 @@
     <DirectoryRef Id="Xp2pDataFolder">
       <Component Id="cmpXp2pDataRoot" Guid="{3A6EBAE9-35F8-4B88-A455-8E7D0D33BFE3}" KeyPath="yes">
         <CreateFolder>
-          <util:PermissionEx User="Users" Modify="yes" />
+          <Permission User="Users" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>
@@ -135,7 +134,7 @@
     <DirectoryRef Id="Xp2pConfigClientFolder">
       <Component Id="cmpXp2pConfigClient" Guid="{A7951FC6-7B6C-4F36-AC1D-4B52C6B720C1}" KeyPath="yes">
         <CreateFolder>
-          <util:PermissionEx User="Users" Modify="yes" />
+          <Permission User="Users" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>
@@ -143,7 +142,7 @@
     <DirectoryRef Id="Xp2pConfigServerFolder">
       <Component Id="cmpXp2pConfigServer" Guid="{E2A4DD4A-1DE4-4B6D-8D52-7B2AC5D052B4}" KeyPath="yes">
         <CreateFolder>
-          <util:PermissionEx User="Users" Modify="yes" />
+          <Permission User="Users" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>
@@ -151,7 +150,7 @@
     <DirectoryRef Id="Xp2pLogsFolder">
       <Component Id="cmpXp2pLogsRoot" Guid="{9E729D75-4F90-4E25-9D08-4A0A23C0EF8D}" KeyPath="yes">
         <CreateFolder>
-          <util:PermissionEx User="Users" Modify="yes" />
+          <Permission User="Users" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>

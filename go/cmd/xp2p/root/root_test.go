@@ -4,12 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestEnsureRuntimeDefaults(t *testing.T) {
 	chdirTemp(t)
 	opts := &rootOptions{}
-	if err := opts.ensureRuntime(); err != nil {
+	if err := opts.ensureRuntime(newRootCmd()); err != nil {
 		t.Fatalf("ensureRuntime failed: %v", err)
 	}
 
@@ -55,7 +57,7 @@ func TestEnsureRuntimeWithOverrides(t *testing.T) {
 		serverKey:        `D:\certs\cert.key`,
 		logJSON:          true,
 	}
-	if err := opts.ensureRuntime(); err != nil {
+	if err := opts.ensureRuntime(newRootCmd()); err != nil {
 		t.Fatalf("ensureRuntime failed: %v", err)
 	}
 
@@ -107,7 +109,7 @@ key = "C:\\certs\\server.key"
 `)
 
 	opts := &rootOptions{configPath: cfgPath}
-	if err := opts.ensureRuntime(); err != nil {
+	if err := opts.ensureRuntime(newRootCmd()); err != nil {
 		t.Fatalf("ensureRuntime failed: %v", err)
 	}
 
@@ -162,4 +164,8 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func newRootCmd() *cobra.Command {
+	return &cobra.Command{Use: "xp2p"}
 }

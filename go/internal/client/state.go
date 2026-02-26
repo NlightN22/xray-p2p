@@ -44,6 +44,8 @@ type clientReverseChannel struct {
 	EndpointTag string `json:"endpoint_tag" toml:"endpoint_tag"`
 }
 
+var ErrClientConfigParse = errors.New("xp2p: client config parse error")
+
 func loadClientInstallState(path string) (clientInstallState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -59,7 +61,7 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
-		return clientInstallState{}, fmt.Errorf("xp2p: parse client config %s: %w", path, err)
+		return clientInstallState{}, fmt.Errorf("%w: %s: %v", ErrClientConfigParse, path, err)
 	}
 	raw := tree.GetPath([]string{"client"})
 	if raw == nil {

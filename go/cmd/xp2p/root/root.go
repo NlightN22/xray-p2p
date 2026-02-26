@@ -27,7 +27,7 @@ func NewCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := opts.ensureRuntime(); err != nil {
+			if err := opts.ensureRuntime(cmd); err != nil {
 				return err
 			}
 			return opts.runService(cmd.Context())
@@ -43,7 +43,7 @@ func NewCommand() *cobra.Command {
 			fmt.Println(version.Current())
 			return exitError{code: 0}
 		}
-		return opts.ensureRuntime()
+		return opts.ensureRuntime(cmd)
 	}
 
 	clientCmd := clientcmd.NewCommand(func() config.Config { return opts.cfg })
@@ -136,13 +136,14 @@ func (o *rootOptions) bindServerOverrideFlags(cmd *cobra.Command) {
 	flags.StringVarP(&o.serverHost, "server-host", "H", "", "public host name or IP for server certificate and links")
 }
 
-func (o *rootOptions) ensureRuntime() error {
+func (o *rootOptions) ensureRuntime(cmd *cobra.Command) error {
 	if o.runtimeOK {
 		return nil
 	}
 	cfg, err := config.Load(config.Options{
-		Path:      strings.TrimSpace(o.configPath),
-		Overrides: o.buildOverrides(),
+		Path:         strings.TrimSpace(o.configPath),
+		Overrides:    o.buildOverrides(),
+		AllowInvalid: shouldIgnoreInvalidConfig(cmd),
 	})
 	if err != nil {
 		return err
@@ -157,6 +158,27 @@ func (o *rootOptions) ensureRuntime() error {
 	o.cfg = cfg
 	o.runtimeOK = true
 	return nil
+}
+
+func shouldIgnoreInvalidConfig(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	switch cmd.CommandPath() {
+	case "xp2p client install", "xp2p server install":
+		return hasForceArg()
+	default:
+		return false
+	}
+}
+
+func hasForceArg() bool {
+	for _, arg := range os.Args[1:] {
+		if strings.HasPrefix(arg, "--force") {
+			return true
+		}
+	}
+	return false
 }
 
 func (o *rootOptions) buildOverrides() map[string]any {

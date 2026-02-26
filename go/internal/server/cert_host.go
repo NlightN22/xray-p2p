@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
@@ -97,10 +98,6 @@ type certificateState struct {
 var errHostRequired = errors.New("xp2p: host required")
 
 func normalizeCertificateOptions(opts CertificateOptions) (certificateState, error) {
-	if strings.TrimSpace(opts.InstallDir) == "" && !filepath.IsAbs(strings.TrimSpace(opts.ConfigDir)) {
-		return certificateState{}, errors.New("xp2p: install directory is required when config dir is relative")
-	}
-
 	installDir := opts.InstallDir
 	if installDir != "" {
 		resolved, err := resolveInstallDir(installDir)
@@ -174,10 +171,7 @@ func resolveCertificateConfigDir(installDir, configDir string) (string, error) {
 	if filepath.IsAbs(cfg) {
 		return cfg, nil
 	}
-	if installDir == "" {
-		return "", errors.New("xp2p: install directory is required when config dir is relative")
-	}
-	return filepath.Join(installDir, cfg), nil
+	return filepath.Join(config.ConfigRoot(), cfg), nil
 }
 
 func ensureConfigExists(configDir string) error {
