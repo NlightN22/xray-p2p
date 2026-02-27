@@ -116,6 +116,8 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
             timeout=LOG_WAIT_TIMEOUT,
         )
 
+        _assert_internet_access(client_host)
+
         _assert_client_install_artifacts(client_host, server_ip, trojan_user, trojan_password)
         _assert_client_state(client_host, server_ip)
         _assert_client_routing(client_host, server_ip)
@@ -822,6 +824,15 @@ def _assert_client_state(host: Host, server_ip: str) -> None:
 def _assert_client_routing(host: Host, server_ip: str) -> None:
     routing = helpers.read_json(host, CLIENT_CONFIG_DIR / "routing.json")
     helpers.assert_routing_rule(routing, server_ip)
+
+
+def _assert_internet_access(host: Host) -> None:
+    result = linux_env.run_guest_script(host, "scripts/linux/check_internet_linux.sh")
+    if result.rc != 0:
+        pytest.fail(
+            "Client internet check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _find_trojan_inbound(data: dict) -> dict:

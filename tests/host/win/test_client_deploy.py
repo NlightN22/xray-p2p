@@ -156,6 +156,9 @@ def test_windows_client_deploy_end_to_end(
                 timeout=LOG_WAIT_TIMEOUT,
             )
 
+        with _timed("check client internet access"):
+            _assert_internet_access(client_host)
+
         with _timed("assert client artifacts"):
             _assert_client_install_artifacts(client_host, server_host_ip, trojan_user, trojan_password)
         with _timed("assert client state"):
@@ -406,6 +409,13 @@ def _stop_process(host, pid: int) -> None:
         ProcessId=str(pid),
     )
     if result.rc != 0:
+        exists = win_env.run_guest_script(
+            host,
+            "scripts/process_exists.ps1",
+            ProcessId=str(pid),
+        )
+        if exists.rc == 3:
+            return
         pytest.fail(
             f"Failed to stop process {pid}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
@@ -445,6 +455,18 @@ def _assert_client_state(host, server_ip: str) -> None:
 def _assert_client_routing(host, server_ip: str) -> None:
     routing = _read_remote_json(host, CLIENT_ROUTING_JSON)
     _assert_routing_rule(routing, server_ip)
+
+
+def _assert_internet_access(host) -> None:
+    result = win_env.run_guest_script(
+        host,
+        "scripts/check_internet_win.ps1",
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Client internet check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _wait_for_client_link(host, proc_info: dict[str, str | int]) -> str:

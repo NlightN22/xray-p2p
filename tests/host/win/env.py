@@ -249,24 +249,6 @@ def _encode_args_payload(args: Iterable[str]) -> str:
     return base64.b64encode(raw.encode("utf-8")).decode("ascii")
 
 
-def _ensure_log_directories(host: Host) -> None:
-    log_dirs = [
-        LOGS_DIR,
-        LOGS_DIR / "client",
-        LOGS_DIR / "server",
-    ]
-    dir_list = ", ".join(ps_quote(str(path)) for path in log_dirs)
-    script = f"""
-$ErrorActionPreference = 'Stop'
-foreach ($dir in @({dir_list})) {{
-    if (-not (Test-Path $dir)) {{
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }}
-}}
-"""
-    run_powershell(host, script)
-
-
 def ensure_msi_package(host: Host) -> str:
     global _MSI_CACHE_PATH_X64
     if _MSI_CACHE_PATH_X64 and path_exists(host, _MSI_CACHE_PATH_X64):
@@ -381,7 +363,6 @@ def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -
         detected = _detect_xp2p_exe(host)
         if detected is not None:
             _set_install_paths_from_exe(detected)
-            _ensure_log_directories(host)
             return
 
     start = time.perf_counter()
@@ -400,7 +381,6 @@ def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -
             f"Checked: {PROGRAM_FILES_INSTALL_DIR} and {PROGRAM_FILES_X86_INSTALL_DIR}."
         )
     _set_install_paths_from_exe(detected)
-    _ensure_log_directories(host)
 
 
 def get_program_files_install_dir(host: Host) -> Path:

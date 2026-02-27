@@ -117,6 +117,8 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             timeout=LOG_WAIT_TIMEOUT,
         )
 
+        _assert_internet_access(openwrt_client_host)
+
         _assert_link_matches(
             link,
             host=server_ip,
@@ -382,6 +384,15 @@ def _assert_client_state(host: Host, server_ip: str) -> None:
 def _assert_client_routing(host: Host, server_ip: str) -> None:
     routing = helpers.read_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
     helpers.assert_routing_rule(routing, server_ip)
+
+
+def _assert_internet_access(host: Host) -> None:
+    result = openwrt_env.run_guest_script(host, "scripts/openwrt/check_internet_openwrt.sh")
+    if result.rc != 0:
+        pytest.fail(
+            "Client internet check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _read_text(host: Host, path: PurePosixPath) -> str:

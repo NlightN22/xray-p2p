@@ -59,12 +59,15 @@ guest suites -- the CI and fellow contributors expect these rules.
 
 3. **Assertions and artefacts**
    - Fetch remote files with helper utilities; avoid ad-hoc transport hacks.
-   - When capturing logs/configs, store them under the synced root so the host
-     can read them (e.g. `C:\xp2p\artifacts\...` on Windows,
-     `/srv/xray-p2p/artifacts/...` on Linux).
-   - Use the synced `build` tree for temporary files and test-run logs
-     (e.g. `C:\xp2p\build\artifacts\...`, `/srv/xray-p2p/build/artifacts/...`);
-     reserve `artifacts` for long-lived outputs that must be kept after a run.
+- When capturing logs/configs, store them under the synced root so the host
+  can read them (e.g. `C:\xp2p\artifacts\...` on Windows,
+  `/srv/xray-p2p/artifacts/...` on Linux).
+- Use the synced `build` tree for temporary files and test-run logs
+  (e.g. `C:\xp2p\build\artifacts\...`, `/srv/xray-p2p/build/artifacts/...`);
+  reserve `artifacts` for long-lived outputs that must be kept after a run.
+- **Do not create application log directories** (for example `C:\ProgramData\xp2p\logs`).
+  Tests may write their own logs only under the synced `build/logs/<platform>` tree
+  (for example `C:\xp2p\build\logs\win`, `/srv/xray-p2p/build/logs/linux`).
 - **OpenWrt reverse tunnel redirects**
   - Add redirect rules only on the ingress side of the tunnel. For client->server
     flows (B->A) this means `xp2p client redirect add --domain ...` on the client
