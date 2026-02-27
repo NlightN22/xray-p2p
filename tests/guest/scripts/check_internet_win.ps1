@@ -20,7 +20,7 @@ try {
     $tcpOk = $false
 }
 if (-not $tcpOk) {
-    Write-Error "Internet check failed: TCP connect to $TcpHost:$TcpPort"
+    Write-Error "Internet check failed: TCP connect to ${TcpHost}:${TcpPort}"
     exit 1
 }
 
