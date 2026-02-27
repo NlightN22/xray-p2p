@@ -20,6 +20,17 @@
     <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" Value="1" />
 
+    <CustomAction Id="SetRegisterPsCompletion"
+                  Property="RegisterPsCompletion"
+                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[#fileRegisterPsCompletion]&quot; -CompletionPath &quot;[#fileXp2pCompletion]&quot; -InstallRoot &quot;[INSTALLFOLDER]&quot;" />
+
+    <CustomAction Id="RegisterPsCompletion"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec"
+                  Execute="deferred"
+                  Return="check"
+                  Impersonate="no" />
+
     <CustomAction Id="SetPerUserInstall" Property="MSIINSTALLPERUSER" Value="1" Execute="immediate" />
     <CustomAction Id="SetPerUserFolder" Property="INSTALLFOLDER" Value="[LocalAppDataFolder]xp2p" Execute="immediate" />
 
@@ -40,6 +51,8 @@
     <InstallExecuteSequence>
       <Custom Action="SetPerUserInstall" Before="CostFinalize">NOT Privileged</Custom>
       <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
+      <Custom Action="SetRegisterPsCompletion" After="InstallFiles">Privileged AND NOT REMOVE="ALL"</Custom>
+      <Custom Action="RegisterPsCompletion" After="SetRegisterPsCompletion">Privileged AND NOT REMOVE="ALL"</Custom>
       <Custom Action="RunClientInstall" After="InstallFiles">NOT Installed AND XP2P_CLIENT_ARGS</Custom>
       <Custom Action="RunServerInstall" After="RunClientInstall">NOT Installed AND XP2P_SERVER_ARGS</Custom>
     </InstallExecuteSequence>
@@ -57,6 +70,7 @@
       </Directory>
       <Directory Id="CommonAppDataFolder">
         <Directory Id="Xp2pDataFolder" Name="xp2p">
+          <Directory Id="Xp2pCompletionsFolder" Name="completions" />
           <Directory Id="Xp2pConfigClientFolder" Name="config-client" />
           <Directory Id="Xp2pConfigServerFolder" Name="config-server" />
           <Directory Id="Xp2pLogsFolder" Name="logs" />
@@ -104,6 +118,10 @@
         <CreateFolder />
       </Component>
 
+      <Component Id="cmpRegisterPsCompletion" Guid="{2B6C8B3E-9A8D-4A23-9F4C-6E5B6E6C0E8A}">
+        <File Id="fileRegisterPsCompletion" Source="$(var.RegisterPsCompletionScript)" KeyPath="yes" />
+      </Component>
+
       <Component Id="cmpServiceAutostart" Guid="{10F0A609-1BCD-43DD-9D33-FE6ED7E65CF3}">
         <Condition>XP2P_SKIP_SERVICE_START="0"</Condition>
         <RegistryValue Root="HKLM"
@@ -128,6 +146,12 @@
         <CreateFolder>
           <Permission User="Users" GenericAll="yes" />
         </CreateFolder>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="Xp2pCompletionsFolder">
+      <Component Id="cmpXp2pCompletion" Guid="{97C5B8A9-1E3B-4A32-9F6A-2B3A5B8C9D01}">
+        <File Id="fileXp2pCompletion" Source="$(var.Xp2pCompletionScript)" KeyPath="yes" />
       </Component>
     </DirectoryRef>
 
@@ -158,7 +182,9 @@
     <Feature Id="MainFeature" Title="xp2p" Level="1">
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
+      <ComponentRef Id="cmpRegisterPsCompletion" />
       <ComponentRef Id="cmpXp2pDataRoot" />
+      <ComponentRef Id="cmpXp2pCompletion" />
       <ComponentRef Id="cmpXp2pConfigClient" />
       <ComponentRef Id="cmpXp2pConfigServer" />
       <ComponentRef Id="cmpXp2pLogsRoot" />

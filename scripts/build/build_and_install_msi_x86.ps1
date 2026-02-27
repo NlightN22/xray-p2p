@@ -25,6 +25,21 @@ function Ensure-Directory {
     }
 }
 
+function Invoke-WixTool {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $ToolPath,
+        [Parameter(Mandatory = $true)]
+        [string[]] $Arguments
+    )
+    $output = & $ToolPath @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($output) {
+        $output | ForEach-Object { Write-Host $_ }
+    }
+    return $exitCode
+}
+
 function Add-ToPath {
     param([string] $Path)
     $current = [Environment]::GetEnvironmentVariable('Path', 'Machine')
@@ -82,6 +97,18 @@ try {
         throw "xp2p binary missing at $binaryOut"
     }
 
+    Write-Info "Generating PowerShell completion script"
+    $completionDir = Join-Path $binaryDir 'completions'
+    Ensure-Directory $completionDir
+    $completionOut = Join-Path $completionDir 'xp2p.ps1'
+    & $binaryOut completion powershell | Set-Content -Path $completionOut -Encoding utf8
+    if ($LASTEXITCODE -ne 0) {
+        throw "xp2p completion powershell failed with exit code $LASTEXITCODE"
+    }
+    if (-not (Test-Path $completionOut)) {
+        throw "PowerShell completion script missing at $completionOut"
+    }
+
     $bundleSourceDir = Join-Path $RepoRoot 'distro\windows\bundle\x86'
     $bundleSourceXray = Join-Path $bundleSourceDir 'xray.exe'
     if (-not (Test-Path $bundleSourceXray)) {
@@ -103,30 +130,63 @@ try {
     $candle = Join-Path $wixDir.FullName 'bin\candle.exe'
     $heat = Join-Path $wixDir.FullName 'bin\heat.exe'
     $light = Join-Path $wixDir.FullName 'bin\light.exe'
+    $wixExt = Join-Path $wixDir.FullName 'bin\WixUtilExtension.dll'
 
     Write-Info "Harvesting xray bundle"
     $bundleWxs = Join-Path $binaryDir 'xp2p-bundle.wxs'
-    & $heat dir $bundleDir -dr BinFolder -cg Xp2pBundleGroup -gg -srd -var var.BundleDir -out $bundleWxs
-    if ($LASTEXITCODE -ne 0) {
-        throw "heat.exe failed with exit code $LASTEXITCODE"
+    $heatExit = Invoke-WixTool -ToolPath $heat -Arguments @(
+        "dir", $bundleDir,
+        "-dr", "BinFolder",
+        "-cg", "Xp2pBundleGroup",
+        "-gg",
+        "-srd",
+        "-var", "var.BundleDir",
+        "-out", $bundleWxs
+    )
+    if ($heatExit -ne 0) {
+        throw "heat.exe failed with exit code $heatExit"
     }
 
     Write-Info "Running candle.exe (x86)"
     $wixObj = Join-Path $binaryDir 'xp2p-x86.wixobj'
     $bundleObj = Join-Path $binaryDir 'xp2p-x86-bundle.wixobj'
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $wixObj (Join-Path $RepoRoot $WixSourceRelative)
-    if ($LASTEXITCODE -ne 0) {
-        throw "candle.exe failed with exit code $LASTEXITCODE"
+    $registerPsCompletion = Join-Path $RepoRoot 'installer\wix\register_ps_completion.ps1'
+    $candleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
+        "-ext", $wixExt,
+        "-dProductVersion=$version",
+        "-dXp2pBinary=$binaryOut",
+        "-dBundleDir=$bundleDir",
+        "-dXp2pCompletionScript=$completionOut",
+        "-dRegisterPsCompletionScript=$registerPsCompletion",
+        "-out", $wixObj,
+        (Join-Path $RepoRoot $WixSourceRelative)
+    )
+    if ($candleExit -ne 0) {
+        throw "candle.exe failed with exit code $candleExit"
     }
-    & $candle "-dProductVersion=$version" "-dXp2pBinary=$binaryOut" "-dBundleDir=$bundleDir" "-out" $bundleObj $bundleWxs
-    if ($LASTEXITCODE -ne 0) {
-        throw "candle.exe failed with exit code $LASTEXITCODE"
+    $candleBundleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
+        "-ext", $wixExt,
+        "-dProductVersion=$version",
+        "-dXp2pBinary=$binaryOut",
+        "-dBundleDir=$bundleDir",
+        "-dXp2pCompletionScript=$completionOut",
+        "-dRegisterPsCompletionScript=$registerPsCompletion",
+        "-out", $bundleObj,
+        $bundleWxs
+    )
+    if ($candleBundleExit -ne 0) {
+        throw "candle.exe failed with exit code $candleBundleExit"
     }
 
     Write-Info "Running light.exe (x86)"
-    & $light "-out" $msiPath $wixObj $bundleObj
-    if ($LASTEXITCODE -ne 0) {
-        throw "light.exe failed with exit code $LASTEXITCODE"
+    $lightExit = Invoke-WixTool -ToolPath $light -Arguments @(
+        "-ext", $wixExt,
+        "-out", $msiPath,
+        $wixObj,
+        $bundleObj
+    )
+    if ($lightExit -ne 0) {
+        throw "light.exe failed with exit code $lightExit"
     }
 }
 finally {
