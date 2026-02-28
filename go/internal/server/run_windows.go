@@ -5,14 +5,15 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
 
 // Run launches xray-core using the installed configuration directory and blocks until the process exits.
@@ -93,6 +94,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
+	onStart := func() {
+		if opts.TunEnabled {
+			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
+		}
+	}
+
 	return runXrayWithConfig(
 		ctx,
 		xrayPath,
@@ -101,6 +108,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		opts.ErrorLogPath,
 		resolveLogPath,
 		configureCmd,
-		nil,
+		onStart,
 	)
 }
