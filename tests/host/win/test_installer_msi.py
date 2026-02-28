@@ -119,6 +119,24 @@ def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp
         )
 
 
+@pytest.mark.host
+@pytest.mark.win
+def test_windows_installer_registers_powershell_completion(server_host, xp2p_msi_path):
+    completion_path = _env.PROGRAM_DATA_ROOT / "completions" / "xp2p.ps1"
+    install_root = _install_root(server_host)
+    result = _env.run_guest_script(
+        server_host,
+        "scripts/check_ps_completion.ps1",
+        CompletionPath=str(completion_path),
+        InstallRoot=str(install_root),
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "PowerShell completion registration check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def _remote_path_exists(host, path: Path) -> bool:
     quoted = _env.ps_quote(str(path))
     script = f"""

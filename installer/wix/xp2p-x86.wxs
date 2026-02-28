@@ -51,8 +51,8 @@
     <InstallExecuteSequence>
       <Custom Action="SetPerUserInstall" Before="CostFinalize">NOT Privileged</Custom>
       <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
-      <Custom Action="SetRegisterPsCompletion" After="InstallFiles">Privileged AND NOT REMOVE="ALL"</Custom>
-      <Custom Action="RegisterPsCompletion" After="SetRegisterPsCompletion">Privileged AND NOT REMOVE="ALL"</Custom>
+      <Custom Action="SetRegisterPsCompletion" After="InstallFiles">NOT REMOVE="ALL"</Custom>
+      <Custom Action="RegisterPsCompletion" After="SetRegisterPsCompletion">NOT REMOVE="ALL"</Custom>
       <Custom Action="RunClientInstall" After="InstallFiles">NOT Installed AND XP2P_CLIENT_ARGS</Custom>
       <Custom Action="RunServerInstall" After="RunClientInstall">NOT Installed AND XP2P_SERVER_ARGS</Custom>
     </InstallExecuteSequence>

@@ -24,11 +24,11 @@
 
     <CustomAction Id="SetRegisterPsCompletion"
                   Property="RegisterPsCompletion"
-                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[#fileRegisterPsCompletion]&quot; -CompletionPath &quot;[#fileXp2pCompletion]&quot; -InstallRoot &quot;[INSTALLFOLDER]&quot;" />
+                  Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[#fileRegisterPsCompletion]&quot; -CompletionPath &quot;[#fileXp2pCompletion]&quot; -InstallRoot &quot;[INSTALLFOLDER]&quot;" />
 
     <CustomAction Id="RegisterPsCompletion"
                   BinaryKey="WixCA"
-                  DllEntry="WixQuietExec"
+                  DllEntry="WixQuietExec64"
                   Execute="deferred"
                   Return="check"
                   Impersonate="no" />
@@ -53,8 +53,8 @@
     <InstallExecuteSequence>
       <Custom Action="SetPerUserInstall" Before="CostFinalize">NOT Privileged</Custom>
       <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
-      <Custom Action="SetRegisterPsCompletion" After="InstallFiles">Privileged AND NOT REMOVE="ALL"</Custom>
-      <Custom Action="RegisterPsCompletion" After="SetRegisterPsCompletion">Privileged AND NOT REMOVE="ALL"</Custom>
+      <Custom Action="SetRegisterPsCompletion" After="InstallFiles">NOT REMOVE="ALL"</Custom>
+      <Custom Action="RegisterPsCompletion" After="SetRegisterPsCompletion">NOT REMOVE="ALL"</Custom>
       <Custom Action="RunClientInstall" After="InstallFiles">NOT Installed AND XP2P_CLIENT_ARGS</Custom>
       <Custom Action="RunServerInstall" After="RunClientInstall">NOT Installed AND XP2P_SERVER_ARGS</Custom>
     </InstallExecuteSequence>

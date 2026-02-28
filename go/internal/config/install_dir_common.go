@@ -82,6 +82,12 @@ func looksLikeInstallRoot(dir string) bool {
 		if logInfo, err := os.Stat(logsDir); err == nil && logInfo.IsDir() {
 			return true
 		}
+		if fileInfo, err := os.Stat(filepath.Join(binDir, "xray.exe")); err == nil && !fileInfo.IsDir() {
+			return true
+		}
+		if fileInfo, err := os.Stat(filepath.Join(binDir, "xray")); err == nil && !fileInfo.IsDir() {
+			return true
+		}
 	}
 	return false
 }

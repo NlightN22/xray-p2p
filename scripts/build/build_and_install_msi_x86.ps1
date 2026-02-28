@@ -101,7 +101,9 @@ try {
     $completionDir = Join-Path $binaryDir 'completions'
     Ensure-Directory $completionDir
     $completionOut = Join-Path $completionDir 'xp2p.ps1'
-    & $binaryOut completion powershell | Set-Content -Path $completionOut -Encoding utf8
+    & $binaryOut completion powershell |
+        Where-Object { $_ -notmatch '^\d{4}-\d{2}-\d{2}T.*\bxp2p:' } |
+        Set-Content -Path $completionOut -Encoding utf8
     if ($LASTEXITCODE -ne 0) {
         throw "xp2p completion powershell failed with exit code $LASTEXITCODE"
     }

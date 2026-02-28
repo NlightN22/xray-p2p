@@ -12,7 +12,8 @@ function Ensure-ProfileLine {
         [Parameter(Mandatory = $true)]
         [string] $ProfilePath,
         [Parameter(Mandatory = $true)]
-        [string] $Line
+        [string] $Line,
+        [string] $LegacyPath = ''
     )
 
     $profileDir = Split-Path -Path $ProfilePath -Parent
@@ -24,10 +25,18 @@ function Ensure-ProfileLine {
     }
 
     $existing = Get-Content -LiteralPath $ProfilePath -ErrorAction SilentlyContinue
-    if ($existing -contains $Line) {
+    $updated = @($existing)
+    if ($LegacyPath) {
+        $escaped = [regex]::Escape($LegacyPath)
+        $legacyPattern = "^\s*\.\s+['""]$escaped['""]\s*$"
+        $updated = $updated | Where-Object { $_ -notmatch $legacyPattern }
+    }
+    if ($updated -contains $Line) {
         return
     }
-
+    if ($updated.Count -ne $existing.Count) {
+        Set-Content -LiteralPath $ProfilePath -Value $updated
+    }
     Add-Content -LiteralPath $ProfilePath -Value $Line
 }
 
@@ -36,14 +45,29 @@ function Ensure-PathEntry {
     if ([string]::IsNullOrWhiteSpace($PathEntry)) {
         return
     }
+    $normalizedEntry = $PathEntry.Trim().Trim('"').TrimEnd('\')
     $current = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-    $segments = $current -split ';'
-    if ($segments -contains $PathEntry) {
-        return
+    $segments = @()
+    if ($current) {
+        $segments = $current -split ';' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
     }
-    $newPath = "$PathEntry;$current"
+    $found = $false
+    $updatedSegments = @()
+    foreach ($segment in $segments) {
+        $normalizedSegment = $segment.Trim('"').TrimEnd('\')
+        if ($normalizedSegment.Equals($normalizedEntry, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+            $found = $true
+            $updatedSegments += $normalizedEntry
+            continue
+        }
+        $updatedSegments += $segment.Trim('"')
+    }
+    if (-not $found) {
+        $updatedSegments = @($normalizedEntry) + $updatedSegments
+    }
+    $newPath = ($updatedSegments -join ';')
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'Machine')
-    $env:Path = "$PathEntry;$env:Path"
+    $env:Path = $newPath
 }
 
 if (-not (Test-Path -LiteralPath $CompletionPath)) {
@@ -51,10 +75,17 @@ if (-not (Test-Path -LiteralPath $CompletionPath)) {
 }
 
 $resolvedCompletion = (Resolve-Path -LiteralPath $CompletionPath).Path
-$completionLine = ". '$resolvedCompletion'"
+$completionLine = "if (Test-Path '$resolvedCompletion') { . '$resolvedCompletion' }"
+$legacyCompletion = ". '$resolvedCompletion'"
 
 Ensure-PathEntry -PathEntry $InstallRoot
-Ensure-ProfileLine -ProfilePath $PROFILE.AllUsersAllHosts -Line $completionLine
+$winPsProfile = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\profile.ps1'
+Ensure-ProfileLine -ProfilePath $winPsProfile -Line $completionLine -LegacyPath $legacyCompletion
+$winPsWow64Dir = Join-Path $env:WINDIR 'SysWOW64\WindowsPowerShell\v1.0'
+if (Test-Path -LiteralPath $winPsWow64Dir) {
+    $winPsWow64Profile = Join-Path $winPsWow64Dir 'profile.ps1'
+    Ensure-ProfileLine -ProfilePath $winPsWow64Profile -Line $completionLine -LegacyPath $legacyCompletion
+}
 
 $pwsh = Get-Command -Name pwsh.exe -ErrorAction SilentlyContinue
 if ($pwsh) {
@@ -62,7 +93,7 @@ if ($pwsh) {
         $pwshProfile = & $pwsh.Source -NoProfile -NonInteractive -Command '$PROFILE.AllUsersAllHosts' 2>$null
         $pwshProfile = $pwshProfile.Trim()
         if (-not [string]::IsNullOrWhiteSpace($pwshProfile)) {
-            Ensure-ProfileLine -ProfilePath $pwshProfile -Line $completionLine
+            Ensure-ProfileLine -ProfilePath $pwshProfile -Line $completionLine -LegacyPath $legacyCompletion
         }
     }
     catch {
