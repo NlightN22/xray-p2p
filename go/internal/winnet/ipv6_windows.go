@@ -6,7 +6,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,7 +76,7 @@ func disableIPv6BindingOnce(ctx context.Context, adapterName string) (ipv6Disabl
 }
 
 func runPowerShell(ctx context.Context, script string) (string, error) {
-	psPath, err := exec.LookPath("powershell.exe")
+	psPath, err := lookPathSystem32("powershell.exe")
 	if err != nil {
 		return "", errPowerShellNotFound
 	}
@@ -130,12 +133,15 @@ func disableIPv6BindingWithPowerShell(ctx context.Context, adapterName string) (
 }
 
 func disableIPv6BindingWithNetsh(ctx context.Context, adapterName string) (ipv6DisableResult, error) {
-	exists, err := adapterExistsWMIC(ctx, adapterName)
+	state, err := getNetshIPv6InterfaceState(ctx, adapterName)
 	if err != nil {
 		return ipv6ResultNoChange, err
 	}
-	if !exists {
+	if state == "" {
 		return ipv6ResultMissing, nil
+	}
+	if strings.EqualFold(state, "disabled") {
+		return ipv6ResultNoChange, nil
 	}
 	if err := runNetsh(ctx, adapterName); err != nil {
 		return ipv6ResultNoChange, err
@@ -143,30 +149,8 @@ func disableIPv6BindingWithNetsh(ctx context.Context, adapterName string) (ipv6D
 	return ipv6ResultDisabled, nil
 }
 
-func adapterExistsWMIC(ctx context.Context, adapterName string) (bool, error) {
-	wmicPath, err := exec.LookPath("wmic.exe")
-	if err != nil {
-		return false, fmt.Errorf("xp2p: wmic.exe not found: %w", err)
-	}
-	escaped := escapeWmiString(adapterName)
-	query := fmt.Sprintf("NetConnectionID='%s'", escaped)
-	cmd := exec.CommandContext(ctx, wmicPath, "path", "Win32_NetworkAdapter", "where", query, "get", "NetConnectionID", "/value")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return false, fmt.Errorf("xp2p: wmic failed: %w: %s", err, strings.TrimSpace(string(out)))
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "NetConnectionID=") {
-			value := strings.TrimSpace(strings.TrimPrefix(line, "NetConnectionID="))
-			return value != "", nil
-		}
-	}
-	return false, nil
-}
-
 func runNetsh(ctx context.Context, adapterName string) error {
-	netshPath, err := exec.LookPath("netsh.exe")
+	netshPath, err := lookPathSystem32("netsh.exe")
 	if err != nil {
 		return fmt.Errorf("xp2p: netsh.exe not found: %w", err)
 	}
@@ -178,6 +162,59 @@ func runNetsh(ctx context.Context, adapterName string) error {
 	return nil
 }
 
-func escapeWmiString(value string) string {
-	return strings.ReplaceAll(value, "'", "''")
+func getNetshIPv6InterfaceState(ctx context.Context, adapterName string) (string, error) {
+	netshPath, err := lookPathSystem32("netsh.exe")
+	if err != nil {
+		return "", fmt.Errorf("xp2p: netsh.exe not found: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, netshPath, "interface", "ipv6", "show", "interface")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("xp2p: netsh show interface failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	target := strings.ToLower(strings.TrimSpace(adapterName))
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+		if _, err := strconv.Atoi(fields[0]); err != nil {
+			continue
+		}
+		name := strings.ToLower(strings.Join(fields[4:], " "))
+		if name == target {
+			return fields[3], nil
+		}
+	}
+	return "", nil
+}
+
+func lookPathSystem32(name string) (string, error) {
+	if path, err := exec.LookPath(name); err == nil {
+		return path, nil
+	}
+	roots := []string{
+		os.Getenv("SystemRoot"),
+		os.Getenv("WINDIR"),
+	}
+	for _, root := range roots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		candidates := []string{
+			filepath.Join(root, "System32", name),
+		}
+		if os.Getenv("PROCESSOR_ARCHITEW6432") != "" {
+			candidates = append(candidates, filepath.Join(root, "Sysnative", name))
+		}
+		if strings.EqualFold(name, "powershell.exe") {
+			candidates = append(candidates, filepath.Join(root, "System32", "WindowsPowerShell", "v1.0", name))
+		}
+		for _, candidate := range candidates {
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("xp2p: %s not found", name)
 }

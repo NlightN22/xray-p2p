@@ -22,6 +22,8 @@ def _start_xp2p_client_run(
     if rel.lower().startswith("logs/"):
         rel = rel[5:]
     log_abs = str(_env.LOGS_DIR / rel)
+    if output_log_path is None:
+        output_log_path = r"C:\xp2p\build\logs\win\xp2p-client-run.out"
     parameters: dict[str, object] = {
         "Xp2pPath": str(_env.XP2P_EXE),
         "InstallDir": install_dir,
@@ -32,8 +34,7 @@ def _start_xp2p_client_run(
     }
     if allow_mismatch:
         parameters["AllowMismatch"] = "1"
-    if output_log_path:
-        parameters["OutputLogPath"] = output_log_path
+    parameters["OutputLogPath"] = output_log_path
 
     result = _env.run_guest_script(
         host,
@@ -53,8 +54,6 @@ def _start_xp2p_client_run(
         return "<missing>"
 
     def _format_logs() -> str:
-        if not output_log_path:
-            return ""
         xp2p_log = _read_log(output_log_path)
         xray_log = _read_log(log_abs)
         return (

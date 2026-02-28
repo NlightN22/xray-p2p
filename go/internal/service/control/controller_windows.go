@@ -7,7 +7,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -91,12 +93,16 @@ func runSC(ctx context.Context, command string, service string, handler scExitHa
 }
 
 func runSCOutput(ctx context.Context, command, service string, handler scExitHandler) (string, error) {
-	cmd := exec.CommandContext(ctx, "sc.exe", command, service)
+	scPath, err := resolveSCPath()
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.CommandContext(ctx, scPath, command, service)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if handler != nil {
 		err = handler(err)
 	}
@@ -126,4 +132,31 @@ func parseServiceState(output string) (string, bool) {
 		return state, state == "RUNNING"
 	}
 	return "UNKNOWN", false
+}
+
+func resolveSCPath() (string, error) {
+	if path, err := exec.LookPath("sc.exe"); err == nil {
+		return path, nil
+	}
+	roots := []string{
+		os.Getenv("SystemRoot"),
+		os.Getenv("WINDIR"),
+	}
+	for _, root := range roots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		candidates := []string{
+			filepath.Join(root, "System32", "sc.exe"),
+		}
+		if os.Getenv("PROCESSOR_ARCHITEW6432") != "" {
+			candidates = append(candidates, filepath.Join(root, "Sysnative", "sc.exe"))
+		}
+		for _, candidate := range candidates {
+			if _, err := os.Stat(candidate); err == nil {
+				return candidate, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("sc.exe not found")
 }

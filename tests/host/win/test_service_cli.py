@@ -21,6 +21,8 @@ CLIENT_INBOUNDS = CLIENT_CONFIG_DIR / "inbounds.json"
 SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
 CLIENT_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-client.toml"
 SERVER_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-server.toml"
+CLIENT_TUN = "xp2pc"
+SERVER_TUN = "xp2ps"
 
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
@@ -98,6 +100,19 @@ def _wait_for_log_entry_any(host, path: Path, phrases: list[str]) -> None:
     elapsed = time.perf_counter() - start
     print(f"TIMING: wait log any timeout: {elapsed:.2f}s")
     pytest.fail(f"Log {path} did not contain any of {phrase_list}. Last content:\n{last_content}")
+
+
+def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
+    result = win_env.run_guest_script(
+        host,
+        "scripts/assert_ipv6_binding_disabled.ps1",
+        InterfaceName=interface_name,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "IPv6 binding check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _current_mode(host, role: str) -> str:
@@ -217,6 +232,7 @@ def test_windows_client_service_cli_controls_service(client_host, xp2p_client_ru
     with _timed("client service start"):
         runner("client", "service", "start", check=True)
     _wait_for_service_state(runner, "client", expected_active=True)
+    _assert_ipv6_binding_disabled(client_host, CLIENT_TUN)
     assert win_env.path_exists(client_host, CLIENT_SERVICE_LOG), "client service log not created"
 
     with _timed("client service stop (final)"):
@@ -294,6 +310,10 @@ def test_windows_service_restarts_when_config_changes(
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
+        if role == "client":
+            _assert_ipv6_binding_disabled(host, CLIENT_TUN)
+        else:
+            _assert_ipv6_binding_disabled(host, SERVER_TUN)
 
         with _timed(f"{role} change config"):
             change_fn()

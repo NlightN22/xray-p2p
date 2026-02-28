@@ -25,6 +25,8 @@ CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 XRAY_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\xray.exe")
 WINTUN_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\wintun.dll")
+DEFAULT_SERVER_TUN = "xp2ps"
+DEFAULT_CLIENT_TUN = "xp2pc"
 
 
 @contextmanager
@@ -177,6 +179,19 @@ def _assert_ping_success(result) -> None:
             )
 
 
+def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
+    result = _env.run_guest_script(
+        host,
+        "scripts/assert_ipv6_binding_disabled.ps1",
+        InterfaceName=interface_name,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "IPv6 binding check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, attempts: int = 3):
     with _timed("ping via socks"):
         args = [
@@ -242,6 +257,8 @@ def test_install_server_and_client_default(
             )
             with client_session_cm as client_session:
                 assert client_session["pid"] > 0
+                _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)
+                _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
                 ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)
     finally:
@@ -327,6 +344,8 @@ def test_install_server_and_client_nodefault(
             )
             with client_session_cm as client_session:
                 assert client_session["pid"] > 0
+                _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)
+                _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
                 ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)
     finally:
