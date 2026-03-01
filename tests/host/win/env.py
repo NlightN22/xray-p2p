@@ -191,7 +191,7 @@ def run_guest_script(
     cleanup_path: Path | None = None
     local_script = LOCAL_GUEST_TESTS_ROOT / relative
     local_hash = _sha256_bytes(local_script.read_bytes())
-    if force_stage or not path_exists(host, script_path):
+    if force_stage or not _path_exists_raw(host, script_path):
         script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
     else:
         remote_hash = _remote_sha256(host, script_path)
@@ -455,6 +455,20 @@ exit 3
     return Path(value[-1].strip())
 
 
+def find_xp2p_exe(host: Host, hint_path: Path | None = None) -> Path | None:
+    result = run_guest_script(
+        host,
+        "scripts/find_xp2p_exe.ps1",
+        HintPath=str(hint_path) if hint_path else "",
+    )
+    if result.rc != 0:
+        return None
+    value = (result.stdout or "").strip().splitlines()
+    if not value:
+        return None
+    return Path(value[-1].strip())
+
+
 def _search_user_programs(host: Host) -> Path | None:
     script = """
 $ErrorActionPreference = 'Stop'
@@ -515,15 +529,15 @@ exit 3
 
 
 def ensure_admin_token(host: Host) -> None:
-    script = """
-$ErrorActionPreference = 'Stop'
-$path = 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System'
-$value = Get-ItemProperty -Path $path -Name 'LocalAccountTokenFilterPolicy' -ErrorAction SilentlyContinue
-if (-not $value -or $value.LocalAccountTokenFilterPolicy -ne 1) {
-    New-ItemProperty -Path $path -Name 'LocalAccountTokenFilterPolicy' -PropertyType DWord -Value 1 -Force | Out-Null
-}
-"""
-    run_powershell(host, script)
+    result = run_guest_script(
+        host,
+        "scripts/ensure_admin_token.ps1",
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to ensure admin token.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def get_remote_file_size(host: Host, path: str | Path) -> int:
@@ -580,21 +594,29 @@ def _build_msi_package(
 
 
 def path_exists(host: Host, path: Path | str) -> bool:
+    return _path_exists_guest(host, path)
+
+
+def _path_exists_guest(host: Host, path: Path | str) -> bool:
+    result = run_guest_script(
+        host,
+        "scripts/path_exists.ps1",
+        TargetPath=str(path),
+    )
+    return result.rc == 0
+
+
+def _path_exists_raw(host: Host, path: Path | str) -> bool:
     target = ps_quote(str(path))
-    script = f"if (Test-Path {target}) {{ exit 0 }} else {{ exit 3 }}"
-    result = run_powershell(host, script)
+    result = run_powershell(
+        host,
+        f"if (Test-Path {target}) {{ exit 0 }} else {{ exit 3 }}",
+    )
     return result.rc == 0
 
 
 def remove_path(host: Host, path: Path | str) -> None:
-    target = ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (Test-Path {target}) {{
-    Remove-Item {target} -Force -Recurse -ErrorAction SilentlyContinue
-}}
-"""
-    run_powershell(host, script)
+    remove_paths(host, [path])
 
 
 def ensure_project_synced(
@@ -642,22 +664,40 @@ def get_host_ipv4(host: Host) -> str:
     return addresses[0]
 
 
+def get_default_ipv4_sendthrough(host: Host) -> str | None:
+    result = run_guest_script(
+        host,
+        "scripts/get_default_ipv4_sendthrough.ps1",
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to detect default IPv4 route address.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    values = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not values:
+        return None
+    return values[-1]
+
+
 
 
 def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:
-    targets = [ps_quote(str(path)) for path in paths]
-    if not targets:
+    payload = base64.b64encode(
+        json.dumps([str(path) for path in paths]).encode("utf-8")
+    ).decode("ascii")
+    if not payload:
         return
-    target_list = ", ".join(targets)
-    script = f"""
-$ErrorActionPreference = 'Stop'
-foreach ($target in @({target_list})) {{
-    if (Test-Path $target) {{
-        Remove-Item $target -Force -Recurse -ErrorAction SilentlyContinue
-    }}
-}}
-"""
-    run_powershell(host, script)
+    result = run_guest_script(
+        host,
+        "scripts/remove_paths.ps1",
+        PathsBase64=payload,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to remove remote paths.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def cleanup_xp2p_install(
@@ -698,15 +738,11 @@ $existing
 
 
 def read_text(host: Host, path: Path | str) -> str:
-    target = ps_quote(str(path))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path {target})) {{
-    exit 3
-}}
-Get-Content -Raw {target}
-"""
-    result = run_powershell(host, script)
+    result = run_guest_script(
+        host,
+        "scripts/read_file.ps1",
+        Path=str(path),
+    )
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to read remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -723,19 +759,13 @@ def read_toml(host: Host, path: Path | str) -> dict:
 
 
 def write_text(host: Host, path: Path | str, content: str) -> None:
-    target = ps_quote(str(path))
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$target = {target}
-$dir = Split-Path -Parent $target
-if ($dir -and -not (Test-Path $dir)) {{
-    New-Item -ItemType Directory -Path $dir -Force | Out-Null
-}}
-$data = [System.Convert]::FromBase64String('{encoded}')
-[System.IO.File]::WriteAllBytes($target, $data)
-"""
-    result = run_powershell(host, script)
+    result = run_guest_script(
+        host,
+        "scripts/write_file.ps1",
+        Path=str(path),
+        ContentBase64=encoded,
+    )
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to write remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

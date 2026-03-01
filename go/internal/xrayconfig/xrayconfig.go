@@ -129,6 +129,7 @@ type DirectOutboundConfig struct {
 	Tag            string `json:"tag" toml:"tag"`
 	Protocol       string `json:"protocol" toml:"protocol"`
 	DomainStrategy string `json:"domain_strategy" toml:"domain_strategy"`
+	SendThrough    string `json:"send_through,omitempty" toml:"send_through"`
 }
 
 func DefaultClientConfig() ClientXrayConfig {
@@ -698,6 +699,9 @@ func mergeDirectOutbound(current, defaults DirectOutboundConfig) DirectOutboundC
 	}
 	if strings.TrimSpace(merged.DomainStrategy) == "" {
 		merged.DomainStrategy = defaults.DomainStrategy
+	}
+	if strings.TrimSpace(merged.SendThrough) == "" {
+		merged.SendThrough = defaults.SendThrough
 	}
 	return merged
 }

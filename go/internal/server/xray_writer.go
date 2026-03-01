@@ -167,12 +167,21 @@ func buildLogs(cfg xrayconfig.LogsConfig) map[string]any {
 }
 
 func writeServerOutbounds(configDir string, cfg xrayconfig.DirectOutboundConfig) error {
+	settings := map[string]any{}
+	sendThrough := strings.TrimSpace(cfg.SendThrough)
+	if sendThrough != "" {
+		settings["sendThrough"] = sendThrough
+	}
+	outbound := map[string]any{
+		"protocol": cfg.Protocol,
+		"tag":      cfg.Tag,
+	}
+	if len(settings) > 0 {
+		outbound["settings"] = settings
+	}
 	doc := map[string]any{
 		"outbounds": []any{
-			map[string]any{
-				"protocol": cfg.Protocol,
-				"tag":      cfg.Tag,
-			},
+			outbound,
 		},
 	}
 	return configio.WriteJSON(filepath.Join(configDir, "outbounds.json"), doc, configio.WriteOptions{

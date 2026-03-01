@@ -136,6 +136,7 @@ func freedomOutbound(direct xrayconfig.DirectOutboundConfig) any {
 		Protocol: direct.Protocol,
 		Settings: freedomSettings{
 			DomainStrategy: direct.DomainStrategy,
+			SendThrough:    strings.TrimSpace(direct.SendThrough),
 		},
 		Tag: direct.Tag,
 	}
@@ -143,6 +144,7 @@ func freedomOutbound(direct xrayconfig.DirectOutboundConfig) any {
 
 type freedomSettings struct {
 	DomainStrategy string `json:"domainStrategy"`
+	SendThrough    string `json:"sendThrough,omitempty"`
 }
 
 func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel) error {

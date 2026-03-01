@@ -68,6 +68,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
+	if err := updateSendThroughOutbound(ctx, configDir); err != nil {
+		return err
+	}
+
 	resolveLogPath := func(raw string) (string, error) {
 		if strings.TrimSpace(raw) == "" {
 			return "", fmt.Errorf("xp2p: log path is empty")

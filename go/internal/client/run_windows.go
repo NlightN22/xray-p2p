@@ -72,6 +72,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
+	if err := updateSendThroughOutbound(ctx, paths); err != nil {
+		return err
+	}
+
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 

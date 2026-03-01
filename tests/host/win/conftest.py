@@ -124,25 +124,47 @@ def _configure_msi_build_id(xp2p_build_id: str) -> None:
 
 
 @pytest.fixture(scope="session")
-def xp2p_msi_path(server_host: Host) -> str:
+def xp2p_msi_path() -> str:
+    win_env.require_vagrant_environment()
+    with _timed("get_ssh_host (msi build)"):
+        server_host = win_env.get_ssh_host(win_env.DEFAULT_SERVER)
     with _timed("ensure_msi_package"):
         return win_env.ensure_msi_package(server_host)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def xp2p_program_files_setup(server_host: Host, client_host: Host):
+def xp2p_program_files_setup():
+    win_env.require_vagrant_environment()
+    with _timed("get_ssh_host (server setup)"):
+        server_host = win_env.get_ssh_host(win_env.DEFAULT_SERVER)
+    with _timed("get_ssh_host (client setup)"):
+        client_host = win_env.get_ssh_host(win_env.DEFAULT_CLIENT)
     with _timed("ensure_admin_token (server)"):
         win_env.ensure_admin_token(server_host)
     with _timed("ensure_admin_token (client)"):
         win_env.ensure_admin_token(client_host)
+    server_backend = getattr(server_host, "backend", None)
+    client_backend = getattr(client_host, "backend", None)
+    if hasattr(server_backend, "_reset_client"):
+        server_backend._reset_client()
+    if hasattr(client_backend, "_reset_client"):
+        client_backend._reset_client()
     with _timed("ensure_project_synced (server)"):
         win_env.ensure_project_synced(server_host, machine=win_env.DEFAULT_SERVER)
     with _timed("ensure_project_synced (client)"):
         win_env.ensure_project_synced(client_host, machine=win_env.DEFAULT_CLIENT)
     with _timed("ensure_program_files_install (server)"):
         win_env.ensure_program_files_install(server_host, force_reinstall=True)
+    detected_server = win_env.find_xp2p_exe(server_host, hint_path=win_env.XP2P_EXE)
+    print(f"INFO: server xp2p.exe detected at {detected_server}")
+    if detected_server is None:
+        pytest.fail(f"xp2p.exe not detected on {win_env.DEFAULT_SERVER} after install")
     with _timed("ensure_program_files_install (client)"):
         win_env.ensure_program_files_install(client_host, force_reinstall=True)
+    detected_client = win_env.find_xp2p_exe(client_host, hint_path=win_env.XP2P_EXE)
+    print(f"INFO: client xp2p.exe detected at {detected_client}")
+    if detected_client is None:
+        pytest.fail(f"xp2p.exe not detected on {win_env.DEFAULT_CLIENT} after install")
     yield
     with _timed("ensure_msi_package (teardown)"):
         msi_path = win_env.ensure_msi_package(server_host)
@@ -152,14 +174,14 @@ def xp2p_program_files_setup(server_host: Host, client_host: Host):
         win_env.uninstall_xp2p_from_msi(client_host, msi_path)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def server_host() -> Host:
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (server)"):
         return win_env.get_ssh_host(win_env.DEFAULT_SERVER)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def client_host() -> Host:
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (client)"):

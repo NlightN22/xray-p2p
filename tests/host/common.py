@@ -73,6 +73,7 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
 
     def run(self, command: str, *args: str, **kwargs):  # type: ignore[override]
         kwargs.setdefault("timeout", SSH_COMMAND_TIMEOUT)
+        self._reset_client()
         try:
             return super().run(command, *args, **kwargs)
         except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
@@ -83,6 +84,14 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
             return super().run(command, *args, **kwargs)
         except paramiko_backend.paramiko.SSHException as exc:
             self._reset_client()
+            error_text = str(exc).lower()
+            if "no existing session" in error_text or "error reading ssh protocol banner" in error_text:
+                for _ in range(5):
+                    time.sleep(2)
+                    try:
+                        return super().run(command, *args, **kwargs)
+                    except paramiko_backend.paramiko.SSHException:
+                        self._reset_client()
             try:
                 return super().run(command, *args, **kwargs)
             except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
