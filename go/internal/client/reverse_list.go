@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -129,7 +130,7 @@ func clientDirectRuleSet(doc map[string]any) map[string]struct{} {
 			continue
 		}
 		outbound, _ := ruleMap["outboundTag"].(string)
-		if !strings.EqualFold(strings.TrimSpace(outbound), "direct") {
+		if !strings.EqualFold(strings.TrimSpace(outbound), directReverseTag()) {
 			continue
 		}
 		for _, tag := range extractStringSlice(ruleMap["inboundTag"]) {
@@ -139,6 +140,13 @@ func clientDirectRuleSet(doc map[string]any) map[string]struct{} {
 		}
 	}
 	return result
+}
+
+func directReverseTag() string {
+	if runtime.GOOS == "windows" {
+		return "direct-random"
+	}
+	return "direct"
 }
 
 func hasClientDirectRule(tag string, rules map[string]struct{}) bool {

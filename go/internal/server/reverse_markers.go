@@ -3,6 +3,8 @@ package server
 import (
 	"fmt"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 )
 
@@ -69,6 +71,13 @@ func updateServerMarkerRules(doc map[string]any, state serverReverseState) bool 
 		changed = true
 	}
 
+	if runtime.GOOS == "windows" {
+		updated := applyWindowsDirectRules(filtered)
+		if !reflect.DeepEqual(filtered, updated) {
+			filtered = updated
+			changed = true
+		}
+	}
 	if changed {
 		routing["rules"] = filtered
 	}

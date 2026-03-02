@@ -121,13 +121,15 @@ def test_client_run_sets_send_through(
             _assert_dns_resolution(client_host, "2ip.ru")
 
         outbounds = _read_remote_json(client_host, CLIENT_OUTBOUNDS_JSON)
-        direct = _find_outbound(outbounds, "direct")
+        direct_udp = _find_outbound(outbounds, "direct-udp")
         expected = _env.get_default_ipv4_sendthrough(client_host)
-        actual = _send_through_value(direct)
+        actual = _send_through_value(direct_udp)
         if expected:
             assert actual == expected
         else:
             assert actual is None
+        direct_random = _find_outbound(outbounds, "direct-random")
+        assert _send_through_value(direct_random) is None
     finally:
         _cleanup_client_install(client_host)
 
@@ -162,12 +164,14 @@ def test_server_run_sets_send_through(
             _assert_dns_resolution(server_host, "2ip.ru")
 
         outbounds = _read_remote_json(server_host, SERVER_OUTBOUNDS_JSON)
-        direct = _find_outbound(outbounds, "direct")
+        direct_udp = _find_outbound(outbounds, "direct-udp")
         expected = _env.get_default_ipv4_sendthrough(server_host)
-        actual = _send_through_value(direct)
+        actual = _send_through_value(direct_udp)
         if expected:
             assert actual == expected
         else:
             assert actual is None
+        direct_random = _find_outbound(outbounds, "direct-random")
+        assert _send_through_value(direct_random) is None
     finally:
         _cleanup_server_install(server_host)

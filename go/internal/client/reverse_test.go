@@ -2,11 +2,12 @@ package client
 
 import (
 	"encoding/json"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -43,8 +44,8 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	}
 
 	rules := doc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 5 {
-		t.Fatalf("expected 5 routing rules, got %d", len(rules))
+	if len(rules) != 5+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(rules))
 	}
 	domainRule := rules[0].(map[string]any)
 	if domainRule["outboundTag"] != "proxy-server-example" {
@@ -54,8 +55,12 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		t.Fatalf("unexpected domains: %+v", domains)
 	}
 	directRule := rules[1].(map[string]any)
-	if directRule["outboundTag"] != "direct" {
-		t.Fatalf("expected direct outbound, got %+v", directRule)
+	expectedDirect := "direct"
+	if runtime.GOOS == "windows" {
+		expectedDirect = "direct-random"
+	}
+	if directRule["outboundTag"] != expectedDirect {
+		t.Fatalf("expected %s outbound, got %+v", expectedDirect, directRule)
 	}
 	inbound := directRule["inboundTag"].([]any)
 	if inbound[0] != "reverse-userserver-example.rev" {
@@ -69,6 +74,13 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	if _, ok := state.Reverse["reverse-userserver-example.rev"]; !ok {
 		t.Fatalf("expected reverse entry in state, got %v", state.Reverse)
 	}
+}
+
+func windowsRuleBonus() int {
+	if runtime.GOOS == "windows" {
+		return 2
+	}
+	return 0
 }
 
 func loadClientRouting(t *testing.T, path string) map[string]any {

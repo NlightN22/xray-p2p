@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -12,6 +13,11 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
+)
+
+const (
+	directRandomTagWindows = "direct-random"
+	directUDPTagWindows    = "direct-udp"
 )
 
 func writeServerInboundsConfig(configDir string, cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, allowInsecure bool, forwards []forward.Rule) error {
@@ -170,21 +176,41 @@ func buildLogs(cfg xrayconfig.LogsConfig) map[string]any {
 
 func writeServerOutbounds(configDir string, cfg xrayconfig.DirectOutboundConfig) error {
 	sendThrough := strings.TrimSpace(cfg.SendThrough)
+	randomTag := cfg.Tag
+	udpTag := ""
+	if runtime.GOOS == "windows" {
+		randomTag = directRandomTagWindows
+		udpTag = directUDPTagWindows
+	}
 	outbound := map[string]any{
 		"protocol": cfg.Protocol,
-		"tag":      cfg.Tag,
+		"tag":      randomTag,
 	}
-	if sendThrough != "" {
+	if sendThrough != "" && udpTag == "" {
 		outbound["sendThrough"] = sendThrough
 	}
 	path := filepath.Join(configDir, "outbounds.json")
 	managedTags := map[string]struct{}{}
-	if tag := strings.TrimSpace(cfg.Tag); tag != "" {
+	if tag := strings.TrimSpace(randomTag); tag != "" {
+		managedTags[strings.ToLower(tag)] = struct{}{}
+	}
+	if tag := strings.TrimSpace(udpTag); tag != "" {
 		managedTags[strings.ToLower(tag)] = struct{}{}
 	}
 	preserved := filterUnmanagedOutbounds(readExistingOutbounds(path), managedTags)
+	outbounds := append(preserved, outbound)
+	if udpTag != "" {
+		udpOutbound := map[string]any{
+			"protocol": cfg.Protocol,
+			"tag":      udpTag,
+		}
+		if sendThrough != "" {
+			udpOutbound["sendThrough"] = sendThrough
+		}
+		outbounds = append(outbounds, udpOutbound)
+	}
 	doc := map[string]any{
-		"outbounds": append(preserved, outbound),
+		"outbounds": outbounds,
 	}
 	return configio.WriteJSON(path, doc, configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),
@@ -300,6 +326,9 @@ func buildServerRouting(cfg xrayconfig.ServerXrayConfig, reverse serverReverseSt
 		}
 		rules = append(rules, entry)
 	}
+	if runtime.GOOS == "windows" {
+		rules = applyWindowsDirectRules(rules)
+	}
 
 	return map[string]any{
 		"reverse": map[string]any{
@@ -310,6 +339,52 @@ func buildServerRouting(cfg xrayconfig.ServerXrayConfig, reverse serverReverseSt
 			"rules":          rules,
 		},
 	}
+}
+
+func applyWindowsDirectRules(rules []any) []any {
+	filtered := make([]any, 0, len(rules))
+	for _, raw := range rules {
+		ruleMap, ok := raw.(map[string]any)
+		if !ok {
+			filtered = append(filtered, raw)
+			continue
+		}
+		if isManagedWindowsDirectRule(ruleMap) {
+			continue
+		}
+		filtered = append(filtered, ruleMap)
+	}
+	filtered = append(filtered,
+		map[string]any{
+			"type":        "field",
+			"network":     "udp",
+			"outboundTag": directUDPTagWindows,
+		},
+		map[string]any{
+			"type":        "field",
+			"network":     "tcp,udp",
+			"outboundTag": directRandomTagWindows,
+		},
+	)
+	return filtered
+}
+
+func isManagedWindowsDirectRule(rule map[string]any) bool {
+	typ, _ := rule["type"].(string)
+	if !strings.EqualFold(strings.TrimSpace(typ), "field") {
+		return false
+	}
+	outbound, _ := rule["outboundTag"].(string)
+	trimmed := strings.ToLower(strings.TrimSpace(outbound))
+	if trimmed != directRandomTagWindows && trimmed != directUDPTagWindows {
+		return false
+	}
+	network, _ := rule["network"].(string)
+	network = strings.ToLower(strings.TrimSpace(network))
+	if network == "" {
+		return false
+	}
+	return strings.Contains(network, "udp")
 }
 
 func boolValue(value *bool, fallback bool) bool {

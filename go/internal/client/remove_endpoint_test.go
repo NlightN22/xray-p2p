@@ -6,6 +6,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -100,8 +101,12 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("parse outbounds: %v", err)
 	}
-	if len(out.Outbounds) != 2 {
-		t.Fatalf("expected trojan and direct outbounds, got %d", len(out.Outbounds))
+	expected := 2
+	if runtime.GOOS == "windows" {
+		expected = 3
+	}
+	if len(out.Outbounds) != expected {
+		t.Fatalf("expected %d outbounds, got %d", expected, len(out.Outbounds))
 	}
 	if out.Outbounds[0].Tag != "proxy-server-b" {
 		t.Fatalf("unexpected trojan outbound %s", out.Outbounds[0].Tag)

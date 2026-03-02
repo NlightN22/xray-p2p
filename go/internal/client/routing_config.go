@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -14,16 +15,30 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
+const (
+	directRandomTagWindows = "direct-random"
+	directUDPTagWindows    = "direct-udp"
+)
+
 func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, endpoints []clientEndpointRecord) error {
-	managedTags := make(map[string]struct{}, len(endpoints)+1)
+	randomTag := direct.Tag
+	udpTag := ""
+	if runtime.GOOS == "windows" {
+		randomTag = directRandomTagWindows
+		udpTag = directUDPTagWindows
+	}
+
+	managedTags := make(map[string]struct{}, len(endpoints)+2)
 	for _, ep := range endpoints {
 		tag := strings.TrimSpace(ep.Tag)
 		if tag != "" {
 			managedTags[strings.ToLower(tag)] = struct{}{}
 		}
 	}
-	directTag := strings.TrimSpace(direct.Tag)
-	if directTag != "" {
+	if directTag := strings.TrimSpace(randomTag); directTag != "" {
+		managedTags[strings.ToLower(directTag)] = struct{}{}
+	}
+	if directTag := strings.TrimSpace(udpTag); directTag != "" {
 		managedTags[strings.ToLower(directTag)] = struct{}{}
 	}
 
@@ -39,7 +54,12 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 		out.Outbounds = append(out.Outbounds, trojanOutbound(ep))
 	}
 
-	out.Outbounds = append(out.Outbounds, freedomOutbound(direct))
+	if randomTag != "" {
+		out.Outbounds = append(out.Outbounds, freedomOutbound(randomTag, direct, ""))
+	}
+	if udpTag != "" {
+		out.Outbounds = append(out.Outbounds, freedomOutbound(udpTag, direct, direct.SendThrough))
+	}
 	if err := configio.WriteJSON(path, out, configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
@@ -182,8 +202,8 @@ type tcpRequest struct {
 	Headers map[string][]string `json:"headers"`
 }
 
-func freedomOutbound(direct xrayconfig.DirectOutboundConfig) any {
-	sendThrough := strings.TrimSpace(direct.SendThrough)
+func freedomOutbound(tag string, direct xrayconfig.DirectOutboundConfig, sendThrough string) any {
+	sendThrough = strings.TrimSpace(sendThrough)
 	return struct {
 		Protocol    string          `json:"protocol"`
 		Settings    freedomSettings `json:"settings"`
@@ -194,7 +214,7 @@ func freedomOutbound(direct xrayconfig.DirectOutboundConfig) any {
 		Settings: freedomSettings{
 			DomainStrategy: direct.DomainStrategy,
 		},
-		Tag:         direct.Tag,
+		Tag:         tag,
 		SendThrough: sendThrough,
 	}
 }
@@ -273,6 +293,9 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	reverseRules := buildClientReverseRules(reverse)
 	if len(reverseRules) > 0 {
 		filtered = append(reverseRules, filtered...)
+	}
+	if runtime.GOOS == "windows" {
+		filtered = applyWindowsDirectRules(filtered)
 	}
 	routing["rules"] = filtered
 
@@ -397,10 +420,63 @@ func buildClientReverseRules(reverse map[string]clientReverseChannel) []any {
 		result = append(result, map[string]any{
 			"type":        "field",
 			"inboundTag":  inbound,
-			"outboundTag": "direct",
+			"outboundTag": directRandomTag(),
 		})
 	}
 	return result
+}
+
+func directRandomTag() string {
+	if runtime.GOOS == "windows" {
+		return directRandomTagWindows
+	}
+	return "direct"
+}
+
+func applyWindowsDirectRules(rules []any) []any {
+	filtered := make([]any, 0, len(rules))
+	for _, raw := range rules {
+		ruleMap, ok := raw.(map[string]any)
+		if !ok {
+			filtered = append(filtered, raw)
+			continue
+		}
+		if isManagedWindowsDirectRule(ruleMap) {
+			continue
+		}
+		filtered = append(filtered, ruleMap)
+	}
+	filtered = append(filtered,
+		map[string]any{
+			"type":        "field",
+			"network":     "udp",
+			"outboundTag": directUDPTagWindows,
+		},
+		map[string]any{
+			"type":        "field",
+			"network":     "tcp,udp",
+			"outboundTag": directRandomTagWindows,
+		},
+	)
+	return filtered
+}
+
+func isManagedWindowsDirectRule(rule map[string]any) bool {
+	typ, _ := rule["type"].(string)
+	if !strings.EqualFold(strings.TrimSpace(typ), "field") {
+		return false
+	}
+	outbound, _ := rule["outboundTag"].(string)
+	trimmed := strings.ToLower(strings.TrimSpace(outbound))
+	if trimmed != directRandomTagWindows && trimmed != directUDPTagWindows {
+		return false
+	}
+	network, _ := rule["network"].(string)
+	network = strings.ToLower(strings.TrimSpace(network))
+	if network == "" {
+		return false
+	}
+	return strings.Contains(network, "udp")
 }
 
 func sortedReverseChannels(reverse map[string]clientReverseChannel) []clientReverseChannel {

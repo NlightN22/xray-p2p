@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -323,6 +324,9 @@ func updateServerRedirectRouting(path string, rules []redirect.Rule) error {
 	filtered := filterServerRedirectRules(existing)
 	for _, rule := range rules {
 		filtered = append(filtered, buildServerRedirectRule(rule))
+	}
+	if runtime.GOOS == "windows" {
+		filtered = applyWindowsDirectRules(filtered)
 	}
 	routing["rules"] = filtered
 	return writeServerRoutingDoc(path, doc)

@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/naming"
@@ -289,6 +291,13 @@ func ensureReverseRule(doc map[string]any, channel serverReverseChannel) bool {
 		changed = true
 		filtered = append(filtered, desiredReverseRule(channel, trimmedUser))
 	}
+	if runtime.GOOS == "windows" {
+		updated := applyWindowsDirectRules(filtered)
+		if !reflect.DeepEqual(filtered, updated) {
+			changed = true
+			filtered = updated
+		}
+	}
 	routing["rules"] = filtered
 	return changed
 }
@@ -313,6 +322,12 @@ func removeReverseRules(doc map[string]any, channel serverReverseChannel) bool {
 		filtered = append(filtered, ruleMap)
 	}
 	if changed {
+		if runtime.GOOS == "windows" {
+			updated := applyWindowsDirectRules(filtered)
+			if !reflect.DeepEqual(filtered, updated) {
+				filtered = updated
+			}
+		}
 		routing["rules"] = filtered
 	}
 	return changed

@@ -94,8 +94,8 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 		t.Fatalf("expected portals to be empty, got %d", len(portals))
 	}
 	rules := routingDoc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 0 {
-		t.Fatalf("expected rules to be empty, got %d", len(rules))
+	if len(rules) != 2 {
+		t.Fatalf("expected rules to contain only direct rules, got %d", len(rules))
 	}
 
 	stateDoc := readServerStateDoc(t, serverStatePath(""))

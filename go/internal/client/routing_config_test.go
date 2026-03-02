@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
@@ -31,19 +32,31 @@ func TestWriteOutboundsConfigIncludesEndpointsAndFreedom(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse outbounds: %v", err)
 	}
-	if len(doc.Outbounds) != 3 {
-		t.Fatalf("expected 3 outbounds (2 trojan + freedom), got %d", len(doc.Outbounds))
+	expected := 3
+	if runtime.GOOS == "windows" {
+		expected = 4
+	}
+	if len(doc.Outbounds) != expected {
+		t.Fatalf("expected %d outbounds, got %d", expected, len(doc.Outbounds))
 	}
 	if doc.Outbounds[0]["tag"] != "proxy-alpha" || doc.Outbounds[1]["tag"] != "proxy-beta" {
 		t.Fatalf("unexpected tags: %+v", doc.Outbounds)
 	}
-	if doc.Outbounds[2]["tag"] != "direct" {
+	if runtime.GOOS == "windows" {
+		if doc.Outbounds[2]["tag"] != "direct-random" || doc.Outbounds[3]["tag"] != "direct-udp" {
+			t.Fatalf("unexpected direct outbounds: %+v", doc.Outbounds[2:])
+		}
+	} else if doc.Outbounds[2]["tag"] != "direct" {
 		t.Fatalf("expected last outbound to be direct, got %+v", doc.Outbounds[2])
 	}
 }
 
 func TestWriteOutboundsConfigPreservesUserOutbounds(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbounds.json")
+	directTag := "direct"
+	if runtime.GOOS == "windows" {
+		directTag = "direct-random"
+	}
 	existing := map[string]any{
 		"outbounds": []any{
 			map[string]any{
@@ -51,7 +64,7 @@ func TestWriteOutboundsConfigPreservesUserOutbounds(t *testing.T) {
 				"protocol": "socks",
 			},
 			map[string]any{
-				"tag":         "direct",
+				"tag":         directTag,
 				"protocol":    "freedom",
 				"sendThrough": "192.0.2.50",
 			},
@@ -92,18 +105,25 @@ func TestWriteOutboundsConfigPreservesUserOutbounds(t *testing.T) {
 		switch tag {
 		case "user-proxy":
 			hasUser = true
-		case "direct":
+		case directTag:
 			hasDirect = true
 			directSendThrough, _ = outbound["sendThrough"].(string)
 		case "proxy-alpha":
 			hasProxy = true
+		case "direct-udp":
+			if runtime.GOOS == "windows" {
+				hasDirect = true
+			}
 		}
 	}
 	if !hasUser || !hasProxy || !hasDirect {
 		t.Fatalf("expected user, proxy, and direct outbounds, got %+v", doc.Outbounds)
 	}
-	if directSendThrough != "10.0.0.5" {
+	if runtime.GOOS != "windows" && directSendThrough != "10.0.0.5" {
 		t.Fatalf("expected sendThrough to be updated, got %q", directSendThrough)
+	}
+	if runtime.GOOS == "windows" && directSendThrough != "" {
+		t.Fatalf("expected direct-random to omit sendThrough, got %q", directSendThrough)
 	}
 	if tag, _ := doc.Outbounds[0]["tag"].(string); tag != "user-proxy" {
 		t.Fatalf("expected user outbound to stay first, got %+v", doc.Outbounds[0])
@@ -144,8 +164,8 @@ func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
 
 	doc := loadRouting(t, path)
 	rules := getRules(t, doc)
-	if len(rules) != 3 {
-		t.Fatalf("expected 3 routing rules, got %d", len(rules))
+	if len(rules) != 3+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(rules))
 	}
 
 	markerIP, err := markerIPForIndex(0)
@@ -192,8 +212,8 @@ func TestUpdateRoutingConfigUsesIPRuleForAddress(t *testing.T) {
 
 	doc := loadRouting(t, path)
 	rules := getRules(t, doc)
-	if len(rules) != 3 {
-		t.Fatalf("expected 3 routing rules, got %d", len(rules))
+	if len(rules) != 3+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(rules))
 	}
 
 	markerIP, err := markerIPForIndex(0)
@@ -306,12 +326,20 @@ func verifyRoutingDocument(t *testing.T, path string, wantRules int, wantBridges
 		t.Fatalf("routing section missing")
 	}
 	rules, _ := routing["rules"].([]any)
-	if len(rules) != wantRules {
-		t.Fatalf("expected %d routing rules, got %d", wantRules, len(rules))
+	expected := wantRules + windowsRuleBonus()
+	if len(rules) != expected {
+		t.Fatalf("expected %d routing rules, got %d", expected, len(rules))
 	}
 	reverseObj, _ := doc["reverse"].(map[string]any)
 	bridges, _ := reverseObj["bridges"].([]any)
 	if len(bridges) != wantBridges {
 		t.Fatalf("expected %d bridges, got %d", wantBridges, len(bridges))
 	}
+}
+
+func windowsRuleBonus() int {
+	if runtime.GOOS == "windows" {
+		return 2
+	}
+	return 0
 }
