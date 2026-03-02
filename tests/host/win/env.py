@@ -769,6 +769,62 @@ def get_default_ipv4_sendthrough(host: Host) -> str | None:
     return values[-1]
 
 
+def get_interface_index(host: Host, interface_name: str) -> int:
+    result = run_guest_script(
+        host,
+        "scripts/get_net_adapter_index.ps1",
+        InterfaceName=interface_name,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to query interface index.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    value = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not value:
+        raise RuntimeError(f"No interface index returned for {interface_name!r}")
+    try:
+        return int(value[-1])
+    except ValueError as exc:
+        raise RuntimeError(f"Unexpected interface index output: {result.stdout!r}") from exc
+
+
+def get_net_routes(
+    host: Host,
+    destination_prefix: str,
+    interface_index: int | None = None,
+) -> list[dict]:
+    parameters: dict[str, object] = {
+        "DestinationPrefix": destination_prefix,
+    }
+    if interface_index is not None:
+        parameters["InterfaceIndex"] = str(interface_index)
+    result = run_guest_script(
+        host,
+        "scripts/get_net_routes.ps1",
+        **parameters,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to query net routes.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    payload = (result.stdout or "").strip()
+    if not payload:
+        return []
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Unexpected net routes output: {payload!r}") from exc
+    if data is None:
+        return []
+    if isinstance(data, dict):
+        return [data]
+    if isinstance(data, list):
+        return data
+    raise RuntimeError(f"Unexpected net routes output type: {type(data).__name__}")
+
+
 
 
 def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:
