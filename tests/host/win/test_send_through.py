@@ -10,6 +10,7 @@ CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
 CLIENT_OUTBOUNDS_JSON = CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_LOG_RELATIVE = r"logs\client.err"
+CLIENT_TUN_NAME = "xp2pc"
 CLIENT_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-client.toml",
     _env.CONFIG_ROOT / "xp2p-client.state.json",
@@ -20,6 +21,7 @@ SERVER_CONFIG_DIR_NAME = "config-server"
 SERVER_CONFIG_DIR = _env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME
 SERVER_OUTBOUNDS_JSON = SERVER_CONFIG_DIR / "outbounds.json"
 SERVER_LOG_RELATIVE = r"logs\server.err"
+SERVER_TUN_NAME = "xp2ps"
 SERVER_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-server.toml",
     _env.CONFIG_ROOT / "xp2p-server.state.json",
@@ -60,11 +62,35 @@ def _find_outbound(data: dict, tag: str) -> dict:
 
 
 def _send_through_value(outbound: dict) -> str | None:
-    settings = outbound.get("settings") or {}
-    value = settings.get("sendThrough")
+    value = outbound.get("sendThrough")
     if value is None:
         return None
     return str(value)
+
+def _assert_tun_interface(host, interface_name: str) -> None:
+    result = _env.run_guest_script(
+        host,
+        "scripts/assert_tun_interface.ps1",
+        InterfaceName=interface_name,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "TUN interface check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _assert_dns_resolution(host, name: str) -> None:
+    result = _env.run_guest_script(
+        host,
+        "scripts/resolve_dns.ps1",
+        Name=name,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "DNS resolution check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 @pytest.mark.host
@@ -91,6 +117,8 @@ def test_client_run_sets_send_through(
             str(CLIENT_INSTALL_DIR), CLIENT_CONFIG_DIR_NAME, CLIENT_LOG_RELATIVE
         ) as session:
             assert session["pid"] > 0
+            _assert_tun_interface(client_host, CLIENT_TUN_NAME)
+            _assert_dns_resolution(client_host, "2ip.ru")
 
         outbounds = _read_remote_json(client_host, CLIENT_OUTBOUNDS_JSON)
         direct = _find_outbound(outbounds, "direct")
@@ -130,6 +158,8 @@ def test_server_run_sets_send_through(
             str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME, SERVER_LOG_RELATIVE
         ) as session:
             assert session["pid"] > 0
+            _assert_tun_interface(server_host, SERVER_TUN_NAME)
+            _assert_dns_resolution(server_host, "2ip.ru")
 
         outbounds = _read_remote_json(server_host, SERVER_OUTBOUNDS_JSON)
         direct = _find_outbound(outbounds, "direct")

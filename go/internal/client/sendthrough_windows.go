@@ -10,13 +10,17 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
 
-func updateSendThroughOutbound(ctx context.Context, paths clientPaths) error {
-	sendThrough, err := winnet.DefaultSendThroughIPv4(ctx)
-	if err != nil {
-		logging.Warn("xp2p: failed to detect sendThrough IPv4", "err", err)
-		sendThrough = ""
-	} else if sendThrough == "" {
-		logging.Warn("xp2p: sendThrough IPv4 not detected, leaving default outbound binding")
+func updateSendThroughOutbound(ctx context.Context, paths clientPaths, tunEnabled bool) error {
+	sendThrough := ""
+	if tunEnabled {
+		value, err := winnet.DefaultSendThroughIPv4(ctx)
+		if err != nil {
+			logging.Warn("xp2p: failed to detect sendThrough IPv4", "err", err)
+		} else if value == "" {
+			logging.Warn("xp2p: sendThrough IPv4 not detected, leaving default outbound binding")
+		} else {
+			sendThrough = value
+		}
 	}
 
 	xrayCfg, err := ensureClientXrayConfig(paths.configFile)

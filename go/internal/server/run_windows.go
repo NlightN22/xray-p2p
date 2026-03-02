@@ -68,7 +68,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
-	if err := updateSendThroughOutbound(ctx, configDir); err != nil {
+	if err := updateSendThroughOutbound(ctx, configDir, opts.TunEnabled); err != nil {
 		return err
 	}
 

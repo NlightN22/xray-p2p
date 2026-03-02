@@ -1,8 +1,10 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"sort"
 	"strings"
 
@@ -13,12 +15,26 @@ import (
 )
 
 func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, endpoints []clientEndpointRecord) error {
+	managedTags := make(map[string]struct{}, len(endpoints)+1)
+	for _, ep := range endpoints {
+		tag := strings.TrimSpace(ep.Tag)
+		if tag != "" {
+			managedTags[strings.ToLower(tag)] = struct{}{}
+		}
+	}
+	directTag := strings.TrimSpace(direct.Tag)
+	if directTag != "" {
+		managedTags[strings.ToLower(directTag)] = struct{}{}
+	}
+
+	preserved := filterUnmanagedOutbounds(readExistingOutbounds(path), managedTags)
 	out := struct {
 		Outbounds []any `json:"outbounds"`
 	}{
-		Outbounds: make([]any, 0, len(endpoints)+1),
+		Outbounds: make([]any, 0, len(preserved)+len(endpoints)+1),
 	}
 
+	out.Outbounds = append(out.Outbounds, preserved...)
 	for _, ep := range endpoints {
 		out.Outbounds = append(out.Outbounds, trojanOutbound(ep))
 	}
@@ -31,6 +47,45 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 		return err
 	}
 	return nil
+}
+
+func readExistingOutbounds(path string) []any {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil
+	}
+	if raw, ok := doc["outbounds"].([]any); ok {
+		return raw
+	}
+	return nil
+}
+
+func filterUnmanagedOutbounds(existing []any, managed map[string]struct{}) []any {
+	if len(existing) == 0 {
+		return nil
+	}
+	result := make([]any, 0, len(existing))
+	for _, raw := range existing {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			result = append(result, raw)
+			continue
+		}
+		tag, ok := entry["tag"].(string)
+		if !ok {
+			result = append(result, raw)
+			continue
+		}
+		if _, exists := managed[strings.ToLower(strings.TrimSpace(tag))]; exists {
+			continue
+		}
+		result = append(result, raw)
+	}
+	return result
 }
 
 func trojanOutbound(ep clientEndpointRecord) any {
@@ -128,23 +183,24 @@ type tcpRequest struct {
 }
 
 func freedomOutbound(direct xrayconfig.DirectOutboundConfig) any {
+	sendThrough := strings.TrimSpace(direct.SendThrough)
 	return struct {
-		Protocol string          `json:"protocol"`
-		Settings freedomSettings `json:"settings"`
-		Tag      string          `json:"tag"`
+		Protocol    string          `json:"protocol"`
+		Settings    freedomSettings `json:"settings"`
+		Tag         string          `json:"tag"`
+		SendThrough string          `json:"sendThrough,omitempty"`
 	}{
 		Protocol: direct.Protocol,
 		Settings: freedomSettings{
 			DomainStrategy: direct.DomainStrategy,
-			SendThrough:    strings.TrimSpace(direct.SendThrough),
 		},
-		Tag: direct.Tag,
+		Tag:         direct.Tag,
+		SendThrough: sendThrough,
 	}
 }
 
 type freedomSettings struct {
 	DomainStrategy string `json:"domainStrategy"`
-	SendThrough    string `json:"sendThrough,omitempty"`
 }
 
 func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel) error {

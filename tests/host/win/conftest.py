@@ -162,6 +162,18 @@ def xp2p_program_files_setup():
     with _timed("ensure_program_files_install (client)"):
         win_env.ensure_program_files_install(client_host, force_reinstall=True)
     detected_client = win_env.find_xp2p_exe(client_host, hint_path=win_env.XP2P_EXE)
+    if detected_client is None:
+        fallback_candidates = [
+            win_env.XP2P_EXE,
+            win_env.PROGRAM_FILES_INSTALL_DIR / "xp2p.exe",
+            win_env.PROGRAM_FILES_INSTALL_DIR / "bin" / "xp2p.exe",
+            win_env.PROGRAM_FILES_X86_INSTALL_DIR / "xp2p.exe",
+            win_env.PROGRAM_FILES_X86_INSTALL_DIR / "bin" / "xp2p.exe",
+        ]
+        for candidate in fallback_candidates:
+            if win_env.path_exists(client_host, candidate):
+                detected_client = candidate
+                break
     print(f"INFO: client xp2p.exe detected at {detected_client}")
     if detected_client is None:
         pytest.fail(f"xp2p.exe not detected on {win_env.DEFAULT_CLIENT} after install")
@@ -172,16 +184,20 @@ def xp2p_program_files_setup():
         win_env.uninstall_xp2p_from_msi(server_host, msi_path)
     with _timed("uninstall_xp2p_from_msi (client)"):
         win_env.uninstall_xp2p_from_msi(client_host, msi_path)
+    with _timed("cleanup_xp2p_leftovers (server)"):
+        win_env.cleanup_xp2p_leftovers(server_host)
+    with _timed("cleanup_xp2p_leftovers (client)"):
+        win_env.cleanup_xp2p_leftovers(client_host)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def server_host() -> Host:
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (server)"):
         return win_env.get_ssh_host(win_env.DEFAULT_SERVER)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def client_host() -> Host:
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (client)"):

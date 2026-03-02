@@ -72,7 +72,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
-	if err := updateSendThroughOutbound(ctx, paths); err != nil {
+	if err := updateSendThroughOutbound(ctx, paths, opts.TunEnabled); err != nil {
 		return err
 	}
 

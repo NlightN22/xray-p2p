@@ -42,6 +42,74 @@ func TestWriteOutboundsConfigIncludesEndpointsAndFreedom(t *testing.T) {
 	}
 }
 
+func TestWriteOutboundsConfigPreservesUserOutbounds(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "outbounds.json")
+	existing := map[string]any{
+		"outbounds": []any{
+			map[string]any{
+				"tag":      "user-proxy",
+				"protocol": "socks",
+			},
+			map[string]any{
+				"tag":         "direct",
+				"protocol":    "freedom",
+				"sendThrough": "192.0.2.50",
+			},
+		},
+	}
+	data, err := json.Marshal(existing)
+	if err != nil {
+		t.Fatalf("marshal existing: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write existing: %v", err)
+	}
+
+	endpoints := []clientEndpointRecord{
+		{Hostname: "alpha.example", Tag: "proxy-alpha", Address: "alpha.example", Port: 8443, User: "alpha", Password: "secret", ServerName: "alpha.example"},
+	}
+	cfg := xrayconfig.DefaultClientConfig().DirectOutbound
+	cfg.SendThrough = "10.0.0.5"
+	if err := writeOutboundsConfig(path, cfg, endpoints); err != nil {
+		t.Fatalf("writeOutboundsConfig failed: %v", err)
+	}
+
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read outbounds: %v", err)
+	}
+	var doc struct {
+		Outbounds []map[string]any `json:"outbounds"`
+	}
+	if err := json.Unmarshal(updated, &doc); err != nil {
+		t.Fatalf("parse outbounds: %v", err)
+	}
+
+	var hasUser, hasDirect, hasProxy bool
+	var directSendThrough string
+	for _, outbound := range doc.Outbounds {
+		tag, _ := outbound["tag"].(string)
+		switch tag {
+		case "user-proxy":
+			hasUser = true
+		case "direct":
+			hasDirect = true
+			directSendThrough, _ = outbound["sendThrough"].(string)
+		case "proxy-alpha":
+			hasProxy = true
+		}
+	}
+	if !hasUser || !hasProxy || !hasDirect {
+		t.Fatalf("expected user, proxy, and direct outbounds, got %+v", doc.Outbounds)
+	}
+	if directSendThrough != "10.0.0.5" {
+		t.Fatalf("expected sendThrough to be updated, got %q", directSendThrough)
+	}
+	if tag, _ := doc.Outbounds[0]["tag"].(string); tag != "user-proxy" {
+		t.Fatalf("expected user outbound to stay first, got %+v", doc.Outbounds[0])
+	}
+}
+
 func TestUpdateRoutingConfigManagesReverseRules(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "routing.json")
 	endpoints := []clientEndpointRecord{

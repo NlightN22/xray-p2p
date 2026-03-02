@@ -108,8 +108,10 @@ def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp
     _assert_paths_exist(server_host, client_files + server_files)
 
     try:
-        _env.uninstall_xp2p_from_msi(server_host, xp2p_msi_path, purge_files=False)
+        _env.uninstall_xp2p_from_msi(server_host, xp2p_msi_path, purge_files=True)
         _assert_paths_exist(server_host, client_files + server_files)
+        _assert_binaries_removed(server_host, install_dir)
+        _assert_services_removed(server_host)
     finally:
         _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
         _env.cleanup_xp2p_install(
@@ -161,3 +163,23 @@ def _assert_paths_exist(host, paths: list[Path]) -> None:
     if missing:
         rendered = "\n".join(missing)
         pytest.fail(f"Expected config files to exist:\n{rendered}")
+
+
+def _assert_binaries_removed(host, install_root: Path) -> None:
+    candidates = [
+        install_root / "xp2p.exe",
+        install_root / "bin" / "xp2p.exe",
+        install_root / "bin" / "xray.exe",
+    ]
+    existing = _env.paths_exist(host, candidates)
+    if existing:
+        rendered = "\n".join(sorted(existing))
+        pytest.fail(f"Expected binaries to be removed:\n{rendered}")
+
+
+def _assert_services_removed(host) -> None:
+    services = ["xp2p-client", "xp2p-server"]
+    remaining = [name for name in services if _env.service_exists(host, name)]
+    if remaining:
+        rendered = "\n".join(remaining)
+        pytest.fail(f"Expected services to be removed:\n{rendered}")

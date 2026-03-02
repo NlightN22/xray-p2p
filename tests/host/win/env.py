@@ -283,29 +283,117 @@ def ensure_msi_package_x86(host: Host) -> str:
 
 def install_xp2p_from_msi(host: Host, msi_path: str | Path) -> None:
     msi_str = ps_quote(str(msi_path))
+    log_path = ps_quote(r"C:\xp2p\build\logs\win\msi-install.log")
     script = f"""
 $ErrorActionPreference = 'Stop'
 $msi = {msi_str}
 if (-not (Test-Path $msi)) {{
     throw "MSI package not found at $msi"
 }}
-$arguments = @('/i', $msi, '/qn', '/norestart', 'XP2P_SKIP_SERVICE_START=1')
+$logPath = {log_path}
+$logDir = Split-Path -Parent $logPath
+if ($logDir -and -not (Test-Path $logDir)) {{
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}}
+if (Test-Path $logPath) {{
+    Remove-Item $logPath -Force -ErrorAction SilentlyContinue
+}}
+$arguments = @('/i', $msi, '/qn', '/norestart', '/l*v', $logPath, 'XP2P_SKIP_SERVICE_START=1')
 $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
 if (-not $process.WaitForExit(300000)) {{
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     exit 124
 }}
 if ($process.ExitCode -ne 0) {{
+    Write-Output ("MSI ExitCode=" + $process.ExitCode)
     exit $process.ExitCode
 }}
 exit 0
 """
     result = run_powershell(host, script)
     if result.rc != 0:
+        stdout = result.stdout or ""
+        if "MSI ExitCode=1603" in stdout:
+            _cleanup_orphaned_xp2p_msi(host)
+            result = run_powershell(host, script)
+            if result.rc == 0:
+                return
         raise RuntimeError(
             "Failed to install xp2p via MSI.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+
+
+def _cleanup_orphaned_xp2p_msi(host: Host) -> None:
+    script = """
+$ErrorActionPreference = 'Stop'
+$productNamePattern = '^xp2p'
+$roots = @(
+    'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+    'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
+)
+$items = Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object {
+    $_.DisplayName -and $_.DisplayName -match $productNamePattern
+}
+foreach ($item in $items) {
+    $code = $item.PSChildName
+    if ($code -and $code -match '^\\{[0-9A-Fa-f-]+\\}$') {
+        $args = @('/x', $code, '/qn', '/norestart')
+        $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -PassThru
+        $proc.WaitForExit(300000) | Out-Null
+    }
+    if ($item.QuietUninstallString) {
+        $cmd = $item.QuietUninstallString
+    } elseif ($item.UninstallString) {
+        $cmd = $item.UninstallString
+    } else {
+        $cmd = $null
+    }
+    if ($cmd) {
+        $cmd = $cmd -replace '/I', '/X'
+        Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $cmd) -Wait -ErrorAction SilentlyContinue | Out-Null
+    }
+    if ($item.PSPath) {
+        Remove-Item -Path $item.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+$installerRoots = @(
+    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products',
+    'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products'
+)
+$productKeys = @()
+foreach ($root in $installerRoots) {
+    $children = Get-ChildItem -Path $root -ErrorAction SilentlyContinue
+    foreach ($child in $children) {
+        $propsPath = Join-Path $child.PSPath 'InstallProperties'
+        $props = Get-ItemProperty -Path $propsPath -ErrorAction SilentlyContinue
+        if (-not $props) {
+            continue
+        }
+        $name = $props.DisplayName
+        if (-not $name) {
+            $name = $props.ProductName
+        }
+        if ($name -and $name -match $productNamePattern) {
+            $productKeys += $child.PSChildName
+            Remove-Item -Path $child.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+$classRoots = @(
+    'HKLM:\\SOFTWARE\\Classes\\Installer\\Products',
+    'HKLM:\\SOFTWARE\\WOW6432Node\\Classes\\Installer\\Products'
+)
+foreach ($root in $classRoots) {
+    foreach ($key in $productKeys) {
+        $target = Join-Path $root $key
+        if (Test-Path $target) {
+            Remove-Item -Path $target -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+"""
+    run_powershell(host, script)
 
 
 def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path, *, purge_files: bool = True) -> None:
@@ -356,6 +444,7 @@ exit 0
             "Failed to uninstall xp2p via MSI.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+    remove_services(host, ["xp2p-client", "xp2p-server"])
 
 
 def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -> None:
@@ -700,6 +789,33 @@ def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:
         )
 
 
+def service_exists(host: Host, service_name: str) -> bool:
+    result = run_guest_script(
+        host,
+        "scripts/check_service_exists.ps1",
+        ServiceName=service_name,
+    )
+    return result.rc == 0
+
+
+def remove_services(host: Host, services: Iterable[str]) -> None:
+    payload = base64.b64encode(
+        json.dumps([str(service) for service in services]).encode("utf-8")
+    ).decode("ascii")
+    if not payload:
+        return
+    result = run_guest_script(
+        host,
+        "scripts/remove_services.ps1",
+        ServicesBase64=payload,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to remove services on remote host.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def cleanup_xp2p_install(
     host: Host,
     *,
@@ -710,6 +826,18 @@ def cleanup_xp2p_install(
     remove_paths(
         host,
         [*config_dirs, *state_files, *extra_paths],
+    )
+
+
+def cleanup_xp2p_leftovers(host: Host) -> None:
+    remove_services(host, ["xp2p-client", "xp2p-server"])
+    remove_paths(
+        host,
+        [
+            PROGRAM_FILES_INSTALL_DIR,
+            PROGRAM_FILES_X86_INSTALL_DIR,
+            PROGRAM_DATA_ROOT,
+        ],
     )
 
 

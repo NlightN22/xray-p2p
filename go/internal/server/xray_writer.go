@@ -1,7 +1,9 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -167,27 +169,66 @@ func buildLogs(cfg xrayconfig.LogsConfig) map[string]any {
 }
 
 func writeServerOutbounds(configDir string, cfg xrayconfig.DirectOutboundConfig) error {
-	settings := map[string]any{}
 	sendThrough := strings.TrimSpace(cfg.SendThrough)
-	if sendThrough != "" {
-		settings["sendThrough"] = sendThrough
-	}
 	outbound := map[string]any{
 		"protocol": cfg.Protocol,
 		"tag":      cfg.Tag,
 	}
-	if len(settings) > 0 {
-		outbound["settings"] = settings
+	if sendThrough != "" {
+		outbound["sendThrough"] = sendThrough
 	}
+	path := filepath.Join(configDir, "outbounds.json")
+	managedTags := map[string]struct{}{}
+	if tag := strings.TrimSpace(cfg.Tag); tag != "" {
+		managedTags[strings.ToLower(tag)] = struct{}{}
+	}
+	preserved := filterUnmanagedOutbounds(readExistingOutbounds(path), managedTags)
 	doc := map[string]any{
-		"outbounds": []any{
-			outbound,
-		},
+		"outbounds": append(preserved, outbound),
 	}
-	return configio.WriteJSON(filepath.Join(configDir, "outbounds.json"), doc, configio.WriteOptions{
+	return configio.WriteJSON(path, doc, configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	})
+}
+
+func readExistingOutbounds(path string) []any {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil
+	}
+	if raw, ok := doc["outbounds"].([]any); ok {
+		return raw
+	}
+	return nil
+}
+
+func filterUnmanagedOutbounds(existing []any, managed map[string]struct{}) []any {
+	if len(existing) == 0 {
+		return nil
+	}
+	result := make([]any, 0, len(existing))
+	for _, raw := range existing {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			result = append(result, raw)
+			continue
+		}
+		tag, ok := entry["tag"].(string)
+		if !ok {
+			result = append(result, raw)
+			continue
+		}
+		if _, exists := managed[strings.ToLower(strings.TrimSpace(tag))]; exists {
+			continue
+		}
+		result = append(result, raw)
+	}
+	return result
 }
 
 func writeServerRouting(configDir string, cfg xrayconfig.ServerXrayConfig, reverse serverReverseState, redirects []redirect.Rule) error {

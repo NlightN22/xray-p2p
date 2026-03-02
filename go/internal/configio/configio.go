@@ -39,6 +39,9 @@ func WriteBytes(path string, data []byte, opts WriteOptions) error {
 		return err
 	}
 	newHash := hashBytes(data)
+	if oldHash != "" && oldHash == newHash {
+		return nil
+	}
 
 	if opts.KeepLastKnownGood && oldHash != "" {
 		if err := writeBackup(path); err != nil {
