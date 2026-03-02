@@ -32,7 +32,7 @@ func applyClientDesiredConfig(paths clientPaths, state clientInstallState, opts 
 		return nil
 	}
 	if opts.TunEnabled {
-		return applyRedirectRoutes(opts.TunName, state.Redirects)
+		return applyRedirectRoutes(opts.TunName, opts.TunAddr, state.Redirects)
 	}
-	return removeRedirectRoutes(opts.TunName, state.Redirects)
+	return removeRedirectRoutes(opts.TunName, opts.TunAddr, state.Redirects)
 }

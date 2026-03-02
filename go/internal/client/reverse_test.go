@@ -76,13 +76,6 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	}
 }
 
-func windowsRuleBonus() int {
-	if runtime.GOOS == "windows" {
-		return 2
-	}
-	return 0
-}
-
 func loadClientRouting(t *testing.T, path string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(path)

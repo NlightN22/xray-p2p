@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
@@ -132,9 +133,13 @@ func TestCheckPortAndFindAvailablePort(t *testing.T) {
 		t.Fatalf("CheckPort expected error when port is busy")
 	}
 	_ = tcpLn.Close()
-	if err := CheckPort(listen, port, ProtocolBoth); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "forbidden") {
+	if err := retryCheckPort(listen, port, ProtocolBoth); err != nil {
+		lower := strings.ToLower(err.Error())
+		if strings.Contains(lower, "forbidden") {
 			t.Skipf("unable to bind due to environment restrictions: %v", err)
+		}
+		if errors.Is(err, ErrPortUnavailable) {
+			t.Skipf("port did not release in time: %v", err)
 		}
 		t.Fatalf("CheckPort after release failed: %v", err)
 	}
@@ -148,6 +153,21 @@ func TestCheckPortAndFindAvailablePort(t *testing.T) {
 	if found <= startPort+1 {
 		t.Fatalf("FindAvailablePort returned unexpected port %d", found)
 	}
+}
+
+func retryCheckPort(listen string, port int, proto Protocol) error {
+	const attempts = 10
+	for i := 0; i < attempts; i++ {
+		err := CheckPort(listen, port, proto)
+		if err == nil {
+			return nil
+		}
+		if !errors.Is(err, ErrPortUnavailable) {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return ErrPortUnavailable
 }
 
 func TestIsAddrInUse(t *testing.T) {

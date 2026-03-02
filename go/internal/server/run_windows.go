@@ -13,6 +13,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
 
@@ -101,6 +102,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 	onStart := func() {
 		if opts.TunEnabled {
 			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
+			go func() {
+				if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
+					logging.Warn("xp2p: redirect route setup failed", "err", err)
+				}
+			}()
 		}
 	}
 

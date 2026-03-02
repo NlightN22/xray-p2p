@@ -108,7 +108,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 				}
 			}()
 			go func() {
-				if err := applyRedirectRoutes(opts.TunName, desired.Redirects); err != nil {
+				if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
 					logging.Warn("xp2p: redirect route setup failed", "err", err)
 				}
 			}()

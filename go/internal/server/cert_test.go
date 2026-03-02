@@ -18,6 +18,7 @@ import (
 
 func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, false, false)
 
@@ -86,6 +87,7 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 
 func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, false, false)
 
@@ -135,6 +137,7 @@ func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 
 func TestSetCertificateRequiresForceWhenTLSConfigured(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true, false)
 

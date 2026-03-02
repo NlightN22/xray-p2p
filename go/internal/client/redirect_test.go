@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -372,13 +371,6 @@ func hasDomainRule(rules []struct {
 		}
 	}
 	return false
-}
-
-func windowsRuleBonus() int {
-	if runtime.GOOS == "windows" {
-		return 2
-	}
-	return 0
 }
 
 func hasMarkerRule(rules []struct {

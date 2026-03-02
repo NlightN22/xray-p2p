@@ -336,10 +336,3 @@ func verifyRoutingDocument(t *testing.T, path string, wantRules int, wantBridges
 		t.Fatalf("expected %d bridges, got %d", wantBridges, len(bridges))
 	}
 }
-
-func windowsRuleBonus() int {
-	if runtime.GOOS == "windows" {
-		return 2
-	}
-	return 0
-}

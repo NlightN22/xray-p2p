@@ -59,7 +59,7 @@ func applyServerDesiredConfig(installDir, configDir string, desired desiredServe
 		return nil
 	}
 	if opts.TunEnabled {
-		return applyRedirectRoutes(opts.TunName, desired.Redirects)
+		return applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects)
 	}
-	return removeRedirectRoutes(opts.TunName, desired.Redirects)
+	return removeRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects)
 }

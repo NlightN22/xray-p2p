@@ -55,7 +55,11 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 	}
 
 	if randomTag != "" {
-		out.Outbounds = append(out.Outbounds, freedomOutbound(randomTag, direct, ""))
+		sendThrough := ""
+		if runtime.GOOS != "windows" {
+			sendThrough = direct.SendThrough
+		}
+		out.Outbounds = append(out.Outbounds, freedomOutbound(randomTag, direct, sendThrough))
 	}
 	if udpTag != "" {
 		out.Outbounds = append(out.Outbounds, freedomOutbound(udpTag, direct, direct.SendThrough))
