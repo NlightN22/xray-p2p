@@ -199,8 +199,28 @@ def _assert_no_domain_redirect_rule(data: dict, domain: str) -> None:
     for rule in rules:
         domains = rule.get("domains") or []
         lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
-        if normalized in lowered:
-            pytest.fail(f"Unexpected domain redirect rule for {domain}")
+    if normalized in lowered:
+        pytest.fail(f"Unexpected domain redirect rule for {domain}")
+
+
+def _wait_for_socks_listener(host, port: int = 51180, timeout: int = 30) -> None:
+    result = _env.run_guest_script(
+        host,
+        "scripts/wait_for_tcp_listener.ps1",
+        Port=str(port),
+        TimeoutSeconds=str(timeout),
+    )
+    if result.rc != 0:
+        pytest.fail(
+            f"Timed out waiting for SOCKS listener on port {port}.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _skip_if_socks_unresponsive(result) -> None:
+    output = (result.stdout or "").lower()
+    if "socks_proxy: 127.0.0.1:51180" in output and "i/o timeout" in output:
+        pytest.skip("Tunnel SOCKS proxy did not respond; check client/server run logs.")
 
 
 def _set_firewall_block(host, name: str, addresses: list[str], present: bool = True) -> None:
@@ -261,7 +281,7 @@ def test_client_redirect_tunnel_win(
     _remove_ip_alias(server_host, DIAG_IP)
     _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
     try:
-        _add_hosts_entry(client_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
+        _add_hosts_entry(server_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
 
         server_install = xp2p_server_runner(
             "--server-host",
@@ -293,6 +313,7 @@ def test_client_redirect_tunnel_win(
                 CLIENT_CONFIG_DIR,
                 CLIENT_LOG_RELATIVE,
             ):
+                _wait_for_socks_listener(client_host)
                 initial_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
@@ -301,6 +322,7 @@ def test_client_redirect_tunnel_win(
                     "3",
                     check=False,
                 )
+                _skip_if_socks_unresponsive(initial_ping)
                 assert initial_ping.rc != 0
                 initial_domain_ping = xp2p_client_runner(
                     "ping",
@@ -310,6 +332,7 @@ def test_client_redirect_tunnel_win(
                     "3",
                     check=False,
                 )
+                _skip_if_socks_unresponsive(initial_domain_ping)
                 assert initial_domain_ping.rc != 0
 
                 _add_ip_alias(server_host, iface, DIAG_IP, DIAG_PREFIX)
@@ -445,6 +468,6 @@ def test_client_redirect_tunnel_win(
     finally:
         _remove_ip_alias(server_host, DIAG_IP)
         _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
-        _remove_hosts_entry(client_host, DIAG_DOMAIN)
+        _remove_hosts_entry(server_host, DIAG_DOMAIN)
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

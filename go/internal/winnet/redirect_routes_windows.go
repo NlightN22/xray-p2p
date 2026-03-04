@@ -113,7 +113,15 @@ func buildSyncRoutesScript(tunName string, cidrs []string, assignIP string, assi
 	}
 	if assignLine != "" {
 		lines = append(lines,
-			`if ($null -eq $ip -and $assignAddr) { `+assignLine+`; $ip = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $ifIndex -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike "169.254.*" -and $_.IPAddress -ne "127.0.0.1" -and $_.IPAddress -ne "0.0.0.0" } | Sort-Object PrefixLength -Descending | Select-Object -First 1 }`,
+			`if ($null -eq $ip -and $assignAddr) {`,
+			`  $assignAttempts = 0`,
+			`  while ($null -eq $ip -and $assignAttempts -lt 6) {`,
+			`    $assignAttempts++`,
+			`    try { `+assignLine+` } catch { }`,
+			`    $ip = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $ifIndex -ErrorAction SilentlyContinue | Where-Object { $_.IPAddress -notlike "169.254.*" -and $_.IPAddress -ne "127.0.0.1" -and $_.IPAddress -ne "0.0.0.0" } | Sort-Object PrefixLength -Descending | Select-Object -First 1`,
+			`    if ($null -eq $ip) { Start-Sleep -Milliseconds 500 }`,
+			`  }`,
+			`}`,
 		)
 	}
 	lines = append(lines,

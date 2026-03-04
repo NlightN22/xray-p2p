@@ -12,6 +12,22 @@ MSI_CACHE_DIR_X86 = _env.MSI_CACHE_DIR_X86
 MSI_MIN_SIZE_BYTES = 1_000_000
 
 
+def _require_msi_service(host) -> None:
+    script = r"""
+$svc = Get-Service -Name 'msiserver' -ErrorAction SilentlyContinue
+if (-not $svc) {
+    exit 3
+}
+if ($svc.StartType -eq 'Disabled') {
+    exit 4
+}
+exit 0
+"""
+    result = _env.run_powershell(host, script)
+    if result.rc != 0:
+        pytest.skip("Windows Installer service is unavailable on this guest.")
+
+
 @pytest.mark.host
 @pytest.mark.win
 def test_windows_installer_builds_msi(server_host, pytestconfig: pytest.Config):
@@ -47,6 +63,7 @@ def test_windows_installer_builds_msi_x86(server_host, pytestconfig: pytest.Conf
 @pytest.mark.host
 @pytest.mark.win
 def test_windows_installer_places_xray_binary(server_host, xp2p_msi_path):
+    _require_msi_service(server_host)
     install_root = _install_root(server_host)
     xray_path = install_root / "bin" / "xray.exe"
     assert _remote_path_exists(server_host, xray_path), (
@@ -57,6 +74,7 @@ def test_windows_installer_places_xray_binary(server_host, xp2p_msi_path):
 @pytest.mark.host
 @pytest.mark.win
 def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp2p_server_runner):
+    _require_msi_service(server_host)
     install_dir = _install_root(server_host)
     client_dir = _env.CONFIG_ROOT / "config-client"
     server_dir = _env.CONFIG_ROOT / "config-server"
@@ -124,6 +142,7 @@ def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp
 @pytest.mark.host
 @pytest.mark.win
 def test_windows_installer_registers_powershell_completion(server_host, xp2p_msi_path):
+    _require_msi_service(server_host)
     completion_path = _env.PROGRAM_DATA_ROOT / "completions" / "xp2p.ps1"
     install_root = _install_root(server_host)
     result = _env.run_guest_script(

@@ -29,6 +29,28 @@ if (-not (Test-Path $Xp2pPath)) {
     exit 3
 }
 
+$services = @('xp2p-client', 'xp2p-server')
+foreach ($name in $services) {
+    $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -ne 'Stopped') {
+        Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+    }
+}
+$netCmd = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+if ($netCmd) {
+    foreach ($port in @(51080, 51180)) {
+        $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+        foreach ($listener in $listeners) {
+            if ($listener.OwningProcess -gt 0) {
+                try {
+                    Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
+                } catch { }
+            }
+        }
+    }
+}
+Start-Sleep -Seconds 1
+
 $existing = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Xp2pPath }
 if ($existing) {
     foreach ($item in $existing) {

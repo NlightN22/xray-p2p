@@ -6,7 +6,7 @@ from testinfra.host import Host
 
 from . import env as _env
 
-CLIENT_RUN_STABILIZE_SECONDS = 6
+CLIENT_RUN_STABILIZE_SECONDS = 15
 
 
 def _start_xp2p_client_run(

@@ -119,12 +119,12 @@ Import-Module ScheduledTasks -ErrorAction SilentlyContinue | Out-Null
 try {
     $scheduleStart = Get-Date
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
-    $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(5))
+    $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(2))
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -Force -User 'SYSTEM' | Out-Null
     Start-ScheduledTask -TaskName $taskName
 
     $waitStart = Get-Date
-    $deadline = (Get-Date).AddMinutes(5)
+    $deadline = (Get-Date).AddMinutes(2)
     while ($true) {
         Start-Sleep -Seconds 1
         $state = (Get-ScheduledTask -TaskName $taskName).State

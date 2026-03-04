@@ -18,6 +18,7 @@ from testinfra.host import Host
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SSH_CONNECT_TIMEOUT = 15
 SSH_COMMAND_TIMEOUT = 120
+VAGRANT_COMMAND_TIMEOUT = 120
 
 
 class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
@@ -155,6 +156,7 @@ def machine_state(vagrant_dir: Path, machine: str) -> str | None:
         ["vagrant", "status", machine, "--machine-readable"],
         cwd=vagrant_dir,
         text=True,
+        timeout=VAGRANT_COMMAND_TIMEOUT,
     )
     elapsed = time.perf_counter() - start
     print(f"TIMING: vagrant status {machine}: {elapsed:.2f}s")
@@ -194,6 +196,7 @@ def _ssh_config(vagrant_dir: Path, machine: str) -> str:
         ["vagrant", "ssh-config", machine],
         cwd=vagrant_dir,
         text=True,
+        timeout=VAGRANT_COMMAND_TIMEOUT,
     )
     elapsed = time.perf_counter() - start
     print(f"TIMING: vagrant ssh-config {machine}: {elapsed:.2f}s")

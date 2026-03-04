@@ -1,12 +1,13 @@
 from contextlib import contextmanager
 from pathlib import Path
+import time
 
 import pytest
 from testinfra.host import Host
 
 from . import env as _env
 
-SERVER_RUN_STABILIZE_SECONDS = 6
+SERVER_RUN_STABILIZE_SECONDS = 15
 
 
 def _start_xp2p_server_run(
@@ -36,13 +37,6 @@ def _start_xp2p_server_run(
         parameters["AllowMismatch"] = "1"
     parameters["OutputLogPath"] = output_log_path
 
-    result = _env.run_guest_script(
-        host,
-        "scripts/start_xp2p_server_run.ps1",
-        **parameters,
-    )
-    stdout = (result.stdout or "").strip()
-
     def _read_log(path: str) -> str:
         if _env.path_exists(host, path):
             return _env.read_text(host, path)
@@ -56,7 +50,36 @@ def _start_xp2p_server_run(
             f"xray log ({log_abs}):\n{xray_log}"
         )
 
-    if result.rc != 0:
+    def _should_retry(xp2p_log: str) -> bool:
+        if "New-NetIPAddress : Element not found" in xp2p_log:
+            return True
+        if "Failed to register rings" in xp2p_log:
+            return True
+        return False
+
+    last_result: CommandResult | None = None
+    for attempt in range(2):
+        result = _env.run_guest_script(
+            host,
+            "scripts/start_xp2p_server_run.ps1",
+            **parameters,
+        )
+        last_result = result
+        stdout = (result.stdout or "").strip()
+
+        if result.rc == 0:
+            pid_value: int | None = None
+            for line in stdout.splitlines():
+                if line.startswith("PID="):
+                    pid_value = int(line.split("=", 1)[1])
+                    break
+            if pid_value is None:
+                pytest.fail(
+                    "Unexpected xp2p server run startup output:\n"
+                    f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                )
+            return pid_value
+
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
                 f"xp2p.exe not found on {_env.DEFAULT_SERVER} at {_env.XP2P_EXE}. "
@@ -68,6 +91,13 @@ def _start_xp2p_server_run(
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
             )
         if "__XP2P_EXIT__" in stdout:
+            xp2p_log = _read_log(output_log_path)
+            if attempt == 0 and _should_retry(xp2p_log):
+                if "Failed to register rings" in xp2p_log:
+                    _env.remove_tun_adapters(host, ["xp2pc", "xp2ps", "Xray Tunnel"])
+                _env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+                time.sleep(2)
+                continue
             pytest.fail(
                 "xp2p server run exited before stabilization period elapsed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
@@ -82,17 +112,11 @@ def _start_xp2p_server_run(
             f"{_env.DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
         )
 
-    pid_value: int | None = None
-    for line in stdout.splitlines():
-        if line.startswith("PID="):
-            pid_value = int(line.split("=", 1)[1])
-            break
-    if pid_value is None:
-        pytest.fail(
-            "Unexpected xp2p server run startup output:\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return pid_value
+    assert last_result is not None
+    pytest.fail(
+        "Failed to start xp2p server run on "
+        f"{_env.DEFAULT_SERVER}.\nSTDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}\n{_format_logs()}"
+    )
 
 
 def _stop_process(host: Host, pid_value: int) -> None:

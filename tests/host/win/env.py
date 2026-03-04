@@ -71,6 +71,10 @@ WIN_STACKS = {
 _CURRENT_WIN_STACK = "win10"
 
 
+class MsiServiceUnavailable(RuntimeError):
+    pass
+
+
 def available_win_stacks() -> list[str]:
     return sorted(WIN_STACKS.keys())
 
@@ -111,7 +115,8 @@ def encode_powershell(script: str) -> str:
 
 
 DEFAULT_POWERSHELL_TIMEOUT = 120
-DEFAULT_GUEST_SCRIPT_TIMEOUT = 900
+DEFAULT_GUEST_SCRIPT_TIMEOUT = 120
+DEFAULT_XP2P_COMMAND_TIMEOUT = 120
 
 
 def run_powershell(host: Host, script: str, timeout: int | float | None = None) -> CommandResult:
@@ -230,13 +235,19 @@ def _extract_marker(output: str, marker: str) -> str | None:
     return None
 
 
-def run_xp2p(host: Host, args: Iterable[str]) -> CommandResult:
+def run_xp2p(
+    host: Host,
+    args: Iterable[str],
+    *,
+    timeout: int | float | None = None,
+) -> CommandResult:
     payload = _encode_args_payload(args)
     result = run_guest_script(
         host,
         "scripts/run_xp2p_command.ps1",
         Xp2pPath=str(XP2P_EXE),
         ArgsBase64=payload,
+        timeout=DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout,
     )
     for line in (result.stdout or "").splitlines():
         if line.startswith("TIMING:"):
@@ -290,6 +301,24 @@ $msi = {msi_str}
 if (-not (Test-Path $msi)) {{
     throw "MSI package not found at $msi"
 }}
+$policyRoots = @(
+    'HKLM:\\Software\\Policies\\Microsoft\\Windows\\Installer',
+    'HKCU:\\Software\\Policies\\Microsoft\\Windows\\Installer'
+)
+foreach ($policyRoot in $policyRoots) {{
+    if (Test-Path $policyRoot) {{
+        Set-ItemProperty -Path $policyRoot -Name 'DisableMSI' -Value 0 -ErrorAction SilentlyContinue
+    }}
+}}
+$svc = Get-Service -Name 'msiserver' -ErrorAction SilentlyContinue
+if ($svc) {{
+    if ($svc.StartType -eq 'Disabled') {{
+        Set-Service -Name 'msiserver' -StartupType Manual -ErrorAction SilentlyContinue
+    }}
+    if ($svc.Status -ne 'Running') {{
+        Start-Service -Name 'msiserver' -ErrorAction SilentlyContinue
+    }}
+}}
 $logPath = {log_path}
 $logDir = Split-Path -Parent $logPath
 if ($logDir -and -not (Test-Path $logDir)) {{
@@ -313,6 +342,31 @@ exit 0
     result = run_powershell(host, script)
     if result.rc != 0:
         stdout = result.stdout or ""
+        if "MSI ExitCode=1601" in stdout:
+            run_powershell(
+                host,
+                """
+$ErrorActionPreference = 'SilentlyContinue'
+foreach ($policyRoot in @(
+    'HKLM:\\Software\\Policies\\Microsoft\\Windows\\Installer',
+    'HKCU:\\Software\\Policies\\Microsoft\\Windows\\Installer'
+)) {{
+    if (Test-Path $policyRoot) {{
+        Set-ItemProperty -Path $policyRoot -Name 'DisableMSI' -Value 0 -ErrorAction SilentlyContinue
+    }}
+}}
+sc.exe config msiserver start= demand | Out-Null
+Start-Service -Name 'msiserver' -ErrorAction SilentlyContinue | Out-Null
+Start-Process -FilePath 'msiexec.exe' -ArgumentList '/unregister' -Wait -ErrorAction SilentlyContinue | Out-Null
+Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAction SilentlyContinue | Out-Null
+""",
+            )
+            result = run_powershell(host, script)
+            if result.rc == 0:
+                return
+            raise MsiServiceUnavailable(
+                "Windows Installer service is unavailable (MSI ExitCode=1601)."
+            )
         if "MSI ExitCode=1603" in stdout:
             _cleanup_orphaned_xp2p_msi(host)
             result = run_powershell(host, script)
@@ -402,6 +456,7 @@ def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path, *, purge_files: bo
     script = f"""
 $ErrorActionPreference = 'Stop'
 $msi = {msi_str}
+$waitSeconds = 110
 $services = @('xp2p-client', 'xp2p-server')
 foreach ($svc in $services) {{
     $service = Get-Service -Name $svc -ErrorAction SilentlyContinue
@@ -415,10 +470,12 @@ $attempt = 0
 do {{
     $attempt++
     $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
-    if (-not $process.WaitForExit(300000)) {{
+    if (-not $process.WaitForExit($waitSeconds * 1000)) {{
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Write-Output "MSI ExitCode=124"
         exit 124
     }}
+    Write-Output ("MSI ExitCode=" + $process.ExitCode)
     $successCodes = @(0, 1605, 1614, 3010)
     if ($successCodes -contains $process.ExitCode) {{
         break
@@ -437,9 +494,27 @@ if (Test-Path {install_dir}) {{
 """
     script += """
 exit 0
-"""
+    """
     result = run_powershell(host, script)
     if result.rc != 0:
+        stdout = result.stdout or ""
+        if "MSI ExitCode=1601" in stdout:
+            remove_services(host, ["xp2p-client", "xp2p-server"])
+            remove_paths(
+                host,
+                [
+                    PROGRAM_FILES_INSTALL_DIR,
+                    PROGRAM_FILES_X86_INSTALL_DIR,
+                    PROGRAM_DATA_ROOT,
+                ],
+            )
+            print("WARNING: MSI uninstall failed (1601); cleaned up xp2p artifacts manually.")
+            return
+        if not path_exists(host, XP2P_EXE) and not service_exists(host, "xp2p-client") and not service_exists(
+            host, "xp2p-server"
+        ):
+            print("WARNING: MSI uninstall reported failure, but xp2p artifacts are already removed.")
+            return
         raise RuntimeError(
             "Failed to uninstall xp2p via MSI.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -458,7 +533,19 @@ def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -
     msi_path = ensure_msi_package(host)
     print(f"TIMING: ensure_msi_package: {time.perf_counter() - start:.2f}s")
     start = time.perf_counter()
-    install_xp2p_from_msi(host, msi_path)
+    try:
+        install_xp2p_from_msi(host, msi_path)
+    except MsiServiceUnavailable:
+        detected = _detect_xp2p_exe(host)
+        if detected is not None:
+            _set_install_paths_from_exe(detected)
+            return
+        _manual_install_from_msi_bin(host)
+        detected = _detect_xp2p_exe(host)
+        if detected is not None:
+            _set_install_paths_from_exe(detected)
+            return
+        raise
     print(f"TIMING: install_xp2p_from_msi: {time.perf_counter() - start:.2f}s")
 
     start = time.perf_counter()
@@ -477,6 +564,40 @@ def get_program_files_install_dir(host: Host) -> Path:
     if detected is not None:
         return _set_install_paths_from_exe(detected)
     return PROGRAM_FILES_INSTALL_DIR
+
+
+def _manual_install_from_msi_bin(host: Host) -> None:
+    install_dir = PROGRAM_FILES_INSTALL_DIR
+    src_root = Path(r"C:\xp2p\build\msi-bin")
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$src = {ps_quote(str(src_root))}
+$dst = {ps_quote(str(install_dir))}
+$xp2p = Join-Path $src 'xp2p.exe'
+$bundle = Join-Path $src 'bundle'
+$xray = Join-Path $bundle 'xray.exe'
+$wintun = Join-Path $bundle 'wintun.dll'
+if (-not (Test-Path $xp2p)) {{
+    throw "Fallback install failed: $xp2p not found"
+}}
+if (-not (Test-Path $xray)) {{
+    throw "Fallback install failed: $xray not found"
+}}
+if (-not (Test-Path $wintun)) {{
+    throw "Fallback install failed: $wintun not found"
+}}
+if (-not (Test-Path $dst)) {{
+    New-Item -ItemType Directory -Path $dst -Force | Out-Null
+}}
+$bin = Join-Path $dst 'bin'
+if (-not (Test-Path $bin)) {{
+    New-Item -ItemType Directory -Path $bin -Force | Out-Null
+}}
+Copy-Item -Path $xp2p -Destination (Join-Path $dst 'xp2p.exe') -Force
+Copy-Item -Path $xray -Destination (Join-Path $bin 'xray.exe') -Force
+Copy-Item -Path $wintun -Destination (Join-Path $bin 'wintun.dll') -Force
+"""
+    run_powershell(host, script)
 
 
 def _set_install_paths_from_exe(exe_path: Path) -> Path:
@@ -667,6 +788,7 @@ def _build_msi_package(
         WixSource=wix_source,
         BuildId=_MSI_BUILD_ID or "",
         Marker=MSI_MARKER,
+        timeout=600,
     )
     if result.rc != 0:
         raise RuntimeError(
@@ -825,6 +947,23 @@ def get_net_routes(
     raise RuntimeError(f"Unexpected net routes output type: {type(data).__name__}")
 
 
+
+
+def remove_tun_adapters(host: Host, adapter_names: Iterable[str]) -> None:
+    names = [str(name) for name in adapter_names if str(name).strip()]
+    if not names:
+        return
+    payload = base64.b64encode(json.dumps(names).encode("utf-8")).decode("ascii")
+    result = run_guest_script(
+        host,
+        "scripts/remove_tun_adapters.ps1",
+        NamesBase64=payload,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to remove TUN adapters.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:

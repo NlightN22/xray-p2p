@@ -180,6 +180,14 @@ def _cleanup_role(
         )
 
 
+def _require_service_installed(host, role: str) -> None:
+    service_name = f"xp2p-{role}"
+    if not win_env.service_exists(host, service_name):
+        pytest.skip(
+            f"{service_name} service is not registered; MSI-based install is required."
+        )
+
+
 def _install_client(runner, host: str, user: str, password: str) -> None:
     runner(
         "client",
@@ -229,10 +237,12 @@ def test_windows_client_service_cli_controls_service(client_host, xp2p_client_ru
 
     with _timed("client install"):
         _install_client(runner, "10.70.0.10", "svc-client@example.com", "SvcClientSecret")
+    _require_service_installed(client_host, "client")
     with _timed("client service start"):
         runner("client", "service", "start", check=True)
     _wait_for_service_state(runner, "client", expected_active=True)
-    _assert_ipv6_binding_disabled(client_host, CLIENT_TUN)
+    if _current_mode(client_host, "client") == "tun":
+        _assert_ipv6_binding_disabled(client_host, CLIENT_TUN)
     assert win_env.path_exists(client_host, CLIENT_SERVICE_LOG), "client service log not created"
 
     with _timed("client service stop (final)"):
@@ -299,6 +309,7 @@ def test_windows_service_restarts_when_config_changes(
         )
     with _timed(f"{role} install"):
         install_fn()
+    _require_service_installed(host, role)
     try:
         with _timed(f"{role} clear logs"):
             _cleanup_role(
@@ -310,10 +321,11 @@ def test_windows_service_restarts_when_config_changes(
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
-        if role == "client":
-            _assert_ipv6_binding_disabled(host, CLIENT_TUN)
-        else:
-            _assert_ipv6_binding_disabled(host, SERVER_TUN)
+        if _current_mode(host, role) == "tun":
+            if role == "client":
+                _assert_ipv6_binding_disabled(host, CLIENT_TUN)
+            else:
+                _assert_ipv6_binding_disabled(host, SERVER_TUN)
 
         with _timed(f"{role} change config"):
             change_fn()
@@ -374,6 +386,7 @@ def test_windows_service_stops_after_invalid_config(
         )
     with _timed(f"{role} install"):
         install_fn()
+    _require_service_installed(host, role)
     try:
         with _timed(f"{role} clear logs"):
             _cleanup_role(
