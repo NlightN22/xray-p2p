@@ -16,9 +16,9 @@ import testinfra.backend.paramiko as paramiko_backend
 from testinfra.host import Host
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SSH_CONNECT_TIMEOUT = 15
-SSH_COMMAND_TIMEOUT = 120
-VAGRANT_COMMAND_TIMEOUT = 120
+SSH_CONNECT_TIMEOUT = 30
+SSH_COMMAND_TIMEOUT = 60
+VAGRANT_COMMAND_TIMEOUT = 60
 
 
 class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
@@ -150,12 +150,44 @@ def ensure_machine_running(vagrant_dir: Path, machine: str) -> None:
 
 
 @lru_cache(maxsize=32)
+def _terminate_process_tree(proc: subprocess.Popen[str]) -> None:
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    else:
+        proc.kill()
+
+
+def _run_vagrant_command(command: list[str], *, cwd: Path, timeout: int) -> str:
+    proc = subprocess.Popen(
+        command,
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        _terminate_process_tree(proc)
+        raise subprocess.TimeoutExpired(command, timeout) from exc
+
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode, command, output=stdout, stderr=stderr)
+    return stdout
+
+
 def machine_state(vagrant_dir: Path, machine: str) -> str | None:
     start = time.perf_counter()
-    output = subprocess.check_output(
+    output = _run_vagrant_command(
         ["vagrant", "status", machine, "--machine-readable"],
         cwd=vagrant_dir,
-        text=True,
         timeout=VAGRANT_COMMAND_TIMEOUT,
     )
     elapsed = time.perf_counter() - start
@@ -192,10 +224,9 @@ def parse_ssh_config(raw: str) -> dict[str, str]:
 @lru_cache(maxsize=32)
 def _ssh_config(vagrant_dir: Path, machine: str) -> str:
     start = time.perf_counter()
-    output = subprocess.check_output(
+    output = _run_vagrant_command(
         ["vagrant", "ssh-config", machine],
         cwd=vagrant_dir,
-        text=True,
         timeout=VAGRANT_COMMAND_TIMEOUT,
     )
     elapsed = time.perf_counter() - start

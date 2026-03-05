@@ -114,9 +114,9 @@ def encode_powershell(script: str) -> str:
     return base64.b64encode(script.encode("utf-16le")).decode("ascii")
 
 
-DEFAULT_POWERSHELL_TIMEOUT = 120
-DEFAULT_GUEST_SCRIPT_TIMEOUT = 120
-DEFAULT_XP2P_COMMAND_TIMEOUT = 120
+DEFAULT_POWERSHELL_TIMEOUT = 60
+DEFAULT_GUEST_SCRIPT_TIMEOUT = 60
+DEFAULT_XP2P_COMMAND_TIMEOUT = 60
 
 
 def run_powershell(host: Host, script: str, timeout: int | float | None = None) -> CommandResult:

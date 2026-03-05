@@ -32,6 +32,7 @@ const (
 	socksReadyTimeout             = 30 * time.Second
 	socksProbeInterval            = 500 * time.Millisecond
 	deployCompletionNotifyTimeout = 30 * time.Second
+	socksPingTimeout              = 45 * time.Second
 )
 
 type manifestOptions struct {
@@ -229,7 +230,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			Port:       markerPort,
 			SocksProxy: socksAddr,
 		}
-		if err := waitForPing(ctx, markerTarget, pingOpts, 15*time.Second); err != nil {
+		if err := waitForPing(ctx, markerTarget, pingOpts, socksPingTimeout); err != nil {
 			completionState = "FAIL ping"
 			logging.Error("xp2p client deploy: ping failed", "err", err)
 			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {

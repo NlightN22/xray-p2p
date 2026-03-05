@@ -13,6 +13,10 @@ param(
     [string]$Protocol = 'TCP',
 
     [Parameter()]
+    [ValidateSet('Block', 'Allow')]
+    [string]$Action = 'Block',
+
+    [Parameter()]
     [ValidateSet('Present', 'Absent')]
     [string]$Ensure = 'Present'
 )
@@ -28,7 +32,7 @@ try {
         New-NetFirewallRule `
             -DisplayName $Name `
             -Direction Inbound `
-            -Action Block `
+            -Action $Action `
             -Protocol $Protocol `
             -LocalPort $LocalPort `
             -RemoteAddress $RemoteAddress `

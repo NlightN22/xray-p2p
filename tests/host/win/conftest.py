@@ -73,6 +73,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 def _timed_test(request: pytest.FixtureRequest):
     global _LAST_TEST_END
     start = time.perf_counter()
+    start_ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     if _LAST_TEST_END is not None:
         gap = start - _LAST_TEST_END
         if gap >= 0.5:
@@ -80,8 +81,12 @@ def _timed_test(request: pytest.FixtureRequest):
     try:
         yield
     finally:
+        end_ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         elapsed = time.perf_counter() - start
-        print(f"TIMING: test {request.node.nodeid} total: {elapsed:.2f}s")
+        print(
+            f"TIMING: test {request.node.nodeid} total: {elapsed:.2f}s "
+            f"start={start_ts}; end={end_ts}"
+        )
         _LAST_TEST_END = time.perf_counter()
 
 
@@ -145,9 +150,9 @@ def xp2p_program_files_setup():
         win_env.ensure_admin_token(client_host)
     server_backend = getattr(server_host, "backend", None)
     client_backend = getattr(client_host, "backend", None)
-    if hasattr(server_backend, "_reset_client"):
+    if server_backend is not None and hasattr(server_backend, "_reset_client"):
         server_backend._reset_client()
-    if hasattr(client_backend, "_reset_client"):
+    if client_backend is not None and hasattr(client_backend, "_reset_client"):
         client_backend._reset_client()
     with _timed("ensure_project_synced (server)"):
         win_env.ensure_project_synced(server_host, machine=win_env.DEFAULT_SERVER)
@@ -294,6 +299,7 @@ def xp2p_server_service(server_host: Host, xp2p_options: dict):
         yield {"pid": pid_value, "port": port}
     finally:
         if pid_value is not None:
+            print(f"TIMING: xp2p_server_service stop start pid={pid_value}")
             stop_script = f"""
 $pidValue = {pid_value}
 if ($pidValue -le 0) {{
@@ -305,7 +311,11 @@ if ($proc) {{
 }}
 exit 0
 """
-            win_env.run_powershell(server_host, stop_script)
+            try:
+                win_env.run_powershell(server_host, stop_script, timeout=30)
+                print(f"TIMING: xp2p_server_service stop done pid={pid_value}")
+            except Exception as exc:
+                print(f"TIMING: xp2p_server_service stop failed pid={pid_value} err={exc}")
 
 
 @pytest.fixture

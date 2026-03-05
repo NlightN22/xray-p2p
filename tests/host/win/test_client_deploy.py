@@ -41,7 +41,8 @@ CLIENT_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\client-deploy.log"
 SERVER_DEPLOY_STDOUT = Path(r"C:\Windows\Temp\xp2p-guest-logs\server-deploy.log")
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
-LOG_WAIT_TIMEOUT = 30
+LOG_WAIT_TIMEOUT = 60
+DEPLOY_FIREWALL_RULE = "xp2p-test-deploy-allow"
 
 
 @pytest.mark.host
@@ -110,6 +111,20 @@ def test_windows_client_deploy_end_to_end(
             link = _wait_for_client_link(client_host, client_proc)
         assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
 
+        _set_firewall_rule(
+            server_host,
+            ensure="Present",
+            remote_address="Any",
+            port=int(DEPLOY_PORT),
+            action="Allow",
+        )
+        _set_firewall_rule(
+            server_host,
+            ensure="Present",
+            remote_address="Any",
+            port=int(TROJAN_PORT),
+            action="Allow",
+        )
         with _timed("start server deploy"):
             server_proc = _start_server_deploy(
                 server_host,
@@ -187,6 +202,20 @@ def test_windows_client_deploy_end_to_end(
         _stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
+        _set_firewall_rule(
+            server_host,
+            ensure="Absent",
+            remote_address="Any",
+            port=int(DEPLOY_PORT),
+            action="Allow",
+        )
+        _set_firewall_rule(
+            server_host,
+            ensure="Absent",
+            remote_address="Any",
+            port=int(TROJAN_PORT),
+            action="Allow",
+        )
         for host in (client_host, server_host):
             _remove_paths(host, HEARTBEAT_STATE_FILES)
 
@@ -247,6 +276,13 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         )
         link = _wait_for_client_link(client_host, client_proc)
 
+        _set_firewall_rule(
+            server_host,
+            ensure="Present",
+            remote_address=client_host_ipv4,
+            port=int(DEPLOY_PORT),
+            action="Allow",
+        )
         server_proc = _start_server_deploy_with_args(
             server_host,
             listen_addr=f":{DEPLOY_PORT}",
@@ -308,8 +344,41 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         _stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
+        _set_firewall_rule(
+            server_host,
+            ensure="Absent",
+            remote_address=client_host_ipv4,
+            port=int(DEPLOY_PORT),
+            action="Allow",
+        )
         for host in (client_host, server_host):
             _remove_paths(host, HEARTBEAT_STATE_FILES)
+
+
+def _set_firewall_rule(
+    server_host,
+    *,
+    ensure: str,
+    remote_address: str,
+    port: int,
+    action: str,
+) -> None:
+    rule_name = f"{DEPLOY_FIREWALL_RULE}-{port}"
+    result = win_env.run_guest_script(
+        server_host,
+        "scripts/configure_firewall_rule.ps1",
+        Name=rule_name,
+        RemoteAddress=remote_address,
+        LocalPort=str(port),
+        Ensure=ensure,
+        Protocol="TCP",
+        Action=action,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to set deploy firewall rule Ensure={ensure} Action={action}.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 def _start_client_deploy(
     host,
