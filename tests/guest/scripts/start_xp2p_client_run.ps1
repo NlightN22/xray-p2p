@@ -61,6 +61,16 @@ if ($existing) {
     Start-Sleep -Seconds 1
 }
 
+$xrayExisting = Get-Process -Name xray -ErrorAction SilentlyContinue
+if ($xrayExisting) {
+    foreach ($item in $xrayExisting) {
+        try {
+            Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue
+        } catch { }
+    }
+    Start-Sleep -Seconds 1
+}
+
 if (Test-Path $LogPath) {
     Remove-Item $LogPath -Force -ErrorAction SilentlyContinue
 }
@@ -103,8 +113,13 @@ while ((Get-Date) -lt $deadline) {
         Write-Output '__XP2P_EXIT__'
         exit 6
     }
+    $xray = Get-Process -Name xray -ErrorAction SilentlyContinue
+    if ($xray) {
+        Write-Output ('PID=' + $processId)
+        exit 0
+    }
     Start-Sleep -Seconds 1
 }
 
-Write-Output ('PID=' + $processId)
-exit 0
+Write-Output '__XP2P_TIMEOUT__'
+exit 5

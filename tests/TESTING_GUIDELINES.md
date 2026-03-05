@@ -83,6 +83,10 @@ guest suites -- the CI and fellow contributors expect these rules.
   - `xp2p ping` invocations must succeed without retries. Do not wrap pings in
     helper loops; invoke once with `check=True` and fail fast when the tunnel is
     misbehaving.
+- **Wintun adapter cleanup logs**
+  - Xray may emit lines like `Failed to find matching adapter name` followed by
+    `Removed orphaned adapter "xp2pc {Number}"`. These are informational cleanup messages
+    and are not treated as test failures by themselves.
 
 ---
 

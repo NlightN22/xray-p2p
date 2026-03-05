@@ -50,7 +50,12 @@ function Remove-HostEntry {
     return ,$filtered
 }
 
-$existing = Get-Content -Path $hostsPath -ErrorAction Stop
+$item = Get-Item -Path $hostsPath -ErrorAction Stop
+if ($item.Attributes -band [System.IO.FileAttributes]::ReadOnly) {
+    Set-ItemProperty -Path $hostsPath -Name Attributes -Value ($item.Attributes -bxor [System.IO.FileAttributes]::ReadOnly)
+}
+
+$existing = [System.IO.File]::ReadAllLines($hostsPath)
 $filtered = Remove-HostEntry -Lines $existing -EntryHost $HostName
 
 if ($Action -eq 'Add') {
@@ -60,4 +65,18 @@ if ($Action -eq 'Add') {
     $filtered += "$IPAddress $HostName"
 }
 
-Set-Content -Path $hostsPath -Value $filtered -Encoding ASCII -Force
+$tmpPath = "$hostsPath.tmp"
+$attempts = 0
+while ($true) {
+    try {
+        [System.IO.File]::WriteAllLines($tmpPath, $filtered, [System.Text.Encoding]::ASCII)
+        Move-Item -Path $tmpPath -Destination $hostsPath -Force
+        break
+    } catch {
+        $attempts++
+        if ($attempts -ge 3) {
+            throw
+        }
+        Start-Sleep -Seconds 1
+    }
+}

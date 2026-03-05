@@ -26,6 +26,8 @@ CLIENT_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-client.toml",
     _env.CONFIG_ROOT / "xp2p-client.state.json",
 ]
+CLIENT_NETSTATE_LOG = r"C:\xp2p\build\logs\win\netstate-client.log"
+SERVER_NETSTATE_LOG = r"C:\xp2p\build\logs\win\netstate-server.log"
 
 
 def _server_public_host() -> str:
@@ -217,12 +219,6 @@ def _wait_for_socks_listener(host, port: int = 51180, timeout: int = 30) -> None
         )
 
 
-def _skip_if_socks_unresponsive(result) -> None:
-    output = (result.stdout or "").lower()
-    if "socks_proxy: 127.0.0.1:51180" in output and "i/o timeout" in output:
-        pytest.skip("Tunnel SOCKS proxy did not respond; check client/server run logs.")
-
-
 def _set_firewall_block(host, name: str, addresses: list[str], present: bool = True) -> None:
     quoted_addresses = ", ".join([_env.ps_quote(addr) for addr in addresses])
     ensure = "$true" if present else "$false"
@@ -262,6 +258,15 @@ def _remove_hosts_entry(host, hostname: str) -> None:
     )
 
 
+def _dump_net_state(host, output_path: str, label: str) -> None:
+    _env.run_guest_script(
+        host,
+        "scripts/dump_net_state.ps1",
+        OutputPath=output_path,
+        Label=label,
+    )
+
+
 @pytest.mark.host
 @pytest.mark.win
 def test_client_redirect_tunnel_win(
@@ -282,6 +287,8 @@ def test_client_redirect_tunnel_win(
     _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
     try:
         _add_hosts_entry(server_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
+        _dump_net_state(server_host, SERVER_NETSTATE_LOG, "before-server-install")
+        _dump_net_state(client_host, CLIENT_NETSTATE_LOG, "before-client-install")
 
         server_install = xp2p_server_runner(
             "--server-host",
@@ -308,12 +315,23 @@ def test_client_redirect_tunnel_win(
             SERVER_CONFIG_DIR,
             SERVER_LOG_RELATIVE,
         ):
+            _dump_net_state(server_host, SERVER_NETSTATE_LOG, "after-server-run-start")
             with xp2p_client_run_factory(
                 str(CLIENT_INSTALL_DIR),
                 CLIENT_CONFIG_DIR,
                 CLIENT_LOG_RELATIVE,
             ):
+                _dump_net_state(client_host, CLIENT_NETSTATE_LOG, "after-client-run-start")
                 _wait_for_socks_listener(client_host)
+                baseline_ping = xp2p_client_runner(
+                    "ping",
+                    server_public_host,
+                    "--tunnel",
+                    "--count",
+                    "3",
+                    check=True,
+                )
+                assert "0% loss" in (baseline_ping.stdout or "").lower()
                 initial_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
@@ -322,7 +340,6 @@ def test_client_redirect_tunnel_win(
                     "3",
                     check=False,
                 )
-                _skip_if_socks_unresponsive(initial_ping)
                 assert initial_ping.rc != 0
                 initial_domain_ping = xp2p_client_runner(
                     "ping",
@@ -332,7 +349,6 @@ def test_client_redirect_tunnel_win(
                     "3",
                     check=False,
                 )
-                _skip_if_socks_unresponsive(initial_domain_ping)
                 assert initial_domain_ping.rc != 0
 
                 _add_ip_alias(server_host, iface, DIAG_IP, DIAG_PREFIX)
@@ -349,6 +365,12 @@ def test_client_redirect_tunnel_win(
                     check=True,
                 )
 
+            with xp2p_client_run_factory(
+                str(CLIENT_INSTALL_DIR),
+                CLIENT_CONFIG_DIR,
+                CLIENT_LOG_RELATIVE,
+            ):
+                _wait_for_socks_listener(client_host)
                 redirected_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
@@ -445,6 +467,12 @@ def test_client_redirect_tunnel_win(
                 _assert_no_redirect_rule(routing_after, DIAG_CIDR)
                 _assert_no_domain_redirect_rule(routing_after, DIAG_DOMAIN)
 
+            with xp2p_client_run_factory(
+                str(CLIENT_INSTALL_DIR),
+                CLIENT_CONFIG_DIR,
+                CLIENT_LOG_RELATIVE,
+            ):
+                _wait_for_socks_listener(client_host)
                 _remove_ip_alias(server_host, DIAG_IP)
                 _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
 
@@ -469,5 +497,7 @@ def test_client_redirect_tunnel_win(
         _remove_ip_alias(server_host, DIAG_IP)
         _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
         _remove_hosts_entry(server_host, DIAG_DOMAIN)
+        _dump_net_state(server_host, SERVER_NETSTATE_LOG, "after-cleanup")
+        _dump_net_state(client_host, CLIENT_NETSTATE_LOG, "after-cleanup")
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

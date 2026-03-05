@@ -16,16 +16,19 @@ foreach ($name in $names) {
     if (-not $name) {
         continue
     }
-    $adapter = Get-NetAdapter -Name $name -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $adapter) {
+    $pattern = "$name*"
+    $adapters = Get-NetAdapter -Name $pattern -IncludeHidden -ErrorAction SilentlyContinue
+    if (-not $adapters) {
         continue
     }
-    if ($removeCmd) {
-        Remove-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
-        continue
-    }
-    if ($disableCmd) {
-        Disable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+    foreach ($adapter in $adapters) {
+        if ($removeCmd) {
+            Remove-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+            continue
+        }
+        if ($disableCmd) {
+            Disable-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction SilentlyContinue
+        }
     }
 }
 exit 0

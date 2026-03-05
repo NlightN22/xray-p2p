@@ -36,13 +36,6 @@ def _start_xp2p_client_run(
         parameters["AllowMismatch"] = "1"
     parameters["OutputLogPath"] = output_log_path
 
-    result = _env.run_guest_script(
-        host,
-        "scripts/start_xp2p_client_run.ps1",
-        **parameters,
-    )
-    stdout = (result.stdout or "").strip()
-
     def _read_log(path: str) -> str:
         if not path:
             return "<missing>"
@@ -61,7 +54,39 @@ def _start_xp2p_client_run(
             f"Xray log ({log_abs}):\n{xray_log}"
         )
 
-    if result.rc != 0:
+    def _should_retry(xp2p_log: str) -> bool:
+        retry_markers = (
+            "Failed to register rings",
+            "Failed to find matching adapter name",
+            "Failed to populate adapter",
+        )
+        return any(marker in xp2p_log for marker in retry_markers)
+
+    last_result = None
+    for attempt in range(2):
+        _env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+        _env.remove_tun_adapters(host, ["xp2pc", "xp2ps", "Xray Tunnel"])
+        result = _env.run_guest_script(
+            host,
+            "scripts/start_xp2p_client_run.ps1",
+            **parameters,
+        )
+        last_result = result
+        stdout = (result.stdout or "").strip()
+
+        if result.rc == 0:
+            pid_value: int | None = None
+            for line in stdout.splitlines():
+                if line.startswith("PID="):
+                    pid_value = int(line.split("=", 1)[1])
+                    break
+            if pid_value is None:
+                pytest.fail(
+                    "Unexpected xp2p client run startup output:\n"
+                    f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                )
+            return pid_value
+
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
                 f"xp2p.exe not found on {_env.DEFAULT_CLIENT} at {_env.XP2P_EXE}. "
@@ -72,7 +97,12 @@ def _start_xp2p_client_run(
                 "Failed to spawn xp2p client run via Win32_Process.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}{_format_logs()}"
             )
-        if "__XP2P_EXIT__" in stdout:
+        if "__XP2P_EXIT__" in stdout or "__XP2P_TIMEOUT__" in stdout:
+            xp2p_log = _read_log(output_log_path)
+            if attempt == 0 and _should_retry(xp2p_log):
+                _env.remove_tun_adapters(host, ["xp2pc", "xp2ps", "Xray Tunnel"])
+                _env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+                continue
             pytest.fail(
                 "xp2p client run exited before stabilization period elapsed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}{_format_logs()}"
@@ -82,17 +112,11 @@ def _start_xp2p_client_run(
             f"{_env.DEFAULT_CLIENT}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}{_format_logs()}"
         )
 
-    pid_value: int | None = None
-    for line in stdout.splitlines():
-        if line.startswith("PID="):
-            pid_value = int(line.split("=", 1)[1])
-            break
-    if pid_value is None:
-        pytest.fail(
-            "Unexpected xp2p client run startup output:\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return pid_value
+    assert last_result is not None
+    pytest.fail(
+        "Failed to start xp2p client run on "
+        f"{_env.DEFAULT_CLIENT}.\nSTDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}{_format_logs()}"
+    )
 
 
 def _stop_process(host: Host, pid_value: int, install_dir: str, log_relative: str) -> None:
