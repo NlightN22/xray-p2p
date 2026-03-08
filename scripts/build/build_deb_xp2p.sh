@@ -161,6 +161,7 @@ done
 
 BEFORE_REMOVE_SCRIPT="$PROJECT_ROOT/distro/linux/deb/before-remove.sh"
 AFTER_REMOVE_SCRIPT="$PROJECT_ROOT/distro/linux/deb/after-remove.sh"
+AFTER_INSTALL_SCRIPT="$PROJECT_ROOT/distro/linux/deb/after-install.sh"
 
 fpm -s dir -t deb \
   -n "$PKG_NAME" \
@@ -172,6 +173,7 @@ fpm -s dir -t deb \
   --license "$LICENSE" \
   "$@" \
   --package "$PACKAGE_PATH" \
+  --after-install "$AFTER_INSTALL_SCRIPT" \
   --before-remove "$BEFORE_REMOVE_SCRIPT" \
   --after-remove "$AFTER_REMOVE_SCRIPT" \
   -C "$STAGING_DIR" \
