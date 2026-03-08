@@ -24,12 +24,12 @@ function Ensure-ProfileLine {
         New-Item -ItemType File -Path $ProfilePath -Force | Out-Null
     }
 
-    $existing = Get-Content -LiteralPath $ProfilePath -ErrorAction SilentlyContinue
+    $existing = @(Get-Content -LiteralPath $ProfilePath -ErrorAction SilentlyContinue)
     $updated = @($existing)
     if ($LegacyPath) {
         $escaped = [regex]::Escape($LegacyPath)
         $legacyPattern = "^\s*\.\s+['""]$escaped['""]\s*$"
-        $updated = $updated | Where-Object { $_ -notmatch $legacyPattern }
+        $updated = @($updated | Where-Object { $_ -notmatch $legacyPattern })
     }
     if ($updated -contains $Line) {
         return

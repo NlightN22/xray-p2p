@@ -357,6 +357,31 @@ function Ensure-VagrantKeys {
         }
     }
 
+    $adminKeysPath = Join-Path $env:ProgramData "ssh\administrators_authorized_keys"
+    $adminExisting = @()
+    if (Test-Path $adminKeysPath) {
+        $adminExisting = Get-Content -Path $adminKeysPath -ErrorAction SilentlyContinue
+    }
+
+    foreach ($key in $keys) {
+        if ($adminExisting -and ($adminExisting | ForEach-Object { $_.Trim() }) -contains $key) {
+            continue
+        }
+
+        if (-not (Test-Path $adminKeysPath)) {
+            Set-Content -Path $adminKeysPath -Value $key -Encoding ascii
+        }
+        else {
+            Add-Content -Path $adminKeysPath -Value $key -Encoding ascii
+        }
+        $changes = $true
+    }
+
+    if (Test-Path $adminKeysPath) {
+        & icacls $adminKeysPath /inheritance:r | Out-Null
+        & icacls $adminKeysPath /grant:r "Administrators:F" "SYSTEM:F" | Out-Null
+    }
+
     return $changes
 }
 

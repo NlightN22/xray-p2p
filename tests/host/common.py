@@ -64,13 +64,14 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         return client
 
     def _reset_client(self) -> None:
-        cached = self.__dict__.get("client")
+        cache = vars(self)
+        cached = cache.get("client")
         if cached is not None:
             try:
                 cached.close()
             except Exception:
                 pass
-        self.__dict__.pop("client", None)
+        cache.pop("client", None)
 
     def run(self, command: str, *args: str, **kwargs):  # type: ignore[override]
         kwargs.setdefault("timeout", SSH_COMMAND_TIMEOUT)
@@ -201,6 +202,7 @@ def machine_state(vagrant_dir: Path, machine: str) -> str | None:
 
 def parse_ssh_config(raw: str) -> dict[str, str]:
     config: dict[str, str] = {}
+    identity_files: list[str] = []
     for line in raw.splitlines():
         line = line.strip()
         if not line or line.lower().startswith("host "):
@@ -212,7 +214,13 @@ def parse_ssh_config(raw: str) -> dict[str, str]:
         value = pieces[1].strip()
         if value.startswith('"') and value.endswith('"'):
             value = value[1:-1]
+        if key == "identityfile":
+            identity_files.append(value)
         config[key] = value
+
+    if identity_files:
+        preferred = next((item for item in identity_files if "ed25519" in item.lower()), None)
+        config["identityfile"] = preferred or identity_files[0]
 
     required = {"hostname", "user", "port", "identityfile"}
     missing = required.difference(config)
