@@ -24,9 +24,21 @@ function Invoke-Vagrant {
     Write-Info ("Running: vagrant {0}" -f ($Args -join " "))
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    & vagrant @Args 2>&1 | ForEach-Object { Write-Host $_ }
+    $output = & vagrant @Args 2>&1
+    $output | ForEach-Object { Write-Host $_ }
     $ErrorActionPreference = $prev
-    return $LASTEXITCODE
+    return [pscustomobject]@{
+        ExitCode = $LASTEXITCODE
+        Output = ($output -join "`n")
+    }
+}
+
+function Test-HostOnlyMissingError {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Output
+    )
+    return $Output -match "VERR_INTNET_FLT_IF_NOT_FOUND"
 }
 
 function Get-MachineState {
@@ -129,8 +141,12 @@ function Ensure-Machine {
 
     if ($state -eq "not_created" -or $state -eq "poweroff" -or $state -eq "aborted") {
         Write-Info ("Starting {0} without provision." -f $Machine)
-        $exitCode = Invoke-Vagrant -Args @("up", $Machine, "--no-provision")
-        if ($exitCode -ne 0) {
+        $result = Invoke-Vagrant -Args @("up", $Machine, "--no-provision")
+        if ($result.ExitCode -ne 0) {
+            if (Test-HostOnlyMissingError -Output $result.Output) {
+                throw ("VirtualBox host-only adapter not found while starting {0}. " +
+                    "Create a host-only interface (VBoxManage hostonlyif create) and retry." -f $Machine)
+            }
             Write-Info ("Initial boot for {0} failed (expected on first boot); continuing to wait." -f $Machine)
         }
     }
@@ -142,9 +158,13 @@ function Ensure-Machine {
 
     if (-not (Test-SyncedFolder -Machine $Machine)) {
         Write-Info ("Synced folder missing on {0}; reloading with provision." -f $Machine)
-        $exitCode = Invoke-Vagrant -Args @("reload", $Machine, "--provision", "--force")
-        if ($exitCode -ne 0) {
-            Write-Info ("Reload/provision failed for {0} (exit {1}); continuing with manual wait/provision." -f $Machine, $exitCode)
+        $result = Invoke-Vagrant -Args @("reload", $Machine, "--provision", "--force")
+        if ($result.ExitCode -ne 0) {
+            if (Test-HostOnlyMissingError -Output $result.Output) {
+                throw ("VirtualBox host-only adapter not found while reloading {0}. " +
+                    "Create a host-only interface (VBoxManage hostonlyif create) and retry." -f $Machine)
+            }
+            Write-Info ("Reload/provision failed for {0} (exit {1}); continuing with manual wait/provision." -f $Machine, $result.ExitCode)
         }
         Write-Info ("Waiting for WinRM on {0} after reload." -f $Machine)
         if (-not (Wait-ForWinRM -Machine $Machine)) {
@@ -156,9 +176,9 @@ function Ensure-Machine {
     }
 
     Write-Info ("Provisioning {0}." -f $Machine)
-    $exitCode = Invoke-Vagrant -Args @("provision", $Machine)
-    if ($exitCode -ne 0) {
-        throw ("Provision failed for {0} (exit {1})." -f $Machine, $exitCode)
+    $result = Invoke-Vagrant -Args @("provision", $Machine)
+    if ($result.ExitCode -ne 0) {
+        throw ("Provision failed for {0} (exit {1})." -f $Machine, $result.ExitCode)
     }
 }
 

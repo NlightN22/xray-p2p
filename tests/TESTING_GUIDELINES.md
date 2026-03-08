@@ -149,5 +149,23 @@ guest suites -- the CI and fellow contributors expect these rules.
   Example: `pytest tests/host/win -vv --win-stack win2022`
 - Available stacks: `win7`, `win10`, `win2016`, `win2022`.
 
+---
+
+## 8. Manual Windows VM Startup (No Helper Script)
+- From `infra/vagrant/windows10`, bring machines up without provisioning first:
+  - `vagrant up win10-a --no-provision`
+  - `vagrant up win10-b --no-provision`
+- Verify WinRM is reachable:
+  - `vagrant winrm win10-a -c "cmd /c echo ready"`
+  - `vagrant winrm win10-b -c "cmd /c echo ready"`
+- Run provisioning after WinRM is up:
+  - `vagrant provision win10-a`
+  - `vagrant provision win10-b`
+
+## 9. Recommended First-Boot Helper
+- Prefer using the helper script to avoid manual wait loops and missing sync folders:
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File infra/vagrant/scripts/win/first_boot_provision.ps1`
+  - Optional: `-Machine win10-a` or `-Machines @("win10-a","win10-b")` to limit targets.
+
 Following these guidelines keeps the suite fast, maintainable, and friendly to
 everyone running it locally or in CI. Thanks for sticking to them!

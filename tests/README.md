@@ -14,6 +14,11 @@
   - Host-only CIDR 10.0.10.0/24: server 10.0.10.1, client 10.0.10.10. The profile is forced to Private and firewall rules for XP2P are pre-created.
 - Host access:
   - WinRM (plaintext): server localhost:55985, client localhost:55986 (vagrant/vagrant).
+- First boot helper (waits for WinRM, validates the synced C:\xp2p folder, and provisions as needed):
+  cd infra/vagrant/windows10
+  powershell -NoProfile -ExecutionPolicy Bypass -File ..\scripts\win\first_boot_provision.ps1
+  powershell -NoProfile -ExecutionPolicy Bypass -File ..\scripts\win\first_boot_provision.ps1 -Machine win10-a
+  powershell -NoProfile -ExecutionPolicy Bypass -File ..\scripts\win\first_boot_provision.ps1 -Machines @("win10-a","win10-b")
 - Re-run provisioning/tests:
   cd infra/vagrant/windows10
   vagrant provision win10-a
