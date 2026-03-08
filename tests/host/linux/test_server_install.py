@@ -63,6 +63,8 @@ def _parse_self_signed(state_output: str) -> bool:
 @pytest.mark.linux
 def test_server_install_uses_provided_certificate_and_force_overwrites(server_host, xp2p_server_runner):
     _cleanup(server_host, xp2p_server_runner)
+    helpers.remove_path(server_host, SERVER_CERT_DEST)
+    helpers.remove_path(server_host, SERVER_KEY_DEST)
     cert_source = PurePosixPath("/tmp/xp2p-server-cert.pem")
     key_source = PurePosixPath("/tmp/xp2p-server-key.pem")
     cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
