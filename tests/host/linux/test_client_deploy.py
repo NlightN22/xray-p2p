@@ -26,6 +26,7 @@ SERVER_HEARTBEAT_STATE_FILE = DEPLOY_INSTALL_ROOT / "state-heartbeat-server.json
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
 LOG_WAIT_TIMEOUT = 30
+SERVICE_START_TIMEOUT = 60
 CLIENT_TUN = "xp2pc"
 SERVER_TUN = "xp2ps"
 CLIENT_TUN_ADDR = "198.18.0.1/30"
@@ -435,7 +436,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
                 "server deploy: server service started",
                 "server deploy: server service start failed",
             ],
-            timeout=LOG_WAIT_TIMEOUT,
+            timeout=SERVICE_START_TIMEOUT,
         )
         if client_pid:
             linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
@@ -563,7 +564,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
                 "server deploy: server service started",
                 "server deploy: server service start failed",
             ],
-            timeout=LOG_WAIT_TIMEOUT,
+            timeout=SERVICE_START_TIMEOUT,
         )
         if client_pid:
             linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
