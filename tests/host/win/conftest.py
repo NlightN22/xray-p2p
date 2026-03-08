@@ -90,6 +90,31 @@ def _timed_test(request: pytest.FixtureRequest):
         _LAST_TEST_END = time.perf_counter()
 
 
+@pytest.fixture(autouse=True)
+def _pre_test_kill_leftovers(server_host: Host, client_host: Host) -> None:
+    def _check_host(host: Host, label: str) -> None:
+        script = "Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id"
+        result = win_env.run_powershell(host, script)
+        pids = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+        if not pids:
+            return
+        print(f"WARNING: leftover xp2p/xray processes on {label}: {', '.join(pids)}")
+        win_env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+        result = win_env.run_powershell(host, script)
+        remaining = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+        if remaining:
+            pytest.fail(
+                f"Leftover xp2p/xray processes on {label} before test: {', '.join(remaining)}"
+            )
+
+    with _timed("pre-test cleanup xp2p processes (server)"):
+        win_env.run_guest_script(server_host, "scripts/kill_xp2p_processes.ps1")
+        _check_host(server_host, win_env.DEFAULT_SERVER)
+    with _timed("pre-test cleanup xp2p processes (client)"):
+        win_env.run_guest_script(client_host, "scripts/kill_xp2p_processes.ps1")
+        _check_host(client_host, win_env.DEFAULT_CLIENT)
+
+
 @pytest.fixture(scope="session")
 def xp2p_options(pytestconfig: pytest.Config) -> dict:
     target = pytestconfig.getoption("xp2p_target")

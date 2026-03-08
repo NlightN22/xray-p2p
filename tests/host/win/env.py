@@ -249,6 +249,12 @@ def run_xp2p(
         ArgsBase64=payload,
         timeout=DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout,
     )
+    stdout = result.stdout or ""
+    if "__XP2P_TIMEOUT__" in stdout or "__XP2P_NOEXIT__" in stdout:
+        raise RuntimeError(
+            "xp2p scheduled task timed out in run_xp2p_command.ps1.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
     for line in (result.stdout or "").splitlines():
         if line.startswith("TIMING:"):
             print(line)

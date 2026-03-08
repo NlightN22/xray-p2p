@@ -42,6 +42,7 @@ $outPath = Join-Path $runtimeRoot "$taskId.out"
 $errPath = Join-Path $runtimeRoot "$taskId.err"
 $codePath = Join-Path $runtimeRoot "$taskId.code"
 $timingPath = Join-Path $runtimeRoot "$taskId.timing"
+$timeoutSeconds = 120
 
 function Remove-TemporaryFile {
     param([string]$Path)
@@ -56,6 +57,50 @@ function Cleanup {
     Remove-TemporaryFile -Path $errPath
     Remove-TemporaryFile -Path $codePath
     Remove-TemporaryFile -Path $timingPath
+}
+
+function Stop-Xp2pProcesses {
+    foreach ($name in @('xp2p', 'xray')) {
+        $procs = Get-Process -Name $name -ErrorAction SilentlyContinue
+        if (-not $procs) {
+            continue
+        }
+        foreach ($proc in $procs) {
+            try {
+                Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            } catch { }
+        }
+    }
+}
+
+function Invoke-Schtasks {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Arguments,
+        [int]$Timeout = 15
+    )
+    $job = Start-Job -ScriptBlock {
+        param($argsString)
+        $output = cmd.exe /c "schtasks.exe $argsString" 2>&1
+        [pscustomobject]@{
+            Code = $LASTEXITCODE
+            Output = $output
+        }
+    } -ArgumentList $Arguments
+    if (-not (Wait-Job -Job $job -Timeout $Timeout)) {
+        Stop-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
+        Remove-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
+        throw "schtasks timeout: $Arguments"
+    }
+    $result = Receive-Job -Job $job -ErrorAction SilentlyContinue
+    Remove-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
+    if (-not $result) {
+        throw "schtasks failed (no result): $Arguments"
+    }
+    if ($result.Code -ne 0) {
+        $outText = $result.Output -join [Environment]::NewLine
+        throw "schtasks failed (exit $($result.Code)): $Arguments`n$outText"
+    }
 }
 
 $escapedXp2p = $Xp2pPath -replace "'", "''"
@@ -114,36 +159,68 @@ Set-Content -Path '$codePath' -Value `$code -Encoding ASCII
 
 Set-Content -Path $scriptPath -Value $taskScript -Encoding UTF8
 
-Import-Module ScheduledTasks -ErrorAction SilentlyContinue | Out-Null
+$parentPid = $PID
+$watchdog = Start-Job -ScriptBlock {
+    param($parentPidValue, $taskNameValue, $timeoutValue)
+    Start-Sleep -Seconds $timeoutValue
+    try { schtasks.exe /End /TN $taskNameValue | Out-Null } catch { }
+    try { Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
+    try { Stop-Process -Id $parentPidValue -Force -ErrorAction SilentlyContinue } catch { }
+} -ArgumentList $parentPid, $taskName, ($timeoutSeconds + 30)
 
 try {
     $scheduleStart = Get-Date
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
-    $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(2))
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -Force -User 'SYSTEM' | Out-Null
-    Start-ScheduledTask -TaskName $taskName
+    $startTime = (Get-Date).AddMinutes(2).ToString('HH:mm')
+    $taskCommand = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$scriptPath`""
+    Invoke-Schtasks -Arguments "/Create /TN `"$taskName`" /TR `"$taskCommand`" /SC ONCE /ST $startTime /RL HIGHEST /RU SYSTEM /F"
+    Invoke-Schtasks -Arguments "/Run /TN `"$taskName`""
 
     $waitStart = Get-Date
-    $deadline = (Get-Date).AddMinutes(2)
-    while ($true) {
+    $waitStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not (Test-Path $codePath)) {
+        if ($waitStopwatch.Elapsed.TotalSeconds -gt $timeoutSeconds) {
+            try { Invoke-Schtasks -Arguments "/End /TN `"$taskName`"" -Timeout 10 } catch { }
+            Stop-Xp2pProcesses
+            Write-Output '__XP2P_TIMEOUT__'
+            Cleanup
+            exit 124
+        }
         Start-Sleep -Seconds 1
-        $state = (Get-ScheduledTask -TaskName $taskName).State
-        if ($state -ne 'Running' -and $state -ne 'Queued') {
-            break
-        }
-        if ((Get-Date) -gt $deadline) {
-            Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-            throw "xp2p scheduled task $taskName timed out."
-        }
     }
     $waitEnd = Get-Date
 } finally {
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+    try { Invoke-Schtasks -Arguments "/Delete /TN `"$taskName`" /F" -Timeout 10 } catch { }
+    if ($watchdog) {
+        Stop-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
+        Remove-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
+    }
 }
 
 if (-not (Test-Path $codePath)) {
+    $codeStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    while (-not (Test-Path $codePath) -and $codeStopwatch.Elapsed.TotalSeconds -lt 10) {
+        Start-Sleep -Milliseconds 500
+    }
+}
+
+if (-not (Test-Path $codePath)) {
+    $taskInfo = $null
+    try {
+        $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+    } catch { }
+    Write-Output "__XP2P_NOEXIT__"
+    if ($taskInfo) {
+        Write-Output ("TASK_RESULT=" + $taskInfo.LastTaskResult)
+        Write-Output ("TASK_LAST_RUN=" + $taskInfo.LastRunTime)
+    }
+    if (Test-Path $outPath) {
+        Get-Content -Path $outPath | ForEach-Object { Write-Output $_ }
+    }
+    if (Test-Path $errPath) {
+        Get-Content -Path $errPath | ForEach-Object { Write-Error $_ }
+    }
     Cleanup
-    throw "xp2p scheduled task $taskName did not record exit code."
+    exit 124
 }
 
 $exitCode = [int](Get-Content -Path $codePath -Raw)

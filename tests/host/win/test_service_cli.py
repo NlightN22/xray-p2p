@@ -102,6 +102,24 @@ def _wait_for_log_entry_any(host, path: Path, phrases: list[str]) -> None:
     pytest.fail(f"Log {path} did not contain any of {phrase_list}. Last content:\n{last_content}")
 
 
+def _wait_for_log_nonempty(host, path: Path, label: str) -> str:
+    start = time.perf_counter()
+    deadline = time.time() + SERVICE_TIMEOUT
+    last_content = ""
+    while time.time() < deadline:
+        if win_env.path_exists(host, path):
+            content = win_env.read_text(host, path)
+            last_content = content
+            if (content or "").strip():
+                elapsed = time.perf_counter() - start
+                print(f"TIMING: wait log nonempty ({label}): {elapsed:.2f}s")
+                return content
+        time.sleep(POLL_INTERVAL)
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: wait log nonempty ({label}) timeout: {elapsed:.2f}s")
+    pytest.fail(f"Log {path} remained empty for {label}. Last content:\n{last_content}")
+
+
 def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
     result = win_env.run_guest_script(
         host,
@@ -413,7 +431,7 @@ def test_windows_service_stops_after_invalid_config(
         _wait_for_service_state(runner, role, expected_active=False)
         assert win_env.path_exists(host, xray_log), f"{role} xray log missing"
         if role == "client":
-            assert win_env.read_text(host, xray_log).strip(), f"{role} xray log is empty"
+            _wait_for_log_nonempty(host, xray_log, f"{role} xray")
     finally:
         with _timed(f"{role} cleanup (final)"):
             _cleanup_role(

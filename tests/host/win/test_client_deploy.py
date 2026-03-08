@@ -225,6 +225,7 @@ def test_windows_client_deploy_end_to_end(
 def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     client_host,
     server_host,
+    client_host_ipv4,
     server_host_ipv4,
     xp2p_client_runner,
     xp2p_server_runner,
