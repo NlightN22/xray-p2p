@@ -20,7 +20,7 @@ type SnapshotProvider func() ([]heartbeat.Snapshot, error)
 func Snapshot(path string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
 	state, err := heartbeat.Load(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) || heartbeat.IsCorrupt(err) {
 			return nil, nil
 		}
 		return nil, err

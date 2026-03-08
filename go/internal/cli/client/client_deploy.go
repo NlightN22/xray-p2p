@@ -497,7 +497,7 @@ func waitForHeartbeat(ctx context.Context, statePath string, timeout time.Durati
 		if err == nil && len(state.Entries) > 0 {
 			return nil
 		}
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !os.IsNotExist(err) && !heartbeat.IsCorrupt(err) {
 			lastErr = err
 		}
 		time.Sleep(500 * time.Millisecond)

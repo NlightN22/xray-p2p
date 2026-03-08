@@ -71,6 +71,19 @@ var (
 	ErrHostRequired = errors.New("heartbeat: host is required")
 )
 
+// IsCorrupt reports whether an error indicates a malformed heartbeat state file.
+func IsCorrupt(err error) bool {
+	if err == nil {
+		return false
+	}
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return true
+	}
+	var typeErr *json.UnmarshalTypeError
+	return errors.As(err, &typeErr)
+}
+
 // NewStore loads the heartbeat state from disk (if available) and keeps future
 // updates in memory. When path is empty, updates remain in memory only.
 func NewStore(path string) (*Store, error) {
@@ -276,8 +289,39 @@ func writeState(path string, state State) error {
 	if err != nil {
 		return fmt.Errorf("heartbeat: encode state %s: %w", path, err)
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("heartbeat: write %s: %w", path, err)
+	dir := filepath.Dir(path)
+	tmpFile, err := os.CreateTemp(dir, "heartbeat-*.tmp")
+	if err != nil {
+		return fmt.Errorf("heartbeat: create temp %s: %w", path, err)
 	}
+	tmpName := tmpFile.Name()
+	removeTmp := true
+	defer func() {
+		if removeTmp {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("heartbeat: write temp %s: %w", path, err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("heartbeat: close temp %s: %w", path, err)
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return fmt.Errorf("heartbeat: chmod temp %s: %w", path, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		if removeErr := os.Remove(path); removeErr == nil {
+			if retryErr := os.Rename(tmpName, path); retryErr == nil {
+				removeTmp = false
+				return nil
+			} else {
+				return fmt.Errorf("heartbeat: rename temp %s: %w", path, retryErr)
+			}
+		}
+		return fmt.Errorf("heartbeat: rename temp %s: %w", path, err)
+	}
+	removeTmp = false
 	return nil
 }

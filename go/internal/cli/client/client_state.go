@@ -135,7 +135,7 @@ func pathExists(path string) (bool, error) {
 func snapshotClientState(installDir, configDir, statePath string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
 	state, err := heartbeat.Load(statePath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, os.ErrNotExist) || heartbeat.IsCorrupt(err) {
 			state = heartbeat.State{}
 		} else {
 			return nil, err
