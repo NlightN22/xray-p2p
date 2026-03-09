@@ -19,7 +19,9 @@ if command -v nc >/dev/null 2>&1; then
   if nc -z -w 3 "$tcp_host" "$tcp_port" >/dev/null 2>&1; then
     exit 0
   fi
-elif command -v wget >/dev/null 2>&1; then
+fi
+
+if command -v wget >/dev/null 2>&1; then
   if wget -q -O /dev/null "http://$dns_name" >/dev/null 2>&1; then
     exit 0
   fi

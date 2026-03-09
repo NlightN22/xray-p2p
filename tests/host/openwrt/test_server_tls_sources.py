@@ -189,8 +189,8 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == cert_source.as_posix()
-        assert primary_cert.get("keyFile") == key_source.as_posix()
+        assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
+        assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
 
         expected_allow_insecure = _parse_self_signed(_read_cert_state(runner))
         assert bool(tls_settings.get("allowInsecure")) is expected_allow_insecure

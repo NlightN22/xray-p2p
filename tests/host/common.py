@@ -219,7 +219,9 @@ def parse_ssh_config(raw: str) -> dict[str, str]:
         config[key] = value
 
     if identity_files:
-        preferred = next((item for item in identity_files if "ed25519" in item.lower()), None)
+        preferred = next((item for item in identity_files if "rsa" in item.lower()), None)
+        if preferred is None:
+            preferred = next((item for item in identity_files if "ed25519" in item.lower()), None)
         config["identityfile"] = preferred or identity_files[0]
 
     required = {"hostname", "user", "port", "identityfile"}

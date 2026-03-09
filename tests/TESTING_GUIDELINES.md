@@ -105,6 +105,8 @@ guest suites -- the CI and fellow contributors expect these rules.
 ## 4. Performance Expectations
 - SSH orchestration should complete quickly; if a test takes more than
   two minutes, audit for redundant provisioning or repeated guest prep.
+- Windows host suites have long timeouts: plan for up to 1h20m total wall time,
+  with a per-test timeout up to 10 minutes.
 - Platform fixtures already install xp2p (MSI on Windows, `.deb` on Debian). Skip
   extra copying unless a test requires a custom build; in that case, use the
   helper scripts from `scripts/build/` and stage artefacts via the synced folder.
