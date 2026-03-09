@@ -14,47 +14,47 @@ xp2p client
 xp2p client install
 Options:
 Includes: Global options
-- --path <dir>           Client installation directory (no short)
-- --config-dir <dir>     Client configuration directory name (no short)
-- --host <host>          Remote server host (no short)
-- --port <port>          Remote server port (no short)
-- --user <email>         Trojan user email (no short)
-- --password <password>  Trojan password (no short)
-- --sni <name>           TLS server name (SNI) (no short)
-- --link <trojan://...>  Trojan client link (no short)
-- --allow-insecure       Allow insecure TLS (skip verification) (no short)
-- --strict-tls           Enforce TLS verification (no short)
-- --force                Replace existing endpoint configuration (no short)
+- --path, -p <dir>           Client installation directory
+- --config-dir, -D <dir>     Client configuration directory name
+- --host, -H <host>          Remote server host
+- --port, -P <port>          Remote server port
+- --user, -u <email>         Trojan user email
+- --password, -w <password>  Trojan password
+- --sni, -s <name>           TLS server name (SNI)
+- --link, -L <trojan://...>  Trojan client link
+- --allow-insecure, -I       Allow insecure TLS (skip verification)
+- --strict-tls, -S           Enforce TLS verification
+- --force, -f                Replace existing endpoint configuration
 
 xp2p client remove [hostname|tag]
 Options:
 Includes: Global options
-- --path <dir>        Client installation directory (no short)
-- --config-dir <dir>  Client configuration directory name (no short)
-- --keep-files        Keep installation files (only with --all) (no short)
-- --ignore-missing    Do not fail if installation is absent (only with --all) (no short)
-- --all               Remove all endpoints and configuration (no short)
-- --quiet             Do not prompt for removal (no short)
+- --path, -p <dir>        Client installation directory
+- --config-dir, -D <dir>  Client configuration directory name
+- --keep-files, -K        Keep installation files (only with --all)
+- --ignore-missing, -m    Do not fail if installation is absent (only with --all)
+- --all, -a               Remove all endpoints and configuration
+- --quiet, -q             Do not prompt for removal
 
 xp2p client list
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
 
 xp2p client run
 Options:
 Includes: Global options
-- --path <dir>                Client installation directory (no short)
-- --config-dir <dir>          Client configuration directory name (no short)
-- --quiet                     Do not prompt for installation (no short)
-- --auto-install              Install automatically if missing (no short)
-- --xray-log-file <path>      File to append xray-core stderr output (no short)
-- --heartbeat                 Enable background heartbeat probes (no short)
-- --heartbeat-interval <dur>  Frequency of heartbeat probes (no short)
-- --heartbeat-timeout <dur>   Timeout per heartbeat probe (no short)
-- --heartbeat-port <port>     Diagnostics service port to probe (no short)
-- --heartbeat-socks <host:port> SOCKS5 proxy for heartbeat (optional) (no short)
+- --path, -p <dir>                Client installation directory
+- --config-dir, -D <dir>          Client configuration directory name
+- --quiet, -q                     Do not prompt for installation
+- --auto-install, -A              Install automatically if missing
+- --xray-log-file, -X <path>      File to append xray-core stderr output
+- --heartbeat, -b                 Enable background heartbeat probes
+- --heartbeat-interval, -I <dur>  Frequency of heartbeat probes
+- --heartbeat-timeout, -T <dur>   Timeout per heartbeat probe
+- --heartbeat-port, -P <port>     Diagnostics service port to probe
+- --heartbeat-socks, -S <host:port> SOCKS5 proxy for heartbeat (optional)
 
 xp2p client service start
 Options:
@@ -74,25 +74,25 @@ Includes: Global options
 xp2p client service run
 Options:
 Includes: Global options
-- --path <dir>                Client installation directory (no short)
-- --config-dir <dir>          Client configuration directory name (no short)
-- --log-file <path>           xp2p service log file (no short)
-- --xray-log-file <path>      xray stderr log file (no short)
-- --max-restarts <n>          Maximum restart attempts after failures (no short)
-- --restart-delay <dur>       Delay between restart attempts (no short)
-- --heartbeat                 Enable heartbeat probes (no short)
-- --heartbeat-interval <dur>  Heartbeat interval (no short)
-- --heartbeat-timeout <dur>   Heartbeat timeout (no short)
-- --heartbeat-port <port>     Diagnostics service port to probe (no short)
-- --heartbeat-socks <host:port> SOCKS5 proxy for heartbeat (optional) (no short)
+- --path, -p <dir>                Client installation directory
+- --config-dir, -D <dir>          Client configuration directory name
+- --log-file, -F <path>           xp2p service log file
+- --xray-log-file, -X <path>      xray stderr log file
+- --max-restarts, -R <n>          Maximum restart attempts after failures
+- --restart-delay, -r <dur>       Delay between restart attempts
+- --heartbeat, -b                 Enable heartbeat probes
+- --heartbeat-interval, -I <dur>  Heartbeat interval
+- --heartbeat-timeout, -T <dur>   Heartbeat timeout
+- --heartbeat-port, -P <port>     Diagnostics service port to probe
+- --heartbeat-socks, -S <host:port> SOCKS5 proxy for heartbeat (optional)
 
 xp2p client state
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --watch            Continuously refresh state until interrupted (no short)
-- --interval <dur>   Refresh interval for --watch (no short)
-- --ttl <dur>        Heartbeat TTL for alive status (no short)
+- --path, -p <dir>       Client installation directory
+- --watch, -w            Continuously refresh state until interrupted
+- --interval, -i <dur>   Refresh interval for --watch
+- --ttl, -T <dur>        Heartbeat TTL for alive status
 
 xp2p client export
 Options:
@@ -109,87 +109,87 @@ Includes: Global options
 xp2p client deploy
 Options:
 Includes: Global options
-- --host <host> (required) Remote host (IP or DNS) to deploy (no short)
-- --port <port>           Deploy port (default 62025) (no short)
-- --install-dir <dir>     Server install directory override (no short)
-- --user <email>          Trojan user identifier (email) (no short)
-- --password <password>   Trojan user password (auto-generated when omitted) (no short)
-- --trojan-port <port>    Trojan service port (no short)
+- --host, -H <host> (required) Remote host (IP or DNS) to deploy
+- --port, -P <port>           Deploy port (default 62025)
+- --install-dir, -I <dir>     Server install directory override
+- --user, -u <email>          Trojan user identifier (email)
+- --password, -w <password>   Trojan user password (auto-generated when omitted)
+- --trojan-port, -T <port>    Trojan service port
 
 xp2p client redirect add
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
-- --cidr <cidr>      CIDR to redirect (mutually exclusive with --domain) (no short)
-- --domain <name>    Domain to redirect (mutually exclusive with --cidr) (no short)
-- --tag <tag>        Outbound tag to route through (prompts when omitted) (no short)
-- --host <host>      Client endpoint hostname to route through (no short)
-- --quiet            Do not prompt for outbound tags (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
+- --cidr, -C <cidr>      CIDR to redirect (mutually exclusive with --domain)
+- --domain, -d <name>    Domain to redirect (mutually exclusive with --cidr)
+- --tag, -g <tag>        Outbound tag to route through (prompts when omitted)
+- --host, -H <host>      Client endpoint hostname to route through
+- --quiet, -q            Do not prompt for outbound tags
 
 xp2p client redirect remove
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
-- --cidr <cidr>      CIDR mapping to remove (mutually exclusive with --domain) (no short)
-- --domain <name>    Domain mapping to remove (mutually exclusive with --cidr) (no short)
-- --tag <tag>        Outbound tag filter (prompts when omitted) (no short)
-- --host <host>      Client endpoint hostname filter (no short)
-- --quiet            Do not prompt for outbound tags (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
+- --cidr, -C <cidr>      CIDR mapping to remove (mutually exclusive with --domain)
+- --domain, -d <name>    Domain mapping to remove (mutually exclusive with --cidr)
+- --tag, -g <tag>        Outbound tag filter (prompts when omitted)
+- --host, -H <host>      Client endpoint hostname filter
+- --quiet, -q            Do not prompt for outbound tags
 
 xp2p client redirect list
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
 
 xp2p client forward add
 Options:
 Includes: Global options
-- --path <dir>           Client installation directory (no short)
-- --config-dir <dir>     Client configuration directory name (no short)
-- --target <host:port> (required) Target host:port to forward traffic to (no short)
-- --listen <host>        Local listen address (default 127.0.0.1) (no short)
-- --listen-port <n>      Local listen port (auto-select when omitted) (no short)
-- --proto <tcp|udp|both> Protocol to forward (no short)
-- --base-port <n>        First port to probe when auto-selecting (no short)
+- --path, -p <dir>           Client installation directory
+- --config-dir, -D <dir>     Client configuration directory name
+- --target, -t <host:port> (required) Target host:port to forward traffic to
+- --listen, -n <host>        Local listen address (default 127.0.0.1)
+- --listen-port, -P <n>      Local listen port (auto-select when omitted)
+- --proto, -o <tcp|udp|both> Protocol to forward
+- --base-port, -B <n>        First port to probe when auto-selecting
 
 xp2p client forward remove
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
-- --listen-port <n>  Forward listen port (no short)
-- --tag <tag>        Forward tag filter (no short)
-- --remark <text>    Forward remark filter (no short)
-- --ignore-missing   Do not fail when the forward rule does not exist (no short)
-- --cleanup          Remove state entry even when config is missing (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
+- --listen-port, -P <n>  Forward listen port
+- --tag, -g <tag>        Forward tag filter
+- --remark, -r <text>    Forward remark filter
+- --ignore-missing, -m   Do not fail when the forward rule does not exist
+- --cleanup, -C          Remove state entry even when config is missing
 
 xp2p client forward list
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
 
 xp2p client reverse
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
 
 xp2p client reverse list
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
 
 xp2p client mode [tun|proxy]
 Options:
 Includes: Global options
-- --path <dir>       Client installation directory (no short)
-- --config-dir <dir> Client configuration directory name (no short)
-- --config <path>    Path to configuration file (toml) (no short)
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
+- --config, -c <path>    Path to configuration file (toml)
 
 xp2p client dns-forward (Linux only)
   Subcommands: add, remove, list
@@ -197,24 +197,24 @@ xp2p client dns-forward (Linux only)
 xp2p client dns-forward add
 Options:
 Includes: Global options
-- --domain <name> (required) Domain name to match (no short)
-- --target <ip:port> (required) Upstream DNS server (no short)
-- --with-forward      Create or reuse a port forward for the target (no short)
-- --intercept         Install DNS intercept redirect (53/tcp,udp) (no short)
-- --quiet             Suppress interactive prompts (no short)
-- --debug             Emit diagnostics output on error (no short)
+- --domain, -d <name> (required) Domain name to match
+- --target, -t <ip:port> (required) Upstream DNS server
+- --with-forward, -W      Create or reuse a port forward for the target
+- --intercept, -I         Install DNS intercept redirect (53/tcp,udp)
+- --quiet, -q             Suppress interactive prompts
+- --debug, -g             Emit diagnostics output on error
 
 xp2p client dns-forward remove
 Options:
 Includes: Global options
-- --domain <name>     Domain name to remove (no short)
-- --with-forward      Remove an auto-created port forward (no short)
-- --intercept         Remove DNS intercept redirect (no short)
-- --all               Remove all managed DNS forward entries (no short)
-- --quiet             Suppress interactive prompts (no short)
-- --debug             Emit diagnostics output on error (no short)
+- --domain, -d <name>     Domain name to remove
+- --with-forward, -W      Remove an auto-created port forward
+- --intercept, -I         Remove DNS intercept redirect
+- --all, -a               Remove all managed DNS forward entries
+- --quiet, -q             Suppress interactive prompts
+- --debug, -g             Emit diagnostics output on error
 
 xp2p client dns-forward list
 Options:
 Includes: Global options
-- --debug             Emit diagnostics output on error (no short)
+- --debug, -g             Emit diagnostics output on error

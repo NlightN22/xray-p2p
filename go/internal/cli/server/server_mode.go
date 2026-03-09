@@ -27,9 +27,9 @@ func newServerModeCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "server installation directory")
-	flags.String("config-dir", "", "server configuration directory name")
-	flags.String("config", "", "path to configuration file (toml)")
+	flags.StringP("path", "p", "", "server installation directory")
+	flags.StringP("config-dir", "D", "", "server configuration directory name")
+	flags.StringP("config", "c", "", "path to configuration file (toml)")
 	return cmd
 }
 

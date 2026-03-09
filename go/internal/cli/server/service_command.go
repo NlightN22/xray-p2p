@@ -82,14 +82,14 @@ func newServerServiceRunCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "server installation directory")
-	flags.String("config-dir", "", "server configuration directory name")
+	flags.StringP("path", "p", "", "server installation directory")
+	flags.StringP("config-dir", "D", "", "server configuration directory name")
 	flags.StringP("diag-service-port", "P", "", "diagnostics service port")
 	flags.StringP("diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
-	flags.String("log-file", filepath.Join(config.LogRoot(), "server", "service.log"), "xp2p service log file")
-	flags.String("xray-log-file", filepath.Join(config.LogRoot(), "server", "xray-service.log"), "xray stderr log file")
-	flags.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
-	flags.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
+	flags.StringP("log-file", "F", filepath.Join(config.LogRoot(), "server", "service.log"), "xp2p service log file")
+	flags.StringP("xray-log-file", "X", filepath.Join(config.LogRoot(), "server", "xray-service.log"), "xray stderr log file")
+	flags.IntP("max-restarts", "R", service.MaxRestartAttempts, "maximum restart attempts after failures")
+	flags.DurationP("restart-delay", "r", 3*time.Second, "delay between restart attempts")
 	return cmd
 }
 

@@ -45,8 +45,8 @@ func newClientReverseListCmd(cfg commandConfig) *cobra.Command {
 
 func bindClientReverseFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
 }
 
 func runClientReverseList(_ context.Context, cfg config.Config, args []string) int {

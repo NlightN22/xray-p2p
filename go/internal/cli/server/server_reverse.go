@@ -45,8 +45,8 @@ func newServerReverseListCmd(cfg commandConfig) *cobra.Command {
 
 func bindServerReverseFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
-	flags.String("path", "", "server installation directory")
-	flags.String("config-dir", "", "server configuration directory name or absolute path")
+	flags.StringP("path", "p", "", "server installation directory")
+	flags.StringP("config-dir", "D", "", "server configuration directory name or absolute path")
 }
 
 func runServerReverseList(_ context.Context, cfg config.Config, args []string) int {

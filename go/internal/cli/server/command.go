@@ -99,14 +99,14 @@ func newServerInstallCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name")
-	flags.StringVar(&opts.Port, "port", "", "server listener port")
-	flags.StringVar(&opts.CertStore, "cert-store", "", "TLS certificate store reference (win-store)")
-	flags.StringVar(&opts.Cert, "cert", "", "TLS certificate file to deploy")
-	flags.StringVar(&opts.Key, "key", "", "TLS private key file to deploy")
-	flags.StringVar(&opts.Host, "host", "", "public host name or IP for generated configuration")
-	flags.BoolVar(&opts.Force, "force", false, "overwrite existing installation")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name")
+	flags.StringVarP(&opts.Port, "port", "P", "", "server listener port")
+	flags.StringVarP(&opts.CertStore, "cert-store", "S", "", "TLS certificate store reference (win-store)")
+	flags.StringVarP(&opts.Cert, "cert", "E", "", "TLS certificate file to deploy")
+	flags.StringVarP(&opts.Key, "key", "k", "", "TLS private key file to deploy")
+	flags.StringVarP(&opts.Host, "host", "H", "", "public host name or IP for generated configuration")
+	flags.BoolVarP(&opts.Force, "force", "f", false, "overwrite existing installation")
 	return cmd
 }
 
@@ -122,11 +122,11 @@ func newServerRemoveCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name")
-	flags.BoolVar(&opts.KeepFiles, "keep-files", false, "keep installation files")
-	flags.BoolVar(&opts.IgnoreMissing, "ignore-missing", false, "do not fail if service or files are absent")
-	flags.BoolVar(&opts.Quiet, "quiet", false, "do not prompt for removal")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name")
+	flags.BoolVarP(&opts.KeepFiles, "keep-files", "K", false, "keep installation files")
+	flags.BoolVarP(&opts.IgnoreMissing, "ignore-missing", "m", false, "do not fail if service or files are absent")
+	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "do not prompt for removal")
 	return cmd
 }
 
@@ -142,13 +142,13 @@ func newServerRunCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name")
 	flags.StringVarP(&opts.DiagPort, "diag-service-port", "P", "", "diagnostics service port")
 	flags.StringVarP(&opts.DiagMode, "diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
-	flags.BoolVar(&opts.AutoInstall, "auto-install", false, "install server assets when missing without prompting")
-	flags.BoolVar(&opts.Quiet, "quiet", false, "suppress interactive prompts")
-	flags.StringVar(&opts.XrayLogFile, "xray-log-file", "", "append xray stderr output to file")
+	flags.BoolVarP(&opts.AutoInstall, "auto-install", "A", false, "install server assets when missing without prompting")
+	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "suppress interactive prompts")
+	flags.StringVarP(&opts.XrayLogFile, "xray-log-file", "X", "", "append xray stderr output to file")
 	return cmd
 }
 
@@ -179,14 +179,14 @@ func newServerUserAddCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
-	flags.StringVar(&opts.UserID, "id", "", "Trojan client identifier (derives the <id><host>.rev reverse tag)")
-	flags.StringVar(&opts.Password, "password", "", "Trojan client password or pre-shared key (auto-generated when omitted)")
-	flags.StringVar(&opts.Key, "key", "", "alias for --password")
-	flags.StringVar(&opts.LinkHost, "host", "", "public host name or IP for generated connection link")
-	flags.BoolVar(&opts.NoReverse, "no-reverse", false, "skip creating reverse portal/routing entries")
-	flags.BoolVar(&opts.Force, "force", false, "overwrite existing user entry")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.UserID, "id", "i", "", "Trojan client identifier (derives the <id><host>.rev reverse tag)")
+	flags.StringVarP(&opts.Password, "password", "w", "", "Trojan client password or pre-shared key (auto-generated when omitted)")
+	flags.StringVarP(&opts.Key, "key", "k", "", "alias for --password")
+	flags.StringVarP(&opts.LinkHost, "host", "H", "", "public host name or IP for generated connection link")
+	flags.BoolVarP(&opts.NoReverse, "no-reverse", "n", false, "skip creating reverse portal/routing entries")
+	flags.BoolVarP(&opts.Force, "force", "f", false, "overwrite existing user entry")
 	return cmd
 }
 
@@ -203,10 +203,10 @@ func newServerUserRemoveCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
-	flags.StringVar(&opts.UserID, "id", "", "Trojan client identifier")
-	flags.StringVar(&opts.Host, "host", "", "public host name or IP (defaults to server host)")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.UserID, "id", "i", "", "Trojan client identifier")
+	flags.StringVarP(&opts.Host, "host", "H", "", "public host name or IP (defaults to server host)")
 	_ = cmd.MarkFlagRequired("id")
 	return cmd
 }
@@ -223,9 +223,9 @@ func newServerUserListCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
-	flags.StringVar(&opts.Host, "host", "", "public host name or IP for generated connection links")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.Host, "host", "H", "", "public host name or IP for generated connection links")
 	return cmd
 }
 
@@ -254,13 +254,13 @@ func newServerCertSetCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
-	flags.StringVar(&opts.CertStore, "cert-store", "", "TLS certificate store reference (win-store)")
-	flags.StringVar(&opts.Cert, "cert", "", "TLS certificate file to deploy")
-	flags.StringVar(&opts.Key, "key", "", "TLS private key file to deploy")
-	flags.StringVar(&opts.Host, "host", "", "public host name or IP for certificate generation")
-	flags.BoolVar(&opts.Force, "force", false, "overwrite existing TLS configuration without prompting")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.CertStore, "cert-store", "S", "", "TLS certificate store reference (win-store)")
+	flags.StringVarP(&opts.Cert, "cert", "E", "", "TLS certificate file to deploy")
+	flags.StringVarP(&opts.Key, "key", "k", "", "TLS private key file to deploy")
+	flags.StringVarP(&opts.Host, "host", "H", "", "public host name or IP for certificate generation")
+	flags.BoolVarP(&opts.Force, "force", "f", false, "overwrite existing TLS configuration without prompting")
 	return cmd
 }
 
@@ -276,8 +276,8 @@ func newServerCertStateCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
 	return cmd
 }
 
@@ -295,9 +295,9 @@ func newServerDeployCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Listen, "listen", ":62025", "deploy listen address")
-	flags.StringVar(&opts.Link, "link", "", "deploy link (trojan://...)")
+	flags.StringVarP(&opts.Listen, "listen", "n", ":62025", "deploy listen address")
+	flags.StringVarP(&opts.Link, "link", "L", "", "deploy link (trojan://...)")
 	_ = cmd.MarkFlagRequired("link")
-	flags.DurationVar(&opts.Timeout, "timeout", 10*time.Minute, "idle shutdown timeout")
+	flags.DurationVarP(&opts.Timeout, "timeout", "t", 10*time.Minute, "idle shutdown timeout")
 	return cmd
 }

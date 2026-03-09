@@ -46,13 +46,13 @@ func newClientRedirectAddCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
-	flags.String("cidr", "", "CIDR to redirect")
-	flags.String("domain", "", "domain to redirect")
-	flags.String("tag", "", "outbound tag to route through (prompts when omitted)")
-	flags.String("host", "", "client endpoint hostname to route through")
-	flags.Bool("quiet", false, "do not prompt for outbound tags")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.StringP("cidr", "C", "", "CIDR to redirect")
+	flags.StringP("domain", "d", "", "domain to redirect")
+	flags.StringP("tag", "g", "", "outbound tag to route through (prompts when omitted)")
+	flags.StringP("host", "H", "", "client endpoint hostname to route through")
+	flags.BoolP("quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -68,13 +68,13 @@ func newClientRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
-	flags.String("cidr", "", "CIDR mapping to remove")
-	flags.String("domain", "", "domain mapping to remove")
-	flags.String("tag", "", "outbound tag filter (prompts when omitted)")
-	flags.String("host", "", "client endpoint hostname filter")
-	flags.Bool("quiet", false, "do not prompt for outbound tags")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.StringP("cidr", "C", "", "CIDR mapping to remove")
+	flags.StringP("domain", "d", "", "domain mapping to remove")
+	flags.StringP("tag", "g", "", "outbound tag filter (prompts when omitted)")
+	flags.StringP("host", "H", "", "client endpoint hostname filter")
+	flags.BoolP("quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -89,8 +89,8 @@ func newClientRedirectListCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
 	return cmd
 }
 

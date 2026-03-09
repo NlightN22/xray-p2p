@@ -27,9 +27,9 @@ func newClientModeCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
-	flags.String("config", "", "path to configuration file (toml)")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.StringP("config", "c", "", "path to configuration file (toml)")
 	return cmd
 }
 

@@ -87,12 +87,12 @@ func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&domain, "domain", "", "domain name to match")
-	flags.StringVar(&target, "target", "", "upstream DNS server (IP:port)")
-	flags.BoolVar(&withForward, "with-forward", false, "create or reuse a port forward for the target")
-	flags.BoolVar(&intercept, "intercept", false, "install DNS intercept redirect (53/tcp,udp)")
-	flags.BoolVar(&quiet, "quiet", false, "suppress interactive prompts")
-	flags.BoolVar(&debug, "debug", false, "emit diagnostics output on error")
+	flags.StringVarP(&domain, "domain", "d", "", "domain name to match")
+	flags.StringVarP(&target, "target", "t", "", "upstream DNS server (IP:port)")
+	flags.BoolVarP(&withForward, "with-forward", "W", false, "create or reuse a port forward for the target")
+	flags.BoolVarP(&intercept, "intercept", "I", false, "install DNS intercept redirect (53/tcp,udp)")
+	flags.BoolVarP(&quiet, "quiet", "q", false, "suppress interactive prompts")
+	flags.BoolVarP(&debug, "debug", "g", false, "emit diagnostics output on error")
 	_ = cmd.MarkFlagRequired("domain")
 	_ = cmd.MarkFlagRequired("target")
 	return cmd
@@ -134,12 +134,12 @@ func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&domain, "domain", "", "domain name to remove")
-	flags.BoolVar(&withForward, "with-forward", false, "remove an auto-created port forward")
-	flags.BoolVar(&intercept, "intercept", false, "remove DNS intercept redirect")
-	flags.BoolVar(&all, "all", false, "remove all managed DNS forward entries")
-	flags.BoolVar(&quiet, "quiet", false, "suppress interactive prompts")
-	flags.BoolVar(&debug, "debug", false, "emit diagnostics output on error")
+	flags.StringVarP(&domain, "domain", "d", "", "domain name to remove")
+	flags.BoolVarP(&withForward, "with-forward", "W", false, "remove an auto-created port forward")
+	flags.BoolVarP(&intercept, "intercept", "I", false, "remove DNS intercept redirect")
+	flags.BoolVarP(&all, "all", "a", false, "remove all managed DNS forward entries")
+	flags.BoolVarP(&quiet, "q", false, "suppress interactive prompts")
+	flags.BoolVarP(&debug, "debug", "g", false, "emit diagnostics output on error")
 	return cmd
 }
 
@@ -181,7 +181,7 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&debug, "debug", false, "emit diagnostics output on error")
+	cmd.Flags().BoolVarP(&debug, "debug", "g", false, "emit diagnostics output on error")
 	return cmd
 }
 

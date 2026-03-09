@@ -50,13 +50,13 @@ func newServerForwardAddCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "server installation directory")
-	flags.String("config-dir", "", "server configuration directory name or absolute path")
-	flags.String("target", "", "target host:port to forward traffic to")
-	flags.String("listen", "", "local listen address (default 127.0.0.1)")
-	flags.Int("listen-port", 0, "local listen port (auto-select when omitted)")
-	flags.String("proto", "", "protocol to forward (tcp, udp, both)")
-	flags.Int("base-port", forward.DefaultBasePort, "first port to probe when auto-selecting")
+	flags.StringP("path", "p", "", "server installation directory")
+	flags.StringP("config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringP("target", "t", "", "target host:port to forward traffic to")
+	flags.StringP("listen", "n", "", "local listen address (default 127.0.0.1)")
+	flags.IntP("listen-port", "P", 0, "local listen port (auto-select when omitted)")
+	flags.StringP("proto", "o", "", "protocol to forward (tcp, udp, both)")
+	flags.IntP("base-port", "B", forward.DefaultBasePort, "first port to probe when auto-selecting")
 	_ = cmd.MarkFlagRequired("target")
 	return cmd
 }
@@ -72,12 +72,12 @@ func newServerForwardRemoveCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "server installation directory")
-	flags.String("config-dir", "", "server configuration directory name or absolute path")
-	flags.Int("listen-port", 0, "forward listen port")
-	flags.String("tag", "", "forward tag")
-	flags.String("remark", "", "forward remark")
-	flags.Bool("ignore-missing", false, "do not fail when the forward rule does not exist")
+	flags.StringP("path", "p", "", "server installation directory")
+	flags.StringP("config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.IntP("listen-port", "P", 0, "forward listen port")
+	flags.StringP("tag", "g", "", "forward tag")
+	flags.StringP("remark", "r", "", "forward remark")
+	flags.BoolP("ignore-missing", "m", false, "do not fail when the forward rule does not exist")
 	return cmd
 }
 
@@ -92,8 +92,8 @@ func newServerForwardListCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "server installation directory")
-	flags.String("config-dir", "", "server configuration directory name or absolute path")
+	flags.StringP("path", "p", "", "server installation directory")
+	flags.StringP("config-dir", "D", "", "server configuration directory name or absolute path")
 	return cmd
 }
 

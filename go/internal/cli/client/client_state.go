@@ -42,10 +42,10 @@ func newClientStateCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "client installation directory")
-	flags.BoolVar(&opts.Watch, "watch", false, "continuously refresh state until interrupted")
-	flags.DurationVar(&opts.Interval, "interval", opts.Interval, "refresh interval for --watch")
-	flags.DurationVar(&opts.TTL, "ttl", opts.TTL, "heartbeat TTL for alive status")
+	flags.StringVarP(&opts.Path, "path", "p", "", "client installation directory")
+	flags.BoolVarP(&opts.Watch, "watch", "w", false, "continuously refresh state until interrupted")
+	flags.DurationVarP(&opts.Interval, "interval", "i", opts.Interval, "refresh interval for --watch")
+	flags.DurationVarP(&opts.TTL, "ttl", "T", opts.TTL, "heartbeat TTL for alive status")
 	return cmd
 }
 

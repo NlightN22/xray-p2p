@@ -83,17 +83,17 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
-	flags.String("log-file", "", "xp2p service log file (default: platform-specific path)")
-	flags.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
-	flags.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
-	flags.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
-	flags.Bool("heartbeat", true, "enable heartbeat probes")
-	flags.Duration("heartbeat-interval", 2*time.Second, "heartbeat interval")
-	flags.Duration("heartbeat-timeout", 2*time.Second, "heartbeat timeout")
-	flags.String("heartbeat-port", "", "diagnostics service port to probe")
-	flags.String("heartbeat-socks", "", "SOCKS5 proxy for heartbeat (optional)")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.StringP("log-file", "F", "", "xp2p service log file (default: platform-specific path)")
+	flags.StringP("xray-log-file", "X", "", "xray stderr log file (default: platform-specific path)")
+	flags.IntP("max-restarts", "R", service.MaxRestartAttempts, "maximum restart attempts after failures")
+	flags.DurationP("restart-delay", "r", 3*time.Second, "delay between restart attempts")
+	flags.BoolP("heartbeat", "b", true, "enable heartbeat probes")
+	flags.DurationP("heartbeat-interval", "I", 2*time.Second, "heartbeat interval")
+	flags.DurationP("heartbeat-timeout", "T", 2*time.Second, "heartbeat timeout")
+	flags.StringP("heartbeat-port", "P", "", "diagnostics service port to probe")
+	flags.StringP("heartbeat-socks", "S", "", "SOCKS5 proxy for heartbeat (optional)")
 	return cmd
 }
 

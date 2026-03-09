@@ -77,17 +77,17 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
-	flags.String("host", "", "remote server host")
-	flags.String("port", "", "remote server port")
-	flags.String("user", "", "Trojan user email (used to derive the <user><host>.rev reverse bridge)")
-	flags.String("password", "", "Trojan password")
-	flags.String("sni", "", "TLS server name (SNI)")
-	flags.String("link", "", "Trojan client link (trojan://...)")
-	flags.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
-	flags.Bool("strict-tls", false, "enforce TLS verification")
-	flags.Bool("force", false, "replace existing endpoint configuration")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.StringP("host", "H", "", "remote server host")
+	flags.StringP("port", "P", "", "remote server port")
+	flags.StringP("user", "u", "", "Trojan user email (used to derive the <user><host>.rev reverse bridge)")
+	flags.StringP("password", "w", "", "Trojan password")
+	flags.StringP("sni", "s", "", "TLS server name (SNI)")
+	flags.StringP("link", "L", "", "Trojan client link (trojan://...)")
+	flags.BoolP("allow-insecure", "I", false, "allow insecure TLS (skip verification)")
+	flags.BoolP("strict-tls", "S", false, "enforce TLS verification")
+	flags.BoolP("force", "f", false, "replace existing endpoint configuration")
 	return cmd
 }
 
@@ -103,12 +103,12 @@ func newClientRemoveCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
-	flags.Bool("keep-files", false, "keep installation files")
-	flags.Bool("ignore-missing", false, "do not fail if installation is absent")
-	flags.Bool("all", false, "remove all endpoints and configuration")
-	flags.Bool("quiet", false, "do not prompt for removal")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.BoolP("keep-files", "K", false, "keep installation files")
+	flags.BoolP("ignore-missing", "m", false, "do not fail if installation is absent")
+	flags.BoolP("all", "a", false, "remove all endpoints and configuration")
+	flags.BoolP("quiet", "q", false, "do not prompt for removal")
 	return cmd
 }
 
@@ -124,8 +124,8 @@ func newClientListCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
 	return cmd
 }
 
@@ -141,11 +141,11 @@ func newClientRunCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.String("path", "", "client installation directory")
-	flags.String("config-dir", "", "client configuration directory name")
-	flags.Bool("quiet", false, "do not prompt for installation")
-	flags.Bool("auto-install", false, "install automatically if missing")
-	flags.String("xray-log-file", "", "file to append xray-core stderr output")
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.BoolP("quiet", "q", false, "do not prompt for installation")
+	flags.BoolP("auto-install", "A", false, "install automatically if missing")
+	flags.StringP("xray-log-file", "X", "", "file to append xray-core stderr output")
 	return cmd
 }
 
@@ -161,13 +161,13 @@ func newClientDeployCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.String("host", "", "remote host (IP or DNS) to deploy")
+	flags.StringP("host", "H", "", "remote host (IP or DNS) to deploy")
 	_ = cmd.MarkFlagRequired("host")
-	flags.String("port", "62025", "deploy port")
-	flags.String("install-dir", "", "server install directory override")
-	flags.String("user", "", "Trojan user identifier (email)")
-	flags.String("password", "", "Trojan user password (auto-generated when omitted)")
-	flags.String("trojan-port", "", "Trojan service port")
+	flags.StringP("port", "P", "62025", "deploy port")
+	flags.StringP("install-dir", "I", "", "server install directory override")
+	flags.StringP("user", "u", "", "Trojan user identifier (email)")
+	flags.StringP("password", "w", "", "Trojan user password (auto-generated when omitted)")
+	flags.StringP("trojan-port", "T", "", "Trojan service port")
 	return cmd
 }
 

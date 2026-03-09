@@ -71,13 +71,13 @@ func newServerRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
-	flags.StringVar(&opts.CIDR, "cidr", "", "CIDR to redirect")
-	flags.StringVar(&opts.Domain, "domain", "", "domain to redirect")
-	flags.StringVar(&opts.Tag, "tag", "", "reverse outbound tag to route through (prompts when omitted)")
-	flags.StringVar(&opts.Host, "host", "", "reverse portal host to route through")
-	flags.BoolVar(&opts.Quiet, "quiet", false, "do not prompt for outbound tags")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.CIDR, "cidr", "C", "", "CIDR to redirect")
+	flags.StringVarP(&opts.Domain, "domain", "d", "", "domain to redirect")
+	flags.StringVarP(&opts.Tag, "tag", "g", "", "reverse outbound tag to route through (prompts when omitted)")
+	flags.StringVarP(&opts.Host, "host", "H", "", "reverse portal host to route through")
+	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -94,13 +94,13 @@ func newServerRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
-	flags.StringVar(&opts.CIDR, "cidr", "", "CIDR mapping to remove")
-	flags.StringVar(&opts.Domain, "domain", "", "domain mapping to remove")
-	flags.StringVar(&opts.Tag, "tag", "", "reverse outbound tag filter (prompts when omitted)")
-	flags.StringVar(&opts.Host, "host", "", "reverse portal host filter")
-	flags.BoolVar(&opts.Quiet, "quiet", false, "do not prompt for outbound tags")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.CIDR, "cidr", "C", "", "CIDR mapping to remove")
+	flags.StringVarP(&opts.Domain, "domain", "d", "", "domain mapping to remove")
+	flags.StringVarP(&opts.Tag, "tag", "g", "", "reverse outbound tag filter (prompts when omitted)")
+	flags.StringVarP(&opts.Host, "host", "H", "", "reverse portal host filter")
+	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
 }
 
@@ -116,8 +116,8 @@ func newServerRedirectListCmd(cfg commandConfig) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Path, "path", "", "server installation directory")
-	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
 	return cmd
 }
 
