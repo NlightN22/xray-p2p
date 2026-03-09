@@ -366,46 +366,81 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             check=True,
         )
 
-        outbounds = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(
-            outbounds,
-            "10.66.0.11",
-            "echo-pass",
-            "echo@example.com",
-            "10.66.0.11",
-        )
-        _assert_no_endpoint("10.66.0.10", outbounds)
+        try:
+            outbounds = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+            helpers.assert_outbound(
+                outbounds,
+                "10.66.0.11",
+                "echo-pass",
+                "echo@example.com",
+                "10.66.0.11",
+            )
+            _assert_no_endpoint("10.66.0.10", outbounds)
 
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
-        helpers.assert_routing_rule(routing, "10.66.0.11")
+            routing = helpers.read_json(client_host, CLIENT_ROUTING)
+            helpers.assert_routing_rule(routing, "10.66.0.11")
 
-        state = helpers.read_client_config(client_host)
-        hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
-        assert hosts == {"10.66.0.11"}
+            state = helpers.read_client_config(client_host)
+            hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
+            assert hosts == {"10.66.0.11"}
 
-        redirect_list_after = xp2p_client_runner(
-            "client",
-            "redirect",
-            "list",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            check=True,
-        ).stdout or ""
-        assert redirect_cidr not in redirect_list_after
+            redirect_list_after = xp2p_client_runner(
+                "client",
+                "redirect",
+                "list",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                check=True,
+            ).stdout or ""
+            assert redirect_cidr not in redirect_list_after
 
-        list_after = xp2p_client_runner(
-            "client",
-            "list",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            check=True,
-        ).stdout or ""
-        assert "10.66.0.11" in list_after
-        assert "10.66.0.10" not in list_after
+            list_after = xp2p_client_runner(
+                "client",
+                "list",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                check=True,
+            ).stdout or ""
+            assert "10.66.0.11" in list_after
+            assert "10.66.0.10" not in list_after
+        except BaseException as exc:
+            if isinstance(exc, KeyboardInterrupt):
+                raise
+            debug = []
+            for path in (CLIENT_OUTBOUNDS, CLIENT_ROUTING, CLIENT_STATE_FILE):
+                if helpers.path_exists(client_host, path):
+                    tail = "\n".join((helpers.read_text(client_host, path) or "").splitlines()[-200:])
+                    debug.append(f"{path}:\n{tail}")
+            list_debug = xp2p_client_runner(
+                "client",
+                "list",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                check=False,
+            )
+            redirect_debug = xp2p_client_runner(
+                "client",
+                "redirect",
+                "list",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                check=False,
+            )
+            debug.append(f"xp2p client list rc={list_debug.rc}\n{list_debug.stdout or ''}\n{list_debug.stderr or ''}")
+            debug.append(
+                f"xp2p client redirect list rc={redirect_debug.rc}\n{redirect_debug.stdout or ''}\n{redirect_debug.stderr or ''}"
+            )
+            raise AssertionError(
+                f"{exc}\n\nDebug details:\n" + "\n\n".join(debug)
+            ) from exc
 
         xp2p_client_runner(
             "client",

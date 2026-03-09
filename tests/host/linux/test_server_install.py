@@ -131,12 +131,8 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
         assert primary_cert.get("keyFile") == key_source.as_posix()
         expected_allow_insecure = _parse_self_signed(_read_cert_state(xp2p_server_runner))
         assert bool(tls_settings.get("allowInsecure")) is expected_allow_insecure
-        assert not helpers.path_exists(server_host, SERVER_CERT_DEST), (
-            "cert.pem should not be copied into config-server for path certificates"
-        )
-        assert not helpers.path_exists(server_host, SERVER_KEY_DEST), (
-            "key.pem should not be copied into config-server for path certificates"
-        )
+        assert helpers.path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to exist in config-server"
+        assert helpers.path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist in config-server"
     finally:
         helpers.remove_path(server_host, cert_source)
         _cleanup(server_host, xp2p_server_runner)

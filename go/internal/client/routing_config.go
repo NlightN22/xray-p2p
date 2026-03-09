@@ -42,7 +42,22 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 		managedTags[strings.ToLower(directTag)] = struct{}{}
 	}
 
-	preserved := filterUnmanagedOutbounds(readExistingOutbounds(path), managedTags)
+	existing := readExistingOutbounds(path)
+	for _, raw := range existing {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		tag, ok := entry["tag"].(string)
+		if !ok {
+			continue
+		}
+		trimmed := strings.ToLower(strings.TrimSpace(tag))
+		if strings.HasPrefix(trimmed, "proxy-") {
+			managedTags[trimmed] = struct{}{}
+		}
+	}
+	preserved := filterUnmanagedOutbounds(existing, managedTags)
 	out := struct {
 		Outbounds []any `json:"outbounds"`
 	}{
