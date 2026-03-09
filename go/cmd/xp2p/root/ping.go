@@ -57,13 +57,13 @@ func newPingCommand(cfg func() config.Config) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.IntVar(&opts.Count, "count", opts.Count, "number of echo requests to send")
-	flags.IntVar(&opts.TimeoutSec, "timeout", opts.TimeoutSec, "per-request timeout in seconds (optional)")
-	flags.StringVar(&opts.Proto, "proto", opts.Proto, "protocol to use (tcp or udp)")
-	flags.IntVar(&opts.Port, "port", opts.Port, "target port (default 62022)")
-	flags.StringVar(&opts.TunnelEndpoint, "tunnel", "", "route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config")
-	flags.StringVar(&opts.EndpointTag, "endpoint", "", "endpoint tag to use when multiple endpoints share the same host")
-	flags.IntVar(&opts.EndpointIndex, "index", 0, "endpoint index (1-based) to use when multiple endpoints share the same host")
+	flags.IntVarP(&opts.Count, "count", "c", opts.Count, "number of echo requests to send")
+	flags.IntVarP(&opts.TimeoutSec, "timeout", "t", opts.TimeoutSec, "per-request timeout in seconds (optional)")
+	flags.StringVarP(&opts.Proto, "proto", "o", opts.Proto, "protocol to use (tcp or udp)")
+	flags.IntVarP(&opts.Port, "port", "P", opts.Port, "target port (default 62022)")
+	flags.StringVarP(&opts.TunnelEndpoint, "tunnel", "T", "", "route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config")
+	flags.StringVarP(&opts.EndpointTag, "endpoint", "e", "", "endpoint tag to use when multiple endpoints share the same host")
+	flags.IntVarP(&opts.EndpointIndex, "index", "i", 0, "endpoint index (1-based) to use when multiple endpoints share the same host")
 	flags.Lookup("tunnel").NoOptDefVal = tunnelConfigSentinel
 	return cmd
 }

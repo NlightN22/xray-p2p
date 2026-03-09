@@ -3,5 +3,5 @@
 xp2p docs
 
 Options:
-- --dir <path> (required) Destination directory for generated docs (no short)
+- --dir, -d <path> (required) Destination directory for generated docs
 - Global options

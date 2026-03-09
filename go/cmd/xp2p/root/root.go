@@ -210,7 +210,7 @@ func newDocsCommand(rootCmd *cobra.Command) *cobra.Command {
 			return doc.GenMarkdownTree(rootCmd, path)
 		},
 	}
-	cmd.Flags().StringVar(&dir, "dir", "", "destination directory for generated docs")
+	cmd.Flags().StringVarP(&dir, "dir", "d", "", "destination directory for generated docs")
 	_ = cmd.MarkFlagRequired("dir")
 	return cmd
 }

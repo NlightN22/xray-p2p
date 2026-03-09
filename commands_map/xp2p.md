@@ -17,25 +17,25 @@ xp2p completion [bash|zsh|fish|powershell]
 
 xp2p docs
   Options:
-  - --dir <path> (required) Destination directory for generated docs (no short)
+  - --dir, -d <path> (required) Destination directory for generated docs
   - Global options
 
 xp2p diag
   Options:
-  - --listen <host:port> Listen address (host:port) (no short)
-  - --proto <tcp|udp>    Protocol to listen on (no short)
-  - --quiet              Reduce log output (no short)
+  - --listen, -n <host:port> Listen address (host:port)
+  - --proto, -o <tcp|udp>    Protocol to listen on
+  - --quiet, -q              Reduce log output
   - Global options
 
 xp2p ping <host>
   Options:
-  - --count <n>          Number of echo requests to send (no short)
-  - --timeout <sec>      Per-request timeout in seconds (no short)
-  - --proto <tcp|udp>    Protocol to use (no short)
-  - --port <n>           Target port (default 62022) (no short)
-  - --tunnel [host:port] Route ping through xp2p tunnel (SOCKS5). If value omitted, auto-detect from config (no short)
-  - --endpoint <tag>     Endpoint tag to use when multiple endpoints share the same host (no short)
-  - --index <n>          Endpoint index (1-based) to use when multiple endpoints share the same host (no short)
+  - --count, -c <n>          Number of echo requests to send
+  - --timeout, -t <sec>      Per-request timeout in seconds
+  - --proto, -o <tcp|udp>    Protocol to use
+  - --port, -P <n>           Target port (default 62022)
+  - --tunnel, -T [host:port] Route ping through xp2p tunnel (SOCKS5). If value omitted, auto-detect from config
+  - --endpoint, -e <tag>     Endpoint tag to use when multiple endpoints share the same host
+  - --index, -i <n>          Endpoint index (1-based) to use when multiple endpoints share the same host
   - Global options
 
 xp2p nat-redirect (Linux only)

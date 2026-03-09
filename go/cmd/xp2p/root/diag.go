@@ -47,9 +47,9 @@ func newDiagCommand(cfg func() config.Config) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.Listen, "listen", opts.Listen, "listen address (host:port)")
-	flags.StringVar(&opts.Proto, "proto", opts.Proto, "protocol to listen on (tcp or udp)")
-	flags.BoolVar(&opts.Quiet, "quiet", false, "reduce log output")
+	flags.StringVarP(&opts.Listen, "listen", "n", opts.Listen, "listen address (host:port)")
+	flags.StringVarP(&opts.Proto, "proto", "o", opts.Proto, "protocol to listen on (tcp or udp)")
+	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "reduce log output")
 	return cmd
 }
 

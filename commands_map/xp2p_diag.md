@@ -3,7 +3,7 @@
 xp2p diag
 
 Options:
-- --listen <host:port> Listen address (host:port) (no short)
-- --proto <tcp|udp>    Protocol to listen on (no short)
-- --quiet              Reduce log output (no short)
+- --listen, -n <host:port> Listen address (host:port)
+- --proto, -o <tcp|udp>    Protocol to listen on
+- --quiet, -q              Reduce log output
 - Global options

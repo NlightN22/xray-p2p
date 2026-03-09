@@ -74,13 +74,13 @@ func newAddCmd(cfg func() config.Config) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("cidr", "", "destination CIDR")
-	flags.Int("port", 0, "dokodemo-door port to redirect to (auto-detected when omitted)")
-	flags.Bool("print-only", false, "render firewall changes without applying them")
-	flags.Bool("quiet", false, "avoid interactive prompts when auto-selecting dokodemo port")
-	flags.String("snippet", defaultSnippet, "nftables snippet path")
-	flags.String("entry-dir", defaultEntryDir, "entry directory for nftables snippet generation")
-	flags.String("inbounds", defaultInbounds, "path to inbounds.json used for auto port detection")
+	flags.StringP("cidr", "C", "", "destination CIDR")
+	flags.IntP("port", "P", 0, "dokodemo-door port to redirect to (auto-detected when omitted)")
+	flags.BoolP("print-only", "O", false, "render firewall changes without applying them")
+	flags.BoolP("quiet", "q", false, "avoid interactive prompts when auto-selecting dokodemo port")
+	flags.StringP("snippet", "s", defaultSnippet, "nftables snippet path")
+	flags.StringP("entry-dir", "E", defaultEntryDir, "entry directory for nftables snippet generation")
+	flags.StringP("inbounds", "i", defaultInbounds, "path to inbounds.json used for auto port detection")
 	return cmd
 }
 
@@ -115,11 +115,11 @@ func newRemoveCmd(cfg func() config.Config) *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.String("cidr", "", "destination CIDR")
-	flags.Bool("all", false, "remove all transparent redirects")
-	flags.Bool("print-only", false, "render firewall changes without applying them")
-	flags.String("snippet", defaultSnippet, "nftables snippet path")
-	flags.String("entry-dir", defaultEntryDir, "entry directory for nftables snippet generation")
+	flags.StringP("cidr", "C", "", "destination CIDR")
+	flags.BoolP("all", "a", false, "remove all transparent redirects")
+	flags.BoolP("print-only", "O", false, "render firewall changes without applying them")
+	flags.StringP("snippet", "s", defaultSnippet, "nftables snippet path")
+	flags.StringP("entry-dir", "E", defaultEntryDir, "entry directory for nftables snippet generation")
 	return cmd
 }
 

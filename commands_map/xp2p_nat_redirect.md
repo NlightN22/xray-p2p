@@ -5,22 +5,22 @@ xp2p nat-redirect (Linux only)
 
 xp2p nat-redirect add
 Options:
-- --cidr <cidr> (required) Destination CIDR (no short)
-- --port <n>              Dokodemo-door port to redirect to (auto-detected when omitted) (no short)
-- --print-only            Render firewall changes without applying them (no short)
-- --quiet                 Avoid interactive prompts when auto-selecting dokodemo port (no short)
-- --snippet <path>        Nftables snippet path (no short)
-- --entry-dir <path>      Entry directory for nftables snippet generation (no short)
-- --inbounds <path>       Path to inbounds.json used for auto port detection (no short)
+- --cidr, -C <cidr> (required) Destination CIDR
+- --port, -P <n>              Dokodemo-door port to redirect to (auto-detected when omitted)
+- --print-only, -O            Render firewall changes without applying them
+- --quiet, -q                 Avoid interactive prompts when auto-selecting dokodemo port
+- --snippet, -s <path>        Nftables snippet path
+- --entry-dir, -E <path>      Entry directory for nftables snippet generation
+- --inbounds, -i <path>       Path to inbounds.json used for auto port detection
 - Global options
 
 xp2p nat-redirect remove
 Options:
-- --cidr <cidr>    Destination CIDR (no short)
-- --all            Remove all transparent redirects (no short)
-- --print-only     Render firewall changes without applying them (no short)
-- --snippet <path> Nftables snippet path (no short)
-- --entry-dir <path> Entry directory for nftables snippet generation (no short)
+- --cidr, -C <cidr>    Destination CIDR
+- --all, -a            Remove all transparent redirects
+- --print-only, -O     Render firewall changes without applying them
+- --snippet, -s <path> Nftables snippet path
+- --entry-dir, -E <path> Entry directory for nftables snippet generation
 - Global options
 
 xp2p nat-redirect list
