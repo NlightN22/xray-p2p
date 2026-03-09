@@ -101,7 +101,7 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     global _DEB_BUILD_READY
     host.run("sudo -n chmod +x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh >/dev/null 2>&1 || true")
 
-    install_timeout = 900
+    install_timeout = 600
     if _DEB_BUILD_READY:
         result = run_guest_script_with_env(
             host,

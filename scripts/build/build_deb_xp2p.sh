@@ -123,7 +123,7 @@ if [ ! -d "$BUNDLE_DIR" ] || [ ! -f "$BUNDLE_DIR/xray" ]; then
   exit 1
 fi
 echo "==> Staging xray bundle from $BUNDLE_DIR"
-rm -f "$STAGING_DIR/etc/xp2p/bin/"*
+rm -rf "$STAGING_DIR/etc/xp2p/bin/"*
 for src in "$BUNDLE_DIR"/*; do
   name=$(basename "$src")
   [ "$name" = ".gitkeep" ] && continue

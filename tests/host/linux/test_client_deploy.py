@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shlex
 import time
 from pathlib import PurePosixPath
 
@@ -139,7 +138,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
             client_ip=client_ip,
         )
 
-        _run_bundle_checks(client_host, server_host)
+        _run_bundle_checks(client_host, server_host, xp2p_client_runner, server_ip)
     finally:
         if client_pid:
             linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
@@ -748,7 +747,7 @@ def _start_client_deploy(
     env = _deploy_env()
     if diag_port:
         env["XP2P_GLOBAL_ARGS"] = f"--diag-service-port {diag_port}"
-    result = _run_guest_script_no_sudo(host, args[0], env, *args[1:])
+    result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p client deploy.\n"
@@ -802,7 +801,7 @@ def _start_server_deploy_with_args(
     env = _deploy_env()
     if global_args:
         env["XP2P_GLOBAL_ARGS"] = " ".join(global_args)
-    result = _run_guest_script_no_sudo(host, args[0], env, *args[1:])
+    result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p server deploy.\n"
@@ -1002,7 +1001,12 @@ def _cleanup_deploy_paths(host: Host) -> None:
     )
 
 
-def _run_bundle_checks(client_host: Host, server_host: Host) -> None:
+def _run_bundle_checks(
+    client_host: Host,
+    server_host: Host,
+    client_runner,
+    server_ip: str,
+) -> None:
     linux_env.run_guest_script(
         client_host,
         "scripts/linux/ensure_dir.sh",
@@ -1017,8 +1021,10 @@ def _run_bundle_checks(client_host: Host, server_host: Host) -> None:
     )
     _run_bundle_explicit(client_host, "client", CLIENT_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
     _run_bundle_explicit(server_host, "server", SERVER_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
+    _assert_tunnel_ping(client_runner, server_ip, "after explicit bundle import")
     _run_bundle_defaults(client_host, "client", CLIENT_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
     _run_bundle_defaults(server_host, "server", SERVER_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
+    _assert_tunnel_ping(client_runner, server_ip, "after default bundle import")
     _run_bundle_negative(server_host)
 
 
@@ -1165,6 +1171,24 @@ def _bundle_hashes(host: Host, config_file: PurePosixPath, state_file: PurePosix
     }
 
 
+def _assert_tunnel_ping(client_runner, server_ip: str, label: str) -> None:
+    time.sleep(2)
+    result = client_runner(
+        "ping",
+        server_ip,
+        "--port",
+        SERVER_DIAG_PORT,
+        "--count",
+        "3",
+        check=False,
+    )
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.rc != 0 or "0% loss" not in output.lower():
+        raise AssertionError(f"xp2p ping failed {label}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+
+
+
+
 def _deploy_env() -> dict[str, str]:
     return {
         "XP2P_CLIENT_INSTALL_DIR": DEPLOY_INSTALL_ROOT.as_posix(),
@@ -1172,21 +1196,3 @@ def _deploy_env() -> dict[str, str]:
         "XP2P_CONFIG_ROOT": DEPLOY_CONFIG_ROOT.as_posix(),
         "XP2P_LOG_ROOT": DEPLOY_LOG_ROOT.as_posix(),
     }
-
-
-def _run_guest_script_no_sudo(
-    host: Host,
-    relative_path: str,
-    env: dict[str, str] | None,
-    *args: str,
-):
-    script_path = linux_env.GUEST_SCRIPTS_ROOT / relative_path
-    quoted_script = shlex.quote(script_path.as_posix())
-    quoted_args = " ".join(shlex.quote(str(arg)) for arg in args)
-    command = f"/bin/bash {quoted_script}"
-    if quoted_args:
-        command = f"{command} {quoted_args}"
-    if env:
-        env_parts = " ".join(f"{key}={shlex.quote(str(value))}" for key, value in env.items())
-        command = f"env {env_parts} {command}"
-    return host.run(command)
