@@ -195,10 +195,10 @@ def test_windows_client_redirect_routes_os(
     server_public_host = _server_public_host()
     try:
         server_install = xp2p_server_runner(
-            "--server-host",
-            server_public_host,
             "server",
             "install",
+            "--host",
+            server_public_host,
             "--force",
             check=True,
         )
@@ -299,10 +299,10 @@ def test_windows_server_redirect_routes_os(
     reverse_tag: str | None = None
     try:
         server_install = xp2p_server_runner(
-            "--server-host",
-            server_public_host,
             "server",
             "install",
+            "--host",
+            server_public_host,
             "--force",
             check=True,
         )
@@ -395,10 +395,10 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
     original_mode: str | None = None
     try:
         server_install = xp2p_server_runner(
-            "--server-host",
-            server_public_host,
             "server",
             "install",
+            "--host",
+            server_public_host,
             "--force",
             check=True,
         )

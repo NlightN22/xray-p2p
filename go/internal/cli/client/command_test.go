@@ -18,7 +18,6 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 		cmd := builder(dummyCfg)
 		cmd.PersistentFlags().String("diag-service-port", "", "")
 		cmd.PersistentFlags().String("diag-service-mode", "", "")
-		cmd.PersistentFlags().String("client-install-dir", "", "")
 		return cmd
 	}
 
@@ -66,17 +65,6 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 				"--host=10.0.0.5",
 				"--trojan-port=8443",
 				"--user=alice@example.com",
-			},
-		},
-		{
-			name:           "persistent overrides skipped",
-			builder:        newClientInstallCmd,
-			persistentArgs: []string{"--client-install-dir", `E:\xp2p`},
-			localArgs:      []string{"--host", "10.0.10.10", "--user", "demo@example.com", "--password", "pass01"},
-			wantFlags: []string{
-				"--password=pass01",
-				"--host=10.0.10.10",
-				"--user=demo@example.com",
 			},
 		},
 	}

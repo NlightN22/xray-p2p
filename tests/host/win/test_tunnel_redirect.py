@@ -291,10 +291,10 @@ def test_client_redirect_tunnel_win(
         _dump_net_state(client_host, CLIENT_NETSTATE_LOG, "before-client-install")
 
         server_install = xp2p_server_runner(
-            "--server-host",
-            server_public_host,
             "server",
             "install",
+            "--host",
+            server_public_host,
             "--force",
             check=True,
         )

@@ -8,25 +8,6 @@
 - --diag-service-port, -P <port>  Diagnostics service port
 - --diag-service-mode, -M <auto|manual>  Diagnostics service startup mode
 
-## Client override options (apply to all `xp2p client ...` subcommands)
-- --client-install-dir, -I <dir>   Client installation directory (Windows)
-- --client-config-dir, -D <dir>    Client configuration directory name
-- --client-host, -A <host>         Remote server host for client config
-- --client-port, -R <port>         Remote server port for client config
-- --client-user, -U <email>        Trojan user email for client config
-- --client-password, -W <password> Trojan password for client config
-- --client-sni, -N <name>          TLS server name (SNI) for client config
-- --client-allow-insecure, -K      Allow TLS verification to be skipped
-- --client-strict-tls, -T          Enforce TLS verification
-
-## Server override options (apply to all `xp2p server ...` subcommands)
-- --server-install-dir, -I <dir>   Server installation directory (Windows)
-- --server-config-dir, -D <dir>    Server configuration directory name
-- --server-cert-store, -S <ref>    TLS certificate store reference (win-store)
-- --server-cert, -E <path>         Path to TLS certificate file (PEM)
-- --server-key, -K <path>          Path to TLS private key file (PEM)
-- --server-host, -H <host>         Public host name or IP for server certificate and links
-
 ## Command tree
 
 xp2p

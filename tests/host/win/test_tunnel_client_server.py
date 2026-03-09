@@ -222,10 +222,10 @@ def test_install_server_and_client_default(
     try:
         server_public_host = _server_public_host()
         server_install = xp2p_server_runner(
-            "--server-host",
-            server_public_host,
             "server",
             "install",
+            "--host",
+            server_public_host,
             "--force",
             check=True,
         )

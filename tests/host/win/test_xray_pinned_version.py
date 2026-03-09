@@ -85,10 +85,10 @@ def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
 
 def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> dict[str, str | None]:
     server_install = xp2p_server_runner(
-        "--server-host",
-        win_env.DEFAULT_TARGET,
         "server",
         "install",
+        "--host",
+        win_env.DEFAULT_TARGET,
         "--force",
         check=True,
     )

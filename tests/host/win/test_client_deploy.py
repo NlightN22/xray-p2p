@@ -284,16 +284,11 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             port=int(DEPLOY_PORT),
             action="Allow",
         )
-        server_proc = _start_server_deploy_with_args(
+        _write_server_config(server_host, certificate=bad_cert, key=bad_key)
+        server_proc = _start_server_deploy(
             server_host,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
-            additional_args=[
-                "--server-cert",
-                str(bad_cert),
-                "--server-key",
-                str(bad_key),
-            ],
         )
 
         _wait_for_log_phrase(
@@ -676,6 +671,19 @@ def _remove_paths(client_host, paths: list[Path]) -> None:
             "Failed to remove remote paths.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+
+
+def _toml_escape_path(value: Path) -> str:
+    return str(value).replace("\\", "\\\\")
+
+
+def _write_server_config(host, *, certificate: Path | None = None, key: Path | None = None) -> None:
+    lines = ["[server]"]
+    if certificate is not None:
+        lines.append(f'certificate = "{_toml_escape_path(certificate)}"')
+    if key is not None:
+        lines.append(f'key = "{_toml_escape_path(key)}"')
+    win_env.write_text(host, SERVER_CONFIG_FILE, "\n".join(lines) + "\n")
 
 
 def _expected_tag(host: str) -> str:

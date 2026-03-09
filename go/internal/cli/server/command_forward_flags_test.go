@@ -17,7 +17,6 @@ func TestForwardFlagsFiltersDiagnostics(t *testing.T) {
 		cmd := builder(func() config.Config { return config.Config{} })
 		cmd.Flags().String("diag-service-port", "", "")
 		cmd.Flags().String("diag-service-mode", "", "")
-		cmd.Flags().String("server-install-dir", "", "")
 		return cmd
 	}
 

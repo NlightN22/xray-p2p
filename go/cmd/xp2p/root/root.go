@@ -47,10 +47,8 @@ func NewCommand() *cobra.Command {
 	}
 
 	clientCmd := clientcmd.NewCommand(func() config.Config { return opts.cfg })
-	opts.bindClientOverrideFlags(clientCmd)
 
 	serverCmd := servercmd.NewCommand(func() config.Config { return opts.cfg })
-	opts.bindServerOverrideFlags(serverCmd)
 
 	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		if err != nil {
@@ -80,23 +78,8 @@ type rootOptions struct {
 	configPath          string
 	logLevel            string
 	serverPort          string
-	serverInstallDir    string
-	serverConfigDir     string
 	serverMode          string
-	serverCertStore     string
-	serverCert          string
-	serverKey           string
-	serverHost          string
 	logJSON             bool
-	clientInstallDir    string
-	clientConfigDir     string
-	clientServerAddr    string
-	clientPort          string
-	clientUser          string
-	clientPassword      string
-	clientServerName    string
-	clientAllowInsecure bool
-	clientStrictTLS     bool
 	versionRequested    bool
 
 	cfg       config.Config
@@ -111,29 +94,6 @@ func (o *rootOptions) bindGlobalFlags(cmd *cobra.Command) {
 	flags.BoolVarP(&o.versionRequested, "version", "v", false, "print xp2p version and exit")
 	flags.StringVarP(&o.serverPort, "diag-service-port", "P", "", "diagnostics service port")
 	flags.StringVarP(&o.serverMode, "diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
-}
-
-func (o *rootOptions) bindClientOverrideFlags(cmd *cobra.Command) {
-	flags := cmd.PersistentFlags()
-	flags.StringVarP(&o.clientInstallDir, "client-install-dir", "I", "", "client installation directory (Windows)")
-	flags.StringVarP(&o.clientConfigDir, "client-config-dir", "D", "", "client configuration directory name")
-	flags.StringVarP(&o.clientServerAddr, "client-host", "A", "", "remote server host for client config")
-	flags.StringVarP(&o.clientPort, "client-port", "R", "", "remote server port for client config")
-	flags.StringVarP(&o.clientUser, "client-user", "U", "", "Trojan user email for client config")
-	flags.StringVarP(&o.clientPassword, "client-password", "W", "", "Trojan password for client config")
-	flags.StringVarP(&o.clientServerName, "client-sni", "N", "", "TLS server name (SNI) for client config")
-	flags.BoolVarP(&o.clientAllowInsecure, "client-allow-insecure", "K", false, "allow TLS verification to be skipped for client config")
-	flags.BoolVarP(&o.clientStrictTLS, "client-strict-tls", "T", false, "enforce TLS verification for client config")
-}
-
-func (o *rootOptions) bindServerOverrideFlags(cmd *cobra.Command) {
-	flags := cmd.PersistentFlags()
-	flags.StringVarP(&o.serverInstallDir, "server-install-dir", "I", "", "server installation directory (Windows)")
-	flags.StringVarP(&o.serverConfigDir, "server-config-dir", "D", "", "server configuration directory name")
-	flags.StringVarP(&o.serverCertStore, "server-cert-store", "S", "", "TLS certificate store reference (win-store)")
-	flags.StringVarP(&o.serverCert, "server-cert", "E", "", "path to TLS certificate file (PEM)")
-	flags.StringVarP(&o.serverKey, "server-key", "K", "", "path to TLS private key file (PEM)")
-	flags.StringVarP(&o.serverHost, "server-host", "H", "", "public host name or IP for server certificate and links")
 }
 
 func (o *rootOptions) ensureRuntime(cmd *cobra.Command) error {
@@ -192,53 +152,8 @@ func (o *rootOptions) buildOverrides() map[string]any {
 	if port := strings.TrimSpace(o.serverPort); port != "" {
 		overrides["server.port"] = port
 	}
-	if dir := strings.TrimSpace(o.serverInstallDir); dir != "" {
-		overrides["server.install_dir"] = dir
-	}
-	if cfgDir := strings.TrimSpace(o.serverConfigDir); cfgDir != "" {
-		overrides["server.config_dir"] = cfgDir
-	}
 	if mode := strings.TrimSpace(o.serverMode); mode != "" {
 		overrides["server.mode"] = mode
-	}
-	if store := strings.TrimSpace(o.serverCertStore); store != "" {
-		overrides["server.cert_store"] = store
-	}
-	if cert := strings.TrimSpace(o.serverCert); cert != "" {
-		overrides["server.certificate"] = cert
-	}
-	if key := strings.TrimSpace(o.serverKey); key != "" {
-		overrides["server.key"] = key
-	}
-	if host := strings.TrimSpace(o.serverHost); host != "" {
-		overrides["server.host"] = host
-	}
-	if dir := strings.TrimSpace(o.clientInstallDir); dir != "" {
-		overrides["client.install_dir"] = dir
-	}
-	if cfgDir := strings.TrimSpace(o.clientConfigDir); cfgDir != "" {
-		overrides["client.config_dir"] = cfgDir
-	}
-	if addr := strings.TrimSpace(o.clientServerAddr); addr != "" {
-		overrides["client.server_address"] = addr
-	}
-	if port := strings.TrimSpace(o.clientPort); port != "" {
-		overrides["client.server_port"] = port
-	}
-	if user := strings.TrimSpace(o.clientUser); user != "" {
-		overrides["client.user"] = user
-	}
-	if pwd := strings.TrimSpace(o.clientPassword); pwd != "" {
-		overrides["client.password"] = pwd
-	}
-	if name := strings.TrimSpace(o.clientServerName); name != "" {
-		overrides["client.server_name"] = name
-	}
-	if o.clientAllowInsecure {
-		overrides["client.allow_insecure"] = true
-	}
-	if o.clientStrictTLS {
-		overrides["client.allow_insecure"] = false
 	}
 	return overrides
 }

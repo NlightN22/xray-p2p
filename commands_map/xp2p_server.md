@@ -8,19 +8,14 @@
 - --diag-service-port, -P <port>  Diagnostics service port
 - --diag-service-mode, -M <auto|manual>  Diagnostics service startup mode
 
-## Server override options (apply to all `xp2p server ...` subcommands)
-- --server-install-dir, -I <dir>   Server installation directory (Windows)
-- --server-config-dir, -D <dir>    Server configuration directory name
-- --server-cert-store, -S <ref>    TLS certificate store reference (win-store)
-- --server-cert, -E <path>         Path to TLS certificate file (PEM)
-- --server-key, -K <path>          Path to TLS private key file (PEM)
-- --server-host, -H <host>         Public host name or IP for server certificate and links
+## Command tree
+
 xp2p server
   Subcommands: install, remove, run, service, state, export, import, user, redirect, forward, reverse, cert, deploy, mode, dns-forward (Linux only)
 
 xp2p server install
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name (no short)
 - --port <port>      Server listener port (no short)
@@ -32,7 +27,7 @@ Includes: Global options; Server override options
 
 xp2p server remove
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name (no short)
 - --keep-files       Keep installation files (no short)
@@ -41,7 +36,7 @@ Includes: Global options; Server override options
 
 xp2p server run
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>          Server installation directory (no short)
 - --config-dir <dir>    Server configuration directory name (no short)
 - --auto-install        Install server assets when missing without prompting (no short)
@@ -50,22 +45,22 @@ Includes: Global options; Server override options
 
 xp2p server service start
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - (no local options)
 
 xp2p server service stop
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - (no local options)
 
 xp2p server service status
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - (no local options)
 
 xp2p server service run
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name (no short)
 - --log-file <path>  xp2p service log file (no short)
@@ -75,7 +70,7 @@ Includes: Global options; Server override options
 
 xp2p server state
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --watch            Continuously refresh state until interrupted (no short)
 - --interval <dur>   Refresh interval for --watch (no short)
@@ -83,19 +78,19 @@ Includes: Global options; Server override options
 
 xp2p server export
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --config-root, -C <dir> Configuration root to export
 - --output, -o <path>     Archive output path
 
 xp2p server import
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --config-root, -C <dir> Configuration root to import into
 - --input, -i <path> (required) Archive input path
 
 xp2p server user add
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 - --id <id>          Trojan client identifier (derives the <id><host>.rev reverse tag) (no short)
@@ -107,7 +102,7 @@ Includes: Global options; Server override options
 
 xp2p server user remove
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 - --id <id> (required) Trojan client identifier (no short)
@@ -115,14 +110,14 @@ Includes: Global options; Server override options
 
 xp2p server user list
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 - --host <host>      Public host name or IP for generated connection links (no short)
 
 xp2p server redirect add
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 - --cidr <cidr>      CIDR to redirect (mutually exclusive with --domain) (no short)
@@ -133,7 +128,7 @@ Includes: Global options; Server override options
 
 xp2p server redirect remove
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 - --cidr <cidr>      CIDR mapping to remove (mutually exclusive with --domain) (no short)
@@ -144,13 +139,13 @@ Includes: Global options; Server override options
 
 xp2p server redirect list
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 
 xp2p server forward add
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>           Server installation directory (no short)
 - --config-dir <dir>     Server configuration directory name or absolute path (no short)
 - --target <host:port> (required) Target host:port to forward traffic to (no short)
@@ -161,7 +156,7 @@ Includes: Global options; Server override options
 
 xp2p server forward remove
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 - --listen-port <n>  Forward listen port (no short)
@@ -171,25 +166,25 @@ Includes: Global options; Server override options
 
 xp2p server forward list
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 
 xp2p server reverse
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 
 xp2p server reverse list
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 
 xp2p server cert set
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 - --cert-store <ref> TLS certificate store reference (win-store) (no short)
@@ -200,20 +195,20 @@ Includes: Global options; Server override options
 
 xp2p server cert state
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name or absolute path (no short)
 
 xp2p server deploy
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --listen <host:port> Deploy listen address (default :62025) (no short)
 - --link <trojan://...> (required) Deploy link (no short)
 - --timeout <dur> Idle shutdown timeout (no short)
 
 xp2p server mode [tun|proxy]
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --path <dir>       Server installation directory (no short)
 - --config-dir <dir> Server configuration directory name (no short)
 - --config <path>    Path to configuration file (toml) (no short)
@@ -223,7 +218,7 @@ xp2p server dns-forward (Linux only)
 
 xp2p server dns-forward add
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --domain <name> (required) Domain name to match (no short)
 - --target <ip:port> (required) Upstream DNS server (no short)
 - --with-forward      Create or reuse a port forward for the target (no short)
@@ -233,7 +228,7 @@ Includes: Global options; Server override options
 
 xp2p server dns-forward remove
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --domain <name>     Domain name to remove (no short)
 - --with-forward      Remove an auto-created port forward (no short)
 - --intercept         Remove DNS intercept redirect (no short)
@@ -243,5 +238,5 @@ Includes: Global options; Server override options
 
 xp2p server dns-forward list
 Options:
-Includes: Global options; Server override options
+Includes: Global options
 - --debug             Emit diagnostics output on error (no short)

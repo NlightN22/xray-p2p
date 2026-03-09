@@ -215,17 +215,12 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
 
-        server_pid = _start_server_deploy_with_args(
+        _write_server_config(server_host, certificate=bad_cert, key=bad_key)
+        server_pid = _start_server_deploy(
             server_host,
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
-            extra_args=[
-                "--server-cert",
-                bad_cert.as_posix(),
-                "--server-key",
-                bad_key.as_posix(),
-            ],
         )
 
         _wait_for_log_phrase(
@@ -985,6 +980,15 @@ def _detect_host_ipv4(host: Host) -> str:
 
 def _read_server_config(host: Host) -> dict:
     return helpers.read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+
+
+def _write_server_config(host: Host, *, certificate: PurePosixPath | None = None, key: PurePosixPath | None = None) -> None:
+    lines = ["[server]"]
+    if certificate is not None:
+        lines.append(f'certificate = "{certificate.as_posix()}"')
+    if key is not None:
+        lines.append(f'key = "{key.as_posix()}"')
+    helpers.write_text(host, SERVER_CONFIG_FILE, "\n".join(lines) + "\n")
 
 
 def _cleanup_deploy_paths(host: Host) -> None:
