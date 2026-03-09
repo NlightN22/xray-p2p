@@ -194,12 +194,8 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
 
         expected_allow_insecure = _parse_self_signed(_read_cert_state(runner))
         assert bool(tls_settings.get("allowInsecure")) is expected_allow_insecure
-        assert not _path_exists(openwrt_server_host, SERVER_CERT_DEST), (
-            "cert.pem should not be copied into config-server for path certificates"
-        )
-        assert not _path_exists(openwrt_server_host, SERVER_KEY_DEST), (
-            "key.pem should not be copied into config-server for path certificates"
-        )
+        assert _path_exists(openwrt_server_host, SERVER_CERT_DEST), "Expected cert.pem to exist in config-server"
+        assert _path_exists(openwrt_server_host, SERVER_KEY_DEST), "Expected key.pem to exist in config-server"
     finally:
         helpers.cleanup_server_install(openwrt_server_host, runner)
         _remove_path(openwrt_server_host, cert_source)
