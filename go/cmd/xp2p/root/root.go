@@ -1,6 +1,7 @@
 package root
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -71,10 +72,10 @@ func NewCommand() *cobra.Command {
 }
 
 type rootOptions struct {
-	configPath          string
-	logLevel            string
-	logJSON             bool
-	versionRequested    bool
+	configPath       string
+	logLevel         string
+	logJSON          bool
+	versionRequested bool
 
 	cfg       config.Config
 	runtimeOK bool

@@ -21,6 +21,7 @@ rules = [
     "for editing and viewing try to use python, if it's is exist",
     "system services (systemd/procd/Windows SCM) must not rely on CLI flags; packages must run xp2p binaries with default parameters only",
     "CLI commands must only update configuration/state files; OS-level changes (TUN, routes, nftables) are applied only by xp2p run/service",
+    "CLI flags standard: identical long names must use the same short aliases everywhere; verify consistency when adding new commands",
     "log files must live under XP2P_LOG_ROOT (default /var/log/xp2p); the audit log file name is audit.log",
     "terminology: cidr means a network in CIDR format (e.g. 10.0.0.0/24) and must be used for redirect/NAT rules; do not use subnet as a term",
     "terminology: host means a DNS name or IP address of a node/server",
