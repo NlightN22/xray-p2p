@@ -59,6 +59,8 @@ type serverRemoveCommandOptions struct {
 type serverRunCommandOptions struct {
 	Path        string
 	ConfigDir   string
+	DiagPort    string
+	DiagMode    string
 	AutoInstall bool
 	Quiet       bool
 	XrayLogFile string
@@ -122,6 +124,13 @@ func runServerRemove(ctx context.Context, cfg config.Config, opts serverRemoveCo
 }
 
 func runServerRun(ctx context.Context, cfg config.Config, opts serverRunCommandOptions) int {
+	if port := strings.TrimSpace(opts.DiagPort); port != "" {
+		cfg.Server.Port = port
+	}
+	if mode := strings.TrimSpace(opts.DiagMode); mode != "" {
+		cfg.Server.Mode = mode
+	}
+
 	execOpts, err := prepareRunOptions(ctx, cfg, opts)
 	if err != nil {
 		logging.Error("xp2p server run: prerequisites failed", "err", err)

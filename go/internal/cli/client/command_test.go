@@ -12,19 +12,15 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
-func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
+func TestForwardFlagsCollectsLocalFlags(t *testing.T) {
 	dummyCfg := func() config.Config { return config.Config{} }
 	makeCmd := func(builder func(commandConfig) *cobra.Command) *cobra.Command {
-		cmd := builder(dummyCfg)
-		cmd.PersistentFlags().String("diag-service-port", "", "")
-		cmd.PersistentFlags().String("diag-service-mode", "", "")
-		return cmd
+		return builder(dummyCfg)
 	}
 
 	cases := []struct {
 		name           string
 		builder        func(commandConfig) *cobra.Command
-		persistentArgs []string
 		localArgs      []string
 		passArgs       []string
 		wantFlags      []string
@@ -74,15 +70,8 @@ func TestForwardFlagsSkipsPersistentDiagnosticsFlags(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Helper()
 			cmd := makeCmd(tc.builder)
-			applyArgs(t, cmd.PersistentFlags(), []string{"--diag-service-port=62023", "--diag-service-mode=manual"})
-			applyArgs(t, cmd.PersistentFlags(), tc.persistentArgs)
 			applyArgs(t, cmd.Flags(), tc.localArgs)
 			got := forwardFlags(cmd, tc.passArgs)
-			for _, entry := range got {
-				if strings.Contains(entry, "diag-service") {
-					t.Fatalf("unexpected diagnostics flag forwarded: %s", entry)
-				}
-			}
 			if len(got) != len(tc.wantFlags)+len(tc.passArgs) {
 				t.Fatalf("forwardFlags = %v, want flags=%v args=%v", got, tc.wantFlags, tc.passArgs)
 			}

@@ -69,18 +69,9 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 }
 
 func forwardFlags(cmd *cobra.Command, args []string) []string {
-	disallowed := map[string]struct{}{
-		"diag-service-port": {},
-		"diag-service-mode": {},
-	}
-
 	flags := cmd.Flags()
 	forwarded := make([]string, 0, len(args)+flags.NFlag())
 	flags.Visit(func(f *pflag.Flag) {
-		if _, skip := disallowed[f.Name]; skip {
-			return
-		}
-
 		name := fmt.Sprintf("--%s", f.Name)
 		if f.Value.Type() == "bool" {
 			if f.Value.String() == "true" {
@@ -153,6 +144,8 @@ func newServerRunCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&opts.Path, "path", "", "server installation directory")
 	flags.StringVar(&opts.ConfigDir, "config-dir", "", "server configuration directory name")
+	flags.StringVarP(&opts.DiagPort, "diag-service-port", "P", "", "diagnostics service port")
+	flags.StringVarP(&opts.DiagMode, "diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
 	flags.BoolVar(&opts.AutoInstall, "auto-install", false, "install server assets when missing without prompting")
 	flags.BoolVar(&opts.Quiet, "quiet", false, "suppress interactive prompts")
 	flags.StringVar(&opts.XrayLogFile, "xray-log-file", "", "append xray stderr output to file")

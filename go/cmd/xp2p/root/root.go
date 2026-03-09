@@ -1,7 +1,6 @@
 package root
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	servercmd "github.com/NlightN22/xray-p2p/go/internal/cli/server"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 )
 
@@ -27,10 +25,8 @@ func NewCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := opts.ensureRuntime(cmd); err != nil {
-				return err
-			}
-			return opts.runService(cmd.Context())
+			_ = cmd.Help()
+			return exitError{code: 1}
 		},
 	}
 
@@ -77,8 +73,6 @@ func NewCommand() *cobra.Command {
 type rootOptions struct {
 	configPath          string
 	logLevel            string
-	serverPort          string
-	serverMode          string
 	logJSON             bool
 	versionRequested    bool
 
@@ -92,8 +86,6 @@ func (o *rootOptions) bindGlobalFlags(cmd *cobra.Command) {
 	flags.StringVarP(&o.logLevel, "log-level", "l", "", "override logging level")
 	flags.BoolVarP(&o.logJSON, "log-json", "j", false, "emit logs in JSON format")
 	flags.BoolVarP(&o.versionRequested, "version", "v", false, "print xp2p version and exit")
-	flags.StringVarP(&o.serverPort, "diag-service-port", "P", "", "diagnostics service port")
-	flags.StringVarP(&o.serverMode, "diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
 }
 
 func (o *rootOptions) ensureRuntime(cmd *cobra.Command) error {
@@ -149,35 +141,12 @@ func (o *rootOptions) buildOverrides() map[string]any {
 	if o.logJSON {
 		overrides["logging.format"] = "json"
 	}
-	if port := strings.TrimSpace(o.serverPort); port != "" {
-		overrides["server.port"] = port
-	}
-	if mode := strings.TrimSpace(o.serverMode); mode != "" {
-		overrides["server.mode"] = mode
-	}
 	return overrides
 }
 
 func natredirectMaybeAdd(opts *rootOptions) *cobra.Command {
 	cmd := natredirectcmd.NewCommand(func() config.Config { return opts.cfg })
 	return cmd
-}
-
-func (o *rootOptions) runService(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := server.StartBackground(ctx, server.Options{
-		Port:       o.cfg.Server.Port,
-		InstallDir: o.cfg.Server.InstallDir,
-	}); err != nil {
-		logging.Error("failed to start diagnostics service", "err", err)
-		return exitError{code: 1}
-	}
-	logging.Info("diagnostics service started", "port", o.cfg.Server.Port)
-	<-ctx.Done()
-	logging.Info("diagnostics service stopped")
-	return nil
 }
 
 func logFormatFromConfig(value string) logging.Format {

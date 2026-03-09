@@ -84,6 +84,8 @@ func newServerServiceRunCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.String("path", "", "server installation directory")
 	flags.String("config-dir", "", "server configuration directory name")
+	flags.StringP("diag-service-port", "P", "", "diagnostics service port")
+	flags.StringP("diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
 	flags.String("log-file", filepath.Join(config.LogRoot(), "server", "service.log"), "xp2p service log file")
 	flags.String("xray-log-file", filepath.Join(config.LogRoot(), "server", "xray-service.log"), "xray stderr log file")
 	flags.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
@@ -159,6 +161,8 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 
 	path := fs.String("path", "", "server installation directory")
 	configDir := fs.String("config-dir", "", "server configuration directory name")
+	diagPort := fs.String("diag-service-port", "", "diagnostics service port")
+	diagMode := fs.String("diag-service-mode", "", "diagnostics service startup mode (auto|manual)")
 	logFile := fs.String("log-file", "", "xp2p service log file (default: platform-specific path)")
 	xrayLog := fs.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
 	maxRestarts := fs.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
@@ -177,6 +181,9 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 
 	installDir := common.FirstNonEmpty(*path, cfg.Server.InstallDir)
 	configDirName := common.FirstNonEmpty(*configDir, cfg.Server.ConfigDir)
+	if mode := strings.TrimSpace(*diagMode); mode != "" {
+		cfg.Server.Mode = mode
+	}
 	serviceLogPath := strings.TrimSpace(*logFile)
 	if serviceLogPath == "" {
 		serviceLogPath = defaultServerServiceLogPath(installDir)
@@ -202,7 +209,7 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
 		XrayLogPath:  xrayLogPath,
-		DiagPort:     cfg.Server.Port,
+		DiagPort:     common.FirstNonEmpty(strings.TrimSpace(*diagPort), cfg.Server.Port),
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
 		TunEnabled:   cfg.Server.TunEnabled,

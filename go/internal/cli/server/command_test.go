@@ -12,7 +12,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
-func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
+func TestServerCommandsExecute(t *testing.T) {
 	tempInstall := func(t *testing.T) string {
 		t.Helper()
 		dir := t.TempDir()
@@ -135,7 +135,6 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 			cmd := NewCommand(func() config.Config { return cfg })
 			root := newServerTestRoot(cmd)
 			fullArgs := append([]string{"server"}, args...)
-			fullArgs = append(fullArgs, "-P", "62080", "--diag-service-mode", "manual")
 			root.SetArgs(fullArgs)
 
 			if err := root.Execute(); err != nil {
@@ -147,8 +146,6 @@ func TestServerCommandsAcceptDiagnosticsFlags(t *testing.T) {
 
 func newServerTestRoot(cmd *cobra.Command) *cobra.Command {
 	root := &cobra.Command{Use: "xp2p"}
-	root.PersistentFlags().StringP("diag-service-port", "P", "", "")
-	root.PersistentFlags().String("diag-service-mode", "", "")
 	root.AddCommand(cmd)
 	return root
 }

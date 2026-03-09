@@ -48,14 +48,8 @@ func TestEnsureRuntimeDefaults(t *testing.T) {
 func TestEnsureRuntimeWithOverrides(t *testing.T) {
 	chdirTemp(t)
 	opts := &rootOptions{
-		logLevel:         "DEBUG",
-		serverPort:       "65010",
-		serverInstallDir: `D:\xp2p`,
-		serverConfigDir:  "cfg-run",
-		serverMode:       "MANUAL",
-		serverCert:       `D:\certs\cert.pem`,
-		serverKey:        `D:\certs\cert.key`,
-		logJSON:          true,
+		logLevel: "DEBUG",
+		logJSON:  true,
 	}
 	if err := opts.ensureRuntime(newRootCmd()); err != nil {
 		t.Fatalf("ensureRuntime failed: %v", err)
@@ -67,27 +61,6 @@ func TestEnsureRuntimeWithOverrides(t *testing.T) {
 	}
 	if cfg.Logging.Format != "json" {
 		t.Fatalf("expected logging format json, got %s", cfg.Logging.Format)
-	}
-	if cfg.Server.Port != "65010" {
-		t.Fatalf("expected port 65010, got %s", cfg.Server.Port)
-	}
-	if cfg.Server.InstallDir != `D:\xp2p` {
-		t.Fatalf("expected install dir D:\\xp2p, got %s", cfg.Server.InstallDir)
-	}
-	if cfg.Server.ConfigDir != "cfg-run" {
-		t.Fatalf("expected config dir cfg-run, got %s", cfg.Server.ConfigDir)
-	}
-	if cfg.Server.Mode != "manual" {
-		t.Fatalf("expected mode manual, got %s", cfg.Server.Mode)
-	}
-	if cfg.Server.CertificateStore != "" {
-		t.Fatalf("expected empty certificate store, got %s", cfg.Server.CertificateStore)
-	}
-	if cfg.Server.CertificateFile != `D:\certs\cert.pem` {
-		t.Fatalf("expected certificate D:\\certs\\cert.pem, got %s", cfg.Server.CertificateFile)
-	}
-	if cfg.Server.KeyFile != `D:\certs\cert.key` {
-		t.Fatalf("expected key D:\\certs\\cert.key, got %s", cfg.Server.KeyFile)
 	}
 }
 

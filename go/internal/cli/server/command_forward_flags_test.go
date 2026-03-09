@@ -12,11 +12,9 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
-func TestForwardFlagsFiltersDiagnostics(t *testing.T) {
+func TestForwardFlagsCollectsLocalFlags(t *testing.T) {
 	makeCmd := func(builder func(commandConfig) *cobra.Command) *cobra.Command {
 		cmd := builder(func() config.Config { return config.Config{} })
-		cmd.Flags().String("diag-service-port", "", "")
-		cmd.Flags().String("diag-service-mode", "", "")
 		return cmd
 	}
 
@@ -46,15 +44,9 @@ func TestForwardFlagsFiltersDiagnostics(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := makeCmd(tc.builder)
-			setFlags(t, cmd.Flags(), []string{"--diag-service-port=62023", "--diag-service-mode=manual"})
 			setFlags(t, cmd.Flags(), tc.persistentArgs)
 			setFlags(t, cmd.Flags(), tc.localArgs)
 			got := forwardFlags(cmd, tc.passArgs)
-			for _, entry := range got {
-				if strings.Contains(entry, "diag-service") {
-					t.Fatalf("unexpected diagnostics flag forwarded: %s", entry)
-				}
-			}
 			if len(got) != len(tc.wantFlags)+len(tc.passArgs) {
 				t.Fatalf("forwardFlags returned %v, want %v+%v", got, tc.wantFlags, tc.passArgs)
 			}

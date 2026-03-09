@@ -5,13 +5,11 @@
 - --log-level, -l <level>         Override logging level
 - --log-json, -j                  Emit logs in JSON format
 - --version, -v                   Print xp2p version and exit (root only)
-- --diag-service-port, -P <port>  Diagnostics service port
-- --diag-service-mode, -M <auto|manual>  Diagnostics service startup mode
 
 ## Command tree
 
 xp2p
-  Behavior: Starts diagnostics service in background and waits (no args).
+  Behavior: Show help and exit.
   Options: Global options
 
 xp2p completion [bash|zsh|fish|powershell]

@@ -429,12 +429,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             trojan_port=TROJAN_PORT,
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
+        _write_server_config(server_host, port=SERVER_DEPLOY_DIAG_PORT)
         server_pid = _start_server_deploy(
             server_host,
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
-            global_args=["--diag-service-port", SERVER_DEPLOY_DIAG_PORT],
         )
 
         _wait_for_log_phrase(
@@ -557,12 +557,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             trojan_port=TROJAN_PORT,
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
+        _write_server_config(server_host, port=SERVER_DEPLOY_DIAG_PORT)
         server_pid = _start_server_deploy(
             server_host,
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
-            global_args=["--diag-service-port", SERVER_DEPLOY_DIAG_PORT],
         )
 
         _wait_for_log_phrase(
@@ -741,7 +741,7 @@ def _start_client_deploy(
     ]
     env = _deploy_env()
     if diag_port:
-        env["XP2P_GLOBAL_ARGS"] = f"--diag-service-port {diag_port}"
+        _write_server_config(host, port=diag_port)
     result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
     if result.rc != 0:
         pytest.fail(
@@ -982,8 +982,16 @@ def _read_server_config(host: Host) -> dict:
     return helpers.read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
 
 
-def _write_server_config(host: Host, *, certificate: PurePosixPath | None = None, key: PurePosixPath | None = None) -> None:
+def _write_server_config(
+    host: Host,
+    *,
+    port: str | None = None,
+    certificate: PurePosixPath | None = None,
+    key: PurePosixPath | None = None,
+) -> None:
     lines = ["[server]"]
+    if port is not None:
+        lines.append(f'port = "{port}"')
     if certificate is not None:
         lines.append(f'certificate = "{certificate.as_posix()}"')
     if key is not None:
