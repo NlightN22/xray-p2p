@@ -1,6 +1,7 @@
 # xp2p
 
 ## Global options (apply to all commands)
+- --help, -h                     Show help for command
 - --config, -c <path>             Path to configuration file
 - --log-level, -l <level>         Override logging level
 - --log-json, -j                  Emit logs in JSON format
