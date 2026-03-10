@@ -43,12 +43,6 @@ function Read-KeyValueFile {
     return $data
 }
 
-function Ensure-Directory {
-    param([string] $Path)
-    if (-not (Test-Path $Path)) {
-        New-Item -ItemType Directory -Path $Path -Force | Out-Null
-    }
-}
 
 $latest = Read-KeyValueFile -Path $LatestPath
 if (-not $latest) {
@@ -103,10 +97,6 @@ if ($process.ExitCode -ne 0) {
     exit $process.ExitCode
 }
 
-$stateDir = Split-Path -Parent $StatePath
-if ($stateDir) {
-    Ensure-Directory -Path $stateDir
-}
 $stateContent = @(
     "version=$version"
     "sha256=$sha256"
