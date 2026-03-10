@@ -11,10 +11,11 @@ import (
 )
 
 type serverDeployOptions struct {
-	Listen  string
-	Link    string
-	Once    bool
-	Timeout time.Duration
+	Listen   string
+	Link     string
+	DiagPort string
+	Once     bool
+	Timeout  time.Duration
 }
 
 func runServerDeploy(ctx context.Context, cfg config.Config, opts serverDeployOptions) int {
@@ -23,6 +24,13 @@ func runServerDeploy(ctx context.Context, cfg config.Config, opts serverDeployOp
 		listenAddr = ":62025"
 	}
 	listenAddr = normalizeListenAddr(listenAddr)
+	if port := strings.TrimSpace(opts.DiagPort); port != "" {
+		if err := validatePortValue(port); err != nil {
+			logging.Error("xp2p server deploy: invalid diagnostics port", "err", err)
+			return 2
+		}
+		cfg.Server.Port = port
+	}
 
 	var expected deploylink.EncryptedLink
 	rawLink := strings.TrimSpace(opts.Link)

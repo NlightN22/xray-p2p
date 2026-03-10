@@ -3,7 +3,7 @@
 xp2p ping <host>
 
 Options:
-- --count, -c <n>          Number of echo requests to send
+- --count, -N <n>          Number of echo requests to send
 - --timeout, -t <sec>      Per-request timeout in seconds
 - --proto, -o <tcp|udp>    Protocol to use
 - --port, -P <n>           Target port (default 62022)

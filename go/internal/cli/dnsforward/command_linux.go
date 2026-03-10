@@ -138,7 +138,7 @@ func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	flags.BoolVarP(&withForward, "with-forward", "W", false, "remove an auto-created port forward")
 	flags.BoolVarP(&intercept, "intercept", "I", false, "remove DNS intercept redirect")
 	flags.BoolVarP(&all, "all", "a", false, "remove all managed DNS forward entries")
-	flags.BoolVarP(&quiet, "q", false, "suppress interactive prompts")
+	flags.BoolVarP(&quiet, "quiet", "q", false, "suppress interactive prompts")
 	flags.BoolVarP(&debug, "debug", "g", false, "emit diagnostics output on error")
 	return cmd
 }

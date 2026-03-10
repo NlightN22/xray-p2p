@@ -207,6 +207,7 @@ Options:
 Includes: Global options
 - --listen, -n <host:port> Deploy listen address (default :62025)
 - --link, -L <trojan://...> (required) Deploy link
+- --diag-service-port, -P <port> Diagnostics service port
 - --timeout, -t <dur> Idle shutdown timeout
 
 xp2p server mode [tun|proxy]
@@ -214,7 +215,6 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name
-- --config, -c <path>    Path to configuration file (toml)
 
 xp2p server dns-forward (Linux only)
   Subcommands: add, remove, list

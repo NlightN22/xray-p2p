@@ -190,7 +190,6 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
-- --config, -c <path>    Path to configuration file (toml)
 
 xp2p client dns-forward (Linux only)
   Subcommands: add, remove, list

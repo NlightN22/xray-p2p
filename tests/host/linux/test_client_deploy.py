@@ -429,12 +429,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             trojan_port=TROJAN_PORT,
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
-        _write_server_config(server_host, port=SERVER_DEPLOY_DIAG_PORT)
         server_pid = _start_server_deploy(
             server_host,
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
+            extra_args=["--diag-service-port", SERVER_DEPLOY_DIAG_PORT],
         )
 
         _wait_for_log_phrase(
@@ -557,12 +557,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             trojan_port=TROJAN_PORT,
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
-        _write_server_config(server_host, port=SERVER_DEPLOY_DIAG_PORT)
         server_pid = _start_server_deploy(
             server_host,
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
+            extra_args=["--diag-service-port", SERVER_DEPLOY_DIAG_PORT],
         )
 
         _wait_for_log_phrase(

@@ -252,6 +252,9 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 			inst.CertificateStore = ""
 			inst.CertificateFile = ""
 			inst.KeyFile = ""
+			if _, updateErr := config.ClearServerCertificateOverrides(""); updateErr != nil {
+				logging.Warn("xp2p server deploy: failed to clear certificate overrides", "err", updateErr)
+			}
 			if retryErr := server.Install(ctx, inst); retryErr == nil {
 				goto installDone
 			} else {

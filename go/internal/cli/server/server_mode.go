@@ -22,6 +22,9 @@ func newServerModeCmd(cfg commandConfig) *cobra.Command {
 		Short: "Switch server mode between TUN and proxy",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
+			if configFlag := cmd.InheritedFlags().Lookup("config"); configFlag != nil && configFlag.Changed {
+				forwarded = append(forwarded, "--config", configFlag.Value.String())
+			}
 			code := runServerMode(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)
 		},
@@ -29,7 +32,6 @@ func newServerModeCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringP("path", "p", "", "server installation directory")
 	flags.StringP("config-dir", "D", "", "server configuration directory name")
-	flags.StringP("config", "c", "", "path to configuration file (toml)")
 	return cmd
 }
 

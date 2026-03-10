@@ -57,7 +57,7 @@ func newPingCommand(cfg func() config.Config) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.IntVarP(&opts.Count, "count", "c", opts.Count, "number of echo requests to send")
+	flags.IntVarP(&opts.Count, "count", "N", opts.Count, "number of echo requests to send")
 	flags.IntVarP(&opts.TimeoutSec, "timeout", "t", opts.TimeoutSec, "per-request timeout in seconds (optional)")
 	flags.StringVarP(&opts.Proto, "proto", "o", opts.Proto, "protocol to use (tcp or udp)")
 	flags.IntVarP(&opts.Port, "port", "P", opts.Port, "target port (default 62022)")

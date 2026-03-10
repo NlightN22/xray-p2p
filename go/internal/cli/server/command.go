@@ -297,6 +297,7 @@ func newServerDeployCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.Listen, "listen", "n", ":62025", "deploy listen address")
 	flags.StringVarP(&opts.Link, "link", "L", "", "deploy link (trojan://...)")
+	flags.StringVarP(&opts.DiagPort, "diag-service-port", "P", "", "diagnostics service port")
 	_ = cmd.MarkFlagRequired("link")
 	flags.DurationVarP(&opts.Timeout, "timeout", "t", 10*time.Minute, "idle shutdown timeout")
 	return cmd
