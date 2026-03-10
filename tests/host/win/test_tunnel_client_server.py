@@ -68,6 +68,30 @@ def _state_files_for(install_dir: Path) -> list[Path]:
     ]
 
 
+def _add_hosts_entry(host, ip: str, hostname: str) -> None:
+    result = _env.run_guest_script(
+        host,
+        "scripts/update_hosts_entry.ps1",
+        Action="Add",
+        HostName=hostname,
+        IPAddress=ip,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to add hosts entry.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _remove_hosts_entry(host, hostname: str) -> None:
+    _env.run_guest_script(
+        host,
+        "scripts/update_hosts_entry.ps1",
+        Action="Remove",
+        HostName=hostname,
+    )
+
+
 def _cleanup_server_install(
     server_host, runner, msi_path: str, install_dir: Path | None = None, purge: bool = False
 ) -> None:
@@ -315,39 +339,34 @@ def test_install_server_and_client_nodefault(
             assert server_session["pid"] > 0
 
             _stage_xray_binary(client_host, CUSTOM_CLIENT_INSTALL_DIR)
-            xp2p_client_runner(
-                "client",
-                "install",
-                "--path",
-                str(CUSTOM_CLIENT_INSTALL_DIR),
-                "--config-dir",
-                CUSTOM_CLIENT_CONFIG_NAME,
-                "--host",
-                server_public_host,
-                "--port",
-                str(CUSTOM_SERVER_PORT),
-                "--user",
-                credential["user"],
-                "--password",
-                credential["password"],
-                "--sni",
-                CUSTOM_SERVER_HOST,
-                "--allow-insecure",
-                "--force",
-                check=True,
-            )
+            _add_hosts_entry(client_host, server_public_host, CUSTOM_SERVER_HOST)
+            try:
+                xp2p_client_runner(
+                    "client",
+                    "install",
+                    "--path",
+                    str(CUSTOM_CLIENT_INSTALL_DIR),
+                    "--config-dir",
+                    CUSTOM_CLIENT_CONFIG_NAME,
+                    "--link",
+                    credential["link"],
+                    "--force",
+                    check=True,
+                )
 
-            client_session_cm = xp2p_client_run_factory(
-                str(CUSTOM_CLIENT_INSTALL_DIR),
-                CUSTOM_CLIENT_CONFIG_NAME,
-                CLIENT_LOG_RELATIVE,
-            )
-            with client_session_cm as client_session:
-                assert client_session["pid"] > 0
-                _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)
-                _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
-                ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
-                _assert_ping_success(ping_result)
+                client_session_cm = xp2p_client_run_factory(
+                    str(CUSTOM_CLIENT_INSTALL_DIR),
+                    CUSTOM_CLIENT_CONFIG_NAME,
+                    CLIENT_LOG_RELATIVE,
+                )
+                with client_session_cm as client_session:
+                    assert client_session["pid"] > 0
+                    _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)
+                    _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
+                    ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
+                    _assert_ping_success(ping_result)
+            finally:
+                _remove_hosts_entry(client_host, CUSTOM_SERVER_HOST)
     finally:
         _cleanup_client_install(
             client_host, xp2p_client_runner, xp2p_msi_path, CUSTOM_CLIENT_INSTALL_DIR, purge=True

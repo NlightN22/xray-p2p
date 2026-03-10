@@ -348,7 +348,6 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             client_password,
             "--sni",
             client_sni,
-            "--allow-insecure",
             "--force",
             check=True,
         )
@@ -361,7 +360,6 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             client_password,
             client_user,
             client_sni,
-            allow_insecure=True,
         )
         routing = _read_remote_json(server_host, client_config_path / "routing.json")
         _assert_routing_rule(routing, client_host)
