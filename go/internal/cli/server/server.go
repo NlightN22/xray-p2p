@@ -120,6 +120,7 @@ func runServerRemove(ctx context.Context, cfg config.Config, opts serverRemoveCo
 		return 1
 	}
 	logging.Info("xp2p server removed", "install_dir", removeOpts.InstallDir, "config_dir", removeOpts.ConfigDir)
+	logging.Warn("xp2p server remove: stop the server service if it is running (xp2p server service stop)")
 	return 0
 }
 

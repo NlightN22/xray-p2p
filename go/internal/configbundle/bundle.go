@@ -78,21 +78,24 @@ func ExportConfigRoot(root, outputPath string) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+	outputDir := filepath.Dir(outputPath)
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
 		return fmt.Errorf("configbundle: ensure output directory: %w", err)
 	}
 
-	file, err := os.Create(outputPath)
+	tmpFile, err := os.CreateTemp(outputDir, ".xp2p-export-*.tmp")
 	if err != nil {
-		return fmt.Errorf("configbundle: create archive %s: %w", outputPath, err)
+		return fmt.Errorf("configbundle: create archive temp file: %w", err)
 	}
+	tmpPath := tmpFile.Name()
 	defer func() {
-		_ = file.Close()
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 	}()
 
 	switch format {
 	case FormatZip:
-		writer := zip.NewWriter(file)
+		writer := zip.NewWriter(tmpFile)
 		if err := writeZip(cleanRoot, writer); err != nil {
 			_ = writer.Close()
 			return err
@@ -100,9 +103,8 @@ func ExportConfigRoot(root, outputPath string) error {
 		if err := writer.Close(); err != nil {
 			return fmt.Errorf("configbundle: close zip: %w", err)
 		}
-		return nil
 	case FormatTarGz:
-		gz := gzip.NewWriter(file)
+		gz := gzip.NewWriter(tmpFile)
 		tw := tar.NewWriter(gz)
 		if err := writeTarGz(cleanRoot, tw); err != nil {
 			_ = tw.Close()
@@ -116,10 +118,20 @@ func ExportConfigRoot(root, outputPath string) error {
 		if err := gz.Close(); err != nil {
 			return fmt.Errorf("configbundle: close gzip: %w", err)
 		}
-		return nil
 	default:
 		return fmt.Errorf("configbundle: unsupported format %s", format)
 	}
+
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("configbundle: close archive temp file: %w", err)
+	}
+	if err := os.Remove(outputPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("configbundle: remove existing archive %s: %w", outputPath, err)
+	}
+	if err := os.Rename(tmpPath, outputPath); err != nil {
+		return fmt.Errorf("configbundle: finalize archive %s: %w", outputPath, err)
+	}
+	return nil
 }
 
 func ImportConfigRoot(root, inputPath string) error {

@@ -82,6 +82,7 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 		}
 
 		logging.Info("xp2p client removed", "install_dir", opts.InstallDir, "config_dir", opts.ConfigDir)
+		logging.Warn("xp2p client remove: stop the client service if it is running (xp2p client service stop)")
 		return 0
 	}
 
@@ -114,5 +115,6 @@ func runClientRemove(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	logging.Info("xp2p client endpoint removed", "target", target, "config_dir", endpointOpts.ConfigDir)
+	logging.Warn("xp2p client remove: stop the client service if it is running (xp2p client service stop)")
 	return 0
 }
