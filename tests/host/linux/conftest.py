@@ -20,6 +20,8 @@ def xp2p_linux_versions(linux_host_factory) -> dict[str, dict[str, str]]:
     for machine in linux_env.MACHINE_IDS:
         host = linux_host_factory(machine)
         versions[machine] = linux_env.ensure_xp2p_installed(machine, host)
+        linux_env.run_xp2p(host, "client", "service", "stop")
+        linux_env.run_xp2p(host, "server", "service", "stop")
     return versions
 
 
