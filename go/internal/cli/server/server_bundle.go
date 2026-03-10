@@ -100,5 +100,6 @@ func runServerImport(_ config.Config, opts serverImportOptions) int {
 		return 1
 	}
 	logging.Info("xp2p server import: archive applied", "path", input)
+	logging.Warn("xp2p server import: verify service status after import")
 	return 0
 }

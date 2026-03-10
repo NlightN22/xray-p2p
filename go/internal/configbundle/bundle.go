@@ -138,6 +138,10 @@ func ImportConfigRoot(root, inputPath string) error {
 	}
 
 	parent := filepath.Dir(cleanRoot)
+	desiredRootMode := os.FileMode(0o755)
+	if info, err := os.Stat(cleanRoot); err == nil {
+		desiredRootMode = info.Mode().Perm()
+	}
 	tempDir, err := os.MkdirTemp(parent, ".xp2p-import-")
 	if err != nil {
 		return fmt.Errorf("configbundle: create temp dir: %w", err)
@@ -145,6 +149,9 @@ func ImportConfigRoot(root, inputPath string) error {
 	defer func() {
 		_ = os.RemoveAll(tempDir)
 	}()
+	if err := os.Chmod(tempDir, desiredRootMode); err != nil {
+		return fmt.Errorf("configbundle: set temp root permissions: %w", err)
+	}
 
 	if err := extractArchive(cleanInput, tempDir, format); err != nil {
 		return err
@@ -298,7 +305,8 @@ func extractZip(path, dest string) error {
 		}
 		target := filepath.Join(dest, rel)
 		if file.FileInfo().IsDir() || strings.HasSuffix(file.Name, "/") {
-			if err := os.MkdirAll(target, file.Mode()); err != nil {
+			dirMode := normalizeDirMode(file.Mode())
+			if err := os.MkdirAll(target, dirMode); err != nil {
 				return fmt.Errorf("configbundle: create dir %s: %w", target, err)
 			}
 			continue
@@ -350,7 +358,8 @@ func extractTarGz(path, dest string) error {
 		target := filepath.Join(dest, rel)
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
+			dirMode := normalizeDirMode(os.FileMode(header.Mode))
+			if err := os.MkdirAll(target, dirMode); err != nil {
 				return fmt.Errorf("configbundle: create dir %s: %w", target, err)
 			}
 		case tar.TypeReg:
@@ -367,7 +376,11 @@ func extractTarGz(path, dest string) error {
 }
 
 func writeFileFromReader(path string, reader io.Reader, mode os.FileMode) error {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode.Perm())
+	perm := mode.Perm()
+	if perm == 0 {
+		perm = 0o644
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
 	if err != nil {
 		return fmt.Errorf("configbundle: write file %s: %w", path, err)
 	}
@@ -378,10 +391,18 @@ func writeFileFromReader(path string, reader io.Reader, mode os.FileMode) error 
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("configbundle: close file %s: %w", path, err)
 	}
-	if mode != 0 {
-		_ = os.Chmod(path, mode.Perm())
+	if perm != 0 {
+		_ = os.Chmod(path, perm)
 	}
 	return nil
+}
+
+func normalizeDirMode(mode os.FileMode) os.FileMode {
+	perm := mode.Perm()
+	if perm == 0 {
+		return 0o755
+	}
+	return perm
 }
 
 func validateArchivePath(name string) (string, error) {
