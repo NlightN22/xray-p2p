@@ -180,7 +180,8 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
             cred_a["password"],
             cred_a["user"],
             SERVER_A_IP,
-            allow_insecure=True,
+            pinned_peer_sha256="",
+            verify_peer_name=SERVER_A_IP,
         )
         helpers.assert_outbound(
             outbounds,
@@ -188,7 +189,8 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
             cred_c["password"],
             cred_c["user"],
             SERVER_C_IP,
-            allow_insecure=True,
+            pinned_peer_sha256="",
+            verify_peer_name=SERVER_C_IP,
         )
 
         routing = client_routing

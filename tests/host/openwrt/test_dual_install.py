@@ -227,7 +227,6 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
             client_password,
             "--sni",
             client_sni,
-            "--allow-insecure",
             "--force",
             check=True,
         )
@@ -240,7 +239,6 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
             client_password,
             client_user,
             client_sni,
-            allow_insecure=True,
         )
         routing = helpers.read_json(openwrt_host, client_config_path / "routing.json")
         helpers.assert_routing_rule(routing, client_host)
