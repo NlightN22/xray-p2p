@@ -77,9 +77,8 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 	if tlsSettings == nil {
 		t.Fatalf("expected tlsSettings")
 	}
-	value, _ := tlsSettings["allowInsecure"].(bool)
-	if !value {
-		t.Fatalf("expected allowInsecure to be true for self-signed certificate")
+	if _, ok := tlsSettings["allowInsecure"]; ok {
+		t.Fatalf("did not expect allowInsecure in server tlsSettings")
 	}
 }
 
@@ -136,9 +135,8 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 	if tlsSettings == nil {
 		t.Fatalf("expected tlsSettings")
 	}
-	value, _ := tlsSettings["allowInsecure"].(bool)
-	if !value {
-		t.Fatalf("expected allowInsecure to be true for self-signed certificate")
+	if _, ok := tlsSettings["allowInsecure"]; ok {
+		t.Fatalf("did not expect allowInsecure in server tlsSettings")
 	}
 }
 

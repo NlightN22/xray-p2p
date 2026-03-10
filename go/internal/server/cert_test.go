@@ -20,7 +20,7 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, false, false)
+	prepareTrojanConfig(t, configDir, false)
 
 	opts := CertificateOptions{
 		InstallDir: dir,
@@ -79,9 +79,8 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 	if tlsSettings == nil {
 		t.Fatalf("expected tlsSettings")
 	}
-	value, _ := tlsSettings["allowInsecure"].(bool)
-	if !value {
-		t.Fatalf("expected allowInsecure true for self-signed certificate")
+	if _, ok := tlsSettings["allowInsecure"]; ok {
+		t.Fatalf("did not expect allowInsecure in server tlsSettings")
 	}
 }
 
@@ -89,7 +88,7 @@ func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, false, false)
+	prepareTrojanConfig(t, configDir, false)
 
 	srcCert, srcKey := createTestCertificateFiles(t, dir, "provided.example.test")
 
@@ -129,9 +128,8 @@ func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 	if tlsSettings == nil {
 		t.Fatalf("expected tlsSettings")
 	}
-	value, _ := tlsSettings["allowInsecure"].(bool)
-	if !value {
-		t.Fatalf("expected allowInsecure true for self-signed certificate")
+	if _, ok := tlsSettings["allowInsecure"]; ok {
+		t.Fatalf("did not expect allowInsecure in server tlsSettings")
 	}
 }
 
@@ -139,7 +137,7 @@ func TestSetCertificateRequiresForceWhenTLSConfigured(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, false)
+	prepareTrojanConfig(t, configDir, true)
 
 	opts := CertificateOptions{
 		InstallDir: dir,
@@ -153,7 +151,7 @@ func TestSetCertificateRequiresForceWhenTLSConfigured(t *testing.T) {
 	}
 }
 
-func prepareTrojanConfig(t *testing.T, configDir string, withTLS bool, allowInsecure bool) {
+func prepareTrojanConfig(t *testing.T, configDir string, withTLS bool) {
 	t.Helper()
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", configDir, err)
@@ -171,9 +169,6 @@ func prepareTrojanConfig(t *testing.T, configDir string, withTLS bool, allowInse
 					"keyFile":         "key.pem",
 				},
 			},
-		}
-		if allowInsecure {
-			tlsSettings["allowInsecure"] = true
 		}
 		streamSettings["tlsSettings"] = tlsSettings
 	}

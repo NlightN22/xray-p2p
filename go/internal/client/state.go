@@ -26,14 +26,16 @@ type clientInstallState struct {
 }
 
 type clientEndpointRecord struct {
-	Hostname      string `json:"hostname" toml:"hostname"`
-	Tag           string `json:"tag" toml:"tag"`
-	Address       string `json:"address" toml:"address"`
-	Port          int    `json:"port" toml:"port"`
-	User          string `json:"user" toml:"user"`
-	Password      string `json:"password" toml:"password"`
-	ServerName    string `json:"server_name" toml:"server_name"`
-	AllowInsecure bool   `json:"allow_insecure" toml:"allow_insecure"`
+	Hostname             string `json:"hostname" toml:"hostname"`
+	Tag                  string `json:"tag" toml:"tag"`
+	Address              string `json:"address" toml:"address"`
+	Port                 int    `json:"port" toml:"port"`
+	User                 string `json:"user" toml:"user"`
+	Password             string `json:"password" toml:"password"`
+	ServerName           string `json:"server_name" toml:"server_name"`
+	AllowInsecure        bool   `json:"allow_insecure" toml:"allow_insecure"`
+	PinnedPeerCertSHA256 string `json:"pinned_peer_cert_sha256" toml:"pinned_peer_cert_sha256"`
+	VerifyPeerCertByName string `json:"verify_peer_cert_by_name" toml:"verify_peer_cert_by_name"`
 }
 
 type clientReverseChannel struct {

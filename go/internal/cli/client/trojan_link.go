@@ -16,6 +16,8 @@ type trojanLink struct {
 	ServerNameSet    bool
 	AllowInsecure    bool
 	AllowInsecureSet bool
+	PinnedPeerSHA256 string
+	VerifyPeerName   string
 }
 
 func parseTrojanLink(raw string) (trojanLink, error) {
@@ -75,6 +77,9 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 		allowInsecure = val
 	}
 
+	pinnedPeerSHA256 := strings.TrimSpace(query.Get("pinnedPeerCertSha256"))
+	verifyPeerName := strings.TrimSpace(query.Get("verifyPeerCertByName"))
+
 	security := strings.ToLower(strings.TrimSpace(query.Get("security")))
 	serverName := ""
 	serverNameSet := false
@@ -91,6 +96,14 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 		serverNameSet = true
 	}
 
+	if security == "none" {
+		pinnedPeerSHA256 = ""
+		verifyPeerName = ""
+	}
+	if pinnedPeerSHA256 != "" && verifyPeerName == "" && serverName != "" {
+		verifyPeerName = serverName
+	}
+
 	return trojanLink{
 		ServerAddress:    address,
 		ServerPort:       portValue,
@@ -100,6 +113,8 @@ func parseTrojanLink(raw string) (trojanLink, error) {
 		ServerNameSet:    serverNameSet,
 		AllowInsecure:    allowInsecure,
 		AllowInsecureSet: allowInsecureSet,
+		PinnedPeerSHA256: pinnedPeerSHA256,
+		VerifyPeerName:   verifyPeerName,
 	}, nil
 }
 

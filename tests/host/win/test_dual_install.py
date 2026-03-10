@@ -144,6 +144,8 @@ def _assert_outbound_entry(
     server_name: str,
     *,
     allow_insecure: bool = False,
+    pinned_peer_sha256=None,
+    verify_peer_name=None,
 ) -> None:
     tag = _expected_tag(host)
     outbound = _find_outbound(data, tag)
@@ -153,7 +155,17 @@ def _assert_outbound_entry(
     assert server["email"] == email
     tls_settings = outbound["streamSettings"]["tlsSettings"]
     assert tls_settings["serverName"] == server_name
-    assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+    if pinned_peer_sha256 is not None:
+        actual_pin = tls_settings.get("pinnedPeerCertSha256")
+        if pinned_peer_sha256:
+            assert actual_pin == pinned_peer_sha256
+        else:
+            assert actual_pin, "Expected pinnedPeerCertSha256 to be set"
+        if verify_peer_name:
+            assert tls_settings.get("verifyPeerCertByName") == verify_peer_name
+        assert "allowInsecure" not in tls_settings or not tls_settings.get("allowInsecure")
+    else:
+        assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
 
 
 def _assert_routing_rule(data: dict, host: str) -> None:

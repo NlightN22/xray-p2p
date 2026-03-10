@@ -97,7 +97,14 @@ def _find_outbound(data: dict, tag: str) -> dict:
 
 
 def _assert_outbound_entry(
-    data: dict, host: str, password: str, email: str, server_name: str, allow_insecure: bool = False
+    data: dict,
+    host: str,
+    password: str,
+    email: str,
+    server_name: str,
+    allow_insecure: bool = False,
+    pinned_peer_sha256=None,
+    verify_peer_name=None,
 ) -> None:
     tag = _expected_tag(host)
     outbound = _find_outbound(data, tag)
@@ -107,7 +114,17 @@ def _assert_outbound_entry(
     assert server["email"] == email
     tls_settings = outbound["streamSettings"]["tlsSettings"]
     assert tls_settings["serverName"] == server_name
-    assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+    if pinned_peer_sha256 is not None:
+        actual_pin = tls_settings.get("pinnedPeerCertSha256")
+        if pinned_peer_sha256:
+            assert actual_pin == pinned_peer_sha256
+        else:
+            assert actual_pin, "Expected pinnedPeerCertSha256 to be set"
+        if verify_peer_name:
+            assert tls_settings.get("verifyPeerCertByName") == verify_peer_name
+        assert "allowInsecure" not in tls_settings or not tls_settings.get("allowInsecure")
+    else:
+        assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
 
 
 def _assert_routing_rule(data: dict, host: str) -> None:
@@ -237,7 +254,8 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
     try:
         link = (
             "trojan://linkpass@link.example.test:58443?"
-            "allowInsecure=1&security=tls&sni=link.example.test#link@example.com"
+            "pinnedPeerCertSha256=deadbeef&security=tls&sni=link.example.test&"
+            "verifyPeerCertByName=link.example.test#link@example.com"
         )
         xp2p_client_runner(
             "client",
@@ -250,7 +268,13 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry(
-            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=True
+            data,
+            "link.example.test",
+            "linkpass",
+            "link@example.com",
+            "link.example.test",
+            pinned_peer_sha256="deadbeef",
+            verify_peer_name="link.example.test",
         )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

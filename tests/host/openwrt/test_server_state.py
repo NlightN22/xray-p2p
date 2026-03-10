@@ -93,7 +93,8 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
 
         fake_link = (
             f"trojan://{client_password}@{client_domain}:{trojan_port}?"
-            f"allowInsecure=1&security=tls&sni={client_domain}#{client_user}"
+            f"pinnedPeerCertSha256=deadbeef&security=tls&sni={client_domain}&"
+            f"verifyPeerCertByName={client_domain}#{client_user}"
         )
         runner(
             "client",

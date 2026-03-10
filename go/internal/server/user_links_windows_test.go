@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +15,7 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, false)
+	prepareTrojanConfig(t, configDir, true)
 
 	certPath, keyPath := createTestCertificateFiles(t, dir, "links.example.test")
 	if err := os.Rename(certPath, filepath.Join(configDir, "cert.pem")); err != nil {
@@ -50,7 +51,17 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	if users[0].Password != "secret" {
 		t.Fatalf("unexpected password: %s", users[0].Password)
 	}
-	if want := "trojan://secret@links.example.test:58443?security=tls&sni=links.example.test#alpha"; users[0].Link != want {
+	pin, err := certificateFingerprintSHA256(filepath.Join(configDir, "cert.pem"))
+	if err != nil {
+		t.Fatalf("fingerprint cert: %v", err)
+	}
+	query := url.Values{}
+	query.Set("pinnedPeerCertSha256", pin)
+	query.Set("security", "tls")
+	query.Set("sni", "links.example.test")
+	query.Set("verifyPeerCertByName", "links.example.test")
+	want := "trojan://secret@links.example.test:58443?" + query.Encode() + "#alpha"
+	if users[0].Link != want {
 		t.Fatalf("unexpected link: %s", users[0].Link)
 	}
 }
@@ -60,7 +71,7 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, false, false)
+	prepareTrojanConfig(t, configDir, false)
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -95,12 +106,12 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	}
 }
 
-func TestListUsersSelfSignedIncludesAllowInsecure(t *testing.T) {
+func TestListUsersSelfSignedAddsPinnedPeerCert(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, true)
+	prepareTrojanConfig(t, configDir, true)
 
 	certPath, keyPath := createTestCertificateFiles(t, dir, "self.example.test")
 	if err := os.Rename(certPath, filepath.Join(configDir, "cert.pem")); err != nil {
@@ -130,7 +141,16 @@ func TestListUsersSelfSignedIncludesAllowInsecure(t *testing.T) {
 	if len(users) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(users))
 	}
-	want := "trojan://secret@self.example.test:58443?allowInsecure=1&security=tls&sni=self.example.test#alpha"
+	pin, err := certificateFingerprintSHA256(filepath.Join(configDir, "cert.pem"))
+	if err != nil {
+		t.Fatalf("fingerprint cert: %v", err)
+	}
+	query := url.Values{}
+	query.Set("pinnedPeerCertSha256", pin)
+	query.Set("security", "tls")
+	query.Set("sni", "self.example.test")
+	query.Set("verifyPeerCertByName", "self.example.test")
+	want := "trojan://secret@self.example.test:58443?" + query.Encode() + "#alpha"
 	if users[0].Link != want {
 		t.Fatalf("unexpected link: %s", users[0].Link)
 	}

@@ -149,8 +149,10 @@ func trojanOutbound(ep clientEndpointRecord) any {
 			Network:  "tcp",
 			Security: "tls",
 			TLSSettings: tlsSettings{
-				AllowInsecure: ep.AllowInsecure,
-				ServerName:    ep.ServerName,
+				AllowInsecure:        ep.AllowInsecure,
+				ServerName:           ep.ServerName,
+				PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
+				VerifyPeerCertByName: ep.VerifyPeerCertByName,
 			},
 			TCPSettings: tcpSettings{
 				Header: tcpHeader{
@@ -201,8 +203,10 @@ type streamSettings struct {
 }
 
 type tlsSettings struct {
-	AllowInsecure bool   `json:"allowInsecure"`
-	ServerName    string `json:"serverName"`
+	AllowInsecure        bool   `json:"allowInsecure,omitempty"`
+	ServerName           string `json:"serverName,omitempty"`
+	PinnedPeerCertSHA256 string `json:"pinnedPeerCertSha256,omitempty"`
+	VerifyPeerCertByName string `json:"verifyPeerCertByName,omitempty"`
 }
 
 type tcpSettings struct {

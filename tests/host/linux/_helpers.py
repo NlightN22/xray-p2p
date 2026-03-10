@@ -303,6 +303,8 @@ def assert_outbound(
     server_name: str,
     *,
     allow_insecure: bool = False,
+    pinned_peer_sha256: str | None = None,
+    verify_peer_name: str | None = None,
 ) -> None:
     tag = expected_proxy_tag(host)
     for outbound in data.get("outbounds", []):
@@ -314,7 +316,17 @@ def assert_outbound(
         assert server["email"] == email
         tls_settings = outbound["streamSettings"]["tlsSettings"]
         assert tls_settings["serverName"] == server_name
-        assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+        if pinned_peer_sha256 is not None:
+            actual_pin = tls_settings.get("pinnedPeerCertSha256")
+            if pinned_peer_sha256:
+                assert actual_pin == pinned_peer_sha256
+            else:
+                assert actual_pin, "Expected pinnedPeerCertSha256 to be set"
+            if verify_peer_name:
+                assert tls_settings.get("verifyPeerCertByName") == verify_peer_name
+            assert "allowInsecure" not in tls_settings or not tls_settings.get("allowInsecure")
+        else:
+            assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
         return
     raise AssertionError(f"Outbound {tag} for host {host} not found")
 

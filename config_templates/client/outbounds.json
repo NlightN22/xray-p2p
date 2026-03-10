@@ -15,8 +15,9 @@
                 "network": "tcp",
                 "security": "tls",
                 "tlsSettings": {
-                    "allowInsecure": true,
-                    "serverName": "domain.tld"
+                    "serverName": "domain.tld",
+                    "pinnedPeerCertSha256": "e8e2d387fdbffeb38e9c9065cf30a97ee23c0e3d32ee6f78ffae40966befccc9",
+                    "verifyPeerCertByName": "domain.tld"
                 },
                 "tcpSettings": {
                     "header": {

@@ -193,7 +193,8 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
         assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
 
         expected_allow_insecure = _parse_self_signed(_read_cert_state(runner))
-        assert bool(tls_settings.get("allowInsecure")) is expected_allow_insecure
+        assert expected_allow_insecure in {True, False}
+        assert "allowInsecure" not in tls_settings
         assert _path_exists(openwrt_server_host, SERVER_CERT_DEST), "Expected cert.pem to exist in config-server"
         assert _path_exists(openwrt_server_host, SERVER_KEY_DEST), "Expected key.pem to exist in config-server"
     finally:
@@ -230,7 +231,7 @@ def test_openwrt_server_install_generates_self_signed_certificate(openwrt_server
         inbounds = _read_remote_json(openwrt_server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
-        assert tls_settings.get("allowInsecure") is True
+        assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]

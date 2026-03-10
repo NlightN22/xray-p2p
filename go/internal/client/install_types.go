@@ -26,6 +26,8 @@ type InstallOptions struct {
 	Password              string
 	ServerName            string
 	AllowInsecure         bool
+	PinnedPeerCertSHA256  string
+	VerifyPeerCertByName  string
 	AllowInsecureOverride bool
 	Force                 bool
 	TunEnabled            bool

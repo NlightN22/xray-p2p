@@ -53,20 +53,10 @@ def _extract_link(output: str) -> str:
     pytest.fail(f"xp2p server user add did not emit trojan link.\nSTDOUT:\n{output}")
 
 
-def _ensure_allow_insecure(link: str) -> str:
-    if "allowInsecure=" in link:
-        return link
-    if "#" in link:
-        base, frag = link.split("#", 1)
-    else:
-        base, frag = link, ""
-    if "?" in base:
-        base = f"{base}&allowInsecure=1"
-    else:
-        base = f"{base}?allowInsecure=1"
-    if frag:
-        return f"{base}#{frag}"
-    return base
+def _ensure_pinned_peer(link: str) -> str:
+    if "pinnedPeerCertSha256=" not in link:
+        pytest.fail(f"Expected pinnedPeerCertSha256 in link: {link}")
+    return link
 
 
 @pytest.mark.host
@@ -316,7 +306,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
             check=True,
         )
         default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
-        link_a = _ensure_allow_insecure(default_cred["link"])
+        link_a = _ensure_pinned_peer(default_cred["link"])
 
         user_add = run(
             "server",
@@ -334,7 +324,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
             server_domain_b,
             check=True,
         )
-        link_b = _ensure_allow_insecure(_extract_link(user_add.stdout or ""))
+        link_b = _ensure_pinned_peer(_extract_link(user_add.stdout or ""))
 
         client_install_a = run(
             "client",

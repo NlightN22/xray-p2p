@@ -92,6 +92,8 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			Password:              password,
 			ServerName:            serverName,
 			AllowInsecure:         opts.AllowInsecure,
+			PinnedPeerCertSHA256:  strings.TrimSpace(opts.PinnedPeerCertSHA256),
+			VerifyPeerCertByName:  strings.TrimSpace(opts.VerifyPeerCertByName),
 			AllowInsecureOverride: opts.AllowInsecureOverride,
 			Force:                 opts.Force,
 			TunEnabled:            tunEnabled,

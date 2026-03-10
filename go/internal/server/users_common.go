@@ -33,6 +33,7 @@ type trojanState struct {
 	port          int
 	tlsEnabled    bool
 	allowInsecure bool
+	pinnedSHA256  string
 }
 
 func parseInbounds(contents []byte) (map[string]any, error) {
@@ -181,10 +182,33 @@ func loadTrojanState(configDir string) (trojanState, error) {
 
 	allowInsecure := false
 	if tlsEnabled {
+		allowInsecureSet := false
 		if tlsSettings, ok := stream["tlsSettings"].(map[string]any); ok {
 			if value, ok := tlsSettings["allowInsecure"].(bool); ok {
 				allowInsecure = value
+				allowInsecureSet = true
 			}
+		}
+		if !allowInsecureSet {
+			if certPathValue, _, err := certificatePathsFromStream(stream); err == nil {
+				certPath := resolveCertificatePath(configDir, certPathValue)
+				if selfSigned, err := isSelfSignedCertificatePath(certPath); err == nil {
+					allowInsecure = selfSigned
+				}
+			}
+		}
+	}
+
+	pinnedSHA256 := ""
+	if tlsEnabled && allowInsecure {
+		certPathValue, _, err := certificatePathsFromStream(stream)
+		if err != nil {
+			return trojanState{}, err
+		}
+		certPath := resolveCertificatePath(configDir, certPathValue)
+		pinnedSHA256, err = certificateFingerprintSHA256(certPath)
+		if err != nil {
+			return trojanState{}, err
 		}
 	}
 
@@ -195,6 +219,7 @@ func loadTrojanState(configDir string) (trojanState, error) {
 		port:          portValue,
 		tlsEnabled:    tlsEnabled,
 		allowInsecure: allowInsecure,
+		pinnedSHA256:  pinnedSHA256,
 	}, nil
 }
 
@@ -314,7 +339,7 @@ func extractTrojanPort(inbound map[string]any) (int, error) {
 	}
 }
 
-func buildTrojanLink(host string, port int, password, label string, tlsEnabled, allowInsecure bool) (string, error) {
+func buildTrojanLink(host string, port int, password, label string, tlsEnabled bool, pinnedPeerCertSHA256, verifyPeerCertByName string) (string, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
 		return "", errors.New("xp2p: host is required to build trojan link")
@@ -334,8 +359,11 @@ func buildTrojanLink(host string, port int, password, label string, tlsEnabled, 
 	if tlsEnabled {
 		query.Set("security", "tls")
 		query.Set("sni", host)
-		if allowInsecure {
-			query.Set("allowInsecure", "1")
+		if pinnedPeerCertSHA256 != "" {
+			query.Set("pinnedPeerCertSha256", pinnedPeerCertSHA256)
+		}
+		if verifyPeerCertByName != "" {
+			query.Set("verifyPeerCertByName", verifyPeerCertByName)
 		}
 	} else {
 		query.Set("security", "none")
@@ -362,7 +390,11 @@ func listUsersFromConfig(configDir, host string) ([]UserLink, error) {
 
 	result := make([]UserLink, 0, len(state.clients))
 	for _, client := range state.clients {
-		link, err := buildTrojanLink(linkHost, state.port, client.Password, client.Email, state.tlsEnabled, state.allowInsecure)
+		verifyName := ""
+		if state.pinnedSHA256 != "" {
+			verifyName = linkHost
+		}
+		link, err := buildTrojanLink(linkHost, state.port, client.Password, client.Email, state.tlsEnabled, state.pinnedSHA256, verifyName)
 		if err != nil {
 			return nil, err
 		}
@@ -391,7 +423,11 @@ func userLinkFromConfig(configDir, host, userID string) (UserLink, error) {
 		if requestedID != "" && !strings.EqualFold(requestedID, strings.TrimSpace(client.Email)) {
 			continue
 		}
-		link, err := buildTrojanLink(linkHost, state.port, client.Password, client.Email, state.tlsEnabled, state.allowInsecure)
+		verifyName := ""
+		if state.pinnedSHA256 != "" {
+			verifyName = linkHost
+		}
+		link, err := buildTrojanLink(linkHost, state.port, client.Password, client.Email, state.tlsEnabled, state.pinnedSHA256, verifyName)
 		if err != nil {
 			return UserLink{}, err
 		}

@@ -18,7 +18,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, false)
+	prepareTrojanConfig(t, configDir, true)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
@@ -65,7 +65,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, false)
+	prepareTrojanConfig(t, configDir, true)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
 
 	opts := AddUserOptions{
@@ -109,7 +109,7 @@ func TestAddUserDetectsReverseConflicts(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, false)
+	prepareTrojanConfig(t, configDir, true)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
@@ -139,7 +139,7 @@ func TestAddUserRejectsDuplicateUser(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, false)
+	prepareTrojanConfig(t, configDir, true)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
@@ -169,7 +169,7 @@ func TestAddUserAllowsForceUpdate(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true, false)
+	prepareTrojanConfig(t, configDir, true)
 	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{

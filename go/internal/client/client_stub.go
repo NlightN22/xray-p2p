@@ -17,13 +17,15 @@ type (
 		ConfigDir  string
 	}
 	EndpointRecord struct {
-		Hostname      string
-		Tag           string
-		Address       string
-		Port          int
-		User          string
-		ServerName    string
-		AllowInsecure bool
+		Hostname             string
+		Tag                  string
+		Address              string
+		Port                 int
+		User                 string
+		ServerName           string
+		AllowInsecure        bool
+		PinnedPeerCertSHA256 string
+		VerifyPeerCertByName string
 	}
 	ReverseListOptions struct {
 		InstallDir string

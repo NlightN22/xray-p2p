@@ -16,6 +16,8 @@ type endpointConfig struct {
 	Password              string
 	ServerName            string
 	AllowInsecure         bool
+	PinnedPeerCertSHA256  string
+	VerifyPeerCertByName  string
 	AllowInsecureOverride bool
 }
 
@@ -41,16 +43,26 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	}
 
 	allowValue := endpoint.AllowInsecure
+	pinnedSHA256 := strings.TrimSpace(endpoint.PinnedPeerCertSHA256)
+	verifyPeer := strings.TrimSpace(endpoint.VerifyPeerCertByName)
+	if pinnedSHA256 != "" {
+		allowValue = false
+		if verifyPeer == "" {
+			verifyPeer = endpoint.ServerName
+		}
+	}
 
 	record := clientEndpointRecord{
-		Hostname:      host,
-		Tag:           tag,
-		Address:       host,
-		Port:          endpoint.Port,
-		User:          endpoint.User,
-		Password:      endpoint.Password,
-		ServerName:    endpoint.ServerName,
-		AllowInsecure: allowValue,
+		Hostname:             host,
+		Tag:                  tag,
+		Address:              host,
+		Port:                 endpoint.Port,
+		User:                 endpoint.User,
+		Password:             endpoint.Password,
+		ServerName:           endpoint.ServerName,
+		AllowInsecure:        allowValue,
+		PinnedPeerCertSHA256: pinnedSHA256,
+		VerifyPeerCertByName: verifyPeer,
 	}
 
 	if err := state.upsert(record, force); err != nil {

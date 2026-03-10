@@ -325,7 +325,7 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
-        assert tls_settings.get("allowInsecure") is True
+        assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
@@ -507,7 +507,8 @@ def _assert_client_install_artifacts(host, server_ip: str, user: str, password: 
         password,
         user,
         server_ip,
-        allow_insecure=True,
+        pinned_peer_sha256="",
+        verify_peer_name=server_ip,
     )
 
 
@@ -726,6 +727,8 @@ def _assert_outbound_entry(
     email: str,
     server_name: str,
     allow_insecure: bool = False,
+    pinned_peer_sha256: str | None = None,
+    verify_peer_name: str | None = None,
 ) -> None:
     tag = _expected_tag(host)
     outbound = _find_outbound(data, tag)
@@ -735,7 +738,17 @@ def _assert_outbound_entry(
     assert server["email"] == email
     tls_settings = outbound["streamSettings"]["tlsSettings"]
     assert tls_settings["serverName"] == server_name
-    assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+    if pinned_peer_sha256 is not None:
+        actual_pin = tls_settings.get("pinnedPeerCertSha256")
+        if pinned_peer_sha256:
+            assert actual_pin == pinned_peer_sha256
+        else:
+            assert actual_pin, "Expected pinnedPeerCertSha256 to be set"
+        if verify_peer_name:
+            assert tls_settings.get("verifyPeerCertByName") == verify_peer_name
+        assert "allowInsecure" not in tls_settings or not tls_settings.get("allowInsecure")
+    else:
+        assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
 
 
 def _find_outbound(data: dict, tag: str) -> dict:

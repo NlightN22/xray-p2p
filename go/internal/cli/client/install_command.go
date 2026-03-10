@@ -99,6 +99,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	passwordValue := cfg.Client.Password
 	serverNameValue := cfg.Client.ServerName
 	allowInsecureValue := cfg.Client.AllowInsecure
+	pinnedPeerCertSHA256 := ""
+	verifyPeerCertByName := ""
 
 	if linkValue != "" {
 		serverAddressValue = linkData.ServerAddress
@@ -106,9 +108,14 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		passwordValue = linkData.Password
 		userValue = linkData.User
 		allowInsecureValue = linkData.AllowInsecure
+		pinnedPeerCertSHA256 = linkData.PinnedPeerSHA256
+		verifyPeerCertByName = linkData.VerifyPeerName
 		if linkData.ServerNameSet {
 			serverNameValue = linkData.ServerName
 		}
+	}
+	if pinnedPeerCertSHA256 != "" {
+		allowInsecureValue = false
 	}
 
 	serverAddressValue = firstNonEmpty(*hostFlag, serverAddressValue)
@@ -131,6 +138,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		Password:              passwordValue,
 		ServerName:            serverNameValue,
 		AllowInsecure:         allowInsecureValue,
+		PinnedPeerCertSHA256:  pinnedPeerCertSHA256,
+		VerifyPeerCertByName:  verifyPeerCertByName,
 		AllowInsecureOverride: allowOverride,
 		Force:                 *force,
 		TunEnabled:            cfg.Client.TunEnabled,

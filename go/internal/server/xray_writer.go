@@ -88,7 +88,6 @@ func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPat
 			security = "tls"
 		}
 	}
-	allowInsecure := cfg.Inbounds.Trojan.AllowInsecure || forceAllowInsecure
 	stream := map[string]any{
 		"network": cfg.Inbounds.Trojan.Network,
 		"tcpSettings": map[string]any{
@@ -111,9 +110,6 @@ func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPat
 					"keyFile":         keyPath,
 				},
 			},
-		}
-		if allowInsecure {
-			tlsSettings["allowInsecure"] = true
 		}
 		stream["security"] = "tls"
 		stream["tlsSettings"] = tlsSettings

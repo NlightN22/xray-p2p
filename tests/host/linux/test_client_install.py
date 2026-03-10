@@ -161,7 +161,8 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
     try:
         link = (
             "trojan://linkpass@link.example.test:58443?"
-            "allowInsecure=1&security=tls&sni=link.example.test#link@example.com"
+            "pinnedPeerCertSha256=deadbeef&security=tls&sni=link.example.test&"
+            "verifyPeerCertByName=link.example.test#link@example.com"
         )
         xp2p_client_runner(
             "client",
@@ -177,7 +178,13 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
         )
         data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
-            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=True
+            data,
+            "link.example.test",
+            "linkpass",
+            "link@example.com",
+            "link.example.test",
+            pinned_peer_sha256="",
+            verify_peer_name="link.example.test",
         )
     finally:
         _cleanup(client_host, xp2p_client_runner)
@@ -234,7 +241,8 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         )
         link = (
             "trojan://statepass@link.example.test:58443?"
-            "allowInsecure=1&security=tls&sni=link.example.test#state-two@example.com"
+            "pinnedPeerCertSha256=deadbeef&security=tls&sni=link.example.test&"
+            "verifyPeerCertByName=link.example.test#state-two@example.com"
         )
         xp2p_client_runner(
             "client",

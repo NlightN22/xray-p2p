@@ -256,7 +256,7 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         inbounds = helpers.read_json(server_host, SERVER_CONFIG_DIR / "inbounds.json")
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
-        assert tls_settings.get("allowInsecure") is True
+        assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
@@ -820,7 +820,8 @@ def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, pass
         password,
         user,
         server_ip,
-        allow_insecure=True,
+        pinned_peer_sha256="",
+        verify_peer_name=server_ip,
     )
 
 

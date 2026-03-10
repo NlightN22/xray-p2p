@@ -62,6 +62,8 @@ func TestRunClientInstall(t *testing.T) {
 					Password:              "secret",
 					ServerName:            "custom.name",
 					AllowInsecure:         true,
+					PinnedPeerCertSHA256:  "",
+					VerifyPeerCertByName:  "",
 					AllowInsecureOverride: true,
 					Force:                 true,
 					TunEnabled:            true,
@@ -104,7 +106,7 @@ func TestRunClientInstall(t *testing.T) {
 			name: "install from link",
 			cfg:  defaultCfg,
 			args: []string{
-				"--link", "trojan://secret@links.example.test:58443?allowInsecure=1&security=tls&sni=links.example.test#alpha@example.com",
+				"--link", "trojan://secret@links.example.test:58443?pinnedPeerCertSha256=deadbeef&security=tls&sni=links.example.test&verifyPeerCertByName=links.example.test#alpha@example.com",
 			},
 			wantCode:   0,
 			wantCalled: true,
@@ -124,8 +126,14 @@ func TestRunClientInstall(t *testing.T) {
 				if opts.ServerName != "links.example.test" {
 					t.Fatalf("unexpected server name: %s", opts.ServerName)
 				}
-				if !opts.AllowInsecure {
-					t.Fatalf("expected allow insecure from link")
+				if opts.AllowInsecure {
+					t.Fatalf("expected allow insecure to remain false")
+				}
+				if opts.PinnedPeerCertSHA256 != "deadbeef" {
+					t.Fatalf("unexpected pinned hash: %s", opts.PinnedPeerCertSHA256)
+				}
+				if opts.VerifyPeerCertByName != "links.example.test" {
+					t.Fatalf("unexpected verify peer name: %s", opts.VerifyPeerCertByName)
 				}
 			},
 		},
@@ -133,7 +141,7 @@ func TestRunClientInstall(t *testing.T) {
 			name: "link email query",
 			cfg:  config.Config{},
 			args: []string{
-				"--link", "trojan://secret@links.example.test:58443?allowInsecure=1&email=alpha@example.com",
+				"--link", "trojan://secret@links.example.test:58443?pinnedPeerCertSha256=deadbeef&email=alpha@example.com&security=tls&sni=links.example.test&verifyPeerCertByName=links.example.test",
 			},
 			wantCode:   0,
 			wantCalled: true,

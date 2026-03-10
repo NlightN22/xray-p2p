@@ -19,7 +19,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
 //go:embed assets/templates/*
@@ -282,7 +281,6 @@ func isSafeInstallDir(path string) bool {
 func deployConfiguration(state installState) error {
 	var certPath string
 	var keyPath string
-	allowInsecure := false
 	if state.certDest != "" {
 		if state.selfSigned {
 			logging.Info("xp2p server install generating self-signed certificate",
@@ -293,13 +291,12 @@ func deployConfiguration(state installState) error {
 			if err := generateSelfSignedCertificate(state.Host, state.certDest, state.keyDest); err != nil {
 				return err
 			}
-			allowInsecure = true
 		} else if state.certSource == CertificateSourcePath {
 			selfSigned, err := isSelfSignedCertificatePath(state.CertificateFile)
 			if err != nil {
 				return err
 			}
-			allowInsecure = selfSigned
+			_ = selfSigned
 			if err := copyFile(state.CertificateFile, state.certDest, 0o644); err != nil {
 				return fmt.Errorf("xp2p: copy certificate: %w", err)
 			}
@@ -319,14 +316,7 @@ func deployConfiguration(state installState) error {
 	if err != nil {
 		return err
 	}
-	if allowInsecure && !xrayCfg.Inbounds.Trojan.AllowInsecure {
-		xrayCfg.Inbounds.Trojan.AllowInsecure = true
-		if err := xrayconfig.SaveServerConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)), config.AuditLogPath(), xrayCfg); err != nil {
-			return err
-		}
-	}
-
-	if err := writeServerInboundsConfig(state.configDir, xrayCfg, state.TunEnabled, state.TunName, state.TunMTU, state.portValue, certPath, keyPath, allowInsecure, nil); err != nil {
+	if err := writeServerInboundsConfig(state.configDir, xrayCfg, state.TunEnabled, state.TunName, state.TunMTU, state.portValue, certPath, keyPath, false, nil); err != nil {
 		return err
 	}
 	if err := writeServerLogs(state.configDir, xrayCfg.Logs); err != nil {

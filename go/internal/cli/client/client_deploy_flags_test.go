@@ -105,12 +105,14 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	}
 
 	opts := buildInstallOptionsFromLink(cfg, trojanLink{
-		ServerAddress: "edge.example.com",
-		ServerPort:    "58443",
-		User:          "user@example.com",
-		Password:      "secret",
-		ServerName:    "edge.example.com",
-		AllowInsecure: true,
+		ServerAddress:    "edge.example.com",
+		ServerPort:       "58443",
+		User:             "user@example.com",
+		Password:         "secret",
+		ServerName:       "edge.example.com",
+		AllowInsecure:    true,
+		PinnedPeerSHA256: "deadbeef",
+		VerifyPeerName:   "edge.example.com",
 	})
 
 	if opts.InstallDir != `C:\xp2p` || opts.ConfigDir != "cfg-client" {
@@ -119,8 +121,14 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	if opts.ServerAddress != "edge.example.com" || opts.ServerPort != "58443" {
 		t.Fatalf("unexpected target: %+v", opts)
 	}
-	if !opts.AllowInsecure {
-		t.Fatalf("expected allow insecure")
+	if opts.AllowInsecure {
+		t.Fatalf("expected allow insecure to be disabled when pin is set")
+	}
+	if opts.PinnedPeerCertSHA256 != "deadbeef" {
+		t.Fatalf("expected pinned sha256, got %q", opts.PinnedPeerCertSHA256)
+	}
+	if opts.VerifyPeerCertByName != "edge.example.com" {
+		t.Fatalf("expected verify peer name, got %q", opts.VerifyPeerCertByName)
 	}
 	if !opts.TunEnabled || !opts.TunEnabledSet {
 		t.Fatalf("expected tun enabled defaults")
