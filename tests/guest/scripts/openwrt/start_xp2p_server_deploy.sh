@@ -11,8 +11,6 @@ LISTEN_ADDR=$2
 DEPLOY_LINK=$3
 shift 3 || true
 
-LOG_DIR=$(dirname "$LOG_PATH")
-mkdir -p "$LOG_DIR"
 : >"$LOG_PATH"
 chmod 600 "$LOG_PATH"
 

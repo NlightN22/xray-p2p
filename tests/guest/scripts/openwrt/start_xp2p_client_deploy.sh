@@ -14,8 +14,6 @@ TROJAN_PASSWORD=$5
 TROJAN_PORT=$6
 shift 6 || true
 
-LOG_DIR=$(dirname "$LOG_PATH")
-mkdir -p "$LOG_DIR"
 : >"$LOG_PATH"
 chmod 600 "$LOG_PATH"
 

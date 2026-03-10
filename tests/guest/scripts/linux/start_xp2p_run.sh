@@ -17,9 +17,6 @@ if [ "$ROLE" != "server" ] && [ "$ROLE" != "client" ]; then
   exit 2
 fi
 
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$(dirname "$LOG_PATH")"
-
 CMD=(/usr/bin/xp2p "$ROLE" run --path "$INSTALL_DIR" --config-dir "$CONFIG_DIR" --auto-install --xray-log-file "$LOG_PATH" --quiet)
 if [ "$#" -gt 0 ]; then
   CMD+=("$@")
