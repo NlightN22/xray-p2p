@@ -99,6 +99,13 @@ guest suites -- the CI and fellow contributors expect these rules.
 - Build/install automation that multiple suites reuse belongs in `scripts/build/`
   (for example `build_deb_xp2p.sh`). Host tests invoke those scripts instead of
   duplicating build logic inline.
+- **Installer-managed directories.** Tests must not create or pre-create
+  installer-owned paths. If these are missing, the test should fail instead of
+  creating them.
+  - Windows MSI: `C:\Program Files\xp2p\`, `C:\ProgramData\xp2p\` (including
+    `config-client`, `config-server`, `logs`, `completions`).
+  - Debian/OpenWrt: `/etc/xp2p/` (including `config-client`, `config-server`,
+    `bin`) and `/var/log/xp2p/`.
 
 ---
 
