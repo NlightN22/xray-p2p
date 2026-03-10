@@ -20,7 +20,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
-	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
 //go:embed assets/templates/*
