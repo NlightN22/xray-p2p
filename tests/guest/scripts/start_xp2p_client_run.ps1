@@ -36,19 +36,49 @@ foreach ($name in $services) {
         Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
     }
 }
-$netCmd = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
-if ($netCmd) {
-    foreach ($port in @(51080, 51180)) {
-        $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-        foreach ($listener in $listeners) {
-            if ($listener.OwningProcess -gt 0) {
+function Stop-ListeningPorts {
+    param([int[]]$Ports)
+    $targets = @{}
+    foreach ($port in $Ports) {
+        $targets[$port] = $true
+    }
+    $netCmd = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+    if ($netCmd) {
+        foreach ($port in $Ports) {
+            $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            foreach ($listener in $listeners) {
+                if ($listener.OwningProcess -gt 0) {
+                    try {
+                        Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
+                    } catch { }
+                }
+            }
+        }
+        return
+    }
+    $lines = netstat -ano -p tcp | Select-String -Pattern "LISTENING"
+    foreach ($match in $lines) {
+        $line = $match.Line
+        if (-not $line) {
+            continue
+        }
+        $parts = $line -split "\s+"
+        if ($parts.Length -lt 5) {
+            continue
+        }
+        $local = $parts[1]
+        $pid = $parts[-1]
+        if ($local -match ":(\\d+)$") {
+            $port = [int]$Matches[1]
+            if ($targets.ContainsKey($port)) {
                 try {
-                    Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
+                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
                 } catch { }
             }
         }
     }
 }
+Stop-ListeningPorts -Ports @(51080, 51180)
 Start-Sleep -Seconds 1
 
 $existing = Get-Process -Name xp2p -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Xp2pPath }

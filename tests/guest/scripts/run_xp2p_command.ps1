@@ -2,7 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Xp2pPath,
     [Parameter(Mandatory = $true)]
-    [string]$ArgsBase64
+    [string]$ArgsBase64,
+    [string]$TimeoutPath,
+    [int]$TimeoutSeconds = 120
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,7 +44,7 @@ $outPath = Join-Path $runtimeRoot "$taskId.out"
 $errPath = Join-Path $runtimeRoot "$taskId.err"
 $codePath = Join-Path $runtimeRoot "$taskId.code"
 $timingPath = Join-Path $runtimeRoot "$taskId.timing"
-$timeoutSeconds = 120
+$timeoutSeconds = $TimeoutSeconds
 
 function Remove-TemporaryFile {
     param([string]$Path)
@@ -59,6 +61,18 @@ function Cleanup {
     Remove-TemporaryFile -Path $timingPath
 }
 
+function Set-TimeoutMarker {
+    param([string]$Message)
+    if (-not $TimeoutPath) {
+        return
+    }
+    $dir = Split-Path -Parent $TimeoutPath
+    if ($dir -and -not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    Set-Content -Path $TimeoutPath -Value $Message -Encoding ASCII
+}
+
 function Stop-Xp2pProcesses {
     foreach ($name in @('xp2p', 'xray')) {
         $procs = Get-Process -Name $name -ErrorAction SilentlyContinue
@@ -70,36 +84,6 @@ function Stop-Xp2pProcesses {
                 Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
             } catch { }
         }
-    }
-}
-
-function Invoke-Schtasks {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Arguments,
-        [int]$Timeout = 15
-    )
-    $job = Start-Job -ScriptBlock {
-        param($argsString)
-        $output = cmd.exe /c "schtasks.exe $argsString" 2>&1
-        [pscustomobject]@{
-            Code = $LASTEXITCODE
-            Output = $output
-        }
-    } -ArgumentList $Arguments
-    if (-not (Wait-Job -Job $job -Timeout $Timeout)) {
-        Stop-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
-        Remove-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
-        throw "schtasks timeout: $Arguments"
-    }
-    $result = Receive-Job -Job $job -ErrorAction SilentlyContinue
-    Remove-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
-    if (-not $result) {
-        throw "schtasks failed (no result): $Arguments"
-    }
-    if ($result.Code -ne 0) {
-        $outText = $result.Output -join [Environment]::NewLine
-        throw "schtasks failed (exit $($result.Code)): $Arguments`n$outText"
     }
 }
 
@@ -159,6 +143,10 @@ Set-Content -Path '$codePath' -Value `$code -Encoding ASCII
 
 Set-Content -Path $scriptPath -Value $taskScript -Encoding UTF8
 
+if ($TimeoutPath -and (Test-Path $TimeoutPath)) {
+    Remove-Item -Path $TimeoutPath -Force -ErrorAction SilentlyContinue
+}
+
 $parentPid = $PID
 $watchdog = Start-Job -ScriptBlock {
     param($parentPidValue, $taskNameValue, $timeoutValue)
@@ -168,19 +156,22 @@ $watchdog = Start-Job -ScriptBlock {
     try { Stop-Process -Id $parentPidValue -Force -ErrorAction SilentlyContinue } catch { }
 } -ArgumentList $parentPid, $taskName, ($timeoutSeconds + 30)
 
+Import-Module ScheduledTasks -ErrorAction SilentlyContinue | Out-Null
+
 try {
     $scheduleStart = Get-Date
-    $startTime = (Get-Date).AddMinutes(2).ToString('HH:mm')
-    $taskCommand = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$scriptPath`""
-    Invoke-Schtasks -Arguments "/Create /TN `"$taskName`" /TR `"$taskCommand`" /SC ONCE /ST $startTime /RL HIGHEST /RU SYSTEM /F"
-    Invoke-Schtasks -Arguments "/Run /TN `"$taskName`""
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$scriptPath`""
+    $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(2))
+    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -Force -User 'SYSTEM' | Out-Null
+    Start-ScheduledTask -TaskName $taskName
 
     $waitStart = Get-Date
     $waitStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     while (-not (Test-Path $codePath)) {
         if ($waitStopwatch.Elapsed.TotalSeconds -gt $timeoutSeconds) {
-            try { Invoke-Schtasks -Arguments "/End /TN `"$taskName`"" -Timeout 10 } catch { }
+            Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             Stop-Xp2pProcesses
+            Set-TimeoutMarker -Message "__XP2P_TIMEOUT__"
             Write-Output '__XP2P_TIMEOUT__'
             Cleanup
             exit 124
@@ -189,7 +180,7 @@ try {
     }
     $waitEnd = Get-Date
 } finally {
-    try { Invoke-Schtasks -Arguments "/Delete /TN `"$taskName`" /F" -Timeout 10 } catch { }
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
     if ($watchdog) {
         Stop-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
         Remove-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
@@ -209,6 +200,7 @@ if (-not (Test-Path $codePath)) {
         $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
     } catch { }
     Write-Output "__XP2P_NOEXIT__"
+    Set-TimeoutMarker -Message "__XP2P_NOEXIT__"
     if ($taskInfo) {
         Write-Output ("TASK_RESULT=" + $taskInfo.LastTaskResult)
         Write-Output ("TASK_LAST_RUN=" + $taskInfo.LastRunTime)
@@ -217,7 +209,7 @@ if (-not (Test-Path $codePath)) {
         Get-Content -Path $outPath | ForEach-Object { Write-Output $_ }
     }
     if (Test-Path $errPath) {
-        Get-Content -Path $errPath | ForEach-Object { Write-Error $_ }
+        Get-Content -Path $errPath | ForEach-Object { Write-Output $_ }
     }
     Cleanup
     exit 124
@@ -229,7 +221,7 @@ if (Test-Path $outPath) {
     Get-Content -Path $outPath | ForEach-Object { Write-Output $_ }
 }
 if (Test-Path $errPath) {
-    Get-Content -Path $errPath | ForEach-Object { Write-Error $_ }
+    Get-Content -Path $errPath | ForEach-Object { Write-Output $_ }
 }
 if (Test-Path $timingPath) {
     Get-Content -Path $timingPath | ForEach-Object { Write-Output "TIMING: $_" }
@@ -238,6 +230,10 @@ if ($scheduleStart -and $waitStart -and $waitEnd) {
     $queueMs = [int](($waitStart - $scheduleStart).TotalMilliseconds)
     $waitMs = [int](($waitEnd - $waitStart).TotalMilliseconds)
     Write-Output "TIMING: schedule_ms=$queueMs; wait_ms=$waitMs"
+}
+
+if ($TimeoutPath -and (Test-Path $TimeoutPath)) {
+    Remove-Item -Path $TimeoutPath -Force -ErrorAction SilentlyContinue
 }
 
 Cleanup

@@ -133,18 +133,22 @@ def test_windows_client_deploy_end_to_end(
             )
 
         with _timed("wait server deploy logs"):
-            _wait_for_log_phrase(
+            initial_server_log = _wait_for_any_log_phrase(
                 server_host,
                 server_proc,
-                "server deploy: manifest decrypted",
+                [
+                    "server deploy: manifest decrypted",
+                    "server deploy: starting xray-core",
+                ],
                 timeout=LOG_WAIT_TIMEOUT,
             )
-            _wait_for_log_phrase(
-                server_host,
-                server_proc,
-                "server deploy: starting xray-core",
-                timeout=LOG_WAIT_TIMEOUT,
-            )
+            if initial_server_log != "server deploy: starting xray-core":
+                _wait_for_log_phrase(
+                    server_host,
+                    server_proc,
+                    "server deploy: starting xray-core",
+                    timeout=LOG_WAIT_TIMEOUT,
+                )
         with _timed("wait client deploy logs"):
             _wait_for_log_phrase(
                 client_host,
@@ -291,10 +295,13 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             deploy_link=link,
         )
 
-        _wait_for_log_phrase(
+        initial_server_log = _wait_for_any_log_phrase(
             server_host,
             server_proc,
-            "server deploy: manifest decrypted",
+            [
+                "server deploy: manifest decrypted",
+                "server deploy: starting xray-core",
+            ],
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
@@ -303,12 +310,13 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             "server deploy: certificate validation failed, using self-signed",
             timeout=LOG_WAIT_TIMEOUT,
         )
-        _wait_for_log_phrase(
-            server_host,
-            server_proc,
-            "server deploy: starting xray-core",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
+        if initial_server_log != "server deploy: starting xray-core":
+            _wait_for_log_phrase(
+                server_host,
+                server_proc,
+                "server deploy: starting xray-core",
+                timeout=LOG_WAIT_TIMEOUT,
+            )
         _wait_for_log_phrase(
             client_host,
             client_proc,
@@ -567,6 +575,30 @@ def _wait_for_log_phrase(host, proc_info: dict[str, str | int], phrase: str, *, 
         return None
 
     _wait_for_log_value(host, proc_info, extractor=_matcher, description=f"'{phrase}'", timeout=timeout)
+
+
+def _wait_for_any_log_phrase(
+    host,
+    proc_info: dict[str, str | int],
+    phrases: list[str],
+    *,
+    timeout: int,
+) -> str:
+    expected_variants = [(phrase, f"xp2p: {phrase}") for phrase in phrases]
+
+    def _matcher(text: str) -> str | None:
+        for phrase, prefixed in expected_variants:
+            if phrase in text or prefixed in text:
+                return phrase
+        return None
+
+    return _wait_for_log_value(
+        host,
+        proc_info,
+        extractor=_matcher,
+        description=f"any of {phrases}",
+        timeout=timeout,
+    )
 
 
 def _wait_for_log_value(

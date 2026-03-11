@@ -55,6 +55,10 @@ def _start_xp2p_server_run(
             return True
         if "Failed to register rings" in xp2p_log:
             return True
+        if "Failed to find matching adapter name" in xp2p_log:
+            return True
+        if "Only one usage of each socket address" in xp2p_log:
+            return True
         return False
 
     last_result: CommandResult | None = None
@@ -103,6 +107,12 @@ def _start_xp2p_server_run(
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
             )
         if "__XP2P_TIMEOUT__" in stdout:
+            xp2p_log = _read_log(output_log_path)
+            if attempt == 0 and _should_retry(xp2p_log):
+                _env.remove_tun_adapters(host, ["xp2pc", "xp2ps", "Xray Tunnel"])
+                _env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+                time.sleep(2)
+                continue
             pytest.fail(
                 "xp2p server run did not start xray-core in time.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"

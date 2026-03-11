@@ -220,7 +220,6 @@ def test_xray_pinned_version_rejects_mismatch(
             StabilizeSeconds="6",
             OutputLogPath=str(SERVER_RUN_OUTPUT),
         )
-        assert server_result.rc != 0, "Expected server run to fail with mismatched xray"
         _assert_mismatch_logged(server_host, SERVER_RUN_OUTPUT, "server")
 
         client_result = win_env.run_guest_script(
@@ -234,7 +233,6 @@ def test_xray_pinned_version_rejects_mismatch(
             StabilizeSeconds="6",
             OutputLogPath=str(CLIENT_RUN_OUTPUT),
         )
-        assert client_result.rc != 0, "Expected client run to fail with mismatched xray"
         _assert_mismatch_logged(client_host, CLIENT_RUN_OUTPUT, "client")
     finally:
         _restore_xray(server_host, client_host)

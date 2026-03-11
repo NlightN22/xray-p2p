@@ -6,6 +6,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Iterable
+from concurrent.futures import ThreadPoolExecutor
 
 from testinfra.backend.base import CommandResult
 from testinfra.host import Host
@@ -117,6 +118,8 @@ def encode_powershell(script: str) -> str:
 DEFAULT_POWERSHELL_TIMEOUT = 60
 DEFAULT_GUEST_SCRIPT_TIMEOUT = 60
 DEFAULT_XP2P_COMMAND_TIMEOUT = 60
+ADMIN_XP2P_SUBCOMMANDS = {"install", "remove", "service", "mode", "deploy"}
+GUEST_BUILD_ROOT = Path(r"C:\xp2p\build")
 
 
 def run_powershell(host: Host, script: str, timeout: int | float | None = None) -> CommandResult:
@@ -241,12 +244,57 @@ def run_xp2p(
     *,
     timeout: int | float | None = None,
 ) -> CommandResult:
+    effective_timeout = DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout
+    timeout_marker, guest_timeout_marker = _xp2p_timeout_marker()
+    if timeout_marker.exists():
+        timeout_marker.unlink(missing_ok=True)
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(_run_xp2p_with_timeout_marker, host, args, effective_timeout, guest_timeout_marker)
+    deadline = time.monotonic() + float(effective_timeout)
+    try:
+        while True:
+            if future.done():
+                result = future.result()
+                if timeout_marker.exists():
+                    marker = timeout_marker.read_text(encoding="ascii", errors="ignore").strip()
+                    raise RuntimeError(
+                        "xp2p command timed out (marker observed after completion).\n"
+                        f"Marker: {marker or '<empty>'}\nPath: {timeout_marker}"
+                    )
+                return result
+            if timeout_marker.exists():
+                marker = timeout_marker.read_text(encoding="ascii", errors="ignore").strip()
+                raise RuntimeError(
+                    "xp2p command timed out while waiting for guest completion.\n"
+                    f"Marker: {marker or '<empty>'}\nPath: {timeout_marker}"
+                )
+            if time.monotonic() > deadline:
+                raise RuntimeError(
+                    "xp2p command timed out before any guest marker appeared.\n"
+                    f"Timeout marker path: {timeout_marker}"
+                )
+            time.sleep(0.5)
+    finally:
+        executor.shutdown(wait=False)
+        if future.done() and timeout_marker.exists():
+            timeout_marker.unlink(missing_ok=True)
+
+
+def _run_xp2p_admin(
+    host: Host,
+    args: Iterable[str],
+    *,
+    timeout: int | float | None = None,
+    timeout_marker: Path | None = None,
+) -> CommandResult:
     payload = _encode_args_payload(args)
     result = run_guest_script(
         host,
         "scripts/run_xp2p_command.ps1",
         Xp2pPath=str(XP2P_EXE),
         ArgsBase64=payload,
+        TimeoutPath=str(timeout_marker) if timeout_marker else "",
+        TimeoutSeconds=str(DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout),
         timeout=DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout,
     )
     stdout = result.stdout or ""
@@ -259,6 +307,68 @@ def run_xp2p(
         if line.startswith("TIMING:"):
             print(line)
     return result
+
+
+def _run_xp2p_direct(
+    host: Host,
+    args: Iterable[str],
+    *,
+    timeout: int | float | None = None,
+) -> CommandResult:
+    arguments = [str(arg) for arg in args]
+    arg_list = ", ".join(ps_quote(arg) for arg in arguments)
+    if not arg_list:
+        arg_list = ""
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$xp2p = {ps_quote(str(XP2P_EXE))}
+if (-not (Test-Path $xp2p)) {{
+    Write-Output '__XP2P_MISSING__'
+    exit 3
+}}
+$arguments = @({arg_list})
+& $xp2p @arguments
+exit $LASTEXITCODE
+"""
+    return run_powershell(
+        host,
+        script,
+        timeout=DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout,
+    )
+
+
+def _xp2p_requires_admin(args: Iterable[str]) -> bool:
+    parts = [str(arg).strip().lower() for arg in args if str(arg).strip()]
+    if not parts:
+        return False
+    idx = 0
+    while idx < len(parts) and parts[idx].startswith("-"):
+        idx += 1
+    if idx >= len(parts):
+        return False
+    if parts[idx] in {"client", "server"} and idx + 1 < len(parts):
+        return parts[idx + 1] in ADMIN_XP2P_SUBCOMMANDS
+    return False
+
+
+def _xp2p_timeout_marker() -> tuple[Path, Path]:
+    marker_dir = REPO_ROOT / "build" / "xp2p-timeouts"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    token = uuid.uuid4().hex
+    local_path = marker_dir / f"xp2p-timeout-{token}.txt"
+    guest_path = GUEST_BUILD_ROOT / "xp2p-timeouts" / f"xp2p-timeout-{token}.txt"
+    return local_path, guest_path
+
+
+def _run_xp2p_with_timeout_marker(
+    host: Host,
+    args: Iterable[str],
+    timeout: int | float,
+    timeout_marker: Path,
+) -> CommandResult:
+    if _xp2p_requires_admin(args):
+        return _run_xp2p_admin(host, args, timeout=timeout, timeout_marker=timeout_marker)
+    return _run_xp2p_direct(host, args, timeout=timeout)
 
 
 def _encode_args_payload(args: Iterable[str]) -> str:

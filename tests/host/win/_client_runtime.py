@@ -59,6 +59,8 @@ def _start_xp2p_client_run(
             "Failed to register rings",
             "Failed to find matching adapter name",
             "Failed to populate adapter",
+            "Only one usage of each socket address",
+            "bind: Only one usage of each socket address",
         )
         return any(marker in xp2p_log for marker in retry_markers)
 
