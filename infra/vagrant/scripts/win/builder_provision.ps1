@@ -126,6 +126,36 @@ function Disable-IdleSleepAndHibernate {
     }
 }
 
+function Disable-WindowsAutoUpdate {
+    Write-Info "Disabling Windows Update automatic checks."
+
+    $policyPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
+    try {
+        if (-not (Test-Path $policyPath)) {
+            New-Item -Path $policyPath -Force | Out-Null
+        }
+        New-ItemProperty -Path $policyPath -Name "NoAutoUpdate" -Value 1 -PropertyType DWord -Force | Out-Null
+        New-ItemProperty -Path $policyPath -Name "AUOptions" -Value 2 -PropertyType DWord -Force | Out-Null
+    }
+    catch {
+        Write-Info ("Failed to update Windows Update policy registry: {0}" -f $_.Exception.Message)
+    }
+
+    $services = @("wuauserv", "UsoSvc")
+    foreach ($service in $services) {
+        try {
+            $svc = Get-Service -Name $service -ErrorAction Stop
+            if ($svc.Status -ne "Stopped") {
+                Stop-Service -Name $service -Force -ErrorAction Stop
+            }
+            Set-Service -Name $service -StartupType Disabled -ErrorAction Stop
+        }
+        catch {
+            Write-Info ("Failed to disable service {0}: {1}" -f $service, $_.Exception.Message)
+        }
+    }
+}
+
 function Ensure-Go {
     $goVersion = $env:XP2P_GO_VERSION
     if (-not $goVersion) {
@@ -190,6 +220,7 @@ Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
 Ensure-WiX
+Disable-WindowsAutoUpdate
 Disable-IdleSleepAndHibernate
 Write-Info "Network configuration handled by network_setup.ps1."
 Write-Info "Provisioning completed successfully."
