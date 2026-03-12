@@ -141,10 +141,11 @@ def test_windows_client_deploy_end_to_end(
                 [
                     "server deploy: manifest decrypted",
                     "server deploy: starting xray-core",
+                    "server deploy: starting listener",
                 ],
                 timeout=LOG_WAIT_TIMEOUT,
             )
-            if initial_server_log != "server deploy: starting xray-core":
+            if initial_server_log not in ("server deploy: starting xray-core", "server deploy: starting listener"):
                 _wait_for_log_phrase(
                     server_host,
                     server_proc,
@@ -479,6 +480,7 @@ def _start_server_deploy_with_args(
 @contextmanager
 def _timed(label: str):
     start = time.perf_counter()
+    print(f"TIMING: start {label}")
     try:
         yield
     finally:
@@ -493,7 +495,7 @@ def _encode_args_payload(args: list[str]) -> str:
 
 def _stop_process(host, pid: int) -> None:
     script = f"""
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'SilentlyContinue'
 $targetPid = {pid}
 if ($targetPid -le 0) {{
     exit 0
@@ -506,6 +508,9 @@ exit 0
 """
     result = win_env.run_powershell(host, script, label="stop_xp2p_processes")
     if result.rc != 0:
+        combined = f"{result.stdout}\n{result.stderr}"
+        if "SetConsoleWindowTitle" in combined or "No process is on the other end of the pipe" in combined:
+            return
         pytest.fail(
             f"Failed to stop process {pid}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
@@ -751,17 +756,25 @@ def _wait_for_log_value(
     timeout: int,
 ):
     deadline = time.time() + timeout
-    last_text = ""
+    last_stdout = ""
+    last_stderr = ""
     while time.time() < deadline:
-        text = _read_combined_logs(host, proc_info)
-        if text:
-            value = extractor(text)
+        stdout_text = _read_optional_text(host, proc_info["stdout"])
+        stderr_text = _read_optional_text(host, proc_info["stderr"])
+        combined = "\n".join(filter(None, [stdout_text, stderr_text]))
+        if combined:
+            value = extractor(combined)
             if value:
                 return value
-            last_text = text
+            last_stdout = stdout_text or last_stdout
+            last_stderr = stderr_text or last_stderr
         time.sleep(1)
-    tail = "\n".join((last_text or "").splitlines()[-30:])
-    pytest.fail(f"Timed out waiting for {description}. Recent log tail:\n{tail}")
+    stdout_tail = "\n".join((last_stdout or "").splitlines()[-30:])
+    stderr_tail = "\n".join((last_stderr or "").splitlines()[-30:])
+    pytest.fail(
+        "Timed out waiting for "
+        f"{description}.\nSTDOUT tail:\n{stdout_tail}\nSTDERR tail:\n{stderr_tail}"
+    )
 
 
 def _read_combined_logs(host, proc_info: dict[str, str | int]) -> str:

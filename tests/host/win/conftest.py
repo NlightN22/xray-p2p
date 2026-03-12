@@ -15,6 +15,7 @@ _LAST_TEST_END: float | None = None
 @contextmanager
 def _timed(label: str):
     start = time.perf_counter()
+    print(f"TIMING: start {label}")
     try:
         yield
     finally:

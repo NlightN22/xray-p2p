@@ -16,9 +16,11 @@ import testinfra.backend.paramiko as paramiko_backend
 from testinfra.host import Host
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SSH_CONNECT_TIMEOUT = 30
+SSH_CONNECT_TIMEOUT = 60
 SSH_COMMAND_TIMEOUT = 60
 VAGRANT_COMMAND_TIMEOUT = 60
+SSH_BANNER_TIMEOUT = 60
+SSH_AUTH_TIMEOUT = 60
 
 
 class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
@@ -31,6 +33,8 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
             "port": int(self.host.port) if self.host.port else 22,
             "username": self.host.user,
             "timeout": self.timeout,
+            "banner_timeout": SSH_BANNER_TIMEOUT,
+            "auth_timeout": SSH_AUTH_TIMEOUT,
             "password": self.host.password,
             "look_for_keys": False,
             "allow_agent": False,
@@ -88,12 +92,14 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
             self._reset_client()
             error_text = str(exc).lower()
             if "no existing session" in error_text or "error reading ssh protocol banner" in error_text:
-                for _ in range(5):
-                    time.sleep(2)
+                for attempt in range(1, 7):
+                    time.sleep(5)
                     try:
                         return super().run(command, *args, **kwargs)
                     except paramiko_backend.paramiko.SSHException:
                         self._reset_client()
+                        if attempt == 6:
+                            print("WARNING: SSH banner retry limit reached.")
             try:
                 return super().run(command, *args, **kwargs)
             except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:

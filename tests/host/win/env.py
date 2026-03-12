@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterable
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
 from testinfra.backend.base import CommandResult
 from testinfra.host import Host
 
@@ -873,25 +874,40 @@ exit 3
 
 
 def ensure_admin_token(host: Host) -> None:
-    marker_local, marker_guest = _admin_token_marker()
-    if marker_local.exists():
-        marker_local.unlink(missing_ok=True)
-    try:
-        result = run_guest_script(
-            host,
-            "scripts/ensure_admin_token.ps1",
-            MarkerPath=str(marker_guest),
-        )
-        if result.rc != 0:
-            raise RuntimeError(
-                "Failed to ensure admin token.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-        if not marker_local.exists():
-            raise RuntimeError("Admin token marker was not created on the host.")
-    finally:
+    last_error: Exception | None = None
+    for attempt in range(1, 4):
+        marker_local, marker_guest = _admin_token_marker()
         if marker_local.exists():
             marker_local.unlink(missing_ok=True)
+        try:
+            result = run_guest_script(
+                host,
+                "scripts/ensure_admin_token.ps1",
+                MarkerPath=str(marker_guest),
+            )
+            if result.rc != 0:
+                raise RuntimeError(
+                    "Failed to ensure admin token.\n"
+                    f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+                )
+            if not marker_local.exists():
+                raise RuntimeError("Admin token marker was not created on the host.")
+            return
+        except pytest.skip.Exception as exc:
+            last_error = exc
+            backend = getattr(host, "backend", None)
+            if backend is not None and hasattr(backend, "_reset_client"):
+                backend._reset_client()
+            if attempt < 3:
+                print(f"WARNING: ensure_admin_token retry {attempt} after SSH error: {exc}")
+                time.sleep(5)
+                continue
+            raise
+        finally:
+            if marker_local.exists():
+                marker_local.unlink(missing_ok=True)
+    if last_error is not None:
+        raise last_error
 
 
 def get_remote_file_size(host: Host, path: str | Path) -> int:
