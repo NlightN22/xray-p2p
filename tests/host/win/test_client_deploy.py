@@ -61,6 +61,8 @@ def test_windows_client_deploy_end_to_end(
         _stop_xp2p_processes(client_host)
     with _timed("cleanup xp2p processes (server)"):
         _stop_xp2p_processes(server_host)
+    with _timed("cleanup client socks listeners"):
+        _stop_listening_ports(client_host, [51080, 51180])
     with _timed("xp2p client remove"):
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
     with _timed("xp2p server remove"):
@@ -502,6 +504,20 @@ def _stop_xp2p_processes(host) -> None:
     if result.rc != 0:
         pytest.fail(
             "Failed to stop xp2p processes.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _stop_listening_ports(host, ports: list[int]) -> None:
+    payload = base64.b64encode(json.dumps([int(port) for port in ports]).encode("utf-8")).decode("ascii")
+    result = win_env.run_guest_script(
+        host,
+        "scripts/stop_listening_ports.ps1",
+        PortsBase64=payload,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to stop listening ports.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 

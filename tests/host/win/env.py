@@ -118,7 +118,7 @@ def encode_powershell(script: str) -> str:
 DEFAULT_POWERSHELL_TIMEOUT = 60
 DEFAULT_GUEST_SCRIPT_TIMEOUT = 60
 DEFAULT_XP2P_COMMAND_TIMEOUT = 60
-ADMIN_XP2P_SUBCOMMANDS = {"install", "remove", "service", "mode", "deploy"}
+ADMIN_XP2P_SUBCOMMANDS = {"run", "service"}
 GUEST_BUILD_ROOT = Path(r"C:\xp2p\build")
 
 
@@ -918,6 +918,8 @@ def _build_msi_package(
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     return path
+
+
 
 
 def path_exists(host: Host, path: Path | str) -> bool:
