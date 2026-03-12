@@ -66,7 +66,7 @@ def _start_xp2p_client_run(
 
     last_result = None
     for attempt in range(2):
-        _env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+        _env.stop_xp2p_processes(host)
         _env.remove_tun_adapters(host, ["xp2pc", "xp2ps", "Xray Tunnel"])
         result = _env.run_guest_script(
             host,
@@ -103,7 +103,7 @@ def _start_xp2p_client_run(
             xp2p_log = _read_log(output_log_path)
             if attempt == 0 and _should_retry(xp2p_log):
                 _env.remove_tun_adapters(host, ["xp2pc", "xp2ps", "Xray Tunnel"])
-                _env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+                _env.stop_xp2p_processes(host)
                 continue
             pytest.fail(
                 "xp2p client run exited before stabilization period elapsed.\n"

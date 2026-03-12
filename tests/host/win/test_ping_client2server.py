@@ -59,15 +59,29 @@ def _assert_ping_success(result, *, server_host, client_host) -> None:
 
 
 def _set_firewall_rule(server_host, *, ensure: str, remote_address: str, port: int) -> None:
-    result = _env.run_guest_script(
-        server_host,
-        "scripts/configure_firewall_rule.ps1",
-        Name=FIREWALL_RULE_NAME,
-        RemoteAddress=remote_address,
-        LocalPort=str(port),
-        Ensure=ensure,
-        Protocol="TCP",
-    )
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$name = {_env.ps_quote(FIREWALL_RULE_NAME)}
+$remote = {_env.ps_quote(remote_address)}
+$port = {port}
+$ensure = {_env.ps_quote(ensure)}
+Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | ForEach-Object {{
+    Remove-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
+}}
+if ($ensure -eq 'Present') {{
+    New-NetFirewallRule `
+        -DisplayName $name `
+        -Direction Inbound `
+        -Action Block `
+        -Protocol TCP `
+        -LocalPort $port `
+        -RemoteAddress $remote `
+        -Profile Any `
+        -EdgeTraversalPolicy Block | Out-Null
+}}
+exit 0
+"""
+    result = _env.run_powershell(server_host, script)
     if result.rc != 0:
         pytest.fail(
             f"Failed to set firewall rule Ensure={ensure} on server:\n"

@@ -99,7 +99,7 @@ def _pre_test_kill_leftovers(server_host: Host, client_host: Host) -> None:
         if not pids:
             return
         print(f"WARNING: leftover xp2p/xray processes on {label}: {', '.join(pids)}")
-        win_env.run_guest_script(host, "scripts/kill_xp2p_processes.ps1")
+        win_env.stop_xp2p_processes(host)
         result = win_env.run_powershell(host, script)
         remaining = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
         if remaining:
@@ -108,10 +108,10 @@ def _pre_test_kill_leftovers(server_host: Host, client_host: Host) -> None:
             )
 
     with _timed("pre-test cleanup xp2p processes (server)"):
-        win_env.run_guest_script(server_host, "scripts/kill_xp2p_processes.ps1")
+        win_env.stop_xp2p_processes(server_host)
         _check_host(server_host, win_env.DEFAULT_SERVER)
     with _timed("pre-test cleanup xp2p processes (client)"):
-        win_env.run_guest_script(client_host, "scripts/kill_xp2p_processes.ps1")
+        win_env.stop_xp2p_processes(client_host)
         _check_host(client_host, win_env.DEFAULT_CLIENT)
 
 

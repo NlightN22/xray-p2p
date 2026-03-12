@@ -56,6 +56,12 @@ guest suites -- the CI and fellow contributors expect these rules.
      e.g. `.ps1` for Windows, `.sh`/`.py` for Linux guests).
    - Invoke them with `_env.run_guest_script(host, "scripts/<name>.<ext>", ...)`.
    - Parameters must be strings; cast numbers explicitly with `str(...)`.
+   - Prefer **inline PowerShell** for small, single-purpose operations on Windows
+     (for example `Test-Path`, trivial `Get-Content`, or simple `Remove-Item`)
+     to avoid extra SSH round-trips from staging guest scripts. Use
+     `tests.host.win.env.run_powershell(...)` (or `_path_exists_raw(...)`) when
+     the logic is short and self-contained; fall back to guest scripts for
+     reusable or multi-step workflows.
 
 3. **Assertions and artefacts**
    - Fetch remote files with helper utilities; avoid ad-hoc transport hacks.

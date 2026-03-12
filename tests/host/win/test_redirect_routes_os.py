@@ -37,7 +37,7 @@ def _server_public_host() -> str:
 
 
 def _cleanup_server_install(server_host, runner) -> None:
-    _env.run_guest_script(server_host, "scripts/kill_xp2p_processes.ps1")
+    _env.stop_xp2p_processes(server_host)
     runner("server", "remove", "--ignore-missing")
     _env.cleanup_xp2p_install(
         server_host,
@@ -47,7 +47,7 @@ def _cleanup_server_install(server_host, runner) -> None:
 
 
 def _cleanup_client_install(client_host, runner) -> None:
-    _env.run_guest_script(client_host, "scripts/kill_xp2p_processes.ps1")
+    _env.stop_xp2p_processes(client_host)
     runner("client", "remove", "--all", "--ignore-missing")
     _env.cleanup_xp2p_install(
         client_host,

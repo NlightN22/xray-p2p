@@ -923,7 +923,7 @@ def _build_msi_package(
 
 
 def path_exists(host: Host, path: Path | str) -> bool:
-    return _path_exists_guest(host, path)
+    return _path_exists_raw(host, path)
 
 
 def _path_exists_guest(host: Host, path: Path | str) -> bool:
@@ -975,10 +975,17 @@ def _wait_for_sync_marker(host: Host, *, timeout: int) -> bool:
 
 
 def get_host_ipv4(host: Host) -> str:
-    result = run_guest_script(
-        host,
-        "scripts/get_ipv4_addresses.ps1",
-    )
+    script = """
+$ErrorActionPreference = 'Stop'
+$addresses = Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin (@('Dhcp', 'Manual')) |
+    Where-Object { $_.IPAddress -ne '127.0.0.1' } |
+    Select-Object -ExpandProperty IPAddress
+if (-not $addresses) {
+    exit 3
+}
+$addresses
+"""
+    result = run_powershell(host, script)
     if result.rc != 0:
         raise RuntimeError(
             "Failed to detect IPv4 addresses.\n"
@@ -1085,19 +1092,41 @@ def remove_tun_adapters(host: Host, adapter_names: Iterable[str]) -> None:
 
 
 def remove_paths(host: Host, paths: Iterable[Path | str]) -> None:
-    payload = base64.b64encode(
-        json.dumps([str(path) for path in paths]).encode("utf-8")
-    ).decode("ascii")
-    if not payload:
+    targets = [str(path) for path in paths]
+    if not targets:
         return
-    result = run_guest_script(
-        host,
-        "scripts/remove_paths.ps1",
-        PathsBase64=payload,
-    )
+    target_list = ", ".join(ps_quote(path) for path in targets)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$targets = @({target_list})
+foreach ($target in $targets) {{
+    if (-not $target) {{
+        continue
+    }}
+    if (Test-Path $target) {{
+        Remove-Item -Path $target -Force -Recurse -ErrorAction SilentlyContinue
+    }}
+}}
+exit 0
+"""
+    result = run_powershell(host, script)
     if result.rc != 0:
         raise RuntimeError(
             "Failed to remove remote paths.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def stop_xp2p_processes(host: Host) -> None:
+    script = """
+$ErrorActionPreference = 'Stop'
+Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+exit 0
+"""
+    result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to stop xp2p processes.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 
@@ -1112,16 +1141,24 @@ def service_exists(host: Host, service_name: str) -> bool:
 
 
 def remove_services(host: Host, services: Iterable[str]) -> None:
-    payload = base64.b64encode(
-        json.dumps([str(service) for service in services]).encode("utf-8")
-    ).decode("ascii")
+    payload = json.dumps([str(service) for service in services])
     if not payload:
         return
-    result = run_guest_script(
-        host,
-        "scripts/remove_services.ps1",
-        ServicesBase64=payload,
-    )
+    encoded = base64.b64encode(payload.encode("utf-8")).decode("ascii")
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$payload = {ps_quote(encoded)}
+$services = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payload)) | ConvertFrom-Json
+foreach ($name in $services) {{
+    if (-not $name) {{
+        continue
+    }}
+    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+    & sc.exe delete $name | Out-Null
+}}
+exit 0
+"""
+    result = run_powershell(host, script)
     if result.rc != 0:
         raise RuntimeError(
             "Failed to remove services on remote host.\n"
@@ -1179,11 +1216,17 @@ $existing
 
 
 def read_text(host: Host, path: Path | str) -> str:
-    result = run_guest_script(
-        host,
-        "scripts/read_file.ps1",
-        Path=str(path),
-    )
+    target = ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target}
+if (-not (Test-Path $target)) {{
+    exit 3
+}}
+Get-Content -Path $target -Raw
+exit 0
+"""
+    result = run_powershell(host, script)
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to read remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -1201,12 +1244,22 @@ def read_toml(host: Host, path: Path | str) -> dict:
 
 def write_text(host: Host, path: Path | str, content: str) -> None:
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    result = run_guest_script(
-        host,
-        "scripts/write_file.ps1",
-        Path=str(path),
-        ContentBase64=encoded,
-    )
+    target = ps_quote(str(path))
+    payload = ps_quote(encoded)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target}
+$payload = {payload}
+$bytes = [System.Convert]::FromBase64String($payload)
+$text = [System.Text.Encoding]::UTF8.GetString($bytes)
+$dir = Split-Path -Parent $target
+if ($dir -and -not (Test-Path $dir)) {{
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+}}
+Set-Content -Path $target -Value $text -Encoding UTF8
+exit 0
+"""
+    result = run_powershell(host, script)
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to write remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

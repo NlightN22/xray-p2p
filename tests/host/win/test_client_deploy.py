@@ -370,16 +370,30 @@ def _set_firewall_rule(
     action: str,
 ) -> None:
     rule_name = f"{DEPLOY_FIREWALL_RULE}-{port}"
-    result = win_env.run_guest_script(
-        server_host,
-        "scripts/configure_firewall_rule.ps1",
-        Name=rule_name,
-        RemoteAddress=remote_address,
-        LocalPort=str(port),
-        Ensure=ensure,
-        Protocol="TCP",
-        Action=action,
-    )
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$name = {win_env.ps_quote(rule_name)}
+$remote = {win_env.ps_quote(remote_address)}
+$port = {port}
+$ensure = {win_env.ps_quote(ensure)}
+$action = {win_env.ps_quote(action)}
+Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | ForEach-Object {{
+    Remove-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue
+}}
+if ($ensure -eq 'Present') {{
+    New-NetFirewallRule `
+        -DisplayName $name `
+        -Direction Inbound `
+        -Action $action `
+        -Protocol TCP `
+        -LocalPort $port `
+        -RemoteAddress $remote `
+        -Profile Any `
+        -EdgeTraversalPolicy Block | Out-Null
+}}
+exit 0
+"""
+    result = win_env.run_powershell(server_host, script)
     if result.rc != 0:
         pytest.fail(
             f"Failed to set deploy firewall rule Ensure={ensure} Action={action}.\n"
@@ -478,29 +492,32 @@ def _encode_args_payload(args: list[str]) -> str:
 
 
 def _stop_process(host, pid: int) -> None:
-    result = win_env.run_guest_script(
-        host,
-        "scripts/stop_process.ps1",
-        ProcessId=str(pid),
-    )
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$targetPid = {pid}
+if ($targetPid -le 0) {{
+    exit 0
+}}
+$proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+if ($proc) {{
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+}}
+exit 0
+"""
+    result = win_env.run_powershell(host, script)
     if result.rc != 0:
-        exists = win_env.run_guest_script(
-            host,
-            "scripts/process_exists.ps1",
-            ProcessId=str(pid),
-        )
-        if exists.rc == 3:
-            return
         pytest.fail(
             f"Failed to stop process {pid}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 
 
 def _stop_xp2p_processes(host) -> None:
-    result = win_env.run_guest_script(
-        host,
-        "scripts/kill_xp2p_processes.ps1",
-    )
+    script = """
+$ErrorActionPreference = 'Stop'
+Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+exit 0
+"""
+    result = win_env.run_powershell(host, script)
     if result.rc != 0:
         pytest.fail(
             "Failed to stop xp2p processes.\n"
@@ -509,12 +526,101 @@ def _stop_xp2p_processes(host) -> None:
 
 
 def _stop_listening_ports(host, ports: list[int]) -> None:
-    payload = base64.b64encode(json.dumps([int(port) for port in ports]).encode("utf-8")).decode("ascii")
-    result = win_env.run_guest_script(
-        host,
-        "scripts/stop_listening_ports.ps1",
-        PortsBase64=payload,
-    )
+    ports_json = json.dumps([int(port) for port in ports])
+    payload = base64.b64encode(ports_json.encode("utf-8")).decode("ascii")
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$payload = {win_env.ps_quote(payload)}
+$decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($payload))
+$ports = $decoded | ConvertFrom-Json
+if (-not ($ports -is [System.Collections.IEnumerable])) {{
+    exit 0
+}}
+$targets = @{{}}
+foreach ($port in $ports) {{
+    $value = 0
+    if ([int]::TryParse([string]$port, [ref]$value)) {{
+        if ($value -gt 0) {{
+            $targets[$value] = $true
+        }}
+    }}
+}}
+if ($targets.Count -eq 0) {{
+    exit 0
+}}
+$netTcpCmd = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+$netUdpCmd = Get-Command Get-NetUDPEndpoint -ErrorAction SilentlyContinue
+if ($netTcpCmd -or $netUdpCmd) {{
+    foreach ($port in $targets.Keys) {{
+        if ($netTcpCmd) {{
+            $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+            foreach ($listener in $listeners) {{
+                if ($listener.OwningProcess -gt 0) {{
+                    try {{
+                        Stop-Process -Id $listener.OwningProcess -Force -ErrorAction SilentlyContinue
+                    }} catch {{ }}
+                }}
+            }}
+        }}
+        if ($netUdpCmd) {{
+            $endpoints = Get-NetUDPEndpoint -LocalPort $port -ErrorAction SilentlyContinue
+            foreach ($endpoint in $endpoints) {{
+                if ($endpoint.OwningProcess -gt 0) {{
+                    try {{
+                        Stop-Process -Id $endpoint.OwningProcess -Force -ErrorAction SilentlyContinue
+                    }} catch {{ }}
+                }}
+            }}
+        }}
+    }}
+    exit 0
+}}
+$lines = netstat -ano -p tcp | Select-String -Pattern "LISTENING"
+foreach ($match in $lines) {{
+    $line = $match.Line
+    if (-not $line) {{
+        continue
+    }}
+    $parts = $line -split "\\s+"
+    if ($parts.Length -lt 5) {{
+        continue
+    }}
+    $local = $parts[1]
+    $pid = $parts[-1]
+    if ($local -match ":(\\d+)$") {{
+        $port = [int]$Matches[1]
+        if ($targets.ContainsKey($port)) {{
+            try {{
+                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            }} catch {{ }}
+        }}
+    }}
+}}
+if ($targets.Count -gt 0) {{
+    $udpLines = netstat -ano -p udp
+    foreach ($line in $udpLines) {{
+        if (-not $line) {{
+            continue
+        }}
+        $parts = $line -split "\\s+"
+        if ($parts.Length -lt 4) {{
+            continue
+        }}
+        $local = $parts[1]
+        $pid = $parts[-1]
+        if ($local -match ":(\\d+)$") {{
+            $port = [int]$Matches[1]
+            if ($targets.ContainsKey($port)) {{
+                try {{
+                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                }} catch {{ }}
+            }}
+        }}
+    }}
+}}
+exit 0
+"""
+    result = win_env.run_powershell(host, script)
     if result.rc != 0:
         pytest.fail(
             "Failed to stop listening ports.\n"
@@ -548,10 +654,29 @@ def _assert_client_routing(host, server_ip: str) -> None:
 
 
 def _assert_internet_access(host) -> None:
-    result = win_env.run_guest_script(
-        host,
-        "scripts/check_internet_win.ps1",
-    )
+    script = """
+$ErrorActionPreference = 'Stop'
+$dnsName = "example.com"
+$tcpHost = "1.1.1.1"
+$tcpPort = 443
+try {
+    Resolve-DnsName -Name $dnsName -ErrorAction Stop | Out-Null
+} catch {
+    Write-Error "Internet check failed: DNS lookup for $dnsName"
+    exit 1
+}
+try {
+    $tcpOk = Test-NetConnection -ComputerName $tcpHost -Port $tcpPort -InformationLevel Quiet
+} catch {
+    $tcpOk = $false
+}
+if (-not $tcpOk) {
+    Write-Error "Internet check failed: TCP connect to ${tcpHost}:${tcpPort}"
+    exit 1
+}
+exit 0
+"""
+    result = win_env.run_powershell(host, script)
     if result.rc != 0:
         pytest.fail(
             "Client internet check failed.\n"
@@ -647,11 +772,16 @@ def _read_combined_logs(host, proc_info: dict[str, str | int]) -> str:
 
 def _read_optional_text(host, path_value) -> str:
     path = Path(path_value)
-    result = win_env.run_guest_script(
-        host,
-        "scripts/read_file.ps1",
-        Path=str(path),
-    )
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$path = {win_env.ps_quote(str(path))}
+if (-not (Test-Path $path)) {{
+    exit 3
+}}
+Get-Content -Path $path -Raw
+exit 0
+"""
+    result = win_env.run_powershell(host, script)
     if result.rc == 0:
         return result.stdout or ""
     if result.rc == 3:
@@ -662,11 +792,16 @@ def _read_optional_text(host, path_value) -> str:
 
 
 def _read_remote_json(client_host, path: Path) -> dict:
-    result = win_env.run_guest_script(
-        client_host,
-        "scripts/read_file.ps1",
-        Path=str(path),
-    )
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$path = {win_env.ps_quote(str(path))}
+if (-not (Test-Path $path)) {{
+    exit 3
+}}
+Get-Content -Path $path -Raw
+exit 0
+"""
+    result = win_env.run_powershell(client_host, script)
     if result.rc != 0:
         pytest.fail(
             f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -685,11 +820,10 @@ def _read_first_existing_json(host, paths: list[Path]) -> dict:
 
 
 def _remote_path_exists(client_host, path: Path) -> bool:
-    result = win_env.run_guest_script(
+    target = win_env.ps_quote(str(path))
+    result = win_env.run_powershell(
         client_host,
-        "scripts/path_exists.ps1",
-        force_stage=True,
-        TargetPath=str(path),
+        f"if (Test-Path {target}) {{ exit 0 }} else {{ exit 3 }}",
     )
     if result.rc == 0:
         return True
@@ -707,14 +841,21 @@ def _remove_remote_path(client_host, path: Path) -> None:
 
 
 def _remove_paths(client_host, paths: list[Path]) -> None:
-    payload = base64.b64encode(
-        json.dumps([str(path) for path in paths]).encode("utf-8")
-    ).decode("ascii")
-    result = win_env.run_guest_script(
-        client_host,
-        "scripts/remove_paths.ps1",
-        PathsBase64=payload,
-    )
+    targets = ", ".join(win_env.ps_quote(str(path)) for path in paths)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$targets = @({targets})
+foreach ($target in $targets) {{
+    if (-not $target) {{
+        continue
+    }}
+    if (Test-Path $target) {{
+        Remove-Item -Path $target -Force -Recurse -ErrorAction SilentlyContinue
+    }}
+}}
+exit 0
+"""
+    result = win_env.run_powershell(client_host, script)
     if result.rc != 0:
         pytest.fail(
             "Failed to remove remote paths.\n"
@@ -872,10 +1013,17 @@ def _assert_heartbeat_entry(
 
 
 def _detect_host_ipv4(host) -> str:
-    result = win_env.run_guest_script(
-        host,
-        "scripts/get_ipv4_addresses.ps1",
-    )
+    script = """
+$ErrorActionPreference = 'Stop'
+$addresses = Get-NetIPAddress -AddressFamily IPv4 -PrefixOrigin (@('Dhcp', 'Manual')) |
+    Where-Object { $_.IPAddress -ne '127.0.0.1' } |
+    Select-Object -ExpandProperty IPAddress
+if (-not $addresses) {
+    exit 3
+}
+$addresses
+"""
+    result = win_env.run_powershell(host, script)
     if result.rc != 0:
         pytest.fail(
             "Failed to detect IPv4 addresses.\n"

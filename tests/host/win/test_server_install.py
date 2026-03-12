@@ -1,4 +1,3 @@
-import base64
 import json
 import time
 from datetime import datetime, timedelta, timezone
@@ -49,34 +48,11 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
 
 
 def _remote_path_exists(host, path: Path) -> bool:
-    result = _env.run_guest_script(
-        host,
-        "scripts/path_exists.ps1",
-        force_stage=True,
-        TargetPath=str(path),
-    )
-    if result.rc == 0:
-        return True
-    if result.rc == 3:
-        return False
-    if not (result.stdout or result.stderr):
-        return False
-    pytest.fail(
-        f"Failed to check remote path {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
+    return _env._path_exists_raw(host, path)
 
 
 def _read_remote_text(host, path: Path) -> str:
-    result = _env.run_guest_script(
-        host,
-        "scripts/read_file.ps1",
-        Path=str(path),
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"Failed to read remote text {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return result.stdout or ""
+    return _env.read_text(host, path)
 
 
 def _read_remote_json(host, path: Path) -> dict:
@@ -88,17 +64,7 @@ def _read_remote_json(host, path: Path) -> dict:
 
 
 def _write_remote_text(host, path: Path, content: str) -> None:
-    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    result = _env.run_guest_script(
-        host,
-        "scripts/write_file.ps1",
-        Path=str(path),
-        ContentBase64=encoded,
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"Failed to write remote text {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
+    _env.write_text(host, path, content)
 
 
 def _remove_remote_path(host, path: Path) -> None:
@@ -106,19 +72,7 @@ def _remove_remote_path(host, path: Path) -> None:
 
 
 def _remove_remote_paths(host, paths: Iterable[Path]) -> None:
-    payload = base64.b64encode(
-        json.dumps([str(path) for path in paths]).encode("utf-8")
-    ).decode("ascii")
-    result = _env.run_guest_script(
-        host,
-        "scripts/remove_paths.ps1",
-        PathsBase64=payload,
-    )
-    if result.rc != 0:
-        pytest.fail(
-            "Failed to remove remote paths.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
+    _env.remove_paths(host, paths)
 
 
 def _expect_tls_paths() -> tuple[str, str]:
