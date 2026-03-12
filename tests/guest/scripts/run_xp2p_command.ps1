@@ -44,6 +44,8 @@ $outPath = Join-Path $runtimeRoot "$taskId.out"
 $errPath = Join-Path $runtimeRoot "$taskId.err"
 $codePath = Join-Path $runtimeRoot "$taskId.code"
 $timingPath = Join-Path $runtimeRoot "$taskId.timing"
+$psexecOutPath = Join-Path $runtimeRoot "$taskId.psexec.out"
+$psexecErrPath = Join-Path $runtimeRoot "$taskId.psexec.err"
 $timeoutSeconds = $TimeoutSeconds
 
 function Remove-TemporaryFile {
@@ -59,6 +61,8 @@ function Cleanup {
     Remove-TemporaryFile -Path $errPath
     Remove-TemporaryFile -Path $codePath
     Remove-TemporaryFile -Path $timingPath
+    Remove-TemporaryFile -Path $psexecOutPath
+    Remove-TemporaryFile -Path $psexecErrPath
 }
 
 function Set-TimeoutMarker {
@@ -85,6 +89,32 @@ function Stop-Xp2pProcesses {
             } catch { }
         }
     }
+}
+
+function Resolve-PsExecPath {
+    $candidate = Get-Command -Name psexec.exe -ErrorAction SilentlyContinue
+    if ($candidate -and $candidate.Path) {
+        return $candidate.Path
+    }
+    $fallbacks = @(
+        "$env:ProgramData\chocolatey\bin\psexec.exe",
+        "$env:ProgramData\chocolatey\lib\sysinternals\tools\PsExec.exe",
+        "C:\Sysinternals\PsExec.exe"
+    )
+    foreach ($path in $fallbacks) {
+        if ($path -and (Test-Path $path)) {
+            return $path
+        }
+    }
+    return $null
+}
+
+function Read-OptionalText {
+    param([string]$Path)
+    if ($Path -and (Test-Path $Path)) {
+        return (Get-Content -Path $Path -Raw)
+    }
+    return ""
 }
 
 $escapedXp2p = $Xp2pPath -replace "'", "''"
@@ -147,43 +177,115 @@ if ($TimeoutPath -and (Test-Path $TimeoutPath)) {
     Remove-Item -Path $TimeoutPath -Force -ErrorAction SilentlyContinue
 }
 
-$parentPid = $PID
-$watchdog = Start-Job -ScriptBlock {
-    param($parentPidValue, $taskNameValue, $timeoutValue)
-    Start-Sleep -Seconds $timeoutValue
-    try { schtasks.exe /End /TN $taskNameValue | Out-Null } catch { }
-    try { Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
-    try { Stop-Process -Id $parentPidValue -Force -ErrorAction SilentlyContinue } catch { }
-} -ArgumentList $parentPid, $taskName, ($timeoutSeconds + 30)
+$adminLaunch = ""
+if ($env:XP2P_ADMIN_LAUNCH) {
+    $adminLaunch = $env:XP2P_ADMIN_LAUNCH.ToLowerInvariant()
+}
+$psExecPath = Resolve-PsExecPath
+$requirePsExec = $false
+$usePsExec = $false
+if ($adminLaunch -eq "psexec") {
+    $usePsExec = $true
+    $requirePsExec = $true
+} elseif ($adminLaunch -eq "scheduled") {
+    $usePsExec = $false
+} elseif ($psExecPath) {
+    $usePsExec = $true
+}
 
-Import-Module ScheduledTasks -ErrorAction SilentlyContinue | Out-Null
+$usedScheduledTask = $false
+$usedPsExec = $false
+$psexecDiagnostics = ""
 
-try {
-    $scheduleStart = Get-Date
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$scriptPath`""
-    $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(2))
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -Force -User 'SYSTEM' | Out-Null
-    Start-ScheduledTask -TaskName $taskName
-
-    $waitStart = Get-Date
+if ($usePsExec) {
+    if (-not $psExecPath) {
+        throw "XP2P_ADMIN_LAUNCH=psexec but PsExec was not found on the guest."
+    }
+    $psexecStart = Get-Date
+    $psexecArgs = @(
+        "-accepteula",
+        "-nobanner",
+        "-s",
+        "-h",
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        $scriptPath
+    )
+    $process = Start-Process -FilePath $psExecPath -ArgumentList $psexecArgs -PassThru -NoNewWindow `
+        -RedirectStandardOutput $psexecOutPath -RedirectStandardError $psexecErrPath
     $waitStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-    while (-not (Test-Path $codePath)) {
+    while (-not $process.HasExited) {
         if ($waitStopwatch.Elapsed.TotalSeconds -gt $timeoutSeconds) {
-            Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             Stop-Xp2pProcesses
             Set-TimeoutMarker -Message "__XP2P_TIMEOUT__"
             Write-Output '__XP2P_TIMEOUT__'
             Cleanup
             exit 124
         }
-        Start-Sleep -Seconds 1
+        Start-Sleep -Milliseconds 200
     }
-    $waitEnd = Get-Date
-} finally {
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
-    if ($watchdog) {
-        Stop-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
-        Remove-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
+    $usedPsExec = $true
+    $psexecEnd = Get-Date
+    if ($process.ExitCode -ne 0 -and -not (Test-Path $codePath)) {
+        $psexecDiagnostics = (Read-OptionalText -Path $psexecErrPath).Trim()
+        if (-not $psexecDiagnostics) {
+            $psexecDiagnostics = (Read-OptionalText -Path $psexecOutPath).Trim()
+        }
+        if ($requirePsExec) {
+            throw "PsExec launch failed (exit $($process.ExitCode)).`n$psexecDiagnostics"
+        }
+        $usedPsExec = $false
+    } else {
+        $psexecMs = [int](($psexecEnd - $psexecStart).TotalMilliseconds)
+        Write-Output "TIMING: psexec_ms=$psexecMs"
+    }
+}
+
+if (-not $usedPsExec) {
+    $usedScheduledTask = $true
+    $parentPid = $PID
+    $watchdog = Start-Job -ScriptBlock {
+        param($parentPidValue, $taskNameValue, $timeoutValue)
+        Start-Sleep -Seconds $timeoutValue
+        try { schtasks.exe /End /TN $taskNameValue | Out-Null } catch { }
+        try { Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
+        try { Stop-Process -Id $parentPidValue -Force -ErrorAction SilentlyContinue } catch { }
+    } -ArgumentList $parentPid, $taskName, ($timeoutSeconds + 30)
+
+    Import-Module ScheduledTasks -ErrorAction SilentlyContinue | Out-Null
+
+    try {
+        $scheduleStart = Get-Date
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$scriptPath`""
+        $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(2))
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -Force -User 'SYSTEM' | Out-Null
+        Start-ScheduledTask -TaskName $taskName
+
+        $waitStart = Get-Date
+        $waitStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        while (-not (Test-Path $codePath)) {
+            if ($waitStopwatch.Elapsed.TotalSeconds -gt $timeoutSeconds) {
+                Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+                Stop-Xp2pProcesses
+                Set-TimeoutMarker -Message "__XP2P_TIMEOUT__"
+                Write-Output '__XP2P_TIMEOUT__'
+                Cleanup
+                exit 124
+            }
+            Start-Sleep -Seconds 1
+        }
+        $waitEnd = Get-Date
+    } finally {
+        Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+        if ($watchdog) {
+            Stop-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
+            Remove-Job -Job $watchdog -ErrorAction SilentlyContinue | Out-Null
+        }
     }
 }
 
@@ -195,15 +297,19 @@ if (-not (Test-Path $codePath)) {
 }
 
 if (-not (Test-Path $codePath)) {
-    $taskInfo = $null
-    try {
-        $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
-    } catch { }
     Write-Output "__XP2P_NOEXIT__"
     Set-TimeoutMarker -Message "__XP2P_NOEXIT__"
-    if ($taskInfo) {
-        Write-Output ("TASK_RESULT=" + $taskInfo.LastTaskResult)
-        Write-Output ("TASK_LAST_RUN=" + $taskInfo.LastRunTime)
+    if ($usedScheduledTask) {
+        $taskInfo = $null
+        try {
+            $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+        } catch { }
+        if ($taskInfo) {
+            Write-Output ("TASK_RESULT=" + $taskInfo.LastTaskResult)
+            Write-Output ("TASK_LAST_RUN=" + $taskInfo.LastRunTime)
+        }
+    } elseif ($psexecDiagnostics) {
+        Write-Output ("PSEXEC_ERROR=" + $psexecDiagnostics)
     }
     if (Test-Path $outPath) {
         Get-Content -Path $outPath | ForEach-Object { Write-Output $_ }

@@ -32,6 +32,24 @@ if (-not (Test-Path $Xp2pPath)) {
     exit 3
 }
 
+function Resolve-PsExecPath {
+    $candidate = Get-Command -Name psexec.exe -ErrorAction SilentlyContinue
+    if ($candidate -and $candidate.Path) {
+        return $candidate.Path
+    }
+    $fallbacks = @(
+        "$env:ProgramData\chocolatey\bin\psexec.exe",
+        "$env:ProgramData\chocolatey\lib\sysinternals\tools\PsExec.exe",
+        "C:\Sysinternals\PsExec.exe"
+    )
+    foreach ($path in $fallbacks) {
+        if ($path -and (Test-Path $path)) {
+            return $path
+        }
+    }
+    return $null
+}
+
 $logDir = Split-Path $LogPath -Parent
 if ($logDir -and -not (Test-Path $logDir)) {
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
@@ -46,6 +64,8 @@ $taskId = [guid]::NewGuid().ToString()
 $taskName = "xp2p-client-deploy-$taskId"
 $launcherPath = Join-Path $runtimeRoot "$taskId.ps1"
 $pidPath = Join-Path $runtimeRoot "$taskId.pid"
+$psexecOutPath = Join-Path $runtimeRoot "$taskId.psexec.out"
+$psexecErrPath = Join-Path $runtimeRoot "$taskId.psexec.err"
 foreach ($target in @($LogPath, $stderrPath)) {
     if (Test-Path $target) {
         Remove-Item $target -Force -ErrorAction SilentlyContinue
@@ -82,10 +102,64 @@ Set-Content -Path '$pidPath' -Value `$proc.Id -Encoding ASCII
 Set-Content -Path $launcherPath -Value $launcher -Encoding UTF8
 
 try {
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$launcherPath`""
-    $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(5))
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -User 'SYSTEM' | Out-Null
-    Start-ScheduledTask -TaskName $taskName
+    $adminLaunch = ""
+    if ($env:XP2P_ADMIN_LAUNCH) {
+        $adminLaunch = $env:XP2P_ADMIN_LAUNCH.ToLowerInvariant()
+    }
+    $psExecPath = Resolve-PsExecPath
+    $requirePsExec = $adminLaunch -eq "psexec"
+    $usePsExec = $false
+    if ($adminLaunch -eq "scheduled") {
+        $usePsExec = $false
+    } elseif ($psExecPath) {
+        $usePsExec = $true
+    } elseif ($requirePsExec) {
+        $usePsExec = $true
+    }
+
+    $usedScheduledTask = $false
+    $usedPsExec = $false
+
+    if ($usePsExec) {
+        if (-not $psExecPath) {
+            throw "XP2P_ADMIN_LAUNCH=psexec but PsExec was not found on the guest."
+        }
+        $psexecArgs = @(
+            "-accepteula",
+            "-nobanner",
+            "-s",
+            "-h",
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            $launcherPath
+        )
+        $process = Start-Process -FilePath $psExecPath -ArgumentList $psexecArgs -PassThru -NoNewWindow `
+            -RedirectStandardOutput $psexecOutPath -RedirectStandardError $psexecErrPath
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0 -and -not (Test-Path $pidPath)) {
+            if ($requirePsExec) {
+                $stderr = ""
+                if (Test-Path $psexecErrPath) {
+                    $stderr = (Get-Content -Path $psexecErrPath -Raw)
+                }
+                throw "PsExec launch failed (exit $($process.ExitCode)).`n$stderr"
+            }
+        } else {
+            $usedPsExec = $true
+        }
+    }
+
+    if (-not $usedPsExec) {
+        $usedScheduledTask = $true
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$launcherPath`""
+        $trigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(5))
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -RunLevel Highest -User 'SYSTEM' | Out-Null
+        Start-ScheduledTask -TaskName $taskName
+    }
 
     $deadline = (Get-Date).AddSeconds(20)
     while (-not (Test-Path $pidPath)) {
@@ -98,6 +172,8 @@ try {
 finally {
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
     Remove-Item $launcherPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $psexecOutPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $psexecErrPath -Force -ErrorAction SilentlyContinue
 }
 
 try {

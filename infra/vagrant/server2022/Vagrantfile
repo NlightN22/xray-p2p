@@ -13,6 +13,7 @@ SHARED_SCRIPTS_ROOT   = File.expand_path("../scripts/win", __dir__)
 OPENSSH_SCRIPT        = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
 NETWORK_SETUP_SCRIPT  = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
 PROVISION_SCRIPT      = File.expand_path("builder_provision.ps1", SHARED_SCRIPTS_ROOT)
+TEST_PROVISION_SCRIPT = File.expand_path("test_provision.ps1", SHARED_SCRIPTS_ROOT)
 DEFAULT_WINRM_PORT    = 5986
 SERVER_WINRM_HOSTPORT = 56985
 CLIENT_WINRM_HOSTPORT = 56986
@@ -96,6 +97,12 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.provision "shell",
                          name: "msi-deps",
                          path: PROVISION_SCRIPT,
+                         privileged: true,
+                         env: shared_env
+
+    machine.vm.provision "shell",
+                         name: "test-deps",
+                         path: TEST_PROVISION_SCRIPT,
                          privileged: true,
                          env: shared_env
 
