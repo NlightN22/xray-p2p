@@ -81,7 +81,7 @@ if ($ensure -eq 'Present') {{
 }}
 exit 0
 """
-    result = _env.run_powershell(server_host, script)
+    result = _env.run_powershell(server_host, script, label="set_firewall_rule")
     if result.rc != 0:
         pytest.fail(
             f"Failed to set firewall rule Ensure={ensure} on server:\n"

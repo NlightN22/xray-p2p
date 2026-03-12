@@ -393,7 +393,7 @@ if ($ensure -eq 'Present') {{
 }}
 exit 0
 """
-    result = win_env.run_powershell(server_host, script)
+    result = win_env.run_powershell(server_host, script, label="set_firewall_rule")
     if result.rc != 0:
         pytest.fail(
             f"Failed to set deploy firewall rule Ensure={ensure} Action={action}.\n"
@@ -504,7 +504,7 @@ if ($proc) {{
 }}
 exit 0
 """
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_powershell(host, script, label="stop_xp2p_processes")
     if result.rc != 0:
         pytest.fail(
             f"Failed to stop process {pid}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -517,7 +517,7 @@ $ErrorActionPreference = 'Stop'
 Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 exit 0
 """
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_powershell(host, script, label="stop_listening_ports")
     if result.rc != 0:
         pytest.fail(
             "Failed to stop xp2p processes.\n"
@@ -620,7 +620,7 @@ if ($targets.Count -gt 0) {{
 }}
 exit 0
 """
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_powershell(host, script, label="check_internet_access")
     if result.rc != 0:
         pytest.fail(
             "Failed to stop listening ports.\n"
@@ -676,7 +676,7 @@ if (-not $tcpOk) {
 }
 exit 0
 """
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_powershell(host, script, label="read_optional_text")
     if result.rc != 0:
         pytest.fail(
             "Client internet check failed.\n"
@@ -781,7 +781,7 @@ if (-not (Test-Path $path)) {{
 Get-Content -Path $path -Raw
 exit 0
 """
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_powershell(host, script, label="read_optional_text")
     if result.rc == 0:
         return result.stdout or ""
     if result.rc == 3:
@@ -801,7 +801,7 @@ if (-not (Test-Path $path)) {{
 Get-Content -Path $path -Raw
 exit 0
 """
-    result = win_env.run_powershell(client_host, script)
+    result = win_env.run_powershell(client_host, script, label="read_remote_json")
     if result.rc != 0:
         pytest.fail(
             f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -824,6 +824,7 @@ def _remote_path_exists(client_host, path: Path) -> bool:
     result = win_env.run_powershell(
         client_host,
         f"if (Test-Path {target}) {{ exit 0 }} else {{ exit 3 }}",
+        label="remote_path_exists",
     )
     if result.rc == 0:
         return True
@@ -855,7 +856,7 @@ foreach ($target in $targets) {{
 }}
 exit 0
 """
-    result = win_env.run_powershell(client_host, script)
+    result = win_env.run_powershell(client_host, script, label="remove_paths")
     if result.rc != 0:
         pytest.fail(
             "Failed to remove remote paths.\n"
@@ -1023,7 +1024,7 @@ if (-not $addresses) {
 }
 $addresses
 """
-    result = win_env.run_powershell(host, script)
+    result = win_env.run_powershell(host, script, label="stop_process")
     if result.rc != 0:
         pytest.fail(
             "Failed to detect IPv4 addresses.\n"

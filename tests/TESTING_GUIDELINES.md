@@ -29,6 +29,12 @@ guest suites -- the CI and fellow contributors expect these rules.
   quirks and keep the rest of the provisioner shared.
 - **Never introduce new WinRM logic.** We route everything through SSH
   (`testinfra` Paramiko backend) for performance and stability, even on Windows.
+- **Windows guest script completion markers.** Every PowerShell guest script
+  invoked from host tests must support a completion marker path (for example
+  `-MarkerPath`). The script should create the marker under the synced
+  `C:\xp2p\build` tree so host code can enforce timeouts without relying on an
+  SSH connection. Host-side helpers must pass and validate the marker for
+  long-running operations.
 - Keep tests **idempotent and clean**. Leave the guest in the same state you
   found it (use fixtures with `yield`, teardown hooks, or the shared PowerShell
   helpers).

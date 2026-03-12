@@ -122,7 +122,13 @@ ADMIN_XP2P_SUBCOMMANDS = {"run", "service"}
 GUEST_BUILD_ROOT = Path(r"C:\xp2p\build")
 
 
-def run_powershell(host: Host, script: str, timeout: int | float | None = None) -> CommandResult:
+def run_powershell(
+    host: Host,
+    script: str,
+    timeout: int | float | None = None,
+    *,
+    label: str | None = None,
+) -> CommandResult:
     encoded = encode_powershell(script)
     started = time.monotonic()
     effective_timeout = DEFAULT_POWERSHELL_TIMEOUT if timeout is None else timeout
@@ -132,7 +138,10 @@ def run_powershell(host: Host, script: str, timeout: int | float | None = None) 
     )
     elapsed_ms = int((time.monotonic() - started) * 1000)
     if elapsed_ms > 2000:
-        print(f"TIMING: powershell_ms={elapsed_ms}")
+        if label:
+            print(f"TIMING: powershell_ms={elapsed_ms} label={label}")
+        else:
+            print(f"TIMING: powershell_ms={elapsed_ms}")
     return result
 
 
@@ -155,7 +164,7 @@ def _remote_sha256(host: Host, path: Path) -> str | None:
         f"(Get-FileHash -Algorithm SHA256 -Path {target}).Hash "
         "}"
     )
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="remote_sha256")
     if result.rc != 0:
         return None
     return (result.stdout or "").strip() or None
@@ -360,6 +369,15 @@ def _xp2p_timeout_marker() -> tuple[Path, Path]:
     return local_path, guest_path
 
 
+def _admin_token_marker() -> tuple[Path, Path]:
+    marker_dir = REPO_ROOT / "build" / "admin-token"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    token = uuid.uuid4().hex
+    local_path = marker_dir / f"admin-token-{token}.txt"
+    guest_path = GUEST_BUILD_ROOT / "admin-token" / f"admin-token-{token}.txt"
+    return local_path, guest_path
+
+
 def _run_xp2p_with_timeout_marker(
     host: Host,
     args: Iterable[str],
@@ -455,7 +473,7 @@ if ($process.ExitCode -ne 0) {{
 }}
 exit 0
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="path_exists_raw")
     if result.rc != 0:
         stdout = result.stdout or ""
         if "MSI ExitCode=1601" in stdout:
@@ -611,7 +629,7 @@ if (Test-Path {install_dir}) {{
     script += """
 exit 0
     """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="get_remote_file_size")
     if result.rc != 0:
         stdout = result.stdout or ""
         if "MSI ExitCode=1601" in stdout:
@@ -772,7 +790,7 @@ foreach ($root in $roots) {{
 }}
 exit 3
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="detect_xp2p_exe_scan")
     if result.rc != 0:
         return _search_user_programs(host)
     value = (result.stdout or "").strip().splitlines()
@@ -817,7 +835,7 @@ foreach ($user in $users) {
 }
 exit 3
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="search_user_programs")
     if result.rc != 0:
         return None
     value = (result.stdout or "").strip().splitlines()
@@ -845,7 +863,7 @@ foreach ($item in $items) {
 }
 exit 3
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="query_install_location")
     if result.rc != 0:
         return None
     value = (result.stdout or "").strip().splitlines()
@@ -855,15 +873,25 @@ exit 3
 
 
 def ensure_admin_token(host: Host) -> None:
-    result = run_guest_script(
-        host,
-        "scripts/ensure_admin_token.ps1",
-    )
-    if result.rc != 0:
-        raise RuntimeError(
-            "Failed to ensure admin token.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    marker_local, marker_guest = _admin_token_marker()
+    if marker_local.exists():
+        marker_local.unlink(missing_ok=True)
+    try:
+        result = run_guest_script(
+            host,
+            "scripts/ensure_admin_token.ps1",
+            MarkerPath=str(marker_guest),
         )
+        if result.rc != 0:
+            raise RuntimeError(
+                "Failed to ensure admin token.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        if not marker_local.exists():
+            raise RuntimeError("Admin token marker was not created on the host.")
+    finally:
+        if marker_local.exists():
+            marker_local.unlink(missing_ok=True)
 
 
 def get_remote_file_size(host: Host, path: str | Path) -> int:
@@ -985,7 +1013,7 @@ if (-not $addresses) {
 }
 $addresses
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="read_text")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to detect IPv4 addresses.\n"
@@ -1109,7 +1137,7 @@ foreach ($target in $targets) {{
 }}
 exit 0
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="write_text")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to remove remote paths.\n"
@@ -1123,7 +1151,7 @@ $ErrorActionPreference = 'Stop'
 Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 exit 0
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="remove_paths")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to stop xp2p processes.\n"
@@ -1158,7 +1186,7 @@ foreach ($name in $services) {{
 }}
 exit 0
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="stop_xp2p_processes")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to remove services on remote host.\n"
@@ -1206,7 +1234,7 @@ foreach ($target in @({target_list})) {{
 }}
 $existing
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="remove_services")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to check remote paths.\n"
@@ -1226,7 +1254,7 @@ if (-not (Test-Path $target)) {{
 Get-Content -Path $target -Raw
 exit 0
 """
-    result = run_powershell(host, script)
+    result = run_powershell(host, script, label="get_host_ipv4")
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to read remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
