@@ -1310,7 +1310,8 @@ $dir = Split-Path -Parent $target
 if ($dir -and -not (Test-Path $dir)) {{
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
 }}
-Set-Content -Path $target -Value $text -Encoding UTF8
+$encoding = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($target, $text, $encoding)
 exit 0
 """
     result = run_powershell(host, script)

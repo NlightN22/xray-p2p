@@ -125,6 +125,8 @@ def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
         host,
         "scripts/assert_ipv6_binding_disabled.ps1",
         InterfaceName=interface_name,
+        TimeoutSeconds=60,
+        PollSeconds=2,
     )
     if result.rc != 0:
         pytest.fail(
