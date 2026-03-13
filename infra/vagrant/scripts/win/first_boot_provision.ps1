@@ -41,6 +41,67 @@ function Test-HostOnlyMissingError {
     return $Output -match "VERR_INTNET_FLT_IF_NOT_FOUND"
 }
 
+function Test-VboxNameCollisionError {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Output
+    )
+    return ($Output -match "VERR_ALREADY_EXISTS" -and $Output -match "Could not rename the directory")
+}
+
+function Get-VboxNameCollisionPaths {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Output
+    )
+    $match = [regex]::Match($Output, "Could not rename the directory '([^']+)' to '([^']+)'")
+    if (-not $match.Success) {
+        return $null
+    }
+    return [pscustomobject]@{
+        From = $match.Groups[1].Value
+        To   = $match.Groups[2].Value
+    }
+}
+
+function Get-RegisteredVmNames {
+    $names = @()
+    $lines = & VBoxManage list vms 2>$null
+    foreach ($line in $lines) {
+        if ($line -match '^"([^"]+)"') {
+            $names += $matches[1]
+        }
+    }
+    return $names
+}
+
+function Try-FixVboxNameCollision {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Machine,
+        [Parameter(Mandatory = $true)]
+        [string] $Output
+    )
+    if (-not (Test-VboxNameCollisionError -Output $Output)) {
+        return $false
+    }
+    $paths = Get-VboxNameCollisionPaths -Output $Output
+    if (-not $paths) {
+        return $false
+    }
+    $registered = Get-RegisteredVmNames
+    if ($registered -contains $Machine) {
+        Write-Info ("VirtualBox already has a VM named {0}; skip folder cleanup." -f $Machine)
+        return $false
+    }
+    if (-not [string]::IsNullOrWhiteSpace($paths.To) -and (Test-Path -LiteralPath $paths.To)) {
+        Write-Info ("Removing stale VM folder for {0}: {1}" -f $Machine, $paths.To)
+        Remove-Item -LiteralPath $paths.To -Recurse -Force -ErrorAction SilentlyContinue
+        return $true
+    }
+    return $false
+}
+
 function Get-MachineState {
     param(
         [Parameter(Mandatory = $true)]
@@ -146,6 +207,13 @@ function Ensure-Machine {
             if (Test-HostOnlyMissingError -Output $result.Output) {
                 throw ("VirtualBox host-only adapter not found while starting {0}. " +
                     "Create a host-only interface (VBoxManage hostonlyif create) and retry." -f $Machine)
+            }
+            if (Try-FixVboxNameCollision -Machine $Machine -Output $result.Output) {
+                Write-Info ("Retrying {0} after name-collision cleanup." -f $Machine)
+                $retry = Invoke-Vagrant -Args @("up", $Machine, "--no-provision")
+                if ($retry.ExitCode -ne 0) {
+                    Write-Info ("Retry boot for {0} failed (exit {1}); continuing to wait." -f $Machine, $retry.ExitCode)
+                }
             }
             Write-Info ("Initial boot for {0} failed (expected on first boot); continuing to wait." -f $Machine)
         }

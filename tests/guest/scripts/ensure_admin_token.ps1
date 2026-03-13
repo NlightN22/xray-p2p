@@ -13,8 +13,8 @@ if (-not $value -or $value.LocalAccountTokenFilterPolicy -ne 1) {
 
 if ($MarkerPath) {
     $markerDir = Split-Path -Parent $MarkerPath
-    if ($markerDir -and -not (Test-Path $markerDir)) {
-        New-Item -ItemType Directory -Path $markerDir -Force | Out-Null
+    if ($markerDir) {
+        [System.IO.Directory]::CreateDirectory($markerDir) | Out-Null
     }
     Set-Content -Path $MarkerPath -Value "OK" -Encoding ASCII
 }

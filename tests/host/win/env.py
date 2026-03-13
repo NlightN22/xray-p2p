@@ -375,7 +375,7 @@ def _admin_token_marker() -> tuple[Path, Path]:
     marker_dir.mkdir(parents=True, exist_ok=True)
     token = uuid.uuid4().hex
     local_path = marker_dir / f"admin-token-{token}.txt"
-    guest_path = GUEST_BUILD_ROOT / "admin-token" / f"admin-token-{token}.txt"
+    guest_path = Path(r"C:\Windows\Temp") / f"xp2p-admin-token-{token}.txt"
     return local_path, guest_path
 
 
@@ -891,7 +891,13 @@ def ensure_admin_token(host: Host) -> None:
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
                 )
             if not marker_local.exists():
-                raise RuntimeError("Admin token marker was not created on the host.")
+                probe = run_powershell(
+                    host,
+                    f"if (Test-Path {ps_quote(str(marker_guest))}) {{ exit 0 }} else {{ exit 3 }}",
+                )
+                if probe.rc != 0:
+                    raise RuntimeError("Admin token marker was not created on the guest.")
+                marker_local.write_text("OK", encoding="ascii")
             return
         except pytest.skip.Exception as exc:
             last_error = exc
@@ -906,6 +912,10 @@ def ensure_admin_token(host: Host) -> None:
         finally:
             if marker_local.exists():
                 marker_local.unlink(missing_ok=True)
+            run_powershell(
+                host,
+                f"if (Test-Path {ps_quote(str(marker_guest))}) {{ Remove-Item -Force {ps_quote(str(marker_guest))} }}",
+            )
     if last_error is not None:
         raise last_error
 
