@@ -19,6 +19,7 @@
     <Property Id="XP2P_CLIENT_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" Value="1" />
+    <Property Id="XP2P_UI_AUTOSTART" Hidden="yes" Secure="yes" Value="1" />
 
     <CustomAction Id="SetRegisterPsCompletion"
                   Property="RegisterPsCompletion"
@@ -127,6 +128,10 @@
                         Wait="yes" />
       </Component>
 
+      <Component Id="cmpXp2pUiExe" Guid="{2D3B93AE-5B34-4D6E-8A94-476A6A0C0F4F}">
+        <File Id="fileXp2pUiExe" Source="$(var.Xp2pUiBinary)" KeyPath="yes" Checksum="yes" />
+      </Component>
+
       <Component Id="cmpInstallRoot" Guid="{F7F77E38-B7FB-4B5B-8995-20FE8F5DCB68}" KeyPath="yes">
         <CreateFolder />
       </Component>
@@ -155,6 +160,16 @@
                         Name="xp2p-server"
                         Start="install"
                         Wait="yes" />
+      </Component>
+
+      <Component Id="cmpXp2pUiAutoStart" Guid="{E9D1B0D7-3911-4C52-9E4F-6A9C868460C1}">
+        <Condition>XP2P_UI_AUTOSTART="1"</Condition>
+        <RegistryValue Root="HKCU"
+                       Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                       Name="xp2p-ui"
+                       Type="string"
+                       Value="&quot;[INSTALLFOLDER]xp2p-ui.exe&quot;"
+                       KeyPath="yes" />
       </Component>
     </DirectoryRef>
 
@@ -208,6 +223,11 @@
       <ComponentRef Id="cmpXp2pLogsRoot" />
       <ComponentGroupRef Id="Xp2pBundleGroup" />
       <ComponentRef Id="cmpServiceAutostart" />
+    </Feature>
+
+    <Feature Id="TrayFeature" Title="xp2p UI" Level="1">
+      <ComponentRef Id="cmpXp2pUiExe" />
+      <ComponentRef Id="cmpXp2pUiAutoStart" />
     </Feature>
   </Product>
 </Wix>

@@ -97,6 +97,18 @@ try {
         throw "xp2p binary missing at $binaryOut"
     }
 
+    Write-Info "Building xp2p-ui.exe (x86)"
+    $uiBinaryOut = Join-Path $binaryDir 'xp2p-ui.exe'
+    $env:GOARCH = '386'
+    $env:GOOS = 'windows'
+    go build -trimpath -ldflags $ldflags -o $uiBinaryOut .\go\cmd\xp2p-ui
+    Remove-Item Env:GOARCH
+    Remove-Item Env:GOOS
+
+    if (-not (Test-Path $uiBinaryOut)) {
+        throw "xp2p-ui binary missing at $uiBinaryOut"
+    }
+
     Write-Info "Generating PowerShell completion script"
     $completionDir = Join-Path $binaryDir 'completions'
     Ensure-Directory $completionDir
@@ -158,6 +170,7 @@ try {
         "-ext", $wixExt,
         "-dProductVersion=$version",
         "-dXp2pBinary=$binaryOut",
+        "-dXp2pUiBinary=$uiBinaryOut",
         "-dBundleDir=$bundleDir",
         "-dXp2pCompletionScript=$completionOut",
         "-dRegisterPsCompletionScript=$registerPsCompletion",
@@ -172,6 +185,7 @@ try {
         "-ext", $wixExt,
         "-dProductVersion=$version",
         "-dXp2pBinary=$binaryOut",
+        "-dXp2pUiBinary=$uiBinaryOut",
         "-dBundleDir=$bundleDir",
         "-dXp2pCompletionScript=$completionOut",
         "-dRegisterPsCompletionScript=$registerPsCompletion",

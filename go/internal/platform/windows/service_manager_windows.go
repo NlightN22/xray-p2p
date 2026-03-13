@@ -4,9 +4,11 @@ package windows
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/NlightN22/xray-p2p/go/internal/ports"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
@@ -49,6 +51,9 @@ func (m *ServiceManager) Status(ctx context.Context, name string) (ports.Service
 
 	service, err := manager.OpenService(name)
 	if err != nil {
+		if isServiceMissing(err) {
+			return ports.ServiceInfo{}, fmt.Errorf("service %s not installed: %w", name, err)
+		}
 		return ports.ServiceInfo{}, err
 	}
 	defer service.Close()
@@ -91,6 +96,9 @@ func (m *ServiceManager) List(ctx context.Context, names []string) ([]ports.Serv
 		}
 		service, err := manager.OpenService(name)
 		if err != nil {
+			if isServiceMissing(err) {
+				continue
+			}
 			return nil, fmt.Errorf("open service %s: %w", name, err)
 		}
 
@@ -149,4 +157,8 @@ func mapServiceState(state svc.State) ports.ServiceState {
 	default:
 		return ports.ServiceStateUnknown
 	}
+}
+
+func isServiceMissing(err error) bool {
+	return errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST)
 }

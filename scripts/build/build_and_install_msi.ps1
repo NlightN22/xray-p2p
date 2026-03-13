@@ -179,6 +179,23 @@ try {
         throw "xp2p binary missing at $binaryOut"
     }
 
+    Write-Info "Building xp2p-ui.exe"
+    $uiBinaryOut = Join-Path $binaryDir 'xp2p-ui.exe'
+    $uiBuild = Invoke-GoCommand -CommandArgs @(
+        "build",
+        "-trimpath",
+        "-ldflags", $ldflags,
+        "-o", $uiBinaryOut,
+        ".\\go\\cmd\\xp2p-ui"
+    )
+    $uiBuild.Output | ForEach-Object { Write-Host $_ }
+    if ($uiBuild.ExitCode -ne 0) {
+        throw "go build xp2p-ui failed with exit code $($uiBuild.ExitCode)"
+    }
+    if (-not (Test-Path $uiBinaryOut)) {
+        throw "xp2p-ui binary missing at $uiBinaryOut"
+    }
+
     Write-Info "Generating PowerShell completion script"
     $completionDir = Join-Path $binaryDir 'completions'
     Ensure-Directory $completionDir
@@ -243,6 +260,7 @@ try {
         "-ext", $wixExt,
         "-dProductVersion=$version",
         "-dXp2pBinary=$binaryOut",
+        "-dXp2pUiBinary=$uiBinaryOut",
         "-dBundleDir=$bundleDir",
         "-dXp2pCompletionScript=$completionOut",
         "-dRegisterPsCompletionScript=$registerPsCompletion",
@@ -257,6 +275,7 @@ try {
         "-ext", $wixExt,
         "-dProductVersion=$version",
         "-dXp2pBinary=$binaryOut",
+        "-dXp2pUiBinary=$uiBinaryOut",
         "-dBundleDir=$bundleDir",
         "-dXp2pCompletionScript=$completionOut",
         "-dRegisterPsCompletionScript=$registerPsCompletion",
