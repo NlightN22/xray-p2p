@@ -33,6 +33,17 @@
                   Return="check"
                   Impersonate="no" />
 
+    <CustomAction Id="SetServiceAclCommand"
+                  Property="GrantServiceAcl"
+                  Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[#fileSetServiceAcl]&quot; -ServiceName xp2p-client -ServiceName xp2p-server -Sid S-1-5-32-545" />
+
+    <CustomAction Id="GrantServiceAcl"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Return="check"
+                  Impersonate="no" />
+
     <CustomAction Id="SetPerUserInstall" Property="MSIINSTALLPERUSER" Value="1" Execute="immediate" />
     <CustomAction Id="SetPerUserFolder" Property="INSTALLFOLDER" Value="[LocalAppDataFolder]xp2p" Execute="immediate" />
 
@@ -55,6 +66,8 @@
       <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
       <Custom Action="SetRegisterPsCompletion" After="InstallFiles">NOT REMOVE="ALL"</Custom>
       <Custom Action="RegisterPsCompletion" After="SetRegisterPsCompletion">NOT REMOVE="ALL"</Custom>
+      <Custom Action="SetServiceAclCommand" After="InstallServices">NOT REMOVE="ALL"</Custom>
+      <Custom Action="GrantServiceAcl" After="SetServiceAclCommand">NOT REMOVE="ALL"</Custom>
       <Custom Action="RunClientInstall" After="InstallFiles">NOT Installed AND XP2P_CLIENT_ARGS</Custom>
       <Custom Action="RunServerInstall" After="RunClientInstall">NOT Installed AND XP2P_SERVER_ARGS</Custom>
     </InstallExecuteSequence>
@@ -124,6 +137,10 @@
         <File Id="fileRegisterPsCompletion" Source="$(var.RegisterPsCompletionScript)" KeyPath="yes" />
       </Component>
 
+      <Component Id="cmpSetServiceAclScript" Guid="{5E83F3F7-2AB3-4CFA-B3C4-1E4250AA9E01}" Win64="yes">
+        <File Id="fileSetServiceAcl" Source="$(var.SetServiceAclScript)" KeyPath="yes" />
+      </Component>
+
       <Component Id="cmpServiceAutostart" Guid="{E0F23327-5C68-4699-98A5-1E4D91550ABA}" Win64="yes">
         <Condition>XP2P_SKIP_SERVICE_START="0"</Condition>
         <RegistryValue Root="HKLM"
@@ -185,6 +202,7 @@
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
       <ComponentRef Id="cmpRegisterPsCompletion" />
+      <ComponentRef Id="cmpSetServiceAclScript" />
       <ComponentRef Id="cmpXp2pDataRoot" />
       <ComponentRef Id="cmpXp2pCompletion" />
       <ComponentRef Id="cmpXp2pConfigClient" />

@@ -50,6 +50,7 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
   msiexec /x xp2p-<version>-windows-amd64.msi
   ```
 - Services `xp2p-client` and `xp2p-server` wrap `xp2p client|server service run`; manage via `xp2p client service start|stop|status` or the Services snap-in. Logs: `C:\Program Files\xp2p\logs\<role>\`.
+- Service management (start/stop/status) is available to Builtin Users without admin elevation.
 
 Need to build from source or generate packages? Follow [`scripts/build/README.md`](scripts/build/README.md).
 

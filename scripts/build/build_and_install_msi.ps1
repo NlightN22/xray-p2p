@@ -238,6 +238,7 @@ try {
     $wixObj = Join-Path $binaryDir 'xp2p.wixobj'
     $bundleObj = Join-Path $binaryDir 'xp2p-bundle.wixobj'
     $registerPsCompletion = Join-Path $RepoRoot 'installer\wix\register_ps_completion.ps1'
+    $setServiceAclScript = Join-Path $RepoRoot 'installer\wix\set_service_acl.ps1'
     $candleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
         "-ext", $wixExt,
         "-dProductVersion=$version",
@@ -245,6 +246,7 @@ try {
         "-dBundleDir=$bundleDir",
         "-dXp2pCompletionScript=$completionOut",
         "-dRegisterPsCompletionScript=$registerPsCompletion",
+        "-dSetServiceAclScript=$setServiceAclScript",
         "-out", $wixObj,
         (Join-Path $RepoRoot $WixSourceRelative)
     )
@@ -258,6 +260,7 @@ try {
         "-dBundleDir=$bundleDir",
         "-dXp2pCompletionScript=$completionOut",
         "-dRegisterPsCompletionScript=$registerPsCompletion",
+        "-dSetServiceAclScript=$setServiceAclScript",
         "-out", $bundleObj,
         $bundleWxs
     )
