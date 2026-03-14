@@ -68,12 +68,21 @@ function Invoke-Step {
     Write-Info ("$Name (done in {0}s)" -f $seconds)
 }
 
+function Remove-WinresArtifacts {
+    param([string] $RsrcPrefix, [string] $Label)
+    $pattern = "$RsrcPrefix*_windows_*.syso"
+    Get-ChildItem $pattern -ErrorAction SilentlyContinue | Remove-Item -Force
+    Write-Info ("Cleaned winres artifacts for {0}" -f $Label)
+}
+
 Write-Info "Preparing MSI (x86) build directories"
 Ensure-Directory $RepoRoot
 Ensure-Directory $CacheDir
 
 Push-Location $RepoRoot
 $msiPath = $null
+$xp2pRsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
+$xp2pUiRsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p-ui\rsrc'
 try {
     Write-Info "Resolving xp2p version"
     $version = (& go run .\go\cmd\xp2p --version).Trim()
@@ -113,8 +122,8 @@ try {
             }
         }
 
-        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p\rsrc') -Arch "386" -Label "xp2p"
-        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres-ui.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p-ui\rsrc') -Arch "386" -Label "xp2p-ui"
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres.json') -RsrcPrefix $xp2pRsrcPrefix -Arch "386" -Label "xp2p"
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres-ui.json') -RsrcPrefix $xp2pUiRsrcPrefix -Arch "386" -Label "xp2p-ui"
     }
 
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'
@@ -139,6 +148,11 @@ try {
     }
     if (-not (Test-Path $uiBinaryOut)) {
         throw "xp2p-ui binary missing at $uiBinaryOut"
+    }
+
+    Invoke-Step -Name "Cleaning winres artifacts" -Action {
+        Remove-WinresArtifacts -RsrcPrefix $xp2pRsrcPrefix -Label "xp2p"
+        Remove-WinresArtifacts -RsrcPrefix $xp2pUiRsrcPrefix -Label "xp2p-ui"
     }
 
     $completionDir = Join-Path $binaryDir 'completions'

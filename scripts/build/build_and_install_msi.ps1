@@ -88,6 +88,13 @@ function Invoke-Step {
     Write-Info ("$Name (done in {0}s)" -f $seconds)
 }
 
+function Remove-WinresArtifacts {
+    param([string] $RsrcPrefix, [string] $Label)
+    $pattern = "$RsrcPrefix*_windows_*.syso"
+    Get-ChildItem $pattern -ErrorAction SilentlyContinue | Remove-Item -Force
+    Write-Info ("Cleaned winres artifacts for {0}" -f $Label)
+}
+
 function Ensure-GoToolchain {
     if (Get-Command -Name go.exe -ErrorAction SilentlyContinue) {
         return
@@ -143,6 +150,9 @@ try {
     Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue
     Ensure-Directory $binaryDir
 
+    $xp2pRsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
+    $xp2pUiRsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p-ui\rsrc'
+
     Invoke-Step -Name "Generating Windows version resources" -Action {
         $skipWinres = $env:XP2P_SKIP_WINRES
         $forceWinres = $env:XP2P_FORCE_WINRES
@@ -191,8 +201,8 @@ try {
             }
         }
 
-        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p\rsrc') -Arch "amd64" -Label "xp2p"
-        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres-ui.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p-ui\rsrc') -Arch "amd64" -Label "xp2p-ui"
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres.json') -RsrcPrefix $xp2pRsrcPrefix -Arch "amd64" -Label "xp2p"
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres-ui.json') -RsrcPrefix $xp2pUiRsrcPrefix -Arch "amd64" -Label "xp2p-ui"
     }
 
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'
@@ -230,6 +240,11 @@ try {
     }
     if (-not (Test-Path $uiBinaryOut)) {
         throw "xp2p-ui binary missing at $uiBinaryOut"
+    }
+
+    Invoke-Step -Name "Cleaning winres artifacts" -Action {
+        Remove-WinresArtifacts -RsrcPrefix $xp2pRsrcPrefix -Label "xp2p"
+        Remove-WinresArtifacts -RsrcPrefix $xp2pUiRsrcPrefix -Label "xp2p-ui"
     }
 
     $completionDir = Join-Path $binaryDir 'completions'
