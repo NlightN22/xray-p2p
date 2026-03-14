@@ -118,7 +118,7 @@ try {
     Invoke-Step -Name "Building xp2p-ui.exe (x86)" -Action {
         $env:GOARCH = '386'
         $env:GOOS = 'windows'
-        go build -trimpath -tags production -ldflags $ldflags -o $uiBinaryOut .\go\cmd\xp2p-ui
+        go build -trimpath -tags production -ldflags "$ldflags -H=windowsgui" -o $uiBinaryOut .\go\cmd\xp2p-ui
         Remove-Item Env:GOARCH
         Remove-Item Env:GOOS
     }

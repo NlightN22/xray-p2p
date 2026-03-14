@@ -25,6 +25,7 @@
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch xp2p UI" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <WixVariable Id="WixUILicenseRtf" Value="installer\wix\license.rtf" />
 
     <CustomAction Id="SetRegisterPsCompletion"
                   Property="RegisterPsCompletion"
@@ -67,6 +68,7 @@
 
     <CustomAction Id="LaunchXp2pUI"
                   FileKey="fileXp2pUiExe"
+                  ExeCommand=""
                   Execute="immediate"
                   Return="asyncNoWait"
                   Impersonate="yes" />

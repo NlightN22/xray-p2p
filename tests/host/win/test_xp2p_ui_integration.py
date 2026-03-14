@@ -136,6 +136,26 @@ def test_xp2p_ui_smoke_launch(server_host):
 
 @pytest.mark.host
 @pytest.mark.win
+def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
+    local_marker, guest_marker = _marker_paths("xp2p-ui-logs")
+    result = win_env.run_guest_script(
+        server_host,
+        "scripts/check_xp2p_ui_logs.ps1",
+        Xp2pUiPath=str(UI_EXE),
+        MarkerPath=str(guest_marker),
+        WaitSeconds="8",
+        MaxLines="200",
+    )
+    _assert_marker(local_marker, "check_xp2p_ui_logs.ps1")
+    if result.rc != 0:
+        pytest.fail(
+            "xp2p-ui log check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+@pytest.mark.host
+@pytest.mark.win
 def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner):
     services = ["xp2p-client", "xp2p-server"]
     missing = [name for name in services if not win_env.service_exists(server_host, name)]

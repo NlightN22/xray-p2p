@@ -202,7 +202,7 @@ try {
             "build",
             "-trimpath",
             "-tags", "production",
-            "-ldflags", $ldflags,
+            "-ldflags", "$ldflags -H=windowsgui",
             "-o", $uiBinaryOut,
             ".\\go\\cmd\\xp2p-ui"
         )

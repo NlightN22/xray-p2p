@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -86,6 +88,17 @@ func (a *TrayApp) onReady() {
 
 	a.buildRoleMenu(clientRoleName, clientService)
 	a.buildRoleMenu(serverRoleName, serverService)
+	logsItem := systray.AddMenuItem("Open logs", "Open xp2p-ui log file")
+	go func() {
+		for {
+			select {
+			case <-logsItem.ClickedCh:
+				a.openLogs()
+			case <-a.shutdownSignal:
+				return
+			}
+		}
+	}()
 	systray.AddSeparator()
 
 	quitItem := systray.AddMenuItem("Quit", "Quit xp2p-ui")
@@ -274,6 +287,7 @@ func (a *TrayApp) fetchRoleStatus(ctx context.Context, serviceName string) roleS
 	if err == nil {
 		return roleStatus{installed: true, state: info.State}
 	}
+	logging.Error("xp2p-ui service status failed", "service", serviceName, "err", err)
 	if isServiceMissingError(err) {
 		return roleStatus{installed: false, state: ports.ServiceStateStopped}
 	}
@@ -296,8 +310,8 @@ func (a *TrayApp) updateRoleMenuLocked(item *roleMenuItem, status roleStatus) {
 	if status.err != nil {
 		item.startItem.Disable()
 		item.stopItem.Disable()
-		item.installItem.Disable()
-		item.deployItem.Disable()
+		item.installItem.Enable()
+		item.deployItem.Enable()
 		delete(a.currentStates, item.serviceName)
 		return
 	}
@@ -518,4 +532,15 @@ func showDialog(ctx context.Context, dialogType runtime.DialogType, title, messa
 		Title:   title,
 		Message: message,
 	})
+}
+
+func (a *TrayApp) openLogs() {
+	logPath := config.LogPath("xp2p-ui.log")
+	if _, err := os.Stat(logPath); err != nil {
+		Notify("xp2p", fmt.Sprintf("Log file not found: %s", logPath))
+		return
+	}
+	if err := exec.Command("explorer.exe", "/select,", logPath).Start(); err != nil {
+		Notify("xp2p", fmt.Sprintf("Open log failed: %v", err))
+	}
 }
