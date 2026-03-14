@@ -23,7 +23,7 @@ func (m *ServiceManager) Start(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return withService(name, func(service *mgr.Service) error {
+	return withServiceAccess(name, windows.SERVICE_START|windows.SERVICE_QUERY_STATUS, func(service *mgr.Service) error {
 		return service.Start()
 	})
 }
@@ -32,7 +32,7 @@ func (m *ServiceManager) Stop(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return withService(name, func(service *mgr.Service) error {
+	return withServiceAccess(name, windows.SERVICE_STOP|windows.SERVICE_QUERY_STATUS, func(service *mgr.Service) error {
 		_, err := service.Control(svc.Stop)
 		return err
 	})
@@ -45,28 +45,25 @@ func (m *ServiceManager) Status(ctx context.Context, name string) (ports.Service
 
 	manager, err := mgr.Connect()
 	if err != nil {
-		return ports.ServiceInfo{}, err
+		return ports.ServiceInfo{}, fmt.Errorf("connect service manager: %w", err)
 	}
 	defer manager.Disconnect()
 
-	service, err := manager.OpenService(name)
+	service, err := openServiceWithAccess(manager, name, windows.SERVICE_QUERY_STATUS)
 	if err != nil {
 		if isServiceMissing(err) {
 			return ports.ServiceInfo{}, fmt.Errorf("service %s not installed: %w", name, err)
 		}
-		return ports.ServiceInfo{}, err
+		return ports.ServiceInfo{}, fmt.Errorf("open service %s: %w", name, err)
 	}
 	defer service.Close()
 
 	status, err := service.Query()
 	if err != nil {
-		return ports.ServiceInfo{}, err
+		return ports.ServiceInfo{}, fmt.Errorf("query service %s: %w", name, err)
 	}
 
-	displayName := ""
-	if config, err := service.Config(); err == nil {
-		displayName = config.DisplayName
-	}
+	displayName := queryServiceDisplayName(manager, name)
 
 	return ports.ServiceInfo{
 		Name:        name,
@@ -94,7 +91,7 @@ func (m *ServiceManager) List(ctx context.Context, names []string) ([]ports.Serv
 		if name == "" {
 			continue
 		}
-		service, err := manager.OpenService(name)
+		service, err := openServiceWithAccess(manager, name, windows.SERVICE_QUERY_STATUS)
 		if err != nil {
 			if isServiceMissing(err) {
 				continue
@@ -103,10 +100,7 @@ func (m *ServiceManager) List(ctx context.Context, names []string) ([]ports.Serv
 		}
 
 		status, err := service.Query()
-		displayName := ""
-		if config, cfgErr := service.Config(); cfgErr == nil {
-			displayName = config.DisplayName
-		}
+		displayName := queryServiceDisplayName(manager, name)
 		service.Close()
 		if err != nil {
 			return nil, fmt.Errorf("query service %s: %w", name, err)
@@ -129,13 +123,50 @@ func withService(name string, fn func(*mgr.Service) error) error {
 	}
 	defer manager.Disconnect()
 
-	service, err := manager.OpenService(name)
+	service, err := openServiceWithAccess(manager, name, windows.SERVICE_ALL_ACCESS)
 	if err != nil {
 		return err
 	}
 	defer service.Close()
 
 	return fn(service)
+}
+
+func withServiceAccess(name string, access uint32, fn func(*mgr.Service) error) error {
+	manager, err := mgr.Connect()
+	if err != nil {
+		return err
+	}
+	defer manager.Disconnect()
+
+	service, err := openServiceWithAccess(manager, name, access)
+	if err != nil {
+		return err
+	}
+	defer service.Close()
+
+	return fn(service)
+}
+
+func openServiceWithAccess(manager *mgr.Mgr, name string, access uint32) (*mgr.Service, error) {
+	handle, err := windows.OpenService(manager.Handle, windows.StringToUTF16Ptr(name), access)
+	if err != nil {
+		return nil, err
+	}
+	return &mgr.Service{Name: name, Handle: handle}, nil
+}
+
+func queryServiceDisplayName(manager *mgr.Mgr, name string) string {
+	service, err := openServiceWithAccess(manager, name, windows.SERVICE_QUERY_CONFIG)
+	if err != nil {
+		return ""
+	}
+	defer service.Close()
+	config, err := service.Config()
+	if err != nil {
+		return ""
+	}
+	return config.DisplayName
 }
 
 func mapServiceState(state svc.State) ports.ServiceState {

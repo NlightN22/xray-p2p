@@ -38,7 +38,7 @@
 
     <CustomAction Id="SetServiceAclCommand"
                   Property="GrantServiceAcl"
-                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[#fileSetServiceAcl]&quot; -ServiceName xp2p-client,xp2p-server -Sid S-1-5-32-545" />
+                  Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -File &quot;[#fileSetServiceAcl]&quot; -ServiceName xp2p-client,xp2p-server -Sid S-1-5-32-545,S-1-5-11" />
 
     <CustomAction Id="GrantServiceAcl"
                   BinaryKey="WixCA"

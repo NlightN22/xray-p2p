@@ -145,11 +145,34 @@ def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
         MarkerPath=str(guest_marker),
         WaitSeconds="8",
         MaxLines="200",
+        ClearLog="true",
     )
     _assert_marker(local_marker, "check_xp2p_ui_logs.ps1")
     if result.rc != 0:
         pytest.fail(
             "xp2p-ui log check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        ) 
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_sc_query_as_non_admin_user(server_host):
+    local_marker, guest_marker = _marker_paths("xp2p-ui-sc-query")
+    result = win_env.run_guest_script(
+        server_host,
+        "scripts/check_sc_query_as_user.ps1",
+        MarkerPath=str(guest_marker),
+        ServiceNames="xp2p-client,xp2p-server",
+        UserName="vagrant",
+        UserPassword="vagrant",
+        UseExistingUser="1",
+        GrantLogonRights="0",
+    )
+    _assert_marker(local_marker, "check_sc_query_as_user.ps1")
+    if result.rc != 0:
+        pytest.fail(
+            "sc query as non-admin user failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 

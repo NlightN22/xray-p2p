@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string[]] $ServiceName,
     [Parameter(Mandatory = $true)]
-    [string] $Sid
+    [string[]] $Sid
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +10,9 @@ Set-StrictMode -Version Latest
 
 if ($ServiceName.Count -eq 1 -and $ServiceName[0] -like "*,*") {
     $ServiceName = $ServiceName[0].Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+if ($Sid.Count -eq 1 -and $Sid[0] -like "*,*") {
+    $Sid = $Sid[0].Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
 }
 
 function Get-ServiceSddl {
@@ -47,14 +50,22 @@ function Add-AceToSddl {
     return $Sddl + $Ace
 }
 
-$ace = "(A;;CCLCSWRPWPDTLOCRRC;;;$Sid)"
 foreach ($name in $ServiceName) {
     $current = Get-ServiceSddl -Name $name
-    if ($current -match [regex]::Escape($ace)) {
+    $updated = $current
+    foreach ($sid in $Sid) {
+        if (-not $sid) {
+            continue
+        }
+        $ace = "(A;;CCLCSWRPWPDTLOCRRC;;;$sid)"
+        if ($updated -match [regex]::Escape($ace)) {
+            continue
+        }
+        $updated = Add-AceToSddl -Sddl $updated -Ace $ace
+    }
+    if ($updated -eq $current) {
         continue
     }
-
-    $updated = Add-AceToSddl -Sddl $current -Ace $ace
     $result = & sc.exe sdset $name $updated 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "sc.exe sdset failed for ${name}: $result"
