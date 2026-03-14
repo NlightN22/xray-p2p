@@ -101,7 +101,7 @@
       <Publish Dialog="ExitDialog"
                Control="Finish"
                Event="DoAction"
-               Value="LaunchXp2pUI">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed</Publish>
+               Value="LaunchXp2pUI">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed AND NOT Privileged</Publish>
     </UI>
 
     <Directory Id="TARGETDIR" Name="SourceDir">

@@ -94,10 +94,10 @@ func startWailsApp(bindings *ui.App) {
 	}
 	app := application.NewWithOptions(&options.App{
 		Title:             "xp2p-ui",
-		Width:             760,
-		Height:            680,
-		MinWidth:          720,
-		MinHeight:         600,
+		Width:             640,
+		Height:            520,
+		MinWidth:          600,
+		MinHeight:         480,
 		WindowStartState:  options.Normal,
 		StartHidden:       true,
 		HideWindowOnClose: true,
