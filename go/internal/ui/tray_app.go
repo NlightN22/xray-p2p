@@ -29,6 +29,7 @@ type TrayApp struct {
 	mu             sync.Mutex
 	roleItems      map[string]*roleMenuItem
 	currentStates  map[string]ports.ServiceState
+	actionErrors   map[string]actionError
 	shutdownSignal chan struct{}
 }
 
@@ -53,6 +54,11 @@ type roleStatus struct {
 	err       error
 }
 
+type actionError struct {
+	err   error
+	until time.Time
+}
+
 const (
 	clientRoleName   = "Client"
 	serverRoleName   = "Server"
@@ -60,6 +66,7 @@ const (
 	serverService    = "xp2p-server"
 	defaultWaitShort = 5 * time.Second
 	defaultWaitLong  = 20 * time.Second
+	actionErrorTTL   = 10 * time.Second
 )
 
 func NewTrayApp(serviceControl *usecase.ServiceControl, settings Settings, icons IconSet, opts TrayOptions) *TrayApp {
@@ -71,6 +78,7 @@ func NewTrayApp(serviceControl *usecase.ServiceControl, settings Settings, icons
 		icons:          icons,
 		roleItems:      make(map[string]*roleMenuItem),
 		currentStates:  make(map[string]ports.ServiceState),
+		actionErrors:   make(map[string]actionError),
 		shutdownSignal: make(chan struct{}),
 	}
 }
@@ -213,11 +221,11 @@ func (a *TrayApp) runServiceAction(ctx context.Context, cancel context.CancelFun
 		defer cancel()
 		err := fn(ctx)
 		if err != nil {
-			Notify("xp2p", fmt.Sprintf("Service %s %s failed: %v", name, action, err))
 			logging.Error("xp2p-ui service action failed", "service", name, "action", action, "err", err)
+			a.setActionError(name, err)
 		} else {
-			Notify("xp2p", fmt.Sprintf("Service %s %s succeeded", name, action))
 			logging.Info("xp2p-ui service action succeeded", "service", name, "action", action)
+			a.clearActionError(name)
 		}
 		a.refreshStatuses()
 	}()
@@ -280,6 +288,31 @@ func (a *TrayApp) setTrayIcon(icon []byte) {
 	systray.SetIcon(icon)
 }
 
+func (a *TrayApp) setActionError(name string, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.actionErrors[name] = actionError{
+		err:   err,
+		until: time.Now().Add(actionErrorTTL),
+	}
+	item, ok := a.roleItems[name]
+	if !ok {
+		return
+	}
+	a.updateRoleMenuLocked(item, roleStatus{
+		installed: true,
+		state:     ports.ServiceStateUnknown,
+		err:       err,
+	})
+}
+
+func (a *TrayApp) clearActionError(name string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.actionErrors, name)
+}
+
 func (a *TrayApp) fetchRoleStatus(ctx context.Context, serviceName string) roleStatus {
 	info, err := a.serviceControl.Status(ctx, serviceName)
 	if err == nil {
@@ -302,6 +335,16 @@ func isPendingState(state ports.ServiceState) bool {
 }
 
 func (a *TrayApp) updateRoleMenuLocked(item *roleMenuItem, status roleStatus) {
+	if status.err == nil {
+		if pending, ok := a.actionErrors[item.serviceName]; ok {
+			if time.Now().After(pending.until) {
+				delete(a.actionErrors, item.serviceName)
+			} else {
+				status.err = pending.err
+			}
+		}
+	}
+
 	label := roleLabel(item.role, status)
 	item.item.SetTitle(label)
 
@@ -323,8 +366,8 @@ func (a *TrayApp) updateRoleMenuLocked(item *roleMenuItem, status roleStatus) {
 		return
 	}
 
-	item.installItem.Disable()
-	item.deployItem.Disable()
+	item.installItem.Enable()
+	item.deployItem.Enable()
 	switch status.state {
 	case ports.ServiceStateRunning:
 		item.startItem.Disable()
@@ -403,7 +446,7 @@ func (a *TrayApp) deployRole(role string) {
 		Notify("xp2p", "Config deploy is unavailable")
 		return
 	}
-	ctx, ok := ensureWailsContext()
+	ctx, ok := waitWailsContext(5 * time.Second)
 	if !ok {
 		Notify("xp2p", "UI runtime is not ready")
 		return
@@ -433,17 +476,16 @@ func (a *TrayApp) deployRole(role string) {
 }
 
 func (a *TrayApp) installClient() {
-	ctx, ok := ensureWailsContext()
+	ctx, ok := waitWailsContext(5 * time.Second)
 	if !ok {
 		Notify("xp2p", "UI runtime is not ready")
 		return
 	}
 	runtime.WindowShow(ctx)
-	runtime.WindowFocus(ctx)
 }
 
 func (a *TrayApp) installServer() {
-	ctx, ok := ensureWailsContext()
+	ctx, ok := waitWailsContext(5 * time.Second)
 	if !ok {
 		Notify("xp2p", "UI runtime is not ready")
 		return

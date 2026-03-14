@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/application"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	winopts "github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed assets/Base.png
@@ -85,8 +86,19 @@ func initLogging() (string, func()) {
 }
 
 func startWailsApp(bindings *ui.App) {
+	userDataPath := wailsUserDataPath()
+	if userDataPath != "" {
+		if err := os.MkdirAll(userDataPath, 0o755); err != nil {
+			logging.Error("xp2p-ui create webview data dir failed", "path", userDataPath, "err", err)
+		}
+	}
 	app := application.NewWithOptions(&options.App{
 		Title:             "xp2p-ui",
+		Width:             760,
+		Height:            680,
+		MinWidth:          720,
+		MinHeight:         600,
+		WindowStartState:  options.Normal,
 		StartHidden:       true,
 		HideWindowOnClose: true,
 		OnStartup: func(ctx context.Context) {
@@ -95,9 +107,22 @@ func startWailsApp(bindings *ui.App) {
 		AssetServer: &assetserver.Options{
 			Assets: frontendAssets,
 		},
+		Windows: &winopts.Options{
+			WebviewUserDataPath: userDataPath,
+		},
 		Bind: []interface{}{bindings},
 	})
 	if err := app.Run(); err != nil {
 		logging.Error("xp2p-ui wails app failed", "err", err)
 	}
+}
+
+func wailsUserDataPath() string {
+	if local := os.Getenv("LOCALAPPDATA"); local != "" {
+		return filepath.Join(local, "xp2p-ui", "webview2")
+	}
+	if dir, err := os.UserConfigDir(); err == nil && dir != "" {
+		return filepath.Join(dir, "xp2p-ui", "webview2")
+	}
+	return ""
 }

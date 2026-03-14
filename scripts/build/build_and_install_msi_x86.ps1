@@ -90,16 +90,31 @@ try {
     Ensure-Directory $binaryDir
 
     Invoke-Step -Name "Generating Windows version resources" -Action {
-        $winresConfig = Join-Path $RepoRoot 'scripts\build\winres.json'
-        if (-not (Test-Path $winresConfig)) {
-            throw "winres config missing at $winresConfig"
+        function Invoke-WinresMake {
+            param(
+                [Parameter(Mandatory = $true)]
+                [string] $ConfigPath,
+                [Parameter(Mandatory = $true)]
+                [string] $RsrcPrefix,
+                [Parameter(Mandatory = $true)]
+                [string] $Arch,
+                [Parameter(Mandatory = $true)]
+                [string] $Label
+            )
+
+            if (-not (Test-Path $ConfigPath)) {
+                throw "winres config missing at $ConfigPath"
+            }
+
+            Get-ChildItem "$RsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
+            go run github.com/tc-hib/go-winres@v0.2.0 make --in $ConfigPath --out $RsrcPrefix --arch $Arch --product-version $version --file-version $version
+            if ($LASTEXITCODE -ne 0) {
+                throw "go-winres failed for $Label with exit code $LASTEXITCODE"
+            }
         }
-        $rsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
-        Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
-        go run github.com/tc-hib/go-winres@v0.2.0 make --in $winresConfig --out $rsrcPrefix --arch 386 --product-version $version --file-version $version
-        if ($LASTEXITCODE -ne 0) {
-            throw "go-winres failed with exit code $LASTEXITCODE"
-        }
+
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p\rsrc') -Arch "386" -Label "xp2p"
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres-ui.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p-ui\rsrc') -Arch "386" -Label "xp2p-ui"
     }
 
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'

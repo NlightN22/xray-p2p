@@ -390,15 +390,6 @@
         }
       }
 
-      els.installButton.addEventListener("click", installClient);
-      els.resetButton.addEventListener("click", loadDefaults);
-      els.installLinkButton.addEventListener("click", installFromLink);
-      bindCard(els.cardLink, "link");
-      bindCard(els.cardManual, "manual");
-      loadDefaults();
-    </script>
-  </body>
-</html>
       function selectMode(mode) {
         const linkActive = mode === "link";
         els.cardLink.classList.toggle("active", linkActive);
@@ -420,3 +411,13 @@
           }
         });
       }
+
+      els.installButton.addEventListener("click", installClient);
+      els.resetButton.addEventListener("click", loadDefaults);
+      els.installLinkButton.addEventListener("click", installFromLink);
+      bindCard(els.cardLink, "link");
+      bindCard(els.cardManual, "manual");
+      loadDefaults();
+    </script>
+  </body>
+</html>

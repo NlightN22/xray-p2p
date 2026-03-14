@@ -144,38 +144,55 @@ try {
     Ensure-Directory $binaryDir
 
     Invoke-Step -Name "Generating Windows version resources" -Action {
-        $winresConfig = Join-Path $RepoRoot 'scripts\build\winres.json'
-        if (-not (Test-Path $winresConfig)) {
-            throw "winres config missing at $winresConfig"
-        }
-        $rsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
-        $existingWinres = Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue
         $skipWinres = $env:XP2P_SKIP_WINRES
         $forceWinres = $env:XP2P_FORCE_WINRES
-        $shouldRunWinres = $true
-        if ($skipWinres -and $skipWinres -ne "0") {
-            $shouldRunWinres = $false
-        } elseif ($existingWinres -and $forceWinres -ne "1") {
-            $shouldRunWinres = $false
-        }
-        if ($shouldRunWinres) {
-            $goWinres = Invoke-GoCommand -CommandArgs @(
-                "run",
-                "github.com/tc-hib/go-winres@v0.2.0",
-                "make",
-                "--in", $winresConfig,
-                "--out", $rsrcPrefix,
-                "--arch", "amd64",
-                "--product-version", $version,
-                "--file-version", $version
+
+        function Invoke-WinresMake {
+            param(
+                [Parameter(Mandatory = $true)]
+                [string] $ConfigPath,
+                [Parameter(Mandatory = $true)]
+                [string] $RsrcPrefix,
+                [Parameter(Mandatory = $true)]
+                [string] $Arch,
+                [Parameter(Mandatory = $true)]
+                [string] $Label
             )
-            $goWinres.Output | ForEach-Object { Write-Host $_ }
-            if ($goWinres.ExitCode -ne 0) {
-                Write-Info "go-winres failed; continuing without refreshed resources."
+
+            if (-not (Test-Path $ConfigPath)) {
+                throw "winres config missing at $ConfigPath"
             }
-        } else {
-            Write-Info "Skipping winres generation (existing resources detected)."
+
+            $existingWinres = Get-ChildItem "$RsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue
+            $shouldRunWinres = $true
+            if ($skipWinres -and $skipWinres -ne "0") {
+                $shouldRunWinres = $false
+            } elseif ($existingWinres -and $forceWinres -ne "1") {
+                $shouldRunWinres = $false
+            }
+
+            if ($shouldRunWinres) {
+                $goWinres = Invoke-GoCommand -CommandArgs @(
+                    "run",
+                    "github.com/tc-hib/go-winres@v0.2.0",
+                    "make",
+                    "--in", $ConfigPath,
+                    "--out", $RsrcPrefix,
+                    "--arch", $Arch,
+                    "--product-version", $version,
+                    "--file-version", $version
+                )
+                $goWinres.Output | ForEach-Object { Write-Host $_ }
+                if ($goWinres.ExitCode -ne 0) {
+                    Write-Info "go-winres failed for $Label; continuing without refreshed resources."
+                }
+            } else {
+                Write-Info "Skipping winres generation for $Label (existing resources detected)."
+            }
         }
+
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p\rsrc') -Arch "amd64" -Label "xp2p"
+        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres-ui.json') -RsrcPrefix (Join-Path $RepoRoot 'go\cmd\xp2p-ui\rsrc') -Arch "amd64" -Label "xp2p-ui"
     }
 
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'
