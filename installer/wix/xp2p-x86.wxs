@@ -3,6 +3,13 @@
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{2A0AB5BE-8EAA-4FBE-91E9-987F93F0E1C5}">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x86" Description="xp2p tunnel service" />
+    <util:CloseApplication Id="CloseXp2pUi"
+                           Target="xp2p-ui.exe"
+                           Description="xp2p UI is running."
+                           CloseMessage="yes"
+                           PromptToContinue="yes"
+                           RebootPrompt="no"
+                           TerminateProcess="1">REMOVE="ALL"</util:CloseApplication>
 
     <MajorUpgrade Schedule="afterInstallValidate"
                   AllowDowngrades="no"
@@ -155,11 +162,6 @@
 
       <Component Id="cmpXp2pUiExe" Guid="{2D3B93AE-5B34-4D6E-8A94-476A6A0C0F4F}">
         <File Id="fileXp2pUiExe" Source="$(var.Xp2pUiBinary)" KeyPath="yes" Checksum="yes" />
-        <util:CloseApplication Id="CloseXp2pUiExe"
-                               Target="xp2p-ui.exe"
-                               CloseMessage="yes"
-                               Terminate="yes"
-                               RebootPrompt="no" />
       </Component>
 
       <Component Id="cmpXp2pUiStartMenu" Guid="{AF52EEB4-DA07-4481-B199-BE1E2CAFE9A1}">

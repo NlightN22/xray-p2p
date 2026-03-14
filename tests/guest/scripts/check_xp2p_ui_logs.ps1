@@ -22,67 +22,6 @@ function Ensure-Marker([string] $path, [string] $payload) {
     Set-Content -Path $path -Value $payload -Encoding ASCII
 }
 
-function Ensure-BatchLogonRight([string] $userPath) {
-    $account = New-Object System.Security.Principal.NTAccount($userPath)
-    $sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
-    if (-not $sid) {
-        throw "Unable to resolve SID for $userPath"
-    }
-    $sidEntry = "*$sid"
-
-    $policyDir = "C:\\xp2p\\build\\ui-secpol"
-    New-Item -ItemType Directory -Path $policyDir -Force | Out-Null
-    $cfgPath = Join-Path $policyDir ("secpol-{0}-{1}.cfg" -f (Get-Date -Format "yyyyMMddHHmmss"), ([System.Guid]::NewGuid().ToString("N").Substring(0, 6)))
-    $dbPath = Join-Path $policyDir "secpol.sdb"
-
-    $exportOutput = & secedit.exe /export /cfg $cfgPath /areas USER_RIGHTS 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $detail = ($exportOutput | Out-String).Trim()
-        if ($detail) {
-            throw "secedit export failed (exit $LASTEXITCODE): $detail"
-        }
-        throw "secedit export failed (exit $LASTEXITCODE)"
-    }
-
-    $lines = Get-Content -Path $cfgPath -Encoding Unicode
-    $lineIndex = -1
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        if ($lines[$i] -match '^SeBatchLogonRight\s*=') {
-            $lineIndex = $i
-            break
-        }
-    }
-
-    if ($lineIndex -ge 0) {
-        $parts = $lines[$lineIndex].Split("=", 2)
-        $value = ""
-        if ($parts.Count -gt 1) {
-            $value = $parts[1].Trim()
-        }
-        $entries = @()
-        if ($value) {
-            $entries = $value.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-        }
-        if (-not ($entries -contains $sidEntry)) {
-            $entries = @($entries + $sidEntry)
-            $lines[$lineIndex] = "SeBatchLogonRight = " + ($entries -join ",")
-            Set-Content -Path $cfgPath -Value $lines -Encoding Unicode
-        }
-    } else {
-        $lines += "SeBatchLogonRight = $sidEntry"
-        Set-Content -Path $cfgPath -Value $lines -Encoding Unicode
-    }
-
-    $applyOutput = & secedit.exe /configure /db $dbPath /cfg $cfgPath /areas USER_RIGHTS 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $detail = ($applyOutput | Out-String).Trim()
-        if ($detail) {
-            throw "secedit configure failed (exit $LASTEXITCODE): $detail"
-        }
-        throw "secedit configure failed (exit $LASTEXITCODE)"
-    }
-}
-
 function Get-ServiceSddl([string] $name) {
     $output = & sc.exe sdshow $name 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -99,15 +38,7 @@ function Get-ServiceSddl([string] $name) {
     return $match.Value.Trim()
 }
 
-$uiTaskName = $null
-$userName = $null
-$password = $null
-$userCreated = $false
-$pidPath = $null
-$launchScript = $null
 $uiPid = $null
-$startedViaTask = $false
-$taskDir = "C:\\xp2p\\build\\ui-task"
 
 $exitCode = 0
 $errorDetail = ""
@@ -145,121 +76,20 @@ try {
         }
     }
 
-    $userName = "xp2pui-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
-    $password = "Xp2pUi!" + (Get-Random -Minimum 100000 -Maximum 999999).ToString() + "Aa"
-    $userPath = "$env:COMPUTERNAME\$userName"
-    $secure = ConvertTo-SecureString $password -AsPlainText -Force
-
-    $localUserCmd = Get-Command -Name New-LocalUser -ErrorAction SilentlyContinue
-    if ($localUserCmd) {
-        New-LocalUser -Name $userName -Password $secure -AccountNeverExpires -PasswordNeverExpires:$true | Out-Null
-        $userCreated = $true
-    } else {
-        $userOutput = & net user $userName /add 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $detail = ($userOutput | Out-String).Trim()
-            if ($detail) {
-                throw "Failed to create local user $userName (exit $LASTEXITCODE): $detail"
-            }
-            throw "Failed to create local user $userName (exit $LASTEXITCODE)"
-        }
-        $userOutput = & net user $userName "$password" 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $detail = ($userOutput | Out-String).Trim()
-            if ($detail) {
-                throw "Failed to set password for $userName (exit $LASTEXITCODE): $detail"
-            }
-            throw "Failed to set password for $userName (exit $LASTEXITCODE)"
-        }
-        $userCreated = $true
+    $uiProc = Start-Process -FilePath $Xp2pUiPath -PassThru
+    if (-not $uiProc) {
+        $exitCode = 4
+        $errorDetail = "xp2p-ui process failed to start"
+        return
     }
-
-    $groupOutput = & net localgroup Users $userName /add 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $detail = ($groupOutput | Out-String).Trim()
-        if ($detail) {
-            throw "Failed to add $userName to Users group (exit $LASTEXITCODE): $detail"
-        }
-        throw "Failed to add $userName to Users group (exit $LASTEXITCODE)"
-    }
-
-    Ensure-BatchLogonRight $userPath
-
-    $credential = New-Object System.Management.Automation.PSCredential($userPath, $secure)
-    try {
-        $proc = Start-Process -FilePath $Xp2pUiPath -Credential $credential -PassThru
-        $uiPid = $proc.Id
-    } catch {
-        $uiPid = $null
-    }
-
-    if (-not $uiPid) {
-        New-Item -ItemType Directory -Path $taskDir -Force | Out-Null
-        $uiTaskName = "xp2p-ui-log-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
-        $pidPath = Join-Path $taskDir "$uiTaskName.pid.txt"
-        $launchScript = Join-Path $taskDir "$uiTaskName.launch.ps1"
-        $safePath = $Xp2pUiPath.Replace("'", "''")
-        $safePid = $pidPath.Replace("'", "''")
-        $scriptBody = @(
-            '$ErrorActionPreference = ''Stop'''
-            "`$p = Start-Process -FilePath '$safePath' -PassThru"
-            "Set-Content -Path '$safePid' -Value `$p.Id -Encoding ASCII"
-        ) -join "`r`n"
-        Set-Content -Path $launchScript -Value $scriptBody -Encoding ASCII
-
-        $startTime = (Get-Date).AddMinutes(1).ToString("HH:mm")
-        $createArgs = @(
-            "/Create",
-            "/TN", $uiTaskName,
-            "/TR", "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$launchScript`"",
-            "/SC", "ONCE",
-            "/ST", $startTime,
-            "/RL", "LIMITED",
-            "/RU", $userPath,
-            "/RP", $password,
-            "/F"
-        )
-        $createOutput = & schtasks.exe @createArgs 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $detail = ($createOutput | Out-String).Trim()
-            if ($detail) {
-                throw "schtasks create failed (exit $LASTEXITCODE): $detail"
-            }
-            throw "schtasks create failed (exit $LASTEXITCODE)"
-        }
-        $runOutput = & schtasks.exe /Run /TN $uiTaskName 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $detail = ($runOutput | Out-String).Trim()
-            if ($detail) {
-                throw "schtasks run failed (exit $LASTEXITCODE): $detail"
-            }
-            throw "schtasks run failed (exit $LASTEXITCODE)"
-        }
-        $startedViaTask = $true
-    }
-
-    if ($startedViaTask) {
-        $pidDeadline = [DateTime]::UtcNow.AddSeconds(20)
-        while ([DateTime]::UtcNow -lt $pidDeadline) {
-            if (Test-Path $pidPath) {
-                break
-            }
-            Start-Sleep -Seconds 1
-        }
-        if (-not (Test-Path $pidPath)) {
-            $exitCode = 4
-            $errorDetail = "xp2p-ui did not report pid"
-            return
-        }
-        $uiPid = (Get-Content -Path $pidPath -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
-        if (-not $uiPid) {
-            $exitCode = 4
-            $errorDetail = "xp2p-ui pid empty"
-            return
-        }
-    }
+    $uiPid = $uiProc.Id
     if ($WaitSeconds -gt 0) {
         Start-Sleep -Seconds $WaitSeconds
+    }
+    $running = Get-Process -Id $uiPid -ErrorAction SilentlyContinue
+    if (-not $running) {
+        $exitCode = 4
+        $errorDetail = "xp2p-ui exited before log check"
     }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
@@ -297,23 +127,6 @@ try {
 } finally {
     if ($uiPid) {
         Stop-Process -Id $uiPid -Force -ErrorAction SilentlyContinue
-    }
-    if ($uiTaskName) {
-        & schtasks.exe /Delete /TN $uiTaskName /F | Out-Null
-    }
-    if ($launchScript -and (Test-Path $launchScript)) {
-        Remove-Item -Path $launchScript -Force -ErrorAction SilentlyContinue
-    }
-    if ($pidPath -and (Test-Path $pidPath)) {
-        Remove-Item -Path $pidPath -Force -ErrorAction SilentlyContinue
-    }
-    if ($userName -and $userCreated) {
-        $removeCmd = Get-Command -Name Remove-LocalUser -ErrorAction SilentlyContinue
-        if ($removeCmd) {
-            Remove-LocalUser -Name $userName -ErrorAction SilentlyContinue
-        } else {
-            & net user $userName /delete | Out-Null
-        }
     }
     if ($exitCode -eq 0) {
         $payload = "OK"

@@ -3,14 +3,12 @@
 package control
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/platform/windows/scctl"
+	"golang.org/x/sys/windows/svc"
 )
 
 type windowsController struct{}
@@ -24,7 +22,7 @@ func (windowsController) Start(ctx context.Context, role Role) error {
 	if err != nil {
 		return err
 	}
-	return runSC(ctx, "start", name, allowServiceAlreadyRunning)
+	return scctl.Run(ctx, "start", name, scctl.AllowServiceAlreadyRunning)
 }
 
 func (windowsController) Stop(ctx context.Context, role Role) error {
@@ -32,7 +30,7 @@ func (windowsController) Stop(ctx context.Context, role Role) error {
 	if err != nil {
 		return err
 	}
-	return runSC(ctx, "stop", name, allowServiceNotStarted)
+	return scctl.Run(ctx, "stop", name, scctl.AllowServiceNotStarted)
 }
 
 func (windowsController) Status(ctx context.Context, role Role) (Status, error) {
@@ -41,39 +39,17 @@ func (windowsController) Status(ctx context.Context, role Role) (Status, error) 
 		return Status{}, err
 	}
 
-	output, err := runSCOutput(ctx, "query", name, nil)
+	output, err := scctl.RunOutput(ctx, "query", name, nil)
 	if err != nil {
 		return Status{}, err
 	}
 
-	state, active := parseServiceState(output)
+	state, active := scctl.ParseServiceState(output)
 	return Status{
 		Active: active,
-		State:  state,
+		State:  serviceStateLabel(state),
 		Detail: strings.TrimSpace(output),
 	}, nil
-}
-
-type scExitHandler func(error) error
-
-func allowServiceNotStarted(err error) error {
-	if err == nil {
-		return nil
-	}
-	if strings.Contains(err.Error(), "1062") {
-		return nil
-	}
-	return err
-}
-
-func allowServiceAlreadyRunning(err error) error {
-	if err == nil {
-		return nil
-	}
-	if strings.Contains(err.Error(), "1056") {
-		return nil
-	}
-	return err
 }
 
 func serviceName(role Role) (string, error) {
@@ -87,76 +63,24 @@ func serviceName(role Role) (string, error) {
 	}
 }
 
-func runSC(ctx context.Context, command string, service string, handler scExitHandler) error {
-	_, err := runSCOutput(ctx, command, service, handler)
-	return err
-}
 
-func runSCOutput(ctx context.Context, command, service string, handler scExitHandler) (string, error) {
-	scPath, err := resolveSCPath()
-	if err != nil {
-		return "", err
+func serviceStateLabel(state svc.State) string {
+	switch state {
+	case svc.Running:
+		return "RUNNING"
+	case svc.Stopped:
+		return "STOPPED"
+	case svc.StartPending:
+		return "START_PENDING"
+	case svc.StopPending:
+		return "STOP_PENDING"
+	case svc.ContinuePending:
+		return "CONTINUE_PENDING"
+	case svc.PausePending:
+		return "PAUSE_PENDING"
+	case svc.Paused:
+		return "PAUSED"
+	default:
+		return "UNKNOWN"
 	}
-	cmd := exec.CommandContext(ctx, scPath, command, service)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-	if handler != nil {
-		err = handler(err)
-	}
-	if err != nil {
-		return "", fmt.Errorf("sc %s %s: %w (output: %s)", command, service, err, strings.TrimSpace(stderr.String()))
-	}
-	return stdout.String(), nil
-}
-
-func parseServiceState(output string) (string, bool) {
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "STATE") {
-			continue
-		}
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		section := strings.TrimSpace(parts[1])
-		fields := strings.Fields(section)
-		if len(fields) == 0 {
-			continue
-		}
-		state := strings.ToUpper(fields[len(fields)-1])
-		return state, state == "RUNNING"
-	}
-	return "UNKNOWN", false
-}
-
-func resolveSCPath() (string, error) {
-	if path, err := exec.LookPath("sc.exe"); err == nil {
-		return path, nil
-	}
-	roots := []string{
-		os.Getenv("SystemRoot"),
-		os.Getenv("WINDIR"),
-	}
-	for _, root := range roots {
-		if strings.TrimSpace(root) == "" {
-			continue
-		}
-		candidates := []string{
-			filepath.Join(root, "System32", "sc.exe"),
-		}
-		if os.Getenv("PROCESSOR_ARCHITEW6432") != "" {
-			candidates = append(candidates, filepath.Join(root, "Sysnative", "sc.exe"))
-		}
-		for _, candidate := range candidates {
-			if _, err := os.Stat(candidate); err == nil {
-				return candidate, nil
-			}
-		}
-	}
-	return "", fmt.Errorf("sc.exe not found")
 }
