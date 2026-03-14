@@ -20,6 +20,9 @@
     <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" Value="1" />
     <Property Id="XP2P_UI_AUTOSTART" Hidden="yes" Secure="yes" Value="1" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch xp2p UI" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
 
     <CustomAction Id="SetRegisterPsCompletion"
                   Property="RegisterPsCompletion"
@@ -60,6 +63,12 @@
                   Return="check"
                   Impersonate="yes" />
 
+    <CustomAction Id="LaunchXp2pUI"
+                  FileKey="fileXp2pUiExe"
+                  Execute="immediate"
+                  Return="asyncNoWait"
+                  Impersonate="yes" />
+
     <InstallExecuteSequence>
       <Custom Action="SetPerUserInstall" Before="CostFinalize">NOT Privileged</Custom>
       <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
@@ -76,12 +85,25 @@
       <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
     </InstallUISequence>
 
+    <UI>
+      <UIRef Id="WixUI_FeatureTree" />
+      <UIRef Id="WixUI_ErrorProgressText" />
+      <Publish Dialog="ExitDialog"
+               Control="Finish"
+               Event="DoAction"
+               Value="LaunchXp2pUI">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed</Publish>
+    </UI>
+
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLFOLDER" Name="xp2p">
           <Directory Id="BinFolder" Name="bin" />
         </Directory>
       </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="Xp2pProgramMenuFolder" Name="xp2p" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
       <Directory Id="CommonAppDataFolder">
         <Directory Id="Xp2pDataFolder" Name="xp2p">
           <Directory Id="Xp2pCompletionsFolder" Name="completions" />
@@ -130,6 +152,22 @@
 
       <Component Id="cmpXp2pUiExe" Guid="{2D3B93AE-5B34-4D6E-8A94-476A6A0C0F4F}">
         <File Id="fileXp2pUiExe" Source="$(var.Xp2pUiBinary)" KeyPath="yes" Checksum="yes" />
+      </Component>
+
+      <Component Id="cmpXp2pUiStartMenu" Guid="{AF52EEB4-DA07-4481-B199-BE1E2CAFE9A1}">
+        <Shortcut Id="ShortcutXp2pUiStartMenu"
+                  Directory="Xp2pProgramMenuFolder"
+                  Name="xp2p UI"
+                  Description="xp2p UI"
+                  Target="[INSTALLFOLDER]xp2p-ui.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveXp2pProgramMenuFolder" Directory="Xp2pProgramMenuFolder" On="uninstall" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\xp2p"
+                       Name="StartMenuShortcut"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
       </Component>
 
       <Component Id="cmpInstallRoot" Guid="{F7F77E38-B7FB-4B5B-8995-20FE8F5DCB68}" KeyPath="yes">
@@ -211,7 +249,24 @@
       </Component>
     </DirectoryRef>
 
-    <Feature Id="MainFeature" Title="xp2p" Level="1">
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="cmpXp2pUiDesktopShortcut" Guid="{921166E7-8785-4618-B5A5-4A2392502961}">
+        <Shortcut Id="ShortcutXp2pUiDesktop"
+                  Directory="DesktopFolder"
+                  Name="xp2p UI"
+                  Description="xp2p UI"
+                  Target="[INSTALLFOLDER]xp2p-ui.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\xp2p"
+                       Name="DesktopShortcut"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="MainFeature" Title="xp2p" Level="1" Display="hidden">
       <ComponentRef Id="cmpXp2pExe" />
       <ComponentRef Id="cmpInstallRoot" />
       <ComponentRef Id="cmpRegisterPsCompletion" />
@@ -225,9 +280,17 @@
       <ComponentRef Id="cmpServiceAutostart" />
     </Feature>
 
-    <Feature Id="TrayFeature" Title="xp2p UI" Level="1">
+    <Feature Id="TrayFeature" Title="xp2p UI" Level="1" Display="hidden">
       <ComponentRef Id="cmpXp2pUiExe" />
       <ComponentRef Id="cmpXp2pUiAutoStart" />
+      <ComponentRef Id="cmpXp2pUiStartMenu" />
+    </Feature>
+
+    <Feature Id="DesktopShortcutFeature"
+             Title="Desktop shortcut"
+             Description="Create a desktop shortcut for xp2p UI"
+             Level="2">
+      <ComponentRef Id="cmpXp2pUiDesktopShortcut" />
     </Feature>
   </Product>
 </Wix>

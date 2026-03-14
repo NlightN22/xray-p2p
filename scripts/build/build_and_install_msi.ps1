@@ -201,6 +201,7 @@ try {
         $uiBuild = Invoke-GoCommand -CommandArgs @(
             "build",
             "-trimpath",
+            "-tags", "production",
             "-ldflags", $ldflags,
             "-o", $uiBinaryOut,
             ".\\go\\cmd\\xp2p-ui"
@@ -253,6 +254,7 @@ try {
     $heat = Join-Path $wixDir.FullName 'bin\heat.exe'
     $light = Join-Path $wixDir.FullName 'bin\light.exe'
     $wixExt = Join-Path $wixDir.FullName 'bin\WixUtilExtension.dll'
+    $wixUiExt = Join-Path $wixDir.FullName 'bin\WixUIExtension.dll'
     Write-Info ("WiX tools: candle={0}, light={1}, heat={2}" -f $candle, $light, $heat)
 
     $bundleWxs = Join-Path $binaryDir 'xp2p-bundle.wxs'
@@ -281,6 +283,7 @@ try {
     Invoke-Step -Name "Running candle.exe (main wixobj)" -Action {
         $candleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
             "-ext", $wixExt,
+            "-ext", $wixUiExt,
             "-dProductVersion=$version",
             "-dXp2pBinary=$binaryOut",
             "-dXp2pUiBinary=$uiBinaryOut",
@@ -298,6 +301,7 @@ try {
     Invoke-Step -Name "Running candle.exe (bundle wixobj)" -Action {
         $candleBundleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
             "-ext", $wixExt,
+            "-ext", $wixUiExt,
             "-dProductVersion=$version",
             "-dXp2pBinary=$binaryOut",
             "-dXp2pUiBinary=$uiBinaryOut",
@@ -316,6 +320,7 @@ try {
     Invoke-Step -Name "Running light.exe" -Action {
         $lightExit = Invoke-WixTool -ToolPath $light -Arguments @(
             "-ext", $wixExt,
+            "-ext", $wixUiExt,
             "-out", $msiPath,
             $wixObj,
             $bundleObj

@@ -47,7 +47,7 @@ function Add-AceToSddl {
     return $Sddl + $Ace
 }
 
-$ace = "(A;;LCRPWP;;;$Sid)"
+$ace = "(A;;CCLCSWRPWPDTLOCRRC;;;$Sid)"
 foreach ($name in $ServiceName) {
     $current = Get-ServiceSddl -Name $name
     if ($current -match [regex]::Escape($ace)) {

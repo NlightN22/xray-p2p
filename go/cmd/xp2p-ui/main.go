@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	_ "embed"
 	"os"
@@ -59,7 +60,10 @@ func main() {
 
 	settings := ui.LoadSettings()
 
-	tray := ui.NewTrayApp(serviceControl, settings, iconSet)
+	tray := ui.NewTrayApp(serviceControl, settings, iconSet, ui.TrayOptions{
+		LinkInstall:    linkInstall,
+		ConfigTransfer: configTransfer,
+	})
 	tray.Run()
 }
 
@@ -85,6 +89,9 @@ func startWailsApp(bindings *ui.App) {
 		Title:             "xp2p-ui",
 		StartHidden:       true,
 		HideWindowOnClose: true,
+		OnStartup: func(ctx context.Context) {
+			ui.SetWailsContext(ctx)
+		},
 		AssetServer: &assetserver.Options{
 			Assets: frontendAssets,
 		},
