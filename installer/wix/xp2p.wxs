@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{E99A193E-D6A9-4743-93D8-EB45053E517A}">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x64" Description="xp2p tunnel service" />
 
@@ -156,6 +157,11 @@
 
       <Component Id="cmpXp2pUiExe" Guid="{7F5B7E9F-2DD4-4F90-9B74-42A99D71B17E}" Win64="yes">
         <File Id="fileXp2pUiExe" Source="$(var.Xp2pUiBinary)" KeyPath="yes" Checksum="yes" />
+        <util:CloseApplication Id="CloseXp2pUiExe"
+                               Target="xp2p-ui.exe"
+                               CloseMessage="yes"
+                               Terminate="yes"
+                               RebootPrompt="no" />
       </Component>
 
       <Component Id="cmpXp2pUiStartMenu" Guid="{260AABB9-911B-43CE-8233-41E6BBB7153E}" Win64="yes">
@@ -293,7 +299,7 @@
     <Feature Id="DesktopShortcutFeature"
              Title="Desktop shortcut"
              Description="Create a desktop shortcut for xp2p UI"
-             Level="2">
+             Level="1">
       <ComponentRef Id="cmpXp2pUiDesktopShortcut" />
     </Feature>
   </Product>
