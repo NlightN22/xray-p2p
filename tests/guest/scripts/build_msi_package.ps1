@@ -17,6 +17,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Write-Stage {
+    param([string] $Message)
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Write-Output ("[build_msi_package] {0} {1}" -f $ts, $Message)
+}
+
 function Resolve-MsiScript {
     param([string] $Arch)
 
@@ -55,7 +61,9 @@ function Test-WixAvailable {
 }
 
 function Ensure-MsiDependencies {
+    Write-Stage "Checking MSI dependencies (Go/WiX)"
     if ((Test-GoAvailable) -and (Test-WixAvailable)) {
+        Write-Stage "MSI dependencies OK"
         return
     }
 
@@ -64,7 +72,7 @@ function Ensure-MsiDependencies {
         throw "MSI dependencies missing and provision script not found at $provisionScript."
     }
 
-    Write-Host "==> Installing MSI build dependencies (Go/WiX)"
+    Write-Stage "Installing MSI build dependencies (Go/WiX)"
     & $provisionScript 2>&1 | ForEach-Object { Write-Output $_ }
 }
 
@@ -73,17 +81,20 @@ if (-not (Test-Path $repoRootPath)) {
     throw "Shared repo root not found at $repoRootPath. Re-mount the synced folder (try 'vagrant reload --provision')."
 }
 
+Write-Stage "Resolve MSI build script for arch=$Architecture"
 $scriptInfo = Resolve-MsiScript -Arch $Architecture
 $scriptPath = Join-Path $RepoRoot $scriptInfo.Script
 if (-not (Test-Path $scriptPath)) {
     throw "MSI build script not found at $scriptPath. Re-mount the synced folder (try 'vagrant reload --provision')."
 }
 
+Write-Stage "Resolved MSI script: $scriptPath (archLabel=$($scriptInfo.ArchLabel))"
 Ensure-MsiDependencies
 
 $buildIdPath = Join-Path $CacheDir 'build-id.txt'
 $latestPath = Join-Path $CacheDir 'latest.txt'
 if ($BuildId) {
+    Write-Stage "Checking MSI cache (BuildId=$BuildId)"
     if ((Test-Path $buildIdPath) -and (Test-Path $latestPath)) {
         $cachedBuildId = (Get-Content -Raw -Path $buildIdPath).Trim()
         if ($cachedBuildId -eq $BuildId) {
@@ -92,6 +103,7 @@ if ($BuildId) {
             if ($msiLine) {
                 $cachedPath = $msiLine.Substring('msi_path='.Length).Trim()
                 if ($cachedPath -and (Test-Path $cachedPath)) {
+                    Write-Stage "Using cached MSI at $cachedPath"
                     Write-Output ("{0}{1}" -f $Marker, $cachedPath)
                     exit 0
                 }
@@ -100,6 +112,7 @@ if ($BuildId) {
     }
 }
 
+Write-Stage "Starting MSI build script"
 $arguments = @{
     RepoRoot = $RepoRoot
     CacheDir = $CacheDir
@@ -109,7 +122,11 @@ $arguments = @{
     BuildOnly = $true
 }
 
+$buildStart = Get-Date
 $output = & $scriptPath @arguments 2>&1
+$buildEnd = Get-Date
+$duration = [math]::Round(($buildEnd - $buildStart).TotalSeconds, 2)
+Write-Stage ("MSI build script finished in {0}s" -f $duration)
 $msiPath = $null
 foreach ($line in $output) {
     if ($null -eq $line) {
@@ -129,6 +146,7 @@ if (-not (Test-Path $msiPath)) {
     throw "MSI package not found at $msiPath"
 }
 
+Write-Stage "MSI build output path: $msiPath"
 $fileName = [System.IO.Path]::GetFileName($msiPath)
 if ($fileName -notmatch '^xp2p-(.+)-windows-') {
     throw "Unable to parse xp2p version from MSI filename '$fileName'"

@@ -15,7 +15,8 @@ function Write-Info {
         [Parameter(Mandatory = $true)]
         [string] $Message
     )
-    Write-Host "==> $Message"
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Write-Host ("==> [{0}] {1}" -f $ts, $Message)
 }
 
 function Ensure-Directory {
@@ -52,6 +53,21 @@ function Add-ToPath {
     $env:Path = "$Path;$env:Path"
 }
 
+function Invoke-Step {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+        [Parameter(Mandatory = $true)]
+        [scriptblock] $Action
+    )
+    $start = Get-Date
+    Write-Info "$Name (start)"
+    & $Action
+    $end = Get-Date
+    $seconds = [math]::Round(($end - $start).TotalSeconds, 2)
+    Write-Info ("$Name (done in {0}s)" -f $seconds)
+}
+
 Write-Info "Preparing MSI (x86) build directories"
 Ensure-Directory $RepoRoot
 Ensure-Directory $CacheDir
@@ -73,54 +89,56 @@ try {
     Remove-Item $binaryDir -Recurse -Force -ErrorAction SilentlyContinue
     Ensure-Directory $binaryDir
 
-    Write-Info "Generating Windows version resources"
-    $winresConfig = Join-Path $RepoRoot 'scripts\build\winres.json'
-    if (-not (Test-Path $winresConfig)) {
-        throw "winres config missing at $winresConfig"
-    }
-    $rsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
-    Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
-    go run github.com/tc-hib/go-winres@v0.2.0 make --in $winresConfig --out $rsrcPrefix --arch 386 --product-version $version --file-version $version
-    if ($LASTEXITCODE -ne 0) {
-        throw "go-winres failed with exit code $LASTEXITCODE"
+    Invoke-Step -Name "Generating Windows version resources" -Action {
+        $winresConfig = Join-Path $RepoRoot 'scripts\build\winres.json'
+        if (-not (Test-Path $winresConfig)) {
+            throw "winres config missing at $winresConfig"
+        }
+        $rsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
+        Get-ChildItem "$rsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
+        go run github.com/tc-hib/go-winres@v0.2.0 make --in $winresConfig --out $rsrcPrefix --arch 386 --product-version $version --file-version $version
+        if ($LASTEXITCODE -ne 0) {
+            throw "go-winres failed with exit code $LASTEXITCODE"
+        }
     }
 
-    Write-Info "Building xp2p.exe (x86)"
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'
-    $env:GOARCH = '386'
-    $env:GOOS = 'windows'
-    go build -trimpath -ldflags $ldflags -o $binaryOut .\go\cmd\xp2p
-    Remove-Item Env:GOARCH
-    Remove-Item Env:GOOS
-
+    Invoke-Step -Name "Building xp2p.exe (x86)" -Action {
+        $env:GOARCH = '386'
+        $env:GOOS = 'windows'
+        go build -trimpath -ldflags $ldflags -o $binaryOut .\go\cmd\xp2p
+        Remove-Item Env:GOARCH
+        Remove-Item Env:GOOS
+    }
     if (-not (Test-Path $binaryOut)) {
         throw "xp2p binary missing at $binaryOut"
     }
 
-    Write-Info "Building xp2p-ui.exe (x86)"
     $uiBinaryOut = Join-Path $binaryDir 'xp2p-ui.exe'
-    $env:GOARCH = '386'
-    $env:GOOS = 'windows'
-    go build -trimpath -ldflags $ldflags -o $uiBinaryOut .\go\cmd\xp2p-ui
-    Remove-Item Env:GOARCH
-    Remove-Item Env:GOOS
-
+    Invoke-Step -Name "Building xp2p-ui.exe (x86)" -Action {
+        $env:GOARCH = '386'
+        $env:GOOS = 'windows'
+        go build -trimpath -ldflags $ldflags -o $uiBinaryOut .\go\cmd\xp2p-ui
+        Remove-Item Env:GOARCH
+        Remove-Item Env:GOOS
+    }
     if (-not (Test-Path $uiBinaryOut)) {
         throw "xp2p-ui binary missing at $uiBinaryOut"
     }
 
-    Write-Info "Generating PowerShell completion script"
     $completionDir = Join-Path $binaryDir 'completions'
-    Ensure-Directory $completionDir
     $completionOut = Join-Path $completionDir 'xp2p.ps1'
-    & $binaryOut completion powershell |
-        Where-Object { $_ -notmatch '^\d{4}-\d{2}-\d{2}T.*\bxp2p:' } |
-        Set-Content -Path $completionOut -Encoding utf8
-    if ($LASTEXITCODE -ne 0) {
-        throw "xp2p completion powershell failed with exit code $LASTEXITCODE"
-    }
-    if (-not (Test-Path $completionOut)) {
-        throw "PowerShell completion script missing at $completionOut"
+    Invoke-Step -Name "Generating PowerShell completion script" -Action {
+        Ensure-Directory $completionDir
+        & $binaryOut completion powershell |
+            Where-Object { $_ -notmatch '^\d{4}-\d{2}-\d{2}T.*\bxp2p:' } |
+            Set-Content -Path $completionOut -Encoding utf8
+        if ($LASTEXITCODE -ne 0) {
+            throw "xp2p completion powershell failed with exit code $LASTEXITCODE"
+        }
+        if (-not (Test-Path $completionOut)) {
+            throw "PowerShell completion script missing at $completionOut"
+        }
     }
 
     $bundleSourceDir = Join-Path $RepoRoot 'distro\windows\bundle\x86'
@@ -145,67 +163,73 @@ try {
     $heat = Join-Path $wixDir.FullName 'bin\heat.exe'
     $light = Join-Path $wixDir.FullName 'bin\light.exe'
     $wixExt = Join-Path $wixDir.FullName 'bin\WixUtilExtension.dll'
+    Write-Info ("WiX tools: candle={0}, light={1}, heat={2}" -f $candle, $light, $heat)
 
-    Write-Info "Harvesting xray bundle"
     $bundleWxs = Join-Path $binaryDir 'xp2p-bundle.wxs'
-    $heatExit = Invoke-WixTool -ToolPath $heat -Arguments @(
-        "dir", $bundleDir,
-        "-dr", "BinFolder",
-        "-cg", "Xp2pBundleGroup",
-        "-gg",
-        "-srd",
-        "-var", "var.BundleDir",
-        "-out", $bundleWxs
-    )
-    if ($heatExit -ne 0) {
-        throw "heat.exe failed with exit code $heatExit"
+    Invoke-Step -Name "Harvesting xray bundle (heat.exe)" -Action {
+        $heatExit = Invoke-WixTool -ToolPath $heat -Arguments @(
+            "dir", $bundleDir,
+            "-dr", "BinFolder",
+            "-cg", "Xp2pBundleGroup",
+            "-gg",
+            "-srd",
+            "-var", "var.BundleDir",
+            "-out", $bundleWxs
+        )
+        if ($heatExit -ne 0) {
+            throw "heat.exe failed with exit code $heatExit"
+        }
     }
 
-    Write-Info "Running candle.exe (x86)"
     $wixObj = Join-Path $binaryDir 'xp2p-x86.wixobj'
     $bundleObj = Join-Path $binaryDir 'xp2p-x86-bundle.wixobj'
     $registerPsCompletion = Join-Path $RepoRoot 'installer\wix\register_ps_completion.ps1'
     $setServiceAclScript = Join-Path $RepoRoot 'installer\wix\set_service_acl.ps1'
-    $candleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
-        "-ext", $wixExt,
-        "-dProductVersion=$version",
-        "-dXp2pBinary=$binaryOut",
-        "-dXp2pUiBinary=$uiBinaryOut",
-        "-dBundleDir=$bundleDir",
-        "-dXp2pCompletionScript=$completionOut",
-        "-dRegisterPsCompletionScript=$registerPsCompletion",
-        "-dSetServiceAclScript=$setServiceAclScript",
-        "-out", $wixObj,
-        (Join-Path $RepoRoot $WixSourceRelative)
-    )
-    if ($candleExit -ne 0) {
-        throw "candle.exe failed with exit code $candleExit"
+    Invoke-Step -Name "Running candle.exe (x86 main wixobj)" -Action {
+        $candleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
+            "-ext", $wixExt,
+            "-dProductVersion=$version",
+            "-dXp2pBinary=$binaryOut",
+            "-dXp2pUiBinary=$uiBinaryOut",
+            "-dBundleDir=$bundleDir",
+            "-dXp2pCompletionScript=$completionOut",
+            "-dRegisterPsCompletionScript=$registerPsCompletion",
+            "-dSetServiceAclScript=$setServiceAclScript",
+            "-out", $wixObj,
+            (Join-Path $RepoRoot $WixSourceRelative)
+        )
+        if ($candleExit -ne 0) {
+            throw "candle.exe failed with exit code $candleExit"
+        }
     }
-    $candleBundleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
-        "-ext", $wixExt,
-        "-dProductVersion=$version",
-        "-dXp2pBinary=$binaryOut",
-        "-dXp2pUiBinary=$uiBinaryOut",
-        "-dBundleDir=$bundleDir",
-        "-dXp2pCompletionScript=$completionOut",
-        "-dRegisterPsCompletionScript=$registerPsCompletion",
-        "-dSetServiceAclScript=$setServiceAclScript",
-        "-out", $bundleObj,
-        $bundleWxs
-    )
-    if ($candleBundleExit -ne 0) {
-        throw "candle.exe failed with exit code $candleBundleExit"
+    Invoke-Step -Name "Running candle.exe (x86 bundle wixobj)" -Action {
+        $candleBundleExit = Invoke-WixTool -ToolPath $candle -Arguments @(
+            "-ext", $wixExt,
+            "-dProductVersion=$version",
+            "-dXp2pBinary=$binaryOut",
+            "-dXp2pUiBinary=$uiBinaryOut",
+            "-dBundleDir=$bundleDir",
+            "-dXp2pCompletionScript=$completionOut",
+            "-dRegisterPsCompletionScript=$registerPsCompletion",
+            "-dSetServiceAclScript=$setServiceAclScript",
+            "-out", $bundleObj,
+            $bundleWxs
+        )
+        if ($candleBundleExit -ne 0) {
+            throw "candle.exe failed with exit code $candleBundleExit"
+        }
     }
 
-    Write-Info "Running light.exe (x86)"
-    $lightExit = Invoke-WixTool -ToolPath $light -Arguments @(
-        "-ext", $wixExt,
-        "-out", $msiPath,
-        $wixObj,
-        $bundleObj
-    )
-    if ($lightExit -ne 0) {
-        throw "light.exe failed with exit code $lightExit"
+    Invoke-Step -Name "Running light.exe (x86)" -Action {
+        $lightExit = Invoke-WixTool -ToolPath $light -Arguments @(
+            "-ext", $wixExt,
+            "-out", $msiPath,
+            $wixObj,
+            $bundleObj
+        )
+        if ($lightExit -ne 0) {
+            throw "light.exe failed with exit code $lightExit"
+        }
     }
 }
 finally {

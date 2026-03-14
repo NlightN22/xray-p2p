@@ -8,12 +8,16 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+if ($ServiceName.Count -eq 1 -and $ServiceName[0] -like "*,*") {
+    $ServiceName = $ServiceName[0].Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+}
+
 function Get-ServiceSddl {
     param([string] $Name)
 
     $output = & sc.exe sdshow $Name 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "sc.exe sdshow failed for $Name: $output"
+        throw "sc.exe sdshow failed for ${Name}: $output"
     }
 
     $joined = ($output -join "`n").Trim()
@@ -53,6 +57,6 @@ foreach ($name in $ServiceName) {
     $updated = Add-AceToSddl -Sddl $current -Ace $ace
     $result = & sc.exe sdset $name $updated 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "sc.exe sdset failed for $name: $result"
+        throw "sc.exe sdset failed for ${name}: $result"
     }
 }

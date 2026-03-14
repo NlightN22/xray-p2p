@@ -40,6 +40,11 @@ try {
     }
     $remaining = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
     if ($remaining) {
+        Stop-Process -Name "xp2p-ui" -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        $remaining = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+    }
+    if ($remaining) {
         Write-Output "xp2p-ui process still running after stop"
         $exitCode = 6
         return

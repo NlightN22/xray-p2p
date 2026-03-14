@@ -476,6 +476,9 @@ exit 0
 """
     result = run_powershell(host, script, label="path_exists_raw")
     if result.rc != 0:
+        log_path = Path(r"C:\xp2p\build\logs\win\msi-install.log")
+        log_tail = _read_msi_log_tail(host, log_path)
+        log_context = _read_msi_failure_context(host, log_path)
         stdout = result.stdout or ""
         if "MSI ExitCode=1601" in stdout:
             run_powershell(
@@ -510,6 +513,7 @@ Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAct
         raise RuntimeError(
             "Failed to install xp2p via MSI.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"{log_context}{log_tail}"
         )
 
 
@@ -583,6 +587,59 @@ foreach ($root in $classRoots) {
 }
 """
     run_powershell(host, script)
+
+
+def _read_msi_log_tail(host: Host, path: Path, lines: int = 200) -> str:
+    target = ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$target = {target}
+if (-not (Test-Path $target)) {{
+    exit 3
+}}
+$content = Get-Content -Path $target -Tail {lines}
+$content
+exit 0
+"""
+    result = run_powershell(host, script, label="msi_log_tail")
+    if result.rc != 0:
+        return "\nMSI log tail: <missing>\n"
+    tail = (result.stdout or "").strip()
+    if not tail:
+        return "\nMSI log tail: <empty>\n"
+    return "\nMSI log tail:\n" + tail + "\n"
+
+
+def _read_msi_failure_context(host: Host, path: Path) -> str:
+    target = ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$target = {target}
+if (-not (Test-Path $target)) {{
+    exit 3
+}}
+$lines = Get-Content -Path $target
+$failIndex = -1
+for ($i = $lines.Count - 1; $i -ge 0; $i--) {{
+    if ($lines[$i] -match 'Return value 3') {{
+        $failIndex = $i
+        break
+    }}
+}}
+if ($failIndex -lt 0) {{
+    exit 0
+}}
+$startIndex = [Math]::Max(0, $failIndex - 40)
+$lines[$startIndex..$failIndex]
+exit 0
+"""
+    result = run_powershell(host, script, label="msi_log_context")
+    if result.rc != 0:
+        return ""
+    context = (result.stdout or "").strip()
+    if not context:
+        return ""
+    return "\nMSI failure context:\n" + context + "\n"
 
 
 def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path, *, purge_files: bool = True) -> None:

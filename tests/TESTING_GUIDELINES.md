@@ -23,6 +23,7 @@ guest suites -- the CI and fellow contributors expect these rules.
 - Windows MSI builds from host tests must execute `tests/guest/scripts/build_msi_package.ps1`,
   which wraps the canonical scripts under `scripts/build/`. Keep the MSI build
   pipeline there instead of duplicating commands inside host helpers.
+- Do not disable MSI build or MSI reinstall flows in Windows host tests unless the request explicitly asks for it.
 - Prefer shared provisioning scripts under `infra/vagrant/scripts/win`, but
   **OpenSSH is allowed to be local per-VM** when the base image needs special
   handling. Use `infra/vagrant/<vm>/scripts/openssh.ps1` for image-specific

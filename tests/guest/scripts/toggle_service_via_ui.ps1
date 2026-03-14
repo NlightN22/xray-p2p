@@ -36,16 +36,65 @@ function Wait-ServiceState([string] $name, [string] $expected, [int] $timeoutSec
     throw "Service $name did not reach state $expected within ${timeoutSeconds}s"
 }
 
-function Invoke-ScAsUser([System.Management.Automation.PSCredential] $cred, [string[]] $args) {
-    $proc = Start-Process -FilePath "sc.exe" -ArgumentList $args -Credential $cred -PassThru -Wait
-    if ($proc.ExitCode -ne 0) {
-        throw "sc.exe failed with exit code $($proc.ExitCode) for args: $($args -join ' ')"
+function Invoke-ScAsUser([string] $userPath, [string] $password, [string] $action, [string] $serviceName) {
+    $safeArgs = @(
+        $action,
+        $serviceName
+    ) | Where-Object { $_ -ne $null -and $_.ToString().Trim() -ne "" }
+    if (-not $safeArgs -or $safeArgs.Count -lt 2) {
+        throw "sc.exe received invalid arguments (action=$action, service=$serviceName)"
+    }
+    $scPath = Join-Path $env:SystemRoot "System32\\sc.exe"
+    $taskName = "xp2p-ui-svc-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
+    $taskCmd = "`"$scPath $($safeArgs -join ' ')`""
+
+    $createArgs = @(
+        "/Create",
+        "/TN", $taskName,
+        "/TR", $taskCmd,
+        "/SC", "ONCE",
+        "/ST", "00:00",
+        "/RL", "LIMITED",
+        "/RU", $userPath,
+        "/RP", $password,
+        "/F"
+    )
+    $createProc = Start-Process -FilePath "schtasks.exe" -ArgumentList $createArgs -PassThru -Wait -NoNewWindow
+    if ($createProc.ExitCode -ne 0) {
+        throw "schtasks create failed with exit code $($createProc.ExitCode) for args: $($safeArgs -join ' ')"
+    }
+
+    $runProc = Start-Process -FilePath "schtasks.exe" -ArgumentList @("/Run", "/TN", $taskName) -PassThru -Wait -NoNewWindow
+    if ($runProc.ExitCode -ne 0) {
+        throw "schtasks run failed with exit code $($runProc.ExitCode) for args: $($safeArgs -join ' ')"
+    }
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    $taskInfo = $null
+    do {
+        $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($taskInfo -and $taskInfo.State -ne "Running") {
+            break
+        }
+        Start-Sleep -Seconds 1
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    & schtasks.exe /Delete /TN $taskName /F | Out-Null
+
+    if (-not $taskInfo) {
+        throw "scheduled task info missing for args: $($safeArgs -join ' ')"
+    }
+    if ($taskInfo.LastTaskResult -ne 0) {
+        throw "sc.exe failed with result $($taskInfo.LastTaskResult) for args: $($safeArgs -join ' ')"
     }
 }
 
 $exitCode = 0
+$errorDetail = ""
+$lastOperation = ""
 $userName = $null
 $password = $null
+$userCreated = $false
 $uiProc = $null
 
 try {
@@ -76,6 +125,7 @@ try {
     if (-not $serviceNames -or $serviceNames.Count -eq 0) {
         $serviceNames = @("xp2p-client", "xp2p-server")
     }
+    $serviceNames = @($serviceNames | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ })
 
     foreach ($name in $serviceNames) {
         $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
@@ -86,42 +136,85 @@ try {
         }
     }
 
-    $userName = "xp2p-ui-test-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
+    $userName = "xp2pui-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
     $password = "Xp2pUi!" + (Get-Random -Minimum 100000 -Maximum 999999).ToString() + "Aa"
     $userPath = "$env:COMPUTERNAME\$userName"
-    & net user $userName $password /add | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to create local user $userName (exit $LASTEXITCODE)"
-    }
-
     $secure = ConvertTo-SecureString $password -AsPlainText -Force
-    $cred = New-Object System.Management.Automation.PSCredential($userPath, $secure)
+
+    $localUserCmd = Get-Command -Name New-LocalUser -ErrorAction SilentlyContinue
+    if ($localUserCmd) {
+        New-LocalUser -Name $userName -Password $secure -AccountNeverExpires -PasswordNeverExpires:$true | Out-Null
+        $userCreated = $true
+    } else {
+        $userOutput = & net user $userName /add 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $detail = ($userOutput | Out-String).Trim()
+            if ($detail) {
+                throw "Failed to create local user $userName (exit $LASTEXITCODE): $detail"
+            }
+            throw "Failed to create local user $userName (exit $LASTEXITCODE)"
+        }
+        $userOutput = & net user $userName "$password" 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $detail = ($userOutput | Out-String).Trim()
+            if ($detail) {
+                throw "Failed to set password for $userName (exit $LASTEXITCODE): $detail"
+            }
+            throw "Failed to set password for $userName (exit $LASTEXITCODE)"
+        }
+        $userCreated = $true
+    }
 
     foreach ($name in $serviceNames) {
         $initial = (Get-Service -Name $name).Status.ToString()
         if ($initial -eq "Running") {
-            Invoke-ScAsUser $cred @("stop", $name)
+            $lastOperation = "sc.exe stop $name"
+            Invoke-ScAsUser $userPath $password "stop" $name
             Wait-ServiceState $name "Stopped" $ServiceWaitSeconds
-            Invoke-ScAsUser $cred @("start", $name)
+            $lastOperation = "sc.exe start $name"
+            Invoke-ScAsUser $userPath $password "start" $name
             Wait-ServiceState $name "Running" $ServiceWaitSeconds
         } else {
-            Invoke-ScAsUser $cred @("start", $name)
+            $lastOperation = "sc.exe start $name"
+            Invoke-ScAsUser $userPath $password "start" $name
             Wait-ServiceState $name "Running" $ServiceWaitSeconds
-            Invoke-ScAsUser $cred @("stop", $name)
+            $lastOperation = "sc.exe stop $name"
+            Invoke-ScAsUser $userPath $password "stop" $name
             Wait-ServiceState $name "Stopped" $ServiceWaitSeconds
         }
     }
 } catch {
-    Write-Output "toggle_service_via_ui failed: $($_.Exception.Message)"
+    $errorDetail = ($_ | Out-String).Trim()
+    if ($lastOperation) {
+        $errorDetail = "LastOp=$lastOperation; $errorDetail"
+    }
+    Write-Output "toggle_service_via_ui failed: $errorDetail"
     $exitCode = 10
 } finally {
     if ($uiProc -and -not $uiProc.HasExited) {
         Stop-Process -Id $uiProc.Id -Force -ErrorAction SilentlyContinue
     }
-    if ($userName) {
-        & net user $userName /delete | Out-Null
+    if ($userName -and $userCreated) {
+        $removeCmd = Get-Command -Name Remove-LocalUser -ErrorAction SilentlyContinue
+        if ($removeCmd) {
+            Remove-LocalUser -Name $userName -ErrorAction SilentlyContinue
+        } else {
+            & net user $userName /delete | Out-Null
+        }
     }
-    $payload = if ($exitCode -eq 0) { "OK" } else { "FAIL:$exitCode" }
+    if ($exitCode -eq 0) {
+        $payload = "OK"
+    } else {
+        $detail = $errorDetail -replace "[\r\n]+", " "
+        if ($detail.Length -gt 160) {
+            $detail = $detail.Substring(0, 160)
+        }
+        if ($detail) {
+            $payload = "FAIL:${exitCode}:$detail"
+        } else {
+            $payload = "FAIL:${exitCode}"
+        }
+    }
     Ensure-Marker $MarkerPath $payload
 }
 
