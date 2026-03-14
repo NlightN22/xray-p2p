@@ -28,6 +28,7 @@ func RunOutput(ctx context.Context, command, service string, handler func(error)
 		return "", err
 	}
 	cmd := exec.CommandContext(ctx, scPath, command, service)
+	cmd.SysProcAttr = &windows.SysProcAttr{HideWindow: true}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -99,10 +100,10 @@ func ParseServiceState(output string) (svc.State, bool) {
 		case "PAUSED":
 			return svc.Paused, false
 		default:
-			return svc.Unknown, false
+			return svc.State(0), false
 		}
 	}
-	return svc.Unknown, false
+	return svc.State(0), false
 }
 
 func IsServiceMissing(err error) bool {

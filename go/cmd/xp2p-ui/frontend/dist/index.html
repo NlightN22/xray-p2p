@@ -13,11 +13,410 @@
         color: #e6e7ea;
       }
       .root {
-        padding: 16px;
+        padding: 18px 20px 24px;
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      h2 {
+        margin: 18px 0 8px;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .hint {
+        color: #a5abb7;
+        font-size: 12px;
+        margin: 4px 0 10px;
+      }
+      .panel {
+        border: 1px solid #2a2f3a;
+        border-radius: 8px;
+        padding: 12px;
+        background: #15181d;
+        margin-bottom: 12px;
+      }
+      .choice {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .card {
+        border: 1px solid #2a2f3a;
+        border-radius: 10px;
+        padding: 14px;
+        background: #14181f;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+      .card h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .card p {
+        margin: 0;
+        color: #a5abb7;
+        font-size: 12px;
+      }
+      .card.active {
+        border-color: #4b74ff;
+        background: #182035;
+      }
+      .hidden {
+        display: none;
+      }
+      .grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: 1fr 1fr;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      label {
+        font-size: 12px;
+        color: #c7cbd6;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"] {
+        background: #0f1116;
+        border: 1px solid #2e3442;
+        color: #e6e7ea;
+        padding: 8px 10px;
+        border-radius: 6px;
+      }
+      input:focus {
+        outline: none;
+        border-color: #4b74ff;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .row label {
+        margin: 0;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      button {
+        background: #2f6bff;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #2a2f3a;
+        color: #d0d5df;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 12px;
+      }
+      .status.ok {
+        color: #7ddc95;
+      }
+      .status.error {
+        color: #ff8a8a;
+      }
+      details summary {
+        cursor: pointer;
+        color: #c7cbd6;
+        font-size: 12px;
+      }
+      details .grid {
+        margin-top: 10px;
+      }
+      @media (max-width: 640px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="root">xp2p-ui</div>
+    <div class="root">
+      <h1>Client install</h1>
+      <div class="hint">Pick a setup mode. Required fields are marked in each section.</div>
+
+      <div class="choice">
+        <div id="cardLink" class="card active" role="button" aria-pressed="true" tabindex="0">
+          <h3>Install by link</h3>
+          <p>Paste a link from the server and install automatically.</p>
+        </div>
+        <div id="cardManual" class="card" role="button" aria-pressed="false" tabindex="0">
+          <h3>Manual setup</h3>
+          <p>Enter server address, user, and password by hand.</p>
+        </div>
+      </div>
+
+      <div id="panelLink" class="panel">
+        <div class="field">
+          <label for="installLink">Link</label>
+          <input id="installLink" type="text" />
+        </div>
+        <div class="actions">
+          <button id="installLinkButton">Install from link</button>
+        </div>
+        <div id="linkStatus" class="status"></div>
+      </div>
+
+      <div id="panelManual" class="panel hidden">
+        <div class="hint">Required: server address, user, password. Port defaults to 8443.</div>
+        <div class="grid">
+          <div class="field">
+            <label for="installDir">Install dir</label>
+            <input id="installDir" type="text" />
+          </div>
+          <div class="field">
+            <label for="configDir">Config dir</label>
+            <input id="configDir" type="text" />
+          </div>
+          <div class="field">
+            <label for="serverAddress">Server address</label>
+            <input id="serverAddress" type="text" />
+          </div>
+          <div class="field">
+            <label for="serverPort">Server port</label>
+            <input id="serverPort" type="number" min="1" max="65535" />
+          </div>
+          <div class="field">
+            <label for="userEmail">User</label>
+            <input id="userEmail" type="text" />
+          </div>
+          <div class="field">
+            <label for="userPassword">Password</label>
+            <input id="userPassword" type="password" />
+          </div>
+          <div class="field">
+            <label for="serverName">Server name</label>
+            <input id="serverName" type="text" />
+          </div>
+          <div class="field row">
+            <input id="allowInsecure" type="checkbox" />
+            <label for="allowInsecure">Allow insecure</label>
+          </div>
+        </div>
+
+        <details>
+          <summary>Advanced options</summary>
+          <div class="grid">
+            <div class="field">
+              <label for="pinnedCert">Pinned peer cert SHA256</label>
+              <input id="pinnedCert" type="text" />
+            </div>
+            <div class="field">
+              <label for="verifyPeerName">Verify peer cert by name</label>
+              <input id="verifyPeerName" type="text" />
+            </div>
+            <div class="field row">
+              <input id="tunEnabled" type="checkbox" />
+              <label for="tunEnabled">TUN enabled</label>
+            </div>
+            <div class="field">
+              <label for="tunName">TUN name</label>
+              <input id="tunName" type="text" />
+            </div>
+            <div class="field">
+              <label for="tunMtu">TUN MTU</label>
+              <input id="tunMtu" type="number" min="1" />
+            </div>
+            <div class="field">
+              <label for="tunAddr">TUN addr</label>
+              <input id="tunAddr" type="text" />
+            </div>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button id="installButton">Install client</button>
+          <button id="resetButton" class="secondary">Reset defaults</button>
+        </div>
+        <div id="status" class="status"></div>
+      </div>
+    </div>
+
+    <script>
+      const els = {
+        installDir: document.getElementById("installDir"),
+        configDir: document.getElementById("configDir"),
+        serverAddress: document.getElementById("serverAddress"),
+        serverPort: document.getElementById("serverPort"),
+        userEmail: document.getElementById("userEmail"),
+        userPassword: document.getElementById("userPassword"),
+        serverName: document.getElementById("serverName"),
+        allowInsecure: document.getElementById("allowInsecure"),
+        pinnedCert: document.getElementById("pinnedCert"),
+        verifyPeerName: document.getElementById("verifyPeerName"),
+        tunEnabled: document.getElementById("tunEnabled"),
+        tunName: document.getElementById("tunName"),
+        tunMtu: document.getElementById("tunMtu"),
+        tunAddr: document.getElementById("tunAddr"),
+        installButton: document.getElementById("installButton"),
+        resetButton: document.getElementById("resetButton"),
+        status: document.getElementById("status"),
+        installLink: document.getElementById("installLink"),
+        installLinkButton: document.getElementById("installLinkButton"),
+        linkStatus: document.getElementById("linkStatus"),
+        cardLink: document.getElementById("cardLink"),
+        cardManual: document.getElementById("cardManual"),
+        panelLink: document.getElementById("panelLink"),
+        panelManual: document.getElementById("panelManual")
+      };
+
+      function setStatus(node, message, ok) {
+        node.textContent = message;
+        node.className = "status" + (ok ? " ok" : " error");
+      }
+
+      function clearStatus(node) {
+        node.textContent = "";
+        node.className = "status";
+      }
+
+      async function loadDefaults() {
+        clearStatus(els.status);
+        if (!window.go || !window.go.ui || !window.go.ui.App || !window.go.ui.App.GetClientInstallDefaults) {
+          setStatus(els.status, "UI bindings are not available.", false);
+          return;
+        }
+        try {
+          const defaults = await window.go.ui.App.GetClientInstallDefaults();
+          els.installDir.value = defaults.installDir || "";
+          els.configDir.value = defaults.configDir || "";
+          els.serverAddress.value = defaults.serverAddress || "";
+          els.serverPort.value = defaults.serverPort || "";
+          els.userEmail.value = defaults.user || "";
+          els.userPassword.value = defaults.password || "";
+          els.serverName.value = defaults.serverName || "";
+          els.allowInsecure.checked = !!defaults.allowInsecure;
+          els.pinnedCert.value = defaults.pinnedPeerCertSha256 || "";
+          els.verifyPeerName.value = defaults.verifyPeerCertByName || "";
+          els.tunEnabled.checked = defaults.tunEnabled !== false;
+          els.tunName.value = defaults.tunName || "";
+          els.tunMtu.value = defaults.tunMtu || "";
+          els.tunAddr.value = defaults.tunAddr || "";
+        } catch (err) {
+          setStatus(els.status, "Failed to load defaults: " + (err?.message || err), false);
+        }
+      }
+
+      function buildPayload() {
+        return {
+          installDir: els.installDir.value.trim(),
+          configDir: els.configDir.value.trim(),
+          serverAddress: els.serverAddress.value.trim(),
+          serverPort: els.serverPort.value.trim(),
+          user: els.userEmail.value.trim(),
+          password: els.userPassword.value,
+          serverName: els.serverName.value.trim(),
+          allowInsecure: !!els.allowInsecure.checked,
+          pinnedPeerCertSha256: els.pinnedCert.value.trim(),
+          verifyPeerCertByName: els.verifyPeerName.value.trim(),
+          tunEnabled: !!els.tunEnabled.checked,
+          tunName: els.tunName.value.trim(),
+          tunMtu: Number(els.tunMtu.value || 0),
+          tunAddr: els.tunAddr.value.trim()
+        };
+      }
+
+      async function installClient() {
+        clearStatus(els.status);
+        const payload = buildPayload();
+        if (!payload.serverAddress) {
+          setStatus(els.status, "Server address is required.", false);
+          return;
+        }
+        if (!payload.user) {
+          setStatus(els.status, "User is required.", false);
+          return;
+        }
+        if (!payload.password) {
+          setStatus(els.status, "Password is required.", false);
+          return;
+        }
+        if (!window.go || !window.go.ui || !window.go.ui.App || !window.go.ui.App.InstallClient) {
+          setStatus(els.status, "UI bindings are not available.", false);
+          return;
+        }
+        els.installButton.disabled = true;
+        try {
+          await window.go.ui.App.InstallClient(payload);
+          setStatus(els.status, "Client install completed.", true);
+        } catch (err) {
+          setStatus(els.status, "Client install failed: " + (err?.message || err), false);
+        } finally {
+          els.installButton.disabled = false;
+        }
+      }
+
+      async function installFromLink() {
+        clearStatus(els.linkStatus);
+        const link = els.installLink.value.trim();
+        if (!link) {
+          setStatus(els.linkStatus, "Link is required.", false);
+          return;
+        }
+        if (!window.go || !window.go.ui || !window.go.ui.App || !window.go.ui.App.InstallFromLink) {
+          setStatus(els.linkStatus, "UI bindings are not available.", false);
+          return;
+        }
+        els.installLinkButton.disabled = true;
+        try {
+          await window.go.ui.App.InstallFromLink(link);
+          setStatus(els.linkStatus, "Link install completed.", true);
+        } catch (err) {
+          setStatus(els.linkStatus, "Link install failed: " + (err?.message || err), false);
+        } finally {
+          els.installLinkButton.disabled = false;
+        }
+      }
+
+      els.installButton.addEventListener("click", installClient);
+      els.resetButton.addEventListener("click", loadDefaults);
+      els.installLinkButton.addEventListener("click", installFromLink);
+      bindCard(els.cardLink, "link");
+      bindCard(els.cardManual, "manual");
+      loadDefaults();
+    </script>
   </body>
 </html>
+      function selectMode(mode) {
+        const linkActive = mode === "link";
+        els.cardLink.classList.toggle("active", linkActive);
+        els.cardManual.classList.toggle("active", !linkActive);
+        els.cardLink.setAttribute("aria-pressed", linkActive ? "true" : "false");
+        els.cardManual.setAttribute("aria-pressed", !linkActive ? "true" : "false");
+        els.panelLink.classList.toggle("hidden", !linkActive);
+        els.panelManual.classList.toggle("hidden", linkActive);
+        clearStatus(els.status);
+        clearStatus(els.linkStatus);
+      }
+
+      function bindCard(card, mode) {
+        card.addEventListener("click", () => selectMode(mode));
+        card.addEventListener("keydown", (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            selectMode(mode);
+          }
+        });
+      }

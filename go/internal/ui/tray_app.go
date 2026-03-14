@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/ports"
@@ -195,25 +194,24 @@ func (a *TrayApp) refreshStatuses() {
 
 func (a *TrayApp) startService(name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultWaitLong)
-	defer cancel()
-	a.runServiceAction(name, "starting", ports.ServiceStateStartPending, func() error {
+	a.runServiceAction(ctx, cancel, name, "starting", ports.ServiceStateStartPending, func(ctx context.Context) error {
 		return a.serviceControl.Start(ctx, name)
 	})
 }
 
 func (a *TrayApp) stopService(name string) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultWaitLong)
-	defer cancel()
-	a.runServiceAction(name, "stopping", ports.ServiceStateStopPending, func() error {
+	a.runServiceAction(ctx, cancel, name, "stopping", ports.ServiceStateStopPending, func(ctx context.Context) error {
 		return a.serviceControl.Stop(ctx, name)
 	})
 }
 
-func (a *TrayApp) runServiceAction(name, action string, pendingState ports.ServiceState, fn func() error) {
+func (a *TrayApp) runServiceAction(ctx context.Context, cancel context.CancelFunc, name, action string, pendingState ports.ServiceState, fn func(context.Context) error) {
 	a.setServicePending(name, pendingState)
 
 	go func() {
-		err := fn()
+		defer cancel()
+		err := fn(ctx)
 		if err != nil {
 			Notify("xp2p", fmt.Sprintf("Service %s %s failed: %v", name, action, err))
 			logging.Error("xp2p-ui service action failed", "service", name, "action", action, "err", err)
@@ -441,48 +439,7 @@ func (a *TrayApp) installClient() {
 		return
 	}
 	runtime.WindowShow(ctx)
-	linkText := ""
-	if text, err := runtime.ClipboardGetText(ctx); err == nil {
-		linkText = strings.TrimSpace(text)
-	}
-	if linkText != "" && a.linkInstall != nil {
-		if err := a.linkInstall.Install(ctx, linkText); err != nil {
-			showDialog(ctx, runtime.ErrorDialog, "xp2p", fmt.Sprintf("Client install failed: %v", err))
-			return
-		}
-		Notify("xp2p", "Client install completed")
-		a.refreshStatuses()
-		return
-	}
-
-	cfg, err := config.Load(config.Options{})
-	if err != nil {
-		showDialog(ctx, runtime.ErrorDialog, "xp2p", fmt.Sprintf("Client install failed: %v", err))
-		return
-	}
-
-	opts := client.InstallOptions{
-		InstallDir:    cfg.Client.InstallDir,
-		ConfigDir:     cfg.Client.ConfigDir,
-		ServerAddress: cfg.Client.ServerAddress,
-		ServerPort:    cfg.Client.ServerPort,
-		User:          cfg.Client.User,
-		Password:      cfg.Client.Password,
-		ServerName:    cfg.Client.ServerName,
-		AllowInsecure: cfg.Client.AllowInsecure,
-		Force:         true,
-		TunEnabled:    cfg.Client.TunEnabled,
-		TunEnabledSet: true,
-		TunName:       cfg.Client.TunName,
-		TunMTU:        cfg.Client.TunMTU,
-		TunAddr:       cfg.Client.TunAddr,
-	}
-	if err := client.Install(ctx, opts); err != nil {
-		showDialog(ctx, runtime.ErrorDialog, "xp2p", fmt.Sprintf("Client install failed: %v", err))
-		return
-	}
-	Notify("xp2p", "Client install completed")
-	a.refreshStatuses()
+	runtime.WindowFocus(ctx)
 }
 
 func (a *TrayApp) installServer() {

@@ -23,6 +23,9 @@ rules = [
     "CLI commands must only update configuration/state files; OS-level changes (TUN, routes, nftables) are applied only by xp2p run/service",
     "CLI flags standard: identical long names must use the same short aliases everywhere; verify consistency when adding new commands",
     "log files must live under XP2P_LOG_ROOT (default /var/log/xp2p); the audit log file name is audit.log",
+    "UI flows must call internal usecases or platform packages directly; do not shell out to xp2p CLI from the UI layer",
+    "UI must validate required inputs before executing install actions, and use configuration defaults for optional fields when empty",
+    "UI should keep presentation logic separate from install/service logic (App bindings call usecases; UI only passes data)",
     "terminology: cidr means a network in CIDR format (e.g. 10.0.0.0/24) and must be used for redirect/NAT rules; do not use subnet as a term",
     "terminology: host means a DNS name or IP address of a node/server",
     "terminology: target means a destination in host:port format and is used for forwarding and dns-forward"
