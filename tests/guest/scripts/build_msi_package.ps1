@@ -11,7 +11,9 @@ param(
     [string] $BuildId,
 
     [string] $RepoRoot = 'C:\xp2p',
-    [string] $Marker = '__MSI_PATH__='
+    [string] $Marker = '__MSI_PATH__=',
+    [string] $StartMarkerPath = "",
+    [string] $DoneMarkerPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -89,6 +91,13 @@ if (-not (Test-Path $scriptPath)) {
 }
 
 Write-Stage "Resolved MSI script: $scriptPath (archLabel=$($scriptInfo.ArchLabel))"
+if ($StartMarkerPath) {
+    $startDir = Split-Path -Parent $StartMarkerPath
+    if ($startDir) {
+        [System.IO.Directory]::CreateDirectory($startDir) | Out-Null
+    }
+    Set-Content -Path $StartMarkerPath -Value "START" -Encoding ASCII
+}
 Ensure-MsiDependencies
 
 $buildIdPath = Join-Path $CacheDir 'build-id.txt'
@@ -147,6 +156,13 @@ if (-not (Test-Path $msiPath)) {
 }
 
 Write-Stage "MSI build output path: $msiPath"
+if ($DoneMarkerPath) {
+    $doneDir = Split-Path -Parent $DoneMarkerPath
+    if ($doneDir) {
+        [System.IO.Directory]::CreateDirectory($doneDir) | Out-Null
+    }
+    Set-Content -Path $DoneMarkerPath -Value $msiPath -Encoding ASCII
+}
 $fileName = [System.IO.Path]::GetFileName($msiPath)
 if ($fileName -notmatch '^xp2p-(.+)-windows-') {
     throw "Unable to parse xp2p version from MSI filename '$fileName'"

@@ -46,34 +46,48 @@ function Invoke-ScAsUser([string] $userPath, [string] $password, [string] $actio
     }
     $scPath = Join-Path $env:SystemRoot "System32\\sc.exe"
     $taskName = "xp2p-ui-svc-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
-    $taskCmd = "`"$scPath $($safeArgs -join ' ')`""
+    $taskDir = "C:\\xp2p\\build\\ui-task"
+    New-Item -ItemType Directory -Path $taskDir -Force | Out-Null
+    $taskOutput = Join-Path $taskDir "$taskName.out.txt"
+    $taskRc = Join-Path $taskDir "$taskName.rc.txt"
+    $cmd = "`"$scPath`" $($safeArgs -join ' ') > `"$taskOutput`" 2>&1 & echo %errorlevel% > `"$taskRc`""
+    $taskCmd = "cmd.exe /c `"$cmd`""
 
+    $startTime = (Get-Date).AddMinutes(1).ToString("HH:mm")
     $createArgs = @(
         "/Create",
         "/TN", $taskName,
         "/TR", $taskCmd,
         "/SC", "ONCE",
-        "/ST", "00:00",
+        "/ST", $startTime,
         "/RL", "LIMITED",
         "/RU", $userPath,
         "/RP", $password,
         "/F"
     )
-    $createProc = Start-Process -FilePath "schtasks.exe" -ArgumentList $createArgs -PassThru -Wait -NoNewWindow
-    if ($createProc.ExitCode -ne 0) {
-        throw "schtasks create failed with exit code $($createProc.ExitCode) for args: $($safeArgs -join ' ')"
+    $createOutput = & schtasks.exe @createArgs 2>&1
+    $createCode = $LASTEXITCODE
+    if ($createCode -ne 0) {
+        $detail = ($createOutput | Out-String).Trim()
+        if ($detail) {
+            throw "schtasks create failed with exit code $createCode for args: $($safeArgs -join ' '); $detail"
+        }
+        throw "schtasks create failed with exit code $createCode for args: $($safeArgs -join ' ')"
     }
 
-    $runProc = Start-Process -FilePath "schtasks.exe" -ArgumentList @("/Run", "/TN", $taskName) -PassThru -Wait -NoNewWindow
-    if ($runProc.ExitCode -ne 0) {
-        throw "schtasks run failed with exit code $($runProc.ExitCode) for args: $($safeArgs -join ' ')"
+    $runOutput = & schtasks.exe /Run /TN $taskName 2>&1
+    $runCode = $LASTEXITCODE
+    if ($runCode -ne 0) {
+        $detail = ($runOutput | Out-String).Trim()
+        if ($detail) {
+            throw "schtasks run failed with exit code $runCode for args: $($safeArgs -join ' '); $detail"
+        }
+        throw "schtasks run failed with exit code $runCode for args: $($safeArgs -join ' ')"
     }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
-    $taskInfo = $null
     do {
-        $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
-        if ($taskInfo -and $taskInfo.State -ne "Running") {
+        if (Test-Path $taskRc) {
             break
         }
         Start-Sleep -Seconds 1
@@ -81,11 +95,83 @@ function Invoke-ScAsUser([string] $userPath, [string] $password, [string] $actio
 
     & schtasks.exe /Delete /TN $taskName /F | Out-Null
 
-    if (-not $taskInfo) {
-        throw "scheduled task info missing for args: $($safeArgs -join ' ')"
+    if (-not (Test-Path $taskRc)) {
+        throw "scheduled task did not write result for args: $($safeArgs -join ' ')"
     }
-    if ($taskInfo.LastTaskResult -ne 0) {
-        throw "sc.exe failed with result $($taskInfo.LastTaskResult) for args: $($safeArgs -join ' ')"
+    $result = (Get-Content -Path $taskRc -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
+    if ($result -ne "0") {
+        $outputText = ""
+        if (Test-Path $taskOutput) {
+            $outputText = (Get-Content -Path $taskOutput -ErrorAction SilentlyContinue | Out-String).Trim()
+        }
+        if ($outputText) {
+            throw "sc.exe failed with exit $result for args: $($safeArgs -join ' '); $outputText"
+        }
+        throw "sc.exe failed with exit $result for args: $($safeArgs -join ' ')"
+    }
+
+    Remove-Item -Path $taskRc, $taskOutput -ErrorAction SilentlyContinue
+    & schtasks.exe /Delete /TN $taskName /F | Out-Null
+}
+
+function Ensure-BatchLogonRight([string] $userPath) {
+    $account = New-Object System.Security.Principal.NTAccount($userPath)
+    $sid = $account.Translate([System.Security.Principal.SecurityIdentifier]).Value
+    if (-not $sid) {
+        throw "Unable to resolve SID for $userPath"
+    }
+    $sidEntry = "*$sid"
+
+    $policyDir = "C:\\xp2p\\build\\ui-secpol"
+    New-Item -ItemType Directory -Path $policyDir -Force | Out-Null
+    $cfgPath = Join-Path $policyDir ("secpol-{0}-{1}.cfg" -f (Get-Date -Format "yyyyMMddHHmmss"), ([System.Guid]::NewGuid().ToString("N").Substring(0, 6)))
+    $dbPath = Join-Path $policyDir "secpol.sdb"
+
+    $exportOutput = & secedit.exe /export /cfg $cfgPath /areas USER_RIGHTS 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $detail = ($exportOutput | Out-String).Trim()
+        if ($detail) {
+            throw "secedit export failed (exit $LASTEXITCODE): $detail"
+        }
+        throw "secedit export failed (exit $LASTEXITCODE)"
+    }
+
+    $lines = Get-Content -Path $cfgPath -Encoding Unicode
+    $lineIndex = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^SeBatchLogonRight\s*=') {
+            $lineIndex = $i
+            break
+        }
+    }
+
+    if ($lineIndex -ge 0) {
+        $parts = $lines[$lineIndex].Split("=", 2)
+        $value = ""
+        if ($parts.Count -gt 1) {
+            $value = $parts[1].Trim()
+        }
+        $entries = @()
+        if ($value) {
+            $entries = $value.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        }
+        if (-not ($entries -contains $sidEntry)) {
+            $entries = @($entries + $sidEntry)
+            $lines[$lineIndex] = "SeBatchLogonRight = " + ($entries -join ",")
+            Set-Content -Path $cfgPath -Value $lines -Encoding Unicode
+        }
+    } else {
+        $lines += "SeBatchLogonRight = $sidEntry"
+        Set-Content -Path $cfgPath -Value $lines -Encoding Unicode
+    }
+
+    $applyOutput = & secedit.exe /configure /db $dbPath /cfg $cfgPath /areas USER_RIGHTS 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $detail = ($applyOutput | Out-String).Trim()
+        if ($detail) {
+            throw "secedit configure failed (exit $LASTEXITCODE): $detail"
+        }
+        throw "secedit configure failed (exit $LASTEXITCODE)"
     }
 }
 
@@ -164,6 +250,7 @@ try {
         }
         $userCreated = $true
     }
+    Ensure-BatchLogonRight $userPath
 
     foreach ($name in $serviceNames) {
         $initial = (Get-Service -Name $name).Status.ToString()

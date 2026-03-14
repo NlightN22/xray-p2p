@@ -379,6 +379,16 @@ def _admin_token_marker() -> tuple[Path, Path]:
     return local_path, guest_path
 
 
+def _msi_build_markers() -> tuple[Path, Path, Path]:
+    marker_dir = REPO_ROOT / "build" / "msi-build"
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    token = uuid.uuid4().hex
+    local_path = marker_dir / f"msi-build-{token}.txt"
+    guest_start = Path(r"C:\Windows\Temp") / f"xp2p-msi-build-start-{token}.txt"
+    guest_done = Path(r"C:\Windows\Temp") / f"xp2p-msi-build-done-{token}.txt"
+    return local_path, guest_start, guest_done
+
+
 def _run_xp2p_with_timeout_marker(
     host: Host,
     args: Iterable[str],
@@ -1007,6 +1017,9 @@ def _build_msi_package(
     cache_dir: Path,
     wix_source: str,
 ) -> str:
+    local_marker, guest_start, guest_done = _msi_build_markers()
+    if local_marker.exists():
+        local_marker.unlink(missing_ok=True)
     result = run_guest_script(
         host,
         "scripts/build_msi_package.ps1",
@@ -1015,9 +1028,23 @@ def _build_msi_package(
         WixSource=wix_source,
         BuildId=_MSI_BUILD_ID or "",
         Marker=MSI_MARKER,
+        StartMarkerPath=str(guest_start),
+        DoneMarkerPath=str(guest_done),
         timeout=600,
     )
     if result.rc != 0:
+        start_probe = run_powershell(
+            host,
+            f"if (Test-Path {ps_quote(str(guest_start))}) {{ exit 0 }} else {{ exit 3 }}",
+        )
+        done_probe = run_powershell(
+            host,
+            f"if (Test-Path {ps_quote(str(guest_done))}) {{ exit 0 }} else {{ exit 3 }}",
+        )
+        local_marker.write_text(
+            f"start={start_probe.rc == 0} done={done_probe.rc == 0}",
+            encoding="ascii",
+        )
         raise RuntimeError(
             f"Failed to build MSI package for {architecture}.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
