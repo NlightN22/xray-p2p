@@ -1,0 +1,192 @@
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: #0f1012;
+        color: #e6e7ea;
+      }
+      .root {
+        padding: 18px 20px 24px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      h2 {
+        margin: 18px 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .hint {
+        color: #a5abb7;
+        font-size: 12px;
+        margin: 4px 0 10px;
+      }
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0 18px;
+      }
+      .tab {
+        background: #1b1f27;
+        color: #c7cbd6;
+        border: 1px solid #2a2f3a;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .tab.active {
+        background: #2f6bff;
+        border-color: #2f6bff;
+        color: #fff;
+      }
+      .scenario {
+        display: none;
+      }
+      .scenario.active {
+        display: block;
+      }
+      .panel {
+        border: 1px solid #2a2f3a;
+        border-radius: 8px;
+        padding: 12px;
+        background: #15181d;
+        margin-bottom: 12px;
+      }
+      .choice {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .card {
+        border: 1px solid #2a2f3a;
+        border-radius: 10px;
+        padding: 14px;
+        background: #14181f;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+      .card h3 {
+        margin: 0 0 6px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .card p {
+        margin: 0;
+        color: #a5abb7;
+        font-size: 12px;
+      }
+      .card.active {
+        border-color: #4b74ff;
+        background: #182035;
+      }
+      .hidden {
+        display: none;
+      }
+      .grid {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: 1fr 1fr;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      label {
+        font-size: 12px;
+        color: #c7cbd6;
+      }
+      label.required::after {
+        content: " *";
+        color: #4b74ff;
+        font-weight: 700;
+      }
+      .field.required input,
+      .field.required textarea {
+        border-color: #3b4f91;
+        box-shadow: 0 0 0 1px rgba(75, 116, 255, 0.2);
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
+      textarea {
+        background: #0f1116;
+        border: 1px solid #2e3442;
+        color: #e6e7ea;
+        padding: 8px 10px;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 12px;
+      }
+      textarea {
+        min-height: 64px;
+        resize: vertical;
+      }
+      input:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #4b74ff;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .row label {
+        margin: 0;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      button {
+        background: #2f6bff;
+        color: #fff;
+        border: 0;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #2a2f3a;
+        color: #d0d5df;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 12px;
+      }
+      .status.ok {
+        color: #7ddc95;
+      }
+      .status.error {
+        color: #ff8a8a;
+      }
+      details summary {
+        cursor: pointer;
+        color: #c7cbd6;
+        font-size: 12px;
+      }
+      details .grid {
+        margin-top: 10px;
+      }
+      @media (max-width: 640px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .choice {
+          grid-template-columns: 1fr;
+        }
+      }

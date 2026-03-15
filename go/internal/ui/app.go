@@ -2,11 +2,17 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"time"
 
+	clientcmd "github.com/NlightN22/xray-p2p/go/internal/cli/client"
+	servercmd "github.com/NlightN22/xray-p2p/go/internal/cli/server"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/link"
 	"github.com/NlightN22/xray-p2p/go/internal/ports"
+	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/NlightN22/xray-p2p/go/internal/usecase"
 )
 
@@ -56,6 +62,57 @@ type ClientInstallRequest struct {
 	TunName              string `json:"tunName"`
 	TunMTU               int    `json:"tunMtu"`
 	TunAddr              string `json:"tunAddr"`
+}
+
+type ClientDeployDefaults struct {
+	Host       string `json:"host"`
+	DeployPort string `json:"deployPort"`
+	InstallDir string `json:"installDir"`
+	User       string `json:"user"`
+	Password   string `json:"password"`
+	TrojanPort string `json:"trojanPort"`
+}
+
+type ClientDeployRequest struct {
+	Host       string `json:"host"`
+	DeployPort string `json:"deployPort"`
+	InstallDir string `json:"installDir"`
+	User       string `json:"user"`
+	Password   string `json:"password"`
+	TrojanPort string `json:"trojanPort"`
+}
+
+type ServerInstallDefaults struct {
+	InstallDir string `json:"installDir"`
+	ConfigDir  string `json:"configDir"`
+	Port       string `json:"port"`
+	CertStore  string `json:"certStore"`
+	CertFile   string `json:"certFile"`
+	KeyFile    string `json:"keyFile"`
+	Host       string `json:"host"`
+}
+
+type ServerInstallRequest struct {
+	InstallDir string `json:"installDir"`
+	ConfigDir  string `json:"configDir"`
+	Port       string `json:"port"`
+	CertStore  string `json:"certStore"`
+	CertFile   string `json:"certFile"`
+	KeyFile    string `json:"keyFile"`
+	Host       string `json:"host"`
+}
+
+type ServerDeployDefaults struct {
+	Listen   string `json:"listen"`
+	DiagPort string `json:"diagPort"`
+	Timeout  string `json:"timeout"`
+}
+
+type ServerDeployRequest struct {
+	Listen   string `json:"listen"`
+	Link     string `json:"link"`
+	DiagPort string `json:"diagPort"`
+	Timeout  string `json:"timeout"`
 }
 
 func NewApp(opts AppOptions) *App {
@@ -122,6 +179,49 @@ func (a *App) GetClientInstallDefaults() (ClientInstallDefaults, error) {
 	}, nil
 }
 
+func (a *App) GetClientDeployDefaults() (ClientDeployDefaults, error) {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return ClientDeployDefaults{}, err
+	}
+	return ClientDeployDefaults{
+		Host:       cfg.Server.Host,
+		DeployPort: "62025",
+		InstallDir: cfg.Server.InstallDir,
+		User:       cfg.Client.User,
+		Password:   cfg.Client.Password,
+		TrojanPort: defaultTrojanPort(cfg),
+	}, nil
+}
+
+func (a *App) GetServerInstallDefaults() (ServerInstallDefaults, error) {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return ServerInstallDefaults{}, err
+	}
+	return ServerInstallDefaults{
+		InstallDir: cfg.Server.InstallDir,
+		ConfigDir:  cfg.Server.ConfigDir,
+		Port:       cfg.Server.TrojanPort,
+		CertStore:  cfg.Server.CertificateStore,
+		CertFile:   cfg.Server.CertificateFile,
+		KeyFile:    cfg.Server.KeyFile,
+		Host:       cfg.Server.Host,
+	}, nil
+}
+
+func (a *App) GetServerDeployDefaults() (ServerDeployDefaults, error) {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return ServerDeployDefaults{}, err
+	}
+	return ServerDeployDefaults{
+		Listen:   ":62025",
+		DiagPort: cfg.Server.Port,
+		Timeout:  "10m",
+	}, nil
+}
+
 func (a *App) InstallClient(req ClientInstallRequest) error {
 	cfg, err := config.Load(config.Options{})
 	if err != nil {
@@ -174,4 +274,97 @@ func (a *App) InstallClient(req ClientInstallRequest) error {
 		TunAddr:              req.TunAddr,
 	}
 	return client.Install(context.Background(), opts)
+}
+
+func (a *App) DeployClient(req ClientDeployRequest) error {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return err
+	}
+	opts := clientcmd.DeployOptions{
+		Host:       strings.TrimSpace(req.Host),
+		DeployPort: strings.TrimSpace(req.DeployPort),
+		InstallDir: strings.TrimSpace(req.InstallDir),
+		User:       strings.TrimSpace(req.User),
+		Password:   strings.TrimSpace(req.Password),
+		TrojanPort: strings.TrimSpace(req.TrojanPort),
+	}
+	return clientcmd.Deploy(context.Background(), cfg, opts)
+}
+
+func (a *App) InstallServer(req ServerInstallRequest) error {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return err
+	}
+	opts := servercmd.InstallOptions{
+		Path:      strings.TrimSpace(req.InstallDir),
+		ConfigDir: strings.TrimSpace(req.ConfigDir),
+		Port:      strings.TrimSpace(req.Port),
+		CertStore: strings.TrimSpace(req.CertStore),
+		CertFile:  strings.TrimSpace(req.CertFile),
+		KeyFile:   strings.TrimSpace(req.KeyFile),
+		Host:      strings.TrimSpace(req.Host),
+	}
+	return servercmd.Install(context.Background(), cfg, opts)
+}
+
+func (a *App) InstallServerFromLink(rawLink string) error {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return err
+	}
+	parsed, err := link.ParseTrojanLink(rawLink)
+	if err != nil {
+		return err
+	}
+	host := strings.TrimSpace(parsed.ServerAddress)
+	if parsed.ServerNameSet && strings.TrimSpace(parsed.ServerName) != "" {
+		host = strings.TrimSpace(parsed.ServerName)
+	}
+	opts := servercmd.InstallOptions{
+		Host: host,
+		Port: strings.TrimSpace(parsed.ServerPort),
+	}
+	return servercmd.Install(context.Background(), cfg, opts)
+}
+
+func (a *App) DeployServer(req ServerDeployRequest) error {
+	cfg, err := config.Load(config.Options{})
+	if err != nil {
+		return err
+	}
+	timeout, err := parseDurationOrZero(req.Timeout)
+	if err != nil {
+		return err
+	}
+	opts := servercmd.DeployOptions{
+		Listen:   strings.TrimSpace(req.Listen),
+		Link:     strings.TrimSpace(req.Link),
+		DiagPort: strings.TrimSpace(req.DiagPort),
+		Timeout:  timeout,
+	}
+	return servercmd.Deploy(context.Background(), cfg, opts)
+}
+
+func parseDurationOrZero(raw string) (time.Duration, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return 0, nil
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid timeout %q: %w", value, err)
+	}
+	return duration, nil
+}
+
+func defaultTrojanPort(cfg config.Config) string {
+	if value := strings.TrimSpace(cfg.Client.ServerPort); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(cfg.Server.TrojanPort); value != "" {
+		return value
+	}
+	return fmt.Sprintf("%d", server.DefaultTrojanPort)
 }
