@@ -6,13 +6,11 @@ import (
 	_ "embed"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/platform/windows"
 	"github.com/NlightN22/xray-p2p/go/internal/ui"
-	uifyne "github.com/NlightN22/xray-p2p/go/internal/ui_fyne"
 	"github.com/NlightN22/xray-p2p/go/internal/usecase"
 	"github.com/wailsapp/wails/v2/pkg/application"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -59,16 +57,9 @@ func main() {
 		Ping:           pingUsecase,
 	})
 
-	settings := ui.LoadSettings()
-
-	if !strings.EqualFold(strings.TrimSpace(os.Getenv("XP2P_UI_BACKEND")), "wails") {
-		if err := uifyne.Run(uifyne.Options{ServiceControl: serviceControl}); err != nil {
-			logging.Error("xp2p-ui fyne failed", "err", err)
-		}
-		return
-	}
-
 	go startWailsApp(appBindings)
+
+	settings := ui.LoadSettings()
 
 	tray := ui.NewTrayApp(serviceControl, settings, iconSet, ui.TrayOptions{
 		LinkInstall:    linkInstall,

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>xp2p-ui</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="root">
+      <h1>xp2p UI</h1>
+      <div class="hint">Open a task from the tray menu. Required fields are marked with *.</div>
+      <section id="client-install" class="scenario active">
+        <h2>Client install</h2>
+        <div class="hint">Pick a setup mode. Required fields are marked in each section.</div>
+        <div class="choice">
+          <div id="clientInstallCardLink" class="card active" role="button" aria-pressed="true" tabindex="0">
+            <h3>Install by link</h3>
+            <p>Paste a link from the server and install automatically.</p>
+          </div>
+          <div id="clientInstallCardManual" class="card" role="button" aria-pressed="false" tabindex="0">
+            <h3>Manual setup</h3>
+            <p>Enter server address, user, and password by hand.</p>
+          </div>
+        </div>
+        <div id="clientInstallPanelLink" class="panel">
+          <div class="field required">
+            <label class="required" for="clientInstallLink">Link</label>
+            <textarea id="clientInstallLink"></textarea>
+          </div>
+          <div class="actions">
+            <button id="clientInstallLinkButton">Install from link</button>
+          </div>
+          <div id="clientInstallLinkStatus" class="status"></div>
+        </div>
+        <div id="clientInstallPanelManual" class="panel hidden">
+          <div class="hint">Required: server address, user, password. Port defaults to 8443.</div>
+          <div class="grid">
+            <div class="field">
+              <label for="clientInstallDir">Install dir</label>
+              <input id="clientInstallDir" type="text" />
+            </div>
+            <div class="field">
+              <label for="clientConfigDir">Config dir</label>
+              <input id="clientConfigDir" type="text" />
+            </div>
+            <div class="field required">
+              <label class="required" for="clientServerAddress">Server address</label>
+              <input id="clientServerAddress" type="text" />
+            </div>
+            <div class="field">
+              <label for="clientServerPort">Server port</label>
+              <input id="clientServerPort" type="number" min="1" max="65535" />
+            </div>
+            <div class="field required">
+              <label class="required" for="clientUser">User</label>
+              <input id="clientUser" type="text" />
+            </div>
+            <div class="field required">
+              <label class="required" for="clientPassword">Password</label>
+              <input id="clientPassword" type="password" />
+            </div>
+            <div class="field">
+              <label for="clientServerName">Server name</label>
+              <input id="clientServerName" type="text" />
+            </div>
+            <div class="field row">
+              <input id="clientAllowInsecure" type="checkbox" />
+              <label for="clientAllowInsecure">Allow insecure</label>
+            </div>
+          </div>
+          <details>
+            <summary>Advanced options</summary>
+            <div class="grid">
+              <div class="field">
+                <label for="clientPinnedCert">Pinned peer cert SHA256</label>
+                <input id="clientPinnedCert" type="text" />
+              </div>
+              <div class="field">
+                <label for="clientVerifyPeerName">Verify peer cert by name</label>
+                <input id="clientVerifyPeerName" type="text" />
+              </div>
+              <div class="field row">
+                <input id="clientTunEnabled" type="checkbox" />
+                <label for="clientTunEnabled">TUN enabled</label>
+              </div>
+              <div class="field">
+                <label for="clientTunName">TUN name</label>
+                <input id="clientTunName" type="text" />
+              </div>
+              <div class="field">
+                <label for="clientTunMtu">TUN MTU</label>
+                <input id="clientTunMtu" type="number" min="1" />
+              </div>
+              <div class="field">
+                <label for="clientTunAddr">TUN addr</label>
+                <input id="clientTunAddr" type="text" />
+              </div>
+            </div>
+          </details>
+          <div class="actions">
+            <button id="clientInstallButton">Install client</button>
+            <button id="clientInstallResetButton" class="secondary">Reset defaults</button>
+          </div>
+          <div id="clientInstallStatus" class="status"></div>
+        </div>
+      </section>
+      <section id="client-deploy" class="scenario">
+        <h2>Client deploy</h2>
+        <div class="hint">Required: deploy host. Other fields are optional.</div>
+        <div id="clientDeployPanel" class="panel">
+          <div class="grid">
+            <div class="field required">
+              <label class="required" for="clientDeployHost">Deploy host</label>
+              <input id="clientDeployHost" type="text" />
+            </div>
+            <div class="field">
+              <label for="clientDeployPort">Deploy port</label>
+              <input id="clientDeployPort" type="number" min="1" max="65535" />
+            </div>
+            <div class="field">
+              <label for="clientDeployInstallDir">Server install dir override</label>
+              <input id="clientDeployInstallDir" type="text" />
+            </div>
+            <div class="field">
+              <label for="clientDeployUser">Trojan user</label>
+              <input id="clientDeployUser" type="text" />
+            </div>
+            <div class="field">
+              <label for="clientDeployPassword">Trojan password</label>
+              <input id="clientDeployPassword" type="text" />
+            </div>
+            <div class="field">
+              <label for="clientDeployTrojanPort">Trojan port</label>
+              <input id="clientDeployTrojanPort" type="number" min="1" max="65535" />
+            </div>
+          </div>
+          <div class="actions">
+            <button id="clientDeployButton">Start deploy</button>
+            <button id="clientDeployResetButton" class="secondary">Reset defaults</button>
+          </div>
+          <div id="clientDeployStatus" class="status"></div>
+        </div>
+      </section>
+      <section id="server-install" class="scenario">
+        <h2>Server install</h2>
+        <div class="hint">Install server assets with defaults or override key parameters.</div>
+        <div class="panel">
+          <div class="hint">All fields are optional; defaults come from the current config.</div>
+          <div class="grid">
+            <div class="field">
+              <label for="serverInstallDir">Install dir</label>
+              <input id="serverInstallDir" type="text" />
+            </div>
+            <div class="field">
+              <label for="serverConfigDir">Config dir</label>
+              <input id="serverConfigDir" type="text" />
+            </div>
+            <div class="field">
+              <label for="serverPort">Trojan port</label>
+              <input id="serverPort" type="number" min="1" max="65535" />
+            </div>
+            <div class="field">
+              <label for="serverHost">Public host</label>
+              <input id="serverHost" type="text" />
+            </div>
+            <div class="field">
+              <label for="serverCertStore">Cert store</label>
+              <input id="serverCertStore" type="text" />
+            </div>
+            <div class="field">
+              <label for="serverCertFile">Cert file</label>
+              <input id="serverCertFile" type="text" />
+            </div>
+            <div class="field">
+              <label for="serverKeyFile">Key file</label>
+              <input id="serverKeyFile" type="text" />
+            </div>
+          </div>
+          <div class="actions">
+            <button id="serverInstallButton">Install server</button>
+            <button id="serverInstallResetButton" class="secondary">Reset defaults</button>
+          </div>
+          <div id="serverInstallStatus" class="status"></div>
+        </div>
+      </section>
+      <section id="server-deploy" class="scenario">
+        <h2>Server deploy</h2>
+        <div class="hint">Required: deploy link. Other fields are optional.</div>
+        <div id="serverDeployPanel" class="panel">
+          <div class="grid">
+            <div class="field required">
+              <label class="required" for="serverDeployLink">Deploy link</label>
+              <textarea id="serverDeployLink"></textarea>
+            </div>
+            <div class="field">
+              <label for="serverDeployListen">Listen address</label>
+              <input id="serverDeployListen" type="text" />
+            </div>
+            <div class="field">
+              <label for="serverDeployDiagPort">Diagnostics port</label>
+              <input id="serverDeployDiagPort" type="number" min="1" max="65535" />
+            </div>
+            <div class="field">
+              <label for="serverDeployTimeout">Idle timeout</label>
+              <input id="serverDeployTimeout" type="text" placeholder="10m" />
+            </div>
+          </div>
+          <div class="actions">
+            <button id="serverDeployButton">Start deploy</button>
+            <button id="serverDeployResetButton" class="secondary">Reset defaults</button>
+          </div>
+          <div id="serverDeployStatus" class="status"></div>
+        </div>
+      </section>
+    </div>
+    <script src="app_base.js"></script>
+    <script src="app_install.js"></script>
+    <script src="app_deploy.js"></script>
+  </body>
+</html>
