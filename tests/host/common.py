@@ -16,11 +16,11 @@ import testinfra.backend.paramiko as paramiko_backend
 from testinfra.host import Host
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SSH_CONNECT_TIMEOUT = 60
-SSH_COMMAND_TIMEOUT = 60
-VAGRANT_COMMAND_TIMEOUT = 60
-SSH_BANNER_TIMEOUT = 60
-SSH_AUTH_TIMEOUT = 60
+SSH_CONNECT_TIMEOUT = 120
+SSH_COMMAND_TIMEOUT = 120
+VAGRANT_COMMAND_TIMEOUT = 120
+SSH_BANNER_TIMEOUT = 120
+SSH_AUTH_TIMEOUT = 120
 
 
 class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
@@ -61,7 +61,12 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
 
         if self.ssh_identity_file:
             cfg["key_filename"] = self.ssh_identity_file
+        debug_cfg = {key: value for key, value in cfg.items() if key != "password"}
+        start = time.perf_counter()
+        print(f"SSH connect start: {debug_cfg}")
         client.connect(**cfg)  # type: ignore[arg-type]
+        elapsed = time.perf_counter() - start
+        print(f"SSH connect done in {elapsed:.2f}s")
         transport = client.get_transport()
         if transport is not None:
             transport.set_keepalive(30)
@@ -79,9 +84,15 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
 
     def run(self, command: str, *args: str, **kwargs):  # type: ignore[override]
         kwargs.setdefault("timeout", SSH_COMMAND_TIMEOUT)
+        short = command.replace("\r", " ").replace("\n", " ")
+        if len(short) > 240:
+            short = short[:240] + "..."
+        print(f"SSH run start (timeout={kwargs.get('timeout')}): {short}")
         self._reset_client()
         try:
-            return super().run(command, *args, **kwargs)
+            result = super().run(command, *args, **kwargs)
+            print(f"SSH run done (rc={result.rc})")
+            return result
         except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
             self._reset_client()
             pytest.skip(f"Guest SSH unavailable: {exc}")
@@ -172,6 +183,7 @@ def _terminate_process_tree(proc: subprocess.Popen[str]) -> None:
 
 
 def _run_vagrant_command(command: list[str], *, cwd: Path, timeout: int) -> str:
+    print(f"Vagrant command start (timeout={timeout}s): {' '.join(command)}")
     proc = subprocess.Popen(
         command,
         cwd=cwd,
@@ -187,6 +199,7 @@ def _run_vagrant_command(command: list[str], *, cwd: Path, timeout: int) -> str:
 
     if proc.returncode != 0:
         raise subprocess.CalledProcessError(proc.returncode, command, output=stdout, stderr=stderr)
+    print("Vagrant command done")
     return stdout
 
 
@@ -255,6 +268,11 @@ def get_ssh_host(vagrant_dir: Path, machine: str) -> Host:
     _patch_paramiko_backend()
     raw = _ssh_config(vagrant_dir, machine)
     config = parse_ssh_config(raw)
+    print(
+        "SSH config resolved: "
+        f"host={config['hostname']} port={config['port']} user={config['user']} "
+        f"identityfile={config['identityfile']}"
+    )
     return testinfra.get_host(
         f"paramiko://{config['user']}@{config['hostname']}:{config['port']}",
         ssh_identity_file=config["identityfile"],

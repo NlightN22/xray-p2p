@@ -53,6 +53,36 @@ function Add-ToPath {
     $env:Path = "$Path;$env:Path"
 }
 
+function Ensure-DotNetSdk {
+    if (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $candidates = @(
+        "C:\Program Files\dotnet\dotnet.exe"
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            Add-ToPath (Split-Path $candidate -Parent)
+            break
+        }
+    }
+
+    if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
+        throw "dotnet.exe not found. Install .NET SDK or ensure it is on PATH."
+    }
+}
+
+function Resolve-UiRuntimeId {
+    param([string] $ArchLabel)
+
+    switch ($ArchLabel) {
+        "amd64" { return "win-x64" }
+        "x86" { return "win-x86" }
+        default { throw "Unsupported UI runtime arch '$ArchLabel'." }
+    }
+}
+
 function Invoke-Step {
     param(
         [Parameter(Mandatory = $true)]
@@ -78,11 +108,11 @@ function Remove-WinresArtifacts {
 Write-Info "Preparing MSI (x86) build directories"
 Ensure-Directory $RepoRoot
 Ensure-Directory $CacheDir
+Ensure-DotNetSdk
 
 Push-Location $RepoRoot
 $msiPath = $null
 $xp2pRsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
-$xp2pUiRsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p-ui\rsrc'
 try {
     Write-Info "Resolving xp2p version"
     $version = (& go run .\go\cmd\xp2p --version).Trim()
@@ -123,7 +153,6 @@ try {
         }
 
         Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres.json') -RsrcPrefix $xp2pRsrcPrefix -Arch "386" -Label "xp2p"
-        Invoke-WinresMake -ConfigPath (Join-Path $RepoRoot 'scripts\build\winres-ui.json') -RsrcPrefix $xp2pUiRsrcPrefix -Arch "386" -Label "xp2p-ui"
     }
 
     $binaryOut = Join-Path $binaryDir 'xp2p.exe'
@@ -140,11 +169,32 @@ try {
 
     $uiBinaryOut = Join-Path $binaryDir 'xp2p-ui.exe'
     Invoke-Step -Name "Building xp2p-ui.exe (x86)" -Action {
-        $env:GOARCH = '386'
-        $env:GOOS = 'windows'
-        go build -trimpath -tags production -ldflags "$ldflags -H=windowsgui" -o $uiBinaryOut .\go\cmd\xp2p-ui
-        Remove-Item Env:GOARCH
-        Remove-Item Env:GOOS
+        $uiProject = Join-Path $RepoRoot "dotnet\\xp2p-ui\\xp2p-ui.csproj"
+        if (-not (Test-Path $uiProject)) {
+            throw "WPF UI project not found at $uiProject"
+        }
+        $uiPublishDir = Join-Path $binaryDir 'xp2p-ui-publish'
+        Ensure-Directory $uiPublishDir
+        $runtimeId = Resolve-UiRuntimeId -ArchLabel $MsiArchLabel
+        Write-Info ("Publishing WPF UI (RID={0})" -f $runtimeId)
+        $dotnetOutput = & dotnet publish $uiProject -c Release -r $runtimeId `
+            /p:SelfContained=true `
+            /p:PublishSingleFile=true `
+            /p:IncludeNativeLibrariesForSelfExtract=true `
+            /p:DebugType=None `
+            /p:DebugSymbols=false `
+            -o $uiPublishDir 2>&1
+        if ($dotnetOutput) {
+            $dotnetOutput | ForEach-Object { Write-Host $_ }
+        }
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed with exit code $LASTEXITCODE"
+        }
+        $publishedExe = Join-Path $uiPublishDir 'xp2p-ui.exe'
+        if (-not (Test-Path $publishedExe)) {
+            throw "WPF UI publish output missing at $publishedExe"
+        }
+        Copy-Item -Path $publishedExe -Destination $uiBinaryOut -Force
     }
     if (-not (Test-Path $uiBinaryOut)) {
         throw "xp2p-ui binary missing at $uiBinaryOut"
@@ -152,7 +202,6 @@ try {
 
     Invoke-Step -Name "Cleaning winres artifacts" -Action {
         Remove-WinresArtifacts -RsrcPrefix $xp2pRsrcPrefix -Label "xp2p"
-        Remove-WinresArtifacts -RsrcPrefix $xp2pUiRsrcPrefix -Label "xp2p-ui"
     }
 
     $completionDir = Join-Path $binaryDir 'completions'

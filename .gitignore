@@ -6,3 +6,5 @@
 .pytest_cache
 __pycache__
 go/cmd/xp2p/rsrc_windows_*.syso
+dotnet/xp2p-ui/bin/
+dotnet/xp2p-ui/obj/

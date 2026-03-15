@@ -116,9 +116,9 @@ def encode_powershell(script: str) -> str:
     return base64.b64encode(script.encode("utf-16le")).decode("ascii")
 
 
-DEFAULT_POWERSHELL_TIMEOUT = 60
-DEFAULT_GUEST_SCRIPT_TIMEOUT = 60
-DEFAULT_XP2P_COMMAND_TIMEOUT = 60
+DEFAULT_POWERSHELL_TIMEOUT = 120
+DEFAULT_GUEST_SCRIPT_TIMEOUT = 120
+DEFAULT_XP2P_COMMAND_TIMEOUT = 120
 ADMIN_XP2P_SUBCOMMANDS = {"run", "service"}
 GUEST_BUILD_ROOT = Path(r"C:\xp2p\build")
 
@@ -133,6 +133,7 @@ def run_powershell(
     encoded = encode_powershell(script)
     started = time.monotonic()
     effective_timeout = DEFAULT_POWERSHELL_TIMEOUT if timeout is None else timeout
+    print(f"Guest PowerShell start (timeout={effective_timeout}s, label={label or 'n/a'})")
     result = host.run(
         f"powershell -NoProfile -NonInteractive -NoLogo -EncodedCommand {encoded}",
         timeout=effective_timeout,
@@ -143,6 +144,7 @@ def run_powershell(
             print(f"TIMING: powershell_ms={elapsed_ms} label={label}")
         else:
             print(f"TIMING: powershell_ms={elapsed_ms}")
+    print(f"Guest PowerShell done (rc={result.rc})")
     return result
 
 
@@ -224,6 +226,9 @@ def run_guest_script(
             f"-File \"{ps_path}\"{args}"
         )
         effective_timeout = DEFAULT_GUEST_SCRIPT_TIMEOUT if timeout is None else timeout
+        print(f"Guest script start: {relative_path} (timeout={effective_timeout}s)")
+        if parameters:
+            print(f"Guest script params: {sorted(parameters.keys())}")
         return host.run(command, timeout=effective_timeout)
 
     try:
@@ -236,6 +241,8 @@ def run_guest_script(
         elapsed = time.perf_counter() - start
         if elapsed > 2.0:
             print(f"TIMING: run_guest_script {relative_path}: {elapsed:.2f}s")
+        if 'result' in locals():
+            print(f"Guest script done: {relative_path} (rc={result.rc})")
         if cleanup_path is not None:
             remove_path(host, cleanup_path)
 
@@ -1030,7 +1037,7 @@ def _build_msi_package(
         Marker=MSI_MARKER,
         StartMarkerPath=str(guest_start),
         DoneMarkerPath=str(guest_done),
-        timeout=600,
+        timeout=120,
     )
     if result.rc != 0:
         start_probe = run_powershell(

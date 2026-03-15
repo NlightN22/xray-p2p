@@ -62,9 +62,18 @@ function Test-WixAvailable {
     return (Test-Path (Join-Path $binPath "candle.exe")) -and (Test-Path (Join-Path $binPath "light.exe"))
 }
 
+function Test-DotNetAvailable {
+    return $null -ne (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)
+}
+
 function Ensure-MsiDependencies {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $UiBackend
+    )
+
     Write-Stage "Checking MSI dependencies (Go/WiX)"
-    if ((Test-GoAvailable) -and (Test-WixAvailable)) {
+    if ((Test-GoAvailable) -and (Test-WixAvailable) -and (Test-DotNetAvailable)) {
         Write-Stage "MSI dependencies OK"
         return
     }
@@ -74,7 +83,8 @@ function Ensure-MsiDependencies {
         throw "MSI dependencies missing and provision script not found at $provisionScript."
     }
 
-    Write-Stage "Installing MSI build dependencies (Go/WiX)"
+    $note = "Go/WiX/.NET"
+    Write-Stage "Installing MSI build dependencies ($note)"
     & $provisionScript 2>&1 | ForEach-Object { Write-Output $_ }
 }
 
@@ -98,7 +108,8 @@ if ($StartMarkerPath) {
     }
     Set-Content -Path $StartMarkerPath -Value "START" -Encoding ASCII
 }
-Ensure-MsiDependencies
+$backend = "wpf"
+Ensure-MsiDependencies -UiBackend $backend
 
 $buildIdPath = Join-Path $CacheDir 'build-id.txt'
 $latestPath = Join-Path $CacheDir 'latest.txt'

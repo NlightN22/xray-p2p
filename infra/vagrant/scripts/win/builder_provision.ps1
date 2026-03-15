@@ -214,11 +214,36 @@ function Ensure-WiX {
     Write-Info ("WiX Toolset ready: {0}" -f $latest.FullName)
 }
 
+function Ensure-DotNetSdk {
+    $dotnetVersion = $env:XP2P_DOTNET_VERSION
+    if (-not $dotnetVersion) {
+        $dotnetVersion = $null
+    }
+
+    Ensure-ChocoPackage -Package "dotnet-8.0-sdk" -Version $dotnetVersion
+
+    if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
+        $dotnetPath = "C:\Program Files\dotnet"
+        if (Test-Path (Join-Path $dotnetPath "dotnet.exe")) {
+            Write-Info "Adding dotnet path '$dotnetPath' to the current session PATH."
+            $env:Path = "$dotnetPath;$env:Path"
+        }
+    }
+
+    if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
+        throw "dotnet.exe not found after installation. Ensure .NET SDK is available."
+    }
+
+    $dotnetInfo = & dotnet.exe --version
+    Write-Info ("Dotnet SDK ready: {0}" -f $dotnetInfo)
+}
+
 Write-Info "Provisioning role detected."
 
 Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
+Ensure-DotNetSdk
 Ensure-WiX
 Disable-WindowsAutoUpdate
 Disable-IdleSleepAndHibernate

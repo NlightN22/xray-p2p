@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <BaseIntermediateOutputPath>..\..\build\dotnet\xp2p-ui\obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>..\..\build\dotnet\xp2p-ui\bin\</BaseOutputPath>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>xp2p-ui</AssemblyName>
+    <RootNamespace>Xp2pUi</RootNamespace>
+    <ApplicationIcon>assets\xp2p.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="assets\xp2p.ico" />
+  </ItemGroup>
+</Project>

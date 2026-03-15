@@ -35,6 +35,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_inst
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi_x86.ps1
 ```
 The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed. Additional parameters let you control the WiX source (`-WixSourceRelative`), the MSI name suffix (`-MsiArchLabel`), and whether the script should only build the MSI (`-BuildOnly`) instead of running `msiexec`. Use `-OutputMarker '__MSI_PATH__='` when another tool needs to parse the resulting path from `stdout`.
+The MSI build scripts compile the WPF UI via `dotnet publish` and embed the resulting `xp2p-ui.exe` into the installer. Ensure the .NET SDK is available on the build host.
+The WPF project outputs `bin/` and `obj/` artifacts under `build/dotnet/xp2p-ui/` to keep the repo clean.
 
 ## OpenWrt SDK fetcher
 
