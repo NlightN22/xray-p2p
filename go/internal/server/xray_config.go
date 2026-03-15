@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -10,6 +11,17 @@ import (
 
 func ensureServerXrayConfig(configFile string) (xrayconfig.ServerXrayConfig, error) {
 	return xrayconfig.EnsureServerConfig(configFile, config.AuditLogPath())
+}
+
+func loadServerXrayConfig(configFile string) (xrayconfig.ServerXrayConfig, error) {
+	cfg, err := xrayconfig.LoadServerConfig(configFile)
+	if err == nil {
+		return cfg, nil
+	}
+	if errors.Is(err, xrayconfig.ErrConfigMissing) || errors.Is(err, xrayconfig.ErrConfigEmpty) {
+		return cfg, fmt.Errorf("xp2p: server config is missing at %s (run install or deploy first)", configFile)
+	}
+	return cfg, err
 }
 
 func ensureServerXrayConfigForce(configFile string, force bool) (xrayconfig.ServerXrayConfig, error) {

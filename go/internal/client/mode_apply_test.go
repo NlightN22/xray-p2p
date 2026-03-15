@@ -29,8 +29,8 @@ func TestApplyModeDoesNotWriteAppliedState(t *testing.T) {
 		TunMTU:     1500,
 		TunAddr:    "198.18.0.1/30",
 	}
-	if err := ApplyMode(opts); err != nil {
-		t.Fatalf("ApplyMode returned error: %v", err)
+	if err := ApplyMode(opts); err == nil {
+		t.Fatalf("expected error when client config is missing")
 	}
 
 	appliedPath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))

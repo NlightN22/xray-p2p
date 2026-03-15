@@ -15,6 +15,8 @@ import (
 )
 
 var ErrConfigParse = errors.New("xrayconfig: parse error")
+var ErrConfigMissing = errors.New("xrayconfig: config file not found")
+var ErrConfigEmpty = errors.New("xrayconfig: config file is empty")
 
 type ClientXrayConfig struct {
 	Inbounds       ClientInboundsConfig `json:"inbounds" toml:"inbounds"`
@@ -270,6 +272,54 @@ func defaultLogsConfig(apiListen string) LogsConfig {
 			},
 		},
 	}
+}
+
+func LoadClientConfig(path string) (ClientXrayConfig, error) {
+	cfg := DefaultClientConfig()
+	if strings.TrimSpace(path) == "" {
+		return ClientXrayConfig{}, errors.New("xrayconfig: config path is empty")
+	}
+	tree, err := loadExistingToml(path)
+	if err != nil {
+		return ClientXrayConfig{}, err
+	}
+	raw := tree.GetPath([]string{"client", "xray"})
+	loaded, ok, err := decodeClientConfig(raw)
+	if err != nil {
+		return ClientXrayConfig{}, err
+	}
+	if !ok {
+		return ClientXrayConfig{}, fmt.Errorf("xrayconfig: client xray config not found in %s", path)
+	}
+	merged := mergeClientConfig(loaded, cfg)
+	if err := validateClientConfig(merged); err != nil {
+		return ClientXrayConfig{}, err
+	}
+	return merged, nil
+}
+
+func LoadServerConfig(path string) (ServerXrayConfig, error) {
+	cfg := DefaultServerConfig()
+	if strings.TrimSpace(path) == "" {
+		return ServerXrayConfig{}, errors.New("xrayconfig: config path is empty")
+	}
+	tree, err := loadExistingToml(path)
+	if err != nil {
+		return ServerXrayConfig{}, err
+	}
+	raw := tree.GetPath([]string{"server", "xray"})
+	loaded, ok, err := decodeServerConfig(raw)
+	if err != nil {
+		return ServerXrayConfig{}, err
+	}
+	if !ok {
+		return ServerXrayConfig{}, fmt.Errorf("xrayconfig: server xray config not found in %s", path)
+	}
+	merged := mergeServerConfig(loaded, cfg)
+	if err := validateServerConfig(merged); err != nil {
+		return ServerXrayConfig{}, err
+	}
+	return merged, nil
 }
 
 func EnsureClientConfig(path string, auditPath string) (ClientXrayConfig, error) {
@@ -786,6 +836,24 @@ func loadOrCreateToml(path string) (*toml.Tree, error) {
 			return nil, fmt.Errorf("xrayconfig: create empty config tree: %w", err)
 		}
 		return tree, nil
+	}
+	tree, err := toml.LoadBytes(data)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", ErrConfigParse, path, err)
+	}
+	return tree, nil
+}
+
+func loadExistingToml(path string) (*toml.Tree, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%w: %s", ErrConfigMissing, path)
+		}
+		return nil, fmt.Errorf("xrayconfig: read %s: %w", path, err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, fmt.Errorf("%w: %s", ErrConfigEmpty, path)
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {

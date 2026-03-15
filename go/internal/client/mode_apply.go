@@ -15,7 +15,7 @@ func applyClientMode(paths clientPaths, opts ModeOptions) error {
 }
 
 func applyClientDesiredConfig(paths clientPaths, state clientInstallState, opts ModeOptions, applyRoutes bool) error {
-	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
+	xrayCfg, err := loadClientXrayConfig(paths.configFile)
 	if err != nil {
 		return err
 	}
