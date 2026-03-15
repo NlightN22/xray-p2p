@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Media;
+using ModernWpf;
 using W = System.Windows.Controls;
 
 namespace Xp2pUi;
@@ -40,14 +41,30 @@ internal sealed partial class MainWindow : Window
         root.RowDefinitions.Add(new W.RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new W.RowDefinition { Height = GridLength.Auto });
 
+        var headerRow = new W.Grid { Margin = new Thickness(0, 0, 0, 12) };
+        headerRow.ColumnDefinitions.Add(new W.ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerRow.ColumnDefinitions.Add(new W.ColumnDefinition { Width = GridLength.Auto });
+
         var header = new W.TextBlock
         {
             Text = "xp2p UI",
-            FontSize = 16,
-            Margin = new Thickness(0, 0, 0, 12)
+            FontSize = 16
         };
-        W.Grid.SetRow(header, 0);
-        root.Children.Add(header);
+        W.Grid.SetColumn(header, 0);
+        headerRow.Children.Add(header);
+
+        var themeSelector = new W.ComboBox
+        {
+            Width = 120,
+            ItemsSource = new[] { "System", "Light", "Dark" },
+            SelectedIndex = 0
+        };
+        themeSelector.SelectionChanged += (_, _) => ApplyTheme(themeSelector.SelectedIndex);
+        W.Grid.SetColumn(themeSelector, 1);
+        headerRow.Children.Add(themeSelector);
+
+        W.Grid.SetRow(headerRow, 0);
+        root.Children.Add(headerRow);
 
         _tabs = new W.TabControl();
         _tabMap = BuildTabs();
@@ -177,18 +194,22 @@ internal sealed partial class MainWindow : Window
         row.Children.Add(status);
 
         var start = new W.Button { Content = "Start", Width = 70, Margin = new Thickness(4, 0, 0, 0) };
-        start.Click += (_, _) =>
+        start.Click += async (_, _) =>
         {
-            SetStatus(_serviceManager.StartService(serviceName));
+            ToggleServiceButtons(start, stop, false);
+            SetStatus(await _serviceManager.StartServiceAsync(serviceName));
             RefreshServiceStatusLabels();
+            ToggleServiceButtons(start, stop, true);
         };
         row.Children.Add(start);
 
         var stop = new W.Button { Content = "Stop", Width = 70, Margin = new Thickness(6, 0, 0, 0) };
-        stop.Click += (_, _) =>
+        stop.Click += async (_, _) =>
         {
-            SetStatus(_serviceManager.StopService(serviceName));
+            ToggleServiceButtons(start, stop, false);
+            SetStatus(await _serviceManager.StopServiceAsync(serviceName));
             RefreshServiceStatusLabels();
+            ToggleServiceButtons(start, stop, true);
         };
         row.Children.Add(stop);
 
@@ -204,6 +225,28 @@ internal sealed partial class MainWindow : Window
         if (_serverStatus is not null)
         {
             _serverStatus.Text = $"Server: {_serviceManager.GetStatus(ServiceNames.Server)}";
+        }
+    }
+
+    private static void ToggleServiceButtons(W.Button start, W.Button stop, bool enabled)
+    {
+        start.IsEnabled = enabled;
+        stop.IsEnabled = enabled;
+    }
+
+    private static void ApplyTheme(int selection)
+    {
+        switch (selection)
+        {
+            case 1:
+                ThemeManager.Current.ApplicationTheme = ApplicationTheme.Light;
+                break;
+            case 2:
+                ThemeManager.Current.ApplicationTheme = ApplicationTheme.Dark;
+                break;
+            default:
+                ThemeManager.Current.ApplicationTheme = null;
+                break;
         }
     }
 }

@@ -13,8 +13,8 @@ internal sealed class App : Application
     private MainWindow? _window;
     private ServiceManager? _serviceManager;
     private IBackend? _backend;
-    private Forms.ToolStripMenuItem? _clientStatusItem;
-    private Forms.ToolStripMenuItem? _serverStatusItem;
+    private Forms.ToolStripMenuItem? _clientMenu;
+    private Forms.ToolStripMenuItem? _serverMenu;
     private ServiceStatusSnapshot? _lastStatus;
     private TrayIconSet? _trayIcons;
 
@@ -62,31 +62,25 @@ internal sealed class App : Application
 
     private Forms.ContextMenuStrip BuildMenu()
     {
-        _clientStatusItem = new Forms.ToolStripMenuItem("Client: Unknown") { Enabled = false };
-        _serverStatusItem = new Forms.ToolStripMenuItem("Server: Unknown") { Enabled = false };
+        _clientMenu = new Forms.ToolStripMenuItem("Client: Unknown");
+        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Client)));
+        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Client)));
+        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Client install.", TabKey.ClientInstall)));
+        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Client deploy.", TabKey.ClientDeploy)));
 
-        var clientMenu = new Forms.ToolStripMenuItem("Client");
-        clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Start", null, (_, _) => StartService(ServiceNames.Client)));
-        clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopService(ServiceNames.Client)));
-        clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Client install.", TabKey.ClientInstall)));
-        clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Client deploy.", TabKey.ClientDeploy)));
-
-        var serverMenu = new Forms.ToolStripMenuItem("Server");
-        serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Start", null, (_, _) => StartService(ServiceNames.Server)));
-        serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopService(ServiceNames.Server)));
-        serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Server install.", TabKey.ServerInstall)));
-        serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Server deploy.", TabKey.ServerDeploy)));
+        _serverMenu = new Forms.ToolStripMenuItem("Server: Unknown");
+        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Server)));
+        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Server)));
+        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Server install.", TabKey.ServerInstall)));
+        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Server deploy.", TabKey.ServerDeploy)));
 
         var openLogs = new Forms.ToolStripMenuItem("Open logs", null, (_, _) => OpenLogs());
         var quit = new Forms.ToolStripMenuItem("Quit", null, (_, _) => Shutdown());
 
         var menu = new Forms.ContextMenuStrip();
         menu.Opening += (_, _) => RefreshServiceStatus();
-        menu.Items.Add(_clientStatusItem);
-        menu.Items.Add(_serverStatusItem);
-        menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add(clientMenu);
-        menu.Items.Add(serverMenu);
+        menu.Items.Add(_clientMenu);
+        menu.Items.Add(_serverMenu);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(openLogs);
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -155,24 +149,24 @@ internal sealed class App : Application
         }
     }
 
-    private void StartService(string name)
+    private async void StartServiceAsync(string name)
     {
         if (_serviceManager is null)
         {
             return;
         }
-        var result = _serviceManager.StartService(name);
+        var result = await _serviceManager.StartServiceAsync(name);
         SetStatus(result);
         RefreshServiceStatus();
     }
 
-    private void StopService(string name)
+    private async void StopServiceAsync(string name)
     {
         if (_serviceManager is null)
         {
             return;
         }
-        var result = _serviceManager.StopService(name);
+        var result = await _serviceManager.StopServiceAsync(name);
         SetStatus(result);
         RefreshServiceStatus();
     }
@@ -200,13 +194,13 @@ internal sealed class App : Application
 
     private void UpdateTrayStatusLabels(ServiceStatusSnapshot snapshot)
     {
-        if (_clientStatusItem is not null)
+        if (_clientMenu is not null)
         {
-            _clientStatusItem.Text = $"Client: {snapshot.ClientStatus}";
+            _clientMenu.Text = $"Client: {snapshot.ClientStatus}";
         }
-        if (_serverStatusItem is not null)
+        if (_serverMenu is not null)
         {
-            _serverStatusItem.Text = $"Server: {snapshot.ServerStatus}";
+            _serverMenu.Text = $"Server: {snapshot.ServerStatus}";
         }
     }
 

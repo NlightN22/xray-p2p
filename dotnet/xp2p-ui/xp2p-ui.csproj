@@ -20,5 +20,6 @@
 
   <ItemGroup>
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
+    <PackageReference Include="ModernWpf" Version="0.9.7" />
   </ItemGroup>
 </Project>

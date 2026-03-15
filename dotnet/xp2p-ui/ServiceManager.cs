@@ -34,19 +34,22 @@ internal sealed class ServiceManager
         }
     }
 
-    public string StartService(string serviceName)
+    public async System.Threading.Tasks.Task<string> StartServiceAsync(string serviceName)
     {
         ActivityChanged?.Invoke(this, true);
         try
         {
-            using var controller = new ServiceController(serviceName);
-            if (controller.Status == ServiceControllerStatus.Running)
+            return await System.Threading.Tasks.Task.Run(() =>
             {
-                return $"{serviceName} already running.";
-            }
-            controller.Start();
-            controller.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
-            return $"{serviceName} started.";
+                using var controller = new ServiceController(serviceName);
+                if (controller.Status == ServiceControllerStatus.Running)
+                {
+                    return $"{serviceName} already running.";
+                }
+                controller.Start();
+                controller.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
+                return $"{serviceName} started.";
+            });
         }
         catch (Exception ex)
         {
@@ -59,19 +62,22 @@ internal sealed class ServiceManager
         }
     }
 
-    public string StopService(string serviceName)
+    public async System.Threading.Tasks.Task<string> StopServiceAsync(string serviceName)
     {
         ActivityChanged?.Invoke(this, true);
         try
         {
-            using var controller = new ServiceController(serviceName);
-            if (controller.Status == ServiceControllerStatus.Stopped)
+            return await System.Threading.Tasks.Task.Run(() =>
             {
-                return $"{serviceName} already stopped.";
-            }
-            controller.Stop();
-            controller.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
-            return $"{serviceName} stopped.";
+                using var controller = new ServiceController(serviceName);
+                if (controller.Status == ServiceControllerStatus.Stopped)
+                {
+                    return $"{serviceName} already stopped.";
+                }
+                controller.Stop();
+                controller.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
+                return $"{serviceName} stopped.";
+            });
         }
         catch (Exception ex)
         {
