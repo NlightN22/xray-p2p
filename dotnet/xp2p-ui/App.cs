@@ -15,6 +15,10 @@ internal sealed class App : Application
     private IBackend? _backend;
     private Forms.ToolStripMenuItem? _clientMenu;
     private Forms.ToolStripMenuItem? _serverMenu;
+    private Forms.ToolStripMenuItem? _clientStartItem;
+    private Forms.ToolStripMenuItem? _clientStopItem;
+    private Forms.ToolStripMenuItem? _serverStartItem;
+    private Forms.ToolStripMenuItem? _serverStopItem;
     private ServiceStatusSnapshot? _lastStatus;
     private TrayIconSet? _trayIcons;
 
@@ -63,14 +67,18 @@ internal sealed class App : Application
     private Forms.ContextMenuStrip BuildMenu()
     {
         _clientMenu = new Forms.ToolStripMenuItem("Client: Unknown");
-        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Client)));
-        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Client)));
+        _clientStartItem = new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Client));
+        _clientStopItem = new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Client));
+        _clientMenu.DropDownItems.Add(_clientStartItem);
+        _clientMenu.DropDownItems.Add(_clientStopItem);
         _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Client install.", TabKey.ClientInstall)));
         _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Client deploy.", TabKey.ClientDeploy)));
 
         _serverMenu = new Forms.ToolStripMenuItem("Server: Unknown");
-        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Server)));
-        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Server)));
+        _serverStartItem = new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Server));
+        _serverStopItem = new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Server));
+        _serverMenu.DropDownItems.Add(_serverStartItem);
+        _serverMenu.DropDownItems.Add(_serverStopItem);
         _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Server install.", TabKey.ServerInstall)));
         _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Server deploy.", TabKey.ServerDeploy)));
 
@@ -202,6 +210,11 @@ internal sealed class App : Application
         {
             _serverMenu.Text = $"Server: {snapshot.ServerStatus}";
         }
+        UpdateTrayServiceButtons(snapshot);
+        if (_trayIcon is not null)
+        {
+            _trayIcon.Text = BuildTrayTooltip(snapshot);
+        }
     }
 
     private void UpdateTrayIconFromStatus()
@@ -214,6 +227,7 @@ internal sealed class App : Application
         if (snapshot is null)
         {
             _trayIcon.Icon = _trayIcons.Base;
+            _trayIcon.Text = "xp2p";
             return;
         }
         if (IsServiceRunning(snapshot.ClientStatus) || IsServiceRunning(snapshot.ServerStatus))
@@ -227,6 +241,54 @@ internal sealed class App : Application
     private static bool IsServiceRunning(string status)
     {
         return string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void UpdateTrayServiceButtons(ServiceStatusSnapshot snapshot)
+    {
+        UpdateTrayButtonsForStatus(snapshot.ClientStatus, _clientStartItem, _clientStopItem);
+        UpdateTrayButtonsForStatus(snapshot.ServerStatus, _serverStartItem, _serverStopItem);
+    }
+
+    private static void UpdateTrayButtonsForStatus(string status, Forms.ToolStripMenuItem? start, Forms.ToolStripMenuItem? stop)
+    {
+        if (start is null || stop is null)
+        {
+            return;
+        }
+        if (IsServiceRunning(status))
+        {
+            start.Enabled = false;
+            stop.Enabled = true;
+            return;
+        }
+        if (string.Equals(status, "Stopped", StringComparison.OrdinalIgnoreCase))
+        {
+            start.Enabled = true;
+            stop.Enabled = false;
+            return;
+        }
+        if (IsServicePending(status))
+        {
+            start.Enabled = false;
+            stop.Enabled = false;
+            return;
+        }
+        start.Enabled = true;
+        stop.Enabled = true;
+    }
+
+    private static bool IsServicePending(string status)
+    {
+        return string.Equals(status, "StartPending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "StopPending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "PausePending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "ContinuePending", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildTrayTooltip(ServiceStatusSnapshot snapshot)
+    {
+        var text = $"Client: {snapshot.ClientStatus} | Server: {snapshot.ServerStatus}";
+        return text.Length <= 63 ? text : text.Substring(0, 63);
     }
 
     private static string GetLogPath()

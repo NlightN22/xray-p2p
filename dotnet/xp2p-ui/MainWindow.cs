@@ -16,6 +16,7 @@ internal sealed partial class MainWindow : Window
     private readonly Dictionary<TabKey, W.TabItem> _tabMap;
     private W.TextBlock? _clientStatus;
     private W.TextBlock? _serverStatus;
+    private readonly Dictionary<string, (W.Button Start, W.Button Stop)> _serviceButtons = new();
 
     public MainWindow(IBackend backend, ServiceManager serviceManager, ImageSource? icon)
     {
@@ -168,10 +169,14 @@ internal sealed partial class MainWindow : Window
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 6)
         });
-        _clientStatus = new W.TextBlock { Text = $"Client: {_serviceManager.GetStatus(ServiceNames.Client)}" };
-        _serverStatus = new W.TextBlock { Text = $"Server: {_serviceManager.GetStatus(ServiceNames.Server)}" };
+        var clientStatus = _serviceManager.GetStatus(ServiceNames.Client);
+        var serverStatus = _serviceManager.GetStatus(ServiceNames.Server);
+        _clientStatus = new W.TextBlock { Text = $"Client: {clientStatus}" };
+        _serverStatus = new W.TextBlock { Text = $"Server: {serverStatus}" };
         panel.Children.Add(BuildServiceRow(ServiceNames.Client, _clientStatus));
         panel.Children.Add(BuildServiceRow(ServiceNames.Server, _serverStatus));
+        UpdateServiceButtons(ServiceNames.Client, clientStatus);
+        UpdateServiceButtons(ServiceNames.Server, serverStatus);
 
         var refresh = new W.Button { Content = "Refresh", Width = 120, Margin = new Thickness(0, 10, 0, 0) };
         refresh.Click += (_, _) =>
@@ -194,6 +199,7 @@ internal sealed partial class MainWindow : Window
         row.Children.Add(status);
 
         var start = new W.Button { Content = "Start", Width = 70, Margin = new Thickness(4, 0, 0, 0) };
+        var stop = new W.Button { Content = "Stop", Width = 70, Margin = new Thickness(6, 0, 0, 0) };
         start.Click += async (_, _) =>
         {
             ToggleServiceButtons(start, stop, false);
@@ -201,9 +207,6 @@ internal sealed partial class MainWindow : Window
             RefreshServiceStatusLabels();
             ToggleServiceButtons(start, stop, true);
         };
-        row.Children.Add(start);
-
-        var stop = new W.Button { Content = "Stop", Width = 70, Margin = new Thickness(6, 0, 0, 0) };
         stop.Click += async (_, _) =>
         {
             ToggleServiceButtons(start, stop, false);
@@ -211,7 +214,9 @@ internal sealed partial class MainWindow : Window
             RefreshServiceStatusLabels();
             ToggleServiceButtons(start, stop, true);
         };
+        row.Children.Add(start);
         row.Children.Add(stop);
+        _serviceButtons[serviceName] = (start, stop);
 
         return row;
     }
@@ -220,11 +225,15 @@ internal sealed partial class MainWindow : Window
     {
         if (_clientStatus is not null)
         {
-            _clientStatus.Text = $"Client: {_serviceManager.GetStatus(ServiceNames.Client)}";
+            var status = _serviceManager.GetStatus(ServiceNames.Client);
+            _clientStatus.Text = $"Client: {status}";
+            UpdateServiceButtons(ServiceNames.Client, status);
         }
         if (_serverStatus is not null)
         {
-            _serverStatus.Text = $"Server: {_serviceManager.GetStatus(ServiceNames.Server)}";
+            var status = _serviceManager.GetStatus(ServiceNames.Server);
+            _serverStatus.Text = $"Server: {status}";
+            UpdateServiceButtons(ServiceNames.Server, status);
         }
     }
 
@@ -232,6 +241,52 @@ internal sealed partial class MainWindow : Window
     {
         start.IsEnabled = enabled;
         stop.IsEnabled = enabled;
+    }
+
+    private void UpdateServiceButtons(string serviceName, string status)
+    {
+        if (!_serviceButtons.TryGetValue(serviceName, out var buttons))
+        {
+            return;
+        }
+        if (IsServiceRunning(status))
+        {
+            buttons.Start.IsEnabled = false;
+            buttons.Stop.IsEnabled = true;
+            return;
+        }
+        if (IsServiceStopped(status))
+        {
+            buttons.Start.IsEnabled = true;
+            buttons.Stop.IsEnabled = false;
+            return;
+        }
+        if (IsServicePending(status))
+        {
+            buttons.Start.IsEnabled = false;
+            buttons.Stop.IsEnabled = false;
+            return;
+        }
+        buttons.Start.IsEnabled = true;
+        buttons.Stop.IsEnabled = true;
+    }
+
+    private static bool IsServiceRunning(string status)
+    {
+        return string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsServiceStopped(string status)
+    {
+        return string.Equals(status, "Stopped", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsServicePending(string status)
+    {
+        return string.Equals(status, "StartPending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "StopPending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "PausePending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "ContinuePending", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ApplyTheme(int selection)

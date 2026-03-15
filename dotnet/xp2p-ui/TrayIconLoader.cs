@@ -58,8 +58,7 @@ internal static class TrayIconLoader
     {
         try
         {
-            var uri = new Uri($"pack://application:,,,/{resourcePath}", UriKind.Absolute);
-            var info = System.Windows.Application.GetResourceStream(uri);
+            var info = System.Windows.Application.GetResourceStream(BuildPackUri(resourcePath));
             if (info is null)
             {
                 return CloneIcon(fallback);
@@ -71,6 +70,13 @@ internal static class TrayIconLoader
         {
             return CloneIcon(fallback);
         }
+    }
+
+    private static Uri BuildPackUri(string resourcePath)
+    {
+        var assemblyName = typeof(TrayIconLoader).Assembly.GetName().Name ?? "Xp2pUi";
+        var cleaned = resourcePath.TrimStart('/');
+        return new Uri($"pack://application:,,,/{assemblyName};component/{cleaned}", UriKind.Absolute);
     }
 
     private static System.Drawing.Icon CreateIconFromPng(Stream stream)
