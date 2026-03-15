@@ -4,8 +4,6 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <BaseIntermediateOutputPath>..\..\build\dotnet\xp2p-ui\obj\</BaseIntermediateOutputPath>
-    <BaseOutputPath>..\..\build\dotnet\xp2p-ui\bin\</BaseOutputPath>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>xp2p-ui</AssemblyName>
@@ -15,6 +13,9 @@
 
   <ItemGroup>
     <Resource Include="assets\xp2p.ico" />
+    <Resource Include="assets\Base.png" />
+    <Resource Include="assets\Enabled.png" />
+    <Resource Include="assets\Enabling.png" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\build\dotnet\xp2p-ui\obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)..\build\dotnet\xp2p-ui\bin\</BaseOutputPath>
+  </PropertyGroup>
+</Project>

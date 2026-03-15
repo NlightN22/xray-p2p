@@ -11,6 +11,16 @@ internal static class ServiceNames
 
 internal sealed class ServiceManager
 {
+    public event EventHandler<bool>? ActivityChanged;
+    public event EventHandler<ServiceStatusSnapshot>? StatusChanged;
+
+    public ServiceStatusSnapshot GetSnapshot()
+    {
+        return new ServiceStatusSnapshot(
+            GetStatus(ServiceNames.Client),
+            GetStatus(ServiceNames.Server));
+    }
+
     public string GetStatus(string serviceName)
     {
         try
@@ -26,6 +36,7 @@ internal sealed class ServiceManager
 
     public string StartService(string serviceName)
     {
+        ActivityChanged?.Invoke(this, true);
         try
         {
             using var controller = new ServiceController(serviceName);
@@ -41,10 +52,16 @@ internal sealed class ServiceManager
         {
             return $"{serviceName} start failed: {ex.Message}";
         }
+        finally
+        {
+            ActivityChanged?.Invoke(this, false);
+            StatusChanged?.Invoke(this, GetSnapshot());
+        }
     }
 
     public string StopService(string serviceName)
     {
+        ActivityChanged?.Invoke(this, true);
         try
         {
             using var controller = new ServiceController(serviceName);
@@ -60,5 +77,12 @@ internal sealed class ServiceManager
         {
             return $"{serviceName} stop failed: {ex.Message}";
         }
+        finally
+        {
+            ActivityChanged?.Invoke(this, false);
+            StatusChanged?.Invoke(this, GetSnapshot());
+        }
     }
 }
+
+internal sealed record ServiceStatusSnapshot(string ClientStatus, string ServerStatus);

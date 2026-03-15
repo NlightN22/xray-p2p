@@ -2,9 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
-using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
 using Application = System.Windows.Application;
 using Forms = System.Windows.Forms;
 
@@ -18,6 +15,8 @@ internal sealed class App : Application
     private IBackend? _backend;
     private Forms.ToolStripMenuItem? _clientStatusItem;
     private Forms.ToolStripMenuItem? _serverStatusItem;
+    private ServiceStatusSnapshot? _lastStatus;
+    private TrayIconSet? _trayIcons;
 
     public App()
     {
@@ -31,18 +30,23 @@ internal sealed class App : Application
         Log("xp2p-ui starting.");
         _backend = BackendFactory.Create();
         _serviceManager = new ServiceManager();
+        _serviceManager.ActivityChanged += OnServiceActivityChanged;
+        _serviceManager.StatusChanged += OnServiceStatusChanged;
+
         var appIcon = GetAppIcon();
-        _window = new MainWindow(_backend, _serviceManager, CreateIconSource(appIcon));
+        _trayIcons = TrayIconLoader.Load(appIcon);
+        _window = new MainWindow(_backend, _serviceManager, TrayIconLoader.CreateIconSource(appIcon));
         _window.Hide();
 
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = appIcon,
+            Icon = _trayIcons.Base,
             Text = "xp2p",
             Visible = true,
             ContextMenuStrip = BuildMenu()
         };
         _trayIcon.DoubleClick += (_, _) => ShowWindow("Ready.", TabKey.Status);
+        RefreshServiceStatus();
     }
 
     private void OnExit(object? sender, ExitEventArgs e)
@@ -53,6 +57,7 @@ internal sealed class App : Application
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
         }
+        _trayIcons?.Dispose();
     }
 
     private Forms.ContextMenuStrip BuildMenu()
@@ -102,6 +107,27 @@ internal sealed class App : Application
             _window.Show();
             _window.Activate();
         });
+    }
+
+    private void OnServiceActivityChanged(object? sender, bool busy)
+    {
+        if (_trayIcon is null)
+        {
+            return;
+        }
+        if (busy && _trayIcons?.Busy is not null)
+        {
+            _trayIcon.Icon = _trayIcons.Busy;
+            return;
+        }
+        UpdateTrayIconFromStatus();
+    }
+
+    private void OnServiceStatusChanged(object? sender, ServiceStatusSnapshot snapshot)
+    {
+        _lastStatus = snapshot;
+        UpdateTrayStatusLabels(snapshot);
+        UpdateTrayIconFromStatus();
     }
 
     private void OpenLogs()
@@ -157,14 +183,10 @@ internal sealed class App : Application
         {
             return;
         }
-        if (_clientStatusItem is not null)
-        {
-            _clientStatusItem.Text = $"Client: {_serviceManager.GetStatus(ServiceNames.Client)}";
-        }
-        if (_serverStatusItem is not null)
-        {
-            _serverStatusItem.Text = $"Server: {_serviceManager.GetStatus(ServiceNames.Server)}";
-        }
+        var snapshot = _serviceManager.GetSnapshot();
+        _lastStatus = snapshot;
+        UpdateTrayStatusLabels(snapshot);
+        UpdateTrayIconFromStatus();
     }
 
     private void SetStatus(string message)
@@ -174,6 +196,43 @@ internal sealed class App : Application
             return;
         }
         Dispatcher.Invoke(() => _window.SetStatus(message));
+    }
+
+    private void UpdateTrayStatusLabels(ServiceStatusSnapshot snapshot)
+    {
+        if (_clientStatusItem is not null)
+        {
+            _clientStatusItem.Text = $"Client: {snapshot.ClientStatus}";
+        }
+        if (_serverStatusItem is not null)
+        {
+            _serverStatusItem.Text = $"Server: {snapshot.ServerStatus}";
+        }
+    }
+
+    private void UpdateTrayIconFromStatus()
+    {
+        if (_trayIcon is null || _trayIcons is null)
+        {
+            return;
+        }
+        var snapshot = _lastStatus;
+        if (snapshot is null)
+        {
+            _trayIcon.Icon = _trayIcons.Base;
+            return;
+        }
+        if (IsServiceRunning(snapshot.ClientStatus) || IsServiceRunning(snapshot.ServerStatus))
+        {
+            _trayIcon.Icon = _trayIcons.Enabled;
+            return;
+        }
+        _trayIcon.Icon = _trayIcons.Base;
+    }
+
+    private static bool IsServiceRunning(string status)
+    {
+        return string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetLogPath()
@@ -226,18 +285,4 @@ internal sealed class App : Application
         return System.Drawing.SystemIcons.Application;
     }
 
-    private static ImageSource? CreateIconSource(System.Drawing.Icon icon)
-    {
-        try
-        {
-            return Imaging.CreateBitmapSourceFromHIcon(
-                icon.Handle,
-                Int32Rect.Empty,
-                BitmapSizeOptions.FromEmptyOptions());
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }
