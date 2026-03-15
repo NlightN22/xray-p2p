@@ -32,6 +32,8 @@ internal sealed class App : Application
     private void OnStartup(object? sender, StartupEventArgs e)
     {
         Log("xp2p-ui starting.");
+        Resources.MergedDictionaries.Add(new ModernWpf.Controls.XamlControlsResources());
+        Resources.MergedDictionaries.Add(new ModernWpf.ThemeResources());
         _backend = BackendFactory.Create();
         _serviceManager = new ServiceManager();
         _serviceManager.ActivityChanged += OnServiceActivityChanged;
@@ -50,6 +52,7 @@ internal sealed class App : Application
             ContextMenuStrip = BuildMenu()
         };
         _trayIcon.DoubleClick += (_, _) => ShowWindow("Ready.", TabKey.Status);
+        _trayIcon.MouseMove += (_, _) => RefreshTrayIconStatus();
         RefreshServiceStatus();
     }
 
@@ -163,6 +166,7 @@ internal sealed class App : Application
         {
             return;
         }
+        _trayIcon?.Icon = _trayIcons?.Busy ?? _trayIcon?.Icon;
         var result = await _serviceManager.StartServiceAsync(name);
         SetStatus(result);
         RefreshServiceStatus();
@@ -174,6 +178,7 @@ internal sealed class App : Application
         {
             return;
         }
+        _trayIcon?.Icon = _trayIcons?.Busy ?? _trayIcon?.Icon;
         var result = await _serviceManager.StopServiceAsync(name);
         SetStatus(result);
         RefreshServiceStatus();
@@ -188,6 +193,16 @@ internal sealed class App : Application
         var snapshot = _serviceManager.GetSnapshot();
         _lastStatus = snapshot;
         UpdateTrayStatusLabels(snapshot);
+        UpdateTrayIconFromStatus();
+    }
+
+    private void RefreshTrayIconStatus()
+    {
+        if (_serviceManager is null)
+        {
+            return;
+        }
+        _lastStatus = _serviceManager.GetSnapshot();
         UpdateTrayIconFromStatus();
     }
 
@@ -221,6 +236,11 @@ internal sealed class App : Application
     {
         if (_trayIcon is null || _trayIcons is null)
         {
+            return;
+        }
+        if (_serviceManager is not null && _serviceManager.IsBusy)
+        {
+            _trayIcon.Icon = _trayIcons.Busy;
             return;
         }
         var snapshot = _lastStatus;

@@ -13,6 +13,7 @@ internal sealed class ServiceManager
 {
     public event EventHandler<bool>? ActivityChanged;
     public event EventHandler<ServiceStatusSnapshot>? StatusChanged;
+    public bool IsBusy { get; private set; }
 
     public ServiceStatusSnapshot GetSnapshot()
     {
@@ -36,6 +37,7 @@ internal sealed class ServiceManager
 
     public async System.Threading.Tasks.Task<string> StartServiceAsync(string serviceName)
     {
+        IsBusy = true;
         ActivityChanged?.Invoke(this, true);
         try
         {
@@ -57,6 +59,7 @@ internal sealed class ServiceManager
         }
         finally
         {
+            IsBusy = false;
             ActivityChanged?.Invoke(this, false);
             StatusChanged?.Invoke(this, GetSnapshot());
         }
@@ -64,6 +67,7 @@ internal sealed class ServiceManager
 
     public async System.Threading.Tasks.Task<string> StopServiceAsync(string serviceName)
     {
+        IsBusy = true;
         ActivityChanged?.Invoke(this, true);
         try
         {
@@ -85,6 +89,7 @@ internal sealed class ServiceManager
         }
         finally
         {
+            IsBusy = false;
             ActivityChanged?.Invoke(this, false);
             StatusChanged?.Invoke(this, GetSnapshot());
         }
