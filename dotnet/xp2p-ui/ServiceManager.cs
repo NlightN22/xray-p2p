@@ -1,0 +1,64 @@
+using System;
+using System.ServiceProcess;
+
+namespace Xp2pUi;
+
+internal static class ServiceNames
+{
+    public const string Client = "xp2p-client";
+    public const string Server = "xp2p-server";
+}
+
+internal sealed class ServiceManager
+{
+    public string GetStatus(string serviceName)
+    {
+        try
+        {
+            using var controller = new ServiceController(serviceName);
+            return controller.Status.ToString();
+        }
+        catch (Exception ex)
+        {
+            return $"Error ({ex.Message})";
+        }
+    }
+
+    public string StartService(string serviceName)
+    {
+        try
+        {
+            using var controller = new ServiceController(serviceName);
+            if (controller.Status == ServiceControllerStatus.Running)
+            {
+                return $"{serviceName} already running.";
+            }
+            controller.Start();
+            controller.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
+            return $"{serviceName} started.";
+        }
+        catch (Exception ex)
+        {
+            return $"{serviceName} start failed: {ex.Message}";
+        }
+    }
+
+    public string StopService(string serviceName)
+    {
+        try
+        {
+            using var controller = new ServiceController(serviceName);
+            if (controller.Status == ServiceControllerStatus.Stopped)
+            {
+                return $"{serviceName} already stopped.";
+            }
+            controller.Stop();
+            controller.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
+            return $"{serviceName} stopped.";
+        }
+        catch (Exception ex)
+        {
+            return $"{serviceName} stop failed: {ex.Message}";
+        }
+    }
+}
