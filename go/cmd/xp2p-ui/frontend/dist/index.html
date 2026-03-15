@@ -145,27 +145,7 @@
       <section id="server-install" class="scenario">
         <h2>Server install</h2>
         <div class="hint">Install server assets with defaults or override key parameters.</div>
-        <div class="choice">
-          <div id="serverInstallCardLink" class="card active" role="button" aria-pressed="true" tabindex="0">
-            <h3>Install by link</h3>
-            <p>Use a trojan link to seed host and port settings.</p>
-          </div>
-          <div id="serverInstallCardManual" class="card" role="button" aria-pressed="false" tabindex="0">
-            <h3>Manual setup</h3>
-            <p>Override install path, ports, and certificates.</p>
-          </div>
-        </div>
-        <div id="serverInstallPanelLink" class="panel">
-          <div class="field required">
-            <label class="required" for="serverInstallLink">Link</label>
-            <textarea id="serverInstallLink"></textarea>
-          </div>
-          <div class="actions">
-            <button id="serverInstallLinkButton">Install from link</button>
-          </div>
-          <div id="serverInstallLinkStatus" class="status"></div>
-        </div>
-        <div id="serverInstallPanelManual" class="panel hidden">
+        <div class="panel">
           <div class="hint">All fields are optional; defaults come from the current config.</div>
           <div class="grid">
             <div class="field">

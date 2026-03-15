@@ -66,13 +66,6 @@
   };
 
   ui.serverInstall = {
-    cardLink: document.getElementById("serverInstallCardLink"),
-    cardManual: document.getElementById("serverInstallCardManual"),
-    panelLink: document.getElementById("serverInstallPanelLink"),
-    panelManual: document.getElementById("serverInstallPanelManual"),
-    link: document.getElementById("serverInstallLink"),
-    linkButton: document.getElementById("serverInstallLinkButton"),
-    linkStatus: document.getElementById("serverInstallLinkStatus"),
     installDir: document.getElementById("serverInstallDir"),
     configDir: document.getElementById("serverConfigDir"),
     port: document.getElementById("serverPort"),
@@ -117,18 +110,6 @@
     ui.clientInstall.panelManual.classList.toggle("hidden", linkActive);
     ui.clearStatus(ui.clientInstall.status);
     ui.clearStatus(ui.clientInstall.linkStatus);
-  };
-
-  ui.selectServerInstallMode = (mode) => {
-    const linkActive = mode === "link";
-    ui.serverInstall.cardLink.classList.toggle("active", linkActive);
-    ui.serverInstall.cardManual.classList.toggle("active", !linkActive);
-    ui.serverInstall.cardLink.setAttribute("aria-pressed", linkActive ? "true" : "false");
-    ui.serverInstall.cardManual.setAttribute("aria-pressed", !linkActive ? "true" : "false");
-    ui.serverInstall.panelLink.classList.toggle("hidden", !linkActive);
-    ui.serverInstall.panelManual.classList.toggle("hidden", linkActive);
-    ui.clearStatus(ui.serverInstall.status);
-    ui.clearStatus(ui.serverInstall.linkStatus);
   };
 
   if (window.runtime && window.runtime.EventsOn) {

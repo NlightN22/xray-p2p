@@ -140,42 +140,22 @@
     }
   }
 
-  async function installServer(source) {
-    const statusNode = source === "link" ? serverInstall.linkStatus : serverInstall.status;
-    ui.clearStatus(statusNode);
+  async function installServer() {
+    ui.clearStatus(serverInstall.status);
     const api = ui.app();
-    if (!api) {
-      ui.setStatus(statusNode, "UI bindings are not available.", false);
+    if (!api || !api.InstallServer) {
+      ui.setStatus(serverInstall.status, "UI bindings are not available.", false);
       return;
     }
-    const button = source === "link" ? serverInstall.linkButton : serverInstall.button;
-    button.disabled = true;
+    serverInstall.button.disabled = true;
     try {
-      if (source === "link") {
-        const linkValue = serverInstall.link.value.trim();
-        if (!linkValue) {
-          ui.setStatus(statusNode, "Link is required.", false);
-          return;
-        }
-        if (!api.InstallServerFromLink) {
-          ui.setStatus(statusNode, "UI bindings are not available.", false);
-          return;
-        }
-        await api.InstallServerFromLink(linkValue);
-        ui.setStatus(statusNode, "Server install completed.", true);
-      } else {
-        if (!api.InstallServer) {
-          ui.setStatus(statusNode, "UI bindings are not available.", false);
-          return;
-        }
-        const payload = buildServerInstallPayload();
-        await api.InstallServer(payload);
-        ui.setStatus(statusNode, "Server install completed.", true);
-      }
+      const payload = buildServerInstallPayload();
+      await api.InstallServer(payload);
+      ui.setStatus(serverInstall.status, "Server install completed.", true);
     } catch (err) {
-      ui.setStatus(statusNode, "Server install failed: " + (err?.message || err), false);
+      ui.setStatus(serverInstall.status, "Server install failed: " + (err?.message || err), false);
     } finally {
-      button.disabled = false;
+      serverInstall.button.disabled = false;
     }
   }
 
@@ -185,11 +165,8 @@
   ui.bindCard(clientInstall.cardLink, () => ui.selectClientInstallMode("link"));
   ui.bindCard(clientInstall.cardManual, () => ui.selectClientInstallMode("manual"));
 
-  serverInstall.linkButton.addEventListener("click", () => installServer("link"));
-  serverInstall.button.addEventListener("click", () => installServer("manual"));
+  serverInstall.button.addEventListener("click", installServer);
   serverInstall.resetButton.addEventListener("click", loadServerInstallDefaults);
-  ui.bindCard(serverInstall.cardLink, () => ui.selectServerInstallMode("link"));
-  ui.bindCard(serverInstall.cardManual, () => ui.selectServerInstallMode("manual"));
 
   loadClientInstallDefaults();
   loadServerInstallDefaults();

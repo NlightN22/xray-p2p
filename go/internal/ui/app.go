@@ -10,7 +10,6 @@ import (
 	servercmd "github.com/NlightN22/xray-p2p/go/internal/cli/server"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/link"
 	"github.com/NlightN22/xray-p2p/go/internal/ports"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/NlightN22/xray-p2p/go/internal/usecase"
@@ -305,26 +304,6 @@ func (a *App) InstallServer(req ServerInstallRequest) error {
 		CertFile:  strings.TrimSpace(req.CertFile),
 		KeyFile:   strings.TrimSpace(req.KeyFile),
 		Host:      strings.TrimSpace(req.Host),
-	}
-	return servercmd.Install(context.Background(), cfg, opts)
-}
-
-func (a *App) InstallServerFromLink(rawLink string) error {
-	cfg, err := config.Load(config.Options{})
-	if err != nil {
-		return err
-	}
-	parsed, err := link.ParseTrojanLink(rawLink)
-	if err != nil {
-		return err
-	}
-	host := strings.TrimSpace(parsed.ServerAddress)
-	if parsed.ServerNameSet && strings.TrimSpace(parsed.ServerName) != "" {
-		host = strings.TrimSpace(parsed.ServerName)
-	}
-	opts := servercmd.InstallOptions{
-		Host: host,
-		Port: strings.TrimSpace(parsed.ServerPort),
 	}
 	return servercmd.Install(context.Background(), cfg, opts)
 }
