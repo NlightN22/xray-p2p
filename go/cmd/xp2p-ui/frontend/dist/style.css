@@ -25,26 +25,6 @@
         font-size: 12px;
         margin: 4px 0 10px;
       }
-      .tabs {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin: 12px 0 18px;
-      }
-      .tab {
-        background: #1b1f27;
-        color: #c7cbd6;
-        border: 1px solid #2a2f3a;
-        border-radius: 999px;
-        padding: 6px 12px;
-        font-size: 12px;
-        cursor: pointer;
-      }
-      .tab.active {
-        background: #2f6bff;
-        border-color: #2f6bff;
-        color: #fff;
-      }
       .scenario {
         display: none;
       }

@@ -13,7 +13,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/ports"
-	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/NlightN22/xray-p2p/go/internal/usecase"
 	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -442,87 +441,32 @@ func (a *TrayApp) installRole(role, serviceName string) {
 }
 
 func (a *TrayApp) deployRole(role string) {
-	if a.configTransfer == nil {
-		Notify("xp2p", "Config deploy is unavailable")
-		return
+	switch role {
+	case clientRoleName:
+		a.openScenario("client-deploy")
+	case serverRoleName:
+		a.openScenario("server-deploy")
+	default:
+		Notify("xp2p", "Deploy action is unavailable for this service")
 	}
-	ctx, ok := waitWailsContext(5 * time.Second)
-	if !ok {
-		Notify("xp2p", "UI runtime is not ready")
-		return
-	}
-	runtime.WindowShow(ctx)
-	path, err := runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
-		Title: "Select xp2p config bundle",
-		Filters: []runtime.FileFilter{
-			{DisplayName: "xp2p bundles", Pattern: "*.zip;*.tar.gz;*.tgz"},
-			{DisplayName: "All files", Pattern: "*.*"},
-		},
-	})
-	if err != nil {
-		showDialog(ctx, runtime.ErrorDialog, "xp2p", fmt.Sprintf("Config deploy failed: %v", err))
-		return
-	}
-	if strings.TrimSpace(path) == "" {
-		return
-	}
-	root := config.ConfigRoot()
-	if err := a.configTransfer.Import(ctx, root, path); err != nil {
-		showDialog(ctx, runtime.ErrorDialog, "xp2p", fmt.Sprintf("Config deploy failed: %v", err))
-		return
-	}
-	Notify("xp2p", fmt.Sprintf("%s config deploy completed", role))
-	a.refreshStatuses()
 }
 
 func (a *TrayApp) installClient() {
-	ctx, ok := waitWailsContext(5 * time.Second)
-	if !ok {
-		Notify("xp2p", "UI runtime is not ready")
-		return
-	}
-	runtime.WindowShow(ctx)
+	a.openScenario("client-install")
 }
 
 func (a *TrayApp) installServer() {
+	a.openScenario("server-install")
+}
+
+func (a *TrayApp) openScenario(name string) {
 	ctx, ok := waitWailsContext(5 * time.Second)
 	if !ok {
 		Notify("xp2p", "UI runtime is not ready")
 		return
 	}
 	runtime.WindowShow(ctx)
-
-	cfg, err := config.Load(config.Options{})
-	if err != nil {
-		showDialog(ctx, runtime.ErrorDialog, "xp2p", fmt.Sprintf("Server install failed: %v", err))
-		return
-	}
-
-	opts := server.InstallOptions{
-		InstallDir:       cfg.Server.InstallDir,
-		ConfigDir:        cfg.Server.ConfigDir,
-		Port:             cfg.Server.Port,
-		CertificateStore: cfg.Server.CertificateStore,
-		CertificateFile:  cfg.Server.CertificateFile,
-		KeyFile:          cfg.Server.KeyFile,
-		Host:             cfg.Server.Host,
-		Force:            true,
-		TunEnabled:       cfg.Server.TunEnabled,
-		TunEnabledSet:    true,
-		TunName:          cfg.Server.TunName,
-		TunMTU:           cfg.Server.TunMTU,
-		TunAddr:          cfg.Server.TunAddr,
-	}
-	if err := server.Install(ctx, opts); err != nil {
-		if errors.Is(err, server.ErrUnsupported) {
-			showDialog(ctx, runtime.ErrorDialog, "xp2p", "Server install is not supported on this platform")
-			return
-		}
-		showDialog(ctx, runtime.ErrorDialog, "xp2p", fmt.Sprintf("Server install failed: %v", err))
-		return
-	}
-	Notify("xp2p", "Server install completed")
-	a.refreshStatuses()
+	runtime.EventsEmit(ctx, "xp2p-ui:open", name)
 }
 
 func showDialog(ctx context.Context, dialogType runtime.DialogType, title, message string) {

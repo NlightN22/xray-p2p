@@ -9,13 +9,7 @@
   <body>
     <div class="root">
       <h1>xp2p UI</h1>
-      <div class="hint">Choose a task. Required fields are marked with *.</div>
-      <div class="tabs">
-        <button class="tab active" data-tab="client-install">Client install</button>
-        <button class="tab" data-tab="client-deploy">Client deploy</button>
-        <button class="tab" data-tab="server-install">Server install</button>
-        <button class="tab" data-tab="server-deploy">Server deploy</button>
-      </div>
+      <div class="hint">Open a task from the tray menu. Required fields are marked with *.</div>
       <section id="client-install" class="scenario active">
         <h2>Client install</h2>
         <div class="hint">Pick a setup mode. Required fields are marked in each section.</div>
@@ -113,35 +107,8 @@
       </section>
       <section id="client-deploy" class="scenario">
         <h2>Client deploy</h2>
-        <div class="hint">Create a deploy link and wait for the server to connect.</div>
-        <div class="choice">
-          <div id="clientDeployCardLink" class="card active" role="button" aria-pressed="true" tabindex="0">
-            <h3>Deploy by link</h3>
-            <p>Use minimal settings and generate a deploy link.</p>
-          </div>
-          <div id="clientDeployCardManual" class="card" role="button" aria-pressed="false" tabindex="0">
-            <h3>Manual setup</h3>
-            <p>Override deploy port, user, and server install directory.</p>
-          </div>
-        </div>
-        <div id="clientDeployPanelLink" class="panel">
-          <div class="grid">
-            <div class="field required">
-              <label class="required" for="clientDeployHostLink">Deploy host</label>
-              <input id="clientDeployHostLink" type="text" />
-            </div>
-            <div class="field">
-              <label for="clientDeployPortLink">Deploy port</label>
-              <input id="clientDeployPortLink" type="number" min="1" max="65535" />
-            </div>
-          </div>
-          <div class="actions">
-            <button id="clientDeployLinkButton">Start deploy</button>
-          </div>
-          <div id="clientDeployLinkStatus" class="status"></div>
-        </div>
-        <div id="clientDeployPanelManual" class="panel hidden">
-          <div class="hint">Required: deploy host. Other fields are optional.</div>
+        <div class="hint">Required: deploy host. Other fields are optional.</div>
+        <div id="clientDeployPanel" class="panel">
           <div class="grid">
             <div class="field required">
               <label class="required" for="clientDeployHost">Deploy host</label>
@@ -239,33 +206,12 @@
       </section>
       <section id="server-deploy" class="scenario">
         <h2>Server deploy</h2>
-        <div class="hint">Listen for client deploy requests and apply the provided link.</div>
-        <div class="choice">
-          <div id="serverDeployCardLink" class="card active" role="button" aria-pressed="true" tabindex="0">
-            <h3>Deploy by link</h3>
-            <p>Paste a deploy link and listen with defaults.</p>
-          </div>
-          <div id="serverDeployCardManual" class="card" role="button" aria-pressed="false" tabindex="0">
-            <h3>Manual setup</h3>
-            <p>Override listen address, diagnostics port, and timeout.</p>
-          </div>
-        </div>
-        <div id="serverDeployPanelLink" class="panel">
-          <div class="field required">
-            <label class="required" for="serverDeployLink">Deploy link</label>
-            <textarea id="serverDeployLink"></textarea>
-          </div>
-          <div class="actions">
-            <button id="serverDeployLinkButton">Start deploy</button>
-          </div>
-          <div id="serverDeployLinkStatus" class="status"></div>
-        </div>
-        <div id="serverDeployPanelManual" class="panel hidden">
-          <div class="hint">Required: deploy link. Other fields are optional.</div>
+        <div class="hint">Required: deploy link. Other fields are optional.</div>
+        <div id="serverDeployPanel" class="panel">
           <div class="grid">
             <div class="field required">
-              <label class="required" for="serverDeployLinkManual">Deploy link</label>
-              <textarea id="serverDeployLinkManual"></textarea>
+              <label class="required" for="serverDeployLink">Deploy link</label>
+              <textarea id="serverDeployLink"></textarea>
             </div>
             <div class="field">
               <label for="serverDeployListen">Listen address</label>
@@ -288,6 +234,8 @@
         </div>
       </section>
     </div>
-    <script src="app.js"></script>
+    <script src="app_base.js"></script>
+    <script src="app_install.js"></script>
+    <script src="app_deploy.js"></script>
   </body>
 </html>
