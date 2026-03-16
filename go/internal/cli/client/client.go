@@ -14,6 +14,7 @@ var (
 	clientRunFunc            = client.Run
 	clientServiceRunFunc     = client.RunService
 	clientRemoveEndpointFunc = client.RemoveEndpoint
+	clientAddEndpointFunc    = client.AddEndpoint
 	clientListFunc           = client.ListEndpoints
 	clientReverseListFunc    = client.ListReverse
 	clientRedirectAddFunc    = client.AddRedirect

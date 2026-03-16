@@ -259,7 +259,7 @@ func resolveUserConfigDir(installDir, configDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return resolveConfigDir(resolvedBase, cfg)
+	return ResolveConfigDir(resolvedBase, cfg)
 }
 
 func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {

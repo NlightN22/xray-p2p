@@ -2,7 +2,10 @@
 
 package server
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // Install is not supported on this platform.
 func Install(_ context.Context, _ InstallOptions) error {
@@ -42,4 +45,9 @@ func ListUsers(_ context.Context, _ ListUsersOptions) ([]UserLink, error) {
 // UserLink is not supported on this platform.
 func GetUserLink(_ context.Context, _ UserLinkOptions) (UserLink, error) {
 	return UserLink{}, ErrUnsupported
+}
+
+// ResolveConfigDir is not supported on this platform.
+func ResolveConfigDir(_, _ string) (string, error) {
+	return "", fmt.Errorf("xp2p: server install is not supported on this platform")
 }

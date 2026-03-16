@@ -26,7 +26,7 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		configDirName = DefaultServerConfigDir
 	}
 
-	configDir, err := resolveConfigDir(installDir, configDirName)
+	configDir, err := ResolveConfigDir(installDir, configDirName)
 	if err != nil {
 		return err
 	}

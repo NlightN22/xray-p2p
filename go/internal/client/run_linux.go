@@ -29,7 +29,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	configDir, err := resolveConfigDir(installDir, opts.ConfigDir)
+	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}

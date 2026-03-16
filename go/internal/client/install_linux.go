@@ -107,7 +107,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return nil
 	}
 
-	configDir, err := resolveConfigDir(installDir, opts.ConfigDir)
+	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -248,7 +248,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		return installState{}, err
 	}
 
-	configDir, err := resolveConfigDir(dir, opts.ConfigDir)
+	configDir, err := ResolveConfigDir(dir, opts.ConfigDir)
 	if err != nil {
 		return installState{}, err
 	}
@@ -289,7 +289,7 @@ func resolveInstallDir(raw string) (string, error) {
 	return cleaned, nil
 }
 
-func resolveConfigDir(base, cfg string) (string, error) {
+func ResolveConfigDir(base, cfg string) (string, error) {
 	cfg = strings.TrimSpace(cfg)
 	if cfg == "" {
 		cfg = layout.ClientConfigDir

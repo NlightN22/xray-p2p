@@ -18,7 +18,7 @@ func ApplyMode(opts ModeOptions) error {
 	if err != nil {
 		return err
 	}
-	configDir, err := resolveConfigDir(installDir, opts.ConfigDir)
+	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}

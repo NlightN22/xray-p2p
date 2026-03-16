@@ -133,6 +133,10 @@ func RemoveEndpoint(_ context.Context, _ RemoveEndpointOptions) error {
 	return ErrUnsupported
 }
 
+func AddEndpoint(_ context.Context, _ InstallOptions) error {
+	return ErrUnsupported
+}
+
 func AddForward(_ ForwardAddOptions) (ForwardAddResult, error) {
 	return ForwardAddResult{}, ErrUnsupported
 }

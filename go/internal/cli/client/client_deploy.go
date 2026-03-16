@@ -149,12 +149,28 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	installOpts := buildInstallOptionsFromLink(cfg, tl)
-	if err := clientInstallFunc(ctx, installOpts); err != nil {
-		completionState = "FAIL client-install"
-		logging.Error("xp2p client deploy: local install failed", "err", err)
+	installed, err := clishared.InstallPresent(clishared.InstallRoleClient, installOpts.InstallDir, installOpts.ConfigDir)
+	if err != nil {
+		completionState = "FAIL client-install-check"
+		logging.Error("xp2p client deploy: install check failed", "err", err)
 		return 1
 	}
-	logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
+	if installed {
+		logging.Info("xp2p client deploy: installation detected, appending endpoint", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
+		if err := clientAddEndpointFunc(ctx, installOpts); err != nil {
+			completionState = "FAIL client-append"
+			logging.Error("xp2p client deploy: append endpoint failed", "err", err)
+			return 1
+		}
+		logging.Info("xp2p client deploy: endpoint added", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
+	} else {
+		if err := clientInstallFunc(ctx, installOpts); err != nil {
+			completionState = "FAIL client-install"
+			logging.Error("xp2p client deploy: local install failed", "err", err)
+			return 1
+		}
+		logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
+	}
 
 	if err := applyClientDeployMode(installOpts, cfg, false); err != nil {
 		completionState = "FAIL client-mode-proxy"

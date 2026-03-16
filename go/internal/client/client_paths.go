@@ -19,7 +19,7 @@ func resolveClientPaths(installDir, configDir string) (clientPaths, error) {
 	if err != nil {
 		return clientPaths{}, err
 	}
-	cfgDir, err := resolveConfigDir(dir, configDir)
+	cfgDir, err := ResolveConfigDir(dir, configDir)
 	if err != nil {
 		return clientPaths{}, err
 	}
