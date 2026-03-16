@@ -113,7 +113,7 @@ internal sealed class App : Application
 
     private async void RequestShutdown()
     {
-        var result = Dispatcher.Invoke(() => MessageBox.Show(
+        var result = Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
             _window,
             "Stop all services?",
             "xp2p",
