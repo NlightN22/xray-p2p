@@ -125,38 +125,6 @@ internal sealed partial class MainWindow : Window
         _tabs.Items.Add(statusTab);
         map[TabKey.Status] = statusTab;
 
-        var clientInstallTab = new W.TabItem
-        {
-            Header = "Client install",
-            Content = BuildClientInstallTab()
-        };
-        _tabs.Items.Add(clientInstallTab);
-        map[TabKey.ClientInstall] = clientInstallTab;
-
-        var clientDeployTab = new W.TabItem
-        {
-            Header = "Client deploy",
-            Content = BuildClientDeployTab()
-        };
-        _tabs.Items.Add(clientDeployTab);
-        map[TabKey.ClientDeploy] = clientDeployTab;
-
-        var serverInstallTab = new W.TabItem
-        {
-            Header = "Server install",
-            Content = BuildServerInstallTab()
-        };
-        _tabs.Items.Add(serverInstallTab);
-        map[TabKey.ServerInstall] = serverInstallTab;
-
-        var serverDeployTab = new W.TabItem
-        {
-            Header = "Server deploy",
-            Content = BuildServerDeployTab()
-        };
-        _tabs.Items.Add(serverDeployTab);
-        map[TabKey.ServerDeploy] = serverDeployTab;
-
         return map;
     }
 
@@ -291,17 +259,22 @@ internal sealed partial class MainWindow : Window
 
     private static void ApplyTheme(int selection)
     {
-        switch (selection)
+        if (selection < 0)
         {
-            case 1:
-                ThemeManager.Current.ApplicationTheme = ApplicationTheme.Light;
-                break;
-            case 2:
-                ThemeManager.Current.ApplicationTheme = ApplicationTheme.Dark;
-                break;
-            default:
-                ThemeManager.Current.ApplicationTheme = null;
-                break;
+            return;
+        }
+        try
+        {
+            ThemeManager.Current.ApplicationTheme = selection switch
+            {
+                1 => ApplicationTheme.Light,
+                2 => ApplicationTheme.Dark,
+                _ => null
+            };
+        }
+        catch
+        {
+            // Ignore theme update failures to keep the UI responsive.
         }
     }
 }

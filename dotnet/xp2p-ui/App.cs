@@ -91,19 +91,14 @@ internal sealed class App : Application
         _clientStopItem = new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Client));
         _clientMenu.DropDownItems.Add(_clientStartItem);
         _clientMenu.DropDownItems.Add(_clientStopItem);
-        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Client install.", TabKey.ClientInstall)));
-        _clientMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Client deploy.", TabKey.ClientDeploy)));
-
         _serverMenu = new Forms.ToolStripMenuItem("Server: Unknown");
         _serverStartItem = new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Server));
         _serverStopItem = new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Server));
         _serverMenu.DropDownItems.Add(_serverStartItem);
         _serverMenu.DropDownItems.Add(_serverStopItem);
-        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Install", null, (_, _) => ShowWindow("Server install.", TabKey.ServerInstall)));
-        _serverMenu.DropDownItems.Add(new Forms.ToolStripMenuItem("Deploy", null, (_, _) => ShowWindow("Server deploy.", TabKey.ServerDeploy)));
 
         var openLogs = new Forms.ToolStripMenuItem("Open logs", null, (_, _) => OpenLogs());
-        var quit = new Forms.ToolStripMenuItem("Quit", null, (_, _) => Shutdown());
+        var quit = new Forms.ToolStripMenuItem("Quit", null, (_, _) => RequestShutdown());
 
         var menu = new Forms.ContextMenuStrip();
         menu.Opening += (_, _) => RefreshServiceStatus();
@@ -114,6 +109,32 @@ internal sealed class App : Application
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(quit);
         return menu;
+    }
+
+    private async void RequestShutdown()
+    {
+        var result = Dispatcher.Invoke(() => MessageBox.Show(
+            _window,
+            "Stop all services?",
+            "xp2p",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question));
+        if (result == MessageBoxResult.Yes)
+        {
+            await StopServicesAsync();
+        }
+        Shutdown();
+    }
+
+    private async System.Threading.Tasks.Task StopServicesAsync()
+    {
+        if (_serviceManager is null)
+        {
+            return;
+        }
+        var stopClient = _serviceManager.StopServiceAsync(ServiceNames.Client);
+        var stopServer = _serviceManager.StopServiceAsync(ServiceNames.Server);
+        await System.Threading.Tasks.Task.WhenAll(stopClient, stopServer);
     }
 
     private void ShowWindow(string message, TabKey tab)
