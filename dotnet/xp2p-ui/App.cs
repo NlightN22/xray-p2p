@@ -113,15 +113,18 @@ internal sealed class App : Application
 
     private async void RequestShutdown()
     {
-        var result = Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
-            _window,
-            "Stop all services?",
-            "xp2p",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question));
-        if (result == MessageBoxResult.Yes)
+        if (ShouldPromptStopServices())
         {
-            await StopServicesAsync();
+            var result = Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
+                _window,
+                "Stop all services?",
+                "xp2p",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question));
+            if (result == MessageBoxResult.Yes)
+            {
+                await StopServicesAsync();
+            }
         }
         Shutdown();
     }
@@ -353,6 +356,19 @@ internal sealed class App : Application
             string.Equals(status, "StopPending", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(status, "PausePending", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(status, "ContinuePending", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool ShouldPromptStopServices()
+    {
+        if (_serviceManager is null)
+        {
+            return false;
+        }
+        var snapshot = _serviceManager.GetSnapshot();
+        return IsServiceRunning(snapshot.ClientStatus) ||
+            IsServiceRunning(snapshot.ServerStatus) ||
+            IsServicePending(snapshot.ClientStatus) ||
+            IsServicePending(snapshot.ServerStatus);
     }
 
     private static string BuildTrayTooltip(ServiceStatusSnapshot snapshot)
