@@ -414,10 +414,20 @@ internal sealed class App : Application
     {
         _statusTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(5)
+            Interval = GetStatusPollInterval()
         };
         _statusTimer.Tick += (_, _) => RefreshServiceStatus();
         _statusTimer.Start();
+    }
+
+    private static TimeSpan GetStatusPollInterval()
+    {
+        var raw = Environment.GetEnvironmentVariable("XP2P_UI_STATUS_POLL_SECONDS");
+        if (int.TryParse(raw, out var seconds) && seconds > 0 && seconds <= 60)
+        {
+            return TimeSpan.FromSeconds(seconds);
+        }
+        return TimeSpan.FromSeconds(5);
     }
 
     private TrayIconState GetTrayIconState()

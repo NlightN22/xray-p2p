@@ -187,6 +187,13 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
 
     _install_client(xp2p_server_runner)
     _install_server(xp2p_server_runner)
+    log_patterns = [
+        r"tray status: .*Running",
+        r"tray status: .*Stopped",
+    ]
+    log_patterns_payload = base64.b64encode(
+        json.dumps(log_patterns).encode("utf-8")
+    ).decode("ascii")
     local_marker, guest_marker = _marker_paths("xp2p-ui-service-toggle")
     payload = base64.b64encode(json.dumps(services).encode("utf-8")).decode("ascii")
     try:
@@ -198,6 +205,9 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
             ServiceNamesBase64=payload,
             UiWaitSeconds="5",
             ServiceWaitSeconds="30",
+            ClearLog="true",
+            UiPollSeconds="6",
+            RequiredPatternsBase64=log_patterns_payload,
         )
         _assert_marker(local_marker, "toggle_service_via_ui.ps1")
         if result.rc != 0:
@@ -208,3 +218,46 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
     finally:
         _cleanup_role(server_host, "client")
         _cleanup_role(server_host, "server")
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_xp2p_ui_tracks_service_crash_without_config(server_host, xp2p_server_runner):
+    _install_client(xp2p_server_runner)
+    config_paths = [
+        r"C:\ProgramData\xp2p\config-client",
+        r"C:\ProgramData\xp2p\xp2p-client.toml",
+        r"C:\ProgramData\xp2p\xp2p-client.state.json",
+    ]
+    config_payload = base64.b64encode(json.dumps(config_paths).encode("utf-8")).decode("ascii")
+    services_payload = base64.b64encode(json.dumps(["xp2p-client"]).encode("utf-8")).decode("ascii")
+    local_marker, guest_marker = _marker_paths("xp2p-ui-crash-track")
+    try:
+        result = win_env.run_guest_script(
+            server_host,
+            "scripts/toggle_service_via_ui.ps1",
+            MarkerPath=str(guest_marker),
+            Xp2pUiPath=str(UI_EXE),
+            ServiceNamesBase64=services_payload,
+            UiWaitSeconds="5",
+            ServiceWaitSeconds="20",
+            ClearLog="true",
+            UiPollSeconds="6",
+            ExpectCrash="true",
+            CrashWaitSeconds="60",
+            CrashServiceName="xp2p-client",
+            ConfigDirsBase64=config_payload,
+            StatusPollSeconds="1",
+            AllowStoppedOnly="true",
+            StartStatusesBase64=base64.b64encode(
+                json.dumps(["StartPending", "Running"]).encode("utf-8")
+            ).decode("ascii"),
+        )
+        _assert_marker(local_marker, "toggle_service_via_ui.ps1")
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p-ui crash tracking check failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+    finally:
+        _cleanup_role(server_host, "client")
