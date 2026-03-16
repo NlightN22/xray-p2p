@@ -106,8 +106,16 @@ try {
         return
     }
 
-    $tail = Get-Content -Path $LogPath -ErrorAction SilentlyContinue -Tail $MaxLines
-    $text = ($tail | Out-String).Trim()
+$tail = Get-Content -Path $LogPath -ErrorAction SilentlyContinue -Tail $MaxLines
+$text = ($tail | Out-String).Trim()
+$tailText = $text -replace '[^\x00-\x7F]', '?'
+$tailText = $tailText -replace "(`r`n|`r|`n)+", "`n"
+Write-Host "xp2p-ui log tail ($MaxLines lines max):"
+if ($tailText) {
+    Write-Host $tailText
+} else {
+    Write-Host "<empty>"
+}
     if ($text -match "access is denied") {
         $exitCode = 6
         $errorDetail = "log contains access denied"
@@ -130,6 +138,9 @@ try {
     }
     if ($exitCode -eq 0) {
         $payload = "OK"
+        if ($tailText) {
+            $payload = $payload + "`n" + $tailText
+        }
     } else {
         $detail = $errorDetail -replace "[\r\n]+", " "
         if ($detail.Length -gt 160) {

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Application = System.Windows.Application;
 using Forms = System.Windows.Forms;
 
@@ -21,6 +22,12 @@ internal sealed class App : Application
     private Forms.ToolStripMenuItem? _serverStopItem;
     private ServiceStatusSnapshot? _lastStatus;
     private TrayIconSet? _trayIcons;
+    private System.Windows.Media.ImageSource? _windowIconBase;
+    private System.Windows.Media.ImageSource? _windowIconEnabled;
+    private System.Windows.Media.ImageSource? _windowIconBusy;
+    private DispatcherTimer? _statusTimer;
+    private string? _lastStatusKey;
+    private TrayIconState? _lastTrayIconState;
 
     public App()
     {
@@ -32,6 +39,9 @@ internal sealed class App : Application
     private void OnStartup(object? sender, StartupEventArgs e)
     {
         Log("xp2p-ui starting.");
+        Log($"base dir: {AppContext.BaseDirectory}");
+        Log($"assembly name: {GetType().Assembly.GetName().Name}");
+        LogResourcesHint();
         Resources.MergedDictionaries.Add(new ModernWpf.Controls.XamlControlsResources());
         Resources.MergedDictionaries.Add(new ModernWpf.ThemeResources());
         _backend = BackendFactory.Create();
@@ -40,8 +50,11 @@ internal sealed class App : Application
         _serviceManager.StatusChanged += OnServiceStatusChanged;
 
         var appIcon = GetAppIcon();
-        _trayIcons = TrayIconLoader.Load(appIcon);
-        _window = new MainWindow(_backend, _serviceManager, TrayIconLoader.CreateIconSource(appIcon));
+        _trayIcons = TrayIconLoader.Load(appIcon, Log);
+        _windowIconBase = TrayIconLoader.CreateIconSource(_trayIcons.Base);
+        _windowIconEnabled = TrayIconLoader.CreateIconSource(_trayIcons.Enabled);
+        _windowIconBusy = TrayIconLoader.CreateIconSource(_trayIcons.Busy);
+        _window = new MainWindow(_backend, _serviceManager, _windowIconBase);
         _window.Hide();
 
         _trayIcon = new Forms.NotifyIcon
@@ -52,13 +65,17 @@ internal sealed class App : Application
             ContextMenuStrip = BuildMenu()
         };
         _trayIcon.DoubleClick += (_, _) => ShowWindow("Ready.", TabKey.Status);
-        _trayIcon.MouseMove += (_, _) => RefreshTrayIconStatus();
         RefreshServiceStatus();
+        StartStatusTimer();
     }
 
     private void OnExit(object? sender, ExitEventArgs e)
     {
         Log("xp2p-ui exiting.");
+        if (_statusTimer is not null)
+        {
+            _statusTimer.Stop();
+        }
         if (_trayIcon is not null)
         {
             _trayIcon.Visible = false;
@@ -123,6 +140,7 @@ internal sealed class App : Application
         if (busy && _trayIcons?.Busy is not null)
         {
             _trayIcon.Icon = _trayIcons.Busy;
+            UpdateWindowIcon(_windowIconBusy);
             return;
         }
         UpdateTrayIconFromStatus();
@@ -131,6 +149,7 @@ internal sealed class App : Application
     private void OnServiceStatusChanged(object? sender, ServiceStatusSnapshot snapshot)
     {
         _lastStatus = snapshot;
+        Log($"service status changed: client={snapshot.ClientStatus} server={snapshot.ServerStatus} busy={_serviceManager?.IsBusy}");
         UpdateTrayStatusLabels(snapshot);
         UpdateTrayIconFromStatus();
     }
@@ -166,10 +185,13 @@ internal sealed class App : Application
         {
             return;
         }
-        _trayIcon?.Icon = _trayIcons?.Busy ?? _trayIcon?.Icon;
+        if (_trayIcon is not null && _trayIcons?.Busy is not null)
+        {
+            _trayIcon.Icon = _trayIcons.Busy;
+            UpdateWindowIcon(_windowIconBusy);
+        }
         var result = await _serviceManager.StartServiceAsync(name);
         SetStatus(result);
-        RefreshServiceStatus();
     }
 
     private async void StopServiceAsync(string name)
@@ -178,10 +200,13 @@ internal sealed class App : Application
         {
             return;
         }
-        _trayIcon?.Icon = _trayIcons?.Busy ?? _trayIcon?.Icon;
+        if (_trayIcon is not null && _trayIcons?.Busy is not null)
+        {
+            _trayIcon.Icon = _trayIcons.Busy;
+            UpdateWindowIcon(_windowIconBusy);
+        }
         var result = await _serviceManager.StopServiceAsync(name);
         SetStatus(result);
-        RefreshServiceStatus();
     }
 
     private void RefreshServiceStatus()
@@ -193,16 +218,6 @@ internal sealed class App : Application
         var snapshot = _serviceManager.GetSnapshot();
         _lastStatus = snapshot;
         UpdateTrayStatusLabels(snapshot);
-        UpdateTrayIconFromStatus();
-    }
-
-    private void RefreshTrayIconStatus()
-    {
-        if (_serviceManager is null)
-        {
-            return;
-        }
-        _lastStatus = _serviceManager.GetSnapshot();
         UpdateTrayIconFromStatus();
     }
 
@@ -230,6 +245,12 @@ internal sealed class App : Application
         {
             _trayIcon.Text = BuildTrayTooltip(snapshot);
         }
+        var statusKey = BuildStatusKey(snapshot, _serviceManager?.IsBusy ?? false);
+        if (!string.Equals(_lastStatusKey, statusKey, StringComparison.Ordinal))
+        {
+            _lastStatusKey = statusKey;
+            Log($"tray status: client={snapshot.ClientStatus} server={snapshot.ServerStatus} busy={_serviceManager?.IsBusy}");
+        }
     }
 
     private void UpdateTrayIconFromStatus()
@@ -238,24 +259,32 @@ internal sealed class App : Application
         {
             return;
         }
-        if (_serviceManager is not null && _serviceManager.IsBusy)
+        var desired = GetTrayIconState();
+        if (_lastTrayIconState == desired)
         {
-            _trayIcon.Icon = _trayIcons.Busy;
             return;
         }
+        _lastTrayIconState = desired;
         var snapshot = _lastStatus;
-        if (snapshot is null)
+        switch (desired)
         {
-            _trayIcon.Icon = _trayIcons.Base;
-            _trayIcon.Text = "xp2p";
-            return;
+            case TrayIconState.Busy:
+                _trayIcon.Icon = _trayIcons.Busy;
+                Log("tray icon: busy");
+                UpdateWindowIcon(_windowIconBusy);
+                break;
+            case TrayIconState.Enabled:
+                _trayIcon.Icon = _trayIcons.Enabled;
+                Log("tray icon: enabled");
+                UpdateWindowIcon(_windowIconEnabled);
+                break;
+            default:
+                _trayIcon.Icon = _trayIcons.Base;
+                _trayIcon.Text = "xp2p";
+                Log(snapshot is null ? "tray icon: disabled (no snapshot)" : "tray icon: disabled");
+                UpdateWindowIcon(_windowIconBase);
+                break;
         }
-        if (IsServiceRunning(snapshot.ClientStatus) || IsServiceRunning(snapshot.ServerStatus))
-        {
-            _trayIcon.Icon = _trayIcons.Enabled;
-            return;
-        }
-        _trayIcon.Icon = _trayIcons.Base;
     }
 
     private static bool IsServiceRunning(string status)
@@ -340,6 +369,26 @@ internal sealed class App : Application
         }
     }
 
+    private void LogResourcesHint()
+    {
+        try
+        {
+            var assembly = GetType().Assembly;
+            foreach (var name in assembly.GetManifestResourceNames())
+            {
+                if (!name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                Log($"resource: {name}");
+            }
+        }
+        catch
+        {
+            // Ignore resource log failures.
+        }
+    }
+
     private static System.Drawing.Icon GetAppIcon()
     {
         var exePath = Process.GetCurrentProcess().MainModule?.FileName;
@@ -359,6 +408,52 @@ internal sealed class App : Application
             }
         }
         return System.Drawing.SystemIcons.Application;
+    }
+
+    private void StartStatusTimer()
+    {
+        _statusTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(5)
+        };
+        _statusTimer.Tick += (_, _) => RefreshServiceStatus();
+        _statusTimer.Start();
+    }
+
+    private TrayIconState GetTrayIconState()
+    {
+        if (_serviceManager is not null && _serviceManager.IsBusy)
+        {
+            return TrayIconState.Busy;
+        }
+        var snapshot = _lastStatus;
+        if (snapshot is not null &&
+            (IsServiceRunning(snapshot.ClientStatus) || IsServiceRunning(snapshot.ServerStatus)))
+        {
+            return TrayIconState.Enabled;
+        }
+        return TrayIconState.Disabled;
+    }
+
+    private static string BuildStatusKey(ServiceStatusSnapshot snapshot, bool busy)
+    {
+        return $"{snapshot.ClientStatus}|{snapshot.ServerStatus}|{busy}";
+    }
+
+    private void UpdateWindowIcon(System.Windows.Media.ImageSource? icon)
+    {
+        if (_window is null || icon is null)
+        {
+            return;
+        }
+        Dispatcher.Invoke(() => _window.Icon = icon);
+    }
+
+    private enum TrayIconState
+    {
+        Disabled,
+        Enabled,
+        Busy
     }
 
 }

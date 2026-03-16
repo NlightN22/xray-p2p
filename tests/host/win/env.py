@@ -243,6 +243,15 @@ def run_guest_script(
             print(f"TIMING: run_guest_script {relative_path}: {elapsed:.2f}s")
         if 'result' in locals():
             print(f"Guest script done: {relative_path} (rc={result.rc})")
+            if relative_path == "scripts/check_xp2p_ui_logs.ps1":
+                stdout = (result.stdout or "").strip()
+                stderr = (result.stderr or "").strip()
+                if stdout:
+                    print("Guest script stdout (check_xp2p_ui_logs.ps1):")
+                    print(stdout)
+                if stderr:
+                    print("Guest script stderr (check_xp2p_ui_logs.ps1):")
+                    print(stderr)
         if cleanup_path is not None:
             remove_path(host, cleanup_path)
 

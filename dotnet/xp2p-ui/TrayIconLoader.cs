@@ -31,11 +31,11 @@ internal sealed class TrayIconSet : IDisposable
 
 internal static class TrayIconLoader
 {
-    public static TrayIconSet Load(System.Drawing.Icon fallback)
+    public static TrayIconSet Load(System.Drawing.Icon fallback, Action<string>? log = null)
     {
-        var baseIcon = LoadIconFromResource("assets/Base.png", fallback);
-        var enabledIcon = LoadIconFromResource("assets/Enabled.png", fallback);
-        var busyIcon = LoadIconFromResource("assets/Enabling.png", fallback);
+        var baseIcon = LoadIconFromResource("assets/Disabled.png", fallback, log);
+        var enabledIcon = LoadIconFromResource("assets/Enabled.png", fallback, log);
+        var busyIcon = LoadIconFromResource("assets/Enabling.png", fallback, log);
         return new TrayIconSet(baseIcon, enabledIcon, busyIcon);
     }
 
@@ -54,29 +54,82 @@ internal static class TrayIconLoader
         }
     }
 
-    private static System.Drawing.Icon LoadIconFromResource(string resourcePath, System.Drawing.Icon fallback)
+    private static System.Drawing.Icon LoadIconFromResource(string resourcePath, System.Drawing.Icon fallback, Action<string>? log)
+    {
+        if (TryLoadFromManifest(resourcePath, log, out var icon))
+        {
+            return icon;
+        }
+        if (TryLoadFromFile(resourcePath, log, out icon))
+        {
+            return icon;
+        }
+        log?.Invoke($"tray icon resource failed: {resourcePath} (fallback)");
+        return CloneIcon(fallback);
+    }
+
+
+    private static bool TryLoadFromFile(string resourcePath, Action<string>? log, out System.Drawing.Icon icon)
     {
         try
         {
-            var info = System.Windows.Application.GetResourceStream(BuildPackUri(resourcePath));
-            if (info is null)
+            var baseDir = AppContext.BaseDirectory;
+            var cleaned = resourcePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+            var path = Path.Combine(baseDir, cleaned);
+            if (!File.Exists(path))
             {
-                return CloneIcon(fallback);
+                log?.Invoke($"tray icon file missing: {path}");
+                icon = null!;
+                return false;
             }
-            using var stream = info.Stream;
-            return CreateIconFromPng(stream);
+            using var stream = File.OpenRead(path);
+            icon = CreateIconFromPng(stream);
+            log?.Invoke($"tray icon file loaded: {path}");
+            return true;
         }
-        catch
+        catch (Exception ex)
         {
-            return CloneIcon(fallback);
+            log?.Invoke($"tray icon file failed: {resourcePath} error={ex.GetType().Name} {ex.Message}");
+            icon = null!;
+            return false;
         }
     }
 
-    private static Uri BuildPackUri(string resourcePath)
+    private static bool TryLoadFromManifest(string resourcePath, Action<string>? log, out System.Drawing.Icon icon)
     {
-        var assemblyName = typeof(TrayIconLoader).Assembly.GetName().Name ?? "Xp2pUi";
-        var cleaned = resourcePath.TrimStart('/');
-        return new Uri($"pack://application:,,,/{assemblyName};component/{cleaned}", UriKind.Absolute);
+        try
+        {
+            var assembly = typeof(TrayIconLoader).Assembly;
+            var suffix = resourcePath.TrimStart('/').Replace('/', '.');
+            var matched = false;
+            foreach (var name in assembly.GetManifestResourceNames())
+            {
+                if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                matched = true;
+                using var stream = assembly.GetManifestResourceStream(name);
+                if (stream is null)
+                {
+                    continue;
+                }
+                icon = CreateIconFromPng(stream);
+                log?.Invoke($"tray icon manifest loaded: {name}");
+                return true;
+            }
+            if (!matched)
+            {
+                log?.Invoke($"tray icon manifest missing: *{suffix}");
+            }
+        }
+        catch (Exception ex)
+        {
+            log?.Invoke($"tray icon manifest failed: {resourcePath} error={ex.GetType().Name} {ex.Message}");
+            // Ignore and fall back.
+        }
+        icon = null!;
+        return false;
     }
 
     private static System.Drawing.Icon CreateIconFromPng(Stream stream)

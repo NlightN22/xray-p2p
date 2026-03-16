@@ -39,6 +39,7 @@ internal sealed class ServiceManager
     {
         IsBusy = true;
         ActivityChanged?.Invoke(this, true);
+        StatusChanged?.Invoke(this, GetSnapshot());
         try
         {
             return await System.Threading.Tasks.Task.Run(() =>
@@ -69,6 +70,7 @@ internal sealed class ServiceManager
     {
         IsBusy = true;
         ActivityChanged?.Invoke(this, true);
+        StatusChanged?.Invoke(this, GetSnapshot());
         try
         {
             return await System.Threading.Tasks.Task.Run(() =>
