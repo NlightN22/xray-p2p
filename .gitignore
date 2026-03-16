@@ -10,3 +10,4 @@ dotnet/xp2p-ui/bin/
 dotnet/xp2p-ui/obj/
 xray-p2p.sln
 /dotnet/build/
+/dotnet/xp2p-ui.tests/TestResults/

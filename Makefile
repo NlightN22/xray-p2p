@@ -17,7 +17,7 @@ VAGRANT_OWRT_DIR := infra/vagrant/openwrt
 
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
-.PHONY: run build build-% fmt lint test vagrant-win10 vagrant-win10-destroy \
+.PHONY: run build build-% fmt lint test ui-test-cover vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi
 
@@ -34,6 +34,9 @@ lint:
 
 test:
 	powershell -NoProfile -Command "go clean -testcache ; go test ./... -cover"
+
+ui-test-cover:
+	powershell -NoProfile -Command "$$ErrorActionPreference = 'Stop'; dotnet test .\dotnet\xp2p-ui.tests\xp2p-ui.tests.csproj -v:m --nologo --logger 'console;verbosity=detailed' /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=build\\dotnet\\xp2p-ui.tests\\coverage\\; if ($$LASTEXITCODE -eq 0) { Write-Host 'OK' } else { Write-Host 'FAIL'; exit $$LASTEXITCODE }"
 
 test-wsl:
 	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
