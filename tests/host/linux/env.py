@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import shlex
+import time
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Callable
@@ -103,18 +104,24 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
 
     install_timeout = 600
     if _DEB_BUILD_READY:
+        timing_label = f"linux install_xp2p {machine} (skip_build)"
+        start = time.perf_counter()
         result = run_guest_script_with_env(
             host,
             "scripts/linux/install_xp2p.sh",
             {"XP2P_SKIP_BUILD": "1"},
             timeout=install_timeout,
         )
+        print(f"TIMING: {timing_label}: {time.perf_counter() - start:.2f}s")
     else:
+        timing_label = f"linux install_xp2p {machine} (build)"
+        start = time.perf_counter()
         result = run_guest_script(
             host,
             "scripts/linux/install_xp2p.sh",
             timeout=install_timeout,
         )
+        print(f"TIMING: {timing_label}: {time.perf_counter() - start:.2f}s")
     if result.rc != 0:
         raise RuntimeError(
             "Failed to build and install xp2p on guest "
