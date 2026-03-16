@@ -217,60 +217,16 @@ internal sealed partial class MainWindow : Window
         {
             return;
         }
-        if (IsServiceRunning(status))
-        {
-            buttons.Start.IsEnabled = false;
-            buttons.Stop.IsEnabled = true;
-            return;
-        }
-        if (IsServiceStopped(status))
-        {
-            buttons.Start.IsEnabled = true;
-            buttons.Stop.IsEnabled = false;
-            return;
-        }
-        if (IsServicePending(status))
-        {
-            buttons.Start.IsEnabled = false;
-            buttons.Stop.IsEnabled = false;
-            return;
-        }
-        buttons.Start.IsEnabled = true;
-        buttons.Stop.IsEnabled = true;
-    }
-
-    private static bool IsServiceRunning(string status)
-    {
-        return string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsServiceStopped(string status)
-    {
-        return string.Equals(status, "Stopped", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsServicePending(string status)
-    {
-        return string.Equals(status, "StartPending", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(status, "StopPending", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(status, "PausePending", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(status, "ContinuePending", StringComparison.OrdinalIgnoreCase);
+        var state = UiLogic.GetServiceButtonState(status);
+        buttons.Start.IsEnabled = state.StartEnabled;
+        buttons.Stop.IsEnabled = state.StopEnabled;
     }
 
     private static void ApplyTheme(int selection)
     {
-        if (selection < 0)
-        {
-            return;
-        }
         try
         {
-            ThemeManager.Current.ApplicationTheme = selection switch
-            {
-                1 => ApplicationTheme.Light,
-                2 => ApplicationTheme.Dark,
-                _ => null
-            };
+            ThemeManager.Current.ApplicationTheme = UiLogic.GetThemeFromSelection(selection);
         }
         catch
         {

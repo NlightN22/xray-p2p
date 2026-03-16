@@ -34,4 +34,8 @@
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
     <PackageReference Include="ModernWpfUI" Version="0.9.7-preview.2" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xp2pUi.Tests" />
+  </ItemGroup>
 </Project>

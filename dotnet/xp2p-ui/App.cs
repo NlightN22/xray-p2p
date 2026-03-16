@@ -267,7 +267,7 @@ internal sealed class App : Application
         UpdateTrayServiceButtons(snapshot);
         if (_trayIcon is not null)
         {
-            _trayIcon.Text = BuildTrayTooltip(snapshot);
+            _trayIcon.Text = UiLogic.BuildTrayTooltip(snapshot);
         }
         var statusKey = BuildStatusKey(snapshot, _serviceManager?.IsBusy ?? false);
         if (!string.Equals(_lastStatusKey, statusKey, StringComparison.Ordinal))
@@ -311,11 +311,6 @@ internal sealed class App : Application
         }
     }
 
-    private static bool IsServiceRunning(string status)
-    {
-        return string.Equals(status, "Running", StringComparison.OrdinalIgnoreCase);
-    }
-
     private void UpdateTrayServiceButtons(ServiceStatusSnapshot snapshot)
     {
         UpdateTrayButtonsForStatus(snapshot.ClientStatus, _clientStartItem, _clientStopItem);
@@ -328,34 +323,9 @@ internal sealed class App : Application
         {
             return;
         }
-        if (IsServiceRunning(status))
-        {
-            start.Enabled = false;
-            stop.Enabled = true;
-            return;
-        }
-        if (string.Equals(status, "Stopped", StringComparison.OrdinalIgnoreCase))
-        {
-            start.Enabled = true;
-            stop.Enabled = false;
-            return;
-        }
-        if (IsServicePending(status))
-        {
-            start.Enabled = false;
-            stop.Enabled = false;
-            return;
-        }
-        start.Enabled = true;
-        stop.Enabled = true;
-    }
-
-    private static bool IsServicePending(string status)
-    {
-        return string.Equals(status, "StartPending", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(status, "StopPending", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(status, "PausePending", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(status, "ContinuePending", StringComparison.OrdinalIgnoreCase);
+        var state = UiLogic.GetServiceButtonState(status);
+        start.Enabled = state.StartEnabled;
+        stop.Enabled = state.StopEnabled;
     }
 
     private bool ShouldPromptStopServices()
@@ -364,17 +334,7 @@ internal sealed class App : Application
         {
             return false;
         }
-        var snapshot = _serviceManager.GetSnapshot();
-        return IsServiceRunning(snapshot.ClientStatus) ||
-            IsServiceRunning(snapshot.ServerStatus) ||
-            IsServicePending(snapshot.ClientStatus) ||
-            IsServicePending(snapshot.ServerStatus);
-    }
-
-    private static string BuildTrayTooltip(ServiceStatusSnapshot snapshot)
-    {
-        var text = $"Client: {snapshot.ClientStatus} | Server: {snapshot.ServerStatus}";
-        return text.Length <= 63 ? text : text.Substring(0, 63);
+        return UiLogic.ShouldPromptStopServices(_serviceManager.GetSnapshot());
     }
 
     private static string GetLogPath()
@@ -475,7 +435,7 @@ internal sealed class App : Application
         }
         var snapshot = _lastStatus;
         if (snapshot is not null &&
-            (IsServiceRunning(snapshot.ClientStatus) || IsServiceRunning(snapshot.ServerStatus)))
+            (UiLogic.IsServiceRunning(snapshot.ClientStatus) || UiLogic.IsServiceRunning(snapshot.ServerStatus)))
         {
             return TrayIconState.Enabled;
         }
