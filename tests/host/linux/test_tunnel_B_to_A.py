@@ -229,8 +229,8 @@ def _socks_port(host, config_path: PurePosixPath) -> int:
     return SOCKS_PORT
 
 
-@pytest.fixture(scope="module")
-def tunnel_environment(linux_host_factory, xp2p_linux_versions):
+@pytest.fixture
+def tunnel_environment(linux_host_factory, xp2p_linux_versions, xp2p_full_cleanup):
     server_host = linux_host_factory(linux_env.DEFAULT_CLIENT)
     client_host = linux_host_factory(linux_env.DEFAULT_SERVER)
     server_runner = _runner(server_host)
@@ -254,8 +254,6 @@ def tunnel_environment(linux_host_factory, xp2p_linux_versions):
             host.run(
                 "sudo -n rm -f /etc/nftables.d/xray-transparent.d/*.entry /etc/xp2p/nftables/xray-transparent.d/*.entry >/dev/null 2>&1 || true"
             )
-        helpers.cleanup_server_install(server_host, server_runner)
-        helpers.cleanup_client_install(client_host, client_runner)
         helpers.remove_path(server_host, SERVER_HEARTBEAT_STATE_FILE)
         helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
 

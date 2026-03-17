@@ -121,7 +121,6 @@ def _assert_list_contains(rows: list[dict[str, str]], listen: int, target: str, 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_forward_cli_flow(client_host, xp2p_client_runner):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
     try:
         _install_client(xp2p_client_runner)
         _assert_forward_list_empty(xp2p_client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME)
@@ -295,13 +294,11 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
         helpers.assert_no_forward_inbound_entry(client_inbounds, second_port)
         _assert_forward_list_empty(xp2p_client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME)
     finally:
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_forward_cli_flow(server_host, xp2p_server_runner):
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
     try:
         _install_server(xp2p_server_runner)
         _assert_forward_list_empty(xp2p_server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME)
@@ -461,13 +458,11 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
         helpers.assert_no_forward_inbound_entry(server_inbounds, second_port)
         _assert_forward_list_empty(xp2p_server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME)
     finally:
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_forward_add_warns_without_redirect(client_host, xp2p_client_runner):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
     try:
         _install_client(xp2p_client_runner)
         result = _forward_cmd(
@@ -495,13 +490,11 @@ def test_client_forward_add_warns_without_redirect(client_host, xp2p_client_runn
             check=True,
         )
     finally:
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_forward_add_warns_without_redirect(server_host, xp2p_server_runner):
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
     try:
         _install_server(xp2p_server_runner)
         result = _forward_cmd(
@@ -529,4 +522,3 @@ def test_server_forward_add_warns_without_redirect(server_host, xp2p_server_runn
             check=True,
         )
     finally:
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)

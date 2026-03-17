@@ -37,8 +37,6 @@ def _mismatch_version(pinned: str) -> str:
 
 
 def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> None:
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
     linux_env.run_guest_script(server_host, "scripts/linux/kill_xp2p_processes.sh")
     linux_env.run_guest_script(client_host, "scripts/linux/kill_xp2p_processes.sh")
 

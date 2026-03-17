@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Callable
 
 import pytest
 from testinfra.host import Host
 
+from . import _helpers as helpers
 from . import env as linux_env
 
 
@@ -66,3 +68,68 @@ def xp2p_client_runner(client_host: Host):
 @pytest.fixture
 def xp2p_server_runner(server_host: Host):
     return _xp2p_runner(server_host)
+
+
+@pytest.fixture(autouse=True)
+def xp2p_full_cleanup(request, linux_host_factory, xp2p_linux_versions):
+    module_name = request.fspath.basename if request.fspath else ""
+    needed: set[str] = set()
+    if "client_host" in request.fixturenames or "server_host" in request.fixturenames:
+        needed.update({linux_env.DEFAULT_CLIENT, linux_env.DEFAULT_SERVER})
+    if "aux_host" in request.fixturenames:
+        needed.add(linux_env.DEFAULT_AUX)
+    if "linux_host_factory" in request.fixturenames:
+        needed.update({linux_env.DEFAULT_CLIENT, linux_env.DEFAULT_SERVER})
+        if module_name == "test_tunnel_BC_to_A.py":
+            needed.add(linux_env.DEFAULT_AUX)
+
+    hosts = [linux_host_factory(machine) for machine in sorted(needed)]
+
+    def _cleanup_host(host: Host) -> None:
+        runner = _xp2p_runner(host)
+        runner(
+            "client",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--all",
+            "--ignore-missing",
+        )
+        runner(
+            "server",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--ignore-missing",
+        )
+        runner("client", "service", "stop")
+        runner("server", "service", "stop")
+        linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        linux_env.run_guest_script(host, "scripts/linux/bundle_cleanup_backups.sh", helpers.CONFIG_ROOT.as_posix())
+        bundle_artifacts = linux_env.WORK_TREE / "build" / "artifacts" / "bundle"
+        for path in (
+            helpers.CLIENT_CONFIG_FILE,
+            helpers.SERVER_CONFIG_FILE,
+            helpers.CLIENT_APPLIED_STATE_FILE,
+            helpers.SERVER_APPLIED_STATE_FILE,
+            helpers.CLIENT_HEARTBEAT_STATE_FILE,
+            helpers.SERVER_HEARTBEAT_STATE_FILE,
+            helpers.CLIENT_CONFIG_DIR / "inbounds.json",
+            helpers.SERVER_CONFIG_DIR / "inbounds.json",
+            helpers.CLIENT_LOG_FILE,
+            helpers.SERVER_LOG_FILE,
+            *helpers.SERVICE_LOG_FILES,
+            helpers.CONFIG_ROOT / "bundle-marker.txt",
+            bundle_artifacts,
+            PurePosixPath("/tmp/xp2p-client-deploy.log"),
+            PurePosixPath("/tmp/xp2p-server-deploy.log"),
+        ):
+            helpers.remove_path(host, path)
+
+    for host in hosts:
+        _cleanup_host(host)
+    yield

@@ -31,6 +31,12 @@ HEARTBEAT_STATE_FILE = CLIENT_HEARTBEAT_STATE_FILE
 LOG_ROOT = PurePosixPath(os.environ.get("XP2P_LOG_ROOT", "/var/log/xp2p"))
 CLIENT_LOG_FILE = LOG_ROOT / "client.err"
 SERVER_LOG_FILE = LOG_ROOT / "server.err"
+SERVICE_LOG_FILES = (
+    LOG_ROOT / "client" / "service.log",
+    LOG_ROOT / "client" / "xray-service.log",
+    LOG_ROOT / "server" / "service.log",
+    LOG_ROOT / "server" / "xray-service.log",
+)
 XRAY_BINARY = INSTALL_ROOT / "bin" / "xray"
 REVERSE_SUFFIX = ".rev"
 
@@ -54,8 +60,7 @@ def cleanup_client_install(
         "--ignore-missing",
         "--quiet",
     )
-    linux_env.remove_path(host, LOG_ROOT)
-    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
+    remove_log_files(host)
 
 
 def cleanup_server_install(
@@ -76,8 +81,7 @@ def cleanup_server_install(
         "--ignore-missing",
         "--quiet",
     )
-    linux_env.remove_path(host, LOG_ROOT)
-    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
+    remove_log_files(host)
 
 
 def assert_reverse_cli_output(
@@ -131,6 +135,11 @@ def path_exists(host: Host, path: PurePosixPath) -> bool:
 
 def remove_path(host: Host, path: PurePosixPath) -> None:
     linux_env.remove_path(host, path)
+
+
+def remove_log_files(host: Host) -> None:
+    for path in (CLIENT_LOG_FILE, SERVER_LOG_FILE, *SERVICE_LOG_FILES):
+        linux_env.remove_path(host, path)
 
 
 def write_text(host: Host, path: PurePosixPath, content: str) -> None:

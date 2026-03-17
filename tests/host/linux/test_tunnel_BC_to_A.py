@@ -34,7 +34,6 @@ def _extract_link(output: str) -> str:
 
 
 def _install_client(host, runner, link: str):
-    helpers.cleanup_client_install(host, runner)
     runner(
         "client",
         "install",
@@ -210,9 +209,6 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
     client_b_runner = _runner(client_b)
     client_c_runner = _runner(client_c)
 
-    helpers.cleanup_server_install(server_host, server_runner)
-    helpers.cleanup_client_install(client_b, client_b_runner)
-    helpers.cleanup_client_install(client_c, client_c_runner)
     for host in (server_host, client_b, client_c):
         _reset_host(host)
     helpers.remove_path(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
@@ -524,9 +520,6 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
     finally:
         for host in (server_host, client_b, client_c):
             _reset_host(host)
-        helpers.cleanup_client_install(client_b, client_b_runner)
-        helpers.cleanup_client_install(client_c, client_c_runner)
-        helpers.cleanup_server_install(server_host, server_runner)
         helpers.remove_path(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
         for host in (client_b, client_c):
             helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)

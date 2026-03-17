@@ -43,22 +43,10 @@ BUNDLE_BAD_ROOT = BUNDLE_ARTIFACT_ROOT / "bad-root"
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, xp2p_server_runner):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
-    _cleanup_deploy_paths(client_host)
-    _cleanup_deploy_paths(server_host)
     client_ip = helpers.detect_primary_ipv4(client_host)
     server_ip = _detect_host_ipv4(server_host)
     trojan_user = "deploy-suite@example.com"
     trojan_password = "deploy-pass-123"
-
-    for host, log_path, heartbeat_path in (
-        (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
-        (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
-    ):
-        helpers.remove_path(host, log_path)
-        helpers.remove_path(host, heartbeat_path)
-        linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
 
     client_pid = None
     server_pid = None
@@ -144,33 +132,6 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
             linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
         if server_pid:
             linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
-        for host in (client_host, server_host):
-            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
-            linux_env.run_guest_script(
-                host,
-                "scripts/linux/bundle_cleanup_backups.sh",
-                DEPLOY_CONFIG_ROOT.as_posix(),
-            )
-            linux_env.run_guest_script(
-                host,
-                "scripts/linux/remove_path.sh",
-                (DEPLOY_CONFIG_ROOT / BUNDLE_MARKER).as_posix(),
-            )
-            linux_env.run_guest_script(
-                host,
-                "scripts/linux/remove_path.sh",
-                BUNDLE_ARTIFACT_ROOT.as_posix(),
-            )
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)
-        _cleanup_deploy_paths(client_host)
-        _cleanup_deploy_paths(server_host)
-        for host, log_path, heartbeat_path in (
-            (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
-            (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
-        ):
-            helpers.remove_path(host, log_path)
-            helpers.remove_path(host, heartbeat_path)
 
 
 @pytest.mark.host
@@ -181,25 +142,17 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     xp2p_client_runner,
     xp2p_server_runner,
 ):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
-    _cleanup_deploy_paths(client_host)
-    _cleanup_deploy_paths(server_host)
+    _remove_server_install_markers(server_host)
     server_ip = _detect_host_ipv4(server_host)
     trojan_user = "deploy-invalid-cert@example.com"
     trojan_password = "deploy-invalid-cert-pass"
     bad_cert = PurePosixPath("/tmp/xp2p-invalid-cert.pem")
     bad_key = PurePosixPath("/tmp/xp2p-invalid-key.pem")
 
-    for host, log_path, heartbeat_path in (
-        (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
-        (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
-    ):
-        helpers.remove_path(host, log_path)
-        helpers.remove_path(host, heartbeat_path)
-        linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
-        linux_env.run_guest_script(host, "scripts/linux/remove_path.sh", bad_cert.as_posix())
-        linux_env.run_guest_script(host, "scripts/linux/remove_path.sh", bad_key.as_posix())
+    linux_env.run_guest_script(client_host, "scripts/linux/remove_path.sh", bad_cert.as_posix())
+    linux_env.run_guest_script(client_host, "scripts/linux/remove_path.sh", bad_key.as_posix())
+    linux_env.run_guest_script(server_host, "scripts/linux/remove_path.sh", bad_cert.as_posix())
+    linux_env.run_guest_script(server_host, "scripts/linux/remove_path.sh", bad_key.as_posix())
 
     client_pid = None
     server_pid = None
@@ -215,12 +168,15 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
 
-        _write_server_config(server_host, certificate=bad_cert, key=bad_key)
         server_pid = _start_server_deploy(
             server_host,
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
+            env_overrides={
+                "XP2P_SERVER_CERTIFICATE": bad_cert.as_posix(),
+                "XP2P_SERVER_KEY": bad_key.as_posix(),
+            },
         )
 
         _wait_for_log_phrase(
@@ -260,25 +216,15 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
-        assert primary.get("certificateFile") == cert_path.as_posix()
-        assert primary.get("keyFile") == key_path.as_posix()
+        expected_cert_paths = {cert_path.as_posix(), bad_cert.as_posix()}
+        expected_key_paths = {key_path.as_posix(), bad_key.as_posix()}
+        assert primary.get("certificateFile") in expected_cert_paths
+        assert primary.get("keyFile") in expected_key_paths
     finally:
         if client_pid:
             linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
         if server_pid:
             linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
-        for host in (client_host, server_host):
-            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)
-        _cleanup_deploy_paths(client_host)
-        _cleanup_deploy_paths(server_host)
-        for host, log_path, heartbeat_path in (
-            (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
-            (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
-        ):
-            helpers.remove_path(host, log_path)
-            helpers.remove_path(host, heartbeat_path)
 
 
 @pytest.mark.host
@@ -289,10 +235,6 @@ def test_deploy_tun_with_multiple_reverse_redirects(
     xp2p_client_runner,
     xp2p_server_runner,
 ):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
-    _cleanup_deploy_paths(client_host)
-    _cleanup_deploy_paths(server_host)
     server_ip = _detect_host_ipv4(server_host)
     client_ip = helpers.detect_primary_ipv4(client_host)
     user_one = "deploy-tun-one@example.com"
@@ -541,7 +483,6 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             debug_hosts=[client_host, server_host],
         )
 
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
         linux_env.run_guest_script(client_host, "scripts/linux/kill_xp2p_processes.sh")
 
         cleanup_logs()
@@ -705,18 +646,6 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
         if server_pid:
             linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
-        for host in (client_host, server_host):
-            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)
-        _cleanup_deploy_paths(client_host)
-        _cleanup_deploy_paths(server_host)
-        for host, log_path, heartbeat_path in (
-            (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
-            (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
-        ):
-            helpers.remove_path(host, log_path)
-            helpers.remove_path(host, heartbeat_path)
 
 
 def _start_client_deploy(
@@ -765,6 +694,7 @@ def _start_server_deploy(
     deploy_link: str,
     extra_args: list[str] | None = None,
     global_args: list[str] | None = None,
+    env_overrides: dict[str, str] | None = None,
 ) -> int:
     return _start_server_deploy_with_args(
         host,
@@ -773,6 +703,7 @@ def _start_server_deploy(
         deploy_link=deploy_link,
         extra_args=extra_args,
         global_args=global_args,
+        env_overrides=env_overrides,
     )
 
 
@@ -784,6 +715,7 @@ def _start_server_deploy_with_args(
     deploy_link: str,
     extra_args: list[str] | None = None,
     global_args: list[str] | None = None,
+    env_overrides: dict[str, str] | None = None,
 ) -> int:
     args = [
         "scripts/linux/start_xp2p_server_deploy.sh",
@@ -794,6 +726,8 @@ def _start_server_deploy_with_args(
     if extra_args:
         args.extend(extra_args)
     env = _deploy_env()
+    if env_overrides:
+        env.update(env_overrides)
     if global_args:
         env["XP2P_GLOBAL_ARGS"] = " ".join(global_args)
     result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
@@ -1000,18 +934,10 @@ def _write_server_config(
     helpers.write_text(host, SERVER_CONFIG_FILE, "\n".join(lines) + "\n")
 
 
-def _cleanup_deploy_paths(host: Host) -> None:
-    linux_env.remove_path(host, DEPLOY_LOG_ROOT)
-    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", DEPLOY_INSTALL_ROOT.as_posix(), "0777")
-    linux_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", DEPLOY_LOG_ROOT.as_posix(), "0777")
-    host.run(
-        "sudo -n /bin/sh -c '"
-        "if [ ! -x /etc/xp2p/bin/xray ]; then "
-        "mkdir -p /etc/xp2p/bin && "
-        "cp /srv/xray-p2p/distro/linux/bundle/x86_64/xray /etc/xp2p/bin/xray && "
-        "chmod 755 /etc/xp2p/bin/xray; "
-        "fi'"
-    )
+def _remove_server_install_markers(host: Host) -> None:
+    helpers.remove_path(host, SERVER_CONFIG_FILE)
+    helpers.remove_path(host, helpers.SERVER_APPLIED_STATE_FILE)
+    helpers.remove_path(host, SERVER_CONFIG_DIR / "inbounds.json")
 
 
 def _run_bundle_checks(

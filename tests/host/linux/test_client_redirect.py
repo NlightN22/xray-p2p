@@ -16,7 +16,6 @@ INVALID_CIDR = "10.999.0.0/33"
 
 
 def _cleanup(client_host, xp2p_client_runner) -> None:
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
 
 
 def _install_endpoint(runner, host: str, user: str, password: str) -> None:

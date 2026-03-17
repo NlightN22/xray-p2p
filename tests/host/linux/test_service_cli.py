@@ -95,11 +95,6 @@ def _stop_service(role: str, runner) -> None:
     _wait_for_service_state(runner, role, expected_active=False)
 
 
-def _clear_logs(host, *paths) -> None:
-    for path in paths:
-        helpers.remove_path(host, path)
-
-
 def _unit_missing(result) -> bool:
     text = ((result.stdout or "") + (result.stderr or "")).lower()
     return "could not be found" in text or "loaded: not-found" in text
@@ -165,7 +160,6 @@ def _toggle_mode(host, runner, role: str, config_dir: str) -> str:
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_service_cli_controls_systemd(client_host, xp2p_client_runner):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
     try:
         _install_client_endpoint(
             xp2p_client_runner,
@@ -174,7 +168,6 @@ def test_client_service_cli_controls_systemd(client_host, xp2p_client_runner):
             "svc-client-secret",
         )
 
-        _clear_logs(client_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG)
         _start_service("client", xp2p_client_runner, client_host, CLIENT_DIAG_PORT)
         assert helpers.path_exists(client_host, CLIENT_SERVICE_LOG), "client service log was not created"
 
@@ -182,18 +175,14 @@ def test_client_service_cli_controls_systemd(client_host, xp2p_client_runner):
         assert helpers.path_exists(client_host, CLIENT_SERVICE_LOG), "client service log missing after stop"
     finally:
         _stop_service("client", xp2p_client_runner)
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
-        _clear_logs(client_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_service_cli_controls_systemd(server_host, xp2p_server_runner):
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
     try:
         _install_server_instance(xp2p_server_runner, server_host, host_name="svc-server.example.com", port="62120")
 
-        _clear_logs(server_host, SERVER_SERVICE_LOG, SERVER_XRAY_LOG)
         _start_service("server", xp2p_server_runner, server_host, SERVER_DIAG_PORT)
         assert helpers.path_exists(server_host, SERVER_SERVICE_LOG), "server service log was not created"
 
@@ -201,8 +190,6 @@ def test_server_service_cli_controls_systemd(server_host, xp2p_server_runner):
         assert helpers.path_exists(server_host, SERVER_SERVICE_LOG), "server service log missing after stop"
     finally:
         _stop_service("server", xp2p_server_runner)
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)
-        _clear_logs(server_host, SERVER_SERVICE_LOG, SERVER_XRAY_LOG)
 
 
 @pytest.mark.host
@@ -218,7 +205,6 @@ def test_service_restarts_when_config_changes(
     if role == "client":
         host = client_host
         runner = xp2p_client_runner
-        cleanup = helpers.cleanup_client_install
         service_log = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
         diag_port = CLIENT_DIAG_PORT
@@ -242,7 +228,6 @@ def test_service_restarts_when_config_changes(
     else:
         host = server_host
         runner = xp2p_server_runner
-        cleanup = helpers.cleanup_server_install
         service_log = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
         diag_port = SERVER_DIAG_PORT
@@ -263,10 +248,8 @@ def test_service_restarts_when_config_changes(
             if original_mode:
                 _set_mode(runner, role, config_dir, original_mode)
 
-    cleanup(host, runner)
     try:
         install_fn()
-        _clear_logs(host, service_log, xray_log)
         _start_service(role, runner, host, diag_port)
 
         change_fn()
@@ -277,8 +260,6 @@ def test_service_restarts_when_config_changes(
             revert_fn()
     finally:
         _stop_service(role, runner)
-        cleanup(host, runner)
-        _clear_logs(host, service_log, xray_log)
 
 
 @pytest.mark.host
@@ -295,7 +276,6 @@ def test_service_stops_after_invalid_config(
     if role == "client":
         host = client_host
         runner = xp2p_client_runner
-        cleanup = helpers.cleanup_client_install
         service_log = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
         config_path = CLIENT_CONFIG
@@ -310,7 +290,6 @@ def test_service_stops_after_invalid_config(
     else:
         host = server_host
         runner = xp2p_server_runner
-        cleanup = helpers.cleanup_server_install
         service_log = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
         config_path = SERVER_CONFIG
@@ -323,12 +302,10 @@ def test_service_stops_after_invalid_config(
             port="62130",
         )
 
-    cleanup(host, runner)
     original_config = None
     try:
         install_fn()
         original_config = helpers.read_text(host, config_path)
-        _clear_logs(host, service_log, xray_log)
         _start_service(role, runner, host, diag_port)
 
         helpers.write_text(host, config_path, invalid_config)
@@ -346,8 +323,6 @@ def test_service_stops_after_invalid_config(
         if original_config is not None:
             helpers.write_text(host, config_path, original_config)
         runner(role, "service", "stop")
-        cleanup(host, runner)
-        _clear_logs(host, service_log, xray_log)
 
 
 @pytest.mark.host
@@ -416,8 +391,6 @@ def test_package_remove_keeps_config_files(server_host, xp2p_server_runner):
             rendered = "\n".join(path.as_posix() for path in missing)
             pytest.fail(f"Expected config files to exist:\n{rendered}")
 
-    helpers.cleanup_client_install(server_host, xp2p_server_runner)
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
     for path in state_paths:
         if helpers.path_exists(server_host, path):
             helpers.remove_path(server_host, path)
@@ -470,8 +443,6 @@ def test_package_remove_keeps_config_files(server_host, xp2p_server_runner):
                 "Failed to reinstall xp2p package "
                 f"(exit {reinstall.rc}).\nSTDOUT:\n{reinstall.stdout}\nSTDERR:\n{reinstall.stderr}"
             )
-        helpers.cleanup_client_install(server_host, xp2p_server_runner)
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)
         for path in state_paths:
             if helpers.path_exists(server_host, path):
                 helpers.remove_path(server_host, path)

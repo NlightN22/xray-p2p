@@ -60,7 +60,6 @@ def _assert_tun_addr(host, name: str, addr: str) -> None:
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_service_brings_up_tun(client_host, xp2p_client_runner):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
     failed = False
     try:
         print("[runtime] client install start")
@@ -90,13 +89,11 @@ def test_client_service_brings_up_tun(client_host, xp2p_client_runner):
         if failed:
             _dump_diagnostics(client_host, "client")
         _stop_service("client", xp2p_client_runner)
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_service_brings_up_tun(server_host, xp2p_server_runner):
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
     failed = False
     try:
         print("[runtime] server install start")
@@ -124,4 +121,3 @@ def test_server_service_brings_up_tun(server_host, xp2p_server_runner):
         if failed:
             _dump_diagnostics(server_host, "server")
         _stop_service("server", xp2p_server_runner)
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)

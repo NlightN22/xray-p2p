@@ -10,7 +10,6 @@ SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
 
 
 def _cleanup(server_host, xp2p_server_runner):
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
 
 
 def _trojan_clients(server_host) -> list[dict]:

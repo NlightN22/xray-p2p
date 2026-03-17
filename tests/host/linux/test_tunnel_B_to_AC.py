@@ -88,9 +88,6 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
     client_primary_ip = helpers.detect_primary_ipv4(client_b)
 
     def cleanup():
-        helpers.cleanup_server_install(server_a, server_a_runner)
-        helpers.cleanup_server_install(server_c, server_c_runner)
-        helpers.cleanup_client_install(client_b, client_runner)
         for host in (server_a, server_c):
             helpers.remove_path(host, helpers.SERVER_HEARTBEAT_STATE_FILE)
         helpers.remove_path(client_b, helpers.CLIENT_HEARTBEAT_STATE_FILE)

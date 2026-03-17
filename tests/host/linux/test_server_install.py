@@ -17,7 +17,6 @@ FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
 
 def _cleanup(server_host, xp2p_server_runner) -> None:
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
 
 
 def _trojan_inbound(data: dict) -> dict:

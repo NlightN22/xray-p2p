@@ -63,12 +63,14 @@ guest suites -- the CI and fellow contributors expect these rules.
      e.g. `.ps1` for Windows, `.sh`/`.py` for Linux guests).
    - Invoke them with `_env.run_guest_script(host, "scripts/<name>.<ext>", ...)`.
    - Parameters must be strings; cast numbers explicitly with `str(...)`.
-   - Prefer **inline PowerShell** for small, single-purpose operations on Windows
-     (for example `Test-Path`, trivial `Get-Content`, or simple `Remove-Item`)
-     to avoid extra SSH round-trips from staging guest scripts. Use
-     `tests.host.win.env.run_powershell(...)` (or `_path_exists_raw(...)`) when
-     the logic is short and self-contained; fall back to guest scripts for
-     reusable or multi-step workflows.
+   - Prefer **inline shell commands** for small, single-purpose operations on
+     every OS (for example `Test-Path`, trivial `Get-Content`, `Remove-Item`,
+     or simple `test -f`/`cat`/`rm`) to avoid extra SSH round-trips from staging
+     guest scripts. Use the platform helpers for inline execution
+     (`tests.host.win.env.run_powershell(...)`, `_path_exists_raw(...)`,
+     or the equivalent Linux/OpenWrt host helpers) when the logic is short and
+     self-contained; fall back to guest scripts for reusable or multi-step
+     workflows.
 
 3. **Assertions and artefacts**
    - Fetch remote files with helper utilities; avoid ad-hoc transport hacks.
@@ -113,8 +115,11 @@ guest suites -- the CI and fellow contributors expect these rules.
   (for example `build_deb_xp2p.sh`). Host tests invoke those scripts instead of
   duplicating build logic inline.
 - **Installer-managed directories.** Tests must not create or pre-create
-  installer-owned paths. If these are missing, the test should fail instead of
-  creating them.
+  installer-owned directories. If these directories are missing, the test should
+  fail instead of creating them. Tests may delete or reset files inside these
+  directories during cleanup when needed (including configs and logs), but
+  should avoid recreating the directories themselves. **Do not touch binaries**
+  or replace files under installer-managed `bin` directories.
   - Windows MSI: `C:\Program Files\xp2p\`, `C:\ProgramData\xp2p\` (including
     `config-client`, `config-server`, `logs`, `completions`).
   - Debian/OpenWrt: `/etc/xp2p/` (including `config-client`, `config-server`,

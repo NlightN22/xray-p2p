@@ -16,7 +16,6 @@ def _networkd_path(name: str) -> str:
 @pytest.mark.host
 @pytest.mark.linux
 def test_linux_tun_autoconfig_client_no_networkd(client_host, xp2p_client_runner):
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
     try:
         result = linux_env.run_xp2p_with_env(
             client_host,
@@ -45,13 +44,11 @@ def test_linux_tun_autoconfig_client_no_networkd(client_host, xp2p_client_runner
             "Networkd file should not be created for client install"
         )
     finally:
-        helpers.cleanup_client_install(client_host, xp2p_client_runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_linux_tun_autoconfig_server_no_networkd(server_host, xp2p_server_runner):
-    helpers.cleanup_server_install(server_host, xp2p_server_runner)
     try:
         result = linux_env.run_xp2p_with_env(
             server_host,
@@ -78,4 +75,3 @@ def test_linux_tun_autoconfig_server_no_networkd(server_host, xp2p_server_runner
             "Networkd file should not be created for server install"
         )
     finally:
-        helpers.cleanup_server_install(server_host, xp2p_server_runner)

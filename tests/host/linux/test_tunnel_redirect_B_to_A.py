@@ -109,8 +109,6 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
             host.run("sudo -n pkill -f '/usr/bin/xp2p server run' >/dev/null 2>&1 || true")
             host.run("sudo -n pkill -f '/usr/bin/xp2p client run' >/dev/null 2>&1 || true")
             host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
-        helpers.cleanup_server_install(server_host, server_runner)
-        helpers.cleanup_client_install(client_host, client_runner)
         helpers.remove_path(server_host, SERVER_HEARTBEAT_STATE_FILE)
         helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
         for cidr in (DIAG_CIDR, DIAG_DOMAIN_CIDR):

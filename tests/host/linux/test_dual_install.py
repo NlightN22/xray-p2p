@@ -34,8 +34,6 @@ def _read_roles(host) -> dict:
 def test_client_and_server_share_install_dir(server_host):
     run = lambda *cmd, check=False: _xp2p_run(server_host, *cmd, check=check)
     try:
-        helpers.cleanup_client_install(server_host, run)
-        helpers.cleanup_server_install(server_host, run)
 
         run(
             "client",
@@ -126,8 +124,6 @@ def test_client_and_server_install_support_extended_arguments(server_host):
     server_host_value = "linux-max.example"
     server_port_value = "62577"
     try:
-        helpers.cleanup_client_install(server_host, run, config_dir=custom_client_config)
-        helpers.cleanup_server_install(server_host, run, config_dir=custom_server_config)
 
         run(
             "client",
@@ -183,5 +179,3 @@ def test_client_and_server_install_support_extended_arguments(server_host):
         roles = _read_roles(server_host)
         assert {"client", "server"} <= set(roles.keys())
     finally:
-        helpers.cleanup_server_install(server_host, run, config_dir=custom_server_config)
-        helpers.cleanup_client_install(server_host, run, config_dir=custom_client_config)

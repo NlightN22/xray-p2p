@@ -15,7 +15,6 @@ CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
 
 
 def _cleanup(client_host, xp2p_client_runner) -> None:
-    helpers.cleanup_client_install(client_host, xp2p_client_runner)
 
 
 @pytest.mark.host
