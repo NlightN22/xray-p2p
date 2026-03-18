@@ -175,7 +175,13 @@ def machine_host_factory() -> Callable[[str], Host]:
 
 
 def path_exists(host: Host, path: str | Path | PurePosixPath) -> bool:
-    result = run_guest_script(host, "scripts/linux/path_exists.sh", _posix(path))
+    target = _posix(path)
+    quoted = shlex.quote(target)
+    result = host.run(
+        "sudo -n /bin/sh -c "
+        "'if [ -e \"$1\" ]; then exit 0; else exit 3; fi' "
+        f"-- {quoted}"
+    )
     if result.rc in (0, 3):
         return result.rc == 0
     raise RuntimeError(
@@ -184,7 +190,13 @@ def path_exists(host: Host, path: str | Path | PurePosixPath) -> bool:
 
 
 def remove_path(host: Host, path: str | Path | PurePosixPath) -> None:
-    result = run_guest_script(host, "scripts/linux/remove_path.sh", _posix(path))
+    target = _posix(path)
+    quoted = shlex.quote(target)
+    result = host.run(
+        "sudo -n /bin/sh -c "
+        "'if [ -e \"$1\" ]; then rm -rf \"$1\"; exit 0; fi; exit 3' "
+        f"-- {quoted}"
+    )
     if result.rc not in (0, 3):
         raise RuntimeError(
             f"Failed to remove path {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -192,7 +204,13 @@ def remove_path(host: Host, path: str | Path | PurePosixPath) -> None:
 
 
 def read_text(host: Host, path: str | Path | PurePosixPath) -> str:
-    result = run_guest_script(host, "scripts/linux/read_file.sh", _posix(path))
+    target = _posix(path)
+    quoted = shlex.quote(target)
+    result = host.run(
+        "sudo -n /bin/sh -c "
+        "'if [ ! -f \"$1\" ]; then exit 3; fi; cat \"$1\"' "
+        f"-- {quoted}"
+    )
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to read remote text {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -210,11 +228,13 @@ def read_json(host: Host, path: str | Path | PurePosixPath) -> dict:
 
 def write_text(host: Host, path: str | Path | PurePosixPath, content: str) -> None:
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    result = run_guest_script(
-        host,
-        "scripts/linux/write_file.sh",
-        _posix(path),
-        encoded,
+    path_arg = _posix(path)
+    quoted_path = shlex.quote(path_arg)
+    quoted_content = shlex.quote(encoded)
+    result = host.run(
+        "sudo -n /bin/sh -c "
+        "'mkdir -p \"$(dirname \"$1\")\"; printf %s \"$2\" | base64 -d >\"$1\"' "
+        f"-- {quoted_path} {quoted_content}"
     )
     if result.rc != 0:
         raise RuntimeError(
@@ -223,12 +243,33 @@ def write_text(host: Host, path: str | Path | PurePosixPath, content: str) -> No
 
 
 def file_sha256(host: Host, path: str | Path | PurePosixPath) -> str:
-    result = run_guest_script(host, "scripts/linux/file_sha256.sh", _posix(path))
+    target = _posix(path)
+    quoted = shlex.quote(target)
+    result = host.run(
+        "sudo -n /bin/sh -c "
+        "'if [ ! -f \"$1\" ]; then exit 3; fi; sha256sum \"$1\"' "
+        f"-- {quoted}"
+    )
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to hash remote file {path} (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-    return (result.stdout or "").strip()
+    return (result.stdout or "").split()[0]
+
+
+def kill_xp2p_processes(host: Host) -> None:
+    host.run(
+        "sudo -n /bin/sh -c "
+        "'for pattern in "
+        "\"xp2p client run\" "
+        "\"xp2p server run\" "
+        "\"xp2p client deploy\" "
+        "\"xp2p server deploy\" "
+        "\"/etc/xp2p/bin/xray\" "
+        "\"/usr/bin/xp2p\"; do "
+        "pkill -f \"$pattern\" >/dev/null 2>&1 || true; "
+        "done'"
+    )
 
 
 @contextmanager

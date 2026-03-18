@@ -44,6 +44,7 @@ def test_linux_tun_autoconfig_client_no_networkd(client_host, xp2p_client_runner
             "Networkd file should not be created for client install"
         )
     finally:
+        pass
 
 
 @pytest.mark.host
@@ -75,3 +76,4 @@ def test_linux_tun_autoconfig_server_no_networkd(server_host, xp2p_server_runner
             "Networkd file should not be created for server install"
         )
     finally:
+        pass

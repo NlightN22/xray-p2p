@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import shlex
+from collections.abc import Mapping
 from typing import Callable
 
 import pytest
@@ -16,29 +18,45 @@ def linux_host_factory() -> Callable[[str], Host]:
     return linux_env.machine_host_factory()
 
 
-@pytest.fixture(scope="session")
-def xp2p_linux_versions(linux_host_factory) -> dict[str, dict[str, str]]:
-    versions: dict[str, dict[str, str]] = {}
-    for machine in linux_env.MACHINE_IDS:
-        host = linux_host_factory(machine)
-        versions[machine] = linux_env.ensure_xp2p_installed(machine, host)
-        linux_env.run_xp2p(host, "client", "service", "stop")
-        linux_env.run_xp2p(host, "server", "service", "stop")
-    return versions
+class _LazyLinuxVersions(Mapping[str, dict[str, str]]):
+    def __init__(self, host_factory: Callable[[str], Host]) -> None:
+        self._host_factory = host_factory
+        self._cache: dict[str, dict[str, str]] = {}
+
+    def __getitem__(self, key: str) -> dict[str, str]:
+        if key not in linux_env.MACHINE_IDS:
+            raise KeyError(key)
+        if key not in self._cache:
+            host = self._host_factory(key)
+            self._cache[key] = linux_env.ensure_xp2p_installed(key, host)
+            linux_env.run_xp2p(host, "client", "service", "stop")
+            linux_env.run_xp2p(host, "server", "service", "stop")
+        return self._cache[key]
+
+    def __iter__(self):
+        return iter(linux_env.MACHINE_IDS)
+
+    def __len__(self) -> int:
+        return len(linux_env.MACHINE_IDS)
 
 
 @pytest.fixture(scope="session")
-def client_host(linux_host_factory, xp2p_linux_versions) -> Host:
+def xp2p_linux_versions(linux_host_factory) -> Mapping[str, dict[str, str]]:
+    return _LazyLinuxVersions(linux_host_factory)
+
+
+@pytest.fixture(scope="session")
+def client_host(linux_host_factory) -> Host:
     return linux_host_factory(linux_env.DEFAULT_CLIENT)
 
 
 @pytest.fixture(scope="session")
-def server_host(linux_host_factory, xp2p_linux_versions) -> Host:
+def server_host(linux_host_factory) -> Host:
     return linux_host_factory(linux_env.DEFAULT_SERVER)
 
 
 @pytest.fixture(scope="session")
-def aux_host(linux_host_factory, xp2p_linux_versions) -> Host:
+def aux_host(linux_host_factory) -> Host:
     return linux_host_factory(linux_env.DEFAULT_AUX)
 
 
@@ -71,7 +89,7 @@ def xp2p_server_runner(server_host: Host):
 
 
 @pytest.fixture(autouse=True)
-def xp2p_full_cleanup(request, linux_host_factory, xp2p_linux_versions):
+def xp2p_full_cleanup(request, linux_host_factory):
     module_name = request.fspath.basename if request.fspath else ""
     needed: set[str] = set()
     if "client_host" in request.fixturenames or "server_host" in request.fixturenames:
@@ -108,10 +126,16 @@ def xp2p_full_cleanup(request, linux_host_factory, xp2p_linux_versions):
         )
         runner("client", "service", "stop")
         runner("server", "service", "stop")
-        linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
-        linux_env.run_guest_script(host, "scripts/linux/bundle_cleanup_backups.sh", helpers.CONFIG_ROOT.as_posix())
+        linux_env.kill_xp2p_processes(host)
+        root = helpers.CONFIG_ROOT.as_posix()
+        quoted_root = shlex.quote(root)
+        host.run(
+            "sudo -n /bin/sh -c "
+            "'for path in \"$1\".bak-*; do [ -e \"$path\" ] || continue; rm -rf \"$path\"; done' "
+            f"-- {quoted_root}"
+        )
         bundle_artifacts = linux_env.WORK_TREE / "build" / "artifacts" / "bundle"
-        for path in (
+        cleanup_paths = [
             helpers.CLIENT_CONFIG_FILE,
             helpers.SERVER_CONFIG_FILE,
             helpers.CLIENT_APPLIED_STATE_FILE,
@@ -127,8 +151,9 @@ def xp2p_full_cleanup(request, linux_host_factory, xp2p_linux_versions):
             bundle_artifacts,
             PurePosixPath("/tmp/xp2p-client-deploy.log"),
             PurePosixPath("/tmp/xp2p-server-deploy.log"),
-        ):
-            helpers.remove_path(host, path)
+        ]
+        quoted_paths = " ".join(shlex.quote(path.as_posix()) for path in cleanup_paths)
+        host.run(f"sudo -n /bin/sh -c 'rm -rf -- \"$@\"' -- {quoted_paths}")
 
     for host in hosts:
         _cleanup_host(host)

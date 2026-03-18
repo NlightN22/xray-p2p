@@ -9,9 +9,6 @@ from tests.host.linux import _helpers as helpers
 SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
 
 
-def _cleanup(server_host, xp2p_server_runner):
-
-
 def _trojan_clients(server_host) -> list[dict]:
     data = helpers.read_json(server_host, SERVER_INBOUNDS)
     inbounds = data.get("inbounds", [])
@@ -68,7 +65,6 @@ def _install_server(server_host, xp2p_server_runner, port: str, host: str):
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_install_provisions_default_user(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         host = "srv-install.xp2p.test"
         _install_server(server_host, xp2p_server_runner, "62040", host)
@@ -78,13 +74,12 @@ def test_server_install_provisions_default_user(server_host, xp2p_server_runner)
         removed = _remove_default_user(server_host, xp2p_server_runner, host)
         assert removed["email"].startswith("client-")
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         host = "srv-add.xp2p.test"
         _install_server(server_host, xp2p_server_runner, "62041", host)
@@ -151,13 +146,12 @@ def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_serv
         final = _trojan_clients(server_host)
         assert len(final) == 1 and final[0]["password"] == "secret-two"
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         host = "srv-remove.xp2p.test"
         _install_server(server_host, xp2p_server_runner, "62042", host)
@@ -212,13 +206,12 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
 
         assert _trojan_clients(server_host) == []
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_user_add_validates_password(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         host = "srv-validate.xp2p.test"
         _install_server(server_host, xp2p_server_runner, "62043", host)
@@ -264,4 +257,4 @@ def test_server_user_add_validates_password(server_host, xp2p_server_runner):
         assert len(clients) == 1
         assert clients[0].get("email") == "charlie"
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass

@@ -17,6 +17,33 @@ RUN_LOG_CLIENT = PurePosixPath("/tmp/xp2p-client-run.log")
 XRAY_BACKUP = PurePosixPath("/etc/xp2p/bin/xray.pinned.bak")
 
 
+def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> None:
+    for runner in (xp2p_server_runner, xp2p_client_runner):
+        runner(
+            "client",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--all",
+            "--ignore-missing",
+        )
+        runner(
+            "server",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--ignore-missing",
+        )
+    linux_env.kill_xp2p_processes(server_host)
+    linux_env.kill_xp2p_processes(client_host)
+    linux_env.remove_path(server_host, RUN_LOG_SERVER)
+    linux_env.remove_path(client_host, RUN_LOG_CLIENT)
+
+
 def _pinned_version() -> str:
     payload = json.loads(PINNED_JSON.read_text(encoding="utf-8"))
     version = (payload or {}).get("version", "").strip()
@@ -34,11 +61,6 @@ def _mismatch_version(pinned: str) -> str:
     if candidate == pinned or len(candidate) != len(pinned):
         pytest.fail(f"Unable to generate mismatch version from {pinned!r}")
     return candidate
-
-
-def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> None:
-    linux_env.run_guest_script(server_host, "scripts/linux/kill_xp2p_processes.sh")
-    linux_env.run_guest_script(client_host, "scripts/linux/kill_xp2p_processes.sh")
 
 
 def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> dict[str, str]:
@@ -73,7 +95,7 @@ def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_cl
 
 
 def _patch_xray(host, replacement: str) -> None:
-    linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+    linux_env.kill_xp2p_processes(host)
     result = linux_env.run_guest_script(
         host,
         "scripts/linux/wrap_xray_version.sh",
@@ -89,7 +111,7 @@ def _patch_xray(host, replacement: str) -> None:
 
 
 def _restore_xray(host) -> None:
-    linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+    linux_env.kill_xp2p_processes(host)
     if linux_env.path_exists(host, XRAY_BACKUP):
         linux_env.run_guest_script(
             host,

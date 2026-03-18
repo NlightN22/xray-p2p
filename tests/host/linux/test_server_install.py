@@ -16,9 +16,6 @@ FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
 FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
 
-def _cleanup(server_host, xp2p_server_runner) -> None:
-
-
 def _trojan_inbound(data: dict) -> dict:
     for entry in data.get("inbounds", []):
         if entry.get("protocol") == "trojan":
@@ -61,7 +58,6 @@ def _parse_self_signed(state_output: str) -> bool:
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_install_uses_provided_certificate_and_force_overwrites(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     helpers.remove_path(server_host, SERVER_CERT_DEST)
     helpers.remove_path(server_host, SERVER_KEY_DEST)
     cert_source = PurePosixPath("/tmp/xp2p-server-cert.pem")
@@ -134,13 +130,11 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
         assert helpers.path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist in config-server"
     finally:
         helpers.remove_path(server_host, cert_source)
-        _cleanup(server_host, xp2p_server_runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_install_generates_self_signed_certificate(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         xp2p_server_runner(
             "server",
@@ -174,13 +168,12 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         assert "Status:      OK" in state_output
         assert "self-signed: yes" in state_output.lower()
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     cert_source = PurePosixPath("/tmp/xp2p-mismatch-cert.pem")
     cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
     try:
@@ -225,13 +218,12 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     missing_cert = PurePosixPath("/tmp/xp2p-missing-cert.pem")
     missing_key = PurePosixPath("/tmp/xp2p-missing-key.pem")
     try:
@@ -279,13 +271,12 @@ def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runne
             or "file does not exist" in combined
         ), f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         xp2p_server_runner(
             "server",
@@ -323,13 +314,12 @@ def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         xp2p_server_runner(
             "server",
@@ -370,13 +360,12 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
         after = helpers.read_text(server_host, SERVER_INBOUNDS)
         assert after == before, "Expected config to remain unchanged after win-store error"
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_cert_set_rejects_directory_paths(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     cert_dir = PurePosixPath("/tmp/xp2p-cert-dir")
     key_dir = PurePosixPath("/tmp/xp2p-key-dir")
     try:
@@ -421,13 +410,11 @@ def test_server_cert_set_rejects_directory_paths(server_host, xp2p_server_runner
     finally:
         helpers.remove_path(server_host, cert_dir)
         helpers.remove_path(server_host, key_dir)
-        _cleanup(server_host, xp2p_server_runner)
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_install_requires_force_when_state_exists(server_host, xp2p_server_runner):
-    _cleanup(server_host, xp2p_server_runner)
     try:
         xp2p_server_runner(
             "server",
@@ -461,4 +448,4 @@ def test_server_install_requires_force_when_state_exists(server_host, xp2p_serve
         combined = f"{result.stdout}\n{result.stderr}".lower()
         assert "server files already present" in combined
     finally:
-        _cleanup(server_host, xp2p_server_runner)
+        pass

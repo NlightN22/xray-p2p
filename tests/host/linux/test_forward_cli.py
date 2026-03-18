@@ -294,6 +294,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
         helpers.assert_no_forward_inbound_entry(client_inbounds, second_port)
         _assert_forward_list_empty(xp2p_client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME)
     finally:
+        pass
 
 
 @pytest.mark.host
@@ -458,6 +459,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
         helpers.assert_no_forward_inbound_entry(server_inbounds, second_port)
         _assert_forward_list_empty(xp2p_server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME)
     finally:
+        pass
 
 
 @pytest.mark.host
@@ -490,6 +492,7 @@ def test_client_forward_add_warns_without_redirect(client_host, xp2p_client_runn
             check=True,
         )
     finally:
+        pass
 
 
 @pytest.mark.host
@@ -522,3 +525,4 @@ def test_server_forward_add_warns_without_redirect(server_host, xp2p_server_runn
             check=True,
         )
     finally:
+        pass

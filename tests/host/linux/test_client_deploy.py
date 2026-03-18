@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import PurePosixPath
+import shlex
 
 import pytest
 from testinfra.host import Host
@@ -149,10 +150,10 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     bad_cert = PurePosixPath("/tmp/xp2p-invalid-cert.pem")
     bad_key = PurePosixPath("/tmp/xp2p-invalid-key.pem")
 
-    linux_env.run_guest_script(client_host, "scripts/linux/remove_path.sh", bad_cert.as_posix())
-    linux_env.run_guest_script(client_host, "scripts/linux/remove_path.sh", bad_key.as_posix())
-    linux_env.run_guest_script(server_host, "scripts/linux/remove_path.sh", bad_cert.as_posix())
-    linux_env.run_guest_script(server_host, "scripts/linux/remove_path.sh", bad_key.as_posix())
+    helpers.remove_path(client_host, bad_cert)
+    helpers.remove_path(client_host, bad_key)
+    helpers.remove_path(server_host, bad_cert)
+    helpers.remove_path(server_host, bad_key)
 
     client_pid = None
     server_pid = None
@@ -251,7 +252,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         ):
             helpers.remove_path(host, log_path)
             helpers.remove_path(host, heartbeat_path)
-            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+            linux_env.kill_xp2p_processes(host)
             host.run(
                 "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
                 "62032/tcp 62032/udp >/dev/null 2>&1 || true"
@@ -347,7 +348,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         xp2p_client_runner("client", "service", "stop")
         xp2p_server_runner("server", "service", "stop")
         for host in (client_host, server_host):
-            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+            linux_env.kill_xp2p_processes(host)
         server_host.run(
             "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
             "62032/tcp 62032/udp >/dev/null 2>&1 || true"
@@ -403,7 +404,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         xp2p_client_runner("client", "service", "stop")
         xp2p_server_runner("server", "service", "stop")
         for host in (client_host, server_host):
-            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+            linux_env.kill_xp2p_processes(host)
         server_host.run(
             "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
             "62032/tcp 62032/udp >/dev/null 2>&1 || true"
@@ -483,7 +484,19 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             debug_hosts=[client_host, server_host],
         )
 
-        linux_env.run_guest_script(client_host, "scripts/linux/kill_xp2p_processes.sh")
+        xp2p_client_runner(
+            "client",
+            "remove",
+            "--path",
+            DEPLOY_INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--all",
+            "--ignore-missing",
+            "--quiet",
+            check=True,
+        )
+        linux_env.kill_xp2p_processes(client_host)
 
         cleanup_logs()
         xp2p_server_runner("server", "service", "stop")
@@ -530,7 +543,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         xp2p_client_runner("client", "service", "stop")
         xp2p_server_runner("server", "service", "stop")
         for host in (client_host, server_host):
-            linux_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+            linux_env.kill_xp2p_processes(host)
         server_host.run(
             "sudo -n fuser -k 62022/tcp 62022/udp 62023/tcp 62023/udp "
             "62032/tcp 62032/udp >/dev/null 2>&1 || true"
@@ -673,15 +686,21 @@ def _start_client_deploy(
         _write_server_config(host, port=diag_port)
     result = linux_env.run_guest_script_with_env(host, args[0], env, *args[1:])
     if result.rc != 0:
+        log_tail = _read_optional_log(host, log_path)
+        tail = "\n".join((log_tail or "").splitlines()[-40:])
         pytest.fail(
             "Failed to start xp2p client deploy.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n"
+            f"Log tail:\n{tail}"
         )
     pid = _extract_marker(result.stdout, "__XP2P_PID__=")
     if not pid:
+        log_tail = _read_optional_log(host, log_path)
+        tail = "\n".join((log_tail or "").splitlines()[-40:])
         pytest.fail(
             "xp2p client deploy script did not emit PID marker.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n"
+            f"Log tail:\n{tail}"
         )
     return int(pid)
 
@@ -879,7 +898,12 @@ def _wait_for_log_value(
 
 
 def _read_optional_log(host: Host, path: PurePosixPath) -> str:
-    result = linux_env.run_guest_script(host, "scripts/linux/read_file.sh", path.as_posix())
+    quoted = shlex.quote(path.as_posix())
+    result = host.run(
+        "sudo -n /bin/sh -c "
+        "'if [ ! -f \"$1\" ]; then exit 3; fi; cat \"$1\"' "
+        f"-- {quoted}"
+    )
     if result.rc == 0:
         return result.stdout or ""
     if result.rc == 3:
@@ -898,7 +922,7 @@ def _extract_marker(output: str | None, marker: str) -> str | None:
 
 
 def _detect_host_ipv4(host: Host) -> str:
-    result = linux_env.run_guest_script(host, "scripts/linux/get_primary_ipv4.sh")
+    result = host.run("ip -o -4 addr show scope global | awk '{print $4}' | cut -d/ -f1")
     if result.rc != 0:
         pytest.fail(
             "Failed to detect IPv4 addresses.\n"
@@ -1057,7 +1081,7 @@ def _run_bundle_defaults(
 
 
 def _run_bundle_negative(host: Host) -> None:
-    linux_env.run_guest_script(host, "scripts/linux/remove_path.sh", BUNDLE_BAD_ROOT.as_posix())
+    helpers.remove_path(host, BUNDLE_BAD_ROOT)
     linux_env.run_guest_script(host, "scripts/linux/bundle_setup.sh", BUNDLE_BAD_ROOT.as_posix())
     bad_archive = BUNDLE_ARTIFACT_ROOT / "bad-traversal.zip"
     linux_env.run_guest_script(

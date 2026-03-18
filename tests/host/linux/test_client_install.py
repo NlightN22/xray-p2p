@@ -14,13 +14,9 @@ CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
 
 
-def _cleanup(client_host, xp2p_client_runner) -> None:
-
-
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         xp2p_client_runner(
             "client",
@@ -148,7 +144,6 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             allow_insecure=False,
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
         if helpers.path_exists(client_host, helpers.HEARTBEAT_STATE_FILE):
             helpers.remove_path(client_host, helpers.HEARTBEAT_STATE_FILE)
 
@@ -156,7 +151,6 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_from_link(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         link = (
             "trojan://linkpass@link.example.test:58443?"
@@ -186,13 +180,12 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
             verify_peer_name="link.example.test",
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_from_link_without_allow_insecure(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         link = (
             "trojan://linkpass@link.example.test:58443?"
@@ -215,13 +208,12 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
             data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         xp2p_client_runner(
             "client",
@@ -275,7 +267,7 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         assert {row["TAG"] for row in rows} == expected_tags
         assert {row["HOST"] for row in rows} == expected_hosts
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        pass
 
 
 def _assert_no_endpoint(host: str, data: dict):
@@ -288,7 +280,6 @@ def _assert_no_endpoint(host: str, data: dict):
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         xp2p_client_runner(
             "client",
@@ -471,13 +462,12 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         ).stdout or ""
         assert "No client endpoints configured." in final_list
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         xp2p_client_runner(
             "client",
@@ -531,13 +521,12 @@ def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_
             check=True,
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        pass
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_recovers_without_state_marker(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         xp2p_client_runner(
             "client",
@@ -580,4 +569,4 @@ def test_client_install_recovers_without_state_marker(client_host, xp2p_client_r
             "Expected client config/state files to be recreated"
         )
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        pass

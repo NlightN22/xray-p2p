@@ -15,9 +15,6 @@ REDIRECT_DOMAIN = "svc.internal.example"
 INVALID_CIDR = "10.999.0.0/33"
 
 
-def _cleanup(client_host, xp2p_client_runner) -> None:
-
-
 def _install_endpoint(runner, host: str, user: str, password: str) -> None:
     runner(
         "client",
@@ -104,7 +101,6 @@ def _combined_output(result) -> str:
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner):
-    _cleanup(client_host, xp2p_client_runner)
     try:
         _install_endpoint(xp2p_client_runner, PRIMARY_HOST, "primary@example.com", "primary-pass")
         _install_endpoint(xp2p_client_runner, SECONDARY_HOST, "secondary@example.com", "secondary-pass")
@@ -306,4 +302,4 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         assert all(rec.get("cidr") != REDIRECT_CIDR for rec in records)
         assert records == []
     finally:
-        _cleanup(client_host, xp2p_client_runner)
+        pass

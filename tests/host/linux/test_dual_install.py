@@ -179,3 +179,4 @@ def test_client_and_server_install_support_extended_arguments(server_host):
         roles = _read_roles(server_host)
         assert {"client", "server"} <= set(roles.keys())
     finally:
+        pass
