@@ -32,6 +32,10 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch ui-xp2p" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <WixVariable Id="WixUILicenseRtf" Value="installer\wix\license.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="assets\wix\WixUIBannerBmp.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="assets\wix\WixUIDialogBmp.bmp" />
+    <Icon Id="ProductIcon" SourceFile="assets\wix\xp2p_product.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
 
     <CustomAction Id="SetRegisterPsCompletion"
                   Property="RegisterPsCompletion"

@@ -8,26 +8,26 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ui-xp2p</AssemblyName>
     <RootNamespace>Xp2pUi</RootNamespace>
-    <ApplicationIcon>assets\xp2p.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\assets\xp2p.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <Resource Include="assets\xp2p.ico" />
-    <Resource Include="assets\Base.png" />
-    <Resource Include="assets\Disabled.png" />
-    <Resource Include="assets\Enabled.png" />
-    <Resource Include="assets\Enabling.png" />
+    <Resource Include="..\..\assets\xp2p.ico" />
+    <Resource Include="..\..\assets\Base.png" />
+    <Resource Include="..\..\assets\Disabled.png" />
+    <Resource Include="..\..\assets\Enabled.png" />
+    <Resource Include="..\..\assets\Enabling.png" />
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="assets\Base.png" />
-    <EmbeddedResource Include="assets\Disabled.png" />
-    <EmbeddedResource Include="assets\Enabled.png" />
-    <EmbeddedResource Include="assets\Enabling.png" />
-    <Content Include="assets\Base.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="assets\Disabled.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="assets\Enabled.png" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="assets\Enabling.png" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="..\..\assets\Base.png" />
+    <EmbeddedResource Include="..\..\assets\Disabled.png" />
+    <EmbeddedResource Include="..\..\assets\Enabled.png" />
+    <EmbeddedResource Include="..\..\assets\Enabling.png" />
+    <Content Include="..\..\assets\Base.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\Disabled.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\Enabled.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\Enabling.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
