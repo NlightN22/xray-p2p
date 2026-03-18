@@ -100,11 +100,13 @@ internal static class TrayIconLoader
         try
         {
             var assembly = typeof(TrayIconLoader).Assembly;
-            var suffix = resourcePath.TrimStart('/').Replace('/', '.');
+            var suffixSlash = resourcePath.TrimStart('/');
+            var suffixDot = suffixSlash.Replace('/', '.');
             var matched = false;
             foreach (var name in assembly.GetManifestResourceNames())
             {
-                if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                if (!name.EndsWith(suffixDot, StringComparison.OrdinalIgnoreCase) &&
+                    !name.EndsWith(suffixSlash, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -120,7 +122,7 @@ internal static class TrayIconLoader
             }
             if (!matched)
             {
-                log?.Invoke($"tray icon manifest missing: *{suffix}");
+                log?.Invoke($"tray icon manifest missing: *{suffixDot} | *{suffixSlash}");
             }
         }
         catch (Exception ex)
