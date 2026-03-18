@@ -68,7 +68,7 @@ service xp2p-client start
 xp2p server state
 ```
 
-Use `xp2p server dns-forward add --domain corp.example --address 10.10.10.53` and `xp2p client dns-forward list` to program dnsmasq on OpenWrt; the helpers are idempotent and clean up on remove. `xp2p nat-redirect apply` bootstraps `/etc/nftables.d` (or `/etc/xp2p/nftables` fallback) so NAT snippets come up without manual directories.
+Use `xp2p server dns-forward add --domain corp.example --target 10.10.10.53:53` and `xp2p client dns-forward list` to program dnsmasq on OpenWrt; the helpers are idempotent and clean up on remove. `xp2p nat-redirect add --cidr 192.168.10.0/24` bootstraps `/etc/nftables.d` (or `/etc/xp2p/nftables` fallback) so NAT snippets come up without manual directories.
 
 ### Linux
 
@@ -84,8 +84,8 @@ Add CIDR/domain redirects and forwards after install:
 ```bash
 xp2p client redirect add --cidr 192.168.10.0/24
 xp2p client forward add --target 192.0.2.10:22
-xp2p client dns-forward add --domain dev.example --address 10.10.10.53
-xp2p nat-redirect apply
+xp2p client dns-forward add --domain dev.example --target 10.10.10.53:53
+xp2p nat-redirect add --cidr 192.168.10.0/24
 ```
 
 ### Windows
@@ -200,7 +200,7 @@ xp2p server reverse list
 xp2p server redirect add --cidr 10.20.0.0/16
 xp2p server forward add --target 192.0.2.10:22
 xp2p server reverse list
-xp2p server dns-forward add --domain corp.example --address 10.10.10.53
+xp2p server dns-forward add --domain corp.example --target 10.10.10.53:53
 xp2p server dns-forward list
 
 # TLS upkeep
@@ -241,12 +241,12 @@ xp2p client forward list
 xp2p client reverse list
 
 # DNS/DHCP helpers
-xp2p client dns-forward add --domain dev.example --address 10.10.10.53
+xp2p client dns-forward add --domain dev.example --target 10.10.10.53:53
 xp2p client dns-forward list
-xp2p client dns-forward remove --domain dev.example --address 10.10.10.53
+xp2p client dns-forward remove --domain dev.example
 ```
 
-`xp2p client remove --all` removes the client configuration and binaries, which is useful when repackaging deployments. Tunnel proxy autodetection feeds diagnostics: `xp2p ping example.com --tunnel` reads the client/server configuration and probes connectivity through the tunnel. Add `--endpoint <tag>` to force the client-side outbound (host is ignored when tag is provided) or pass the reverse user/tag on the server (or `--endpoint <user>`) to route via the reverse channel; then `xp2p nat-redirect apply` bootstraps nftables/iptables snippets if you want transparent interception on Linux/OpenWrt.
+`xp2p client remove --all` removes the client configuration and binaries, which is useful when repackaging deployments. Tunnel proxy autodetection feeds diagnostics: `xp2p ping example.com -T` reads the client/server configuration and probes connectivity through the tunnel. Use `-e <tag>` or `-i <index>` (with `-T`) to select a client endpoint when multiple endpoints share the same host, or pass the reverse user/tag directly as the host on the server (for example `xp2p ping deploy-123@local -T` or `xp2p ping proxy-10-62-10-11 -T`). The host argument is still required even when `-e`/`-i` are set; it is used to resolve the endpoint. Then `xp2p nat-redirect add --cidr 192.168.10.0/24` bootstraps nftables/iptables snippets if you want transparent interception on Linux/OpenWrt.
 
 ### Remote deploy handshake
 
@@ -275,10 +275,10 @@ The server stops listening after the first deploy request. The client encrypts i
 
 - Heartbeat/state: `xp2p client state --watch` and `xp2p server state --watch` stream heartbeat tables from `state-heartbeat.json` with TTL filtering.
 - Diagnostics responder: `xp2p diag` starts a foreground listener for `xp2p ping`; override with `xp2p diag --listen 0.0.0.0:62025 --proto udp` if you need a custom port/protocol.
-- Tunnel cascade: `xp2p ping 10.62.10.12 --tunnel` auto-detects SOCKS from client config, then server, then errors if absent; override with `--tunnel 127.0.0.1:1080`. Use `--endpoint <tag>` on the client to force a specific outbound regardless of host, or pass the reverse user/tag (or `--endpoint <user>`) on the server to select a reverse channel.
+- Tunnel cascade: `xp2p ping 10.62.10.12 -T` auto-detects SOCKS from client config, then server, then errors if absent; override with `-T 127.0.0.1:1080`. Use `-e <tag>` or `-i <index>` (with `-T`) to select a client endpoint when multiple endpoints share the same host. For reverse channels, pass the reverse user/tag as the host (for example `xp2p ping deploy-123@local -T` or `xp2p ping proxy-10-62-10-11 -T`).
 - Forwarding: `xp2p client forward add|list|remove` and `xp2p server forward add|list|remove` manage explicit forwards alongside managed reverse portals.
 - DNS/DHCP: `xp2p {client,server} dns-forward add|remove|list` manage per-domain entries in dnsmasq (`dhcp.@dnsmasq[0].server`) on OpenWrt and keep state in sync.
-- NAT snippets: `xp2p nat-redirect apply` sets up transparent intercept snippets and validates nft/iptables chains; rerun to regenerate directories if missing.
+- NAT snippets: `xp2p nat-redirect add --cidr 192.168.10.0/24` sets up transparent intercept snippets and validates nft/iptables chains; rerun to regenerate directories if missing.
 
 ## Project layout and further docs
 
