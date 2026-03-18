@@ -52,6 +52,7 @@ func newClientRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringP("domain", "d", "", "domain to redirect")
 	flags.StringP("tag", "g", "", "outbound tag to route through (prompts when omitted)")
 	flags.StringP("host", "H", "", "client endpoint hostname to route through")
+	flags.BoolP("no-routes", "N", false, "do not add OS routes for CIDR redirects")
 	flags.BoolP("quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
 }
@@ -104,6 +105,7 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 	domain := fs.String("domain", "", "domain to redirect")
 	tag := fs.String("tag", "", "outbound tag to use")
 	host := fs.String("host", "", "client endpoint hostname")
+	noRoutes := fs.Bool("no-routes", false, "do not add OS routes for CIDR redirects")
 	quiet := fs.Bool("quiet", false, "do not prompt for outbound tags")
 
 	if err := fs.Parse(args); err != nil {
@@ -125,6 +127,10 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 	}
 	if hasCIDR && hasDomain {
 		logging.Error("xp2p client redirect add: specify only one of --cidr or --domain")
+		return 2
+	}
+	if *noRoutes && !hasCIDR {
+		logging.Error("xp2p client redirect add: --no-routes requires --cidr")
 		return 2
 	}
 
@@ -158,6 +164,7 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 		Domain:     *domain,
 		Tag:        tagValue,
 		Hostname:   hostValue,
+		NoRoutes:   *noRoutes,
 		TunEnabled: cfg.Client.TunEnabled,
 		TunName:    cfg.Client.TunName,
 	}

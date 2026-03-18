@@ -20,6 +20,7 @@ type Rule struct {
 	CIDR        string `json:"cidr,omitempty" toml:"cidr"`
 	Domain      string `json:"domain,omitempty" toml:"domain"`
 	OutboundTag string `json:"outbound_tag" toml:"outbound_tag"`
+	NoRoutes    bool   `json:"no_routes,omitempty" toml:"no_routes"`
 }
 
 // Target identifies the normalized redirect selector.

@@ -87,6 +87,7 @@ xp2p client forward add --target 192.0.2.10:22
 xp2p client dns-forward add --domain dev.example --target 10.10.10.53:53
 xp2p nat-redirect add --cidr 192.168.10.0/24
 ```
+Use `-N`/`--no-routes` with `--cidr` to keep OS routes unchanged while still updating xray routing rules.
 
 ### Windows
 

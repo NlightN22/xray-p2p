@@ -54,6 +54,9 @@ func applyRedirectRoutes(tunName, _ string, redirects []redirect.Rule) error {
 		if rule.Kind() != redirect.KindCIDR {
 			continue
 		}
+		if rule.NoRoutes {
+			continue
+		}
 		value := strings.TrimSpace(rule.Value())
 		if value == "" {
 			continue
@@ -78,6 +81,9 @@ func removeRedirectRoutes(tunName, _ string, redirects []redirect.Rule) error {
 	seen := make(map[string]struct{}, len(redirects))
 	for _, rule := range redirects {
 		if rule.Kind() != redirect.KindCIDR {
+			continue
+		}
+		if rule.NoRoutes {
 			continue
 		}
 		value := strings.TrimSpace(rule.Value())

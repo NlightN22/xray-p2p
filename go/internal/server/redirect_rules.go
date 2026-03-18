@@ -22,6 +22,7 @@ type RedirectAddOptions struct {
 	Domain     string
 	Tag        string
 	Hostname   string
+	NoRoutes   bool
 	TunEnabled bool
 	TunName    string
 }
@@ -162,6 +163,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		rule.Domain = target.Value
 	} else {
 		rule.CIDR = target.Value
+		rule.NoRoutes = opts.NoRoutes
 	}
 
 	updated, addErr := redirect.AddRule(store.redirects, rule)

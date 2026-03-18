@@ -23,6 +23,7 @@ type serverRedirectAddOptions struct {
 	Domain    string
 	Tag       string
 	Host      string
+	NoRoutes  bool
 	Quiet     bool
 }
 
@@ -77,6 +78,7 @@ func newServerRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.Domain, "domain", "d", "", "domain to redirect")
 	flags.StringVarP(&opts.Tag, "tag", "g", "", "reverse outbound tag to route through (prompts when omitted)")
 	flags.StringVarP(&opts.Host, "host", "H", "", "reverse portal host to route through")
+	flags.BoolVarP(&opts.NoRoutes, "no-routes", "N", false, "do not add OS routes for CIDR redirects")
 	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
 }
@@ -132,6 +134,10 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 		logging.Error("xp2p server redirect add: specify only one of --cidr or --domain")
 		return 2
 	}
+	if opts.NoRoutes && !hasCIDR {
+		logging.Error("xp2p server redirect add: --no-routes requires --cidr")
+		return 2
+	}
 
 	installDir := firstNonEmpty(opts.Path, cfg.Server.InstallDir)
 	configDir := firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir)
@@ -163,6 +169,7 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 		Domain:     opts.Domain,
 		Tag:        tagValue,
 		Hostname:   hostValue,
+		NoRoutes:   opts.NoRoutes,
 		TunEnabled: cfg.Server.TunEnabled,
 		TunName:    cfg.Server.TunName,
 	}

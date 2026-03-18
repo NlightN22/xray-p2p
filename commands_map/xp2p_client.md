@@ -126,6 +126,7 @@ Includes: Global options
 - --domain, -d <name>    Domain to redirect (mutually exclusive with --cidr)
 - --tag, -g <tag>        Outbound tag to route through (prompts when omitted)
 - --host, -H <host>      Client endpoint hostname to route through
+- --no-routes, -N        Do not add OS routes for CIDR redirects
 - --quiet, -q            Do not prompt for outbound tags
 
 xp2p client redirect remove

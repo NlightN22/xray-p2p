@@ -41,6 +41,9 @@ func collectRedirectCIDRs(redirects []redirect.Rule) []string {
 		if rule.Kind() != redirect.KindCIDR {
 			continue
 		}
+		if rule.NoRoutes {
+			continue
+		}
 		value := strings.TrimSpace(rule.Value())
 		if value == "" {
 			continue
