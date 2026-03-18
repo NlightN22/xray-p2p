@@ -35,6 +35,7 @@ def _server_public_host() -> str:
 
 
 def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
+    _stop_xp2p_services(server_host)
     runner("server", "remove", "--ignore-missing")
     _env.cleanup_xp2p_install(
         server_host,
@@ -44,6 +45,7 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
+    _stop_xp2p_services(client_host)
     runner("client", "remove", "--all", "--ignore-missing")
     _env.cleanup_xp2p_install(
         client_host,
@@ -79,6 +81,20 @@ def _ps_exec(host, script: str):
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     return result
+
+
+def _stop_xp2p_services(host) -> None:
+    script = """
+$ErrorActionPreference = 'SilentlyContinue'
+foreach ($name in @('xp2p-client', 'xp2p-server')) {
+    $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -ne 'Stopped') {
+        Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+    }
+}
+exit 0
+"""
+    _env.run_powershell(host, script)
 
 
 def _get_interface_alias(host, ip: str) -> str:

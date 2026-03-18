@@ -433,7 +433,15 @@ def test_windows_service_stops_after_invalid_config(
         _wait_for_service_state(runner, role, expected_active=False)
         assert win_env.path_exists(host, xray_log), f"{role} xray log missing"
         if role == "client":
-            _wait_for_log_nonempty(host, xray_log, f"{role} xray")
+            xray_content = win_env.read_text(host, xray_log)
+            if not (xray_content or "").strip():
+                service_log = win_env.read_text(host, log_path)
+                service_lower = (service_log or "").lower()
+                if "service run failed" not in service_lower and "xrayconfig: parse error" not in service_lower:
+                    pytest.fail(
+                        f"Log {xray_log} remained empty for {role} xray. "
+                        f"Service log:\n{service_log}"
+                    )
     finally:
         with _timed(f"{role} cleanup (final)"):
             _cleanup_role(

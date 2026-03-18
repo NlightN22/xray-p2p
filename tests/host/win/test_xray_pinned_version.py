@@ -46,10 +46,14 @@ def _state_files_for(install_dir: Path) -> list[Path]:
 
 
 def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> None:
+    _stop_xray_processes(server_host)
+    _stop_xray_processes(client_host)
     xp2p_server_runner("server", "remove", "--ignore-missing", "--quiet")
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing", "--quiet")
     server_install_dir = _install_dir(server_host)
     client_install_dir = _install_dir(client_host)
+    _remove_xray_backup(server_host)
+    _remove_xray_backup(client_host)
     win_env.cleanup_xp2p_install(
         server_host,
         config_dirs=[win_env.CONFIG_ROOT / SERVER_CONFIG_NAME],
@@ -104,13 +108,11 @@ def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_cl
     return credential
 
 
-def _stop_xray(host) -> None:
+def _stop_xray_processes(host) -> None:
     script = """
-$xray = Get-Process -Name xray -ErrorAction SilentlyContinue
-if ($xray) {
-    foreach ($item in $xray) {
-        try { Stop-Process -Id $item.Id -Force -ErrorAction SilentlyContinue } catch { }
-    }
+$ErrorActionPreference = 'SilentlyContinue'
+Get-Process -Name xray,'xray.pinned.bak' -ErrorAction SilentlyContinue | ForEach-Object {
+    try { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } catch { }
 }
 """
     win_env.run_powershell(host, script)
@@ -118,7 +120,7 @@ if ($xray) {
 
 def _wrap_xray(server_host, client_host, fake_version: str) -> None:
     for host in (server_host, client_host):
-        _stop_xray(host)
+        _stop_xray_processes(host)
         result = win_env.run_guest_script(
             host,
             "scripts/wrap_xray_version.ps1",
@@ -135,7 +137,7 @@ def _wrap_xray(server_host, client_host, fake_version: str) -> None:
 
 def _restore_xray(server_host, client_host) -> None:
     for host in (server_host, client_host):
-        _stop_xray(host)
+        _stop_xray_processes(host)
         backup = _xray_backup(host)
         if win_env.path_exists(host, backup):
             win_env.run_guest_script(
@@ -145,6 +147,12 @@ def _restore_xray(server_host, client_host) -> None:
                 Destination=str(_xray_path(host)),
             )
             win_env.remove_path(host, backup)
+
+
+def _remove_xray_backup(host) -> None:
+    backup = _xray_backup(host)
+    if win_env.path_exists(host, backup):
+        win_env.remove_path(host, backup)
 
 
 def _assert_mismatch_logged(host, path: Path, role: str) -> None:

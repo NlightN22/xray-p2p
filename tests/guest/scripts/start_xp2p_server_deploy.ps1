@@ -13,7 +13,9 @@ param(
 
     [string[]] $AdditionalArgs,
 
-    [string] $AdditionalArgsBase64
+    [string] $AdditionalArgsBase64,
+
+    [string] $EnvOverridesBase64
 )
 
 $ErrorActionPreference = 'Stop'
@@ -74,11 +76,39 @@ if ($extraArgs) {
     $arguments += $extraArgs
 }
 
+$envLines = ''
+if ($EnvOverridesBase64) {
+    try {
+        $decodedEnv = [System.Text.Encoding]::UTF8.GetString(
+            [System.Convert]::FromBase64String($EnvOverridesBase64)
+        )
+        if ($decodedEnv) {
+            $parsedEnv = $decodedEnv | ConvertFrom-Json -ErrorAction Stop
+            if ($parsedEnv -is [System.Collections.IDictionary]) {
+                foreach ($key in $parsedEnv.Keys) {
+                    $value = [string]$parsedEnv[$key]
+                    $escapedValue = $value -replace "'", "''"
+                    $envLines += "`$env:$key = '$escapedValue'`n"
+                }
+            } else {
+                foreach ($prop in $parsedEnv.PSObject.Properties) {
+                    $value = [string]$prop.Value
+                    $escapedValue = $value -replace "'", "''"
+                    $envLines += "`$env:$($prop.Name) = '$escapedValue'`n"
+                }
+            }
+        }
+    } catch {
+        # Ignore env override parsing failures to avoid blocking deploy start.
+    }
+}
+
 $escapedArgs = $arguments | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }
 $argListLiteral = [string]::Join(',', $escapedArgs)
 $launcher = @"
 $ErrorActionPreference = 'Stop'
 `$argsList = @($argListLiteral)
+$envLines
 `$proc = Start-Process -FilePath '$Xp2pPath' -ArgumentList `$argsList -RedirectStandardOutput '$LogPath' -RedirectStandardError '$stderrPath' -WindowStyle Hidden -PassThru
 Set-Content -Path '$pidPath' -Value `$proc.Id -Encoding ASCII
 "@

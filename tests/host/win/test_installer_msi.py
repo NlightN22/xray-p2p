@@ -21,6 +21,18 @@ if (-not $svc) {
 if ($svc.StartType -eq 'Disabled') {
     exit 4
 }
+$startOk = $true
+try {
+    if ($svc.Status -ne 'Running') {
+        Start-Service -Name 'msiserver' -ErrorAction Stop | Out-Null
+    }
+} catch {
+    $startOk = $false
+}
+$svc = Get-Service -Name 'msiserver' -ErrorAction SilentlyContinue
+if (-not $startOk -or -not $svc -or $svc.Status -ne 'Running') {
+    exit 5
+}
 exit 0
 """
     result = _env.run_powershell(host, script)
@@ -125,18 +137,25 @@ def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp
     server_files = config_files.config_paths(server_dir, config_files.SERVER_CONFIG_FILES)
     _assert_paths_exist(server_host, client_files + server_files)
 
+    skip_reason = None
     try:
         _env.uninstall_xp2p_from_msi(server_host, xp2p_msi_path, purge_files=True)
         _assert_paths_exist(server_host, client_files + server_files)
         _assert_binaries_removed(server_host, install_dir)
         _assert_services_removed(server_host)
     finally:
-        _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+        try:
+            _env.install_xp2p_from_msi(server_host, xp2p_msi_path)
+        except _env.MsiServiceUnavailable as exc:
+            skip_reason = str(exc)
+            _env.ensure_program_files_install(server_host)
         _env.cleanup_xp2p_install(
             server_host,
             config_dirs=[client_dir, server_dir],
             state_files=state_files,
         )
+    if skip_reason:
+        pytest.skip(skip_reason)
 
 
 @pytest.mark.host

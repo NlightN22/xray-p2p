@@ -17,6 +17,11 @@ MARKER_DIR = Path(r"C:\xp2p\build\ui-markers")
 LOCAL_MARKER_DIR = common.REPO_ROOT / "build" / "ui-markers"
 
 
+def _require_ui_installed(host) -> None:
+    if not win_env.path_exists(host, UI_EXE):
+        pytest.skip(f"xp2p-ui.exe not found at {UI_EXE}")
+
+
 def _autostart_expected() -> str:
     raw = os.environ.get("XP2P_UI_AUTOSTART")
     if raw is None or raw.strip() == "":
@@ -99,6 +104,7 @@ def _install_server(runner) -> None:
 @pytest.mark.host
 @pytest.mark.win
 def test_xp2p_ui_install_and_autostart(server_host):
+    _require_ui_installed(server_host)
     local_marker, guest_marker = _marker_paths("xp2p-ui-install")
     result = win_env.run_guest_script(
         server_host,
@@ -118,6 +124,7 @@ def test_xp2p_ui_install_and_autostart(server_host):
 @pytest.mark.host
 @pytest.mark.win
 def test_xp2p_ui_smoke_launch(server_host):
+    _require_ui_installed(server_host)
     local_marker, guest_marker = _marker_paths("xp2p-ui-launch")
     result = win_env.run_guest_script(
         server_host,
@@ -137,6 +144,7 @@ def test_xp2p_ui_smoke_launch(server_host):
 @pytest.mark.host
 @pytest.mark.win
 def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
+    _require_ui_installed(server_host)
     local_marker, guest_marker = _marker_paths("xp2p-ui-logs")
     result = win_env.run_guest_script(
         server_host,
@@ -157,29 +165,36 @@ def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
 
 @pytest.mark.host
 @pytest.mark.win
-def test_sc_query_as_non_admin_user(server_host):
+def test_sc_query_as_non_admin_user(server_host, xp2p_server_runner):
+    _install_client(xp2p_server_runner)
+    _install_server(xp2p_server_runner)
     local_marker, guest_marker = _marker_paths("xp2p-ui-sc-query")
-    result = win_env.run_guest_script(
-        server_host,
-        "scripts/check_sc_query_as_user.ps1",
-        MarkerPath=str(guest_marker),
-        ServiceNames="xp2p-client,xp2p-server",
-        UserName="vagrant",
-        UserPassword="vagrant",
-        UseExistingUser="1",
-        GrantLogonRights="0",
-    )
-    _assert_marker(local_marker, "check_sc_query_as_user.ps1")
-    if result.rc != 0:
-        pytest.fail(
-            "sc query as non-admin user failed.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    try:
+        result = win_env.run_guest_script(
+            server_host,
+            "scripts/check_sc_query_as_user.ps1",
+            MarkerPath=str(guest_marker),
+            ServiceNames="xp2p-client,xp2p-server",
+            UserName="vagrant",
+            UserPassword="vagrant",
+            UseExistingUser="1",
+            GrantLogonRights="0",
         )
+        _assert_marker(local_marker, "check_sc_query_as_user.ps1")
+        if result.rc != 0:
+            pytest.fail(
+                "sc query as non-admin user failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+    finally:
+        _cleanup_role(server_host, "client")
+        _cleanup_role(server_host, "server")
 
 
 @pytest.mark.host
 @pytest.mark.win
 def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner):
+    _require_ui_installed(server_host)
     services = ["xp2p-client", "xp2p-server"]
     missing = [name for name in services if not win_env.service_exists(server_host, name)]
     if missing:
@@ -223,6 +238,7 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
 @pytest.mark.host
 @pytest.mark.win
 def test_xp2p_ui_tracks_service_crash_without_config(server_host, xp2p_server_runner):
+    _require_ui_installed(server_host)
     _install_client(xp2p_server_runner)
     config_paths = [
         r"C:\ProgramData\xp2p\config-client",

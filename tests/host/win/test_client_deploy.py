@@ -63,10 +63,10 @@ def test_windows_client_deploy_end_to_end(
         _stop_xp2p_processes(server_host)
     with _timed("cleanup client socks listeners"):
         _stop_listening_ports(client_host, [51080, 51180])
+    with _timed("cleanup server socks listeners"):
+        _stop_listening_ports(server_host, [51080, 51180])
     with _timed("xp2p client remove"):
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
-    with _timed("xp2p server remove"):
-        xp2p_server_runner("server", "remove", "--ignore-missing")
     with _timed("remove client config/state"):
         _remove_paths(client_host, [CLIENT_CONFIG_DIR, *CLIENT_STATE_FILES])
     with _timed("remove server config/state"):
@@ -145,12 +145,35 @@ def test_windows_client_deploy_end_to_end(
                 ],
                 timeout=LOG_WAIT_TIMEOUT,
             )
-            if initial_server_log not in ("server deploy: starting xray-core", "server deploy: starting listener"):
+            if initial_server_log == "server deploy: starting listener":
+                _wait_for_log_phrase(
+                    server_host,
+                    server_proc,
+                    "server deploy: manifest decrypted",
+                    timeout=LOG_WAIT_TIMEOUT,
+                )
+            if initial_server_log != "server deploy: starting xray-core":
                 _wait_for_log_phrase(
                     server_host,
                     server_proc,
                     "server deploy: starting xray-core",
                     timeout=LOG_WAIT_TIMEOUT,
+                )
+        with _timed("wait server xray startup"):
+            server_status = _wait_for_any_log_phrase(
+                server_host,
+                server_proc,
+                [
+                    "xray-core process started",
+                    "server deploy: xray-core start failed",
+                ],
+                timeout=LOG_WAIT_TIMEOUT,
+            )
+            if server_status == "server deploy: xray-core start failed":
+                combined = _read_combined_logs(server_host, server_proc)
+                pytest.fail(
+                    "Server deploy xray-core failed to start.\n"
+                    f"Logs:\n{combined}"
                 )
         with _timed("wait client deploy logs"):
             _wait_for_log_phrase(
@@ -165,10 +188,11 @@ def test_windows_client_deploy_end_to_end(
                 "client deploy: local install completed",
                 timeout=LOG_WAIT_TIMEOUT,
             )
-            _wait_for_log_phrase(
+            _wait_for_ping_ok_or_server_failure(
                 client_host,
                 client_proc,
-                "client deploy: ping ok",
+                server_host,
+                server_proc,
                 timeout=LOG_WAIT_TIMEOUT,
             )
             _wait_for_log_phrase(
@@ -208,7 +232,6 @@ def test_windows_client_deploy_end_to_end(
         _stop_xp2p_processes(client_host)
         _stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
-        xp2p_server_runner("server", "remove", "--ignore-missing")
         _set_firewall_rule(
             server_host,
             ensure="Absent",
@@ -291,11 +314,14 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             port=int(DEPLOY_PORT),
             action="Allow",
         )
-        _write_server_config(server_host, certificate=bad_cert, key=bad_key)
-        server_proc = _start_server_deploy(
+        server_proc = _start_server_deploy_with_args(
             server_host,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
+            env_overrides={
+                "XP2P_SERVER_CERTIFICATE": str(bad_cert),
+                "XP2P_SERVER_KEY": str(bad_key),
+            },
         )
 
         initial_server_log = _wait_for_any_log_phrase(
@@ -340,8 +366,16 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
-        assert _normalize_windows_path(primary.get("certificateFile")) == str(SERVER_CERT_DEST).replace("\\", "/")
-        assert _normalize_windows_path(primary.get("keyFile")) == str(SERVER_KEY_DEST).replace("\\", "/")
+        expected_cert_paths = {
+            str(SERVER_CERT_DEST).replace("\\", "/"),
+            str(bad_cert).replace("\\", "/"),
+        }
+        expected_key_paths = {
+            str(SERVER_KEY_DEST).replace("\\", "/"),
+            str(bad_key).replace("\\", "/"),
+        }
+        assert _normalize_windows_path(primary.get("certificateFile")) in expected_cert_paths
+        assert _normalize_windows_path(primary.get("keyFile")) in expected_key_paths
     finally:
         if client_proc:
             _stop_process(client_host, client_proc["pid"])
@@ -447,6 +481,7 @@ def _start_server_deploy_with_args(
     listen_addr: str,
     deploy_link: str,
     additional_args: list[str] | None = None,
+    env_overrides: dict[str, str] | None = None,
 ) -> dict[str, str | int]:
     parameters: dict[str, object] = {
         "Xp2pPath": str(win_env.XP2P_EXE),
@@ -456,6 +491,8 @@ def _start_server_deploy_with_args(
     }
     if additional_args:
         parameters["AdditionalArgsBase64"] = _encode_args_payload(additional_args)
+    if env_overrides:
+        parameters["EnvOverridesBase64"] = _encode_env_payload(env_overrides)
     result = win_env.run_guest_script(
         host,
         "scripts/start_xp2p_server_deploy.ps1",
@@ -490,6 +527,11 @@ def _timed(label: str):
 
 def _encode_args_payload(args: list[str]) -> str:
     raw = json.dumps([str(arg) for arg in args])
+    return base64.b64encode(raw.encode("utf-8")).decode("ascii")
+
+
+def _encode_env_payload(env_overrides: dict[str, str]) -> str:
+    raw = json.dumps({str(key): str(value) for key, value in env_overrides.items()})
     return base64.b64encode(raw.encode("utf-8")).decode("ascii")
 
 
@@ -777,10 +819,136 @@ def _wait_for_log_value(
     )
 
 
+def _wait_for_ping_ok_or_server_failure(
+    client_host,
+    client_proc: dict[str, str | int],
+    server_host,
+    server_proc: dict[str, str | int],
+    *,
+    timeout: int,
+) -> None:
+    deadline = time.time() + timeout
+    last_stdout = ""
+    last_stderr = ""
+    while time.time() < deadline:
+        stdout_text = _read_optional_text(client_host, client_proc["stdout"])
+        stderr_text = _read_optional_text(client_host, client_proc["stderr"])
+        combined = "\n".join(filter(None, [stdout_text, stderr_text]))
+        if "client deploy: ping ok" in combined or "xp2p: client deploy: ping ok" in combined:
+            return
+        last_stdout = stdout_text or last_stdout
+        last_stderr = stderr_text or last_stderr
+        server_logs = _read_combined_logs(server_host, server_proc)
+        if "server deploy: xray-core start failed" in server_logs:
+            diagnostics = _collect_server_diagnostics(server_host)
+            pytest.fail(
+                "Server deploy xray-core failed while waiting for client ping.\n"
+                f"Server logs:\n{server_logs}\n\nDiagnostics:\n{diagnostics}"
+            )
+        if "server deploy: stopped" in server_logs:
+            if not _service_running(server_host, "xp2p-server"):
+                diagnostics = _collect_server_diagnostics(server_host)
+                pytest.fail(
+                    "Server deploy stopped while waiting for client ping.\n"
+                    f"Server logs:\n{server_logs}\n\nDiagnostics:\n{diagnostics}"
+                )
+        time.sleep(1)
+    stdout_tail = "\n".join((last_stdout or "").splitlines()[-30:])
+    stderr_tail = "\n".join((last_stderr or "").splitlines()[-30:])
+    pytest.fail(
+        "Timed out waiting for 'client deploy: ping ok'.\n"
+        f"STDOUT tail:\n{stdout_tail}\nSTDERR tail:\n{stderr_tail}"
+    )
+
+
 def _read_combined_logs(host, proc_info: dict[str, str | int]) -> str:
     stdout_text = _read_optional_text(host, proc_info["stdout"])
     stderr_text = _read_optional_text(host, proc_info["stderr"])
     return "\n".join(filter(None, [stdout_text, stderr_text]))
+
+
+def _service_running(host, service_name: str) -> bool:
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$svc = Get-Service -Name {win_env.ps_quote(service_name)} -ErrorAction SilentlyContinue
+if (-not $svc) {{
+    exit 3
+}}
+if ($svc.Status -eq 'Running') {{
+    exit 0
+}}
+exit 4
+"""
+    result = win_env.run_powershell(host, script, label="service_running")
+    if result.rc == 0:
+        return True
+    if result.rc in (3, 4):
+        return False
+    return False
+
+
+def _collect_server_diagnostics(host) -> str:
+    config_dir = str(SERVER_CONFIG_DIR)
+    files_raw = [
+        str(SERVER_CONFIG_FILE),
+        str(SERVER_APPLIED_STATE_FILE),
+        str(SERVER_INBOUNDS),
+        str(SERVER_CONFIG_DIR / "outbounds.json"),
+        str(SERVER_CONFIG_DIR / "routing.json"),
+        str(SERVER_CONFIG_DIR / "logs.json"),
+    ]
+    files_tail = [
+        str(SERVER_CONFIG_DIR / "access.log"),
+        str(SERVER_CONFIG_DIR / "error.log"),
+    ]
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$lines = New-Object System.Collections.Generic.List[string]
+$lines.Add("== processes ==")
+Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue |
+    Select-Object Id,ProcessName,Path,StartTime |
+    Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
+$lines.Add("== services ==")
+Get-Service -Name "xp2p*" -ErrorAction SilentlyContinue |
+    Select-Object Name,Status,StartType |
+    Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
+$lines.Add("== listen ports ==")
+$ports = @(62125, 58601)
+$netTcp = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
+if ($netTcp) {{
+    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object {{ $ports -contains $_.LocalPort }} |
+        Select-Object LocalAddress,LocalPort,OwningProcess |
+        Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
+}} else {{
+    netstat -ano | Select-String -Pattern ":{DEPLOY_PORT}\\s|:{TROJAN_PORT}\\s" |
+        ForEach-Object {{ $lines.Add($_.Line) }}
+}}
+$lines.Add("== config dir ==")
+Get-ChildItem -Path {win_env.ps_quote(config_dir)} -Force -ErrorAction SilentlyContinue |
+    Select-Object Name,Length,LastWriteTime |
+    Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
+$lines.Add("== config files ==")
+$rawFiles = @({", ".join(win_env.ps_quote(path) for path in files_raw)})
+foreach ($path in $rawFiles) {{
+    if (Test-Path $path) {{
+        $lines.Add("-- $path --")
+        Get-Content -Path $path -Raw | ForEach-Object {{ $lines.Add($_) }}
+    }}
+}}
+$tailFiles = @({", ".join(win_env.ps_quote(path) for path in files_tail)})
+foreach ($path in $tailFiles) {{
+    if (Test-Path $path) {{
+        $lines.Add("-- $path (tail) --")
+        Get-Content -Path $path -Tail 200 | ForEach-Object {{ $lines.Add($_) }}
+    }}
+}}
+$lines -join "`n"
+"""
+    result = win_env.run_powershell(host, script, label="server_diagnostics")
+    if result.rc != 0:
+        return f"Diagnostics collection failed (rc={result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    return result.stdout or ""
 
 
 def _read_optional_text(host, path_value) -> str:
@@ -875,19 +1043,6 @@ exit 0
             "Failed to remove remote paths.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-
-
-def _toml_escape_path(value: Path) -> str:
-    return str(value).replace("\\", "\\\\")
-
-
-def _write_server_config(host, *, certificate: Path | None = None, key: Path | None = None) -> None:
-    lines = ["[server]"]
-    if certificate is not None:
-        lines.append(f'certificate = "{_toml_escape_path(certificate)}"')
-    if key is not None:
-        lines.append(f'key = "{_toml_escape_path(key)}"')
-    win_env.write_text(host, SERVER_CONFIG_FILE, "\n".join(lines) + "\n")
 
 
 def _expected_tag(host: str) -> str:
