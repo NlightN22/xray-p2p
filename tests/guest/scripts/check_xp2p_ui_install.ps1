@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $MarkerPath,
     [string] $AutostartExpected = "true",
-    [string] $RunValueName = "xp2p-ui"
+    [string] $RunValueName = "ui-xp2p"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,7 +13,7 @@ Set-StrictMode -Version Latest
 $exitCode = 0
 try {
     if (-not (Test-Path $Xp2pUiPath)) {
-        Write-Output "xp2p-ui not found at $Xp2pUiPath"
+        Write-Output "ui-xp2p not found at $Xp2pUiPath"
         $exitCode = 3
         return
     }
@@ -30,13 +30,13 @@ try {
         }
         if ($expect -in @("1", "true", "yes")) {
             if (-not $present) {
-                Write-Output "xp2p-ui autostart missing in HKCU Run"
+                Write-Output "ui-xp2p autostart missing in HKCU Run"
                 $exitCode = 4
                 return
             }
         } elseif ($expect -in @("0", "false", "no")) {
             if ($present) {
-                Write-Output "xp2p-ui autostart present in HKCU Run when disabled"
+                Write-Output "ui-xp2p autostart present in HKCU Run when disabled"
                 $exitCode = 5
                 return
             }

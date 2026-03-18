@@ -4,8 +4,8 @@
   <Product Id="*" Name="xp2p" Language="1033" Version="$(var.ProductVersion)" Manufacturer="xp2p" UpgradeCode="{E99A193E-D6A9-4743-93D8-EB45053E517A}">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x64" Description="xp2p tunnel service" />
     <util:CloseApplication Id="CloseXp2pUi"
-                           Target="xp2p-ui.exe"
-                           Description="xp2p UI is running."
+                           Target="ui-xp2p.exe"
+                           Description="ui-xp2p is running."
                            CloseMessage="yes"
                            PromptToContinue="yes"
                            RebootPrompt="no"
@@ -31,7 +31,7 @@
     <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" Value="1" />
     <Property Id="XP2P_UI_AUTOSTART" Hidden="yes" Secure="yes" Value="1" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch xp2p UI" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch ui-xp2p" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <WixVariable Id="WixUILicenseRtf" Value="installer\wix\license.rtf" />
 
@@ -169,9 +169,9 @@
       <Component Id="cmpXp2pUiStartMenu" Guid="{260AABB9-911B-43CE-8233-41E6BBB7153E}" Win64="yes">
         <Shortcut Id="ShortcutXp2pUiStartMenu"
                   Directory="Xp2pProgramMenuFolder"
-                  Name="xp2p UI"
-                  Description="xp2p UI"
-                  Target="[INSTALLFOLDER]xp2p-ui.exe"
+                  Name="ui-xp2p"
+                  Description="ui-xp2p"
+                  Target="[INSTALLFOLDER]ui-xp2p.exe"
                   WorkingDirectory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveXp2pProgramMenuFolder" Directory="Xp2pProgramMenuFolder" On="uninstall" />
         <RegistryValue Root="HKCU"
@@ -216,9 +216,9 @@
         <Condition>XP2P_UI_AUTOSTART="1"</Condition>
         <RegistryValue Root="HKCU"
                        Key="Software\Microsoft\Windows\CurrentVersion\Run"
-                       Name="xp2p-ui"
+                       Name="ui-xp2p"
                        Type="string"
-                       Value="&quot;[INSTALLFOLDER]xp2p-ui.exe&quot;"
+                       Value="&quot;[INSTALLFOLDER]ui-xp2p.exe&quot;"
                        KeyPath="yes" />
       </Component>
     </DirectoryRef>
@@ -265,9 +265,9 @@
       <Component Id="cmpXp2pUiDesktopShortcut" Guid="{8F3EC8B6-90BB-4CEB-9262-CEA891CECCDE}" Win64="yes">
         <Shortcut Id="ShortcutXp2pUiDesktop"
                   Directory="DesktopFolder"
-                  Name="xp2p UI"
-                  Description="xp2p UI"
-                  Target="[INSTALLFOLDER]xp2p-ui.exe"
+                  Name="ui-xp2p"
+                  Description="ui-xp2p"
+                  Target="[INSTALLFOLDER]ui-xp2p.exe"
                   WorkingDirectory="INSTALLFOLDER" />
         <RegistryValue Root="HKCU"
                        Key="Software\xp2p"
@@ -292,7 +292,7 @@
       <ComponentRef Id="cmpServiceAutostart" />
     </Feature>
 
-    <Feature Id="TrayFeature" Title="xp2p UI" Level="1" Display="hidden">
+    <Feature Id="TrayFeature" Title="ui-xp2p" Level="1" Display="hidden">
       <ComponentRef Id="cmpXp2pUiExe" />
       <ComponentRef Id="cmpXp2pUiAutoStart" />
       <ComponentRef Id="cmpXp2pUiStartMenu" />
@@ -300,7 +300,7 @@
 
     <Feature Id="DesktopShortcutFeature"
              Title="Desktop shortcut"
-             Description="Create a desktop shortcut for xp2p UI"
+             Description="Create a desktop shortcut for ui-xp2p"
              Level="1">
       <ComponentRef Id="cmpXp2pUiDesktopShortcut" />
     </Feature>

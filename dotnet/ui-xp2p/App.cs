@@ -38,7 +38,7 @@ internal sealed class App : Application
 
     private void OnStartup(object? sender, StartupEventArgs e)
     {
-        Log("xp2p-ui starting.");
+        Log("ui-xp2p starting.");
         Log($"base dir: {AppContext.BaseDirectory}");
         Log($"assembly name: {GetType().Assembly.GetName().Name}");
         LogResourcesHint();
@@ -71,7 +71,7 @@ internal sealed class App : Application
 
     private void OnExit(object? sender, ExitEventArgs e)
     {
-        Log("xp2p-ui exiting.");
+        Log("ui-xp2p exiting.");
         if (_statusTimer is not null)
         {
             _statusTimer.Stop();
@@ -344,7 +344,7 @@ internal sealed class App : Application
         {
             programData = @"C:\ProgramData";
         }
-        return Path.Combine(programData, "xp2p", "logs", "xp2p-ui.log");
+        return Path.Combine(programData, "xp2p", "logs", "ui-xp2p.log");
     }
 
     private void Log(string message)

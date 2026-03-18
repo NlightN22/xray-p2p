@@ -252,13 +252,13 @@ try {
         throw "xp2p binary missing at $binaryOut"
     }
 
-    $uiBinaryOut = Join-Path $binaryDir 'xp2p-ui.exe'
-    Invoke-Step -Name "Building xp2p-ui.exe" -Action {
-        $uiProject = Join-Path $RepoRoot "dotnet\\xp2p-ui\\xp2p-ui.csproj"
+    $uiBinaryOut = Join-Path $binaryDir 'ui-xp2p.exe'
+    Invoke-Step -Name "Building ui-xp2p.exe" -Action {
+        $uiProject = Join-Path $RepoRoot "dotnet\\ui-xp2p\\ui-xp2p.csproj"
         if (-not (Test-Path $uiProject)) {
             throw "WPF UI project not found at $uiProject"
         }
-        $uiPublishDir = Join-Path $binaryDir 'xp2p-ui-publish'
+        $uiPublishDir = Join-Path $binaryDir 'ui-xp2p-publish'
         Ensure-Directory $uiPublishDir
         $runtimeId = Resolve-UiRuntimeId -ArchLabel $MsiArchLabel
         Write-Info ("Publishing WPF UI (RID={0})" -f $runtimeId)
@@ -275,14 +275,14 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "dotnet publish failed with exit code $LASTEXITCODE"
         }
-        $publishedExe = Join-Path $uiPublishDir 'xp2p-ui.exe'
+        $publishedExe = Join-Path $uiPublishDir 'ui-xp2p.exe'
         if (-not (Test-Path $publishedExe)) {
             throw "WPF UI publish output missing at $publishedExe"
         }
         Copy-Item -Path $publishedExe -Destination $uiBinaryOut -Force
     }
     if (-not (Test-Path $uiBinaryOut)) {
-        throw "xp2p-ui binary missing at $uiBinaryOut"
+        throw "ui-xp2p binary missing at $uiBinaryOut"
     }
 
     Invoke-Step -Name "Cleaning winres artifacts" -Action {

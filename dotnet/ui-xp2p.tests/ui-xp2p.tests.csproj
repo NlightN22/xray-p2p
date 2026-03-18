@@ -16,6 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\\xp2p-ui\\xp2p-ui.csproj" />
+    <ProjectReference Include="..\\ui-xp2p\\ui-xp2p.csproj" />
   </ItemGroup>
 </Project>

@@ -13,13 +13,13 @@ $exitCode = 0
 $proc = $null
 try {
     if (-not (Test-Path $Xp2pUiPath)) {
-        Write-Output "xp2p-ui not found at $Xp2pUiPath"
+        Write-Output "ui-xp2p not found at $Xp2pUiPath"
         $exitCode = 3
         return
     }
     $proc = Start-Process -FilePath $Xp2pUiPath -PassThru
     if (-not $proc) {
-        Write-Output "xp2p-ui process failed to start"
+        Write-Output "ui-xp2p process failed to start"
         $exitCode = 4
         return
     }
@@ -28,7 +28,7 @@ try {
     }
     $running = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
     if (-not $running) {
-        Write-Output "xp2p-ui exited before smoke timeout"
+        Write-Output "ui-xp2p exited before smoke timeout"
         $exitCode = 5
         return
     }
@@ -40,12 +40,12 @@ try {
     }
     $remaining = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
     if ($remaining) {
-        Stop-Process -Name "xp2p-ui" -Force -ErrorAction SilentlyContinue
+        Stop-Process -Name "ui-xp2p" -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
         $remaining = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
     }
     if ($remaining) {
-        Write-Output "xp2p-ui process still running after stop"
+        Write-Output "ui-xp2p process still running after stop"
         $exitCode = 6
         return
     }

@@ -5,7 +5,7 @@ param(
     [string] $ServiceNamesBase64 = "",
     [int] $UiWaitSeconds = 5,
     [int] $ServiceWaitSeconds = 20,
-    [string] $LogPath = "C:\\ProgramData\\xp2p\\logs\\xp2p-ui.log",
+    [string] $LogPath = "C:\\ProgramData\\xp2p\\logs\\ui-xp2p.log",
     [string] $ClearLog = "true",
     [int] $UiPollSeconds = 6,
     [string] $RequiredPatternsBase64 = "",
@@ -149,7 +149,7 @@ function Invoke-ScAsUser([string] $userPath, [string] $password, [string] $actio
         throw "sc.exe received invalid arguments (action=$action, service=$serviceName)"
     }
     $scPath = Join-Path $env:SystemRoot "System32\\sc.exe"
-    $taskName = "xp2p-ui-svc-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
+    $taskName = "ui-xp2p-svc-" + ([System.Guid]::NewGuid().ToString("N").Substring(0, 8))
     $taskDir = "C:\\xp2p\\build\\ui-task"
     New-Item -ItemType Directory -Path $taskDir -Force | Out-Null
     $taskOutput = Join-Path $taskDir "$taskName.out.txt"
@@ -308,7 +308,7 @@ try {
 
     if ($Xp2pUiPath) {
         if (-not (Test-Path $Xp2pUiPath)) {
-            Write-Output "xp2p-ui not found at $Xp2pUiPath"
+            Write-Output "ui-xp2p not found at $Xp2pUiPath"
             $exitCode = 3
             return
         }
@@ -321,7 +321,7 @@ try {
         }
         $uiRunning = Get-Process -Id $uiProc.Id -ErrorAction SilentlyContinue
         if (-not $uiRunning) {
-            Write-Output "xp2p-ui exited before service toggle"
+            Write-Output "ui-xp2p exited before service toggle"
             $exitCode = 4
             return
         }

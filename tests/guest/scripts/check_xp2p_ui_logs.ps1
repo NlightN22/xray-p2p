@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $MarkerPath,
     [string] $Xp2pUiPath = "",
-    [string] $LogPath = "C:\\ProgramData\\xp2p\\logs\\xp2p-ui.log",
+    [string] $LogPath = "C:\\ProgramData\\xp2p\\logs\\ui-xp2p.log",
     [int] $WaitSeconds = 8,
     [int] $MaxLines = 200,
     [string] $ClearLog = "true"
@@ -48,7 +48,7 @@ $uiProc = $null
 try {
     if (-not $Xp2pUiPath -or -not (Test-Path $Xp2pUiPath)) {
         $exitCode = 3
-        $errorDetail = "xp2p-ui not found at $Xp2pUiPath"
+        $errorDetail = "ui-xp2p not found at $Xp2pUiPath"
         return
     }
 
@@ -70,7 +70,7 @@ try {
             Set-Content -Path $aclPath -Value $aclLines -Encoding ASCII
         }
         if (Test-Path $LogPath) {
-            $backup = Join-Path $logBackupDir ("xp2p-ui-{0}.log" -f (Get-Date -Format "yyyyMMddHHmmss"))
+            $backup = Join-Path $logBackupDir ("ui-xp2p-{0}.log" -f (Get-Date -Format "yyyyMMddHHmmss"))
             Copy-Item -Path $LogPath -Destination $backup -Force
             Remove-Item -Path $LogPath -Force -ErrorAction SilentlyContinue
         }
@@ -79,7 +79,7 @@ try {
     $uiProc = Start-Process -FilePath $Xp2pUiPath -PassThru
     if (-not $uiProc) {
         $exitCode = 4
-        $errorDetail = "xp2p-ui process failed to start"
+        $errorDetail = "ui-xp2p process failed to start"
         return
     }
     $uiPid = $uiProc.Id
@@ -89,7 +89,7 @@ try {
     $running = Get-Process -Id $uiPid -ErrorAction SilentlyContinue
     if (-not $running) {
         $exitCode = 4
-        $errorDetail = "xp2p-ui exited before log check"
+        $errorDetail = "ui-xp2p exited before log check"
     }
 
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
@@ -110,7 +110,7 @@ $tail = Get-Content -Path $LogPath -ErrorAction SilentlyContinue -Tail $MaxLines
 $text = ($tail | Out-String).Trim()
 $tailText = $text -replace '[^\x00-\x7F]', '?'
 $tailText = $tailText -replace "(`r`n|`r|`n)+", "`n"
-Write-Host "xp2p-ui log tail ($MaxLines lines max):"
+Write-Host "ui-xp2p log tail ($MaxLines lines max):"
 if ($tailText) {
     Write-Host $tailText
 } else {
@@ -124,7 +124,7 @@ if ($tailText) {
         }
         return
     }
-    if ($text -match "xp2p-ui list services failed") {
+    if ($text -match "ui-xp2p list services failed") {
         $exitCode = 7
         $errorDetail = "log contains list services failed"
         return

@@ -12,14 +12,14 @@ from tests.host import common
 from tests.host.win import env as win_env
 
 INSTALL_ROOT = Path(r"C:\Program Files\xp2p")
-UI_EXE = INSTALL_ROOT / "xp2p-ui.exe"
+UI_EXE = INSTALL_ROOT / "ui-xp2p.exe"
 MARKER_DIR = Path(r"C:\xp2p\build\ui-markers")
 LOCAL_MARKER_DIR = common.REPO_ROOT / "build" / "ui-markers"
 
 
 def _require_ui_installed(host) -> None:
     if not win_env.path_exists(host, UI_EXE):
-        pytest.skip(f"xp2p-ui.exe not found at {UI_EXE}")
+        pytest.skip(f"ui-xp2p.exe not found at {UI_EXE}")
 
 
 def _autostart_expected() -> str:
@@ -105,7 +105,7 @@ def _install_server(runner) -> None:
 @pytest.mark.win
 def test_xp2p_ui_install_and_autostart(server_host):
     _require_ui_installed(server_host)
-    local_marker, guest_marker = _marker_paths("xp2p-ui-install")
+    local_marker, guest_marker = _marker_paths("ui-xp2p-install")
     result = win_env.run_guest_script(
         server_host,
         "scripts/check_xp2p_ui_install.ps1",
@@ -116,7 +116,7 @@ def test_xp2p_ui_install_and_autostart(server_host):
     _assert_marker(local_marker, "check_xp2p_ui_install.ps1")
     if result.rc != 0:
         pytest.fail(
-            "xp2p-ui install/autostart check failed.\n"
+            "ui-xp2p install/autostart check failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 
@@ -125,7 +125,7 @@ def test_xp2p_ui_install_and_autostart(server_host):
 @pytest.mark.win
 def test_xp2p_ui_smoke_launch(server_host):
     _require_ui_installed(server_host)
-    local_marker, guest_marker = _marker_paths("xp2p-ui-launch")
+    local_marker, guest_marker = _marker_paths("ui-xp2p-launch")
     result = win_env.run_guest_script(
         server_host,
         "scripts/launch_xp2p_ui.ps1",
@@ -136,7 +136,7 @@ def test_xp2p_ui_smoke_launch(server_host):
     _assert_marker(local_marker, "launch_xp2p_ui.ps1")
     if result.rc != 0:
         pytest.fail(
-            "xp2p-ui failed to launch or exit cleanly.\n"
+            "ui-xp2p failed to launch or exit cleanly.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 
@@ -145,7 +145,7 @@ def test_xp2p_ui_smoke_launch(server_host):
 @pytest.mark.win
 def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
     _require_ui_installed(server_host)
-    local_marker, guest_marker = _marker_paths("xp2p-ui-logs")
+    local_marker, guest_marker = _marker_paths("ui-xp2p-logs")
     result = win_env.run_guest_script(
         server_host,
         "scripts/check_xp2p_ui_logs.ps1",
@@ -158,7 +158,7 @@ def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
     _assert_marker(local_marker, "check_xp2p_ui_logs.ps1")
     if result.rc != 0:
         pytest.fail(
-            "xp2p-ui log check failed.\n"
+            "ui-xp2p log check failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         ) 
 
@@ -168,7 +168,7 @@ def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
 def test_sc_query_as_non_admin_user(server_host, xp2p_server_runner):
     _install_client(xp2p_server_runner)
     _install_server(xp2p_server_runner)
-    local_marker, guest_marker = _marker_paths("xp2p-ui-sc-query")
+    local_marker, guest_marker = _marker_paths("ui-xp2p-sc-query")
     try:
         result = win_env.run_guest_script(
             server_host,
@@ -209,7 +209,7 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
     log_patterns_payload = base64.b64encode(
         json.dumps(log_patterns).encode("utf-8")
     ).decode("ascii")
-    local_marker, guest_marker = _marker_paths("xp2p-ui-service-toggle")
+    local_marker, guest_marker = _marker_paths("ui-xp2p-service-toggle")
     payload = base64.b64encode(json.dumps(services).encode("utf-8")).decode("ascii")
     try:
         result = win_env.run_guest_script(
@@ -227,7 +227,7 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
         _assert_marker(local_marker, "toggle_service_via_ui.ps1")
         if result.rc != 0:
             pytest.fail(
-                "xp2p-ui service toggle check failed.\n"
+                "ui-xp2p service toggle check failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
     finally:
@@ -247,7 +247,7 @@ def test_xp2p_ui_tracks_service_crash_without_config(server_host, xp2p_server_ru
     ]
     config_payload = base64.b64encode(json.dumps(config_paths).encode("utf-8")).decode("ascii")
     services_payload = base64.b64encode(json.dumps(["xp2p-client"]).encode("utf-8")).decode("ascii")
-    local_marker, guest_marker = _marker_paths("xp2p-ui-crash-track")
+    local_marker, guest_marker = _marker_paths("ui-xp2p-crash-track")
     try:
         result = win_env.run_guest_script(
             server_host,
@@ -272,7 +272,7 @@ def test_xp2p_ui_tracks_service_crash_without_config(server_host, xp2p_server_ru
         _assert_marker(local_marker, "toggle_service_via_ui.ps1")
         if result.rc != 0:
             pytest.fail(
-                "xp2p-ui crash tracking check failed.\n"
+                "ui-xp2p crash tracking check failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
     finally:

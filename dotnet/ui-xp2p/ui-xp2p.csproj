@@ -6,7 +6,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>xp2p-ui</AssemblyName>
+    <AssemblyName>ui-xp2p</AssemblyName>
     <RootNamespace>Xp2pUi</RootNamespace>
     <ApplicationIcon>assets\xp2p.ico</ApplicationIcon>
   </PropertyGroup>

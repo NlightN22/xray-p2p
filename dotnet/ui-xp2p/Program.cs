@@ -8,7 +8,7 @@ internal static class Program
     [STAThread]
     public static void Main()
     {
-        using var mutex = new Mutex(true, @"Global\xp2p-ui", out var createdNew);
+        using var mutex = new Mutex(true, @"Global\ui-xp2p", out var createdNew);
         if (!createdNew)
         {
             return;
