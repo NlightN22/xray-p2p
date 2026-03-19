@@ -1,0 +1,66 @@
+name: aggregate-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.2.4)"
+        required: true
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag SHA
+        id: ref
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          git fetch --tags --force
+          if ! git rev-parse "refs/tags/$tag^{commit}" >/dev/null 2>&1; then
+            echo "Tag not found: $tag" >&2
+            exit 1
+          fi
+          sha="$(git rev-parse "refs/tags/$tag^{commit}")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts from build workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.ref.outputs.sha }}"
+          workflows=("build.yml" "build-msi.yml" "build-deb.yml")
+          for wf in "${workflows[@]}"; do
+            run_id=$(gh run list --workflow "$wf" --json databaseId,headSha,conclusion -L 50 \
+              | jq -r --arg sha "$sha" '.[] | select(.headSha==$sha and .conclusion=="success") | .databaseId' \
+              | head -n 1)
+            if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+              echo "No successful run found for $wf at $sha" >&2
+              exit 1
+            fi
+            gh run download "$run_id" -D "artifacts/$wf"
+          done
+
+      - name: Collect release assets
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f -print0 | xargs -0 -I {} cp {} release/
+          cd release
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | xargs -0 sha256sum > SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: release/*
+          generate_release_notes: true
