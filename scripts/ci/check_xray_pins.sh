@@ -11,6 +11,7 @@ if [ ! -f "$PIN_FILE" ]; then
 fi
 
 export PIN_FILE
+export PROJECT_ROOT
 
 python3 - <<'PY'
 import hashlib
@@ -18,7 +19,10 @@ import json
 import os
 import sys
 
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+project_root = os.environ.get("PROJECT_ROOT")
+if not project_root:
+    print("ERROR: PROJECT_ROOT is not set", file=sys.stderr)
+    sys.exit(1)
 pin_file = os.environ.get("PIN_FILE") or os.path.join(project_root, "go", "internal", "xray", "pinned.json")
 
 with open(pin_file, "r", encoding="utf-8") as handle:
