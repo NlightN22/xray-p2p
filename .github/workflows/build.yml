@@ -9,26 +9,11 @@ on:
         default: "main"
 
 jobs:
-  build-matrix:
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            archive: tar.gz
-            ext: ""
-          - goos: linux
-            goarch: arm64
-            archive: tar.gz
-            ext: ""
-          - goos: windows
-            goarch: amd64
-            archive: zip
-            ext: ".exe"
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,12 +34,40 @@ jobs:
           version="$(go run ./go/cmd/xp2p --version)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Compute build matrix
+        id: matrix
+        run: |
+          set -euo pipefail
+          matrix=$(go run ./go/tools/targets matrix)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build-matrix:
+    runs-on: ubuntu-latest
+    needs: prepare
+    outputs:
+      version: ${{ needs.prepare.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           EXT: ${{ matrix.ext }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           out="dist/${GOOS}-${GOARCH}/xp2p${EXT}"
@@ -62,28 +75,40 @@ jobs:
           ldflags="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VERSION}"
           go build -trimpath -ldflags="$ldflags" -o "$out" ./go/cmd/xp2p
 
+      - name: Stage bundled dependencies
+        run: |
+          set -euo pipefail
+          dest="dist/${{ matrix.goos }}-${{ matrix.goarch }}"
+          go run ./go/tools/targets deps --target "${{ matrix.goos }}-${{ matrix.goarch }}" --dest "$dest"
+
       - name: Package
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           ARCHIVE: ${{ matrix.archive }}
           EXT: ${{ matrix.ext }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
           cd "dist/${GOOS}-${GOARCH}"
           artifact="../xp2p-${VERSION}-${GOOS}-${GOARCH}.${ARCHIVE}"
+          shopt -s nullglob
+          files=(*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No files to package in $(pwd)" >&2
+            exit 1
+          fi
           if [ "$ARCHIVE" = "zip" ]; then
-            zip -j "$artifact" "xp2p${EXT}"
+            zip -j "$artifact" "${files[@]}"
           else
-            tar -czf "$artifact" "xp2p${EXT}"
+            tar -czf "$artifact" "${files[@]}"
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xp2p-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/xp2p-${{ steps.version.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
+          name: xp2p-${{ needs.prepare.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/xp2p-${{ needs.prepare.outputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive }}
           retention-days: 7
 
   smoke:
