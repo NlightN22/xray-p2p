@@ -117,3 +117,20 @@ SHA256sum: 79b4ba5e4511a3151c80601d7f856ebb9179f9a228c4f83b32811d4a14801375
 Description:  Minimal xp2p CLI packaging helper that reuses a prebuilt binary.
  Build the binary ahead of time and point XP2P_PREBUILT to it when invoking make.
 
+Package: xp2p
+Version: 0.2.4-1
+Depends: libc
+Source: /srv/xray-p2p/openwrt/feed/packages/utils/xp2p
+SourceName: xp2p
+License: MIT
+Section: net
+SourceDateEpoch: 1770987876
+Maintainer: xray-p2p maintainers
+Architecture: mipsel_24kc
+Installed-Size: 14385062
+Filename: xp2p_0.2.4-1_mipsel_24kc.ipk
+Size: 14353357
+SHA256sum: 6bde3f550b3dae2e48d62118e22bbe7d2dd414ee25aba7a53dce9f2bfa85be19
+Description:  Minimal xp2p CLI packaging helper that reuses a prebuilt binary.
+ Build the binary ahead of time and point XP2P_PREBUILT to it when invoking make.
+
