@@ -42,7 +42,7 @@ foreach ($target in ($targets.PSObject.Properties | Sort-Object Name)) {
         }
         $actual = (Get-FileHash -Algorithm SHA256 -Path $path).Hash.ToLower()
         if ($actual -ne $expected.ToLower()) {
-            $errors.Add("${targetName}: sha256 mismatch for $path: expected $expected, got $actual")
+            $errors.Add("${targetName}: sha256 mismatch for ${path}: expected $expected, got $actual")
         }
     }
 }
