@@ -1,0 +1,23 @@
+site_name: XP2P Tunnel provider
+site_url: https://sitename.exmpl
+theme:
+  name: material
+  font:
+    text: Merriweather Sans
+    code: Roboto Mono
+  palette: 
+    - scheme:  slate
+      toggle:
+        icon: material/weather-sunny
+        name: Dark mode
+      primary: blue
+      accent: deep purple
+
+    - scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Light mode
+      primary: green
+      accent: deep orange
+
+  
