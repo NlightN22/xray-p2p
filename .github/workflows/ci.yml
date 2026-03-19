@@ -12,6 +12,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Make scripts executable
+        run: |
+          set -euo pipefail
+          find scripts -type f -name "*.sh" -exec chmod +x {} +
+
       - name: Check pinned xray assets
         run: |
           set -euo pipefail
