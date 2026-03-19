@@ -11,6 +11,8 @@ env:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      XP2P_LOG_ROOT: ${{ runner.temp }}/xp2p-log
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
@@ -91,6 +93,8 @@ jobs:
     if: ${{ needs.verify.outputs.run_full_release == 'true' }}
     runs-on: ubuntu-latest
     needs: verify
+    env:
+      XP2P_LOG_ROOT: ${{ runner.temp }}/xp2p-log
     outputs:
       version: ${{ needs.verify.outputs.version }}
     strategy:
@@ -259,6 +263,7 @@ jobs:
     needs: verify
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      XP2P_LOG_ROOT: ${{ runner.temp }}/xp2p-log
     steps:
       - name: Checkout
         uses: actions/checkout@v4
