@@ -2,7 +2,12 @@
 
 package client
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+)
 
 func TestResolveClientLogPath(t *testing.T) {
 	t.Run("AbsolutePath", func(t *testing.T) {
@@ -21,7 +26,7 @@ func TestResolveClientLogPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveClientLogPath: %v", err)
 		}
-		want := "/var/log/xp2p/client.err"
+		want := filepath.Join(config.LogRoot(), "client.err")
 		if resolved != want {
 			t.Fatalf("expected %s got %s", want, resolved)
 		}
@@ -32,7 +37,7 @@ func TestResolveClientLogPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveClientLogPath: %v", err)
 		}
-		want := "/var/log/xp2p/client.err"
+		want := filepath.Join(config.LogRoot(), "client.err")
 		if resolved != want {
 			t.Fatalf("expected %s got %s", want, resolved)
 		}

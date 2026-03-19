@@ -2,7 +2,12 @@
 
 package server
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+)
 
 func TestResolveServerLogPath(t *testing.T) {
 	t.Run("Absolute", func(t *testing.T) {
@@ -21,7 +26,7 @@ func TestResolveServerLogPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveServerLogPath: %v", err)
 		}
-		want := "/var/log/xp2p/server.err"
+		want := filepath.Join(config.LogRoot(), "server.err")
 		if got != want {
 			t.Fatalf("expected %s got %s", want, got)
 		}
@@ -32,7 +37,7 @@ func TestResolveServerLogPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolveServerLogPath: %v", err)
 		}
-		want := "/var/log/xp2p/server.err"
+		want := filepath.Join(config.LogRoot(), "server.err")
 		if got != want {
 			t.Fatalf("expected %s got %s", want, got)
 		}

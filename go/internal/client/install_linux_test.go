@@ -3,10 +3,10 @@
 package client
 
 import (
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"path/filepath"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -34,7 +34,7 @@ func TestNormalizeInstallOptionsLinux(t *testing.T) {
 		t.Fatalf("configDir mismatch: got %s want %s", state.configDir, expectedConfig)
 	}
 
-	expectedLogDir := filepath.Join(layout.UnixLogRoot, "client")
+	expectedLogDir := filepath.Join(config.LogRoot(), "client")
 	if state.logsDir != expectedLogDir {
 		t.Fatalf("logsDir mismatch: got %s want %s", state.logsDir, expectedLogDir)
 	}
