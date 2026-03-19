@@ -10,6 +10,8 @@ if [ ! -f "$PIN_FILE" ]; then
   exit 1
 fi
 
+export PIN_FILE
+
 python3 - <<'PY'
 import hashlib
 import json
@@ -17,7 +19,7 @@ import os
 import sys
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-pin_file = os.path.join(project_root, "distro", "xray", "pinned.json")
+pin_file = os.environ.get("PIN_FILE") or os.path.join(project_root, "go", "internal", "xray", "pinned.json")
 
 with open(pin_file, "r", encoding="utf-8") as handle:
     data = json.load(handle)
