@@ -1,17 +1,16 @@
-# Welcome to MkDocs
+# XP2P Connection Guide
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+This guide is organized from simple to complex. Start with a single A-B tunnel,
+then layer in redirects, DNS handling, and multi-node chains.
 
-## Commands
+## Scope
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
+- OpenWrt hosts for A and B.
+- Alpine guests for C1 and C2 (used in the chain scenario).
+- Commands use the default paths and config dirs.
 
-## Project layout
+## Conventions
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+- A = server node, B = client node.
+- C1, C2 = downstream Alpine guests behind B and A.
+- Replace example IPs, users, and passwords with your actual values.

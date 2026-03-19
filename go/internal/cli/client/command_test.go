@@ -19,11 +19,11 @@ func TestForwardFlagsCollectsLocalFlags(t *testing.T) {
 	}
 
 	cases := []struct {
-		name           string
-		builder        func(commandConfig) *cobra.Command
-		localArgs      []string
-		passArgs       []string
-		wantFlags      []string
+		name      string
+		builder   func(commandConfig) *cobra.Command
+		localArgs []string
+		passArgs  []string
+		wantFlags []string
 	}{
 		{
 			name:      "install strings and bool",

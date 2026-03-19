@@ -1,5 +1,11 @@
 site_name: XP2P Tunnel provider
 site_url: https://sitename.exmpl
+nav:
+  - Overview: index.md
+  - Single Tunnel (A-B): 01-single-tunnel.md
+  - Redirects Within A-B: 02-redirects.md
+  - Chain (C2-B-A-C1): 03-chain.md
+  - Advanced Variants: 04-advanced.md
 theme:
   name: material
   font:

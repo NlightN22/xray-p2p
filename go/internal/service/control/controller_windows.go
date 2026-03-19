@@ -63,7 +63,6 @@ func serviceName(role Role) (string, error) {
 	}
 }
 
-
 func serviceStateLabel(state svc.State) string {
 	switch state {
 	case svc.Running:

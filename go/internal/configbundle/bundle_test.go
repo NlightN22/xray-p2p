@@ -106,14 +106,14 @@ func createFixtureRoot(t *testing.T, root string) map[string]string {
 		filepath.Join("config-client", "inbounds.json"):        `{"in":1}`,
 		filepath.Join("config-client", "nested", "route.json"): `{"route":true}`,
 		filepath.Join("config-server", "inbounds.json"):        `{"in":2}`,
-		"xp2p-client.toml":                                     "client=1\n",
-		"xp2p-server.toml":                                     "server=1\n",
-		"cert.pem":                                             "cert\n",
-		"key.pem":                                              "key\n",
-		"xp2p-client.state.json":                               `{"state":"c"}`,
-		"xp2p-server.state.json":                               `{"state":"s"}`,
-		"install-state-client.json":                            `{"install":"c"}`,
-		"install-state-server.json":                            `{"install":"s"}`,
+		"xp2p-client.toml":          "client=1\n",
+		"xp2p-server.toml":          "server=1\n",
+		"cert.pem":                  "cert\n",
+		"key.pem":                   "key\n",
+		"xp2p-client.state.json":    `{"state":"c"}`,
+		"xp2p-server.state.json":    `{"state":"s"}`,
+		"install-state-client.json": `{"install":"c"}`,
+		"install-state-server.json": `{"install":"s"}`,
 	}
 
 	for rel, content := range files {
