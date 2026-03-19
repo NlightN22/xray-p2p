@@ -19,7 +19,7 @@ foreach ($target in ($targets.PSObject.Properties | Sort-Object Name)) {
     $targetName = $target.Name
     $meta = $target.Value
     if (-not $targetName.Contains('/')) {
-        $errors.Add("$targetName: expected target format os/arch")
+        $errors.Add("${targetName}: expected target format os/arch")
         continue
     }
     $parts = $targetName.Split('/', 2)
@@ -30,19 +30,19 @@ foreach ($target in ($targets.PSObject.Properties | Sort-Object Name)) {
         $expected = $item.sha256
         $required = [bool]$item.required
         if ([string]::IsNullOrWhiteSpace($name) -or [string]::IsNullOrWhiteSpace($expected)) {
-            $errors.Add("$targetName: invalid file entry")
+            $errors.Add("${targetName}: invalid file entry")
             continue
         }
         $path = Join-Path $projectRoot ("distro\{0}\bundle\{1}\{2}" -f $osName, $arch, $name)
         if (-not (Test-Path $path)) {
             if ($required) {
-                $errors.Add("$targetName: missing $path")
+                $errors.Add("${targetName}: missing $path")
             }
             continue
         }
         $actual = (Get-FileHash -Algorithm SHA256 -Path $path).Hash.ToLower()
         if ($actual -ne $expected.ToLower()) {
-            $errors.Add("$targetName: sha256 mismatch for $path: expected $expected, got $actual")
+            $errors.Add("${targetName}: sha256 mismatch for $path: expected $expected, got $actual")
         }
     }
 }
