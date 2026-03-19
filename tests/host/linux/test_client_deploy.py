@@ -130,9 +130,9 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         _run_bundle_checks(client_host, server_host, xp2p_client_runner, server_ip)
     finally:
         if client_pid:
-            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+            linux_env.stop_process(client_host, str(client_pid))
         if server_pid:
-            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+            linux_env.stop_process(server_host, str(server_pid))
 
 
 @pytest.mark.host
@@ -223,9 +223,9 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         assert primary.get("keyFile") in expected_key_paths
     finally:
         if client_pid:
-            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+            linux_env.stop_process(client_host, str(client_pid))
         if server_pid:
-            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+            linux_env.stop_process(server_host, str(server_pid))
 
 
 @pytest.mark.host
@@ -396,10 +396,10 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             timeout=SERVICE_START_TIMEOUT,
         )
         if client_pid:
-            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+            linux_env.stop_process(client_host, str(client_pid))
             client_pid = None
         if server_pid:
-            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+            linux_env.stop_process(server_host, str(server_pid))
             server_pid = None
         xp2p_client_runner("client", "service", "stop")
         xp2p_server_runner("server", "service", "stop")
@@ -535,10 +535,10 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             timeout=SERVICE_START_TIMEOUT,
         )
         if client_pid:
-            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+            linux_env.stop_process(client_host, str(client_pid))
             client_pid = None
         if server_pid:
-            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+            linux_env.stop_process(server_host, str(server_pid))
             server_pid = None
         xp2p_client_runner("client", "service", "stop")
         xp2p_server_runner("server", "service", "stop")
@@ -656,9 +656,9 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         )
     finally:
         if client_pid:
-            linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+            linux_env.stop_process(client_host, str(client_pid))
         if server_pid:
-            linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+            linux_env.stop_process(server_host, str(server_pid))
 
 
 def _start_client_deploy(

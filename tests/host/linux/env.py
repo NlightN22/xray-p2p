@@ -71,6 +71,24 @@ def run_guest_script(
     return host.run(command, timeout=timeout)
 
 
+def stop_process(host: Host, pid: int | str) -> None:
+    pid_arg = shlex.quote(str(pid))
+    script = (
+        "pid=\"$1\"; "
+        "case \"$pid\" in ''|*[!0-9]*) exit 0;; esac; "
+        "kill -0 \"$pid\" >/dev/null 2>&1 || exit 0; "
+        "kill \"$pid\" >/dev/null 2>&1 || true; "
+        "i=0; "
+        "while [ $i -lt 20 ]; do "
+        "kill -0 \"$pid\" >/dev/null 2>&1 || exit 0; "
+        "sleep 1; "
+        "i=$((i+1)); "
+        "done; "
+        "kill -9 \"$pid\" >/dev/null 2>&1 || true"
+    )
+    host.run(f"sudo -n /bin/sh -c {shlex.quote(script)} -- {pid_arg}")
+
+
 def run_guest_script_with_env(
     host: Host,
     relative_path: str,
@@ -302,7 +320,7 @@ def xp2p_run_session(
     try:
         yield {"pid": int(pid_value), "log": log_arg}
     finally:
-        run_guest_script(host, "scripts/linux/stop_process.sh", pid_value)
+        stop_process(host, pid_value)
 
 
 @contextmanager
@@ -343,4 +361,4 @@ def xp2p_run_session_with_env(
     try:
         yield {"pid": int(pid_value), "log": log_arg}
     finally:
-        run_guest_script(host, "scripts/linux/stop_process.sh", pid_value)
+        stop_process(host, pid_value)

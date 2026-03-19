@@ -2,7 +2,7 @@
 set -eu
 
 if [ "$#" -lt 3 ]; then
-  echo "Usage: start_xp2p_server_deploy.sh <log_path> <listen_addr> <deploy_link> [extra...]" >&2
+  echo "Usage: start_xp2p_server_deploy.sh <log_path> <listen_addr> <deploy_link> [ENV=VAL ...] [-- extra...]" >&2
   exit 2
 fi
 
@@ -14,14 +14,43 @@ shift 3 || true
 : >"$LOG_PATH"
 chmod 600 "$LOG_PATH"
 
-EXTRA_ARGS="$*"
+ENV_ARGS=""
+EXTRA_ARGS=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --)
+      shift
+      EXTRA_ARGS="$*"
+      break
+      ;;
+    *=*)
+      if [ -n "$ENV_ARGS" ]; then
+        ENV_ARGS="$ENV_ARGS $1"
+      else
+        ENV_ARGS="$1"
+      fi
+      shift
+      ;;
+    *)
+      EXTRA_ARGS="$*"
+      break
+      ;;
+  esac
+done
+
 set -- server deploy --listen "$LISTEN_ADDR" --link "$DEPLOY_LINK"
+
 if [ -n "$EXTRA_ARGS" ]; then
   # shellcheck disable=SC2086
   set -- "$@" $EXTRA_ARGS
 fi
 
-setsid /usr/bin/xp2p "$@" >"$LOG_PATH" 2>&1 &
+if [ -n "$ENV_ARGS" ]; then
+  # shellcheck disable=SC2086
+  setsid env $ENV_ARGS /usr/bin/xp2p "$@" >"$LOG_PATH" 2>&1 &
+else
+  setsid /usr/bin/xp2p "$@" >"$LOG_PATH" 2>&1 &
+fi
 PID=$!
 sleep 1
 if ! kill -0 "$PID" >/dev/null 2>&1; then

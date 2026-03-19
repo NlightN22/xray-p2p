@@ -155,7 +155,7 @@ def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
             success = True
         finally:
             if client_pid:
-                linux_env.run_guest_script(client_host, "scripts/linux/stop_process.sh", str(client_pid))
+                linux_env.stop_process(client_host, str(client_pid))
             if server_proc:
                 helpers.stop_windows_process(server_host, int(server_proc["pid"]))
             linux_helpers.cleanup_client_install(client_host, linux_client_runner)
@@ -265,7 +265,7 @@ def test_cross_deploy_windows_client_linux_server(linux_hosts, windows_hosts):
             if client_proc:
                 helpers.stop_windows_process(client_host, int(client_proc["pid"]))
             if server_pid:
-                linux_env.run_guest_script(server_host, "scripts/linux/stop_process.sh", str(server_pid))
+                linux_env.stop_process(server_host, str(server_pid))
             helpers.cleanup_windows_client_install(client_host, win_client_runner, DEFAULT_WINDOWS_INSTALL_DIR)
             linux_helpers.cleanup_server_install(server_host, linux_server_runner)
             win_env.remove_path(client_host, WINDOWS_HEARTBEAT_STATE_FILE)

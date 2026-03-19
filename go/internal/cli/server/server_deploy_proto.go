@@ -5,9 +5,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -214,6 +217,27 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		notifyFailure(results)
 		return
 	}
+	if installed {
+		required := []string{
+			"inbounds.json",
+			"outbounds.json",
+			"routing.json",
+			"logs.json",
+		}
+		for _, name := range required {
+			path := filepath.Join(configDir, name)
+			if _, err := os.Stat(path); err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					_ = writeLine(rw, "ERR xp2p: server install incomplete: missing "+name)
+					notifyFailure(results)
+					return
+				}
+				_ = writeLine(rw, "ERR "+err.Error())
+				notifyFailure(results)
+				return
+			}
+		}
+	}
 
 	inst := server.InstallOptions{
 		InstallDir:            installDir,
@@ -241,6 +265,11 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 			inst.CertificateStore = ""
 			inst.CertificateFile = ""
 			inst.KeyFile = ""
+			s.Cfg.Server.CertificateStore = ""
+			s.Cfg.Server.CertificateFile = ""
+			s.Cfg.Server.KeyFile = ""
+			_ = os.Unsetenv("XP2P_SERVER_CERTIFICATE")
+			_ = os.Unsetenv("XP2P_SERVER_KEY")
 			if _, updateErr := config.ClearServerCertificateOverrides(""); updateErr != nil {
 				logging.Warn("xp2p server deploy: failed to clear certificate overrides", "err", updateErr)
 			}

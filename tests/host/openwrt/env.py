@@ -156,6 +156,24 @@ def run_guest_script(host: Host, relative_path: str, *args: str):
     return host.run(command)
 
 
+def stop_process(host: Host, pid: int | str) -> None:
+    pid_arg = shlex.quote(str(pid))
+    script = (
+        "pid=\"$1\"; "
+        "case \"$pid\" in ''|*[!0-9]*) exit 0;; esac; "
+        "kill -0 \"$pid\" >/dev/null 2>&1 || exit 0; "
+        "kill \"$pid\" >/dev/null 2>&1 || true; "
+        "i=0; "
+        "while [ $i -lt 20 ]; do "
+        "kill -0 \"$pid\" >/dev/null 2>&1 || exit 0; "
+        "sleep 1; "
+        "i=$((i+1)); "
+        "done; "
+        "kill -9 \"$pid\" >/dev/null 2>&1 || true"
+    )
+    host.run(f"/bin/sh -c {shlex.quote(script)} -- {pid_arg}")
+
+
 def run_alpine_guest_script(host: Host, relative_path: str, *args: str):
     script_path = ALPINE_GUEST_SCRIPTS_ROOT / relative_path
     quoted_script = shlex.quote(script_path.as_posix())

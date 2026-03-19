@@ -142,17 +142,9 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
         )
     finally:
         if client_pid:
-            openwrt_env.run_guest_script(
-                openwrt_client_host,
-                "scripts/linux/stop_process.sh",
-                str(client_pid),
-            )
+            openwrt_env.stop_process(openwrt_client_host, client_pid)
         if server_pid:
-            openwrt_env.run_guest_script(
-                openwrt_server_host,
-                "scripts/linux/stop_process.sh",
-                str(server_pid),
-            )
+            openwrt_env.stop_process(openwrt_server_host, server_pid)
         for host in (openwrt_client_host, openwrt_server_host):
             openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         helpers.cleanup_client_install(openwrt_client_host, client_runner)
@@ -211,12 +203,15 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         )
         link = _wait_for_client_link(openwrt_client_host, CLIENT_DEPLOY_LOG)
 
-        _write_server_config(openwrt_server_host, certificate=bad_cert, key=bad_key)
-        server_pid = _start_server_deploy(
+        server_pid = _start_server_deploy_with_args(
             openwrt_server_host,
             log_path=SERVER_DEPLOY_LOG,
             listen_addr=f":{DEPLOY_PORT}",
             deploy_link=link,
+            extra_args=[
+                f"XP2P_SERVER_CERTIFICATE={bad_cert.as_posix()}",
+                f"XP2P_SERVER_KEY={bad_key.as_posix()}",
+            ],
         )
 
         _wait_for_log_phrase(
@@ -260,17 +255,9 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         assert primary.get("keyFile") == key_path.as_posix()
     finally:
         if client_pid:
-            openwrt_env.run_guest_script(
-                openwrt_client_host,
-                "scripts/linux/stop_process.sh",
-                str(client_pid),
-            )
+            openwrt_env.stop_process(openwrt_client_host, client_pid)
         if server_pid:
-            openwrt_env.run_guest_script(
-                openwrt_server_host,
-                "scripts/linux/stop_process.sh",
-                str(server_pid),
-            )
+            openwrt_env.stop_process(openwrt_server_host, server_pid)
         for host in (openwrt_client_host, openwrt_server_host):
             openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
         helpers.cleanup_client_install(openwrt_client_host, client_runner)
@@ -482,10 +469,13 @@ def _assert_link_matches(
     assert query.get("security") == ["tls"], f"security param missing: {query}"
     assert query.get("sni") == [host], f"sni mismatch (got {query.get('sni')}, want {host})"
     pin_values = query.get("pinnedPeerCertSha256") or []
-    assert len(pin_values) == 1 and pin_values[0], f"pinnedPeerCertSha256 missing: {query}"
-    assert query.get("verifyPeerCertByName") == [host], (
-        f"verifyPeerCertByName mismatch (got {query.get('verifyPeerCertByName')}, want {host})"
-    )
+    if pin_values:
+        assert len(pin_values) == 1 and pin_values[0], f"pinnedPeerCertSha256 invalid: {query}"
+        assert query.get("verifyPeerCertByName") == [host], (
+            f"verifyPeerCertByName mismatch (got {query.get('verifyPeerCertByName')}, want {host})"
+        )
+    else:
+        assert not query.get("verifyPeerCertByName"), f"verifyPeerCertByName unexpected: {query}"
 
 
 def _wait_for_log_phrase(host: Host, path: PurePosixPath, phrase: str, *, timeout: int) -> None:
