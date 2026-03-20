@@ -6,6 +6,10 @@ on:
       tag:
         description: "Release tag (e.g. v0.2.4)"
         required: true
+      artifact_ref:
+        description: "Git ref to source artifacts (tag, branch, or SHA). Defaults to tag."
+        required: false
+        default: ""
       release_notes:
         description: "Release notes (raw text)"
         required: false
@@ -35,13 +39,26 @@ jobs:
           fi
           sha="$(git rev-parse "refs/tags/$tag^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          artifact_ref="${{ inputs.artifact_ref }}"
+          artifact_sha="$sha"
+          if [ -n "$artifact_ref" ]; then
+            if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
+              git fetch --all --prune
+            fi
+            if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
+              echo "Artifact ref not found: $artifact_ref" >&2
+              exit 1
+            fi
+            artifact_sha="$(git rev-parse "$artifact_ref^{commit}")"
+          fi
+          echo "artifact_sha=$artifact_sha" >> "$GITHUB_OUTPUT"
 
       - name: Download artifacts from build workflows
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          sha="${{ steps.ref.outputs.sha }}"
+          sha="${{ steps.ref.outputs.artifact_sha }}"
           workflows=("build.yml" "build-msi.yml" "build-deb.yml")
           for wf in "${workflows[@]}"; do
             run_id=$(gh run list --workflow "$wf" --json databaseId,headSha,conclusion -L 50 \
