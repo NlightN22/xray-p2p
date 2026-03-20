@@ -11,6 +11,14 @@ on:
 jobs:
   deb:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+          - armhf
+          - 386
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,13 +55,15 @@ jobs:
           sudo gem install --no-document fpm
 
       - name: Build deb packages
+        env:
+          XP2P_DEB_ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           export PATH="/usr/local/go/bin:$PATH"
-          ./scripts/build/build_deb_xp2p.sh --all
+          ./scripts/build/build_deb_xp2p.sh
 
       - name: Upload deb artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: xp2p-deb
+          name: xp2p-deb-${{ matrix.arch }}
           path: build/deb/artifacts/*.deb

@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           sha="${{ steps.ref.outputs.sha }}"
-          workflows=("build.yml" "build-msi.yml" "build-deb.yml")
+          workflows=("build.yml" "build-msi.yml" "build-deb.yml" "build-ipk.yml")
           for wf in "${workflows[@]}"; do
             run_id=$(gh run list --workflow "$wf" --json databaseId,headSha,conclusion -L 50 \
               | jq -r --arg sha "$sha" '.[] | select(.headSha==$sha and .conclusion=="success") | .databaseId' \
