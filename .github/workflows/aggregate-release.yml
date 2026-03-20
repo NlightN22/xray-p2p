@@ -6,10 +6,6 @@ on:
       tag:
         description: "Release tag (e.g. v0.2.4)"
         required: true
-      artifact_ref:
-        description: "Git ref to source artifacts (tag, branch, or SHA). Defaults to tag."
-        required: false
-        default: ""
       release_notes:
         description: "Release notes (raw text)"
         required: false
@@ -39,19 +35,8 @@ jobs:
           fi
           sha="$(git rev-parse "refs/tags/$tag^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          artifact_ref="${{ inputs.artifact_ref }}"
-          if [ -z "$artifact_ref" ]; then
-            artifact_ref="${GITHUB_REF_NAME}"
-          fi
           mode="branch"
-          value="$artifact_ref"
-          if git rev-parse "refs/tags/$artifact_ref^{commit}" >/dev/null 2>&1; then
-            mode="sha"
-            value="$(git rev-parse "refs/tags/$artifact_ref^{commit}")"
-          elif printf '%s' "$artifact_ref" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then
-            mode="sha"
-            value="$artifact_ref"
-          fi
+          value="${GITHUB_REF_NAME}"
           echo "artifact_mode=$mode" >> "$GITHUB_OUTPUT"
           echo "artifact_value=$value" >> "$GITHUB_OUTPUT"
 
@@ -105,17 +90,27 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ inputs.tag }}"
-          notes="${{ inputs.release_notes }}"
-          feed="OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
           existing=$(gh release view "$tag" --json body -q .body)
-          updated="$existing"
-          if [ -n "$notes" ]; then
-            updated="${updated}\n\n${notes}"
-          fi
-          if [ -n "$updated" ]; then
-            updated="${updated}\n\n${feed}"
-          else
-            updated="${feed}"
-          fi
-          printf "%b" "$updated" > release_notes.txt
+          export EXISTING_NOTES="$existing"
+          export INPUT_RELEASE_NOTES="${{ inputs.release_notes }}"
+          export FEED_NOTE="OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
+          python3 - <<'PY'
+import os
+
+existing = os.environ.get("EXISTING_NOTES", "")
+notes = os.environ.get("INPUT_RELEASE_NOTES", "")
+feed = os.environ.get("FEED_NOTE", "")
+
+parts = []
+if existing:
+    parts.append(existing)
+if notes:
+    parts.append(notes)
+if feed:
+    parts.append(feed)
+
+content = "\n\n".join(parts).strip() + "\n"
+with open("release_notes.txt", "w", encoding="utf-8") as handle:
+    handle.write(content)
+PY
           gh release edit "$tag" --notes-file release_notes.txt
