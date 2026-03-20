@@ -95,22 +95,22 @@ jobs:
           export INPUT_RELEASE_NOTES="${{ inputs.release_notes }}"
           export FEED_NOTE="OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
           python3 - <<'PY'
-import os
+          import os
 
-existing = os.environ.get("EXISTING_NOTES", "")
-notes = os.environ.get("INPUT_RELEASE_NOTES", "")
-feed = os.environ.get("FEED_NOTE", "")
+          existing = os.environ.get("EXISTING_NOTES", "")
+          notes = os.environ.get("INPUT_RELEASE_NOTES", "")
+          feed = os.environ.get("FEED_NOTE", "")
 
-parts = []
-if existing:
-    parts.append(existing)
-if notes:
-    parts.append(notes)
-if feed:
-    parts.append(feed)
+          parts = []
+          if existing:
+              parts.append(existing)
+          if notes:
+              parts.append(notes)
+          if feed:
+              parts.append(feed)
 
-content = "\n\n".join(parts).strip() + "\n"
-with open("release_notes.txt", "w", encoding="utf-8") as handle:
-    handle.write(content)
-PY
+          content = "\n\n".join(parts).strip() + "\n"
+          with open("release_notes.txt", "w", encoding="utf-8") as handle:
+              handle.write(content)
+          PY
           gh release edit "$tag" --notes-file release_notes.txt
