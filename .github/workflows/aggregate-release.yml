@@ -10,6 +10,10 @@ on:
         description: "Release notes (raw text)"
         required: false
         default: ""
+      release_notes_b64:
+        description: "Release notes (base64-encoded UTF-8, optional)"
+        required: false
+        default: ""
 
 jobs:
   aggregate:
@@ -22,6 +26,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
 
       - name: Resolve tag SHA
         id: ref
@@ -93,20 +104,28 @@ jobs:
           existing=$(gh release view "$tag" --json body -q .body)
           export EXISTING_NOTES="$existing"
           export INPUT_RELEASE_NOTES="${{ inputs.release_notes }}"
+          export INPUT_RELEASE_NOTES_B64="${{ inputs.release_notes_b64 }}"
           export FEED_NOTE="OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
           python3 - <<'PY'
           import os
 
           existing = os.environ.get("EXISTING_NOTES", "")
-          notes = os.environ.get("INPUT_RELEASE_NOTES", "")
+          notes_raw = os.environ.get("INPUT_RELEASE_NOTES", "")
+          notes_b64 = os.environ.get("INPUT_RELEASE_NOTES_B64", "")
+          notes = ""
+          if notes_b64:
+              import base64
+              notes = base64.b64decode(notes_b64).decode("utf-8")
+          else:
+              notes = notes_raw.replace("\\n", "\n")
           feed = os.environ.get("FEED_NOTE", "")
 
           parts = []
           if existing:
               parts.append(existing)
-          if notes:
+          if notes and notes not in existing:
               parts.append(notes)
-          if feed:
+          if feed and feed not in existing:
               parts.append(feed)
 
           content = "\n\n".join(parts).strip() + "\n"
@@ -114,3 +133,54 @@ jobs:
               handle.write(content)
           PY
           gh release edit "$tag" --notes-file release_notes.txt
+
+      - name: Prepare latest artifacts
+        id: latest
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          version="${tag#v}"
+          assets=$(go run ./go/tools/targets assets --name "xp2p" --version "$version")
+          printf '%s\n' "$assets" > artifacts.tsv
+          mkdir -p latest
+          while IFS=$'\t' read -r _ release latest; do
+            if [ -z "$release" ] || [ -z "$latest" ]; then
+              continue
+            fi
+            cp "release/$release" "latest/$latest"
+          done < artifacts.tsv
+          latest_paths=$(awk -F'\t' '{print "latest/" $3}' artifacts.tsv)
+          {
+            echo "latest_files<<EOF"
+            echo "$latest_paths"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update latest tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags
+          git tag -f latest "${{ steps.ref.outputs.sha }}"
+          git push origin latest --force
+
+      - name: Publish latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release delete latest --yes || true
+          args=()
+          while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              args+=("$file")
+            fi
+          done <<< "${{ steps.latest.outputs.latest_files }}"
+          gh release create latest "${args[@]}" \
+            --title "Latest" \
+            --notes "Automated update for version ${VERSION}" \
+            --latest
