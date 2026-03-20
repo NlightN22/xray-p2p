@@ -40,17 +40,18 @@ jobs:
           sha="$(git rev-parse "refs/tags/$tag^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           artifact_ref="${{ inputs.artifact_ref }}"
-          artifact_sha="$sha"
-          if [ -n "$artifact_ref" ]; then
-            if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
-              git fetch --all --prune
-            fi
-            if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
-              echo "Artifact ref not found: $artifact_ref" >&2
-              exit 1
-            fi
-            artifact_sha="$(git rev-parse "$artifact_ref^{commit}")"
+          if [ -z "$artifact_ref" ]; then
+            artifact_ref="${GITHUB_REF_NAME}"
           fi
+          artifact_sha="$sha"
+          if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
+            git fetch --all --prune
+          fi
+          if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
+            echo "Artifact ref not found: $artifact_ref" >&2
+            exit 1
+          fi
+          artifact_sha="$(git rev-parse "$artifact_ref^{commit}")"
           echo "artifact_sha=$artifact_sha" >> "$GITHUB_OUTPUT"
 
       - name: Download artifacts from build workflows
