@@ -43,30 +43,42 @@ jobs:
           if [ -z "$artifact_ref" ]; then
             artifact_ref="${GITHUB_REF_NAME}"
           fi
-          artifact_sha="$sha"
-          if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
-            git fetch --all --prune
+          mode="branch"
+          value="$artifact_ref"
+          if git rev-parse "refs/tags/$artifact_ref^{commit}" >/dev/null 2>&1; then
+            mode="sha"
+            value="$(git rev-parse "refs/tags/$artifact_ref^{commit}")"
+          elif printf '%s' "$artifact_ref" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then
+            mode="sha"
+            value="$artifact_ref"
           fi
-          if ! git rev-parse "$artifact_ref^{commit}" >/dev/null 2>&1; then
-            echo "Artifact ref not found: $artifact_ref" >&2
-            exit 1
-          fi
-          artifact_sha="$(git rev-parse "$artifact_ref^{commit}")"
-          echo "artifact_sha=$artifact_sha" >> "$GITHUB_OUTPUT"
+          echo "artifact_mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "artifact_value=$value" >> "$GITHUB_OUTPUT"
 
       - name: Download artifacts from build workflows
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          sha="${{ steps.ref.outputs.artifact_sha }}"
+          mode="${{ steps.ref.outputs.artifact_mode }}"
+          value="${{ steps.ref.outputs.artifact_value }}"
           workflows=("build.yml" "build-msi.yml" "build-deb.yml")
           for wf in "${workflows[@]}"; do
-            run_id=$(gh run list --workflow "$wf" --json databaseId,headSha,conclusion -L 50 \
-              | jq -r --arg sha "$sha" '.[] | select(.headSha==$sha and .conclusion=="success") | .databaseId' \
-              | head -n 1)
+            if [ "$mode" = "sha" ]; then
+              run_id=$(gh run list --workflow "$wf" --json databaseId,headSha,conclusion -L 50 \
+                | jq -r --arg sha "$value" '.[] | select(.headSha==$sha and .conclusion=="success") | .databaseId' \
+                | head -n 1)
+            else
+              run_id=$(gh run list --workflow "$wf" --branch "$value" --json databaseId,conclusion -L 50 \
+                | jq -r '.[] | select(.conclusion=="success") | .databaseId' \
+                | head -n 1)
+            fi
             if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
-              echo "No successful run found for $wf at $sha" >&2
+              if [ "$mode" = "sha" ]; then
+                echo "No successful run found for $wf at $value" >&2
+              else
+                echo "No successful run found for $wf on branch $value" >&2
+              fi
               exit 1
             fi
             gh run download "$run_id" -D "artifacts/$wf"
