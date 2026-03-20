@@ -6,6 +6,10 @@ on:
       tag:
         description: "Release tag (e.g. v0.2.4)"
         required: true
+      release_notes:
+        description: "Release notes (raw text)"
+        required: false
+        default: ""
 
 jobs:
   aggregate:
@@ -38,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           sha="${{ steps.ref.outputs.sha }}"
-          workflows=("build.yml" "build-msi.yml" "build-deb.yml" "build-ipk.yml")
+          workflows=("build.yml" "build-msi.yml" "build-deb.yml")
           for wf in "${workflows[@]}"; do
             run_id=$(gh run list --workflow "$wf" --json databaseId,headSha,conclusion -L 50 \
               | jq -r --arg sha "$sha" '.[] | select(.headSha==$sha and .conclusion=="success") | .databaseId' \
@@ -64,3 +68,24 @@ jobs:
           tag_name: ${{ inputs.tag }}
           files: release/*
           generate_release_notes: true
+
+      - name: Append release notes and OpenWrt feed link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${{ inputs.tag }}"
+          notes="${{ inputs.release_notes }}"
+          feed="OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
+          existing=$(gh release view "$tag" --json body -q .body)
+          updated="$existing"
+          if [ -n "$notes" ]; then
+            updated="${updated}\n\n${notes}"
+          fi
+          if [ -n "$updated" ]; then
+            updated="${updated}\n\n${feed}"
+          else
+            updated="${feed}"
+          fi
+          printf "%b" "$updated" > release_notes.txt
+          gh release edit "$tag" --notes-file release_notes.txt
