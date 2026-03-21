@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import shlex
 import time
 
 import pytest
@@ -15,10 +16,13 @@ CLIENT_PASSWORD = "full-tun-pass"
 ENDPOINT_IP = "198.51.100.10"
 ENDPOINT_DOMAIN = "tun-full.example"
 ENDPOINT_DOMAIN_IP = "198.51.100.20"
+SECOND_ENDPOINT_IP = "198.51.100.30"
+USER_RULE_DOMAIN = "user-rule.example"
 DNS_SERVERS = ["1.1.1.1", "9.9.9.9"]
 
 FULL_STATE_FILE = helpers.CONFIG_ROOT / "xp2p-client.tun-full.json"
 RESOLV_CONF = PurePosixPath("/etc/resolv.conf")
+SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
 
@@ -173,6 +177,40 @@ def _toml_value(value) -> str:
     raise TypeError(f"Unsupported TOML value: {value!r}")
 
 
+def _ensure_client_xray_rule(host, domain: str, outbound_tag: str) -> None:
+    config_path = helpers.CLIENT_CONFIG_FILE
+    original = helpers.read_text(host, config_path)
+    updated = _append_xray_routing_rule(original, domain, outbound_tag)
+    if updated != original:
+        helpers.write_text(host, config_path, updated)
+
+
+def _append_xray_routing_rule(text: str, domain: str, outbound_tag: str) -> str:
+    domain_value = f"full:{domain}"
+    if domain_value in text and f'outboundTag = "{outbound_tag}"' in text:
+        return text
+    rule_block = [
+        "[[client.xray.routing.rules]]",
+        'type = "field"',
+        f'domain = ["{domain_value}"]',
+        f'outboundTag = "{outbound_tag}"',
+    ]
+    if "[client.xray.routing]" in text or "[[client.xray.routing.rules]]" in text:
+        return text.rstrip() + "\n\n" + "\n".join(rule_block) + "\n"
+    routing_block = [
+        "[client.xray.routing]",
+        'domain_strategy = "IPOnDemand"',
+        *rule_block,
+    ]
+    if "[client.xray]" in text:
+        return text.rstrip() + "\n\n" + "\n".join(routing_block) + "\n"
+    full_block = [
+        "[client.xray]",
+        *routing_block,
+    ]
+    return text.rstrip() + "\n\n" + "\n".join(full_block) + "\n"
+
+
 def _wait_for_full_tunnel(
     host,
     tun_name: str,
@@ -289,6 +327,26 @@ def _wait_for_proxy(
     _wait_for_condition("Proxy mode rollback", _check)
 
 
+def _wait_for_log_entries(host, path: PurePosixPath, entries: list[str], base: str = "", timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    last_content = ""
+    lowered_entries = [entry.lower() for entry in entries]
+    while time.time() < deadline:
+        if helpers.path_exists(host, path):
+            content = helpers.read_text(host, path)
+            last_content = content
+            delta = content[len(base) :] if base else content
+            lowered = delta.lower()
+            if all(entry in lowered for entry in lowered_entries):
+                return
+        time.sleep(POLL_INTERVAL)
+    raise AssertionError(
+        f"Log {path} did not contain expected entries.\n"
+        f"Missing: {lowered_entries}\n"
+        f"Last content:\n{last_content}"
+    )
+
+
 def _install_client_endpoint(runner, host_value: str, user: str, password: str) -> None:
     runner(
         "client",
@@ -308,8 +366,8 @@ def _install_client_endpoint(runner, host_value: str, user: str, password: str) 
     )
 
 
-def _client_mode(runner, *args: str) -> None:
-    runner(
+def _client_mode(runner, *args: str, check: bool = True):
+    return runner(
         "client",
         "mode",
         *args,
@@ -317,7 +375,7 @@ def _client_mode(runner, *args: str) -> None:
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",
         helpers.CLIENT_CONFIG_DIR_NAME,
-        check=True,
+        check=check,
     )
 
 
@@ -341,6 +399,80 @@ def _client_tun_name(host) -> str:
     return tun_name or "xp2pc"
 
 
+def _routing_rules(host) -> list[dict]:
+    data = helpers.read_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+    routing = data.get("routing") or {}
+    rules = routing.get("rules") or []
+    if not isinstance(rules, list):
+        raise AssertionError(f"routing.rules should be list, got {type(rules)}")
+    return [rule for rule in rules if isinstance(rule, dict)]
+
+
+def _assert_full_tunnel_rule_last(host, outbound_tag: str) -> None:
+    rules = _routing_rules(host)
+    assert rules, "routing.json rules list is empty"
+    last_rule = rules[-1]
+    assert last_rule.get("outboundTag") == outbound_tag, f"Unexpected full-tunnel tag: {last_rule}"
+    assert last_rule.get("ip") == ["0.0.0.0/0", "::/0"], f"Unexpected full-tunnel rule: {last_rule}"
+
+
+def _find_rule_index(rules: list[dict], predicate) -> int:
+    for idx, rule in enumerate(rules):
+        if predicate(rule):
+            return idx
+    return -1
+
+
+def _client_list_entries(runner) -> list[dict[str, str]]:
+    result = runner(
+        "client",
+        "list",
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.CLIENT_CONFIG_DIR_NAME,
+        check=True,
+    )
+    lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not lines or lines[0].lower().startswith("no client endpoints"):
+        return []
+    entries: list[dict[str, str]] = []
+    for line in lines[1:]:
+        parts = line.split()
+        if len(parts) >= 2:
+            entries.append({"host": parts[0], "tag": parts[1]})
+    return entries
+
+
+def _run_client_mode_interactive(host, selection: str) -> None:
+    args = [
+        "xp2p",
+        "client",
+        "mode",
+        "tun",
+        "full",
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.CLIENT_CONFIG_DIR_NAME,
+    ]
+    quoted = " ".join(shlex.quote(arg) for arg in args)
+    command = f"printf {shlex.quote(selection + chr(10))} | sudo -n {quoted}"
+    result = host.run(command)
+    if result.rc != 0:
+        raise AssertionError(
+            f"Interactive mode command failed (rc={result.rc}).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _assert_verbose_flag_available(host, command: str) -> None:
+    result = host.run(f"sudo -n {command} --help")
+    combined = f"{result.stdout}\n{result.stderr}"
+    assert result.rc == 0, f"{command} --help failed: {combined}"
+    assert "--verbose" in combined, f"{command} --help missing --verbose flag"
+
+
 def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_runner, xp2p_linux_versions):
     _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
     host_entry_added = False
@@ -362,6 +494,8 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
 
         original_config = helpers.read_text(client_host, helpers.CLIENT_CONFIG_FILE)
         original_resolv = helpers.read_text(client_host, RESOLV_CONF)
+        expected_tag = helpers.expected_proxy_tag(ENDPOINT_IP)
+        _ensure_client_xray_rule(client_host, USER_RULE_DOMAIN, "direct")
         _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
 
         _start_service(xp2p_client_runner, client_host)
@@ -376,7 +510,13 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         bypass_routes = _build_bypass_routes(defaults4, endpoint_ips, 32)
         tun_name = _client_tun_name(client_host)
 
-        _client_mode(xp2p_client_runner, "tun", "full")
+        log_base = helpers.read_text(client_host, SERVICE_LOG) if helpers.path_exists(client_host, SERVICE_LOG) else ""
+        result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", expected_tag, "-V", check=False)
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p client mode tun full failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
         _wait_for_full_tunnel(
             client_host,
             tun_name,
@@ -386,8 +526,36 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
             DNS_SERVERS,
             original_resolv,
         )
+        _wait_for_log_entries(
+            client_host,
+            SERVICE_LOG,
+            [
+                "full-tunnel default routes captured",
+                "full-tunnel bypass routes prepared",
+                "full-tunnel default routes set to tun",
+                "full-tunnel dns override applied",
+                "before",
+                "after",
+            ],
+            base=log_base,
+        )
+        _assert_full_tunnel_rule_last(client_host, expected_tag)
+        rules = _routing_rules(client_host)
+        user_rule_index = _find_rule_index(
+            rules,
+            lambda rule: USER_RULE_DOMAIN in " ".join(rule.get("domain") or []),
+        )
+        assert user_rule_index != -1, "User routing rule missing from routing.json"
+        assert user_rule_index < len(rules) - 1, "User routing rule should appear before full-tunnel rule"
+        assert helpers.read_client_config(client_host).get("full_tunnel_tag") == expected_tag
 
-        _client_mode(xp2p_client_runner, "tun", "split")
+        log_base = helpers.read_text(client_host, SERVICE_LOG) if helpers.path_exists(client_host, SERVICE_LOG) else ""
+        result = _client_mode(xp2p_client_runner, "tun", "split", "-V", check=False)
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p client mode tun split failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
         _wait_for_rollback(
             client_host,
             tun_name,
@@ -395,6 +563,17 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
             defaults6,
             bypass_routes,
             original_resolv,
+        )
+        _wait_for_log_entries(
+            client_host,
+            SERVICE_LOG,
+            [
+                "full-tunnel default routes removed from tun",
+                "full-tunnel bypass routes removed",
+                "full-tunnel default routes restored",
+                "full-tunnel dns restored",
+            ],
+            base=log_base,
         )
         assert helpers.read_client_config(client_host).get("tun_mode") == "split"
 
@@ -429,6 +608,65 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
                 "remove",
                 ENDPOINT_DOMAIN,
             )
+
+
+def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_client_runner, xp2p_linux_versions):
+    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+    _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
+    _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
+    _install_client_endpoint(xp2p_client_runner, SECOND_ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
+
+    config_hash = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE)
+    routing_hash = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+
+    quiet_result = _client_mode(xp2p_client_runner, "tun", "full", "--quiet", check=False)
+    assert quiet_result.rc != 0
+    assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE) == config_hash
+    assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json") == routing_hash
+    assert helpers.read_client_config(client_host).get("tun_mode") != "full"
+
+    tag_for_ip = helpers.expected_proxy_tag(ENDPOINT_IP)
+    tag_for_domain = helpers.expected_proxy_tag(ENDPOINT_DOMAIN)
+    tag_for_second = helpers.expected_proxy_tag(SECOND_ENDPOINT_IP)
+
+    result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", tag_for_ip, check=False)
+    assert result.rc == 0, f"Mode with --tag failed: {result.stdout}\n{result.stderr}"
+    _assert_full_tunnel_rule_last(client_host, tag_for_ip)
+    assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_ip
+
+    result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
+    assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
+
+    result = _client_mode(xp2p_client_runner, "tun", "full", "--host", ENDPOINT_DOMAIN, check=False)
+    assert result.rc == 0, f"Mode with --host failed: {result.stdout}\n{result.stderr}"
+    _assert_full_tunnel_rule_last(client_host, tag_for_domain)
+    assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_domain
+
+    result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
+    assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
+    _update_client_config(client_host, full_tunnel_tag="")
+
+    entries = _client_list_entries(xp2p_client_runner)
+    assert entries, "Expected client list entries for interactive selection"
+    selection_index = None
+    for idx, entry in enumerate(entries, start=1):
+        if entry["tag"] == tag_for_second:
+            selection_index = idx
+            break
+    assert selection_index is not None, "Could not locate interactive selection index"
+    _run_client_mode_interactive(client_host, str(selection_index))
+    _assert_full_tunnel_rule_last(client_host, tag_for_second)
+    assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_second
+
+    result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
+    assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
+
+
+def test_client_verbose_flags_available(client_host, xp2p_linux_versions):
+    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+    _assert_verbose_flag_available(client_host, "xp2p client mode")
+    _assert_verbose_flag_available(client_host, "xp2p client run")
+    _assert_verbose_flag_available(client_host, "xp2p client service run")
 
 
 def test_client_redirect_default_route_rejected(client_host, xp2p_client_runner, xp2p_linux_versions):
