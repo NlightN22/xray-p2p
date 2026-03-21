@@ -93,6 +93,7 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			User:                  user,
 			Password:              password,
 			ServerName:            serverName,
+			ALPN:                  normalizeALPN(opts.ALPN),
 			AllowInsecure:         opts.AllowInsecure,
 			PinnedPeerCertSHA256:  strings.TrimSpace(opts.PinnedPeerCertSHA256),
 			VerifyPeerCertByName:  strings.TrimSpace(opts.VerifyPeerCertByName),

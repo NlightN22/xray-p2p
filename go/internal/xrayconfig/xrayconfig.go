@@ -207,27 +207,7 @@ func DefaultServerConfig() ServerXrayConfig {
 				Security:      "tls",
 				AllowInsecure: false,
 				Header: TCPHeader{
-					Type: "http",
-					Request: TCPRequest{
-						Version: "1.1",
-						Method:  "GET",
-						Path:    []string{"/"},
-						Headers: map[string][]string{
-							"Host": {
-								"www.bing.com",
-								"www.apple.com",
-							},
-							"User-Agent": {
-								"Mozilla/5.0",
-							},
-							"Accept-Encoding": {
-								"gzip, deflate",
-							},
-							"Connection": {
-								"keep-alive",
-							},
-						},
-					},
+					Type: "none",
 				},
 			},
 		},
@@ -506,10 +486,11 @@ func validateTrojan(cfg TrojanInboundConfig) error {
 	if strings.TrimSpace(cfg.Security) == "" {
 		return errors.New("xrayconfig: trojan security is required")
 	}
-	if strings.TrimSpace(cfg.Header.Type) == "" {
+	headerType := strings.TrimSpace(cfg.Header.Type)
+	if headerType == "" {
 		return errors.New("xrayconfig: trojan header type is required")
 	}
-	if strings.TrimSpace(cfg.Header.Request.Method) == "" {
+	if !strings.EqualFold(headerType, "none") && strings.TrimSpace(cfg.Header.Request.Method) == "" {
 		return errors.New("xrayconfig: trojan header request method is required")
 	}
 	return nil

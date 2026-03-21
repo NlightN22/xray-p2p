@@ -25,6 +25,9 @@ func TestParseTrojanLink(t *testing.T) {
 	if !link.ServerNameSet {
 		t.Fatal("expected server name to be set")
 	}
+	if link.ALPN != nil {
+		t.Fatalf("unexpected alpn: %v", link.ALPN)
+	}
 }
 
 func TestParseTrojanLinkAllowsInsecure(t *testing.T) {
@@ -37,6 +40,19 @@ func TestParseTrojanLinkAllowsInsecure(t *testing.T) {
 	}
 	if !link.AllowInsecureSet {
 		t.Fatal("expected allow insecure flag set")
+	}
+}
+
+func TestParseTrojanLinkALPN(t *testing.T) {
+	link, err := ParseTrojanLink("trojan://secret@edge.example.com:443?alpn=h2,http/1.1&security=tls&sni=edge.example.com#user@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(link.ALPN) != 2 {
+		t.Fatalf("unexpected alpn count: %v", link.ALPN)
+	}
+	if link.ALPN[0] != "h2" || link.ALPN[1] != "http/1.1" {
+		t.Fatalf("unexpected alpn values: %v", link.ALPN)
 	}
 }
 

@@ -49,8 +49,8 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	if !hasReverseRule(rules, "alpha-useredge-example.rev") {
 		t.Fatalf("expected reverse rule for alpha-useredge-example.rev, got %v", rules)
 	}
-	if markerCount := countMarkerRules(rules, "alpha-useredge-example.rev"); markerCount != 2 {
-		t.Fatalf("expected 2 marker rules, got %d", markerCount)
+	if markerCount := countMarkerRules(rules, "alpha-useredge-example.rev"); markerCount != 1 {
+		t.Fatalf("expected 1 marker rule, got %d", markerCount)
 	}
 
 	stateDoc := readServerStateDoc(t, serverStatePath(""))

@@ -91,14 +91,9 @@ func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPat
 	stream := map[string]any{
 		"network": cfg.Inbounds.Trojan.Network,
 		"tcpSettings": map[string]any{
+			"acceptProxyProtocol": false,
 			"header": map[string]any{
-				"type": cfg.Inbounds.Trojan.Header.Type,
-				"request": map[string]any{
-					"version": cfg.Inbounds.Trojan.Header.Request.Version,
-					"method":  cfg.Inbounds.Trojan.Header.Request.Method,
-					"path":    cfg.Inbounds.Trojan.Header.Request.Path,
-					"headers": cfg.Inbounds.Trojan.Header.Request.Headers,
-				},
+				"type": "none",
 			},
 		},
 	}
@@ -288,13 +283,6 @@ func buildServerRouting(cfg xrayconfig.ServerXrayConfig, reverse serverReverseSt
 			continue
 		}
 		markerCIDR := markerIP + "/32"
-		markerRules = append(markerRules, map[string]any{
-			"type":        "field",
-			"domain":      []string{"full:" + markerIP},
-			"inboundTag":  []string{cfg.Inbounds.Socks.Tag},
-			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
-			"outboundTag": channel.Tag,
-		})
 		markerRules = append(markerRules, map[string]any{
 			"type":        "field",
 			"ip":          []string{markerCIDR},

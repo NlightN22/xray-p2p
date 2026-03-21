@@ -15,6 +15,7 @@ type endpointConfig struct {
 	User                  string
 	Password              string
 	ServerName            string
+	ALPN                  []string
 	AllowInsecure         bool
 	PinnedPeerCertSHA256  string
 	VerifyPeerCertByName  string
@@ -60,6 +61,7 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 		User:                 endpoint.User,
 		Password:             endpoint.Password,
 		ServerName:           endpoint.ServerName,
+		ALPN:                 normalizeALPN(endpoint.ALPN),
 		AllowInsecure:        allowValue,
 		PinnedPeerCertSHA256: pinnedSHA256,
 		VerifyPeerCertByName: verifyPeer,
@@ -99,4 +101,28 @@ func buildProxyTag(host string) string {
 		sanitized = "endpoint"
 	}
 	return "proxy-" + sanitized
+}
+
+func normalizeALPN(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, value)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }

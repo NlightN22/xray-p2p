@@ -434,6 +434,7 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 		User:                 link.User,
 		Password:             link.Password,
 		ServerName:           link.ServerName,
+		ALPN:                 link.ALPN,
 		AllowInsecure:        allowInsecure,
 		PinnedPeerCertSHA256: link.PinnedPeerSHA256,
 		VerifyPeerCertByName: link.VerifyPeerName,

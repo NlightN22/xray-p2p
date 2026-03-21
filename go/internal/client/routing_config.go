@@ -54,12 +54,6 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		markerCIDR := markerIP + "/32"
 		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], map[string]any{
 			"type":        "field",
-			"domain":      []string{"full:" + markerIP},
-			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
-			"outboundTag": ep.Tag,
-		})
-		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], map[string]any{
-			"type":        "field",
 			"ip":          []string{markerCIDR},
 			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
 			"outboundTag": ep.Tag,

@@ -25,6 +25,7 @@ type InstallOptions struct {
 	User                  string
 	Password              string
 	ServerName            string
+	ALPN                  []string
 	AllowInsecure         bool
 	PinnedPeerCertSHA256  string
 	VerifyPeerCertByName  string

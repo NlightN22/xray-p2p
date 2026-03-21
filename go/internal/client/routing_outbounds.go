@@ -142,32 +142,13 @@ func trojanOutbound(ep clientEndpointRecord) any {
 			TLSSettings: tlsSettings{
 				AllowInsecure:        ep.AllowInsecure,
 				ServerName:           ep.ServerName,
+				ALPN:                 ep.ALPN,
 				PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
 				VerifyPeerCertByName: ep.VerifyPeerCertByName,
 			},
 			TCPSettings: tcpSettings{
 				Header: tcpHeader{
-					Type: "http",
-					Request: tcpRequest{
-						Version: "1.1",
-						Method:  "GET",
-						Path:    []string{"/"},
-						Headers: map[string][]string{
-							"Host": {
-								"www.bing.com",
-								"www.apple.com",
-							},
-							"User-Agent": {
-								"Mozilla/5.0",
-							},
-							"Accept-Encoding": {
-								"gzip, deflate",
-							},
-							"Connection": {
-								"keep-alive",
-							},
-						},
-					},
+					Type: "none",
 				},
 			},
 		},
@@ -194,10 +175,11 @@ type streamSettings struct {
 }
 
 type tlsSettings struct {
-	AllowInsecure        bool   `json:"allowInsecure,omitempty"`
-	ServerName           string `json:"serverName,omitempty"`
-	PinnedPeerCertSHA256 string `json:"pinnedPeerCertSha256,omitempty"`
-	VerifyPeerCertByName string `json:"verifyPeerCertByName,omitempty"`
+	AllowInsecure        bool     `json:"allowInsecure,omitempty"`
+	ServerName           string   `json:"serverName,omitempty"`
+	ALPN                 []string `json:"alpn,omitempty"`
+	PinnedPeerCertSHA256 string   `json:"pinnedPeerCertSha256,omitempty"`
+	VerifyPeerCertByName string   `json:"verifyPeerCertByName,omitempty"`
 }
 
 type tcpSettings struct {
@@ -205,8 +187,8 @@ type tcpSettings struct {
 }
 
 type tcpHeader struct {
-	Type    string     `json:"type"`
-	Request tcpRequest `json:"request"`
+	Type    string      `json:"type"`
+	Request *tcpRequest `json:"request,omitempty"`
 }
 
 type tcpRequest struct {

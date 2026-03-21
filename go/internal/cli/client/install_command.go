@@ -105,6 +105,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	allowInsecureValue := cfg.Client.AllowInsecure
 	pinnedPeerCertSHA256 := ""
 	verifyPeerCertByName := ""
+	var alpnValues []string
 
 	if linkValue != "" {
 		serverAddressValue = linkData.ServerAddress
@@ -114,6 +115,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		allowInsecureValue = linkData.AllowInsecure
 		pinnedPeerCertSHA256 = linkData.PinnedPeerSHA256
 		verifyPeerCertByName = linkData.VerifyPeerName
+		alpnValues = linkData.ALPN
 		if linkData.ServerNameSet {
 			serverNameValue = linkData.ServerName
 		}
@@ -141,6 +143,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		User:                  userValue,
 		Password:              passwordValue,
 		ServerName:            serverNameValue,
+		ALPN:                  alpnValues,
 		AllowInsecure:         allowInsecureValue,
 		PinnedPeerCertSHA256:  pinnedPeerCertSHA256,
 		VerifyPeerCertByName:  verifyPeerCertByName,

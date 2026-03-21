@@ -108,7 +108,7 @@ func TestRunClientInstall(t *testing.T) {
 			name: "install from link",
 			cfg:  defaultCfg,
 			args: []string{
-				"--link", "trojan://secret@links.example.test:58443?pinnedPeerCertSha256=deadbeef&security=tls&sni=links.example.test&verifyPeerCertByName=links.example.test#alpha@example.com",
+				"--link", "trojan://secret@links.example.test:58443?alpn=h2,http/1.1&pinnedPeerCertSha256=deadbeef&security=tls&sni=links.example.test&verifyPeerCertByName=links.example.test#alpha@example.com",
 			},
 			wantCode:   0,
 			wantCalled: true,
@@ -136,6 +136,9 @@ func TestRunClientInstall(t *testing.T) {
 				}
 				if opts.VerifyPeerCertByName != "links.example.test" {
 					t.Fatalf("unexpected verify peer name: %s", opts.VerifyPeerCertByName)
+				}
+				if len(opts.ALPN) != 2 || opts.ALPN[0] != "h2" || opts.ALPN[1] != "http/1.1" {
+					t.Fatalf("unexpected alpn: %v", opts.ALPN)
 				}
 			},
 		},

@@ -14,6 +14,7 @@ type TrojanLink struct {
 	Password         string
 	ServerName       string
 	ServerNameSet    bool
+	ALPN             []string
 	AllowInsecure    bool
 	AllowInsecureSet bool
 	PinnedPeerSHA256 string
@@ -79,6 +80,7 @@ func ParseTrojanLink(raw string) (TrojanLink, error) {
 
 	pinnedPeerSHA256 := strings.TrimSpace(query.Get("pinnedPeerCertSha256"))
 	verifyPeerName := strings.TrimSpace(query.Get("verifyPeerCertByName"))
+	alpn := parseALPN(query)
 
 	security := strings.ToLower(strings.TrimSpace(query.Get("security")))
 	serverName := ""
@@ -99,6 +101,7 @@ func ParseTrojanLink(raw string) (TrojanLink, error) {
 	if security == "none" {
 		pinnedPeerSHA256 = ""
 		verifyPeerName = ""
+		alpn = nil
 	}
 	if pinnedPeerSHA256 != "" && verifyPeerName == "" && serverName != "" {
 		verifyPeerName = serverName
@@ -111,11 +114,39 @@ func ParseTrojanLink(raw string) (TrojanLink, error) {
 		Password:         password,
 		ServerName:       serverName,
 		ServerNameSet:    serverNameSet,
+		ALPN:             alpn,
 		AllowInsecure:    allowInsecure,
 		AllowInsecureSet: allowInsecureSet,
 		PinnedPeerSHA256: pinnedPeerSHA256,
 		VerifyPeerName:   verifyPeerName,
 	}, nil
+}
+
+func parseALPN(values url.Values) []string {
+	rawValues, ok := values["alpn"]
+	if !ok || len(rawValues) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(rawValues))
+	result := make([]string, 0, len(rawValues))
+	for _, raw := range rawValues {
+		for _, part := range strings.Split(raw, ",") {
+			clean := strings.TrimSpace(part)
+			if clean == "" {
+				continue
+			}
+			key := strings.ToLower(clean)
+			if _, exists := seen[key]; exists {
+				continue
+			}
+			seen[key] = struct{}{}
+			result = append(result, clean)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func parseBoolFlag(value string) (bool, error) {

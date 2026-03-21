@@ -27,6 +27,7 @@ func AddEndpoint(ctx context.Context, opts InstallOptions) error {
 		User:                  base.user,
 		Password:              base.password,
 		ServerName:            base.serverName,
+		ALPN:                  base.installOpts.ALPN,
 		AllowInsecure:         base.installOpts.AllowInsecure,
 		PinnedPeerCertSHA256:  base.installOpts.PinnedPeerCertSHA256,
 		VerifyPeerCertByName:  base.installOpts.VerifyPeerCertByName,

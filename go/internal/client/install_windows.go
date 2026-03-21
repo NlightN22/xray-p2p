@@ -256,6 +256,7 @@ func deployConfiguration(state installState) error {
 		User:                  state.User,
 		Password:              state.Password,
 		ServerName:            state.serverName,
+		ALPN:                  state.ALPN,
 		AllowInsecure:         state.AllowInsecure,
 		PinnedPeerCertSHA256:  state.PinnedPeerCertSHA256,
 		VerifyPeerCertByName:  state.VerifyPeerCertByName,

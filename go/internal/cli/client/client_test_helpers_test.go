@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -148,9 +149,9 @@ func prepareClientInstallation(t *testing.T, installDir, configDirName string) {
 	}
 }
 
-func requireEqual[T comparable](t *testing.T, got, want T, label string) {
+func requireEqual(t *testing.T, got, want any, label string) {
 	t.Helper()
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%s mismatch: got %v want %v", label, got, want)
 	}
 }
