@@ -13,6 +13,12 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Logs are stored under `/var/log/xp2p` by default on Linux/OpenWrt; set `XP2P_LOG_ROOT` to override. The audit log lives at `<log root>/audit.log`.
 - Windows Vagrant guests ship with evaluation licenses. Once the license expires `wlms.exe` will power off the VM every few hours (Event ID 1074/User32). Refresh or re-arm the license before running Windows host tests to avoid silent shutdowns during pytest.
 
+## Routing rules
+
+- Client routing rules are ordered as: endpoint bypass (direct) first, then other system rules, then redirects, and finally user-defined rules.
+- Endpoint bypass rules must match each endpoint address and use the direct outbound tag (`direct` on Unix-like platforms, `direct-random` on Windows).
+- System rules include reverse bridge rules, diagnostics marker rules, endpoint routing rules, and Windows direct fallback rules.
+
 ## Testing
 
 - Unit tests: `go test ./...`

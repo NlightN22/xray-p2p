@@ -143,13 +143,13 @@ func TestUpdateRoutingConfigManagesReverseRules(t *testing.T) {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 
-	verifyRoutingDocument(t, path, 5, 1)
+	verifyRoutingDocument(t, path, 6, 1)
 
 	// Second update should not duplicate rules/bridges.
 	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, reverse); err != nil {
 		t.Fatalf("second updateRoutingConfig failed: %v", err)
 	}
-	verifyRoutingDocument(t, path, 5, 1)
+	verifyRoutingDocument(t, path, 6, 1)
 }
 
 func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
@@ -164,8 +164,8 @@ func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
 
 	doc := loadRouting(t, path)
 	rules := getRules(t, doc)
-	if len(rules) != 3+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(rules))
+	if len(rules) != 4+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 4+windowsRuleBonus(), len(rules))
 	}
 
 	markerIP, err := markerIPForIndex(0)
@@ -212,8 +212,8 @@ func TestUpdateRoutingConfigUsesIPRuleForAddress(t *testing.T) {
 
 	doc := loadRouting(t, path)
 	rules := getRules(t, doc)
-	if len(rules) != 3+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(rules))
+	if len(rules) != 4+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 4+windowsRuleBonus(), len(rules))
 	}
 
 	markerIP, err := markerIPForIndex(0)

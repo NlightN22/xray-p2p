@@ -44,27 +44,26 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	}
 
 	rules := doc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 5+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(rules))
+	if len(rules) != 6+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 6+windowsRuleBonus(), len(rules))
 	}
-	domainRule := rules[0].(map[string]any)
+	domainRule := findRuleWithDomainRule(rules, "full:reverse-userserver-example.rev")
+	if domainRule == nil {
+		t.Fatalf("expected reverse domain rule, got %+v", rules)
+	}
 	if domainRule["outboundTag"] != "proxy-server-example" {
 		t.Fatalf("unexpected outbound tag: %+v", domainRule)
 	}
-	if domains := domainRule["domain"].([]any); domains[0] != "full:reverse-userserver-example.rev" {
-		t.Fatalf("unexpected domains: %+v", domains)
-	}
-	directRule := rules[1].(map[string]any)
 	expectedDirect := "direct"
 	if runtime.GOOS == "windows" {
 		expectedDirect = "direct-random"
 	}
+	directRule := findRuleWithInboundAndOutbound(rules, "reverse-userserver-example.rev", expectedDirect)
+	if directRule == nil {
+		t.Fatalf("expected reverse direct rule, got %+v", rules)
+	}
 	if directRule["outboundTag"] != expectedDirect {
 		t.Fatalf("expected %s outbound, got %+v", expectedDirect, directRule)
-	}
-	inbound := directRule["inboundTag"].([]any)
-	if inbound[0] != "reverse-userserver-example.rev" {
-		t.Fatalf("unexpected inbound tag: %+v", inbound)
 	}
 
 	state, err := loadClientInstallState(configFile)
@@ -87,4 +86,47 @@ func loadClientRouting(t *testing.T, path string) map[string]any {
 		t.Fatalf("parse routing: %v", err)
 	}
 	return doc
+}
+
+func findRuleWithDomainRule(rules []any, domain string) map[string]any {
+	for _, raw := range rules {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		domains, ok := entry["domain"].([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range domains {
+			if value, ok := item.(string); ok && value == domain {
+				return entry
+			}
+		}
+	}
+	return nil
+}
+
+func findRuleWithInboundAndOutbound(rules []any, inboundTag string, outboundTag string) map[string]any {
+	for _, raw := range rules {
+		entry, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if outboundTag != "" {
+			if tag, _ := entry["outboundTag"].(string); tag != outboundTag {
+				continue
+			}
+		}
+		inbound, ok := entry["inboundTag"].([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range inbound {
+			if value, ok := item.(string); ok && value == inboundTag {
+				return entry
+			}
+		}
+	}
+	return nil
 }

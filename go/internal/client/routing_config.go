@@ -1,12 +1,8 @@
 package client
 
 import (
-	"encoding/json"
 	"fmt"
-	"net"
-	"os"
 	"runtime"
-	"sort"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -14,237 +10,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
-
-const (
-	directRandomTagWindows = "direct-random"
-	directUDPTagWindows    = "direct-udp"
-)
-
-func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, endpoints []clientEndpointRecord) error {
-	randomTag := direct.Tag
-	udpTag := ""
-	if runtime.GOOS == "windows" {
-		randomTag = directRandomTagWindows
-		udpTag = directUDPTagWindows
-	}
-
-	managedTags := make(map[string]struct{}, len(endpoints)+2)
-	for _, ep := range endpoints {
-		tag := strings.TrimSpace(ep.Tag)
-		if tag != "" {
-			managedTags[strings.ToLower(tag)] = struct{}{}
-		}
-	}
-	if directTag := strings.TrimSpace(randomTag); directTag != "" {
-		managedTags[strings.ToLower(directTag)] = struct{}{}
-	}
-	if directTag := strings.TrimSpace(udpTag); directTag != "" {
-		managedTags[strings.ToLower(directTag)] = struct{}{}
-	}
-
-	existing := readExistingOutbounds(path)
-	for _, raw := range existing {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		tag, ok := entry["tag"].(string)
-		if !ok {
-			continue
-		}
-		trimmed := strings.ToLower(strings.TrimSpace(tag))
-		if strings.HasPrefix(trimmed, "proxy-") {
-			managedTags[trimmed] = struct{}{}
-		}
-	}
-	preserved := filterUnmanagedOutbounds(existing, managedTags)
-	out := struct {
-		Outbounds []any `json:"outbounds"`
-	}{
-		Outbounds: make([]any, 0, len(preserved)+len(endpoints)+1),
-	}
-
-	out.Outbounds = append(out.Outbounds, preserved...)
-	for _, ep := range endpoints {
-		out.Outbounds = append(out.Outbounds, trojanOutbound(ep))
-	}
-
-	if randomTag != "" {
-		sendThrough := ""
-		if runtime.GOOS != "windows" {
-			sendThrough = direct.SendThrough
-		}
-		out.Outbounds = append(out.Outbounds, freedomOutbound(randomTag, direct, sendThrough))
-	}
-	if udpTag != "" {
-		out.Outbounds = append(out.Outbounds, freedomOutbound(udpTag, direct, direct.SendThrough))
-	}
-	if err := configio.WriteJSON(path, out, configio.WriteOptions{
-		AuditPath:         config.AuditLogPath(),
-		KeepLastKnownGood: true,
-	}); err != nil {
-		return err
-	}
-	return nil
-}
-
-func readExistingOutbounds(path string) []any {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil
-	}
-	if raw, ok := doc["outbounds"].([]any); ok {
-		return raw
-	}
-	return nil
-}
-
-func filterUnmanagedOutbounds(existing []any, managed map[string]struct{}) []any {
-	if len(existing) == 0 {
-		return nil
-	}
-	result := make([]any, 0, len(existing))
-	for _, raw := range existing {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			result = append(result, raw)
-			continue
-		}
-		tag, ok := entry["tag"].(string)
-		if !ok {
-			result = append(result, raw)
-			continue
-		}
-		if _, exists := managed[strings.ToLower(strings.TrimSpace(tag))]; exists {
-			continue
-		}
-		result = append(result, raw)
-	}
-	return result
-}
-
-func trojanOutbound(ep clientEndpointRecord) any {
-	return struct {
-		Protocol       string         `json:"protocol"`
-		Settings       trojanSettings `json:"settings"`
-		StreamSettings streamSettings `json:"streamSettings"`
-		Tag            string         `json:"tag"`
-	}{
-		Protocol: "trojan",
-		Settings: trojanSettings{
-			Servers: []trojanServer{
-				{
-					Address:  ep.Address,
-					Port:     ep.Port,
-					Password: ep.Password,
-					Email:    ep.User,
-				},
-			},
-		},
-		StreamSettings: streamSettings{
-			Network:  "tcp",
-			Security: "tls",
-			TLSSettings: tlsSettings{
-				AllowInsecure:        ep.AllowInsecure,
-				ServerName:           ep.ServerName,
-				PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
-				VerifyPeerCertByName: ep.VerifyPeerCertByName,
-			},
-			TCPSettings: tcpSettings{
-				Header: tcpHeader{
-					Type: "http",
-					Request: tcpRequest{
-						Version: "1.1",
-						Method:  "GET",
-						Path:    []string{"/"},
-						Headers: map[string][]string{
-							"Host": {
-								"www.bing.com",
-								"www.apple.com",
-							},
-							"User-Agent": {
-								"Mozilla/5.0",
-							},
-							"Accept-Encoding": {
-								"gzip, deflate",
-							},
-							"Connection": {
-								"keep-alive",
-							},
-						},
-					},
-				},
-			},
-		},
-		Tag: ep.Tag,
-	}
-}
-
-type trojanSettings struct {
-	Servers []trojanServer `json:"servers"`
-}
-
-type trojanServer struct {
-	Address  string `json:"address"`
-	Port     int    `json:"port"`
-	Password string `json:"password"`
-	Email    string `json:"email"`
-}
-
-type streamSettings struct {
-	Network     string      `json:"network"`
-	Security    string      `json:"security"`
-	TLSSettings tlsSettings `json:"tlsSettings"`
-	TCPSettings tcpSettings `json:"tcpSettings"`
-}
-
-type tlsSettings struct {
-	AllowInsecure        bool   `json:"allowInsecure,omitempty"`
-	ServerName           string `json:"serverName,omitempty"`
-	PinnedPeerCertSHA256 string `json:"pinnedPeerCertSha256,omitempty"`
-	VerifyPeerCertByName string `json:"verifyPeerCertByName,omitempty"`
-}
-
-type tcpSettings struct {
-	Header tcpHeader `json:"header"`
-}
-
-type tcpHeader struct {
-	Type    string     `json:"type"`
-	Request tcpRequest `json:"request"`
-}
-
-type tcpRequest struct {
-	Version string              `json:"version"`
-	Method  string              `json:"method"`
-	Path    []string            `json:"path"`
-	Headers map[string][]string `json:"headers"`
-}
-
-func freedomOutbound(tag string, direct xrayconfig.DirectOutboundConfig, sendThrough string) any {
-	sendThrough = strings.TrimSpace(sendThrough)
-	return struct {
-		Protocol    string          `json:"protocol"`
-		Settings    freedomSettings `json:"settings"`
-		Tag         string          `json:"tag"`
-		SendThrough string          `json:"sendThrough,omitempty"`
-	}{
-		Protocol: direct.Protocol,
-		Settings: freedomSettings{
-			DomainStrategy: direct.DomainStrategy,
-		},
-		Tag:         tag,
-		SendThrough: sendThrough,
-	}
-}
-
-type freedomSettings struct {
-	DomainStrategy string `json:"domainStrategy"`
-}
 
 func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel) error {
 	document := make(map[string]any)
@@ -269,6 +34,40 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 
 	filtered := filterManagedRules(existing, managed)
 	filtered = filterReverseRules(filtered, reverse)
+	filtered = filterEndpointBypassRules(filtered, endpoints)
+	ruleBuckets := map[routingRuleClass][]any{
+		routingRuleEndpointBypass: {},
+		routingRuleSystem:         {},
+		routingRuleRedirect:       {},
+		routingRuleUser:           filtered,
+	}
+
+	for _, ep := range endpoints {
+		ruleBuckets[routingRuleEndpointBypass] = append(ruleBuckets[routingRuleEndpointBypass], endpointBypassRule(ep))
+	}
+	ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], buildClientReverseRules(reverse)...)
+	for idx, ep := range endpoints {
+		markerIP, err := markerIPForIndex(idx)
+		if err != nil {
+			return fmt.Errorf("xp2p: allocate diagnostics marker for %s: %w", ep.Tag, err)
+		}
+		markerCIDR := markerIP + "/32"
+		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], map[string]any{
+			"type":        "field",
+			"domain":      []string{"full:" + markerIP},
+			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
+			"outboundTag": ep.Tag,
+		})
+		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], map[string]any{
+			"type":        "field",
+			"ip":          []string{markerCIDR},
+			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
+			"outboundTag": ep.Tag,
+		})
+	}
+	for _, ep := range endpoints {
+		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], endpointRouteRule(ep))
+	}
 	for _, rule := range redirects {
 		entry := map[string]any{
 			"type":        "field",
@@ -280,47 +79,23 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		default:
 			entry["ip"] = []string{rule.Value()}
 		}
-		filtered = append(filtered, entry)
-	}
-	for idx, ep := range endpoints {
-		markerIP, err := markerIPForIndex(idx)
-		if err != nil {
-			return fmt.Errorf("xp2p: allocate diagnostics marker for %s: %w", ep.Tag, err)
-		}
-		markerCIDR := markerIP + "/32"
-		filtered = append(filtered, map[string]any{
-			"type":        "field",
-			"domain":      []string{"full:" + markerIP},
-			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
-			"outboundTag": ep.Tag,
-		})
-		filtered = append(filtered, map[string]any{
-			"type":        "field",
-			"ip":          []string{markerCIDR},
-			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
-			"outboundTag": ep.Tag,
-		})
-	}
-	for _, ep := range endpoints {
-		rule := map[string]any{
-			"type":        "field",
-			"outboundTag": ep.Tag,
-		}
-		if net.ParseIP(ep.Address) != nil {
-			rule["ip"] = []string{ep.Address}
-		} else {
-			rule["domain"] = []string{"full:" + ep.Address}
-		}
-		filtered = append(filtered, rule)
-	}
-	reverseRules := buildClientReverseRules(reverse)
-	if len(reverseRules) > 0 {
-		filtered = append(reverseRules, filtered...)
+		ruleBuckets[routingRuleRedirect] = append(ruleBuckets[routingRuleRedirect], entry)
 	}
 	if runtime.GOOS == "windows" {
-		filtered = applyWindowsDirectRules(filtered)
+		ruleBuckets[routingRuleUser] = filterWindowsDirectRules(ruleBuckets[routingRuleUser])
+		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], windowsDirectRules()...)
 	}
-	routing["rules"] = filtered
+	orderedClasses := []routingRuleClass{
+		routingRuleEndpointBypass,
+		routingRuleSystem,
+		routingRuleRedirect,
+		routingRuleUser,
+	}
+	orderedRules := make([]any, 0, len(existing))
+	for _, class := range orderedClasses {
+		orderedRules = append(orderedRules, ruleBuckets[class]...)
+	}
+	routing["rules"] = orderedRules
 
 	reverseObj := ensureObject(document, "reverse")
 	updateReverseBridges(reverseObj, sortedReverseChannels(reverse))
@@ -332,243 +107,4 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		return err
 	}
 	return nil
-}
-
-func ensureObject(root map[string]any, key string) map[string]any {
-	if raw, ok := root[key]; ok {
-		if obj, ok := raw.(map[string]any); ok {
-			return obj
-		}
-	}
-	obj := make(map[string]any)
-	root[key] = obj
-	return obj
-}
-
-func extractRuleSlice(raw any) []any {
-	if rules, ok := raw.([]any); ok {
-		return rules
-	}
-	return []any{}
-}
-
-func managedOutboundTags(endpoints []clientEndpointRecord, redirects []redirect.Rule) map[string]struct{} {
-	total := len(endpoints) + len(redirects)
-	if total == 0 {
-		return map[string]struct{}{}
-	}
-	known := make(map[string]struct{}, total)
-	for _, ep := range endpoints {
-		if tag := strings.TrimSpace(ep.Tag); tag != "" {
-			known[strings.ToLower(tag)] = struct{}{}
-		}
-	}
-	for _, rule := range redirects {
-		if tag := strings.TrimSpace(rule.OutboundTag); tag != "" {
-			known[strings.ToLower(tag)] = struct{}{}
-		}
-	}
-	return known
-}
-
-func filterManagedRules(rules []any, managed map[string]struct{}) []any {
-	if len(rules) == 0 {
-		return []any{}
-	}
-	if len(managed) == 0 {
-		return rules
-	}
-
-	result := make([]any, 0, len(rules))
-	for _, rule := range rules {
-		ruleMap, ok := rule.(map[string]any)
-		if !ok {
-			result = append(result, rule)
-			continue
-		}
-		outbound, _ := ruleMap["outboundTag"].(string)
-		if _, managed := managed[strings.ToLower(outbound)]; managed {
-			continue
-		}
-		result = append(result, ruleMap)
-	}
-	return result
-}
-
-func filterReverseRules(rules []any, reverse map[string]clientReverseChannel) []any {
-	if len(rules) == 0 || len(reverse) == 0 {
-		return rules
-	}
-	known := make(map[string]struct{}, len(reverse))
-	for _, channel := range reverse {
-		known[strings.ToLower(strings.TrimSpace(channel.Tag))] = struct{}{}
-	}
-	filtered := make([]any, 0, len(rules))
-	for _, rule := range rules {
-		ruleMap, ok := rule.(map[string]any)
-		if !ok {
-			filtered = append(filtered, rule)
-			continue
-		}
-		inbound := extractStringSlice(ruleMap["inboundTag"])
-		remove := false
-		for _, tag := range inbound {
-			if _, ok := known[strings.ToLower(strings.TrimSpace(tag))]; ok {
-				remove = true
-				break
-			}
-		}
-		if remove {
-			continue
-		}
-		filtered = append(filtered, ruleMap)
-	}
-	return filtered
-}
-
-func buildClientReverseRules(reverse map[string]clientReverseChannel) []any {
-	channels := sortedReverseChannels(reverse)
-	if len(channels) == 0 {
-		return nil
-	}
-	result := make([]any, 0, len(channels)*2)
-	for _, channel := range channels {
-		inbound := []string{channel.Tag}
-		result = append(result, map[string]any{
-			"type":        "field",
-			"domain":      []string{"full:" + channel.Domain},
-			"inboundTag":  inbound,
-			"outboundTag": channel.EndpointTag,
-		})
-		result = append(result, map[string]any{
-			"type":        "field",
-			"inboundTag":  inbound,
-			"outboundTag": directRandomTag(),
-		})
-	}
-	return result
-}
-
-func directRandomTag() string {
-	if runtime.GOOS == "windows" {
-		return directRandomTagWindows
-	}
-	return "direct"
-}
-
-func applyWindowsDirectRules(rules []any) []any {
-	filtered := make([]any, 0, len(rules))
-	for _, raw := range rules {
-		ruleMap, ok := raw.(map[string]any)
-		if !ok {
-			filtered = append(filtered, raw)
-			continue
-		}
-		if isManagedWindowsDirectRule(ruleMap) {
-			continue
-		}
-		filtered = append(filtered, ruleMap)
-	}
-	filtered = append(filtered,
-		map[string]any{
-			"type":        "field",
-			"network":     "udp",
-			"outboundTag": directUDPTagWindows,
-		},
-		map[string]any{
-			"type":        "field",
-			"network":     "tcp,udp",
-			"outboundTag": directRandomTagWindows,
-		},
-	)
-	return filtered
-}
-
-func isManagedWindowsDirectRule(rule map[string]any) bool {
-	typ, _ := rule["type"].(string)
-	if !strings.EqualFold(strings.TrimSpace(typ), "field") {
-		return false
-	}
-	outbound, _ := rule["outboundTag"].(string)
-	trimmed := strings.ToLower(strings.TrimSpace(outbound))
-	if trimmed != directRandomTagWindows && trimmed != directUDPTagWindows {
-		return false
-	}
-	network, _ := rule["network"].(string)
-	network = strings.ToLower(strings.TrimSpace(network))
-	if network == "" {
-		return false
-	}
-	return strings.Contains(network, "udp")
-}
-
-func sortedReverseChannels(reverse map[string]clientReverseChannel) []clientReverseChannel {
-	if len(reverse) == 0 {
-		return []clientReverseChannel{}
-	}
-	keys := make([]string, 0, len(reverse))
-	for key := range reverse {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	result := make([]clientReverseChannel, 0, len(keys))
-	for _, key := range keys {
-		result = append(result, reverse[key])
-	}
-	return result
-}
-
-func updateReverseBridges(reverseObj map[string]any, channels []clientReverseChannel) {
-	existing, _ := reverseObj["bridges"].([]any)
-	managed := make(map[string]struct{}, len(channels))
-	for _, channel := range channels {
-		managed[strings.ToLower(strings.TrimSpace(channel.Tag))] = struct{}{}
-	}
-	filtered := make([]any, 0, len(existing))
-	for _, raw := range existing {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			filtered = append(filtered, raw)
-			continue
-		}
-		tag, _ := entry["tag"].(string)
-		if _, ok := managed[strings.ToLower(strings.TrimSpace(tag))]; ok {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	for _, channel := range channels {
-		filtered = append(filtered, map[string]any{
-			"domain": channel.Domain,
-			"tag":    channel.Tag,
-		})
-	}
-	if filtered == nil {
-		filtered = []any{}
-	}
-	reverseObj["bridges"] = filtered
-}
-
-func extractStringSlice(raw any) []string {
-	switch values := raw.(type) {
-	case []string:
-		result := make([]string, len(values))
-		for i, item := range values {
-			result[i] = strings.TrimSpace(item)
-		}
-		return result
-	case []any:
-		result := make([]string, 0, len(values))
-		for _, item := range values {
-			if str, ok := item.(string); ok {
-				result = append(result, strings.TrimSpace(str))
-			}
-		}
-		return result
-	default:
-		if str, ok := raw.(string); ok {
-			return []string{strings.TrimSpace(str)}
-		}
-		return []string{}
-	}
 }

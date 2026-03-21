@@ -79,8 +79,8 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 4+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 4+windowsRuleBonus(), len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 5+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(doc.Routing.Rules))
 	}
 	if !hasIPRule(doc.Routing.Rules, "10.70.0.0/16", "proxy-server-example") {
 		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
@@ -173,8 +173,8 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 4+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 4+windowsRuleBonus(), len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 5+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(doc.Routing.Rules))
 	}
 	if !hasDomainRule(doc.Routing.Rules, "app.service.example", "proxy-server-example") {
 		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
@@ -327,8 +327,8 @@ func TestRemoveDomainRedirect(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 4+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 4+windowsRuleBonus(), len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 5+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(doc.Routing.Rules))
 	}
 	for _, rule := range doc.Routing.Rules {
 		if len(rule.Domains) > 0 {
