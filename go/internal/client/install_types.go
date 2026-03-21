@@ -42,33 +42,35 @@ type InstallOptions struct {
 
 // RunOptions controls execution of the xray-core client process.
 type RunOptions struct {
-	InstallDir   string
-	ConfigDir    string
-	ErrorLogPath string
-	Heartbeat    HeartbeatOptions
-	TunEnabled   bool
-	TunName      string
-	TunMTU       int
-	TunAddr      string
-	TunMode      string
-	DNSServers   []string
+	InstallDir        string
+	ConfigDir         string
+	ErrorLogPath      string
+	Heartbeat         HeartbeatOptions
+	TunEnabled        bool
+	TunName           string
+	TunMTU            int
+	TunAddr           string
+	TunMode           string
+	DNSServers        []string
+	FullTunnelVerbose bool
 }
 
 // ServiceOptions controls execution of the managed client service.
 type ServiceOptions struct {
-	InstallDir   string
-	ConfigDir    string
-	XrayLogPath  string
-	Heartbeat    HeartbeatOptions
-	DiagPort     string
-	MaxRestarts  int
-	RestartDelay time.Duration
-	TunEnabled   bool
-	TunName      string
-	TunMTU       int
-	TunAddr      string
-	TunMode      string
-	DNSServers   []string
+	InstallDir        string
+	ConfigDir         string
+	XrayLogPath       string
+	Heartbeat         HeartbeatOptions
+	DiagPort          string
+	MaxRestarts       int
+	RestartDelay      time.Duration
+	TunEnabled        bool
+	TunName           string
+	TunMTU            int
+	TunAddr           string
+	TunMode           string
+	DNSServers        []string
+	FullTunnelVerbose bool
 }
 
 // HeartbeatOptions controls background telemetry probes.

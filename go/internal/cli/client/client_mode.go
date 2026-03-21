@@ -32,6 +32,7 @@ func newClientModeCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringP("path", "p", "", "client installation directory")
 	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.BoolP("verbose", "V", false, "emit full-tunnel change details")
 	return cmd
 }
 
@@ -42,6 +43,7 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	configPath := fs.String("config", "", "path to configuration file")
+	verbose := fs.Bool("verbose", false, "emit full-tunnel change details")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -91,6 +93,12 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 	if err != nil {
 		logging.Error("xp2p client mode: update config failed", "err", err)
 		return 1
+	}
+	if *verbose {
+		if _, err := config.UpdateFullTunnelVerbose(*configPath, true); err != nil {
+			logging.Error("xp2p client mode: update verbose flag failed", "err", err)
+			return 1
+		}
 	}
 	tunMode := ""
 	if fs.NArg() == 2 {

@@ -90,6 +90,7 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 	flags.IntP("max-restarts", "R", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	flags.DurationP("restart-delay", "r", 3*time.Second, "delay between restart attempts")
 	flags.BoolP("heartbeat", "b", true, "enable heartbeat probes")
+	flags.BoolP("verbose", "V", false, "emit full-tunnel change details")
 	flags.DurationP("heartbeat-interval", "I", 2*time.Second, "heartbeat interval")
 	flags.DurationP("heartbeat-timeout", "T", 2*time.Second, "heartbeat timeout")
 	flags.StringP("heartbeat-port", "P", "", "diagnostics service port to probe")
@@ -171,6 +172,7 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	maxRestarts := fs.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	restartDelay := fs.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
 	hbEnabled := fs.Bool("heartbeat", true, "enable heartbeat probes")
+	verbose := fs.Bool("verbose", false, "emit full-tunnel change details")
 	hbInterval := fs.Duration("heartbeat-interval", 2*time.Second, "heartbeat interval")
 	hbTimeout := fs.Duration("heartbeat-timeout", 2*time.Second, "heartbeat timeout")
 	hbPort := fs.String("heartbeat-port", cfg.Server.Port, "diagnostics service port to probe")
@@ -230,12 +232,13 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 			Port:         firstNonEmpty(strings.TrimSpace(*hbPort), cfg.Server.Port),
 			SocksAddress: firstNonEmpty(strings.TrimSpace(*hbSocks), cfg.Client.SocksAddress),
 		},
-		TunEnabled: cfg.Client.TunEnabled,
-		TunName:    cfg.Client.TunName,
-		TunMTU:     cfg.Client.TunMTU,
-		TunAddr:    cfg.Client.TunAddr,
-		TunMode:    cfg.Client.TunMode,
-		DNSServers: cfg.Client.DNSServers,
+		TunEnabled:        cfg.Client.TunEnabled,
+		TunName:           cfg.Client.TunName,
+		TunMTU:            cfg.Client.TunMTU,
+		TunAddr:           cfg.Client.TunAddr,
+		TunMode:           cfg.Client.TunMode,
+		DNSServers:        cfg.Client.DNSServers,
+		FullTunnelVerbose: cfg.Client.FullTunnelVerbose || *verbose,
 	}
 
 	if err := clientServiceRunFunc(ctx, opts); err != nil {

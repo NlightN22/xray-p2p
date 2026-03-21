@@ -26,6 +26,7 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	quiet := fs.Bool("quiet", false, "do not prompt for installation")
 	autoInstall := fs.Bool("auto-install", false, "install automatically if missing")
 	logFile := fs.String("xray-log-file", "", "file to append xray-core stderr output")
+	verbose := fs.Bool("verbose", false, "emit full-tunnel change details")
 	hbEnabled := fs.Bool("heartbeat", true, "enable background heartbeat probes")
 	hbInterval := fs.Duration("heartbeat-interval", 2*time.Second, "frequency of heartbeat probes")
 	hbTimeout := fs.Duration("heartbeat-timeout", 2*time.Second, "timeout per heartbeat probe")
@@ -103,12 +104,13 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 			Port:         firstNonEmpty(strings.TrimSpace(*hbPort), cfg.Server.Port),
 			SocksAddress: firstNonEmpty(strings.TrimSpace(*hbSocks), cfg.Client.SocksAddress),
 		},
-		TunEnabled: cfg.Client.TunEnabled,
-		TunName:    cfg.Client.TunName,
-		TunMTU:     cfg.Client.TunMTU,
-		TunAddr:    cfg.Client.TunAddr,
-		TunMode:    cfg.Client.TunMode,
-		DNSServers: cfg.Client.DNSServers,
+		TunEnabled:        cfg.Client.TunEnabled,
+		TunName:           cfg.Client.TunName,
+		TunMTU:            cfg.Client.TunMTU,
+		TunAddr:           cfg.Client.TunAddr,
+		TunMode:           cfg.Client.TunMode,
+		DNSServers:        cfg.Client.DNSServers,
+		FullTunnelVerbose: cfg.Client.FullTunnelVerbose || *verbose,
 	}
 
 	if err := clientRunFunc(ctx, opts); err != nil {

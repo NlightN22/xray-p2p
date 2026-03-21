@@ -13,7 +13,7 @@ import (
 
 const resolvConfPath = "/etc/resolv.conf"
 
-func applyDNSOverrides(servers []string) (*fullTunnelDNSBackup, error) {
+func applyDNSOverrides(servers []string, verbose bool) (*fullTunnelDNSBackup, error) {
 	trimmed := filterDNSValues(servers)
 	if len(servers) == 0 {
 		return nil, nil
@@ -33,20 +33,38 @@ func applyDNSOverrides(servers []string) (*fullTunnelDNSBackup, error) {
 	if err := os.WriteFile(resolvConfPath, []byte(content), 0o644); err != nil {
 		return nil, fmt.Errorf("xp2p: write resolv.conf: %w", err)
 	}
+	if verbose {
+		before := parseResolvConfServers(string(data))
+		after := parseResolvConfServers(content)
+		logging.Info("xp2p: full-tunnel DNS override applied", "path", resolvConfPath, "before", before, "after", after)
+	}
 	logging.Info("xp2p: full-tunnel DNS servers applied", "path", resolvConfPath)
 	return backup, nil
 }
 
-func restoreDNSOverrides(backup *fullTunnelDNSBackup) error {
+func restoreDNSOverrides(backup *fullTunnelDNSBackup, verbose bool) error {
 	if backup == nil || backup.ResolvConf == "" {
+		if verbose {
+			logging.Info("xp2p: full-tunnel DNS unchanged (no backup)", "path", resolvConfPath)
+		}
 		return nil
 	}
 	path := resolvConfPath
 	if strings.TrimSpace(backup.ResolvPath) != "" {
 		path = strings.TrimSpace(backup.ResolvPath)
 	}
+	var before []string
+	if verbose {
+		if data, err := os.ReadFile(path); err == nil {
+			before = parseResolvConfServers(string(data))
+		}
+	}
 	if err := os.WriteFile(path, []byte(backup.ResolvConf), 0o644); err != nil {
 		return fmt.Errorf("xp2p: restore resolv.conf: %w", err)
+	}
+	if verbose {
+		after := parseResolvConfServers(backup.ResolvConf)
+		logging.Info("xp2p: full-tunnel DNS restored", "path", path, "before", before, "after", after)
 	}
 	logging.Info("xp2p: full-tunnel DNS servers restored", "path", path)
 	return nil
@@ -85,4 +103,21 @@ func filterDNSValues(servers []string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+func parseResolvConfServers(content string) []string {
+	var servers []string
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "nameserver") {
+			fields := strings.Fields(trimmed)
+			if len(fields) >= 2 {
+				servers = append(servers, fields[1])
+			}
+		}
+	}
+	return servers
 }

@@ -22,37 +22,38 @@ const defaultEnvPrefix = "XP2P_"
 var ErrConfigParse = errors.New("config: parse error")
 
 var defaultValues = map[string]any{
-	"logging.level":         "info",
-	"logging.format":        "text",
-	"server.port":           "62022",
-	"server.trojan_port":    "58443",
-	"server.install_dir":    "",
-	"server.config_dir":     "config-server",
-	"server.mode":           "auto",
-	"server.cert_store":     "",
-	"server.certificate":    "",
-	"server.key":            "",
-	"server.host":           "",
-	"server.tun_enabled":    true,
-	"server.tun_name":       "xp2ps",
-	"server.tun_mtu":        1500,
-	"server.tun_addr":       "198.18.0.5/30",
-	"client.install_dir":    "",
-	"client.config_dir":     "config-client",
-	"client.server_address": "",
-	"client.server_port":    "8443",
-	"client.diag_port":      "62023",
-	"client.user":           "",
-	"client.password":       "",
-	"client.server_name":    "",
-	"client.allow_insecure": false,
-	"client.socks_address":  "127.0.0.1:51180",
-	"client.tun_enabled":    true,
-	"client.tun_name":       "xp2pc",
-	"client.tun_mtu":        1500,
-	"client.tun_addr":       "198.18.0.1/30",
-	"client.tun_mode":       "split",
-	"client.dns_servers":    []string{},
+	"logging.level":              "info",
+	"logging.format":             "text",
+	"server.port":                "62022",
+	"server.trojan_port":         "58443",
+	"server.install_dir":         "",
+	"server.config_dir":          "config-server",
+	"server.mode":                "auto",
+	"server.cert_store":          "",
+	"server.certificate":         "",
+	"server.key":                 "",
+	"server.host":                "",
+	"server.tun_enabled":         true,
+	"server.tun_name":            "xp2ps",
+	"server.tun_mtu":             1500,
+	"server.tun_addr":            "198.18.0.5/30",
+	"client.install_dir":         "",
+	"client.config_dir":          "config-client",
+	"client.server_address":      "",
+	"client.server_port":         "8443",
+	"client.diag_port":           "62023",
+	"client.user":                "",
+	"client.password":            "",
+	"client.server_name":         "",
+	"client.allow_insecure":      false,
+	"client.socks_address":       "127.0.0.1:51180",
+	"client.tun_enabled":         true,
+	"client.tun_name":            "xp2pc",
+	"client.tun_mtu":             1500,
+	"client.tun_addr":            "198.18.0.1/30",
+	"client.tun_mode":            "split",
+	"client.dns_servers":         []string{},
+	"client.full_tunnel_verbose": false,
 }
 
 // Config represents the top-level application configuration.
@@ -87,22 +88,23 @@ type ServerConfig struct {
 
 // ClientConfig holds client installation settings.
 type ClientConfig struct {
-	InstallDir    string `koanf:"install_dir"`
-	ConfigDir     string `koanf:"config_dir"`
-	ServerAddress string `koanf:"server_address"`
-	ServerPort    string `koanf:"server_port"`
-	DiagPort      string `koanf:"diag_port"`
-	User          string `koanf:"user"`
-	Password      string `koanf:"password"`
-	ServerName    string `koanf:"server_name"`
-	AllowInsecure bool   `koanf:"allow_insecure"`
-	SocksAddress  string `koanf:"socks_address"`
-	TunEnabled    bool   `koanf:"tun_enabled"`
-	TunName       string `koanf:"tun_name"`
-	TunMTU        int    `koanf:"tun_mtu"`
-	TunAddr       string `koanf:"tun_addr"`
-	TunMode       string `koanf:"tun_mode"`
-	DNSServers    []string `koanf:"dns_servers"`
+	InstallDir        string   `koanf:"install_dir"`
+	ConfigDir         string   `koanf:"config_dir"`
+	ServerAddress     string   `koanf:"server_address"`
+	ServerPort        string   `koanf:"server_port"`
+	DiagPort          string   `koanf:"diag_port"`
+	User              string   `koanf:"user"`
+	Password          string   `koanf:"password"`
+	ServerName        string   `koanf:"server_name"`
+	AllowInsecure     bool     `koanf:"allow_insecure"`
+	SocksAddress      string   `koanf:"socks_address"`
+	TunEnabled        bool     `koanf:"tun_enabled"`
+	TunName           string   `koanf:"tun_name"`
+	TunMTU            int      `koanf:"tun_mtu"`
+	TunAddr           string   `koanf:"tun_addr"`
+	TunMode           string   `koanf:"tun_mode"`
+	DNSServers        []string `koanf:"dns_servers"`
+	FullTunnelVerbose bool     `koanf:"full_tunnel_verbose"`
 }
 
 // Options control configuration loading behaviour.

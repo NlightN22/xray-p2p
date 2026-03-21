@@ -49,16 +49,17 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}()
 
 	baseRunOpts := RunOptions{
-		InstallDir:   installDir,
-		ConfigDir:    configDirName,
-		ErrorLogPath: strings.TrimSpace(opts.XrayLogPath),
-		Heartbeat:    opts.Heartbeat,
-		TunEnabled:   opts.TunEnabled,
-		TunName:      opts.TunName,
-		TunMTU:       opts.TunMTU,
-		TunAddr:      opts.TunAddr,
-		TunMode:      opts.TunMode,
-		DNSServers:   opts.DNSServers,
+		InstallDir:        installDir,
+		ConfigDir:         configDirName,
+		ErrorLogPath:      strings.TrimSpace(opts.XrayLogPath),
+		Heartbeat:         opts.Heartbeat,
+		TunEnabled:        opts.TunEnabled,
+		TunName:           opts.TunName,
+		TunMTU:            opts.TunMTU,
+		TunAddr:           opts.TunAddr,
+		TunMode:           opts.TunMode,
+		DNSServers:        opts.DNSServers,
+		FullTunnelVerbose: opts.FullTunnelVerbose,
 	}
 	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
@@ -104,6 +105,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 			runOpts.TunAddr = cfg.Client.TunAddr
 			runOpts.TunMode = cfg.Client.TunMode
 			runOpts.DNSServers = cfg.Client.DNSServers
+			runOpts.FullTunnelVerbose = runOpts.FullTunnelVerbose || cfg.Client.FullTunnelVerbose
 		}
 		return Run(runCtx, runOpts)
 	}); err != nil {

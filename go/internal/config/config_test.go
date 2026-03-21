@@ -97,6 +97,9 @@ func TestLoadDefaults(t *testing.T) {
 	if len(cfg.Client.DNSServers) != 0 {
 		t.Fatalf("expected empty client dns servers by default")
 	}
+	if cfg.Client.FullTunnelVerbose {
+		t.Fatalf("expected full tunnel verbose disabled by default")
+	}
 }
 
 func TestLoadFromFile(t *testing.T) {
@@ -118,6 +121,7 @@ tun_mtu = 1300
 tun_addr = "198.18.0.13/30"
 tun_mode = "full"
 dns_servers = ["1.1.1.1", "8.8.8.8"]
+full_tunnel_verbose = true
 `)
 	writeFile(t, filepath.Join(dir, "xp2p-server.toml"), `
 [logging]
@@ -227,6 +231,9 @@ tun_addr = "198.18.0.9/30"
 	if len(cfg.Client.DNSServers) != 2 || cfg.Client.DNSServers[0] != "1.1.1.1" || cfg.Client.DNSServers[1] != "8.8.8.8" {
 		t.Fatalf("unexpected client dns servers: %v", cfg.Client.DNSServers)
 	}
+	if !cfg.Client.FullTunnelVerbose {
+		t.Fatalf("expected full tunnel verbose true from file")
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -258,6 +265,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_CLIENT_TUN_MTU", "1350")
 	t.Setenv("XP2P_CLIENT_TUN_ADDR", "198.18.0.21/30")
 	t.Setenv("XP2P_CLIENT_TUN_MODE", "FULL")
+	t.Setenv("XP2P_CLIENT_FULL_TUNNEL_VERBOSE", "true")
 
 	cfg, err := Load(Options{})
 	if err != nil {
@@ -341,6 +349,9 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.Client.TunMode != "full" {
 		t.Fatalf("expected client tun mode full, got %s", cfg.Client.TunMode)
 	}
+	if !cfg.Client.FullTunnelVerbose {
+		t.Fatalf("expected full tunnel verbose true from env")
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
@@ -350,33 +361,34 @@ func TestLoadOverrides(t *testing.T) {
 
 	cfg, err := Load(Options{
 		Overrides: map[string]any{
-			"logging.level":         "error",
-			"logging.format":        "json",
-			"server.port":           "65003",
-			"server.trojan_port":    "58446",
-			"server.install_dir":    `E:\xp2p`,
-			"server.config_dir":     "cfg-override",
-			"server.mode":           "MANUAL",
-			"server.certificate":    `E:\certs\cert.pem`,
-			"server.key":            `E:\certs\cert.key`,
-			"server.tun_enabled":    false,
-			"server.tun_name":       "server-override",
-			"server.tun_mtu":        1420,
-			"server.tun_addr":       "198.18.0.25/30",
-			"client.install_dir":    `F:\xp2p-client`,
-			"client.config_dir":     "cfg-client-override",
-			"client.server_address": "remote.override",
-			"client.server_port":    "9643",
-			"client.user":           "override@example.com",
-			"client.password":       "overridepass",
-			"client.server_name":    "override.example.com",
-			"client.allow_insecure": false,
-			"client.tun_enabled":    true,
-			"client.tun_name":       "client-override",
-			"client.tun_mtu":        1320,
-			"client.tun_addr":       "198.18.0.29/30",
-			"client.tun_mode":       "full",
-			"client.dns_servers":    []string{"1.1.1.1", "8.8.8.8"},
+			"logging.level":              "error",
+			"logging.format":             "json",
+			"server.port":                "65003",
+			"server.trojan_port":         "58446",
+			"server.install_dir":         `E:\xp2p`,
+			"server.config_dir":          "cfg-override",
+			"server.mode":                "MANUAL",
+			"server.certificate":         `E:\certs\cert.pem`,
+			"server.key":                 `E:\certs\cert.key`,
+			"server.tun_enabled":         false,
+			"server.tun_name":            "server-override",
+			"server.tun_mtu":             1420,
+			"server.tun_addr":            "198.18.0.25/30",
+			"client.install_dir":         `F:\xp2p-client`,
+			"client.config_dir":          "cfg-client-override",
+			"client.server_address":      "remote.override",
+			"client.server_port":         "9643",
+			"client.user":                "override@example.com",
+			"client.password":            "overridepass",
+			"client.server_name":         "override.example.com",
+			"client.allow_insecure":      false,
+			"client.tun_enabled":         true,
+			"client.tun_name":            "client-override",
+			"client.tun_mtu":             1320,
+			"client.tun_addr":            "198.18.0.29/30",
+			"client.tun_mode":            "full",
+			"client.dns_servers":         []string{"1.1.1.1", "8.8.8.8"},
+			"client.full_tunnel_verbose": true,
 		},
 	})
 	if err != nil {
@@ -463,6 +475,9 @@ func TestLoadOverrides(t *testing.T) {
 	if len(cfg.Client.DNSServers) != 2 || cfg.Client.DNSServers[0] != "1.1.1.1" || cfg.Client.DNSServers[1] != "8.8.8.8" {
 		t.Fatalf("unexpected client dns servers: %v", cfg.Client.DNSServers)
 	}
+	if !cfg.Client.FullTunnelVerbose {
+		t.Fatalf("expected full tunnel verbose true from overrides")
+	}
 }
 
 func TestLoadWithExplicitPath(t *testing.T) {
@@ -503,6 +518,7 @@ tun_mtu = 1310
 tun_addr = "198.18.0.37/30"
 tun_mode = "full"
 dns_servers = ["9.9.9.9"]
+full_tunnel_verbose = true
 `)
 
 	cfg, err := Load(Options{Path: cfgPath})
@@ -592,6 +608,9 @@ dns_servers = ["9.9.9.9"]
 	}
 	if len(cfg.Client.DNSServers) != 1 || cfg.Client.DNSServers[0] != "9.9.9.9" {
 		t.Fatalf("unexpected client dns servers: %v", cfg.Client.DNSServers)
+	}
+	if !cfg.Client.FullTunnelVerbose {
+		t.Fatalf("expected full tunnel verbose true from toml")
 	}
 }
 

@@ -52,6 +52,7 @@ Includes: Global options
 - --quiet, -q                     Do not prompt for installation
 - --auto-install, -A              Install automatically if missing
 - --xray-log-file, -X <path>      File to append xray-core stderr output
+- --verbose, -V                   Emit full-tunnel change details
 - --heartbeat, -b                 Enable background heartbeat probes
 - --heartbeat-interval, -I <dur>  Frequency of heartbeat probes
 - --heartbeat-timeout, -T <dur>   Timeout per heartbeat probe
@@ -83,6 +84,7 @@ Includes: Global options
 - --max-restarts, -R <n>          Maximum restart attempts after failures
 - --restart-delay, -r <dur>       Delay between restart attempts
 - --heartbeat, -b                 Enable heartbeat probes
+- --verbose, -V                   Emit full-tunnel change details
 - --heartbeat-interval, -I <dur>  Heartbeat interval
 - --heartbeat-timeout, -T <dur>   Heartbeat timeout
 - --heartbeat-port, -P <port>     Diagnostics service port to probe
@@ -192,6 +194,7 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+- --verbose, -V          Emit full-tunnel change details
 
 xp2p client dns-forward (Linux only)
   Subcommands: add, remove, list

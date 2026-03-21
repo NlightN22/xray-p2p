@@ -20,3 +20,4 @@ client:
   dns_servers:
     - 1.1.1.1
     - 8.8.8.8
+  full_tunnel_verbose: false

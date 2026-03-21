@@ -91,7 +91,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		if !fullEnabled {
 			return
 		}
-		if err := restoreFullTunnel(ctx, paths); err != nil {
+		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
 			logging.Warn("xp2p: full-tunnel rollback failed", "err", err)
 		}
 	}()
