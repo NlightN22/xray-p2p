@@ -26,6 +26,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	allowInsecure := fs.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
 	strictTLS := fs.Bool("strict-tls", false, "enforce TLS verification")
 	force := fs.Bool("force", false, "replace existing endpoint configuration")
+	tunMode := fs.String("tun-mode", "", "TUN routing mode: split or full")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -55,6 +56,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	passwordProvided := false
 	allowInsecureRequested := false
 	strictTLSRequested := false
+	tunModeProvided := false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "user":
@@ -67,6 +69,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 			allowInsecureRequested = true
 		case "strict-tls":
 			strictTLSRequested = true
+		case "tun-mode":
+			tunModeProvided = true
 		}
 	})
 
@@ -147,6 +151,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		TunName:               cfg.Client.TunName,
 		TunMTU:                cfg.Client.TunMTU,
 		TunAddr:               cfg.Client.TunAddr,
+		TunMode:               cfg.Client.TunMode,
+		TunModeSet:            tunModeProvided,
 	}
 	if *allowInsecure {
 		opts.AllowInsecure = true
@@ -155,6 +161,15 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	if *strictTLS {
 		opts.AllowInsecure = false
 		opts.AllowInsecureOverride = true
+	}
+	if tunModeProvided {
+		modeValue := strings.ToLower(strings.TrimSpace(*tunMode))
+		if modeValue != "split" && modeValue != "full" {
+			logging.Error("xp2p client install: invalid --tun-mode (use split or full)")
+			return 2
+		}
+		opts.TunMode = modeValue
+		opts.TunModeSet = true
 	}
 
 	if err := clientInstallFunc(ctx, opts); err != nil {

@@ -10,7 +10,7 @@
 ## Command tree
 
 xp2p client
-  Subcommands: install, remove, list, run, service, state, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
+  Subcommands: install, remove, list, run, service, state, export, import, deploy, redirect, forward, reverse, mode, tun-mode, dns-forward (Linux only)
 
 xp2p client install
 Options:
@@ -26,6 +26,7 @@ Includes: Global options
 - --allow-insecure, -I       Allow insecure TLS (skip verification)
 - --strict-tls, -S           Enforce TLS verification
 - --force, -f                Replace existing endpoint configuration
+- --tun-mode <split|full>    TUN routing mode (default: split)
 
 xp2p client remove [hostname|tag]
 Options:
@@ -191,6 +192,10 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+
+xp2p client tun-mode [split|full]
+Options:
+Includes: Global options
 
 xp2p client dns-forward (Linux only)
   Subcommands: add, remove, list

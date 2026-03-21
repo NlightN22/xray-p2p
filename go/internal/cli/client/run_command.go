@@ -107,6 +107,8 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 		TunName:    cfg.Client.TunName,
 		TunMTU:     cfg.Client.TunMTU,
 		TunAddr:    cfg.Client.TunAddr,
+		TunMode:    cfg.Client.TunMode,
+		DNSServers: cfg.Client.DNSServers,
 	}
 
 	if err := clientRunFunc(ctx, opts); err != nil {
@@ -132,6 +134,7 @@ func performClientInstall(ctx context.Context, cfg config.Config, installDir, co
 		TunName:       cfg.Client.TunName,
 		TunMTU:        cfg.Client.TunMTU,
 		TunAddr:       cfg.Client.TunAddr,
+		TunMode:       cfg.Client.TunMode,
 	}
 	return clientInstallFunc(ctx, opts)
 }

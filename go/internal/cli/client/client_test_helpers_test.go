@@ -23,6 +23,7 @@ func clientCfg(installDir, configDir string) config.Config {
 			TunName:    "xp2pc",
 			TunMTU:     1500,
 			TunAddr:    "198.18.0.1/30",
+			TunMode:    "split",
 		},
 	}
 }

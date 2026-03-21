@@ -73,6 +73,21 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
+	wantFull := opts.TunEnabled && strings.EqualFold(strings.TrimSpace(opts.TunMode), "full")
+	if !wantFull {
+		if err := restoreFullTunnel(ctx, paths); err != nil {
+			return err
+		}
+	}
+	defer func() {
+		if !wantFull {
+			return
+		}
+		if err := restoreFullTunnel(ctx, paths); err != nil {
+			logging.Warn("xp2p: full-tunnel rollback failed", "err", err)
+		}
+	}()
+
 	if err := updateSendThroughOutbound(ctx, paths, opts.TunEnabled); err != nil {
 		return err
 	}
@@ -113,6 +128,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 					logging.Warn("xp2p: redirect route setup failed", "err", err)
 				}
 			}()
+		}
+		if wantFull {
+			if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
+				logging.Warn("xp2p: full-tunnel apply failed", "err", err)
+			}
 		}
 	}
 

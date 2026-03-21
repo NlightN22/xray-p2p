@@ -13,6 +13,10 @@ server:
 client:
   diag_port: 62023
   tun_enabled: true
+  tun_mode: split
   tun_name: xp2pc
   tun_mtu: 1500
   tun_addr: 198.18.0.1/30
+  dns_servers:
+    - 1.1.1.1
+    - 8.8.8.8

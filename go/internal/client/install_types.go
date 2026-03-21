@@ -35,6 +35,8 @@ type InstallOptions struct {
 	TunName               string
 	TunMTU                int
 	TunAddr               string
+	TunMode               string
+	TunModeSet            bool
 }
 
 // RunOptions controls execution of the xray-core client process.
@@ -47,6 +49,8 @@ type RunOptions struct {
 	TunName      string
 	TunMTU       int
 	TunAddr      string
+	TunMode      string
+	DNSServers   []string
 }
 
 // ServiceOptions controls execution of the managed client service.
@@ -62,6 +66,8 @@ type ServiceOptions struct {
 	TunName      string
 	TunMTU       int
 	TunAddr      string
+	TunMode      string
+	DNSServers   []string
 }
 
 // HeartbeatOptions controls background telemetry probes.

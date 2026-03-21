@@ -59,6 +59,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newClientForwardCmd(cfg),
 		newClientReverseCmd(cfg),
 		newClientModeCmd(cfg),
+		newClientTunModeCmd(cfg),
 	)
 	dnsForwardMaybeAdd(cmd, cfg)
 	return cmd
@@ -88,6 +89,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.BoolP("allow-insecure", "I", false, "allow insecure TLS (skip verification)")
 	flags.BoolP("strict-tls", "S", false, "enforce TLS verification")
 	flags.BoolP("force", "f", false, "replace existing endpoint configuration")
+	flags.String("tun-mode", "", "TUN routing mode (split or full)")
 	return cmd
 }
 

@@ -3,11 +3,12 @@ package client
 import (
 	"errors"
 	"fmt"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -71,6 +72,7 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 	if tunAddr == "" {
 		tunAddr = "198.18.0.1/30"
 	}
+	tunMode := normalizeTunModeValue(opts.TunMode)
 
 	return clientInstallBase{
 		installDir:       installDir,
@@ -101,6 +103,44 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			TunName:               tunName,
 			TunMTU:                tunMTU,
 			TunAddr:               tunAddr,
+			TunMode:               tunMode,
+			TunModeSet:            opts.TunModeSet,
 		},
 	}, nil
+}
+
+func normalizeTunModeValue(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "full":
+		return "full"
+	default:
+		return "split"
+	}
+}
+
+func ensureClientTunConfig(force bool, tunEnabled bool, tunName string, tunMTU int, tunAddr string, tunMode string, tunModeSet bool) error {
+	if _, err := config.EnsureTunSettings("", "client", tunEnabled, tunName, tunMTU, tunAddr); err != nil {
+		if force && errors.Is(err, config.ErrConfigParse) {
+			configPath := config.ConfigPath(layout.ClientConfigFileName)
+			if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				return removeErr
+			}
+			if _, retryErr := config.EnsureTunSettings("", "client", tunEnabled, tunName, tunMTU, tunAddr); retryErr != nil {
+				return retryErr
+			}
+		} else {
+			return err
+		}
+	}
+
+	if tunModeSet {
+		if _, err := config.UpdateTunMode("", "client", tunMode); err != nil {
+			return err
+		}
+		return nil
+	}
+	if _, err := config.EnsureTunMode("", "client", tunMode); err != nil {
+		return err
+	}
+	return nil
 }

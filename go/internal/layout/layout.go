@@ -22,6 +22,8 @@ const (
 	ServerConfigFileName = "xp2p-server.toml"
 	// ClientAppliedStateFileName stores applied client state in the default config root.
 	ClientAppliedStateFileName = "xp2p-client.state.json"
+	// ClientFullTunnelStateFileName stores full-tunnel rollback state in the default config root.
+	ClientFullTunnelStateFileName = "xp2p-client.tun-full.json"
 	// ServerAppliedStateFileName stores applied server state in the default config root.
 	ServerAppliedStateFileName = "xp2p-server.state.json"
 	// AuditLogFileName stores configuration change audit logs.

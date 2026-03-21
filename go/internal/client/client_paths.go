@@ -12,6 +12,7 @@ type clientPaths struct {
 	configDir  string
 	configFile string
 	stateFile  string
+	fullState  string
 }
 
 func resolveClientPaths(installDir, configDir string) (clientPaths, error) {
@@ -28,5 +29,6 @@ func resolveClientPaths(installDir, configDir string) (clientPaths, error) {
 		configDir:  cfgDir,
 		configFile: filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
 		stateFile:  filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)),
+		fullState:  filepath.Clean(config.ConfigPath(layout.ClientFullTunnelStateFileName)),
 	}, nil
 }

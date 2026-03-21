@@ -5,6 +5,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"strings"
 
@@ -81,6 +82,9 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err != nil {
 		return err
 	}
+	if ruleTarget.Kind == redirect.KindCIDR && isDefaultRoute(ruleTarget.Value) {
+		return errors.New("xp2p: default route redirects are reserved for tun-mode full")
+	}
 
 	rule := redirect.Rule{
 		OutboundTag: tag,
@@ -109,6 +113,21 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 	return nil
+}
+
+func isDefaultRoute(value string) bool {
+	ip, network, err := net.ParseCIDR(strings.TrimSpace(value))
+	if err != nil || ip == nil || network == nil {
+		return false
+	}
+	ones, _ := network.Mask.Size()
+	if ones != 0 {
+		return false
+	}
+	if ip.To4() != nil {
+		return ip.Equal(net.IPv4zero)
+	}
+	return ip.Equal(net.IPv6zero)
 }
 
 // RemoveRedirect deletes redirect rules.

@@ -234,6 +234,8 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		TunName:    cfg.Client.TunName,
 		TunMTU:     cfg.Client.TunMTU,
 		TunAddr:    cfg.Client.TunAddr,
+		TunMode:    cfg.Client.TunMode,
+		DNSServers: cfg.Client.DNSServers,
 	}
 
 	if err := clientServiceRunFunc(ctx, opts); err != nil {

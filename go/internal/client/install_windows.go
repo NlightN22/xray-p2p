@@ -59,18 +59,8 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
 
-	if _, err := config.EnsureTunSettings("", "client", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
-		if state.Force && errors.Is(err, config.ErrConfigParse) {
-			configPath := config.ConfigPath(layout.ClientConfigFileName)
-			if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-				return removeErr
-			}
-			if _, retryErr := config.EnsureTunSettings("", "client", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); retryErr != nil {
-				return retryErr
-			}
-		} else {
-			return err
-		}
+	if err := ensureClientTunConfig(state.Force, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr, state.TunMode, state.TunModeSet); err != nil {
+		return err
 	}
 
 	if err := ensureXrayBinaryPresent(state.binDir); err != nil {

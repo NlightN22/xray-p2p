@@ -57,6 +57,8 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		TunName:      opts.TunName,
 		TunMTU:       opts.TunMTU,
 		TunAddr:      opts.TunAddr,
+		TunMode:      opts.TunMode,
+		DNSServers:   opts.DNSServers,
 	}
 
 	watchPaths := []string{

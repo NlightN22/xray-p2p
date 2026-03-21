@@ -46,6 +46,9 @@ func TestBuildClientInstallBaseDefaults(t *testing.T) {
 	if base.installOpts.TunAddr != "198.18.0.1/30" {
 		t.Fatalf("expected tun addr 198.18.0.1/30, got %s", base.installOpts.TunAddr)
 	}
+	if base.installOpts.TunMode != "split" {
+		t.Fatalf("expected tun mode split, got %s", base.installOpts.TunMode)
+	}
 }
 
 func TestBuildClientInstallBaseRequiresInputs(t *testing.T) {

@@ -200,6 +200,8 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		TunName:    cfg.Client.TunName,
 		TunMTU:     cfg.Client.TunMTU,
 		TunAddr:    cfg.Client.TunAddr,
+		TunMode:    cfg.Client.TunMode,
+		DNSServers: cfg.Client.DNSServers,
 	}
 	runErrCh := make(chan error, 1)
 	logging.Info("xp2p client deploy: starting local client run", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)
@@ -441,6 +443,7 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 		TunName:              cfg.Client.TunName,
 		TunMTU:               cfg.Client.TunMTU,
 		TunAddr:              cfg.Client.TunAddr,
+		TunMode:              cfg.Client.TunMode,
 	}
 }
 

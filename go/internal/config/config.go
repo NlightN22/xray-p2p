@@ -51,6 +51,8 @@ var defaultValues = map[string]any{
 	"client.tun_name":       "xp2pc",
 	"client.tun_mtu":        1500,
 	"client.tun_addr":       "198.18.0.1/30",
+	"client.tun_mode":       "split",
+	"client.dns_servers":    []string{},
 }
 
 // Config represents the top-level application configuration.
@@ -99,6 +101,8 @@ type ClientConfig struct {
 	TunName       string `koanf:"tun_name"`
 	TunMTU        int    `koanf:"tun_mtu"`
 	TunAddr       string `koanf:"tun_addr"`
+	TunMode       string `koanf:"tun_mode"`
+	DNSServers    []string `koanf:"dns_servers"`
 }
 
 // Options control configuration loading behaviour.
@@ -350,6 +354,43 @@ func normalize(cfg *Config) {
 	if cfg.Client.TunAddr == "" {
 		cfg.Client.TunAddr = defaultValues["client.tun_addr"].(string)
 	}
+	cfg.Client.TunMode = normalizeTunMode(cfg.Client.TunMode)
+	cfg.Client.DNSServers = normalizeDNSServers(cfg.Client.DNSServers)
 
 	// AllowInsecure is a boolean and defaults through the map loader.
+}
+
+func normalizeTunMode(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "full":
+		return "full"
+	case "split":
+		return "split"
+	default:
+		return defaultValues["client.tun_mode"].(string)
+	}
+}
+
+func normalizeDNSServers(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]struct{}, len(values))
+	trimmed := make([]string, 0, len(values))
+	for _, value := range values {
+		clean := strings.TrimSpace(value)
+		if clean == "" {
+			continue
+		}
+		key := strings.ToLower(clean)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		trimmed = append(trimmed, clean)
+	}
+	if len(trimmed) == 0 {
+		return []string{}
+	}
+	return trimmed
 }

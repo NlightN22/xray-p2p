@@ -24,6 +24,7 @@ func TestRunClientInstall(t *testing.T) {
 			TunName:       "xp2pc",
 			TunMTU:        1500,
 			TunAddr:       "198.18.0.1/30",
+			TunMode:       "split",
 		},
 	}
 
@@ -71,6 +72,7 @@ func TestRunClientInstall(t *testing.T) {
 					TunName:               "xp2pc",
 					TunMTU:                1500,
 					TunAddr:               "198.18.0.1/30",
+					TunMode:               "split",
 				}, "install options")
 			},
 		},

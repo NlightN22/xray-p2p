@@ -19,6 +19,19 @@ xp2p client redirect add --path /etc/xp2p --config-dir config-client --cidr 10.0
 xp2p client redirect add --path /etc/xp2p --config-dir config-client --cidr 10.0.102.0/24 --tag proxy-10-63-30-12
 ```
 
+## Full-tunnel mode
+
+Full-tunnel mode is available only when the client runs in TUN mode (`client.tun_enabled = true`).
+It replaces default routes with the TUN interface, adds bypass routes to all configured endpoints,
+and switches DNS resolvers to `client.dns_servers` while full-tunnel is active.
+
+```toml
+[client]
+tun_enabled = true
+tun_mode = "full"
+dns_servers = ["1.1.1.1", "8.8.8.8"]
+```
+
 ## DNS per-domain routing
 
 ```sh
