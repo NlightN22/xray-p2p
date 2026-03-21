@@ -44,8 +44,8 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	}
 
 	rules := doc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 6+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 6+windowsRuleBonus(), len(rules))
+	if len(rules) != 4+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 4+windowsRuleBonus(), len(rules))
 	}
 	domainRule := findRuleWithDomainRule(rules, "full:reverse-userserver-example.rev")
 	if domainRule == nil {

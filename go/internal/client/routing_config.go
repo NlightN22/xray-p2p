@@ -59,9 +59,6 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 			"outboundTag": ep.Tag,
 		})
 	}
-	for _, ep := range endpoints {
-		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], endpointRouteRule(ep))
-	}
 	for _, rule := range redirects {
 		entry := map[string]any{
 			"type":        "field",

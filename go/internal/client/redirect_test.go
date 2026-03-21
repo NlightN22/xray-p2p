@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -79,13 +80,17 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 5+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 3+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(doc.Routing.Rules))
 	}
 	if !hasIPRule(doc.Routing.Rules, "10.70.0.0/16", "proxy-server-example") {
 		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
 	}
-	if !hasIPRule(doc.Routing.Rules, "203.0.113.10", "proxy-server-example") {
+	directTag := "direct"
+	if runtime.GOOS == "windows" {
+		directTag = "direct-random"
+	}
+	if !hasIPRule(doc.Routing.Rules, "203.0.113.10", directTag) {
 		t.Fatalf("missing endpoint rule %+v", doc.Routing.Rules)
 	}
 	if !hasMarkerRule(doc.Routing.Rules) {
@@ -173,8 +178,8 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 5+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 3+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(doc.Routing.Rules))
 	}
 	if !hasDomainRule(doc.Routing.Rules, "app.service.example", "proxy-server-example") {
 		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
@@ -327,8 +332,8 @@ func TestRemoveDomainRedirect(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse routing: %v", err)
 	}
-	if len(doc.Routing.Rules) != 5+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 5+windowsRuleBonus(), len(doc.Routing.Rules))
+	if len(doc.Routing.Rules) != 3+windowsRuleBonus() {
+		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(doc.Routing.Rules))
 	}
 	for _, rule := range doc.Routing.Rules {
 		if len(rule.Domains) > 0 {

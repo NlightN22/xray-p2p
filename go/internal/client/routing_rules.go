@@ -27,19 +27,6 @@ func endpointBypassRule(ep clientEndpointRecord) map[string]any {
 	return rule
 }
 
-func endpointRouteRule(ep clientEndpointRecord) map[string]any {
-	rule := map[string]any{
-		"type":        "field",
-		"outboundTag": ep.Tag,
-	}
-	if net.ParseIP(ep.Address) != nil {
-		rule["ip"] = []string{ep.Address}
-	} else {
-		rule["domain"] = []string{"full:" + ep.Address}
-	}
-	return rule
-}
-
 func endpointMatchKey(address string) (string, bool) {
 	address = strings.TrimSpace(address)
 	if address == "" {
