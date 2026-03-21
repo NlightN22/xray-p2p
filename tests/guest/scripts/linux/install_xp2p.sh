@@ -40,6 +40,8 @@ ARCH=$(dpkg --print-architecture)
 EXPECTED_PKG="$ARTIFACT_DIR/xp2p_${SOURCE_VERSION}_${ARCH}.deb"
 SKIP_BUILD="${XP2P_SKIP_BUILD:-0}"
 LATEST_PKG=""
+echo "==> Purging existing xp2p package"
+sudo -n dpkg -P xp2p >/dev/null 2>&1 || true
 if [ "$SKIP_BUILD" = "1" ]; then
   if [ ! -f "$EXPECTED_PKG" ]; then
     echo "Expected cached package not found: $EXPECTED_PKG" >&2

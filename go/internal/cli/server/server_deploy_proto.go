@@ -198,6 +198,12 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 	if configDir == "" {
 		configDir = server.DefaultServerConfigDir
 	}
+	resolvedConfigDir, err := server.ResolveConfigDir(installDir, configDir)
+	if err != nil {
+		_ = writeLine(rw, "ERR "+err.Error())
+		notifyFailure(results)
+		return
+	}
 
 	port := strings.TrimSpace(man.TrojanPort)
 	if port == "" {
@@ -225,7 +231,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 			"logs.json",
 		}
 		for _, name := range required {
-			path := filepath.Join(configDir, name)
+			path := filepath.Join(resolvedConfigDir, name)
 			if _, err := os.Stat(path); err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					_ = writeLine(rw, "ERR xp2p: server install incomplete: missing "+name)

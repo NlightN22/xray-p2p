@@ -99,6 +99,8 @@ def _combined_output(result) -> str:
 @pytest.mark.host
 @pytest.mark.linux
 def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
+    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+    _ = xp2p_linux_versions[linux_env.DEFAULT_SERVER]
     server_host = linux_host_factory(linux_env.DEFAULT_CLIENT)  # Host A
     client_host = linux_host_factory(linux_env.DEFAULT_SERVER)  # Host B
     server_runner = _runner(server_host)

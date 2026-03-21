@@ -235,7 +235,10 @@ def test_deploy_tun_with_multiple_reverse_redirects(
     server_host,
     xp2p_client_runner,
     xp2p_server_runner,
+    xp2p_linux_versions,
 ):
+    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+    _ = xp2p_linux_versions[linux_env.DEFAULT_SERVER]
     server_ip = _detect_host_ipv4(server_host)
     client_ip = helpers.detect_primary_ipv4(client_host)
     user_one = "deploy-tun-one@example.com"
