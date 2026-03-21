@@ -54,6 +54,7 @@ var defaultValues = map[string]any{
 	"client.tun_mode":            "split",
 	"client.dns_servers":         []string{},
 	"client.full_tunnel_verbose": false,
+	"client.full_tunnel_tag":     "",
 }
 
 // Config represents the top-level application configuration.
@@ -105,6 +106,7 @@ type ClientConfig struct {
 	TunMode           string   `koanf:"tun_mode"`
 	DNSServers        []string `koanf:"dns_servers"`
 	FullTunnelVerbose bool     `koanf:"full_tunnel_verbose"`
+	FullTunnelTag     string   `koanf:"full_tunnel_tag"`
 }
 
 // Options control configuration loading behaviour.
@@ -358,6 +360,7 @@ func normalize(cfg *Config) {
 	}
 	cfg.Client.TunMode = normalizeTunMode(cfg.Client.TunMode)
 	cfg.Client.DNSServers = normalizeDNSServers(cfg.Client.DNSServers)
+	cfg.Client.FullTunnelTag = strings.TrimSpace(cfg.Client.FullTunnelTag)
 
 	// AllowInsecure is a boolean and defaults through the map loader.
 }

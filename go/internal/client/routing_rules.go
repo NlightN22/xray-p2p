@@ -12,6 +12,7 @@ const (
 	routingRuleSystem         routingRuleClass = "system"
 	routingRuleRedirect       routingRuleClass = "redirect"
 	routingRuleUser           routingRuleClass = "user"
+	routingRuleFullTunnel     routingRuleClass = "full-tunnel"
 )
 
 func endpointBypassRule(ep clientEndpointRecord) map[string]any {
@@ -36,4 +37,16 @@ func endpointMatchKey(address string) (string, bool) {
 		return "ip:" + address, true
 	}
 	return "domain:full:" + strings.ToLower(address), true
+}
+
+func fullTunnelRule(tag string) map[string]any {
+	trimmed := strings.TrimSpace(tag)
+	if trimmed == "" {
+		return nil
+	}
+	return map[string]any{
+		"type":        "field",
+		"ip":          []string{"0.0.0.0/0", "::/0"},
+		"outboundTag": trimmed,
+	}
 }

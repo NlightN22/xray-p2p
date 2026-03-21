@@ -239,6 +239,7 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		TunMode:           cfg.Client.TunMode,
 		DNSServers:        cfg.Client.DNSServers,
 		FullTunnelVerbose: cfg.Client.FullTunnelVerbose || *verbose,
+		FullTunnelTag:     cfg.Client.FullTunnelTag,
 	}
 
 	if err := clientServiceRunFunc(ctx, opts); err != nil {

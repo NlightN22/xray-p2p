@@ -11,12 +11,18 @@ import (
 )
 
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
+	if err := syncFullTunnelRouting(paths, desired, opts); err != nil {
+		return false, err
+	}
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	if !opts.TunEnabled || mode != "full" {
 		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
 			return false, err
 		}
 		return false, nil
+	}
+	if strings.TrimSpace(opts.FullTunnelTag) == "" {
+		logging.Warn("xp2p: full-tunnel outbound tag missing; routing rule not added")
 	}
 	return enableFullTunnel(ctx, paths, opts, desired)
 }

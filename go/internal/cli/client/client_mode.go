@@ -10,10 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 func newClientModeCmd(cfg commandConfig) *cobra.Command {
@@ -32,6 +34,9 @@ func newClientModeCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringP("path", "p", "", "client installation directory")
 	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.StringP("tag", "g", "", "outbound tag for full-tunnel routing (prompts when omitted)")
+	flags.StringP("host", "H", "", "client endpoint hostname for full-tunnel routing")
+	flags.BoolP("quiet", "q", false, "do not prompt for outbound tags")
 	flags.BoolP("verbose", "V", false, "emit full-tunnel change details")
 	return cmd
 }
@@ -43,6 +48,9 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	configPath := fs.String("config", "", "path to configuration file")
+	tag := fs.String("tag", "", "outbound tag for full-tunnel routing")
+	host := fs.String("host", "", "client endpoint hostname for full-tunnel routing")
+	quiet := fs.Bool("quiet", false, "do not prompt for outbound tags")
 	verbose := fs.Bool("verbose", false, "emit full-tunnel change details")
 
 	if err := fs.Parse(args); err != nil {
@@ -89,6 +97,38 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 		return 2
 	}
 
+	loadedCfg, err := loadModeConfig(*configPath, cfg)
+	if err != nil {
+		logging.Error("xp2p client mode: failed to load config", "err", err)
+		return 1
+	}
+
+	tunMode := loadedCfg.Client.TunMode
+	if fs.NArg() == 2 {
+		if !tunEnabled {
+			logging.Error("xp2p client mode: tun mode is only valid with tun")
+			return 2
+		}
+		value := strings.ToLower(strings.TrimSpace(fs.Arg(1)))
+		if value != "split" && value != "full" {
+			logging.Error("xp2p client mode: invalid tun mode (use split or full)")
+			return 2
+		}
+		tunMode = value
+	}
+
+	fullTunnelTag := strings.TrimSpace(loadedCfg.Client.FullTunnelTag)
+	if tunEnabled && tunMode == "full" {
+		resolvedTag, _, err := resolveFullTunnelBinding(installDir, configDirName, *tag, *host, fullTunnelTag, *quiet)
+		if err != nil {
+			logging.Error("xp2p client mode: failed to resolve full-tunnel endpoint", "err", err)
+			return 1
+		}
+		if strings.TrimSpace(resolvedTag) != "" {
+			fullTunnelTag = resolvedTag
+		}
+	}
+
 	updatedPath, err := config.UpdateTunEnabled(*configPath, "client", tunEnabled)
 	if err != nil {
 		logging.Error("xp2p client mode: update config failed", "err", err)
@@ -100,32 +140,34 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 			return 1
 		}
 	}
-	tunMode := ""
 	if fs.NArg() == 2 {
-		if !tunEnabled {
-			logging.Error("xp2p client mode: tun mode is only valid with tun")
-			return 2
-		}
-		tunMode = strings.ToLower(strings.TrimSpace(fs.Arg(1)))
 		if _, err := config.UpdateTunMode(*configPath, "client", tunMode); err != nil {
 			logging.Error("xp2p client mode: update tun mode failed", "err", err)
 			return 1
 		}
 	}
+	if tunEnabled && tunMode == "full" && strings.TrimSpace(fullTunnelTag) != "" {
+		if _, err := config.UpdateFullTunnelTag(*configPath, fullTunnelTag); err != nil {
+			logging.Error("xp2p client mode: update full-tunnel tag failed", "err", err)
+			return 1
+		}
+	}
 
 	if err := clientModeFunc(client.ModeOptions{
-		InstallDir: installDir,
-		ConfigDir:  configDirName,
-		TunEnabled: tunEnabled,
-		TunName:    cfg.Client.TunName,
-		TunMTU:     cfg.Client.TunMTU,
-		TunAddr:    cfg.Client.TunAddr,
+		InstallDir:    installDir,
+		ConfigDir:     configDirName,
+		TunEnabled:    tunEnabled,
+		TunName:       cfg.Client.TunName,
+		TunMTU:        cfg.Client.TunMTU,
+		TunAddr:       cfg.Client.TunAddr,
+		TunMode:       tunMode,
+		FullTunnelTag: fullTunnelTag,
 	}); err != nil {
 		logging.Error("xp2p client mode: apply failed", "err", err)
 		return 1
 	}
 
-	if tunMode != "" {
+	if fs.NArg() == 2 {
 		logging.Info("xp2p client mode updated", "mode", mode, "tun_mode", tunMode, "config", updatedPath)
 	} else {
 		logging.Info("xp2p client mode updated", "mode", mode, "config", updatedPath)
@@ -192,4 +234,80 @@ func parseMode(value string) (bool, error) {
 	default:
 		return false, errors.New("use tun or proxy")
 	}
+}
+
+func loadModeConfig(configPath string, fallback config.Config) (config.Config, error) {
+	trimmed := strings.TrimSpace(configPath)
+	if trimmed == "" {
+		trimmed = config.ConfigPath(layout.ClientConfigFileName)
+	}
+	loaded, err := config.Load(config.Options{
+		Path:         trimmed,
+		AllowInvalid: true,
+	})
+	if err != nil {
+		return fallback, err
+	}
+	return loaded, nil
+}
+
+func resolveFullTunnelBinding(installDir, configDir, tag, host, existingTag string, quiet bool) (string, string, error) {
+	tagValue := strings.TrimSpace(tag)
+	hostValue := strings.TrimSpace(host)
+	if tagValue == "" && hostValue == "" {
+		if strings.TrimSpace(existingTag) != "" {
+			return strings.TrimSpace(existingTag), "", nil
+		}
+		if quiet {
+			return "", "", errors.New("xp2p: --tag or --host is required for full-tunnel")
+		}
+		selection, err := promptClientRedirectBinding(installDir, configDir)
+		if err != nil {
+			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+				return "", "", errors.New("xp2p: --tag or --host is required for full-tunnel")
+			}
+			return "", "", err
+		}
+		return selection.Tag, selection.Host, nil
+	}
+
+	bindings, err := listClientBindings(installDir, configDir)
+	if err != nil {
+		return "", "", err
+	}
+	binding, err := redirect.ResolveBinding(tagValue, hostValue, bindings)
+	if err != nil {
+		switch {
+		case errors.Is(err, redirect.ErrBindingHostNotFound):
+			return "", "", errors.New("xp2p: client endpoint not found")
+		case errors.Is(err, redirect.ErrBindingTagNotFound):
+			return "", "", errors.New("xp2p: outbound tag is not registered")
+		case errors.Is(err, redirect.ErrBindingTagMismatch):
+			return binding.Tag, binding.Host, errors.New("xp2p: tag does not match host")
+		default:
+			return "", "", err
+		}
+	}
+	return binding.Tag, binding.Host, nil
+}
+
+func listClientBindings(installDir, configDir string) ([]redirect.Binding, error) {
+	records, err := clientListFunc(client.ListOptions{
+		InstallDir: installDir,
+		ConfigDir:  configDir,
+	})
+	if err != nil {
+		return nil, err
+	}
+	bindings := make([]redirect.Binding, 0, len(records))
+	for _, rec := range records {
+		if strings.TrimSpace(rec.Tag) == "" {
+			continue
+		}
+		bindings = append(bindings, redirect.Binding{
+			Tag:  rec.Tag,
+			Host: rec.Hostname,
+		})
+	}
+	return bindings, nil
 }

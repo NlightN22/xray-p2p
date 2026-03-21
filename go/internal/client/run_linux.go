@@ -66,12 +66,14 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	if !applied.matches(desired, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
 		if err := applyClientDesiredConfig(paths, desired, ModeOptions{
-			InstallDir: installDir,
-			ConfigDir:  opts.ConfigDir,
-			TunEnabled: tunEnabled,
-			TunName:    opts.TunName,
-			TunMTU:     opts.TunMTU,
-			TunAddr:    opts.TunAddr,
+			InstallDir:    installDir,
+			ConfigDir:     opts.ConfigDir,
+			TunEnabled:    tunEnabled,
+			TunName:       opts.TunName,
+			TunMTU:        opts.TunMTU,
+			TunAddr:       opts.TunAddr,
+			TunMode:       opts.TunMode,
+			FullTunnelTag: opts.FullTunnelTag,
 		}, true); err != nil {
 			return err
 		}

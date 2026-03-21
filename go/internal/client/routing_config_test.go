@@ -139,14 +139,14 @@ func TestUpdateRoutingConfigManagesReverseRules(t *testing.T) {
 		"alphaalpha-example.rev": {UserID: "alpha", Host: "alpha.example", Tag: "alphaalpha-example.rev", Domain: "alphaalpha-example.rev", EndpointTag: "proxy-alpha"},
 	}
 
-	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, reverse); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, reverse, false, ""); err != nil {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 
 	verifyRoutingDocument(t, path, 4, 1)
 
 	// Second update should not duplicate rules/bridges.
-	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, reverse); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, reverse, false, ""); err != nil {
 		t.Fatalf("second updateRoutingConfig failed: %v", err)
 	}
 	verifyRoutingDocument(t, path, 4, 1)
@@ -158,7 +158,7 @@ func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
 		{Hostname: "alpha.example", Tag: "proxy-alpha", Address: "alpha.example"},
 	}
 
-	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, nil); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, nil, false, ""); err != nil {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 
@@ -198,7 +198,7 @@ func TestUpdateRoutingConfigUsesIPRuleForAddress(t *testing.T) {
 		{Hostname: "192.0.2.10", Tag: "proxy-alpha", Address: "192.0.2.10"},
 	}
 
-	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, nil); err != nil {
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, nil, false, ""); err != nil {
 		t.Fatalf("updateRoutingConfig failed: %v", err)
 	}
 
@@ -229,6 +229,39 @@ func TestUpdateRoutingConfigUsesIPRuleForAddress(t *testing.T) {
 	}
 	if got := asStrings(rule["domain"]); len(got) != 0 {
 		t.Fatalf("did not expect domain field, got %v", got)
+	}
+}
+
+func TestUpdateRoutingConfigAppendsFullTunnelRuleLast(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "routing.json")
+	endpoints := []clientEndpointRecord{
+		{Hostname: "alpha.example", Tag: "proxy-alpha", Address: "alpha.example"},
+	}
+	routingCfg := xrayconfig.DefaultClientConfig().Routing
+	routingCfg.Rules = []map[string]any{
+		{
+			"type":        "field",
+			"ip":          []string{"10.0.0.0/8"},
+			"outboundTag": "direct",
+		},
+	}
+
+	if err := updateRoutingConfig(path, routingCfg, endpoints, nil, nil, true, "proxy-alpha"); err != nil {
+		t.Fatalf("updateRoutingConfig failed: %v", err)
+	}
+
+	doc := loadRouting(t, path)
+	rules := getRules(t, doc)
+	if len(rules) == 0 {
+		t.Fatalf("expected routing rules, got none")
+	}
+	last := rules[len(rules)-1]
+	if last["outboundTag"] != "proxy-alpha" {
+		t.Fatalf("expected full-tunnel rule to use proxy-alpha, got %+v", last)
+	}
+	ipValues := asStrings(last["ip"])
+	if len(ipValues) != 2 || ipValues[0] != "0.0.0.0/0" || ipValues[1] != "::/0" {
+		t.Fatalf("expected full-tunnel rule to include 0.0.0.0/0 and ::/0, got %v", ipValues)
 	}
 }
 

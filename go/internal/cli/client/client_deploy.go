@@ -196,12 +196,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			Port:         cfg.Server.Port,
 			SocksAddress: cfg.Client.SocksAddress,
 		},
-		TunEnabled: false,
-		TunName:    cfg.Client.TunName,
-		TunMTU:     cfg.Client.TunMTU,
-		TunAddr:    cfg.Client.TunAddr,
-		TunMode:    cfg.Client.TunMode,
-		DNSServers: cfg.Client.DNSServers,
+		TunEnabled:    false,
+		TunName:       cfg.Client.TunName,
+		TunMTU:        cfg.Client.TunMTU,
+		TunAddr:       cfg.Client.TunAddr,
+		TunMode:       cfg.Client.TunMode,
+		DNSServers:    cfg.Client.DNSServers,
+		FullTunnelTag: cfg.Client.FullTunnelTag,
 	}
 	runErrCh := make(chan error, 1)
 	logging.Info("xp2p client deploy: starting local client run", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)
@@ -549,12 +550,14 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 	logging.Info("xp2p client deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
 
 	err = client.ApplyMode(client.ModeOptions{
-		InstallDir: installOpts.InstallDir,
-		ConfigDir:  installOpts.ConfigDir,
-		TunEnabled: tunEnabled,
-		TunName:    cfg.Client.TunName,
-		TunMTU:     cfg.Client.TunMTU,
-		TunAddr:    cfg.Client.TunAddr,
+		InstallDir:    installOpts.InstallDir,
+		ConfigDir:     installOpts.ConfigDir,
+		TunEnabled:    tunEnabled,
+		TunName:       cfg.Client.TunName,
+		TunMTU:        cfg.Client.TunMTU,
+		TunAddr:       cfg.Client.TunAddr,
+		TunMode:       cfg.Client.TunMode,
+		FullTunnelTag: cfg.Client.FullTunnelTag,
 	})
 	if err == nil {
 		return nil

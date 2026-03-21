@@ -100,6 +100,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Client.FullTunnelVerbose {
 		t.Fatalf("expected full tunnel verbose disabled by default")
 	}
+	if cfg.Client.FullTunnelTag != "" {
+		t.Fatalf("expected empty full tunnel tag by default")
+	}
 }
 
 func TestLoadFromFile(t *testing.T) {
@@ -122,6 +125,7 @@ tun_addr = "198.18.0.13/30"
 tun_mode = "full"
 dns_servers = ["1.1.1.1", "8.8.8.8"]
 full_tunnel_verbose = true
+full_tunnel_tag = "proxy-1"
 `)
 	writeFile(t, filepath.Join(dir, "xp2p-server.toml"), `
 [logging]
@@ -234,6 +238,9 @@ tun_addr = "198.18.0.9/30"
 	if !cfg.Client.FullTunnelVerbose {
 		t.Fatalf("expected full tunnel verbose true from file")
 	}
+	if cfg.Client.FullTunnelTag != "proxy-1" {
+		t.Fatalf("expected full tunnel tag proxy-1, got %s", cfg.Client.FullTunnelTag)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -266,6 +273,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XP2P_CLIENT_TUN_ADDR", "198.18.0.21/30")
 	t.Setenv("XP2P_CLIENT_TUN_MODE", "FULL")
 	t.Setenv("XP2P_CLIENT_FULL_TUNNEL_VERBOSE", "true")
+	t.Setenv("XP2P_CLIENT_FULL_TUNNEL_TAG", "proxy-env")
 
 	cfg, err := Load(Options{})
 	if err != nil {
@@ -352,6 +360,9 @@ func TestLoadFromEnv(t *testing.T) {
 	if !cfg.Client.FullTunnelVerbose {
 		t.Fatalf("expected full tunnel verbose true from env")
 	}
+	if cfg.Client.FullTunnelTag != "proxy-env" {
+		t.Fatalf("expected full tunnel tag proxy-env, got %s", cfg.Client.FullTunnelTag)
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {
@@ -389,6 +400,7 @@ func TestLoadOverrides(t *testing.T) {
 			"client.tun_mode":            "full",
 			"client.dns_servers":         []string{"1.1.1.1", "8.8.8.8"},
 			"client.full_tunnel_verbose": true,
+			"client.full_tunnel_tag":     "proxy-override",
 		},
 	})
 	if err != nil {
@@ -478,6 +490,9 @@ func TestLoadOverrides(t *testing.T) {
 	if !cfg.Client.FullTunnelVerbose {
 		t.Fatalf("expected full tunnel verbose true from overrides")
 	}
+	if cfg.Client.FullTunnelTag != "proxy-override" {
+		t.Fatalf("expected full tunnel tag proxy-override, got %s", cfg.Client.FullTunnelTag)
+	}
 }
 
 func TestLoadWithExplicitPath(t *testing.T) {
@@ -519,6 +534,7 @@ tun_addr = "198.18.0.37/30"
 tun_mode = "full"
 dns_servers = ["9.9.9.9"]
 full_tunnel_verbose = true
+full_tunnel_tag = "proxy-toml"
 `)
 
 	cfg, err := Load(Options{Path: cfgPath})
@@ -611,6 +627,9 @@ full_tunnel_verbose = true
 	}
 	if !cfg.Client.FullTunnelVerbose {
 		t.Fatalf("expected full tunnel verbose true from toml")
+	}
+	if cfg.Client.FullTunnelTag != "proxy-toml" {
+		t.Fatalf("expected full tunnel tag proxy-toml, got %s", cfg.Client.FullTunnelTag)
 	}
 }
 

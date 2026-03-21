@@ -53,6 +53,7 @@ type RunOptions struct {
 	TunMode           string
 	DNSServers        []string
 	FullTunnelVerbose bool
+	FullTunnelTag     string
 }
 
 // ServiceOptions controls execution of the managed client service.
@@ -71,6 +72,7 @@ type ServiceOptions struct {
 	TunMode           string
 	DNSServers        []string
 	FullTunnelVerbose bool
+	FullTunnelTag     string
 }
 
 // HeartbeatOptions controls background telemetry probes.

@@ -89,7 +89,11 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints); err != nil {
 		return clientInstallState{}, err
 	}
-	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
+	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(configFile)
+	if err != nil {
+		return clientInstallState{}, err
+	}
+	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag); err != nil {
 		return clientInstallState{}, err
 	}
 	return state, nil

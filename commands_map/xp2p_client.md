@@ -194,6 +194,9 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+- --tag, -g <tag>        Outbound tag for full-tunnel routing (prompts when omitted)
+- --host, -H <host>      Client endpoint hostname for full-tunnel routing
+- --quiet, -q            Do not prompt for outbound tags
 - --verbose, -V          Emit full-tunnel change details
 
 xp2p client dns-forward (Linux only)

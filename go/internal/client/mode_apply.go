@@ -4,6 +4,7 @@ package client
 
 import (
 	"path/filepath"
+	"strings"
 )
 
 func applyClientMode(paths clientPaths, opts ModeOptions) error {
@@ -25,7 +26,8 @@ func applyClientDesiredConfig(paths clientPaths, state clientInstallState, opts 
 	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints); err != nil {
 		return err
 	}
-	if err := updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse); err != nil {
+	fullEnabled := opts.TunEnabled && strings.EqualFold(strings.TrimSpace(opts.TunMode), "full")
+	if err := updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, opts.FullTunnelTag); err != nil {
 		return err
 	}
 	if !applyRoutes {

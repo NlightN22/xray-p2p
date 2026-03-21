@@ -10,6 +10,8 @@ type ModeOptions struct {
 	TunName    string
 	TunMTU     int
 	TunAddr    string
+	TunMode    string
+	FullTunnelTag string
 }
 
 // ApplyMode updates inbounds and routes to match the selected mode.

@@ -21,3 +21,4 @@ client:
     - 1.1.1.1
     - 8.8.8.8
   full_tunnel_verbose: false
+  full_tunnel_tag: ""

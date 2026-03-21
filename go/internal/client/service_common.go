@@ -60,6 +60,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		TunMode:           opts.TunMode,
 		DNSServers:        opts.DNSServers,
 		FullTunnelVerbose: opts.FullTunnelVerbose,
+		FullTunnelTag:     opts.FullTunnelTag,
 	}
 	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
@@ -106,6 +107,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 			runOpts.TunMode = cfg.Client.TunMode
 			runOpts.DNSServers = cfg.Client.DNSServers
 			runOpts.FullTunnelVerbose = runOpts.FullTunnelVerbose || cfg.Client.FullTunnelVerbose
+			runOpts.FullTunnelTag = cfg.Client.FullTunnelTag
 		}
 		return Run(runCtx, runOpts)
 	}); err != nil {

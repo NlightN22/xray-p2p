@@ -11,7 +11,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
-func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel) error {
+func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel, fullTunnelEnabled bool, fullTunnelTag string) error {
 	document := make(map[string]any)
 	routing := ensureObject(document, "routing")
 	routing["domainStrategy"] = strings.TrimSpace(cfg.DomainStrategy)
@@ -40,6 +40,7 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		routingRuleSystem:         {},
 		routingRuleRedirect:       {},
 		routingRuleUser:           filtered,
+		routingRuleFullTunnel:     {},
 	}
 
 	for _, ep := range endpoints {
@@ -76,11 +77,17 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		ruleBuckets[routingRuleUser] = filterWindowsDirectRules(ruleBuckets[routingRuleUser])
 		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], windowsDirectRules()...)
 	}
+	if fullTunnelEnabled {
+		if rule := fullTunnelRule(fullTunnelTag); rule != nil {
+			ruleBuckets[routingRuleFullTunnel] = append(ruleBuckets[routingRuleFullTunnel], rule)
+		}
+	}
 	orderedClasses := []routingRuleClass{
 		routingRuleEndpointBypass,
 		routingRuleSystem,
 		routingRuleRedirect,
 		routingRuleUser,
+		routingRuleFullTunnel,
 	}
 	orderedRules := make([]any, 0, len(existing))
 	for _, class := range orderedClasses {

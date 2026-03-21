@@ -166,6 +166,35 @@ func UpdateFullTunnelVerbose(path string, enabled bool) (string, error) {
 	return configPath, nil
 }
 
+// UpdateFullTunnelTag updates full_tunnel_tag in the specified config file and returns the path used.
+func UpdateFullTunnelTag(path string, tag string) (string, error) {
+	trimmedRole := "client"
+	configPath, err := resolveConfigPath(path, trimmedRole)
+	if err != nil {
+		return "", err
+	}
+	if strings.ToLower(filepath.Ext(configPath)) != ".toml" {
+		return "", fmt.Errorf("config: only toml files are supported for full tunnel tag updates")
+	}
+
+	tree, err := loadOrCreateToml(configPath)
+	if err != nil {
+		return "", err
+	}
+	tree.SetPath([]string{trimmedRole, "full_tunnel_tag"}, strings.TrimSpace(tag))
+
+	data, err := encodeToml(tree)
+	if err != nil {
+		return "", err
+	}
+	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
+		AuditPath: AuditLogPath(),
+	}); err != nil {
+		return "", err
+	}
+	return configPath, nil
+}
+
 // EnsureTunMode stores tun_mode defaults in the role config when missing.
 func EnsureTunMode(path string, role string, mode string) (string, error) {
 	trimmedRole := strings.ToLower(strings.TrimSpace(role))
