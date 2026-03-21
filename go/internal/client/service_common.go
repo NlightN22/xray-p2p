@@ -48,7 +48,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		}
 	}()
 
-	runOpts := RunOptions{
+	baseRunOpts := RunOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
 		ErrorLogPath: strings.TrimSpace(opts.XrayLogPath),
@@ -60,6 +60,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		TunMode:      opts.TunMode,
 		DNSServers:   opts.DNSServers,
 	}
+	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
 	watchPaths := []string{
 		filepath.Join(installDir, "bin"),
@@ -88,11 +89,22 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		RestartDelay:  opts.RestartDelay,
 	}
 
-	if err := ensureLogFile(runOpts.ErrorLogPath); err != nil {
+	if err := ensureLogFile(baseRunOpts.ErrorLogPath); err != nil {
 		return err
 	}
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
+		runOpts := baseRunOpts
+		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
+			logging.Warn("xp2p client service: failed to reload config", "err", err)
+		} else {
+			runOpts.TunEnabled = cfg.Client.TunEnabled
+			runOpts.TunName = cfg.Client.TunName
+			runOpts.TunMTU = cfg.Client.TunMTU
+			runOpts.TunAddr = cfg.Client.TunAddr
+			runOpts.TunMode = cfg.Client.TunMode
+			runOpts.DNSServers = cfg.Client.DNSServers
+		}
 		return Run(runCtx, runOpts)
 	}); err != nil {
 		return fmt.Errorf("xp2p client service: %w", err)

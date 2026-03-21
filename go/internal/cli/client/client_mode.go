@@ -18,8 +18,8 @@ import (
 
 func newClientModeCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mode [tun|proxy]",
-		Short: "Switch client mode between TUN and proxy",
+		Use:   "mode [tun|proxy] [split|full]",
+		Short: "Switch client mode between TUN and proxy (optional tun mode)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			if configFlag := cmd.InheritedFlags().Lookup("config"); configFlag != nil && configFlag.Changed {
@@ -56,11 +56,20 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 			logging.Error("xp2p client mode: failed to resolve current mode", "err", err)
 			return 1
 		}
-		logging.Info("xp2p client mode: current mode", "mode", mode)
+		tunMode, err := resolveClientTunMode(*configPath, cfg)
+		if err != nil {
+			logging.Error("xp2p client mode: failed to resolve tun mode", "err", err)
+			return 1
+		}
+		if mode == "tun" {
+			logging.Info("xp2p client mode: current mode", "mode", mode, "tun_mode", tunMode)
+		} else {
+			logging.Info("xp2p client mode: current mode", "mode", mode)
+		}
 		return 0
 	}
-	if fs.NArg() != 1 {
-		logging.Error("xp2p client mode: specify tun or proxy")
+	if fs.NArg() > 2 {
+		logging.Error("xp2p client mode: specify tun or proxy (optional split or full)")
 		return 2
 	}
 
@@ -83,6 +92,18 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 		logging.Error("xp2p client mode: update config failed", "err", err)
 		return 1
 	}
+	tunMode := ""
+	if fs.NArg() == 2 {
+		if !tunEnabled {
+			logging.Error("xp2p client mode: tun mode is only valid with tun")
+			return 2
+		}
+		tunMode = strings.ToLower(strings.TrimSpace(fs.Arg(1)))
+		if _, err := config.UpdateTunMode(*configPath, "client", tunMode); err != nil {
+			logging.Error("xp2p client mode: update tun mode failed", "err", err)
+			return 1
+		}
+	}
 
 	if err := clientModeFunc(client.ModeOptions{
 		InstallDir: installDir,
@@ -96,7 +117,11 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 		return 1
 	}
 
-	logging.Info("xp2p client mode updated", "mode", mode, "config", updatedPath)
+	if tunMode != "" {
+		logging.Info("xp2p client mode updated", "mode", mode, "tun_mode", tunMode, "config", updatedPath)
+	} else {
+		logging.Info("xp2p client mode updated", "mode", mode, "config", updatedPath)
+	}
 	return 0
 }
 
@@ -112,6 +137,24 @@ func resolveClientMode(cfg config.Config) (string, error) {
 		return "tun", nil
 	}
 	return "proxy", nil
+}
+
+func resolveClientTunMode(configPath string, cfg config.Config) (string, error) {
+	trimmed := strings.TrimSpace(configPath)
+	if trimmed == "" {
+		if cfg.Client.TunMode != "" {
+			return cfg.Client.TunMode, nil
+		}
+		trimmed = config.ConfigPath(layout.ClientConfigFileName)
+	}
+	loaded, err := config.Load(config.Options{
+		Path:         trimmed,
+		AllowInvalid: true,
+	})
+	if err != nil {
+		return "", err
+	}
+	return loaded.Client.TunMode, nil
 }
 
 func parseModeFromState(data []byte) string {
