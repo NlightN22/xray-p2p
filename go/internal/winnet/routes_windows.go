@@ -7,8 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 type Route struct {
@@ -23,6 +27,78 @@ type Route struct {
 var ErrInterfaceNotFound = errors.New("xp2p: interface not found")
 
 func DefaultRoutes(ctx context.Context) ([]Route, error) {
+	routes, err := defaultRoutesFromIPHelper()
+	if err == nil {
+		return routes, nil
+	}
+	fallback, fallbackErr := defaultRoutesFromPowerShell(ctx)
+	if fallbackErr != nil {
+		return nil, fmt.Errorf("xp2p: route lookup failed: %v: %w", err, fallbackErr)
+	}
+	return fallback, nil
+}
+
+func defaultRoutesFromIPHelper() ([]Route, error) {
+	var table *windows.MibIpForwardTable2
+	if err := windows.GetIpForwardTable2(windows.AF_UNSPEC, &table); err != nil {
+		return nil, err
+	}
+	if table == nil {
+		return nil, nil
+	}
+	defer windows.FreeMibTable(unsafe.Pointer(table))
+	routes := make([]Route, 0, 2)
+	for _, row := range table.Rows() {
+		prefix, family, ok := ipPrefixFromRaw(row.DestinationPrefix)
+		if !ok {
+			continue
+		}
+		if prefix != "0.0.0.0/0" && prefix != "::/0" {
+			continue
+		}
+		nextHop, _, _ := ipFromRaw(row.NextHop)
+		routes = append(routes, Route{
+			DestinationPrefix: prefix,
+			NextHop:           nextHop,
+			InterfaceIndex:    int(row.InterfaceIndex),
+			RouteMetric:       int(row.Metric),
+			PolicyStore:       "ActiveStore",
+			AddressFamily:     family,
+		})
+	}
+	return routes, nil
+}
+
+func ipPrefixFromRaw(prefix windows.IpAddressPrefix) (string, string, bool) {
+	ip, family, ok := ipFromRaw(prefix.Prefix)
+	if !ok || ip == "" {
+		return "", "", false
+	}
+	return fmt.Sprintf("%s/%d", ip, prefix.PrefixLength), family, true
+}
+
+func ipFromRaw(addr windows.RawSockaddrInet) (string, string, bool) {
+	switch addr.Family {
+	case windows.AF_INET:
+		raw := (*windows.RawSockaddrInet4)(unsafe.Pointer(&addr))
+		ip := net.IP(raw.Addr[:]).To4()
+		if ip == nil {
+			return "", "", false
+		}
+		return ip.String(), "IPv4", true
+	case windows.AF_INET6:
+		raw := (*windows.RawSockaddrInet6)(unsafe.Pointer(&addr))
+		ip := net.IP(raw.Addr[:])
+		if ip == nil {
+			return "", "", false
+		}
+		return ip.String(), "IPv6", true
+	default:
+		return "", "", false
+	}
+}
+
+func defaultRoutesFromPowerShell(ctx context.Context) ([]Route, error) {
 	script := strings.Join([]string{
 		`$ErrorActionPreference = "Stop"`,
 		`$routes = @()`,

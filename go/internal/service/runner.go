@@ -128,6 +128,10 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				if shouldIgnoreEvent(path, ignored) {
 					continue
 				}
+				if shouldSkipWatchRestart(opts, &watchRestarts) {
+					logging.Warn("service restart skipped (watch limiter)", "service", name, "path", path)
+					continue
+				}
 				restarting = true
 				restartPath = path
 				cancelChild()
@@ -141,6 +145,10 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				if shouldIgnoreEvent(path, ignored) {
 					continue
 				}
+				if shouldSkipWatchRestart(opts, &watchRestarts) {
+					logging.Warn("service restart skipped (watch limiter)", "service", name, "path", path)
+					continue
+				}
 				restarting = true
 				restartPath = path
 				cancelChild()
@@ -152,25 +160,6 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 		cancelChild()
 
 		if restarting {
-			if opts.MaxWatchRestarts > 0 && opts.WatchRestartWindow > 0 {
-				now := time.Now()
-				cutoff := now.Add(-opts.WatchRestartWindow)
-				kept := watchRestarts[:0]
-				for _, ts := range watchRestarts {
-					if ts.After(cutoff) {
-						kept = append(kept, ts)
-					}
-				}
-				watchRestarts = kept
-				if len(watchRestarts) >= opts.MaxWatchRestarts {
-					logging.Warn("service restart skipped (watch limiter)", "service", name, "path", restartPath)
-					if !waitWithContext(ctx, restartDelay) {
-						return nil
-					}
-					continue
-				}
-				watchRestarts = append(watchRestarts, now)
-			}
 			failures = 0
 			if restartPath != "" {
 				logging.Info("service configuration change detected", "service", name, "path", restartPath)
@@ -241,4 +230,24 @@ func shouldIgnoreEvent(path string, ignored map[string]struct{}) bool {
 	}
 	_, skip := ignored[clean]
 	return skip
+}
+
+func shouldSkipWatchRestart(opts Options, restarts *[]time.Time) bool {
+	if opts.MaxWatchRestarts <= 0 || opts.WatchRestartWindow <= 0 {
+		return false
+	}
+	now := time.Now()
+	cutoff := now.Add(-opts.WatchRestartWindow)
+	kept := (*restarts)[:0]
+	for _, ts := range *restarts {
+		if ts.After(cutoff) {
+			kept = append(kept, ts)
+		}
+	}
+	*restarts = kept
+	if len(*restarts) >= opts.MaxWatchRestarts {
+		return true
+	}
+	*restarts = append(*restarts, now)
+	return false
 }

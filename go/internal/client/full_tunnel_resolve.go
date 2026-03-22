@@ -10,6 +10,10 @@ import (
 
 const resolverTimeout = 3 * time.Second
 
+var lookupIPAddrs = func(ctx context.Context, host string) ([]net.IPAddr, error) {
+	return net.DefaultResolver.LookupIPAddr(ctx, host)
+}
+
 func resolveEndpointIPs(ctx context.Context, endpoints []clientEndpointRecord, cache map[string]fullTunnelEndpointIPs) ([]string, []string, map[string]fullTunnelEndpointIPs, error) {
 	seen4 := make(map[string]struct{})
 	seen6 := make(map[string]struct{})
@@ -47,7 +51,7 @@ func resolveEndpointIPs(ctx context.Context, endpoints []clientEndpointRecord, c
 		}
 
 		resolveCtx, cancel := context.WithTimeout(ctx, resolverTimeout)
-		addrs, err := net.DefaultResolver.LookupIPAddr(resolveCtx, host)
+		addrs, err := lookupIPAddrs(resolveCtx, host)
 		cancel()
 		if err != nil || len(addrs) == 0 {
 			if cacheOK && (len(cacheEntry.IPv4) > 0 || len(cacheEntry.IPv6) > 0) {
