@@ -120,6 +120,7 @@ Includes: Global options
 - --password, -w <password>   Trojan user password (auto-generated when omitted)
 - --trojan-port, -T <port>    Trojan service port
 - --tun-mode, -m <split|full> TUN routing mode (split or full)
+- --force, -f                 Allow changing existing tun mode
 
 xp2p client redirect add
 Options:

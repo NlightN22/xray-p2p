@@ -25,6 +25,7 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 		"--password", "secret",
 		"--trojan-port", "65010",
 		"--tun-mode", "full",
+		"--force",
 	}
 
 	opts, err := parseDeployFlags(cfg, args)
@@ -51,6 +52,9 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 	}
 	if !opts.manifest.tunModeSet || opts.manifest.tunMode != "full" {
 		t.Fatalf("expected tun mode full, got %q (set=%v)", opts.manifest.tunMode, opts.manifest.tunModeSet)
+	}
+	if !opts.manifest.force {
+		t.Fatalf("expected force to be set")
 	}
 }
 

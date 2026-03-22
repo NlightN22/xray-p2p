@@ -44,6 +44,7 @@ type manifestOptions struct {
 	trojanPassword string
 	tunMode        string
 	tunModeSet     bool
+	force          bool
 }
 
 type runtimeOptions struct {
@@ -183,8 +184,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 
 	tunMode := strings.TrimSpace(modeCfg.Client.TunMode)
 	if opts.manifest.tunModeSet {
+		if installed && !strings.EqualFold(tunMode, opts.manifest.tunMode) && !opts.manifest.force {
+			completionState = "FAIL client-mode-conflict"
+			logging.Error("xp2p client deploy: tun mode conflict (use --force to override)", "current", tunMode, "requested", opts.manifest.tunMode)
+			return 1
+		}
 		tunMode = opts.manifest.tunMode
-		if modeCfg.Client.TunMode != "" && !strings.EqualFold(modeCfg.Client.TunMode, tunMode) {
+		if installed && !strings.EqualFold(modeCfg.Client.TunMode, tunMode) {
 			logging.Warn("xp2p client deploy: overriding existing tun mode", "from", modeCfg.Client.TunMode, "to", tunMode)
 		}
 	}
@@ -332,6 +338,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
 	trojanPort := fs.String("trojan-port", "", "Trojan service port")
 	tunMode := fs.String("tun-mode", "", "TUN routing mode (split or full)")
+	force := fs.Bool("force", false, "allow changing existing tun mode")
 
 	if err := fs.Parse(args); err != nil {
 		return deployOptions{}, err
@@ -402,6 +409,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 			trojanPassword: strings.TrimSpace(passwordValue),
 			tunMode:        tunModeValue,
 			tunModeSet:     tunModeSet,
+			force:          *force,
 		},
 		runtime: runtimeOptions{
 			remoteHost: host,
