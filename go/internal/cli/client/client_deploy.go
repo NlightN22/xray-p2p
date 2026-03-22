@@ -42,6 +42,8 @@ type manifestOptions struct {
 	trojanPort     string
 	trojanUser     string
 	trojanPassword string
+	tunMode        string
+	tunModeSet     bool
 }
 
 type runtimeOptions struct {
@@ -172,7 +174,32 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 	}
 
-	if err := applyClientDeployMode(installOpts, cfg, false); err != nil {
+	modeCfg, err := loadDeployClientConfig()
+	if err != nil {
+		completionState = "FAIL client-config"
+		logging.Error("xp2p client deploy: load config failed", "err", err)
+		return 1
+	}
+
+	tunMode := strings.TrimSpace(modeCfg.Client.TunMode)
+	if opts.manifest.tunModeSet {
+		tunMode = opts.manifest.tunMode
+		if modeCfg.Client.TunMode != "" && !strings.EqualFold(modeCfg.Client.TunMode, tunMode) {
+			logging.Warn("xp2p client deploy: overriding existing tun mode", "from", modeCfg.Client.TunMode, "to", tunMode)
+		}
+	}
+
+	fullTunnelTag := strings.TrimSpace(modeCfg.Client.FullTunnelTag)
+	if opts.manifest.tunModeSet && tunMode == "full" {
+		tag, tagErr := resolveDeployFullTunnelTag(installOpts.InstallDir, installOpts.ConfigDir, tl, opts.runtime)
+		if tagErr != nil {
+			logging.Warn("xp2p client deploy: full-tunnel tag resolution failed", "err", tagErr)
+		} else if strings.TrimSpace(tag) != "" {
+			fullTunnelTag = tag
+		}
+	}
+
+	if err := applyClientDeployMode(installOpts, cfg, false, tunMode, opts.manifest.tunModeSet, fullTunnelTag); err != nil {
 		completionState = "FAIL client-mode-proxy"
 		logging.Error("xp2p client deploy: proxy mode setup failed", "err", err)
 		return 1
@@ -281,7 +308,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 1
 	}
 
-	if err := applyClientDeployMode(installOpts, cfg, true); err != nil {
+	if err := applyClientDeployMode(installOpts, cfg, true, tunMode, opts.manifest.tunModeSet, fullTunnelTag); err != nil {
 		completionState = "FAIL client-mode-tun"
 		logging.Error("xp2p client deploy: tun mode setup failed", "err", err)
 		return 1
@@ -304,6 +331,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
 	trojanPort := fs.String("trojan-port", "", "Trojan service port")
+	tunMode := fs.String("tun-mode", "", "TUN routing mode (split or full)")
 
 	if err := fs.Parse(args); err != nil {
 		return deployOptions{}, err
@@ -344,11 +372,25 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	}
 
 	installDirSet := false
+	tunModeSet := false
 	fs.Visit(func(flag *flag.Flag) {
 		if flag.Name == "install-dir" {
 			installDirSet = true
 		}
+		if flag.Name == "tun-mode" {
+			tunModeSet = true
+		}
 	})
+
+	tunModeValue := strings.TrimSpace(*tunMode)
+	if tunModeSet {
+		switch strings.ToLower(tunModeValue) {
+		case "split", "full":
+			tunModeValue = strings.ToLower(tunModeValue)
+		default:
+			return deployOptions{}, fmt.Errorf("--tun-mode must be split or full")
+		}
+	}
 
 	return deployOptions{
 		manifest: manifestOptions{
@@ -358,6 +400,8 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 			trojanPort:     serverPortValue,
 			trojanUser:     strings.TrimSpace(userValue),
 			trojanPassword: strings.TrimSpace(passwordValue),
+			tunMode:        tunModeValue,
+			tunModeSet:     tunModeSet,
 		},
 		runtime: runtimeOptions{
 			remoteHost: host,
@@ -535,7 +579,7 @@ func waitForHeartbeat(ctx context.Context, statePath string, timeout time.Durati
 	return fmt.Errorf("heartbeat state %s not found", statePath)
 }
 
-func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config, tunEnabled bool) error {
+func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config, tunEnabled bool, tunMode string, tunModeSet bool, fullTunnelTag string) error {
 	modeLabel := "proxy"
 	if tunEnabled {
 		modeLabel = "tun"
@@ -547,7 +591,22 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 	if _, err := config.EnsureTunSettings("", "client", tunEnabled, cfg.Client.TunName, cfg.Client.TunMTU, cfg.Client.TunAddr); err != nil {
 		return err
 	}
+	if tunModeSet {
+		if _, err := config.UpdateTunMode("", "client", tunMode); err != nil {
+			return err
+		}
+	}
+	if tunModeSet && strings.EqualFold(strings.TrimSpace(tunMode), "full") && strings.TrimSpace(fullTunnelTag) != "" {
+		if _, err := config.UpdateFullTunnelTag("", fullTunnelTag); err != nil {
+			return err
+		}
+	}
 	logging.Info("xp2p client deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
+
+	modeCfg, modeErr := loadDeployClientConfig()
+	if modeErr != nil {
+		return modeErr
+	}
 
 	err = client.ApplyMode(client.ModeOptions{
 		InstallDir:    installOpts.InstallDir,
@@ -556,8 +615,8 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 		TunName:       cfg.Client.TunName,
 		TunMTU:        cfg.Client.TunMTU,
 		TunAddr:       cfg.Client.TunAddr,
-		TunMode:       cfg.Client.TunMode,
-		FullTunnelTag: cfg.Client.FullTunnelTag,
+		TunMode:       modeCfg.Client.TunMode,
+		FullTunnelTag: modeCfg.Client.FullTunnelTag,
 	})
 	if err == nil {
 		return nil
@@ -567,6 +626,40 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 		return nil
 	}
 	return err
+}
+
+func loadDeployClientConfig() (config.Config, error) {
+	return config.Load(config.Options{
+		Path:         config.ConfigPath(layout.ClientConfigFileName),
+		AllowInvalid: true,
+	})
+}
+
+func resolveDeployFullTunnelTag(installDir, configDir string, link trojanLink, runtime runtimeOptions) (string, error) {
+	host := strings.TrimSpace(link.ServerAddress)
+	if host == "" {
+		host = strings.TrimSpace(runtime.serverHost)
+	}
+	if host == "" {
+		host = strings.TrimSpace(runtime.remoteHost)
+	}
+	if host == "" {
+		return "", fmt.Errorf("xp2p: deploy host is required for full-tunnel")
+	}
+
+	records, err := clientListFunc(client.ListOptions{
+		InstallDir: installDir,
+		ConfigDir:  configDir,
+	})
+	if err != nil {
+		return "", err
+	}
+	for _, record := range records {
+		if strings.EqualFold(record.Hostname, host) && strings.TrimSpace(record.Tag) != "" {
+			return record.Tag, nil
+		}
+	}
+	return "", fmt.Errorf("xp2p: full-tunnel endpoint %s not found", host)
 }
 
 func startClientDeployService(ctx context.Context) {

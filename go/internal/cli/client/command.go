@@ -173,6 +173,10 @@ func newClientDeployCmd(cfg commandConfig) *cobra.Command {
 	flags.StringP("user", "u", "", "Trojan user identifier (email)")
 	flags.StringP("password", "w", "", "Trojan user password (auto-generated when omitted)")
 	flags.StringP("trojan-port", "T", "", "Trojan service port")
+	flags.StringP("tun-mode", "m", "", "TUN routing mode (split or full)")
+	_ = cmd.RegisterFlagCompletionFunc("tun-mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"split", "full"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	return cmd
 }
 

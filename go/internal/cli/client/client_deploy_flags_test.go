@@ -24,6 +24,7 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 		"--user", "branch@example.com",
 		"--password", "secret",
 		"--trojan-port", "65010",
+		"--tun-mode", "full",
 	}
 
 	opts, err := parseDeployFlags(cfg, args)
@@ -47,6 +48,9 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 	}
 	if opts.manifest.trojanPassword != "secret" {
 		t.Fatalf("manifest password = %s", opts.manifest.trojanPassword)
+	}
+	if !opts.manifest.tunModeSet || opts.manifest.tunMode != "full" {
+		t.Fatalf("expected tun mode full, got %q (set=%v)", opts.manifest.tunMode, opts.manifest.tunModeSet)
 	}
 }
 
@@ -89,6 +93,16 @@ func TestParseDeployFlagsRejectsInvalidPassword(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error for invalid password")
+	}
+}
+
+func TestParseDeployFlagsRejectsInvalidTunMode(t *testing.T) {
+	_, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"--tun-mode", "fast",
+	})
+	if err == nil {
+		t.Fatalf("expected error for invalid tun mode")
 	}
 }
 

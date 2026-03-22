@@ -119,6 +119,7 @@ Includes: Global options
 - --user, -u <email>          Trojan user identifier (email)
 - --password, -w <password>   Trojan user password (auto-generated when omitted)
 - --trojan-port, -T <port>    Trojan service port
+- --tun-mode, -m <split|full> TUN routing mode (split or full)
 
 xp2p client redirect add
 Options:
