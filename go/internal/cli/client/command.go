@@ -89,6 +89,9 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.BoolP("strict-tls", "S", false, "enforce TLS verification")
 	flags.BoolP("force", "f", false, "replace existing endpoint configuration")
 	flags.StringP("tun-mode", "m", "", "TUN routing mode (split or full)")
+	_ = cmd.RegisterFlagCompletionFunc("tun-mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"split", "full"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	return cmd
 }
 

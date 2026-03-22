@@ -22,6 +22,8 @@ rules = [
     "system services (systemd/procd/Windows SCM) must not rely on CLI flags; packages must run xp2p binaries with default parameters only",
     "CLI commands must only update configuration/state files; OS-level changes (TUN, routes, nftables) are applied only by xp2p run/service",
     "CLI flags standard: identical long names must use the same short aliases everywhere; verify consistency when adding new commands",
+    "CLI flags standard: long flags must have short aliases; short aliases must be unique for each parameter across the project (see commands_map)",
+    "CLI flags standard: when adding flags, include them in ValidArgs/ValidArgsFunction",
     "log files must live under XP2P_LOG_ROOT (default /var/log/xp2p); the audit log file name is audit.log",
     "UI flows must call internal usecases or platform packages directly; do not shell out to xp2p CLI from the UI layer",
     "UI must validate required inputs before executing install actions, and use configuration defaults for optional fields when empty",
