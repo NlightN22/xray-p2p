@@ -87,13 +87,12 @@ def _expected_tag(host: str) -> str:
 
 
 def _assert_routing_rule(data: dict, host: str) -> None:
-    tag = _expected_tag(host)
     rules = data.get("routing", {}).get("rules", [])
     for rule in rules:
         ips = rule.get("ip", [])
-        if rule.get("outboundTag") == tag and host in ips:
+        if rule.get("outboundTag") == "direct" and host in ips:
             return
-    raise AssertionError(f"Routing rule for {host} -> {tag} not found")
+    raise AssertionError(f"Routing rule for {host} -> direct not found")
 
 
 def _assert_redirect_rule(data: dict, cidr: str, tag: str) -> None:

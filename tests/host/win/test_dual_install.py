@@ -169,12 +169,11 @@ def _assert_outbound_entry(
 
 
 def _assert_routing_rule(data: dict, host: str) -> None:
-    tag = _expected_tag(host)
     rules = data.get("routing", {}).get("rules", [])
     for rule in rules:
-        if rule.get("outboundTag") == tag and host in rule.get("ip", []):
+        if rule.get("outboundTag") == "direct" and host in rule.get("ip", []):
             return
-    raise AssertionError(f"Expected routing rule for {host} -> {tag}")
+    raise AssertionError(f"Expected routing rule for {host} -> direct")
 
 
 @pytest.mark.host
