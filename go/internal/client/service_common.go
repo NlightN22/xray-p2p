@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -96,6 +97,13 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
+		if _, err := os.Stat(configDir); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				logging.Warn("xp2p client service: configuration directory missing; stopping", "path", configDir)
+				return nil
+			}
+			return fmt.Errorf("xp2p: configuration directory check failed at %s: %w", configDir, err)
+		}
 		runOpts := baseRunOpts
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
 			logging.Warn("xp2p client service: failed to reload config", "err", err)

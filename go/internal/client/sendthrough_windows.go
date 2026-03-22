@@ -32,5 +32,5 @@ func updateSendThroughOutbound(ctx context.Context, paths clientPaths, tunEnable
 		return err
 	}
 	xrayCfg.DirectOutbound.SendThrough = sendThrough
-	return writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints)
+	return writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, nil, false)
 }

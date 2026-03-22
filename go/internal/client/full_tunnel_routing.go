@@ -39,6 +39,14 @@ func syncFullTunnelRouting(paths clientPaths, state clientInstallState, opts Run
 	)
 }
 
+func syncFullTunnelOutbounds(paths clientPaths, state clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) error {
+	xrayCfg, err := loadClientXrayConfig(paths.configFile)
+	if err != nil {
+		return err
+	}
+	return writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, endpointIPs, requireEndpointIPs)
+}
+
 func loadFullTunnelEndpointCache() (map[string]fullTunnelEndpointIPs, error) {
 	state, err := loadFullTunnelState(config.ConfigPath(layout.ClientFullTunnelStateFileName))
 	if err != nil {

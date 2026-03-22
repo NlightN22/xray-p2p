@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -11,7 +12,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
-func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, endpoints []clientEndpointRecord) error {
+func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, endpoints []clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) error {
 	randomTag := direct.Tag
 	udpTag := ""
 	if runtime.GOOS == "windows" {
@@ -57,7 +58,11 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 
 	out.Outbounds = append(out.Outbounds, preserved...)
 	for _, ep := range endpoints {
-		out.Outbounds = append(out.Outbounds, trojanOutbound(ep))
+		outbound, err := trojanOutbound(ep, endpointIPs, requireEndpointIPs)
+		if err != nil {
+			return err
+		}
+		out.Outbounds = append(out.Outbounds, outbound)
 	}
 
 	if randomTag != "" {
@@ -118,7 +123,21 @@ func filterUnmanagedOutbounds(existing []any, managed map[string]struct{}) []any
 	return result
 }
 
-func trojanOutbound(ep clientEndpointRecord) any {
+func trojanOutbound(ep clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) (any, error) {
+	address := ep.Address
+	serverName := ep.ServerName
+	if requireEndpointIPs {
+		host := endpointHost(ep)
+		if host == "" {
+			return nil, fmt.Errorf("xp2p: endpoint host is required for full-tunnel outbound")
+		}
+		entry := endpointIPs[strings.ToLower(host)]
+		ips := uniqueEndpointIPs(entry)
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("xp2p: endpoint %s has no resolved IPs", host)
+		}
+		address = ips[0]
+	}
 	return struct {
 		Protocol       string         `json:"protocol"`
 		Settings       trojanSettings `json:"settings"`
@@ -129,7 +148,7 @@ func trojanOutbound(ep clientEndpointRecord) any {
 		Settings: trojanSettings{
 			Servers: []trojanServer{
 				{
-					Address:  ep.Address,
+					Address:  address,
 					Port:     ep.Port,
 					Password: ep.Password,
 					Email:    ep.User,
@@ -141,7 +160,7 @@ func trojanOutbound(ep clientEndpointRecord) any {
 			Security: "tls",
 			TLSSettings: tlsSettings{
 				AllowInsecure:        ep.AllowInsecure,
-				ServerName:           ep.ServerName,
+				ServerName:           serverName,
 				ALPN:                 ep.ALPN,
 				PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
 				VerifyPeerCertByName: ep.VerifyPeerCertByName,
@@ -153,7 +172,7 @@ func trojanOutbound(ep clientEndpointRecord) any {
 			},
 		},
 		Tag: ep.Tag,
-	}
+	}, nil
 }
 
 type trojanSettings struct {

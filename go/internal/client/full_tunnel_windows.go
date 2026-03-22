@@ -14,6 +14,9 @@ import (
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	if !opts.TunEnabled || mode != "full" {
+		if err := syncFullTunnelOutbounds(paths, desired, nil, false); err != nil {
+			return false, err
+		}
 		if err := syncFullTunnelRouting(paths, desired, opts, nil, false); err != nil {
 			return false, err
 		}
@@ -31,6 +34,9 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	}
 	endpointIPv4, endpointIPv6, resolvedEndpoints, err := resolveEndpointIPs(ctx, desired.Endpoints, state.EndpointIPs)
 	if err != nil {
+		return false, err
+	}
+	if err := syncFullTunnelOutbounds(paths, desired, resolvedEndpoints, true); err != nil {
 		return false, err
 	}
 	if err := syncFullTunnelRouting(paths, desired, opts, resolvedEndpoints, true); err != nil {
