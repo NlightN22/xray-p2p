@@ -88,6 +88,14 @@ func resolveEndpointIPs(ctx context.Context, endpoints []clientEndpointRecord, c
 	return ips4, ips6, resolved, nil
 }
 
+func resolveEndpointIPMap(ctx context.Context, endpoints []clientEndpointRecord, cache map[string]fullTunnelEndpointIPs) (map[string]fullTunnelEndpointIPs, error) {
+	_, _, resolved, err := resolveEndpointIPs(ctx, endpoints, cache)
+	if err != nil {
+		return nil, err
+	}
+	return resolved, nil
+}
+
 func appendUniqueIPs(ipv4 []string, ipv6 []string, seen4 map[string]struct{}, seen6 map[string]struct{}, target4 *[]string, target6 *[]string) {
 	for _, ip := range ipv4 {
 		trimmed := strings.TrimSpace(ip)

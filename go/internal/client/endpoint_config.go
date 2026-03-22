@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -86,21 +87,25 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	if err != nil {
 		return clientInstallState{}, err
 	}
-	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, nil, false); err != nil {
+	endpointIPs, err := resolveEndpointIPMap(context.Background(), state.Endpoints, nil)
+	if err != nil {
+		return clientInstallState{}, err
+	}
+	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, endpointIPs, true); err != nil {
 		return clientInstallState{}, err
 	}
 	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(configFile)
 	if err != nil {
 		return clientInstallState{}, err
 	}
-	endpointIPs := map[string]fullTunnelEndpointIPs(nil)
+	routeEndpointIPs := map[string]fullTunnelEndpointIPs(nil)
 	if fullEnabled {
-		endpointIPs, err = loadFullTunnelEndpointCache()
+		routeEndpointIPs, err = loadFullTunnelEndpointCache()
 		if err != nil {
 			return clientInstallState{}, err
 		}
 	}
-	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false); err != nil {
+	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, routeEndpointIPs, false); err != nil {
 		return clientInstallState{}, err
 	}
 	return state, nil

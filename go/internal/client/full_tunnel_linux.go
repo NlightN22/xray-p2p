@@ -13,7 +13,11 @@ import (
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	if !opts.TunEnabled || mode != "full" {
-		if err := syncFullTunnelOutbounds(paths, desired, nil, false); err != nil {
+		endpointIPs, err := resolveEndpointIPMap(ctx, desired.Endpoints, nil)
+		if err != nil {
+			return false, err
+		}
+		if err := syncFullTunnelOutbounds(paths, desired, endpointIPs, true); err != nil {
 			return false, err
 		}
 		if err := syncFullTunnelRouting(paths, desired, opts, nil, false); err != nil {

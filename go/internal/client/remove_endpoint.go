@@ -63,19 +63,23 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, nil, false); err != nil {
+	endpointIPs, err := resolveEndpointIPMap(ctx, state.Endpoints, nil)
+	if err != nil {
+		return err
+	}
+	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, endpointIPs, true); err != nil {
 		return err
 	}
 	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(paths.configFile)
 	if err != nil {
 		return err
 	}
-	var endpointIPs map[string]fullTunnelEndpointIPs
+	routeEndpointIPs := map[string]fullTunnelEndpointIPs(nil)
 	if fullEnabled {
-		endpointIPs, err = loadFullTunnelEndpointCache()
+		routeEndpointIPs, err = loadFullTunnelEndpointCache()
 		if err != nil {
 			return err
 		}
 	}
-	return updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false)
+	return updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, routeEndpointIPs, false)
 }

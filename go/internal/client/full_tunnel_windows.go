@@ -15,7 +15,11 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
-		if err := syncFullTunnelOutbounds(paths, desired, nil, false); err != nil {
+		endpointIPs, err := resolveEndpointIPMap(ctx, desired.Endpoints, nil)
+		if err != nil {
+			return false, err
+		}
+		if err := syncFullTunnelOutbounds(paths, desired, endpointIPs, true); err != nil {
 			return false, err
 		}
 		if err := syncFullTunnelRouting(paths, desired, opts, nil, false); err != nil {
@@ -66,6 +70,10 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
 	bypassRoutes := buildWindowsBypassRoutes(defaults, endpointIPv4, endpointIPv6)
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes prepared", "routes", bypassRoutes)
+
+	if _, err := resolveWindowsInterfaceIndex(ctx, opts.TunName, opts.FullTunnelVerbose, true); err != nil {
+		return false, err
+	}
 
 	if !state.Enabled {
 		state = fullTunnelState{
