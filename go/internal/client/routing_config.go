@@ -81,7 +81,6 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	}
 	if runtime.GOOS == "windows" {
 		ruleBuckets[routingRuleUser] = filterWindowsDirectRules(ruleBuckets[routingRuleUser])
-		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], windowsDirectRules()...)
 	}
 	if fullTunnelEnabled {
 		if rule := fullTunnelRule(fullTunnelTag); rule != nil {
