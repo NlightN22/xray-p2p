@@ -50,10 +50,11 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes captured", "ipv4", defaults4, "ipv6", defaults6)
 	}
 
-	endpointIPv4, endpointIPv6, err := resolveEndpointIPs(ctx, desired.Endpoints)
+	endpointIPv4, endpointIPv6, resolvedEndpoints, err := resolveEndpointIPs(ctx, desired.Endpoints, state.EndpointIPs)
 	if err != nil {
 		return false, err
 	}
+	endpointCache := resolvedEndpoints
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
 	bypass4 := buildBypassRoutes(defaults4, endpointIPv4, 32)
 	bypass6 := buildBypassRoutes(defaults6, endpointIPv6, 128)
@@ -66,6 +67,9 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			TunMode:      "full",
 			IPv4Defaults: defaults4,
 			IPv6Defaults: defaults6,
+		}
+		if len(endpointCache) > 0 {
+			state.EndpointIPs = endpointCache
 		}
 		if len(opts.DNSServers) > 0 {
 			backup, dnsErr := applyDNSOverrides(opts.DNSServers, opts.FullTunnelVerbose)
@@ -89,6 +93,12 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			return false, err
 		}
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes removed", "ipv4", defaults4, "ipv6", defaults6)
+	} else {
+		if len(endpointCache) > 0 {
+			state.EndpointIPs = endpointCache
+		} else {
+			state.EndpointIPs = nil
+		}
 	}
 
 	addedRoutes := make([]fullTunnelRoute, 0, len(bypass4)+len(bypass6))
@@ -159,8 +169,14 @@ func restoreFullTunnel(_ context.Context, paths clientPaths, verbose bool) error
 	if err := restoreDNSOverrides(state.DNSBackup, verbose); err != nil {
 		return err
 	}
-
-	return clearFullTunnelState(paths.fullState)
+	state.Enabled = false
+	state.TunName = ""
+	state.TunMode = ""
+	state.IPv4Defaults = nil
+	state.IPv6Defaults = nil
+	state.BypassRoutes = nil
+	state.DNSBackup = nil
+	return saveFullTunnelState(paths.fullState, state)
 }
 
 func logFullTunnelVerbose(enabled bool, message string, args ...any) {

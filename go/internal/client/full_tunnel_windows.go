@@ -48,9 +48,14 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes captured", "routes", defaults)
 	}
 
-	endpointIPv4, endpointIPv6, err := resolveEndpointIPs(ctx, desired.Endpoints)
+	endpointIPv4, endpointIPv6, resolvedEndpoints, err := resolveEndpointIPs(ctx, desired.Endpoints, state.EndpointIPs)
 	if err != nil {
 		return false, err
+	}
+	if len(resolvedEndpoints) > 0 {
+		state.EndpointIPs = resolvedEndpoints
+	} else {
+		state.EndpointIPs = nil
 	}
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
 	bypassRoutes := buildWindowsBypassRoutes(defaults, endpointIPv4, endpointIPv6)
@@ -61,6 +66,9 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			Enabled: true,
 			TunName: strings.TrimSpace(opts.TunName),
 			TunMode: "full",
+		}
+		if len(resolvedEndpoints) > 0 {
+			state.EndpointIPs = resolvedEndpoints
 		}
 		state.IPv4Defaults, state.IPv6Defaults = encodeWindowsDefaults(defaults)
 		if len(opts.DNSServers) > 0 {
@@ -142,7 +150,14 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	if err := restoreWindowsDNS(ctx, state.DNSBackup, state.TunName, verbose); err != nil {
 		return err
 	}
-	return clearFullTunnelState(paths.fullState)
+	state.Enabled = false
+	state.TunName = ""
+	state.TunMode = ""
+	state.IPv4Defaults = nil
+	state.IPv6Defaults = nil
+	state.BypassRoutes = nil
+	state.DNSBackup = nil
+	return saveFullTunnelState(paths.fullState, state)
 }
 
 func logFullTunnelVerbose(enabled bool, message string, args ...any) {

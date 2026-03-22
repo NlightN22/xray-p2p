@@ -11,14 +11,15 @@ import (
 )
 
 type fullTunnelState struct {
-	Enabled      bool                 `json:"enabled"`
-	TunName      string               `json:"tun_name,omitempty"`
-	TunMode      string               `json:"tun_mode,omitempty"`
-	IPv4Defaults []string             `json:"ipv4_defaults,omitempty"`
-	IPv6Defaults []string             `json:"ipv6_defaults,omitempty"`
-	BypassRoutes []fullTunnelRoute    `json:"bypass_routes,omitempty"`
-	DNSBackup    *fullTunnelDNSBackup `json:"dns_backup,omitempty"`
-	Timestamp    time.Time            `json:"timestamp"`
+	Enabled      bool                             `json:"enabled"`
+	TunName      string                           `json:"tun_name,omitempty"`
+	TunMode      string                           `json:"tun_mode,omitempty"`
+	IPv4Defaults []string                         `json:"ipv4_defaults,omitempty"`
+	IPv6Defaults []string                         `json:"ipv6_defaults,omitempty"`
+	BypassRoutes []fullTunnelRoute                `json:"bypass_routes,omitempty"`
+	DNSBackup    *fullTunnelDNSBackup             `json:"dns_backup,omitempty"`
+	EndpointIPs  map[string]fullTunnelEndpointIPs `json:"endpoint_ips,omitempty"`
+	Timestamp    time.Time                        `json:"timestamp"`
 }
 
 type fullTunnelRoute struct {
@@ -32,10 +33,16 @@ type fullTunnelRoute struct {
 }
 
 type fullTunnelDNSBackup struct {
-	ResolvConf string   `json:"resolv_conf,omitempty"`
-	ResolvPath string   `json:"resolv_path,omitempty"`
+	ResolvConf  string   `json:"resolv_conf,omitempty"`
+	ResolvPath  string   `json:"resolv_path,omitempty"`
 	WindowsIPv4 []string `json:"windows_ipv4,omitempty"`
 	WindowsIPv6 []string `json:"windows_ipv6,omitempty"`
+}
+
+type fullTunnelEndpointIPs struct {
+	IPv4       []string  `json:"ipv4,omitempty"`
+	IPv6       []string  `json:"ipv6,omitempty"`
+	ResolvedAt time.Time `json:"resolved_at,omitempty"`
 }
 
 func loadFullTunnelState(path string) (fullTunnelState, error) {
