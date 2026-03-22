@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -87,9 +86,6 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
 	}
 	directTag := "direct"
-	if runtime.GOOS == "windows" {
-		directTag = "direct-random"
-	}
 	if !hasIPRule(doc.Routing.Rules, "203.0.113.10", directTag) {
 		t.Fatalf("missing endpoint rule %+v", doc.Routing.Rules)
 	}

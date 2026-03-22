@@ -71,7 +71,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 	bypassRoutes := buildWindowsBypassRoutes(defaults, endpointIPv4, endpointIPv6)
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes prepared", "routes", bypassRoutes)
 
-	if _, err := resolveWindowsInterfaceIndex(ctx, opts.TunName, opts.FullTunnelVerbose, true); err != nil {
+	if _, err := resolveWindowsInterfaceIndex(ctx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose, true); err != nil {
 		return false, err
 	}
 
@@ -80,6 +80,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			Enabled: true,
 			TunName: strings.TrimSpace(opts.TunName),
 			TunMode: "full",
+			TunAddr: strings.TrimSpace(opts.TunAddr),
 		}
 		if len(resolvedEndpoints) > 0 {
 			state.EndpointIPs = resolvedEndpoints
@@ -114,13 +115,13 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 	}
 
 	if hasFamily(defaults, "IPv4") {
-		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, "IPv4", opts.FullTunnelVerbose); err != nil {
+		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, opts.TunAddr, "IPv4", opts.FullTunnelVerbose); err != nil {
 			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
 	}
 	if hasFamily(defaults, "IPv6") {
-		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, "IPv6", opts.FullTunnelVerbose); err != nil {
+		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, opts.TunAddr, "IPv6", opts.FullTunnelVerbose); err != nil {
 			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
@@ -133,6 +134,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		} else {
 			state.EndpointIPs = nil
 		}
+		state.TunAddr = strings.TrimSpace(opts.TunAddr)
 	}
 	state.BypassRoutes = bypassRoutes
 	if err := saveFullTunnelState(paths.fullState, state); err != nil {
@@ -153,8 +155,8 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	}
 
 	if tun := strings.TrimSpace(state.TunName); tun != "" {
-		_ = removeWindowsDefaultRoute(ctx, tun, "IPv4")
-		_ = removeWindowsDefaultRoute(ctx, tun, "IPv6")
+		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv4")
+		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv6")
 		logFullTunnelVerbose(verbose, "xp2p: full-tunnel default routes removed from tun", "interface", tun)
 	}
 	if err := removeWindowsBypassRoutes(ctx, state.BypassRoutes); err != nil {
@@ -175,6 +177,7 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	state.Enabled = false
 	state.TunName = ""
 	state.TunMode = ""
+	state.TunAddr = ""
 	state.IPv4Defaults = nil
 	state.IPv6Defaults = nil
 	state.BypassRoutes = nil

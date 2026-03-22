@@ -3,13 +3,12 @@ package client
 import (
 	"context"
 	"encoding/json"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
@@ -101,12 +100,8 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 	if err := json.Unmarshal(data, &out); err != nil {
 		t.Fatalf("parse outbounds: %v", err)
 	}
-	expected := 2
-	if runtime.GOOS == "windows" {
-		expected = 3
-	}
-	if len(out.Outbounds) != expected {
-		t.Fatalf("expected %d outbounds, got %d", expected, len(out.Outbounds))
+	if len(out.Outbounds) != 2 {
+		t.Fatalf("expected 2 outbounds, got %d", len(out.Outbounds))
 	}
 	if out.Outbounds[0].Tag != "proxy-server-b" {
 		t.Fatalf("unexpected trojan outbound %s", out.Outbounds[0].Tag)

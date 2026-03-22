@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
@@ -32,21 +31,13 @@ func TestWriteOutboundsConfigIncludesEndpointsAndFreedom(t *testing.T) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("parse outbounds: %v", err)
 	}
-	expected := 3
-	if runtime.GOOS == "windows" {
-		expected = 4
-	}
-	if len(doc.Outbounds) != expected {
-		t.Fatalf("expected %d outbounds, got %d", expected, len(doc.Outbounds))
+	if len(doc.Outbounds) != 3 {
+		t.Fatalf("expected 3 outbounds, got %d", len(doc.Outbounds))
 	}
 	if doc.Outbounds[0]["tag"] != "proxy-alpha" || doc.Outbounds[1]["tag"] != "proxy-beta" {
 		t.Fatalf("unexpected tags: %+v", doc.Outbounds)
 	}
-	if runtime.GOOS == "windows" {
-		if doc.Outbounds[2]["tag"] != "direct-random" || doc.Outbounds[3]["tag"] != "direct-udp" {
-			t.Fatalf("unexpected direct outbounds: %+v", doc.Outbounds[2:])
-		}
-	} else if doc.Outbounds[2]["tag"] != "direct" {
+	if doc.Outbounds[2]["tag"] != "direct" {
 		t.Fatalf("expected last outbound to be direct, got %+v", doc.Outbounds[2])
 	}
 }
@@ -54,9 +45,6 @@ func TestWriteOutboundsConfigIncludesEndpointsAndFreedom(t *testing.T) {
 func TestWriteOutboundsConfigPreservesUserOutbounds(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "outbounds.json")
 	directTag := "direct"
-	if runtime.GOOS == "windows" {
-		directTag = "direct-random"
-	}
 	existing := map[string]any{
 		"outbounds": []any{
 			map[string]any{
@@ -110,20 +98,13 @@ func TestWriteOutboundsConfigPreservesUserOutbounds(t *testing.T) {
 			directSendThrough, _ = outbound["sendThrough"].(string)
 		case "proxy-alpha":
 			hasProxy = true
-		case "direct-udp":
-			if runtime.GOOS == "windows" {
-				hasDirect = true
-			}
 		}
 	}
 	if !hasUser || !hasProxy || !hasDirect {
 		t.Fatalf("expected user, proxy, and direct outbounds, got %+v", doc.Outbounds)
 	}
-	if runtime.GOOS != "windows" && directSendThrough != "10.0.0.5" {
+	if directSendThrough != "10.0.0.5" {
 		t.Fatalf("expected sendThrough to be updated, got %q", directSendThrough)
-	}
-	if runtime.GOOS == "windows" && directSendThrough != "" {
-		t.Fatalf("expected direct-random to omit sendThrough, got %q", directSendThrough)
 	}
 	if tag, _ := doc.Outbounds[0]["tag"].(string); tag != "user-proxy" {
 		t.Fatalf("expected user outbound to stay first, got %+v", doc.Outbounds[0])

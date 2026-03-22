@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 )
@@ -143,9 +142,6 @@ func clientDirectRuleSet(doc map[string]any) map[string]struct{} {
 }
 
 func directReverseTag() string {
-	if runtime.GOOS == "windows" {
-		return "direct-random"
-	}
 	return "direct"
 }
 

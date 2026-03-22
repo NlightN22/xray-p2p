@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -55,9 +54,6 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		t.Fatalf("unexpected outbound tag: %+v", domainRule)
 	}
 	expectedDirect := "direct"
-	if runtime.GOOS == "windows" {
-		expectedDirect = "direct-random"
-	}
 	directRule := findRuleWithInboundAndOutbound(rules, "reverse-userserver-example.rev", expectedDirect)
 	if directRule == nil {
 		t.Fatalf("expected reverse direct rule, got %+v", rules)

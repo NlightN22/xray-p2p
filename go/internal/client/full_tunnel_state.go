@@ -14,6 +14,7 @@ type fullTunnelState struct {
 	Enabled      bool                             `json:"enabled"`
 	TunName      string                           `json:"tun_name,omitempty"`
 	TunMode      string                           `json:"tun_mode,omitempty"`
+	TunAddr      string                           `json:"tun_addr,omitempty"`
 	IPv4Defaults []string                         `json:"ipv4_defaults,omitempty"`
 	IPv6Defaults []string                         `json:"ipv6_defaults,omitempty"`
 	BypassRoutes []fullTunnelRoute                `json:"bypass_routes,omitempty"`

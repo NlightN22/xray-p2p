@@ -1,9 +1,6 @@
 package client
 
-import (
-	"runtime"
-	"strings"
-)
+import "strings"
 
 const (
 	directRandomTagWindows = "direct-random"
@@ -11,9 +8,6 @@ const (
 )
 
 func directRandomTag() string {
-	if runtime.GOOS == "windows" {
-		return directRandomTagWindows
-	}
 	return "direct"
 }
 

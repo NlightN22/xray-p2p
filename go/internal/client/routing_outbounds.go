@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -15,10 +14,6 @@ import (
 func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, endpoints []clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) error {
 	randomTag := direct.Tag
 	udpTag := ""
-	if runtime.GOOS == "windows" {
-		randomTag = directRandomTagWindows
-		udpTag = directUDPTagWindows
-	}
 
 	managedTags := make(map[string]struct{}, len(endpoints)+2)
 	for _, ep := range endpoints {
@@ -66,11 +61,7 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 	}
 
 	if randomTag != "" {
-		sendThrough := ""
-		if runtime.GOOS != "windows" {
-			sendThrough = direct.SendThrough
-		}
-		out.Outbounds = append(out.Outbounds, freedomOutbound(randomTag, direct, sendThrough))
+		out.Outbounds = append(out.Outbounds, freedomOutbound(randomTag, direct, direct.SendThrough))
 	}
 	if udpTag != "" {
 		out.Outbounds = append(out.Outbounds, freedomOutbound(udpTag, direct, direct.SendThrough))

@@ -86,11 +86,11 @@ func removeWindowsBypassRoutes(ctx context.Context, routes []fullTunnelRoute) er
 	return nil
 }
 
-func ensureWindowsDefaultRoute(ctx context.Context, tunName string, family string, verbose bool) error {
+func ensureWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr string, family string, verbose bool) error {
 	if strings.TrimSpace(tunName) == "" {
 		return errors.New("xp2p: tun name is required for full-tunnel default route")
 	}
-	ifIndex, err := resolveWindowsInterfaceIndex(ctx, tunName, verbose, true)
+	ifIndex, err := resolveWindowsInterfaceIndex(ctx, tunName, tunAddr, verbose, true)
 	if err != nil {
 		return err
 	}
@@ -112,11 +112,11 @@ func ensureWindowsDefaultRoute(ctx context.Context, tunName string, family strin
 	return winnet.ApplyRoute(ctx, route)
 }
 
-func removeWindowsDefaultRoute(ctx context.Context, tunName string, family string) error {
+func removeWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr string, family string) error {
 	if strings.TrimSpace(tunName) == "" {
 		return nil
 	}
-	ifIndex, err := resolveWindowsInterfaceIndex(ctx, tunName, false, false)
+	ifIndex, err := resolveWindowsInterfaceIndex(ctx, tunName, tunAddr, false, false)
 	if err != nil {
 		return nil
 	}
@@ -229,11 +229,12 @@ func parseInt(value string) int {
 	return out
 }
 
-func resolveWindowsInterfaceIndex(ctx context.Context, tunName string, verbose bool, wait bool) (int, error) {
+func resolveWindowsInterfaceIndex(ctx context.Context, tunName string, tunAddr string, verbose bool, wait bool) (int, error) {
 	name := strings.TrimSpace(tunName)
 	if name == "" {
 		return 0, errors.New("xp2p: tun name is required for interface lookup")
 	}
+	trimmedAddr := strings.TrimSpace(tunAddr)
 	deadline := time.Now()
 	if wait {
 		deadline = time.Now().Add(5 * time.Second)
@@ -247,6 +248,15 @@ func resolveWindowsInterfaceIndex(ctx context.Context, tunName string, verbose b
 				logging.Info("xp2p: full-tunnel tun interface resolved", "interface", name, "ifIndex", index, "attempt", attempt)
 			}
 			return index, nil
+		}
+		if errors.Is(err, winnet.ErrInterfaceNotFound) && trimmedAddr != "" {
+			ifIndex, addrErr := winnet.InterfaceIndexByIP(trimmedAddr)
+			if addrErr == nil && ifIndex > 0 {
+				if verbose {
+					logging.Info("xp2p: full-tunnel tun interface resolved by addr", "interface", name, "addr", trimmedAddr, "ifIndex", ifIndex, "attempt", attempt)
+				}
+				return ifIndex, nil
+			}
 		}
 		if ctx.Err() != nil {
 			return 0, err
