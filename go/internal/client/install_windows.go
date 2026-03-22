@@ -94,6 +94,13 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err != nil {
 		return err
 	}
+	paths, err := resolveClientPaths(installDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+	if err := restoreFullTunnel(ctx, paths, false); err != nil {
+		return err
+	}
 
 	if err := os.RemoveAll(configDir); err != nil {
 		return fmt.Errorf("xp2p: remove client config dir: %w", err)

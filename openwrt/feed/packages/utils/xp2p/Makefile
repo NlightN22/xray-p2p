@@ -113,6 +113,15 @@ fi
 
 case "$$1" in
 	remove|upgrade|deconfigure)
+		if command -v xp2p >/dev/null 2>&1; then
+			mode_output="$$(xp2p client mode 2>/dev/null || true)"
+			echo "$$mode_output" | grep -qi "mode: tun" || true
+			if echo "$$mode_output" | grep -qi "mode: tun"; then
+				if echo "$$mode_output" | grep -qi "tun_mode: full"; then
+					xp2p client mode tun split -q >/dev/null 2>&1 || true
+				fi
+			fi
+		fi
 		/etc/init.d/xp2p-client stop >/dev/null 2>&1 || true
 		/etc/init.d/xp2p-server stop >/dev/null 2>&1 || true
 		;;

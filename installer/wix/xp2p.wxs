@@ -61,6 +61,17 @@
                   Return="check"
                   Impersonate="no" />
 
+    <CustomAction Id="SetRollbackFullTunnel"
+                  Property="RollbackFullTunnel"
+                  Value="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -Command &quot;if (Get-Command xp2p -ErrorAction SilentlyContinue) { $m = xp2p client mode 2&gt;$null; if ($m -match 'mode: tun' -and $m -match 'tun_mode: full') { xp2p client mode tun split -q &gt;$null 2&gt;&amp;1 } }&quot;" />
+
+    <CustomAction Id="RollbackFullTunnel"
+                  BinaryKey="WixCA"
+                  DllEntry="WixQuietExec64"
+                  Execute="deferred"
+                  Return="ignore"
+                  Impersonate="no" />
+
     <CustomAction Id="SetPerUserInstall" Property="MSIINSTALLPERUSER" Value="1" Execute="immediate" />
     <CustomAction Id="SetPerUserFolder" Property="INSTALLFOLDER" Value="[LocalAppDataFolder]xp2p" Execute="immediate" />
 
@@ -88,6 +99,8 @@
     <InstallExecuteSequence>
       <Custom Action="SetPerUserInstall" Before="CostFinalize">NOT Privileged</Custom>
       <Custom Action="SetPerUserFolder" Before="CostFinalize">NOT Privileged</Custom>
+      <Custom Action="SetRollbackFullTunnel" Before="RollbackFullTunnel">REMOVE="ALL"</Custom>
+      <Custom Action="RollbackFullTunnel" Before="StopServices">REMOVE="ALL"</Custom>
       <Custom Action="SetRegisterPsCompletion" After="InstallFiles">NOT REMOVE="ALL"</Custom>
       <Custom Action="RegisterPsCompletion" After="SetRegisterPsCompletion">NOT REMOVE="ALL"</Custom>
       <Custom Action="SetServiceAclCommand" After="InstallServices">NOT REMOVE="ALL"</Custom>
