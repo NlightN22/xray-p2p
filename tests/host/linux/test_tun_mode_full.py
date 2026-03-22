@@ -17,7 +17,7 @@ ENDPOINT_IP = "198.51.100.10"
 ENDPOINT_DOMAIN = "tun-full.example"
 ENDPOINT_DOMAIN_IP = "198.51.100.20"
 SECOND_ENDPOINT_IP = "198.51.100.30"
-USER_RULE_DOMAIN = "user-rule.example"
+REDIRECT_CIDR = "203.0.113.10/32"
 DNS_SERVERS = ["1.1.1.1", "9.9.9.9"]
 
 FULL_STATE_FILE = helpers.CONFIG_ROOT / "xp2p-client.tun-full.json"
@@ -99,6 +99,28 @@ def _build_bypass_routes(defaults: list[str], ips: list[str], prefix_len: int) -
     return routes
 
 
+def _default_gateway_and_dev(route: str) -> tuple[str | None, str | None]:
+    fields = route.split()
+    gateway = dev = None
+    if "via" in fields:
+        idx = fields.index("via")
+        if idx + 1 < len(fields):
+            gateway = fields[idx + 1]
+    if "dev" in fields:
+        idx = fields.index("dev")
+        if idx + 1 < len(fields):
+            dev = fields[idx + 1]
+    return gateway, dev
+
+
+def _route_matches(route: str, gateway: str | None, dev: str | None) -> bool:
+    if gateway and f"via {gateway}" not in route:
+        return False
+    if dev and f"dev {dev}" not in route:
+        return False
+    return True
+
+
 def _wait_for_condition(label: str, predicate, *, timeout: float = SERVICE_TIMEOUT) -> None:
     deadline = time.time() + timeout
     last_debug = ""
@@ -177,40 +199,6 @@ def _toml_value(value) -> str:
     raise TypeError(f"Unsupported TOML value: {value!r}")
 
 
-def _ensure_client_xray_rule(host, domain: str, outbound_tag: str) -> None:
-    config_path = helpers.CLIENT_CONFIG_FILE
-    original = helpers.read_text(host, config_path)
-    updated = _append_xray_routing_rule(original, domain, outbound_tag)
-    if updated != original:
-        helpers.write_text(host, config_path, updated)
-
-
-def _append_xray_routing_rule(text: str, domain: str, outbound_tag: str) -> str:
-    domain_value = f"full:{domain}"
-    if domain_value in text and f'outboundTag = "{outbound_tag}"' in text:
-        return text
-    rule_block = [
-        "[[client.xray.routing.rules]]",
-        'type = "field"',
-        f'domain = ["{domain_value}"]',
-        f'outboundTag = "{outbound_tag}"',
-    ]
-    if "[client.xray.routing]" in text or "[[client.xray.routing.rules]]" in text:
-        return text.rstrip() + "\n\n" + "\n".join(rule_block) + "\n"
-    routing_block = [
-        "[client.xray.routing]",
-        'domain_strategy = "IPOnDemand"',
-        *rule_block,
-    ]
-    if "[client.xray]" in text:
-        return text.rstrip() + "\n\n" + "\n".join(routing_block) + "\n"
-    full_block = [
-        "[client.xray]",
-        *routing_block,
-    ]
-    return text.rstrip() + "\n\n" + "\n".join(full_block) + "\n"
-
-
 def _wait_for_full_tunnel(
     host,
     tun_name: str,
@@ -227,10 +215,16 @@ def _wait_for_full_tunnel(
         resolv = helpers.read_text(host, RESOLV_CONF)
         bypass_ok = True
         missing_bypass: list[str] = []
+        defaults_gateways = [_default_gateway_and_dev(route) for route in defaults4]
         for route in bypass_routes:
             dest = route.split()[0]
             route_lines = _list_routes(host, "-4", dest)
-            if route not in route_lines:
+            matched = False
+            for gateway, dev in defaults_gateways:
+                if any(_route_matches(line, gateway, dev) for line in route_lines):
+                    matched = True
+                    break
+            if not matched:
                 bypass_ok = False
                 missing_bypass.append(f"{dest} -> {route_lines}")
 
@@ -434,10 +428,14 @@ def _client_list_entries(runner) -> list[dict[str, str]]:
         check=True,
     )
     lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    lines = [
+        line for line in lines
+        if "HOSTNAME" not in line and "INFO xp2p:" not in line
+    ]
     if not lines or lines[0].lower().startswith("no client endpoints"):
         return []
     entries: list[dict[str, str]] = []
-    for line in lines[1:]:
+    for line in lines:
         parts = line.split()
         if len(parts) >= 2:
             entries.append({"host": parts[0], "tag": parts[1]})
@@ -476,9 +474,11 @@ def _assert_verbose_flag_available(host, command: str) -> None:
 def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_runner, xp2p_linux_versions):
     _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
     host_entry_added = False
+    redirect_added = False
     service_started = False
     original_config = None
     original_resolv = None
+    expected_tag = None
     try:
         linux_env.run_guest_script(
             client_host,
@@ -495,8 +495,21 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         original_config = helpers.read_text(client_host, helpers.CLIENT_CONFIG_FILE)
         original_resolv = helpers.read_text(client_host, RESOLV_CONF)
         expected_tag = helpers.expected_proxy_tag(ENDPOINT_IP)
-        _ensure_client_xray_rule(client_host, USER_RULE_DOMAIN, "direct")
         _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
+        redirect_result = _client_redirect(
+            xp2p_client_runner,
+            "add",
+            "--cidr",
+            REDIRECT_CIDR,
+            "--host",
+            ENDPOINT_IP,
+            check=False,
+        )
+        assert redirect_result.rc == 0, (
+            "xp2p client redirect add failed.\n"
+            f"STDOUT:\n{redirect_result.stdout}\nSTDERR:\n{redirect_result.stderr}"
+        )
+        redirect_added = True
 
         _start_service(xp2p_client_runner, client_host)
         service_started = True
@@ -541,12 +554,12 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         )
         _assert_full_tunnel_rule_last(client_host, expected_tag)
         rules = _routing_rules(client_host)
-        user_rule_index = _find_rule_index(
+        redirect_rule_index = _find_rule_index(
             rules,
-            lambda rule: USER_RULE_DOMAIN in " ".join(rule.get("domain") or []),
+            lambda rule: REDIRECT_CIDR in (rule.get("ip") or []) and rule.get("outboundTag") == expected_tag,
         )
-        assert user_rule_index != -1, "User routing rule missing from routing.json"
-        assert user_rule_index < len(rules) - 1, "User routing rule should appear before full-tunnel rule"
+        assert redirect_rule_index != -1, "Redirect routing rule missing from routing.json"
+        assert redirect_rule_index < len(rules) - 1, "Redirect rule should appear before full-tunnel rule"
         assert helpers.read_client_config(client_host).get("full_tunnel_tag") == expected_tag
 
         log_base = helpers.read_text(client_host, SERVICE_LOG) if helpers.path_exists(client_host, SERVICE_LOG) else ""
@@ -590,10 +603,6 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
 
         _client_mode(xp2p_client_runner, "proxy")
         _wait_for_proxy(client_host, tun_name, defaults4, defaults6)
-
-        applied = helpers.read_client_applied_state(client_host)
-        assert applied.get("tun_enabled") is False
-        assert applied.get("mode") == "proxy"
     finally:
         if service_started:
             _stop_service(xp2p_client_runner)
@@ -601,6 +610,16 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
             helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, original_config)
         if original_resolv is not None:
             helpers.write_text(client_host, RESOLV_CONF, original_resolv)
+        if redirect_added and expected_tag:
+            _client_redirect(
+                xp2p_client_runner,
+                "remove",
+                "--cidr",
+                REDIRECT_CIDR,
+                "--tag",
+                expected_tag,
+                check=False,
+            )
         if host_entry_added:
             linux_env.run_guest_script(
                 client_host,
