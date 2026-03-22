@@ -18,7 +18,7 @@ func TestWriteOutboundsConfigIncludesEndpointsAndFreedom(t *testing.T) {
 		{Hostname: "beta.example", Tag: "proxy-beta", Address: "beta.example", Port: 9443, User: "beta", Password: "other", ServerName: "beta.example"},
 	}
 
-	if err := writeOutboundsConfig(path, xrayconfig.DefaultClientConfig().DirectOutbound, endpoints); err != nil {
+	if err := writeOutboundsConfig(path, xrayconfig.DefaultClientConfig().DirectOutbound, endpoints, nil, false); err != nil {
 		t.Fatalf("writeOutboundsConfig failed: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestWriteOutboundsConfigPreservesUserOutbounds(t *testing.T) {
 	}
 	cfg := xrayconfig.DefaultClientConfig().DirectOutbound
 	cfg.SendThrough = "10.0.0.5"
-	if err := writeOutboundsConfig(path, cfg, endpoints); err != nil {
+	if err := writeOutboundsConfig(path, cfg, endpoints, nil, false); err != nil {
 		t.Fatalf("writeOutboundsConfig failed: %v", err)
 	}
 
