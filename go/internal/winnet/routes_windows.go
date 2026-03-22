@@ -5,6 +5,7 @@ package winnet
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ type Route struct {
 	PolicyStore       string `json:"PolicyStore"`
 	AddressFamily     string `json:"AddressFamily"`
 }
+
+var ErrInterfaceNotFound = errors.New("xp2p: interface not found")
 
 func DefaultRoutes(ctx context.Context) ([]Route, error) {
 	script := strings.Join([]string{
@@ -47,7 +50,7 @@ func InterfaceIndexByName(ctx context.Context, name string) (int, error) {
 	}
 	out = strings.TrimSpace(out)
 	if out == "" {
-		return 0, fmt.Errorf("xp2p: interface %s not found", name)
+		return 0, fmt.Errorf("%w: %s", ErrInterfaceNotFound, name)
 	}
 	value, err := strconv.Atoi(out)
 	if err != nil {
@@ -86,7 +89,7 @@ func ApplyRoute(ctx context.Context, route Route) error {
 		`}`,
 	}, "; ")
 	_, err := runPowerShell(ctx, script)
-	return err
+	return wrapRouteError(err)
 }
 
 func RemoveRoute(ctx context.Context, route Route) error {
@@ -98,15 +101,20 @@ func RemoveRoute(ctx context.Context, route Route) error {
 	if nextHop == "" {
 		nextHop = "0.0.0.0"
 	}
+	policy := strings.TrimSpace(route.PolicyStore)
+	policyArg := ""
+	if policy != "" {
+		policyArg = ` -PolicyStore "` + escapePowerShellString(policy) + `"`
+	}
 	script := strings.Join([]string{
 		`$ErrorActionPreference = "Stop"`,
 		`$dest = "` + escapePowerShellString(dest) + `"`,
 		`$ifIndex = ` + strconv.Itoa(route.InterfaceIndex),
 		`$nextHop = "` + escapePowerShellString(nextHop) + `"`,
-		`Remove-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop -Confirm:$false -ErrorAction SilentlyContinue | Out-Null`,
+		`Remove-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop` + policyArg + ` -Confirm:$false -ErrorAction SilentlyContinue | Out-Null`,
 	}, "; ")
 	_, err := runPowerShell(ctx, script)
-	return err
+	return wrapRouteError(err)
 }
 
 func decodeRoutes(raw string) ([]Route, error) {
@@ -123,4 +131,17 @@ func decodeRoutes(raw string) ([]Route, error) {
 		return nil, fmt.Errorf("xp2p: parse routes: %w", err)
 	}
 	return []Route{single}, nil
+}
+
+func wrapRouteError(err error) error {
+	if err == nil {
+		return nil
+	}
+	lower := strings.ToLower(err.Error())
+	if strings.Contains(lower, "access is denied") ||
+		strings.Contains(lower, "access denied") ||
+		strings.Contains(lower, "requested operation requires elevation") {
+		return fmt.Errorf("xp2p: route change requires administrator privileges: %w", err)
+	}
+	return err
 }

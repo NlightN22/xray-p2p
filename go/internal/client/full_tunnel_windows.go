@@ -13,6 +13,7 @@ import (
 
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
 		if err := syncFullTunnelOutbounds(paths, desired, nil, false); err != nil {
 			return false, err
@@ -90,6 +91,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		}
 
 		for _, route := range defaults {
+			logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default route remove", "route", route)
 			if err := winnet.RemoveRoute(ctx, route); err != nil {
 				_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 				return false, err
@@ -98,19 +100,19 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes removed", "routes", defaults)
 	}
 
-	if err := syncWindowsBypassRoutes(ctx, bypassRoutes, state.BypassRoutes); err != nil {
+	if err := syncWindowsBypassRoutes(ctx, bypassRoutes, state.BypassRoutes, opts.FullTunnelVerbose); err != nil {
 		_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 		return false, err
 	}
 
 	if hasFamily(defaults, "IPv4") {
-		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, "IPv4"); err != nil {
+		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, "IPv4", opts.FullTunnelVerbose); err != nil {
 			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
 	}
 	if hasFamily(defaults, "IPv6") {
-		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, "IPv6"); err != nil {
+		if err := ensureWindowsDefaultRoute(ctx, opts.TunName, "IPv6", opts.FullTunnelVerbose); err != nil {
 			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
