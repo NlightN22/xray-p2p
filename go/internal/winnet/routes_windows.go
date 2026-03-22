@@ -20,7 +20,9 @@ type Route struct {
 	DestinationPrefix string `json:"DestinationPrefix"`
 	NextHop           string `json:"NextHop"`
 	InterfaceIndex    int    `json:"InterfaceIndex"`
+	InterfaceLuid     uint64 `json:"InterfaceLuid"`
 	RouteMetric       int    `json:"RouteMetric"`
+	InterfaceMetric   int    `json:"InterfaceMetric"`
 	PolicyStore       string `json:"PolicyStore"`
 	AddressFamily     string `json:"AddressFamily"`
 }
@@ -58,11 +60,14 @@ func defaultRoutesFromIPHelper() ([]Route, error) {
 			continue
 		}
 		nextHop, _, _ := ipFromRaw(row.NextHop)
+		ifMetric, _ := interfaceMetricFromIPHelper(row.InterfaceLuid, int(row.InterfaceIndex), family)
 		routes = append(routes, Route{
 			DestinationPrefix: prefix,
 			NextHop:           nextHop,
 			InterfaceIndex:    int(row.InterfaceIndex),
+			InterfaceLuid:     row.InterfaceLuid,
 			RouteMetric:       int(row.Metric),
+			InterfaceMetric:   ifMetric,
 			PolicyStore:       "ActiveStore",
 			AddressFamily:     family,
 		})
@@ -105,6 +110,14 @@ func defaultRoutesFromPowerShell(ctx context.Context) ([]Route, error) {
 		`$routes = @()`,
 		`$routes += Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue | Select-Object DestinationPrefix,NextHop,InterfaceIndex,RouteMetric,PolicyStore,AddressFamily`,
 		`$routes += Get-NetRoute -DestinationPrefix "::/0" -ErrorAction SilentlyContinue | Select-Object DestinationPrefix,NextHop,InterfaceIndex,RouteMetric,PolicyStore,AddressFamily`,
+		`foreach ($route in $routes) {`,
+		`  $ifRow = Get-NetIPInterface -InterfaceIndex $route.InterfaceIndex -AddressFamily $route.AddressFamily -ErrorAction SilentlyContinue | Select-Object -First 1`,
+		`  if ($null -ne $ifRow) {`,
+		`    $route | Add-Member -NotePropertyName InterfaceMetric -NotePropertyValue $ifRow.InterfaceMetric -Force`,
+		`  } else {`,
+		`    $route | Add-Member -NotePropertyName InterfaceMetric -NotePropertyValue 0 -Force`,
+		`  }`,
+		`}`,
 		`if ($routes.Count -eq 0) { Write-Output "" } else { $routes | ConvertTo-Json -Compress }`,
 	}, "; ")
 	out, err := runPowerShell(ctx, script)
@@ -151,6 +164,26 @@ func InterfaceIndexByIP(addr string) (int, error) {
 	}
 }
 
+func InterfaceLuidByName(name string) (uint64, error) {
+	if luid, err := interfaceLuidByNameNative(name); err == nil {
+		return luid, nil
+	} else if errors.Is(err, ErrInterfaceNotFound) {
+		return 0, err
+	} else {
+		return 0, err
+	}
+}
+
+func InterfaceLuidByIP(addr string) (uint64, error) {
+	if luid, err := interfaceLuidByIPNative(addr); err == nil {
+		return luid, nil
+	} else if errors.Is(err, ErrInterfaceNotFound) {
+		return 0, err
+	} else {
+		return 0, err
+	}
+}
+
 func ApplyRoute(ctx context.Context, route Route) error {
 	dest := strings.TrimSpace(route.DestinationPrefix)
 	if dest == "" {
@@ -162,6 +195,8 @@ func ApplyRoute(ctx context.Context, route Route) error {
 	}
 	if err := applyRouteNative(route); err == nil {
 		return nil
+	} else if isRouteNotFoundError(err) {
+		return err
 	}
 	policy := strings.TrimSpace(route.PolicyStore)
 	if policy == "" {
@@ -176,11 +211,15 @@ func ApplyRoute(ctx context.Context, route Route) error {
 		`$dest = "` + escapePowerShellString(dest) + `"`,
 		`$nextHop = "` + escapePowerShellString(nextHop) + `"`,
 		`$ifIndex = ` + strconv.Itoa(route.InterfaceIndex),
-		`$existing = Get-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -ErrorAction SilentlyContinue | Select-Object -First 1`,
-		`if ($null -eq $existing) {`,
-		`  New-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop -PolicyStore "` + escapePowerShellString(policy) + `"` + metric + ` -ErrorAction Stop | Out-Null`,
-		`} else {`,
+		`$existing = Get-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -ErrorAction SilentlyContinue`,
+		`$exact = $existing | Where-Object { $_.NextHop -eq $nextHop } | Select-Object -First 1`,
+		`if ($null -ne $exact) {`,
 		`  Set-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop -PolicyStore "` + escapePowerShellString(policy) + `"` + metric + ` -ErrorAction Stop | Out-Null`,
+		`} else {`,
+		`  if ($null -ne $existing) {`,
+		`    Remove-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -Confirm:$false -ErrorAction SilentlyContinue | Out-Null`,
+		`  }`,
+		`  New-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop -PolicyStore "` + escapePowerShellString(policy) + `"` + metric + ` -ErrorAction Stop | Out-Null`,
 		`}`,
 	}, "; ")
 	_, err := runPowerShell(ctx, script)
@@ -271,6 +310,62 @@ func interfaceIndexByIPNative(addr string) (int, error) {
 	return 0, ErrInterfaceNotFound
 }
 
+func interfaceLuidByNameNative(name string) (uint64, error) {
+	normalized := strings.TrimSpace(name)
+	if normalized == "" {
+		return 0, ErrInterfaceNotFound
+	}
+	adapter := windows.IpAdapterAddresses{}
+	size := uint32(unsafe.Sizeof(adapter))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, &adapter, &size); err != nil && err != windows.ERROR_BUFFER_OVERFLOW {
+		return 0, err
+	}
+	buf := make([]byte, size)
+	head := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0]))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, head, &size); err != nil {
+		return 0, err
+	}
+	for aa := head; aa != nil; aa = aa.Next {
+		if matchAdapterName(aa, normalized) {
+			return aa.Luid, nil
+		}
+	}
+	return 0, fmt.Errorf("%w: %s", ErrInterfaceNotFound, name)
+}
+
+func interfaceLuidByIPNative(addr string) (uint64, error) {
+	ip := parseIP(addr)
+	if ip == nil {
+		return 0, ErrInterfaceNotFound
+	}
+	needle := ip.String()
+	if needle == "" {
+		return 0, ErrInterfaceNotFound
+	}
+	adapter := windows.IpAdapterAddresses{}
+	size := uint32(unsafe.Sizeof(adapter))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, &adapter, &size); err != nil && err != windows.ERROR_BUFFER_OVERFLOW {
+		return 0, err
+	}
+	buf := make([]byte, size)
+	head := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0]))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, head, &size); err != nil {
+		return 0, err
+	}
+	for aa := head; aa != nil; aa = aa.Next {
+		for ua := aa.FirstUnicastAddress; ua != nil; ua = ua.Next {
+			addrIP := ua.Address.IP()
+			if addrIP == nil {
+				continue
+			}
+			if addrIP.String() == needle {
+				return aa.Luid, nil
+			}
+		}
+	}
+	return 0, ErrInterfaceNotFound
+}
+
 func matchAdapterName(adapter *windows.IpAdapterAddresses, target string) bool {
 	if adapter == nil || target == "" {
 		return false
@@ -302,11 +397,18 @@ func parseIP(value string) net.IP {
 }
 
 var (
-	modiphlpapi               = windows.NewLazySystemDLL("iphlpapi.dll")
-	procCreateIpForwardEntry2 = modiphlpapi.NewProc("CreateIpForwardEntry2")
-	procSetIpForwardEntry2    = modiphlpapi.NewProc("SetIpForwardEntry2")
-	procDeleteIpForwardEntry2 = modiphlpapi.NewProc("DeleteIpForwardEntry2")
+	modiphlpapi                    = windows.NewLazySystemDLL("iphlpapi.dll")
+	procCreateIpForwardEntry2      = modiphlpapi.NewProc("CreateIpForwardEntry2")
+	procSetIpForwardEntry2         = modiphlpapi.NewProc("SetIpForwardEntry2")
+	procDeleteIpForwardEntry2      = modiphlpapi.NewProc("DeleteIpForwardEntry2")
+	procInitializeIpForwardEntry2  = modiphlpapi.NewProc("InitializeIpForwardEntry2")
+	procInitializeIpInterfaceEntry = modiphlpapi.NewProc("InitializeIpInterfaceEntry")
+	procGetIpInterfaceEntry        = modiphlpapi.NewProc("GetIpInterfaceEntry")
 )
+
+func IsRouteNotFoundError(err error) bool {
+	return isRouteNotFoundError(err)
+}
 
 func applyRouteNative(route Route) error {
 	row, err := mibRouteFromRoute(route)
@@ -359,14 +461,20 @@ func mibRouteFromRoute(route Route) (windows.MibIpForwardRow2, error) {
 	if !ok {
 		return windows.MibIpForwardRow2{}, fmt.Errorf("xp2p: parse route next hop: %s", nextHop)
 	}
-	row := windows.MibIpForwardRow2{
-		InterfaceIndex:    uint32(route.InterfaceIndex),
-		DestinationPrefix: windows.IpAddressPrefix{Prefix: prefix, PrefixLength: uint8(ones)},
-		NextHop:           nextHopRaw,
-		Metric:            uint32(max(0, route.RouteMetric)),
-		Protocol:          windows.MIB_IPPROTO_NETMGMT,
-		Origin:            windows.NlroManual,
+	var row windows.MibIpForwardRow2
+	if err := initializeIpForwardEntry2(&row); err != nil {
+		return windows.MibIpForwardRow2{}, err
 	}
+	if route.InterfaceLuid != 0 {
+		row.InterfaceLuid = route.InterfaceLuid
+	} else {
+		row.InterfaceIndex = uint32(route.InterfaceIndex)
+	}
+	row.DestinationPrefix = windows.IpAddressPrefix{Prefix: prefix, PrefixLength: uint8(ones)}
+	row.NextHop = nextHopRaw
+	row.Metric = uint32(max(0, route.RouteMetric))
+	row.Protocol = windows.MIB_IPPROTO_NETMGMT
+	row.Origin = windows.NlroManual
 	return row, nil
 }
 
@@ -421,12 +529,79 @@ func deleteIpForwardEntry2(row *windows.MibIpForwardRow2) error {
 	return nil
 }
 
+func initializeIpForwardEntry2(row *windows.MibIpForwardRow2) error {
+	if err := procInitializeIpForwardEntry2.Find(); err != nil {
+		return err
+	}
+	r0, _, _ := syscall.SyscallN(procInitializeIpForwardEntry2.Addr(), uintptr(unsafe.Pointer(row)))
+	if r0 != 0 {
+		return windows.Errno(r0)
+	}
+	return nil
+}
+
+func initializeIpInterfaceEntry(row *windows.MibIpInterfaceRow) error {
+	if err := procInitializeIpInterfaceEntry.Find(); err != nil {
+		return err
+	}
+	r0, _, _ := syscall.SyscallN(procInitializeIpInterfaceEntry.Addr(), uintptr(unsafe.Pointer(row)))
+	if r0 != 0 {
+		return windows.Errno(r0)
+	}
+	return nil
+}
+
+func getIpInterfaceEntry(row *windows.MibIpInterfaceRow) error {
+	if err := procGetIpInterfaceEntry.Find(); err != nil {
+		return err
+	}
+	r0, _, _ := syscall.SyscallN(procGetIpInterfaceEntry.Addr(), uintptr(unsafe.Pointer(row)))
+	if r0 != 0 {
+		return windows.Errno(r0)
+	}
+	return nil
+}
+
+func interfaceMetricFromIPHelper(luid uint64, ifIndex int, family string) (int, bool) {
+	var row windows.MibIpInterfaceRow
+	if err := initializeIpInterfaceEntry(&row); err != nil {
+		return 0, false
+	}
+	if strings.EqualFold(family, "IPv6") {
+		row.Family = windows.AF_INET6
+	} else {
+		row.Family = windows.AF_INET
+	}
+	if luid != 0 {
+		row.InterfaceLuid = luid
+	} else if ifIndex > 0 {
+		row.InterfaceIndex = uint32(ifIndex)
+	} else {
+		return 0, false
+	}
+	if err := getIpInterfaceEntry(&row); err != nil {
+		return 0, false
+	}
+	return int(row.Metric), true
+}
+
 func errnoIs(err error, target windows.Errno) bool {
 	var errno windows.Errno
 	if errors.As(err, &errno) {
 		return errno == target
 	}
 	return false
+}
+
+func isRouteNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errnoIs(err, windows.ERROR_NOT_FOUND) || errnoIs(err, windows.ERROR_FILE_NOT_FOUND) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "element not found") || strings.Contains(lower, "error 1168")
 }
 
 func max(a, b int) int {

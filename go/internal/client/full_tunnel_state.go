@@ -24,13 +24,15 @@ type fullTunnelState struct {
 }
 
 type fullTunnelRoute struct {
-	Family         string `json:"family,omitempty"`
-	Route          string `json:"route,omitempty"`
-	Destination    string `json:"destination,omitempty"`
-	NextHop        string `json:"next_hop,omitempty"`
-	InterfaceIndex int    `json:"interface_index,omitempty"`
-	RouteMetric    int    `json:"route_metric,omitempty"`
-	PolicyStore    string `json:"policy_store,omitempty"`
+	Family          string `json:"family,omitempty"`
+	Route           string `json:"route,omitempty"`
+	Destination     string `json:"destination,omitempty"`
+	NextHop         string `json:"next_hop,omitempty"`
+	InterfaceIndex  int    `json:"interface_index,omitempty"`
+	InterfaceLuid   uint64 `json:"interface_luid,omitempty"`
+	RouteMetric     int    `json:"route_metric,omitempty"`
+	InterfaceMetric int    `json:"interface_metric,omitempty"`
+	PolicyStore     string `json:"policy_store,omitempty"`
 }
 
 type fullTunnelDNSBackup struct {

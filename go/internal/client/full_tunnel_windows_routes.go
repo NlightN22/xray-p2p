@@ -22,24 +22,28 @@ func buildWindowsBypassRoutes(defaults []winnet.Route, ipv4 []string, ipv6 []str
 			for _, ip := range ipv4 {
 				dest := fmt.Sprintf("%s/32", ip)
 				routes = append(routes, fullTunnelRoute{
-					Family:         "ipv4",
-					Destination:    dest,
-					NextHop:        def.NextHop,
-					InterfaceIndex: def.InterfaceIndex,
-					RouteMetric:    def.RouteMetric,
-					PolicyStore:    def.PolicyStore,
+					Family:          "ipv4",
+					Destination:     dest,
+					NextHop:         def.NextHop,
+					InterfaceIndex:  def.InterfaceIndex,
+					InterfaceLuid:   def.InterfaceLuid,
+					RouteMetric:     def.RouteMetric,
+					InterfaceMetric: def.InterfaceMetric,
+					PolicyStore:     def.PolicyStore,
 				})
 			}
 		case "ipv6":
 			for _, ip := range ipv6 {
 				dest := fmt.Sprintf("%s/128", ip)
 				routes = append(routes, fullTunnelRoute{
-					Family:         "ipv6",
-					Destination:    dest,
-					NextHop:        def.NextHop,
-					InterfaceIndex: def.InterfaceIndex,
-					RouteMetric:    def.RouteMetric,
-					PolicyStore:    def.PolicyStore,
+					Family:          "ipv6",
+					Destination:     dest,
+					NextHop:         def.NextHop,
+					InterfaceIndex:  def.InterfaceIndex,
+					InterfaceLuid:   def.InterfaceLuid,
+					RouteMetric:     def.RouteMetric,
+					InterfaceMetric: def.InterfaceMetric,
+					PolicyStore:     def.PolicyStore,
 				})
 			}
 		}
@@ -90,33 +94,51 @@ func ensureWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr stri
 	if strings.TrimSpace(tunName) == "" {
 		return errors.New("xp2p: tun name is required for full-tunnel default route")
 	}
-	ifIndex, err := resolveWindowsInterfaceIndex(ctx, tunName, tunAddr, verbose, true)
-	if err != nil {
-		return err
-	}
 	dest := "0.0.0.0/0"
 	nextHop := "0.0.0.0"
 	if strings.EqualFold(family, "IPv6") {
 		dest = "::/0"
 		nextHop = "::"
 	}
-	route := winnet.Route{
-		DestinationPrefix: dest,
-		NextHop:           nextHop,
-		InterfaceIndex:    ifIndex,
-		RouteMetric:       1,
-		PolicyStore:       "ActiveStore",
-		AddressFamily:     family,
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		ifIndex, ifLuid, err := resolveWindowsInterface(ctx, tunName, tunAddr, verbose, true)
+		if err != nil {
+			lastErr = err
+		} else {
+			route := winnet.Route{
+				DestinationPrefix: dest,
+				NextHop:           nextHop,
+				InterfaceIndex:    ifIndex,
+				InterfaceLuid:     ifLuid,
+				RouteMetric:       1,
+				PolicyStore:       "ActiveStore",
+				AddressFamily:     family,
+			}
+			logFullTunnelVerbose(verbose, "xp2p: full-tunnel default route apply", "interface", tunName, "route", route, "attempt", attempt+1)
+			if err := winnet.ApplyRoute(ctx, route); err != nil {
+				lastErr = err
+				if winnet.IsRouteNotFoundError(err) {
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+				return err
+			}
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	logFullTunnelVerbose(verbose, "xp2p: full-tunnel default route apply", "interface", tunName, "route", route)
-	return winnet.ApplyRoute(ctx, route)
+	if lastErr != nil {
+		return lastErr
+	}
+	return errors.New("xp2p: full-tunnel default route apply failed")
 }
 
 func removeWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr string, family string) error {
 	if strings.TrimSpace(tunName) == "" {
 		return nil
 	}
-	ifIndex, err := resolveWindowsInterfaceIndex(ctx, tunName, tunAddr, false, false)
+	ifIndex, ifLuid, err := resolveWindowsInterface(ctx, tunName, tunAddr, false, false)
 	if err != nil {
 		return nil
 	}
@@ -130,6 +152,7 @@ func removeWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr stri
 		DestinationPrefix: dest,
 		NextHop:           nextHop,
 		InterfaceIndex:    ifIndex,
+		InterfaceLuid:     ifLuid,
 		RouteMetric:       1,
 		PolicyStore:       "ActiveStore",
 		AddressFamily:     family,
@@ -145,14 +168,20 @@ func toWindowsRoute(route fullTunnelRoute) winnet.Route {
 		DestinationPrefix: route.Destination,
 		NextHop:           route.NextHop,
 		InterfaceIndex:    route.InterfaceIndex,
+		InterfaceLuid:     route.InterfaceLuid,
 		RouteMetric:       route.RouteMetric,
+		InterfaceMetric:   route.InterfaceMetric,
 		PolicyStore:       route.PolicyStore,
 		AddressFamily:     family,
 	}
 }
 
 func windowsRouteKey(route fullTunnelRoute) string {
-	return strings.ToLower(route.Family) + "|" + strings.ToLower(route.Destination) + "|" + strings.ToLower(route.NextHop) + "|" + fmt.Sprintf("%d", route.InterfaceIndex)
+	key := strings.ToLower(route.Family) + "|" + strings.ToLower(route.Destination) + "|" + strings.ToLower(route.NextHop) + "|" + fmt.Sprintf("%d", route.InterfaceIndex)
+	if route.InterfaceLuid != 0 {
+		key += "|" + fmt.Sprintf("%d", route.InterfaceLuid)
+	}
+	return key
 }
 
 func hasFamily(routes []winnet.Route, family string) bool {
@@ -196,27 +225,33 @@ func decodeWindowsRoutes(state fullTunnelState) []winnet.Route {
 }
 
 func encodeWindowsRoute(route winnet.Route) string {
-	return fmt.Sprintf("%s|%s|%d|%d|%s",
+	return fmt.Sprintf("%s|%s|%d|%d|%s|%d|%d",
 		route.DestinationPrefix,
 		route.NextHop,
 		route.InterfaceIndex,
 		route.RouteMetric,
 		route.PolicyStore,
+		route.InterfaceMetric,
+		route.InterfaceLuid,
 	)
 }
 
 func decodeWindowsRoute(raw string) (winnet.Route, bool) {
 	parts := strings.Split(raw, "|")
-	if len(parts) < 5 {
+	if len(parts) != 7 {
 		return winnet.Route{}, false
 	}
 	ifIndex := parseInt(parts[2])
 	metric := parseInt(parts[3])
+	ifMetric := parseInt(parts[5])
+	ifLuid := parseUint64(parts[6])
 	return winnet.Route{
 		DestinationPrefix: parts[0],
 		NextHop:           parts[1],
 		InterfaceIndex:    ifIndex,
+		InterfaceLuid:     ifLuid,
 		RouteMetric:       metric,
+		InterfaceMetric:   ifMetric,
 		PolicyStore:       parts[4],
 	}, true
 }
@@ -229,10 +264,18 @@ func parseInt(value string) int {
 	return out
 }
 
-func resolveWindowsInterfaceIndex(ctx context.Context, tunName string, tunAddr string, verbose bool, wait bool) (int, error) {
+func parseUint64(value string) uint64 {
+	out, err := strconv.ParseUint(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return out
+}
+
+func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string, verbose bool, wait bool) (int, uint64, error) {
 	name := strings.TrimSpace(tunName)
 	if name == "" {
-		return 0, errors.New("xp2p: tun name is required for interface lookup")
+		return 0, 0, errors.New("xp2p: tun name is required for interface lookup")
 	}
 	trimmedAddr := strings.TrimSpace(tunAddr)
 	deadline := time.Now()
@@ -244,25 +287,33 @@ func resolveWindowsInterfaceIndex(ctx context.Context, tunName string, tunAddr s
 		attempt++
 		index, err := winnet.InterfaceIndexByName(ctx, name)
 		if err == nil {
-			if verbose {
-				logging.Info("xp2p: full-tunnel tun interface resolved", "interface", name, "ifIndex", index, "attempt", attempt)
+			luid, luidErr := winnet.InterfaceLuidByName(name)
+			if luidErr != nil {
+				luid = 0
 			}
-			return index, nil
+			if verbose {
+				logging.Info("xp2p: full-tunnel tun interface resolved", "interface", name, "ifIndex", index, "ifLuid", luid, "attempt", attempt)
+			}
+			return index, luid, nil
 		}
 		if errors.Is(err, winnet.ErrInterfaceNotFound) && trimmedAddr != "" {
 			ifIndex, addrErr := winnet.InterfaceIndexByIP(trimmedAddr)
 			if addrErr == nil && ifIndex > 0 {
-				if verbose {
-					logging.Info("xp2p: full-tunnel tun interface resolved by addr", "interface", name, "addr", trimmedAddr, "ifIndex", ifIndex, "attempt", attempt)
+				luid, luidErr := winnet.InterfaceLuidByIP(trimmedAddr)
+				if luidErr != nil {
+					luid = 0
 				}
-				return ifIndex, nil
+				if verbose {
+					logging.Info("xp2p: full-tunnel tun interface resolved by addr", "interface", name, "addr", trimmedAddr, "ifIndex", ifIndex, "ifLuid", luid, "attempt", attempt)
+				}
+				return ifIndex, luid, nil
 			}
 		}
 		if ctx.Err() != nil {
-			return 0, err
+			return 0, 0, err
 		}
 		if !errors.Is(err, winnet.ErrInterfaceNotFound) || time.Now().After(deadline) {
-			return 0, err
+			return 0, 0, err
 		}
 		if verbose {
 			logging.Info("xp2p: full-tunnel waiting for tun interface", "interface", name, "attempt", attempt)
