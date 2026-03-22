@@ -26,7 +26,7 @@ Includes: Global options
 - --allow-insecure, -I       Allow insecure TLS (skip verification)
 - --strict-tls, -S           Enforce TLS verification
 - --force, -f                Replace existing endpoint configuration
-- --tun-mode <split|full>    TUN routing mode (default: split)
+- --tun-mode, -m <split|full> TUN routing mode (default: split)
 
 xp2p client remove [hostname|tag]
 Options:

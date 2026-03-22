@@ -88,7 +88,7 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.BoolP("allow-insecure", "I", false, "allow insecure TLS (skip verification)")
 	flags.BoolP("strict-tls", "S", false, "enforce TLS verification")
 	flags.BoolP("force", "f", false, "replace existing endpoint configuration")
-	flags.String("tun-mode", "", "TUN routing mode (split or full)")
+	flags.StringP("tun-mode", "m", "", "TUN routing mode (split or full)")
 	return cmd
 }
 

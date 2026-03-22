@@ -20,6 +20,13 @@ func newServerModeCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mode [tun|proxy]",
 		Short: "Switch server mode between TUN and proxy",
+		Args:  cobra.RangeArgs(0, 1),
+		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+			if len(args) == 0 {
+				return []string{"tun", "proxy"}, cobra.ShellCompDirectiveNoFileComp
+			}
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			if configFlag := cmd.InheritedFlags().Lookup("config"); configFlag != nil && configFlag.Changed {

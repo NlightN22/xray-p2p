@@ -22,6 +22,18 @@ func newClientModeCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mode [tun|proxy] [split|full]",
 		Short: "Switch client mode between TUN and proxy (optional tun mode)",
+		Args:  cobra.RangeArgs(0, 2),
+		ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+			switch len(args) {
+			case 0:
+				return []string{"tun", "proxy"}, cobra.ShellCompDirectiveNoFileComp
+			case 1:
+				if strings.ToLower(strings.TrimSpace(args[0])) == "tun" {
+					return []string{"split", "full"}, cobra.ShellCompDirectiveNoFileComp
+				}
+			}
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			if configFlag := cmd.InheritedFlags().Lookup("config"); configFlag != nil && configFlag.Changed {
