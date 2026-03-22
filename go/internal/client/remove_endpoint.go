@@ -63,7 +63,7 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 	if err != nil {
 		return err
 	}
-	endpointIPs, err := resolveEndpointIPMap(ctx, state.Endpoints, nil)
+	endpointIPs, err := resolveEndpointIPMapWithCache(ctx, state.Endpoints)
 	if err != nil {
 		return err
 	}

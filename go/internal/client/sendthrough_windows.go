@@ -32,7 +32,7 @@ func updateSendThroughOutbound(ctx context.Context, paths clientPaths, tunEnable
 		return err
 	}
 	xrayCfg.DirectOutbound.SendThrough = sendThrough
-	endpointIPs, err := resolveEndpointIPMap(ctx, state.Endpoints, nil)
+	endpointIPs, err := resolveEndpointIPMapWithCache(ctx, state.Endpoints)
 	if err != nil {
 		return err
 	}

@@ -24,7 +24,7 @@ func applyClientDesiredConfig(paths clientPaths, state clientInstallState, opts 
 	if err := writeClientInboundsConfig(paths.configDir, xrayCfg, opts.TunEnabled, opts.TunName, opts.TunMTU, state.Forwards); err != nil {
 		return err
 	}
-	endpointIPs, err := resolveEndpointIPMap(context.Background(), state.Endpoints, nil)
+	endpointIPs, err := resolveEndpointIPMapWithCache(context.Background(), state.Endpoints)
 	if err != nil {
 		return err
 	}

@@ -100,6 +100,38 @@ func resolveEndpointIPMap(ctx context.Context, endpoints []clientEndpointRecord,
 	return resolved, nil
 }
 
+func resolveEndpointIPMapWithCache(ctx context.Context, endpoints []clientEndpointRecord) (map[string]fullTunnelEndpointIPs, error) {
+	cache, err := loadFullTunnelEndpointCache()
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := resolveEndpointIPMap(ctx, endpoints, cache)
+	if err != nil && cacheHasEndpoints(endpoints, cache) {
+		return cache, nil
+	}
+	return resolved, err
+}
+
+func cacheHasEndpoints(endpoints []clientEndpointRecord, cache map[string]fullTunnelEndpointIPs) bool {
+	if len(endpoints) == 0 || len(cache) == 0 {
+		return false
+	}
+	for _, endpoint := range endpoints {
+		host := endpointHost(endpoint)
+		if host == "" {
+			continue
+		}
+		entry, ok := cache[strings.ToLower(host)]
+		if !ok {
+			continue
+		}
+		if len(entry.IPv4) > 0 || len(entry.IPv6) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func appendUniqueIPs(ipv4 []string, ipv6 []string, seen4 map[string]struct{}, seen6 map[string]struct{}, target4 *[]string, target6 *[]string) {
 	for _, ip := range ipv4 {
 		trimmed := strings.TrimSpace(ip)

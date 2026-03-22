@@ -87,7 +87,7 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	if err != nil {
 		return clientInstallState{}, err
 	}
-	endpointIPs, err := resolveEndpointIPMap(context.Background(), state.Endpoints, nil)
+	endpointIPs, err := resolveEndpointIPMapWithCache(context.Background(), state.Endpoints)
 	if err != nil {
 		return clientInstallState{}, err
 	}

@@ -15,7 +15,7 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
-		endpointIPs, err := resolveEndpointIPMap(ctx, desired.Endpoints, nil)
+		endpointIPs, err := resolveEndpointIPMapWithCache(ctx, desired.Endpoints)
 		if err != nil {
 			return false, err
 		}
@@ -75,7 +75,8 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		return false, err
 	}
 
-	if !state.Enabled {
+	removeDefaults := !state.Enabled
+	if removeDefaults {
 		state = fullTunnelState{
 			Enabled: true,
 			TunName: strings.TrimSpace(opts.TunName),
@@ -98,15 +99,6 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		if err := saveFullTunnelState(paths.fullState, state); err != nil {
 			return false, err
 		}
-
-		for _, route := range defaults {
-			logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default route remove", "route", route)
-			if err := winnet.RemoveRoute(ctx, route); err != nil {
-				_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
-				return false, err
-			}
-		}
-		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes removed", "routes", defaults)
 	}
 
 	if err := syncWindowsBypassRoutes(ctx, bypassRoutes, state.BypassRoutes, opts.FullTunnelVerbose); err != nil {
@@ -127,6 +119,17 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		}
 	}
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes set to tun", "interface", opts.TunName, "ipv4", hasFamily(defaults, "IPv4"), "ipv6", hasFamily(defaults, "IPv6"))
+
+	if removeDefaults {
+		for _, route := range defaults {
+			logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default route remove", "route", route)
+			if err := winnet.RemoveRoute(ctx, route); err != nil {
+				_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
+				return false, err
+			}
+		}
+		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes removed", "routes", defaults)
+	}
 
 	if state.Enabled {
 		if len(resolvedEndpoints) > 0 {
