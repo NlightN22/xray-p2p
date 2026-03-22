@@ -29,6 +29,10 @@ type Options struct {
 	MaxRestarts int
 	// RestartDelay specifies the pause between restart attempts. Zero defaults to 3 seconds.
 	RestartDelay time.Duration
+	// MaxWatchRestarts limits watcher-triggered restarts within WatchRestartWindow. Zero disables.
+	MaxWatchRestarts int
+	// WatchRestartWindow defines the rolling window for MaxWatchRestarts. Zero disables.
+	WatchRestartWindow time.Duration
 }
 
 // Run launches the supplied function, restarts it on failure, and watches the configured paths.
@@ -88,6 +92,7 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 	}
 
 	failures := 0
+	watchRestarts := make([]time.Time, 0, 8)
 	for {
 		select {
 		case <-ctx.Done():
@@ -147,6 +152,25 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 		cancelChild()
 
 		if restarting {
+			if opts.MaxWatchRestarts > 0 && opts.WatchRestartWindow > 0 {
+				now := time.Now()
+				cutoff := now.Add(-opts.WatchRestartWindow)
+				kept := watchRestarts[:0]
+				for _, ts := range watchRestarts {
+					if ts.After(cutoff) {
+						kept = append(kept, ts)
+					}
+				}
+				watchRestarts = kept
+				if len(watchRestarts) >= opts.MaxWatchRestarts {
+					logging.Warn("service restart skipped (watch limiter)", "service", name, "path", restartPath)
+					if !waitWithContext(ctx, restartDelay) {
+						return nil
+					}
+					continue
+				}
+				watchRestarts = append(watchRestarts, now)
+			}
 			failures = 0
 			if restartPath != "" {
 				logging.Info("service configuration change detected", "service", name, "path", restartPath)

@@ -117,11 +117,74 @@ func TestRunRestartsOnWatchFile(t *testing.T) {
 	}
 }
 
+func TestRunWatchLimiterSkipsAfterThreshold(t *testing.T) {
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	configPath := filepath.Join(dir, "xp2p-client.toml")
+	if err := os.WriteFile(configPath, []byte("init = true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	startCh := make(chan struct{}, 4)
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- Run(ctx, Options{
+			Name:               "watch-limiter",
+			WatchFiles:         []string{configPath},
+			WatchDebounce:      10 * time.Millisecond,
+			RestartDelay:       10 * time.Millisecond,
+			MaxWatchRestarts:   1,
+			WatchRestartWindow: 2 * time.Second,
+		}, func(runCtx context.Context) error {
+			startCh <- struct{}{}
+			<-runCtx.Done()
+			return runCtx.Err()
+		})
+	}()
+
+	waitForStart(t, startCh)
+
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("ts=%d\n", time.Now().UnixNano())), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	waitForStart(t, startCh)
+
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("ts=%d\n", time.Now().UnixNano()+1)), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	waitForNoStart(t, startCh, 600*time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("service returned error: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for service shutdown")
+	}
+}
+
 func waitForStart(t *testing.T, ch <-chan struct{}) {
 	t.Helper()
 	select {
 	case <-ch:
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for service start")
+	}
+}
+
+func waitForNoStart(t *testing.T, ch <-chan struct{}, d time.Duration) {
+	t.Helper()
+	select {
+	case <-ch:
+		t.Fatal("unexpected service restart")
+	case <-time.After(d):
 	}
 }

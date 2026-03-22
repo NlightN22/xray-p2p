@@ -83,13 +83,15 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}
 
 	runnerOpts := service.Options{
-		Name:          "client",
-		WatchPaths:    watchPaths,
-		WatchFiles:    watchFiles,
-		WatchDebounce: 400 * time.Millisecond,
-		IgnorePaths:   ignorePaths,
-		MaxRestarts:   opts.MaxRestarts,
-		RestartDelay:  opts.RestartDelay,
+		Name:               "client",
+		WatchPaths:         watchPaths,
+		WatchFiles:         watchFiles,
+		WatchDebounce:      400 * time.Millisecond,
+		IgnorePaths:        ignorePaths,
+		MaxRestarts:        opts.MaxRestarts,
+		RestartDelay:       opts.RestartDelay,
+		MaxWatchRestarts:   3,
+		WatchRestartWindow: 30 * time.Second,
 	}
 
 	if err := ensureLogFile(baseRunOpts.ErrorLogPath); err != nil {
