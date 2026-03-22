@@ -11,11 +11,11 @@ import (
 )
 
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
-	if err := syncFullTunnelRouting(paths, desired, opts); err != nil {
-		return false, err
-	}
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	if !opts.TunEnabled || mode != "full" {
+		if err := syncFullTunnelRouting(paths, desired, opts, nil, false); err != nil {
+			return false, err
+		}
 		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
 			return false, err
 		}
@@ -24,14 +24,21 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	if strings.TrimSpace(opts.FullTunnelTag) == "" {
 		logging.Warn("xp2p: full-tunnel outbound tag missing; routing rule not added")
 	}
-	return enableFullTunnel(ctx, paths, opts, desired)
-}
-
-func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	state, err := loadFullTunnelState(paths.fullState)
 	if err != nil {
 		return false, err
 	}
+	endpointIPv4, endpointIPv6, resolvedEndpoints, err := resolveEndpointIPs(ctx, desired.Endpoints, state.EndpointIPs)
+	if err != nil {
+		return false, err
+	}
+	if err := syncFullTunnelRouting(paths, desired, opts, resolvedEndpoints, true); err != nil {
+		return false, err
+	}
+	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
+}
+
+func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState, state fullTunnelState, endpointIPv4 []string, endpointIPv6 []string, resolvedEndpoints map[string]fullTunnelEndpointIPs) (bool, error) {
 
 	defaults4 := state.IPv4Defaults
 	defaults6 := state.IPv6Defaults
@@ -50,11 +57,6 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes captured", "ipv4", defaults4, "ipv6", defaults6)
 	}
 
-	endpointIPv4, endpointIPv6, resolvedEndpoints, err := resolveEndpointIPs(ctx, desired.Endpoints, state.EndpointIPs)
-	if err != nil {
-		return false, err
-	}
-	endpointCache := resolvedEndpoints
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
 	bypass4 := buildBypassRoutes(defaults4, endpointIPv4, 32)
 	bypass6 := buildBypassRoutes(defaults6, endpointIPv6, 128)
@@ -68,8 +70,8 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			IPv4Defaults: defaults4,
 			IPv6Defaults: defaults6,
 		}
-		if len(endpointCache) > 0 {
-			state.EndpointIPs = endpointCache
+		if len(resolvedEndpoints) > 0 {
+			state.EndpointIPs = resolvedEndpoints
 		}
 		if len(opts.DNSServers) > 0 {
 			backup, dnsErr := applyDNSOverrides(opts.DNSServers, opts.FullTunnelVerbose)
@@ -94,8 +96,8 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		}
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes removed", "ipv4", defaults4, "ipv6", defaults6)
 	} else {
-		if len(endpointCache) > 0 {
-			state.EndpointIPs = endpointCache
+		if len(resolvedEndpoints) > 0 {
+			state.EndpointIPs = resolvedEndpoints
 		} else {
 			state.EndpointIPs = nil
 		}

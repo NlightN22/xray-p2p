@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func loadFullTunnelRouteSettings(configFile string) (bool, string, error) {
@@ -19,7 +20,7 @@ func loadFullTunnelRouteSettings(configFile string) (bool, string, error) {
 	return enabled, strings.TrimSpace(cfg.Client.FullTunnelTag), nil
 }
 
-func syncFullTunnelRouting(paths clientPaths, state clientInstallState, opts RunOptions) error {
+func syncFullTunnelRouting(paths clientPaths, state clientInstallState, opts RunOptions, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) error {
 	xrayCfg, err := loadClientXrayConfig(paths.configFile)
 	if err != nil {
 		return err
@@ -33,5 +34,18 @@ func syncFullTunnelRouting(paths clientPaths, state clientInstallState, opts Run
 		state.Reverse,
 		fullEnabled,
 		opts.FullTunnelTag,
+		endpointIPs,
+		requireEndpointIPs,
 	)
+}
+
+func loadFullTunnelEndpointCache() (map[string]fullTunnelEndpointIPs, error) {
+	state, err := loadFullTunnelState(config.ConfigPath(layout.ClientFullTunnelStateFileName))
+	if err != nil {
+		return nil, err
+	}
+	if len(state.EndpointIPs) == 0 {
+		return nil, nil
+	}
+	return state.EndpointIPs, nil
 }

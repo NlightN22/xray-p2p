@@ -341,12 +341,11 @@ def assert_outbound(
 
 
 def assert_routing_rule(data: dict, host: str) -> None:
-    tag = expected_proxy_tag(host)
     rules = data.get("routing", {}).get("rules", [])
     for rule in rules:
-        if rule.get("outboundTag") == tag and host in rule.get("ip", []):
+        if rule.get("outboundTag") == "direct" and host in rule.get("ip", []):
             return
-    raise AssertionError(f"Routing rule for {host} -> {tag} not found")
+    raise AssertionError(f"Routing rule for {host} -> direct not found")
 
 
 def assert_redirect_rule(data: dict, cidr: str, tag: str) -> None:

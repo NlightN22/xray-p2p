@@ -113,7 +113,14 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag); err != nil {
+	var endpointIPs map[string]fullTunnelEndpointIPs
+	if fullEnabled {
+		endpointIPs, err = loadFullTunnelEndpointCache()
+		if err != nil {
+			return err
+		}
+	}
+	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false); err != nil {
 		return err
 	}
 	return nil
@@ -180,7 +187,14 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag); err != nil {
+	var endpointIPs map[string]fullTunnelEndpointIPs
+	if fullEnabled {
+		endpointIPs, err = loadFullTunnelEndpointCache()
+		if err != nil {
+			return err
+		}
+	}
+	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false); err != nil {
 		return err
 	}
 	return nil

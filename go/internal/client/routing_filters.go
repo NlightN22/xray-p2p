@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -49,19 +50,34 @@ func filterManagedRules(rules []any, managed map[string]struct{}) []any {
 	return result
 }
 
-func filterEndpointBypassRules(rules []any, endpoints []clientEndpointRecord) []any {
+func filterEndpointBypassRules(rules []any, endpoints []clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireIPs bool) ([]any, error) {
 	if len(rules) == 0 || len(endpoints) == 0 {
-		return rules
+		return rules, nil
 	}
 	known := make(map[string]struct{}, len(endpoints))
 	for _, ep := range endpoints {
-		key, ok := endpointMatchKey(ep.Address)
-		if ok {
-			known[key] = struct{}{}
+		host := endpointHost(ep)
+		if host == "" {
+			return nil, fmt.Errorf("xp2p: endpoint host is required for full-tunnel routing")
+		}
+		entry := endpointIPs[strings.ToLower(host)]
+		ips := uniqueEndpointIPs(entry)
+		if len(ips) == 0 {
+			if requireIPs {
+				return nil, fmt.Errorf("xp2p: endpoint %s has no resolved IPs", host)
+			}
+			key, ok := endpointMatchKey(ep.Address)
+			if ok {
+				known[key] = struct{}{}
+			}
+			continue
+		}
+		for _, ip := range ips {
+			known["ip:"+strings.TrimSpace(ip)] = struct{}{}
 		}
 	}
 	if len(known) == 0 {
-		return rules
+		return rules, nil
 	}
 	filtered := make([]any, 0, len(rules))
 	for _, rule := range rules {
@@ -75,7 +91,7 @@ func filterEndpointBypassRules(rules []any, endpoints []clientEndpointRecord) []
 		}
 		filtered = append(filtered, ruleMap)
 	}
-	return filtered
+	return filtered, nil
 }
 
 func isEndpointBypassRule(rule map[string]any, known map[string]struct{}) bool {

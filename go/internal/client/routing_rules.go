@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"net"
 	"strings"
 )
@@ -28,6 +29,34 @@ func endpointBypassRule(ep clientEndpointRecord) map[string]any {
 	return rule
 }
 
+func endpointBypassRules(endpoints []clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireIPs bool) ([]any, error) {
+	if len(endpoints) == 0 {
+		return []any{}, nil
+	}
+	rules := make([]any, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		host := endpointHost(endpoint)
+		if host == "" {
+			return nil, fmt.Errorf("xp2p: endpoint host is required for full-tunnel routing")
+		}
+		entry := endpointIPs[strings.ToLower(host)]
+		ips := uniqueEndpointIPs(entry)
+		if len(ips) == 0 {
+			if requireIPs {
+				return nil, fmt.Errorf("xp2p: endpoint %s has no resolved IPs", host)
+			}
+			rules = append(rules, endpointBypassRule(endpoint))
+			continue
+		}
+		rules = append(rules, map[string]any{
+			"type":        "field",
+			"ip":          ips,
+			"outboundTag": directRandomTag(),
+		})
+	}
+	return rules, nil
+}
+
 func endpointMatchKey(address string) (string, bool) {
 	address = strings.TrimSpace(address)
 	if address == "" {
@@ -49,4 +78,21 @@ func fullTunnelRule(tag string) map[string]any {
 		"ip":          []string{"0.0.0.0/0", "::/0"},
 		"outboundTag": trimmed,
 	}
+}
+
+func uniqueEndpointIPs(entry fullTunnelEndpointIPs) []string {
+	seen := make(map[string]struct{})
+	ips := make([]string, 0, len(entry.IPv4)+len(entry.IPv6))
+	for _, ip := range append(entry.IPv4, entry.IPv6...) {
+		trimmed := strings.TrimSpace(ip)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		ips = append(ips, trimmed)
+	}
+	return ips
 }

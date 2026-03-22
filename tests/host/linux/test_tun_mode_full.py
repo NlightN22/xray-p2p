@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import os
 import shlex
 import time
 
@@ -17,6 +18,7 @@ ENDPOINT_IP = "198.51.100.10"
 ENDPOINT_DOMAIN = "tun-full.example"
 ENDPOINT_DOMAIN_IP = "198.51.100.20"
 SECOND_ENDPOINT_IP = "198.51.100.30"
+UNRESOLVED_DOMAIN = "tun-full-bad.example.invalid"
 REDIRECT_CIDR = "203.0.113.10/32"
 DNS_SERVERS = ["1.1.1.1", "9.9.9.9"]
 
@@ -199,6 +201,14 @@ def _toml_value(value) -> str:
     raise TypeError(f"Unsupported TOML value: {value!r}")
 
 
+def _replace_endpoint_address(text: str, hostname: str, address: str) -> str:
+    target = f'address = "{hostname}"'
+    replacement = f'address = "{address}"'
+    if target not in text:
+        return text
+    return text.replace(target, replacement, 1)
+
+
 def _wait_for_full_tunnel(
     host,
     tun_name: str,
@@ -268,6 +278,13 @@ def _wait_for_rollback(
         current_defaults4 = _list_default_routes(host, "-4")
         current_defaults6 = _list_default_routes(host, "-6")
         state_exists = helpers.path_exists(host, FULL_STATE_FILE)
+        state_enabled = False
+        if state_exists:
+            try:
+                state = helpers.read_json(host, FULL_STATE_FILE)
+                state_enabled = bool(state.get("enabled"))
+            except Exception:
+                state_enabled = True
         resolv = helpers.read_text(host, RESOLV_CONF)
         bypass_left: list[str] = []
         for route in bypass_routes:
@@ -281,9 +298,9 @@ def _wait_for_rollback(
         defaults_ok = (not defaults4 or not _has_default_via_tun(current_defaults4, tun_name)) and (
             not defaults6 or not _has_default_via_tun(current_defaults6, tun_name)
         )
-        ok = (not state_exists) and defaults_ok and defaults_restored and not bypass_left and resolv == original_resolv
+        ok = (not state_exists or not state_enabled) and defaults_ok and defaults_restored and not bypass_left and resolv == original_resolv
         debug = (
-            f"state_exists={state_exists} defaults_ok={defaults_ok} defaults_restored={defaults_restored} "
+            f"state_exists={state_exists} state_enabled={state_enabled} defaults_ok={defaults_ok} defaults_restored={defaults_restored} "
             f"bypass_left={bypass_left}\n"
             f"defaults4={current_defaults4}\n"
             f"defaults6={current_defaults6}\n"
@@ -292,6 +309,43 @@ def _wait_for_rollback(
         return ok, debug
 
     _wait_for_condition("Full-tunnel rollback", _check)
+
+
+def _wait_for_routes_restored(
+    host,
+    tun_name: str,
+    defaults4: list[str],
+    defaults6: list[str],
+    bypass_routes: list[str],
+    original_resolv: str,
+) -> None:
+    def _check():
+        current_defaults4 = _list_default_routes(host, "-4")
+        current_defaults6 = _list_default_routes(host, "-6")
+        resolv = helpers.read_text(host, RESOLV_CONF)
+        bypass_left: list[str] = []
+        for route in bypass_routes:
+            dest = route.split()[0]
+            route_lines = _list_routes(host, "-4", dest)
+            if route_lines:
+                bypass_left.append(f"{dest} -> {route_lines}")
+        defaults_restored = all(route in current_defaults4 for route in defaults4) and all(
+            route in current_defaults6 for route in defaults6
+        )
+        defaults_ok = (not defaults4 or not _has_default_via_tun(current_defaults4, tun_name)) and (
+            not defaults6 or not _has_default_via_tun(current_defaults6, tun_name)
+        )
+        ok = defaults_ok and defaults_restored and not bypass_left and resolv == original_resolv
+        debug = (
+            f"defaults_ok={defaults_ok} defaults_restored={defaults_restored} "
+            f"bypass_left={bypass_left}\n"
+            f"defaults4={current_defaults4}\n"
+            f"defaults6={current_defaults6}\n"
+            f"resolv_conf:\n{resolv}"
+        )
+        return ok, debug
+
+    _wait_for_condition("Routes restored", _check)
 
 
 def _wait_for_proxy(
@@ -310,9 +364,17 @@ def _wait_for_proxy(
             not defaults6 or not _has_default_via_tun(current_defaults6, tun_name)
         )
         state_exists = helpers.path_exists(host, FULL_STATE_FILE)
-        ok = defaults_ok and defaults_restored and not state_exists
+        state_enabled = False
+        if state_exists:
+            try:
+                state = helpers.read_json(host, FULL_STATE_FILE)
+                state_enabled = bool(state.get("enabled"))
+            except Exception:
+                state_enabled = True
+        ok = defaults_ok and defaults_restored and (not state_exists or not state_enabled)
         debug = (
-            f"defaults_ok={defaults_ok} defaults_restored={defaults_restored} state_exists={state_exists}\n"
+            f"defaults_ok={defaults_ok} defaults_restored={defaults_restored} "
+            f"state_exists={state_exists} state_enabled={state_enabled}\n"
             f"defaults4={current_defaults4}\n"
             f"defaults6={current_defaults6}"
         )
@@ -495,6 +557,10 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         original_config = helpers.read_text(client_host, helpers.CLIENT_CONFIG_FILE)
         original_resolv = helpers.read_text(client_host, RESOLV_CONF)
         expected_tag = helpers.expected_proxy_tag(ENDPOINT_IP)
+        resolved_domain_ip = _resolve_ipv4(client_host, ENDPOINT_DOMAIN)
+        updated_config = _replace_endpoint_address(original_config, ENDPOINT_DOMAIN, resolved_domain_ip)
+        if updated_config != original_config:
+            helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, updated_config)
         _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
         redirect_result = _client_redirect(
             xp2p_client_runner,
@@ -518,7 +584,6 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         defaults6 = _list_default_routes(client_host, "-6")
         assert defaults4 or defaults6, "Expected at least one default route before full-tunnel"
 
-        resolved_domain_ip = _resolve_ipv4(client_host, ENDPOINT_DOMAIN)
         endpoint_ips = [ENDPOINT_IP, resolved_domain_ip]
         bypass_routes = _build_bypass_routes(defaults4, endpoint_ips, 32)
         tun_name = _client_tun_name(client_host)
@@ -554,6 +619,11 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         )
         _assert_full_tunnel_rule_last(client_host, expected_tag)
         rules = _routing_rules(client_host)
+        domain_bypass_index = _find_rule_index(
+            rules,
+            lambda rule: resolved_domain_ip in (rule.get("ip") or []) and rule.get("outboundTag") == "direct",
+        )
+        assert domain_bypass_index != -1, "Domain endpoint bypass rule should use resolved IP in routing.json"
         redirect_rule_index = _find_rule_index(
             rules,
             lambda rule: REDIRECT_CIDR in (rule.get("ip") or []) and rule.get("outboundTag") == expected_tag,
@@ -561,6 +631,28 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         assert redirect_rule_index != -1, "Redirect routing rule missing from routing.json"
         assert redirect_rule_index < len(rules) - 1, "Redirect rule should appear before full-tunnel rule"
         assert helpers.read_client_config(client_host).get("full_tunnel_tag") == expected_tag
+
+        _stop_service(xp2p_client_runner)
+        service_started = False
+        _wait_for_routes_restored(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            original_resolv,
+        )
+        _start_service(xp2p_client_runner, client_host)
+        service_started = True
+        _wait_for_full_tunnel(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            DNS_SERVERS,
+            original_resolv,
+        )
 
         log_base = helpers.read_text(client_host, SERVICE_LOG) if helpers.path_exists(client_host, SERVICE_LOG) else ""
         result = _client_mode(xp2p_client_runner, "tun", "split", "-V", check=False)
@@ -603,6 +695,64 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
 
         _client_mode(xp2p_client_runner, "proxy")
         _wait_for_proxy(client_host, tun_name, defaults4, defaults6)
+
+        result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", expected_tag, check=False)
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p client mode tun full failed before remove.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        _wait_for_full_tunnel(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            DNS_SERVERS,
+            original_resolv,
+        )
+
+        remove_result = xp2p_client_runner(
+            "client",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--all",
+            "--ignore-missing",
+            "--quiet",
+            check=False,
+        )
+        if remove_result.rc != 0:
+            pytest.fail(
+                "xp2p client remove failed.\n"
+                f"STDOUT:\n{remove_result.stdout}\nSTDERR:\n{remove_result.stderr}"
+            )
+        _wait_for_routes_restored(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            original_resolv,
+        )
+
+        _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
+        _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
+        _update_client_config(client_host, tun_mode="full", dns_servers=DNS_SERVERS)
+        _start_service(xp2p_client_runner, client_host)
+        service_started = True
+        _wait_for_full_tunnel(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            DNS_SERVERS,
+            original_resolv,
+        )
+
     finally:
         if service_started:
             _stop_service(xp2p_client_runner)
@@ -620,6 +770,105 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
                 expected_tag,
                 check=False,
             )
+        if host_entry_added:
+            linux_env.run_guest_script(
+                client_host,
+                "scripts/linux/update_hosts_entry.sh",
+                "remove",
+                ENDPOINT_DOMAIN,
+            )
+
+
+def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2p_client_runner, xp2p_linux_versions):
+    if os.environ.get("XP2P_RUN_DESTRUCTIVE_TESTS", "").strip().lower() not in {"1", "true", "yes"}:
+        pytest.skip("Set XP2P_RUN_DESTRUCTIVE_TESTS=1 to run destructive package purge test.")
+
+    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+    host_entry_added = False
+    service_started = False
+    package_removed = False
+    original_config = None
+    original_resolv = None
+    try:
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "add",
+            ENDPOINT_DOMAIN_IP,
+            ENDPOINT_DOMAIN,
+        )
+        host_entry_added = True
+
+        _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
+        _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
+
+        original_config = helpers.read_text(client_host, helpers.CLIENT_CONFIG_FILE)
+        original_resolv = helpers.read_text(client_host, RESOLV_CONF)
+        expected_tag = helpers.expected_proxy_tag(ENDPOINT_IP)
+        resolved_domain_ip = _resolve_ipv4(client_host, ENDPOINT_DOMAIN)
+        updated_config = _replace_endpoint_address(original_config, ENDPOINT_DOMAIN, resolved_domain_ip)
+        if updated_config != original_config:
+            helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, updated_config)
+        _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
+
+        _start_service(xp2p_client_runner, client_host)
+        service_started = True
+
+        defaults4 = _list_default_routes(client_host, "-4")
+        defaults6 = _list_default_routes(client_host, "-6")
+        assert defaults4 or defaults6, "Expected at least one default route before full-tunnel"
+        tun_name = _client_tun_name(client_host)
+        endpoint_ips = [ENDPOINT_IP, resolved_domain_ip]
+        bypass_routes = _build_bypass_routes(defaults4, endpoint_ips, 32)
+
+        result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", expected_tag, check=False)
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p client mode tun full failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        _wait_for_full_tunnel(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            DNS_SERVERS,
+            original_resolv,
+        )
+
+        package_remove = client_host.run("sudo -n dpkg -P xp2p")
+        if package_remove.rc != 0:
+            pytest.fail(
+                "dpkg purge failed.\n"
+                f"STDOUT:\n{package_remove.stdout}\nSTDERR:\n{package_remove.stderr}"
+            )
+        package_removed = True
+        service_started = False
+        _wait_for_routes_restored(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            original_resolv,
+        )
+    finally:
+        if package_removed:
+            reinstall = linux_env.run_guest_script(client_host, "scripts/linux/install_xp2p.sh")
+            if reinstall.rc != 0:
+                pytest.fail(
+                    "Failed to reinstall xp2p package.\n"
+                    f"STDOUT:\n{reinstall.stdout}\nSTDERR:\n{reinstall.stderr}"
+                )
+        if service_started and not package_removed:
+            _stop_service(xp2p_client_runner)
+        if original_config is not None and not package_removed:
+            helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, original_config)
+        if original_resolv is not None:
+            helpers.write_text(client_host, RESOLV_CONF, original_resolv)
+        if original_config is not None and package_removed:
+            helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, original_config)
         if host_entry_added:
             linux_env.run_guest_script(
                 client_host,
@@ -717,3 +966,27 @@ def test_client_redirect_default_route_rejected(client_host, xp2p_client_runner,
     assert ipv6_result.rc != 0
     combined = f"{ipv6_result.stdout}\n{ipv6_result.stderr}".lower()
     assert "reserved for tun-mode full" in combined
+
+
+def test_client_tun_mode_full_unresolved_endpoint_fails(client_host, xp2p_client_runner, xp2p_linux_versions):
+    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+    _install_client_endpoint(xp2p_client_runner, UNRESOLVED_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
+    _update_client_config(client_host, tun_mode="full")
+
+    xp2p_client_runner("client", "service", "stop")
+    start_result = xp2p_client_runner("client", "service", "start", check=False)
+    if start_result.rc != 0:
+        pytest.fail(
+            "xp2p client service start failed.\n"
+            f"STDOUT:\n{start_result.stdout}\nSTDERR:\n{start_result.stderr}"
+        )
+
+    _wait_for_log_entries(
+        client_host,
+        SERVICE_LOG,
+        [
+            "resolve endpoint",
+            UNRESOLVED_DOMAIN,
+        ],
+    )
+    _wait_for_service_state(xp2p_client_runner, "client", expected_active=False)

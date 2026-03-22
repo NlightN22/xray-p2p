@@ -27,7 +27,15 @@ func applyClientDesiredConfig(paths clientPaths, state clientInstallState, opts 
 		return err
 	}
 	fullEnabled := opts.TunEnabled && strings.EqualFold(strings.TrimSpace(opts.TunMode), "full")
-	if err := updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, opts.FullTunnelTag); err != nil {
+	var endpointIPs map[string]fullTunnelEndpointIPs
+	if fullEnabled {
+		var cacheErr error
+		endpointIPs, cacheErr = loadFullTunnelEndpointCache()
+		if cacheErr != nil {
+			return cacheErr
+		}
+	}
+	if err := updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, opts.FullTunnelTag, endpointIPs, false); err != nil {
 		return err
 	}
 	if !applyRoutes {

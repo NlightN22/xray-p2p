@@ -11,7 +11,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
-func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel, fullTunnelEnabled bool, fullTunnelTag string) error {
+func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel, fullTunnelEnabled bool, fullTunnelTag string, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) error {
 	document := make(map[string]any)
 	routing := ensureObject(document, "routing")
 	routing["domainStrategy"] = strings.TrimSpace(cfg.DomainStrategy)
@@ -34,7 +34,10 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 
 	filtered := filterManagedRules(existing, managed)
 	filtered = filterReverseRules(filtered, reverse)
-	filtered = filterEndpointBypassRules(filtered, endpoints)
+	filtered, err := filterEndpointBypassRules(filtered, endpoints, endpointIPs, fullTunnelEnabled && requireEndpointIPs)
+	if err != nil {
+		return err
+	}
 	ruleBuckets := map[routingRuleClass][]any{
 		routingRuleEndpointBypass: {},
 		routingRuleSystem:         {},
@@ -43,9 +46,12 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		routingRuleFullTunnel:     {},
 	}
 
-	for _, ep := range endpoints {
-		ruleBuckets[routingRuleEndpointBypass] = append(ruleBuckets[routingRuleEndpointBypass], endpointBypassRule(ep))
+	ensureIPs := fullTunnelEnabled && requireEndpointIPs
+	bypassRules, err := endpointBypassRules(endpoints, endpointIPs, ensureIPs)
+	if err != nil {
+		return err
 	}
+	ruleBuckets[routingRuleEndpointBypass] = append(ruleBuckets[routingRuleEndpointBypass], bypassRules...)
 	ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], buildClientReverseRules(reverse)...)
 	for idx, ep := range endpoints {
 		markerIP, err := markerIPForIndex(idx)
