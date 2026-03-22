@@ -3,10 +3,13 @@ package clientcmd
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestRunClientInstall(t *testing.T) {
@@ -232,4 +235,30 @@ func execClientInstall(cfg config.Config, args []string, installErr error) (int,
 
 	code := runClientInstall(context.Background(), cfg, args)
 	return code, calls
+}
+
+func TestRunClientInstallRejectsTunModeConflictWithoutForce(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+
+	configPath := filepath.Join(root, layout.ClientConfigFileName)
+	if err := os.WriteFile(configPath, []byte("[client]\n  tun_mode = \"split\"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg := clientCfg(`C:\xp2p-client`, "config-client")
+	args := []string{
+		"--host", "example.org",
+		"--user", "user@example.com",
+		"--password", "secret",
+		"--tun-mode", "full",
+	}
+
+	code, calls := execClientInstall(cfg, args, nil)
+	if code != 1 {
+		t.Fatalf("exit code: got %d want %d", code, 1)
+	}
+	if len(calls) != 0 {
+		t.Fatalf("expected install to be skipped")
+	}
 }

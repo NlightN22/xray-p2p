@@ -8,6 +8,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
@@ -173,6 +174,25 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		}
 		opts.TunMode = modeValue
 		opts.TunModeSet = true
+	}
+
+	if tunModeProvided && !*force {
+		configPath := config.ConfigPath(layout.ClientConfigFileName)
+		if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
+			existing, loadErr := config.Load(config.Options{
+				Path:         configPath,
+				AllowInvalid: true,
+			})
+			if loadErr != nil {
+				logging.Warn("xp2p client install: failed to load existing config for tun mode check", "err", loadErr)
+			} else if current := strings.TrimSpace(existing.Client.TunMode); current != "" && !strings.EqualFold(current, opts.TunMode) {
+				logging.Error("xp2p client install: tun mode conflict (use --force to override)", "current", current, "requested", opts.TunMode)
+				return 1
+			}
+		} else if err != nil && !os.IsNotExist(err) {
+			logging.Error("xp2p client install: unable to stat existing config", "err", err)
+			return 1
+		}
 	}
 
 	if err := clientInstallFunc(ctx, opts); err != nil {
