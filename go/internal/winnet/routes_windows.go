@@ -4,10 +4,10 @@ package winnet
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,11 +34,7 @@ func DefaultRoutes(ctx context.Context) ([]Route, error) {
 	if err == nil {
 		return routes, nil
 	}
-	fallback, fallbackErr := defaultRoutesFromPowerShell(ctx)
-	if fallbackErr != nil {
-		return nil, fmt.Errorf("xp2p: route lookup failed: %v: %w", err, fallbackErr)
-	}
-	return fallback, nil
+	return nil, fmt.Errorf("xp2p: route lookup failed: %w", err)
 }
 
 func defaultRoutesFromIPHelper() ([]Route, error) {
@@ -104,54 +100,12 @@ func ipFromRaw(addr windows.RawSockaddrInet) (string, string, bool) {
 	}
 }
 
-func defaultRoutesFromPowerShell(ctx context.Context) ([]Route, error) {
-	script := strings.Join([]string{
-		`$ErrorActionPreference = "Stop"`,
-		`$routes = @()`,
-		`$routes += Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue | Select-Object DestinationPrefix,NextHop,InterfaceIndex,RouteMetric,PolicyStore,AddressFamily`,
-		`$routes += Get-NetRoute -DestinationPrefix "::/0" -ErrorAction SilentlyContinue | Select-Object DestinationPrefix,NextHop,InterfaceIndex,RouteMetric,PolicyStore,AddressFamily`,
-		`foreach ($route in $routes) {`,
-		`  $ifRow = Get-NetIPInterface -InterfaceIndex $route.InterfaceIndex -AddressFamily $route.AddressFamily -ErrorAction SilentlyContinue | Select-Object -First 1`,
-		`  if ($null -ne $ifRow) {`,
-		`    $route | Add-Member -NotePropertyName InterfaceMetric -NotePropertyValue $ifRow.InterfaceMetric -Force`,
-		`  } else {`,
-		`    $route | Add-Member -NotePropertyName InterfaceMetric -NotePropertyValue 0 -Force`,
-		`  }`,
-		`}`,
-		`if ($routes.Count -eq 0) { Write-Output "" } else { $routes | ConvertTo-Json -Compress }`,
-	}, "; ")
-	out, err := runPowerShell(ctx, script)
-	if err != nil {
-		return nil, err
-	}
-	return decodeRoutes(out)
-}
-
 func InterfaceIndexByName(ctx context.Context, name string) (int, error) {
 	if idx, err := interfaceIndexByNameNative(name); err == nil {
 		return idx, nil
-	} else if !errors.Is(err, ErrInterfaceNotFound) {
+	} else {
 		return 0, err
 	}
-	escaped := escapePowerShellString(name)
-	script := strings.Join([]string{
-		`$ErrorActionPreference = "Stop"`,
-		`$adapter = Get-NetAdapter -Name '` + escaped + `' -ErrorAction SilentlyContinue | Select-Object -First 1`,
-		`if ($null -eq $adapter) { Write-Output "" } else { Write-Output $adapter.ifIndex }`,
-	}, "; ")
-	out, err := runPowerShell(ctx, script)
-	if err != nil {
-		return 0, err
-	}
-	out = strings.TrimSpace(out)
-	if out == "" {
-		return 0, fmt.Errorf("%w: %s", ErrInterfaceNotFound, name)
-	}
-	value, err := strconv.Atoi(out)
-	if err != nil {
-		return 0, fmt.Errorf("xp2p: parse interface index: %w", err)
-	}
-	return value, nil
 }
 
 func InterfaceIndexByIP(addr string) (int, error) {
@@ -193,37 +147,24 @@ func ApplyRoute(ctx context.Context, route Route) error {
 	if nextHop == "" {
 		return fmt.Errorf("xp2p: next hop required for %s", dest)
 	}
-	if err := applyRouteNative(route); err == nil {
-		return nil
-	} else if isRouteNotFoundError(err) {
-		return err
+	if err := applyRouteNative(route); err != nil {
+		if isIPHelperUnsupported(err) {
+			return wrapRouteError(applyRouteLegacy(ctx, route))
+		}
+		return wrapRouteError(err)
 	}
-	policy := strings.TrimSpace(route.PolicyStore)
-	if policy == "" {
-		policy = "ActiveStore"
+	return nil
+}
+
+func InterfaceIPv4(ctx context.Context, ifIndex int) (string, error) {
+	if ifIndex <= 0 {
+		return "", nil
 	}
-	metric := ""
-	if route.RouteMetric > 0 {
-		metric = fmt.Sprintf(" -RouteMetric %d", route.RouteMetric)
+	value, err := interfaceIPv4Native(ifIndex)
+	if err != nil {
+		return "", err
 	}
-	script := strings.Join([]string{
-		`$ErrorActionPreference = "Stop"`,
-		`$dest = "` + escapePowerShellString(dest) + `"`,
-		`$nextHop = "` + escapePowerShellString(nextHop) + `"`,
-		`$ifIndex = ` + strconv.Itoa(route.InterfaceIndex),
-		`$existing = Get-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -ErrorAction SilentlyContinue`,
-		`$exact = $existing | Where-Object { $_.NextHop -eq $nextHop } | Select-Object -First 1`,
-		`if ($null -ne $exact) {`,
-		`  Set-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop -PolicyStore "` + escapePowerShellString(policy) + `"` + metric + ` -ErrorAction Stop | Out-Null`,
-		`} else {`,
-		`  if ($null -ne $existing) {`,
-		`    Remove-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -Confirm:$false -ErrorAction SilentlyContinue | Out-Null`,
-		`  }`,
-		`  New-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop -PolicyStore "` + escapePowerShellString(policy) + `"` + metric + ` -ErrorAction Stop | Out-Null`,
-		`}`,
-	}, "; ")
-	_, err := runPowerShell(ctx, script)
-	return wrapRouteError(err)
+	return strings.TrimSpace(value), nil
 }
 
 func RemoveRoute(ctx context.Context, route Route) error {
@@ -235,23 +176,13 @@ func RemoveRoute(ctx context.Context, route Route) error {
 	if nextHop == "" {
 		nextHop = "0.0.0.0"
 	}
-	if err := removeRouteNative(route); err == nil {
-		return nil
+	if err := removeRouteNative(route); err != nil {
+		if isIPHelperUnsupported(err) {
+			return wrapRouteError(removeRouteLegacy(ctx, route))
+		}
+		return wrapRouteError(err)
 	}
-	policy := strings.TrimSpace(route.PolicyStore)
-	policyArg := ""
-	if policy != "" {
-		policyArg = ` -PolicyStore "` + escapePowerShellString(policy) + `"`
-	}
-	script := strings.Join([]string{
-		`$ErrorActionPreference = "Stop"`,
-		`$dest = "` + escapePowerShellString(dest) + `"`,
-		`$ifIndex = ` + strconv.Itoa(route.InterfaceIndex),
-		`$nextHop = "` + escapePowerShellString(nextHop) + `"`,
-		`Remove-NetRoute -DestinationPrefix $dest -InterfaceIndex $ifIndex -NextHop $nextHop` + policyArg + ` -Confirm:$false -ErrorAction SilentlyContinue | Out-Null`,
-	}, "; ")
-	_, err := runPowerShell(ctx, script)
-	return wrapRouteError(err)
+	return nil
 }
 
 func interfaceIndexByNameNative(name string) (int, error) {
@@ -366,6 +297,45 @@ func interfaceLuidByIPNative(addr string) (uint64, error) {
 	return 0, ErrInterfaceNotFound
 }
 
+func interfaceIPv4Native(ifIndex int) (string, error) {
+	adapter := windows.IpAdapterAddresses{}
+	size := uint32(unsafe.Sizeof(adapter))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, &adapter, &size); err != nil && err != windows.ERROR_BUFFER_OVERFLOW {
+		return "", err
+	}
+	buf := make([]byte, size)
+	head := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0]))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, head, &size); err != nil {
+		return "", err
+	}
+	best := ""
+	bestPrefix := uint8(0)
+	for aa := head; aa != nil; aa = aa.Next {
+		if int(aa.IfIndex) != ifIndex {
+			continue
+		}
+		for ua := aa.FirstUnicastAddress; ua != nil; ua = ua.Next {
+			addrIP := ua.Address.IP()
+			if addrIP == nil {
+				continue
+			}
+			ip4 := addrIP.To4()
+			if ip4 == nil {
+				continue
+			}
+			if ip4.Equal(net.IPv4zero) || ip4.IsLoopback() || (ip4[0] == 169 && ip4[1] == 254) {
+				continue
+			}
+			prefix := ua.OnLinkPrefixLength
+			if best == "" || prefix > bestPrefix {
+				best = ip4.String()
+				bestPrefix = prefix
+			}
+		}
+	}
+	return best, nil
+}
+
 func matchAdapterName(adapter *windows.IpAdapterAddresses, target string) bool {
 	if adapter == nil || target == "" {
 		return false
@@ -394,6 +364,75 @@ func parseIP(value string) net.IP {
 		return ipNet.IP
 	}
 	return net.ParseIP(value)
+}
+
+func applyRouteLegacy(ctx context.Context, route Route) error {
+	args, err := buildRouteArgs("add", route)
+	if err != nil {
+		return err
+	}
+	return runRouteCommand(ctx, args, false)
+}
+
+func removeRouteLegacy(ctx context.Context, route Route) error {
+	args, err := buildRouteArgs("delete", route)
+	if err != nil {
+		return err
+	}
+	return runRouteCommand(ctx, args, true)
+}
+
+func buildRouteArgs(action string, route Route) ([]string, error) {
+	dest := strings.TrimSpace(route.DestinationPrefix)
+	if dest == "" {
+		return nil, errors.New("xp2p: route destination required")
+	}
+	nextHop := strings.TrimSpace(route.NextHop)
+	if nextHop == "" {
+		nextHop = "0.0.0.0"
+	}
+	ifIndex := route.InterfaceIndex
+	if ifIndex <= 0 {
+		return nil, errors.New("xp2p: interface index required")
+	}
+	metric := route.RouteMetric
+	ip, ipNet, err := net.ParseCIDR(dest)
+	if err != nil || ipNet == nil || ip == nil {
+		return nil, fmt.Errorf("xp2p: parse route destination: %s", dest)
+	}
+	if ip.To4() == nil {
+		args := []string{"-6", action, dest, nextHop, "if", strconv.Itoa(ifIndex)}
+		if metric > 0 {
+			args = append(args, "metric", strconv.Itoa(metric))
+		}
+		return args, nil
+	}
+	mask := net.IP(ipNet.Mask).String()
+	args := []string{action, ip.String(), "mask", mask, nextHop, "if", strconv.Itoa(ifIndex)}
+	if metric > 0 {
+		args = append(args, "metric", strconv.Itoa(metric))
+	}
+	return args, nil
+}
+
+func runRouteCommand(ctx context.Context, args []string, ignoreNotFound bool) error {
+	routePath, err := lookPathSystem32("route.exe")
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, routePath, args...)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	output := strings.TrimSpace(string(out))
+	if ignoreNotFound {
+		lower := strings.ToLower(output)
+		if strings.Contains(lower, "not found") || strings.Contains(lower, "no such") {
+			return nil
+		}
+	}
+	return fmt.Errorf("xp2p: route.exe failed: %w: %s", err, output)
 }
 
 var (
@@ -604,27 +643,20 @@ func isRouteNotFoundError(err error) bool {
 	return strings.Contains(lower, "element not found") || strings.Contains(lower, "error 1168")
 }
 
+func isIPHelperUnsupported(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "initializeipforwardentry2") ||
+		strings.Contains(lower, "procedure could not be found")
+}
+
 func max(a, b int) int {
 	if a > b {
 		return a
 	}
 	return b
-}
-
-func decodeRoutes(raw string) ([]Route, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return nil, nil
-	}
-	var list []Route
-	if err := json.Unmarshal([]byte(trimmed), &list); err == nil {
-		return list, nil
-	}
-	var single Route
-	if err := json.Unmarshal([]byte(trimmed), &single); err != nil {
-		return nil, fmt.Errorf("xp2p: parse routes: %w", err)
-	}
-	return []Route{single}, nil
 }
 
 func wrapRouteError(err error) error {

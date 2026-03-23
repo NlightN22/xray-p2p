@@ -106,6 +106,13 @@ func ensureWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr stri
 		if err != nil {
 			lastErr = err
 		} else {
+			if strings.EqualFold(family, "IPv4") {
+				if err := waitForWindowsIPv4(ctx, ifIndex, verbose); err != nil {
+					lastErr = err
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+			}
 			route := winnet.Route{
 				DestinationPrefix: dest,
 				NextHop:           nextHop,
@@ -280,7 +287,7 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 	trimmedAddr := strings.TrimSpace(tunAddr)
 	deadline := time.Now()
 	if wait {
-		deadline = time.Now().Add(5 * time.Second)
+		deadline = time.Now().Add(10 * time.Second)
 	}
 	attempt := 0
 	for {
@@ -317,6 +324,34 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 		}
 		if verbose {
 			logging.Info("xp2p: full-tunnel waiting for tun interface", "interface", name, "attempt", attempt)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func waitForWindowsIPv4(ctx context.Context, ifIndex int, verbose bool) error {
+	deadline := time.Now().Add(10 * time.Second)
+	attempt := 0
+	for {
+		attempt++
+		value, err := winnet.InterfaceIPv4(ctx, ifIndex)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(value) != "" {
+			if verbose {
+				logging.Info("xp2p: full-tunnel tun IPv4 ready", "ifIndex", ifIndex, "ip", value, "attempt", attempt)
+			}
+			return nil
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("xp2p: tun IPv4 address unavailable for interface %d", ifIndex)
+		}
+		if verbose {
+			logging.Info("xp2p: full-tunnel waiting for tun IPv4", "ifIndex", ifIndex, "attempt", attempt)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

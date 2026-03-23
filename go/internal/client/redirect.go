@@ -82,10 +82,6 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err != nil {
 		return err
 	}
-	if ruleTarget.Kind == redirect.KindCIDR && isDefaultRoute(ruleTarget.Value) {
-		return errors.New("xp2p: default route redirects are reserved for tun-mode full")
-	}
-
 	rule := redirect.Rule{
 		OutboundTag: tag,
 	}
