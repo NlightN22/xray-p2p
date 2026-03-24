@@ -7,6 +7,7 @@ GO_LDFLAGS := -s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current
 VAGRANT_WINMSI_DIR := infra/vagrant/win-msi
 
 VAGRANT_WIN10_DIR := infra/vagrant/windows10
+VAGRANT_WIN22_DIR := infra/vagrant/server2022
 VAGRANT_WIN10_SERVER_ID := win10-a
 VAGRANT_WIN10_CLIENT_ID := win10-b
 
@@ -48,10 +49,10 @@ halt-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant halt
 
 up-win22:
-	cd $(VAGRANT_WIN10_DIR) && vagrant up
+	cd $(VAGRANT_WIN22_DIR) && vagrant up
 
 halt-win22:
-	cd $(VAGRANT_WIN10_DIR) && vagrant halt
+	cd $(VAGRANT_WIN22_DIR) && vagrant halt
 
 up-deb12:
 	cd $(VAGRANT_DEB12_DIR) && vagrant up

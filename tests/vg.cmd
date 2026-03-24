@@ -9,6 +9,8 @@ if /I "%ENVNAME%"=="win10" (
     set "VDIR=%~dp0..\infra\vagrant\debian12\deb-test"
 ) else if /I "%ENVNAME%"=="owrt" (
     set "VDIR=%~dp0..\infra\vagrant\openwrt"
+) else if /I "%ENVNAME%"=="win22" (
+    set "VDIR=%~dp0..\infra\vagrant\server2022"
 ) else (
     echo Unknown environment: %ENVNAME%
     exit /b 1
