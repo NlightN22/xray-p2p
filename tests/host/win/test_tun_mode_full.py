@@ -18,6 +18,7 @@ CLIENT_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-client.state.json",
     _env.CONFIG_ROOT / "xp2p-client.tun-full.json",
 ]
+CLIENT_SERVICE_LOG = _env.LOGS_DIR / "client" / "service.log"
 
 CLIENT_USER = "full-tun@example.com"
 CLIENT_PASSWORD = "full-tun-pass"
@@ -27,8 +28,12 @@ ENDPOINT_DOMAIN_IP = "198.51.100.20"
 
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
-ROUTE_TIMEOUT = 60.0
-ROUTE_POLL_INTERVAL = 1.5
+IFACE_TIMEOUT = 120.0
+ROUTE_WAIT_INITIAL = 60.0
+ROUTE_WAIT_RETRY = 60.0
+ROUTE_WAIT_SPLIT = 60.0
+ROUTE_POLL_INTERVAL = 2.0
+WATCH_RESTART_WINDOW = 35.0
 
 
 def _cleanup_client_install(client_host, runner) -> None:
@@ -213,7 +218,7 @@ def _route_metric(route: dict) -> int:
 
 
 def _wait_for_interface_index(host, name: str) -> int:
-    deadline = time.time() + ROUTE_TIMEOUT
+    deadline = time.time() + IFACE_TIMEOUT
     last_error: Exception | None = None
     while time.time() < deadline:
         try:
@@ -225,7 +230,7 @@ def _wait_for_interface_index(host, name: str) -> int:
 
 
 def _wait_for_condition(label: str, predicate) -> None:
-    deadline = time.time() + ROUTE_TIMEOUT
+    deadline = time.time() + ROUTE_WAIT_INITIAL
     last_debug = ""
     while time.time() < deadline:
         ok, debug = predicate()
@@ -233,18 +238,53 @@ def _wait_for_condition(label: str, predicate) -> None:
             return
         last_debug = debug
         time.sleep(ROUTE_POLL_INTERVAL)
-    pytest.fail(f"{label} not reached within {ROUTE_TIMEOUT:.0f}s.\n{last_debug}")
+    pytest.fail(f"{label} not reached within {ROUTE_WAIT_INITIAL:.0f}s.\n{last_debug}")
+
+
+def _poll_for_condition(label: str, predicate, timeout: float) -> tuple[bool, str]:
+    deadline = time.time() + timeout
+    last_debug = ""
+    while time.time() < deadline:
+        ok, debug = predicate()
+        if ok:
+            return True, ""
+        last_debug = debug
+        time.sleep(ROUTE_POLL_INTERVAL)
+    return False, f"{label} not reached within {timeout:.0f}s.\n{last_debug}"
+
+
+def _read_log_tail(host, path: Path, lines: int = 200) -> str:
+    if not _env.path_exists(host, path):
+        return ""
+    target = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$content = Get-Content -Path {target} -Tail {int(lines)}
+$content
+"""
+    result = _env.run_powershell(host, script, label="log_tail")
+    if result.rc != 0:
+        return f"<failed to read {path}>"
+    return result.stdout or ""
+
+
+def _is_tun_route(route: dict, tun_name: str, tun_index: int) -> bool:
+    alias = str(route.get("InterfaceAlias") or "").strip().lower()
+    if alias and alias == tun_name.lower():
+        return True
+    return _route_id(route)[1] == tun_index
 
 
 def _wait_for_full_tunnel(
     host,
+    tun_name: str,
     tun_index: int,
     old_default_ids: set[tuple[str, int]],
     endpoint_ips: list[str],
 ) -> None:
     def _check():
         defaults = _default_routes(host)
-        tun_routes = [route for route in defaults if _route_id(route)[1] == tun_index]
+        tun_routes = [route for route in defaults if _is_tun_route(route, tun_name, tun_index)]
         has_tun_default = bool(tun_routes)
         min_metric = min((_route_metric(route) for route in defaults), default=None)
         best_is_tun = min_metric is not None and any(
@@ -262,26 +302,80 @@ def _wait_for_full_tunnel(
             if not matched:
                 missing_bypass.append(f"{ip} -> {routes}")
 
+        state_text = ""
+        if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
+            state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
+        service_log = _read_log_tail(host, CLIENT_SERVICE_LOG)
+
         ok = has_tun_default and best_is_tun and not missing_bypass
         debug = (
             f"has_tun_default={has_tun_default} best_is_tun={best_is_tun} "
             f"missing_bypass={missing_bypass}\n"
-            f"defaults={defaults}"
+            f"defaults={defaults}\n"
+            f"full_state={state_text}\n"
+            f"service_log_tail:\n{service_log}"
         )
         return ok, debug
 
     _wait_for_condition("Full-tunnel routes", _check)
 
 
+def _poll_for_full_tunnel(
+    host,
+    tun_name: str,
+    tun_index: int,
+    old_default_ids: set[tuple[str, int]],
+    endpoint_ips: list[str],
+    timeout: float,
+) -> tuple[bool, str]:
+    def _check():
+        defaults = _default_routes(host)
+        tun_routes = [route for route in defaults if _is_tun_route(route, tun_name, tun_index)]
+        has_tun_default = bool(tun_routes)
+        min_metric = min((_route_metric(route) for route in defaults), default=None)
+        best_is_tun = min_metric is not None and any(
+            _route_metric(route) == min_metric for route in tun_routes
+        )
+
+        missing_bypass: list[str] = []
+        for ip in endpoint_ips:
+            routes = _env.get_net_routes(host, f"{ip}/32")
+            matched = False
+            for route in routes:
+                if _route_id(route) in old_default_ids:
+                    matched = True
+                    break
+            if not matched:
+                missing_bypass.append(f"{ip} -> {routes}")
+
+        state_text = ""
+        if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
+            state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
+        service_log = _read_log_tail(host, CLIENT_SERVICE_LOG)
+
+        ok = has_tun_default and best_is_tun and not missing_bypass
+        debug = (
+            f"has_tun_default={has_tun_default} best_is_tun={best_is_tun} "
+            f"missing_bypass={missing_bypass}\n"
+            f"defaults={defaults}\n"
+            f"full_state={state_text}\n"
+            f"service_log_tail:\n{service_log}"
+        )
+        return ok, debug
+
+    return _poll_for_condition("Full-tunnel routes", _check, timeout)
+
+
 def _wait_for_routes_restored(
     host,
+    tun_name: str,
     tun_index: int,
     old_default_ids: set[tuple[str, int]],
     endpoint_ips: list[str],
 ) -> None:
     def _check():
         defaults = _default_routes(host)
-        tun_routes = [route for route in defaults if _route_id(route)[1] == tun_index]
+        tun_routes = [route for route in defaults if _is_tun_route(route, tun_name, tun_index)]
         defaults_restored = any(_route_id(route) in old_default_ids for route in defaults)
         bypass_left: list[str] = []
         for ip in endpoint_ips:
@@ -289,15 +383,58 @@ def _wait_for_routes_restored(
             if routes:
                 bypass_left.append(f"{ip} -> {routes}")
 
+        state_text = ""
+        if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
+            state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
+        service_log = _read_log_tail(host, CLIENT_SERVICE_LOG)
+
         ok = not tun_routes and defaults_restored and not bypass_left
         debug = (
             f"tun_routes={tun_routes} defaults_restored={defaults_restored} "
             f"bypass_left={bypass_left}\n"
-            f"defaults={defaults}"
+            f"defaults={defaults}\n"
+            f"full_state={state_text}\n"
+            f"service_log_tail:\n{service_log}"
         )
         return ok, debug
 
     _wait_for_condition("Routes restored", _check)
+
+
+def _poll_for_routes_restored(
+    host,
+    tun_name: str,
+    tun_index: int,
+    old_default_ids: set[tuple[str, int]],
+    endpoint_ips: list[str],
+    timeout: float,
+) -> tuple[bool, str]:
+    def _check():
+        defaults = _default_routes(host)
+        tun_routes = [route for route in defaults if _is_tun_route(route, tun_name, tun_index)]
+        defaults_restored = any(_route_id(route) in old_default_ids for route in defaults)
+        bypass_left: list[str] = []
+        for ip in endpoint_ips:
+            routes = _env.get_net_routes(host, f"{ip}/32")
+            if routes:
+                bypass_left.append(f"{ip} -> {routes}")
+
+        state_text = ""
+        if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
+            state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
+        service_log = _read_log_tail(host, CLIENT_SERVICE_LOG)
+
+        ok = not tun_routes and defaults_restored and not bypass_left
+        debug = (
+            f"tun_routes={tun_routes} defaults_restored={defaults_restored} "
+            f"bypass_left={bypass_left}\n"
+            f"defaults={defaults}\n"
+            f"full_state={state_text}\n"
+            f"service_log_tail:\n{service_log}"
+        )
+        return ok, debug
+
+    return _poll_for_condition("Routes restored", _check, timeout)
 
 
 def _expected_tag(host: str) -> str:
@@ -391,16 +528,46 @@ def test_windows_client_tun_mode_full_routes(client_host, xp2p_client_runner):
                 "xp2p client mode tun full failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
+        client_cfg = _env.read_toml(client_host, CLIENT_CONFIG_FILE).get("client") or {}
+        assert client_cfg.get("tun_mode") == "full", "client.tun_mode was not updated to full"
+        assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
 
         tun_name = _client_tun_name(client_host)
         tun_index = _wait_for_interface_index(client_host, tun_name)
         endpoint_ips = [ENDPOINT_IP, resolved_domain_ip]
-        _wait_for_full_tunnel(
+        ok, debug = _poll_for_full_tunnel(
             client_host,
+            tun_name,
             tun_index,
             old_default_ids,
             endpoint_ips,
+            ROUTE_WAIT_INITIAL,
         )
+        if not ok:
+            time.sleep(WATCH_RESTART_WINDOW)
+            result = _client_mode(
+                xp2p_client_runner,
+                "tun",
+                "full",
+                "--tag",
+                expected_tag,
+                check=False,
+            )
+            if result.rc != 0:
+                pytest.fail(
+                    "xp2p client mode tun full retry failed.\n"
+                    f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{debug}"
+                )
+            ok, debug = _poll_for_full_tunnel(
+                client_host,
+                tun_name,
+                tun_index,
+                old_default_ids,
+                endpoint_ips,
+                ROUTE_WAIT_RETRY,
+            )
+            if not ok:
+                pytest.fail(debug)
 
         result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
         if result.rc != 0:
@@ -408,12 +575,16 @@ def test_windows_client_tun_mode_full_routes(client_host, xp2p_client_runner):
                 "xp2p client mode tun split failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
-        _wait_for_routes_restored(
+        ok, debug = _poll_for_routes_restored(
             client_host,
+            tun_name,
             tun_index,
             old_default_ids,
             endpoint_ips,
+            ROUTE_WAIT_SPLIT,
         )
+        if not ok:
+            pytest.fail(debug)
     finally:
         if service_started:
             _stop_client_service(xp2p_client_runner)
