@@ -131,8 +131,37 @@ def _wait_for_interface_index(host, name: str) -> int:
             return _env.get_interface_index(host, name)
         except Exception as exc:
             last_error = exc
+        fallback = _find_interface_index_by_prefix(host, name)
+        if fallback is not None:
+            return fallback
         time.sleep(ROUTE_POLL_INTERVAL)
     pytest.fail(f"Interface {name} not available: {last_error}")
+
+
+def _find_interface_index_by_prefix(host, prefix: str) -> int | None:
+    target = _env.ps_quote(prefix)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$prefix = {target}
+$adapter = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.Name -like "$prefix*" }} |
+    Sort-Object -Property ifIndex |
+    Select-Object -First 1
+if (-not $adapter) {{
+    exit 3
+}}
+Write-Output $adapter.ifIndex
+"""
+    result = _env.run_powershell(host, script, label="find_net_adapter")
+    if result.rc != 0:
+        return None
+    value = (result.stdout or "").strip().splitlines()
+    if not value:
+        return None
+    try:
+        return int(value[-1].strip())
+    except ValueError:
+        return None
 
 
 def _route_snapshot(host, cidr: str) -> list[dict]:
@@ -193,6 +222,7 @@ def test_windows_client_redirect_routes_os(
     _cleanup_server_install(server_host, xp2p_server_runner)
     _cleanup_client_install(client_host, xp2p_client_runner)
     server_public_host = _server_public_host()
+    original_mode: str | None = None
     try:
         server_install = xp2p_server_runner(
             "server",
@@ -234,6 +264,10 @@ def test_windows_client_redirect_routes_os(
             server_public_host,
             check=True,
         )
+
+        original_mode = _current_client_mode(client_host)
+        if original_mode != "tun":
+            _set_client_mode(xp2p_client_runner, "tun")
 
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
@@ -279,6 +313,8 @@ def test_windows_client_redirect_routes_os(
             server_public_host,
             check=False,
         )
+        if original_mode and original_mode != "tun":
+            _set_client_mode(xp2p_client_runner, original_mode)
         _cleanup_client_install(client_host, xp2p_client_runner)
         _cleanup_server_install(server_host, xp2p_server_runner)
 
@@ -425,6 +461,10 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             check=True,
         )
 
+        original_mode = _current_client_mode(client_host)
+        if original_mode != "tun":
+            _set_client_mode(xp2p_client_runner, "tun")
+
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
@@ -471,7 +511,6 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             _wait_for_route_absent(client_host, CLIENT_REDIRECT_CIDR)
             _wait_for_route_present(client_host, CLIENT_REDIRECT_CIDR_ALT, tun_index)
 
-        original_mode = _current_client_mode(client_host)
         _set_client_mode(xp2p_client_runner, "proxy")
 
         with xp2p_server_run_factory(
@@ -505,7 +544,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             server_public_host,
             check=False,
         )
-        if original_mode:
+        if original_mode and original_mode != _current_client_mode(client_host):
             _set_client_mode(xp2p_client_runner, original_mode)
         _cleanup_client_install(client_host, xp2p_client_runner)
         _cleanup_server_install(server_host, xp2p_server_runner)

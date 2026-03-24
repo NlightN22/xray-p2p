@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -135,6 +136,24 @@ def _wrap_xray(server_host, client_host, fake_version: str) -> None:
             )
 
 
+def _run_guest_script_with_retry(host, script: str, *, retries: int = 3, delay: float = 5.0, **params):
+    last_exc: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            return win_env.run_guest_script(host, script, **params)
+        except Exception as exc:
+            last_exc = exc
+            backend = getattr(host, "backend", None)
+            if backend is not None and hasattr(backend, "_reset_client"):
+                backend._reset_client()
+            if attempt < retries:
+                time.sleep(delay)
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
+
+
 def _restore_xray(server_host, client_host) -> None:
     for host in (server_host, client_host):
         _stop_xray_processes(host)
@@ -217,7 +236,7 @@ def test_xray_pinned_version_rejects_mismatch(
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
         _wrap_xray(server_host, client_host, mismatch)
 
-        server_result = win_env.run_guest_script(
+        server_result = _run_guest_script_with_retry(
             server_host,
             "scripts/start_xp2p_server_run.ps1",
             Xp2pPath=str(win_env.XP2P_EXE),
@@ -230,7 +249,7 @@ def test_xray_pinned_version_rejects_mismatch(
         )
         _assert_mismatch_logged(server_host, SERVER_RUN_OUTPUT, "server")
 
-        client_result = win_env.run_guest_script(
+        client_result = _run_guest_script_with_retry(
             client_host,
             "scripts/start_xp2p_client_run.ps1",
             Xp2pPath=str(win_env.XP2P_EXE),

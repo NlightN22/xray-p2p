@@ -121,7 +121,7 @@ def _update_client_config(host, **updates) -> None:
     original = _env.read_text(host, CLIENT_CONFIG_FILE)
     updated = _update_toml_section(original, "client", updates)
     if updated != original:
-        _env.write_text(host, CLIENT_CONFIG_FILE, updated)
+        _write_text_atomic(host, CLIENT_CONFIG_FILE, updated)
 
 
 def _update_toml_section(text: str, section: str, updates: dict) -> str:
@@ -268,11 +268,114 @@ $content
     return result.stdout or ""
 
 
+def _write_text_atomic(host, path: Path, content: str) -> None:
+    encoded = _env.ps_quote(content.encode("utf-8").hex())
+    target = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target}
+$hex = {encoded}
+$bytes = for ($i = 0; $i -lt $hex.Length; $i += 2) {{
+    [Convert]::ToByte($hex.Substring($i, 2), 16)
+}}
+$text = [System.Text.Encoding]::UTF8.GetString($bytes)
+$dir = Split-Path -Parent $target
+if ($dir -and -not (Test-Path $dir)) {{
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+}}
+$tempName = [System.IO.Path]::GetRandomFileName()
+$tempPath = Join-Path $dir $tempName
+$encoding = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($tempPath, $text, $encoding)
+Move-Item -Path $tempPath -Destination $target -Force
+"""
+    result = _env.run_powershell(host, script, label="write_text_atomic")
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to write remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _assert_internet_access(host) -> None:
+    script = """
+$ErrorActionPreference = 'Stop'
+$dnsName = "example.com"
+$tcpHost = "1.1.1.1"
+$tcpPort = 443
+try {
+    Resolve-DnsName -Name $dnsName -ErrorAction Stop | Out-Null
+} catch {
+    Write-Error "Internet check failed: DNS lookup for $dnsName"
+    exit 1
+}
+try {
+    $tcpOk = Test-NetConnection -ComputerName $tcpHost -Port $tcpPort -InformationLevel Quiet
+} catch {
+    $tcpOk = $false
+}
+if (-not $tcpOk) {
+    Write-Error "Internet check failed: TCP connect to ${tcpHost}:${tcpPort}"
+    exit 1
+}
+exit 0
+"""
+    result = _env.run_powershell(host, script, label="check_internet_access")
+    if result.rc != 0:
+        pytest.fail(
+            "Client internet check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def _is_tun_route(route: dict, tun_name: str, tun_index: int) -> bool:
     alias = str(route.get("InterfaceAlias") or "").strip().lower()
     if alias and alias == tun_name.lower():
         return True
     return _route_id(route)[1] == tun_index
+
+
+def _find_adapter_by_prefix(host, prefix: str) -> tuple[str, int] | None:
+    target = _env.ps_quote(prefix)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$prefix = {target}
+$adapter = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.Name -like "$prefix*" }} |
+    Sort-Object -Property ifIndex |
+    Select-Object -First 1
+if (-not $adapter) {{
+    exit 3
+}}
+Write-Output ("{0}|{1}" -f $adapter.Name, $adapter.ifIndex)
+"""
+    result = _env.run_powershell(host, script, label="find_net_adapter")
+    if result.rc != 0:
+        return None
+    value = (result.stdout or "").strip().splitlines()
+    if not value:
+        return None
+    parts = value[-1].split("|", 1)
+    if len(parts) != 2:
+        return None
+    try:
+        return parts[0].strip(), int(parts[1].strip())
+    except ValueError:
+        return None
+
+
+def _wait_for_tun_adapter(host, tun_name: str) -> tuple[str, int]:
+    deadline = time.time() + IFACE_TIMEOUT
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        try:
+            return tun_name, _env.get_interface_index(host, tun_name)
+        except Exception as exc:
+            last_error = exc
+        fallback = _find_adapter_by_prefix(host, tun_name)
+        if fallback is not None:
+            return fallback
+        time.sleep(ROUTE_POLL_INTERVAL)
+    pytest.fail(f"Interface {tun_name} not available: {last_error}")
 
 
 def _wait_for_full_tunnel(
@@ -509,7 +612,7 @@ def test_windows_client_tun_mode_full_routes(client_host, xp2p_client_runner):
         original_config = _env.read_text(client_host, CLIENT_CONFIG_FILE)
         updated_config = _replace_endpoint_address(original_config, ENDPOINT_DOMAIN, resolved_domain_ip)
         if updated_config != original_config:
-            _env.write_text(client_host, CLIENT_CONFIG_FILE, updated_config)
+            _write_text_atomic(client_host, CLIENT_CONFIG_FILE, updated_config)
 
         _update_client_config(client_host, tun_mode="split")
         _client_mode(xp2p_client_runner, "tun", "split", check=True)
@@ -533,7 +636,7 @@ def test_windows_client_tun_mode_full_routes(client_host, xp2p_client_runner):
         assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
 
         tun_name = _client_tun_name(client_host)
-        tun_index = _wait_for_interface_index(client_host, tun_name)
+        tun_name, tun_index = _wait_for_tun_adapter(client_host, tun_name)
         endpoint_ips = [ENDPOINT_IP, resolved_domain_ip]
         ok, debug = _poll_for_full_tunnel(
             client_host,
@@ -585,6 +688,10 @@ def test_windows_client_tun_mode_full_routes(client_host, xp2p_client_runner):
         )
         if not ok:
             pytest.fail(debug)
+
+        _stop_client_service(xp2p_client_runner)
+        service_started = False
+        _assert_internet_access(client_host)
     finally:
         if service_started:
             _stop_client_service(xp2p_client_runner)
