@@ -10,10 +10,11 @@ SERVER_PRIVATE_IP     = "10.62.10.51".freeze
 CLIENT_PRIVATE_IP     = "10.62.10.52".freeze
 HOST_SYNCED_ROOT      = File.expand_path("../../..", __dir__)
 SHARED_SCRIPTS_ROOT   = File.expand_path("../scripts/win", __dir__)
-OPENSSH_SCRIPT        = File.expand_path("openssh.ps1", SHARED_SCRIPTS_ROOT)
+LOCAL_SCRIPTS_ROOT    = __dir__
+OPENSSH_SCRIPT        = File.expand_path("openssh.ps1", LOCAL_SCRIPTS_ROOT)
 NETWORK_SETUP_SCRIPT  = File.expand_path("network_setup.ps1", SHARED_SCRIPTS_ROOT)
 PROVISION_SCRIPT      = File.expand_path("builder_provision.ps1", SHARED_SCRIPTS_ROOT)
-DEFAULT_WINRM_PORT    = 5986
+DEFAULT_WINRM_PORT    = 5985
 SERVER_WINRM_HOSTPORT = 56785
 CLIENT_WINRM_HOSTPORT = 56786
 SSH_GUEST_PORT        = 2222
@@ -25,7 +26,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
     machine.vm.box = BOX_NAME
     machine.vm.box_version = BOX_VERSION
     machine.vm.guest = :windows
-    machine.vm.boot_timeout = 800
+    machine.vm.boot_timeout = 400
     machine.vm.communicator = "winrm"
     machine.vm.hostname = vb_name
 
@@ -34,9 +35,8 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
 
     machine.winrm.username = "vagrant"
     machine.winrm.password = "vagrant"
-    machine.winrm.transport = :ssl
+    machine.winrm.transport = :plaintext
     machine.winrm.basic_auth_only = true
-    machine.winrm.ssl_peer_verification = false
     machine.winrm.host = "127.0.0.1"
     machine.winrm.port = winrm_host_port
     machine.winrm.timeout = 400
@@ -68,8 +68,8 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
 
     machine.vm.provider "virtualbox" do |vb|
       vb.name = vb_name
-      vb.memory = 6144
-      vb.cpus = 4
+      vb.memory = 8192
+      vb.cpus = 6
       vb.linked_clone = false
       vb.gui = false
     end
@@ -98,6 +98,7 @@ def define_xp2p_machine(config, machine_id:, vb_name:, role:, private_ip:, winrm
                          path: PROVISION_SCRIPT,
                          privileged: true,
                          env: shared_env
+
   end
 end
 
