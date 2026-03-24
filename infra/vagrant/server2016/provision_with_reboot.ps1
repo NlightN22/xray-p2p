@@ -40,6 +40,76 @@ function Invoke-Vagrant {
     }
 }
 
+function Get-VagrantState {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Machine
+    )
+
+    $vagrantCmd = Get-Command -Name "vagrant" -ErrorAction SilentlyContinue
+    if (-not $vagrantCmd) {
+        throw "vagrant not found in PATH. Ensure Vagrant is installed and available."
+    }
+
+    $env:VAGRANT_CWD = $scriptRoot
+    $output = & $vagrantCmd.Source status $Machine --machine-readable 2>&1
+    if (-not $output) {
+        return $null
+    }
+
+    foreach ($line in $output) {
+        if ($line -match ",state,([^,]+)$") {
+            return $Matches[1]
+        }
+    }
+
+    return $null
+}
+
+function Ensure-MachineUp {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Machine
+    )
+
+    $state = Get-VagrantState -Machine $Machine
+    if (-not $state) {
+        Write-Host ("==> Unable to determine state for {0}; running 'up'." -f $Machine)
+        $result = Invoke-Vagrant -Arguments ("up {0} --provision" -f $Machine)
+        if ($result.ExitCode -ne 0) {
+            Write-Host ("==> Initial provisioning for {0} failed. Attempting reboot + provision retry." -f $Machine)
+            $reload = Invoke-Vagrant -Arguments ("reload {0} --force" -f $Machine)
+            if ($reload.ExitCode -ne 0) {
+                exit $reload.ExitCode
+            }
+            $retry = Invoke-Vagrant -Arguments ("provision {0}" -f $Machine)
+            if ($retry.ExitCode -ne 0) {
+                exit $retry.ExitCode
+            }
+        }
+        return
+    }
+
+    if ($state -in @("not_created", "poweroff", "saved", "aborted", "stopped")) {
+        Write-Host ("==> {0} state is {1}; running 'up --provision'." -f $Machine, $state)
+        $result = Invoke-Vagrant -Arguments ("up {0} --provision" -f $Machine)
+        if ($result.ExitCode -ne 0) {
+            Write-Host ("==> Initial provisioning for {0} failed. Attempting reboot + provision retry." -f $Machine)
+            $reload = Invoke-Vagrant -Arguments ("reload {0} --force" -f $Machine)
+            if ($reload.ExitCode -ne 0) {
+                exit $reload.ExitCode
+            }
+            $retry = Invoke-Vagrant -Arguments ("provision {0}" -f $Machine)
+            if ($retry.ExitCode -ne 0) {
+                exit $retry.ExitCode
+            }
+        }
+    }
+    else {
+        Write-Host ("==> {0} state is {1}; skipping 'up'." -f $Machine, $state)
+    }
+}
+
 function Needs-Reboot {
     param(
         [Parameter(Mandatory = $true)]
@@ -65,6 +135,9 @@ function Needs-Reboot {
 
     return $false
 }
+
+Ensure-MachineUp -Machine "win2016-a"
+Ensure-MachineUp -Machine "win2016-b"
 
 $firstRun = Invoke-Vagrant -Arguments "reload --provision --force"
 if ($firstRun.ExitCode -eq 0) {
