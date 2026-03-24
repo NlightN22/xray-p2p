@@ -238,12 +238,27 @@ function Ensure-DotNetSdk {
     Write-Info ("Dotnet SDK ready: {0}" -f $dotnetInfo)
 }
 
+function Ensure-NuGetSources {
+    $sourcesOutput = & dotnet.exe nuget list source 2>$null
+    if (-not $sourcesOutput -or ($sourcesOutput | Select-String -SimpleMatch "No sources found")) {
+        Write-Info "Adding default NuGet source (nuget.org)."
+        & dotnet.exe nuget add source "https://api.nuget.org/v3/index.json" -n "nuget.org" | Write-Host
+        return
+    }
+
+    if (-not ($sourcesOutput | Select-String -SimpleMatch "nuget.org")) {
+        Write-Info "Adding missing NuGet source (nuget.org)."
+        & dotnet.exe nuget add source "https://api.nuget.org/v3/index.json" -n "nuget.org" | Write-Host
+    }
+}
+
 Write-Info "Provisioning role detected."
 
 Ensure-IsElevated
 Ensure-Chocolatey
 Ensure-Go
 Ensure-DotNetSdk
+Ensure-NuGetSources
 Ensure-WiX
 Disable-WindowsAutoUpdate
 Disable-IdleSleepAndHibernate
