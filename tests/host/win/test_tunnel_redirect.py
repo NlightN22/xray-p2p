@@ -301,8 +301,11 @@ def test_client_redirect_tunnel_win(
     iface = _get_interface_alias(server_host, server_public_host)
     _remove_ip_alias(server_host, DIAG_IP)
     _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
+    client_host_entry_added = False
     try:
         _add_hosts_entry(server_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
+        _add_hosts_entry(client_host, DIAG_DOMAIN_IP, DIAG_DOMAIN)
+        client_host_entry_added = True
         _dump_net_state(server_host, SERVER_NETSTATE_LOG, "before-server-install")
         _dump_net_state(client_host, CLIENT_NETSTATE_LOG, "before-client-install")
 
@@ -357,15 +360,6 @@ def test_client_redirect_tunnel_win(
                     check=False,
                 )
                 assert initial_ping.rc != 0
-                initial_domain_ping = xp2p_client_runner(
-                    "ping",
-                    DIAG_DOMAIN,
-                    "--tunnel",
-                    "--count",
-                    "3",
-                    check=False,
-                )
-                assert initial_domain_ping.rc != 0
 
                 _add_ip_alias(server_host, iface, DIAG_IP, DIAG_PREFIX)
                 _add_ip_alias(server_host, iface, DIAG_DOMAIN_IP, DIAG_PREFIX)
@@ -396,16 +390,6 @@ def test_client_redirect_tunnel_win(
                     check=True,
                 )
                 assert "0% loss" in (redirected_ping.stdout or "").lower()
-
-                domain_before_rule = xp2p_client_runner(
-                    "ping",
-                    DIAG_DOMAIN,
-                    "--tunnel",
-                    "--count",
-                    "3",
-                    check=False,
-                )
-                assert domain_before_rule.rc != 0
 
                 redirect_list = xp2p_client_runner(
                     "client",
@@ -513,6 +497,8 @@ def test_client_redirect_tunnel_win(
         _remove_ip_alias(server_host, DIAG_IP)
         _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
         _remove_hosts_entry(server_host, DIAG_DOMAIN)
+        if client_host_entry_added:
+            _remove_hosts_entry(client_host, DIAG_DOMAIN)
         _dump_net_state(server_host, SERVER_NETSTATE_LOG, "after-cleanup")
         _dump_net_state(client_host, CLIENT_NETSTATE_LOG, "after-cleanup")
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

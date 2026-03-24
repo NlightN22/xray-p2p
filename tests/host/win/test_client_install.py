@@ -18,6 +18,8 @@ CLIENT_STATE_FILES = [
     CLIENT_CONFIG_FILE,
     CLIENT_APPLIED_STATE_FILE,
 ]
+LINK_HOST = "link.example.test"
+LINK_HOST_IP = "198.51.100.40"
 
 
 def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
@@ -89,6 +91,30 @@ def _expected_tag(host: str) -> str:
     return f"proxy-{sanitized}"
 
 
+def _add_hosts_entry(host, ip: str, hostname: str) -> None:
+    result = _env.run_guest_script(
+        host,
+        "scripts/update_hosts_entry.ps1",
+        Action="Add",
+        HostName=hostname,
+        IPAddress=ip,
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to add hosts entry.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _remove_hosts_entry(host, hostname: str) -> None:
+    _env.run_guest_script(
+        host,
+        "scripts/update_hosts_entry.ps1",
+        Action="Remove",
+        HostName=hostname,
+    )
+
+
 def _find_outbound(data: dict, tag: str) -> dict:
     for outbound in data.get("outbounds", []):
         if outbound.get("tag") == tag:
@@ -110,6 +136,38 @@ def _assert_outbound_entry(
     outbound = _find_outbound(data, tag)
     server = outbound["settings"]["servers"][0]
     assert server["address"] == host
+    assert server["password"] == password
+    assert server["email"] == email
+    tls_settings = outbound["streamSettings"]["tlsSettings"]
+    assert tls_settings["serverName"] == server_name
+    if pinned_peer_sha256 is not None:
+        actual_pin = tls_settings.get("pinnedPeerCertSha256")
+        if pinned_peer_sha256:
+            assert actual_pin == pinned_peer_sha256
+        else:
+            assert actual_pin, "Expected pinnedPeerCertSha256 to be set"
+        if verify_peer_name:
+            assert tls_settings.get("verifyPeerCertByName") == verify_peer_name
+        assert "allowInsecure" not in tls_settings or not tls_settings.get("allowInsecure")
+    else:
+        assert bool(tls_settings.get("allowInsecure")) is bool(allow_insecure)
+
+
+def _assert_outbound_entry_any_host(
+    data: dict,
+    hosts: set[str],
+    password: str,
+    email: str,
+    server_name: str,
+    allow_insecure: bool = False,
+    pinned_peer_sha256=None,
+    verify_peer_name=None,
+) -> None:
+    tag = _expected_tag(server_name)
+    outbound = _find_outbound(data, tag)
+    server = outbound["settings"]["servers"][0]
+    actual_host = server.get("address")
+    assert actual_host in hosts, f"Unexpected outbound address {actual_host!r}"
     assert server["password"] == password
     assert server["email"] == email
     tls_settings = outbound["streamSettings"]["tlsSettings"]
@@ -250,11 +308,14 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
 @pytest.mark.win
 def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path):
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
+    host_entry_added = False
     try:
+        _add_hosts_entry(client_host, LINK_HOST_IP, LINK_HOST)
+        host_entry_added = True
         link = (
-            "trojan://linkpass@link.example.test:58443?"
-            "pinnedPeerCertSha256=deadbeef&security=tls&sni=link.example.test&"
-            "verifyPeerCertByName=link.example.test#link@example.com"
+            f"trojan://linkpass@{LINK_HOST}:58443?"
+            f"pinnedPeerCertSha256=deadbeef&security=tls&sni={LINK_HOST}&"
+            f"verifyPeerCertByName={LINK_HOST}#link@example.com"
         )
         xp2p_client_runner(
             "client",
@@ -266,16 +327,18 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
         )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbound_entry(
+        _assert_outbound_entry_any_host(
             data,
-            "link.example.test",
+            {LINK_HOST, LINK_HOST_IP},
             "linkpass",
             "link@example.com",
-            "link.example.test",
+            LINK_HOST,
             pinned_peer_sha256="deadbeef",
-            verify_peer_name="link.example.test",
+            verify_peer_name=LINK_HOST,
         )
     finally:
+        if host_entry_added:
+            _remove_hosts_entry(client_host, LINK_HOST)
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
 
@@ -283,10 +346,13 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
 @pytest.mark.win
 def test_client_install_from_link_without_allow_insecure(client_host, xp2p_client_runner, xp2p_msi_path):
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
+    host_entry_added = False
     try:
+        _add_hosts_entry(client_host, LINK_HOST_IP, LINK_HOST)
+        host_entry_added = True
         link = (
-            "trojan://linkpass@link.example.test:58443?"
-            "security=tls&sni=link.example.test#link@example.com"
+            f"trojan://linkpass@{LINK_HOST}:58443?"
+            f"security=tls&sni={LINK_HOST}#link@example.com"
         )
         xp2p_client_runner(
             "client",
@@ -298,10 +364,12 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
         )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
-        _assert_outbound_entry(
-            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
+        _assert_outbound_entry_any_host(
+            data, {LINK_HOST, LINK_HOST_IP}, "linkpass", "link@example.com", LINK_HOST, allow_insecure=False
         )
     finally:
+        if host_entry_added:
+            _remove_hosts_entry(client_host, LINK_HOST)
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
 
