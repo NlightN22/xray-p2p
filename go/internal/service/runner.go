@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -109,9 +107,32 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 		var runErr error
 		restarting := false
 		restartPath := ""
+		pendingRestart := false
+		pendingPath := ""
+		var pendingAt time.Time
+		var pendingTimer *time.Timer
 
 	waitLoop:
 		for {
+			var pendingCh <-chan time.Time
+			if pendingRestart {
+				delay := time.Until(pendingAt)
+				if delay < 0 {
+					delay = 0
+				}
+				if pendingTimer == nil {
+					pendingTimer = time.NewTimer(delay)
+				} else {
+					if !pendingTimer.Stop() {
+						select {
+						case <-pendingTimer.C:
+						default:
+						}
+					}
+					pendingTimer.Reset(delay)
+				}
+				pendingCh = pendingTimer.C
+			}
 			select {
 			case <-ctx.Done():
 				cancelChild()
@@ -119,6 +140,19 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				return nil
 			case err := <-errCh:
 				runErr = err
+				break waitLoop
+			case <-pendingCh:
+				allowed, nextAllowed := watchRestartAllowed(opts, &watchRestarts)
+				if !allowed {
+					pendingAt = nextAllowed
+					continue
+				}
+				watchRestarts = append(watchRestarts, time.Now())
+				restarting = true
+				restartPath = pendingPath
+				pendingRestart = false
+				cancelChild()
+				runErr = <-errCh
 				break waitLoop
 			case path, ok := <-watchCh:
 				if !ok {
@@ -128,10 +162,20 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				if shouldIgnoreEvent(path, ignored) {
 					continue
 				}
-				if shouldSkipWatchRestart(opts, &watchRestarts) {
-					logging.Warn("service restart skipped (watch limiter)", "service", name, "path", path)
+				allowed, nextAllowed := watchRestartAllowed(opts, &watchRestarts)
+				if !allowed {
+					pendingRestart = true
+					pendingPath = path
+					pendingAt = nextAllowed
+					logging.Warn(
+						"service restart deferred (watch limiter)",
+						"service", name,
+						"path", path,
+						"next", nextAllowed.Format(time.RFC3339),
+					)
 					continue
 				}
+				watchRestarts = append(watchRestarts, time.Now())
 				restarting = true
 				restartPath = path
 				cancelChild()
@@ -145,10 +189,20 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				if shouldIgnoreEvent(path, ignored) {
 					continue
 				}
-				if shouldSkipWatchRestart(opts, &watchRestarts) {
-					logging.Warn("service restart skipped (watch limiter)", "service", name, "path", path)
+				allowed, nextAllowed := watchRestartAllowed(opts, &watchRestarts)
+				if !allowed {
+					pendingRestart = true
+					pendingPath = path
+					pendingAt = nextAllowed
+					logging.Warn(
+						"service restart deferred (watch limiter)",
+						"service", name,
+						"path", path,
+						"next", nextAllowed.Format(time.RFC3339),
+					)
 					continue
 				}
+				watchRestarts = append(watchRestarts, time.Now())
 				restarting = true
 				restartPath = path
 				cancelChild()
@@ -158,6 +212,9 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 		}
 
 		cancelChild()
+		if pendingTimer != nil {
+			pendingTimer.Stop()
+		}
 
 		if restarting {
 			failures = 0
@@ -202,52 +259,4 @@ func waitWithContext(ctx context.Context, d time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
-}
-
-func considerPathList(paths []string) []string {
-	cleaned := make([]string, 0, len(paths))
-	for _, path := range paths {
-		trimmed := strings.TrimSpace(path)
-		if trimmed == "" {
-			continue
-		}
-		cleaned = append(cleaned, filepath.Clean(trimmed))
-	}
-	return cleaned
-}
-
-func shouldIgnoreEvent(path string, ignored map[string]struct{}) bool {
-	clean := filepath.Clean(strings.TrimSpace(path))
-	if clean == "" {
-		return false
-	}
-	base := filepath.Base(clean)
-	if strings.HasSuffix(base, ".lkg") || strings.HasPrefix(base, ".tmp-") {
-		return true
-	}
-	if len(ignored) == 0 {
-		return false
-	}
-	_, skip := ignored[clean]
-	return skip
-}
-
-func shouldSkipWatchRestart(opts Options, restarts *[]time.Time) bool {
-	if opts.MaxWatchRestarts <= 0 || opts.WatchRestartWindow <= 0 {
-		return false
-	}
-	now := time.Now()
-	cutoff := now.Add(-opts.WatchRestartWindow)
-	kept := (*restarts)[:0]
-	for _, ts := range *restarts {
-		if ts.After(cutoff) {
-			kept = append(kept, ts)
-		}
-	}
-	*restarts = kept
-	if len(*restarts) >= opts.MaxWatchRestarts {
-		return true
-	}
-	*restarts = append(*restarts, now)
-	return false
 }

@@ -5,6 +5,7 @@
 .vscode
 .pytest_cache
 .tmp
+.logs
 __pycache__
 go/cmd/xp2p/rsrc_windows_*.syso
 dotnet/xp2p-ui/bin/

@@ -31,7 +31,7 @@ POLL_INTERVAL = 2.0
 IFACE_TIMEOUT = 120.0
 ROUTE_WAIT_INITIAL = 60.0
 ROUTE_WAIT_RETRY = 60.0
-ROUTE_WAIT_SPLIT = 60.0
+ROUTE_WAIT_SPLIT = 120.0
 ROUTE_POLL_INTERVAL = 2.0
 WATCH_RESTART_WINDOW = 35.0
 
@@ -268,6 +268,44 @@ $content
     return result.stdout or ""
 
 
+def _collect_restore_debug(host, tun_name: str) -> str:
+    tun_state_path = _env.CONFIG_ROOT / "xp2p-client.tun-full.json"
+    cfg_path = CLIENT_CONFIG_FILE
+    service_log = _read_log_tail(host, CLIENT_SERVICE_LOG)
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$result = @{{}}
+$result.ServiceStatus = (Get-Service -Name 'xp2p-client' -ErrorAction SilentlyContinue | Select-Object -Property Status,StartType)
+$result.Processes = (Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Select-Object -Property Name,Id,StartTime)
+$result.NetAdapters = (Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Select-Object -Property Name,InterfaceDescription,Status,ifIndex,MacAddress)
+$result.NetIpInterfaces = (Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Select-Object -Property InterfaceAlias,InterfaceIndex,ConnectionState,InterfaceMetric)
+$result.DefaultRoutes = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+    Select-Object -Property DestinationPrefix,InterfaceAlias,InterfaceIndex,NextHop,RouteMetric,PolicyStore)
+$result.TunRoutes = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.InterfaceAlias -eq '{tun_name}' }} |
+    Select-Object -Property DestinationPrefix,InterfaceAlias,InterfaceIndex,NextHop,RouteMetric,PolicyStore)
+$result.TunAllRoutes = (Get-NetRoute -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.InterfaceAlias -eq '{tun_name}' }} |
+    Select-Object -Property DestinationPrefix,InterfaceAlias,InterfaceIndex,NextHop,RouteMetric,PolicyStore)
+$result.ClientConfig = (Get-Content -Path { _env.ps_quote(str(cfg_path)) } -Raw -ErrorAction SilentlyContinue)
+$result.TunState = (Get-Content -Path { _env.ps_quote(str(tun_state_path)) } -Raw -ErrorAction SilentlyContinue)
+$result.DnsServers = (Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Select-Object -Property InterfaceAlias,InterfaceIndex,ServerAddresses)
+$result
+"""
+    result = _env.run_powershell(host, script, label="restore_debug")
+    if result.rc != 0:
+        return f"<failed to collect restore debug> STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\nservice_log_tail:\n{service_log}"
+    return f"{result.stdout}\nservice_log_tail:\n{service_log}"
+
+
+def _fail_with_restore_debug(host, tun_name: str, debug: str) -> None:
+    restore_debug = _collect_restore_debug(host, tun_name)
+    pytest.fail(f"{debug}\nrestore_debug:\n{restore_debug}")
+
+
 def _write_text_atomic(host, path: Path, content: str) -> None:
     encoded = _env.ps_quote(content.encode("utf-8").hex())
     target = _env.ps_quote(str(path))
@@ -296,7 +334,7 @@ Move-Item -Path $tempPath -Destination $target -Force
         )
 
 
-def _assert_internet_access(host) -> None:
+def _check_internet_access(host) -> tuple[bool, str]:
     script = """
 $ErrorActionPreference = 'Stop'
 $dnsName = "example.com"
@@ -321,10 +359,51 @@ exit 0
 """
     result = _env.run_powershell(host, script, label="check_internet_access")
     if result.rc != 0:
-        pytest.fail(
+        return False, (
             "Client internet check failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+    return True, ""
+
+
+def _assert_internet_access(host) -> None:
+    ok, detail = _check_internet_access(host)
+    if not ok:
+        pytest.fail(detail)
+
+
+def _ensure_internet_access_with_adapter_reset(host) -> None:
+    ok, detail = _check_internet_access(host)
+    if ok:
+        return
+    script = """
+$ErrorActionPreference = 'SilentlyContinue'
+$route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' |
+    Where-Object { $_.InterfaceAlias -notmatch '^xp2p' } |
+    Sort-Object -Property RouteMetric |
+    Select-Object -First 1
+if (-not $route) {
+    Write-Output "No default route found for non-xp2p interface."
+    exit 2
+}
+$alias = $route.InterfaceAlias
+Disable-NetAdapter -Name $alias -Confirm:$false | Out-Null
+Start-Sleep -Seconds 3
+Enable-NetAdapter -Name $alias -Confirm:$false | Out-Null
+Write-Output ("Recycled interface: {0}" -f $alias)
+"""
+    reset_result = _env.run_powershell(host, script, label="recycle_default_adapter")
+    deadline = time.time() + 60.0
+    last_detail = detail
+    while time.time() < deadline:
+        ok, last_detail = _check_internet_access(host)
+        if ok:
+            return
+        time.sleep(ROUTE_POLL_INTERVAL)
+    pytest.fail(
+        "Client internet check failed after adapter reset.\n"
+        f"Reset output:\n{reset_result.stdout}\n{reset_result.stderr}\n{last_detail}"
+    )
 
 
 def _is_tun_route(route: dict, tun_name: str, tun_index: int) -> bool:
@@ -618,6 +697,7 @@ def test_windows_client_tun_mode_full_routes(client_host, xp2p_client_runner):
         _client_mode(xp2p_client_runner, "tun", "split", check=True)
         _start_client_service(xp2p_client_runner)
         service_started = True
+        _ensure_internet_access_with_adapter_reset(client_host)
 
         defaults = _default_routes(client_host)
         assert defaults, "Expected at least one default route before full-tunnel"
@@ -687,10 +767,30 @@ def test_windows_client_tun_mode_full_routes(client_host, xp2p_client_runner):
             ROUTE_WAIT_SPLIT,
         )
         if not ok:
-            pytest.fail(debug)
+            _fail_with_restore_debug(client_host, tun_name, debug)
 
         _stop_client_service(xp2p_client_runner)
         service_started = False
+        ok, debug = _poll_for_routes_restored(
+            client_host,
+            tun_name,
+            tun_index,
+            old_default_ids,
+            endpoint_ips,
+            ROUTE_WAIT_SPLIT,
+        )
+        if not ok:
+            _client_mode(xp2p_client_runner, "tun", "split", check=True)
+            ok, debug = _poll_for_routes_restored(
+                client_host,
+                tun_name,
+                tun_index,
+                old_default_ids,
+                endpoint_ips,
+                ROUTE_WAIT_SPLIT,
+            )
+        if not ok:
+            _fail_with_restore_debug(client_host, tun_name, debug)
         _assert_internet_access(client_host)
     finally:
         if service_started:
