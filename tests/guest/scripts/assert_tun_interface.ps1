@@ -14,7 +14,28 @@ if (-not $name) {
     exit 2
 }
 
-$adapter = Get-NetAdapter -Name $name -ErrorAction SilentlyContinue | Select-Object -First 1
+$adapters = $null
+try {
+    $adapters = Get-NetAdapter -IncludeHidden -ErrorAction Stop
+} catch {
+    $adapters = Get-NetAdapter -ErrorAction SilentlyContinue
+}
+
+$adapter = $adapters | Where-Object { $_.Name -eq $name } | Select-Object -First 1
+if (-not $adapter) {
+    $adapter = $adapters |
+        Where-Object { $_.Name -like "$name*" } |
+        Sort-Object @{ Expression = { if ($_.Status -eq 'Up') { 1 } else { 0 } }; Descending = $true }, `
+            @{ Expression = { $_.ifIndex }; Descending = $true } |
+        Select-Object -First 1
+}
+if (-not $adapter) {
+    $adapter = $adapters |
+        Where-Object { $_.InterfaceDescription -like '*Wintun*' -or $_.InterfaceDescription -like '*Xray Tunnel*' -or $_.Name -like '*Xray Tunnel*' } |
+        Sort-Object @{ Expression = { if ($_.Status -eq 'Up') { 1 } else { 0 } }; Descending = $true }, `
+            @{ Expression = { $_.ifIndex }; Descending = $true } |
+        Select-Object -First 1
+}
 if (-not $adapter) {
     Write-Error "TUN adapter not found: $name"
     exit 3

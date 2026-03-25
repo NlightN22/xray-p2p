@@ -7,7 +7,9 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
 type exitError struct {
@@ -138,6 +140,14 @@ func newClientRunCmd(cfg commandConfig) *cobra.Command {
 		Use:   "run",
 		Short: "Run xp2p client in foreground",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if logLevel, ok, err := common.LogLevelFromFlags(cmd); err != nil {
+				return err
+			} else if ok {
+				if err := common.ApplyProcessLogLevel(logLevel); err != nil {
+					logging.Error("xp2p client run: invalid --log-level", "err", err)
+					return errorForCode(2)
+				}
+			}
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRun(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)

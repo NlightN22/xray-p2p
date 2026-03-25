@@ -3,7 +3,7 @@
 ## Global options (apply to all commands)
 - --help, -h                     Show help for command
 - --config, -c <path>             Path to configuration file
-- --log-level, -l <level>         Override logging level
+- --log-level, -l <level>         Override logging level (debug|info|warn|error)
 - --log-json, -j                  Emit logs in JSON format
 - --version, -v                   Print xp2p version and exit (root only)
 
@@ -62,7 +62,7 @@ Includes: Global options
 xp2p client service start
 Options:
 Includes: Global options
-- (no local options)
+- On Windows, --log-level updates the service environment (XP2P_LOG_LEVEL)
 
 xp2p client service stop
 Options:

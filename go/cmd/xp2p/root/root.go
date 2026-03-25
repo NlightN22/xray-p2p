@@ -87,11 +87,24 @@ func (o *rootOptions) bindGlobalFlags(cmd *cobra.Command) {
 	flags.StringVarP(&o.logLevel, "log-level", "l", "", "override logging level")
 	flags.BoolVarP(&o.logJSON, "log-json", "j", false, "emit logs in JSON format")
 	flags.BoolVarP(&o.versionRequested, "version", "v", false, "print xp2p version and exit")
+	_ = cmd.RegisterFlagCompletionFunc("log-level", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
+	})
 }
 
 func (o *rootOptions) ensureRuntime(cmd *cobra.Command) error {
 	if o.runtimeOK {
 		return nil
+	}
+	if lvl := strings.TrimSpace(o.logLevel); lvl != "" {
+		normalized, err := logging.NormalizeLevel(lvl)
+		if err != nil {
+			return err
+		}
+		o.logLevel = normalized
+		if err := os.Setenv(logging.EnvLogLevel, normalized); err != nil {
+			return fmt.Errorf("set %s: %w", logging.EnvLogLevel, err)
+		}
 	}
 	cfg, err := config.Load(config.Options{
 		Path:         strings.TrimSpace(o.configPath),

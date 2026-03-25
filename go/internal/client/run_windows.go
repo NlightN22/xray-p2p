@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -92,6 +93,23 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	if err := updateSendThroughOutbound(ctx, paths, opts.TunEnabled); err != nil {
 		return err
+	}
+
+	if opts.TunEnabled {
+		if count, err := winnet.RemoveTunAdapters(ctx, opts.TunName); err != nil {
+			logging.Warn("xp2p: tun adapter cleanup failed", "err", err)
+		} else if count > 0 {
+			logging.Info("xp2p: removed stale tun adapters", "interface", opts.TunName, "count", count)
+		}
+		defer func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if count, err := winnet.RemoveTunAdapters(cleanupCtx, opts.TunName); err != nil {
+				logging.Warn("xp2p: tun adapter cleanup failed", "err", err)
+			} else if count > 0 {
+				logging.Info("xp2p: removed stale tun adapters", "interface", opts.TunName, "count", count)
+			}
+		}()
 	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)

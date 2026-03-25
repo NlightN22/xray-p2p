@@ -290,20 +290,10 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 		deadline = time.Now().Add(10 * time.Second)
 	}
 	attempt := 0
+	var lastErr error
 	for {
 		attempt++
-		index, err := winnet.InterfaceIndexByName(ctx, name)
-		if err == nil {
-			luid, luidErr := winnet.InterfaceLuidByName(name)
-			if luidErr != nil {
-				luid = 0
-			}
-			if verbose {
-				logging.Info("xp2p: full-tunnel tun interface resolved", "interface", name, "ifIndex", index, "ifLuid", luid, "attempt", attempt)
-			}
-			return index, luid, nil
-		}
-		if errors.Is(err, winnet.ErrInterfaceNotFound) && trimmedAddr != "" {
+		if trimmedAddr != "" {
 			ifIndex, addrErr := winnet.InterfaceIndexByIP(trimmedAddr)
 			if addrErr == nil && ifIndex > 0 {
 				luid, luidErr := winnet.InterfaceLuidByIP(trimmedAddr)
@@ -315,12 +305,47 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 				}
 				return ifIndex, luid, nil
 			}
+			if addrErr != nil && !errors.Is(addrErr, winnet.ErrInterfaceNotFound) {
+				lastErr = addrErr
+			}
+		}
+		ifIndex, ifLuid, matched, matchErr := winnet.InterfaceByNamePrefix(name)
+		if matchErr == nil && ifIndex > 0 {
+			if verbose {
+				logging.Info("xp2p: full-tunnel tun interface resolved by prefix", "interface", name, "match", matched, "ifIndex", ifIndex, "ifLuid", ifLuid, "attempt", attempt)
+			}
+			return ifIndex, ifLuid, nil
+		}
+		index, nameErr := winnet.InterfaceIndexByName(ctx, name)
+		if nameErr == nil {
+			luid, luidErr := winnet.InterfaceLuidByName(name)
+			if luidErr != nil {
+				luid = 0
+			}
+			if verbose {
+				logging.Info("xp2p: full-tunnel tun interface resolved", "interface", name, "ifIndex", index, "ifLuid", luid, "attempt", attempt)
+			}
+			return index, luid, nil
+		}
+		lastErr = nameErr
+		if errors.Is(lastErr, winnet.ErrInterfaceNotFound) {
+			hints := []string{"xray tunnel", "wintun"}
+			ifIndex, ifLuid, matched, matchErr = winnet.InterfaceByDescriptionContains(hints)
+			if matchErr == nil && ifIndex > 0 {
+				if verbose {
+					logging.Info("xp2p: full-tunnel tun interface resolved by description", "interface", name, "match", matched, "ifIndex", ifIndex, "ifLuid", ifLuid, "attempt", attempt)
+				}
+				return ifIndex, ifLuid, nil
+			}
 		}
 		if ctx.Err() != nil {
-			return 0, 0, err
+			return 0, 0, lastErr
 		}
-		if !errors.Is(err, winnet.ErrInterfaceNotFound) || time.Now().After(deadline) {
-			return 0, 0, err
+		if lastErr != nil && !errors.Is(lastErr, winnet.ErrInterfaceNotFound) {
+			return 0, 0, lastErr
+		}
+		if time.Now().After(deadline) {
+			return 0, 0, lastErr
 		}
 		if verbose {
 			logging.Info("xp2p: full-tunnel waiting for tun interface", "interface", name, "attempt", attempt)

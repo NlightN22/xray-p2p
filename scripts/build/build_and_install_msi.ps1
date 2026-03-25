@@ -293,6 +293,23 @@ try {
     $completionOut = Join-Path $completionDir 'xp2p.ps1'
     Invoke-Step -Name "Generating PowerShell completion script" -Action {
         Ensure-Directory $completionDir
+        if (-not (Test-Path $binaryOut)) {
+            Write-Info "xp2p.exe missing before completion step; rebuilding."
+            $goBuild = Invoke-GoCommand -CommandArgs @(
+                "build",
+                "-trimpath",
+                "-ldflags", $ldflags,
+                "-o", $binaryOut,
+                ".\\go\\cmd\\xp2p"
+            )
+            $goBuild.Output | ForEach-Object { Write-Host $_ }
+            if ($goBuild.ExitCode -ne 0) {
+                throw "go build failed while restoring xp2p.exe (exit code $($goBuild.ExitCode))"
+            }
+        }
+        if (-not (Test-Path $binaryOut)) {
+            throw "xp2p binary missing at $binaryOut before completion step"
+        }
         & $binaryOut completion powershell |
             Where-Object { $_ -notmatch '^\d{4}-\d{2}-\d{2}T.*\bxp2p:' } |
             Set-Content -Path $completionOut -Encoding utf8

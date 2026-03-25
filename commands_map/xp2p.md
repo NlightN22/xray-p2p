@@ -3,7 +3,7 @@
 ## Global options (apply to all commands)
 - --help, -h                     Show help for command
 - --config, -c <path>             Path to configuration file
-- --log-level, -l <level>         Override logging level
+- --log-level, -l <level>         Override logging level (debug|info|warn|error)
 - --log-json, -j                  Emit logs in JSON format
 - --version, -v                   Print xp2p version and exit (root only)
 

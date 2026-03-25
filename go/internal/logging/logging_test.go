@@ -68,6 +68,36 @@ func TestParseLevelDefaultsToInfo(t *testing.T) {
 	}
 }
 
+func TestNormalizeLevel(t *testing.T) {
+	cases := []struct {
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{input: "debug", want: "debug"},
+		{input: "INFO", want: "info"},
+		{input: " warn ", want: "warn"},
+		{input: "error", want: "error"},
+		{input: "", wantErr: true},
+		{input: "trace", wantErr: true},
+	}
+	for _, tc := range cases {
+		got, err := NormalizeLevel(tc.input)
+		if tc.wantErr {
+			if err == nil {
+				t.Fatalf("expected error for %q", tc.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("unexpected error for %q: %v", tc.input, err)
+		}
+		if got != tc.want {
+			t.Fatalf("NormalizeLevel(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
 func TestConfigureRespectsEnvOnInit(t *testing.T) {
 	oldLogger := Logger()
 	oldLevel := levelVar.Level()
@@ -79,7 +109,7 @@ func TestConfigureRespectsEnvOnInit(t *testing.T) {
 		Configure(Options{Output: os.Stderr})
 	})
 
-	t.Setenv(envLogLevel, "error")
+	t.Setenv(EnvLogLevel, "error")
 	SetLevel("info")
 	initLoggerFromEnv()
 

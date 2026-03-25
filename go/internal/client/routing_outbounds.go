@@ -66,6 +66,11 @@ func writeOutboundsConfig(path string, direct xrayconfig.DirectOutboundConfig, e
 	if udpTag != "" {
 		out.Outbounds = append(out.Outbounds, freedomOutbound(udpTag, direct, direct.SendThrough))
 	}
+	if same, err := jsonConfigEqual(path, out); err != nil {
+		return err
+	} else if same {
+		return nil
+	}
 	if err := configio.WriteJSON(path, out, configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,

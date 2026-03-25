@@ -174,7 +174,7 @@ client:
   tun_addr: 198.18.0.1/30
 ```
 
-Every command shares global flags such as `--config`, `--log-level`, `--log-json`, and `--version`. Run `xp2p completion <shell>` to install shell completions or `xp2p docs --dir ./docs/cli` to generate a Markdown command reference straight from the Cobra tree.
+Every command shares global flags such as `--config`, `--log-level` (`debug|info|warn|error`), `--log-json`, and `--version`. On Windows, `xp2p client|server service start --log-level <level>` persists `XP2P_LOG_LEVEL` into the service environment for worker processes. Run `xp2p completion <shell>` to install shell completions or `xp2p docs --dir ./docs/cli` to generate a Markdown command reference straight from the Cobra tree.
 Runtime checks validate the pinned xray version before launch. Override with `XP2P_XRAY_SKIP_VERSION_CHECK=1` to skip the check or `XP2P_XRAY_ALLOW_MISMATCH=1` to warn and continue on mismatches.
 
 By default the xp2p server diagnostics responder listens on TCP/UDP port `62022`, while the client-side diagnostics service uses `62023` to avoid conflicts on hosts that run both roles. Override them through the configuration (`server.port` / `client.diag_port`) or environment variables when needed.

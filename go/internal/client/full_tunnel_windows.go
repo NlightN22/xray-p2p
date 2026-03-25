@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -42,16 +43,55 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	if err != nil {
 		return false, err
 	}
+	if endpointCacheNeedsUpdate(state.EndpointIPs, resolvedEndpoints) {
+		state.EndpointIPs = resolvedEndpoints
+		if err := saveFullTunnelState(paths.fullState, state); err != nil {
+			return false, err
+		}
+	}
+	outboundsPath := filepath.Join(paths.configDir, "outbounds.json")
+	routingPath := filepath.Join(paths.configDir, "routing.json")
+	outboundsHashBefore, err := fileHash(outboundsPath)
+	if err != nil {
+		return false, err
+	}
+	routingHashBefore, err := fileHash(routingPath)
+	if err != nil {
+		return false, err
+	}
 	if err := syncFullTunnelOutbounds(paths, desired, resolvedEndpoints, true); err != nil {
 		return false, err
 	}
 	if err := syncFullTunnelRouting(paths, desired, opts, resolvedEndpoints, true); err != nil {
 		return false, err
 	}
+	outboundsHashAfter, err := fileHash(outboundsPath)
+	if err != nil {
+		return false, err
+	}
+	routingHashAfter, err := fileHash(routingPath)
+	if err != nil {
+		return false, err
+	}
+	outboundsChanged := outboundsHashBefore != outboundsHashAfter
+	routingChanged := routingHashBefore != routingHashAfter
+	if outboundsChanged || routingChanged {
+		logging.Info(
+			"xp2p: full-tunnel config updated; deferring route apply until restart",
+			"outbounds_changed",
+			outboundsChanged,
+			"routing_changed",
+			routingChanged,
+		)
+		return false, nil
+	}
 	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
 }
 
 func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState, state fullTunnelState, endpointIPv4 []string, endpointIPv6 []string, resolvedEndpoints map[string]fullTunnelEndpointIPs) (enabled bool, err error) {
+	if _, _, err := resolveWindowsInterface(ctx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose, true); err != nil {
+		return false, err
+	}
 	var defaults []winnet.Route
 	if state.Enabled {
 		defaults = decodeWindowsRoutes(state)
@@ -78,10 +118,6 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			err = fmt.Errorf("xp2p: full-tunnel apply failed: %w (rollback failed: %v)", err, rollbackErr)
 		}
 	}()
-
-	if _, _, err = resolveWindowsInterface(ctx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose, true); err != nil {
-		return false, err
-	}
 
 	removeDefaults := !state.Enabled
 	if removeDefaults {

@@ -15,7 +15,7 @@ import (
 
 const (
 	defaultServiceName = "xp2p"
-	envLogLevel        = "XP2P_LOG_LEVEL"
+	EnvLogLevel        = "XP2P_LOG_LEVEL"
 )
 
 var (
@@ -151,8 +151,20 @@ func parseLevel(level string) slog.Level {
 	}
 }
 
+func NormalizeLevel(level string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(level))
+	switch normalized {
+	case "debug", "info", "warn", "error":
+		return normalized, nil
+	case "":
+		return "", fmt.Errorf("log level is empty")
+	default:
+		return "", fmt.Errorf("invalid log level %q (use debug, info, warn, or error)", level)
+	}
+}
+
 func initLoggerFromEnv() {
-	levelVar.Set(parseLevel(os.Getenv(envLogLevel)))
+	levelVar.Set(parseLevel(os.Getenv(EnvLogLevel)))
 	formatVar.Store(FormatText)
 	setLogger(os.Stderr)
 }

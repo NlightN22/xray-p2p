@@ -43,7 +43,11 @@ func newClientServiceStartCmd() *cobra.Command {
 		Use:   "start",
 		Short: "Start the xp2p client service",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runClientServiceStart(commandContext(cmd))
+			logLevel, logLevelSet, err := common.LogLevelFromFlags(cmd)
+			if err != nil {
+				return err
+			}
+			code := runClientServiceStart(commandContext(cmd), logLevel, logLevelSet)
 			return errorForCode(code)
 		},
 	}
@@ -77,6 +81,14 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 		Short: "Run the xp2p client service in the foreground",
 		Long:  "Run the xp2p client service in the foreground (intended for service managers).",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if logLevel, ok, err := common.LogLevelFromFlags(cmd); err != nil {
+				return err
+			} else if ok {
+				if err := common.ApplyProcessLogLevel(logLevel); err != nil {
+					logging.Error("xp2p client service run: invalid --log-level", "err", err)
+					return errorForCode(2)
+				}
+			}
 			forwarded := forwardFlags(cmd, args)
 			code := runClientServiceRun(commandContext(cmd), cfg(), forwarded)
 			return errorForCode(code)
@@ -98,10 +110,21 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 	return cmd
 }
 
-func runClientServiceStart(ctx context.Context) int {
+func runClientServiceStart(ctx context.Context, logLevel string, logLevelSet bool) int {
 	if err := common.RequireRoot(); err != nil {
 		logging.Error("xp2p client service start requires root privileges", "err", err)
 		return 1
+	}
+	if logLevelSet {
+		normalized, err := logging.NormalizeLevel(logLevel)
+		if err != nil {
+			logging.Error("xp2p client service start: invalid --log-level", "err", err)
+			return 2
+		}
+		if err := servicecontrol.SetServiceEnv(ctx, servicecontrol.RoleClient, map[string]string{logging.EnvLogLevel: normalized}); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Error("xp2p client service start: failed to update service environment", "err", err)
+			return 1
+		}
 	}
 	ctrl := servicecontrol.Default()
 	if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {

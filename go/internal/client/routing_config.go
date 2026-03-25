@@ -103,6 +103,11 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	reverseObj := ensureObject(document, "reverse")
 	updateReverseBridges(reverseObj, sortedReverseChannels(reverse))
 
+	if same, err := jsonConfigEqual(path, document); err != nil {
+		return err
+	} else if same {
+		return nil
+	}
 	if err := configio.WriteJSON(path, document, configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
