@@ -19,6 +19,7 @@ CUSTOM_SERVER_INSTALL_DIR = Path(r"C:\ProgramData\xp2p-it\server")
 CUSTOM_SERVER_CONFIG_NAME = "it-server-config"
 CUSTOM_CLIENT_INSTALL_DIR = Path(r"C:\ProgramData\xp2p-it\client")
 CUSTOM_CLIENT_CONFIG_NAME = "it-client-config"
+CUSTOM_ROOT_DIR = Path(r"C:\ProgramData\xp2p-it")
 CUSTOM_SERVER_PORT = 62055
 CUSTOM_SERVER_HOST = "xp2p-integration.local"
 CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
@@ -126,6 +127,10 @@ def _cleanup_client_install(
         )
         if purge and install_dir is not None:
             _remove_remote_path(client_host, install_dir)
+
+
+def _cleanup_custom_root(host) -> None:
+    _remove_remote_path(host, CUSTOM_ROOT_DIR)
 
 
 def _stage_xray_binary(host, install_dir: Path) -> None:
@@ -374,3 +379,5 @@ def test_install_server_and_client_nodefault(
         _cleanup_server_install(
             server_host, xp2p_server_runner, xp2p_msi_path, CUSTOM_SERVER_INSTALL_DIR, purge=True
         )
+        _cleanup_custom_root(client_host)
+        _cleanup_custom_root(server_host)
