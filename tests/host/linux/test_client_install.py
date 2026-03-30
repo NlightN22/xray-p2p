@@ -152,6 +152,13 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
 @pytest.mark.linux
 def test_client_install_from_link(client_host, xp2p_client_runner):
     try:
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "add",
+            "198.51.100.44",
+            "link.example.test",
+        )
         link = (
             "trojan://linkpass@link.example.test:58443?"
             "pinnedPeerCertSha256=deadbeef&security=tls&sni=link.example.test&"
@@ -176,17 +183,30 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
             "linkpass",
             "link@example.com",
             "link.example.test",
+            address="198.51.100.44",
             pinned_peer_sha256="",
             verify_peer_name="link.example.test",
         )
     finally:
-        pass
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "remove",
+            "link.example.test",
+        )
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_from_link_without_allow_insecure(client_host, xp2p_client_runner):
     try:
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "add",
+            "198.51.100.44",
+            "link.example.test",
+        )
         link = (
             "trojan://linkpass@link.example.test:58443?"
             "security=tls&sni=link.example.test#link@example.com"
@@ -205,16 +225,34 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
         )
         data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
-            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
+            data,
+            "link.example.test",
+            "linkpass",
+            "link@example.com",
+            "link.example.test",
+            address="198.51.100.44",
+            allow_insecure=False,
         )
     finally:
-        pass
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "remove",
+            "link.example.test",
+        )
 
 
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner):
     try:
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "add",
+            "198.51.100.44",
+            "link.example.test",
+        )
         xp2p_client_runner(
             "client",
             "install",
@@ -267,7 +305,12 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         assert {row["TAG"] for row in rows} == expected_tags
         assert {row["HOST"] for row in rows} == expected_hosts
     finally:
-        pass
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "remove",
+            "link.example.test",
+        )
 
 
 def _assert_no_endpoint(host: str, data: dict):

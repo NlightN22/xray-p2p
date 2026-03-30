@@ -115,13 +115,13 @@ func cacheHasEndpoints(endpoints []clientEndpointRecord, cache map[string]fullTu
 		}
 		entry, ok := cache[strings.ToLower(host)]
 		if !ok {
-			continue
+			return false
 		}
-		if len(entry.IPv4) > 0 || len(entry.IPv6) > 0 {
-			return true
+		if len(entry.IPv4) == 0 && len(entry.IPv6) == 0 {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func cacheFresh(cache map[string]fullTunnelEndpointIPs) bool {

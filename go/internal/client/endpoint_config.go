@@ -87,11 +87,18 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	if err != nil {
 		return clientInstallState{}, err
 	}
-	endpointIPs, err := resolveEndpointIPMapWithCache(context.Background(), state.Endpoints)
+	endpointIPs, err := resolveEndpointIPMap(context.Background(), state.Endpoints, nil)
 	if err != nil {
 		return clientInstallState{}, err
 	}
-	if err := writeOutboundsConfig(filepath.Join(configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, endpointIPs, true); err != nil {
+	requireEndpointIPs := true
+	if err := writeOutboundsConfig(
+		filepath.Join(configDir, "outbounds.json"),
+		xrayCfg.DirectOutbound,
+		state.Endpoints,
+		endpointIPs,
+		requireEndpointIPs,
+	); err != nil {
 		return clientInstallState{}, err
 	}
 	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(configFile)

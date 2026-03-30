@@ -880,54 +880,69 @@ def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2
 
 def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_client_runner, xp2p_linux_versions):
     _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
-    _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
-    _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
-    _install_client_endpoint(xp2p_client_runner, SECOND_ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
+    linux_env.run_guest_script(
+        client_host,
+        "scripts/linux/update_hosts_entry.sh",
+        "add",
+        ENDPOINT_DOMAIN_IP,
+        ENDPOINT_DOMAIN,
+    )
+    try:
+        _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
+        _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
+        _install_client_endpoint(xp2p_client_runner, SECOND_ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
 
-    config_hash = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE)
-    routing_hash = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        config_hash = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE)
+        routing_hash = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
 
-    quiet_result = _client_mode(xp2p_client_runner, "tun", "full", "--quiet", check=False)
-    assert quiet_result.rc != 0
-    assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE) == config_hash
-    assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json") == routing_hash
-    assert helpers.read_client_config(client_host).get("tun_mode") != "full"
+        quiet_result = _client_mode(xp2p_client_runner, "tun", "full", "--quiet", check=False)
+        assert quiet_result.rc != 0
+        assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE) == config_hash
+        assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json") == routing_hash
+        assert helpers.read_client_config(client_host).get("tun_mode") != "full"
 
-    tag_for_ip = helpers.expected_proxy_tag(ENDPOINT_IP)
-    tag_for_domain = helpers.expected_proxy_tag(ENDPOINT_DOMAIN)
-    tag_for_second = helpers.expected_proxy_tag(SECOND_ENDPOINT_IP)
+        tag_for_ip = helpers.expected_proxy_tag(ENDPOINT_IP)
+        tag_for_domain = helpers.expected_proxy_tag(ENDPOINT_DOMAIN)
+        tag_for_second = helpers.expected_proxy_tag(SECOND_ENDPOINT_IP)
 
-    result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", tag_for_ip, check=False)
-    assert result.rc == 0, f"Mode with --tag failed: {result.stdout}\n{result.stderr}"
-    _assert_full_tunnel_rule_last(client_host, tag_for_ip)
-    assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_ip
+        result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", tag_for_ip, check=False)
+        assert result.rc == 0, f"Mode with --tag failed: {result.stdout}\n{result.stderr}"
+        _assert_full_tunnel_rule_last(client_host, tag_for_ip)
+        assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_ip
 
-    result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
-    assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
+        result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
+        assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
 
-    result = _client_mode(xp2p_client_runner, "tun", "full", "--host", ENDPOINT_DOMAIN, check=False)
-    assert result.rc == 0, f"Mode with --host failed: {result.stdout}\n{result.stderr}"
-    _assert_full_tunnel_rule_last(client_host, tag_for_domain)
-    assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_domain
+        result = _client_mode(xp2p_client_runner, "tun", "full", "--host", ENDPOINT_DOMAIN, check=False)
+        assert result.rc == 0, f"Mode with --host failed: {result.stdout}\n{result.stderr}"
+        _assert_full_tunnel_rule_last(client_host, tag_for_domain)
+        assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_domain
 
-    result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
-    assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
-    _update_client_config(client_host, full_tunnel_tag="")
+        result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
+        assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
+        _update_client_config(client_host, full_tunnel_tag="")
 
-    entries = _client_list_entries(xp2p_client_runner)
-    assert entries, "Expected client list entries for interactive selection"
-    selection_index = None
-    for idx, entry in enumerate(entries, start=1):
-        if entry["tag"] == tag_for_second:
-            selection_index = idx
-            break
-    assert selection_index is not None, "Could not locate interactive selection index"
-    _run_client_mode_interactive(client_host, str(selection_index))
-    _assert_full_tunnel_rule_last(client_host, tag_for_second)
-    assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_second
+        entries = _client_list_entries(xp2p_client_runner)
+        assert entries, "Expected client list entries for interactive selection"
+        selection_index = None
+        for idx, entry in enumerate(entries, start=1):
+            if entry["tag"] == tag_for_second:
+                selection_index = idx
+                break
+        assert selection_index is not None, "Could not locate interactive selection index"
+        _run_client_mode_interactive(client_host, str(selection_index))
+        _assert_full_tunnel_rule_last(client_host, tag_for_second)
+        assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_second
 
-    result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
-    assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
+        result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
+        assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
+    finally:
+        linux_env.run_guest_script(
+            client_host,
+            "scripts/linux/update_hosts_entry.sh",
+            "remove",
+            ENDPOINT_DOMAIN,
+        )
 
 
 def test_client_verbose_flags_available(client_host, xp2p_linux_versions):
@@ -970,23 +985,22 @@ def test_client_redirect_default_route_rejected(client_host, xp2p_client_runner,
 
 def test_client_tun_mode_full_unresolved_endpoint_fails(client_host, xp2p_client_runner, xp2p_linux_versions):
     _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
-    _install_client_endpoint(xp2p_client_runner, UNRESOLVED_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
-    _update_client_config(client_host, tun_mode="full")
-
-    xp2p_client_runner("client", "service", "stop")
-    start_result = xp2p_client_runner("client", "service", "start", check=False)
-    if start_result.rc != 0:
-        pytest.fail(
-            "xp2p client service start failed.\n"
-            f"STDOUT:\n{start_result.stdout}\nSTDERR:\n{start_result.stderr}"
-        )
-
-    _wait_for_log_entries(
-        client_host,
-        SERVICE_LOG,
-        [
-            "resolve endpoint",
-            UNRESOLVED_DOMAIN,
-        ],
+    install_result = xp2p_client_runner(
+        "client",
+        "install",
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.CLIENT_CONFIG_DIR_NAME,
+        "--host",
+        UNRESOLVED_DOMAIN,
+        "--user",
+        CLIENT_USER,
+        "--password",
+        CLIENT_PASSWORD,
+        "--force",
+        check=False,
     )
-    _wait_for_service_state(xp2p_client_runner, "client", expected_active=False)
+    assert install_result.rc != 0, "Expected unresolved endpoint install to fail"
+    combined = f"{install_result.stdout}\n{install_result.stderr}".lower()
+    assert "resolve endpoint" in combined and UNRESOLVED_DOMAIN in combined

@@ -17,6 +17,29 @@ RUN_LOG_CLIENT = PurePosixPath("/tmp/xp2p-client-run.log")
 XRAY_BACKUP = PurePosixPath("/etc/xp2p/bin/xray.pinned.bak")
 
 
+def _add_hosts_entry(host, ip: str, name: str) -> None:
+    result = linux_env.run_guest_script(
+        host,
+        "scripts/linux/update_hosts_entry.sh",
+        "add",
+        ip,
+        name,
+    )
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to add hosts entry {name} -> {ip}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _remove_hosts_entry(host, name: str) -> None:
+    linux_env.run_guest_script(
+        host,
+        "scripts/linux/update_hosts_entry.sh",
+        "remove",
+        name,
+    )
+
+
 def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> None:
     for runner in (xp2p_server_runner, xp2p_client_runner):
         runner(
@@ -144,6 +167,8 @@ def test_xray_pinned_version_allows_matching(
     server_host, client_host, xp2p_server_runner, xp2p_client_runner
 ):
     _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
+    server_ip = helpers.detect_primary_ipv4(server_host)
+    _add_hosts_entry(client_host, server_ip, SERVER_HOSTNAME)
     try:
         _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
         with linux_env.xp2p_run_session(
@@ -163,6 +188,7 @@ def test_xray_pinned_version_allows_matching(
             ) as client_session:
                 assert client_session["pid"] > 0
     finally:
+        _remove_hosts_entry(client_host, SERVER_HOSTNAME)
         _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
 
 
@@ -174,6 +200,8 @@ def test_xray_pinned_version_rejects_mismatch(
     pinned = _pinned_version()
     mismatch = _mismatch_version(pinned)
     _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
+    server_ip = helpers.detect_primary_ipv4(server_host)
+    _add_hosts_entry(client_host, server_ip, SERVER_HOSTNAME)
     linux_env.remove_path(server_host, RUN_LOG_SERVER)
     linux_env.remove_path(client_host, RUN_LOG_CLIENT)
     try:
@@ -207,6 +235,7 @@ def test_xray_pinned_version_rejects_mismatch(
         assert client_result.rc != 0, "Expected client run to fail with mismatched xray"
         _assert_mismatch_logged(client_host, "client")
     finally:
+        _remove_hosts_entry(client_host, SERVER_HOSTNAME)
         _restore_xray(server_host)
         _restore_xray(client_host)
         _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
@@ -220,6 +249,8 @@ def test_xray_pinned_version_allows_override(
     pinned = _pinned_version()
     mismatch = _mismatch_version(pinned)
     _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)
+    server_ip = helpers.detect_primary_ipv4(server_host)
+    _add_hosts_entry(client_host, server_ip, SERVER_HOSTNAME)
     linux_env.remove_path(server_host, RUN_LOG_SERVER)
     linux_env.remove_path(client_host, RUN_LOG_CLIENT)
     try:
@@ -252,6 +283,7 @@ def test_xray_pinned_version_allows_override(
         time.sleep(1)
         _assert_mismatch_warned(server_host, "server")
     finally:
+        _remove_hosts_entry(client_host, SERVER_HOSTNAME)
         _restore_xray(server_host)
         _restore_xray(client_host)
         _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner)

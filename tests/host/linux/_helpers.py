@@ -311,6 +311,7 @@ def assert_outbound(
     email: str,
     server_name: str,
     *,
+    address: str | None = None,
     allow_insecure: bool = False,
     pinned_peer_sha256: str | None = None,
     verify_peer_name: str | None = None,
@@ -320,7 +321,8 @@ def assert_outbound(
         if outbound.get("tag") != tag:
             continue
         server = outbound["settings"]["servers"][0]
-        assert server["address"] == host
+        expected_address = address or host
+        assert server["address"] == expected_address
         assert server["password"] == password
         assert server["email"] == email
         tls_settings = outbound["streamSettings"]["tlsSettings"]
