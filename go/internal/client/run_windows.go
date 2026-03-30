@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/health"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
@@ -156,6 +157,14 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
+	onReady := func(readyCtx context.Context) error {
+		addr, err := resolveClientSocksAddress(paths.configFile)
+		if err != nil {
+			logging.Warn("xp2p: client socks health check using defaults", "err", err)
+		}
+		return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
+	}
+
 	return runXrayWithConfig(
 		ctx,
 		xrayPath,
@@ -165,5 +174,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		resolveLogPath,
 		configureCmd,
 		onStart,
+		onReady,
 	)
 }

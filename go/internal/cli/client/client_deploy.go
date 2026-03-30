@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,6 +19,7 @@ import (
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
+	"github.com/NlightN22/xray-p2p/go/internal/health"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -246,7 +246,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	socksAddr := strings.TrimSpace(cfg.Client.SocksAddress)
 	if socksAddr != "" {
 		logging.Info("xp2p client deploy: waiting for local SOCKS proxy", "socks_proxy", socksAddr)
-		if err := waitForSocksProxy(runCtx, socksAddr, socksReadyTimeout); err != nil {
+		if err := health.WaitForSocksProxy(runCtx, socksAddr, socksReadyTimeout, socksProbeInterval); err != nil {
 			completionState = "FAIL socks"
 			logging.Error("xp2p client deploy: socks proxy not ready", "err", err)
 			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
@@ -498,32 +498,6 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 		TunMTU:               cfg.Client.TunMTU,
 		TunAddr:              cfg.Client.TunAddr,
 		TunMode:              cfg.Client.TunMode,
-	}
-}
-
-func waitForSocksProxy(ctx context.Context, addr string, timeout time.Duration) error {
-	addr = strings.TrimSpace(addr)
-	if addr == "" {
-		return fmt.Errorf("socks proxy address is empty")
-	}
-
-	deadline := time.Now().Add(timeout)
-	var lastErr error
-	for {
-		conn, err := net.DialTimeout("tcp", addr, socksProbeInterval)
-		if err == nil {
-			_ = conn.Close()
-			return nil
-		}
-		lastErr = err
-		if time.Now().After(deadline) {
-			return fmt.Errorf("socks proxy %s not ready: %w", addr, lastErr)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(socksProbeInterval):
-		}
 	}
 }
 

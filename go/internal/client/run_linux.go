@@ -12,6 +12,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/health"
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
@@ -127,6 +128,13 @@ func Run(ctx context.Context, opts RunOptions) error {
 					logging.Warn("xp2p: redirect route setup failed", "err", err)
 				}
 			}()
+		},
+		func(readyCtx context.Context) error {
+			addr, err := resolveClientSocksAddress(paths.configFile)
+			if err != nil {
+				logging.Warn("xp2p: client socks health check using defaults", "err", err)
+			}
+			return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
 		},
 	)
 }

@@ -17,6 +17,7 @@ import (
 type logPathResolver func(string) (string, error)
 type cmdConfigurator func(*exec.Cmd)
 type startHook func()
+type readyCheck func(context.Context) error
 
 func runXrayWithConfig(
 	ctx context.Context,
@@ -27,6 +28,7 @@ func runXrayWithConfig(
 	resolveLogPath logPathResolver,
 	configureCmd cmdConfigurator,
 	onStart startHook,
+	onReady readyCheck,
 ) error {
 	var errorWriter io.Writer
 	var errorFile *os.File
@@ -73,6 +75,15 @@ func runXrayWithConfig(
 	}
 
 	logging.Info("xray-core process started", "path", xrayPath)
+	if onReady != nil {
+		if err := onReady(ctx); err != nil {
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
+			}
+			return fmt.Errorf("xp2p: xray-core health check failed: %w", err)
+		}
+	}
 	if onStart != nil {
 		onStart()
 	}
