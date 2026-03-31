@@ -11,9 +11,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 func newServerModeCmd(cfg commandConfig) *cobra.Command {
@@ -42,7 +44,7 @@ func newServerModeCmd(cfg commandConfig) *cobra.Command {
 	return cmd
 }
 
-func runServerMode(_ context.Context, cfg config.Config, args []string) int {
+func runServerMode(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p server mode", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -100,6 +102,10 @@ func runServerMode(_ context.Context, cfg config.Config, args []string) int {
 		logging.Error("xp2p server mode: apply request failed", "err", err)
 		return 1
 	}
+	if err := restartServerServiceIfActive(ctx); err != nil {
+		logging.Error("xp2p server mode: restart failed", "err", err)
+		return 1
+	}
 
 	logging.Info("xp2p server mode updated", "mode", mode, "config", updatedPath)
 	return 0
@@ -146,4 +152,30 @@ func parseMode(value string) (bool, error) {
 	default:
 		return false, errors.New("use tun or proxy")
 	}
+}
+
+func restartServerServiceIfActive(ctx context.Context) error {
+	ctrl := servicecontrol.Default()
+	status, err := ctrl.Status(ctx, servicecontrol.RoleServer)
+	if err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Warn("xp2p server mode: service status not supported; pending changes require manual restart")
+			return nil
+		}
+		return err
+	}
+	if !status.Active {
+		return nil
+	}
+	if err := common.RequireRoot(); err != nil {
+		return err
+	}
+	if err := ctrl.Stop(ctx, servicecontrol.RoleServer); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
+		return err
+	}
+	if err := ctrl.Start(ctx, servicecontrol.RoleServer); err != nil {
+		return err
+	}
+	logging.Info("xp2p server mode: service restarted")
+	return nil
 }

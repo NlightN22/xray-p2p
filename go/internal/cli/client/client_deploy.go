@@ -498,8 +498,16 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 }
 
 func loadDeployClientConfig() (config.Config, error) {
+	path := config.ConfigPath(layout.ClientConfigFileName)
+	if _, err := os.Stat(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			path = config.PendingConfigPath(layout.ClientConfigFileName)
+		} else {
+			return config.Config{}, err
+		}
+	}
 	return config.Load(config.Options{
-		Path:         config.ConfigPath(layout.ClientConfigFileName),
+		Path:         path,
 		AllowInvalid: true,
 	})
 }
@@ -519,6 +527,7 @@ func resolveDeployFullTunnelTag(installDir, configDir string, link trojanLink, r
 	records, err := clientListFunc(client.ListOptions{
 		InstallDir: installDir,
 		ConfigDir:  configDir,
+		Pending:    !clientLiveConfigPresent(),
 	})
 	if err != nil {
 		return "", err
@@ -540,7 +549,17 @@ func ensureClientServiceApplied(ctx context.Context, socksAddr string) error {
 		}
 		return err
 	}
-	if !status.Active {
+	if status.Active {
+		if err := clishared.RequireRoot(); err != nil {
+			return err
+		}
+		if err := ctrl.Stop(ctx, servicecontrol.RoleClient); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
+			return err
+		}
+		if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
+			return err
+		}
+	} else {
 		if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
 			return err
 		}
@@ -552,6 +571,14 @@ func ensureClientServiceApplied(ctx context.Context, socksAddr string) error {
 		return nil
 	}
 	return health.WaitForSocksProxy(ctx, socksAddr, socksReadyTimeout, socksProbeInterval)
+}
+
+func clientLiveConfigPresent() bool {
+	path := config.ConfigPath(layout.ClientConfigFileName)
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+	return true
 }
 
 func waitForApplyRequestClear(ctx context.Context, path string, timeout time.Duration) error {
