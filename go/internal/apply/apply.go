@@ -57,6 +57,16 @@ func (r Request) MatchesRole(role string) bool {
 }
 
 func WriteRequest(path string, req Request, auditPath string) error {
+	if existing, exists, err := ReadRequest(path); err == nil {
+		if exists && existing.ID != "" {
+			if existing.MatchesRole(req.Role) {
+				return nil
+			}
+			if existing.Role != "" && req.Role != "" && !strings.EqualFold(existing.Role, RoleAny) && !strings.EqualFold(req.Role, RoleAny) {
+				req.Role = RoleAny
+			}
+		}
+	}
 	data, err := json.MarshalIndent(req, "", "  ")
 	if err != nil {
 		return fmt.Errorf("apply: encode request: %w", err)
@@ -81,7 +91,12 @@ func ReadRequest(path string) (Request, bool, error) {
 	}
 	var req Request
 	if err := json.Unmarshal(data, &req); err != nil {
-		return Request{}, true, fmt.Errorf("apply: parse request: %w", err)
+		trimmed := strings.TrimSpace(string(data))
+		repaired := strings.ReplaceAll(trimmed, "\\r\\n", "\n")
+		repaired = strings.ReplaceAll(repaired, "\\n", "\n")
+		if retryErr := json.Unmarshal([]byte(repaired), &req); retryErr != nil {
+			return Request{}, true, fmt.Errorf("apply: parse request: %w", err)
+		}
 	}
 	req.Role = strings.TrimSpace(strings.ToLower(req.Role))
 	return req, true, nil

@@ -197,7 +197,14 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 func ListForwards(opts ForwardListOptions) ([]forward.Rule, error) {
 	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	if opts.Pending {
-		statePath = filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]forward.Rule, len(state.Forwards))
+		copy(result, state.Forwards)
+		return result, nil
 	}
 	state, err := loadClientInstallState(statePath)
 	if err != nil {

@@ -161,7 +161,14 @@ func autodetectPorts(inboundsFlag string, quiet bool) ([]int, error) {
 func ensureProxyMode(cfg config.Config, inboundsPath string) error {
 	path := strings.TrimSpace(inboundsPath)
 	if path != "" {
-		if hasTun, err := inboundsHasTun(path); err == nil && hasTun {
+		candidate := pendingInboundsPath(path)
+		checked := path
+		if candidate != "" && candidate != path {
+			if _, err := os.Stat(candidate); err == nil {
+				checked = candidate
+			}
+		}
+		if hasTun, err := inboundsHasTun(checked); err == nil && hasTun {
 			return fmt.Errorf("xp2p: nat-redirect is available only in proxy mode (disable tun to proceed)")
 		}
 	}
@@ -169,6 +176,20 @@ func ensureProxyMode(cfg config.Config, inboundsPath string) error {
 		return fmt.Errorf("xp2p: nat-redirect is available only in proxy mode (set tun_enabled=false)")
 	}
 	return nil
+}
+
+func pendingInboundsPath(path string) string {
+	cleaned := filepath.Clean(path)
+	applyDir := string(os.PathSeparator) + layout.ApplyDirName + string(os.PathSeparator) + layout.PendingDirName + string(os.PathSeparator)
+	if strings.Contains(cleaned, applyDir) {
+		return cleaned
+	}
+	dir := filepath.Dir(cleaned)
+	base := filepath.Base(cleaned)
+	if strings.HasSuffix(dir, string(os.PathSeparator)+layout.ClientConfigDir) || strings.HasSuffix(dir, string(os.PathSeparator)+layout.ServerConfigDir) {
+		return filepath.Join(dir, layout.ApplyDirName, layout.PendingDirName, base)
+	}
+	return cleaned
 }
 
 func inboundsHasTun(path string) (bool, error) {

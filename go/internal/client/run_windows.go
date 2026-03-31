@@ -40,6 +40,21 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
+	if pendingApplied {
+		configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
+			logging.Warn("xp2p: reload client config after apply failed", "err", err)
+		} else {
+			opts.TunEnabled = cfg.Client.TunEnabled
+			opts.TunName = cfg.Client.TunName
+			opts.TunMTU = cfg.Client.TunMTU
+			opts.TunAddr = cfg.Client.TunAddr
+			opts.TunMode = cfg.Client.TunMode
+			opts.DNSServers = cfg.Client.DNSServers
+			opts.FullTunnelVerbose = opts.FullTunnelVerbose || cfg.Client.FullTunnelVerbose
+			opts.FullTunnelTag = cfg.Client.FullTunnelTag
+		}
+	}
 
 	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
 	if _, err := os.Stat(xrayPath); err != nil {

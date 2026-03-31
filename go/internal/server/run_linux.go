@@ -41,6 +41,17 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
+	if pendingApplied {
+		configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
+			logging.Warn("xp2p: reload server config after apply failed", "err", err)
+		} else {
+			opts.TunEnabled = cfg.Server.TunEnabled
+			opts.TunName = cfg.Server.TunName
+			opts.TunMTU = cfg.Server.TunMTU
+			opts.TunAddr = cfg.Server.TunAddr
+		}
+	}
 
 	if stat, err := os.Stat(configDir); err != nil || !stat.IsDir() {
 		if err != nil {

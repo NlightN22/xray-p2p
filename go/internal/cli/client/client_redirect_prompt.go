@@ -17,6 +17,7 @@ func promptClientRedirectBinding(installDir, configDir string) (tagprompt.Entry,
 	records, err := clientListFunc(client.ListOptions{
 		InstallDir: installDir,
 		ConfigDir:  configDir,
+		Pending:    true,
 	})
 	if err != nil {
 		return tagprompt.Entry{}, err

@@ -31,13 +31,21 @@ type EndpointRecord struct {
 func ListEndpoints(opts ListOptions) ([]EndpointRecord, error) {
 	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	if opts.Pending {
-		statePath = filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
+		if err != nil {
+			return nil, err
+		}
+		return toEndpointRecords(state), nil
 	}
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err
 	}
+	return toEndpointRecords(state), nil
+}
 
+func toEndpointRecords(state clientInstallState) []EndpointRecord {
 	records := make([]EndpointRecord, 0, len(state.Endpoints))
 	for _, ep := range state.Endpoints {
 		records = append(records, EndpointRecord{
@@ -50,5 +58,5 @@ func ListEndpoints(opts ListOptions) ([]EndpointRecord, error) {
 			AllowInsecure: ep.AllowInsecure,
 		})
 	}
-	return records, nil
+	return records
 }

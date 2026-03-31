@@ -42,9 +42,17 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 		return nil, err
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	liveStatePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	pendingStatePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := liveStatePath
+	usePending := false
 	if opts.Pending {
-		statePath = filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		if _, err := os.Stat(pendingStatePath); err == nil {
+			statePath = pendingStatePath
+			usePending = true
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("xp2p: read client pending config %s: %w", pendingStatePath, err)
+		}
 	}
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
@@ -52,7 +60,7 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 	}
 
 	routingPath := filepath.Join(paths.configDir, "routing.json")
-	if opts.Pending {
+	if usePending {
 		routingPath = filepath.Join(apply.PendingDir(paths.configDir), "routing.json")
 	}
 	routingDoc, err := loadClientRoutingDoc(routingPath)

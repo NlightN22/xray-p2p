@@ -90,6 +90,17 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 	return state, nil
 }
 
+func loadClientInstallStateWithFallback(pendingPath, livePath string) (clientInstallState, error) {
+	if strings.TrimSpace(pendingPath) != "" {
+		if _, err := os.Stat(pendingPath); err == nil {
+			return loadClientInstallState(pendingPath)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return clientInstallState{}, fmt.Errorf("xp2p: stat client config %s: %w", pendingPath, err)
+		}
+	}
+	return loadClientInstallState(livePath)
+}
+
 
 func (s *clientInstallState) normalize() {
 	if s.Endpoints == nil {

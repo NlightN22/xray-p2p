@@ -215,13 +215,21 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	if opts.Pending {
-		statePath = filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
+		if err != nil {
+			return nil, err
+		}
+		return buildRedirectRecords(state), nil
 	}
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err
 	}
+	return buildRedirectRecords(state), nil
+}
 
+func buildRedirectRecords(state clientInstallState) []RedirectRecord {
 	tagToHost := make(map[string]string, len(state.Endpoints))
 	for _, ep := range state.Endpoints {
 		tagToHost[strings.ToLower(ep.Tag)] = ep.Hostname
@@ -258,7 +266,7 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 			Hostname: host,
 		})
 	}
-	return records, nil
+	return records
 }
 
 func resolveRedirectPaths(installDir, configDir string) (redirectPaths, error) {

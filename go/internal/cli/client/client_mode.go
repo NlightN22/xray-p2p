@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
-	"github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -174,6 +173,19 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 			logging.Error("xp2p client mode: update full-tunnel tag failed", "err", err)
 			return 1
 		}
+	}
+	if err := client.ApplyModePending(client.ModeOptions{
+		InstallDir:    installDir,
+		ConfigDir:     configDirName,
+		TunEnabled:    tunEnabled,
+		TunName:       loadedCfg.Client.TunName,
+		TunMTU:        loadedCfg.Client.TunMTU,
+		TunAddr:       loadedCfg.Client.TunAddr,
+		TunMode:       tunMode,
+		FullTunnelTag: fullTunnelTag,
+	}); err != nil {
+		logging.Error("xp2p client mode: update pending config failed", "err", err)
+		return 1
 	}
 
 	req, err := apply.NewRequest(apply.RoleClient)
@@ -400,15 +412,6 @@ func restartClientServiceIfActive(ctx context.Context) error {
 	if !status.Active {
 		return nil
 	}
-	if err := common.RequireRoot(); err != nil {
-		return err
-	}
-	if err := ctrl.Stop(ctx, servicecontrol.RoleClient); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
-		return err
-	}
-	if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
-		return err
-	}
-	logging.Info("xp2p client mode: service restarted")
+	logging.Info("xp2p client mode: apply request recorded; service will restart automatically")
 	return nil
 }

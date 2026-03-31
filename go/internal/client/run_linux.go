@@ -14,6 +14,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/health"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
@@ -39,6 +40,21 @@ func Run(ctx context.Context, opts RunOptions) error {
 	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, configDir)
 	if err != nil {
 		return err
+	}
+	if pendingApplied {
+		configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
+			logging.Warn("xp2p: reload client config after apply failed", "err", err)
+		} else {
+			opts.TunEnabled = cfg.Client.TunEnabled
+			opts.TunName = cfg.Client.TunName
+			opts.TunMTU = cfg.Client.TunMTU
+			opts.TunAddr = cfg.Client.TunAddr
+			opts.TunMode = cfg.Client.TunMode
+			opts.DNSServers = cfg.Client.DNSServers
+			opts.FullTunnelVerbose = opts.FullTunnelVerbose || cfg.Client.FullTunnelVerbose
+			opts.FullTunnelTag = cfg.Client.FullTunnelTag
+		}
 	}
 
 	if stat, err := os.Stat(configDir); err != nil || !stat.IsDir() {

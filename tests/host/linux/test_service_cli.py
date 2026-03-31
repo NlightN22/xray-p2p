@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 import time
+import os
 
 import pytest
 
@@ -12,6 +13,9 @@ try:
     import tomllib
 except ImportError:  # pragma: no cover - fallback for older runtimes.
     import tomli as tomllib
+
+SKIP_SERVICE_CLI = os.environ.get("XP2P_RUN_SERVICE_CLI_TESTS", "").strip().lower() not in {"1", "true", "yes"}
+pytestmark = [pytest.mark.host, pytest.mark.linux, pytest.mark.skipif(SKIP_SERVICE_CLI, reason="service CLI tests are opt-in")]
 
 CLIENT_SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 CLIENT_XRAY_LOG = helpers.LOG_ROOT / "client" / "xray-service.log"

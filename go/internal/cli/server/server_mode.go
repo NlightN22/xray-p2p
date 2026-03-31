@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
-	"github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -167,15 +166,6 @@ func restartServerServiceIfActive(ctx context.Context) error {
 	if !status.Active {
 		return nil
 	}
-	if err := common.RequireRoot(); err != nil {
-		return err
-	}
-	if err := ctrl.Stop(ctx, servicecontrol.RoleServer); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
-		return err
-	}
-	if err := ctrl.Start(ctx, servicecontrol.RoleServer); err != nil {
-		return err
-	}
-	logging.Info("xp2p server mode: service restarted")
+	logging.Info("xp2p server mode: apply request recorded; service will restart automatically")
 	return nil
 }
