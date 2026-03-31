@@ -362,6 +362,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
+            "--pending",
             check=True,
         ).stdout or ""
         assert "HOSTNAME" in list_result
@@ -392,6 +393,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
+            "--pending",
             check=True,
         ).stdout or ""
         assert redirect_cidr in redirect_list
@@ -433,6 +435,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
                 helpers.CLIENT_CONFIG_DIR_NAME,
+                "--pending",
                 check=True,
             ).stdout or ""
             assert redirect_cidr not in redirect_list_after
@@ -444,6 +447,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
                 helpers.CLIENT_CONFIG_DIR_NAME,
+                "--pending",
                 check=True,
             ).stdout or ""
             assert "10.66.0.11" in list_after
@@ -463,6 +467,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
                 helpers.CLIENT_CONFIG_DIR_NAME,
+                "--pending",
                 check=False,
             )
             redirect_debug = xp2p_client_runner(
@@ -473,6 +478,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
                 helpers.CLIENT_CONFIG_DIR_NAME,
+                "--pending",
                 check=False,
             )
             debug.append(f"xp2p client list rc={list_debug.rc}\n{list_debug.stdout or ''}\n{list_debug.stderr or ''}")
@@ -501,6 +507,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
+            "--pending",
             check=True,
         ).stdout or ""
         assert "No client endpoints configured." in final_list

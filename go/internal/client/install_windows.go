@@ -128,6 +128,14 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	} else {
 		stateRemoved = true
 	}
+	pendingConfigPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	if err := os.Remove(pendingConfigPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove client pending config: %w", err)
+		}
+	} else {
+		stateRemoved = true
+	}
 
 	appliedPath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
 	if err := os.Remove(appliedPath); err != nil {

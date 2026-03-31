@@ -159,6 +159,12 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 			return fmt.Errorf("xp2p: remove server config file: %w", err)
 		}
 	}
+	pendingConfigPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
+	if err := os.Remove(pendingConfigPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove server pending config: %w", err)
+		}
+	}
 
 	appliedPath := filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName))
 	if err := os.Remove(appliedPath); err != nil {
@@ -329,6 +335,12 @@ func serverArtifactsPresent(state installState) (bool, string, error) {
 	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
 	if _, err := os.Stat(inboundsPath); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			pendingInbounds := filepath.Join(state.pendingDir, "inbounds.json")
+			if _, pendingErr := os.Stat(pendingInbounds); pendingErr == nil {
+				return true, fmt.Sprintf("state file %s", state.stateFile), nil
+			} else if !errors.Is(pendingErr, os.ErrNotExist) {
+				return false, "", fmt.Errorf("xp2p: stat %s: %w", pendingInbounds, pendingErr)
+			}
 			return false, "", nil
 		}
 		return false, "", fmt.Errorf("xp2p: stat %s: %w", inboundsPath, err)

@@ -64,6 +64,24 @@ def aux_host(linux_host_factory) -> Host:
 def _xp2p_runner(host: Host):
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
+        pending_targets = {
+            ("client", "list"),
+            ("client", "forward", "list"),
+            ("client", "redirect", "list"),
+            ("client", "reverse"),
+            ("client", "reverse", "list"),
+            ("server", "forward", "list"),
+            ("server", "redirect", "list"),
+            ("server", "reverse"),
+            ("server", "reverse", "list"),
+            ("server", "user", "list"),
+            ("server", "cert", "state"),
+        }
+        if "--pending" not in cmd and "-y" not in cmd:
+            for target in pending_targets:
+                if tuple(cmd[: len(target)]) == target:
+                    cmd.append("--pending")
+                    break
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if not any(arg == "--quiet" for arg in cmd):
                 cmd.append("--quiet")
@@ -136,6 +154,7 @@ def xp2p_full_cleanup(request, linux_host_factory):
         )
         bundle_artifacts = linux_env.WORK_TREE / "build" / "artifacts" / "bundle"
         cleanup_paths = [
+            helpers.CONFIG_ROOT / ".apply",
             helpers.CLIENT_CONFIG_FILE,
             helpers.SERVER_CONFIG_FILE,
             helpers.CLIENT_APPLIED_STATE_FILE,

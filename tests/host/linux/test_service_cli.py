@@ -15,6 +15,7 @@ SERVER_SERVICE_LOG = helpers.LOG_ROOT / "server" / "service.log"
 SERVER_XRAY_LOG = helpers.LOG_ROOT / "server" / "xray-service.log"
 CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
 SERVER_CONFIG = helpers.SERVER_CONFIG_FILE
+APPLY_REQUEST = helpers.CONFIG_ROOT / ".apply" / "apply.request"
 CLIENT_DIAG_PORT = "62023"
 SERVER_DIAG_PORT = "62022"
 
@@ -127,6 +128,10 @@ def _wait_for_log_entry(host, path, substring: str, timeout: float = 60.0) -> No
                 return
         time.sleep(POLL_INTERVAL)
     raise AssertionError(f"Log {path} did not contain {substring!r}. Last content:\n{last_content}")
+
+
+def _write_apply_request(host, role: str) -> None:
+    helpers.write_apply_request(host, role)
 
 
 def _current_mode(host, role: str) -> str:
@@ -309,6 +314,7 @@ def test_service_stops_after_invalid_config(
         _start_service(role, runner, host, diag_port)
 
         helpers.write_text(host, config_path, invalid_config)
+        _write_apply_request(host, role)
         _wait_for_log_entry(host, service_log, "service configuration change detected")
         _wait_for_log_entry(host, service_log, "exceeded restart limit")
         _wait_for_service_state(runner, role, expected_active=False)

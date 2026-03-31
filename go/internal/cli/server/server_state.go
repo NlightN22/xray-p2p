@@ -107,6 +107,12 @@ func serverStateInstallPresent(installDir string) (bool, error) {
 	} else if found {
 		return true, nil
 	}
+	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
+	if found, err := pathExists(pendingPath); err != nil {
+		return false, err
+	} else if found {
+		return true, nil
+	}
 	stateRoot := installDir
 	if runtime.GOOS == "windows" {
 		stateRoot = config.ConfigRoot()

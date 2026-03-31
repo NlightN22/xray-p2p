@@ -56,6 +56,8 @@ def _forward_cmd(runner, role: str, subcommand: str, config_dir: str, *extra: st
         "--config-dir",
         config_dir,
     ]
+    if subcommand == "list":
+        args.append("--pending")
     if role == "server":
         if extra:
             # Provide flags for Cobra validation and forward them after "--" for manual parsing.

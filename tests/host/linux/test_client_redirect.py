@@ -45,6 +45,8 @@ def _redirect_cmd(runner, subcommand: str, *args: str, check: bool = False):
     ]
     if subcommand in {"add", "remove"}:
         base.append("--quiet")
+    if subcommand == "list":
+        base.append("--pending")
     base.extend(args)
     return runner(*base, check=check)
 

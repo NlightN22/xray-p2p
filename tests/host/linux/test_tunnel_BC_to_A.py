@@ -14,7 +14,26 @@ ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 def _runner(host):
     def _run(*args: str, check: bool = False):
-        result = linux_env.run_xp2p(host, *args)
+        cmd = list(args)
+        pending_targets = {
+            ("client", "list"),
+            ("client", "forward", "list"),
+            ("client", "redirect", "list"),
+            ("client", "reverse"),
+            ("client", "reverse", "list"),
+            ("server", "forward", "list"),
+            ("server", "redirect", "list"),
+            ("server", "reverse"),
+            ("server", "reverse", "list"),
+            ("server", "user", "list"),
+            ("server", "cert", "state"),
+        }
+        if "--pending" not in cmd and "-y" not in cmd:
+            for target in pending_targets:
+                if tuple(cmd[: len(target)]) == target:
+                    cmd.append("--pending")
+                    break
+        result = linux_env.run_xp2p(host, *cmd)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "

@@ -335,7 +335,13 @@ installDone:
 		return
 	}
 
-	link, err := server.GetUserLink(ctx, server.UserLinkOptions{InstallDir: installDir, ConfigDir: configDir, Host: host, UserID: userID})
+	link, err := server.GetUserLink(ctx, server.UserLinkOptions{
+		InstallDir: installDir,
+		ConfigDir:  configDir,
+		Host:       host,
+		UserID:     userID,
+		Pending:    true,
+	})
 	if err != nil || strings.TrimSpace(link.Link) == "" {
 		_ = writeLine(rw, "EXIT 1")
 		reason := "failed to build user link"
@@ -354,6 +360,7 @@ installDone:
 	_ = writeLine(rw, "LINK "+link.Link)
 	_ = writeLine(rw, "DONE")
 	if results != nil {
+		logging.Info("xp2p server deploy: starting xray-core", "install_dir", installDir, "config_dir", configDir)
 		results <- runSignal{ok: true, installDir: installDir, configDir: configDir}
 	}
 	s.waitForCompletion(conn, rw, results)

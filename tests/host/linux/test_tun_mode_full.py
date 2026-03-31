@@ -140,6 +140,7 @@ def _update_client_config(host, **updates) -> None:
     updated = _update_toml_section(original, "client", updates)
     if updated != original:
         helpers.write_text(host, helpers.CLIENT_CONFIG_FILE, updated)
+        helpers.write_apply_request(host, "client")
 
 
 def _update_toml_section(text: str, section: str, updates: dict) -> str:
@@ -561,6 +562,8 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         updated_config = _replace_endpoint_address(original_config, ENDPOINT_DOMAIN, resolved_domain_ip)
         if updated_config != original_config:
             helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, updated_config)
+            helpers.write_apply_request(client_host, "client")
+            helpers.write_apply_request(client_host, "client")
         _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
         redirect_result = _client_redirect(
             xp2p_client_runner,
@@ -758,6 +761,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
             _stop_service(xp2p_client_runner)
         if original_config is not None:
             helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, original_config)
+            helpers.write_apply_request(client_host, "client")
         if original_resolv is not None:
             helpers.write_text(client_host, RESOLV_CONF, original_resolv)
         if redirect_added and expected_tag:
@@ -809,6 +813,7 @@ def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2
         updated_config = _replace_endpoint_address(original_config, ENDPOINT_DOMAIN, resolved_domain_ip)
         if updated_config != original_config:
             helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, updated_config)
+            helpers.write_apply_request(client_host, "client")
         _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
 
         _start_service(xp2p_client_runner, client_host)
@@ -865,10 +870,12 @@ def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2
             _stop_service(xp2p_client_runner)
         if original_config is not None and not package_removed:
             helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, original_config)
+            helpers.write_apply_request(client_host, "client")
         if original_resolv is not None:
             helpers.write_text(client_host, RESOLV_CONF, original_resolv)
         if original_config is not None and package_removed:
             helpers.write_text(client_host, helpers.CLIENT_CONFIG_FILE, original_config)
+            helpers.write_apply_request(client_host, "client")
         if host_entry_added:
             linux_env.run_guest_script(
                 client_host,

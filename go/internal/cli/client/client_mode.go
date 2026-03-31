@@ -212,7 +212,7 @@ func resolveClientTunMode(configPath string, cfg config.Config) (string, error) 
 		if cfg.Client.TunMode != "" {
 			return cfg.Client.TunMode, nil
 		}
-		trimmed = config.ConfigPath(layout.ClientConfigFileName)
+		trimmed = resolveConfigPath(layout.ClientConfigFileName)
 	}
 	loaded, err := config.Load(config.Options{
 		Path:         trimmed,
@@ -256,7 +256,7 @@ func parseMode(value string) (bool, error) {
 func loadModeConfig(configPath string, fallback config.Config) (config.Config, error) {
 	trimmed := strings.TrimSpace(configPath)
 	if trimmed == "" {
-		trimmed = config.ConfigPath(layout.ClientConfigFileName)
+		trimmed = resolveConfigPath(layout.ClientConfigFileName)
 	}
 	loaded, err := config.Load(config.Options{
 		Path:         trimmed,
@@ -312,6 +312,7 @@ func listClientBindings(installDir, configDir string) ([]redirect.Binding, error
 	records, err := clientListFunc(client.ListOptions{
 		InstallDir: installDir,
 		ConfigDir:  configDir,
+		Pending:    true,
 	})
 	if err != nil {
 		return nil, err
@@ -370,4 +371,12 @@ func filterCompletions(values []string, prefix string) []string {
 		}
 	}
 	return filtered
+}
+
+func resolveConfigPath(name string) string {
+	live := config.ConfigPath(name)
+	if _, err := os.Stat(live); err == nil {
+		return live
+	}
+	return config.PendingConfigPath(name)
 }

@@ -176,6 +176,7 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
 def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_runner):
     cert_source = PurePosixPath("/tmp/xp2p-mismatch-cert.pem")
     cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
+    pending_key = helpers.SERVER_PENDING_DIR / "key.pem"
     try:
         xp2p_server_runner(
             "server",
@@ -192,8 +193,8 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             check=True,
         )
 
-        assert helpers.path_exists(server_host, SERVER_KEY_DEST), (
-            f"Expected generated key at {SERVER_KEY_DEST}"
+        assert helpers.path_exists(server_host, pending_key), (
+            f"Expected generated key at {pending_key}"
         )
         helpers.write_text(server_host, cert_source, cert_content)
 
@@ -208,7 +209,7 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             "--cert",
             cert_source.as_posix(),
             "--key",
-            SERVER_KEY_DEST.as_posix(),
+            pending_key.as_posix(),
             "--force",
             check=False,
         )

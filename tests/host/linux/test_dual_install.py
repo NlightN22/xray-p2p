@@ -24,7 +24,7 @@ def _xp2p_run(host, *args: str, check: bool = False):
 def _read_roles(host) -> dict:
     roles: dict[str, dict] = {}
     for role, path in STATE_FILES.items():
-        if linux_env.path_exists(host, path):
+        if helpers.path_exists(host, path):
             roles[role] = helpers.read_toml(host, path).get(role) or {}
     return roles
 

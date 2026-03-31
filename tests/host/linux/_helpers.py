@@ -19,6 +19,11 @@ CLIENT_CONFIG_DIR_NAME = "config-client"
 SERVER_CONFIG_DIR_NAME = "config-server"
 CLIENT_CONFIG_DIR = INSTALL_ROOT / CLIENT_CONFIG_DIR_NAME
 SERVER_CONFIG_DIR = INSTALL_ROOT / SERVER_CONFIG_DIR_NAME
+APPLY_DIR_NAME = ".apply"
+PENDING_DIR_NAME = "pending"
+CONFIG_PENDING_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / PENDING_DIR_NAME
+CLIENT_PENDING_DIR = CLIENT_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
+SERVER_PENDING_DIR = SERVER_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
 CLIENT_CONFIG_FILE = CONFIG_ROOT / "xp2p-client.toml"
 SERVER_CONFIG_FILE = CONFIG_ROOT / "xp2p-server.toml"
 CLIENT_APPLIED_STATE_FILE = CONFIG_ROOT / "xp2p-client.state.json"
@@ -103,11 +108,23 @@ def assert_reverse_cli_output(
     )
     output = (result.stdout or "").lower()
     tag = reverse_tag.strip().lower()
+    if tag not in output:
+        result = runner(
+            role,
+            "reverse",
+            "--path",
+            install_path,
+            "--config-dir",
+            config_dir,
+            "--pending",
+            check=True,
+        )
+        output = (result.stdout or "").lower()
     assert tag in output, f"{role} reverse list output missing {reverse_tag}. STDOUT: {result.stdout}"
 
 
-def read_json(host: Host, path: PurePosixPath) -> dict:
-    return linux_env.read_json(host, path)
+def read_json(host: Host, path: PurePosixPath | str) -> dict:
+    return linux_env.read_json(host, _resolve_config_path(host, _as_path(path)))
 
 
 def read_toml(host: Host, path: PurePosixPath) -> dict:
@@ -125,16 +142,24 @@ def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
     raise AssertionError(f"None of the state files exist: {paths}")
 
 
-def read_text(host: Host, path: PurePosixPath) -> str:
-    return linux_env.read_text(host, path)
+def read_text(host: Host, path: PurePosixPath | str) -> str:
+    return linux_env.read_text(host, _resolve_config_path(host, _as_path(path)))
 
 
-def path_exists(host: Host, path: PurePosixPath) -> bool:
-    return linux_env.path_exists(host, path)
+def path_exists(host: Host, path: PurePosixPath | str) -> bool:
+    resolved = _as_path(path)
+    pending = _pending_candidate(resolved)
+    if pending != resolved and linux_env.path_exists(host, pending):
+        return True
+    return linux_env.path_exists(host, resolved)
 
 
 def remove_path(host: Host, path: PurePosixPath) -> None:
-    linux_env.remove_path(host, path)
+    resolved = _as_path(path)
+    pending = _pending_candidate(resolved)
+    linux_env.remove_path(host, pending)
+    if pending != resolved:
+        linux_env.remove_path(host, resolved)
 
 
 def remove_log_files(host: Host) -> None:
@@ -142,12 +167,54 @@ def remove_log_files(host: Host) -> None:
         linux_env.remove_path(host, path)
 
 
-def write_text(host: Host, path: PurePosixPath, content: str) -> None:
-    linux_env.write_text(host, path, content)
+def write_text(host: Host, path: PurePosixPath | str, content: str) -> None:
+    linux_env.write_text(host, _pending_candidate(_as_path(path)), content)
 
 
-def file_sha256(host: Host, path: PurePosixPath) -> str:
-    return linux_env.file_sha256(host, path)
+def file_sha256(host: Host, path: PurePosixPath | str) -> str:
+    return linux_env.file_sha256(host, _resolve_config_path(host, _as_path(path)))
+
+
+def write_apply_request(host: Host, role: str) -> None:
+    payload = f'{{"role":"{role}"}}\\n'
+    path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
+    linux_env.write_text(host, path, payload)
+
+
+def _pending_candidate(path: PurePosixPath | str) -> PurePosixPath:
+    path = _as_path(path)
+    if path.is_relative_to(CONFIG_ROOT / APPLY_DIR_NAME):
+        return path
+    if path.is_relative_to(CLIENT_CONFIG_DIR / APPLY_DIR_NAME):
+        return path
+    if path.is_relative_to(SERVER_CONFIG_DIR / APPLY_DIR_NAME):
+        return path
+    if path.is_relative_to(INSTALL_ROOT):
+        relative = path.relative_to(INSTALL_ROOT)
+        if relative.parts:
+            config_root = relative.parts[0]
+            if config_root.startswith("config-"):
+                return INSTALL_ROOT / config_root / APPLY_DIR_NAME / PENDING_DIR_NAME / PurePosixPath(*relative.parts[1:])
+    if path.is_relative_to(CLIENT_CONFIG_DIR):
+        return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
+    if path.is_relative_to(SERVER_CONFIG_DIR):
+        return SERVER_PENDING_DIR / path.relative_to(SERVER_CONFIG_DIR)
+    if path.is_relative_to(CONFIG_ROOT):
+        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_ROOT)
+    return path
+
+
+def _resolve_config_path(host: Host, path: PurePosixPath) -> PurePosixPath:
+    pending = _pending_candidate(path)
+    if pending != path and linux_env.path_exists(host, pending):
+        return pending
+    return path
+
+
+def _as_path(path: PurePosixPath | str) -> PurePosixPath:
+    if isinstance(path, PurePosixPath):
+        return path
+    return PurePosixPath(str(path))
 
 
 def read_client_config(host: Host) -> dict:

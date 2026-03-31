@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -169,8 +170,18 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 	}
 
 	requiredFiles := []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
-	for _, name := range requiredFiles {
-		path := filepath.Join(configDirPath, name)
+	if present, err := configFilesPresent(configDirPath, requiredFiles); err != nil {
+		return false, err
+	} else if present {
+		return true, nil
+	}
+	pendingDir := apply.PendingDir(configDirPath)
+	return configFilesPresent(pendingDir, requiredFiles)
+}
+
+func configFilesPresent(dir string, names []string) (bool, error) {
+	for _, name := range names {
+		path := filepath.Join(dir, name)
 		if _, err := os.Stat(path); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				return false, nil
