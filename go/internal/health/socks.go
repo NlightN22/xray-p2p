@@ -6,6 +6,8 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
 const defaultProbeInterval = 500 * time.Millisecond
@@ -20,6 +22,8 @@ func WaitForSocksProxy(ctx context.Context, addr string, timeout, interval time.
 		interval = defaultProbeInterval
 	}
 
+	logging.Info("xp2p: socks health check starting", "addr", addr, "timeout", timeout, "interval", interval)
+
 	var deadline time.Time
 	if timeout > 0 {
 		deadline = time.Now().Add(timeout)
@@ -33,6 +37,7 @@ func WaitForSocksProxy(ctx context.Context, addr string, timeout, interval time.
 		conn, err := net.DialTimeout("tcp", addr, interval)
 		if err == nil {
 			_ = conn.Close()
+			logging.Info("xp2p: socks health check ok", "addr", addr)
 			return nil
 		}
 		lastErr = err

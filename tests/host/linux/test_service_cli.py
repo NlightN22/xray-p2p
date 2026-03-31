@@ -443,7 +443,12 @@ def test_package_uninstall_removes_services(server_host):
             _assert_missing(svc)
     finally:
         print("DEBUG: reinstalling xp2p package", flush=True)
-        reinstall = linux_env.run_guest_script(server_host, "scripts/linux/install_xp2p.sh", timeout=600)
+        reinstall = linux_env.run_guest_script_with_env(
+            server_host,
+            "scripts/linux/install_xp2p.sh",
+            {"XP2P_SKIP_BUILD": "1"},
+            timeout=300,
+        )
         if reinstall.rc != 0:
             pytest.fail(
                 "Failed to reinstall xp2p package "
