@@ -104,7 +104,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "client deploy: client run active",
+            "client deploy: completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
 
@@ -1000,7 +1000,7 @@ def _run_bundle_explicit(
     config_file: PurePosixPath,
     state_file: PurePosixPath,
 ) -> None:
-    helpers.write_text(host, DEPLOY_CONFIG_ROOT / BUNDLE_MARKER, "bundle-marker")
+    linux_env.write_text(host, DEPLOY_CONFIG_ROOT / BUNDLE_MARKER, "bundle-marker")
     before = _bundle_hashes(host, config_file, state_file)
     archive = BUNDLE_ARTIFACT_ROOT / f"{role}-explicit.tar.gz"
     result = linux_env.run_xp2p(

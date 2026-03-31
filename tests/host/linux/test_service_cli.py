@@ -8,6 +8,10 @@ import pytest
 from tests.host import config_files
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - fallback for older runtimes.
+    import tomli as tomllib
 
 CLIENT_SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 CLIENT_XRAY_LOG = helpers.LOG_ROOT / "client" / "xray-service.log"
@@ -130,6 +134,16 @@ def _wait_for_log_entry(host, path, substring: str, timeout: float = 60.0) -> No
     raise AssertionError(f"Log {path} did not contain {substring!r}. Last content:\n{last_content}")
 
 
+def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    request_path = helpers.CONFIG_ROOT / ".apply" / "apply.request"
+    while time.time() < deadline:
+        if not linux_env.path_exists(host, request_path):
+            return
+        time.sleep(POLL_INTERVAL)
+    raise AssertionError(f"apply.request did not clear after {timeout} seconds.")
+
+
 def _write_apply_request(host, role: str) -> None:
     helpers.write_apply_request(host, role)
 
@@ -139,6 +153,20 @@ def _current_mode(host, role: str) -> str:
     tun_enabled = state.get("tun_enabled")
     if not isinstance(tun_enabled, bool):
         raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")
+    return "tun" if tun_enabled else "proxy"
+
+
+def _current_live_mode(host, role: str) -> str:
+    config_path = CLIENT_CONFIG if role == "client" else SERVER_CONFIG
+    content = linux_env.read_text(host, config_path)
+    try:
+        tree = tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise AssertionError(f"Failed to parse TOML from {config_path}: {exc}\nContent:\n{content}") from exc
+    state = tree.get(role) or {}
+    tun_enabled = state.get("tun_enabled")
+    if not isinstance(tun_enabled, bool):
+        raise AssertionError(f"Expected tun_enabled boolean in {role} live config, got {tun_enabled!r}")
     return "tun" if tun_enabled else "proxy"
 
 
@@ -259,8 +287,10 @@ def test_service_restarts_when_config_changes(
 
         change_fn()
         try:
-            _wait_for_log_entry(host, service_log, "service configuration change detected")
+            _wait_for_apply_request_clear(host)
             _wait_for_service_state(runner, role, expected_active=True)
+            expected_mode = "proxy" if original_mode == "tun" else "tun"
+            assert _current_live_mode(host, role) == expected_mode
         finally:
             revert_fn()
     finally:
@@ -345,43 +375,81 @@ def test_package_uninstall_removes_services(server_host):
     def _assert_missing(path: PurePosixPath) -> None:
         assert not helpers.path_exists(server_host, path), f"{path} should be removed"
 
+    def _run_logged(label: str, command: str, *, timeout: int | None = None):
+        start = time.perf_counter()
+        result = server_host.run(command, timeout=timeout) if timeout else server_host.run(command)
+        elapsed = time.perf_counter() - start
+        print(f"DEBUG: {label} rc={result.rc} elapsed={elapsed:.2f}s", flush=True)
+        if result.stdout:
+            safe = result.stdout.encode("ascii", "backslashreplace").decode("ascii")
+            print(f"DEBUG: {label} stdout:\n{safe}", flush=True)
+        if result.stderr:
+            safe = result.stderr.encode("ascii", "backslashreplace").decode("ascii")
+            print(f"DEBUG: {label} stderr:\n{safe}", flush=True)
+        return result
+
     try:
-        server_host.run(
+        print("DEBUG: starting package uninstall test", flush=True)
+        status = _run_logged("dpkg status", "sudo -n dpkg -s xp2p")
+        if status.rc != 0:
+            print("DEBUG: xp2p not installed; attempting cached install before purge", flush=True)
+            install = linux_env.run_guest_script_with_env(
+                server_host,
+                "scripts/linux/install_xp2p.sh",
+                {"XP2P_SKIP_BUILD": "1"},
+                timeout=300,
+            )
+            if install.rc != 0:
+                pytest.skip(
+                    "xp2p package not installed and cached build not available "
+                    f"(exit {install.rc}).\nSTDOUT:\n{install.stdout}\nSTDERR:\n{install.stderr}"
+                )
+            print("DEBUG: xp2p cached install completed", flush=True)
+
+        _run_logged(
+            "remove client config",
             "sudo -n /usr/bin/xp2p client remove --path /etc/xp2p --config-dir config-client --all --ignore-missing --quiet"
         )
-        server_host.run(
+        _run_logged(
+            "remove server config",
             "sudo -n /usr/bin/xp2p server remove --path /etc/xp2p --config-dir config-server --ignore-missing --quiet"
         )
 
-        server_host.run("sudo -n rm -rf /etc/xp2p /var/log/xp2p >/dev/null 2>&1 || true")
+        _run_logged(
+            "remove config/log roots",
+            "sudo -n rm -rf /etc/xp2p /var/log/xp2p >/dev/null 2>&1 || true",
+        )
 
-        remove_result = server_host.run("sudo -n dpkg -P xp2p")
+        remove_result = _run_logged("dpkg purge", "sudo -n dpkg -P xp2p", timeout=300)
         if remove_result.rc != 0:
             pytest.fail(
                 "dpkg purge failed "
                 f"(exit {remove_result.rc}).\nSTDOUT:\n{remove_result.stdout}\nSTDERR:\n{remove_result.stderr}"
             )
-        server_host.run("sudo -n systemctl daemon-reload")
+        _run_logged("systemctl daemon-reload", "sudo -n systemctl daemon-reload")
 
-        status_client = server_host.run("sudo -n systemctl status xp2p-client.service")
-        status_server = server_host.run("sudo -n systemctl status xp2p-server.service")
+        status_client = _run_logged("systemctl status client", "sudo -n systemctl status xp2p-client.service")
+        status_server = _run_logged("systemctl status server", "sudo -n systemctl status xp2p-server.service")
         assert status_client.rc != 0 and _unit_missing(status_client)
         assert status_server.rc != 0 and _unit_missing(status_server)
         _assert_service_inactive(server_host, "xp2p-client.service")
         _assert_service_inactive(server_host, "xp2p-server.service")
 
+        print("DEBUG: asserting missing install/log/bin/service paths", flush=True)
         _assert_missing(install_root)
         _assert_missing(log_root)
         _assert_missing(bin_path)
         for svc in service_paths:
             _assert_missing(svc)
     finally:
-        reinstall = linux_env.run_guest_script(server_host, "scripts/linux/install_xp2p.sh")
+        print("DEBUG: reinstalling xp2p package", flush=True)
+        reinstall = linux_env.run_guest_script(server_host, "scripts/linux/install_xp2p.sh", timeout=600)
         if reinstall.rc != 0:
             pytest.fail(
                 "Failed to reinstall xp2p package "
                 f"(exit {reinstall.rc}).\nSTDOUT:\n{reinstall.stdout}\nSTDERR:\n{reinstall.stderr}"
             )
+        print("DEBUG: reinstall completed", flush=True)
 
 
 @pytest.mark.host

@@ -759,6 +759,9 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
+        with _active_tunnel_sessions(tunnel_environment):
+            pass
+
         plan_output = client_nat_runner(
             "nat-redirect",
             "add",

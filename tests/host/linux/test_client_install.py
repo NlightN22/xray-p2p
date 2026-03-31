@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import time
 
 import pytest
 
@@ -288,6 +289,15 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         if helpers.path_exists(client_host, helpers.HEARTBEAT_STATE_FILE):
             helpers.remove_path(client_host, helpers.HEARTBEAT_STATE_FILE)
 
+        xp2p_client_runner(
+            "client",
+            "service",
+            "start",
+            check=True,
+        )
+        _wait_for_apply_request_clear(client_host, timeout_seconds=30.0)
+        _wait_for_path_present(client_host, helpers.CLIENT_CONFIG_FILE, timeout_seconds=30.0)
+
         result = xp2p_client_runner(
             "client",
             "state",
@@ -305,6 +315,7 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         assert {row["TAG"] for row in rows} == expected_tags
         assert {row["HOST"] for row in rows} == expected_hosts
     finally:
+        xp2p_client_runner("client", "service", "stop")
         linux_env.run_guest_script(
             client_host,
             "scripts/linux/update_hosts_entry.sh",
@@ -615,8 +626,26 @@ def test_client_install_recovers_without_state_marker(client_host, xp2p_client_r
             check=True,
         )
 
-        assert all(helpers.path_exists(client_host, path) for path in helpers.CLIENT_STATE_FILES), (
-            "Expected client config/state files to be recreated"
-        )
+        pending_config = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
+        assert helpers.path_exists(client_host, pending_config), "Expected pending client config to be recreated"
     finally:
         pass
+
+
+def _wait_for_apply_request_clear(host, *, timeout_seconds: float) -> None:
+    deadline = time.time() + timeout_seconds
+    apply_path = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
+    while time.time() < deadline:
+        if not linux_env.path_exists(host, apply_path):
+            return
+        time.sleep(1.0)
+    raise AssertionError(f"apply.request not cleared within {timeout_seconds:.0f}s at {apply_path}")
+
+
+def _wait_for_path_present(host, path: PurePosixPath, *, timeout_seconds: float) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if linux_env.path_exists(host, path):
+            return
+        time.sleep(1.0)
+    raise AssertionError(f"Expected path {path} to exist within {timeout_seconds:.0f}s")
