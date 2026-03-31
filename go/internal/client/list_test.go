@@ -24,7 +24,7 @@ func TestListEndpoints(t *testing.T) {
 		_ = os.Chdir(oldWD)
 	})
 
-	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	configPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -54,6 +54,7 @@ func TestListEndpoints(t *testing.T) {
 	records, err := ListEndpoints(ListOptions{
 		InstallDir: dir,
 		ConfigDir:  layout.ClientConfigDir,
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("ListEndpoints failed: %v", err)

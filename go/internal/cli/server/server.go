@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -82,6 +83,10 @@ func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstall
 	if port := strings.TrimSpace(installOpts.Port); port != "" {
 		if _, err := config.UpdateServerTrojanPort("", port); err != nil {
 			logging.Warn("xp2p server install: failed to update server trojan port", "err", err)
+		} else {
+			if req, reqErr := apply.NewRequest(apply.RoleServer); reqErr == nil {
+				_ = apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+			}
 		}
 	}
 

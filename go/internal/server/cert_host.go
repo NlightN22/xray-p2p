@@ -32,10 +32,12 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 		return err
 	}
 
-	configPath := filepath.Join(state.configDir, "inbounds.json")
-	contents, err := os.ReadFile(configPath)
+	pendingDir := pendingConfigDir(state.configDir)
+	configPath := filepath.Join(pendingDir, "inbounds.json")
+	livePath := filepath.Join(state.configDir, "inbounds.json")
+	contents, err := readConfigWithFallback(configPath, livePath)
 	if err != nil {
-		return fmt.Errorf("xp2p: read %s: %w", configPath, err)
+		return err
 	}
 
 	root, err := parseInbounds(contents)
@@ -57,6 +59,15 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 		return ErrCertificateConfigured
 	}
 
+	if state.generateSelfSigned {
+		if err := os.MkdirAll(pendingDir, 0o755); err != nil {
+			return fmt.Errorf("xp2p: create pending config directory: %w", err)
+		}
+		state.certDest = filepath.Join(pendingDir, "cert.pem")
+		state.keyDest = filepath.Join(pendingDir, "key.pem")
+		state.certPath = filepath.Join(state.configDir, "cert.pem")
+		state.keyPath = filepath.Join(state.configDir, "key.pem")
+	}
 	if err := provisionCertificateFiles(state); err != nil {
 		return err
 	}
@@ -65,6 +76,9 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 	trojan["streamSettings"] = streamSettings
 
 	if err := writeInbounds(configPath, root); err != nil {
+		return err
+	}
+	if err := writeServerApplyRequest(); err != nil {
 		return err
 	}
 

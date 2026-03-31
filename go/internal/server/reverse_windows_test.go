@@ -19,7 +19,8 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
+	pendingDir := pendingConfigDir(configDir)
+	writeEmptyRouting(t, filepath.Join(pendingDir, "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -31,7 +32,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 		t.Fatalf("AddUser: %v", err)
 	}
 
-	routingDoc := loadJSONFile(t, filepath.Join(configDir, "routing.json"))
+	routingDoc := loadJSONFile(t, filepath.Join(pendingDir, "routing.json"))
 	reverse, ok := routingDoc["reverse"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected reverse object in routing.json")
@@ -53,7 +54,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 		t.Fatalf("expected 1 marker rule, got %d", markerCount)
 	}
 
-	stateDoc := readServerStateDoc(t, serverStatePath(""))
+	stateDoc := readServerStateDoc(t, pendingConfigPath())
 	channels := stateDoc["reverse_channels"].(map[string]any)
 	if _, ok := channels["alpha-useredge-example.rev"]; !ok {
 		t.Fatalf("expected reverse channel entry, got %v", channels)
@@ -66,7 +67,8 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
+	pendingDir := pendingConfigDir(configDir)
+	writeEmptyRouting(t, filepath.Join(pendingDir, "routing.json"))
 
 	opts := AddUserOptions{
 		InstallDir: dir,
@@ -88,7 +90,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 		t.Fatalf("RemoveUser: %v", err)
 	}
 
-	routingDoc := loadJSONFile(t, filepath.Join(configDir, "routing.json"))
+	routingDoc := loadJSONFile(t, filepath.Join(pendingDir, "routing.json"))
 	portals := routingDoc["reverse"].(map[string]any)["portals"].([]any)
 	if len(portals) != 0 {
 		t.Fatalf("expected portals to be empty, got %d", len(portals))
@@ -98,7 +100,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 		t.Fatalf("expected rules to contain only direct rules, got %d", len(rules))
 	}
 
-	stateDoc := readServerStateDoc(t, serverStatePath(""))
+	stateDoc := readServerStateDoc(t, pendingConfigPath())
 	if _, ok := stateDoc["reverse_channels"]; ok {
 		t.Fatalf("expected reverse_channels to be removed, got %v", stateDoc)
 	}
@@ -110,7 +112,7 @@ func TestAddUserDetectsReverseConflicts(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
+	writeEmptyRouting(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -140,7 +142,7 @@ func TestAddUserRejectsDuplicateUser(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
+	writeEmptyRouting(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -170,7 +172,7 @@ func TestAddUserAllowsForceUpdate(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(configDir, "routing.json"))
+	writeEmptyRouting(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -193,7 +195,7 @@ func TestAddUserAllowsForceUpdate(t *testing.T) {
 		t.Fatalf("AddUser force: %v", err)
 	}
 
-	state, err := loadTrojanState(configDir)
+	state, err := loadTrojanState(pendingConfigDir(configDir))
 	if err != nil {
 		t.Fatalf("loadTrojanState: %v", err)
 	}
@@ -207,6 +209,9 @@ func TestAddUserAllowsForceUpdate(t *testing.T) {
 
 func writeEmptyRouting(t *testing.T, path string) {
 	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir routing dir: %v", err)
+	}
 	data := []byte(`{"reverse":{"portals":[]},"routing":{"domainStrategy":"AsIs","rules":[]}}`)
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write routing template: %v", err)

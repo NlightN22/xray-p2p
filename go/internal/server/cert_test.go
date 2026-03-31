@@ -33,8 +33,9 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 		t.Fatalf("SetCertificate failed: %v", err)
 	}
 
-	certPath := filepath.Join(configDir, "cert.pem")
-	keyPath := filepath.Join(configDir, "key.pem")
+	pendingDir := pendingConfigDir(configDir)
+	certPath := filepath.Join(pendingDir, "cert.pem")
+	keyPath := filepath.Join(pendingDir, "key.pem")
 
 	cert := loadCertificateFile(t, certPath)
 	if cert.Subject.CommonName != "cert.test.local" {
@@ -56,8 +57,8 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 		t.Fatalf("expected RSA private key in %s", keyPath)
 	}
 
-	configPath := filepath.Join(configDir, "inbounds.json")
-	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(certPath), filepath.ToSlash(keyPath))
+	configPath := filepath.Join(pendingDir, "inbounds.json")
+	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(filepath.Join(configDir, "cert.pem")), filepath.ToSlash(filepath.Join(configDir, "key.pem")))
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -105,7 +106,7 @@ func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 		t.Fatalf("SetCertificate failed: %v", err)
 	}
 
-	configPath := filepath.Join(configDir, "inbounds.json")
+	configPath := filepath.Join(pendingConfigDir(configDir), "inbounds.json")
 	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(srcCert), filepath.ToSlash(srcKey))
 
 	data, err := os.ReadFile(configPath)

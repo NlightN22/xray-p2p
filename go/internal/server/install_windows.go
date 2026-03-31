@@ -15,6 +15,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -30,6 +31,7 @@ type installState struct {
 	binDir     string
 	logsDir    string
 	configDir  string
+	pendingDir string
 	xrayPath   string
 	certDest   string
 	keyDest    string
@@ -74,10 +76,13 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
+	if err := os.MkdirAll(state.pendingDir, 0o755); err != nil {
+		return fmt.Errorf("xp2p: create pending config directory: %w", err)
+	}
 
 	if _, err := config.EnsureTunSettings("", "server", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
 		if state.Force && errors.Is(err, config.ErrConfigParse) {
-			configPath := config.ConfigPath(layout.ServerConfigFileName)
+			configPath := config.PendingConfigPath(layout.ServerConfigFileName)
 			if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 				return removeErr
 			}
@@ -97,6 +102,13 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	}
 	if err := installstate.Write(state.stateFile, installstate.KindServer); err != nil {
 		return fmt.Errorf("xp2p: write server state: %w", err)
+	}
+	req, err := apply.NewRequest(apply.RoleServer)
+	if err != nil {
+		return err
+	}
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		return err
 	}
 
 	logging.Info("xp2p server install completed", "install_dir", state.installDir)
@@ -194,14 +206,15 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		binDir:         filepath.Join(dir, layout.BinDirName),
 		logsDir:        config.LogRoot(),
 		configDir:      base.configDir,
+		pendingDir:     apply.PendingDir(base.configDir),
 		xrayPath:       filepath.Join(dir, layout.BinDirName, "xray.exe"),
 		portValue:      base.portVal,
 		selfSigned:     base.selfSigned,
 		certSource:     base.certSource,
 	}
 
-	state.certDest = filepath.Join(state.configDir, "cert.pem")
-	state.keyDest = filepath.Join(state.configDir, "key.pem")
+	state.certDest = filepath.Join(state.pendingDir, "cert.pem")
+	state.keyDest = filepath.Join(state.pendingDir, "key.pem")
 	state.stateFile = filepath.Clean(config.ConfigPath(layout.ServerStateFileName))
 
 	return state, nil
@@ -307,25 +320,25 @@ func deployConfiguration(state installState) error {
 			keyPath = filepath.ToSlash(state.keyDest)
 		}
 		if certPath == "" && keyPath == "" {
-			certPath = filepath.ToSlash(state.certDest)
-			keyPath = filepath.ToSlash(state.keyDest)
+			certPath = filepath.ToSlash(filepath.Join(state.configDir, "cert.pem"))
+			keyPath = filepath.ToSlash(filepath.Join(state.configDir, "key.pem"))
 		}
 	}
 
-	xrayCfg, err := ensureServerXrayConfigForce(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)), state.Force)
+	xrayCfg, err := ensureServerXrayConfigForce(pendingConfigPath(), state.Force)
 	if err != nil {
 		return err
 	}
-	if err := writeServerInboundsConfig(state.configDir, xrayCfg, state.TunEnabled, state.TunName, state.TunMTU, state.portValue, certPath, keyPath, false, nil); err != nil {
+	if err := writeServerInboundsConfig(state.pendingDir, xrayCfg, state.TunEnabled, state.TunName, state.TunMTU, state.portValue, certPath, keyPath, false, nil); err != nil {
 		return err
 	}
-	if err := writeServerLogs(state.configDir, xrayCfg.Logs); err != nil {
+	if err := writeServerLogs(state.pendingDir, xrayCfg.Logs); err != nil {
 		return err
 	}
-	if err := writeServerOutbounds(state.configDir, xrayCfg.DirectOutbound); err != nil {
+	if err := writeServerOutbounds(state.pendingDir, xrayCfg.DirectOutbound); err != nil {
 		return err
 	}
-	if err := writeServerRouting(state.configDir, xrayCfg, nil, nil); err != nil {
+	if err := writeServerRouting(state.pendingDir, xrayCfg, nil, nil); err != nil {
 		return err
 	}
 	return nil

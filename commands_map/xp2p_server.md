@@ -117,6 +117,7 @@ Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
 - --host, -H <host>      Public host name or IP for generated connection links
+- --pending, -y          List pending configuration
 
 xp2p server redirect add
 Options:
@@ -146,6 +147,7 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
+- --pending, -y          List pending configuration
 
 xp2p server forward add
 Options:
@@ -173,18 +175,21 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
+- --pending, -y          List pending configuration
 
 xp2p server reverse
 Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
+- --pending, -y          List pending configuration
 
 xp2p server reverse list
 Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
+- --pending, -y          List pending configuration
 
 xp2p server cert set
 Options:
@@ -202,6 +207,7 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
+- --pending, -y          Show pending configuration
 
 xp2p server deploy
 Options:

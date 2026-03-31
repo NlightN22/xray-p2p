@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -18,12 +19,13 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	configDirPath := filepath.Join(dir, configDirName)
+	liveConfigDir := filepath.Join(dir, configDirName)
+	configDirPath := apply.PendingDir(liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -96,6 +98,7 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	list, err := ListRedirects(RedirectListOptions{
 		InstallDir: dir,
 		ConfigDir:  configDirName,
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("list redirects: %v", err)
@@ -113,12 +116,13 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	configDirPath := filepath.Join(dir, configDirName)
+	liveConfigDir := filepath.Join(dir, configDirName)
+	configDirPath := apply.PendingDir(liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -184,6 +188,7 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	list, err := ListRedirects(RedirectListOptions{
 		InstallDir: dir,
 		ConfigDir:  configDirName,
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("list redirects: %v", err)
@@ -201,12 +206,13 @@ func TestRemoveRedirectByTag(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	configDirPath := filepath.Join(dir, configDirName)
+	liveConfigDir := filepath.Join(dir, configDirName)
+	configDirPath := apply.PendingDir(liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -251,6 +257,7 @@ func TestRemoveRedirectByTag(t *testing.T) {
 	list, err := ListRedirects(RedirectListOptions{
 		InstallDir: dir,
 		ConfigDir:  configDirName,
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("list redirects: %v", err)
@@ -268,12 +275,13 @@ func TestRemoveDomainRedirect(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	configDirPath := filepath.Join(dir, configDirName)
+	liveConfigDir := filepath.Join(dir, configDirName)
+	configDirPath := apply.PendingDir(liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -394,11 +402,11 @@ func TestListRedirectsReportsMixedRecords(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	if err := os.MkdirAll(filepath.Join(dir, configDirName), 0o755); err != nil {
+	if err := os.MkdirAll(apply.PendingDir(filepath.Join(dir, configDirName)), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{Hostname: "server-a.example", Tag: "proxy-server-a"},
@@ -416,6 +424,7 @@ func TestListRedirectsReportsMixedRecords(t *testing.T) {
 	list, err := ListRedirects(RedirectListOptions{
 		InstallDir: dir,
 		ConfigDir:  configDirName,
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("list redirects: %v", err)

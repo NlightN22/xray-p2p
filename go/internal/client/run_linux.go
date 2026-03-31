@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/health"
@@ -35,6 +36,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
+	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, configDir)
+	if err != nil {
+		return err
+	}
+
 	if stat, err := os.Stat(configDir); err != nil || !stat.IsDir() {
 		if err != nil {
 			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", configDir, err)
@@ -50,7 +56,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	applied, err := loadClientAppliedState(paths.stateFile)
+	appliedState, err := loadClientAppliedState(paths.stateFile)
 	if err != nil {
 		return err
 	}
@@ -65,7 +71,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
-	if !applied.matches(desired, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
+	if !appliedState.matches(desired, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
 		if err := applyClientDesiredConfig(paths, desired, ModeOptions{
 			InstallDir:    installDir,
 			ConfigDir:     opts.ConfigDir,
@@ -106,7 +112,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	return runXrayWithConfig(
+	runErr := runXrayWithConfig(
 		ctx,
 		xrayPath,
 		configDir,
@@ -137,6 +143,14 @@ func Run(ctx context.Context, opts RunOptions) error {
 			return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
 		},
 	)
+	if runErr != nil && pendingApplied && rollback != nil {
+		if err := rollback.Restore(config.AuditLogPath()); err != nil {
+			logging.Warn("xp2p: rollback failed after apply", "err", err)
+		} else {
+			logging.Warn("xp2p: rollback completed after apply failure")
+		}
+	}
+	return runErr
 }
 
 func tunSetupErrorWithHint(action string, err error) error {

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
@@ -23,6 +24,7 @@ type installState struct {
 	binDir       string
 	logsDir      string
 	configDir    string
+	pendingDir   string
 	serverPort   int
 	serverName   string
 	serverRemote string
@@ -58,6 +60,9 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
+	if err := os.MkdirAll(state.pendingDir, 0o755); err != nil {
+		return fmt.Errorf("xp2p: create pending config directory: %w", err)
+	}
 
 	if err := ensureClientTunConfig(state.Force, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr, state.TunMode, state.TunModeSet); err != nil {
 		return err
@@ -70,6 +75,13 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return err
 	}
 
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		return err
+	}
 	logging.Info("xp2p client install completed", "install_dir", state.installDir)
 	return nil
 }
@@ -174,6 +186,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		binDir:         filepath.Join(dir, layout.BinDirName),
 		logsDir:        config.LogRoot(),
 		configDir:      base.configDir,
+		pendingDir:     apply.PendingDir(base.configDir),
 		serverPort:     base.portVal,
 		serverName:     base.serverName,
 		serverRemote:   base.address,
@@ -242,7 +255,7 @@ func deployConfiguration(state installState) error {
 		return err
 	}
 
-	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
+	inboundsPath := filepath.Join(state.pendingDir, "inbounds.json")
 	if err := configio.WriteJSON(inboundsPath, buildClientInbounds(xrayCfg, state.TunEnabled, state.TunName, state.TunMTU), configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
@@ -250,14 +263,14 @@ func deployConfiguration(state installState) error {
 		return err
 	}
 
-	if err := configio.WriteJSON(filepath.Join(state.configDir, "logs.json"), buildLogs(xrayCfg.Logs), configio.WriteOptions{
+	if err := configio.WriteJSON(filepath.Join(state.pendingDir, "logs.json"), buildLogs(xrayCfg.Logs), configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),
 		KeepLastKnownGood: true,
 	}); err != nil {
 		return err
 	}
 
-	cfg, err := applyClientEndpointConfig(state.configDir, state.configFile, endpointConfig{
+	_, err = applyClientEndpointConfig(state.pendingDir, state.configFile, endpointConfig{
 		Hostname:              state.serverRemote,
 		Port:                  state.serverPort,
 		User:                  state.User,
@@ -272,7 +285,7 @@ func deployConfiguration(state installState) error {
 	if err != nil {
 		return err
 	}
-	return saveClientAppliedState(state.stateFile, cfg, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr)
+	return nil
 }
 
 func ensureXrayBinaryPresent(binDir string) error {

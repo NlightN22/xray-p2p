@@ -13,12 +13,14 @@ import (
 type serverCertStateOptions struct {
 	Path      string
 	ConfigDir string
+	Pending   bool
 }
 
 func runServerCertState(cfg config.Config, opts serverCertStateOptions) int {
 	state, err := serverCertStateFunc(server.CertificateStateOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		Pending:    opts.Pending,
 	})
 	if err != nil {
 		logging.Error("xp2p server cert state failed", "err", err)

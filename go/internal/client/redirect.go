@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
@@ -41,6 +44,7 @@ type RedirectRemoveOptions struct {
 type RedirectListOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 // RedirectRecord describes a redirect rule.
@@ -60,7 +64,7 @@ type redirectPaths struct {
 
 // AddRedirect registers a custom CIDR redirect.
 func AddRedirect(opts RedirectAddOptions) error {
-	paths, err := resolveRedirectPaths(opts.InstallDir, opts.ConfigDir)
+	paths, err := resolveRedirectPathsPending(opts.InstallDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -122,7 +126,11 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false); err != nil {
 		return err
 	}
-	return nil
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 }
 
 func isDefaultRoute(value string) bool {
@@ -142,7 +150,7 @@ func isDefaultRoute(value string) bool {
 
 // RemoveRedirect deletes redirect rules.
 func RemoveRedirect(opts RedirectRemoveOptions) error {
-	paths, err := resolveRedirectPaths(opts.InstallDir, opts.ConfigDir)
+	paths, err := resolveRedirectPathsPending(opts.InstallDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -196,17 +204,20 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false); err != nil {
 		return err
 	}
-	return nil
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 }
 
 // ListRedirects returns configured redirect entries.
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
-	paths, err := resolveRedirectPaths(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return nil, err
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if opts.Pending {
+		statePath = filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	}
-
-	state, err := loadClientInstallState(paths.configFile)
+	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +263,17 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 
 func resolveRedirectPaths(installDir, configDir string) (redirectPaths, error) {
 	paths, err := resolveClientPaths(installDir, configDir)
+	if err != nil {
+		return redirectPaths{}, err
+	}
+	return redirectPaths{
+		clientPaths: paths,
+		routing:     filepath.Join(paths.configDir, "routing.json"),
+	}, nil
+}
+
+func resolveRedirectPathsPending(installDir, configDir string) (redirectPaths, error) {
+	paths, err := resolvePendingClientPaths(installDir, configDir)
 	if err != nil {
 		return redirectPaths{}, err
 	}

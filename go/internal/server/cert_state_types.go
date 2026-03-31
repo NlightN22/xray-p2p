@@ -15,6 +15,7 @@ const (
 type CertificateStateOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 type CertificateState struct {

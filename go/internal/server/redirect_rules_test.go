@@ -37,14 +37,14 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 		t.Fatalf("AddRedirect failed: %v", err)
 	}
 
-	statePath := serverStatePath(dir)
+	statePath := pendingConfigPath()
 	stateDoc := readServerStateDoc(t, statePath)
 	rawRules, ok := stateDoc[serverRedirectRulesKey].([]any)
 	if !ok || len(rawRules) != 1 {
 		t.Fatalf("expected redirect entry, got %+v", stateDoc[serverRedirectRulesKey])
 	}
 
-	routingPath := filepath.Join(configDir, "routing.json")
+	routingPath := filepath.Join(pendingConfigDir(configDir), "routing.json")
 	routingDoc := readJSONFile(t, routingPath)
 	routingObj, _ := routingDoc["routing"].(map[string]any)
 	rules := extractInterfaceSlice(routingObj["rules"])
@@ -55,6 +55,7 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	records, err := ListRedirects(RedirectListOptions{
 		InstallDir: dir,
 		ConfigDir:  configDir,
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("ListRedirects failed: %v", err)
@@ -99,12 +100,12 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 		t.Fatalf("RemoveRedirect failed: %v", err)
 	}
 
-	stateDoc := readServerStateDoc(t, serverStatePath(dir))
+	stateDoc := readServerStateDoc(t, pendingConfigPath())
 	if _, ok := stateDoc[serverRedirectRulesKey]; ok {
 		t.Fatalf("expected redirect rules cleared, got %+v", stateDoc[serverRedirectRulesKey])
 	}
 
-	routingDoc := readJSONFile(t, filepath.Join(configDir, "routing.json"))
+	routingDoc := readJSONFile(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
 	routingObj, _ := routingDoc["routing"].(map[string]any)
 	rules := extractInterfaceSlice(routingObj["rules"])
 	if hasRedirectRule(rules, "", "10.50.0.0/16", "10.50.0.0/16") {
@@ -142,7 +143,7 @@ func writeServerStateFile(t *testing.T, installDir string, reverse map[string]se
 	if len(redirects) > 0 {
 		doc[serverRedirectRulesKey] = redirects
 	}
-	if err := writeServerStateDoc(serverStatePath(installDir), doc); err != nil {
+	if err := writeServerStateDoc(pendingConfigPath(), doc); err != nil {
 		t.Fatalf("write state: %v", err)
 	}
 }

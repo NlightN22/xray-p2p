@@ -11,12 +11,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 // ReverseListOptions controls client reverse enumeration.
 type ReverseListOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 // ReverseRecord describes a client reverse tunnel.
@@ -37,12 +42,19 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 		return nil, err
 	}
 
-	state, err := loadClientInstallState(paths.configFile)
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if opts.Pending {
+		statePath = filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	}
+	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err
 	}
 
 	routingPath := filepath.Join(paths.configDir, "routing.json")
+	if opts.Pending {
+		routingPath = filepath.Join(apply.PendingDir(paths.configDir), "routing.json")
+	}
 	routingDoc, err := loadClientRoutingDoc(routingPath)
 	if err != nil {
 		return nil, err

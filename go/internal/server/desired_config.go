@@ -12,7 +12,11 @@ type desiredServerConfig struct {
 }
 
 func loadServerDesiredConfig(installDir string) (desiredServerConfig, error) {
-	doc, err := loadServerStateDoc(serverStatePath(installDir))
+	return loadServerDesiredConfigFromPath(serverStatePath(installDir))
+}
+
+func loadServerDesiredConfigFromPath(path string) (desiredServerConfig, error) {
+	doc, err := loadServerStateDoc(path)
 	if err != nil {
 		return desiredServerConfig{}, err
 	}

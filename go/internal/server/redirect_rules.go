@@ -43,6 +43,7 @@ type RedirectRemoveOptions struct {
 type RedirectListOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 // RedirectRecord describes a server redirect.
@@ -68,6 +69,18 @@ func openServerRedirectStore(installDir string) (serverRedirectStore, error) {
 	if err != nil {
 		return serverRedirectStore{}, err
 	}
+	return buildServerRedirectStore(path, doc)
+}
+
+func openServerRedirectStoreFromPath(path string) (serverRedirectStore, error) {
+	doc, err := loadServerStateDoc(path)
+	if err != nil {
+		return serverRedirectStore{}, err
+	}
+	return buildServerRedirectStore(path, doc)
+}
+
+func buildServerRedirectStore(path string, doc map[string]any) (serverRedirectStore, error) {
 	reverseState, err := decodeServerReverseState(doc)
 	if err != nil {
 		return serverRedirectStore{}, err
@@ -133,12 +146,13 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 
-	configDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
+	configDir := pendingConfigDir(liveConfigDir)
 
-	store, err := openServerRedirectStore(installDir)
+	store, err := openServerRedirectStorePending()
 	if err != nil {
 		return err
 	}
@@ -176,10 +190,10 @@ func AddRedirect(opts RedirectAddOptions) error {
 			return err
 		}
 	}
-	if err := rebuildServerRouting(installDir, configDir); err != nil {
+	if err := rebuildServerRoutingFromPath(pendingConfigPath(), configDir); err != nil {
 		return err
 	}
-	return nil
+	return writeServerApplyRequest()
 }
 
 // RemoveRedirect removes a server redirect rule.
@@ -189,12 +203,13 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return err
 	}
 
-	configDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
+	configDir := pendingConfigDir(liveConfigDir)
 
-	store, err := openServerRedirectStore(installDir)
+	store, err := openServerRedirectStorePending()
 	if err != nil {
 		return err
 	}
@@ -225,10 +240,10 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return err
 	}
 
-	if err := rebuildServerRouting(installDir, configDir); err != nil {
+	if err := rebuildServerRoutingFromPath(pendingConfigPath(), configDir); err != nil {
 		return err
 	}
-	return nil
+	return writeServerApplyRequest()
 }
 
 // ListRedirects lists configured server redirects.
@@ -238,7 +253,12 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 		return nil, err
 	}
 
-	store, err := openServerRedirectStore(installDir)
+	var store serverRedirectStore
+	if opts.Pending {
+		store, err = openServerRedirectStoreFromPath(pendingConfigPath())
+	} else {
+		store, err = openServerRedirectStore(installDir)
+	}
 	if err != nil {
 		return nil, err
 	}

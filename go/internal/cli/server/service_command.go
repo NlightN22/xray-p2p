@@ -31,6 +31,7 @@ func newServerServiceCmd(cfg commandConfig) *cobra.Command {
 	cmd.AddCommand(
 		newServerServiceStartCmd(),
 		newServerServiceStopCmd(),
+		newServerServiceRestartCmd(),
 		newServerServiceStatusCmd(),
 		newServerServiceRunCmd(cfg),
 	)
@@ -58,6 +59,17 @@ func newServerServiceStopCmd() *cobra.Command {
 		Short: "Stop the xp2p server service",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerServiceStop(commandContext(cmd))
+			return errorForCode(code)
+		},
+	}
+}
+
+func newServerServiceRestartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "restart",
+		Short: "Restart the xp2p server service",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			code := runServerServiceRestart(commandContext(cmd))
 			return errorForCode(code)
 		},
 	}
@@ -149,6 +161,28 @@ func runServerServiceStop(ctx context.Context) int {
 		return 1
 	}
 	logging.Info("xp2p server service stopped")
+	return 0
+}
+
+func runServerServiceRestart(ctx context.Context) int {
+	if err := common.RequireRoot(); err != nil {
+		logging.Error("xp2p server service restart requires root privileges", "err", err)
+		return 1
+	}
+	ctrl := servicecontrol.Default()
+	if err := ctrl.Stop(ctx, servicecontrol.RoleServer); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
+		logging.Error("failed to stop xp2p server service", "err", err)
+		return 1
+	}
+	if err := ctrl.Start(ctx, servicecontrol.RoleServer); err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Error("xp2p server service restart is not supported on this platform")
+		} else {
+			logging.Error("failed to start xp2p server service", "err", err)
+		}
+		return 1
+	}
+	logging.Info("xp2p server service restarted")
 	return 0
 }
 

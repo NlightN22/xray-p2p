@@ -43,6 +43,7 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+- --pending, -y          List pending configuration
 
 xp2p client run
 Options:
@@ -150,6 +151,7 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+- --pending, -y          List pending configuration
 
 xp2p client forward add
 Options:
@@ -178,18 +180,21 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+- --pending, -y          List pending configuration
 
 xp2p client reverse
 Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+- --pending, -y          List pending configuration
 
 xp2p client reverse list
 Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
+- --pending, -y          List pending configuration
 
 xp2p client mode [tun|proxy] [split|full]
 Options:

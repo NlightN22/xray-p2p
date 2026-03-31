@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -57,13 +58,6 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		TunAddr:      opts.TunAddr,
 	}
 
-	watchPaths := []string{
-		filepath.Join(installDir, "bin"),
-		configDir,
-	}
-	watchFiles := []string{
-		filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
-	}
 	stateRoot := installDir
 	if runtime.GOOS == "windows" {
 		stateRoot = config.ConfigRoot()
@@ -76,8 +70,7 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 
 	runnerOpts := service.Options{
 		Name:               "server",
-		WatchPaths:         watchPaths,
-		WatchFiles:         watchFiles,
+		WatchFiles:         []string{config.ApplyRequestPath()},
 		WatchDebounce:      400 * time.Millisecond,
 		IgnorePaths:        ignorePaths,
 		MaxRestarts:        opts.MaxRestarts,
@@ -89,6 +82,18 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err := ensureLogFile(runOpts.ErrorLogPath); err != nil {
 		return err
 	}
+
+	logWatcherStop, err := service.StartLogWatcher(ctx, service.LogWatchOptions{
+		Name:          "server",
+		Paths:         []string{configDir},
+		Files:         []string{filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))},
+		IgnorePrefix:  []string{apply.ApplyDir(configDir)},
+		WatchDebounce: 400 * time.Millisecond,
+	})
+	if err != nil {
+		return err
+	}
+	defer logWatcherStop()
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
 		return Run(runCtx, runOpts)

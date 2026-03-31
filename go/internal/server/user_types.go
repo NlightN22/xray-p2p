@@ -24,6 +24,7 @@ type ListUsersOptions struct {
 	InstallDir string
 	ConfigDir  string
 	Host       string
+	Pending    bool
 }
 
 // UserLinkOptions describes parameters for generating a connection link for a specific Trojan user.
@@ -32,6 +33,7 @@ type UserLinkOptions struct {
 	ConfigDir  string
 	Host       string
 	UserID     string
+	Pending    bool
 }
 
 // UserLink contains the essential details for a Trojan user, including a ready-to-use connection link.

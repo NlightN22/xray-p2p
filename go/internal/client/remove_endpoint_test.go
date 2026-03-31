@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -18,12 +19,13 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	configDirPath := filepath.Join(dir, configDirName)
+	liveConfigDir := filepath.Join(dir, configDirName)
+	configDirPath := apply.PendingDir(liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -136,12 +138,13 @@ func TestRemoveEndpointRemovesAllWhenNoEndpointsRemain(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	configDirPath := filepath.Join(dir, configDirName)
+	liveConfigDir := filepath.Join(dir, configDirName)
+	configDirPath := apply.PendingDir(liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -167,10 +170,11 @@ func TestRemoveEndpointRemovesAllWhenNoEndpointsRemain(t *testing.T) {
 		t.Fatalf("RemoveEndpoint failed: %v", err)
 	}
 
-	if _, err := os.Stat(configDirPath); !os.IsNotExist(err) {
-		t.Fatalf("config dir should be removed, stat err=%v", err)
+	updated, err := loadClientInstallState(statePath)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
 	}
-	if _, err := os.Stat(statePath); !os.IsNotExist(err) {
-		t.Fatalf("state file should be removed, stat err=%v", err)
+	if len(updated.Endpoints) != 0 {
+		t.Fatalf("expected no endpoints remaining, got %d", len(updated.Endpoints))
 	}
 }

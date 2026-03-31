@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
@@ -278,6 +279,8 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 			_ = os.Unsetenv("XP2P_SERVER_KEY")
 			if _, updateErr := config.ClearServerCertificateOverrides(""); updateErr != nil {
 				logging.Warn("xp2p server deploy: failed to clear certificate overrides", "err", updateErr)
+			} else if req, reqErr := apply.NewRequest(apply.RoleServer); reqErr == nil {
+				_ = apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 			}
 			if retryErr := server.Install(ctx, inst); retryErr == nil {
 				goto installDone
@@ -298,6 +301,8 @@ installDone:
 			_ = writeLine(rw, "ERR "+err.Error())
 			notifyFailure(results)
 			return
+		} else if req, reqErr := apply.NewRequest(apply.RoleServer); reqErr == nil {
+			_ = apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 		}
 	}
 

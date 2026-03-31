@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 // RemoveEndpointOptions control removal of a specific endpoint.
@@ -28,7 +31,7 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 		return errors.New("xp2p: endpoint hostname or tag is required")
 	}
 
-	paths, err := resolveClientPaths(opts.InstallDir, opts.ConfigDir)
+	paths, err := resolvePendingClientPaths(opts.InstallDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -48,13 +51,6 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 
 	state.removeRedirectsByTag(record.Tag)
 	state.removeReverseChannelsByTag(record.Tag)
-
-	if len(state.Endpoints) == 0 {
-		return Remove(ctx, RemoveOptions{
-			InstallDir: paths.installDir,
-			ConfigDir:  opts.ConfigDir,
-		})
-	}
 
 	if err := state.save(paths.configFile); err != nil {
 		return err
@@ -81,5 +77,12 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 			return err
 		}
 	}
-	return updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, routeEndpointIPs, false)
+	if err := updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, routeEndpointIPs, false); err != nil {
+		return err
+	}
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 }

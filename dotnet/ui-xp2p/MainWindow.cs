@@ -16,7 +16,7 @@ internal sealed partial class MainWindow : Window
     private readonly Dictionary<TabKey, W.TabItem> _tabMap;
     private W.TextBlock? _clientStatus;
     private W.TextBlock? _serverStatus;
-    private readonly Dictionary<string, (W.Button Start, W.Button Stop)> _serviceButtons = new();
+    private readonly Dictionary<string, (W.Button Start, W.Button Stop, W.Button Restart)> _serviceButtons = new();
 
     public MainWindow(IBackend backend, ServiceManager serviceManager, ImageSource? icon)
     {
@@ -168,23 +168,32 @@ internal sealed partial class MainWindow : Window
 
         var start = new W.Button { Content = "Start", Width = 70, Margin = new Thickness(4, 0, 0, 0) };
         var stop = new W.Button { Content = "Stop", Width = 70, Margin = new Thickness(6, 0, 0, 0) };
+        var restart = new W.Button { Content = "Restart", Width = 80, Margin = new Thickness(6, 0, 0, 0) };
         start.Click += async (_, _) =>
         {
-            ToggleServiceButtons(start, stop, false);
+            ToggleServiceButtons(start, stop, restart, false);
             SetStatus(await _serviceManager.StartServiceAsync(serviceName));
             RefreshServiceStatusLabels();
-            ToggleServiceButtons(start, stop, true);
+            ToggleServiceButtons(start, stop, restart, true);
         };
         stop.Click += async (_, _) =>
         {
-            ToggleServiceButtons(start, stop, false);
+            ToggleServiceButtons(start, stop, restart, false);
             SetStatus(await _serviceManager.StopServiceAsync(serviceName));
             RefreshServiceStatusLabels();
-            ToggleServiceButtons(start, stop, true);
+            ToggleServiceButtons(start, stop, restart, true);
+        };
+        restart.Click += async (_, _) =>
+        {
+            ToggleServiceButtons(start, stop, restart, false);
+            SetStatus(await _serviceManager.RestartServiceAsync(serviceName));
+            RefreshServiceStatusLabels();
+            ToggleServiceButtons(start, stop, restart, true);
         };
         row.Children.Add(start);
         row.Children.Add(stop);
-        _serviceButtons[serviceName] = (start, stop);
+        row.Children.Add(restart);
+        _serviceButtons[serviceName] = (start, stop, restart);
 
         return row;
     }
@@ -205,10 +214,11 @@ internal sealed partial class MainWindow : Window
         }
     }
 
-    private static void ToggleServiceButtons(W.Button start, W.Button stop, bool enabled)
+    private static void ToggleServiceButtons(W.Button start, W.Button stop, W.Button restart, bool enabled)
     {
         start.IsEnabled = enabled;
         stop.IsEnabled = enabled;
+        restart.IsEnabled = enabled;
     }
 
     private void UpdateServiceButtons(string serviceName, string status)
@@ -220,6 +230,7 @@ internal sealed partial class MainWindow : Window
         var state = UiLogic.GetServiceButtonState(status);
         buttons.Start.IsEnabled = state.StartEnabled;
         buttons.Stop.IsEnabled = state.StopEnabled;
+        buttons.Restart.IsEnabled = UiLogic.IsRestartEnabled(status);
     }
 
     private static void ApplyTheme(int selection)

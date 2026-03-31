@@ -40,6 +40,7 @@ type serverRedirectRemoveOptions struct {
 type serverRedirectListOptions struct {
 	Path      string
 	ConfigDir string
+	Pending   bool
 }
 
 func newServerRedirectCmd(cfg commandConfig) *cobra.Command {
@@ -120,6 +121,7 @@ func newServerRedirectListCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
 	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.BoolVarP(&opts.Pending, "pending", "y", false, "list pending configuration")
 	return cmd
 }
 
@@ -251,6 +253,7 @@ func runServerRedirectList(_ context.Context, cfg config.Config, opts serverRedi
 	listOpts := server.RedirectListOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		Pending:    opts.Pending,
 	}
 	records, err := serverRedirectListFunc(listOpts)
 	if err != nil {

@@ -27,6 +27,30 @@ func ConfigPath(name string) string {
 	return filepath.Join(root, filepath.Clean(name))
 }
 
+// ApplyRoot returns the configuration apply root directory.
+func ApplyRoot() string {
+	return filepath.Join(filepath.Clean(ConfigRoot()), layout.ApplyDirName)
+}
+
+// PendingRoot returns the configuration pending root directory.
+func PendingRoot() string {
+	return filepath.Join(ApplyRoot(), layout.PendingDirName)
+}
+
+// PendingConfigPath returns the full path inside the pending root.
+func PendingConfigPath(name string) string {
+	root := filepath.Clean(PendingRoot())
+	if root == "." || root == "" {
+		return filepath.Clean(name)
+	}
+	return filepath.Join(root, filepath.Clean(name))
+}
+
+// ApplyRequestPath returns the full path to apply.request.
+func ApplyRequestPath() string {
+	return filepath.Join(ApplyRoot(), layout.ApplyRequestFileName)
+}
+
 // LogRoot returns the default log root for the current platform.
 func LogRoot() string {
 	if override := strings.TrimSpace(os.Getenv(envLogRoot)); override != "" {

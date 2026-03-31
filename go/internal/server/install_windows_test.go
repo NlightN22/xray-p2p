@@ -47,7 +47,9 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 		t.Fatalf("Install failed: %v", err)
 	}
 
-	certPath := filepath.Join(config.ConfigRoot(), "config-server", "cert.pem")
+	liveConfigDir := filepath.Join(config.ConfigRoot(), "config-server")
+	pendingDir := pendingConfigDir(liveConfigDir)
+	certPath := filepath.Join(pendingDir, "cert.pem")
 	cert := loadCertificate(t, certPath)
 	if len(cert.DNSNames) != 1 || cert.DNSNames[0] != "example.test" {
 		t.Fatalf("expected certificate DNSNames to contain example.test, got %v", cert.DNSNames)
@@ -60,7 +62,7 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 		t.Fatalf("expected certificate validity of approximately 10 years, got %v", cert.NotAfter.Sub(cert.NotBefore))
 	}
 
-	configPath := filepath.Join(config.ConfigRoot(), "config-server", "inbounds.json")
+	configPath := filepath.Join(pendingDir, "inbounds.json")
 	root, err := parseInbounds(readFile(t, configPath))
 	if err != nil {
 		t.Fatalf("parse inbounds: %v", err)
@@ -101,7 +103,9 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 		t.Fatalf("Install failed: %v", err)
 	}
 
-	certPath := filepath.Join(config.ConfigRoot(), "config-server", "cert.pem")
+	liveConfigDir := filepath.Join(config.ConfigRoot(), "config-server")
+	pendingDir := pendingConfigDir(liveConfigDir)
+	certPath := filepath.Join(pendingDir, "cert.pem")
 	cert := loadCertificate(t, certPath)
 	if len(cert.DNSNames) != 0 {
 		t.Fatalf("expected no DNS names for IP host, got %v", cert.DNSNames)
@@ -118,7 +122,7 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 		t.Fatalf("expected certificate to contain IP %s, got %v", host, cert.IPAddresses)
 	}
 
-	configPath := filepath.Join(config.ConfigRoot(), "config-server", "inbounds.json")
+	configPath := filepath.Join(pendingDir, "inbounds.json")
 	root, err := parseInbounds(readFile(t, configPath))
 	if err != nil {
 		t.Fatalf("parse inbounds: %v", err)

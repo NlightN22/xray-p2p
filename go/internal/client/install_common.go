@@ -83,7 +83,7 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 		password:         password,
 		user:             user,
 		serverName:       serverName,
-		configFile:       filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
+		configFile:       filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName)),
 		appliedStateFile: filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)),
 		installOpts: InstallOptions{
 			InstallDir:            installDir,
@@ -122,7 +122,7 @@ func normalizeTunModeValue(value string) string {
 func ensureClientTunConfig(force bool, tunEnabled bool, tunName string, tunMTU int, tunAddr string, tunMode string, tunModeSet bool) error {
 	if _, err := config.EnsureTunSettings("", "client", tunEnabled, tunName, tunMTU, tunAddr); err != nil {
 		if force && errors.Is(err, config.ErrConfigParse) {
-			configPath := config.ConfigPath(layout.ClientConfigFileName)
+			configPath := config.PendingConfigPath(layout.ClientConfigFileName)
 			if removeErr := os.Remove(configPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 				return removeErr
 			}

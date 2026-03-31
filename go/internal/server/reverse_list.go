@@ -12,6 +12,7 @@ import (
 type ReverseListOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 // ReverseRecord describes a server reverse tunnel.
@@ -35,7 +36,11 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 		return nil, err
 	}
 
-	stateDoc, err := loadServerStateDoc(serverStatePath(installDir))
+	statePath := serverStatePath(installDir)
+	if opts.Pending {
+		statePath = pendingConfigPath()
+	}
+	stateDoc, err := loadServerStateDoc(statePath)
 	if err != nil {
 		return nil, err
 	}
@@ -45,6 +50,9 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 	}
 
 	routingPath := filepath.Join(configDir, "routing.json")
+	if opts.Pending {
+		routingPath = filepath.Join(pendingConfigDir(configDir), "routing.json")
+	}
 	routingDoc, err := loadServerRouting(routingPath)
 	if err != nil {
 		return nil, err

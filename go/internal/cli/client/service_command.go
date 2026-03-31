@@ -32,6 +32,7 @@ func newClientServiceCmd(cfg commandConfig) *cobra.Command {
 	cmd.AddCommand(
 		newClientServiceStartCmd(),
 		newClientServiceStopCmd(),
+		newClientServiceRestartCmd(),
 		newClientServiceStatusCmd(),
 		newClientServiceRunCmd(cfg),
 	)
@@ -59,6 +60,17 @@ func newClientServiceStopCmd() *cobra.Command {
 		Short: "Stop the xp2p client service",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runClientServiceStop(commandContext(cmd))
+			return errorForCode(code)
+		},
+	}
+}
+
+func newClientServiceRestartCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "restart",
+		Short: "Restart the xp2p client service",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			code := runClientServiceRestart(commandContext(cmd))
 			return errorForCode(code)
 		},
 	}
@@ -154,6 +166,28 @@ func runClientServiceStop(ctx context.Context) int {
 		return 1
 	}
 	logging.Info("xp2p client service stopped")
+	return 0
+}
+
+func runClientServiceRestart(ctx context.Context) int {
+	if err := common.RequireRoot(); err != nil {
+		logging.Error("xp2p client service restart requires root privileges", "err", err)
+		return 1
+	}
+	ctrl := servicecontrol.Default()
+	if err := ctrl.Stop(ctx, servicecontrol.RoleClient); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
+		logging.Error("failed to stop xp2p client service", "err", err)
+		return 1
+	}
+	if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Error("xp2p client service restart is not supported on this platform")
+		} else {
+			logging.Error("failed to start xp2p client service", "err", err)
+		}
+		return 1
+	}
+	logging.Info("xp2p client service restarted")
 	return 0
 }
 

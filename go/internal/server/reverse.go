@@ -107,19 +107,29 @@ func buildServerReverseChannel(userID, host string) (serverReverseChannel, error
 }
 
 func applyServerReverseChannel(store *reverseStore, installDir string, configDir string, channel serverReverseChannel) error {
+	configPath := serverStatePath(installDir)
+	return applyServerReverseChannelWithConfig(store, configPath, configDir, channel)
+}
+
+func purgeServerReverseChannel(store *reverseStore, installDir string, configDir string, channel serverReverseChannel) error {
+	configPath := serverStatePath(installDir)
+	return purgeServerReverseChannelWithConfig(store, configPath, configDir, channel)
+}
+
+func applyServerReverseChannelWithConfig(store *reverseStore, configPath string, configDir string, channel serverReverseChannel) error {
 	store.put(channel)
 	if err := store.save(); err != nil {
 		return err
 	}
-	return rebuildServerRouting(installDir, configDir)
+	return rebuildServerRoutingFromPath(configPath, configDir)
 }
 
-func purgeServerReverseChannel(store *reverseStore, installDir string, configDir string, channel serverReverseChannel) error {
+func purgeServerReverseChannelWithConfig(store *reverseStore, configPath string, configDir string, channel serverReverseChannel) error {
 	store.delete(channel.Tag)
 	if err := store.save(); err != nil {
 		return err
 	}
-	return rebuildServerRouting(installDir, configDir)
+	return rebuildServerRoutingFromPath(configPath, configDir)
 }
 
 func ensureServerRoutingConfig(configDir string, channel serverReverseChannel) error {

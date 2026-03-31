@@ -332,10 +332,10 @@ func resolveConfigPath(explicit, role string) (string, error) {
 		return filepath.Clean(trimmed), nil
 	}
 	if strings.EqualFold(strings.TrimSpace(role), "client") {
-		return filepath.Clean(ConfigPath(layout.ClientConfigFileName)), nil
+		return filepath.Clean(PendingConfigPath(layout.ClientConfigFileName)), nil
 	}
 	if strings.EqualFold(strings.TrimSpace(role), "server") {
-		return filepath.Clean(ConfigPath(layout.ServerConfigFileName)), nil
+		return filepath.Clean(PendingConfigPath(layout.ServerConfigFileName)), nil
 	}
 	return "", fmt.Errorf("config: unsupported role %q", role)
 }

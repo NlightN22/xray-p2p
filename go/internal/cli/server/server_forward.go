@@ -94,6 +94,7 @@ func newServerForwardListCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringP("path", "p", "", "server installation directory")
 	flags.StringP("config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.BoolP("pending", "y", false, "list pending configuration")
 	return cmd
 }
 
@@ -216,6 +217,7 @@ func runServerForwardList(_ context.Context, cfg config.Config, args []string) i
 
 	path := fs.String("path", "", "server installation directory")
 	configDir := fs.String("config-dir", "", "server configuration directory name or absolute path")
+	pending := fs.Bool("pending", false, "list pending configuration")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -232,6 +234,7 @@ func runServerForwardList(_ context.Context, cfg config.Config, args []string) i
 	rules, err := serverListForwardFunc(server.ForwardListOptions{
 		InstallDir: firstNonEmpty(*path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Server.ConfigDir),
+		Pending:    *pending,
 	})
 	if err != nil {
 		logging.Error("xp2p server forward list failed", "err", err)

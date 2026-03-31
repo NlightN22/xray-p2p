@@ -95,7 +95,7 @@ func (f *fileWatcher) run() {
 			if !ok {
 				return
 			}
-			if evt.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+			if evt.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename) == 0 {
 				continue
 			}
 			clean := filepath.Clean(evt.Name)

@@ -6,9 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 // ForwardAddOptions controls client forward creation.
@@ -40,6 +44,7 @@ type ForwardRemoveOptions struct {
 type ForwardListOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 // AddForward registers a dokodemo-door forward on the client.
@@ -58,7 +63,7 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 		proto = forward.ProtocolBoth
 	}
 
-	paths, err := resolveClientPaths(opts.InstallDir, opts.ConfigDir)
+	paths, err := resolvePendingClientPaths(opts.InstallDir, opts.ConfigDir)
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
@@ -124,7 +129,13 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if parsed, err := netip.ParseAddr(strings.TrimSpace(targetHost)); err == nil {
 		targetAddr = parsed
 	}
-
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		return ForwardAddResult{}, err
+	}
 	return ForwardAddResult{
 		Rule:   rule,
 		Routed: forward.MatchesRedirect(state.Redirects, targetAddr),
@@ -137,7 +148,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, errors.New("xp2p: --listen-port, --tag, or --remark is required")
 	}
 
-	paths, err := resolveClientPaths(opts.InstallDir, opts.ConfigDir)
+	paths, err := resolvePendingClientPaths(opts.InstallDir, opts.ConfigDir)
 	if err != nil {
 		return forward.Rule{}, err
 	}
@@ -170,17 +181,25 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		state.insertForwardAt(rule, idx)
 		return forward.Rule{}, err
 	}
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		state.insertForwardAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		state.insertForwardAt(rule, idx)
+		return forward.Rule{}, err
+	}
 	return rule, nil
 }
 
 // ListForwards reports all configured forwards.
 func ListForwards(opts ForwardListOptions) ([]forward.Rule, error) {
-	paths, err := resolveClientPaths(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return nil, err
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if opts.Pending {
+		statePath = filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	}
-
-	state, err := loadClientInstallState(paths.configFile)
+	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err
 	}

@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
 func newServerModeCmd(cfg commandConfig) *cobra.Command {
@@ -79,7 +79,7 @@ func runServerMode(_ context.Context, cfg config.Config, args []string) int {
 	}
 
 	installDir := firstNonEmpty(*path, cfg.Server.InstallDir)
-	configDirName := firstNonEmpty(*configDir, cfg.Server.ConfigDir)
+	_ = firstNonEmpty(*configDir, cfg.Server.ConfigDir)
 	if strings.TrimSpace(installDir) == "" {
 		logging.Error("xp2p server mode: install directory is required")
 		return 2
@@ -91,15 +91,13 @@ func runServerMode(_ context.Context, cfg config.Config, args []string) int {
 		return 1
 	}
 
-	if err := serverModeFunc(server.ModeOptions{
-		InstallDir: installDir,
-		ConfigDir:  configDirName,
-		TunEnabled: tunEnabled,
-		TunName:    cfg.Server.TunName,
-		TunMTU:     cfg.Server.TunMTU,
-		TunAddr:    cfg.Server.TunAddr,
-	}); err != nil {
-		logging.Error("xp2p server mode: apply failed", "err", err)
+	req, err := apply.NewRequest(apply.RoleServer)
+	if err != nil {
+		logging.Error("xp2p server mode: apply request failed", "err", err)
+		return 1
+	}
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		logging.Error("xp2p server mode: apply request failed", "err", err)
 		return 1
 	}
 

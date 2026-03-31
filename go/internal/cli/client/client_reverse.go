@@ -47,6 +47,7 @@ func bindClientReverseFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 	flags.StringP("path", "p", "", "client installation directory")
 	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.BoolP("pending", "y", false, "list pending configuration")
 }
 
 func runClientReverseList(_ context.Context, cfg config.Config, args []string) int {
@@ -55,6 +56,7 @@ func runClientReverseList(_ context.Context, cfg config.Config, args []string) i
 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
+	pending := fs.Bool("pending", false, "list pending configuration")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -71,6 +73,7 @@ func runClientReverseList(_ context.Context, cfg config.Config, args []string) i
 	opts := client.ReverseListOptions{
 		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
+		Pending:    *pending,
 	}
 	records, err := clientReverseListFunc(opts)
 	if err != nil {

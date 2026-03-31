@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -42,14 +43,15 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 		t.Fatalf("Install returned error: %v", err)
 	}
 
-	configDir := filepath.Join(dir, DefaultClientConfigDir)
+	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
+	configDir := apply.PendingDir(liveConfigDir)
 	for _, name := range []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"} {
 		if _, err := os.Stat(filepath.Join(configDir, name)); err != nil {
 			t.Fatalf("expected %s to be created: %v", name, err)
 		}
 	}
 
-	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	configPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(configPath)
 	if err != nil {
 		t.Fatalf("read config state: %v", err)
@@ -70,11 +72,11 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read applied state: %v", err)
 	}
-	if applied.Mode != "tun" {
+	if applied.Mode != "" {
 		t.Fatalf("unexpected applied mode: %s", applied.Mode)
 	}
-	if len(applied.Config.Endpoints) != 1 {
-		t.Fatalf("expected 1 applied endpoint, got %d", len(applied.Config.Endpoints))
+	if len(applied.Config.Endpoints) != 0 {
+		t.Fatalf("expected no applied endpoints, got %d", len(applied.Config.Endpoints))
 	}
 }
 
@@ -113,7 +115,8 @@ func TestInstallRewritesInboundsAndLogs(t *testing.T) {
 		t.Fatalf("write stub xray: %v", err)
 	}
 
-	configDir := filepath.Join(dir, DefaultClientConfigDir)
+	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
+	configDir := apply.PendingDir(liveConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}

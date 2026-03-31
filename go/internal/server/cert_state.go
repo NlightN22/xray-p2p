@@ -18,6 +18,9 @@ func CertificateStateFromConfig(opts CertificateStateOptions) (CertificateState,
 	if err != nil {
 		return CertificateState{}, err
 	}
+	if opts.Pending {
+		configDir = pendingConfigDir(configDir)
+	}
 	if err := ensureConfigExists(configDir); err != nil {
 		return CertificateState{}, err
 	}
@@ -39,8 +42,8 @@ func CertificateStateFromConfig(opts CertificateStateOptions) (CertificateState,
 		return state, nil
 	}
 
-	state.CertPath = resolveCertificatePath(configDir, certRel)
-	state.KeyPath = resolveCertificatePath(configDir, keyRel)
+	state.CertPath = resolveCertificatePathWithPending(configDir, certRel, opts.Pending)
+	state.KeyPath = resolveCertificatePathWithPending(configDir, keyRel, opts.Pending)
 
 	cert, status, issue := loadCertificateDetails(state.CertPath)
 	state.Status = status

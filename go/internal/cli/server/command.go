@@ -236,6 +236,7 @@ func newServerUserListCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
 	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
 	flags.StringVarP(&opts.Host, "host", "H", "", "public host name or IP for generated connection links")
+	flags.BoolVarP(&opts.Pending, "pending", "y", false, "list pending configuration")
 	return cmd
 }
 
@@ -288,6 +289,7 @@ func newServerCertStateCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
 	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.BoolVarP(&opts.Pending, "pending", "y", false, "show pending configuration")
 	return cmd
 }
 

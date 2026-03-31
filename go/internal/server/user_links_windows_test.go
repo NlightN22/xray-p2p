@@ -38,6 +38,7 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	users, err := ListUsers(context.Background(), ListUsersOptions{
 		InstallDir: dir,
 		ConfigDir:  "config-server",
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("ListUsers: %v", err)
@@ -87,6 +88,7 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 		InstallDir: dir,
 		ConfigDir:  "config-server",
 		UserID:     "beta",
+		Pending:    true,
 	})
 	if err == nil {
 		t.Fatalf("expected error when host missing for non-TLS configuration")
@@ -97,6 +99,7 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 		ConfigDir:  "config-server",
 		UserID:     "beta",
 		Host:       "example.internal",
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("UserLink: %v", err)
@@ -134,6 +137,7 @@ func TestListUsersSelfSignedAddsPinnedPeerCert(t *testing.T) {
 	users, err := ListUsers(context.Background(), ListUsersOptions{
 		InstallDir: dir,
 		ConfigDir:  "config-server",
+		Pending:    true,
 	})
 	if err != nil {
 		t.Fatalf("ListUsers: %v", err)

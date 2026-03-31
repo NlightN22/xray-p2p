@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -20,7 +19,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 	"github.com/NlightN22/xray-p2p/go/internal/health"
-	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
@@ -33,6 +31,7 @@ const (
 	socksProbeInterval            = 500 * time.Millisecond
 	deployCompletionNotifyTimeout = 30 * time.Second
 	socksPingTimeout              = 45 * time.Second
+	applyRequestTimeout           = 45 * time.Second
 )
 
 type manifestOptions struct {
@@ -216,46 +215,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		defer cancelDiagnostics()
 	}
 
-	runCtx, runCancel := context.WithCancel(ctx)
-	defer runCancel()
-
-	runOpts := client.RunOptions{
-		InstallDir: installOpts.InstallDir,
-		ConfigDir:  installOpts.ConfigDir,
-		Heartbeat: client.HeartbeatOptions{
-			Enabled:      true,
-			Interval:     2 * time.Second,
-			Timeout:      2 * time.Second,
-			Port:         cfg.Server.Port,
-			SocksAddress: cfg.Client.SocksAddress,
-		},
-		TunEnabled:    false,
-		TunName:       cfg.Client.TunName,
-		TunMTU:        cfg.Client.TunMTU,
-		TunAddr:       cfg.Client.TunAddr,
-		TunMode:       cfg.Client.TunMode,
-		DNSServers:    cfg.Client.DNSServers,
-		FullTunnelTag: cfg.Client.FullTunnelTag,
-	}
-	runErrCh := make(chan error, 1)
-	logging.Info("xp2p client deploy: starting local client run", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)
-	go func() {
-		runErrCh <- clientRunFunc(runCtx, runOpts)
-	}()
-
 	socksAddr := strings.TrimSpace(cfg.Client.SocksAddress)
+	if err := ensureClientServiceApplied(ctx, socksAddr); err != nil {
+		completionState = "FAIL service-apply"
+		logging.Error("xp2p client deploy: service apply failed", "err", err)
+		return 1
+	}
 	if socksAddr != "" {
-		logging.Info("xp2p client deploy: waiting for local SOCKS proxy", "socks_proxy", socksAddr)
-		if err := health.WaitForSocksProxy(runCtx, socksAddr, socksReadyTimeout, socksProbeInterval); err != nil {
-			completionState = "FAIL socks"
-			logging.Error("xp2p client deploy: socks proxy not ready", "err", err)
-			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
-				logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
-			}
-			return 1
-		}
-		logging.Info("xp2p client deploy: client run active", "install_dir", runOpts.InstallDir, "config_dir", runOpts.ConfigDir)
-
 		targetHost := strings.TrimSpace(tl.ServerAddress)
 		if targetHost == "" {
 			targetHost = strings.TrimSpace(opts.runtime.serverHost)
@@ -268,9 +234,6 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		if err != nil {
 			completionState = "FAIL marker"
 			logging.Error("xp2p client deploy: marker resolution failed", "err", err)
-			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
-				logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
-			}
 			return 1
 		}
 
@@ -285,9 +248,6 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		if err := waitForPing(ctx, markerTarget, pingOpts, socksPingTimeout); err != nil {
 			completionState = "FAIL ping"
 			logging.Error("xp2p client deploy: ping failed", "err", err)
-			if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
-				logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
-			}
 			return 1
 		}
 		logging.Info("xp2p client deploy: ping ok")
@@ -295,32 +255,16 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Warn("xp2p client deploy: socks proxy address missing; skipping ping")
 	}
 
-	stateRoot := runOpts.InstallDir
-	if runtime.GOOS == "windows" {
-		stateRoot = config.ConfigRoot()
-	}
-	if err := waitForHeartbeat(runCtx, filepath.Join(stateRoot, layout.ClientHeartbeatStateFileName), 10*time.Second); err != nil {
-		completionState = "FAIL heartbeat"
-		logging.Error("xp2p client deploy: heartbeat missing", "err", err)
-		if stopErr := stopLocalClient(runCancel, runErrCh); stopErr != nil {
-			logging.Warn("xp2p client deploy: local client stop failed", "err", stopErr)
-		}
-		return 1
-	}
-
-	if err := stopLocalClient(runCancel, runErrCh); err != nil {
-		completionState = "FAIL client-stop"
-		logging.Error("xp2p client deploy: client run exited", "err", err)
-		return 1
-	}
-
 	if err := applyClientDeployMode(installOpts, cfg, true, tunMode, opts.manifest.tunModeSet, fullTunnelTag); err != nil {
 		completionState = "FAIL client-mode-tun"
 		logging.Error("xp2p client deploy: tun mode setup failed", "err", err)
 		return 1
 	}
-
-	startClientDeployService(ctx)
+	if err := ensureClientServiceApplied(ctx, socksAddr); err != nil {
+		completionState = "FAIL service-apply"
+		logging.Error("xp2p client deploy: service apply failed", "err", err)
+		return 1
+	}
 
 	completionState = "OK"
 	logging.Info("xp2p client deploy: completed")
@@ -501,21 +445,6 @@ func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.Inst
 	}
 }
 
-func stopLocalClient(cancel context.CancelFunc, runErrCh <-chan error) error {
-	if cancel != nil {
-		cancel()
-	}
-	select {
-	case err := <-runErrCh:
-		if err != nil && !errors.Is(err, context.Canceled) {
-			return err
-		}
-		return nil
-	case <-time.After(5 * time.Second):
-		return fmt.Errorf("timeout waiting for local client to stop")
-	}
-}
-
 func waitForPing(ctx context.Context, host string, opts ping.Options, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	var lastErr error
@@ -536,29 +465,6 @@ func waitForPing(ctx context.Context, host string, opts ping.Options, timeout ti
 		}
 		time.Sleep(1 * time.Second)
 	}
-}
-
-func waitForHeartbeat(ctx context.Context, statePath string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	var lastErr error
-
-	for time.Now().Before(deadline) {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		state, err := heartbeat.Load(statePath)
-		if err == nil && len(state.Entries) > 0 {
-			return nil
-		}
-		if err != nil && !os.IsNotExist(err) && !heartbeat.IsCorrupt(err) {
-			lastErr = err
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	if lastErr != nil {
-		return fmt.Errorf("heartbeat state: %w", lastErr)
-	}
-	return fmt.Errorf("heartbeat state %s not found", statePath)
 }
 
 func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config, tunEnabled bool, tunMode string, tunModeSet bool, fullTunnelTag string) error {
@@ -584,30 +490,11 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 		}
 	}
 	logging.Info("xp2p client deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
-
-	modeCfg, modeErr := loadDeployClientConfig()
-	if modeErr != nil {
-		return modeErr
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
 	}
-
-	err = client.ApplyMode(client.ModeOptions{
-		InstallDir:    installOpts.InstallDir,
-		ConfigDir:     installOpts.ConfigDir,
-		TunEnabled:    tunEnabled,
-		TunName:       cfg.Client.TunName,
-		TunMTU:        cfg.Client.TunMTU,
-		TunAddr:       cfg.Client.TunAddr,
-		TunMode:       modeCfg.Client.TunMode,
-		FullTunnelTag: modeCfg.Client.FullTunnelTag,
-	})
-	if err == nil {
-		return nil
-	}
-	if isPermissionError(err) {
-		logging.Warn("xp2p client deploy: mode apply skipped due to permissions", "mode", modeLabel, "err", err)
-		return nil
-	}
-	return err
+	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 }
 
 func loadDeployClientConfig() (config.Config, error) {
@@ -644,23 +531,42 @@ func resolveDeployFullTunnelTag(installDir, configDir string, link trojanLink, r
 	return "", fmt.Errorf("xp2p: full-tunnel endpoint %s not found", host)
 }
 
-func startClientDeployService(ctx context.Context) {
+func ensureClientServiceApplied(ctx context.Context, socksAddr string) error {
 	ctrl := servicecontrol.Default()
-	if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
+	status, err := ctrl.Status(ctx, servicecontrol.RoleClient)
+	if err != nil {
 		if errors.Is(err, servicecontrol.ErrUnsupported) {
-			logging.Warn("xp2p client deploy: service start is not supported on this platform")
-			return
+			return err
 		}
-		logging.Warn("xp2p client deploy: client service start failed", "err", err)
-		return
+		return err
 	}
-	logging.Info("xp2p client deploy: client service started")
+	if !status.Active {
+		if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
+			return err
+		}
+	}
+	if err := waitForApplyRequestClear(ctx, config.ApplyRequestPath(), applyRequestTimeout); err != nil {
+		return err
+	}
+	if strings.TrimSpace(socksAddr) == "" {
+		return nil
+	}
+	return health.WaitForSocksProxy(ctx, socksAddr, socksReadyTimeout, socksProbeInterval)
 }
 
-func isPermissionError(err error) bool {
-	if err == nil {
-		return false
+func waitForApplyRequestClear(ctx context.Context, path string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if _, err := os.Stat(path); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	lower := strings.ToLower(err.Error())
-	return strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied")
+	return fmt.Errorf("apply request still present after %s", timeout)
 }

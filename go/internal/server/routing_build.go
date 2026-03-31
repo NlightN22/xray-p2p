@@ -8,11 +8,16 @@ import (
 )
 
 func rebuildServerRouting(installDir string, configDir string) error {
-	desired, err := loadServerDesiredConfig(installDir)
+	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	return rebuildServerRoutingFromPath(configPath, configDir)
+}
+
+func rebuildServerRoutingFromPath(configPath string, configDir string) error {
+	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return err
 	}
-	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(configPath))
 	if err != nil {
 		return err
 	}

@@ -210,6 +210,7 @@ xp2p server cert state
 ```
 
 `xp2p server state` prints the currently installed assets, while `xp2p server remove` removes the installation after confirmation.
+Add `--pending` (or `-y`) to list commands and `xp2p server cert state` to inspect staged configuration before applying it.
 `xp2p server cert state` reports the active TLS certificate (paths, SAN, validity) and exits with 0 only when a valid certificate is present.
 
 ### Client lifecycle

@@ -26,6 +26,18 @@ func openServerForwardStore(installDir string) (serverForwardStore, error) {
 	if err != nil {
 		return serverForwardStore{}, err
 	}
+	return buildServerForwardStore(path, doc)
+}
+
+func openServerForwardStoreFromPath(path string) (serverForwardStore, error) {
+	doc, err := loadServerStateDoc(path)
+	if err != nil {
+		return serverForwardStore{}, err
+	}
+	return buildServerForwardStore(path, doc)
+}
+
+func buildServerForwardStore(path string, doc map[string]any) (serverForwardStore, error) {
 	forwards, err := decodeServerForwardRules(doc)
 	if err != nil {
 		return serverForwardStore{}, err

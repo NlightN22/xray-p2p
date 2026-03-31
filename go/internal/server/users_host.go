@@ -42,10 +42,11 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		return err
 	}
 
-	configDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
+	liveConfigDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
+	configDir := pendingConfigDir(liveConfigDir)
 
 	var (
 		channel serverReverseChannel
@@ -57,7 +58,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		if err != nil {
 			return err
 		}
-		store, storeErr = openReverseStore(resolvedInstallDir)
+		store, storeErr = openReverseStorePending()
 		if storeErr != nil {
 			return storeErr
 		}
@@ -66,10 +67,11 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		}
 	}
 
+	livePath := filepath.Join(liveConfigDir, "inbounds.json")
 	configPath := filepath.Join(configDir, "inbounds.json")
-	contents, err := os.ReadFile(configPath)
+	contents, err := readConfigWithFallback(configPath, livePath)
 	if err != nil {
-		return fmt.Errorf("xp2p: read %s: %w", configPath, err)
+		return err
 	}
 
 	root, err := parseInbounds(contents)
@@ -122,7 +124,10 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		if host == "" || opts.NoReverse {
 			return nil
 		}
-		return applyServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
+		if err := applyServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
+			return err
+		}
+		return writeServerApplyRequest()
 	}
 
 	settings["clients"] = clientsToInterfaces(clients)
@@ -136,9 +141,11 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		"updated", updated,
 	)
 	if host != "" && !opts.NoReverse {
-		return applyServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
+		if err := applyServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
+			return err
+		}
 	}
-	return nil
+	return writeServerApplyRequest()
 }
 
 // RemoveUser removes the Trojan client with the provided identifier. The operation is idempotent.
@@ -159,10 +166,11 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		return err
 	}
 
-	configDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
+	liveConfigDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
+	configDir := pendingConfigDir(liveConfigDir)
 
 	var (
 		channel serverReverseChannel
@@ -173,19 +181,20 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		if err != nil {
 			return err
 		}
-		store, err = openReverseStore(resolvedInstallDir)
+		store, err = openReverseStorePending()
 		if err != nil {
 			return err
 		}
 	}
 
+	livePath := filepath.Join(liveConfigDir, "inbounds.json")
 	configPath := filepath.Join(configDir, "inbounds.json")
-	contents, err := os.ReadFile(configPath)
+	contents, err := readConfigWithFallback(configPath, livePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: %s: %w", configPath, err)
+			return fmt.Errorf("xp2p: %s: %w", livePath, err)
 		}
-		return fmt.Errorf("xp2p: read %s: %w", configPath, err)
+		return err
 	}
 
 	root, err := parseInbounds(contents)
@@ -224,7 +233,10 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 			"config", configPath,
 		)
 		if host != "" {
-			return purgeServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
+			if err := purgeServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
+				return err
+			}
+			return writeServerApplyRequest()
 		}
 		return nil
 	}
@@ -239,9 +251,11 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		"config", configPath,
 	)
 	if host != "" {
-		return purgeServerReverseChannel(&store, resolvedInstallDir, configDir, channel)
+		if err := purgeServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
+			return err
+		}
 	}
-	return nil
+	return writeServerApplyRequest()
 }
 
 func resolveUserConfigDir(installDir, configDir string) (string, error) {
@@ -272,6 +286,9 @@ func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {
 		return nil, err
 	}
 
+	if opts.Pending {
+		configDir = pendingConfigDir(configDir)
+	}
 	return listUsersFromConfig(configDir, strings.TrimSpace(opts.Host))
 }
 
@@ -285,5 +302,8 @@ func GetUserLink(ctx context.Context, opts UserLinkOptions) (UserLink, error) {
 		return UserLink{}, err
 	}
 
+	if opts.Pending {
+		configDir = pendingConfigDir(configDir)
+	}
 	return userLinkFromConfig(configDir, strings.TrimSpace(opts.Host), opts.UserID)
 }

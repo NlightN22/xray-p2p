@@ -38,7 +38,7 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 		t.Fatalf("expected Routed=false without redirect rules")
 	}
 
-	statePath := serverStatePath(dir)
+	statePath := pendingConfigPath()
 	doc, err := loadServerStateDoc(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -48,7 +48,7 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 		t.Fatalf("expected forward state entry, got %v", doc[serverForwardRulesKey])
 	}
 
-	inbounds := readServerInboundsDoc(t, filepath.Join(configDir, "inbounds.json"))
+	inbounds := readServerInboundsDoc(t, filepath.Join(pendingConfigDir(configDir), "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
 	if !hasInboundTag(items, result.Rule.Tag) {
 		t.Fatalf("expected forward inbound tag %q to be present", result.Rule.Tag)
@@ -86,7 +86,7 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 		t.Fatalf("RemoveForward returned error: %v", err)
 	}
 
-	statePath := serverStatePath(dir)
+	statePath := pendingConfigPath()
 	doc, err := loadServerStateDoc(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -95,7 +95,7 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 		t.Fatalf("expected forward rules to be removed, got %v", doc[serverForwardRulesKey])
 	}
 
-	inbounds := readServerInboundsDoc(t, filepath.Join(configDir, "inbounds.json"))
+	inbounds := readServerInboundsDoc(t, filepath.Join(pendingConfigDir(configDir), "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
 	if hasInboundTag(items, addRes.Rule.Tag) {
 		t.Fatalf("expected forward inbound tag %q to be removed", addRes.Rule.Tag)

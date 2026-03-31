@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -173,17 +174,13 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 		}
 	}
 
-	if err := clientModeFunc(client.ModeOptions{
-		InstallDir:    installDir,
-		ConfigDir:     configDirName,
-		TunEnabled:    tunEnabled,
-		TunName:       cfg.Client.TunName,
-		TunMTU:        cfg.Client.TunMTU,
-		TunAddr:       cfg.Client.TunAddr,
-		TunMode:       tunMode,
-		FullTunnelTag: fullTunnelTag,
-	}); err != nil {
-		logging.Error("xp2p client mode: apply failed", "err", err)
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		logging.Error("xp2p client mode: apply request failed", "err", err)
+		return 1
+	}
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		logging.Error("xp2p client mode: apply request failed", "err", err)
 		return 1
 	}
 

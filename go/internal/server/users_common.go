@@ -180,6 +180,8 @@ func loadTrojanState(configDir string) (trojanState, error) {
 		tlsEnabled = true
 	}
 
+	pending := isPendingConfigDir(configDir)
+
 	allowInsecure := false
 	if tlsEnabled {
 		allowInsecureSet := false
@@ -191,7 +193,7 @@ func loadTrojanState(configDir string) (trojanState, error) {
 		}
 		if !allowInsecureSet {
 			if certPathValue, _, err := certificatePathsFromStream(stream); err == nil {
-				certPath := resolveCertificatePath(configDir, certPathValue)
+				certPath := resolveCertificatePathWithPending(configDir, certPathValue, pending)
 				if selfSigned, err := isSelfSignedCertificatePath(certPath); err == nil {
 					allowInsecure = selfSigned
 				}
@@ -205,7 +207,7 @@ func loadTrojanState(configDir string) (trojanState, error) {
 		if err != nil {
 			return trojanState{}, err
 		}
-		certPath := resolveCertificatePath(configDir, certPathValue)
+		certPath := resolveCertificatePathWithPending(configDir, certPathValue, pending)
 		pinnedSHA256, err = certificateFingerprintSHA256(certPath)
 		if err != nil {
 			return trojanState{}, err
@@ -265,7 +267,7 @@ func inferHostsFromCertificate(configDir string, stream map[string]any) ([]strin
 		return nil, err
 	}
 
-	certPath := resolveCertificatePath(configDir, certPathValue)
+	certPath := resolveCertificatePathWithPending(configDir, certPathValue, isPendingConfigDir(configDir))
 
 	data, err := os.ReadFile(certPath)
 	if err != nil {

@@ -89,6 +89,7 @@ func newClientForwardListCmd(cfg commandConfig) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringP("path", "p", "", "client installation directory")
 	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.BoolP("pending", "y", false, "list pending configuration")
 	return cmd
 }
 
@@ -213,6 +214,7 @@ func runClientForwardList(_ context.Context, cfg config.Config, args []string) i
 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
+	pending := fs.Bool("pending", false, "list pending configuration")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -229,6 +231,7 @@ func runClientForwardList(_ context.Context, cfg config.Config, args []string) i
 	rules, err := client.ListForwards(client.ForwardListOptions{
 		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
+		Pending:    *pending,
 	})
 	if err != nil {
 		logging.Error("xp2p client forward list failed", "err", err)

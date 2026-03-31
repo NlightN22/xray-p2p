@@ -33,6 +33,7 @@ type serverUserListOptions struct {
 	Path      string
 	ConfigDir string
 	Host      string
+	Pending   bool
 }
 
 func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAddOptions) int {
@@ -110,6 +111,7 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 			ConfigDir:  addOpts.ConfigDir,
 			Host:       host,
 			UserID:     opts.UserID,
+			Pending:    true,
 		}
 		if link, err := serverUserLinkFunc(ctx, linkOpts); err != nil {
 			logging.Warn("xp2p server user add: unable to build trojan link", "err", err)
@@ -144,6 +146,7 @@ func runServerUserList(ctx context.Context, cfg config.Config, opts serverUserLi
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
 		Host:       firstNonEmpty(opts.Host, cfg.Server.Host),
+		Pending:    opts.Pending,
 	}
 
 	users, err := serverUserListFunc(ctx, listOpts)

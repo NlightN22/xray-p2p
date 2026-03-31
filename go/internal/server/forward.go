@@ -9,9 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 // ForwardAddOptions describes server forward creation.
@@ -42,6 +40,7 @@ type ForwardRemoveOptions struct {
 type ForwardListOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 // AddForward registers a dokodemo-door forward in server configuration.
@@ -63,12 +62,13 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
-	configDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
+	configDir := pendingConfigDir(liveConfigDir)
 
-	store, err := openServerForwardStore(installDir)
+	store, err := openServerForwardStorePending()
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
@@ -112,20 +112,17 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err := store.saveForwards(); err != nil {
 		return ForwardAddResult{}, err
 	}
-	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	xrayCfg, err := ensureServerXrayConfig(pendingConfigPath())
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
-	tunEnabled, tunName, tunMTU, err := loadServerTunSettings(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	cfg, err := loadServerConfigWithFallback()
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
-	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName)})
-	if err != nil {
-		return ForwardAddResult{}, err
-	}
-	certPath := filepath.Join(configDir, "cert.pem")
-	keyPath := filepath.Join(configDir, "key.pem")
+	tunEnabled, tunName, tunMTU := cfg.Server.TunEnabled, cfg.Server.TunName, cfg.Server.TunMTU
+	certPath := filepath.Join(liveConfigDir, "cert.pem")
+	keyPath := filepath.Join(liveConfigDir, "key.pem")
 	if strings.TrimSpace(cfg.Server.CertificateFile) != "" {
 		certPath = cfg.Server.CertificateFile
 	}
@@ -141,6 +138,9 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 		targetAddr = parsed
 	}
 
+	if err := writeServerApplyRequest(); err != nil {
+		return ForwardAddResult{}, err
+	}
 	return ForwardAddResult{
 		Rule:   rule,
 		Routed: forward.MatchesRedirect(store.redirects, targetAddr),
@@ -158,12 +158,13 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, err
 	}
 
-	configDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return forward.Rule{}, err
 	}
+	configDir := pendingConfigDir(liveConfigDir)
 
-	store, err := openServerForwardStore(installDir)
+	store, err := openServerForwardStorePending()
 	if err != nil {
 		return forward.Rule{}, err
 	}
@@ -177,23 +178,19 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}
-	xrayCfg, err := ensureServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	xrayCfg, err := ensureServerXrayConfig(pendingConfigPath())
 	if err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}
-	tunEnabled, tunName, tunMTU, err := loadServerTunSettings(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	cfg, err := loadServerConfigWithFallback()
 	if err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}
-	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName)})
-	if err != nil {
-		store.insertAt(rule, idx)
-		return forward.Rule{}, err
-	}
-	certPath := filepath.Join(configDir, "cert.pem")
-	keyPath := filepath.Join(configDir, "key.pem")
+	tunEnabled, tunName, tunMTU := cfg.Server.TunEnabled, cfg.Server.TunName, cfg.Server.TunMTU
+	certPath := filepath.Join(liveConfigDir, "cert.pem")
+	keyPath := filepath.Join(liveConfigDir, "key.pem")
 	if strings.TrimSpace(cfg.Server.CertificateFile) != "" {
 		certPath = cfg.Server.CertificateFile
 	}
@@ -201,6 +198,10 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		keyPath = cfg.Server.KeyFile
 	}
 	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
+		store.insertAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	if err := writeServerApplyRequest(); err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}
@@ -214,7 +215,12 @@ func ListForwards(opts ForwardListOptions) ([]forward.Rule, error) {
 		return nil, err
 	}
 
-	store, err := openServerForwardStore(installDir)
+	var store serverForwardStore
+	if opts.Pending {
+		store, err = openServerForwardStoreFromPath(pendingConfigPath())
+	} else {
+		store, err = openServerForwardStore(installDir)
+	}
 	if err != nil {
 		return nil, err
 	}

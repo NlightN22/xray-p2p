@@ -90,6 +90,7 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 	return state, nil
 }
 
+
 func (s *clientInstallState) normalize() {
 	if s.Endpoints == nil {
 		s.Endpoints = []clientEndpointRecord{}

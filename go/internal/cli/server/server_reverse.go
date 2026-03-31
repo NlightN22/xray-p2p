@@ -47,6 +47,7 @@ func bindServerReverseFlags(cmd *cobra.Command) {
 	flags := cmd.Flags()
 	flags.StringP("path", "p", "", "server installation directory")
 	flags.StringP("config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.BoolP("pending", "y", false, "list pending configuration")
 }
 
 func runServerReverseList(_ context.Context, cfg config.Config, args []string) int {
@@ -55,6 +56,7 @@ func runServerReverseList(_ context.Context, cfg config.Config, args []string) i
 
 	path := fs.String("path", "", "server installation directory")
 	configDir := fs.String("config-dir", "", "server configuration directory name or absolute path")
+	pending := fs.Bool("pending", false, "list pending configuration")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -71,6 +73,7 @@ func runServerReverseList(_ context.Context, cfg config.Config, args []string) i
 	opts := server.ReverseListOptions{
 		InstallDir: firstNonEmpty(*path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Server.ConfigDir),
+		Pending:    *pending,
 	}
 	records, err := serverReverseListFunc(opts)
 	if err != nil {

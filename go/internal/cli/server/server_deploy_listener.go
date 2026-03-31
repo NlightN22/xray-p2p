@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -192,22 +193,11 @@ func (s *deployServer) applyMode(installDir, configDir string, tunEnabled bool) 
 		return err
 	}
 	logging.Info("xp2p server deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
-	err = server.ApplyMode(server.ModeOptions{
-		InstallDir: installDir,
-		ConfigDir:  configDir,
-		TunEnabled: tunEnabled,
-		TunName:    s.Cfg.Server.TunName,
-		TunMTU:     s.Cfg.Server.TunMTU,
-		TunAddr:    s.Cfg.Server.TunAddr,
-	})
-	if err == nil {
-		return nil
+	req, err := apply.NewRequest(apply.RoleServer)
+	if err != nil {
+		return err
 	}
-	if isPermissionError(err) {
-		logging.Warn("xp2p server deploy: mode apply skipped due to permissions", "mode", modeLabel, "err", err)
-		return nil
-	}
-	return err
+	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 }
 
 func (s *deployServer) applyTunAndStartService(ctx context.Context, installDir, configDir string) {
@@ -224,12 +214,4 @@ func (s *deployServer) applyTunAndStartService(ctx context.Context, installDir, 
 		return
 	}
 	logging.Info("xp2p server deploy: server service started")
-}
-
-func isPermissionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	lower := strings.ToLower(err.Error())
-	return strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied")
 }

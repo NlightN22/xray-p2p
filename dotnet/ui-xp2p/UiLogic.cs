@@ -65,4 +65,9 @@ internal static class UiLogic
             string.Equals(status, "PausePending", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(status, "ContinuePending", StringComparison.OrdinalIgnoreCase);
     }
+
+    public static bool IsRestartEnabled(string status)
+    {
+        return !IsServicePending(status);
+    }
 }

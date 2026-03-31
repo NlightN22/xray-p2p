@@ -96,6 +96,38 @@ internal sealed class ServiceManager
             StatusChanged?.Invoke(this, GetSnapshot());
         }
     }
+
+    public async System.Threading.Tasks.Task<string> RestartServiceAsync(string serviceName)
+    {
+        IsBusy = true;
+        ActivityChanged?.Invoke(this, true);
+        StatusChanged?.Invoke(this, GetSnapshot());
+        try
+        {
+            return await System.Threading.Tasks.Task.Run(() =>
+            {
+                using var controller = new ServiceController(serviceName);
+                if (controller.Status != ServiceControllerStatus.Stopped)
+                {
+                    controller.Stop();
+                    controller.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
+                }
+                controller.Start();
+                controller.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
+                return $"{serviceName} restarted.";
+            });
+        }
+        catch (Exception ex)
+        {
+            return $"{serviceName} restart failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            ActivityChanged?.Invoke(this, false);
+            StatusChanged?.Invoke(this, GetSnapshot());
+        }
+    }
 }
 
 internal sealed record ServiceStatusSnapshot(string ClientStatus, string ServerStatus);

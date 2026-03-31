@@ -18,6 +18,7 @@ func runClientList(_ context.Context, cfg config.Config, args []string) int {
 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
+	pending := fs.Bool("pending", false, "list pending configuration")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -34,6 +35,7 @@ func runClientList(_ context.Context, cfg config.Config, args []string) int {
 	opts := client.ListOptions{
 		InstallDir: firstNonEmpty(*path, cfg.Client.InstallDir),
 		ConfigDir:  firstNonEmpty(*configDir, cfg.Client.ConfigDir),
+		Pending:    *pending,
 	}
 	records, err := clientListFunc(opts)
 	if err != nil {

@@ -28,7 +28,7 @@ func TestBuildClientInstallBaseDefaults(t *testing.T) {
 	if base.serverName != "edge.example.com" {
 		t.Fatalf("serverName = %s", base.serverName)
 	}
-	if base.configFile != filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)) {
+	if base.configFile != filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName)) {
 		t.Fatalf("configFile = %s", base.configFile)
 	}
 	if base.appliedStateFile != filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)) {

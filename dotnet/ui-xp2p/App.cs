@@ -18,8 +18,10 @@ internal sealed class App : Application
     private Forms.ToolStripMenuItem? _serverMenu;
     private Forms.ToolStripMenuItem? _clientStartItem;
     private Forms.ToolStripMenuItem? _clientStopItem;
+    private Forms.ToolStripMenuItem? _clientRestartItem;
     private Forms.ToolStripMenuItem? _serverStartItem;
     private Forms.ToolStripMenuItem? _serverStopItem;
+    private Forms.ToolStripMenuItem? _serverRestartItem;
     private ServiceStatusSnapshot? _lastStatus;
     private TrayIconSet? _trayIcons;
     private System.Windows.Media.ImageSource? _windowIconBase;
@@ -89,13 +91,17 @@ internal sealed class App : Application
         _clientMenu = new Forms.ToolStripMenuItem("Client: Unknown");
         _clientStartItem = new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Client));
         _clientStopItem = new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Client));
+        _clientRestartItem = new Forms.ToolStripMenuItem("Restart", null, (_, _) => RestartServiceAsync(ServiceNames.Client));
         _clientMenu.DropDownItems.Add(_clientStartItem);
         _clientMenu.DropDownItems.Add(_clientStopItem);
+        _clientMenu.DropDownItems.Add(_clientRestartItem);
         _serverMenu = new Forms.ToolStripMenuItem("Server: Unknown");
         _serverStartItem = new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Server));
         _serverStopItem = new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Server));
+        _serverRestartItem = new Forms.ToolStripMenuItem("Restart", null, (_, _) => RestartServiceAsync(ServiceNames.Server));
         _serverMenu.DropDownItems.Add(_serverStartItem);
         _serverMenu.DropDownItems.Add(_serverStopItem);
+        _serverMenu.DropDownItems.Add(_serverRestartItem);
 
         var openLogs = new Forms.ToolStripMenuItem("Open logs", null, (_, _) => OpenLogs());
         var quit = new Forms.ToolStripMenuItem("Quit", null, (_, _) => RequestShutdown());
@@ -233,6 +239,21 @@ internal sealed class App : Application
         SetStatus(result);
     }
 
+    private async void RestartServiceAsync(string name)
+    {
+        if (_serviceManager is null)
+        {
+            return;
+        }
+        if (_trayIcon is not null && _trayIcons?.Busy is not null)
+        {
+            _trayIcon.Icon = _trayIcons.Busy;
+            UpdateWindowIcon(_windowIconBusy);
+        }
+        var result = await _serviceManager.RestartServiceAsync(name);
+        SetStatus(result);
+    }
+
     private void RefreshServiceStatus()
     {
         if (_serviceManager is null)
@@ -313,11 +334,11 @@ internal sealed class App : Application
 
     private void UpdateTrayServiceButtons(ServiceStatusSnapshot snapshot)
     {
-        UpdateTrayButtonsForStatus(snapshot.ClientStatus, _clientStartItem, _clientStopItem);
-        UpdateTrayButtonsForStatus(snapshot.ServerStatus, _serverStartItem, _serverStopItem);
+        UpdateTrayButtonsForStatus(snapshot.ClientStatus, _clientStartItem, _clientStopItem, _clientRestartItem);
+        UpdateTrayButtonsForStatus(snapshot.ServerStatus, _serverStartItem, _serverStopItem, _serverRestartItem);
     }
 
-    private static void UpdateTrayButtonsForStatus(string status, Forms.ToolStripMenuItem? start, Forms.ToolStripMenuItem? stop)
+    private static void UpdateTrayButtonsForStatus(string status, Forms.ToolStripMenuItem? start, Forms.ToolStripMenuItem? stop, Forms.ToolStripMenuItem? restart)
     {
         if (start is null || stop is null)
         {
@@ -326,6 +347,10 @@ internal sealed class App : Application
         var state = UiLogic.GetServiceButtonState(status);
         start.Enabled = state.StartEnabled;
         stop.Enabled = state.StopEnabled;
+        if (restart is not null)
+        {
+            restart.Enabled = UiLogic.IsRestartEnabled(status);
+        }
     }
 
     private bool ShouldPromptStopServices()
