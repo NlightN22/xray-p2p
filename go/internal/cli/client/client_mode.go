@@ -11,12 +11,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 func newClientModeCmd(cfg commandConfig) *cobra.Command {
@@ -62,7 +64,7 @@ func newClientModeCmd(cfg commandConfig) *cobra.Command {
 	return cmd
 }
 
-func runClientMode(_ context.Context, cfg config.Config, args []string) int {
+func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p client mode", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -181,6 +183,10 @@ func runClientMode(_ context.Context, cfg config.Config, args []string) int {
 	}
 	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
 		logging.Error("xp2p client mode: apply request failed", "err", err)
+		return 1
+	}
+	if err := restartClientServiceIfActive(ctx); err != nil {
+		logging.Error("xp2p client mode: restart failed", "err", err)
 		return 1
 	}
 
@@ -379,4 +385,30 @@ func resolveConfigPath(name string) string {
 		return live
 	}
 	return config.PendingConfigPath(name)
+}
+
+func restartClientServiceIfActive(ctx context.Context) error {
+	ctrl := servicecontrol.Default()
+	status, err := ctrl.Status(ctx, servicecontrol.RoleClient)
+	if err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Warn("xp2p client mode: service status not supported; pending changes require manual restart")
+			return nil
+		}
+		return err
+	}
+	if !status.Active {
+		return nil
+	}
+	if err := common.RequireRoot(); err != nil {
+		return err
+	}
+	if err := ctrl.Stop(ctx, servicecontrol.RoleClient); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
+		return err
+	}
+	if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
+		return err
+	}
+	logging.Info("xp2p client mode: service restarted")
+	return nil
 }
