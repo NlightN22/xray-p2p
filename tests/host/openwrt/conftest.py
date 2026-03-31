@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 
 import pytest
@@ -57,18 +58,30 @@ def openwrt_ipk_target() -> str:
 
 
 @pytest.fixture(scope="session")
-def xp2p_openwrt_ipk(ipk_builder_host, openwrt_ipk_target):
+def xp2p_openwrt_ipk(openwrt_ipk_target):
     openwrt_env.IPK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    build_start = time.perf_counter()
-    openwrt_env.build_ipk(ipk_builder_host, openwrt_ipk_target)
-    build_elapsed = time.perf_counter() - build_start
-    print(f"TIMING: openwrt ipk build: {build_elapsed:.2f}s")
+    force_build = os.environ.get("XP2P_OPENWRT_FORCE_BUILD", "").strip().lower() in {"1", "true", "yes"}
     artifact = openwrt_env.latest_local_ipk()
-    assert artifact, "Expected build/ipk to contain a freshly built xp2p ipk"
-    openwrt_env.ensure_packages_index_present()
-    sync_start = time.perf_counter()
-    for machine in openwrt_env.OPENWRT_MACHINES:
-        openwrt_env.sync_build_output(machine)
-    sync_elapsed = time.perf_counter() - sync_start
-    print(f"TIMING: openwrt build output sync: {sync_elapsed:.2f}s")
+    if not force_build and artifact:
+        openwrt_env.ensure_packages_index_present()
+        print(f"TIMING: openwrt ipk build skipped (cached {artifact.name})")
+    else:
+        openwrt_env.require_ipk_builder_environment()
+        ipk_builder_host = openwrt_env.get_ipk_builder_host()
+        build_start = time.perf_counter()
+        openwrt_env.build_ipk(ipk_builder_host, openwrt_ipk_target)
+        build_elapsed = time.perf_counter() - build_start
+        print(f"TIMING: openwrt ipk build: {build_elapsed:.2f}s")
+        artifact = openwrt_env.latest_local_ipk()
+        assert artifact, "Expected build/ipk to contain a freshly built xp2p ipk"
+        openwrt_env.ensure_packages_index_present()
+    skip_sync = os.environ.get("XP2P_OPENWRT_SKIP_IPK_SYNC", "").strip().lower() in {"1", "true", "yes"}
+    if not skip_sync:
+        sync_start = time.perf_counter()
+        for machine in openwrt_env.OPENWRT_MACHINES:
+            openwrt_env.sync_build_output(machine)
+        sync_elapsed = time.perf_counter() - sync_start
+        print(f"TIMING: openwrt build output sync: {sync_elapsed:.2f}s")
+    else:
+        print("TIMING: openwrt build output sync skipped (env XP2P_OPENWRT_SKIP_IPK_SYNC)")
     return artifact

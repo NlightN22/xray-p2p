@@ -46,7 +46,8 @@ def _install_endpoint(runner, host: str, user: str, password: str) -> None:
 
 
 def _read_remote_json(client_host, path: Path) -> dict:
-    quoted = _env.ps_quote(str(path))
+    resolved = _env.resolve_config_path(client_host, path)
+    quoted = _env.ps_quote(str(resolved))
     script = f"""
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path {quoted})) {{

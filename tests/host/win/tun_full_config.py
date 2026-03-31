@@ -87,7 +87,8 @@ def _toml_value(value) -> str:
 
 def write_text_atomic(host, path: Path, content: str) -> None:
     encoded = _env.ps_quote(content.encode("utf-8").hex())
-    target = _env.ps_quote(str(path))
+    resolved = _env.pending_candidate(path)
+    target = _env.ps_quote(str(resolved))
     script = f"""
 $ErrorActionPreference = 'Stop'
 $target = {target}

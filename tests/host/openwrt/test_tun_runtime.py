@@ -13,6 +13,7 @@ CLIENT_ADDR = "198.18.0.1/30"
 SERVER_ADDR = "198.18.0.5/30"
 SERVICE_TIMEOUT = 45.0
 POLL_INTERVAL = 1.5
+APPLY_REQUEST = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
 
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 
@@ -43,6 +44,15 @@ def _wait_for_service_state(host, role: str, expected_active: bool) -> None:
     raise AssertionError(
         f"xp2p {role} service did not reach {state} state.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
     )
+
+
+def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not helpers.path_exists(host, APPLY_REQUEST):
+            return
+        time.sleep(POLL_INTERVAL)
+    raise AssertionError(f"apply.request did not clear after {timeout} seconds.")
 
 
 def _assert_tun_addr(host, name: str, addr: str, timeout_seconds: int | None = None) -> None:
@@ -85,6 +95,7 @@ def test_openwrt_client_service_brings_up_tun(openwrt_host, xp2p_openwrt_ipk):
         )
         runner("client", "service", "start", check=True)
         _wait_for_service_state(openwrt_host, "client", expected_active=True)
+        _wait_for_apply_request_clear(openwrt_host)
         _assert_tun_addr(openwrt_host, CLIENT_TUN, CLIENT_ADDR)
     finally:
         runner("client", "service", "stop")
@@ -114,6 +125,7 @@ def test_openwrt_server_service_brings_up_tun(openwrt_host, xp2p_openwrt_ipk):
         )
         runner("server", "service", "start", check=True)
         _wait_for_service_state(openwrt_host, "server", expected_active=True)
+        _wait_for_apply_request_clear(openwrt_host)
         _assert_tun_addr(openwrt_host, SERVER_TUN, SERVER_ADDR, timeout_seconds=30)
     finally:
         runner("server", "service", "stop")

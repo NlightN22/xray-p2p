@@ -549,17 +549,10 @@ func ensureClientServiceApplied(ctx context.Context, socksAddr string) error {
 		}
 		return err
 	}
-	if status.Active {
+	if !status.Active {
 		if err := clishared.RequireRoot(); err != nil {
 			return err
 		}
-		if err := ctrl.Stop(ctx, servicecontrol.RoleClient); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
-			return err
-		}
-		if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
-			return err
-		}
-	} else {
 		if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
 			return err
 		}

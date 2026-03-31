@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from tests.host.openwrt import _helpers as helpers
@@ -11,6 +13,7 @@ CLIENT_ADDR = "198.18.0.1/30"
 SERVER_ADDR = "198.18.0.5/30"
 
 pytestmark = [pytest.mark.host, pytest.mark.linux]
+APPLY_REQUEST = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
 
 
 def _runner(host):
@@ -58,6 +61,15 @@ def _parse_uci_show(output: str) -> dict[str, list[str]]:
     return values
 
 
+def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not helpers.path_exists(host, APPLY_REQUEST):
+            return
+        time.sleep(1.5)
+    raise AssertionError(f"apply.request did not clear after {timeout} seconds.")
+
+
 def _assert_uci_interface(output: str, name: str, addr: str) -> None:
     data = _parse_uci_show(output)
     base = f"network.{name}"
@@ -89,15 +101,19 @@ def test_openwrt_tun_autoconfig_client_network(openwrt_host, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
+        runner("client", "service", "start", check=True)
+        _wait_for_apply_request_clear(openwrt_host)
 
         output = _uci_show_network(openwrt_host, CLIENT_TUN)
         _assert_uci_interface(output, CLIENT_TUN, CLIENT_ADDR)
 
+        runner("client", "service", "stop")
         helpers.cleanup_client_install(openwrt_host, runner)
         assert not _uci_show_network(openwrt_host, CLIENT_TUN).strip(), (
             "Expected UCI interface to be removed after xp2p client remove"
         )
     finally:
+        runner("client", "service", "stop")
         helpers.cleanup_client_install(openwrt_host, runner)
         openwrt_env.run_guest_script(openwrt_host, "scripts/openwrt/uci_network_delete.sh", CLIENT_TUN)
 
@@ -121,15 +137,19 @@ def test_openwrt_tun_autoconfig_server_network(openwrt_host, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
+        runner("server", "service", "start", check=True)
+        _wait_for_apply_request_clear(openwrt_host)
 
         output = _uci_show_network(openwrt_host, SERVER_TUN)
         _assert_uci_interface(output, SERVER_TUN, SERVER_ADDR)
 
+        runner("server", "service", "stop")
         helpers.cleanup_server_install(openwrt_host, runner)
         assert not _uci_show_network(openwrt_host, SERVER_TUN).strip(), (
             "Expected UCI interface to be removed after xp2p server remove"
         )
     finally:
+        runner("server", "service", "stop")
         helpers.cleanup_server_install(openwrt_host, runner)
         openwrt_env.run_guest_script(openwrt_host, "scripts/openwrt/uci_network_delete.sh", SERVER_TUN)
 
@@ -155,6 +175,8 @@ def test_openwrt_tun_autoconfig_preserves_unmanaged_uci(openwrt_host, xp2p_openw
             "--force",
             check=True,
         )
+        runner("client", "service", "start", check=True)
+        _wait_for_apply_request_clear(openwrt_host)
 
         openwrt_env.run_guest_script(
             openwrt_host,
@@ -173,5 +195,6 @@ def test_openwrt_tun_autoconfig_preserves_unmanaged_uci(openwrt_host, xp2p_openw
         assert base in data and "interface" in data[base], "Expected unmanaged UCI section to remain"
         assert f"{base}.xp2p_managed" not in data, "Expected unmanaged UCI section without xp2p_managed"
     finally:
+        runner("client", "service", "stop")
         helpers.cleanup_client_install(openwrt_host, runner)
         openwrt_env.run_guest_script(openwrt_host, "scripts/openwrt/uci_network_delete.sh", CLIENT_TUN)

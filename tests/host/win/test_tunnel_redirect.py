@@ -130,7 +130,8 @@ Get-NetIPAddress -IPAddress {_env.ps_quote(ip)} -ErrorAction SilentlyContinue | 
 
 
 def _read_remote_text(host, path: Path) -> str:
-    quoted = _env.ps_quote(str(path))
+    resolved = _env.resolve_config_path(host, path)
+    quoted = _env.ps_quote(str(resolved))
     script = f"""
 $ErrorActionPreference = 'Stop'
 $target = {quoted}

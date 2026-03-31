@@ -110,12 +110,19 @@ def ensure_guest_scripts_synced() -> None:
     if not GUEST_SCRIPTS_SOURCE.exists():
         return
     current_hash = _compute_guest_scripts_hash()
+    skip_sync = os.environ.get("XP2P_OPENWRT_SKIP_GUEST_SYNC", "").strip().lower() in {"1", "true", "yes"}
     if _SCRIPTS_HASH_CACHE == current_hash and _SCRIPTS_SYNCED:
         elapsed = time.perf_counter() - start
         print(f"TIMING: ensure_guest_scripts_synced: {elapsed:.2f}s")
         return
     cached = _read_cached_scripts_hash()
     if cached == current_hash and cached is not None:
+        if skip_sync:
+            _SCRIPTS_HASH_CACHE = current_hash
+            _SCRIPTS_SYNCED = True
+            elapsed = time.perf_counter() - start
+            print(f"TIMING: ensure_guest_scripts_synced skipped: {elapsed:.2f}s")
+            return
         _SCRIPTS_HASH_CACHE = current_hash
         if _SCRIPTS_SYNCED:
             elapsed = time.perf_counter() - start
@@ -313,6 +320,11 @@ def install_ipk_on_host(
     force: bool = True,
 ) -> PurePosixPath:
     dest = destination or PurePosixPath("/tmp/xp2p.ipk")
+    skip_reinstall = os.environ.get("XP2P_OPENWRT_SKIP_REINSTALL", "").strip().lower() in {"1", "true", "yes"}
+    if skip_reinstall:
+        status = host.run("opkg status xp2p")
+        if status.rc == 0:
+            return dest
     staged_path = stage_ipk_on_guest(host, ipk_path, dest)
     opkg_remove(host, "xp2p", ignore_missing=True)
     _purge_xp2p_artifacts(host)
@@ -374,7 +386,27 @@ def opkg_install_local(host: Host, path: PurePosixPath) -> None:
 
 
 def run_xp2p(host: Host, *args: str):
-    quoted_args = " ".join(shlex.quote(arg) for arg in args)
+    cmd = list(args)
+    pending_targets = {
+        ("client", "list"),
+        ("client", "forward", "list"),
+        ("client", "redirect", "list"),
+        ("client", "reverse"),
+        ("client", "reverse", "list"),
+        ("server", "forward", "list"),
+        ("server", "redirect", "list"),
+        ("server", "reverse"),
+        ("server", "reverse", "list"),
+        ("server", "user", "list"),
+        ("server", "cert", "state"),
+        ("server", "state"),
+    }
+    if "--pending" not in cmd and "-y" not in cmd:
+        for target in pending_targets:
+            if tuple(cmd[: len(target)]) == target:
+                cmd.append("--pending")
+                break
+    quoted_args = " ".join(shlex.quote(arg) for arg in cmd)
     command = "/usr/bin/xp2p"
     if quoted_args:
         command = f"{command} {quoted_args}"

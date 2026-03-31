@@ -973,9 +973,10 @@ exit 0
 
 
 def _read_remote_json(client_host, path: Path) -> dict:
+    resolved = win_env.resolve_config_path(client_host, path)
     script = f"""
 $ErrorActionPreference = 'Stop'
-$path = {win_env.ps_quote(str(path))}
+$path = {win_env.ps_quote(str(resolved))}
 if (-not (Test-Path $path)) {{
     exit 3
 }}
@@ -1001,7 +1002,8 @@ def _read_first_existing_json(host, paths: list[Path]) -> dict:
 
 
 def _remote_path_exists(client_host, path: Path) -> bool:
-    target = win_env.ps_quote(str(path))
+    resolved = win_env.resolve_config_path(client_host, path)
+    target = win_env.ps_quote(str(resolved))
     result = win_env.run_powershell(
         client_host,
         f"if (Test-Path {target}) {{ exit 0 }} else {{ exit 3 }}",

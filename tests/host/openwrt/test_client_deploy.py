@@ -80,40 +80,24 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             deploy_link=link,
         )
 
-        _wait_for_log_phrase(
+        _wait_for_log_phrases(
             openwrt_server_host,
             SERVER_DEPLOY_LOG,
-            "server deploy: manifest decrypted",
+            [
+                "server deploy: manifest decrypted",
+                "server deploy: starting xray-core",
+            ],
             timeout=LOG_WAIT_TIMEOUT,
         )
-        _wait_for_log_phrase(
-            openwrt_server_host,
-            SERVER_DEPLOY_LOG,
-            "server deploy: starting xray-core",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
+        _wait_for_log_phrases(
             openwrt_client_host,
             CLIENT_DEPLOY_LOG,
-            "client deploy: trojan link received",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            openwrt_client_host,
-            CLIENT_DEPLOY_LOG,
-            "client deploy: local install completed",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            openwrt_client_host,
-            CLIENT_DEPLOY_LOG,
-            "client deploy: ping ok",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            openwrt_client_host,
-            CLIENT_DEPLOY_LOG,
-            "client deploy: client run active",
+            [
+                "client deploy: trojan link received",
+                "client deploy: local install completed",
+                "client deploy: ping ok",
+                "client deploy: completed",
+            ],
             timeout=LOG_WAIT_TIMEOUT,
         )
 
@@ -214,22 +198,14 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             ],
         )
 
-        _wait_for_log_phrase(
+        _wait_for_log_phrases(
             openwrt_server_host,
             SERVER_DEPLOY_LOG,
-            "server deploy: manifest decrypted",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            openwrt_server_host,
-            SERVER_DEPLOY_LOG,
-            "server deploy: certificate validation failed, using self-signed",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            openwrt_server_host,
-            SERVER_DEPLOY_LOG,
-            "server deploy: starting xray-core",
+            [
+                "server deploy: manifest decrypted",
+                "server deploy: certificate validation failed, using self-signed",
+                "server deploy: starting xray-core",
+            ],
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(
@@ -241,18 +217,22 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
 
         cert_path = helpers.SERVER_CONFIG_DIR / "cert.pem"
         key_path = helpers.SERVER_CONFIG_DIR / "key.pem"
-        assert _path_exists(openwrt_server_host, cert_path), f"Expected cert at {cert_path}"
-        assert _path_exists(openwrt_server_host, key_path), f"Expected key at {key_path}"
+        pending_cert_path = helpers.SERVER_PENDING_DIR / "cert.pem"
+        pending_key_path = helpers.SERVER_PENDING_DIR / "key.pem"
+        assert helpers.path_exists(openwrt_server_host, cert_path), f"Expected cert at {cert_path}"
+        assert helpers.path_exists(openwrt_server_host, key_path), f"Expected key at {key_path}"
 
-        inbounds = _read_json(openwrt_server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_json(openwrt_server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
-        assert primary.get("certificateFile") == cert_path.as_posix()
-        assert primary.get("keyFile") == key_path.as_posix()
+        expected_cert_paths = {cert_path.as_posix(), pending_cert_path.as_posix()}
+        expected_key_paths = {key_path.as_posix(), pending_key_path.as_posix()}
+        assert primary.get("certificateFile") in expected_cert_paths
+        assert primary.get("keyFile") in expected_key_paths
     finally:
         if client_pid:
             openwrt_env.stop_process(openwrt_client_host, client_pid)
@@ -479,19 +459,33 @@ def _assert_link_matches(
 
 
 def _wait_for_log_phrase(host: Host, path: PurePosixPath, phrase: str, *, timeout: int) -> None:
-    expected_variants = (phrase, f"xp2p: {phrase}")
+    _wait_for_log_phrases(host, path, [phrase], timeout=timeout)
+
+
+def _wait_for_log_phrases(
+    host: Host,
+    path: PurePosixPath,
+    phrases: list[str],
+    *,
+    timeout: int,
+) -> None:
+    expected_variants = []
+    for phrase in phrases:
+        expected_variants.append(phrase)
+        expected_variants.append(f"xp2p: {phrase}")
 
     def _matcher(text: str) -> bool | None:
         for variant in expected_variants:
-            if variant in text:
-                return True
-        return None
+            if variant not in text:
+                return None
+        return True
 
+    description = ", ".join(f"'{phrase}'" for phrase in phrases)
     _wait_for_log_value(
         host,
         path,
         extractor=_matcher,
-        description=f"'{phrase}' in {path}",
+        description=f"{description} in {path}",
         timeout=timeout,
     )
 

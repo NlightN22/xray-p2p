@@ -49,7 +49,8 @@ def _xp2p_run(host, *args: str, check: bool = False):
 
 
 def _read_remote_json(host, path: Path) -> dict:
-    quoted = _env.ps_quote(str(path))
+    resolved = _env.resolve_config_path(host, path)
+    quoted = _env.ps_quote(str(resolved))
     script = f"""
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path {quoted})) {{
@@ -65,7 +66,8 @@ Get-Content -Raw {quoted}
 
 
 def _read_remote_json_optional(host, path: Path) -> tuple[dict | None, bool]:
-    quoted = _env.ps_quote(str(path))
+    resolved = _env.resolve_config_path(host, path)
+    quoted = _env.ps_quote(str(resolved))
     script = f"""
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path {quoted})) {{

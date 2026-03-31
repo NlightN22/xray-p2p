@@ -23,6 +23,7 @@ CLIENT_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-client.toml"
 SERVER_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-server.toml"
 CLIENT_TUN = "xp2pc"
 SERVER_TUN = "xp2ps"
+APPLY_REQUEST = win_env.CONFIG_ROOT / win_env.APPLY_DIR_NAME / "apply.request"
 
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
@@ -118,6 +119,20 @@ def _wait_for_log_nonempty(host, path: Path, label: str) -> str:
     elapsed = time.perf_counter() - start
     print(f"TIMING: wait log nonempty ({label}) timeout: {elapsed:.2f}s")
     pytest.fail(f"Log {path} remained empty for {label}. Last content:\n{last_content}")
+
+
+def _wait_for_apply_request_clear(host, timeout: float = 90.0) -> None:
+    start = time.perf_counter()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not win_env.path_exists(host, APPLY_REQUEST):
+            elapsed = time.perf_counter() - start
+            print(f"TIMING: wait apply.request clear: {elapsed:.2f}s")
+            return
+        time.sleep(POLL_INTERVAL)
+    elapsed = time.perf_counter() - start
+    print(f"TIMING: wait apply.request clear timeout: {elapsed:.2f}s")
+    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
 
 
 def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
@@ -261,6 +276,7 @@ def test_windows_client_service_cli_controls_service(client_host, xp2p_client_ru
     with _timed("client service start"):
         runner("client", "service", "start", check=True)
     _wait_for_service_state(runner, "client", expected_active=True)
+    _wait_for_apply_request_clear(client_host)
     if _current_mode(client_host, "client") == "tun":
         _assert_ipv6_binding_disabled(client_host, CLIENT_TUN)
     assert win_env.path_exists(client_host, CLIENT_SERVICE_LOG), "client service log not created"
@@ -341,19 +357,26 @@ def test_windows_service_restarts_when_config_changes(
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
+        _wait_for_apply_request_clear(host)
         if _current_mode(host, role) == "tun":
             if role == "client":
                 _assert_ipv6_binding_disabled(host, CLIENT_TUN)
             else:
                 _assert_ipv6_binding_disabled(host, SERVER_TUN)
 
-        with _timed(f"{role} change config"):
-            change_fn()
-        with _timed(f"{role} revert config"):
-            revert_fn()
+        change_applied = False
+        try:
+            with _timed(f"{role} change config"):
+                change_fn()
+                change_applied = True
 
-        _wait_for_log_entry(host, log_path, "service configuration change detected")
-        _wait_for_service_state(runner, role, expected_active=True)
+            _wait_for_log_entry(host, log_path, "service configuration change detected")
+            _wait_for_apply_request_clear(host)
+            _wait_for_service_state(runner, role, expected_active=True)
+        finally:
+            if change_applied:
+                with _timed(f"{role} revert config"):
+                    revert_fn()
     finally:
         with _timed(f"{role} cleanup (final)"):
             _cleanup_role(
@@ -418,9 +441,11 @@ def test_windows_service_stops_after_invalid_config(
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
+        _wait_for_apply_request_clear(host)
 
         with _timed(f"{role} write broken config"):
             win_env.write_text(host, config_path, "BROKEN-CONFIG")
+            win_env.write_apply_request(host, role)
         _wait_for_log_entry_any(
             host,
             log_path,

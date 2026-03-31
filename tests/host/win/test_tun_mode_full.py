@@ -78,6 +78,8 @@ def test_windows_client_tun_mode_full_routes(
         server_service_started = True
         svc.start_client_service(xp2p_client_runner)
         service_started = True
+        svc.wait_for_apply_request_clear(server_host)
+        svc.wait_for_apply_request_clear(client_host)
 
         defaults = tun.default_routes(client_host)
         assert defaults, "Expected at least one default route before full-tunnel"
@@ -101,6 +103,7 @@ def test_windows_client_tun_mode_full_routes(
         client_cfg = _env.read_toml(client_host, tun.CLIENT_CONFIG_FILE).get("client") or {}
         assert client_cfg.get("tun_mode") == "full", "client.tun_mode was not updated to full"
         assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
+        svc.wait_for_apply_request_clear(client_host)
 
         tun_name = tun.client_tun_name(client_host)
         tun_name, tun_index = tun.wait_for_tun_adapter(client_host, tun_name)
@@ -147,6 +150,7 @@ def test_windows_client_tun_mode_full_routes(
                 "xp2p client mode tun split failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
+        svc.wait_for_apply_request_clear(client_host)
         ok, debug = tun.poll_for_routes_restored(
             client_host,
             tun_name,
@@ -180,6 +184,7 @@ def test_windows_client_tun_mode_full_routes(
                 "xp2p client mode tun full (second pass) failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
+        svc.wait_for_apply_request_clear(client_host)
         ok, debug = tun.poll_for_full_tunnel(
             client_host,
             tun_name,

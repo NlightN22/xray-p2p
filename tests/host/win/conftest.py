@@ -372,6 +372,25 @@ def xp2p_client_runner(
 
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
+        pending_targets = {
+            ("client", "list"),
+            ("client", "forward", "list"),
+            ("client", "redirect", "list"),
+            ("client", "reverse"),
+            ("client", "reverse", "list"),
+            ("server", "forward", "list"),
+            ("server", "redirect", "list"),
+            ("server", "reverse"),
+            ("server", "reverse", "list"),
+            ("server", "user", "list"),
+            ("server", "cert", "state"),
+            ("server", "state"),
+        }
+        if "--pending" not in cmd and "-y" not in cmd:
+            for target in pending_targets:
+                if tuple(cmd[: len(target)]) == target:
+                    cmd.append("--pending")
+                    break
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
@@ -401,6 +420,25 @@ def xp2p_server_runner(
 
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
+        pending_targets = {
+            ("client", "list"),
+            ("client", "forward", "list"),
+            ("client", "redirect", "list"),
+            ("client", "reverse"),
+            ("client", "reverse", "list"),
+            ("server", "forward", "list"),
+            ("server", "redirect", "list"),
+            ("server", "reverse"),
+            ("server", "reverse", "list"),
+            ("server", "user", "list"),
+            ("server", "cert", "state"),
+            ("server", "state"),
+        }
+        if "--pending" not in cmd and "-y" not in cmd:
+            for target in pending_targets:
+                if tuple(cmd[: len(target)]) == target:
+                    cmd.append("--pending")
+                    break
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if "--quiet" not in cmd:
                 cmd.append("--quiet")

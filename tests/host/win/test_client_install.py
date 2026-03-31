@@ -33,7 +33,8 @@ def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
 
 
 def _read_remote_json(client_host, path: Path) -> dict:
-    quoted = _env.ps_quote(str(path))
+    resolved = _env.resolve_config_path(client_host, path)
+    quoted = _env.ps_quote(str(resolved))
     script = f"""
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path {quoted})) {{
@@ -52,7 +53,8 @@ Get-Content -Raw {quoted}
 
 
 def _remote_path_exists(client_host, path: Path) -> bool:
-    quoted = _env.ps_quote(str(path))
+    resolved = _env.resolve_config_path(client_host, path)
+    quoted = _env.ps_quote(str(resolved))
     script = f"if (Test-Path {quoted}) {{ exit 0 }} else {{ exit 3 }}"
     result = _env.run_powershell(client_host, script)
     return result.rc == 0

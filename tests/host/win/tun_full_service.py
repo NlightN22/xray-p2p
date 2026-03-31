@@ -8,6 +8,7 @@ from tests.host.win import env as _env
 
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
+APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
 
 
 def require_client_service(host) -> None:
@@ -44,6 +45,15 @@ def wait_for_role_service_state(runner, role: str, expected_active: bool) -> Non
         f"xp2p {role} service did not reach {state} state.\n"
         f"STDOUT:\n{last_stdout}\nSTDERR:\n{last_stderr}"
     )
+
+
+def wait_for_apply_request_clear(host, timeout: float = 90.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _env.path_exists(host, APPLY_REQUEST):
+            return
+        time.sleep(POLL_INTERVAL)
+    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
 
 
 def start_service(runner, role: str) -> None:

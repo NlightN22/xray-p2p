@@ -28,6 +28,9 @@ PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 PROGRAM_FILES_X86_INSTALL_DIR = Path(r"C:\Program Files (x86)\xp2p")
 PROGRAM_DATA_ROOT = Path(os.environ.get("ProgramData", r"C:\ProgramData")) / "xp2p"
 CONFIG_ROOT = Path(os.environ.get("XP2P_CONFIG_ROOT", str(PROGRAM_DATA_ROOT)))
+APPLY_DIR_NAME = ".apply"
+PENDING_DIR_NAME = "pending"
+CONFIG_PENDING_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / PENDING_DIR_NAME
 LOGS_DIR = Path(os.environ.get("XP2P_LOG_ROOT", str(CONFIG_ROOT / "logs")))
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
@@ -956,6 +959,40 @@ exit 3
     return Path(value[-1].strip())
 
 
+def _as_path(path: Path | str) -> Path:
+    if isinstance(path, Path):
+        return path
+    return Path(str(path))
+
+
+def _pending_candidate(path: Path) -> Path:
+    if path.is_relative_to(CONFIG_ROOT / APPLY_DIR_NAME):
+        return path
+    if path.is_relative_to(CONFIG_ROOT):
+        relative = path.relative_to(CONFIG_ROOT)
+        if relative.parts:
+            config_root = relative.parts[0]
+            if config_root.startswith("config-"):
+                return CONFIG_ROOT / config_root / APPLY_DIR_NAME / PENDING_DIR_NAME / Path(*relative.parts[1:])
+        return CONFIG_PENDING_ROOT / relative
+    return path
+
+
+def _resolve_config_path(host: Host, path: Path) -> Path:
+    pending = _pending_candidate(path)
+    if pending != path and _path_exists_raw(host, pending):
+        return pending
+    return path
+
+
+def resolve_config_path(host: Host, path: Path | str) -> Path:
+    return _resolve_config_path(host, _as_path(path))
+
+
+def pending_candidate(path: Path | str) -> Path:
+    return _pending_candidate(_as_path(path))
+
+
 def ensure_admin_token(host: Host) -> None:
     last_error: Exception | None = None
     for attempt in range(1, 4):
@@ -1077,6 +1114,9 @@ def _build_msi_package(
 
 
 def path_exists(host: Host, path: Path | str) -> bool:
+    resolved = _resolve_config_path(host, _as_path(path))
+    if resolved != _as_path(path):
+        return True
     return _path_exists_raw(host, path)
 
 
@@ -1099,7 +1139,12 @@ def _path_exists_raw(host: Host, path: Path | str) -> bool:
 
 
 def remove_path(host: Host, path: Path | str) -> None:
-    remove_paths(host, [path])
+    resolved = _as_path(path)
+    pending = _pending_candidate(resolved)
+    targets = [pending]
+    if pending != resolved:
+        targets.append(resolved)
+    remove_paths(host, targets)
 
 
 def ensure_project_synced(
@@ -1346,31 +1391,16 @@ def cleanup_xp2p_leftovers(host: Host) -> None:
 
 
 def paths_exist(host: Host, paths: Iterable[Path | str]) -> set[str]:
-    targets = [ps_quote(str(path)) for path in paths]
-    if not targets:
-        return set()
-    target_list = ", ".join(targets)
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$existing = @()
-foreach ($target in @({target_list})) {{
-    if (Test-Path $target) {{
-        $existing += $target
-    }}
-}}
-$existing
-"""
-    result = run_powershell(host, script, label="remove_services")
-    if result.rc != 0:
-        raise RuntimeError(
-            "Failed to check remote paths.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return {line.strip().strip("'") for line in (result.stdout or "").splitlines() if line.strip()}
+    existing: set[str] = set()
+    for path in paths:
+        if path_exists(host, path):
+            existing.add(str(path))
+    return existing
 
 
 def read_text(host: Host, path: Path | str) -> str:
-    target = ps_quote(str(path))
+    resolved = _resolve_config_path(host, _as_path(path))
+    target = ps_quote(str(resolved))
     script = f"""
 $ErrorActionPreference = 'Stop'
 $target = {target}
@@ -1397,8 +1427,9 @@ def read_toml(host: Host, path: Path | str) -> dict:
 
 
 def write_text(host: Host, path: Path | str, content: str) -> None:
+    resolved = _pending_candidate(_as_path(path))
     encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
-    target = ps_quote(str(path))
+    target = ps_quote(str(resolved))
     payload = ps_quote(encoded)
     script = f"""
 $ErrorActionPreference = 'Stop'
@@ -1419,3 +1450,9 @@ exit 0
         raise RuntimeError(
             f"Failed to write remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+
+
+def write_apply_request(host: Host, role: str) -> None:
+    payload = f'{{"role":"{role}"}}\\n'
+    path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
+    write_text(host, path, payload)

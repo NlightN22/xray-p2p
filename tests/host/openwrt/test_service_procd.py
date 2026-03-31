@@ -20,6 +20,7 @@ SERVER_DIAG_PORT = "62022"
 
 SERVICE_TIMEOUT = 45.0
 POLL_INTERVAL = 1.5
+APPLY_REQUEST = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
 
 
 def _xp2p(host, *args: str, check: bool = False):
@@ -67,6 +68,15 @@ def _wait_for_log_entry(host, path: PurePosixPath, phrase: str, timeout: float =
                 return
         time.sleep(POLL_INTERVAL)
     raise AssertionError(f"{path} missing phrase {phrase!r}. Last content:\n{last}")
+
+
+def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not helpers.path_exists(host, APPLY_REQUEST):
+            return
+        time.sleep(POLL_INTERVAL)
+    raise AssertionError(f"apply.request did not clear after {timeout} seconds.")
 
 
 def _current_mode(host, role: str) -> str:
@@ -148,6 +158,7 @@ def test_openwrt_client_service_cli_controls_procd(openwrt_host, xp2p_openwrt_ip
 
         runner("client", "service", "start", check=True)
         _wait_for_service_state(openwrt_host, "client", expected_active=True)
+        _wait_for_apply_request_clear(openwrt_host)
         status = runner("client", "service", "status")
         assert status.rc == 0, f"xp2p client service status failed:\n{status.stdout}\n{status.stderr}"
         _wait_for_diag_listener(openwrt_host, CLIENT_DIAG_PORT)
@@ -272,17 +283,18 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
         runner(role, "service", "start", check=True)
         _wait_for_service_state(openwrt_host, role, expected_active=True)
         _wait_for_diag_listener(openwrt_host, diag_port)
+        _wait_for_apply_request_clear(openwrt_host)
 
         change_applied = False
         try:
             change_fn()
             change_applied = True
+            _wait_for_log_entry(openwrt_host, service_log, "service configuration change detected")
+            _wait_for_apply_request_clear(openwrt_host)
+            _wait_for_service_state(openwrt_host, role, expected_active=True)
         finally:
             if change_applied:
                 revert_fn()
-
-        _wait_for_log_entry(openwrt_host, service_log, "service configuration change detected")
-        _wait_for_service_state(openwrt_host, role, expected_active=True)
     finally:
         runner(role, "service", "stop")
         if role == "client":
@@ -344,10 +356,12 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
 
     try:
         _clear_logs(openwrt_host, service_log, xray_log)
-        runner(role, "service", "stop")
-        helpers.write_text(openwrt_host, config_path, "BROKEN-CONFIG")
         runner(role, "service", "start")
+        _wait_for_service_state(openwrt_host, role, expected_active=True)
+        helpers.write_text(openwrt_host, config_path, "BROKEN-CONFIG")
+        helpers.write_apply_request(openwrt_host, role)
 
+        _wait_for_log_entry(openwrt_host, service_log, "service configuration change detected")
         _wait_for_log_entry(openwrt_host, service_log, "exceeded restart limit")
         _wait_for_service_state(openwrt_host, role, expected_active=False)
         log_content = helpers.read_text(openwrt_host, service_log)

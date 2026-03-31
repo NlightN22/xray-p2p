@@ -16,6 +16,11 @@ CLIENT_CONFIG_DIR_NAME = linux_helpers.CLIENT_CONFIG_DIR_NAME
 SERVER_CONFIG_DIR_NAME = linux_helpers.SERVER_CONFIG_DIR_NAME
 CLIENT_CONFIG_DIR = linux_helpers.CLIENT_CONFIG_DIR
 SERVER_CONFIG_DIR = linux_helpers.SERVER_CONFIG_DIR
+APPLY_DIR_NAME = linux_helpers.APPLY_DIR_NAME
+PENDING_DIR_NAME = linux_helpers.PENDING_DIR_NAME
+CONFIG_PENDING_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / PENDING_DIR_NAME
+CLIENT_PENDING_DIR = CLIENT_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
+SERVER_PENDING_DIR = SERVER_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
 CLIENT_CONFIG_FILE = linux_helpers.CLIENT_CONFIG_FILE
 SERVER_CONFIG_FILE = linux_helpers.SERVER_CONFIG_FILE
 CLIENT_APPLIED_STATE_FILE = linux_helpers.CLIENT_APPLIED_STATE_FILE
@@ -31,22 +36,6 @@ LOG_ROOT = linux_helpers.LOG_ROOT
 REVERSE_SUFFIX = linux_helpers.REVERSE_SUFFIX
 XRAY_BINARY = linux_helpers.XRAY_BINARY
 
-
-def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:
-    target = _posix(path)
-    directory = PurePosixPath(target).parent.as_posix()
-    host.run(f"mkdir -p {shlex.quote(directory)}")
-    marker = "XP2P_EOF"
-    command = (
-        f"cat <<'{marker}' > {shlex.quote(target)}\n"
-        f"{content}\n"
-        f"{marker}\n"
-    )
-    result = host.run(command)
-    if result.rc != 0:
-        raise RuntimeError(
-            f"Failed to write remote text {target}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
 
 extract_trojan_credential = linux_helpers.extract_trojan_credential
 expected_proxy_tag = linux_helpers.expected_proxy_tag
@@ -151,7 +140,7 @@ def file_sha256(host: Host, path: PurePosixPath | Path | str) -> str:
 
 
 def read_text(host: Host, path: PurePosixPath | Path | str) -> str:
-    target = _posix(path)
+    target = _posix(_resolve_config_path(host, _as_path(path)))
     result = host.run(f"cat {shlex.quote(target)}")
     if result.rc != 0:
         raise RuntimeError(
@@ -184,14 +173,23 @@ def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
 
 
 def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
-    target = _posix(path)
+    resolved = _as_path(path)
+    pending = _pending_candidate(resolved)
+    if pending != resolved and linux_helpers.path_exists(host, pending):
+        return True
+    target = _posix(resolved)
     result = host.run(f"test -e {shlex.quote(target)}")
     return result.rc == 0
 
 
 def remove_path(host: Host, path: PurePosixPath | Path | str) -> None:
-    target = _posix(path)
+    resolved = _as_path(path)
+    pending = _pending_candidate(resolved)
+    target = _posix(pending)
     host.run(f"rm -rf {shlex.quote(target)} >/dev/null 2>&1 || true")
+    if pending != resolved:
+        target = _posix(resolved)
+        host.run(f"rm -rf {shlex.quote(target)} >/dev/null 2>&1 || true")
 
 
 def read_client_config(host: Host) -> dict:
@@ -200,6 +198,66 @@ def read_client_config(host: Host) -> dict:
 
 def read_server_config(host: Host) -> dict:
     return read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+
+
+def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:
+    target = _posix(_pending_candidate(_as_path(path)))
+    directory = PurePosixPath(target).parent.as_posix()
+    host.run(f"mkdir -p {shlex.quote(directory)}")
+    marker = "XP2P_EOF"
+    command = (
+        f"cat <<'{marker}' > {shlex.quote(target)}\n"
+        f"{content}\n"
+        f"{marker}\n"
+    )
+    result = host.run(command)
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to write remote text {target}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def write_apply_request(host: Host, role: str) -> None:
+    payload = f'{{"role":"{role}"}}\\n'
+    path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
+    write_text(host, path, payload)
+
+
+def _pending_candidate(path: PurePosixPath) -> PurePosixPath:
+    if path.is_relative_to(CONFIG_ROOT / APPLY_DIR_NAME):
+        return path
+    if path.is_relative_to(CLIENT_CONFIG_DIR / APPLY_DIR_NAME):
+        return path
+    if path.is_relative_to(SERVER_CONFIG_DIR / APPLY_DIR_NAME):
+        return path
+    if path.is_relative_to(INSTALL_ROOT):
+        relative = path.relative_to(INSTALL_ROOT)
+        if relative.parts:
+            config_root = relative.parts[0]
+            if config_root.startswith("config-"):
+                return INSTALL_ROOT / config_root / APPLY_DIR_NAME / PENDING_DIR_NAME / PurePosixPath(*relative.parts[1:])
+    if path.is_relative_to(CLIENT_CONFIG_DIR):
+        return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
+    if path.is_relative_to(SERVER_CONFIG_DIR):
+        return SERVER_PENDING_DIR / path.relative_to(SERVER_CONFIG_DIR)
+    if path.is_relative_to(CONFIG_ROOT):
+        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_ROOT)
+    return path
+
+
+def _resolve_config_path(host: Host, path: PurePosixPath) -> PurePosixPath:
+    pending = _pending_candidate(path)
+    if pending != path and linux_helpers.path_exists(host, pending):
+        return pending
+    return path
+
+
+def _as_path(path: PurePosixPath | Path | str) -> PurePosixPath:
+    if isinstance(path, PurePosixPath):
+        return path
+    if isinstance(path, Path):
+        return PurePosixPath(path.as_posix())
+    return PurePosixPath(str(path))
 
 
 def read_client_applied_state(host: Host) -> dict:

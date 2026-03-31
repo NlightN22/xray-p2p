@@ -56,8 +56,12 @@ def test_openwrt_server_cert_state_reports_valid_and_expired(openwrt_server_host
         assert state.rc == 0, f"expected successful cert state, rc={state.rc}\nSTDOUT:\n{state.stdout}\nSTDERR:\n{state.stderr}"
         assert "Status:      OK" in state.stdout, f"missing OK status\n{state.stdout}"
         assert f"Subject:     CN={server_host}" in state.stdout, f"missing subject\n{state.stdout}"
-        assert f"Certificate: {cert_path.as_posix()}" in state.stdout, f"missing cert path\n{state.stdout}"
-        assert f"Key:         {key_path.as_posix()}" in state.stdout, f"missing key path\n{state.stdout}"
+        pending_cert = (helpers.SERVER_PENDING_DIR / "cert.pem").as_posix()
+        pending_key = (helpers.SERVER_PENDING_DIR / "key.pem").as_posix()
+        cert_ok = f"Certificate: {cert_path.as_posix()}" in state.stdout or f"Certificate: {pending_cert}" in state.stdout
+        key_ok = f"Key:         {key_path.as_posix()}" in state.stdout or f"Key:         {pending_key}" in state.stdout
+        assert cert_ok, f"missing cert path\n{state.stdout}"
+        assert key_ok, f"missing key path\n{state.stdout}"
 
         helpers.write_text(openwrt_server_host, cert_path, _EXPIRED_CERT)
         helpers.write_text(openwrt_server_host, key_path, _EXPIRED_KEY)
