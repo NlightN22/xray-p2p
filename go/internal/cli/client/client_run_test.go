@@ -63,46 +63,6 @@ func TestRunClientRun(t *testing.T) {
 			},
 		},
 		{
-			name: "passes log file",
-			cfg: func(t *testing.T) config.Config {
-				dir := filepath.Join(t.TempDir(), "client")
-				prepareClientInstallation(t, dir, client.DefaultClientConfigDir)
-				return config.Config{
-					Client: config.ClientConfig{
-						InstallDir:    dir,
-						ConfigDir:     client.DefaultClientConfigDir,
-						SocksAddress:  "127.0.0.1:5555",
-						ServerAddress: "edge.example.org",
-						TunEnabled:    true,
-						TunName:       "xp2pc",
-						TunMTU:        1500,
-						TunAddr:       "198.18.0.1/30",
-					},
-					Server: config.ServerConfig{
-						Port: "63000",
-					},
-				}
-			},
-			args:     []string{"--xray-log-file", `logs\xray.err`},
-			prepared: true,
-			wantCode: 0,
-			wantRun:  1,
-			onRun: func(t *testing.T, _ config.Config, opts client.RunOptions) {
-				if opts.ErrorLogPath != `logs\xray.err` {
-					t.Fatalf("unexpected error log path: %s", opts.ErrorLogPath)
-				}
-				if !opts.Heartbeat.Enabled {
-					t.Fatalf("heartbeat should be enabled by default")
-				}
-				if opts.Heartbeat.Port != "63000" {
-					t.Fatalf("unexpected heartbeat port: %s", opts.Heartbeat.Port)
-				}
-				if opts.Heartbeat.SocksAddress != "127.0.0.1:5555" {
-					t.Fatalf("unexpected heartbeat socks: %s", opts.Heartbeat.SocksAddress)
-				}
-			},
-		},
-		{
 			name: "quiet missing installation",
 			cfg: func(t *testing.T) config.Config {
 				return config.Config{

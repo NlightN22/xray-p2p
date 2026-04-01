@@ -110,7 +110,6 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 	flags.StringP("path", "p", "", "client installation directory")
 	flags.StringP("config-dir", "D", "", "client configuration directory name")
 	flags.StringP("log-file", "F", "", "xp2p service log file (default: platform-specific path)")
-	flags.StringP("xray-log-file", "X", "", "xray stderr log file (default: platform-specific path)")
 	flags.IntP("max-restarts", "R", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	flags.DurationP("restart-delay", "r", 3*time.Second, "delay between restart attempts")
 	flags.BoolP("heartbeat", "b", true, "enable heartbeat probes")
@@ -225,7 +224,6 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	logFile := fs.String("log-file", "", "xp2p service log file (default: platform-specific path)")
-	xrayLog := fs.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
 	maxRestarts := fs.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	restartDelay := fs.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
 	hbEnabled := fs.Bool("heartbeat", true, "enable heartbeat probes")
@@ -270,15 +268,9 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		diagPort = cfg.Server.Port
 	}
 
-	xrayLogPath := strings.TrimSpace(*xrayLog)
-	if xrayLogPath == "" {
-		xrayLogPath = defaultClientXrayLogPath(installDir)
-	}
-
 	opts := client.ServiceOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
-		XrayLogPath:  xrayLogPath,
 		DiagPort:     diagPort,
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
@@ -308,10 +300,6 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 
 func defaultClientServiceLogPath(installDir string) string {
 	return defaultClientLogPath(installDir, "service.log")
-}
-
-func defaultClientXrayLogPath(installDir string) string {
-	return defaultClientLogPath(installDir, "xray-service.log")
 }
 
 func defaultClientLogPath(installDir string, fileName string) string {

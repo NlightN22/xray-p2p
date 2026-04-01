@@ -106,7 +106,7 @@ def _pre_test_kill_leftovers(server_host: Host, client_host: Host) -> None:
         if remaining:
             pytest.fail(
                 f"Leftover xp2p/xray processes on {label} before test: {', '.join(remaining)}"
-            )
+        )
 
     with _timed("pre-test cleanup xp2p processes (server)"):
         win_env.stop_xp2p_processes(server_host)
@@ -283,7 +283,7 @@ def xp2p_server_service(server_host: Host, xp2p_options: dict):
             Xp2pPath=str(win_env.XP2P_EXE),
             Port=port,
             TimeoutSeconds=win_env.SERVICE_START_TIMEOUT,
-        )
+            )
         stdout = (result.stdout or "").strip()
 
         if result.rc != 0:
@@ -291,28 +291,28 @@ def xp2p_server_service(server_host: Host, xp2p_options: dict):
                 pytest.skip(
                     f"xp2p.exe not found on {win_env.DEFAULT_SERVER} at {win_env.XP2P_EXE}. "
                     "Provision the guest before running host tests."
-                )
+        )
             if "__XP2P_CREATE_FAIL__" in stdout:
                 pytest.fail(
                     "Failed to spawn xp2p diagnostics service via Win32_Process.\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-                )
+        )
             if "__XP2P_ALREADY_RUNNING__" in stdout:
                 pytest.skip(
                     "xp2p diagnostics service is already running on the server; "
                     "stop manual instances before executing host tests."
-                )
+        )
             pytest.fail(
                 "Failed to start xp2p diagnostics service on "
                 f"{win_env.DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
 
         for line in stdout.splitlines():
             if line == "__XP2P_EXIT__":
                 pytest.fail(
                     "xp2p diagnostics service exited before the port was reachable.\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-                )
+        )
             if line.startswith("PID="):
                 pid_value = int(line.split("=", 1)[1])
                 break
@@ -320,7 +320,7 @@ def xp2p_server_service(server_host: Host, xp2p_options: dict):
             pytest.fail(
                 "Unexpected xp2p service startup output:\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
 
         yield {"pid": pid_value, "port": port}
     finally:
@@ -348,8 +348,8 @@ exit 0
 def xp2p_client_run_factory(client_host: Host):
     win_env.ensure_program_files_install(client_host)
 
-    def _factory(install_dir: str, config_dir: str, log_relative: str):
-        return _client_runtime.xp2p_client_run_session(client_host, install_dir, config_dir, log_relative)
+    def _factory(install_dir: str, config_dir: str):
+        return _client_runtime.xp2p_client_run_session(client_host, install_dir, config_dir)
 
     return _factory
 
@@ -358,8 +358,8 @@ def xp2p_client_run_factory(client_host: Host):
 def xp2p_server_run_factory(server_host: Host):
     win_env.ensure_program_files_install(server_host)
 
-    def _factory(install_dir: str, config_dir: str, log_relative: str):
-        return _server_runtime.xp2p_server_run_session(server_host, install_dir, config_dir, log_relative)
+    def _factory(install_dir: str, config_dir: str):
+        return _server_runtime.xp2p_server_run_session(server_host, install_dir, config_dir)
 
     return _factory
 
@@ -400,13 +400,13 @@ def xp2p_client_runner(
             pytest.skip(
                 f"xp2p.exe not found on {win_env.DEFAULT_CLIENT} at {win_env.XP2P_EXE}. "
                 "Provision the guest before running host tests."
-            )
+        )
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed on "
                 f"{win_env.DEFAULT_CLIENT} (exit {result.rc}).\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
         return result
 
     return _runner
@@ -448,13 +448,13 @@ def xp2p_server_runner(
             pytest.skip(
                 f"xp2p.exe not found on {win_env.DEFAULT_SERVER} at {win_env.XP2P_EXE}. "
                 "Provision the guest before running host tests."
-            )
+        )
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed on "
                 f"{win_env.DEFAULT_SERVER} (exit {result.rc}).\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
         return result
 
     return _runner

@@ -1,23 +1,22 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ "$#" -lt 4 ]; then
-  echo "Usage: start_xp2p_run.sh <role> <install_dir> <config_dir> <log_path> [extra...]" >&2
+if [ "$#" -lt 3 ]; then
+  echo "Usage: start_xp2p_run.sh <role> <install_dir> <config_dir> [extra...]" >&2
   exit 2
 fi
 
 ROLE=$1
 INSTALL_DIR=$2
 CONFIG_DIR=$3
-LOG_PATH=$4
-shift 4 || true
+shift 3 || true
 
 if [ "$ROLE" != "server" ] && [ "$ROLE" != "client" ]; then
   echo "Unsupported role: $ROLE" >&2
   exit 2
 fi
 
-CMD=(/usr/bin/xp2p "$ROLE" run --path "$INSTALL_DIR" --config-dir "$CONFIG_DIR" --auto-install --xray-log-file "$LOG_PATH" --quiet)
+CMD=(/usr/bin/xp2p "$ROLE" run --path "$INSTALL_DIR" --config-dir "$CONFIG_DIR" --auto-install --quiet)
 if [ "$#" -gt 0 ]; then
   CMD+=("$@")
 fi

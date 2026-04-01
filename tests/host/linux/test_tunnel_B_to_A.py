@@ -36,7 +36,7 @@ def _parse_redirect_output(text: str) -> list[dict[str, str]]:
             lowered.startswith("no redirect rules")
             or lowered.startswith("no server redirect rules")
             or lowered.startswith("no client redirect rules")
-        ):
+    ):
             return []
         if lowered.startswith("type"):
             header_idx = idx
@@ -368,13 +368,11 @@ def _active_tunnel_sessions(env: dict):
         "server",
         env["server_install_path"],
         helpers.SERVER_CONFIG_DIR_NAME,
-        helpers.SERVER_LOG_FILE,
     ), linux_env.xp2p_run_session(
         env["client_host"],
         "client",
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
-        helpers.CLIENT_LOG_FILE,
     ):
         time.sleep(2.0)
         server_socks_port = _socks_port(env["server_host"], helpers.SERVER_CONFIG_DIR / "inbounds.json")

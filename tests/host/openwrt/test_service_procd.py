@@ -10,9 +10,7 @@ from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
 
 CLIENT_SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
-CLIENT_XRAY_LOG = helpers.LOG_ROOT / "client" / "xray-service.log"
 SERVER_SERVICE_LOG = helpers.LOG_ROOT / "server" / "service.log"
-SERVER_XRAY_LOG = helpers.LOG_ROOT / "server" / "xray-service.log"
 CLIENT_INBOUNDS = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
 SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
 CLIENT_DIAG_PORT = "62023"
@@ -152,7 +150,7 @@ def test_openwrt_client_service_cli_controls_procd(openwrt_host, xp2p_openwrt_ip
             check=True,
         )
 
-        _clear_logs(openwrt_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG)
+        _clear_logs(openwrt_host, CLIENT_SERVICE_LOG)
         _stop_service("client", runner)
         _wait_for_service_state(openwrt_host, "client", expected_active=False)
 
@@ -172,7 +170,7 @@ def test_openwrt_client_service_cli_controls_procd(openwrt_host, xp2p_openwrt_ip
     finally:
         runner("client", "service", "stop")
         helpers.cleanup_client_install(openwrt_host, runner)
-        _clear_logs(openwrt_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG)
+        _clear_logs(openwrt_host, CLIENT_SERVICE_LOG)
 
 
 @pytest.mark.host
@@ -213,7 +211,6 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
         helpers.cleanup_client_install(openwrt_host, runner)
         helpers.cleanup_server_install(openwrt_host, runner)
         service_log = CLIENT_SERVICE_LOG
-        xray_log = CLIENT_XRAY_LOG
         diag_port = CLIENT_DIAG_PORT
         config_dir = helpers.CLIENT_CONFIG_DIR_NAME
         original_mode: str | None = None
@@ -247,7 +244,6 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
     else:
         helpers.cleanup_server_install(openwrt_host, runner)
         service_log = SERVER_SERVICE_LOG
-        xray_log = SERVER_XRAY_LOG
         diag_port = SERVER_DIAG_PORT
         config_dir = helpers.SERVER_CONFIG_DIR_NAME
         original_mode: str | None = None
@@ -278,7 +274,7 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
 
     install_fn()
     try:
-        _clear_logs(openwrt_host, service_log, xray_log)
+        _clear_logs(openwrt_host, service_log)
         runner(role, "service", "stop")
         runner(role, "service", "start", check=True)
         _wait_for_service_state(openwrt_host, role, expected_active=True)
@@ -301,7 +297,7 @@ def test_openwrt_service_restarts_when_config_changes(openwrt_host, xp2p_openwrt
             helpers.cleanup_client_install(openwrt_host, runner)
         else:
             helpers.cleanup_server_install(openwrt_host, runner)
-        _clear_logs(openwrt_host, service_log, xray_log)
+        _clear_logs(openwrt_host, service_log)
 
 
 @pytest.mark.host
@@ -313,7 +309,6 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
     if role == "client":
         helpers.cleanup_client_install(openwrt_host, runner)
         service_log = CLIENT_SERVICE_LOG
-        xray_log = CLIENT_XRAY_LOG
         config_path = helpers.CLIENT_CONFIG_FILE
 
         runner(
@@ -335,7 +330,6 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
     else:
         helpers.cleanup_server_install(openwrt_host, runner)
         service_log = SERVER_SERVICE_LOG
-        xray_log = SERVER_XRAY_LOG
         config_path = helpers.SERVER_CONFIG_FILE
 
         runner(
@@ -355,7 +349,7 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
         _prime_service_state(openwrt_host, role, runner)
 
     try:
-        _clear_logs(openwrt_host, service_log, xray_log)
+        _clear_logs(openwrt_host, service_log)
         runner(role, "service", "start")
         _wait_for_service_state(openwrt_host, role, expected_active=True)
         helpers.write_text(openwrt_host, config_path, "BROKEN-CONFIG")
@@ -366,20 +360,17 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
         _wait_for_service_state(openwrt_host, role, expected_active=False)
         log_content = helpers.read_text(openwrt_host, service_log)
         assert "attempt" in log_content.lower()
-        assert helpers.path_exists(openwrt_host, xray_log), f"{role} xray log missing"
-        xray_content = helpers.read_text(openwrt_host, xray_log)
-        if not xray_content.strip():
-            assert "parse" in log_content.lower() or "config" in log_content.lower(), (
-                f"{role} xray log is empty and no config error found.\n"
-                f"Service log:\n{log_content}"
-            )
+        assert "parse" in log_content.lower() or "config" in log_content.lower(), (
+            f"{role} service log missing config error details.\n"
+            f"Service log:\n{log_content}"
+        )
     finally:
         runner(role, "service", "stop")
         if role == "client":
             helpers.cleanup_client_install(openwrt_host, runner)
         else:
             helpers.cleanup_server_install(openwrt_host, runner)
-        _clear_logs(openwrt_host, service_log, xray_log)
+        _clear_logs(openwrt_host, service_log)
 
 
 @pytest.mark.host
@@ -460,4 +451,4 @@ def test_openwrt_opkg_removal_and_purge_cleanup(openwrt_host, xp2p_openwrt_ipk):
         openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
         helpers.cleanup_client_install(openwrt_host, runner)
         helpers.cleanup_server_install(openwrt_host, runner)
-        _clear_logs(openwrt_host, CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG, SERVER_SERVICE_LOG, SERVER_XRAY_LOG)
+        _clear_logs(openwrt_host, CLIENT_SERVICE_LOG, SERVER_SERVICE_LOG)

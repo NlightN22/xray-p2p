@@ -160,7 +160,7 @@ def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
         pytest.fail(
             "ui-xp2p log check failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        ) 
+        )
 
 
 @pytest.mark.host
@@ -179,13 +179,13 @@ def test_sc_query_as_non_admin_user(server_host, xp2p_server_runner):
             UserPassword="vagrant",
             UseExistingUser="1",
             GrantLogonRights="0",
-        )
+            )
         _assert_marker(local_marker, "check_sc_query_as_user.ps1")
         if result.rc != 0:
             pytest.fail(
                 "sc query as non-admin user failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
     finally:
         _cleanup_role(server_host, "client")
         _cleanup_role(server_host, "server")
@@ -223,13 +223,13 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
             ClearLog="true",
             UiPollSeconds="6",
             RequiredPatternsBase64=log_patterns_payload,
-        )
+            )
         _assert_marker(local_marker, "toggle_service_via_ui.ps1")
         if result.rc != 0:
             pytest.fail(
                 "ui-xp2p service toggle check failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
     finally:
         _cleanup_role(server_host, "client")
         _cleanup_role(server_host, "server")
@@ -268,12 +268,12 @@ def test_xp2p_ui_tracks_service_crash_without_config(server_host, xp2p_server_ru
             StartStatusesBase64=base64.b64encode(
                 json.dumps(["StartPending", "Running"]).encode("utf-8")
             ).decode("ascii"),
-        )
+            )
         _assert_marker(local_marker, "toggle_service_via_ui.ps1")
         if result.rc != 0:
             pytest.fail(
                 "ui-xp2p crash tracking check failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
     finally:
         _cleanup_role(server_host, "client")

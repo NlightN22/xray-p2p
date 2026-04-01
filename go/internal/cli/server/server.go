@@ -64,7 +64,6 @@ type serverRunCommandOptions struct {
 	DiagMode    string
 	AutoInstall bool
 	Quiet       bool
-	XrayLogFile string
 }
 
 func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstallCommandOptions) int {
@@ -203,13 +202,12 @@ func prepareRunOptions(ctx context.Context, cfg config.Config, opts serverRunCom
 	}
 
 	return server.RunOptions{
-		InstallDir:   installDir,
-		ConfigDir:    configDirName,
-		ErrorLogPath: strings.TrimSpace(opts.XrayLogFile),
-		TunEnabled:   cfg.Server.TunEnabled,
-		TunName:      cfg.Server.TunName,
-		TunMTU:       cfg.Server.TunMTU,
-		TunAddr:      cfg.Server.TunAddr,
+		InstallDir: installDir,
+		ConfigDir:  configDirName,
+		TunEnabled: cfg.Server.TunEnabled,
+		TunName:    cfg.Server.TunName,
+		TunMTU:     cfg.Server.TunMTU,
+		TunAddr:    cfg.Server.TunAddr,
 	}, nil
 }
 

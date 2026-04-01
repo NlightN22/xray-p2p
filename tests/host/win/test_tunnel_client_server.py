@@ -11,8 +11,6 @@ DEFAULT_SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 DEFAULT_SERVER_CONFIG_NAME = "config-server"
 DEFAULT_CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 DEFAULT_CLIENT_CONFIG_NAME = "config-client"
-SERVER_LOG_RELATIVE = r"logs\server.err"
-CLIENT_LOG_RELATIVE = r"logs\client.err"
 DEFAULT_DIAGNOSTICS_PORT = 62022
 
 CUSTOM_SERVER_INSTALL_DIR = Path(r"C:\ProgramData\xp2p-it\server")
@@ -106,7 +104,7 @@ def _cleanup_server_install(
             server_host,
             config_dirs=[_resolve_server_config_dir(target_dir)],
             state_files=_state_files_for(target_dir),
-        )
+            )
         if purge and install_dir is not None:
             _remove_remote_path(server_host, install_dir)
 
@@ -124,7 +122,7 @@ def _cleanup_client_install(
             client_host,
             config_dirs=[_resolve_client_config_dir(target_dir)],
             state_files=_state_files_for(target_dir),
-        )
+            )
         if purge and install_dir is not None:
             _remove_remote_path(client_host, install_dir)
 
@@ -158,7 +156,7 @@ Copy-Item -Path $wintunSource -Destination $wintunDest -Force
             pytest.fail(
                 "Failed to stage xray.exe prior to custom install.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
 
 
 def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
@@ -200,12 +198,12 @@ def _assert_ping_success(result) -> None:
                 pytest.fail(
                     "xp2p ping reported warnings/errors in STDERR:\n"
                     f"{result.stderr}"
-                )
+        )
         else:
             pytest.fail(
                 "xp2p ping wrote unexpected output to STDERR:\n"
                 f"{result.stderr}"
-            )
+        )
 
 
 def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
@@ -257,7 +255,7 @@ def test_install_server_and_client_default(
             server_public_host,
             "--force",
             check=True,
-        )
+            )
         credential = _extract_generated_credential(server_install.stdout or "")
         assert credential["link"], "Trojan link was not emitted for default install"
         assert credential["link"].startswith("trojan://")
@@ -265,8 +263,7 @@ def test_install_server_and_client_default(
         server_session_cm = xp2p_server_run_factory(
             str(DEFAULT_SERVER_INSTALL_DIR),
             DEFAULT_SERVER_CONFIG_NAME,
-            SERVER_LOG_RELATIVE,
-        )
+            )
         with server_session_cm as server_session:
             assert server_session["pid"] > 0
 
@@ -277,13 +274,12 @@ def test_install_server_and_client_default(
                 credential["link"],
                 "--force",
                 check=True,
-            )
+                )
 
             client_session_cm = xp2p_client_run_factory(
                 str(DEFAULT_CLIENT_INSTALL_DIR),
                 DEFAULT_CLIENT_CONFIG_NAME,
-                CLIENT_LOG_RELATIVE,
-            )
+                )
             with client_session_cm as client_session:
                 assert client_session["pid"] > 0
                 _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)
@@ -332,14 +328,13 @@ def test_install_server_and_client_nodefault(
             str(CUSTOM_KEY_PATH),
             "--force",
             check=True,
-        )
+            )
         credential = _extract_generated_credential(server_install.stdout or "")
 
         server_session_cm = xp2p_server_run_factory(
             str(CUSTOM_SERVER_INSTALL_DIR),
             CUSTOM_SERVER_CONFIG_NAME,
-            SERVER_LOG_RELATIVE,
-        )
+            )
         with server_session_cm as server_session:
             assert server_session["pid"] > 0
 
@@ -357,13 +352,12 @@ def test_install_server_and_client_nodefault(
                     credential["link"],
                     "--force",
                     check=True,
-                )
+                    )
 
                 client_session_cm = xp2p_client_run_factory(
                     str(CUSTOM_CLIENT_INSTALL_DIR),
                     CUSTOM_CLIENT_CONFIG_NAME,
-                    CLIENT_LOG_RELATIVE,
-                )
+                    )
                 with client_session_cm as client_session:
                     assert client_session["pid"] > 0
                     _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)

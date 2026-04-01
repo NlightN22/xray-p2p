@@ -50,12 +50,12 @@ def _assert_ping_success(result, *, server_host, client_host) -> None:
                 pytest.fail(
                     "xp2p ping reported warnings/errors in STDERR:\n"
                     f"{result.stderr}"
-                )
+        )
         else:
             pytest.fail(
                 "xp2p ping wrote unexpected output to STDERR:\n"
                 f"{result.stderr}"
-            )
+        )
 
 
 def _set_firewall_rule(server_host, *, ensure: str, remote_address: str, port: int) -> None:
@@ -143,19 +143,19 @@ def test_xp2p_service_ping_blocked_by_firewall(
             ensure="Present",
             remote_address=CLIENT_SUBNET_HOST,
             port=port,
-        )
+            )
         result = _run_ping(xp2p_client_runner, xp2p_options)
         output_lower = (result.stdout or "").lower()
         if result.rc == 0 and "100% loss" not in output_lower:
             pytest.fail(
                 "xp2p ping unexpectedly succeeded despite firewall block:\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
     finally:
         _set_firewall_rule(
             server_host,
             ensure="Absent",
             remote_address=CLIENT_SUBNET_HOST,
             port=port,
-        )
+            )
         _set_firewall_profiles(server_host, enabled=False)

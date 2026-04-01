@@ -10,8 +10,6 @@ SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR = "config-server"
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
-SERVER_LOG_RELATIVE = r"logs\server.err"
-CLIENT_LOG_RELATIVE = r"logs\client.err"
 CLIENT_ROUTING_JSON = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR / "routing.json"
 DIAG_IP = "10.77.0.1"
 DIAG_CIDR = f"{DIAG_IP}/32"
@@ -298,7 +296,7 @@ def test_client_redirect_tunnel_win(
     _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
     server_public_host = _server_public_host()
-    server_log_path = _env.LOGS_DIR / "server.err"
+    server_log_path = _env.LOGS_DIR / "xp2p-server-run.out"
     iface = _get_interface_alias(server_host, server_public_host)
     _remove_ip_alias(server_host, DIAG_IP)
     _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
@@ -317,7 +315,7 @@ def test_client_redirect_tunnel_win(
             server_public_host,
             "--force",
             check=True,
-        )
+            )
         credential = _extract_generated_credential(server_install.stdout or "")
         assert credential["link"], "Expected trojan link in server install output"
 
@@ -328,19 +326,17 @@ def test_client_redirect_tunnel_win(
             credential["link"],
             "--force",
             check=True,
-        )
+            )
 
         with xp2p_server_run_factory(
             str(SERVER_INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
-        ):
+            ):
             _dump_net_state(server_host, SERVER_NETSTATE_LOG, "after-server-run-start")
             with xp2p_client_run_factory(
                 str(CLIENT_INSTALL_DIR),
                 CLIENT_CONFIG_DIR,
-                CLIENT_LOG_RELATIVE,
-            ):
+                ):
                 _dump_net_state(client_host, CLIENT_NETSTATE_LOG, "after-client-run-start")
                 _wait_for_socks_listener(client_host)
                 baseline_ping = xp2p_client_runner(
@@ -350,7 +346,7 @@ def test_client_redirect_tunnel_win(
                     "--count",
                     "3",
                     check=True,
-                )
+                    )
                 assert "0% loss" in (baseline_ping.stdout or "").lower()
                 initial_ping = xp2p_client_runner(
                     "ping",
@@ -359,7 +355,7 @@ def test_client_redirect_tunnel_win(
                     "--count",
                     "3",
                     check=False,
-                )
+                    )
                 assert initial_ping.rc != 0
 
                 _add_ip_alias(server_host, iface, DIAG_IP, DIAG_PREFIX)
@@ -374,13 +370,12 @@ def test_client_redirect_tunnel_win(
                     "--host",
                     server_public_host,
                     check=True,
-                )
+                    )
 
             with xp2p_client_run_factory(
                 str(CLIENT_INSTALL_DIR),
                 CLIENT_CONFIG_DIR,
-                CLIENT_LOG_RELATIVE,
-            ):
+                ):
                 _wait_for_socks_listener(client_host)
                 redirected_ping = xp2p_client_runner(
                     "ping",
@@ -389,7 +384,7 @@ def test_client_redirect_tunnel_win(
                     "--count",
                     "3",
                     check=True,
-                )
+                    )
                 assert "0% loss" in (redirected_ping.stdout or "").lower()
 
                 redirect_list = xp2p_client_runner(
@@ -415,7 +410,7 @@ def test_client_redirect_tunnel_win(
                     "--host",
                     server_public_host,
                     check=True,
-                )
+                    )
 
                 redirect_list = xp2p_client_runner(
                     "client",
@@ -437,7 +432,7 @@ def test_client_redirect_tunnel_win(
                     "--host",
                     server_public_host,
                     check=True,
-                )
+                    )
 
                 routing_after_domain = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
                 _assert_redirect_rule(routing_after_domain, DIAG_CIDR, _expected_tag(server_public_host))
@@ -450,7 +445,7 @@ def test_client_redirect_tunnel_win(
                     "--count",
                     "3",
                     check=True,
-                )
+                    )
                 assert "0% loss" in (redirected_ping_again.stdout or "").lower()
 
                 xp2p_client_runner(
@@ -462,7 +457,7 @@ def test_client_redirect_tunnel_win(
                     "--host",
                     server_public_host,
                     check=True,
-                )
+                    )
 
                 routing_after = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
                 _assert_no_redirect_rule(routing_after, DIAG_CIDR)
@@ -471,8 +466,7 @@ def test_client_redirect_tunnel_win(
             with xp2p_client_run_factory(
                 str(CLIENT_INSTALL_DIR),
                 CLIENT_CONFIG_DIR,
-                CLIENT_LOG_RELATIVE,
-            ):
+                ):
                 _wait_for_socks_listener(client_host)
                 _remove_ip_alias(server_host, DIAG_IP)
                 _remove_ip_alias(server_host, DIAG_DOMAIN_IP)
@@ -484,7 +478,7 @@ def test_client_redirect_tunnel_win(
                     "--count",
                     "3",
                     check=False,
-                )
+                    )
                 assert final_ping.rc != 0
 
                 final_list = xp2p_client_runner(

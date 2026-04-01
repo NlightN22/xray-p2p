@@ -274,20 +274,17 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
                 "server",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            ), openwrt_env.xp2p_run_session(
+                    ), openwrt_env.xp2p_run_session(
                 server_c,
                 "server",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            ), openwrt_env.xp2p_run_session(
+                    ), openwrt_env.xp2p_run_session(
                 client_b,
                 "client",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.CLIENT_CONFIG_DIR_NAME,
-                helpers.CLIENT_LOG_FILE,
-            ):
+                        ):
                 try:
                     client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
                     _wait_for_port(client_b, client_socks_port)

@@ -289,19 +289,19 @@ def run_xp2p(
                     raise RuntimeError(
                         "xp2p command timed out (marker observed after completion).\n"
                         f"Marker: {marker or '<empty>'}\nPath: {timeout_marker}"
-                    )
+        )
                 return result
             if timeout_marker.exists():
                 marker = timeout_marker.read_text(encoding="ascii", errors="ignore").strip()
                 raise RuntimeError(
                     "xp2p command timed out while waiting for guest completion.\n"
                     f"Marker: {marker or '<empty>'}\nPath: {timeout_marker}"
-                )
+        )
             if time.monotonic() > deadline:
                 raise RuntimeError(
                     "xp2p command timed out before any guest marker appeared.\n"
                     f"Timeout marker path: {timeout_marker}"
-                )
+        )
             time.sleep(0.5)
     finally:
         executor.shutdown(wait=False)
@@ -527,13 +527,13 @@ Start-Service -Name 'msiserver' -ErrorAction SilentlyContinue | Out-Null
 Start-Process -FilePath 'msiexec.exe' -ArgumentList '/unregister' -Wait -ErrorAction SilentlyContinue | Out-Null
 Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAction SilentlyContinue | Out-Null
 """,
-            )
+        )
             result = run_powershell(host, script)
             if result.rc == 0:
                 return
             raise MsiServiceUnavailable(
                 "Windows Installer service is unavailable (MSI ExitCode=1601)."
-            )
+        )
         if "MSI ExitCode=1603" in stdout:
             _cleanup_orphaned_xp2p_msi(host)
             result = run_powershell(host, script)
@@ -728,7 +728,7 @@ exit 0
                     PROGRAM_FILES_X86_INSTALL_DIR,
                     PROGRAM_DATA_ROOT,
                 ],
-            )
+                )
             print("WARNING: MSI uninstall failed (1601); cleaned up xp2p artifacts manually.")
             return
         if not path_exists(host, XP2P_EXE) and not service_exists(host, "xp2p-client") and not service_exists(
@@ -851,7 +851,7 @@ def _detect_xp2p_exe(host: Host) -> Path | None:
         for candidate in (
             install_root / "xp2p.exe",
             install_root / "bin" / "xp2p.exe",
-        ):
+            ):
             if path_exists(host, candidate):
                 return candidate
 
@@ -1004,17 +1004,17 @@ def ensure_admin_token(host: Host) -> None:
                 host,
                 "scripts/ensure_admin_token.ps1",
                 MarkerPath=str(marker_guest),
-            )
+                )
             if result.rc != 0:
                 raise RuntimeError(
                     "Failed to ensure admin token.\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-                )
+        )
             if not marker_local.exists():
                 probe = run_powershell(
                     host,
                     f"if (Test-Path {ps_quote(str(marker_guest))}) {{ exit 0 }} else {{ exit 3 }}",
-                )
+                    )
                 if probe.rc != 0:
                     raise RuntimeError("Admin token marker was not created on the guest.")
                 marker_local.write_text("OK", encoding="ascii")
@@ -1035,7 +1035,7 @@ def ensure_admin_token(host: Host) -> None:
             run_powershell(
                 host,
                 f"if (Test-Path {ps_quote(str(marker_guest))}) {{ Remove-Item -Force {ps_quote(str(marker_guest))} }}",
-            )
+                )
     if last_error is not None:
         raise last_error
 
@@ -1089,15 +1089,15 @@ def _build_msi_package(
         start_probe = run_powershell(
             host,
             f"if (Test-Path {ps_quote(str(guest_start))}) {{ exit 0 }} else {{ exit 3 }}",
-        )
+            )
         done_probe = run_powershell(
             host,
             f"if (Test-Path {ps_quote(str(guest_done))}) {{ exit 0 }} else {{ exit 3 }}",
-        )
+            )
         local_marker.write_text(
             f"start={start_probe.rc == 0} done={done_probe.rc == 0}",
             encoding="ascii",
-        )
+            )
         raise RuntimeError(
             f"Failed to build MSI package for {architecture}.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

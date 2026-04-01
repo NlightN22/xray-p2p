@@ -26,7 +26,6 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	quiet := fs.Bool("quiet", false, "do not prompt for installation")
 	autoInstall := fs.Bool("auto-install", false, "install automatically if missing")
-	logFile := fs.String("xray-log-file", "", "file to append xray-core stderr output")
 	verbose := fs.Bool("verbose", false, "emit full-tunnel change details")
 	hbEnabled := fs.Bool("heartbeat", true, "enable background heartbeat probes")
 	hbInterval := fs.Duration("heartbeat-interval", 2*time.Second, "frequency of heartbeat probes")
@@ -97,7 +96,6 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	opts := client.RunOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
-		ErrorLogPath: strings.TrimSpace(*logFile),
 		Heartbeat: client.HeartbeatOptions{
 			Enabled:      *hbEnabled,
 			Interval:     *hbInterval,

@@ -482,15 +482,12 @@ def xp2p_run_session(
     role: str,
     install_dir: str | Path | PurePosixPath,
     config_dir: str,
-    log_path: str | Path | PurePosixPath,
     *,
     extra_args: list[str] | None = None,
 ):
     if role not in {"server", "client"}:
         raise ValueError(f"Unsupported role: {role}")
     install_path = _posix(install_dir)
-    log_file = _posix(log_path)
-    log_dir = str(PurePosixPath(log_file).parent)
     _stop_xp2p_services(host)
     for port in ("62022", "62023", "52080", "52180", "51080", "51180"):
         host.run(f"fuser -k {port}/tcp >/dev/null 2>&1 || true")
@@ -501,7 +498,6 @@ def xp2p_run_session(
     host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
     host.run("ps w | grep '/etc/xp2p/bin/xray' | grep -v grep | awk '{print $1}' | xargs -r kill -9 >/dev/null 2>&1 || true")
     host.run("ps w | grep '/usr/bin/xp2p' | grep -v grep | awk '{print $1}' | xargs -r kill -9 >/dev/null 2>&1 || true")
-    host.run(f"mkdir -p {shlex.quote(log_dir)}")
     netstat_before = _netstat_snapshot(host)
     logs_path = PurePosixPath(install_dir) / config_dir / "logs.json"
     logs_config = _read_file_safe(host, logs_path)
@@ -513,7 +509,6 @@ def xp2p_run_session(
         f"--path {shlex.quote(install_path)} "
         f"--config-dir {shlex.quote(config_dir)} "
         f"--auto-install "
-        f"--xray-log-file {shlex.quote(log_file)} "
         f"--quiet{extra} >/tmp/xp2p-{role}-run.log 2>&1 & echo $!"
     )
     last_log = ""
@@ -552,6 +547,6 @@ def xp2p_run_session(
             )
         )
     try:
-        yield {"pid": int(pid_value), "log": log_file}
+        yield {"pid": int(pid_value)}
     finally:
         host.run(f"kill {pid_value} >/dev/null 2>&1 || true")

@@ -141,7 +141,7 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
         for host, log_path in (
             (openwrt_client_host, CLIENT_DEPLOY_LOG),
             (openwrt_server_host, SERVER_DEPLOY_LOG),
-        ):
+    ):
             helpers.remove_path(host, log_path)
             helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
 
@@ -250,7 +250,7 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         for host, log_path in (
             (openwrt_client_host, CLIENT_DEPLOY_LOG),
             (openwrt_server_host, SERVER_DEPLOY_LOG),
-        ):
+    ):
             _remove_path(host, log_path)
             _remove_path(host, helpers.HEARTBEAT_STATE_FILE)
 

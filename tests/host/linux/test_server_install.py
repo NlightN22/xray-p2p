@@ -92,7 +92,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
             SERVER_OUTBOUNDS,
             SERVER_LOGS_JSON,
             SERVER_ROUTING_JSON,
-        ):
+    ):
             assert helpers.path_exists(server_host, config_path), f"Missing config file {config_path}"
 
         helpers.write_text(server_host, cert_source, cert_content)

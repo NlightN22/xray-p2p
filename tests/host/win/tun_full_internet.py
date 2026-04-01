@@ -73,11 +73,6 @@ if (Test-Path '{_env.LOG_ROOT}\\client\\service.log') {{
     Write-Output "missing: {_env.LOG_ROOT}\\client\\service.log"
 }}
 Write-Output "=== xray client service log (tail) ==="
-if (Test-Path '{_env.LOG_ROOT}\\client\\xray-service.log') {{
-    Get-Content -Path '{_env.LOG_ROOT}\\client\\xray-service.log' -Tail 200
-}} else {{
-    Write-Output "missing: {_env.LOG_ROOT}\\client\\xray-service.log"
-}}
 """
     result = _env.run_powershell(host, script, label="internet_debug")
     return f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

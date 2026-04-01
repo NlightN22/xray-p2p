@@ -88,14 +88,14 @@ def start_deploy_tunnel(
             server_proc,
             "server deploy: manifest decrypted",
             timeout=deploy.LOG_WAIT_TIMEOUT,
-        )
+            )
     if initial_server_log != "server deploy: starting xray-core":
         deploy._wait_for_log_phrase(
             server_host,
             server_proc,
             "server deploy: starting xray-core",
             timeout=deploy.LOG_WAIT_TIMEOUT,
-        )
+            )
     server_status = deploy._wait_for_any_log_phrase(
         server_host,
         server_proc,

@@ -11,8 +11,6 @@ from tests.host.win import _client_runtime, _server_runtime, env as win_env
 PINNED_JSON = Path("go/internal/xray/pinned.json")
 SERVER_CONFIG_NAME = "config-server"
 CLIENT_CONFIG_NAME = "config-client"
-SERVER_LOG_RELATIVE = r"logs\server.err"
-CLIENT_LOG_RELATIVE = r"logs\client.err"
 RUN_OUTPUT_DIR = Path(r"C:\xp2p\build\artifacts\pinned-version")
 SERVER_RUN_OUTPUT = RUN_OUTPUT_DIR / "server-run.log"
 CLIENT_RUN_OUTPUT = RUN_OUTPUT_DIR / "client-run.log"
@@ -128,12 +126,12 @@ def _wrap_xray(server_host, client_host, fake_version: str) -> None:
             XrayPath=str(_xray_path(host)),
             BackupPath=str(_xray_backup(host)),
             FakeVersion=fake_version,
-        )
+            )
         if result.rc != 0:
             pytest.fail(
                 "Failed to wrap xray version.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
 
 
 def _run_guest_script_with_retry(host, script: str, *, retries: int = 3, delay: float = 5.0, **params):
@@ -164,7 +162,7 @@ def _restore_xray(server_host, client_host) -> None:
                 "scripts/copy_file.ps1",
                 Source=str(backup),
                 Destination=str(_xray_path(host)),
-            )
+                )
             win_env.remove_path(host, backup)
 
 
@@ -204,13 +202,11 @@ def test_xray_pinned_version_allows_matching(
         with xp2p_server_run_factory(
             str(server_install_dir),
             SERVER_CONFIG_NAME,
-            SERVER_LOG_RELATIVE,
         ) as server_session:
             assert server_session["pid"] > 0
             with xp2p_client_run_factory(
                 str(client_install_dir),
                 CLIENT_CONFIG_NAME,
-                CLIENT_LOG_RELATIVE,
             ) as client_session:
                 assert client_session["pid"] > 0
     finally:
@@ -242,11 +238,9 @@ def test_xray_pinned_version_rejects_mismatch(
             Xp2pPath=str(win_env.XP2P_EXE),
             InstallDir=str(server_install_dir),
             ConfigDir=SERVER_CONFIG_NAME,
-            LogRelative=SERVER_LOG_RELATIVE,
-            LogPath=str(_log_path(server_install_dir, SERVER_LOG_RELATIVE)),
             StabilizeSeconds="6",
             OutputLogPath=str(SERVER_RUN_OUTPUT),
-        )
+            )
         _assert_mismatch_logged(server_host, SERVER_RUN_OUTPUT, "server")
 
         client_result = _run_guest_script_with_retry(
@@ -255,11 +249,9 @@ def test_xray_pinned_version_rejects_mismatch(
             Xp2pPath=str(win_env.XP2P_EXE),
             InstallDir=str(client_install_dir),
             ConfigDir=CLIENT_CONFIG_NAME,
-            LogRelative=CLIENT_LOG_RELATIVE,
-            LogPath=str(_log_path(client_install_dir, CLIENT_LOG_RELATIVE)),
             StabilizeSeconds="6",
             OutputLogPath=str(CLIENT_RUN_OUTPUT),
-        )
+            )
         _assert_mismatch_logged(client_host, CLIENT_RUN_OUTPUT, "client")
     finally:
         _restore_xray(server_host, client_host)
@@ -289,7 +281,6 @@ def test_xray_pinned_version_allows_override(
             server_host,
             str(server_install_dir),
             SERVER_CONFIG_NAME,
-            SERVER_LOG_RELATIVE,
             allow_mismatch=True,
             output_log_path=str(SERVER_RUN_OUTPUT),
         ) as server_session:
@@ -298,7 +289,6 @@ def test_xray_pinned_version_allows_override(
                 client_host,
                 str(client_install_dir),
                 CLIENT_CONFIG_NAME,
-                CLIENT_LOG_RELATIVE,
                 allow_mismatch=True,
                 output_log_path=str(CLIENT_RUN_OUTPUT),
             ) as client_session:
@@ -322,9 +312,3 @@ def _xray_path(host) -> Path:
 def _xray_backup(host) -> Path:
     return _install_dir(host) / "bin" / "xray.pinned.bak"
 
-
-def _log_path(install_dir: Path, relative: str) -> Path:
-    rel = Path(relative).as_posix()
-    if rel.lower().startswith("logs/"):
-        rel = rel[5:]
-    return win_env.LOGS_DIR / rel

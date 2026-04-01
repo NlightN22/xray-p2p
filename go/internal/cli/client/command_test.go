@@ -41,9 +41,9 @@ func TestForwardFlagsCollectsLocalFlags(t *testing.T) {
 		{
 			name:      "run bool true/false and strings",
 			builder:   newClientRunCmd,
-			localArgs: []string{"--quiet", "--auto-install=false", "--xray-log-file", `logs\client.err`},
+			localArgs: []string{"--quiet", "--auto-install=false"},
 			passArgs:  []string{"--relay"},
-			wantFlags: []string{"--auto-install=false", "--quiet", "--xray-log-file=logs\\client.err"},
+			wantFlags: []string{"--auto-install=false", "--quiet"},
 		},
 		{
 			name:    "deploy string flags",

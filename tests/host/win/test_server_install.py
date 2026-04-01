@@ -19,8 +19,7 @@ SERVER_CERT_DEST = SERVER_CONFIG_DIR / "cert.pem"
 SERVER_KEY_DEST = SERVER_CONFIG_DIR / "key.pem"
 SERVER_BIN_DIR = SERVER_INSTALL_DIR / "bin"
 XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
-SERVER_LOG_RELATIVE = r"logs\server.err"
-SERVER_LOG_FILE = _env.LOGS_DIR / "server.err"
+SERVER_RUN_LOG = _env.LOGS_DIR / "xp2p-server-run.out"
 SERVER_HOST_VALUE = "xp2p.test.local"
 SERVER_INSTALL_STATE = _env.CONFIG_ROOT / "install-state-server.json"
 SERVER_STATE_FILES = [
@@ -43,7 +42,7 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
     )
     _remove_remote_paths(
         server_host,
-        [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_LOG_FILE, SERVER_INSTALL_STATE],
+        [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_RUN_LOG, SERVER_INSTALL_STATE],
     )
 
 
@@ -131,7 +130,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         assert _remote_path_exists(server_host, XRAY_BINARY), (
             f"Expected xray binary at {XRAY_BINARY}"
@@ -141,10 +140,10 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
             SERVER_LOGS_JSON,
             SERVER_OUTBOUNDS_JSON,
             SERVER_ROUTING_JSON,
-        ):
+            ):
             assert _remote_path_exists(server_host, config_path), (
                 f"Expected config file {config_path}"
-            )
+        )
 
         xp2p_server_runner(
             "server",
@@ -162,7 +161,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds_data)
@@ -198,7 +197,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         updated_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         updated_trojan = _trojan_inbound(updated_inbounds)
@@ -248,7 +247,7 @@ def test_server_install_uses_path_certificate_source(server_host, xp2p_server_ru
             str(key_source),
             "--force",
             check=True,
-        )
+            )
 
         inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds_data)
@@ -287,7 +286,7 @@ def test_server_install_generates_self_signed_certificate(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         xp2p_server_runner(
             "server",
@@ -301,7 +300,7 @@ def test_server_install_generates_self_signed_certificate(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         assert _remote_path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to exist"
         assert _remote_path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
@@ -357,7 +356,7 @@ def test_server_install_generates_self_signed_certificate(
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
             check=False,
-        )
+            )
         assert state.rc == 0, (
             f"Expected cert state to succeed, rc={state.rc}\n"
             f"STDOUT:\n{state.stdout}\nSTDERR:\n{state.stderr}"
@@ -388,7 +387,7 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         assert _remote_path_exists(server_host, SERVER_KEY_DEST), (
             f"Expected generated key at {SERVER_KEY_DEST}"
@@ -410,7 +409,7 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             SERVER_HOST_VALUE,
             "--force",
             check=False,
-        )
+            )
         assert result.rc != 0, "Expected mismatched certificate/key to fail"
         combined = _combined_output(result).lower()
         assert "certificate and key do not match" in combined, (
@@ -440,7 +439,7 @@ def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runne
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         _remove_remote_paths(server_host, [missing_cert, missing_key])
 
@@ -460,7 +459,7 @@ def test_server_cert_set_rejects_missing_cert_key(server_host, xp2p_server_runne
             SERVER_HOST_VALUE,
             "--force",
             check=False,
-        )
+            )
         assert result.rc != 0, "Expected missing certificate/key to fail"
         combined = _combined_output(result).lower()
         assert "certificate file" in combined, (
@@ -493,7 +492,7 @@ def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         result = xp2p_server_runner(
             "server",
@@ -511,7 +510,7 @@ def test_server_cert_set_requires_absolute_paths(server_host, xp2p_server_runner
             SERVER_HOST_VALUE,
             "--force",
             check=False,
-        )
+            )
         assert result.rc != 0, "Expected relative certificate/key paths to fail"
         combined = _combined_output(result).lower()
         assert "path must be absolute" in combined, (
@@ -539,7 +538,7 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         before = _read_remote_text(server_host, SERVER_INBOUNDS)
 
@@ -555,7 +554,7 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             "MY",
             "--force",
             check=False,
-        )
+            )
         assert result.rc != 0, "Expected win-store to be not implemented"
         combined = _combined_output(result).lower()
         assert "not implemented" in combined, (
@@ -588,22 +587,22 @@ def test_server_run_starts_xray_core(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         with xp2p_server_run_factory(
-            str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME, SERVER_LOG_RELATIVE
+            str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME
         ) as session:
             assert session["pid"] > 0
 
-        assert _remote_path_exists(server_host, SERVER_LOG_FILE), (
-            f"Expected log file {SERVER_LOG_FILE} to be created"
+        assert _remote_path_exists(server_host, SERVER_RUN_LOG), (
+            f"Expected log file {SERVER_RUN_LOG} to be created"
         )
-        log_content = _read_remote_text(server_host, SERVER_LOG_FILE)
+        log_content = _read_remote_text(server_host, SERVER_RUN_LOG)
         assert log_content.strip(), "Expected xray-core to produce log output"
         assert "Failed to start" not in log_content
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
-        _remove_remote_paths(server_host, [SERVER_LOG_FILE])
+        _remove_remote_paths(server_host, [SERVER_RUN_LOG])
 
 
 @pytest.mark.host
@@ -626,7 +625,7 @@ def test_server_install_requires_force_when_state_exists(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         result = xp2p_server_runner(
             "server",
@@ -640,7 +639,7 @@ def test_server_install_requires_force_when_state_exists(
             "--host",
             SERVER_HOST_VALUE,
             check=False,
-        )
+            )
         assert result.rc != 0, "Expected second install without --force to fail when state file exists"
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
         assert "server files already present" in combined, f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
@@ -668,7 +667,7 @@ def test_server_install_succeeds_without_state_marker(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-        )
+            )
 
         _remove_remote_paths(server_host, [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_INSTALL_STATE])
         assert not any(
@@ -690,7 +689,7 @@ def test_server_install_succeeds_without_state_marker(
             "--host",
             SERVER_HOST_VALUE,
             check=True,
-        )
+            )
 
         expected_paths = [
             _env.CONFIG_ROOT / "xp2p-server.toml",

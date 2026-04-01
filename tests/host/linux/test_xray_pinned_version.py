@@ -176,7 +176,6 @@ def test_xray_pinned_version_allows_matching(
             "server",
             helpers.INSTALL_ROOT,
             helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
         ) as server_session:
             assert server_session["pid"] > 0
             with linux_env.xp2p_run_session(
@@ -184,7 +183,6 @@ def test_xray_pinned_version_allows_matching(
                 "client",
                 helpers.INSTALL_ROOT,
                 helpers.CLIENT_CONFIG_DIR_NAME,
-                helpers.CLIENT_LOG_FILE,
             ) as client_session:
                 assert client_session["pid"] > 0
     finally:
@@ -215,7 +213,6 @@ def test_xray_pinned_version_rejects_mismatch(
             "server",
             helpers.INSTALL_ROOT.as_posix(),
             helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE.as_posix(),
             "0",
             "0",
         )
@@ -228,7 +225,6 @@ def test_xray_pinned_version_rejects_mismatch(
             "client",
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
-            helpers.CLIENT_LOG_FILE.as_posix(),
             "0",
             "0",
         )
@@ -263,7 +259,6 @@ def test_xray_pinned_version_allows_override(
             "server",
             helpers.INSTALL_ROOT,
             helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
             allow_mismatch=True,
             auto_install=False,
         ) as server_session:
@@ -273,7 +268,6 @@ def test_xray_pinned_version_allows_override(
                 "client",
                 helpers.INSTALL_ROOT,
                 helpers.CLIENT_CONFIG_DIR_NAME,
-                helpers.CLIENT_LOG_FILE,
                 allow_mismatch=True,
                 auto_install=False,
             ) as client_session:

@@ -55,13 +55,11 @@ def _run_sessions(server_host, client_host):
         "server",
         helpers.INSTALL_ROOT.as_posix(),
         helpers.SERVER_CONFIG_DIR_NAME,
-        helpers.SERVER_LOG_FILE,
     ), linux_env.xp2p_run_session(
         client_host,
         "client",
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
-        helpers.CLIENT_LOG_FILE,
     ):
         yield
 

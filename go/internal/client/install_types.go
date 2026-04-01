@@ -44,7 +44,6 @@ type InstallOptions struct {
 type RunOptions struct {
 	InstallDir        string
 	ConfigDir         string
-	ErrorLogPath      string
 	Heartbeat         HeartbeatOptions
 	TunEnabled        bool
 	TunName           string
@@ -60,7 +59,6 @@ type RunOptions struct {
 type ServiceOptions struct {
 	InstallDir        string
 	ConfigDir         string
-	XrayLogPath       string
 	Heartbeat         HeartbeatOptions
 	DiagPort          string
 	MaxRestarts       int

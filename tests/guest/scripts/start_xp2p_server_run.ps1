@@ -8,12 +8,6 @@ param(
     [Parameter(Mandatory = $true)]
     [string] $ConfigDir,
 
-    [Parameter(Mandatory = $true)]
-    [string] $LogRelative,
-
-    [Parameter(Mandatory = $true)]
-    [string] $LogPath,
-
     [int] $StabilizeSeconds = 6,
 
     [string] $AllowMismatch = "",
@@ -101,11 +95,7 @@ if ($xrayExisting) {
     Start-Sleep -Seconds 1
 }
 
-if (Test-Path $LogPath) {
-    Remove-Item $LogPath -Force -ErrorAction SilentlyContinue
-}
-
-$commandLine = "`"$Xp2pPath`" server run --quiet --path `"$InstallDir`" --config-dir `"$ConfigDir`" --xray-log-file `"$LogRelative`""
+$commandLine = "`"$Xp2pPath`" server run --quiet --path `"$InstallDir`" --config-dir `"$ConfigDir`""
 $envPrefix = ""
 if ($AllowMismatch -and $AllowMismatch -ne "0") {
     $envPrefix = "set XP2P_XRAY_ALLOW_MISMATCH=1&& "

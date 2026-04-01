@@ -4,17 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
 )
 
-type logPathResolver func(string) (string, error)
 type cmdConfigurator func(*exec.Cmd)
 type startHook func()
 type readyCheck func(context.Context) error
@@ -24,31 +20,11 @@ func runXrayWithConfig(
 	xrayPath string,
 	configDir string,
 	cmdDir string,
-	errorLogPath string,
-	resolveLogPath logPathResolver,
 	configureCmd cmdConfigurator,
 	onStart startHook,
 	onReady readyCheck,
 ) error {
 	var errorWriter io.Writer
-	var errorFile *os.File
-	if raw := strings.TrimSpace(errorLogPath); raw != "" {
-		logPath, err := resolveLogPath(raw)
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-			return fmt.Errorf("xp2p: create log directory %s: %w", filepath.Dir(logPath), err)
-		}
-		file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-		if err != nil {
-			return fmt.Errorf("xp2p: open xray log file %s: %w", logPath, err)
-		}
-		errorFile = file
-		errorWriter = file
-		defer func() { _ = errorFile.Close() }()
-		logging.Info("xray-core stderr redirected to file", "path", logPath)
-	}
 
 	if err := xray.VerifyPinnedVersion(ctx, xrayPath); err != nil {
 		return err

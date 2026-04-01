@@ -2,7 +2,6 @@ package servercmd
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -118,7 +117,7 @@ func TestServerCommandsExecute(t *testing.T) {
 			args := tc.args
 			if tc.name == "run" {
 				dir := cfg.Server.InstallDir
-				args = []string{"run", "--path", dir, "--config-dir", cfg.Server.ConfigDir, "--xray-log-file", filepath.Join(dir, "logs", "server.err")}
+				args = []string{"run", "--path", dir, "--config-dir", cfg.Server.ConfigDir}
 			}
 
 			var cleanup func()

@@ -196,7 +196,7 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
             install_dir="/etc/xp2p",
             config_dir="config-server",
             log_path="/tmp/xp2p-server.log",
-        ):
+    ):
             with openwrt_env.xp2p_run_session(
                 openwrt_client_host,
                 role="client",
@@ -293,13 +293,13 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             install_dir="/etc/xp2p",
             config_dir="config-server",
             log_path="/tmp/xp2p-server.log",
-        ), openwrt_env.xp2p_run_session(
+    ), openwrt_env.xp2p_run_session(
             openwrt_client_host,
             role="client",
             install_dir="/etc/xp2p",
             config_dir="config-client",
             log_path="/tmp/xp2p-client.log",
-        ):
+    ):
             time.sleep(2.0)
             tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
             if tunnel_ping.rc != 0:
@@ -345,13 +345,13 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             install_dir="/etc/xp2p",
             config_dir="config-server",
             log_path="/tmp/xp2p-server.log",
-        ), openwrt_env.xp2p_run_session(
+    ), openwrt_env.xp2p_run_session(
             openwrt_client_host,
             role="client",
             install_dir="/etc/xp2p",
             config_dir="config-client",
             log_path="/tmp/xp2p-client.log",
-        ):
+    ):
             nat_port = _detect_dokodemo_port(openwrt_client_host, "/etc/xp2p/config-client/inbounds.json")
             nat = client_runner(
                 "nat-redirect",

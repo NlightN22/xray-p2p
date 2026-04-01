@@ -215,7 +215,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--tag",
             primary_tag,
             check=True,
-        )
+            )
 
         list_output, records = _list_redirects(xp2p_client_runner)
         assert any(
@@ -236,7 +236,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--host",
             PRIMARY_HOST,
             check=True,
-        )
+            )
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_no_redirect_rule(routing, REDIRECT_CIDR)
 
@@ -248,7 +248,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--host",
             SECONDARY_HOST,
             check=True,
-        )
+            )
         list_output, records = _list_redirects(xp2p_client_runner)
         assert any(rec["host"] == SECONDARY_HOST for rec in records)
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
@@ -262,7 +262,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--host",
             SECONDARY_HOST,
             check=True,
-        )
+            )
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_no_redirect_rule(routing, REDIRECT_CIDR)
 
@@ -274,7 +274,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--tag",
             primary_tag,
             check=False,
-        )
+            )
         assert invalid_tag_result.rc != 0
         assert "invalid cidr" in _combined_output(invalid_tag_result)
 
@@ -286,7 +286,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--host",
             SECONDARY_HOST,
             check=False,
-        )
+            )
         assert invalid_host_result.rc != 0
         assert "invalid cidr" in _combined_output(invalid_host_result)
 
@@ -298,7 +298,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--host",
             SECONDARY_HOST,
             check=True,
-        )
+            )
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
         list_output, records = _list_redirects(xp2p_client_runner)
@@ -317,7 +317,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--host",
             SECONDARY_HOST,
             check=True,
-        )
+            )
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
         _assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
@@ -333,7 +333,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "--host",
             SECONDARY_HOST,
             check=True,
-        )
+            )
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
         _assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
@@ -343,7 +343,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "remove",
             SECONDARY_HOST,
             check=True,
-        )
+            )
 
         auto_output, auto_records = _list_redirects(xp2p_client_runner)
         assert "no redirect rules configured" in auto_output.lower()
@@ -364,7 +364,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "remove",
             SECONDARY_HOST,
             check=False,
-        )
+            )
         assert missing_remove.rc != 0
         assert f'client endpoint "{SECONDARY_HOST}" not found' in _combined_output(missing_remove)
 
@@ -373,7 +373,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             "remove",
             "--all",
             check=True,
-        )
+            )
 
         final_output, records = _list_redirects(xp2p_client_runner)
         assert "no redirect rules configured" in final_output.lower()

@@ -82,7 +82,7 @@ def test_windows_client_deploy_end_to_end(
                 CLIENT_DEPLOY_STDOUT,
                 Path(str(CLIENT_DEPLOY_STDOUT) + ".err"),
             ],
-        )
+            )
     with _timed("remove deploy logs (server)"):
         _remove_paths(
             server_host,
@@ -90,7 +90,7 @@ def test_windows_client_deploy_end_to_end(
                 SERVER_DEPLOY_STDOUT,
                 Path(str(SERVER_DEPLOY_STDOUT) + ".err"),
             ],
-        )
+            )
 
     server_host_ip = server_host_ipv4
     client_host_ip = client_host_ipv4
@@ -108,7 +108,7 @@ def test_windows_client_deploy_end_to_end(
                 trojan_user=trojan_user,
                 trojan_password=trojan_password,
                 trojan_port=TROJAN_PORT,
-            )
+                )
         with _timed("wait client deploy link"):
             link = _wait_for_client_link(client_host, client_proc)
         assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
@@ -119,20 +119,20 @@ def test_windows_client_deploy_end_to_end(
             remote_address="Any",
             port=int(DEPLOY_PORT),
             action="Allow",
-        )
+            )
         _set_firewall_rule(
             server_host,
             ensure="Present",
             remote_address="Any",
             port=int(TROJAN_PORT),
             action="Allow",
-        )
+            )
         with _timed("start server deploy"):
             server_proc = _start_server_deploy(
                 server_host,
                 listen_addr=f":{DEPLOY_PORT}",
                 deploy_link=link,
-            )
+                )
 
         with _timed("wait server deploy logs"):
             initial_server_log = _wait_for_any_log_phrase(
@@ -144,21 +144,21 @@ def test_windows_client_deploy_end_to_end(
                     "server deploy: starting listener",
                 ],
                 timeout=LOG_WAIT_TIMEOUT,
-            )
+                )
             if initial_server_log == "server deploy: starting listener":
                 _wait_for_log_phrase(
                     server_host,
                     server_proc,
                     "server deploy: manifest decrypted",
                     timeout=LOG_WAIT_TIMEOUT,
-                )
+                    )
             if initial_server_log != "server deploy: starting xray-core":
                 _wait_for_log_phrase(
                     server_host,
                     server_proc,
                     "server deploy: starting xray-core",
                     timeout=LOG_WAIT_TIMEOUT,
-                )
+                    )
         with _timed("wait server xray startup"):
             server_status = _wait_for_any_log_phrase(
                 server_host,
@@ -168,39 +168,39 @@ def test_windows_client_deploy_end_to_end(
                     "server deploy: xray-core start failed",
                 ],
                 timeout=LOG_WAIT_TIMEOUT,
-            )
+                )
             if server_status == "server deploy: xray-core start failed":
                 combined = _read_combined_logs(server_host, server_proc)
                 pytest.fail(
                     "Server deploy xray-core failed to start.\n"
                     f"Logs:\n{combined}"
-                )
+        )
         with _timed("wait client deploy logs"):
             _wait_for_log_phrase(
                 client_host,
                 client_proc,
                 "client deploy: trojan link received",
                 timeout=LOG_WAIT_TIMEOUT,
-            )
+                )
             _wait_for_log_phrase(
                 client_host,
                 client_proc,
                 "client deploy: local install completed",
                 timeout=LOG_WAIT_TIMEOUT,
-            )
+                )
             _wait_for_ping_ok_or_server_failure(
                 client_host,
                 client_proc,
                 server_host,
                 server_proc,
                 timeout=LOG_WAIT_TIMEOUT,
-            )
+                )
             _wait_for_log_phrase(
                 client_host,
                 client_proc,
                 "client deploy: client run active",
                 timeout=LOG_WAIT_TIMEOUT,
-            )
+                )
 
         with _timed("check client internet access"):
             _assert_internet_access(client_host)
@@ -221,7 +221,7 @@ def test_windows_client_deploy_end_to_end(
                 host=server_host_ip,
                 user=trojan_user,
                 client_ip=client_host_ip,
-            )
+                )
     finally:
         total = time.perf_counter() - test_start
         print(f"TIMING: test_windows_client_deploy_end_to_end total: {total:.2f}s")
@@ -238,14 +238,14 @@ def test_windows_client_deploy_end_to_end(
             remote_address="Any",
             port=int(DEPLOY_PORT),
             action="Allow",
-        )
+            )
         _set_firewall_rule(
             server_host,
             ensure="Absent",
             remote_address="Any",
             port=int(TROJAN_PORT),
             action="Allow",
-        )
+            )
         for host in (client_host, server_host):
             _remove_paths(host, HEARTBEAT_STATE_FILES)
 
@@ -304,7 +304,7 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             trojan_user=trojan_user,
             trojan_password=trojan_password,
             trojan_port=TROJAN_PORT,
-        )
+            )
         link = _wait_for_client_link(client_host, client_proc)
 
         _set_firewall_rule(
@@ -313,7 +313,7 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             remote_address=client_host_ipv4,
             port=int(DEPLOY_PORT),
             action="Allow",
-        )
+            )
         server_proc = _start_server_deploy_with_args(
             server_host,
             listen_addr=f":{DEPLOY_PORT}",
@@ -322,7 +322,7 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
                 "XP2P_SERVER_CERTIFICATE": str(bad_cert),
                 "XP2P_SERVER_KEY": str(bad_key),
             },
-        )
+            )
 
         initial_server_log = _wait_for_any_log_phrase(
             server_host,
@@ -332,26 +332,26 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
                 "server deploy: starting xray-core",
             ],
             timeout=LOG_WAIT_TIMEOUT,
-        )
+            )
         _wait_for_log_phrase(
             server_host,
             server_proc,
             "server deploy: certificate validation failed, using self-signed",
             timeout=LOG_WAIT_TIMEOUT,
-        )
+            )
         if initial_server_log != "server deploy: starting xray-core":
             _wait_for_log_phrase(
                 server_host,
                 server_proc,
                 "server deploy: starting xray-core",
                 timeout=LOG_WAIT_TIMEOUT,
-            )
+                )
         _wait_for_log_phrase(
             client_host,
             client_proc,
             "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
-        )
+            )
 
         assert _remote_path_exists(server_host, SERVER_CERT_DEST), (
             f"Expected server cert at {SERVER_CERT_DEST}"
@@ -391,7 +391,7 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             remote_address=client_host_ipv4,
             port=int(DEPLOY_PORT),
             action="Allow",
-        )
+            )
         for host in (client_host, server_host):
             _remove_paths(host, HEARTBEAT_STATE_FILES)
 
@@ -844,14 +844,14 @@ def _wait_for_ping_ok_or_server_failure(
             pytest.fail(
                 "Server deploy xray-core failed while waiting for client ping.\n"
                 f"Server logs:\n{server_logs}\n\nDiagnostics:\n{diagnostics}"
-            )
+        )
         if "server deploy: stopped" in server_logs:
             if not _service_running(server_host, "xp2p-server"):
                 diagnostics = _collect_server_diagnostics(server_host)
                 pytest.fail(
                     "Server deploy stopped while waiting for client ping.\n"
                     f"Server logs:\n{server_logs}\n\nDiagnostics:\n{diagnostics}"
-                )
+        )
         time.sleep(1)
     stdout_tail = "\n".join((last_stdout or "").splitlines()[-30:])
     stderr_tail = "\n".join((last_stderr or "").splitlines()[-30:])
@@ -1165,19 +1165,19 @@ def _assert_heartbeat_entry(
             if recorded_host != host.strip():
                 raise AssertionError(
                     f"Heartbeat entry {entry_tag} host mismatch (expected {host}, got {recorded_host})"
-                )
+        )
         if user is not None:
             recorded_user = (entry.get("user") or "").strip()
             if recorded_user != user.strip():
                 raise AssertionError(
                     f"Heartbeat entry {entry_tag} user mismatch (expected {user}, got {recorded_user})"
-                )
+        )
         if client_ip is not None:
             recorded_ip = (entry.get("client_ip") or "").strip()
             if recorded_ip != client_ip.strip():
                 raise AssertionError(
                     f"Heartbeat entry {entry_tag} client IP mismatch (expected {client_ip}, got {recorded_ip})"
-                )
+        )
         return
     raise AssertionError(f"Heartbeat entry for tag {tag} not found in state")
 

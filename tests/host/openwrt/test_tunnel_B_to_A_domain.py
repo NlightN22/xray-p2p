@@ -179,13 +179,11 @@ def _active_tunnel_sessions(env: dict):
         "server",
         env["server_install_path"],
         helpers.SERVER_CONFIG_DIR_NAME,
-        helpers.SERVER_LOG_FILE,
     ), openwrt_env.xp2p_run_session(
         env["client_host"],
         "client",
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
-        helpers.CLIENT_LOG_FILE,
     ):
         time.sleep(2.0)
         yield

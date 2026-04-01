@@ -52,7 +52,6 @@ Includes: Global options
 - --config-dir, -D <dir>          Client configuration directory name
 - --quiet, -q                     Do not prompt for installation
 - --auto-install, -A              Install automatically if missing
-- --xray-log-file, -X <path>      File to append xray-core stderr output
 - --verbose, -V                   Emit full-tunnel change details
 - --heartbeat, -b                 Enable background heartbeat probes
 - --heartbeat-interval, -I <dur>  Frequency of heartbeat probes
@@ -81,7 +80,6 @@ Includes: Global options
 - --path, -p <dir>                Client installation directory
 - --config-dir, -D <dir>          Client configuration directory name
 - --log-file, -F <path>           xp2p service log file
-- --xray-log-file, -X <path>      xray stderr log file
 - --max-restarts, -R <n>          Maximum restart attempts after failures
 - --restart-delay, -r <dur>       Delay between restart attempts
 - --heartbeat, -b                 Enable heartbeat probes

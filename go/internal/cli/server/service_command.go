@@ -111,7 +111,6 @@ func newServerServiceRunCmd(cfg commandConfig) *cobra.Command {
 	flags.StringP("diag-service-port", "P", "", "diagnostics service port")
 	flags.StringP("diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
 	flags.StringP("log-file", "F", filepath.Join(config.LogRoot(), "server", "service.log"), "xp2p service log file")
-	flags.StringP("xray-log-file", "X", filepath.Join(config.LogRoot(), "server", "xray-service.log"), "xray stderr log file")
 	flags.IntP("max-restarts", "R", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	flags.DurationP("restart-delay", "r", 3*time.Second, "delay between restart attempts")
 	return cmd
@@ -221,7 +220,6 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	diagPort := fs.String("diag-service-port", "", "diagnostics service port")
 	diagMode := fs.String("diag-service-mode", "", "diagnostics service startup mode (auto|manual)")
 	logFile := fs.String("log-file", "", "xp2p service log file (default: platform-specific path)")
-	xrayLog := fs.String("xray-log-file", "", "xray stderr log file (default: platform-specific path)")
 	maxRestarts := fs.Int("max-restarts", service.MaxRestartAttempts, "maximum restart attempts after failures")
 	restartDelay := fs.Duration("restart-delay", 3*time.Second, "delay between restart attempts")
 	if err := fs.Parse(args); err != nil {
@@ -257,15 +255,9 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	defer logWriter.Close()
 	logging.Configure(logging.Options{Output: logWriter})
 
-	xrayLogPath := strings.TrimSpace(*xrayLog)
-	if xrayLogPath == "" {
-		xrayLogPath = defaultServerXrayLogPath(installDir)
-	}
-
 	opts := server.ServiceOptions{
 		InstallDir:   installDir,
 		ConfigDir:    configDirName,
-		XrayLogPath:  xrayLogPath,
 		DiagPort:     common.FirstNonEmpty(strings.TrimSpace(*diagPort), cfg.Server.Port),
 		MaxRestarts:  *maxRestarts,
 		RestartDelay: *restartDelay,
@@ -283,10 +275,6 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 
 func defaultServerServiceLogPath(installDir string) string {
 	return defaultServerLogPath(installDir, "service.log")
-}
-
-func defaultServerXrayLogPath(installDir string) string {
-	return defaultServerLogPath(installDir, "xray-service.log")
 }
 
 func defaultServerLogPath(installDir string, fileName string) string {

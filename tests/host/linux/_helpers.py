@@ -34,13 +34,11 @@ CLIENT_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-client.json"
 SERVER_HEARTBEAT_STATE_FILE = INSTALL_ROOT / "state-heartbeat-server.json"
 HEARTBEAT_STATE_FILE = CLIENT_HEARTBEAT_STATE_FILE
 LOG_ROOT = PurePosixPath(os.environ.get("XP2P_LOG_ROOT", "/var/log/xp2p"))
-CLIENT_LOG_FILE = LOG_ROOT / "client.err"
-SERVER_LOG_FILE = LOG_ROOT / "server.err"
+CLIENT_LOG_FILE = PurePosixPath("/tmp/xp2p-client-run.log")
+SERVER_LOG_FILE = PurePosixPath("/tmp/xp2p-server-run.log")
 SERVICE_LOG_FILES = (
     LOG_ROOT / "client" / "service.log",
-    LOG_ROOT / "client" / "xray-service.log",
     LOG_ROOT / "server" / "service.log",
-    LOG_ROOT / "server" / "xray-service.log",
 )
 XRAY_BINARY = INSTALL_ROOT / "bin" / "xray"
 REVERSE_SUFFIX = ".rev"

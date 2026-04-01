@@ -122,7 +122,7 @@ def _heartbeat_debug(server_host, client_hosts) -> str:
                 [
                     f"host={host.backend.hostname}",
                     f"/tmp/xp2p-client-run.log:\n{_tail_log(host, '/tmp/xp2p-client-run.log')}",
-                    f"/var/log/xp2p/client.err:\n{_tail_log(host, helpers.CLIENT_LOG_FILE.as_posix())}",
+                    f\"{helpers.CLIENT_LOG_FILE.as_posix()}:\\n{_tail_log(host, helpers.CLIENT_LOG_FILE.as_posix())}\",
                     f"listening:\n{listening}",
                     f"routing markers:\n{marker_rules}",
                     f"outbounds.json:\n{outbounds}",
@@ -298,7 +298,7 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
         for reverse_tag, user in (
             (reverse_default, default_cred["user"]),
             (reverse_second, "client-two@example.com"),
-        ):
+    ):
             helpers.assert_server_reverse_state(
                 server_state,
                 reverse_tag,
@@ -400,8 +400,7 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                 "server",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            )
+                        )
             server_session.__enter__()
             try:
                 client_b_session = linux_env.xp2p_run_session(
@@ -409,8 +408,7 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                     "client",
                     helpers.INSTALL_ROOT.as_posix(),
                     helpers.CLIENT_CONFIG_DIR_NAME,
-                    helpers.CLIENT_LOG_FILE,
-                )
+                                )
                 client_b_session.__enter__()
                 client_c_session = None
                 try:
@@ -443,8 +441,7 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
                         "client",
                         helpers.INSTALL_ROOT.as_posix(),
                         helpers.CLIENT_CONFIG_DIR_NAME,
-                        helpers.CLIENT_LOG_FILE,
-                    )
+                                        )
                     client_c_session.__enter__()
                     try:
                         _wait_for_port(client_c, 51180)

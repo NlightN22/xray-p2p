@@ -51,7 +51,7 @@ def test_windows_client_tun_mode_full_routes(
             server_host,
             config_dirs=[SERVER_CONFIG_DIR],
             state_files=SERVER_STATE_FILES,
-        )
+            )
         for host in (client_host, server_host):
             _env.remove_paths(host, tun_deploy.HEARTBEAT_STATE_FILES)
             tun_deploy.remove_deploy_logs(host)
@@ -63,7 +63,7 @@ def test_windows_client_tun_mode_full_routes(
             trojan_user=CLIENT_USER,
             trojan_password=CLIENT_PASSWORD,
             trojan_port=TROJAN_PORT,
-        )
+            )
 
         svc.require_client_service(client_host)
         cfg.update_client_config(client_host, tun_mode="split")
@@ -94,12 +94,12 @@ def test_windows_client_tun_mode_full_routes(
             "--tag",
             expected_tag,
             check=False,
-        )
+            )
         if result.rc != 0:
             pytest.fail(
                 "xp2p client mode tun full failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
         client_cfg = _env.read_toml(client_host, tun.CLIENT_CONFIG_FILE).get("client") or {}
         assert client_cfg.get("tun_mode") == "full", "client.tun_mode was not updated to full"
         assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
@@ -115,7 +115,7 @@ def test_windows_client_tun_mode_full_routes(
             old_default_ids,
             endpoint_ips,
             tun.ROUTE_WAIT_INITIAL,
-        )
+            )
         if not ok:
             time.sleep(tun.WATCH_RESTART_WINDOW)
             result = cfg.client_mode(
@@ -125,12 +125,12 @@ def test_windows_client_tun_mode_full_routes(
                 "--tag",
                 expected_tag,
                 check=False,
-            )
+                )
             if result.rc != 0:
                 pytest.fail(
                     "xp2p client mode tun full retry failed.\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{debug}"
-                )
+        )
             ok, debug = tun.poll_for_full_tunnel(
                 client_host,
                 tun_name,
@@ -138,7 +138,7 @@ def test_windows_client_tun_mode_full_routes(
                 old_default_ids,
                 endpoint_ips,
                 tun.ROUTE_WAIT_RETRY,
-            )
+                )
             if not ok:
                 pytest.fail(debug)
 
@@ -149,7 +149,7 @@ def test_windows_client_tun_mode_full_routes(
             pytest.fail(
                 "xp2p client mode tun split failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
         svc.wait_for_apply_request_clear(client_host)
         ok, debug = tun.poll_for_routes_restored(
             client_host,
@@ -158,7 +158,7 @@ def test_windows_client_tun_mode_full_routes(
             old_default_ids,
             endpoint_ips,
             tun.ROUTE_WAIT_SPLIT,
-        )
+            )
         if not ok:
             diag.fail_with_restore_debug(
                 client_host,
@@ -167,7 +167,7 @@ def test_windows_client_tun_mode_full_routes(
                 config_file=tun.CLIENT_CONFIG_FILE,
                 state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
                 service_log=tun.CLIENT_SERVICE_LOG,
-            )
+                )
 
         net.assert_internet_access(client_host, label="after split restore")
 
@@ -178,12 +178,12 @@ def test_windows_client_tun_mode_full_routes(
             "--tag",
             expected_tag,
             check=False,
-        )
+            )
         if result.rc != 0:
             pytest.fail(
                 "xp2p client mode tun full (second pass) failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
+        )
         svc.wait_for_apply_request_clear(client_host)
         ok, debug = tun.poll_for_full_tunnel(
             client_host,
@@ -192,7 +192,7 @@ def test_windows_client_tun_mode_full_routes(
             old_default_ids,
             endpoint_ips,
             tun.ROUTE_WAIT_RETRY,
-        )
+            )
         if not ok:
             pytest.fail(debug)
 
@@ -207,7 +207,7 @@ def test_windows_client_tun_mode_full_routes(
             old_default_ids,
             endpoint_ips,
             tun.ROUTE_WAIT_SPLIT,
-        )
+            )
         if not ok:
             diag.fail_with_restore_debug(
                 client_host,
@@ -216,7 +216,7 @@ def test_windows_client_tun_mode_full_routes(
                 config_file=tun.CLIENT_CONFIG_FILE,
                 state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
                 service_log=tun.CLIENT_SERVICE_LOG,
-            )
+                )
         net.assert_internet_access(client_host, label="after service stop")
     finally:
         if client_proc:
@@ -235,7 +235,7 @@ def test_windows_client_tun_mode_full_routes(
             server_host,
             trojan_port=TROJAN_PORT,
             ensure="Absent",
-        )
+            )
         for host in (client_host, server_host):
             _env.remove_paths(host, tun_deploy.HEARTBEAT_STATE_FILES)
             tun_deploy.remove_deploy_logs(host)

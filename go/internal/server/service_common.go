@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -49,13 +48,12 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}()
 
 	runOpts := RunOptions{
-		InstallDir:   installDir,
-		ConfigDir:    configDirName,
-		ErrorLogPath: strings.TrimSpace(opts.XrayLogPath),
-		TunEnabled:   opts.TunEnabled,
-		TunName:      opts.TunName,
-		TunMTU:       opts.TunMTU,
-		TunAddr:      opts.TunAddr,
+		InstallDir: installDir,
+		ConfigDir:  configDirName,
+		TunEnabled: opts.TunEnabled,
+		TunName:    opts.TunName,
+		TunMTU:     opts.TunMTU,
+		TunAddr:    opts.TunAddr,
 	}
 
 	stateRoot := installDir
@@ -79,10 +77,6 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		WatchRestartWindow: 30 * time.Second,
 	}
 
-	if err := ensureLogFile(runOpts.ErrorLogPath); err != nil {
-		return err
-	}
-
 	logWatcherStop, err := service.StartLogWatcher(ctx, service.LogWatchOptions{
 		Name:          "server",
 		Paths:         []string{configDir},
@@ -99,24 +93,6 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		return Run(runCtx, runOpts)
 	}); err != nil {
 		return fmt.Errorf("xp2p server service: %w", err)
-	}
-	return nil
-}
-
-func ensureLogFile(path string) error {
-	logPath := strings.TrimSpace(path)
-	if logPath == "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
-		return fmt.Errorf("xp2p: create log directory %s: %w", filepath.Dir(logPath), err)
-	}
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("xp2p: open xray log file %s: %w", logPath, err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("xp2p: close xray log file %s: %w", logPath, err)
 	}
 	return nil
 }

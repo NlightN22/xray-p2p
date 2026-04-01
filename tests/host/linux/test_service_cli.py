@@ -18,9 +18,7 @@ SKIP_SERVICE_CLI = os.environ.get("XP2P_RUN_SERVICE_CLI_TESTS", "").strip().lowe
 pytestmark = [pytest.mark.host, pytest.mark.linux, pytest.mark.skipif(SKIP_SERVICE_CLI, reason="service CLI tests are opt-in")]
 
 CLIENT_SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
-CLIENT_XRAY_LOG = helpers.LOG_ROOT / "client" / "xray-service.log"
 SERVER_SERVICE_LOG = helpers.LOG_ROOT / "server" / "service.log"
-SERVER_XRAY_LOG = helpers.LOG_ROOT / "server" / "xray-service.log"
 CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
 SERVER_CONFIG = helpers.SERVER_CONFIG_FILE
 APPLY_REQUEST = helpers.CONFIG_ROOT / ".apply" / "apply.request"
@@ -243,7 +241,6 @@ def test_service_restarts_when_config_changes(
         host = client_host
         runner = xp2p_client_runner
         service_log = CLIENT_SERVICE_LOG
-        xray_log = CLIENT_XRAY_LOG
         diag_port = CLIENT_DIAG_PORT
         config_dir = helpers.CLIENT_CONFIG_DIR_NAME
         base_host = "10.55.10.60"
@@ -266,7 +263,6 @@ def test_service_restarts_when_config_changes(
         host = server_host
         runner = xp2p_server_runner
         service_log = SERVER_SERVICE_LOG
-        xray_log = SERVER_XRAY_LOG
         diag_port = SERVER_DIAG_PORT
         config_dir = helpers.SERVER_CONFIG_DIR_NAME
         original_mode: str | None = None
@@ -316,7 +312,6 @@ def test_service_stops_after_invalid_config(
         host = client_host
         runner = xp2p_client_runner
         service_log = CLIENT_SERVICE_LOG
-        xray_log = CLIENT_XRAY_LOG
         config_path = CLIENT_CONFIG
         invalid_config = "[client]\nendpoints = \"invalid\"\n"
         diag_port = CLIENT_DIAG_PORT
@@ -330,7 +325,6 @@ def test_service_stops_after_invalid_config(
         host = server_host
         runner = xp2p_server_runner
         service_log = SERVER_SERVICE_LOG
-        xray_log = SERVER_XRAY_LOG
         config_path = SERVER_CONFIG
         invalid_config = "[server]\nserver_redirects = \"invalid\"\n"
         diag_port = SERVER_DIAG_PORT
@@ -356,9 +350,10 @@ def test_service_stops_after_invalid_config(
         log_content = helpers.read_text(host, service_log)
         attempts = log_content.lower().count("attempt:")
         assert attempts >= max_attempts, f"expected at least {max_attempts} restart attempts"
-        assert helpers.path_exists(host, xray_log), f"{role} xray log missing"
-        if role == "client":
-            assert helpers.read_text(host, xray_log).strip(), f"{role} xray log is empty"
+        assert "parse" in log_content.lower() or "config" in log_content.lower(), (
+            f"{role} service log missing config error details.\n"
+            f"Service log:\n{log_content}"
+        )
     finally:
         if original_config is not None:
             helpers.write_text(host, config_path, original_config)

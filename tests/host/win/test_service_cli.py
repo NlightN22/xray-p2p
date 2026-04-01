@@ -14,9 +14,7 @@ INSTALL_ROOT = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = win_env.CONFIG_ROOT / "config-client"
 SERVER_CONFIG_DIR = win_env.CONFIG_ROOT / "config-server"
 CLIENT_SERVICE_LOG = win_env.LOGS_DIR / "client" / "service.log"
-CLIENT_XRAY_LOG = win_env.LOGS_DIR / "client" / "xray-service.log"
 SERVER_SERVICE_LOG = win_env.LOGS_DIR / "server" / "service.log"
-SERVER_XRAY_LOG = win_env.LOGS_DIR / "server" / "xray-service.log"
 CLIENT_INBOUNDS = CLIENT_CONFIG_DIR / "inbounds.json"
 SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
 CLIENT_CONFIG_FILE = win_env.CONFIG_ROOT / "xp2p-client.toml"
@@ -267,8 +265,8 @@ def test_windows_client_service_cli_controls_service(client_host, xp2p_client_ru
             client_host,
             "client",
             remove_config=False,
-            log_paths=[CLIENT_SERVICE_LOG, CLIENT_XRAY_LOG],
-        )
+            log_paths=[CLIENT_SERVICE_LOG],
+            )
 
     with _timed("client install"):
         _install_client(runner, "10.70.0.10", "svc-client@example.com", "SvcClientSecret")
@@ -299,14 +297,13 @@ def test_windows_service_restarts_when_config_changes(
         host = client_host
         runner = xp2p_client_runner
         log_path = CLIENT_SERVICE_LOG
-        xray_log = CLIENT_XRAY_LOG
         original_mode: str | None = None
         install_fn = lambda: _install_client(
             runner,
             "10.70.0.20",
             "svc-change@example.com",
             "SvcChangeSecret",
-        )
+            )
 
         def change_fn():
             nonlocal original_mode
@@ -320,13 +317,12 @@ def test_windows_service_restarts_when_config_changes(
         host = server_host
         runner = xp2p_server_runner
         log_path = SERVER_SERVICE_LOG
-        xray_log = SERVER_XRAY_LOG
         original_mode: str | None = None
         install_fn = lambda: _install_server(
             runner,
             "svc-server.example.com",
             "62180",
-        )
+            )
 
         def change_fn():
             nonlocal original_mode
@@ -341,8 +337,8 @@ def test_windows_service_restarts_when_config_changes(
             host,
             role,
             remove_config=True,
-            log_paths=[log_path, xray_log],
-        )
+            log_paths=[log_path],
+            )
     with _timed(f"{role} install"):
         install_fn()
     _require_service_installed(host, role)
@@ -352,8 +348,8 @@ def test_windows_service_restarts_when_config_changes(
                 host,
                 role,
                 remove_config=False,
-                log_paths=[log_path, xray_log],
-            )
+                log_paths=[log_path],
+                )
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
@@ -384,7 +380,7 @@ def test_windows_service_restarts_when_config_changes(
                 role,
                 remove_config=True,
                 log_paths=None,
-            )
+                )
 
 
 @pytest.mark.host
@@ -400,33 +396,31 @@ def test_windows_service_stops_after_invalid_config(
         host = client_host
         runner = xp2p_client_runner
         log_path = CLIENT_SERVICE_LOG
-        xray_log = CLIENT_XRAY_LOG
         config_path = CLIENT_CONFIG_FILE
         install_fn = lambda: _install_client(
             runner,
             "10.70.0.30",
             "svc-fail@example.com",
             "SvcFailSecret",
-        )
+            )
     else:
         host = server_host
         runner = xp2p_server_runner
         log_path = SERVER_SERVICE_LOG
-        xray_log = SERVER_XRAY_LOG
         config_path = SERVER_CONFIG_FILE
         install_fn = lambda: _install_server(
             runner,
             "svc-fail.example.com",
             "62190",
-        )
+            )
 
     with _timed(f"{role} cleanup (pre)"):
         _cleanup_role(
             host,
             role,
             remove_config=True,
-            log_paths=[log_path, xray_log],
-        )
+            log_paths=[log_path],
+            )
     with _timed(f"{role} install"):
         install_fn()
     _require_service_installed(host, role)
@@ -436,8 +430,8 @@ def test_windows_service_stops_after_invalid_config(
                 host,
                 role,
                 remove_config=False,
-                log_paths=[log_path, xray_log],
-            )
+                log_paths=[log_path],
+                )
         with _timed(f"{role} service start"):
             runner(role, "service", "start", check=True)
         _wait_for_service_state(runner, role, expected_active=True)
@@ -454,19 +448,12 @@ def test_windows_service_stops_after_invalid_config(
                 "service run failed",
                 "service failed",
             ],
-        )
+            )
         _wait_for_service_state(runner, role, expected_active=False)
-        assert win_env.path_exists(host, xray_log), f"{role} xray log missing"
-        if role == "client":
-            xray_content = win_env.read_text(host, xray_log)
-            if not (xray_content or "").strip():
-                service_log = win_env.read_text(host, log_path)
-                service_lower = (service_log or "").lower()
-                if "service run failed" not in service_lower and "xrayconfig: parse error" not in service_lower:
-                    pytest.fail(
-                        f"Log {xray_log} remained empty for {role} xray. "
-                        f"Service log:\n{service_log}"
-                    )
+        service_log = win_env.read_text(host, log_path)
+        service_lower = (service_log or "").lower()
+        if "service run failed" not in service_lower and "xrayconfig: parse error" not in service_lower:
+            pytest.fail(f"Service log missing failure details:\n{service_log}")
     finally:
         with _timed(f"{role} cleanup (final)"):
             _cleanup_role(
@@ -474,4 +461,4 @@ def test_windows_service_stops_after_invalid_config(
                 role,
                 remove_config=True,
                 log_paths=None,
-            )
+                )

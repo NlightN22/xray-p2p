@@ -228,14 +228,12 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             "server",
             chain_environment["server_install_path"],
             helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
-        ), openwrt_env.xp2p_run_session(
+            ), openwrt_env.xp2p_run_session(
             chain_environment["client_host"],
             "client",
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
-            helpers.CLIENT_LOG_FILE,
-        ):
+                ):
             with _timed("tunnel warmup"):
                 time.sleep(2.0)
             with _timed("tunnel ping"):
@@ -484,14 +482,12 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
             "server",
             chain_environment["server_install_path"],
             helpers.SERVER_CONFIG_DIR_NAME,
-            helpers.SERVER_LOG_FILE,
-        ), openwrt_env.xp2p_run_session(
+            ), openwrt_env.xp2p_run_session(
             chain_environment["client_host"],
             "client",
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
-            helpers.CLIENT_LOG_FILE,
-        ):
+                ):
             with _timed("reverse tunnel warmup"):
                 time.sleep(2.0)
             with _timed("reverse wait heartbeat"):

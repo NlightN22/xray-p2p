@@ -42,7 +42,6 @@ Includes: Global options
 - --diag-service-mode, -M <auto|manual> Diagnostics service startup mode
 - --auto-install, -A        Install server assets when missing without prompting
 - --quiet, -q               Suppress interactive prompts
-- --xray-log-file, -X <path> Append xray stderr output to file
 
 xp2p server service start
 Options:
@@ -67,7 +66,6 @@ Includes: Global options
 - --diag-service-port, -P <port> Diagnostics service port
 - --diag-service-mode, -M <auto|manual> Diagnostics service startup mode
 - --log-file, -F <path>  xp2p service log file
-- --xray-log-file, -X <path> xray stderr log file
 - --max-restarts, -R <n> Maximum restart attempts after failures
 - --restart-delay, -r <dur> Delay between restart attempts
 

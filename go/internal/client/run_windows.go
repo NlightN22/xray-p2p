@@ -142,25 +142,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 
-	resolveLogPath := func(raw string) (string, error) {
-		if strings.TrimSpace(raw) == "" {
-			return "", fmt.Errorf("xp2p: log path is empty")
-		}
-		trimmed := strings.TrimSpace(filepath.Clean(raw))
-		if trimmed == "" || trimmed == "." {
-			return "", fmt.Errorf("xp2p: log path is empty")
-		}
-		if filepath.IsAbs(trimmed) {
-			return trimmed, nil
-		}
-		rel := filepath.ToSlash(trimmed)
-		rel = strings.TrimPrefix(rel, "logs/")
-		if rel == "" || rel == "." {
-			rel = "xp2p-client.log"
-		}
-		return filepath.Join(config.LogRoot(), rel), nil
-	}
-
 	configureCmd := func(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow: true,
@@ -196,8 +177,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		xrayPath,
 		configDir,
 		installDir,
-		opts.ErrorLogPath,
-		resolveLogPath,
 		configureCmd,
 		onStart,
 		onReady,

@@ -201,7 +201,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "--all",
             "--ignore-missing",
             check=True,
-        )
+            )
         run(
             "server",
             "remove",
@@ -211,7 +211,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             SERVER_CONFIG_DIR,
             "--ignore-missing",
             check=True,
-        )
+            )
 
         run(
             "client",
@@ -228,7 +228,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "dual-pass",
             "--force",
             check=True,
-        )
+            )
         client_hash = _remote_sha256(server_host, XRAY_BINARY)
 
         run(
@@ -243,7 +243,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "--host",
             "dual.xp2p.test",
             check=True,
-        )
+            )
         server_hash = _remote_sha256(server_host, XRAY_BINARY)
         assert client_hash == server_hash, "Expected shared xray.exe to be reused without modification"
 
@@ -260,7 +260,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "--all",
             "--ignore-missing",
             check=True,
-        )
+            )
         roles_after = _read_roles(server_host)
         assert "server" in roles_after and "client" not in roles_after, (
             f"Client removal should not delete server role: {roles_after}"
@@ -274,7 +274,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             "--config-dir",
             SERVER_CONFIG_DIR,
             "--ignore-missing",
-        )
+            )
         run(
             "client",
             "remove",
@@ -284,7 +284,7 @@ def test_client_and_server_share_install_dir(server_host, xp2p_msi_path):
             CLIENT_CONFIG_DIR,
             "--all",
             "--ignore-missing",
-        )
+            )
 
 
 @pytest.mark.host
@@ -320,7 +320,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             "--all",
             "--ignore-missing",
             check=True,
-        )
+            )
         run(
             "server",
             "remove",
@@ -330,7 +330,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             custom_server_config,
             "--ignore-missing",
             check=True,
-        )
+            )
 
         run(
             "client",
@@ -351,7 +351,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             client_sni,
             "--force",
             check=True,
-        )
+            )
 
         client_config_path = _env.CONFIG_ROOT / custom_client_config
         outbounds = _read_remote_json(server_host, client_config_path / "outbounds.json")
@@ -361,7 +361,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             client_password,
             client_user,
             client_sni,
-        )
+            )
         routing = _read_remote_json(server_host, client_config_path / "routing.json")
         _assert_routing_rule(routing, client_host)
         roles_after_client = _read_roles(server_host)
@@ -380,7 +380,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             server_host_value,
             "--force",
             check=True,
-        )
+            )
 
         final_roles = _read_roles(server_host)
         assert {"client", "server"} <= set(final_roles.keys())
@@ -393,7 +393,7 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             "--config-dir",
             custom_server_config,
             "--ignore-missing",
-        )
+            )
         run(
             "client",
             "remove",
@@ -403,4 +403,4 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             custom_client_config,
             "--all",
             "--ignore-missing",
-        )
+            )

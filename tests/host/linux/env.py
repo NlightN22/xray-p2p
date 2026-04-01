@@ -296,17 +296,14 @@ def xp2p_run_session(
     role: str,
     install_dir: str | Path | PurePosixPath,
     config_dir: str,
-    log_path: str | Path | PurePosixPath,
 ):
     install_arg = _posix(install_dir)
-    log_arg = _posix(log_path)
     result = run_guest_script(
         host,
         "scripts/linux/start_xp2p_run.sh",
         role,
         install_arg,
         config_dir,
-        log_arg,
     )
     if result.rc != 0:
         raise RuntimeError(
@@ -318,7 +315,7 @@ def xp2p_run_session(
             f"xp2p {role} run script did not emit PID marker.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     try:
-        yield {"pid": int(pid_value), "log": log_arg}
+        yield {"pid": int(pid_value)}
     finally:
         stop_process(host, pid_value)
 
@@ -329,13 +326,11 @@ def xp2p_run_session_with_env(
     role: str,
     install_dir: str | Path | PurePosixPath,
     config_dir: str,
-    log_path: str | Path | PurePosixPath,
     *,
     allow_mismatch: bool = False,
     auto_install: bool = True,
 ):
     install_arg = _posix(install_dir)
-    log_arg = _posix(log_path)
     allow_arg = "1" if allow_mismatch else "0"
     auto_arg = "1" if auto_install else "0"
     result = run_guest_script(
@@ -344,7 +339,6 @@ def xp2p_run_session_with_env(
         role,
         install_arg,
         config_dir,
-        log_arg,
         allow_arg,
         auto_arg,
     )
@@ -359,6 +353,6 @@ def xp2p_run_session_with_env(
             f"xp2p {role} run script did not emit PID marker.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     try:
-        yield {"pid": int(pid_value), "log": log_arg}
+        yield {"pid": int(pid_value)}
     finally:
         stop_process(host, pid_value)

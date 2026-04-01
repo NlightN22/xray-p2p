@@ -115,7 +115,7 @@ def _assert_list_contains(rows: list[dict[str, str]], listen: int, target: str, 
             and row.get("target") == formatted_target
             and row.get("remark") == formatted_remark
             and row.get("protocols") == formatted_protocols
-        ):
+    ):
             return
     pytest.fail(f"Forward list does not contain {formatted_listen} -> {formatted_target}")
 

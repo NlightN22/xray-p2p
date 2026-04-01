@@ -58,7 +58,6 @@ type CertificateOptions struct {
 type RunOptions struct {
 	InstallDir   string
 	ConfigDir    string
-	ErrorLogPath string
 	TunEnabled   bool
 	TunName      string
 	TunMTU       int
@@ -69,7 +68,6 @@ type RunOptions struct {
 type ServiceOptions struct {
 	InstallDir   string
 	ConfigDir    string
-	XrayLogPath  string
 	DiagPort     string
 	MaxRestarts  int
 	RestartDelay time.Duration

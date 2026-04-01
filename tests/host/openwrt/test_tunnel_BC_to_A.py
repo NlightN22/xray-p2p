@@ -270,7 +270,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         for reverse_tag, user in (
             (reverse_default, default_cred["user"]),
             (reverse_second, "client-two@example.com"),
-        ):
+    ):
             helpers.assert_server_reverse_state(
                 server_state,
                 reverse_tag,
@@ -372,8 +372,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 "server",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            )
+                        )
             server_session.__enter__()
             try:
                 client_b_session = openwrt_env.xp2p_run_session(
@@ -381,8 +380,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     "client",
                     helpers.INSTALL_ROOT.as_posix(),
                     helpers.CLIENT_CONFIG_DIR_NAME,
-                    helpers.CLIENT_LOG_FILE,
-                )
+                                )
                 client_b_session.__enter__()
                 client_c_session = None
                 try:
@@ -397,8 +395,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                             "client",
                             helpers.INSTALL_ROOT.as_posix(),
                             helpers.CLIENT_CONFIG_DIR_NAME,
-                            helpers.CLIENT_LOG_FILE,
-                        )
+                                                )
                         client_c_session.__enter__()
                         try:
                             helpers.wait_for_heartbeat_state(

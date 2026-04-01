@@ -153,7 +153,7 @@ def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp
             server_host,
             config_dirs=[client_dir, server_dir],
             state_files=state_files,
-        )
+            )
     if skip_reason:
         pytest.skip(skip_reason)
 

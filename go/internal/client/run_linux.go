@@ -4,11 +4,9 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
@@ -138,8 +136,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 		xrayPath,
 		configDir,
 		configDir,
-		opts.ErrorLogPath,
-		resolveClientLogPath,
 		nil,
 		func() {
 			if !tunEnabled {
@@ -176,25 +172,4 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 func tunSetupErrorWithHint(action string, err error) error {
 	return fmt.Errorf("xp2p: tun setup failed during %s: %w (set XP2P_CLIENT_TUN_ENABLED=false or run \"xp2p client mode proxy\")", action, err)
-}
-
-func resolveClientLogPath(raw string) (string, error) {
-	if strings.TrimSpace(raw) == "" {
-		return "", errors.New("xp2p: log path is empty")
-	}
-	trimmed := strings.TrimSpace(filepath.Clean(raw))
-	if trimmed == "" || trimmed == "." {
-		return "", errors.New("xp2p: log path is empty")
-	}
-	if filepath.IsAbs(trimmed) {
-		return trimmed, nil
-	}
-
-	rel := filepath.ToSlash(trimmed)
-	rel = strings.TrimPrefix(rel, "logs/")
-	if rel == "" || rel == "." {
-		rel = "xp2p-client.log"
-	}
-
-	return filepath.Join(config.LogRoot(), rel), nil
 }

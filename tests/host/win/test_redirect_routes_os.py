@@ -10,8 +10,6 @@ from tests.host.win import env as _env
 INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
 SERVER_CONFIG_DIR = "config-server"
-CLIENT_LOG_RELATIVE = r"logs\client.err"
-SERVER_LOG_RELATIVE = r"logs\server.err"
 CLIENT_TUN = "xp2pc"
 SERVER_TUN = "xp2ps"
 
@@ -231,7 +229,7 @@ def test_windows_client_redirect_routes_os(
             server_public_host,
             "--force",
             check=True,
-        )
+            )
         credential = _extract_generated_credential(server_install.stdout or "")
         assert credential["link"], "Expected trojan link in server install output"
 
@@ -242,7 +240,7 @@ def test_windows_client_redirect_routes_os(
             credential["link"],
             "--force",
             check=True,
-        )
+            )
 
         xp2p_client_runner(
             "client",
@@ -253,7 +251,7 @@ def test_windows_client_redirect_routes_os(
             "--host",
             server_public_host,
             check=True,
-        )
+            )
         xp2p_client_runner(
             "client",
             "redirect",
@@ -263,7 +261,7 @@ def test_windows_client_redirect_routes_os(
             "--host",
             server_public_host,
             check=True,
-        )
+            )
 
         original_mode = _current_client_mode(client_host)
         if original_mode != "tun":
@@ -272,12 +270,10 @@ def test_windows_client_redirect_routes_os(
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
         ), xp2p_client_run_factory(
             str(INSTALL_DIR),
             CLIENT_CONFIG_DIR,
-            CLIENT_LOG_RELATIVE,
-        ):
+            ):
             tun_index = _wait_for_interface_index(client_host, CLIENT_TUN)
             _wait_for_route_present(client_host, CLIENT_REDIRECT_CIDR, tun_index)
 
@@ -290,17 +286,15 @@ def test_windows_client_redirect_routes_os(
             "--host",
             server_public_host,
             check=True,
-        )
+            )
 
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
         ), xp2p_client_run_factory(
             str(INSTALL_DIR),
             CLIENT_CONFIG_DIR,
-            CLIENT_LOG_RELATIVE,
-        ):
+            ):
             _wait_for_route_absent(client_host, CLIENT_REDIRECT_CIDR)
     finally:
         xp2p_client_runner(
@@ -312,7 +306,7 @@ def test_windows_client_redirect_routes_os(
             "--host",
             server_public_host,
             check=False,
-        )
+            )
         if original_mode and original_mode != "tun":
             _set_client_mode(xp2p_client_runner, original_mode)
         _cleanup_client_install(client_host, xp2p_client_runner)
@@ -341,7 +335,7 @@ def test_windows_server_redirect_routes_os(
             server_public_host,
             "--force",
             check=True,
-        )
+            )
         credential = _extract_generated_credential(server_install.stdout or "")
         assert credential["link"], "Expected trojan link in server install output"
         reverse_tag = _expected_reverse_tag(credential["user"] or "", server_public_host)
@@ -353,7 +347,7 @@ def test_windows_server_redirect_routes_os(
             credential["link"],
             "--force",
             check=True,
-        )
+            )
 
         xp2p_server_runner(
             "server",
@@ -364,17 +358,15 @@ def test_windows_server_redirect_routes_os(
             "--tag",
             reverse_tag,
             check=True,
-        )
+            )
 
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
         ), xp2p_client_run_factory(
             str(INSTALL_DIR),
             CLIENT_CONFIG_DIR,
-            CLIENT_LOG_RELATIVE,
-        ):
+            ):
             tun_index = _wait_for_interface_index(server_host, SERVER_TUN)
             _wait_for_route_present(server_host, SERVER_REDIRECT_CIDR, tun_index)
 
@@ -387,17 +379,15 @@ def test_windows_server_redirect_routes_os(
             "--tag",
             reverse_tag,
             check=True,
-        )
+            )
 
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
         ), xp2p_client_run_factory(
             str(INSTALL_DIR),
             CLIENT_CONFIG_DIR,
-            CLIENT_LOG_RELATIVE,
-        ):
+            ):
             _wait_for_route_absent(server_host, SERVER_REDIRECT_CIDR)
     finally:
         if reverse_tag:
@@ -410,7 +400,7 @@ def test_windows_server_redirect_routes_os(
                 "--tag",
                 reverse_tag,
                 check=False,
-            )
+                )
         _cleanup_client_install(client_host, xp2p_client_runner)
         _cleanup_server_install(server_host, xp2p_server_runner)
 
@@ -437,7 +427,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             server_public_host,
             "--force",
             check=True,
-        )
+            )
         credential = _extract_generated_credential(server_install.stdout or "")
         assert credential["link"], "Expected trojan link in server install output"
 
@@ -448,7 +438,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             credential["link"],
             "--force",
             check=True,
-        )
+            )
 
         xp2p_client_runner(
             "client",
@@ -459,7 +449,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             "--host",
             server_public_host,
             check=True,
-        )
+            )
 
         original_mode = _current_client_mode(client_host)
         if original_mode != "tun":
@@ -468,12 +458,10 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
         ), xp2p_client_run_factory(
             str(INSTALL_DIR),
             CLIENT_CONFIG_DIR,
-            CLIENT_LOG_RELATIVE,
-        ):
+            ):
             tun_index = _wait_for_interface_index(client_host, CLIENT_TUN)
             _wait_for_route_present(client_host, CLIENT_REDIRECT_CIDR, tun_index)
 
@@ -486,7 +474,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             "--host",
             server_public_host,
             check=True,
-        )
+            )
         xp2p_client_runner(
             "client",
             "redirect",
@@ -496,17 +484,15 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             "--host",
             server_public_host,
             check=True,
-        )
+            )
 
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
         ), xp2p_client_run_factory(
             str(INSTALL_DIR),
             CLIENT_CONFIG_DIR,
-            CLIENT_LOG_RELATIVE,
-        ):
+            ):
             tun_index = _wait_for_interface_index(client_host, CLIENT_TUN)
             _wait_for_route_absent(client_host, CLIENT_REDIRECT_CIDR)
             _wait_for_route_present(client_host, CLIENT_REDIRECT_CIDR_ALT, tun_index)
@@ -516,12 +502,10 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
-            SERVER_LOG_RELATIVE,
         ), xp2p_client_run_factory(
             str(INSTALL_DIR),
             CLIENT_CONFIG_DIR,
-            CLIENT_LOG_RELATIVE,
-        ):
+            ):
             _wait_for_route_absent(client_host, CLIENT_REDIRECT_CIDR_ALT)
     finally:
         xp2p_client_runner(
@@ -533,7 +517,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             "--host",
             server_public_host,
             check=False,
-        )
+            )
         xp2p_client_runner(
             "client",
             "redirect",
@@ -543,7 +527,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             "--host",
             server_public_host,
             check=False,
-        )
+            )
         if original_mode and original_mode != _current_client_mode(client_host):
             _set_client_mode(xp2p_client_runner, original_mode)
         _cleanup_client_install(client_host, xp2p_client_runner)

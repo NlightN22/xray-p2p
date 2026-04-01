@@ -74,7 +74,7 @@ def test_server_install_creates_and_allows_removing_default_user(
             "62030",
             "--force",
             check=True,
-        )
+            )
 
         default_client = _initial_install_client(server_host)
         assert default_client["email"].startswith("client-")
@@ -100,7 +100,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "62031",
             "--force",
             check=True,
-        )
+            )
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -116,7 +116,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "alpha",
             "--password",
             "secret-one",
-        )
+            )
 
         first_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         first_clients = _trojan_clients(first_inbounds)
@@ -136,7 +136,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "alpha",
             "--password",
             "secret-one",
-        )
+            )
         assert duplicate.rc != 0, "Expected failure when adding duplicate user without --force"
 
         second_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
@@ -158,7 +158,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "secret-two",
             "--force",
             check=True,
-        )
+            )
 
         final_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         final_clients = _trojan_clients(final_inbounds)
@@ -184,7 +184,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
             "62032",
             "--force",
             check=True,
-        )
+            )
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -201,7 +201,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
             "--password",
             "secret",
             check=True,
-        )
+            )
 
         xp2p_server_runner(
             "server",
@@ -214,7 +214,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
             "--id",
             "bravo",
             check=True,
-        )
+            )
 
         after_remove = _read_remote_json(server_host, SERVER_INBOUNDS)
         assert _trojan_clients(after_remove) == []
@@ -230,7 +230,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
             "--id",
             "bravo",
             check=True,
-        )
+            )
     finally:
         _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
@@ -251,7 +251,7 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             "62033",
             "--force",
             check=True,
-        )
+            )
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -266,7 +266,7 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             "--id",
             "charlie",
             check=True,
-        )
+            )
 
         current_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
         clients = _trojan_clients(current_inbounds)
@@ -286,7 +286,7 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             "delta",
             "--password",
             "bad+pass",
-        )
+            )
         assert invalid_password.rc != 0, "Expected failure when password is invalid"
 
         missing_id = xp2p_server_runner(
@@ -299,7 +299,7 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             SERVER_CONFIG_DIR_NAME,
             "--password",
             "secret",
-        )
+            )
         assert missing_id.rc != 0, "Expected failure when identifier is missing"
 
         current_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)

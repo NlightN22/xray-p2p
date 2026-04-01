@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-from pathlib import Path
 import time
 
 import pytest
@@ -14,23 +13,16 @@ def _start_xp2p_server_run(
     host: Host,
     install_dir: str,
     config_dir: str,
-    log_relative: str,
     *,
     allow_mismatch: bool = False,
     output_log_path: str | None = None,
 ) -> int:
-    rel = Path(log_relative).as_posix()
-    if rel.lower().startswith("logs/"):
-        rel = rel[5:]
-    log_abs = str(_env.LOGS_DIR / rel)
     if output_log_path is None:
         output_log_path = str(_env.LOGS_DIR / "xp2p-server-run.out")
     parameters: dict[str, object] = {
         "Xp2pPath": str(_env.XP2P_EXE),
         "InstallDir": install_dir,
         "ConfigDir": config_dir,
-        "LogRelative": log_relative,
-        "LogPath": log_abs,
         "StabilizeSeconds": str(SERVER_RUN_STABILIZE_SECONDS),
     }
     if allow_mismatch:
@@ -44,11 +36,7 @@ def _start_xp2p_server_run(
 
     def _format_logs() -> str:
         xp2p_log = _read_log(output_log_path)
-        xray_log = _read_log(log_abs)
-        return (
-            f"xp2p run log ({output_log_path}):\n{xp2p_log}\n"
-            f"xray log ({log_abs}):\n{xray_log}"
-        )
+        return f"xp2p run log ({output_log_path}):\n{xp2p_log}"
 
     def _should_retry(xp2p_log: str) -> bool:
         if "New-NetIPAddress : Element not found" in xp2p_log:
@@ -67,7 +55,7 @@ def _start_xp2p_server_run(
             host,
             "scripts/start_xp2p_server_run.ps1",
             **parameters,
-        )
+            )
         last_result = result
         stdout = (result.stdout or "").strip()
 
@@ -81,19 +69,19 @@ def _start_xp2p_server_run(
                 pytest.fail(
                     "Unexpected xp2p server run startup output:\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-                )
+        )
             return pid_value
 
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
                 f"xp2p.exe not found on {_env.DEFAULT_SERVER} at {_env.XP2P_EXE}. "
                 "Provision the guest before running host tests."
-            )
+        )
         if "__XP2P_CREATE_FAIL__" in stdout:
             pytest.fail(
                 "Failed to spawn xp2p server run via Win32_Process.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
-            )
+        )
         if "__XP2P_EXIT__" in stdout:
             xp2p_log = _read_log(output_log_path)
             if attempt == 0 and _should_retry(xp2p_log):
@@ -105,7 +93,7 @@ def _start_xp2p_server_run(
             pytest.fail(
                 "xp2p server run exited before stabilization period elapsed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
-            )
+        )
         if "__XP2P_TIMEOUT__" in stdout:
             xp2p_log = _read_log(output_log_path)
             if attempt == 0 and _should_retry(xp2p_log):
@@ -116,7 +104,7 @@ def _start_xp2p_server_run(
             pytest.fail(
                 "xp2p server run did not start xray-core in time.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
-            )
+        )
         pytest.fail(
             "Failed to start xp2p server run on "
             f"{_env.DEFAULT_SERVER}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{_format_logs()}"
@@ -156,15 +144,11 @@ exit 0
 
 
 @contextmanager
-def xp2p_server_run_session(host: Host, install_dir: str, config_dir: str, log_relative: str):
+def xp2p_server_run_session(host: Host, install_dir: str, config_dir: str):
     pid_value = None
     try:
-        pid_value = _start_xp2p_server_run(host, install_dir, config_dir, log_relative)
-        rel = Path(log_relative).as_posix()
-        if rel.lower().startswith("logs/"):
-            rel = rel[5:]
-        log_file = str(_env.LOGS_DIR / rel)
-        yield {"pid": pid_value, "log_path": log_file}
+        pid_value = _start_xp2p_server_run(host, install_dir, config_dir)
+        yield {"pid": pid_value}
     finally:
         if pid_value is not None:
             _stop_process(host, pid_value)
@@ -175,7 +159,6 @@ def xp2p_server_run_session_with_env(
     host: Host,
     install_dir: str,
     config_dir: str,
-    log_relative: str,
     *,
     allow_mismatch: bool = False,
     output_log_path: str | None = None,
@@ -186,15 +169,10 @@ def xp2p_server_run_session_with_env(
             host,
             install_dir,
             config_dir,
-            log_relative,
             allow_mismatch=allow_mismatch,
             output_log_path=output_log_path,
-        )
-        rel = Path(log_relative).as_posix()
-        if rel.lower().startswith("logs/"):
-            rel = rel[5:]
-        log_file = str(_env.LOGS_DIR / rel)
-        yield {"pid": pid_value, "log_path": log_file}
+            )
+        yield {"pid": pid_value}
     finally:
         if pid_value is not None:
             _stop_process(host, pid_value)

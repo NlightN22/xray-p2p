@@ -158,7 +158,6 @@ func newServerRunCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.DiagMode, "diag-service-mode", "M", "", "diagnostics service startup mode (auto|manual)")
 	flags.BoolVarP(&opts.AutoInstall, "auto-install", "A", false, "install server assets when missing without prompting")
 	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "suppress interactive prompts")
-	flags.StringVarP(&opts.XrayLogFile, "xray-log-file", "X", "", "append xray stderr output to file")
 	return cmd
 }
 

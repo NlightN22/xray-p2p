@@ -10,8 +10,7 @@ CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
 CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
 CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
-CLIENT_LOG_RELATIVE = r"logs\client.err"
-CLIENT_LOG_FILE = _env.LOGS_DIR / "client.err"
+CLIENT_RUN_LOG = Path(r"C:\xp2p\build\logs\win\xp2p-client-run.out")
 CLIENT_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-client.toml"
 CLIENT_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-client.state.json"
 CLIENT_STATE_FILES = [
@@ -28,7 +27,7 @@ def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
         client_host,
         config_dirs=[CLIENT_CONFIG_DIR],
         state_files=CLIENT_STATE_FILES,
-        extra_paths=[CLIENT_LOG_FILE],
+        extra_paths=[CLIENT_RUN_LOG],
     )
 
 
@@ -210,7 +209,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "--password",
             "test_password123",
             check=True,
-        )
+            )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry(data, "10.62.10.10", "test_password123", "alpha@example.com", "10.62.10.10")
@@ -227,7 +226,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "--sni",
             "vpn.example.local",
             check=True,
-        )
+            )
 
         updated_outbounds = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry(
@@ -237,7 +236,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "alpha@example.com",
             "10.62.10.10",
             allow_insecure=False,
-        )
+            )
         _assert_outbound_entry(
             updated_outbounds,
             "10.62.10.11",
@@ -245,7 +244,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "beta@example.com",
             "vpn.example.local",
             allow_insecure=False,
-        )
+            )
 
         routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
         _assert_routing_rule(routing, "10.62.10.10")
@@ -265,7 +264,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "--password",
             "new-password",
             check=False,
-        )
+            )
         assert duplicate.rc != 0, "Expected duplicate endpoint install to fail without --force"
         combined = f"{duplicate.stdout}\n{duplicate.stderr}".lower()
         assert "endpoint 10.62.10.10:8443 already exists" in combined
@@ -283,7 +282,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "override.example",
             "--force",
             check=True,
-        )
+            )
 
         refreshed = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry(
@@ -293,7 +292,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "gamma@example.com",
             "override.example",
             allow_insecure=False,
-        )
+            )
         _assert_outbound_entry(
             refreshed,
             "10.62.10.11",
@@ -301,7 +300,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "beta@example.com",
             "vpn.example.local",
             allow_insecure=False,
-        )
+            )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
@@ -326,7 +325,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
             link,
             "--force",
             check=True,
-        )
+            )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry_any_host(
@@ -337,7 +336,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
             LINK_HOST,
             pinned_peer_sha256="deadbeef",
             verify_peer_name=LINK_HOST,
-        )
+            )
     finally:
         if host_entry_added:
             _remove_hosts_entry(client_host, LINK_HOST)
@@ -363,7 +362,7 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
             link,
             "--force",
             check=True,
-        )
+            )
 
         data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
         _assert_outbound_entry_any_host(
@@ -393,19 +392,19 @@ def test_client_run_starts_xray_core(
             "runtime_password789",
             "--force",
             check=True,
-        )
+            )
 
         with xp2p_client_run_factory(
-            str(CLIENT_INSTALL_DIR), CLIENT_CONFIG_DIR_NAME, CLIENT_LOG_RELATIVE
+            str(CLIENT_INSTALL_DIR), CLIENT_CONFIG_DIR_NAME
         ) as session:
             assert session["pid"] > 0
 
-        assert _remote_path_exists(client_host, CLIENT_LOG_FILE), (
-            f"Expected log file {CLIENT_LOG_FILE} to be created"
+        assert _remote_path_exists(client_host, CLIENT_RUN_LOG), (
+            f"Expected log file {CLIENT_RUN_LOG} to be created"
         )
         log_content = _env.run_powershell(
             client_host,
-            f"$ErrorActionPreference='Stop'; Get-Content -Raw {_env.ps_quote(str(CLIENT_LOG_FILE))}",
+            f"$ErrorActionPreference='Stop'; Get-Content -Raw {_env.ps_quote(str(CLIENT_RUN_LOG))}",
         ).stdout
         assert log_content.strip(), "Expected xray-core to produce log output"
         assert "Failed to start" not in log_content
@@ -430,7 +429,7 @@ def test_client_install_requires_force_for_existing_endpoint(
             "--password",
             "state-pass",
             check=True,
-        )
+            )
 
         result = xp2p_client_runner(
             "client",
@@ -442,7 +441,7 @@ def test_client_install_requires_force_for_existing_endpoint(
             "--password",
             "state-pass-2",
             check=False,
-        )
+            )
         assert result.rc != 0, "Expected install to fail when endpoint exists without --force"
         combined = f"{result.stdout}\n{result.stderr}".strip().lower()
         assert "endpoint 10.62.10.50:8443 already exists" in combined
@@ -458,7 +457,7 @@ def test_client_install_requires_force_for_existing_endpoint(
             "state-pass-2",
             "--force",
             check=True,
-        )
+            )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)
 
@@ -481,7 +480,7 @@ def test_client_install_succeeds_without_state_marker(
             "nostate-pass",
             "--force",
             check=True,
-        )
+            )
 
         _env.remove_paths(client_host, CLIENT_STATE_FILES)
         assert not _env.paths_exist(client_host, CLIENT_STATE_FILES), (
@@ -498,7 +497,7 @@ def test_client_install_succeeds_without_state_marker(
             "--password",
             "nostate-pass-2",
             check=True,
-        )
+            )
 
         existing = _env.paths_exist(client_host, CLIENT_STATE_FILES)
         expected = {str(path) for path in CLIENT_STATE_FILES}

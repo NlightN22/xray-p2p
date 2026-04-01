@@ -252,7 +252,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         for host, log_path, heartbeat_path in (
             (client_host, CLIENT_DEPLOY_LOG, CLIENT_HEARTBEAT_STATE_FILE),
             (server_host, SERVER_DEPLOY_LOG, SERVER_HEARTBEAT_STATE_FILE),
-        ):
+    ):
             helpers.remove_path(host, log_path)
             helpers.remove_path(host, heartbeat_path)
             linux_env.kill_xp2p_processes(host)
@@ -639,9 +639,8 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             )
         except AssertionError as exc:
             service_log = DEPLOY_LOG_ROOT / "server" / "service.log"
-            xray_log = DEPLOY_LOG_ROOT / "server" / "xray-service.log"
             log_details = ""
-            for path in (service_log, xray_log):
+            for path in (service_log,):
                 if helpers.path_exists(server_host, path):
                     tail = "\n".join((helpers.read_text(server_host, path) or "").splitlines()[-40:])
                     log_details += f"\n{path}:\n{tail}\n"

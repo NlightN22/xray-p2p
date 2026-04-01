@@ -160,7 +160,6 @@ func newClientRunCmd(cfg commandConfig) *cobra.Command {
 	flags.StringP("config-dir", "D", "", "client configuration directory name")
 	flags.BoolP("quiet", "q", false, "do not prompt for installation")
 	flags.BoolP("auto-install", "A", false, "install automatically if missing")
-	flags.StringP("xray-log-file", "X", "", "file to append xray-core stderr output")
 	flags.BoolP("verbose", "V", false, "emit full-tunnel change details")
 	return cmd
 }

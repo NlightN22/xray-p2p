@@ -282,20 +282,17 @@ def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
                 "server",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            ), linux_env.xp2p_run_session(
+                    ), linux_env.xp2p_run_session(
                 server_c,
                 "server",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.SERVER_CONFIG_DIR_NAME,
-                helpers.SERVER_LOG_FILE,
-            ), linux_env.xp2p_run_session(
+                    ), linux_env.xp2p_run_session(
                 client_b,
                 "client",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.CLIENT_CONFIG_DIR_NAME,
-                helpers.CLIENT_LOG_FILE,
-            ):
+                        ):
                 client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
                 _wait_for_port(client_b, client_socks_port)
                 for target in (SERVER_A_IP, SERVER_C_IP):

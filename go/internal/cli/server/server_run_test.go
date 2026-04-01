@@ -32,7 +32,7 @@ func TestRunServerRun(t *testing.T) {
 			wantCode: 0,
 			wantRun:  1,
 			onRun: func(t *testing.T, cfg config.Config, opts server.RunOptions) {
-				if opts.InstallDir != cfg.Server.InstallDir || opts.ConfigDir != cfg.Server.ConfigDir || opts.ErrorLogPath != "" {
+				if opts.InstallDir != cfg.Server.InstallDir || opts.ConfigDir != cfg.Server.ConfigDir {
 					t.Fatalf("unexpected run options: %#v", opts)
 				}
 			},
@@ -51,26 +51,6 @@ func TestRunServerRun(t *testing.T) {
 			onInstall: func(t *testing.T, cfg config.Config, opts server.InstallOptions) {
 				if opts.InstallDir != cfg.Server.InstallDir || opts.ConfigDir != cfg.Server.ConfigDir {
 					t.Fatalf("unexpected install options: %#v", opts)
-				}
-			},
-			onRun: func(t *testing.T, _ config.Config, opts server.RunOptions) {
-				if opts.ErrorLogPath != "" {
-					t.Fatalf("unexpected error log path: %s", opts.ErrorLogPath)
-				}
-			},
-		},
-		{
-			name: "passes log file",
-			cfg: func(t *testing.T) config.Config {
-				return serverCfg(filepath.Join(t.TempDir(), "srv"), server.DefaultServerConfigDir, "")
-			},
-			opts:     serverRunCommandOptions{XrayLogFile: `logs\xray.err`},
-			prepared: true,
-			wantCode: 0,
-			wantRun:  1,
-			onRun: func(t *testing.T, _ config.Config, opts server.RunOptions) {
-				if opts.ErrorLogPath != `logs\xray.err` {
-					t.Fatalf("unexpected error log path: %s", opts.ErrorLogPath)
 				}
 			},
 		},
