@@ -404,6 +404,7 @@ func ensureDeployTargetAvailable(cfg config.Config, opts deployOptions) error {
 	records, err := clientListFunc(client.ListOptions{
 		InstallDir: strings.TrimSpace(cfg.Client.InstallDir),
 		ConfigDir:  strings.TrimSpace(cfg.Client.ConfigDir),
+		Pending:    !clientLiveConfigPresent(),
 	})
 	if err != nil {
 		return err

@@ -32,12 +32,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	liveConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
 
-	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleServer, configDir)
+	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleServer, liveConfigDir)
 	if err != nil {
 		return err
 	}
@@ -53,18 +53,21 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
-	if stat, err := os.Stat(configDir); err != nil || !stat.IsDir() {
+	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
 		if err != nil {
-			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", configDir, err)
+			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", liveConfigDir, err)
 		}
-		return fmt.Errorf("xp2p: %s is not a directory", configDir)
+		return fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
 	}
 
-	desired, err := loadServerDesiredConfig(installDir)
+	configDir, configFile, err := adjustRunPaths(liveConfigDir)
 	if err != nil {
 		return err
 	}
-	configFile := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	desired, err := loadServerDesiredConfigWithFallback(pendingConfigPath(), filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	if err != nil {
+		return err
+	}
 	appliedState, err := loadServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)))
 	if err != nil {
 		return err

@@ -165,14 +165,27 @@ func loadFileIfPresent(k *koanf.Koanf, explicitPath string, allowInvalid bool) e
 	}
 
 	roleFiles := []string{
-		ConfigPath(layout.ClientConfigFileName),
-		ConfigPath(layout.ServerConfigFileName),
+		layout.ClientConfigFileName,
+		layout.ServerConfigFileName,
 	}
-	for _, candidate := range roleFiles {
-		if _, err := os.Stat(candidate); err == nil {
-			if err := loadFile(k, candidate, allowInvalid); err != nil {
+	for _, name := range roleFiles {
+		live := ConfigPath(name)
+		if _, err := os.Stat(live); err == nil {
+			if err := loadFile(k, live, allowInvalid); err != nil {
 				return err
 			}
+			continue
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("config: read %s: %w", live, err)
+		}
+
+		pending := PendingConfigPath(name)
+		if _, err := os.Stat(pending); err == nil {
+			if err := loadFile(k, pending, allowInvalid); err != nil {
+				return err
+			}
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("config: read %s: %w", pending, err)
 		}
 	}
 	return nil

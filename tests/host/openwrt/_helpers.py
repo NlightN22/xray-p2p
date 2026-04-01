@@ -35,6 +35,7 @@ SERVER_LOG_FILE = linux_helpers.SERVER_LOG_FILE
 LOG_ROOT = linux_helpers.LOG_ROOT
 REVERSE_SUFFIX = linux_helpers.REVERSE_SUFFIX
 XRAY_BINARY = linux_helpers.XRAY_BINARY
+SERVICE_LOG_FILES = linux_helpers.SERVICE_LOG_FILES
 
 
 extract_trojan_credential = linux_helpers.extract_trojan_credential
@@ -221,6 +222,22 @@ def write_apply_request(host: Host, role: str) -> None:
     payload = f'{{"role":"{role}"}}\\n'
     path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
     write_text(host, path, payload)
+
+
+def dump_logs(host: Host, label: str, paths: list[PurePosixPath] | None = None, *, tail_lines: int = 200) -> None:
+    entries = paths or [CLIENT_LOG_FILE, SERVER_LOG_FILE, *SERVICE_LOG_FILES]
+    header = f"==== XP2P LOGS ({label}) on {host.backend.hostname} ===="
+    print(header)
+    for path in entries:
+        if not path_exists(host, path):
+            print(f"-- {path} (missing)")
+            continue
+        content = read_text(host, path)
+        lines = content.splitlines()
+        tail = "\n".join(lines[-tail_lines:])
+        print(f"-- {path} (tail {min(len(lines), tail_lines)} lines)")
+        print(tail)
+    print("=" * len(header))
 
 
 def _pending_candidate(path: PurePosixPath) -> PurePosixPath:

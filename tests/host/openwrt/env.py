@@ -399,7 +399,6 @@ def run_xp2p(host: Host, *args: str):
         ("server", "reverse", "list"),
         ("server", "user", "list"),
         ("server", "cert", "state"),
-        ("server", "state"),
     }
     if "--pending" not in cmd and "-y" not in cmd:
         for target in pending_targets:

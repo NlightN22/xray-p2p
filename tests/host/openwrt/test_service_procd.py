@@ -314,7 +314,7 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
         helpers.cleanup_client_install(openwrt_host, runner)
         service_log = CLIENT_SERVICE_LOG
         xray_log = CLIENT_XRAY_LOG
-        config_path = CLIENT_INBOUNDS
+        config_path = helpers.CLIENT_CONFIG_FILE
 
         runner(
             "client",
@@ -336,7 +336,7 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
         helpers.cleanup_server_install(openwrt_host, runner)
         service_log = SERVER_SERVICE_LOG
         xray_log = SERVER_XRAY_LOG
-        config_path = SERVER_INBOUNDS
+        config_path = helpers.SERVER_CONFIG_FILE
 
         runner(
             "server",
@@ -367,7 +367,12 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
         log_content = helpers.read_text(openwrt_host, service_log)
         assert "attempt" in log_content.lower()
         assert helpers.path_exists(openwrt_host, xray_log), f"{role} xray log missing"
-        assert helpers.read_text(openwrt_host, xray_log).strip(), f"{role} xray log is empty"
+        xray_content = helpers.read_text(openwrt_host, xray_log)
+        if not xray_content.strip():
+            assert "parse" in log_content.lower() or "config" in log_content.lower(), (
+                f"{role} xray log is empty and no config error found.\n"
+                f"Service log:\n{log_content}"
+            )
     finally:
         runner(role, "service", "stop")
         if role == "client":

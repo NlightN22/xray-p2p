@@ -39,11 +39,11 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
     server_runner = _runner(openwrt_server_host)
     client_runner = _runner(openwrt_client_host)
 
-    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
-    openwrt_env.install_ipk_on_host(openwrt_client_host, xp2p_openwrt_ipk, force=True)
-
     helpers.cleanup_client_install(openwrt_client_host, client_runner)
     helpers.cleanup_server_install(openwrt_server_host, server_runner)
+
+    openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
+    openwrt_env.install_ipk_on_host(openwrt_client_host, xp2p_openwrt_ipk, force=True)
 
     client_ip = _detect_host_ipv4(openwrt_client_host)
     server_ip = _detect_host_ipv4(openwrt_server_host)
@@ -114,16 +114,21 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
         _assert_client_state(openwrt_client_host, server_ip)
         _assert_client_routing(openwrt_client_host, server_ip)
 
-        heartbeat_state = helpers.wait_for_heartbeat_state(
-            openwrt_client_host,
-            timeout_seconds=LOG_WAIT_TIMEOUT,
-        )
-        helpers.assert_heartbeat_entry(
-            heartbeat_state,
-            helpers.expected_proxy_tag(server_ip),
-            host=server_ip,
-            user=trojan_user,
-        )
+        try:
+            heartbeat_state = helpers.wait_for_heartbeat_state(
+                openwrt_client_host,
+                timeout_seconds=LOG_WAIT_TIMEOUT,
+            )
+            helpers.assert_heartbeat_entry(
+                heartbeat_state,
+                helpers.expected_proxy_tag(server_ip),
+                host=server_ip,
+                user=trojan_user,
+            )
+        except AssertionError:
+            helpers.dump_logs(openwrt_client_host, "client deploy client")
+            helpers.dump_logs(openwrt_server_host, "client deploy server")
+            raise
     finally:
         if client_pid:
             openwrt_env.stop_process(openwrt_client_host, client_pid)

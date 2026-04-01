@@ -5,6 +5,7 @@ package natredirect
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -126,19 +127,26 @@ func autodetectPorts(inboundsFlag string, quiet bool) ([]int, error) {
 		if trimmed == "" {
 			continue
 		}
-		if info, err := os.Stat(trimmed); err != nil || info.IsDir() {
-			continue
+		paths := []string{trimmed}
+		if pending := pendingInboundsPath(trimmed); pending != trimmed {
+			paths = append([]string{pending}, paths...)
 		}
-		detected, err := firewall.DetectDokodemoPorts(trimmed, true)
-		if err != nil {
-			continue
-		}
-		for _, p := range detected {
-			if _, ok := seen[p]; ok {
+		for _, candidate := range paths {
+			info, err := os.Stat(candidate)
+			if err != nil || info.IsDir() {
 				continue
 			}
-			seen[p] = struct{}{}
-			ports = append(ports, p)
+			detected, err := firewall.DetectDokodemoPorts(candidate, true)
+			if err != nil {
+				continue
+			}
+			for _, p := range detected {
+				if _, ok := seen[p]; ok {
+					continue
+				}
+				seen[p] = struct{}{}
+				ports = append(ports, p)
+			}
 		}
 	}
 	if len(ports) == 0 {
@@ -172,10 +180,47 @@ func ensureProxyMode(cfg config.Config, inboundsPath string) error {
 			return fmt.Errorf("xp2p: nat-redirect is available only in proxy mode (disable tun to proceed)")
 		}
 	}
-	if cfg.Client.TunEnabled && cfg.Server.TunEnabled {
+	clientTun, serverTun, err := resolveTunState(cfg)
+	if err != nil {
+		return err
+	}
+	if clientTun && serverTun {
 		return fmt.Errorf("xp2p: nat-redirect is available only in proxy mode (set tun_enabled=false)")
 	}
 	return nil
+}
+
+func resolveTunState(cfg config.Config) (bool, bool, error) {
+	clientTun := cfg.Client.TunEnabled
+	serverTun := cfg.Server.TunEnabled
+
+	clientPending := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	if clientPending != "" {
+		if _, err := os.Stat(clientPending); err == nil {
+			pendingCfg, err := config.Load(config.Options{Path: clientPending})
+			if err != nil {
+				return false, false, err
+			}
+			clientTun = pendingCfg.Client.TunEnabled
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, false, err
+		}
+	}
+
+	serverPending := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
+	if serverPending != "" {
+		if _, err := os.Stat(serverPending); err == nil {
+			pendingCfg, err := config.Load(config.Options{Path: serverPending})
+			if err != nil {
+				return false, false, err
+			}
+			serverTun = pendingCfg.Server.TunEnabled
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, false, err
+		}
+	}
+
+	return clientTun, serverTun, nil
 }
 
 func pendingInboundsPath(path string) string {

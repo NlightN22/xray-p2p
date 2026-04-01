@@ -15,6 +15,37 @@ func loadServerDesiredConfig(installDir string) (desiredServerConfig, error) {
 	return loadServerDesiredConfigFromPath(serverStatePath(installDir))
 }
 
+func loadServerDesiredConfigWithFallback(pendingPath, livePath string) (desiredServerConfig, error) {
+	doc, err := loadServerStateDocWithFallback(pendingPath, livePath)
+	if err != nil {
+		return desiredServerConfig{}, err
+	}
+	reverse, err := decodeServerReverseState(doc)
+	if err != nil {
+		return desiredServerConfig{}, err
+	}
+	redirects, err := decodeServerRedirectRules(doc)
+	if err != nil {
+		return desiredServerConfig{}, err
+	}
+	forwards, err := decodeServerForwardRules(doc)
+	if err != nil {
+		return desiredServerConfig{}, err
+	}
+	reverse = normalizeReverse(reverse)
+	if redirects == nil {
+		redirects = []redirect.Rule{}
+	}
+	if forwards == nil {
+		forwards = []forward.Rule{}
+	}
+	return desiredServerConfig{
+		Reverse:   reverse,
+		Redirects: redirects,
+		Forwards:  forwards,
+	}, nil
+}
+
 func loadServerDesiredConfigFromPath(path string) (desiredServerConfig, error) {
 	doc, err := loadServerStateDoc(path)
 	if err != nil {

@@ -25,11 +25,15 @@ func applyServerMode(installDir, configDir string, opts ModeOptions) error {
 func applyServerDesiredConfig(installDir, configDir string, desired desiredServerConfig, previousReverse serverReverseState, opts ModeOptions, applyRoutes bool) error {
 	previousReverse = normalizeReverse(previousReverse)
 
-	xrayCfg, err := loadServerXrayConfig(filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	configPath, err := resolveServerConfigPath()
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName)})
+	xrayCfg, err := loadServerXrayConfig(configPath)
+	if err != nil {
+		return err
+	}
+	cfg, err := loadServerConfigWithFallback()
 	if err != nil {
 		return err
 	}

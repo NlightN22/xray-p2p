@@ -75,8 +75,9 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		return nil, fmt.Errorf("invalid heartbeat port %q", portStr)
 	}
 
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
-	state, err := loadClientInstallState(statePath)
+	liveStatePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	pendingStatePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	state, err := loadClientInstallStateWithFallback(pendingStatePath, liveStatePath)
 	if err != nil {
 		return nil, err
 	}

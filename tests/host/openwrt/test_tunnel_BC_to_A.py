@@ -386,48 +386,54 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 client_b_session.__enter__()
                 client_c_session = None
                 try:
-                    helpers.wait_for_heartbeat_state(
-                        server_host,
-                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-                    )
-                    _assert_server_state_reports_user(server_host, default_cred["user"])
-                    client_c_session = openwrt_env.xp2p_run_session(
-                        client_c,
-                        "client",
-                        helpers.INSTALL_ROOT.as_posix(),
-                        helpers.CLIENT_CONFIG_DIR_NAME,
-                        helpers.CLIENT_LOG_FILE,
-                    )
-                    client_c_session.__enter__()
                     try:
                         helpers.wait_for_heartbeat_state(
                             server_host,
                             path=helpers.SERVER_HEARTBEAT_STATE_FILE,
                         )
-                        _assert_server_state_reports_users(
-                            server_host,
-                            {default_cred["user"], "client-two@example.com"},
+                        _assert_server_state_reports_user(server_host, default_cred["user"])
+                        client_c_session = openwrt_env.xp2p_run_session(
+                            client_c,
+                            "client",
+                            helpers.INSTALL_ROOT.as_posix(),
+                            helpers.CLIENT_CONFIG_DIR_NAME,
+                            helpers.CLIENT_LOG_FILE,
                         )
-                        _assert_server_state_reports_users_alive(
-                            server_host,
-                            {default_cred["user"], "client-two@example.com"},
-                        )
-                        for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
-                            result = runner(
-                                "ping",
-                                SERVER_IP,
-                                "--tunnel",
-                                "--count",
-                                "3",
-                                check=True,
+                        client_c_session.__enter__()
+                        try:
+                            helpers.wait_for_heartbeat_state(
+                                server_host,
+                                path=helpers.SERVER_HEARTBEAT_STATE_FILE,
                             )
-                            stdout = (result.stdout or "").lower()
-                            assert "0% loss" in stdout, (
-                                f"xp2p ping from {origin} did not report zero loss:\n"
-                                f"{result.stdout}"
+                            _assert_server_state_reports_users(
+                                server_host,
+                                {default_cred["user"], "client-two@example.com"},
                             )
-                    finally:
-                        pass
+                            _assert_server_state_reports_users_alive(
+                                server_host,
+                                {default_cred["user"], "client-two@example.com"},
+                            )
+                            for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
+                                result = runner(
+                                    "ping",
+                                    SERVER_IP,
+                                    "--tunnel",
+                                    "--count",
+                                    "3",
+                                    check=True,
+                                )
+                                stdout = (result.stdout or "").lower()
+                                assert "0% loss" in stdout, (
+                                    f"xp2p ping from {origin} did not report zero loss:\n"
+                                    f"{result.stdout}"
+                                )
+                        finally:
+                            pass
+                    except BaseException:
+                        helpers.dump_logs(server_host, "tunnel BC to A server")
+                        helpers.dump_logs(client_b, "tunnel BC to A client B")
+                        helpers.dump_logs(client_c, "tunnel BC to A client C")
+                        raise
                     client_b_session.__exit__(None, None, None)
                     client_b_session = None
                     helpers.wait_for_heartbeat_state(

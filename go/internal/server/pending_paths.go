@@ -49,6 +49,19 @@ func loadServerConfigWithFallback() (config.Config, error) {
 	return config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName)})
 }
 
+func resolveServerConfigPath() (string, error) {
+	livePath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	pendingPath := pendingConfigPath()
+	if pendingPath != "" {
+		if _, err := os.Stat(pendingPath); err == nil {
+			return pendingPath, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+	}
+	return livePath, nil
+}
+
 func writeServerApplyRequest() error {
 	req, err := apply.NewRequest(apply.RoleServer)
 	if err != nil {

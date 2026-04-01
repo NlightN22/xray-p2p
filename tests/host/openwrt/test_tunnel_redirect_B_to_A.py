@@ -26,6 +26,7 @@ CLIENT_DIAGNOSTICS_PORT = 62023
 REVERSE_TUNNEL_WARMUP_SECONDS = 2.5
 SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
 CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
+APPLY_REQUEST = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
 
 
 def _runner(host):
@@ -123,6 +124,57 @@ def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: 
             return
         time.sleep(interval)
     pytest.fail(f"Port {port} did not open on {host.backend.hostname} within {timeout_seconds}s")
+
+
+def _wait_for_apply_request_clear(host, *, timeout_seconds: float = 30.0, interval: float = 1.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if not helpers.path_exists(host, APPLY_REQUEST):
+            return
+        time.sleep(interval)
+    pytest.fail(f"apply.request did not clear within {timeout_seconds}s on {host.backend.hostname}")
+
+
+def _assert_socks_inbound_listen(host, path, expected_listens: set[str]) -> None:
+    data = helpers.read_json(host, path)
+    for inbound in data.get("inbounds") or []:
+        if inbound.get("protocol") != "socks":
+            continue
+        listen = (inbound.get("listen") or "").strip() or "127.0.0.1"
+        if listen in expected_listens:
+            return
+        raise AssertionError(
+            f"SOCKS listen {listen!r} does not match {sorted(expected_listens)} in {path}"
+        )
+    raise AssertionError(f"SOCKS inbound not found in {path}")
+
+
+def _assert_port_listen_host(host, port: int, expected_hosts: set[str]) -> None:
+    result = host.run("netstat -tnl")
+    output = result.stdout or ""
+    for host_addr in expected_hosts:
+        if f"{host_addr}:{port}" in output:
+            return
+    pytest.fail(
+        f"Expected port {port} to listen on {sorted(expected_hosts)} "
+        f"on {host.backend.hostname}. netstat:\n{output}"
+    )
+
+
+def _dump_client_inbounds(host, label: str) -> None:
+    paths = [
+        helpers.CLIENT_CONFIG_DIR / "inbounds.json",
+        helpers.CLIENT_PENDING_DIR / "inbounds.json",
+    ]
+    print(f"==== CLIENT INBOUNDS ({label}) on {host.backend.hostname} ====")
+    for path in paths:
+        if not helpers.path_exists(host, path):
+            print(f"-- {path} (missing)")
+            continue
+        content = helpers.read_text(host, path)
+        print(f"-- {path}")
+        print(content)
+    print("==== END CLIENT INBOUNDS ====")
 
 
 def _warmup_reverse_tunnel():
@@ -506,7 +558,11 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             reverse_tag,
         )
 
-        client_host.run("sed -i 's/127\\.0\\.0\\.1/0.0.0.0/g' /etc/xp2p/config-client/inbounds.json")
+        inbounds_path = helpers.CLIENT_PENDING_DIR / "inbounds.json"
+        if not helpers.path_exists(client_host, inbounds_path):
+            inbounds_path = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
+        client_host.run(f"sed -i 's/127\\.0\\.0\\.1/0.0.0.0/g' {inbounds_path.as_posix()}")
+        helpers.write_apply_request(client_host, "client")
 
         server_runner(
             "server",
@@ -536,41 +592,54 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.CLIENT_CONFIG_DIR_NAME,
             helpers.CLIENT_LOG_FILE,
         ):
-            _wait_for_port(client_host, SOCKS_PORT)
-            _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
-            heartbeat_state = helpers.wait_for_heartbeat_state(
-                server_host,
-                path=SERVER_HEARTBEAT_STATE_FILE,
-            )
-            helpers.assert_heartbeat_entry(
-                heartbeat_state,
-                endpoint_tag,
-                host=SERVER_IP,
-                user=credential["user"],
-                client_ip=client_primary_ip,
-            )
-            _wait_for_alive_entries(
-                server_runner,
-                client_runner,
-                install_path=helpers.INSTALL_ROOT.as_posix(),
-                expected_tag=endpoint_tag,
-                expected_host=SERVER_IP,
-                expected_user=credential["user"],
-                expected_client_ip=client_primary_ip,
-            )
-            _warmup_reverse_tunnel()
+            try:
+                _wait_for_port(client_host, SOCKS_PORT)
+                _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
+                _wait_for_apply_request_clear(client_host)
+                _assert_socks_inbound_listen(
+                    client_host,
+                    helpers.CLIENT_CONFIG_DIR / "inbounds.json",
+                    {CLIENT_TUNNEL_IP, "0.0.0.0"},
+                )
+                _assert_port_listen_host(client_host, SOCKS_PORT, {CLIENT_TUNNEL_IP, "0.0.0.0"})
+                heartbeat_state = helpers.wait_for_heartbeat_state(
+                    server_host,
+                    path=SERVER_HEARTBEAT_STATE_FILE,
+                )
+                helpers.assert_heartbeat_entry(
+                    heartbeat_state,
+                    endpoint_tag,
+                    host=SERVER_IP,
+                    user=credential["user"],
+                    client_ip=client_primary_ip,
+                )
+                _wait_for_alive_entries(
+                    server_runner,
+                    client_runner,
+                    install_path=helpers.INSTALL_ROOT.as_posix(),
+                    expected_tag=endpoint_tag,
+                    expected_host=SERVER_IP,
+                    expected_user=credential["user"],
+                    expected_client_ip=client_primary_ip,
+                )
+                _warmup_reverse_tunnel()
 
             redirected_ping = server_runner(
                 "ping",
                 CLIENT_DIAG_IP,
-                f"--tunnel={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                "--tunnel",
                 "--port",
                 str(CLIENT_DIAGNOSTICS_PORT),
                 "--count",
                 "3",
                 check=True,
             )
-            tunnel_common.assert_zero_loss(redirected_ping, f"redirected ping to {CLIENT_DIAG_IP}")
+                tunnel_common.assert_zero_loss(redirected_ping, f"redirected ping to {CLIENT_DIAG_IP}")
+            except BaseException:
+                helpers.dump_logs(client_host, "tunnel redirect A to B client")
+                helpers.dump_logs(server_host, "tunnel redirect A to B server")
+                _dump_client_inbounds(client_host, "tunnel redirect A to B")
+                raise
 
         _add_hosts_entry(client_host, CLIENT_DIAG_IP, CLIENT_DIAG_DOMAIN)
         server_domain_redirect_added = False
@@ -607,48 +676,61 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_CONFIG_DIR_NAME,
                 helpers.CLIENT_LOG_FILE,
             ):
-                _wait_for_port(client_host, SOCKS_PORT)
-                _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
-                heartbeat_state = helpers.wait_for_heartbeat_state(
-                    server_host,
-                    path=SERVER_HEARTBEAT_STATE_FILE,
-                )
-                helpers.assert_heartbeat_entry(
-                    heartbeat_state,
-                    endpoint_tag,
-                    host=SERVER_IP,
-                    user=credential["user"],
-                    client_ip=client_primary_ip,
-                )
-                _wait_for_alive_entries(
-                    server_runner,
-                    client_runner,
-                    install_path=helpers.INSTALL_ROOT.as_posix(),
-                    expected_tag=endpoint_tag,
-                    expected_host=SERVER_IP,
-                    expected_user=credential["user"],
-                    expected_client_ip=client_primary_ip,
-                )
-                _wait_for_server_redirect_apply(
-                    server_host,
-                    target=CLIENT_DIAG_DOMAIN,
-                    outbound_tag=reverse_tag,
-                )
-                _warmup_reverse_tunnel()
+                try:
+                    _wait_for_port(client_host, SOCKS_PORT)
+                    _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
+                    _wait_for_apply_request_clear(client_host)
+                    _assert_socks_inbound_listen(
+                        client_host,
+                        helpers.CLIENT_CONFIG_DIR / "inbounds.json",
+                        {CLIENT_TUNNEL_IP, "0.0.0.0"},
+                    )
+                    _assert_port_listen_host(client_host, SOCKS_PORT, {CLIENT_TUNNEL_IP, "0.0.0.0"})
+                    heartbeat_state = helpers.wait_for_heartbeat_state(
+                        server_host,
+                        path=SERVER_HEARTBEAT_STATE_FILE,
+                    )
+                    helpers.assert_heartbeat_entry(
+                        heartbeat_state,
+                        endpoint_tag,
+                        host=SERVER_IP,
+                        user=credential["user"],
+                        client_ip=client_primary_ip,
+                    )
+                    _wait_for_alive_entries(
+                        server_runner,
+                        client_runner,
+                        install_path=helpers.INSTALL_ROOT.as_posix(),
+                        expected_tag=endpoint_tag,
+                        expected_host=SERVER_IP,
+                        expected_user=credential["user"],
+                        expected_client_ip=client_primary_ip,
+                    )
+                    _wait_for_server_redirect_apply(
+                        server_host,
+                        target=CLIENT_DIAG_DOMAIN,
+                        outbound_tag=reverse_tag,
+                    )
+                    _warmup_reverse_tunnel()
 
                 redirected_domain = server_runner(
                     "ping",
                     CLIENT_DIAG_DOMAIN,
-                    f"--tunnel={CLIENT_TUNNEL_IP}:{SOCKS_PORT}",
+                    "--tunnel",
                     "--port",
                     str(CLIENT_DIAGNOSTICS_PORT),
                     "--count",
                     "3",
                     check=True,
                 )
-                tunnel_common.assert_zero_loss(
-                    redirected_domain, f"redirected ping to {CLIENT_DIAG_DOMAIN}"
-                )
+                    tunnel_common.assert_zero_loss(
+                        redirected_domain, f"redirected ping to {CLIENT_DIAG_DOMAIN}"
+                    )
+                except BaseException:
+                    helpers.dump_logs(client_host, "tunnel redirect A to B domain client")
+                    helpers.dump_logs(server_host, "tunnel redirect A to B domain server")
+                    _dump_client_inbounds(client_host, "tunnel redirect A to B domain")
+                    raise
         finally:
             if server_domain_redirect_added:
                 server_runner(

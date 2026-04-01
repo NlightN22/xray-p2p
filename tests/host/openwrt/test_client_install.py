@@ -237,8 +237,9 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
 def test_client_install_from_link(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
+        link_host = "10.55.0.99"
         link = (
-            "trojan://linkpass@link.example.test:58443?"
+            f"trojan://linkpass@{link_host}:58443?"
             "pinnedPeerCertSha256=deadbeef&security=tls&sni=link.example.test&"
             "verifyPeerCertByName=link.example.test#link@example.com"
         )
@@ -257,7 +258,7 @@ def test_client_install_from_link(openwrt_host, xp2p_openwrt_ipk):
         data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data,
-            "link.example.test",
+            link_host,
             "linkpass",
             "link@example.com",
             "link.example.test",
@@ -274,8 +275,9 @@ def test_client_install_from_link(openwrt_host, xp2p_openwrt_ipk):
 def test_client_install_from_link_without_allow_insecure(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
+        link_host = "10.55.0.98"
         link = (
-            "trojan://linkpass@link.example.test:58443?"
+            f"trojan://linkpass@{link_host}:58443?"
             "security=tls&sni=link.example.test#link@example.com"
         )
         runner(
@@ -292,7 +294,7 @@ def test_client_install_from_link_without_allow_insecure(openwrt_host, xp2p_open
         )
         data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
-            data, "link.example.test", "linkpass", "link@example.com", "link.example.test", allow_insecure=False
+            data, link_host, "linkpass", "link@example.com", "link.example.test", allow_insecure=False
         )
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
@@ -319,8 +321,9 @@ def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk)
             "state-pass-one",
             check=True,
         )
+        link_host = "10.55.0.97"
         link = (
-            "trojan://statepass@link.example.test:58443?"
+            f"trojan://statepass@{link_host}:58443?"
             "pinnedPeerCertSha256=deadbeef&security=tls&sni=link.example.test&"
             "verifyPeerCertByName=link.example.test#state-two@example.com"
         )
@@ -349,9 +352,9 @@ def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk)
         rows = tunnel_common.parse_state_rows(result.stdout or "")
         expected_tags = {
             helpers.expected_proxy_tag("10.55.0.40"),
-            helpers.expected_proxy_tag("link.example.test"),
+            helpers.expected_proxy_tag(link_host),
         }
-        expected_hosts = {"10.55.0.40", "link.example.test"}
+        expected_hosts = {"10.55.0.40", link_host}
         assert len(rows) == 2
         assert {row["TAG"] for row in rows} == expected_tags
         assert {row["HOST"] for row in rows} == expected_hosts
@@ -627,8 +630,14 @@ def test_client_install_recovers_without_state_marker(openwrt_host, xp2p_openwrt
             check=True,
         )
 
-        assert all(helpers.path_exists(openwrt_host, path) for path in helpers.CLIENT_STATE_FILES), (
-            "Expected client config/state files to be recreated"
+        assert helpers.path_exists(openwrt_host, helpers.CLIENT_CONFIG_FILE), (
+            "Expected client config to be recreated"
+        )
+        assert helpers.path_exists(openwrt_host, CLIENT_OUTBOUNDS), (
+            "Expected client outbounds to be recreated"
+        )
+        assert helpers.path_exists(openwrt_host, CLIENT_ROUTING), (
+            "Expected client routing to be recreated"
         )
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)

@@ -137,6 +137,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             credential["password"],
             credential["user"],
             SERVER_DOMAIN,
+            address=SERVER_IP,
             pinned_peer_sha256="",
             verify_peer_name=SERVER_DOMAIN,
         )

@@ -106,6 +106,18 @@ func clientStateInstallPresent(installDir string) (bool, error) {
 	} else if found {
 		return true, nil
 	}
+	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	if found, err := pathExists(pendingPath); err != nil {
+		return false, err
+	} else if found {
+		return true, nil
+	}
+	pendingState := filepath.Clean(config.PendingConfigPath(layout.ClientAppliedStateFileName))
+	if found, err := pathExists(pendingState); err != nil {
+		return false, err
+	} else if found {
+		return true, nil
+	}
 	stateRoot := installDir
 	if runtime.GOOS == "windows" {
 		stateRoot = config.ConfigRoot()
@@ -145,9 +157,22 @@ func snapshotClientState(installDir, configDir, statePath string, ttl time.Durat
 		state.Entries = make(map[string]heartbeat.Entry)
 	}
 
+	liveConfig := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	pending := false
+	if found, err := pathExists(liveConfig); err != nil {
+		return nil, err
+	} else if !found {
+		pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		if foundPending, err := pathExists(pendingConfig); err != nil {
+			return nil, err
+		} else if foundPending {
+			pending = true
+		}
+	}
 	endpoints, err := client.ListEndpoints(client.ListOptions{
 		InstallDir: installDir,
 		ConfigDir:  configDir,
+		Pending:    pending,
 	})
 	if err != nil {
 		return nil, err

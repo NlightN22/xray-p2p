@@ -476,11 +476,11 @@ def _dump_dns_forward_debug(
 ) -> str:
     parts: list[str] = []
     parts.append("--- openwrt-b xp2p redirect list ---")
-    parts.append((openwrt_client_host.run("/usr/bin/xp2p client redirect list || true").stdout or "").strip())
+    parts.append((openwrt_env.run_xp2p(openwrt_client_host, "client", "redirect", "list").stdout or "").strip())
     parts.append("--- openwrt-b nat-redirect list ---")
     parts.append((openwrt_client_host.run("/usr/bin/xp2p nat-redirect list || true").stdout or "").strip())
     parts.append("--- openwrt-b xp2p forward list ---")
-    parts.append((openwrt_client_host.run("/usr/bin/xp2p client forward list || true").stdout or "").strip())
+    parts.append((openwrt_env.run_xp2p(openwrt_client_host, "client", "forward", "list").stdout or "").strip())
     parts.append("--- openwrt-b nft xray_transparent ---")
     parts.append((openwrt_client_host.run("nft list table inet xray_transparent 2>/dev/null || true").stdout or "").strip())
     parts.append("--- openwrt-b nft fw4 ---")
@@ -556,8 +556,8 @@ def _assert_rebind_allowed(output: str, base_domain: str) -> None:
 
 
 def _detect_forward_port(host, target_host: str, target_port: int = 53, role: str = "client") -> str:
-    cmd = "/usr/bin/xp2p client forward list" if role == "client" else "/usr/bin/xp2p server forward list"
-    list_res = host.run(cmd)
+    args = ("client", "forward", "list") if role == "client" else ("server", "forward", "list")
+    list_res = openwrt_env.run_xp2p(host, *args)
     assert list_res.rc == 0, f"forward list failed: {list_res.stderr}"
     output = list_res.stdout or ""
     # Expect a line like: "127.0.0.1:53331  tcp   <target_host>:<port>"

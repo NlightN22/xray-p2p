@@ -14,6 +14,8 @@ pytestmark = [pytest.mark.host, pytest.mark.linux]
 SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
 SERVER_CERT_DEST = helpers.SERVER_CONFIG_DIR / "cert.pem"
 SERVER_KEY_DEST = helpers.SERVER_CONFIG_DIR / "key.pem"
+SERVER_CERT_PENDING = helpers.SERVER_PENDING_DIR / "cert.pem"
+SERVER_KEY_PENDING = helpers.SERVER_PENDING_DIR / "key.pem"
 
 
 def _runner(host: Host):
@@ -30,10 +32,11 @@ def _runner(host: Host):
 
 
 def _copy_remote_file(host: Host, source: PurePosixPath, dest: PurePosixPath) -> None:
+    source_path = _resolve_server_path(host, source)
     result = openwrt_env.run_guest_script(
         host,
         "scripts/linux/copy_file.sh",
-        source.as_posix(),
+        source_path.as_posix(),
         dest.as_posix(),
     )
     if result.rc == 0:
@@ -47,41 +50,21 @@ def _copy_remote_file(host: Host, source: PurePosixPath, dest: PurePosixPath) ->
 
 
 def _read_remote_text(host: Host, path: PurePosixPath) -> str:
-    result = openwrt_env.run_guest_script(
-        host,
-        "scripts/linux/read_file.sh",
-        path.as_posix(),
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"Failed to read remote text {path} (exit {result.rc}).\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    return result.stdout or ""
+    try:
+        return helpers.read_text(host, path)
+    except RuntimeError as exc:
+        pytest.fail(str(exc))
 
 
 def _read_remote_json(host: Host, path: PurePosixPath) -> dict:
-    content = _read_remote_text(host, path)
     try:
-        return json.loads(content)
-    except json.JSONDecodeError as exc:
-        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}")
+        return helpers.read_json(host, path)
+    except RuntimeError as exc:
+        pytest.fail(str(exc))
 
 
 def _path_exists(host: Host, path: PurePosixPath) -> bool:
-    result = openwrt_env.run_guest_script(
-        host,
-        "scripts/linux/path_exists.sh",
-        path.as_posix(),
-    )
-    if result.rc == 0:
-        return True
-    if result.rc == 3:
-        return False
-    pytest.fail(
-        f"Failed to check path {path} (exit {result.rc}).\n"
-        f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
+    return helpers.path_exists(host, path)
 
 
 def _remove_path(host: Host, path: PurePosixPath) -> None:
@@ -99,6 +82,14 @@ def _remove_path(host: Host, path: PurePosixPath) -> None:
 
 def _combined_output(result) -> str:
     return f"{result.stdout}\n{result.stderr}".strip()
+
+
+def _resolve_server_path(host: Host, path: PurePosixPath) -> PurePosixPath:
+    if path == SERVER_CERT_DEST and helpers.path_exists(host, SERVER_CERT_PENDING):
+        return SERVER_CERT_PENDING
+    if path == SERVER_KEY_DEST and helpers.path_exists(host, SERVER_KEY_PENDING):
+        return SERVER_KEY_PENDING
+    return path
 
 
 def _trojan_inbound(data: dict) -> dict:
@@ -189,8 +180,10 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
-        assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
+        expected_cert_paths = {SERVER_CERT_DEST.as_posix(), SERVER_CERT_PENDING.as_posix()}
+        expected_key_paths = {SERVER_KEY_DEST.as_posix(), SERVER_KEY_PENDING.as_posix()}
+        assert primary_cert.get("certificateFile") in expected_cert_paths
+        assert primary_cert.get("keyFile") in expected_key_paths
 
         expected_allow_insecure = _parse_self_signed(_read_cert_state(runner))
         assert expected_allow_insecure in {True, False}
@@ -235,8 +228,10 @@ def test_openwrt_server_install_generates_self_signed_certificate(openwrt_server
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
-        assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
+        expected_cert_paths = {SERVER_CERT_DEST.as_posix(), SERVER_CERT_PENDING.as_posix()}
+        expected_key_paths = {SERVER_KEY_DEST.as_posix(), SERVER_KEY_PENDING.as_posix()}
+        assert primary_cert.get("certificateFile") in expected_cert_paths
+        assert primary_cert.get("keyFile") in expected_key_paths
 
         state_output = _read_cert_state(runner)
         assert "Status:      OK" in state_output

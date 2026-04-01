@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
@@ -237,6 +238,14 @@ func detectSocksProxies(cfg config.Config) (string, string, error) {
 func clientConfigPresent() bool {
 	path := config.ConfigPath(layout.ClientConfigFileName)
 	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	pending := config.PendingConfigPath(layout.ClientConfigFileName)
+	if pending == "" {
+		return false
+	}
+	_, err = os.Stat(pending)
 	return err == nil
 }
 
@@ -273,9 +282,18 @@ func loadSocksAddress(installDir, configDir string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", errSocksInboundNotFound
+			pendingPath := filepath.Join(apply.PendingDir(dir), "inbounds.json")
+			data, err = os.ReadFile(pendingPath)
+			if err != nil {
+				if errors.Is(err, os.ErrNotExist) {
+					return "", errSocksInboundNotFound
+				}
+				return "", fmt.Errorf("read %s: %w", pendingPath, err)
+			}
+			path = pendingPath
+		} else {
+			return "", fmt.Errorf("read %s: %w", path, err)
 		}
-		return "", fmt.Errorf("read %s: %w", path, err)
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(data))

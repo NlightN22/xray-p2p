@@ -3,12 +3,16 @@
 package dnsforward
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/client"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -54,13 +58,32 @@ func (m *Manager) listForwards() ([]forward.Rule, error) {
 		return server.ListForwards(server.ForwardListOptions{
 			InstallDir: m.installDir,
 			ConfigDir:  m.configDir,
+			Pending:    shouldUsePendingConfig(layout.ServerConfigFileName),
 		})
 	default:
 		return client.ListForwards(client.ForwardListOptions{
 			InstallDir: m.installDir,
 			ConfigDir:  m.configDir,
+			Pending:    shouldUsePendingConfig(layout.ClientConfigFileName),
 		})
 	}
+}
+
+func shouldUsePendingConfig(name string) bool {
+	livePath := config.ConfigPath(name)
+	if _, err := os.Stat(livePath); err == nil {
+		return false
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	pendingPath := config.PendingConfigPath(name)
+	if pendingPath == "" {
+		return false
+	}
+	if _, err := os.Stat(pendingPath); err == nil {
+		return true
+	}
+	return false
 }
 
 func (m *Manager) addForward(addr netip.Addr, port int) (forward.Rule, error) {

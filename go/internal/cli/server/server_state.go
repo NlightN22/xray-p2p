@@ -66,11 +66,11 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 		logging.Info("xp2p server state: server is not installed")
 		return 1
 	}
-	stateRoot := installDir
-	if runtime.GOOS == "windows" {
-		stateRoot = config.ConfigRoot()
+	statePath, err := resolveServerHeartbeatStatePath(installDir)
+	if err != nil {
+		logging.Error("xp2p server state: resolve heartbeat path failed", "err", err)
+		return 1
 	}
-	statePath := filepath.Join(stateRoot, layout.ServerHeartbeatStateFileName)
 	ttl := opts.TTL
 	if ttl <= 0 {
 		ttl = defaultHeartbeatTTL
@@ -166,9 +166,35 @@ func snapshotServerState(statePath, installDir string, ttl time.Duration) ([]hea
 	return filtered, nil
 }
 
+func resolveServerHeartbeatStatePath(installDir string) (string, error) {
+	stateRoot := installDir
+	if runtime.GOOS == "windows" {
+		stateRoot = config.ConfigRoot()
+	}
+	livePath := filepath.Join(stateRoot, layout.ServerHeartbeatStateFileName)
+	if found, err := pathExists(livePath); err != nil {
+		return "", err
+	} else if found {
+		return livePath, nil
+	}
+	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ServerHeartbeatStateFileName))
+	if found, err := pathExists(pendingPath); err != nil {
+		return "", err
+	} else if found {
+		return pendingPath, nil
+	}
+	return livePath, nil
+}
+
 func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
 	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	if doc, found, err := loadServerConfigDoc(configPath); err != nil {
+		return nil, err
+	} else if found {
+		return extractServerReversePairs(doc), nil
+	}
+	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
+	if doc, found, err := loadServerConfigDoc(pendingPath); err != nil {
 		return nil, err
 	} else if found {
 		return extractServerReversePairs(doc), nil

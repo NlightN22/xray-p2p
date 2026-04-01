@@ -288,34 +288,40 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.CLIENT_CONFIG_DIR_NAME,
                 helpers.CLIENT_LOG_FILE,
             ):
-                client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
-                _wait_for_port(client_b, client_socks_port)
-                for target in (SERVER_A_IP, SERVER_C_IP):
-                    result = client_runner(
-                        "ping",
-                        target,
-                        "--tunnel",
-                        "--count",
-                        "3",
-                        check=True,
-                    )
-                    stdout = (result.stdout or "").lower()
-                    assert "0% loss" in stdout, (
-                        f"xp2p ping to {target} did not report zero loss:\n"
-                        f"{result.stdout}"
-                    )
-                for entry in server_entries:
-                    heartbeat_state = helpers.wait_for_heartbeat_state(
-                        entry["host"],
-                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-                    )
-                    helpers.assert_heartbeat_entry(
-                        heartbeat_state,
-                        helpers.expected_proxy_tag(entry["ip"]),
-                        host=entry["ip"],
-                        user=entry["credential"]["user"],
-                        client_ip=client_primary_ip,
-                    )
+                try:
+                    client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+                    _wait_for_port(client_b, client_socks_port)
+                    for target in (SERVER_A_IP, SERVER_C_IP):
+                        result = client_runner(
+                            "ping",
+                            target,
+                            "--tunnel",
+                            "--count",
+                            "3",
+                            check=True,
+                        )
+                        stdout = (result.stdout or "").lower()
+                        assert "0% loss" in stdout, (
+                            f"xp2p ping to {target} did not report zero loss:\n"
+                            f"{result.stdout}"
+                        )
+                    for entry in server_entries:
+                        heartbeat_state = helpers.wait_for_heartbeat_state(
+                            entry["host"],
+                            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                        )
+                        helpers.assert_heartbeat_entry(
+                            heartbeat_state,
+                            helpers.expected_proxy_tag(entry["ip"]),
+                            host=entry["ip"],
+                            user=entry["credential"]["user"],
+                            client_ip=client_primary_ip,
+                        )
+                except BaseException:
+                    helpers.dump_logs(client_b, "tunnel B to A/C client")
+                    helpers.dump_logs(server_a, "tunnel B to A/C server A")
+                    helpers.dump_logs(server_c, "tunnel B to A/C server C")
+                    raise
         finally:
             for spec in redirect_specs:
                 spec.runner(
