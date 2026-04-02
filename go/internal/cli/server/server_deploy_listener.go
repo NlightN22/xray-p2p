@@ -2,17 +2,18 @@ package servercmd
 
 import (
 	"context"
-	"errors"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
-	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 type deployServer struct {
@@ -181,10 +182,6 @@ func (s *deployServer) Run(ctx context.Context) error {
 }
 
 func (s *deployServer) applyMode(installDir, configDir string, tunEnabled bool) error {
-	modeLabel := "proxy"
-	if tunEnabled {
-		modeLabel = "tun"
-	}
 	updatedPath, err := config.UpdateTunEnabled("", "server", tunEnabled)
 	if err != nil {
 		return err
@@ -192,26 +189,53 @@ func (s *deployServer) applyMode(installDir, configDir string, tunEnabled bool) 
 	if _, err := config.EnsureTunSettings("", "server", tunEnabled, s.Cfg.Server.TunName, s.Cfg.Server.TunMTU, s.Cfg.Server.TunAddr); err != nil {
 		return err
 	}
-	logging.Info("xp2p server deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
+	logDeployPaths("xp2p server deploy: mode config updated", updatedPath)
 	req, err := apply.NewRequest(apply.RoleServer)
 	if err != nil {
 		return err
 	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		return err
+	}
+	logDeployPaths("xp2p server deploy: apply request written", updatedPath)
+	return nil
 }
 
 func (s *deployServer) applyTunAndStartService(ctx context.Context, installDir, configDir string) {
 	if err := s.applyMode(installDir, configDir, true); err != nil {
 		logging.Warn("xp2p server deploy: tun mode setup failed", "err", err)
 	}
-	ctrl := servicecontrol.Default()
-	if err := ctrl.Start(ctx, servicecontrol.RoleServer); err != nil {
-		if errors.Is(err, servicecontrol.ErrUnsupported) {
-			logging.Warn("xp2p server deploy: service start is not supported on this platform")
-			return
-		}
-		logging.Warn("xp2p server deploy: server service start failed", "err", err)
-		return
+	logging.Info("xp2p server deploy: service start skipped after deploy")
+}
+
+func logDeployPaths(message, updatedPath string) {
+	applyPath := config.ApplyRequestPath()
+	applyDir := filepath.Dir(applyPath)
+	logging.Info(
+		message,
+		"mode_config", updatedPath,
+		"live_config", config.ConfigPath(layout.ServerConfigFileName),
+		"pending_config", config.PendingConfigPath(layout.ServerConfigFileName),
+		"apply_dir", applyDir,
+		"apply_request", applyPath,
+		"live_exists", fileExists(config.ConfigPath(layout.ServerConfigFileName)),
+		"pending_exists", fileExists(config.PendingConfigPath(layout.ServerConfigFileName)),
+		"apply_dir_exists", dirExists(applyDir),
+		"apply_request_exists", fileExists(applyPath),
+	)
+}
+
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
 	}
-	logging.Info("xp2p server deploy: server service started")
+	return false
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }

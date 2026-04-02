@@ -484,6 +484,7 @@ def xp2p_run_session(
     config_dir: str,
     *,
     extra_args: list[str] | None = None,
+    log_path: PurePosixPath | Path | str | None = None,
 ):
     if role not in {"server", "client"}:
         raise ValueError(f"Unsupported role: {role}")
@@ -504,12 +505,18 @@ def xp2p_run_session(
     extra = ""
     if extra_args:
         extra = " " + " ".join(shlex.quote(str(arg)) for arg in extra_args)
+    if log_path is None:
+        log_target = f"/tmp/xp2p-{role}-run.log"
+    elif isinstance(log_path, (PurePosixPath, Path)):
+        log_target = log_path.as_posix()
+    else:
+        log_target = str(log_path)
     start_cmd = (
         f"setsid /usr/bin/xp2p {role} run "
         f"--path {shlex.quote(install_path)} "
         f"--config-dir {shlex.quote(config_dir)} "
         f"--auto-install "
-        f"--quiet{extra} >/tmp/xp2p-{role}-run.log 2>&1 & echo $!"
+        f"--quiet{extra} >{shlex.quote(log_target)} 2>&1 & echo $!"
     )
     last_log = ""
     pid_value: str | None = None
@@ -527,7 +534,7 @@ def xp2p_run_session(
         alive = host.run(f"kill -0 {pid_value} >/dev/null 2>&1")
         if alive.rc == 0:
             break
-        log_read = host.run(f"cat /tmp/xp2p-{role}-run.log 2>/dev/null || true")
+        log_read = host.run(f"cat {shlex.quote(log_target)} 2>/dev/null || true")
         last_log = log_read.stdout or ""
         host.run(f"pkill -f 'xp2p {role} run' >/dev/null 2>&1 || true")
         host.run("pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")

@@ -22,6 +22,8 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
+var requiredServerConfigFiles = []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
+
 func ensureServerAssets(ctx context.Context, cfg config.Config, installDir, configDirName, configDirPath string, autoInstall, quiet bool) error {
 	present, err := serverAssetsPresent(installDir, configDirPath)
 	if err != nil {
@@ -107,14 +109,13 @@ func serverAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, fmt.Errorf("xp2p: %s is not a directory", configDirPath)
 	}
 
-	requiredFiles := []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
-	if present, err := configFilesPresent(configDirPath, requiredFiles); err != nil {
+	if present, err := configFilesPresent(configDirPath, requiredServerConfigFiles); err != nil {
 		return false, err
 	} else if present {
 		return true, nil
 	}
 	pendingDir := apply.PendingDir(configDirPath)
-	return configFilesPresent(pendingDir, requiredFiles)
+	return configFilesPresent(pendingDir, requiredServerConfigFiles)
 }
 
 func configFilesPresent(dir string, names []string) (bool, error) {
@@ -164,6 +165,52 @@ func resolveConfigDirPath(installDir, configDir string) (string, error) {
 		return filepath.Join(config.ConfigRoot(), cfgDir), nil
 	}
 	return filepath.Join(installDir, cfgDir), nil
+}
+
+func ensureServerApplyRequestIfPendingOnly(configDirPath string) error {
+	liveConfig := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if _, err := os.Stat(liveConfig); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
+	pendingConfigPresent := false
+	if _, err := os.Stat(pendingConfig); err == nil {
+		pendingConfigPresent = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	pendingDir := apply.PendingDir(configDirPath)
+	pendingDirPresent, err := configFilesPresent(pendingDir, requiredServerConfigFiles)
+	if err != nil {
+		return err
+	}
+	if !pendingConfigPresent && !pendingDirPresent {
+		return nil
+	}
+
+	applyPath := config.ApplyRequestPath()
+	if _, err := os.Stat(applyPath); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	req, err := apply.NewRequest(apply.RoleServer)
+	if err != nil {
+		return err
+	}
+	if err := apply.WriteRequest(applyPath, req, config.AuditLogPath()); err != nil {
+		return err
+	}
+	logging.Info("xp2p server run: apply request recorded for pending-only configuration",
+		"pending_config", pendingConfig,
+		"pending_dir", pendingDir,
+	)
+	return nil
 }
 
 func validatePortValue(port string) error {

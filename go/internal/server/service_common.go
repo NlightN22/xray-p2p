@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -29,6 +30,12 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	configDir, err := ResolveConfigDir(installDir, configDirName)
 	if err != nil {
 		return err
+	}
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return fmt.Errorf("xp2p: create config directory: %w", err)
+	}
+	if err := os.MkdirAll(apply.PendingDir(configDir), 0o755); err != nil {
+		return fmt.Errorf("xp2p: create pending config directory: %w", err)
 	}
 
 	var diagCancel context.CancelFunc

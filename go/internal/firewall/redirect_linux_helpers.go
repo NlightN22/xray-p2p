@@ -29,12 +29,14 @@ func renderSnippetWithFW4(entries []Entry, useFW4 bool) string {
 	b.WriteString("    type nat hook prerouting priority -95; policy accept;\n")
 	for _, e := range entries {
 		b.WriteString(fmt.Sprintf("    meta l4proto tcp tcp dport != %d ip daddr %s counter redirect to :%d\n", e.Port, e.CIDR, e.Port))
+		b.WriteString(fmt.Sprintf("    meta l4proto udp udp dport != %d ip daddr %s counter redirect to :%d\n", e.Port, e.CIDR, e.Port))
 	}
 	b.WriteString("}\n")
 	b.WriteString("chain xray_transparent_output {\n")
 	b.WriteString("    type nat hook output priority -95; policy accept;\n")
 	for _, e := range entries {
 		b.WriteString(fmt.Sprintf("    meta l4proto tcp tcp dport != %d ip daddr %s counter redirect to :%d\n", e.Port, e.CIDR, e.Port))
+		b.WriteString(fmt.Sprintf("    meta l4proto udp udp dport != %d ip daddr %s counter redirect to :%d\n", e.Port, e.CIDR, e.Port))
 	}
 	b.WriteString("}\n")
 	b.WriteString("chain xray_transparent_output_allow {\n")
@@ -43,6 +45,7 @@ func renderSnippetWithFW4(entries []Entry, useFW4 bool) string {
 	for _, e := range entries {
 		if !seen[e.Port] {
 			b.WriteString(fmt.Sprintf("    tcp dport %d counter accept\n", e.Port))
+			b.WriteString(fmt.Sprintf("    udp dport %d counter accept\n", e.Port))
 			seen[e.Port] = true
 		}
 	}
@@ -66,7 +69,9 @@ func renderIPTables(entries []Entry) []string {
 	for _, e := range entries {
 		commands = append(commands,
 			fmt.Sprintf("iptables -t nat -A XRAY_TRANSPARENT -p tcp -d %s ! --dport %d -j REDIRECT --to-ports %d", e.CIDR, e.Port, e.Port),
+			fmt.Sprintf("iptables -t nat -A XRAY_TRANSPARENT -p udp -d %s ! --dport %d -j REDIRECT --to-ports %d", e.CIDR, e.Port, e.Port),
 			fmt.Sprintf("iptables -t filter -A XRAY_TRANSPARENT_OUT -p tcp --dport %d -j ACCEPT", e.Port),
+			fmt.Sprintf("iptables -t filter -A XRAY_TRANSPARENT_OUT -p udp --dport %d -j ACCEPT", e.Port),
 		)
 	}
 	if len(entries) == 0 {

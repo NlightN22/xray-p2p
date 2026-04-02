@@ -33,6 +33,12 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return fmt.Errorf("xp2p: create config directory: %w", err)
+	}
+	if err := os.MkdirAll(apply.PendingDir(configDir), 0o755); err != nil {
+		return fmt.Errorf("xp2p: create pending config directory: %w", err)
+	}
 
 	var diagCancel context.CancelFunc
 	if port := strings.TrimSpace(opts.DiagPort); port != "" {

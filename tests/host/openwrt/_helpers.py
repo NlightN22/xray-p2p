@@ -62,8 +62,10 @@ def cleanup_client_install(
     install_dir: PurePosixPath | None = None,
     config_dir: str | None = None,
 ) -> None:
+    print(f"==== cleanup client on {host.backend.hostname} ====")
     install_path = (install_dir or INSTALL_ROOT).as_posix()
     config_name = config_dir or CLIENT_CONFIG_DIR_NAME
+    print(f"client remove start: {install_path} ({config_name})")
     runner(
         "client",
         "remove",
@@ -75,8 +77,11 @@ def cleanup_client_install(
         "--ignore-missing",
         "--quiet",
     )
+    print("client remove done")
     remove_path(host, LOG_ROOT)
+    print(f"client log root cleared: {LOG_ROOT.as_posix()}")
     openwrt_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
+    print("==== cleanup client done ====")
 
 
 def cleanup_server_install(
@@ -85,8 +90,10 @@ def cleanup_server_install(
     install_dir: PurePosixPath | None = None,
     config_dir: str | None = None,
 ) -> None:
+    print(f"==== cleanup server on {host.backend.hostname} ====")
     install_path = (install_dir or INSTALL_ROOT).as_posix()
     config_name = config_dir or SERVER_CONFIG_DIR_NAME
+    print(f"server remove start: {install_path} ({config_name})")
     runner(
         "server",
         "remove",
@@ -97,8 +104,11 @@ def cleanup_server_install(
         "--ignore-missing",
         "--quiet",
     )
+    print("server remove done")
     remove_path(host, LOG_ROOT)
+    print(f"server log root cleared: {LOG_ROOT.as_posix()}")
     openwrt_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
+    print("==== cleanup server done ====")
 
 
 def find_tun_inbound(data: dict) -> dict | None:
@@ -199,6 +209,21 @@ def read_client_config(host: Host) -> dict:
 
 def read_server_config(host: Host) -> dict:
     return read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+
+
+def dump_install_dirs(host: Host, label: str) -> None:
+    paths = [INSTALL_ROOT, CLIENT_CONFIG_DIR, SERVER_CONFIG_DIR]
+    print(f"==== INSTALL DIRS ({label}) on {host.backend.hostname} ====")
+    for path in paths:
+        target = path.as_posix()
+        exists = host.run(f"test -d {shlex.quote(target)}").rc == 0
+        status = "present" if exists else "missing"
+        print(f"{target}: {status}")
+        if exists:
+            listing = host.run(f"ls -lha {shlex.quote(target)}")
+            if listing.stdout:
+                print(listing.stdout)
+    print("==== END INSTALL DIRS ====")
 
 
 def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:

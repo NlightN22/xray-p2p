@@ -18,6 +18,9 @@ SERVER_DEPLOY_LOG = PurePosixPath("/tmp/xp2p-server-deploy.log")
 DEPLOY_PORT = "62125"
 TROJAN_PORT = "58601"
 LOG_WAIT_TIMEOUT = 30
+CLIENT_DIAG_PORT = "62023"
+SERVER_DIAG_PORT = "62022"
+SERVICE_START_TIMEOUT = 30
 
 
 def _runner(host: Host):
@@ -41,9 +44,20 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
 
     helpers.cleanup_client_install(openwrt_client_host, client_runner)
     helpers.cleanup_server_install(openwrt_server_host, server_runner)
+    helpers.dump_install_dirs(openwrt_client_host, "client deploy after cleanup")
+    helpers.dump_install_dirs(openwrt_server_host, "client deploy after cleanup")
 
     openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
     openwrt_env.install_ipk_on_host(openwrt_client_host, xp2p_openwrt_ipk, force=True)
+    for host, runner in (
+        (openwrt_server_host, server_runner),
+        (openwrt_client_host, client_runner),
+    ):
+        runner("client", "service", "stop")
+        runner("server", "service", "stop")
+        openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+    helpers.dump_install_dirs(openwrt_client_host, "client deploy after install")
+    helpers.dump_install_dirs(openwrt_server_host, "client deploy after install")
 
     client_ip = _detect_host_ipv4(openwrt_client_host)
     server_ip = _detect_host_ipv4(openwrt_server_host)
@@ -95,7 +109,6 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             [
                 "client deploy: trojan link received",
                 "client deploy: local install completed",
-                "client deploy: ping ok",
                 "client deploy: completed",
             ],
             timeout=LOG_WAIT_TIMEOUT,
@@ -114,6 +127,19 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
         _assert_client_state(openwrt_client_host, server_ip)
         _assert_client_routing(openwrt_client_host, server_ip)
 
+        _wait_for_port_closed(openwrt_client_host, CLIENT_DIAG_PORT, timeout=SERVICE_START_TIMEOUT)
+        _wait_for_port_closed(openwrt_server_host, SERVER_DIAG_PORT, timeout=SERVICE_START_TIMEOUT)
+        client_runner("client", "service", "start", check=True)
+        server_runner("server", "service", "start", check=True)
+        if not _wait_for_port_open(openwrt_client_host, CLIENT_DIAG_PORT, timeout=SERVICE_START_TIMEOUT):
+            helpers.dump_logs(openwrt_client_host, "client deploy client")
+            helpers.dump_logs(openwrt_server_host, "client deploy server")
+            pytest.fail(f"Port {CLIENT_DIAG_PORT} did not open within {SERVICE_START_TIMEOUT}s")
+        if not _wait_for_port_open(openwrt_server_host, SERVER_DIAG_PORT, timeout=SERVICE_START_TIMEOUT):
+            helpers.dump_logs(openwrt_client_host, "client deploy client")
+            helpers.dump_logs(openwrt_server_host, "client deploy server")
+            pytest.fail(f"Port {SERVER_DIAG_PORT} did not open within {SERVICE_START_TIMEOUT}s")
+
         try:
             heartbeat_state = helpers.wait_for_heartbeat_state(
                 openwrt_client_host,
@@ -128,6 +154,8 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
         except AssertionError:
             helpers.dump_logs(openwrt_client_host, "client deploy client")
             helpers.dump_logs(openwrt_server_host, "client deploy server")
+            helpers.dump_install_dirs(openwrt_client_host, "client deploy client failure")
+            helpers.dump_install_dirs(openwrt_server_host, "client deploy server failure")
             raise
     finally:
         if client_pid:
@@ -521,6 +549,26 @@ def _read_optional_log(host: Host, path: PurePosixPath) -> str:
     if not _path_exists(host, path):
         return ""
     return _read_text(host, path)
+
+
+def _wait_for_port_closed(host: Host, port: str, *, timeout: int) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        result = host.run(f"netstat -lnptu 2>/dev/null | grep -q ':{port} '")
+        if result.rc != 0:
+            return
+        time.sleep(1)
+    pytest.fail(f"Port {port} did not close within {timeout}s")
+
+
+def _wait_for_port_open(host: Host, port: str, *, timeout: int) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        result = host.run(f"netstat -lnptu 2>/dev/null | grep -q ':{port} '")
+        if result.rc == 0:
+            return True
+        time.sleep(1)
+    return False
 
 
 def _extract_marker(output: str | None, marker: str) -> str | None:

@@ -18,6 +18,8 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
+var requiredClientConfigFiles = []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
+
 func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p client run", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
@@ -86,6 +88,11 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 				return 1
 			}
 		}
+	}
+
+	if err := ensureClientApplyRequestIfPendingOnly(configDirPath); err != nil {
+		logging.Error("xp2p client run: apply request check failed", "err", err)
+		return 1
 	}
 
 	cancelDiagnostics := startDiagnostics(ctx, cfg.Client.DiagPort)
@@ -167,14 +174,13 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, fmt.Errorf("xp2p: %s is not a directory", configDirPath)
 	}
 
-	requiredFiles := []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
-	if present, err := configFilesPresent(configDirPath, requiredFiles); err != nil {
+	if present, err := configFilesPresent(configDirPath, requiredClientConfigFiles); err != nil {
 		return false, err
 	} else if present {
 		return true, nil
 	}
 	pendingDir := apply.PendingDir(configDirPath)
-	return configFilesPresent(pendingDir, requiredFiles)
+	return configFilesPresent(pendingDir, requiredClientConfigFiles)
 }
 
 func configFilesPresent(dir string, names []string) (bool, error) {
@@ -202,4 +208,50 @@ func resolveClientConfigDirPath(installDir, configDir string) (string, error) {
 		return filepath.Join(config.ConfigRoot(), cfgDir), nil
 	}
 	return filepath.Join(installDir, cfgDir), nil
+}
+
+func ensureClientApplyRequestIfPendingOnly(configDirPath string) error {
+	liveConfig := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if _, err := os.Stat(liveConfig); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	pendingConfigPresent := false
+	if _, err := os.Stat(pendingConfig); err == nil {
+		pendingConfigPresent = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	pendingDir := apply.PendingDir(configDirPath)
+	pendingDirPresent, err := configFilesPresent(pendingDir, requiredClientConfigFiles)
+	if err != nil {
+		return err
+	}
+	if !pendingConfigPresent && !pendingDirPresent {
+		return nil
+	}
+
+	applyPath := config.ApplyRequestPath()
+	if _, err := os.Stat(applyPath); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	if err := apply.WriteRequest(applyPath, req, config.AuditLogPath()); err != nil {
+		return err
+	}
+	logging.Info("xp2p client run: apply request recorded for pending-only configuration",
+		"pending_config", pendingConfig,
+		"pending_dir", pendingDir,
+	)
+	return nil
 }

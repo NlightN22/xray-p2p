@@ -98,8 +98,10 @@ fi
 
 mkdir -p /etc/xp2p
 mkdir -p /etc/xp2p/bin
+mkdir -p /etc/xp2p/config-client
+mkdir -p /etc/xp2p/config-server
 mkdir -p /var/log/xp2p
-chmod 0755 /etc/xp2p /etc/xp2p/bin /var/log/xp2p
+chmod 0755 /etc/xp2p /etc/xp2p/bin /etc/xp2p/config-client /etc/xp2p/config-server /var/log/xp2p
 /etc/init.d/xp2p-client enable >/dev/null 2>&1 || true
 /etc/init.d/xp2p-server enable >/dev/null 2>&1 || true
 exit 0

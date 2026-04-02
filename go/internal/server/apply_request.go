@@ -3,6 +3,7 @@
 package server
 
 import (
+	"os"
 	"path/filepath"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
@@ -13,6 +14,23 @@ import (
 
 func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bool, error) {
 	reqPath := config.ApplyRequestPath()
+	logging.Info("xp2p: apply request check",
+		"role", role,
+		"apply_request", reqPath,
+		"apply_request_exists", fileExists(reqPath),
+		"apply_root", config.ApplyRoot(),
+		"apply_root_exists", dirExists(config.ApplyRoot()),
+		"pending_root", config.PendingRoot(),
+		"pending_root_exists", dirExists(config.PendingRoot()),
+		"pending_config", config.PendingConfigPath(layout.ServerConfigFileName),
+		"pending_config_exists", fileExists(config.PendingConfigPath(layout.ServerConfigFileName)),
+		"pending_dir", apply.PendingDir(configDir),
+		"pending_dir_exists", dirExists(apply.PendingDir(configDir)),
+		"live_config", config.ConfigPath(layout.ServerConfigFileName),
+		"live_config_exists", fileExists(config.ConfigPath(layout.ServerConfigFileName)),
+		"live_config_dir", configDir,
+		"live_config_dir_exists", dirExists(configDir),
+	)
 	req, exists, err := apply.ReadRequest(reqPath)
 	if err != nil {
 		return nil, false, err
@@ -43,4 +61,19 @@ func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bo
 		logging.Warn("xp2p: apply request skipped (no pending data)", "role", role, "request_id", req.ID)
 	}
 	return rollback, applied, nil
+}
+
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+	return false
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -210,18 +211,16 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 1
 	}
 
-	cancelDiagnostics := startDiagnostics(ctx, cfg.Client.DiagPort)
-	if cancelDiagnostics != nil {
-		defer cancelDiagnostics()
-	}
-
 	socksAddr := strings.TrimSpace(cfg.Client.SocksAddress)
-	if err := ensureClientServiceApplied(ctx, socksAddr); err != nil {
+	serviceActive, err := ensureClientServiceApplied(ctx, socksAddr)
+	if err != nil {
 		completionState = "FAIL service-apply"
 		logging.Error("xp2p client deploy: service apply failed", "err", err)
 		return 1
 	}
-	if socksAddr != "" {
+	if !serviceActive {
+		logging.Info("xp2p client deploy: service inactive; skipping SOCKS ping")
+	} else if socksAddr != "" {
 		targetHost := strings.TrimSpace(tl.ServerAddress)
 		if targetHost == "" {
 			targetHost = strings.TrimSpace(opts.runtime.serverHost)
@@ -260,7 +259,8 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Error("xp2p client deploy: tun mode setup failed", "err", err)
 		return 1
 	}
-	if err := ensureClientServiceApplied(ctx, socksAddr); err != nil {
+	_, err = ensureClientServiceApplied(ctx, socksAddr)
+	if err != nil {
 		completionState = "FAIL service-apply"
 		logging.Error("xp2p client deploy: service apply failed", "err", err)
 		return 1
@@ -469,10 +469,6 @@ func waitForPing(ctx context.Context, host string, opts ping.Options, timeout ti
 }
 
 func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config, tunEnabled bool, tunMode string, tunModeSet bool, fullTunnelTag string) error {
-	modeLabel := "proxy"
-	if tunEnabled {
-		modeLabel = "tun"
-	}
 	updatedPath, err := config.UpdateTunEnabled("", "client", tunEnabled)
 	if err != nil {
 		return err
@@ -490,12 +486,16 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 			return err
 		}
 	}
-	logging.Info("xp2p client deploy: mode config updated", "mode", modeLabel, "config", updatedPath)
+	logDeployPaths("xp2p client deploy: mode config updated", updatedPath)
 	req, err := apply.NewRequest(apply.RoleClient)
 	if err != nil {
 		return err
 	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+		return err
+	}
+	logDeployPaths("xp2p client deploy: apply request written", updatedPath)
+	return nil
 }
 
 func loadDeployClientConfig() (config.Config, error) {
@@ -541,30 +541,30 @@ func resolveDeployFullTunnelTag(installDir, configDir string, link trojanLink, r
 	return "", fmt.Errorf("xp2p: full-tunnel endpoint %s not found", host)
 }
 
-func ensureClientServiceApplied(ctx context.Context, socksAddr string) error {
+func ensureClientServiceApplied(ctx context.Context, socksAddr string) (bool, error) {
 	ctrl := servicecontrol.Default()
 	status, err := ctrl.Status(ctx, servicecontrol.RoleClient)
 	if err != nil {
 		if errors.Is(err, servicecontrol.ErrUnsupported) {
-			return err
+			return false, err
 		}
-		return err
+		return false, err
 	}
 	if !status.Active {
-		if err := clishared.RequireRoot(); err != nil {
-			return err
-		}
-		if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
-			return err
-		}
+		logging.Info("xp2p client deploy: service start skipped after deploy", "service_active", false)
+		return false, nil
 	}
 	if err := waitForApplyRequestClear(ctx, config.ApplyRequestPath(), applyRequestTimeout); err != nil {
-		return err
+		logDeployPaths("xp2p client deploy: apply request timeout", config.ConfigPath(layout.ClientConfigFileName))
+		return status.Active, err
 	}
 	if strings.TrimSpace(socksAddr) == "" {
-		return nil
+		return status.Active, nil
 	}
-	return health.WaitForSocksProxy(ctx, socksAddr, socksReadyTimeout, socksProbeInterval)
+	if err := health.WaitForSocksProxy(ctx, socksAddr, socksReadyTimeout, socksProbeInterval); err != nil {
+		return status.Active, err
+	}
+	return status.Active, nil
 }
 
 func clientLiveConfigPresent() bool {
@@ -590,4 +590,36 @@ func waitForApplyRequestClear(ctx context.Context, path string, timeout time.Dur
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("apply request still present after %s", timeout)
+}
+
+func logDeployPaths(message, updatedPath string) {
+	applyPath := config.ApplyRequestPath()
+	applyDir := filepath.Dir(applyPath)
+	logging.Info(
+		message,
+		"mode_config", updatedPath,
+		"live_config", config.ConfigPath(layout.ClientConfigFileName),
+		"pending_config", config.PendingConfigPath(layout.ClientConfigFileName),
+		"apply_dir", applyDir,
+		"apply_request", applyPath,
+		"live_exists", fileExists(config.ConfigPath(layout.ClientConfigFileName)),
+		"pending_exists", fileExists(config.PendingConfigPath(layout.ClientConfigFileName)),
+		"apply_dir_exists", dirExists(applyDir),
+		"apply_request_exists", fileExists(applyPath),
+	)
+}
+
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); err == nil {
+		return true
+	}
+	return false
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }

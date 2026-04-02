@@ -17,7 +17,8 @@ var (
 
 func ResolveMarkerTarget(installDir, host, tag string, index int) (string, int, error) {
 	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
-	state, err := loadClientInstallState(statePath)
+	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
 	if err != nil {
 		return "", 0, err
 	}

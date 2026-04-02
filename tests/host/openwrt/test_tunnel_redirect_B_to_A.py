@@ -278,6 +278,8 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
 
     iface_name = _find_interface_for_ip(server_host, SERVER_IP)
     cleanup(iface_name)
+    helpers.dump_install_dirs(server_host, "tunnel redirect B to A after cleanup")
+    helpers.dump_install_dirs(client_host, "tunnel redirect B to A after cleanup")
     try:
 
         server_install = server_runner(
@@ -307,6 +309,8 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
+        helpers.dump_install_dirs(server_host, "tunnel redirect B to A after install")
+        helpers.dump_install_dirs(client_host, "tunnel redirect B to A after install")
 
         client_state = helpers.read_client_config(client_host)
         client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
@@ -500,8 +504,12 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 )
 
     cleanup()
+    helpers.dump_install_dirs(server_host, "tunnel redirect A to B after cleanup")
+    helpers.dump_install_dirs(client_host, "tunnel redirect A to B after cleanup")
     for machine, host in ((SERVER_MACHINE, server_host), (CLIENT_MACHINE, client_host)):
         openwrt_env.install_ipk_on_host(host, xp2p_openwrt_ipk)
+    helpers.dump_install_dirs(server_host, "tunnel redirect A to B after install")
+    helpers.dump_install_dirs(client_host, "tunnel redirect A to B after install")
 
     server_runner = _runner(server_host)
     client_runner = _runner(client_host)
