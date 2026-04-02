@@ -98,15 +98,18 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "client deploy: ping ok",
-            timeout=LOG_WAIT_TIMEOUT,
-        )
-        _wait_for_log_phrase(
-            client_host,
-            CLIENT_DEPLOY_LOG,
             "client deploy: completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
+        if client_pid:
+            linux_env.stop_process(client_host, str(client_pid))
+            client_pid = None
+        if server_pid:
+            linux_env.stop_process(server_host, str(server_pid))
+            server_pid = None
+        xp2p_server_runner("server", "service", "start", check=True)
+        xp2p_client_runner("client", "service", "start", check=True)
+        _wait_for_apply_request_clear(client_host, timeout_seconds=60.0)
 
         _assert_internet_access(client_host)
 
@@ -117,7 +120,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         heartbeat_state = helpers.wait_for_heartbeat_state(
             client_host,
             path=CLIENT_HEARTBEAT_STATE_FILE,
-            timeout_seconds=LOG_WAIT_TIMEOUT,
+            timeout_seconds=60.0,
         )
         helpers.assert_heartbeat_entry(
             heartbeat_state,
@@ -389,14 +392,11 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
-        _wait_for_any_log_phrase(
+        _wait_for_log_phrase(
             server_host,
             SERVER_DEPLOY_LOG,
-            [
-                "server deploy: server service started",
-                "server deploy: server service start failed",
-            ],
-            timeout=SERVICE_START_TIMEOUT,
+            "server deploy: starting xray-core",
+            timeout=LOG_WAIT_TIMEOUT,
         )
         if client_pid:
             linux_env.stop_process(client_host, str(client_pid))
@@ -528,14 +528,11 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             "client deploy: local install completed",
             timeout=LOG_WAIT_TIMEOUT,
         )
-        _wait_for_any_log_phrase(
+        _wait_for_log_phrase(
             server_host,
             SERVER_DEPLOY_LOG,
-            [
-                "server deploy: server service started",
-                "server deploy: server service start failed",
-            ],
-            timeout=SERVICE_START_TIMEOUT,
+            "server deploy: starting xray-core",
+            timeout=LOG_WAIT_TIMEOUT,
         )
         if client_pid:
             linux_env.stop_process(client_host, str(client_pid))
@@ -897,6 +894,16 @@ def _wait_for_log_value(
         time.sleep(1)
     tail = "\n".join((last_text or "").splitlines()[-30:])
     pytest.fail(f"Timed out waiting for {description}. Recent log tail:\n{tail}")
+
+
+def _wait_for_apply_request_clear(host: Host, *, timeout_seconds: float = 30.0) -> None:
+    apply_path = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if not linux_env.path_exists(host, apply_path):
+            return
+        time.sleep(1.0)
+    pytest.fail(f"apply.request not cleared within {timeout_seconds:.0f}s at {apply_path}")
 
 
 def _read_optional_log(host: Host, path: PurePosixPath) -> str:

@@ -122,7 +122,7 @@ def _heartbeat_debug(server_host, client_hosts) -> str:
                 [
                     f"host={host.backend.hostname}",
                     f"/tmp/xp2p-client-run.log:\n{_tail_log(host, '/tmp/xp2p-client-run.log')}",
-                    f\"{helpers.CLIENT_LOG_FILE.as_posix()}:\\n{_tail_log(host, helpers.CLIENT_LOG_FILE.as_posix())}\",
+                    f"{helpers.CLIENT_LOG_FILE.as_posix()}:\n{_tail_log(host, helpers.CLIENT_LOG_FILE.as_posix())}",
                     f"listening:\n{listening}",
                     f"routing markers:\n{marker_rules}",
                     f"outbounds.json:\n{outbounds}",
@@ -298,7 +298,7 @@ def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
         for reverse_tag, user in (
             (reverse_default, default_cred["user"]),
             (reverse_second, "client-two@example.com"),
-    ):
+        ):
             helpers.assert_server_reverse_state(
                 server_state,
                 reverse_tag,

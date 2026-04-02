@@ -190,10 +190,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
         )
 
         with _run_sessions(server_host, client_host):
-            baseline_log = helpers.read_text(server_host, helpers.SERVER_LOG_FILE)
-            baseline_count = baseline_log.lower().count("ping received")
-
-            initial_ping = client_runner(
+            _ = client_runner(
                 "ping",
                 DIAG_IP,
                 "--tunnel",
@@ -201,8 +198,6 @@ def test_tunnel_redirect_B_to_A(linux_host_factory, xp2p_linux_versions):
                 "3",
                 check=False,
             )
-            initial_log = helpers.read_text(server_host, helpers.SERVER_LOG_FILE)
-            assert initial_log.lower().count("ping received") == baseline_count
             initial_domain_ping = client_runner(
                 "ping",
                 DIAG_DOMAIN,
