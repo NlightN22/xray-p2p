@@ -8,6 +8,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
 var (
@@ -27,11 +29,18 @@ func SyncRedirectRoutes(tunName, tunAddr string, cidrs []string) error {
 	if err != nil {
 		return err
 	}
-	switch strings.ToLower(strings.TrimSpace(out)) {
+	trimmed := strings.TrimSpace(out)
+	switch strings.ToLower(trimmed) {
 	case "missing-interface":
 		return ErrInterfaceMissing
 	case "missing-ip":
 		return ErrTunIPv4Missing
+	}
+	if strings.HasPrefix(trimmed, "ok:") {
+		addr := strings.TrimSpace(strings.TrimPrefix(trimmed, "ok:"))
+		if addr != "" {
+			logging.Info("xp2p: tun IPv4 available", "interface", name, "addr", addr)
+		}
 	}
 	return nil
 }
@@ -145,7 +154,7 @@ func buildSyncRoutesScript(tunName string, cidrs []string, assignIP string, assi
 		`    Set-NetRoute -InterfaceIndex $ifIndex -DestinationPrefix $cidr -NextHop "0.0.0.0" -ErrorAction SilentlyContinue | Out-Null`,
 		`  }`,
 		`}`,
-		`Write-Output "ok"`,
+		`Write-Output ("ok:" + $ifPrefix)`,
 	)
 	return strings.Join(lines, "; ")
 }

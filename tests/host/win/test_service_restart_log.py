@@ -90,24 +90,6 @@ Write-Output ("{0}|{1}" -f $adapter.Name, $adapter.ifIndex)
         pytest.fail(f"Unexpected TUN adapter output: {value[-1]!r} ({exc})")
 
 
-def _get_tun_ipv4(host, if_index: int) -> list[str]:
-    script = f"""
-$ErrorActionPreference = 'Stop'
-$index = {int(if_index)}
-$ips = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $index -ErrorAction SilentlyContinue |
-    Where-Object {{ $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '0.0.0.0' }} |
-    Select-Object -ExpandProperty IPAddress
-if (-not $ips) {{
-    exit 3
-}}
-$ips
-"""
-    result = _env.run_powershell(host, script, label="tun_ipv4")
-    if result.rc != 0:
-        return []
-    return [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
-
-
 def _collect_restart_debug(host) -> str:
     log_path = None
     for candidate in _client_service_log_candidates():
@@ -162,10 +144,12 @@ def test_client_service_restart_logs(client_host, xp2p_client_runner) -> None:
         svc.start_client_service(xp2p_client_runner)
         svc.wait_for_apply_request_clear(client_host)
         svc.wait_for_service_state(xp2p_client_runner, expected_active=True)
+        svc.wait_for_service_ready(client_host)
 
         svc.restart_client_service(xp2p_client_runner)
         try:
             svc.wait_for_service_state(xp2p_client_runner, expected_active=True)
+            svc.wait_for_service_ready(client_host)
         except pytest.fail.Exception as exc:
             debug = _collect_restart_debug(client_host)
             pytest.fail(
@@ -176,7 +160,7 @@ def test_client_service_restart_logs(client_host, xp2p_client_runner) -> None:
 
         tun_name = "xp2pc"
         adapter_name, adapter_index = _find_tun_adapter(client_host, tun_name)
-        ips = _get_tun_ipv4(client_host, adapter_index)
+        ips = svc.wait_for_tun_ipv4_by_index(client_host, adapter_index, timeout=60.0)
         print(f"INFO: client TUN adapter: name={adapter_name} index={adapter_index} ips={ips}")
         if not ips:
             debug = _collect_restart_debug(client_host)

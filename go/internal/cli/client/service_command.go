@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -123,8 +124,10 @@ func newClientServiceRunCmd(cfg commandConfig) *cobra.Command {
 
 func runClientServiceStart(ctx context.Context, logLevel string, logLevelSet bool) int {
 	if err := common.RequireRoot(); err != nil {
-		logging.Error("xp2p client service start requires root privileges", "err", err)
-		return 1
+		if runtime.GOOS != "windows" {
+			logging.Error("xp2p client service start requires root privileges", "err", err)
+			return 1
+		}
 	}
 	if logLevelSet {
 		normalized, err := logging.NormalizeLevel(logLevel)
@@ -152,8 +155,10 @@ func runClientServiceStart(ctx context.Context, logLevel string, logLevelSet boo
 
 func runClientServiceStop(ctx context.Context) int {
 	if err := common.RequireRoot(); err != nil {
-		logging.Error("xp2p client service stop requires root privileges", "err", err)
-		return 1
+		if runtime.GOOS != "windows" {
+			logging.Error("xp2p client service stop requires root privileges", "err", err)
+			return 1
+		}
 	}
 	ctrl := servicecontrol.Default()
 	if err := ctrl.Stop(ctx, servicecontrol.RoleClient); err != nil {
@@ -170,8 +175,10 @@ func runClientServiceStop(ctx context.Context) int {
 
 func runClientServiceRestart(ctx context.Context) int {
 	if err := common.RequireRoot(); err != nil {
-		logging.Error("xp2p client service restart requires root privileges", "err", err)
-		return 1
+		if runtime.GOOS != "windows" {
+			logging.Error("xp2p client service restart requires root privileges", "err", err)
+			return 1
+		}
 	}
 	ctrl := servicecontrol.Default()
 	if err := ctrl.Stop(ctx, servicecontrol.RoleClient); err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {

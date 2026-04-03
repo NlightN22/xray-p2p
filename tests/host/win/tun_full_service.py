@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win import tun_full_diagnostics as diag
+from tests.host.win import tun_full_helpers as tun
 
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
 APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
 CLIENT_CONFIG = _env.CONFIG_ROOT / "xp2p-client.toml"
+CLIENT_SERVICE_LOG = _env.LOGS_DIR / "client" / "service.log"
 
 
 def require_client_service(host) -> None:
@@ -68,6 +72,58 @@ def wait_for_client_config(host, timeout: float = 90.0) -> None:
             return
         time.sleep(POLL_INTERVAL)
     pytest.fail(f"xp2p-client.toml did not appear after {timeout} seconds.")
+
+
+def wait_for_service_ready(host, log_path: Path | None = None, timeout: float = 90.0) -> None:
+    deadline = time.time() + timeout
+    last_tail = ""
+    if log_path is None:
+        log_path = CLIENT_SERVICE_LOG
+    while time.time() < deadline:
+        if _env.path_exists(host, log_path):
+            last_tail = diag.read_log_tail(host, log_path)
+            if "socks health check ok" in (last_tail or "").lower():
+                return
+        time.sleep(POLL_INTERVAL)
+    pytest.fail(
+        "xp2p service did not report socks health check ok.\n"
+        f"log_path={log_path}\n"
+        f"log_tail:\n{last_tail}"
+    )
+
+
+def wait_for_tun_ipv4_by_index(host, if_index: int, timeout: float = 60.0) -> list[str]:
+    deadline = time.time() + timeout
+    last_stdout = ""
+    last_stderr = ""
+    while time.time() < deadline:
+        script = f"""
+$ErrorActionPreference = 'Stop'
+$index = {int(if_index)}
+$ips = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $index -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '0.0.0.0' }} |
+    Select-Object -ExpandProperty IPAddress
+if (-not $ips) {{
+    exit 3
+}}
+$ips
+"""
+        result = _env.run_powershell(host, script, label="wait_for_tun_ipv4")
+        last_stdout = result.stdout or ""
+        last_stderr = result.stderr or ""
+        if result.rc == 0:
+            return [line.strip() for line in last_stdout.splitlines() if line.strip()]
+        time.sleep(POLL_INTERVAL)
+    pytest.fail(
+        f"TUN IPv4 did not appear for interface index {if_index} after {timeout:.0f}s.\n"
+        f"STDOUT:\n{last_stdout}\nSTDERR:\n{last_stderr}"
+    )
+
+
+def wait_for_tun_ipv4(host, tun_name: str, timeout: float = 60.0) -> tuple[str, int, list[str]]:
+    adapter_name, adapter_index = tun.wait_for_tun_adapter(host, tun_name)
+    ips = wait_for_tun_ipv4_by_index(host, adapter_index, timeout=timeout)
+    return adapter_name, adapter_index, ips
 
 
 def start_service(runner, role: str) -> None:
