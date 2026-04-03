@@ -109,11 +109,16 @@ def _pre_test_kill_leftovers(server_host: Host, client_host: Host) -> None:
         )
 
     with _timed("pre-test cleanup xp2p processes (server)"):
-        win_env.stop_xp2p_processes(server_host)
         _check_host(server_host, win_env.DEFAULT_SERVER)
     with _timed("pre-test cleanup xp2p processes (client)"):
-        win_env.stop_xp2p_processes(client_host)
         _check_host(client_host, win_env.DEFAULT_CLIENT)
+    try:
+        yield
+    finally:
+        with _timed("post-test cleanup xp2p processes (server)"):
+            win_env.stop_xp2p_processes(server_host)
+        with _timed("post-test cleanup xp2p processes (client)"):
+            win_env.stop_xp2p_processes(client_host)
 
 
 @pytest.fixture(scope="session")

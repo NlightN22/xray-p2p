@@ -119,6 +119,32 @@ def _wait_for_log_nonempty(host, path: Path, label: str) -> str:
     pytest.fail(f"Log {path} remained empty for {label}. Last content:\n{last_content}")
 
 
+def _write_live_text(host, path: Path, content: str) -> None:
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    target = win_env.ps_quote(str(path))
+    payload = win_env.ps_quote(encoded)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target}
+$payload = {payload}
+$bytes = [System.Convert]::FromBase64String($payload)
+$text = [System.Text.Encoding]::UTF8.GetString($bytes)
+$dir = Split-Path -Parent $target
+if ($dir -and -not (Test-Path $dir)) {{
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+}}
+$encoding = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($target, $text, $encoding)
+exit 0
+"""
+    result = win_env.run_powershell(host, script, label="write_live_text")
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to write live config text.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def _wait_for_apply_request_clear(host, timeout: float = 90.0) -> None:
     start = time.perf_counter()
     deadline = time.time() + timeout
@@ -438,8 +464,9 @@ def test_windows_service_stops_after_invalid_config(
         _wait_for_apply_request_clear(host)
 
         with _timed(f"{role} write broken config"):
-            win_env.write_text(host, config_path, "BROKEN-CONFIG")
-            win_env.write_apply_request(host, role)
+            _write_live_text(host, config_path, "BROKEN-CONFIG")
+        with _timed(f"{role} service restart"):
+            runner(role, "service", "restart")
         _wait_for_log_entry_any(
             host,
             log_path,

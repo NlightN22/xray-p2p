@@ -7,6 +7,17 @@ from testinfra.host import Host
 from . import env as _env
 
 SERVER_RUN_STABILIZE_SECONDS = 15
+APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
+APPLY_REQUEST_TIMEOUT = 90.0
+
+
+def _wait_for_apply_request_clear(host: Host, timeout: float = APPLY_REQUEST_TIMEOUT) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _env.path_exists(host, APPLY_REQUEST):
+            return
+        time.sleep(1.0)
+    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
 
 
 def _start_xp2p_server_run(
@@ -148,6 +159,7 @@ def xp2p_server_run_session(host: Host, install_dir: str, config_dir: str):
     pid_value = None
     try:
         pid_value = _start_xp2p_server_run(host, install_dir, config_dir)
+        _wait_for_apply_request_clear(host)
         yield {"pid": pid_value}
     finally:
         if pid_value is not None:
@@ -172,6 +184,7 @@ def xp2p_server_run_session_with_env(
             allow_mismatch=allow_mismatch,
             output_log_path=output_log_path,
             )
+        _wait_for_apply_request_clear(host)
         yield {"pid": pid_value}
     finally:
         if pid_value is not None:

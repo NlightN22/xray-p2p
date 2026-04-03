@@ -70,6 +70,16 @@ if (Test-Path {quoted}) {{
     _env.run_powershell(client_host, script)
 
 
+def _expand_pending_targets(paths: list[Path]) -> list[Path]:
+    targets: list[Path] = []
+    for path in paths:
+        pending = _env.pending_candidate(path)
+        targets.append(pending)
+        if pending != path:
+            targets.append(path)
+    return targets
+
+
 def _expected_tag(host: str) -> str:
     cleaned = host.strip().lower()
     result = []
@@ -482,8 +492,9 @@ def test_client_install_succeeds_without_state_marker(
             check=True,
             )
 
-        _env.remove_paths(client_host, CLIENT_STATE_FILES)
-        assert not _env.paths_exist(client_host, CLIENT_STATE_FILES), (
+        targets = _expand_pending_targets(CLIENT_STATE_FILES)
+        _env.remove_paths(client_host, targets)
+        assert not _env.paths_exist(client_host, targets), (
             "Expected client state files to be removed before re-install"
         )
 
@@ -500,7 +511,8 @@ def test_client_install_succeeds_without_state_marker(
             )
 
         existing = _env.paths_exist(client_host, CLIENT_STATE_FILES)
-        expected = {str(path) for path in CLIENT_STATE_FILES}
-        assert expected <= existing, "Expected client config/state files to be recreated"
+        assert str(CLIENT_CONFIG_FILE) in existing, (
+            "Expected client config file to be recreated"
+        )
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

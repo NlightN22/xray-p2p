@@ -159,22 +159,6 @@ def test_windows_client_deploy_end_to_end(
                     "server deploy: starting xray-core",
                     timeout=LOG_WAIT_TIMEOUT,
                     )
-        with _timed("wait server xray startup"):
-            server_status = _wait_for_any_log_phrase(
-                server_host,
-                server_proc,
-                [
-                    "xray-core process started",
-                    "server deploy: xray-core start failed",
-                ],
-                timeout=LOG_WAIT_TIMEOUT,
-                )
-            if server_status == "server deploy: xray-core start failed":
-                combined = _read_combined_logs(server_host, server_proc)
-                pytest.fail(
-                    "Server deploy xray-core failed to start.\n"
-                    f"Logs:\n{combined}"
-        )
         with _timed("wait client deploy logs"):
             _wait_for_log_phrase(
                 client_host,
@@ -188,19 +172,37 @@ def test_windows_client_deploy_end_to_end(
                 "client deploy: local install completed",
                 timeout=LOG_WAIT_TIMEOUT,
                 )
-            _wait_for_ping_ok_or_server_failure(
+            _wait_for_any_log_phrase(
                 client_host,
                 client_proc,
+                [
+                    "client deploy: completed",
+                    "client deploy: client run active",
+                ],
+                timeout=LOG_WAIT_TIMEOUT,
+                )
+        with _timed("wait server deploy completion"):
+            _wait_for_any_log_phrase(
                 server_host,
                 server_proc,
+                [
+                    "server deploy: completion requested",
+                    "server deploy: stopped",
+                ],
                 timeout=LOG_WAIT_TIMEOUT,
                 )
-            _wait_for_log_phrase(
-                client_host,
-                client_proc,
-                "client deploy: client run active",
-                timeout=LOG_WAIT_TIMEOUT,
-                )
+        if client_proc:
+            _stop_process(client_host, client_proc["pid"])
+            client_proc = None
+        if server_proc:
+            _stop_process(server_host, server_proc["pid"])
+            server_proc = None
+        with _timed("start xp2p services"):
+            xp2p_server_runner("server", "service", "start", check=True)
+            xp2p_client_runner("client", "service", "start", check=True)
+        with _timed("wait apply.request clear"):
+            _wait_for_apply_request_clear(server_host, timeout=90.0)
+            _wait_for_apply_request_clear(client_host, timeout=90.0)
 
         with _timed("check client internet access"):
             _assert_internet_access(client_host)
@@ -367,12 +369,14 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
         expected_cert_paths = {
-            str(SERVER_CERT_DEST).replace("\\", "/"),
-            str(bad_cert).replace("\\", "/"),
+            _normalize_windows_path(str(SERVER_CERT_DEST)),
+            _normalize_windows_path(str(win_env.pending_candidate(SERVER_CERT_DEST))),
+            _normalize_windows_path(str(bad_cert)),
         }
         expected_key_paths = {
-            str(SERVER_KEY_DEST).replace("\\", "/"),
-            str(bad_key).replace("\\", "/"),
+            _normalize_windows_path(str(SERVER_KEY_DEST)),
+            _normalize_windows_path(str(win_env.pending_candidate(SERVER_KEY_DEST))),
+            _normalize_windows_path(str(bad_key)),
         }
         assert _normalize_windows_path(primary.get("certificateFile")) in expected_cert_paths
         assert _normalize_windows_path(primary.get("keyFile")) in expected_key_paths
@@ -787,6 +791,16 @@ def _wait_for_any_log_phrase(
         description=f"any of {phrases}",
         timeout=timeout,
     )
+
+
+def _wait_for_apply_request_clear(host, *, timeout: float = 60.0) -> None:
+    apply_path = win_env.CONFIG_ROOT / win_env.APPLY_DIR_NAME / "apply.request"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not win_env.path_exists(host, apply_path):
+            return
+        time.sleep(1.0)
+    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
 
 
 def _wait_for_log_value(

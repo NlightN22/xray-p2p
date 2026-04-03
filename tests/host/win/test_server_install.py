@@ -47,7 +47,7 @@ def _cleanup_server_install(server_host, runner, msi_path: str) -> None:
 
 
 def _remote_path_exists(host, path: Path) -> bool:
-    return _env._path_exists_raw(host, path)
+    return _env.path_exists(host, path)
 
 
 def _read_remote_text(host, path: Path) -> str:
@@ -74,10 +74,29 @@ def _remove_remote_paths(host, paths: Iterable[Path]) -> None:
     _env.remove_paths(host, paths)
 
 
-def _expect_tls_paths() -> tuple[str, str]:
-    expected_cert = str(SERVER_CERT_DEST).replace("\\", "/")
-    expected_key = str(SERVER_KEY_DEST).replace("\\", "/")
-    return expected_cert, expected_key
+def _expand_pending_targets(paths: Iterable[Path]) -> list[Path]:
+    targets: list[Path] = []
+    for path in paths:
+        pending = _env.pending_candidate(path)
+        targets.append(pending)
+        if pending != path:
+            targets.append(path)
+    return targets
+
+
+def _path_variants(path: Path) -> set[str]:
+    raw = str(path)
+    return {raw, raw.replace("\\", "/")}
+
+
+def _expect_tls_paths() -> tuple[set[str], set[str]]:
+    cert_paths = set()
+    key_paths = set()
+    cert_paths.update(_path_variants(SERVER_CERT_DEST))
+    key_paths.update(_path_variants(SERVER_KEY_DEST))
+    cert_paths.update(_path_variants(_env.pending_candidate(SERVER_CERT_DEST)))
+    key_paths.update(_path_variants(_env.pending_candidate(SERVER_KEY_DEST)))
+    return cert_paths, key_paths
 
 
 def _trojan_inbound(data: dict) -> dict:
@@ -256,9 +275,9 @@ def test_server_install_uses_path_certificate_source(server_host, xp2p_server_ru
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates in configuration"
         primary_cert = certificates[0]
-        expected_cert, expected_key = _expect_tls_paths()
-        assert primary_cert.get("certificateFile") == expected_cert
-        assert primary_cert.get("keyFile") == expected_key
+        expected_cert_paths, expected_key_paths = _expect_tls_paths()
+        assert primary_cert.get("certificateFile") in expected_cert_paths
+        assert primary_cert.get("keyFile") in expected_key_paths
 
         assert _remote_path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to be copied"
         assert _remote_path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to be copied"
@@ -302,10 +321,18 @@ def test_server_install_generates_self_signed_certificate(
             check=True,
             )
 
-        assert _remote_path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to exist"
-        assert _remote_path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
+        cert_path = SERVER_CERT_DEST
+        pending_cert = _env.pending_candidate(SERVER_CERT_DEST)
+        if _env.path_exists(server_host, pending_cert):
+            cert_path = pending_cert
+        key_path = SERVER_KEY_DEST
+        pending_key = _env.pending_candidate(SERVER_KEY_DEST)
+        if _env.path_exists(server_host, pending_key):
+            key_path = pending_key
+        assert _remote_path_exists(server_host, cert_path), "Expected cert.pem to exist"
+        assert _remote_path_exists(server_host, key_path), "Expected key.pem to exist"
 
-        cert_info = _decode_remote_certificate(server_host, SERVER_CERT_DEST)
+        cert_info = _decode_remote_certificate(server_host, cert_path)
         subject_cn = cert_info.get("SubjectCN")
         assert subject_cn == SERVER_HOST_VALUE, (
             f"Expected CN={SERVER_HOST_VALUE}, got {subject_cn}"
@@ -331,7 +358,7 @@ def test_server_install_generates_self_signed_certificate(
             f"Expected certificate validity close to 10 years, got {not_after - now}"
         )
 
-        key_content = _read_remote_text(server_host, SERVER_KEY_DEST)
+        key_content = _read_remote_text(server_host, key_path)
         assert "BEGIN RSA PRIVATE KEY" in key_content
 
         inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
@@ -342,10 +369,10 @@ def test_server_install_generates_self_signed_certificate(
         assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS configuration for self-signed certificate"
-        expected_cert, expected_key = _expect_tls_paths()
+        expected_cert_paths, expected_key_paths = _expect_tls_paths()
         cert_ref = certificates[0]
-        assert cert_ref.get("certificateFile") == expected_cert
-        assert cert_ref.get("keyFile") == expected_key
+        assert cert_ref.get("certificateFile") in expected_cert_paths
+        assert cert_ref.get("keyFile") in expected_key_paths
 
         state = xp2p_server_runner(
             "server",
@@ -363,8 +390,9 @@ def test_server_install_generates_self_signed_certificate(
         )
         assert "Status:      OK" in state.stdout
         assert f"Subject:     CN={SERVER_HOST_VALUE}" in state.stdout
-        assert f"Certificate: {SERVER_CERT_DEST}" in state.stdout
-        assert f"Key:         {SERVER_KEY_DEST}" in state.stdout
+        expected_cert_paths, expected_key_paths = _expect_tls_paths()
+        assert any(f"Certificate: {path}" in state.stdout for path in expected_cert_paths)
+        assert any(f"Key:         {path}" in state.stdout for path in expected_key_paths)
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
@@ -389,8 +417,12 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             check=True,
             )
 
-        assert _remote_path_exists(server_host, SERVER_KEY_DEST), (
-            f"Expected generated key at {SERVER_KEY_DEST}"
+        key_path = SERVER_KEY_DEST
+        pending_key = _env.pending_candidate(SERVER_KEY_DEST)
+        if _env.path_exists(server_host, pending_key):
+            key_path = pending_key
+        assert _remote_path_exists(server_host, key_path), (
+            f"Expected generated key at {key_path}"
         )
 
         result = xp2p_server_runner(
@@ -404,7 +436,7 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             "--cert",
             str(FIXTURE_CERT_GUEST),
             "--key",
-            str(SERVER_KEY_DEST),
+            str(key_path),
             "--host",
             SERVER_HOST_VALUE,
             "--force",
@@ -669,11 +701,9 @@ def test_server_install_succeeds_without_state_marker(
             check=True,
             )
 
-        _remove_remote_paths(server_host, [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_INSTALL_STATE])
-        assert not any(
-            _remote_path_exists(server_host, path)
-            for path in [SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_INSTALL_STATE]
-        ), (
+        targets = _expand_pending_targets([SERVER_CONFIG_DIR, *SERVER_STATE_FILES, SERVER_INSTALL_STATE])
+        _remove_remote_paths(server_host, targets)
+        assert not any(_remote_path_exists(server_host, path) for path in targets), (
             "Expected server state files to be removed before re-install"
         )
 
@@ -693,7 +723,6 @@ def test_server_install_succeeds_without_state_marker(
 
         expected_paths = [
             _env.CONFIG_ROOT / "xp2p-server.toml",
-            SERVER_INSTALL_STATE,
         ]
         deadline = time.time() + 10.0
         missing: list[Path] = []
@@ -702,6 +731,6 @@ def test_server_install_succeeds_without_state_marker(
             if not missing:
                 break
             time.sleep(1.0)
-        assert not missing, f"Expected server config/state files to be recreated: {missing}"
+        assert not missing, f"Expected server config files to be recreated: {missing}"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

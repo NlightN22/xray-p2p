@@ -26,6 +26,25 @@ SERVER_STATE_FILES = [
 ]
 
 
+def _wait_for_client_apply(
+    client_host,
+    xp2p_client_runner,
+    *,
+    ensure_config: bool = False,
+    allow_restart: bool = False,
+) -> None:
+    svc.wait_for_apply_request_clear(client_host)
+    if ensure_config:
+        svc.wait_for_client_config(client_host)
+    svc.wait_for_service_state(xp2p_client_runner, expected_active=True)
+    if not allow_restart:
+        return
+    tail = diag.read_log_tail(client_host, tun.CLIENT_SERVICE_LOG)
+    if "deferring route apply until restart" in (tail or "").lower():
+        svc.restart_client_service(xp2p_client_runner)
+        svc.wait_for_service_state(xp2p_client_runner, expected_active=True)
+
+
 def test_windows_client_tun_mode_full_routes(
     client_host,
     server_host,
@@ -103,7 +122,12 @@ def test_windows_client_tun_mode_full_routes(
         client_cfg = _env.read_toml(client_host, tun.CLIENT_CONFIG_FILE).get("client") or {}
         assert client_cfg.get("tun_mode") == "full", "client.tun_mode was not updated to full"
         assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
-        svc.wait_for_apply_request_clear(client_host)
+        _wait_for_client_apply(
+            client_host,
+            xp2p_client_runner,
+            ensure_config=True,
+            allow_restart=True,
+        )
 
         tun_name = tun.client_tun_name(client_host)
         tun_name, tun_index = tun.wait_for_tun_adapter(client_host, tun_name)
@@ -131,6 +155,11 @@ def test_windows_client_tun_mode_full_routes(
                     "xp2p client mode tun full retry failed.\n"
                     f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{debug}"
         )
+            _wait_for_client_apply(
+                client_host,
+                xp2p_client_runner,
+                allow_restart=True,
+            )
             ok, debug = tun.poll_for_full_tunnel(
                 client_host,
                 tun_name,
@@ -150,7 +179,11 @@ def test_windows_client_tun_mode_full_routes(
                 "xp2p client mode tun split failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-        svc.wait_for_apply_request_clear(client_host)
+        _wait_for_client_apply(
+            client_host,
+            xp2p_client_runner,
+            ensure_config=True,
+        )
         ok, debug = tun.poll_for_routes_restored(
             client_host,
             tun_name,
@@ -184,7 +217,12 @@ def test_windows_client_tun_mode_full_routes(
                 "xp2p client mode tun full (second pass) failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-        svc.wait_for_apply_request_clear(client_host)
+        _wait_for_client_apply(
+            client_host,
+            xp2p_client_runner,
+            ensure_config=True,
+            allow_restart=True,
+        )
         ok, debug = tun.poll_for_full_tunnel(
             client_host,
             tun_name,

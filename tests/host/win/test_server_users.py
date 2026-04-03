@@ -2,6 +2,8 @@ import re
 
 import pytest
 
+import time
+
 from tests.host.win import env as _env
 
 from .test_server_install import (
@@ -52,14 +54,50 @@ def _remove_initial_install_client(server_host, xp2p_server_runner):
     return default_client
 
 
+def _wait_for_apply_request_clear(host, *, timeout: float = 60.0) -> None:
+    apply_path = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _env.path_exists(host, apply_path):
+            return
+        time.sleep(1.0)
+    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
+
+
+def _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory) -> None:
+    live_inbounds = SERVER_INBOUNDS
+    if _env.path_exists(server_host, live_inbounds):
+        return
+    if xp2p_server_run_factory is not None:
+        with xp2p_server_run_factory(str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME) as session:
+            assert session["pid"] > 0
+    else:
+        if not _env.service_exists(server_host, "xp2p-server"):
+            pytest.skip("xp2p-server service is not registered; MSI install required.")
+        xp2p_server_runner("server", "service", "start", check=True)
+        _wait_for_apply_request_clear(server_host, timeout=90.0)
+        xp2p_server_runner("server", "service", "stop", check=True)
+    deadline = time.time() + 30.0
+    while time.time() < deadline:
+        if _env.path_exists(server_host, live_inbounds):
+            break
+        time.sleep(1.0)
+    if not _env.path_exists(server_host, live_inbounds):
+        pytest.fail("Live inbounds.json was not created after apply request.")
+
+
 def _is_unreserved(value: str) -> bool:
     return re.fullmatch(r"[A-Za-z0-9._~-]+", value or "") is not None
+
+
+def _link_host(server_host) -> str:
+    return _env.get_host_ipv4(server_host)
 
 
 @pytest.mark.host
 @pytest.mark.win
 def test_server_install_creates_and_allows_removing_default_user(
-    server_host, xp2p_server_runner, xp2p_msi_path
+    server_host, xp2p_server_runner, xp2p_server_run_factory, xp2p_msi_path
 ):
     _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
@@ -75,6 +113,7 @@ def test_server_install_creates_and_allows_removing_default_user(
             "--force",
             check=True,
             )
+        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         default_client = _initial_install_client(server_host)
         assert default_client["email"].startswith("client-")
@@ -86,9 +125,12 @@ def test_server_install_creates_and_allows_removing_default_user(
 
 @pytest.mark.host
 @pytest.mark.win
-def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_msi_path):
+def test_server_user_add_and_idempotent(
+    server_host, xp2p_server_runner, xp2p_server_run_factory, xp2p_msi_path
+):
     _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
+        link_host = _link_host(server_host)
         xp2p_server_runner(
             "server",
             "install",
@@ -101,6 +143,7 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             "--force",
             check=True,
             )
+        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -112,6 +155,8 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
+            "--host",
+            link_host,
             "--id",
             "alpha",
             "--password",
@@ -132,6 +177,8 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
+            "--host",
+            link_host,
             "--id",
             "alpha",
             "--password",
@@ -152,6 +199,8 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
+            "--host",
+            link_host,
             "--id",
             "alpha",
             "--password",
@@ -170,9 +219,12 @@ def test_server_user_add_and_idempotent(server_host, xp2p_server_runner, xp2p_ms
 
 @pytest.mark.host
 @pytest.mark.win
-def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_msi_path):
+def test_server_user_remove_is_idempotent(
+    server_host, xp2p_server_runner, xp2p_server_run_factory, xp2p_msi_path
+):
     _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
+        link_host = _link_host(server_host)
         xp2p_server_runner(
             "server",
             "install",
@@ -185,6 +237,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
             "--force",
             check=True,
             )
+        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -196,6 +249,8 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
+            "--host",
+            link_host,
             "--id",
             "bravo",
             "--password",
@@ -237,9 +292,12 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner, xp2p_
 
 @pytest.mark.host
 @pytest.mark.win
-def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_msi_path):
+def test_server_user_add_validates_input(
+    server_host, xp2p_server_runner, xp2p_server_run_factory, xp2p_msi_path
+):
     _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
     try:
+        link_host = _link_host(server_host)
         xp2p_server_runner(
             "server",
             "install",
@@ -252,6 +310,7 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             "--force",
             check=True,
             )
+        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -263,6 +322,8 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
+            "--host",
+            link_host,
             "--id",
             "charlie",
             check=True,
@@ -282,6 +343,8 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
+            "--host",
+            link_host,
             "--id",
             "delta",
             "--password",
@@ -297,6 +360,8 @@ def test_server_user_add_validates_input(server_host, xp2p_server_runner, xp2p_m
             str(SERVER_INSTALL_DIR),
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
+            "--host",
+            link_host,
             "--password",
             "secret",
             )

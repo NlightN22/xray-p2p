@@ -137,6 +137,16 @@ def run_powershell(
     started = time.monotonic()
     effective_timeout = DEFAULT_POWERSHELL_TIMEOUT if timeout is None else timeout
     print(f"Guest PowerShell start (timeout={effective_timeout}s, label={label or 'n/a'})")
+    lines = [line.rstrip() for line in script.strip().splitlines() if line.strip()]
+    if not lines:
+        summary = "<empty>"
+    else:
+        summary = lines[0].strip()
+        if len(summary) > 160:
+            summary = summary[:157] + "..."
+        if len(lines) > 1:
+            summary = f"{summary} (+{len(lines) - 1} lines)"
+    print(f"Guest PowerShell script summary: {summary}")
     result = host.run(
         f"powershell -NoProfile -NonInteractive -NoLogo -EncodedCommand {encoded}",
         timeout=effective_timeout,
@@ -1372,10 +1382,14 @@ def cleanup_xp2p_install(
     state_files: Iterable[Path],
     extra_paths: Iterable[Path] = (),
 ) -> None:
-    remove_paths(
-        host,
-        [*config_dirs, *state_files, *extra_paths],
-    )
+    targets: list[Path | str] = []
+    for path in [*config_dirs, *state_files, *extra_paths]:
+        resolved = _as_path(path)
+        pending = _pending_candidate(resolved)
+        targets.append(pending)
+        if pending != resolved:
+            targets.append(resolved)
+    remove_paths(host, targets)
 
 
 def cleanup_xp2p_leftovers(host: Host) -> None:

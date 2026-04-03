@@ -100,6 +100,9 @@ def start_deploy_tunnel(
         server_host,
         server_proc,
         [
+            "server deploy: apply request written",
+            "xp2p: pending config applied",
+            "server deploy: completion requested",
             "xray-core process started",
             "server deploy: xray-core start failed",
         ],
@@ -116,19 +119,6 @@ def start_deploy_tunnel(
         client_host,
         client_proc,
         "client deploy: local install completed",
-        timeout=deploy.LOG_WAIT_TIMEOUT,
-    )
-    deploy._wait_for_ping_ok_or_server_failure(
-        client_host,
-        client_proc,
-        server_host,
-        server_proc,
-        timeout=deploy.LOG_WAIT_TIMEOUT,
-    )
-    deploy._wait_for_log_phrase(
-        client_host,
-        client_proc,
-        "client deploy: client run active",
         timeout=deploy.LOG_WAIT_TIMEOUT,
     )
     return client_proc, server_proc

@@ -9,6 +9,7 @@ from tests.host.win import env as _env
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
 APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
+CLIENT_CONFIG = _env.CONFIG_ROOT / "xp2p-client.toml"
 
 
 def require_client_service(host) -> None:
@@ -26,6 +27,10 @@ def start_client_service(runner) -> None:
 
 def stop_client_service(runner) -> None:
     stop_service(runner, "client")
+
+
+def restart_client_service(runner) -> None:
+    restart_service(runner, "client")
 
 
 def wait_for_role_service_state(runner, role: str, expected_active: bool) -> None:
@@ -56,6 +61,15 @@ def wait_for_apply_request_clear(host, timeout: float = 90.0) -> None:
     pytest.fail(f"apply.request did not clear after {timeout} seconds.")
 
 
+def wait_for_client_config(host, timeout: float = 90.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _env.path_exists(host, CLIENT_CONFIG):
+            return
+        time.sleep(POLL_INTERVAL)
+    pytest.fail(f"xp2p-client.toml did not appear after {timeout} seconds.")
+
+
 def start_service(runner, role: str) -> None:
     runner(role, "service", "start", check=True)
     wait_for_role_service_state(runner, role, expected_active=True)
@@ -64,3 +78,8 @@ def start_service(runner, role: str) -> None:
 def stop_service(runner, role: str) -> None:
     runner(role, "service", "stop", check=True)
     wait_for_role_service_state(runner, role, expected_active=False)
+
+
+def restart_service(runner, role: str) -> None:
+    runner(role, "service", "restart", check=True)
+    wait_for_role_service_state(runner, role, expected_active=True)

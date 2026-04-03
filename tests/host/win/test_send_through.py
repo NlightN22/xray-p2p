@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -44,12 +45,47 @@ def _cleanup_server_install(server_host) -> None:
 
 
 
-def _read_remote_json(host, path: Path) -> dict:
-    content = _env.read_text(host, path)
+def _path_exists_exact(host, path: Path) -> bool:
+    quoted = _env.ps_quote(str(path))
+    result = _env.run_powershell(
+        host,
+        f"if (Test-Path {quoted}) {{ exit 0 }} else {{ exit 3 }}",
+        label="path_exists_exact",
+    )
+    return result.rc == 0
+
+
+def _read_json_exact(host, path: Path) -> dict:
+    quoted = _env.ps_quote(str(path))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+if (-not (Test-Path {quoted})) {{
+    exit 3
+}}
+Get-Content -Path {quoted} -Raw
+exit 0
+"""
+    result = _env.run_powershell(host, script, label="read_json_exact")
+    if result.rc != 0:
+        pytest.fail(
+            f"Failed to read JSON {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
     try:
-        return json.loads(content)
+        return json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}")
+        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{result.stdout}")
+
+
+def _read_outbounds_json(host, path: Path, *, timeout: float = 30.0) -> dict:
+    pending = _env.pending_candidate(path)
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _path_exists_exact(host, path):
+            return _read_json_exact(host, path)
+        time.sleep(1.0)
+    if _path_exists_exact(host, pending):
+        return _read_json_exact(host, pending)
+    pytest.fail(f"Timed out waiting for outbounds JSON at {path}.")
 
 
 def _find_outbound(data: dict, tag: str) -> dict:
@@ -64,6 +100,34 @@ def _send_through_value(outbound: dict) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _wait_for_apply_request_clear(host, *, timeout: float = 60.0) -> None:
+    apply_path = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not _env.path_exists(host, apply_path):
+            return
+        time.sleep(1.0)
+    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
+
+
+def _ensure_live_outbounds(host, runner, role: str, outbounds_path: Path) -> None:
+    if _path_exists_exact(host, outbounds_path):
+        return
+    service_name = f"xp2p-{role}"
+    if not _env.service_exists(host, service_name):
+        pytest.skip(f"{service_name} service is not registered; MSI install required.")
+    runner(role, "service", "start", check=True)
+    _wait_for_apply_request_clear(host, timeout=90.0)
+    deadline = time.time() + 30.0
+    while time.time() < deadline:
+        if _path_exists_exact(host, outbounds_path):
+            break
+        time.sleep(1.0)
+    runner(role, "service", "stop", check=True)
+    if not _path_exists_exact(host, outbounds_path):
+        pytest.fail(f"Live outbounds.json was not created at {outbounds_path}.")
 
 def _assert_tun_interface(host, interface_name: str) -> None:
     result = _env.run_guest_script(
@@ -110,6 +174,9 @@ def test_client_run_sets_send_through(
             "--force",
             check=True,
             )
+        _ensure_live_outbounds(
+            client_host, xp2p_client_runner, "client", CLIENT_OUTBOUNDS_JSON
+        )
 
         with xp2p_client_run_factory(
             str(CLIENT_INSTALL_DIR), CLIENT_CONFIG_DIR_NAME
@@ -118,7 +185,7 @@ def test_client_run_sets_send_through(
             _assert_tun_interface(client_host, CLIENT_TUN_NAME)
             _assert_dns_resolution(client_host, "2ip.ru")
 
-        outbounds = _read_remote_json(client_host, CLIENT_OUTBOUNDS_JSON)
+        outbounds = _read_outbounds_json(client_host, CLIENT_OUTBOUNDS_JSON)
         direct = _find_outbound(outbounds, "direct")
         expected = _env.get_default_ipv4_sendthrough(client_host)
         actual = _send_through_value(direct)
@@ -151,6 +218,9 @@ def test_server_run_sets_send_through(
             "--force",
             check=True,
             )
+        _ensure_live_outbounds(
+            server_host, xp2p_server_runner, "server", SERVER_OUTBOUNDS_JSON
+        )
 
         with xp2p_server_run_factory(
             str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME
@@ -159,7 +229,7 @@ def test_server_run_sets_send_through(
             _assert_tun_interface(server_host, SERVER_TUN_NAME)
             _assert_dns_resolution(server_host, "2ip.ru")
 
-        outbounds = _read_remote_json(server_host, SERVER_OUTBOUNDS_JSON)
+        outbounds = _read_outbounds_json(server_host, SERVER_OUTBOUNDS_JSON)
         direct_udp = _find_outbound(outbounds, "direct-udp")
         expected = _env.get_default_ipv4_sendthrough(server_host)
         actual = _send_through_value(direct_udp)
