@@ -40,6 +40,54 @@ exit 0
         )
     return True, ""
 
+
+def check_dns_resolution(host, name: str) -> tuple[bool, str]:
+    quoted = _env.ps_quote(name)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$dnsName = {quoted}
+try {{
+    Resolve-DnsName -Name $dnsName -ErrorAction Stop | Out-Null
+}} catch {{
+    Write-Error "DNS check failed: lookup for $dnsName"
+    exit 1
+}}
+exit 0
+"""
+    result = _env.run_powershell(host, script, label="check_dns_resolution")
+    if result.rc != 0:
+        return False, (
+            "DNS resolution check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return True, ""
+
+
+def check_direct_ping(host, target: str) -> tuple[bool, str]:
+    quoted = _env.ps_quote(target)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {quoted}
+try {{
+    $ok = Test-Connection -ComputerName $target -Count 2 -Quiet
+}} catch {{
+    $ok = $false
+}}
+if (-not $ok) {{
+    Write-Error "Direct ping failed: $target"
+    exit 1
+}}
+exit 0
+"""
+    result = _env.run_powershell(host, script, label="check_direct_ping")
+    if result.rc != 0:
+        return False, (
+            "Direct ping check failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return True, ""
+
+
 def _collect_internet_debug(host) -> str:
     script = f"""
 $ErrorActionPreference = 'SilentlyContinue'
@@ -85,6 +133,24 @@ def assert_internet_access(host, *, label: str = "") -> None:
     debug = _collect_internet_debug(host)
     suffix = f" ({label})" if label else ""
     pytest.fail(f"{detail}\nInternet debug{suffix}:\n{debug}")
+
+
+def assert_dns_resolution(host, name: str, *, label: str = "") -> None:
+    ok, detail = check_dns_resolution(host, name)
+    if ok:
+        return
+    debug = _collect_internet_debug(host)
+    suffix = f" ({label})" if label else ""
+    pytest.fail(f"{detail}\nDNS debug{suffix}:\n{debug}")
+
+
+def assert_direct_ping(host, target: str, *, label: str = "") -> None:
+    ok, detail = check_direct_ping(host, target)
+    if ok:
+        return
+    debug = _collect_internet_debug(host)
+    suffix = f" ({label})" if label else ""
+    pytest.fail(f"{detail}\nDirect ping debug{suffix}:\n{debug}")
 
 
 def ensure_internet_access_with_adapter_reset(host) -> None:

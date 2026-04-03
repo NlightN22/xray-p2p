@@ -14,7 +14,7 @@ import (
 
 func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bool, error) {
 	reqPath := config.ApplyRequestPath()
-	logging.Info("xp2p: apply request check",
+	logging.Debug("xp2p: apply request check",
 		"role", role,
 		"apply_request", reqPath,
 		"apply_request_exists", fileExists(reqPath),

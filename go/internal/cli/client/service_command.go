@@ -178,6 +178,10 @@ func runClientServiceRestart(ctx context.Context) int {
 		logging.Error("failed to stop xp2p client service", "err", err)
 		return 1
 	}
+	if err := waitForServiceState(ctx, ctrl, servicecontrol.RoleClient, "STOPPED", 60*time.Second); err != nil {
+		logging.Error("xp2p client service restart: stop timed out", "err", err)
+		return 1
+	}
 	if err := ctrl.Start(ctx, servicecontrol.RoleClient); err != nil {
 		if errors.Is(err, servicecontrol.ErrUnsupported) {
 			logging.Error("xp2p client service restart is not supported on this platform")
@@ -186,8 +190,36 @@ func runClientServiceRestart(ctx context.Context) int {
 		}
 		return 1
 	}
+	if err := waitForServiceState(ctx, ctrl, servicecontrol.RoleClient, "RUNNING", 60*time.Second); err != nil {
+		logging.Error("xp2p client service restart: start timed out", "err", err)
+		return 1
+	}
 	logging.Info("xp2p client service restarted")
 	return 0
+}
+
+func waitForServiceState(ctx context.Context, ctrl servicecontrol.Controller, role servicecontrol.Role, desired string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		status, err := ctrl.Status(ctx, role)
+		if err != nil {
+			if errors.Is(err, servicecontrol.ErrUnsupported) {
+				return err
+			}
+			return err
+		}
+		if strings.EqualFold(status.State, desired) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("service %s did not reach %s (state=%s)", role, desired, status.State)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }
 
 func runClientServiceStatus(ctx context.Context, out any) int {

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
@@ -77,18 +79,27 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	routingChanged := routingHashBefore != routingHashAfter
 	if outboundsChanged || routingChanged {
 		logging.Info(
-			"xp2p: full-tunnel config updated; deferring route apply until restart",
+			"xp2p: full-tunnel config updated; requesting controlled restart before route apply",
 			"outbounds_changed",
 			outboundsChanged,
 			"routing_changed",
 			routingChanged,
 		)
+		req, err := apply.NewRequest(apply.RoleClient)
+		if err != nil {
+			return false, err
+		}
+		if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+			return false, err
+		}
+		logging.Info("xp2p: full-tunnel apply request written", "path", config.ApplyRequestPath(), "request_id", req.ID)
 		return false, nil
 	}
 	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
 }
 
 func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState, state fullTunnelState, endpointIPv4 []string, endpointIPv6 []string, resolvedEndpoints map[string]fullTunnelEndpointIPs) (enabled bool, err error) {
+	logging.Info("xp2p: full-tunnel apply start", "tun_name", opts.TunName, "tun_addr", opts.TunAddr)
 	if _, _, err := resolveWindowsInterface(ctx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose, true); err != nil {
 		return false, err
 	}
@@ -184,6 +195,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		return false, err
 	}
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes applied", "count", len(bypassRoutes))
+	logging.Info("xp2p: full-tunnel apply complete", "bypass_routes", len(bypassRoutes))
 	return true, nil
 }
 

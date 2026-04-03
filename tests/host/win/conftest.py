@@ -7,7 +7,7 @@ import pytest
 from testinfra.backend.base import CommandResult
 from testinfra.host import Host
 
-from . import _client_runtime, _server_runtime, env as win_env
+from . import _client_runtime, _server_runtime, env as win_env, tun_full_internet as net
 
 _LAST_TEST_END: float | None = None
 
@@ -169,7 +169,7 @@ def xp2p_msi_path() -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def xp2p_program_files_setup():
+def xp2p_program_files_setup(_configure_msi_build_id):
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (server setup)"):
         server_host = win_env.get_ssh_host(win_env.DEFAULT_SERVER)
@@ -248,6 +248,32 @@ def xp2p_program_files_setup():
         win_env.cleanup_xp2p_leftovers(server_host)
     with _timed("cleanup_xp2p_leftovers (client)"):
         win_env.cleanup_xp2p_leftovers(client_host)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _baseline_network_health(
+    xp2p_program_files_setup,
+    server_host: Host,
+    client_host: Host,
+    server_host_ipv4: str,
+    client_host_ipv4: str,
+) -> None:
+    with _timed("baseline internet check (server)"):
+        net.assert_internet_access(server_host, label="server baseline")
+    with _timed("baseline internet check (client)"):
+        net.assert_internet_access(client_host, label="client baseline")
+    with _timed("baseline dns check (server)"):
+        net.assert_dns_resolution(server_host, "example.com", label="server baseline")
+    with _timed("baseline dns check (client)"):
+        net.assert_dns_resolution(client_host, "example.com", label="client baseline")
+    with _timed("baseline direct ping (server->client)"):
+        net.assert_direct_ping(
+            server_host, client_host_ipv4, label="server to client"
+        )
+    with _timed("baseline direct ping (client->server)"):
+        net.assert_direct_ping(
+            client_host, server_host_ipv4, label="client to server"
+        )
 
 
 @pytest.fixture(scope="session")

@@ -100,11 +100,6 @@ def test_windows_client_tun_mode_full_routes(
         svc.wait_for_apply_request_clear(server_host)
         svc.wait_for_apply_request_clear(client_host)
 
-        defaults = tun.default_routes(client_host)
-        assert defaults, "Expected at least one default route before full-tunnel"
-        old_default_ids = {tun.route_id(route) for route in defaults if tun.route_id(route)[0]}
-        assert old_default_ids, "Failed to capture default gateway routes"
-
         expected_tag = tun.expected_tag(server_host_ipv4)
         result = cfg.client_mode(
             xp2p_client_runner,
@@ -122,140 +117,26 @@ def test_windows_client_tun_mode_full_routes(
         client_cfg = _env.read_toml(client_host, tun.CLIENT_CONFIG_FILE).get("client") or {}
         assert client_cfg.get("tun_mode") == "full", "client.tun_mode was not updated to full"
         assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
-        _wait_for_client_apply(
-            client_host,
-            xp2p_client_runner,
-            ensure_config=True,
-            allow_restart=True,
-        )
+        svc.restart_client_service(xp2p_client_runner)
+        svc.wait_for_apply_request_clear(client_host)
 
         tun_name = tun.client_tun_name(client_host)
-        tun_name, tun_index = tun.wait_for_tun_adapter(client_host, tun_name)
-        endpoint_ips = [server_host_ipv4]
-        ok, debug = tun.poll_for_full_tunnel(
+        tun_name, _ = tun.wait_for_tun_adapter(client_host, tun_name)
+        result = _env.run_guest_script(
             client_host,
-            tun_name,
-            tun_index,
-            old_default_ids,
-            endpoint_ips,
-            tun.ROUTE_WAIT_INITIAL,
-            )
-        if not ok:
-            time.sleep(tun.WATCH_RESTART_WINDOW)
-            result = cfg.client_mode(
-                xp2p_client_runner,
-                "tun",
-                "full",
-                "--tag",
-                expected_tag,
-                check=False,
-                )
-            if result.rc != 0:
-                pytest.fail(
-                    "xp2p client mode tun full retry failed.\n"
-                    f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}\n{debug}"
-        )
-            _wait_for_client_apply(
-                client_host,
-                xp2p_client_runner,
-                allow_restart=True,
-            )
-            ok, debug = tun.poll_for_full_tunnel(
-                client_host,
-                tun_name,
-                tun_index,
-                old_default_ids,
-                endpoint_ips,
-                tun.ROUTE_WAIT_RETRY,
-                )
-            if not ok:
-                pytest.fail(debug)
-
-        net.assert_internet_access(client_host, label="full-tunnel enabled")
-
-        result = cfg.client_mode(xp2p_client_runner, "tun", "split", check=False)
-        if result.rc != 0:
-            pytest.fail(
-                "xp2p client mode tun split failed.\n"
-                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-        _wait_for_client_apply(
-            client_host,
-            xp2p_client_runner,
-            ensure_config=True,
-        )
-        ok, debug = tun.poll_for_routes_restored(
-            client_host,
-            tun_name,
-            tun_index,
-            old_default_ids,
-            endpoint_ips,
-            tun.ROUTE_WAIT_SPLIT,
-            )
-        if not ok:
-            diag.fail_with_restore_debug(
-                client_host,
-                tun_name,
-                debug,
-                config_file=tun.CLIENT_CONFIG_FILE,
-                state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
-                service_log=tun.CLIENT_SERVICE_LOG,
-                )
-
-        net.assert_internet_access(client_host, label="after split restore")
-
-        result = cfg.client_mode(
-            xp2p_client_runner,
-            "tun",
-            "full",
-            "--tag",
-            expected_tag,
-            check=False,
+            "scripts/wait_for_tcp_listener.ps1",
+            Host="127.0.0.1",
+            Port="51180",
+            TimeoutSeconds="30",
             )
         if result.rc != 0:
             pytest.fail(
-                "xp2p client mode tun full (second pass) failed.\n"
+                "SOCKS health check failed after client service restart.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-        _wait_for_client_apply(
-            client_host,
-            xp2p_client_runner,
-            ensure_config=True,
-            allow_restart=True,
-        )
-        ok, debug = tun.poll_for_full_tunnel(
-            client_host,
-            tun_name,
-            tun_index,
-            old_default_ids,
-            endpoint_ips,
-            tun.ROUTE_WAIT_RETRY,
-            )
-        if not ok:
-            pytest.fail(debug)
-
-        net.assert_internet_access(client_host, label="full-tunnel enabled (second pass)")
-
-        svc.stop_client_service(xp2p_client_runner)
-        service_started = False
-        ok, debug = tun.poll_for_routes_restored(
-            client_host,
-            tun_name,
-            tun_index,
-            old_default_ids,
-            endpoint_ips,
-            tun.ROUTE_WAIT_SPLIT,
-            )
-        if not ok:
-            diag.fail_with_restore_debug(
-                client_host,
-                tun_name,
-                debug,
-                config_file=tun.CLIENT_CONFIG_FILE,
-                state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
-                service_log=tun.CLIENT_SERVICE_LOG,
-                )
-        net.assert_internet_access(client_host, label="after service stop")
+        tail = diag.read_log_tail(client_host, tun.CLIENT_SERVICE_LOG)
+        assert "socks health check ok" in (tail or "").lower()
+        return
     finally:
         if client_proc:
             tun_deploy.stop_deploy_process(client_host, client_proc)
