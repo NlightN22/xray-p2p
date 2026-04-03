@@ -45,6 +45,7 @@ PROJECT_SYNC_MARKER = Path(r"C:\xp2p\scripts\build\build_and_install_msi.ps1")
 _MSI_CACHE_PATH_X64: str | None = None
 _MSI_CACHE_PATH_X86: str | None = None
 _MSI_BUILD_ID: str | None = None
+_GUEST_SCRIPT_CACHE: dict[tuple[str, str], str] = {}
 
 WIN_STACKS = {
     "win7": {
@@ -173,6 +174,19 @@ def _sha256_bytes(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def _guest_script_cache_key(host: Host, script_path: Path) -> tuple[str, str]:
+    backend = getattr(host, "backend", None)
+    host_id = None
+    if backend is not None:
+        host_id = getattr(backend, "host", None) or getattr(backend, "hostname", None)
+        port = getattr(backend, "port", None)
+        if host_id is not None and port is not None:
+            host_id = f"{host_id}:{port}"
+    if host_id is None:
+        host_id = repr(host)
+    return host_id, str(script_path)
+
+
 def _remote_sha256(host: Host, path: Path) -> str | None:
     target = ps_quote(str(path))
     script = (
@@ -224,12 +238,18 @@ def run_guest_script(
     cleanup_path: Path | None = None
     local_script = LOCAL_GUEST_TESTS_ROOT / relative
     local_hash = _sha256_bytes(local_script.read_bytes())
-    if force_stage or not _path_exists_raw(host, script_path):
-        script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
-    else:
-        remote_hash = _remote_sha256(host, script_path)
-        if not remote_hash or remote_hash.lower() != local_hash.lower():
+    cache_key = _guest_script_cache_key(host, script_path)
+    cached_hash = _GUEST_SCRIPT_CACHE.get(cache_key)
+    use_cached = bool(cached_hash and cached_hash.lower() == local_hash.lower() and not force_stage)
+    if not use_cached:
+        if force_stage or not _path_exists_raw(host, script_path):
             script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
+        else:
+            remote_hash = _remote_sha256(host, script_path)
+            if not remote_hash or remote_hash.lower() != local_hash.lower():
+                script_path, cleanup_path = _stage_guest_script(host, relative, relative_label=relative_path)
+            else:
+                _GUEST_SCRIPT_CACHE[cache_key] = local_hash
 
     def _invoke(target: Path) -> CommandResult:
         ps_path = str(target).replace('"', '""')

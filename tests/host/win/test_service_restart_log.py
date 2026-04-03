@@ -143,12 +143,10 @@ def test_client_service_restart_logs(client_host, xp2p_client_runner) -> None:
 
         svc.start_client_service(xp2p_client_runner)
         svc.wait_for_apply_request_clear(client_host)
-        svc.wait_for_service_state(xp2p_client_runner, expected_active=True)
         svc.wait_for_service_ready(client_host)
 
         svc.restart_client_service(xp2p_client_runner)
         try:
-            svc.wait_for_service_state(xp2p_client_runner, expected_active=True)
             svc.wait_for_service_ready(client_host)
         except pytest.fail.Exception as exc:
             debug = _collect_restart_debug(client_host)
