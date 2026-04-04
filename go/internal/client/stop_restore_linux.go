@@ -1,0 +1,23 @@
+//go:build linux
+
+package client
+
+import (
+	"context"
+	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
+)
+
+func restoreFullTunnelOnStop(installDir, configDirName string) {
+	paths, err := resolveClientPaths(installDir, configDirName)
+	if err != nil {
+		logging.Warn("xp2p: full-tunnel restore on stop skipped", "err", err)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := restoreFullTunnel(ctx, paths, false); err != nil {
+		logging.Warn("xp2p: full-tunnel restore on stop failed", "err", err)
+	}
+}
