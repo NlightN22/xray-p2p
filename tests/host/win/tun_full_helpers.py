@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import time
 
 import pytest
@@ -34,6 +35,17 @@ def cleanup_client_install(host, runner) -> None:
         config_dirs=[CLIENT_CONFIG_DIR],
         state_files=CLIENT_STATE_FILES,
     )
+
+
+def _read_full_tunnel_state(host) -> dict:
+    state_path = _env.CONFIG_ROOT / "xp2p-client.tun-full.json"
+    if not _env.path_exists(host, state_path):
+        return {}
+    payload = _env.read_text(host, state_path)
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return {}
 def client_tun_name(host) -> str:
     client_cfg = _env.read_toml(host, CLIENT_CONFIG_FILE).get("client") or {}
     tun_name = (client_cfg.get("tun_name") or "").strip()
@@ -177,10 +189,14 @@ def poll_for_full_tunnel(
                 missing_bypass.append(f"{ip} -> {routes}")
 
         state_text = ""
-        if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
-            state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
+        state_data = _read_full_tunnel_state(host)
+        if state_data:
+            state_text = json.dumps(state_data, indent=2)
         service_log = diag.read_log_tail(host, log_path or CLIENT_SERVICE_LOG)
 
+        bypass_expected = bool(state_data.get("bypass_routes")) if state_data else True
+        if not bypass_expected:
+            missing_bypass = []
         ok = has_tun_default and best_is_tun and not missing_bypass
         debug = (
             f"has_tun_default={has_tun_default} best_is_tun={best_is_tun} "
@@ -215,10 +231,14 @@ def poll_for_routes_restored(
                 bypass_left.append(f"{ip} -> {routes}")
 
         state_text = ""
-        if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
-            state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
+        state_data = _read_full_tunnel_state(host)
+        if state_data:
+            state_text = json.dumps(state_data, indent=2)
         service_log = diag.read_log_tail(host, log_path or CLIENT_SERVICE_LOG)
 
+        bypass_expected = bool(state_data.get("bypass_routes")) if state_data else True
+        if not bypass_expected:
+            bypass_left = []
         ok = not tun_routes and defaults_restored and not bypass_left
         debug = (
             f"tun_routes={tun_routes} defaults_restored={defaults_restored} "
