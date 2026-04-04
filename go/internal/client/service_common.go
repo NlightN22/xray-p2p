@@ -127,7 +127,9 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		}
 		return Run(runCtx, runOpts)
 	}); err != nil {
+		restoreFullTunnelOnStop(installDir, configDirName)
 		return fmt.Errorf("xp2p client service: %w", err)
 	}
+	restoreFullTunnelOnStop(installDir, configDirName)
 	return nil
 }
