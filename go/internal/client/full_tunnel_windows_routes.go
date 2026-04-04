@@ -51,6 +51,55 @@ func buildWindowsBypassRoutes(defaults []winnet.Route, ipv4 []string, ipv6 []str
 	return routes
 }
 
+func filterBypassIPv4(endpoints []string, tunIfIndex int, verbose bool) []string {
+	var filtered []string
+	for _, ip := range endpoints {
+		route, prefixLen, ok, err := winnet.BestRouteForIP(ip)
+		if err != nil {
+			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass route lookup failed", "ip", ip, "err", err)
+			filtered = append(filtered, ip)
+			continue
+		}
+		if !ok || tunIfIndex == 0 {
+			filtered = append(filtered, ip)
+			continue
+		}
+		if route.InterfaceIndex != tunIfIndex && prefixLen > 0 && !isDefaultRoutePrefix(route.DestinationPrefix) {
+			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass skipped (direct route exists)", "ip", ip, "route", route.DestinationPrefix, "ifIndex", route.InterfaceIndex)
+			continue
+		}
+		filtered = append(filtered, ip)
+	}
+	return filtered
+}
+
+func filterBypassIPv6(endpoints []string, tunIfIndex int, verbose bool) []string {
+	var filtered []string
+	for _, ip := range endpoints {
+		route, prefixLen, ok, err := winnet.BestRouteForIP(ip)
+		if err != nil {
+			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass route lookup failed", "ip", ip, "err", err)
+			filtered = append(filtered, ip)
+			continue
+		}
+		if !ok || tunIfIndex == 0 {
+			filtered = append(filtered, ip)
+			continue
+		}
+		if route.InterfaceIndex != tunIfIndex && prefixLen > 0 && !isDefaultRoutePrefix(route.DestinationPrefix) {
+			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass skipped (direct route exists)", "ip", ip, "route", route.DestinationPrefix, "ifIndex", route.InterfaceIndex)
+			continue
+		}
+		filtered = append(filtered, ip)
+	}
+	return filtered
+}
+
+func isDefaultRoutePrefix(dest string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(dest))
+	return trimmed == "0.0.0.0/0" || trimmed == "::/0"
+}
+
 func syncWindowsBypassRoutes(ctx context.Context, desired []fullTunnelRoute, existing []fullTunnelRoute, verbose bool) error {
 	desiredSet := make(map[string]struct{}, len(desired))
 	for _, route := range desired {

@@ -37,6 +37,64 @@ func DefaultRoutes(ctx context.Context) ([]Route, error) {
 	return nil, fmt.Errorf("xp2p: route lookup failed: %w", err)
 }
 
+// BestRouteForIP returns the most specific route that matches the given IP.
+func BestRouteForIP(ip string) (Route, int, bool, error) {
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil {
+		return Route{}, 0, false, nil
+	}
+	family := "IPv6"
+	if parsed.To4() != nil {
+		family = "IPv4"
+	}
+	var table *windows.MibIpForwardTable2
+	if err := windows.GetIpForwardTable2(windows.AF_UNSPEC, &table); err != nil {
+		return Route{}, 0, false, err
+	}
+	if table == nil {
+		return Route{}, 0, false, nil
+	}
+	defer windows.FreeMibTable(unsafe.Pointer(table))
+	var best Route
+	bestPrefix := -1
+	bestMetric := 0
+	for _, row := range table.Rows() {
+		prefix, fam, ok := ipPrefixFromRaw(row.DestinationPrefix)
+		if !ok || !strings.EqualFold(fam, family) {
+			continue
+		}
+		_, ipNet, err := net.ParseCIDR(prefix)
+		if err != nil || ipNet == nil {
+			continue
+		}
+		if !ipNet.Contains(parsed) {
+			continue
+		}
+		prefixLen, _ := ipNet.Mask.Size()
+		ifMetric, _ := interfaceMetricFromIPHelper(row.InterfaceLuid, int(row.InterfaceIndex), fam)
+		metric := int(row.Metric) + ifMetric
+		if prefixLen > bestPrefix || (prefixLen == bestPrefix && (bestPrefix < 0 || metric < bestMetric)) {
+			nextHop, _, _ := ipFromRaw(row.NextHop)
+			best = Route{
+				DestinationPrefix: prefix,
+				NextHop:           nextHop,
+				InterfaceIndex:    int(row.InterfaceIndex),
+				InterfaceLuid:     row.InterfaceLuid,
+				RouteMetric:       int(row.Metric),
+				InterfaceMetric:   ifMetric,
+				PolicyStore:       "ActiveStore",
+				AddressFamily:     fam,
+			}
+			bestPrefix = prefixLen
+			bestMetric = metric
+		}
+	}
+	if bestPrefix < 0 {
+		return Route{}, 0, false, nil
+	}
+	return best, bestPrefix, true, nil
+}
+
 func defaultRoutesFromIPHelper() ([]Route, error) {
 	var table *windows.MibIpForwardTable2
 	if err := windows.GetIpForwardTable2(windows.AF_UNSPEC, &table); err != nil {

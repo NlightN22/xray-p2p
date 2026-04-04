@@ -52,7 +52,8 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 
 func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState, state fullTunnelState, endpointIPv4 []string, endpointIPv6 []string, resolvedEndpoints map[string]fullTunnelEndpointIPs) (enabled bool, err error) {
 	logging.Info("xp2p: full-tunnel apply start", "tun_name", opts.TunName, "tun_addr", opts.TunAddr)
-	if _, _, err := resolveWindowsInterface(ctx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose, true); err != nil {
+	ifIndex, _, err := resolveWindowsInterface(ctx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose, true)
+	if err != nil {
 		return false, err
 	}
 	var defaults []winnet.Route
@@ -69,6 +70,8 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes captured", "routes", defaults)
 	}
 
+	endpointIPv4 = filterBypassIPv4(endpointIPv4, ifIndex, opts.FullTunnelVerbose)
+	endpointIPv6 = filterBypassIPv6(endpointIPv6, ifIndex, opts.FullTunnelVerbose)
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
 	bypassRoutes := buildWindowsBypassRoutes(defaults, endpointIPv4, endpointIPv6)
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes prepared", "routes", bypassRoutes)
