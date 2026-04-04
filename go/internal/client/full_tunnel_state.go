@@ -87,3 +87,12 @@ func clearFullTunnelState(path string) error {
 	}
 	return nil
 }
+
+// FullTunnelEnabled reports whether full-tunnel routes are applied.
+func FullTunnelEnabled(path string) (bool, error) {
+	state, err := loadFullTunnelState(path)
+	if err != nil {
+		return false, err
+	}
+	return state.Enabled, nil
+}

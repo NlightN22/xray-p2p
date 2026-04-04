@@ -13,16 +13,6 @@ import (
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	if !opts.TunEnabled || mode != "full" {
-		endpointIPs, err := resolveEndpointIPMap(ctx, desired.Endpoints, nil)
-		if err != nil {
-			return false, err
-		}
-		if err := syncFullTunnelOutbounds(paths, desired, endpointIPs, true); err != nil {
-			return false, err
-		}
-		if err := syncFullTunnelRouting(paths, desired, opts, nil, false); err != nil {
-			return false, err
-		}
 		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
 			return false, err
 		}
@@ -39,11 +29,11 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	if err != nil {
 		return false, err
 	}
-	if err := syncFullTunnelOutbounds(paths, desired, resolvedEndpoints, true); err != nil {
-		return false, err
-	}
-	if err := syncFullTunnelRouting(paths, desired, opts, resolvedEndpoints, true); err != nil {
-		return false, err
+	if endpointCacheNeedsUpdate(state.EndpointIPs, resolvedEndpoints) {
+		state.EndpointIPs = resolvedEndpoints
+		if err := saveFullTunnelState(paths.fullState, state); err != nil {
+			return false, err
+		}
 	}
 	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
 }

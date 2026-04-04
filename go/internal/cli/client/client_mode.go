@@ -94,7 +94,20 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 			return 1
 		}
 		if mode == "tun" {
-			logging.Info("xp2p client mode: current mode", "mode", mode, "tun_mode", tunMode)
+			status := ""
+			if tunMode == "full" {
+				enabled, err := client.FullTunnelEnabled(config.ConfigPath(layout.ClientFullTunnelStateFileName))
+				if err != nil {
+					logging.Warn("xp2p client mode: failed to read full-tunnel state", "err", err)
+				} else if !enabled {
+					status = "pending"
+				}
+			}
+			if status != "" {
+				logging.Info("xp2p client mode: current mode", "mode", mode, "tun_mode", tunMode, "tun_mode_status", status)
+			} else {
+				logging.Info("xp2p client mode: current mode", "mode", mode, "tun_mode", tunMode)
+			}
 		} else {
 			logging.Info("xp2p client mode: current mode", "mode", mode)
 		}

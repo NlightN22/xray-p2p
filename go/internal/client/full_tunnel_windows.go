@@ -6,11 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
@@ -20,16 +17,6 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
 		logging.Info("xp2p: full-tunnel sync skipped (not enabled)")
-		endpointIPs, err := resolveEndpointIPMapWithCache(ctx, desired.Endpoints)
-		if err != nil {
-			return false, err
-		}
-		if err := syncFullTunnelOutbounds(paths, desired, endpointIPs, true); err != nil {
-			return false, err
-		}
-		if err := syncFullTunnelRouting(paths, desired, opts, nil, false); err != nil {
-			return false, err
-		}
 		if windowsRoutesDisabled {
 			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel restore")
 		} else {
@@ -55,50 +42,6 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 		if err := saveFullTunnelState(paths.fullState, state); err != nil {
 			return false, err
 		}
-	}
-	outboundsPath := filepath.Join(paths.configDir, "outbounds.json")
-	routingPath := filepath.Join(paths.configDir, "routing.json")
-	outboundsHashBefore, err := fileHash(outboundsPath)
-	if err != nil {
-		return false, err
-	}
-	routingHashBefore, err := fileHash(routingPath)
-	if err != nil {
-		return false, err
-	}
-	if err := syncFullTunnelOutbounds(paths, desired, resolvedEndpoints, true); err != nil {
-		return false, err
-	}
-	if err := syncFullTunnelRouting(paths, desired, opts, resolvedEndpoints, true); err != nil {
-		return false, err
-	}
-	outboundsHashAfter, err := fileHash(outboundsPath)
-	if err != nil {
-		return false, err
-	}
-	routingHashAfter, err := fileHash(routingPath)
-	if err != nil {
-		return false, err
-	}
-	outboundsChanged := outboundsHashBefore != outboundsHashAfter
-	routingChanged := routingHashBefore != routingHashAfter
-	if outboundsChanged || routingChanged {
-		logging.Info(
-			"xp2p: full-tunnel config updated; requesting controlled restart before route apply",
-			"outbounds_changed",
-			outboundsChanged,
-			"routing_changed",
-			routingChanged,
-		)
-		req, err := apply.NewRequest(apply.RoleClient)
-		if err != nil {
-			return false, err
-		}
-		if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
-			return false, err
-		}
-		logging.Info("xp2p: full-tunnel apply request written", "path", config.ApplyRequestPath(), "request_id", req.ID)
-		return false, nil
 	}
 	if windowsRoutesDisabled {
 		logging.Warn("xp2p: full-tunnel route apply disabled on windows")

@@ -170,12 +170,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 					}
 					logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
 				}()
-				logging.Info("xp2p: windows route apply disabled; skipping redirect/full-tunnel routes")
 				if wantFull {
-					if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
-						logging.Warn("xp2p: full-tunnel apply failed", "err", err)
-					}
+					logging.Info("xp2p: full-tunnel pending (routes disabled)")
 				}
+				logging.Info("xp2p: windows route apply disabled; skipping redirect/full-tunnel routes")
 				return
 			}
 			go func() {
