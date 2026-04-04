@@ -153,6 +153,8 @@ def poll_for_full_tunnel(
     old_default_ids: set[tuple[str, int]],
     endpoint_ips: list[str],
     timeout: float,
+    *,
+    log_path: Path | None = None,
 ) -> tuple[bool, str]:
     def _check():
         defaults = default_routes(host)
@@ -177,7 +179,7 @@ def poll_for_full_tunnel(
         state_text = ""
         if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
             state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
-        service_log = diag.read_log_tail(host, CLIENT_SERVICE_LOG)
+        service_log = diag.read_log_tail(host, log_path or CLIENT_SERVICE_LOG)
 
         ok = has_tun_default and best_is_tun and not missing_bypass
         debug = (
@@ -199,6 +201,8 @@ def poll_for_routes_restored(
     old_default_ids: set[tuple[str, int]],
     endpoint_ips: list[str],
     timeout: float,
+    *,
+    log_path: Path | None = None,
 ) -> tuple[bool, str]:
     def _check():
         defaults = default_routes(host)
@@ -213,7 +217,7 @@ def poll_for_routes_restored(
         state_text = ""
         if _env.path_exists(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json"):
             state_text = _env.read_text(host, _env.CONFIG_ROOT / "xp2p-client.tun-full.json")
-        service_log = diag.read_log_tail(host, CLIENT_SERVICE_LOG)
+        service_log = diag.read_log_tail(host, log_path or CLIENT_SERVICE_LOG)
 
         ok = not tun_routes and defaults_restored and not bypass_left
         debug = (

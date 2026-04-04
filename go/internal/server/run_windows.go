@@ -121,8 +121,17 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	onStart := func() {
 		if opts.TunEnabled {
-			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
 			go func() {
+				waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if _, _, err := winnet.WaitForTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false); err != nil {
+					logging.Warn("xp2p: tun IPv4 wait failed; skipping route apply", "err", err)
+					return
+				}
+				if ctx.Err() != nil {
+					return
+				}
+				go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
 				if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
 					logging.Warn("xp2p: redirect route setup failed", "err", err)
 				}

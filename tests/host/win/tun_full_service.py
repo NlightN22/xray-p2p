@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -14,6 +15,7 @@ POLL_INTERVAL = 2.0
 APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
 CLIENT_CONFIG = _env.CONFIG_ROOT / "xp2p-client.toml"
 CLIENT_SERVICE_LOG = _env.LOGS_DIR / "client" / "service.log"
+SERVICE_REG_PATH = r"HKLM:\SYSTEM\CurrentControlSet\Services\xp2p-client"
 SUCCESS_MARKERS = {
     "proxy": "socks health check ok",
     "tun": "xp2p: tun ipv4 available",
@@ -75,6 +77,15 @@ def wait_for_apply_request_clear(host, timeout: float = 90.0) -> None:
     pytest.fail(f"apply.request did not clear after {timeout} seconds.")
 
 
+def wait_for_apply_request_set(host, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _env.path_exists(host, APPLY_REQUEST):
+            return
+        time.sleep(POLL_INTERVAL)
+    pytest.fail(f"apply.request did not appear after {timeout} seconds.")
+
+
 def wait_for_client_config(host, timeout: float = 90.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -82,6 +93,73 @@ def wait_for_client_config(host, timeout: float = 90.0) -> None:
             return
         time.sleep(POLL_INTERVAL)
     pytest.fail(f"xp2p-client.toml did not appear after {timeout} seconds.")
+
+
+def set_service_log_root(host, log_root: Path) -> list[str]:
+    log_root_str = _env.ps_quote(str(log_root))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$path = '{SERVICE_REG_PATH}'
+$existing = @()
+try {{
+    $value = (Get-ItemProperty -Path $path -Name Environment -ErrorAction SilentlyContinue).Environment
+    if ($value) {{
+        $existing = @($value)
+    }}
+}} catch {{}}
+$filtered = @()
+foreach ($entry in $existing) {{
+    if ($entry -and $entry -notlike 'XP2P_LOG_ROOT=*') {{
+        $filtered += $entry
+    }}
+}}
+$filtered += ('XP2P_LOG_ROOT=' + {log_root_str})
+$envValue = [string[]]$filtered
+Set-ItemProperty -Path $path -Name Environment -Value $envValue
+$existing | ConvertTo-Json -Compress
+"""
+    result = _env.run_powershell(host, script, label="set_service_log_root")
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to set service log root.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    payload = (result.stdout or "").strip()
+    if not payload:
+        return []
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"Failed to parse service env snapshot: {payload!r} ({exc})")
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return [str(item) for item in data if str(item).strip()]
+    return [str(data)]
+
+
+def restore_service_env(host, entries: list[str]) -> None:
+    payload = json.dumps(entries)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$path = '{SERVICE_REG_PATH}'
+$payload = { _env.ps_quote(payload) }
+$entries = @()
+if ($payload -and $payload -ne 'null') {{
+    $entries = $payload | ConvertFrom-Json
+}}
+if (-not $entries) {{
+    Remove-ItemProperty -Path $path -Name Environment -ErrorAction SilentlyContinue
+    exit 0
+}}
+Set-ItemProperty -Path $path -Name Environment -Value $entries
+"""
+    result = _env.run_powershell(host, script, label="restore_service_env")
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to restore service environment.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def wait_for_service_ready(host, log_path: Path | None = None, timeout: float = 90.0) -> None:
@@ -145,6 +223,39 @@ def wait_for_service_outcome(host, log_path: Path | None = None, timeout: float 
         time.sleep(POLL_INTERVAL)
     pytest.fail(
         "xp2p service did not reach a restart outcome within timeout.\n"
+        f"log_path={log_path}\n"
+        f"log_tail:\n{last_tail}"
+    )
+
+
+def wait_for_service_marker(
+    host,
+    marker: str,
+    *,
+    log_path: Path | None = None,
+    timeout: float = 120.0,
+) -> None:
+    deadline = time.time() + timeout
+    if log_path is None:
+        log_path = CLIENT_SERVICE_LOG
+    last_tail = ""
+    marker_lower = marker.lower()
+    while time.time() < deadline:
+        if _env.path_exists(host, log_path):
+            last_tail = diag.read_log_tail(host, log_path)
+            tail_lower = (last_tail or "").lower()
+            if marker_lower in tail_lower:
+                return
+            if any(marker in tail_lower for marker in FAIL_MARKERS):
+                pytest.fail(
+                    "xp2p service restart failed based on log marker.\n"
+                    f"log_path={log_path}\n"
+                    f"log_tail:\n{last_tail}"
+                )
+        time.sleep(POLL_INTERVAL)
+    pytest.fail(
+        "xp2p service did not reach expected log marker within timeout.\n"
+        f"marker={marker}\n"
         f"log_path={log_path}\n"
         f"log_tail:\n{last_tail}"
     )

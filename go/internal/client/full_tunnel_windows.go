@@ -19,6 +19,7 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
+		logging.Info("xp2p: full-tunnel sync skipped (not enabled)")
 		endpointIPs, err := resolveEndpointIPMapWithCache(ctx, desired.Endpoints)
 		if err != nil {
 			return false, err
@@ -200,11 +201,13 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 }
 
 func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) error {
+	logging.Info("xp2p: full-tunnel restore start")
 	state, err := loadFullTunnelState(paths.fullState)
 	if err != nil {
 		return err
 	}
 	if !state.Enabled {
+		logging.Info("xp2p: full-tunnel restore skipped (disabled)")
 		return nil
 	}
 
@@ -236,7 +239,11 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	state.IPv6Defaults = nil
 	state.BypassRoutes = nil
 	state.DNSBackup = nil
-	return saveFullTunnelState(paths.fullState, state)
+	if err := saveFullTunnelState(paths.fullState, state); err != nil {
+		return err
+	}
+	logging.Info("xp2p: full-tunnel restore complete")
+	return nil
 }
 
 func rollbackFullTunnel(ctx context.Context, paths clientPaths, verbose bool, state fullTunnelState, defaults []winnet.Route) error {
