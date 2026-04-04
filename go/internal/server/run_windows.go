@@ -121,6 +121,21 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	onStart := func() {
 		if opts.TunEnabled {
+			if windowsRoutesDisabled {
+				go func() {
+					waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+					defer cancel()
+					logging.Info("xp2p: ensuring tun IPv4 (routes disabled)", "timeout", "120s")
+					ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false)
+					if err != nil {
+						logging.Warn("xp2p: tun IPv4 ensure failed", "err", err)
+						return
+					}
+					logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
+				}()
+				logging.Info("xp2p: windows route apply disabled; skipping redirect routes")
+				return
+			}
 			go func() {
 				waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()

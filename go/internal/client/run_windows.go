@@ -105,16 +105,24 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	wantFull := opts.TunEnabled && strings.EqualFold(strings.TrimSpace(opts.TunMode), "full")
 	if !wantFull {
-		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-			return err
+		if windowsRoutesDisabled {
+			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel restore")
+		} else {
+			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
+				return err
+			}
 		}
 	}
 	defer func() {
 		if !wantFull {
 			return
 		}
-		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-			logging.Warn("xp2p: full-tunnel rollback failed", "err", err)
+		if windowsRoutesDisabled {
+			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel rollback")
+		} else {
+			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
+				logging.Warn("xp2p: full-tunnel rollback failed", "err", err)
+			}
 		}
 	}()
 
@@ -150,6 +158,26 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	onStart := func() {
 		if opts.TunEnabled {
+			if windowsRoutesDisabled {
+				go func() {
+					waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+					defer cancel()
+					logging.Info("xp2p: ensuring tun IPv4 (routes disabled)", "timeout", "120s")
+					ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose)
+					if err != nil {
+						logging.Warn("xp2p: tun IPv4 ensure failed", "err", err)
+						return
+					}
+					logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
+				}()
+				logging.Info("xp2p: windows route apply disabled; skipping redirect/full-tunnel routes")
+				if wantFull {
+					if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
+						logging.Warn("xp2p: full-tunnel apply failed", "err", err)
+					}
+				}
+				return
+			}
 			go func() {
 				waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()

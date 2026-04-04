@@ -30,8 +30,12 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 		if err := syncFullTunnelRouting(paths, desired, opts, nil, false); err != nil {
 			return false, err
 		}
-		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-			return false, err
+		if windowsRoutesDisabled {
+			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel restore")
+		} else {
+			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
+				return false, err
+			}
 		}
 		return false, nil
 	}
@@ -94,6 +98,10 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 			return false, err
 		}
 		logging.Info("xp2p: full-tunnel apply request written", "path", config.ApplyRequestPath(), "request_id", req.ID)
+		return false, nil
+	}
+	if windowsRoutesDisabled {
+		logging.Warn("xp2p: full-tunnel route apply disabled on windows")
 		return false, nil
 	}
 	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
