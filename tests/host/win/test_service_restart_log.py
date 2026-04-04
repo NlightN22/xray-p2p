@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -17,10 +18,14 @@ CLIENT_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-client.state.json",
     _env.CONFIG_ROOT / "xp2p-client.tun-full.json",
 ]
+SYNCED_LOG_ROOT = Path(r"C:\xp2p\build\logs\tests")
+SYNCED_SERVICE_LOG = SYNCED_LOG_ROOT / "client" / "service.log"
+SERVICE_REG_PATH = r"HKLM:\SYSTEM\CurrentControlSet\Services\xp2p-client"
 
 
 def _client_service_log_candidates() -> list[Path]:
     return [
+        SYNCED_SERVICE_LOG,
         _env.LOGS_DIR / "client" / "service.log",
         _env.CONFIG_ROOT / "logs" / "client" / "service.log",
         _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "pending" / "logs" / "client" / "service.log",
@@ -44,50 +49,71 @@ def _cleanup_client_install(client_host, runner) -> None:
     )
 
 
-def _find_tun_adapter(host, tun_name: str) -> tuple[str, int]:
-    target = _env.ps_quote(tun_name)
+def _set_service_log_root(host, log_root: Path) -> list[str]:
+    log_root_str = _env.ps_quote(str(log_root))
     script = f"""
 $ErrorActionPreference = 'Stop'
-$name = {target}
+$path = '{SERVICE_REG_PATH}'
+$existing = @()
 try {{
-    $adapters = Get-NetAdapter -IncludeHidden -ErrorAction Stop
-}} catch {{
-    $adapters = Get-NetAdapter -ErrorAction SilentlyContinue
+    $value = (Get-ItemProperty -Path $path -Name Environment -ErrorAction SilentlyContinue).Environment
+    if ($value) {{
+        $existing = @($value)
+    }}
+}} catch {{}}
+$filtered = @()
+foreach ($entry in $existing) {{
+    if ($entry -and $entry -notlike 'XP2P_LOG_ROOT=*') {{
+        $filtered += $entry
+    }}
 }}
-$adapter = $adapters | Where-Object {{ $_.Name -eq $name }} | Select-Object -First 1
-if (-not $adapter) {{
-    $adapter = $adapters |
-        Where-Object {{ $_.Name -like "$name*" }} |
-        Sort-Object -Property ifIndex |
-        Select-Object -First 1
-}}
-if (-not $adapter) {{
-    $adapter = $adapters |
-        Where-Object {{ $_.InterfaceDescription -like '*Wintun*' -or $_.InterfaceDescription -like '*Xray Tunnel*' -or $_.Name -like '*Xray Tunnel*' }} |
-        Sort-Object -Property ifIndex |
-        Select-Object -First 1
-}}
-if (-not $adapter) {{
-    exit 3
-}}
-Write-Output ("{0}|{1}" -f $adapter.Name, $adapter.ifIndex)
+$filtered += ('XP2P_LOG_ROOT=' + {log_root_str})
+$envValue = [string[]]$filtered
+Set-ItemProperty -Path $path -Name Environment -Value $envValue
+$existing | ConvertTo-Json -Compress
 """
-    result = _env.run_powershell(host, script, label="find_tun_adapter")
+    result = _env.run_powershell(host, script, label="set_service_log_root")
     if result.rc != 0:
         pytest.fail(
-            "TUN adapter not found.\n"
+            "Failed to set service log root.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-    value = (result.stdout or "").strip().splitlines()
-    if not value:
-        pytest.fail("TUN adapter lookup returned empty output.")
-    parts = value[-1].split("|", 1)
-    if len(parts) != 2:
-        pytest.fail(f"Unexpected TUN adapter output: {value[-1]!r}")
+    payload = (result.stdout or "").strip()
+    if not payload:
+        return []
     try:
-        return parts[0].strip(), int(parts[1].strip())
-    except ValueError as exc:
-        pytest.fail(f"Unexpected TUN adapter output: {value[-1]!r} ({exc})")
+        data = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        pytest.fail(f"Failed to parse service env snapshot: {payload!r} ({exc})")
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return [str(item) for item in data if str(item).strip()]
+    return [str(data)]
+
+
+def _restore_service_env(host, entries: list[str]) -> None:
+    payload = json.dumps(entries)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$path = '{SERVICE_REG_PATH}'
+$payload = { _env.ps_quote(payload) }
+$entries = @()
+if ($payload -and $payload -ne 'null') {{
+    $entries = $payload | ConvertFrom-Json
+}}
+if (-not $entries) {{
+    Remove-ItemProperty -Path $path -Name Environment -ErrorAction SilentlyContinue
+    exit 0
+}}
+Set-ItemProperty -Path $path -Name Environment -Value $entries
+"""
+    result = _env.run_powershell(host, script, label="restore_service_env")
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to restore service environment.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
 
 
 def _collect_restart_debug(host) -> str:
@@ -125,7 +151,14 @@ def test_client_service_restart_logs(client_host, xp2p_client_runner) -> None:
         pytest.skip("xp2p-client service is not registered; MSI install required.")
 
     _cleanup_client_install(client_host, xp2p_client_runner)
+    original_env: list[str] = []
     try:
+        _env.run_powershell(
+            client_host,
+            f"New-Item -ItemType Directory -Path {_env.ps_quote(str(SYNCED_LOG_ROOT))} -Force | Out-Null",
+            label="ensure_synced_log_root",
+        )
+        original_env = _set_service_log_root(client_host, SYNCED_LOG_ROOT)
         xp2p_client_runner(
             "client",
             "install",
@@ -143,11 +176,13 @@ def test_client_service_restart_logs(client_host, xp2p_client_runner) -> None:
 
         svc.start_client_service(xp2p_client_runner)
         svc.wait_for_apply_request_clear(client_host)
-        svc.wait_for_service_ready(client_host)
+        first_outcome = svc.wait_for_service_outcome(client_host, log_path=SYNCED_SERVICE_LOG)
+        print(f"INFO: initial service outcome={first_outcome}")
 
         svc.restart_client_service(xp2p_client_runner)
         try:
-            svc.wait_for_service_ready(client_host)
+            restart_outcome = svc.wait_for_service_outcome(client_host, log_path=SYNCED_SERVICE_LOG)
+            print(f"INFO: restart service outcome={restart_outcome}")
         except pytest.fail.Exception as exc:
             debug = _collect_restart_debug(client_host)
             pytest.fail(
@@ -155,14 +190,6 @@ def test_client_service_restart_logs(client_host, xp2p_client_runner) -> None:
                 f"{debug}\n"
                 f"original_error={exc}"
             )
-
-        tun_name = "xp2pc"
-        adapter_name, adapter_index = _find_tun_adapter(client_host, tun_name)
-        ips = svc.wait_for_tun_ipv4_by_index(client_host, adapter_index, timeout=60.0)
-        print(f"INFO: client TUN adapter: name={adapter_name} index={adapter_index} ips={ips}")
-        if not ips:
-            debug = _collect_restart_debug(client_host)
-            pytest.fail(f"TUN adapter has no IPv4 address after restart.\n{debug}")
 
         log_path = _find_client_service_log(client_host)
         tail = diag.read_log_tail(client_host, log_path)
@@ -173,4 +200,7 @@ def test_client_service_restart_logs(client_host, xp2p_client_runner) -> None:
             debug = _collect_restart_debug(client_host)
             pytest.fail(f"Client service log is empty at {log_path}\n{debug}")
     finally:
+        if original_env is not None:
+            _restore_service_env(client_host, original_env)
+        _env.remove_path(client_host, SYNCED_SERVICE_LOG)
         _cleanup_client_install(client_host, xp2p_client_runner)

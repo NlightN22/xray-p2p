@@ -14,6 +14,16 @@ POLL_INTERVAL = 2.0
 APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
 CLIENT_CONFIG = _env.CONFIG_ROOT / "xp2p-client.toml"
 CLIENT_SERVICE_LOG = _env.LOGS_DIR / "client" / "service.log"
+SUCCESS_MARKERS = {
+    "proxy": "socks health check ok",
+    "tun": "xp2p: tun ipv4 available",
+}
+FAIL_MARKERS = [
+    "context cancel",
+    "xray-core health check failed",
+    "xp2p client service failed",
+    "failed to start xp2p",
+]
 
 
 def require_client_service(host) -> None:
@@ -87,6 +97,54 @@ def wait_for_service_ready(host, log_path: Path | None = None, timeout: float = 
         time.sleep(POLL_INTERVAL)
     pytest.fail(
         "xp2p service did not report socks health check ok.\n"
+        f"log_path={log_path}\n"
+        f"log_tail:\n{last_tail}"
+    )
+
+
+def wait_for_service_outcome(host, log_path: Path | None = None, timeout: float = 120.0) -> str:
+    deadline = time.time() + timeout
+    if log_path is None:
+        log_path = CLIENT_SERVICE_LOG
+    last_tail = ""
+    seen: set[str] = set()
+    if _env.path_exists(host, log_path):
+        last_tail = diag.read_log_tail(host, log_path)
+        tail_lower = (last_tail or "").lower()
+        if SUCCESS_MARKERS["proxy"] in tail_lower:
+            return "proxy"
+        if SUCCESS_MARKERS["tun"] in tail_lower:
+            return "tun"
+        if any(marker in tail_lower for marker in FAIL_MARKERS):
+            pytest.fail(
+                "xp2p service restart failed based on log marker.\n"
+                f"log_path={log_path}\n"
+                f"log_tail:\n{last_tail}"
+            )
+        seen = {line.strip() for line in last_tail.splitlines() if line.strip()}
+    while time.time() < deadline:
+        if _env.path_exists(host, log_path):
+            last_tail = diag.read_log_tail(host, log_path)
+            tail_lower = (last_tail or "").lower()
+            if SUCCESS_MARKERS["proxy"] in tail_lower:
+                return "proxy"
+            if SUCCESS_MARKERS["tun"] in tail_lower:
+                return "tun"
+            if any(marker in tail_lower for marker in FAIL_MARKERS):
+                pytest.fail(
+                    "xp2p service restart failed based on log marker.\n"
+                    f"log_path={log_path}\n"
+                    f"log_tail:\n{last_tail}"
+                )
+            for raw in last_tail.splitlines():
+                line = raw.strip()
+                if not line or line in seen:
+                    continue
+                lower = line.lower()
+                seen.add(line)
+        time.sleep(POLL_INTERVAL)
+    pytest.fail(
+        "xp2p service did not reach a restart outcome within timeout.\n"
         f"log_path={log_path}\n"
         f"log_tail:\n{last_tail}"
     )

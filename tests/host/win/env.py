@@ -184,6 +184,8 @@ def _guest_script_cache_key(host: Host, script_path: Path) -> tuple[str, str]:
             host_id = f"{host_id}:{port}"
     if host_id is None:
         host_id = repr(host)
+    else:
+        host_id = str(host_id)
     return host_id, str(script_path)
 
 
