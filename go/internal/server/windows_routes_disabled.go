@@ -2,4 +2,4 @@
 
 package server
 
-const windowsRoutesDisabled = true
+const windowsRoutesDisabled = false

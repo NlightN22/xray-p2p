@@ -2,4 +2,4 @@
 
 package client
 
-const windowsRoutesDisabled = true
+const windowsRoutesDisabled = false

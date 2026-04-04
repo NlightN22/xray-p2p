@@ -177,10 +177,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 				return
 			}
 			go func() {
-				waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 				defer cancel()
-				if _, _, err := winnet.WaitForTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose); err != nil {
-					logging.Warn("xp2p: tun IPv4 wait failed; skipping route apply", "err", err)
+				if _, _, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose); err != nil {
+					logging.Warn("xp2p: tun IPv4 ensure failed; skipping route apply", "err", err)
 					return
 				}
 				if ctx.Err() != nil {
