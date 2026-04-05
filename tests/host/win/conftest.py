@@ -160,7 +160,7 @@ def _configure_msi_build_id(xp2p_build_id: str) -> None:
 
 
 @pytest.fixture(scope="session")
-def xp2p_msi_path() -> str:
+def xp2p_msi_path(_configure_win_stack) -> str:
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (msi build)"):
         server_host = win_env.get_ssh_host(win_env.DEFAULT_SERVER)
@@ -169,7 +169,7 @@ def xp2p_msi_path() -> str:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def xp2p_program_files_setup(_configure_msi_build_id):
+def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (server setup)"):
         server_host = win_env.get_ssh_host(win_env.DEFAULT_SERVER)
@@ -277,14 +277,14 @@ def _baseline_network_health(
 
 
 @pytest.fixture(scope="session")
-def server_host() -> Host:
+def server_host(_configure_win_stack) -> Host:
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (server)"):
         return win_env.get_ssh_host(win_env.DEFAULT_SERVER)
 
 
 @pytest.fixture(scope="session")
-def client_host() -> Host:
+def client_host(_configure_win_stack) -> Host:
     win_env.require_vagrant_environment()
     with _timed("get_ssh_host (client)"):
         return win_env.get_ssh_host(win_env.DEFAULT_CLIENT)

@@ -130,21 +130,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	if opts.TunEnabled {
-		if count, err := winnet.RemoveTunAdapters(ctx, opts.TunName); err != nil {
-			logging.Warn("xp2p: tun adapter cleanup failed", "err", err)
-		} else if count > 0 {
-			logging.Info("xp2p: removed stale tun adapters", "interface", opts.TunName, "count", count)
-		}
-		defer func() {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			if count, err := winnet.RemoveTunAdapters(cleanupCtx, opts.TunName); err != nil {
-				logging.Warn("xp2p: tun adapter cleanup failed", "err", err)
-			} else if count > 0 {
-				logging.Info("xp2p: removed stale tun adapters", "interface", opts.TunName, "count", count)
-			}
-		}()
+	wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
+	if result, err := winnet.CleanupWintunAdapter(wintunPath, opts.TunName); err != nil {
+		logging.Warn("xp2p: wintun adapter cleanup failed", "interface", opts.TunName, "result", "error", "err", err)
+	} else {
+		logging.Info("xp2p: wintun adapter cleanup", "interface", opts.TunName, "result", result)
 	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
