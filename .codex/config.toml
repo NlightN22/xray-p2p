@@ -30,5 +30,6 @@ rules = [
     "UI should keep presentation logic separate from install/service logic (App bindings call usecases; UI only passes data)",
     "terminology: cidr means a network in CIDR format (e.g. 10.0.0.0/24) and must be used for redirect/NAT rules; do not use subnet as a term",
     "terminology: host means a DNS name or IP address of a node/server",
-    "terminology: target means a destination in host:port format and is used for forwarding and dns-forward"
+    "terminology: target means a destination in host:port format and is used for forwarding and dns-forward",
+    "windows xray-core logs like \"Failed to find matching adapter name\" and \"Removed orphaned adapter\" are expected during Wintun setup; do not treat them as errors unless behavior breaks"
 ]

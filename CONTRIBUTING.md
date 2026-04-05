@@ -12,6 +12,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - When authoring service units or packaging hooks (systemd or procd), run `xp2p ... service run` without extra CLI flags. Services must rely on the default configuration baked into the binary, and packages must manage enabling/disabling them without injecting custom flags so upgrades do not require flag migrations.
 - Logs are stored under `/var/log/xp2p` by default on Linux/OpenWrt; set `XP2P_LOG_ROOT` to override. The audit log lives at `<log root>/audit.log`.
 - Windows Vagrant guests ship with evaluation licenses. Once the license expires `wlms.exe` will power off the VM every few hours (Event ID 1074/User32). Refresh or re-arm the license before running Windows host tests to avoid silent shutdowns during pytest.
+- Windows runs of xray-core may log `Failed to find matching adapter name` and `Removed orphaned adapter` during Wintun adapter setup; treat these as expected startup noise unless service functionality is impacted.
 
 ## Routing rules
 
