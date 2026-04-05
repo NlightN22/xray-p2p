@@ -171,7 +171,7 @@ func InterfaceIPv4Details(ifIndex int) (IPv4Details, error) {
 			if details.IP == "" || prefix > details.Prefix {
 				details.IP = ip4.String()
 				details.Prefix = prefix
-				details.DadState = ua.DadState
+				details.DadState = uint32(ua.DadState)
 			}
 		}
 		if details.IP == "" {

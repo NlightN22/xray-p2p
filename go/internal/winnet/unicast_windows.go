@@ -57,22 +57,21 @@ func unicastRowFromIPv4(ifIndex int, addr string, prefix int) (windows.MibUnicas
 	return row, nil
 }
 
-func rawSockaddrFromIPUnicast(ip net.IP) (windows.RawSockaddrInet, string, bool) {
+func rawSockaddrFromIPUnicast(ip net.IP) (windows.RawSockaddrInet6, string, bool) {
 	if ip4 := ip.To4(); ip4 != nil {
-		var addr windows.RawSockaddrInet
+		var addr windows.RawSockaddrInet6
 		raw := (*windows.RawSockaddrInet4)(unsafe.Pointer(&addr))
 		raw.Family = windows.AF_INET
 		copy(raw.Addr[:], ip4)
 		return addr, "IPv4", true
 	}
 	if ip16 := ip.To16(); ip16 != nil {
-		var addr windows.RawSockaddrInet
-		raw := (*windows.RawSockaddrInet6)(unsafe.Pointer(&addr))
-		raw.Family = windows.AF_INET6
-		copy(raw.Addr[:], ip16)
+		var addr windows.RawSockaddrInet6
+		addr.Family = windows.AF_INET6
+		copy(addr.Addr[:], ip16)
 		return addr, "IPv6", true
 	}
-	return windows.RawSockaddrInet{}, "", false
+	return windows.RawSockaddrInet6{}, "", false
 }
 
 func initializeUnicastIpAddressEntry(row *windows.MibUnicastIpAddressRow) error {
