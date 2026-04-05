@@ -3,6 +3,7 @@
 package winnet
 
 import (
+	"net"
 	"strings"
 	"unsafe"
 
@@ -17,6 +18,21 @@ type adapterInfo struct {
 	Luid         uint64
 	OperStatus   uint32
 }
+
+type IPv4Details struct {
+	IP         string
+	Prefix     uint8
+	OperStatus uint32
+	DadState   uint32
+}
+
+const (
+	dadStateInvalid    uint32 = 0
+	dadStateTentative  uint32 = 1
+	dadStateDuplicate  uint32 = 2
+	dadStateDeprecated uint32 = 3
+	dadStatePreferred  uint32 = 4
+)
 
 func InterfaceByNamePrefix(prefix string) (int, uint64, string, error) {
 	normalized := strings.TrimSpace(prefix)
@@ -116,6 +132,92 @@ func InterfaceIsUpByIndex(ifIndex int) (bool, error) {
 		return false, err
 	}
 	return status == windows.IfOperStatusUp, nil
+}
+
+func InterfaceIPv4Details(ifIndex int) (IPv4Details, error) {
+	if ifIndex <= 0 {
+		return IPv4Details{}, ErrInterfaceNotFound
+	}
+	adapter := windows.IpAdapterAddresses{}
+	size := uint32(unsafe.Sizeof(adapter))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, &adapter, &size); err != nil && err != windows.ERROR_BUFFER_OVERFLOW {
+		return IPv4Details{}, err
+	}
+	buf := make([]byte, size)
+	head := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0]))
+	if err := windows.GetAdaptersAddresses(windows.AF_UNSPEC, 0, 0, head, &size); err != nil {
+		return IPv4Details{}, err
+	}
+	for aa := head; aa != nil; aa = aa.Next {
+		if int(aa.IfIndex) != ifIndex {
+			continue
+		}
+		details := IPv4Details{
+			OperStatus: aa.OperStatus,
+		}
+		for ua := aa.FirstUnicastAddress; ua != nil; ua = ua.Next {
+			addrIP := ua.Address.IP()
+			if addrIP == nil {
+				continue
+			}
+			ip4 := addrIP.To4()
+			if ip4 == nil {
+				continue
+			}
+			if ip4.Equal(net.IPv4zero) || ip4.IsLoopback() || (ip4[0] == 169 && ip4[1] == 254) {
+				continue
+			}
+			prefix := ua.OnLinkPrefixLength
+			if details.IP == "" || prefix > details.Prefix {
+				details.IP = ip4.String()
+				details.Prefix = prefix
+				details.DadState = ua.DadState
+			}
+		}
+		if details.IP == "" {
+			return details, ErrTunIPv4Missing
+		}
+		return details, nil
+	}
+	return IPv4Details{}, ErrInterfaceNotFound
+}
+
+func InterfaceOperStatusName(status uint32) string {
+	switch status {
+	case windows.IfOperStatusUp:
+		return "up"
+	case windows.IfOperStatusDown:
+		return "down"
+	case windows.IfOperStatusTesting:
+		return "testing"
+	case windows.IfOperStatusUnknown:
+		return "unknown"
+	case windows.IfOperStatusDormant:
+		return "dormant"
+	case windows.IfOperStatusNotPresent:
+		return "not_present"
+	case windows.IfOperStatusLowerLayerDown:
+		return "lower_layer_down"
+	default:
+		return "unknown"
+	}
+}
+
+func InterfaceDadStateName(state uint32) string {
+	switch state {
+	case dadStateInvalid:
+		return "invalid"
+	case dadStateTentative:
+		return "tentative"
+	case dadStateDuplicate:
+		return "duplicate"
+	case dadStateDeprecated:
+		return "deprecated"
+	case dadStatePreferred:
+		return "preferred"
+	default:
+		return "unknown"
+	}
 }
 
 func pickBestAdapter(candidates []adapterInfo) (adapterInfo, bool) {

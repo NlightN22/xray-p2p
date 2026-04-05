@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"golang.org/x/sys/windows"
 )
 
 func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose bool) (int, string, error) {
@@ -28,19 +29,26 @@ func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose
 		attempt++
 		ifIndex, err := resolveTunInterface(ctx, name, addr)
 		if err == nil && ifIndex > 0 {
-			ip, ipErr := InterfaceIPv4(ctx, ifIndex)
-			if ipErr != nil {
-				return 0, "", ipErr
+			ip, oper, dad, ready, stateErr := interfaceIPv4ReadyState(ifIndex)
+			if stateErr != nil && !errors.Is(stateErr, ErrTunIPv4Missing) {
+				return 0, "", stateErr
 			}
-			if strings.TrimSpace(ip) != "" {
+			if ready {
 				if verbose {
-					logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip, "attempt", attempt)
+					logging.Info(
+						"xp2p: tun IPv4 ready",
+						"ifIndex", ifIndex,
+						"ip", ip,
+						"operStatus", oper,
+						"dadState", dad,
+						"attempt", attempt,
+					)
 				}
 				return ifIndex, ip, nil
 			}
 			lastErr = ErrTunIPv4Missing
 			if verbose {
-				logging.Info("xp2p: waiting for tun IPv4", "ifIndex", ifIndex, "attempt", attempt)
+				logging.Info("xp2p: waiting for tun IPv4", "ifIndex", ifIndex, "operStatus", oper, "dadState", dad, "attempt", attempt)
 			}
 		} else if err != nil && !errors.Is(err, ErrInterfaceNotFound) {
 			return 0, "", err
@@ -121,19 +129,26 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 					}
 				}
 			}
-			ip, ipErr := InterfaceIPv4(ctx, ifIndex)
-			if ipErr != nil {
-				return 0, "", ipErr
+			ip, oper, dad, ready, stateErr := interfaceIPv4ReadyState(ifIndex)
+			if stateErr != nil && !errors.Is(stateErr, ErrTunIPv4Missing) {
+				return 0, "", stateErr
 			}
-			if strings.TrimSpace(ip) != "" {
+			if ready {
 				if verbose {
-					logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip, "attempt", attempt)
+					logging.Info(
+						"xp2p: tun IPv4 ready",
+						"ifIndex", ifIndex,
+						"ip", ip,
+						"operStatus", oper,
+						"dadState", dad,
+						"attempt", attempt,
+					)
 				}
 				return ifIndex, ip, nil
 			}
 			lastErr = ErrTunIPv4Missing
 			if verbose {
-				logging.Info("xp2p: waiting for tun IPv4", "ifIndex", ifIndex, "attempt", attempt)
+				logging.Info("xp2p: waiting for tun IPv4", "ifIndex", ifIndex, "operStatus", oper, "dadState", dad, "attempt", attempt)
 			}
 		} else if err != nil && !errors.Is(err, ErrInterfaceNotFound) {
 			return 0, "", err
@@ -163,6 +178,11 @@ func ensureInterfaceIPv4(ctx context.Context, ifIndex int, ip string, prefix int
 	if strings.TrimSpace(ip) == "" || prefix <= 0 {
 		return ErrTunIPv4Missing
 	}
+	if err := assignInterfaceIPv4Native(ifIndex, ip, prefix); err == nil {
+		return nil
+	} else if !isUnicastIPHelperUnsupported(err) {
+		return err
+	}
 	script := strings.Join([]string{
 		`$ErrorActionPreference = "Stop"`,
 		`$ifIndex = ` + strconv.Itoa(ifIndex),
@@ -175,4 +195,15 @@ func ensureInterfaceIPv4(ctx context.Context, ifIndex int, ip string, prefix int
 	}, "; ")
 	_, err := runPowerShell(ctx, script)
 	return err
+}
+
+func interfaceIPv4ReadyState(ifIndex int) (string, string, string, bool, error) {
+	details, err := InterfaceIPv4Details(ifIndex)
+	if err != nil {
+		return "", InterfaceOperStatusName(details.OperStatus), InterfaceDadStateName(details.DadState), false, err
+	}
+	oper := InterfaceOperStatusName(details.OperStatus)
+	dad := InterfaceDadStateName(details.DadState)
+	ready := details.IP != "" && details.OperStatus == windows.IfOperStatusUp && details.DadState == dadStatePreferred
+	return details.IP, oper, dad, ready, nil
 }

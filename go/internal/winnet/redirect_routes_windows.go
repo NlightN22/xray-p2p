@@ -39,7 +39,22 @@ func SyncRedirectRoutes(tunName, tunAddr string, cidrs []string) error {
 	if strings.HasPrefix(trimmed, "ok:") {
 		addr := strings.TrimSpace(strings.TrimPrefix(trimmed, "ok:"))
 		if addr != "" {
-			logging.Info("xp2p: tun IPv4 available", "interface", name, "addr", addr)
+			ifIndex, _, _, err := InterfaceByNamePrefix(name)
+			if err == nil && ifIndex > 0 {
+				if details, stateErr := InterfaceIPv4Details(ifIndex); stateErr == nil {
+					logging.Info(
+						"xp2p: tun IPv4 available",
+						"interface", name,
+						"addr", addr,
+						"operStatus", InterfaceOperStatusName(details.OperStatus),
+						"dadState", InterfaceDadStateName(details.DadState),
+					)
+				} else {
+					logging.Info("xp2p: tun IPv4 available", "interface", name, "addr", addr)
+				}
+			} else {
+				logging.Info("xp2p: tun IPv4 available", "interface", name, "addr", addr)
+			}
 		}
 	}
 	return nil

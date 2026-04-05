@@ -1,0 +1,123 @@
+//go:build windows
+
+package winnet
+
+import (
+	"errors"
+	"fmt"
+	"net"
+	"strings"
+	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+var (
+	modiphlpapiUnicast                 = windows.NewLazySystemDLL("iphlpapi.dll")
+	procInitializeUnicastIpAddressEntry = modiphlpapiUnicast.NewProc("InitializeUnicastIpAddressEntry")
+	procCreateUnicastIpAddressEntry     = modiphlpapiUnicast.NewProc("CreateUnicastIpAddressEntry")
+	procSetUnicastIpAddressEntry        = modiphlpapiUnicast.NewProc("SetUnicastIpAddressEntry")
+)
+
+func assignInterfaceIPv4Native(ifIndex int, ip string, prefix int) error {
+	addr := strings.TrimSpace(ip)
+	if ifIndex <= 0 || addr == "" || prefix <= 0 {
+		return ErrInterfaceNotFound
+	}
+	row, err := unicastRowFromIPv4(ifIndex, addr, prefix)
+	if err != nil {
+		return err
+	}
+	if err := createUnicastIpAddressEntry(&row); err != nil {
+		if errnoIs(err, windows.ERROR_OBJECT_ALREADY_EXISTS) {
+			return setUnicastIpAddressEntry(&row)
+		}
+		return err
+	}
+	return nil
+}
+
+func unicastRowFromIPv4(ifIndex int, addr string, prefix int) (windows.MibUnicastIpAddressRow, error) {
+	ip := net.ParseIP(strings.TrimSpace(addr))
+	if ip == nil {
+		return windows.MibUnicastIpAddressRow{}, fmt.Errorf("xp2p: parse ip address: %s", addr)
+	}
+	raw, family, ok := rawSockaddrFromIPUnicast(ip)
+	if !ok || family != "IPv4" {
+		return windows.MibUnicastIpAddressRow{}, fmt.Errorf("xp2p: ipv4 address required: %s", addr)
+	}
+	var row windows.MibUnicastIpAddressRow
+	if err := initializeUnicastIpAddressEntry(&row); err != nil {
+		return windows.MibUnicastIpAddressRow{}, err
+	}
+	row.InterfaceIndex = uint32(ifIndex)
+	row.Address = raw
+	row.OnLinkPrefixLength = uint8(prefix)
+	return row, nil
+}
+
+func rawSockaddrFromIPUnicast(ip net.IP) (windows.RawSockaddrInet, string, bool) {
+	if ip4 := ip.To4(); ip4 != nil {
+		var addr windows.RawSockaddrInet
+		raw := (*windows.RawSockaddrInet4)(unsafe.Pointer(&addr))
+		raw.Family = windows.AF_INET
+		copy(raw.Addr[:], ip4)
+		return addr, "IPv4", true
+	}
+	if ip16 := ip.To16(); ip16 != nil {
+		var addr windows.RawSockaddrInet
+		raw := (*windows.RawSockaddrInet6)(unsafe.Pointer(&addr))
+		raw.Family = windows.AF_INET6
+		copy(raw.Addr[:], ip16)
+		return addr, "IPv6", true
+	}
+	return windows.RawSockaddrInet{}, "", false
+}
+
+func initializeUnicastIpAddressEntry(row *windows.MibUnicastIpAddressRow) error {
+	if err := procInitializeUnicastIpAddressEntry.Find(); err != nil {
+		return err
+	}
+	r0, _, _ := syscall.SyscallN(procInitializeUnicastIpAddressEntry.Addr(), uintptr(unsafe.Pointer(row)))
+	if r0 != 0 {
+		return windows.Errno(r0)
+	}
+	return nil
+}
+
+func createUnicastIpAddressEntry(row *windows.MibUnicastIpAddressRow) error {
+	if err := procCreateUnicastIpAddressEntry.Find(); err != nil {
+		return err
+	}
+	r0, _, _ := syscall.SyscallN(procCreateUnicastIpAddressEntry.Addr(), uintptr(unsafe.Pointer(row)))
+	if r0 != 0 {
+		return windows.Errno(r0)
+	}
+	return nil
+}
+
+func setUnicastIpAddressEntry(row *windows.MibUnicastIpAddressRow) error {
+	if err := procSetUnicastIpAddressEntry.Find(); err != nil {
+		return err
+	}
+	r0, _, _ := syscall.SyscallN(procSetUnicastIpAddressEntry.Addr(), uintptr(unsafe.Pointer(row)))
+	if r0 != 0 {
+		return windows.Errno(r0)
+	}
+	return nil
+}
+
+func isUnicastIPHelperUnsupported(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.ERROR_PROC_NOT_FOUND) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "initializeunicastipaddressentry") ||
+		strings.Contains(lower, "createunicastipaddressentry") ||
+		strings.Contains(lower, "setunicastipaddressentry") ||
+		strings.Contains(lower, "procedure could not be found")
+}
