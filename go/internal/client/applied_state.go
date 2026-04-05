@@ -29,6 +29,8 @@ type clientAppliedState struct {
 type clientRuntimeState struct {
 	Tun       tunRuntimeState   `json:"tun,omitempty"`
 	Routes    routeRuntimeState `json:"routes,omitempty"`
+	SocksReady bool             `json:"socks_ready,omitempty"`
+	LastError string            `json:"last_error,omitempty"`
 	Timestamp time.Time         `json:"timestamp,omitempty"`
 }
 

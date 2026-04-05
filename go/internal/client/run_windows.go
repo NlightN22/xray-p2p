@@ -177,6 +177,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 						Name:      strings.TrimSpace(opts.TunName),
 						LastError: err.Error(),
 					},
+					LastError: err.Error(),
 				})
 				logging.Warn("xp2p: tun IPv4 ensure failed; skipping route apply", "err", err)
 				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
@@ -251,7 +252,15 @@ func Run(ctx context.Context, opts RunOptions) error {
 		if err != nil {
 			logging.Warn("xp2p: client socks health check using defaults", "err", err)
 		}
-		return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
+		readyErr := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
+		runtime := clientRuntimeState{SocksReady: readyErr == nil}
+		if readyErr != nil {
+			runtime.LastError = readyErr.Error()
+		}
+		if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
+			logging.Warn("xp2p: client runtime state update failed", "err", err)
+		}
+		return readyErr
 	}
 
 	runErr := runXrayWithConfig(
