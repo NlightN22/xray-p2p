@@ -32,7 +32,7 @@ func assignInterfaceIPv4Native(ifIndex int, ip string, prefix int) error {
 		return err
 	}
 	if err := createUnicastIpAddressEntry(&row); err != nil {
-		if errnoIs(err, windows.ERROR_OBJECT_ALREADY_EXISTS) {
+		if isUnicastEntryExistsError(err) {
 			return setUnicastIpAddressEntry(&row)
 		}
 		return err
@@ -124,4 +124,15 @@ func isUnicastIPHelperUnsupported(err error) bool {
 		strings.Contains(lower, "createunicastipaddressentry") ||
 		strings.Contains(lower, "setunicastipaddressentry") ||
 		strings.Contains(lower, "procedure could not be found")
+}
+
+func isUnicastEntryExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errnoIs(err, windows.ERROR_OBJECT_ALREADY_EXISTS) || errnoIs(err, windows.ERROR_DIR_NOT_EMPTY) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "directory cannot be removed") || strings.Contains(lower, "already exists")
 }
