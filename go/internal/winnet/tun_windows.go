@@ -44,21 +44,28 @@ func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose
 					tentativeSince = time.Now()
 				}
 				if time.Since(tentativeSince) >= tunTentativeTimeout {
+					logging.Warn(
+						"xp2p: tun IPv4 remained tentative",
+						"ifIndex", ifIndex,
+						"ip", ip,
+						"operStatus", oper,
+						"dadState", dad,
+					)
 					return 0, "", ErrTunIPv4TentativeTimeout
 				}
 			} else {
 				tentativeSince = time.Time{}
 			}
 			if ready {
+				logging.Info(
+					"xp2p: tun IPv4 ready",
+					"ifIndex", ifIndex,
+					"ip", ip,
+					"operStatus", oper,
+					"dadState", dad,
+				)
 				if verbose {
-					logging.Info(
-						"xp2p: tun IPv4 ready",
-						"ifIndex", ifIndex,
-						"ip", ip,
-						"operStatus", oper,
-						"dadState", dad,
-						"attempt", attempt,
-					)
+					logging.Info("xp2p: tun IPv4 ready details", "ifIndex", ifIndex, "attempt", attempt)
 				}
 				return ifIndex, ip, nil
 			}
@@ -148,6 +155,13 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 					tentativeSince = time.Now()
 				}
 				if time.Since(tentativeSince) >= tunTentativeTimeout {
+					logging.Warn(
+						"xp2p: tun IPv4 remained tentative",
+						"ifIndex", ifIndex,
+						"ip", ip,
+						"operStatus", oper,
+						"dadState", dad,
+					)
 					return 0, "", ErrTunIPv4TentativeTimeout
 				}
 			} else {
@@ -165,15 +179,15 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 				}
 			}
 			if ready {
+				logging.Info(
+					"xp2p: tun IPv4 ready",
+					"ifIndex", ifIndex,
+					"ip", ip,
+					"operStatus", oper,
+					"dadState", dad,
+				)
 				if verbose {
-					logging.Info(
-						"xp2p: tun IPv4 ready",
-						"ifIndex", ifIndex,
-						"ip", ip,
-						"operStatus", oper,
-						"dadState", dad,
-						"attempt", attempt,
-					)
+					logging.Info("xp2p: tun IPv4 ready details", "ifIndex", ifIndex, "attempt", attempt)
 				}
 				return ifIndex, ip, nil
 			}

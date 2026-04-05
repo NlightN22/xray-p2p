@@ -123,12 +123,24 @@ func Run(ctx context.Context, opts RunOptions) error {
 			}
 			waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if _, _, err := winnet.WaitForTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false); err != nil {
+			ifIndex, ip, err := winnet.WaitForTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false)
+			if err != nil {
 				logging.Warn("xp2p: tun IPv4 wait failed; skipping route apply", "err", err)
 				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
 					return err
 				}
 				return nil
+			}
+			if details, detailErr := winnet.InterfaceIPv4Details(ifIndex); detailErr == nil {
+				logging.Info(
+					"xp2p: tun IPv4 ready; applying routes",
+					"ifIndex", ifIndex,
+					"ip", ip,
+					"operStatus", winnet.InterfaceOperStatusName(details.OperStatus),
+					"dadState", winnet.InterfaceDadStateName(details.DadState),
+				)
+			} else {
+				logging.Info("xp2p: tun IPv4 ready; applying routes", "ifIndex", ifIndex, "ip", ip)
 			}
 			if ctx.Err() != nil {
 				return nil
