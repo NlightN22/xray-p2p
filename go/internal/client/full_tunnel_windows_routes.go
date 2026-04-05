@@ -430,3 +430,33 @@ func waitForWindowsIPv4(ctx context.Context, ifIndex int, verbose bool) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 }
+
+func waitForWindowsInterfaceUp(ctx context.Context, ifIndex int, tunName string, verbose bool) error {
+	deadline := time.Now().Add(20 * time.Second)
+	attempt := 0
+	logged := false
+	for {
+		attempt++
+		up, err := winnet.InterfaceIsUpByIndex(ifIndex)
+		if err != nil {
+			return err
+		}
+		if up {
+			return nil
+		}
+		if !logged {
+			logging.Info("xp2p: full-tunnel apply deferred: adapter not connected", "interface", tunName, "ifIndex", ifIndex)
+			logged = true
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("xp2p: tun adapter not connected: %s (%d)", tunName, ifIndex)
+		}
+		if verbose {
+			logging.Info("xp2p: full-tunnel waiting for tun adapter", "interface", tunName, "ifIndex", ifIndex, "attempt", attempt)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}

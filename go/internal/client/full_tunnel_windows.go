@@ -56,6 +56,9 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 	if err != nil {
 		return false, err
 	}
+	if err := waitForWindowsInterfaceUp(ctx, ifIndex, opts.TunName, opts.FullTunnelVerbose); err != nil {
+		return false, err
+	}
 	var defaults []winnet.Route
 	if state.Enabled {
 		defaults = decodeWindowsRoutes(state)

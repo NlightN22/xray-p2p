@@ -94,6 +94,30 @@ func adapterInfos() ([]adapterInfo, error) {
 	return out, nil
 }
 
+func InterfaceOperStatusByIndex(ifIndex int) (uint32, error) {
+	if ifIndex <= 0 {
+		return 0, ErrInterfaceNotFound
+	}
+	adapters, err := adapterInfos()
+	if err != nil {
+		return 0, err
+	}
+	for _, adapter := range adapters {
+		if adapter.IfIndex == ifIndex {
+			return adapter.OperStatus, nil
+		}
+	}
+	return 0, ErrInterfaceNotFound
+}
+
+func InterfaceIsUpByIndex(ifIndex int) (bool, error) {
+	status, err := InterfaceOperStatusByIndex(ifIndex)
+	if err != nil {
+		return false, err
+	}
+	return status == windows.IfOperStatusUp, nil
+}
+
 func pickBestAdapter(candidates []adapterInfo) (adapterInfo, bool) {
 	var best adapterInfo
 	found := false
