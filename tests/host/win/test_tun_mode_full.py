@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -49,13 +50,64 @@ def _wait_for_client_apply(
         svc.wait_for_service_outcome(client_host, log_path=log_path)
 
 
+def _is_tun_default_route(route: dict, tun_name: str) -> bool:
+    alias = str(route.get("InterfaceAlias") or "").strip().lower()
+    if not alias:
+        return False
+    tun_name = tun_name.strip().lower()
+    if tun_name:
+        return alias == tun_name or alias.startswith(tun_name) or "xray tunnel" in alias or "xp2p" in alias
+    return "xray tunnel" in alias or "xp2p" in alias
+
+
+def _wait_for_non_tun_default_routes(client_host, tun_name: str, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    last_defaults: list[dict] = []
+    while time.time() < deadline:
+        defaults = tun.default_routes(client_host)
+        last_defaults = defaults
+        if defaults and not any(_is_tun_default_route(route, tun_name) for route in defaults):
+            return
+        time.sleep(tun.ROUTE_POLL_INTERVAL)
+    pytest.fail(f"Default routes still point to tun after {timeout:.0f}s: {last_defaults}")
+
+
+def _ensure_default_routes_restored(client_host, xp2p_client_runner) -> None:
+    state_path = _env.CONFIG_ROOT / "xp2p-client.tun-full.json"
+    state_enabled = False
+    if _env.path_exists(client_host, state_path):
+        try:
+            payload = _env.read_text(client_host, state_path)
+            state_enabled = bool(json.loads(payload or "{}").get("enabled"))
+        except json.JSONDecodeError:
+            state_enabled = False
+    defaults = tun.default_routes(client_host)
+    tun_default = any(_is_tun_default_route(route, "") for route in defaults)
+    if not state_enabled and not tun_default:
+        return
+    xp2p_client_runner("client", "service", "stop", check=False)
+    _wait_for_non_tun_default_routes(client_host, "")
+
+
+def _skip_if_not_direct_file(request) -> None:
+    args = [str(arg).replace("\\", "/").lower() for arg in request.config.args]
+    if len(args) == 1:
+        target = args[0]
+        if target.endswith("tests/host/win/test_tun_mode_full.py") or target.endswith("test_tun_mode_full.py"):
+            return
+    pytest.skip("Long-running full-tunnel test; run this file directly to execute.")
+
+
 def test_windows_client_tun_mode_full_routes(
     client_host,
     server_host,
     server_host_ipv4,
     xp2p_client_runner,
     xp2p_server_runner,
+    request,
 ):
+    _skip_if_not_direct_file(request)
+    _ensure_default_routes_restored(client_host, xp2p_client_runner)
     net.assert_internet_access(server_host, label="pre-check-server")
     net.assert_internet_access(client_host, label="pre-check-client")
 
@@ -65,6 +117,7 @@ def test_windows_client_tun_mode_full_routes(
     server_service_started = False
     original_env: list[str] | None = None
     success = False
+    client_removed = False
     old_default_ids: set[tuple[str, int]] | None = None
     tun_name: str | None = None
     tun_index: int | None = None
@@ -204,6 +257,122 @@ def test_windows_client_tun_mode_full_routes(
                 state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
                 service_log=SYNCED_SERVICE_LOG,
             )
+
+        result = cfg.client_mode(
+            xp2p_client_runner,
+            "tun",
+            "full",
+            "--tag",
+            expected_tag,
+            check=False,
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p client mode tun full failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        svc.wait_for_apply_request_set(client_host)
+        _wait_for_client_apply(
+            client_host,
+            xp2p_client_runner,
+            ensure_config=True,
+            allow_restart=True,
+            log_path=SYNCED_SERVICE_LOG,
+        )
+        net.assert_internet_access(client_host, label="post-full")
+        ok, debug = tun.poll_for_full_tunnel(
+            client_host,
+            tun_name,
+            tun_index,
+            old_default_ids or set(),
+            [server_host_ipv4],
+            timeout=tun.ROUTE_WAIT_SPLIT,
+            log_path=SYNCED_SERVICE_LOG,
+        )
+        if not ok:
+            diag.fail_with_restore_debug(
+                client_host,
+                tun_name,
+                debug,
+                config_file=tun.CLIENT_CONFIG_FILE,
+                state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
+                service_log=SYNCED_SERVICE_LOG,
+            )
+
+        svc.stop_client_service(xp2p_client_runner)
+        service_started = False
+        ok, debug = tun.poll_for_routes_restored(
+            client_host,
+            tun_name,
+            tun_index,
+            old_default_ids or set(),
+            [server_host_ipv4],
+            timeout=tun.ROUTE_WAIT_SPLIT,
+            log_path=SYNCED_SERVICE_LOG,
+        )
+        if not ok:
+            diag.fail_with_restore_debug(
+                client_host,
+                tun_name,
+                debug,
+                config_file=tun.CLIENT_CONFIG_FILE,
+                state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
+                service_log=SYNCED_SERVICE_LOG,
+            )
+        net.assert_internet_access(client_host, label="post-stop")
+
+        xp2p_client_runner("client", "service", "start", check=True)
+        service_started = True
+        _wait_for_client_apply(
+            client_host,
+            xp2p_client_runner,
+            ensure_config=True,
+            allow_restart=True,
+            log_path=SYNCED_SERVICE_LOG,
+        )
+        net.assert_internet_access(client_host, label="post-restart")
+        ok, debug = tun.poll_for_full_tunnel(
+            client_host,
+            tun_name,
+            tun_index,
+            old_default_ids or set(),
+            [server_host_ipv4],
+            timeout=tun.ROUTE_WAIT_SPLIT,
+            log_path=SYNCED_SERVICE_LOG,
+        )
+        if not ok:
+            diag.fail_with_restore_debug(
+                client_host,
+                tun_name,
+                debug,
+                config_file=tun.CLIENT_CONFIG_FILE,
+                state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
+                service_log=SYNCED_SERVICE_LOG,
+            )
+
+        xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+        client_removed = True
+        service_started = False
+        ok, debug = tun.poll_for_routes_restored(
+            client_host,
+            tun_name,
+            tun_index,
+            old_default_ids or set(),
+            [server_host_ipv4],
+            timeout=tun.ROUTE_WAIT_SPLIT,
+            log_path=SYNCED_SERVICE_LOG,
+        )
+        if not ok:
+            diag.fail_with_restore_debug(
+                client_host,
+                tun_name,
+                debug,
+                config_file=tun.CLIENT_CONFIG_FILE,
+                state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
+                service_log=SYNCED_SERVICE_LOG,
+            )
+        net.assert_internet_access(client_host, label="post-remove")
+
         net.assert_internet_access(client_host, label="post-test")
         success = True
         return
@@ -239,7 +408,8 @@ def test_windows_client_tun_mode_full_routes(
             svc.stop_service(xp2p_server_runner, "server")
         _env.stop_xp2p_processes(client_host)
         _env.stop_xp2p_processes(server_host)
-        xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+        if not client_removed:
+            xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
         tun_deploy.ensure_deploy_firewall_rules(
             server_host,
