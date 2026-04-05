@@ -7,6 +7,8 @@ internal readonly record struct ServiceButtonState(bool StartEnabled, bool StopE
 
 internal static class UiLogic
 {
+    private static readonly TimeSpan RuntimeStaleThreshold = TimeSpan.FromSeconds(30);
+
     public static ApplicationTheme? GetThemeFromSelection(int selection)
     {
         return selection switch
@@ -42,9 +44,12 @@ internal static class UiLogic
             IsServicePending(snapshot.ServerStatus);
     }
 
-    public static string BuildTrayTooltip(ServiceStatusSnapshot snapshot)
+    public static string BuildTrayTooltip(ServiceStatusSnapshot snapshot, ClientRuntimeView? runtime)
     {
-        var text = $"Client: {snapshot.ClientStatus} | Server: {snapshot.ServerStatus}";
+        var runtimeText = runtime?.Summary;
+        var text = string.IsNullOrWhiteSpace(runtimeText)
+            ? $"Client: {snapshot.ClientStatus} | Server: {snapshot.ServerStatus}"
+            : $"Client: {snapshot.ClientStatus} | {runtimeText} | Server: {snapshot.ServerStatus}";
         return text.Length <= 63 ? text : text.Substring(0, 63);
     }
 
@@ -69,5 +74,70 @@ internal static class UiLogic
     public static bool IsRestartEnabled(string status)
     {
         return !IsServicePending(status);
+    }
+
+    public static ClientRuntimeView BuildClientRuntimeView(string serviceStatus, ClientStateFile? state)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (state?.Runtime?.Timestamp is not DateTimeOffset timestamp)
+        {
+            return new ClientRuntimeView(ClientRuntimeStatus.Failed, "Tun: Unknown", "Tun: Unknown", null, false);
+        }
+
+        var age = now - timestamp;
+        var isFresh = age <= RuntimeStaleThreshold;
+        if (!isFresh)
+        {
+            return new ClientRuntimeView(ClientRuntimeStatus.Failed, "Tun: Unknown", "Tun: Unknown", state.Runtime.LastError, false);
+        }
+
+        if (IsServiceStopped(serviceStatus))
+        {
+            return new ClientRuntimeView(ClientRuntimeStatus.Failed, "Tun: Stopped", "Tun: Stopped", state.Runtime.LastError, true);
+        }
+        if (IsServicePending(serviceStatus))
+        {
+            return new ClientRuntimeView(ClientRuntimeStatus.Pending, "Tun: Pending", "Tun: Pending", state.Runtime.LastError, true);
+        }
+        if (!IsServiceRunning(serviceStatus))
+        {
+            return new ClientRuntimeView(ClientRuntimeStatus.Failed, $"Tun: {serviceStatus}", $"Tun: {serviceStatus}", state.Runtime.LastError, true);
+        }
+
+        if (!state.TunEnabled)
+        {
+            return state.Runtime.SocksReady
+                ? new ClientRuntimeView(ClientRuntimeStatus.Ready, "Proxy: Ready (SOCKS)", "Proxy: Ready (SOCKS)", null, true)
+                : new ClientRuntimeView(ClientRuntimeStatus.Pending, "Proxy: Pending (SOCKS)", "Proxy: Pending (SOCKS)", state.Runtime.LastError, true);
+        }
+
+        var tun = state.Runtime.Tun;
+        var routes = state.Runtime.Routes;
+        var tunReady = tun?.Ready == true;
+        var fullApplied = routes?.FullApplied == true;
+        var redirectApplied = routes?.RedirectApplied == true;
+        var routeLabel = fullApplied ? "Full" : redirectApplied ? "Split" : "Tun";
+        var routeReady = fullApplied || redirectApplied;
+        var summary = tunReady && routeReady ? $"Tun: Ready | Routes: {routeLabel}" : $"Tun: Pending | Routes: {routeLabel}";
+
+        var detail = BuildTunDetail(tun, routes, routeLabel);
+        var status = tunReady && routeReady ? ClientRuntimeStatus.Ready : ClientRuntimeStatus.Pending;
+        return new ClientRuntimeView(status, summary, detail, state.Runtime.LastError, true);
+    }
+
+    private static string BuildTunDetail(RuntimeTunState? tun, RuntimeRoutesState? routes, string routeLabel)
+    {
+        var name = string.IsNullOrWhiteSpace(tun?.Name) ? "-" : tun.Name;
+        var ip = string.IsNullOrWhiteSpace(tun?.IPv4) ? "-" : tun.IPv4;
+        var prefix = tun?.Prefix > 0 ? $"/{tun.Prefix}" : "";
+        var oper = string.IsNullOrWhiteSpace(tun?.OperStatus) ? "-" : tun.OperStatus;
+        var dad = string.IsNullOrWhiteSpace(tun?.DadState) ? "-" : tun.DadState;
+        var routesText = routeLabel switch
+        {
+            "Full" => $"full({routes?.FullBypassCount ?? 0})",
+            "Split" => $"split({routes?.RedirectCount ?? 0})",
+            _ => "none"
+        };
+        return $"Tun: {name} {ip}{prefix} {oper}/{dad} | Routes: {routesText}";
     }
 }

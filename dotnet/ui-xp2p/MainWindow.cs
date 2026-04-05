@@ -16,6 +16,7 @@ internal sealed partial class MainWindow : Window
     private readonly Dictionary<TabKey, W.TabItem> _tabMap;
     private W.TextBlock? _clientStatus;
     private W.TextBlock? _serverStatus;
+    private W.TextBlock? _clientRuntime;
     private readonly Dictionary<string, (W.Button Start, W.Button Stop, W.Button Restart)> _serviceButtons = new();
 
     public MainWindow(IBackend backend, ServiceManager serviceManager, ImageSource? icon)
@@ -143,6 +144,8 @@ internal sealed partial class MainWindow : Window
         _serverStatus = new W.TextBlock { Text = $"Server: {serverStatus}" };
         panel.Children.Add(BuildServiceRow(ServiceNames.Client, _clientStatus));
         panel.Children.Add(BuildServiceRow(ServiceNames.Server, _serverStatus));
+        _clientRuntime = new W.TextBlock { Text = "Tun: Unknown" };
+        panel.Children.Add(_clientRuntime);
         UpdateServiceButtons(ServiceNames.Client, clientStatus);
         UpdateServiceButtons(ServiceNames.Server, serverStatus);
 
@@ -212,6 +215,15 @@ internal sealed partial class MainWindow : Window
             _serverStatus.Text = $"Server: {status}";
             UpdateServiceButtons(ServiceNames.Server, status);
         }
+    }
+
+    public void SetClientRuntimeStatus(string message)
+    {
+        if (_clientRuntime is null)
+        {
+            return;
+        }
+        _clientRuntime.Text = message;
     }
 
     private static void ToggleServiceButtons(W.Button start, W.Button stop, W.Button restart, bool enabled)

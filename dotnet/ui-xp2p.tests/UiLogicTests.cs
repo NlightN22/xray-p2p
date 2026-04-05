@@ -57,7 +57,7 @@ public sealed class UiLogicTests
     {
         var snapshot = new ServiceStatusSnapshot("Stopped", "Stopped");
 
-        Assert.Equal("Client: Stopped | Server: Stopped", UiLogic.BuildTrayTooltip(snapshot));
+        Assert.Equal("Client: Stopped | Server: Stopped", UiLogic.BuildTrayTooltip(snapshot, null));
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class UiLogicTests
         var snapshot = new ServiceStatusSnapshot(client, server);
         var text = $"Client: {client} | Server: {server}";
 
-        var tooltip = UiLogic.BuildTrayTooltip(snapshot);
+        var tooltip = UiLogic.BuildTrayTooltip(snapshot, null);
 
         Assert.Equal(63, tooltip.Length);
         Assert.Equal(text.Substring(0, 63), tooltip);

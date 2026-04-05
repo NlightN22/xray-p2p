@@ -30,6 +30,7 @@ internal sealed class App : Application
     private DispatcherTimer? _statusTimer;
     private string? _lastStatusKey;
     private TrayIconState? _lastTrayIconState;
+    private ClientRuntimeView? _clientRuntimeView;
 
     public App()
     {
@@ -179,6 +180,7 @@ internal sealed class App : Application
     private void OnServiceStatusChanged(object? sender, ServiceStatusSnapshot snapshot)
     {
         _lastStatus = snapshot;
+        RefreshClientRuntimeStatus(snapshot);
         Log($"service status changed: client={snapshot.ClientStatus} server={snapshot.ServerStatus} busy={_serviceManager?.IsBusy}");
         UpdateTrayStatusLabels(snapshot);
         UpdateTrayIconFromStatus();
@@ -262,6 +264,7 @@ internal sealed class App : Application
         }
         var snapshot = _serviceManager.GetSnapshot();
         _lastStatus = snapshot;
+        RefreshClientRuntimeStatus(snapshot);
         UpdateTrayStatusLabels(snapshot);
         UpdateTrayIconFromStatus();
     }
@@ -288,9 +291,9 @@ internal sealed class App : Application
         UpdateTrayServiceButtons(snapshot);
         if (_trayIcon is not null)
         {
-            _trayIcon.Text = UiLogic.BuildTrayTooltip(snapshot);
+            _trayIcon.Text = UiLogic.BuildTrayTooltip(snapshot, _clientRuntimeView);
         }
-        var statusKey = BuildStatusKey(snapshot, _serviceManager?.IsBusy ?? false);
+        var statusKey = BuildStatusKey(snapshot, _serviceManager?.IsBusy ?? false, _clientRuntimeView);
         if (!string.Equals(_lastStatusKey, statusKey, StringComparison.Ordinal))
         {
             _lastStatusKey = statusKey;
@@ -458,6 +461,15 @@ internal sealed class App : Application
         {
             return TrayIconState.Busy;
         }
+        if (_clientRuntimeView is not null)
+        {
+            return _clientRuntimeView.Status switch
+            {
+                ClientRuntimeStatus.Ready => TrayIconState.Enabled,
+                ClientRuntimeStatus.Pending => TrayIconState.Busy,
+                _ => TrayIconState.Disabled
+            };
+        }
         var snapshot = _lastStatus;
         if (snapshot is not null &&
             (UiLogic.IsServiceRunning(snapshot.ClientStatus) || UiLogic.IsServiceRunning(snapshot.ServerStatus)))
@@ -467,9 +479,9 @@ internal sealed class App : Application
         return TrayIconState.Disabled;
     }
 
-    private static string BuildStatusKey(ServiceStatusSnapshot snapshot, bool busy)
+    private static string BuildStatusKey(ServiceStatusSnapshot snapshot, bool busy, ClientRuntimeView? runtime)
     {
-        return $"{snapshot.ClientStatus}|{snapshot.ServerStatus}|{busy}";
+        return $"{snapshot.ClientStatus}|{snapshot.ServerStatus}|{busy}|{runtime?.Status}|{runtime?.Summary}";
     }
 
     private void UpdateWindowIcon(System.Windows.Media.ImageSource? icon)
@@ -486,6 +498,38 @@ internal sealed class App : Application
         Disabled,
         Enabled,
         Busy
+    }
+
+    private void RefreshClientRuntimeStatus(ServiceStatusSnapshot snapshot)
+    {
+        if (_window is null)
+        {
+            return;
+        }
+        var statePath = GetClientStatePath();
+        var state = ClientStateReader.TryLoad(statePath);
+        _clientRuntimeView = UiLogic.BuildClientRuntimeView(snapshot.ClientStatus, state);
+        var view = _clientRuntimeView;
+        if (view is null)
+        {
+            return;
+        }
+        var message = view.Detail;
+        if (!string.IsNullOrWhiteSpace(view.LastError))
+        {
+            message = $"{message} | Error: {view.LastError}";
+        }
+        Dispatcher.Invoke(() => _window.SetClientRuntimeStatus(message));
+    }
+
+    private static string GetClientStatePath()
+    {
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        if (string.IsNullOrWhiteSpace(programData))
+        {
+            programData = @"C:\ProgramData";
+        }
+        return Path.Combine(programData, "xp2p", "xp2p-client.state.json");
     }
 
 }
