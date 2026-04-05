@@ -7,8 +7,6 @@ internal readonly record struct ServiceButtonState(bool StartEnabled, bool StopE
 
 internal static class UiLogic
 {
-    private static readonly TimeSpan RuntimeStaleThreshold = TimeSpan.FromSeconds(30);
-
     public static ApplicationTheme? GetThemeFromSelection(int selection)
     {
         return selection switch
@@ -82,13 +80,6 @@ internal static class UiLogic
         if (state?.Runtime?.Timestamp is not DateTimeOffset timestamp)
         {
             return new ClientRuntimeView(ClientRuntimeStatus.Failed, "Tun: Unknown", "Tun: Unknown", null, false);
-        }
-
-        var age = now - timestamp;
-        var isFresh = age <= RuntimeStaleThreshold;
-        if (!isFresh)
-        {
-            return new ClientRuntimeView(ClientRuntimeStatus.Failed, "Tun: Unknown", "Tun: Unknown", state.Runtime.LastError, false);
         }
 
         if (IsServiceStopped(serviceStatus))
