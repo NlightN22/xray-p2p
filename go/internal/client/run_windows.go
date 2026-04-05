@@ -172,19 +172,40 @@ func Run(ctx context.Context, opts RunOptions) error {
 			defer cancel()
 			ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose)
 			if err != nil {
+				_ = updateClientRuntimeState(paths.stateFile, clientRuntimeState{
+					Tun: tunRuntimeState{
+						Name:      strings.TrimSpace(opts.TunName),
+						LastError: err.Error(),
+					},
+				})
 				logging.Warn("xp2p: tun IPv4 ensure failed; skipping route apply", "err", err)
 				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
 					return err
 				}
 				return nil
 			}
+			runtime := clientRuntimeState{
+				Tun: tunRuntimeState{
+					Name:    strings.TrimSpace(opts.TunName),
+					IfIndex: ifIndex,
+					IPv4:    strings.TrimSpace(ip),
+				},
+			}
 			if details, detailErr := winnet.InterfaceIPv4Details(ifIndex); detailErr == nil {
+				oper := winnet.InterfaceOperStatusName(details.OperStatus)
+				dad := winnet.InterfaceDadStateName(details.DadState)
+				runtime.Tun.Prefix = int(details.Prefix)
+				runtime.Tun.OperStatus = oper
+				runtime.Tun.DadState = dad
+				runtime.Tun.Ready = details.IP != "" &&
+					strings.EqualFold(oper, "up") &&
+					strings.EqualFold(dad, "preferred")
 				logging.Info(
 					"xp2p: tun IPv4 ready; applying routes",
 					"ifIndex", ifIndex,
 					"ip", ip,
-					"operStatus", winnet.InterfaceOperStatusName(details.OperStatus),
-					"dadState", winnet.InterfaceDadStateName(details.DadState),
+					"operStatus", oper,
+					"dadState", dad,
 				)
 			} else {
 				logging.Info("xp2p: tun IPv4 ready; applying routes", "ifIndex", ifIndex, "ip", ip)
@@ -193,13 +214,33 @@ func Run(ctx context.Context, opts RunOptions) error {
 				return nil
 			}
 			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
+			redirectCount := len(collectRedirectCIDRs(desired.Redirects))
+			redirectApplied := false
 			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
 				logging.Warn("xp2p: redirect route setup failed", "err", err)
+			} else {
+				redirectApplied = true
 			}
+			fullApplied := false
+			fullBypassCount := 0
 			if wantFull {
-				if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
+				if applied, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
 					logging.Warn("xp2p: full-tunnel apply failed", "err", err)
+				} else {
+					fullApplied = applied
 				}
+				if fullState, err := loadFullTunnelState(paths.fullState); err == nil {
+					fullBypassCount = len(fullState.BypassRoutes)
+				}
+			}
+			runtime.Routes = routeRuntimeState{
+				RedirectApplied: redirectApplied,
+				RedirectCount:   redirectCount,
+				FullApplied:     fullApplied,
+				FullBypassCount: fullBypassCount,
+			}
+			if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
+				logging.Warn("xp2p: client runtime state update failed", "err", err)
 			}
 		}
 		return nil
