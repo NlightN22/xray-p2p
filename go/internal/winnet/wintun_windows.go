@@ -37,12 +37,12 @@ func CleanupWintunAdapter(wintunPath string, adapterName string) (WintunCleanupR
 	if err := dll.Load(); err != nil {
 		return WintunCleanupSkipped, fmt.Errorf("xp2p: load wintun dll: %w", err)
 	}
-	openProc, err := dll.FindProc("WintunOpenAdapter")
-	if err != nil {
+	openProc := dll.NewProc("WintunOpenAdapter")
+	if err := openProc.Find(); err != nil {
 		return WintunCleanupSkipped, fmt.Errorf("xp2p: find WintunOpenAdapter: %w", err)
 	}
-	closeProc, err := dll.FindProc("WintunCloseAdapter")
-	if err != nil {
+	closeProc := dll.NewProc("WintunCloseAdapter")
+	if err := closeProc.Find(); err != nil {
 		return WintunCleanupSkipped, fmt.Errorf("xp2p: find WintunCloseAdapter: %w", err)
 	}
 
