@@ -223,6 +223,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 		onReady,
 	)
 	if runErr != nil && pendingApplied && rollback != nil {
+		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
+			logging.Warn("xp2p: tun ready failed; mode change remains pending", "err", runErr)
+			return runErr
+		}
 		if err := rollback.Restore(config.AuditLogPath()); err != nil {
 			logging.Warn("xp2p: rollback failed after apply", "err", err)
 		} else {

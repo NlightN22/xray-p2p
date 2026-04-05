@@ -20,6 +20,7 @@ func applyRedirectRoutes(tunName, tunAddr string, redirects []redirect.Rule) err
 		}
 		return err
 	}
+	logging.Info("xp2p: redirect routes applied", "interface", strings.TrimSpace(tunName), "count", len(cidrs))
 	return nil
 }
 

@@ -32,6 +32,10 @@ tun_mode = "full"
 dns_servers = ["1.1.1.1", "8.8.8.8"]
 ```
 
+### Windows Server 2016
+
+On Windows Server 2016, the Wintun adapter can intermittently stay disconnected after restarts (IPv4 remains `Tentative`, routes do not apply). When this happens, `xp2p` keeps the mode change pending and retries through service restarts until the adapter reports `up`/`preferred`. Cleanup runs before each start. The following xray logs are expected during adapter recreation: `Failed to find matching adapter name`, `Removed orphaned adapter`.
+
 ## DNS per-domain routing
 
 ```sh
