@@ -20,6 +20,8 @@ var (
 	procSetUnicastIpAddressEntry        = modiphlpapiUnicast.NewProc("SetUnicastIpAddressEntry")
 )
 
+const ipLifetimeInfinite uint32 = 0xFFFFFFFF
+
 func assignInterfaceIPv4Native(ifIndex int, ip string, prefix int) error {
 	addr := strings.TrimSpace(ip)
 	if ifIndex <= 0 || addr == "" || prefix <= 0 {
@@ -54,15 +56,18 @@ func unicastRowFromIPv4(ifIndex int, addr string, prefix int) (windows.MibUnicas
 	row.InterfaceIndex = uint32(ifIndex)
 	row.Address = raw
 	row.OnLinkPrefixLength = uint8(prefix)
+	row.PrefixOrigin = windows.IpPrefixOriginManual
+	row.SuffixOrigin = windows.IpSuffixOriginManual
+	row.ValidLifetime = ipLifetimeInfinite
+	row.PreferredLifetime = ipLifetimeInfinite
 	return row, nil
 }
 
 func rawSockaddrFromIPUnicast(ip net.IP) (windows.RawSockaddrInet6, string, bool) {
 	if ip4 := ip.To4(); ip4 != nil {
 		var addr windows.RawSockaddrInet6
-		raw := (*windows.RawSockaddrInet4)(unsafe.Pointer(&addr))
-		raw.Family = windows.AF_INET
-		copy(raw.Addr[:], ip4)
+		addr.Family = windows.AF_INET
+		copy(addr.Addr[:], ip4)
 		return addr, "IPv4", true
 	}
 	if ip16 := ip.To16(); ip16 != nil {

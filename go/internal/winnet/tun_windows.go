@@ -179,9 +179,12 @@ func ensureInterfaceIPv4(ctx context.Context, ifIndex int, ip string, prefix int
 		return ErrTunIPv4Missing
 	}
 	if err := assignInterfaceIPv4Native(ifIndex, ip, prefix); err == nil {
+		logging.Info("xp2p: tun IPv4 assigned", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "method", "native")
 		return nil
 	} else if !isUnicastIPHelperUnsupported(err) {
-		return err
+		logging.Warn("xp2p: native tun IPv4 assign failed; falling back to PowerShell", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "err", err)
+	} else {
+		logging.Warn("xp2p: native tun IPv4 assign unsupported; falling back to PowerShell", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "err", err)
 	}
 	script := strings.Join([]string{
 		`$ErrorActionPreference = "Stop"`,
@@ -194,6 +197,9 @@ func ensureInterfaceIPv4(ctx context.Context, ifIndex int, ip string, prefix int
 		`Write-Output "ok"`,
 	}, "; ")
 	_, err := runPowerShell(ctx, script)
+	if err == nil {
+		logging.Info("xp2p: tun IPv4 assigned", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "method", "powershell")
+	}
 	return err
 }
 
