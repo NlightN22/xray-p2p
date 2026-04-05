@@ -110,9 +110,9 @@ func Run(ctx context.Context, opts RunOptions) error {
 		configDir,
 		configDir,
 		nil,
-		func() {
+		func() error {
 			if !tunEnabled {
-				return
+				return nil
 			}
 			go func() {
 				if err := linuxnet.EnsureTunAddress(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
@@ -124,6 +124,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 					logging.Warn("xp2p: redirect route setup failed", "err", err)
 				}
 			}()
+			return nil
 		},
 		func(readyCtx context.Context) error {
 			addr, err := resolveServerSocksAddress(configFile)

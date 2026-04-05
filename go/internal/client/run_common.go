@@ -12,7 +12,7 @@ import (
 )
 
 type cmdConfigurator func(*exec.Cmd)
-type startHook func()
+type startHook func() error
 type readyCheck func(context.Context) error
 
 func runXrayWithConfig(
@@ -61,7 +61,13 @@ func runXrayWithConfig(
 		}
 	}
 	if onStart != nil {
-		onStart()
+		if err := onStart(); err != nil {
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
+			}
+			return err
+		}
 	}
 
 	var wg sync.WaitGroup

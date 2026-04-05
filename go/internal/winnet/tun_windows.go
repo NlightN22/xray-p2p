@@ -13,6 +13,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+var ErrTunIPv4TentativeTimeout = errors.New("xp2p: tun IPv4 remained tentative")
+
+const tunTentativeTimeout = 10 * time.Second
+
 func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose bool) (int, string, error) {
 	name := strings.TrimSpace(tunName)
 	addr := strings.TrimSpace(tunAddr)
@@ -25,13 +29,25 @@ func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose
 	}
 	attempt := 0
 	var lastErr error
+	var tentativeSince time.Time
 	for {
 		attempt++
 		ifIndex, err := resolveTunInterface(ctx, name, addr)
 		if err == nil && ifIndex > 0 {
-			ip, oper, dad, ready, stateErr := interfaceIPv4ReadyState(ifIndex)
+			details, stateErr := InterfaceIPv4Details(ifIndex)
 			if stateErr != nil && !errors.Is(stateErr, ErrTunIPv4Missing) {
 				return 0, "", stateErr
+			}
+			ip, oper, dad, ready := statusFromIPv4Details(details)
+			if ip != "" && details.DadState == dadStateTentative {
+				if tentativeSince.IsZero() {
+					tentativeSince = time.Now()
+				}
+				if time.Since(tentativeSince) >= tunTentativeTimeout {
+					return 0, "", ErrTunIPv4TentativeTimeout
+				}
+			} else {
+				tentativeSince = time.Time{}
 			}
 			if ready {
 				if verbose {
@@ -117,21 +133,36 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 	}
 	attempt := 0
 	var lastErr error
+	var tentativeSince time.Time
 	for {
 		attempt++
 		ifIndex, err := resolveTunInterface(ctx, name, addr)
 		if err == nil && ifIndex > 0 {
-			if assignOK {
-				if err := ensureInterfaceIPv4(ctx, ifIndex, assignIP, assignPrefix); err != nil {
-					lastErr = err
-					if verbose {
-						logging.Info("xp2p: tun IPv4 assign attempt failed", "ifIndex", ifIndex, "attempt", attempt, "err", err)
-					}
-				}
-			}
-			ip, oper, dad, ready, stateErr := interfaceIPv4ReadyState(ifIndex)
+			details, stateErr := InterfaceIPv4Details(ifIndex)
 			if stateErr != nil && !errors.Is(stateErr, ErrTunIPv4Missing) {
 				return 0, "", stateErr
+			}
+			ip, oper, dad, ready := statusFromIPv4Details(details)
+			if ip != "" && details.DadState == dadStateTentative {
+				if tentativeSince.IsZero() {
+					tentativeSince = time.Now()
+				}
+				if time.Since(tentativeSince) >= tunTentativeTimeout {
+					return 0, "", ErrTunIPv4TentativeTimeout
+				}
+			} else {
+				tentativeSince = time.Time{}
+			}
+			shouldAssign := assignOK && (ip == "" || !strings.EqualFold(ip, assignIP))
+			if assignOK {
+				if shouldAssign {
+					if err := ensureInterfaceIPv4(ctx, ifIndex, assignIP, assignPrefix); err != nil {
+						lastErr = err
+						if verbose {
+							logging.Info("xp2p: tun IPv4 assign attempt failed", "ifIndex", ifIndex, "attempt", attempt, "err", err)
+						}
+					}
+				}
 			}
 			if ready {
 				if verbose {
@@ -208,8 +239,13 @@ func interfaceIPv4ReadyState(ifIndex int) (string, string, string, bool, error) 
 	if err != nil {
 		return "", InterfaceOperStatusName(details.OperStatus), InterfaceDadStateName(details.DadState), false, err
 	}
+	ip, oper, dad, ready := statusFromIPv4Details(details)
+	return ip, oper, dad, ready, nil
+}
+
+func statusFromIPv4Details(details IPv4Details) (string, string, string, bool) {
 	oper := InterfaceOperStatusName(details.OperStatus)
 	dad := InterfaceDadStateName(details.DadState)
 	ready := details.IP != "" && details.OperStatus == windows.IfOperStatusUp && details.DadState == dadStatePreferred
-	return details.IP, oper, dad, ready, nil
+	return details.IP, oper, dad, ready
 }

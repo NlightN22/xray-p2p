@@ -9,7 +9,7 @@ import (
 )
 
 // MaxRestartAttempts defines the default limit of restart retries after failures.
-const MaxRestartAttempts = 5
+const MaxRestartAttempts = 10
 
 // Options controls service runner behaviour.
 type Options struct {

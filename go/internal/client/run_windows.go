@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -146,47 +147,50 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 	}
 
-	onStart := func() {
+	onStart := func() error {
 		if opts.TunEnabled {
 			if windowsRoutesDisabled {
-				go func() {
-					waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-					defer cancel()
-					logging.Info("xp2p: ensuring tun IPv4 (routes disabled)", "timeout", "120s")
-					ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose)
-					if err != nil {
-						logging.Warn("xp2p: tun IPv4 ensure failed", "err", err)
-						return
+				waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+				defer cancel()
+				logging.Info("xp2p: ensuring tun IPv4 (routes disabled)", "timeout", "120s")
+				ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose)
+				if err != nil {
+					logging.Warn("xp2p: tun IPv4 ensure failed", "err", err)
+					if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
+						return err
 					}
-					logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
-				}()
+					return nil
+				}
+				logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
 				if wantFull {
 					logging.Info("xp2p: full-tunnel pending (routes disabled)")
 				}
 				logging.Info("xp2p: windows route apply disabled; skipping redirect/full-tunnel routes")
-				return
+				return nil
 			}
-			go func() {
-				waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-				defer cancel()
-				if _, _, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose); err != nil {
-					logging.Warn("xp2p: tun IPv4 ensure failed; skipping route apply", "err", err)
-					return
+			waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+			if _, _, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose); err != nil {
+				logging.Warn("xp2p: tun IPv4 ensure failed; skipping route apply", "err", err)
+				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
+					return err
 				}
-				if ctx.Err() != nil {
-					return
+				return nil
+			}
+			if ctx.Err() != nil {
+				return nil
+			}
+			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
+			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
+				logging.Warn("xp2p: redirect route setup failed", "err", err)
+			}
+			if wantFull {
+				if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
+					logging.Warn("xp2p: full-tunnel apply failed", "err", err)
 				}
-				go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
-				if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
-					logging.Warn("xp2p: redirect route setup failed", "err", err)
-				}
-				if wantFull {
-					if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
-						logging.Warn("xp2p: full-tunnel apply failed", "err", err)
-					}
-				}
-			}()
+			}
 		}
+		return nil
 	}
 
 	onReady := func(readyCtx context.Context) error {
