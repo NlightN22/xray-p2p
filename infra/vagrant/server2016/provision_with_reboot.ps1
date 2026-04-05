@@ -22,6 +22,8 @@ function Invoke-Vagrant {
     $psi.WorkingDirectory = $scriptRoot
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
     $psi.EnvironmentVariables["VAGRANT_CWD"] = $scriptRoot
 
     Write-Host ("==> Running: {0} {1}" -f $psi.FileName, $psi.Arguments)
@@ -32,11 +34,20 @@ function Invoke-Vagrant {
     [void]$proc.Start()
     $proc.WaitForExit()
 
+    $stdOut = $proc.StandardOutput.ReadToEnd()
+    $stdErr = $proc.StandardError.ReadToEnd()
+    if ($stdOut) {
+        Write-Host $stdOut
+    }
+    if ($stdErr) {
+        Write-Host $stdErr
+    }
+
     Write-Host ("==> ExitCode: {0}" -f $proc.ExitCode)
 
     return @{
         ExitCode = $proc.ExitCode
-        Output   = ""
+        Output   = ($stdOut + "`n" + $stdErr).Trim()
     }
 }
 
@@ -112,11 +123,11 @@ function Ensure-MachineUp {
 
 function Needs-Reboot {
     param(
-        [Parameter(Mandatory = $true)]
-        [string] $Output
+        [AllowEmptyString()]
+        [string] $Output = ""
     )
 
-    if (-not $Output) {
+    if ([string]::IsNullOrWhiteSpace($Output)) {
         return $false
     }
 
