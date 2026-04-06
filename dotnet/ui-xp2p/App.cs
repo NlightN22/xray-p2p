@@ -60,7 +60,7 @@ internal sealed partial class App : Application
         _serviceManager = new ServiceManager();
         _serviceManager.ActivityChanged += OnServiceActivityChanged;
         _serviceManager.StatusChanged += OnServiceStatusChanged;
-        _modeManager = new ModeManager();
+        _modeManager = new ModeManager(Log);
 
         var appIcon = GetAppIcon();
         _trayIcons = TrayIconLoader.Load(appIcon, Log);

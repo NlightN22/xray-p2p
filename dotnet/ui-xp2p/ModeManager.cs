@@ -8,8 +8,15 @@ namespace Xp2pUi;
 
 internal sealed class ModeManager
 {
+    private readonly Action<string>? _log;
+
     private const string ConfigRootEnv = "XP2P_CONFIG_ROOT";
     private const string LogRootEnv = "XP2P_LOG_ROOT";
+
+    public ModeManager(Action<string>? log = null)
+    {
+        _log = log;
+    }
 
     public OperationResult ApplyClientMode(ClientMode mode)
     {
@@ -19,12 +26,16 @@ internal sealed class ModeManager
         var pendingPath = GetPendingConfigPath("xp2p-client.toml");
         var sourcePath = ResolveSourceConfig(configPath, pendingPath);
 
+        Log($"mode manager: client mode request {ModeLogic.FormatClientMode(mode)}");
+        Log($"mode manager: client config source={sourcePath} pending={pendingPath}");
+
         var content = ReadTextOrEmpty(sourcePath);
         content = UpdateTomlValue(content, "client", "tun_enabled", desiredTunEnabled ? "true" : "false");
         if (desiredTunEnabled)
         {
             if (mode == ClientMode.TunFull && string.IsNullOrWhiteSpace(ReadTomlValue(content, "client", "full_tunnel_tag")))
             {
+                Log("mode manager: client full mode rejected (missing client.full_tunnel_tag)");
                 return OperationResult.Fail("Full mode requires client.full_tunnel_tag in config.");
             }
             content = UpdateTomlValue(content, "client", "tun_mode", $"\"{desiredTunMode}\"");
@@ -33,11 +44,13 @@ internal sealed class ModeManager
         try
         {
             WriteFileWithAudit(pendingPath, content, ignoreAuditErrors: false);
+            Log($"mode manager: client pending config written {pendingPath}");
             WriteApplyRequest("client");
             return OperationResult.Ok($"Client mode requested: {ModeLogic.FormatClientMode(mode)}.");
         }
         catch (Exception ex)
         {
+            Log($"mode manager: client mode update failed {ex.GetType().Name} {ex.Message}");
             return OperationResult.Fail($"Client mode update failed: {ex.Message}");
         }
     }
@@ -49,17 +62,22 @@ internal sealed class ModeManager
         var pendingPath = GetPendingConfigPath("xp2p-server.toml");
         var sourcePath = ResolveSourceConfig(configPath, pendingPath);
 
+        Log($"mode manager: server mode request {ModeLogic.FormatServerMode(mode)}");
+        Log($"mode manager: server config source={sourcePath} pending={pendingPath}");
+
         var content = ReadTextOrEmpty(sourcePath);
         content = UpdateTomlValue(content, "server", "tun_enabled", desiredTunEnabled ? "true" : "false");
 
         try
         {
             WriteFileWithAudit(pendingPath, content, ignoreAuditErrors: false);
+            Log($"mode manager: server pending config written {pendingPath}");
             WriteApplyRequest("server");
             return OperationResult.Ok($"Server mode requested: {ModeLogic.FormatServerMode(mode)}.");
         }
         catch (Exception ex)
         {
+            Log($"mode manager: server mode update failed {ex.GetType().Name} {ex.Message}");
             return OperationResult.Fail($"Server mode update failed: {ex.Message}");
         }
     }
@@ -225,6 +243,7 @@ internal sealed class ModeManager
         {
             if (exists && MatchesRole(existing.Role, desiredRole))
             {
+                Log($"mode manager: apply request already matches role={desiredRole} path={path}");
                 return;
             }
             if (exists && RequiresAnyRole(existing.Role, desiredRole))
@@ -242,6 +261,7 @@ internal sealed class ModeManager
         var json = JsonSerializer.Serialize(request, new JsonSerializerOptions { WriteIndented = true });
         json = json.TrimEnd() + "\n";
         WriteFileWithAudit(path, json, ignoreAuditErrors: true);
+        Log($"mode manager: apply request written role={desiredRole} path={path}");
     }
 
     private static bool TryReadApplyRequest(string path, out ApplyRequest existing, out bool exists)
@@ -317,6 +337,7 @@ internal sealed class ModeManager
         var newHash = HashBytes(data);
         if (oldHash == newHash)
         {
+            Log($"mode manager: skip write (no changes) path={path}");
             return;
         }
         var dir = Path.GetDirectoryName(path);
@@ -336,6 +357,7 @@ internal sealed class ModeManager
         }
         catch when (ignoreAuditErrors)
         {
+            Log($"mode manager: audit write skipped path={auditPath}");
         }
     }
 
@@ -461,6 +483,11 @@ internal sealed class ModeManager
             return value.Substring(1, value.Length - 2);
         }
         return value;
+    }
+
+    private void Log(string message)
+    {
+        _log?.Invoke(message);
     }
 
     private sealed class ApplyRequest
