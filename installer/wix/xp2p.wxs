@@ -243,7 +243,7 @@
     <DirectoryRef Id="Xp2pDataFolder">
       <Component Id="cmpXp2pDataRoot" Guid="{CB9F9DB5-76DD-49E0-9A77-5F7A4E2BDCA0}" Win64="yes" KeyPath="yes">
         <CreateFolder>
-          <Permission User="Users" GenericAll="yes" />
+          <util:PermissionEx User="S-1-5-32-545" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>
@@ -257,7 +257,7 @@
     <DirectoryRef Id="Xp2pConfigClientFolder">
       <Component Id="cmpXp2pConfigClient" Guid="{B0A5E1C6-56AA-4F1E-88F7-9A9C5A32339A}" Win64="yes" KeyPath="yes">
         <CreateFolder>
-          <Permission User="Users" GenericAll="yes" />
+          <util:PermissionEx User="S-1-5-32-545" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>
@@ -265,7 +265,7 @@
     <DirectoryRef Id="Xp2pConfigServerFolder">
       <Component Id="cmpXp2pConfigServer" Guid="{F8E8A0A4-7B6B-4D0B-9A9A-0B0D86C1DFA7}" Win64="yes" KeyPath="yes">
         <CreateFolder>
-          <Permission User="Users" GenericAll="yes" />
+          <util:PermissionEx User="S-1-5-32-545" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>
@@ -273,7 +273,7 @@
     <DirectoryRef Id="Xp2pLogsFolder">
       <Component Id="cmpXp2pLogsRoot" Guid="{E3E83E72-3F2B-4C3B-A3A4-9EA6E6110A21}" Win64="yes" KeyPath="yes">
         <CreateFolder>
-          <Permission User="Users" GenericAll="yes" />
+          <util:PermissionEx User="S-1-5-32-545" GenericAll="yes" />
         </CreateFolder>
       </Component>
     </DirectoryRef>
