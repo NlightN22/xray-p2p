@@ -39,6 +39,54 @@ internal sealed partial class App
         {
             return;
         }
+        if (mode == ClientMode.TunFull)
+        {
+            var state = _modeManager.GetClientFullTunnelTagState();
+            if (!string.IsNullOrWhiteSpace(state.ExistingTag))
+            {
+                var resultExisting = _modeManager.ApplyClientMode(mode);
+                SetStatus(resultExisting.Message);
+                if (resultExisting.Success)
+                {
+                    _pendingClientMode = mode;
+                    RefreshServiceStatus();
+                }
+                return;
+            }
+            if (state.CandidateTags.Count == 1)
+            {
+                var resultSingle = _modeManager.ApplyClientMode(mode, state.CandidateTags[0]);
+                SetStatus(resultSingle.Message);
+                if (resultSingle.Success)
+                {
+                    _pendingClientMode = mode;
+                    RefreshServiceStatus();
+                }
+                return;
+            }
+            if (state.CandidateTags.Count > 1 && _window is not null)
+            {
+                var dialog = new TagSelectionDialog(state.CandidateTags)
+                {
+                    Owner = _window
+                };
+                if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.SelectedTag))
+                {
+                    var resultPick = _modeManager.ApplyClientMode(mode, dialog.SelectedTag);
+                    SetStatus(resultPick.Message);
+                    if (resultPick.Success)
+                    {
+                        _pendingClientMode = mode;
+                        RefreshServiceStatus();
+                    }
+                }
+                else
+                {
+                    SetStatus("Full mode change cancelled.");
+                }
+                return;
+            }
+        }
         var result = _modeManager.ApplyClientMode(mode);
         SetStatus(result.Message);
         if (result.Success)

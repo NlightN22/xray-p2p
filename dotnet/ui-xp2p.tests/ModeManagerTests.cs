@@ -7,15 +7,91 @@ namespace Xp2pUi.Tests;
 public sealed class ModeManagerTests
 {
     [Fact]
-    public void ApplyClientMode_FullRequiresTag()
+    public void ApplyClientMode_FullUsesSingleEndpointTag()
     {
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
 
+        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+            "[[client.endpoints]]\n" +
+            "tag = \"proxy-alpha\"\n" +
+            "hostname = \"edge.example\"\n");
+
+        var result = manager.ApplyClientMode(ClientMode.TunFull);
+
+        Assert.True(result.Success);
+        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
+        Assert.True(File.Exists(pendingPath));
+        var content = File.ReadAllText(pendingPath);
+        Assert.Contains("[client]", content, StringComparison.Ordinal);
+        Assert.Contains("tun_enabled = true", content, StringComparison.Ordinal);
+        Assert.Contains("tun_mode = \"full\"", content, StringComparison.Ordinal);
+        Assert.Contains("full_tunnel_tag = \"proxy-alpha\"", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyClientMode_FullUsesInlineEndpointTag()
+    {
+        using var env = new TempConfigRoot();
+        var manager = new ModeManager();
+
+        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+            "[client]\n" +
+            "endpoints = [{ tag = \"proxy-inline\", hostname = \"edge.example\" }]\n");
+
+        var result = manager.ApplyClientMode(ClientMode.TunFull);
+
+        Assert.True(result.Success);
+        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
+        Assert.True(File.Exists(pendingPath));
+        var content = File.ReadAllText(pendingPath);
+        Assert.Contains("full_tunnel_tag = \"proxy-inline\"", content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ApplyClientMode_FullFailsWhenMultipleEndpoints()
+    {
+        using var env = new TempConfigRoot();
+        var manager = new ModeManager();
+
+        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+            "[[client.endpoints]]\n" +
+            "tag = \"proxy-alpha\"\n" +
+            "hostname = \"edge.example\"\n" +
+            "\n" +
+            "[[client.endpoints]]\n" +
+            "tag = \"proxy-beta\"\n" +
+            "hostname = \"edge2.example\"\n");
+
         var result = manager.ApplyClientMode(ClientMode.TunFull);
 
         Assert.False(result.Success);
-        Assert.DoesNotContain("xp2p-client.toml", Directory.GetFiles(env.Root, "*", SearchOption.AllDirectories));
+        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
+        Assert.False(File.Exists(pendingPath));
+    }
+
+    [Fact]
+    public void ApplyClientMode_FullWithOverrideTagWritesPending()
+    {
+        using var env = new TempConfigRoot();
+        var manager = new ModeManager();
+
+        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+            "[[client.endpoints]]\n" +
+            "tag = \"proxy-alpha\"\n" +
+            "hostname = \"edge.example\"\n" +
+            "\n" +
+            "[[client.endpoints]]\n" +
+            "tag = \"proxy-beta\"\n" +
+            "hostname = \"edge2.example\"\n");
+
+        var result = manager.ApplyClientMode(ClientMode.TunFull, "proxy-beta");
+
+        Assert.True(result.Success);
+        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
+        Assert.True(File.Exists(pendingPath));
+        var content = File.ReadAllText(pendingPath);
+        Assert.Contains("full_tunnel_tag = \"proxy-beta\"", content, StringComparison.Ordinal);
     }
 
     [Fact]

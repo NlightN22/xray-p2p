@@ -3,6 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Xp2pUi;
 
@@ -18,7 +19,7 @@ internal sealed class ModeManager
         _log = log;
     }
 
-    public OperationResult ApplyClientMode(ClientMode mode)
+    public OperationResult ApplyClientMode(ClientMode mode, string? fullTunnelTagOverride = null)
     {
         var desiredTunEnabled = mode != ClientMode.Proxy;
         var desiredTunMode = mode == ClientMode.TunFull ? "full" : "split";
@@ -33,10 +34,31 @@ internal sealed class ModeManager
         content = UpdateTomlValue(content, "client", "tun_enabled", desiredTunEnabled ? "true" : "false");
         if (desiredTunEnabled)
         {
-            if (mode == ClientMode.TunFull && string.IsNullOrWhiteSpace(ReadTomlValue(content, "client", "full_tunnel_tag")))
+            if (mode == ClientMode.TunFull)
             {
-                Log("mode manager: client full mode rejected (missing client.full_tunnel_tag)");
-                return OperationResult.Fail("Full mode requires client.full_tunnel_tag in config.");
+                var existingTag = ReadTomlValue(content, "client", "full_tunnel_tag");
+                var resolvedTag = string.IsNullOrWhiteSpace(fullTunnelTagOverride) ? existingTag : fullTunnelTagOverride;
+                if (string.IsNullOrWhiteSpace(resolvedTag))
+                {
+                    var tags = ReadEndpointTags(content);
+                    Log($"mode manager: client endpoint tags count={tags.Count} tags={string.Join(",", tags)}");
+                    if (tags.Count == 0)
+                    {
+                        Log("mode manager: client full mode rejected (no endpoints found)");
+                        return OperationResult.Fail("Full mode requires endpoint tag; no endpoints found.");
+                    }
+                    if (tags.Count > 1)
+                    {
+                        Log("mode manager: client full mode rejected (multiple endpoints found)");
+                        return OperationResult.Fail("Full mode requires endpoint tag; multiple endpoints found.");
+                    }
+                    resolvedTag = tags[0];
+                    Log($"mode manager: client full mode auto tag={resolvedTag}");
+                }
+                if (!string.IsNullOrWhiteSpace(resolvedTag))
+                {
+                    content = UpdateTomlValue(content, "client", "full_tunnel_tag", $"\"{resolvedTag}\"");
+                }
             }
             content = UpdateTomlValue(content, "client", "tun_mode", $"\"{desiredTunMode}\"");
         }
@@ -233,6 +255,132 @@ internal sealed class ModeManager
             return TrimTomlQuotes(value);
         }
         return null;
+    }
+
+    public ClientFullTunnelTagState GetClientFullTunnelTagState()
+    {
+        var configPath = GetConfigPath("xp2p-client.toml");
+        var pendingPath = GetPendingConfigPath("xp2p-client.toml");
+        var sourcePath = ResolveSourceConfig(configPath, pendingPath);
+        var content = ReadTextOrEmpty(sourcePath);
+        var existing = ReadTomlValue(content, "client", "full_tunnel_tag") ?? "";
+        var tags = ReadEndpointTags(content);
+        return new ClientFullTunnelTagState(existing, tags);
+    }
+
+    private static System.Collections.Generic.List<string> ReadEndpointTags(string content)
+    {
+        var normalized = NormalizeLineEndings(content);
+        var lines = normalized.Length == 0 ? Array.Empty<string>() : normalized.Split('\n');
+        var inEndpoints = false;
+        var tags = new System.Collections.Generic.List<string>();
+        var seen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var endpointsBlock = ExtractEndpointsInlineBlock(lines);
+        if (!string.IsNullOrWhiteSpace(endpointsBlock))
+        {
+            foreach (Match match in Regex.Matches(endpointsBlock, @"\btag\s*=\s*(['""])(?<tag>[^'""]+)\1"))
+            {
+                var value = match.Groups["tag"].Value.Trim();
+                if (value.Length == 0)
+                {
+                    continue;
+                }
+                if (seen.Add(value))
+                {
+                    tags.Add(value);
+                }
+            }
+        }
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+            {
+                var header = trimmed.Trim('[', ']').Trim();
+                if (string.Equals(header, "client.endpoints", StringComparison.OrdinalIgnoreCase))
+                {
+                    inEndpoints = true;
+                    continue;
+                }
+                if (inEndpoints)
+                {
+                    inEndpoints = false;
+                }
+                continue;
+            }
+            if (!inEndpoints)
+            {
+                continue;
+            }
+            if (!MatchesKey(line, "tag"))
+            {
+                continue;
+            }
+            var value = ReadValueFromLine(line);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+            if (seen.Add(value))
+            {
+                tags.Add(value);
+            }
+        }
+        return tags;
+    }
+
+    private static string ExtractEndpointsInlineBlock(string[] lines)
+    {
+        var capture = false;
+        var depth = 0;
+        var builder = new StringBuilder();
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (!capture && Regex.IsMatch(trimmed, @"^endpoints\s*="))
+            {
+                capture = true;
+            }
+            if (!capture)
+            {
+                continue;
+            }
+            builder.Append(trimmed).Append(' ');
+            foreach (var ch in trimmed)
+            {
+                if (ch == '[')
+                {
+                    depth++;
+                }
+                else if (ch == ']')
+                {
+                    depth--;
+                }
+            }
+            if (capture && depth <= 0 && trimmed.Contains(']'))
+            {
+                break;
+            }
+        }
+        return builder.ToString();
+    }
+
+    private static string ReadValueFromLine(string line)
+    {
+        var idx = line.IndexOf('=');
+        if (idx < 0)
+        {
+            return "";
+        }
+        var value = line[(idx + 1)..].Trim();
+        var commentIdx = value.IndexOf('#');
+        if (commentIdx >= 0)
+        {
+            value = value[..commentIdx].Trim();
+        }
+        return TrimTomlQuotes(value);
     }
 
     private void WriteApplyRequest(string role)
@@ -489,6 +637,10 @@ internal sealed class ModeManager
     {
         _log?.Invoke(message);
     }
+
+    public readonly record struct ClientFullTunnelTagState(
+        string ExistingTag,
+        System.Collections.Generic.IReadOnlyList<string> CandidateTags);
 
     private sealed class ApplyRequest
     {

@@ -46,8 +46,8 @@ internal static class UiLogic
     {
         var runtimeText = runtime?.Summary;
         var text = string.IsNullOrWhiteSpace(runtimeText)
-            ? $"Client: {snapshot.ClientStatus} | Server: {snapshot.ServerStatus}"
-            : $"Client: {snapshot.ClientStatus} | {runtimeText} | Server: {snapshot.ServerStatus}";
+            ? $"Client: {snapshot.ClientStatus}{Environment.NewLine}Server: {snapshot.ServerStatus}"
+            : $"Client: {snapshot.ClientStatus} | {runtimeText}{Environment.NewLine}Server: {snapshot.ServerStatus}";
         return text.Length <= 63 ? text : text.Substring(0, 63);
     }
 
