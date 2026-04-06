@@ -21,6 +21,7 @@ CLIENT_PASSWORD = "full-tun-pass"
 TROJAN_PORT = "58601"
 SYNCED_LOG_ROOT = _env.GUEST_BUILD_ROOT / "logs" / "tests"
 SYNCED_SERVICE_LOG = SYNCED_LOG_ROOT / "client" / "service.log"
+SYNCED_SERVICE_KEEP_LOG = SYNCED_LOG_ROOT / "client" / "service.keep.log"
 
 SERVER_CONFIG_DIR_NAME = "config-server"
 SERVER_CONFIG_DIR = _env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME
@@ -48,6 +49,20 @@ def _wait_for_client_apply(
     if "deferring route apply until restart" in (tail or "").lower():
         xp2p_client_runner("client", "service", "restart", check=True)
         svc.wait_for_service_outcome(client_host, log_path=log_path)
+
+
+def _preserve_service_log(client_host) -> None:
+    script = (
+        "$ErrorActionPreference = 'SilentlyContinue'\n"
+        f"$src = {_env.ps_quote(str(SYNCED_SERVICE_LOG))}\n"
+        f"$dst = {_env.ps_quote(str(SYNCED_SERVICE_KEEP_LOG))}\n"
+        "$dstDir = Split-Path -Parent $dst\n"
+        "if (Test-Path $src) {\n"
+        "    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null\n"
+        "    Copy-Item -Path $src -Destination $dst -Force\n"
+        "}\n"
+    )
+    _env.run_powershell(client_host, script, label="preserve_service_log")
 
 
 def _is_tun_default_route(route: dict, tun_name: str) -> bool:
@@ -377,6 +392,7 @@ def test_windows_client_tun_mode_full_routes(
         success = True
         return
     finally:
+        _preserve_service_log(client_host)
         if original_env is not None:
             svc.restore_service_env(client_host, original_env)
         if client_proc:
