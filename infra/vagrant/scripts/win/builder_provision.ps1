@@ -156,6 +156,27 @@ function Disable-WindowsAutoUpdate {
     }
 }
 
+function Ensure-WindowsInstallerEnabled {
+    Write-Info "Ensuring Windows Installer policies allow MSI installs."
+
+    $policyRoots = @(
+        "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer",
+        "HKCU:\SOFTWARE\Policies\Microsoft\Windows\Installer"
+    )
+
+    foreach ($root in $policyRoots) {
+        try {
+            if (-not (Test-Path $root)) {
+                New-Item -Path $root -Force | Out-Null
+            }
+            New-ItemProperty -Path $root -Name "DisableMSI" -Value 0 -PropertyType DWord -Force | Out-Null
+        }
+        catch {
+            Write-Info ("Failed to update MSI policy at {0}: {1}" -f $root, $_.Exception.Message)
+        }
+    }
+}
+
 function Ensure-Go {
     $goVersion = $env:XP2P_GO_VERSION
     if (-not $goVersion) {
@@ -260,6 +281,7 @@ Ensure-Go
 Ensure-DotNetSdk
 Ensure-NuGetSources
 Ensure-WiX
+Ensure-WindowsInstallerEnabled
 Disable-WindowsAutoUpdate
 Disable-IdleSleepAndHibernate
 Write-Info "Network configuration handled by network_setup.ps1."
