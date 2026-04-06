@@ -5,6 +5,8 @@ set "ENVNAME=%~1"
 
 if /I "%ENVNAME%"=="win10" (
     set "VDIR=%~dp0..\infra\vagrant\windows10"
+) else if /I "%ENVNAME%"=="win11" (
+    set "VDIR=%~dp0..\infra\vagrant\windows11"
 ) else if /I "%ENVNAME%"=="deb12" (
     set "VDIR=%~dp0..\infra\vagrant\debian12\deb-test"
 ) else if /I "%ENVNAME%"=="owrt" (
