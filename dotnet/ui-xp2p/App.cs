@@ -22,6 +22,14 @@ internal sealed class App : Application
     private Forms.ToolStripMenuItem? _serverStartItem;
     private Forms.ToolStripMenuItem? _serverStopItem;
     private Forms.ToolStripMenuItem? _serverRestartItem;
+    private Forms.ToolStripMenuItem? _clientModeMenu;
+    private Forms.ToolStripMenuItem? _clientModeProxyItem;
+    private Forms.ToolStripMenuItem? _clientModeSplitItem;
+    private Forms.ToolStripMenuItem? _clientModeFullItem;
+    private Forms.ToolStripMenuItem? _serverModeMenu;
+    private Forms.ToolStripMenuItem? _serverModeProxyItem;
+    private Forms.ToolStripMenuItem? _serverModeTunItem;
+    private Forms.ToolStripMenuItem? _serverModeUnsupportedItem;
     private ServiceStatusSnapshot? _lastStatus;
     private TrayIconSet? _trayIcons;
     private System.Windows.Media.ImageSource? _windowIconBase;
@@ -31,6 +39,9 @@ internal sealed class App : Application
     private string? _lastStatusKey;
     private TrayIconState? _lastTrayIconState;
     private ClientRuntimeView? _clientRuntimeView;
+    private ModeManager? _modeManager;
+    private ClientMode? _pendingClientMode;
+    private ServerMode? _pendingServerMode;
 
     public App()
     {
@@ -51,6 +62,7 @@ internal sealed class App : Application
         _serviceManager = new ServiceManager();
         _serviceManager.ActivityChanged += OnServiceActivityChanged;
         _serviceManager.StatusChanged += OnServiceStatusChanged;
+        _modeManager = new ModeManager();
 
         var appIcon = GetAppIcon();
         _trayIcons = TrayIconLoader.Load(appIcon, Log);
@@ -58,6 +70,8 @@ internal sealed class App : Application
         _windowIconEnabled = TrayIconLoader.CreateIconSource(_trayIcons.Enabled);
         _windowIconBusy = TrayIconLoader.CreateIconSource(_trayIcons.Busy);
         _window = new MainWindow(_backend, _serviceManager, _windowIconBase);
+        _window.ClientModeRequested += (_, mode) => RequestClientMode(mode);
+        _window.ServerModeRequested += (_, mode) => RequestServerMode(mode);
         _window.Hide();
 
         _trayIcon = new Forms.NotifyIcon
@@ -96,6 +110,15 @@ internal sealed class App : Application
         _clientMenu.DropDownItems.Add(_clientStartItem);
         _clientMenu.DropDownItems.Add(_clientStopItem);
         _clientMenu.DropDownItems.Add(_clientRestartItem);
+        _clientMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+        _clientModeMenu = new Forms.ToolStripMenuItem("Mode: Unknown");
+        _clientModeProxyItem = new Forms.ToolStripMenuItem("Proxy", null, (_, _) => RequestClientMode(ClientMode.Proxy));
+        _clientModeSplitItem = new Forms.ToolStripMenuItem("Tun Split", null, (_, _) => RequestClientMode(ClientMode.TunSplit));
+        _clientModeFullItem = new Forms.ToolStripMenuItem("Tun Full", null, (_, _) => RequestClientMode(ClientMode.TunFull));
+        _clientModeMenu.DropDownItems.Add(_clientModeProxyItem);
+        _clientModeMenu.DropDownItems.Add(_clientModeSplitItem);
+        _clientModeMenu.DropDownItems.Add(_clientModeFullItem);
+        _clientMenu.DropDownItems.Add(_clientModeMenu);
         _serverMenu = new Forms.ToolStripMenuItem("Server: Unknown");
         _serverStartItem = new Forms.ToolStripMenuItem("Start", null, (_, _) => StartServiceAsync(ServiceNames.Server));
         _serverStopItem = new Forms.ToolStripMenuItem("Stop", null, (_, _) => StopServiceAsync(ServiceNames.Server));
@@ -103,6 +126,16 @@ internal sealed class App : Application
         _serverMenu.DropDownItems.Add(_serverStartItem);
         _serverMenu.DropDownItems.Add(_serverStopItem);
         _serverMenu.DropDownItems.Add(_serverRestartItem);
+        _serverMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+        _serverModeMenu = new Forms.ToolStripMenuItem("Mode: Unknown");
+        _serverModeProxyItem = new Forms.ToolStripMenuItem("Proxy", null, (_, _) => RequestServerMode(ServerMode.Proxy));
+        _serverModeTunItem = new Forms.ToolStripMenuItem("Tun", null, (_, _) => RequestServerMode(ServerMode.Tun));
+        _serverModeUnsupportedItem = new Forms.ToolStripMenuItem("Split/Full modes are not supported on server.") { Enabled = false };
+        _serverModeMenu.DropDownItems.Add(_serverModeProxyItem);
+        _serverModeMenu.DropDownItems.Add(_serverModeTunItem);
+        _serverModeMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+        _serverModeMenu.DropDownItems.Add(_serverModeUnsupportedItem);
+        _serverMenu.DropDownItems.Add(_serverModeMenu);
 
         var openLogs = new Forms.ToolStripMenuItem("Open logs", null, (_, _) => OpenLogs());
         var quit = new Forms.ToolStripMenuItem("Quit", null, (_, _) => RequestShutdown());
@@ -181,6 +214,7 @@ internal sealed class App : Application
     {
         _lastStatus = snapshot;
         RefreshClientRuntimeStatus(snapshot);
+        RefreshServerModeStatus();
         Log($"service status changed: client={snapshot.ClientStatus} server={snapshot.ServerStatus} busy={_serviceManager?.IsBusy}");
         UpdateTrayStatusLabels(snapshot);
         UpdateTrayIconFromStatus();
@@ -265,6 +299,7 @@ internal sealed class App : Application
         var snapshot = _serviceManager.GetSnapshot();
         _lastStatus = snapshot;
         RefreshClientRuntimeStatus(snapshot);
+        RefreshServerModeStatus();
         UpdateTrayStatusLabels(snapshot);
         UpdateTrayIconFromStatus();
     }
@@ -506,7 +541,7 @@ internal sealed class App : Application
         {
             return;
         }
-        var statePath = GetClientStatePath();
+        var statePath = _modeManager?.GetClientStatePath() ?? GetClientStatePath();
         var state = ClientStateReader.TryLoad(statePath);
         _clientRuntimeView = UiLogic.BuildClientRuntimeView(snapshot.ClientStatus, state);
         var view = _clientRuntimeView;
@@ -519,7 +554,20 @@ internal sealed class App : Application
         {
             message = $"{message} | Error: {view.LastError}";
         }
-        Dispatcher.Invoke(() => _window.SetClientRuntimeStatus(message));
+        var mode = ModeLogic.ResolveClientMode(state);
+        if (_pendingClientMode.HasValue && mode.HasValue && mode.Value == _pendingClientMode.Value)
+        {
+            _pendingClientMode = null;
+        }
+        var pending = _pendingClientMode;
+        var label = mode.HasValue ? ModeLogic.FormatClientMode(mode.Value) : "Unknown";
+        var display = pending.HasValue ? ModeLogic.FormatPending(ModeLogic.FormatClientMode(pending.Value)) : label;
+        Dispatcher.Invoke(() =>
+        {
+            _window.SetClientRuntimeStatus(message);
+            _window.SetClientModeStatus(mode, display, pending.HasValue);
+        });
+        UpdateTrayClientModeMenu(mode, display, pending.HasValue);
     }
 
     private static string GetClientStatePath()
@@ -530,6 +578,91 @@ internal sealed class App : Application
             programData = @"C:\ProgramData";
         }
         return Path.Combine(programData, "xp2p", "xp2p-client.state.json");
+    }
+
+    private void RefreshServerModeStatus()
+    {
+        if (_window is null)
+        {
+            return;
+        }
+        var statePath = _modeManager?.GetServerStatePath();
+        if (string.IsNullOrWhiteSpace(statePath))
+        {
+            return;
+        }
+        var state = ServerStateReader.TryLoad(statePath);
+        var mode = ModeLogic.ResolveServerMode(state);
+        if (_pendingServerMode.HasValue && mode.HasValue && mode.Value == _pendingServerMode.Value)
+        {
+            _pendingServerMode = null;
+        }
+        var pending = _pendingServerMode;
+        var label = mode.HasValue ? ModeLogic.FormatServerMode(mode.Value) : "Unknown";
+        var display = pending.HasValue ? ModeLogic.FormatPending(ModeLogic.FormatServerMode(pending.Value)) : label;
+        Dispatcher.Invoke(() => _window.SetServerModeStatus(mode, display, pending.HasValue));
+        UpdateTrayServerModeMenu(mode, display, pending.HasValue);
+    }
+
+    private void UpdateTrayClientModeMenu(ClientMode? mode, string label, bool pending)
+    {
+        if (_clientModeMenu is not null)
+        {
+            _clientModeMenu.Text = $"Mode: {label}";
+        }
+        if (_clientModeProxyItem is null || _clientModeSplitItem is null || _clientModeFullItem is null)
+        {
+            return;
+        }
+        var enabled = !pending;
+        _clientModeProxyItem.Enabled = enabled && mode != ClientMode.Proxy;
+        _clientModeSplitItem.Enabled = enabled && mode != ClientMode.TunSplit;
+        _clientModeFullItem.Enabled = enabled && mode != ClientMode.TunFull;
+    }
+
+    private void UpdateTrayServerModeMenu(ServerMode? mode, string label, bool pending)
+    {
+        if (_serverModeMenu is not null)
+        {
+            _serverModeMenu.Text = $"Mode: {label}";
+        }
+        if (_serverModeProxyItem is null || _serverModeTunItem is null)
+        {
+            return;
+        }
+        var enabled = !pending;
+        _serverModeProxyItem.Enabled = enabled && mode != ServerMode.Proxy;
+        _serverModeTunItem.Enabled = enabled && mode != ServerMode.Tun;
+    }
+
+    private void RequestClientMode(ClientMode mode)
+    {
+        if (_modeManager is null)
+        {
+            return;
+        }
+        var result = _modeManager.ApplyClientMode(mode);
+        SetStatus(result.Message);
+        if (result.Success)
+        {
+            _pendingClientMode = mode;
+            RefreshServiceStatus();
+        }
+    }
+
+    private void RequestServerMode(ServerMode mode)
+    {
+        if (_modeManager is null)
+        {
+            return;
+        }
+        var result = _modeManager.ApplyServerMode(mode);
+        SetStatus(result.Message);
+        if (result.Success)
+        {
+            _pendingServerMode = mode;
+            RefreshServiceStatus();
+        }
     }
 
 }

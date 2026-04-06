@@ -17,6 +17,14 @@ internal sealed partial class MainWindow : Window
     private W.TextBlock? _clientStatus;
     private W.TextBlock? _serverStatus;
     private W.TextBlock? _clientRuntime;
+    private W.TextBlock? _clientMode;
+    private W.TextBlock? _serverMode;
+    private W.Button? _clientModeButton;
+    private W.Button? _serverModeButton;
+    private ClientMode? _clientModeValue;
+    private ServerMode? _serverModeValue;
+    private bool _clientModePending;
+    private bool _serverModePending;
     private readonly Dictionary<string, (W.Button Start, W.Button Stop, W.Button Restart)> _serviceButtons = new();
 
     public MainWindow(IBackend backend, ServiceManager serviceManager, ImageSource? icon)
@@ -101,6 +109,9 @@ internal sealed partial class MainWindow : Window
         Content = root;
     }
 
+    public event EventHandler<ClientMode>? ClientModeRequested;
+    public event EventHandler<ServerMode>? ServerModeRequested;
+
     public void SetStatus(string message)
     {
         _status.Text = message;
@@ -146,6 +157,17 @@ internal sealed partial class MainWindow : Window
         panel.Children.Add(BuildServiceRow(ServiceNames.Server, _serverStatus));
         _clientRuntime = new W.TextBlock { Text = "Tun: Unknown" };
         panel.Children.Add(_clientRuntime);
+
+        _clientMode = new W.TextBlock { Text = "Client mode: Unknown" };
+        _clientModeButton = new W.Button { Content = "Mode", Width = 80, Margin = new Thickness(4, 0, 0, 0) };
+        _clientModeButton.Click += (_, _) => ShowClientModeMenu();
+        panel.Children.Add(BuildModeRow(_clientMode, _clientModeButton));
+
+        _serverMode = new W.TextBlock { Text = "Server mode: Unknown" };
+        _serverModeButton = new W.Button { Content = "Mode", Width = 80, Margin = new Thickness(4, 0, 0, 0) };
+        _serverModeButton.Click += (_, _) => ShowServerModeMenu();
+        panel.Children.Add(BuildModeRow(_serverMode, _serverModeButton));
+
         UpdateServiceButtons(ServiceNames.Client, clientStatus);
         UpdateServiceButtons(ServiceNames.Server, serverStatus);
 
@@ -201,6 +223,19 @@ internal sealed partial class MainWindow : Window
         return row;
     }
 
+    private static UIElement BuildModeRow(W.TextBlock status, W.Button button)
+    {
+        var row = new W.StackPanel
+        {
+            Orientation = W.Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        status.Width = 220;
+        row.Children.Add(status);
+        row.Children.Add(button);
+        return row;
+    }
+
     private void RefreshServiceStatusLabels()
     {
         if (_clientStatus is not null)
@@ -224,6 +259,34 @@ internal sealed partial class MainWindow : Window
             return;
         }
         _clientRuntime.Text = message;
+    }
+
+    public void SetClientModeStatus(ClientMode? mode, string label, bool pending)
+    {
+        _clientModeValue = mode;
+        _clientModePending = pending;
+        if (_clientMode is not null)
+        {
+            _clientMode.Text = $"Client mode: {label}";
+        }
+        if (_clientModeButton is not null)
+        {
+            _clientModeButton.IsEnabled = !pending;
+        }
+    }
+
+    public void SetServerModeStatus(ServerMode? mode, string label, bool pending)
+    {
+        _serverModeValue = mode;
+        _serverModePending = pending;
+        if (_serverMode is not null)
+        {
+            _serverMode.Text = $"Server mode: {label}";
+        }
+        if (_serverModeButton is not null)
+        {
+            _serverModeButton.IsEnabled = !pending;
+        }
     }
 
     private static void ToggleServiceButtons(W.Button start, W.Button stop, W.Button restart, bool enabled)
@@ -255,5 +318,47 @@ internal sealed partial class MainWindow : Window
         {
             // Ignore theme update failures to keep the UI responsive.
         }
+    }
+
+    private void ShowClientModeMenu()
+    {
+        if (_clientModeButton is null || _clientModePending)
+        {
+            return;
+        }
+        var menu = new W.ContextMenu();
+        foreach (var option in ModeLogic.ClientAlternatives(_clientModeValue))
+        {
+            var label = ModeLogic.FormatClientMode(option);
+            var item = new W.MenuItem { Header = label };
+            item.Click += (_, _) => ClientModeRequested?.Invoke(this, option);
+            menu.Items.Add(item);
+        }
+        _clientModeButton.ContextMenu = menu;
+        menu.IsOpen = true;
+    }
+
+    private void ShowServerModeMenu()
+    {
+        if (_serverModeButton is null || _serverModePending)
+        {
+            return;
+        }
+        var menu = new W.ContextMenu();
+        foreach (var option in ModeLogic.ServerAlternatives(_serverModeValue))
+        {
+            var label = ModeLogic.FormatServerMode(option);
+            var item = new W.MenuItem { Header = label };
+            item.Click += (_, _) => ServerModeRequested?.Invoke(this, option);
+            menu.Items.Add(item);
+        }
+        menu.Items.Add(new W.Separator());
+        menu.Items.Add(new W.MenuItem
+        {
+            Header = "Split/Full modes are not supported on server.",
+            IsEnabled = false
+        });
+        _serverModeButton.ContextMenu = menu;
+        menu.IsOpen = true;
     }
 }
