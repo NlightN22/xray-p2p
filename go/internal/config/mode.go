@@ -28,7 +28,7 @@ func UpdateTunEnabled(path string, role string, enabled bool) (string, error) {
 		return "", fmt.Errorf("config: only toml files are supported for mode changes")
 	}
 
-	tree, err := loadOrCreateToml(configPath)
+	tree, err := loadOrCreateModeToml(configPath, trimmedRole)
 	if err != nil {
 		return "", err
 	}
@@ -61,7 +61,7 @@ func EnsureTunSettings(path string, role string, enabled bool, name string, mtu 
 		return "", fmt.Errorf("config: only toml files are supported for tun settings")
 	}
 
-	tree, err := loadOrCreateToml(configPath)
+	tree, err := loadOrCreateModeToml(configPath, trimmedRole)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +119,7 @@ func UpdateTunMode(path string, role string, mode string) (string, error) {
 		return "", fmt.Errorf("config: only toml files are supported for tun mode updates")
 	}
 
-	tree, err := loadOrCreateToml(configPath)
+	tree, err := loadOrCreateModeToml(configPath, trimmedRole)
 	if err != nil {
 		return "", err
 	}
@@ -148,7 +148,7 @@ func UpdateFullTunnelVerbose(path string, enabled bool) (string, error) {
 		return "", fmt.Errorf("config: only toml files are supported for verbose updates")
 	}
 
-	tree, err := loadOrCreateToml(configPath)
+	tree, err := loadOrCreateModeToml(configPath, trimmedRole)
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +177,7 @@ func UpdateFullTunnelTag(path string, tag string) (string, error) {
 		return "", fmt.Errorf("config: only toml files are supported for full tunnel tag updates")
 	}
 
-	tree, err := loadOrCreateToml(configPath)
+	tree, err := loadOrCreateModeToml(configPath, trimmedRole)
 	if err != nil {
 		return "", err
 	}
@@ -215,7 +215,7 @@ func EnsureTunMode(path string, role string, mode string) (string, error) {
 		return "", fmt.Errorf("config: only toml files are supported for tun mode settings")
 	}
 
-	tree, err := loadOrCreateToml(configPath)
+	tree, err := loadOrCreateModeToml(configPath, trimmedRole)
 	if err != nil {
 		return "", err
 	}
@@ -338,6 +338,38 @@ func resolveConfigPath(explicit, role string) (string, error) {
 		return filepath.Clean(PendingConfigPath(layout.ServerConfigFileName)), nil
 	}
 	return "", fmt.Errorf("config: unsupported role %q", role)
+}
+
+func loadOrCreateModeToml(path string, role string) (*toml.Tree, error) {
+	if _, err := os.Stat(path); err == nil {
+		return loadOrCreateToml(path)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("config: read %s: %w", path, err)
+	}
+
+	live := liveConfigPath(role)
+	if live == "" {
+		return toml.TreeFromMap(map[string]any{})
+	}
+	if _, err := os.Stat(live); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return toml.TreeFromMap(map[string]any{})
+		}
+		return nil, fmt.Errorf("config: read %s: %w", live, err)
+	}
+
+	return loadOrCreateToml(live)
+}
+
+func liveConfigPath(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "client":
+		return filepath.Clean(ConfigPath(layout.ClientConfigFileName))
+	case "server":
+		return filepath.Clean(ConfigPath(layout.ServerConfigFileName))
+	default:
+		return ""
+	}
 }
 
 func loadOrCreateToml(path string) (*toml.Tree, error) {
