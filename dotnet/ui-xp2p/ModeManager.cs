@@ -439,6 +439,16 @@ internal sealed class ModeManager
         return normalized;
     }
 
+    private static string EnsureLineEnding(string[] lines)
+    {
+        if (lines.Length == 0)
+        {
+            return "\n";
+        }
+        var content = string.Join("\n", lines);
+        return NormalizeLineEndings(content);
+    }
+
     private static string TrimTomlQuotes(string value)
     {
         if (value.Length < 2)

@@ -11,7 +11,7 @@ internal sealed partial class App
     {
         if (ShouldPromptStopServices())
         {
-            var result = Dispatcher.Invoke(() => MessageBox.Show(
+            var result = (MessageBoxResult)Dispatcher.Invoke(() => System.Windows.MessageBox.Show(
                 _window,
                 "Stop all services?",
                 "xp2p",
