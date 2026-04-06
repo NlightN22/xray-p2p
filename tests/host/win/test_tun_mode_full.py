@@ -51,6 +51,32 @@ def _wait_for_client_apply(
         svc.wait_for_service_outcome(client_host, log_path=log_path)
 
 
+def _wait_for_full_tunnel_state(
+    client_host,
+    *,
+    expected_enabled: bool,
+    expected_mode: str,
+    timeout: float = 60.0,
+) -> dict:
+    deadline = time.time() + timeout
+    last_state: dict = {}
+    while time.time() < deadline:
+        state = tun._read_full_tunnel_state(client_host)
+        last_state = state
+        if not state:
+            time.sleep(tun.ROUTE_POLL_INTERVAL)
+            continue
+        enabled = bool(state.get("enabled"))
+        mode = str(state.get("tun_mode") or "").strip().lower()
+        if enabled == expected_enabled and mode == expected_mode:
+            return state
+        time.sleep(tun.ROUTE_POLL_INTERVAL)
+    pytest.fail(
+        "xp2p-client.tun-full.json did not reach expected state.\n"
+        f"Expected: enabled={expected_enabled}, mode={expected_mode}. Last state: {last_state}"
+    )
+
+
 def _preserve_service_log(client_host) -> None:
     script = (
         "$ErrorActionPreference = 'SilentlyContinue'\n"
@@ -204,11 +230,6 @@ def test_windows_client_tun_mode_full_routes(
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
         svc.wait_for_apply_request_set(client_host)
-        pending_cfg = _env.pending_candidate(tun.CLIENT_CONFIG_FILE)
-        client_cfg = _env.read_toml(client_host, pending_cfg).get("client") or {}
-        assert client_cfg.get("tun_mode") == "full", "client.tun_mode was not updated to full"
-        assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
-
         _wait_for_client_apply(
             client_host,
             xp2p_client_runner,
@@ -216,6 +237,13 @@ def test_windows_client_tun_mode_full_routes(
             allow_restart=True,
             log_path=SYNCED_SERVICE_LOG,
         )
+        _wait_for_full_tunnel_state(
+            client_host,
+            expected_enabled=True,
+            expected_mode="full",
+        )
+        client_cfg = _env.read_toml(client_host, tun.CLIENT_CONFIG_FILE).get("client") or {}
+        assert client_cfg.get("full_tunnel_tag") == expected_tag, "client.full_tunnel_tag was not updated"
         net.assert_internet_access(client_host, label="full-tun")
 
         tun_name = tun.client_tun_name(client_host)
