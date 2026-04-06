@@ -52,6 +52,11 @@ func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bo
 	if err != nil {
 		return nil, false, err
 	}
+	if applied {
+		if err := apply.CleanupPending(pendingSet); err != nil {
+			logging.Warn("xp2p: pending cleanup failed", "role", role, "err", err)
+		}
+	}
 	if err := apply.RemoveRequest(reqPath); err != nil {
 		logging.Warn("xp2p: apply request cleanup failed", "path", reqPath, "err", err)
 	}
