@@ -107,8 +107,9 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         if server_pid:
             linux_env.stop_process(server_host, str(server_pid))
             server_pid = None
-        xp2p_server_runner("server", "service", "start", check=True)
-        xp2p_client_runner("client", "service", "start", check=True)
+        _assert_server_config_exists(server_host)
+        xp2p_server_runner("--log-level", "debug", "server", "service", "start", check=True)
+        xp2p_client_runner("--log-level", "debug", "client", "service", "start", check=True)
         _wait_for_apply_request_clear(client_host, timeout_seconds=60.0)
 
         _assert_internet_access(client_host)
@@ -117,11 +118,16 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         _assert_client_state(client_host, server_ip)
         _assert_client_routing(client_host, server_ip)
 
-        heartbeat_state = helpers.wait_for_heartbeat_state(
-            client_host,
-            path=CLIENT_HEARTBEAT_STATE_FILE,
-            timeout_seconds=60.0,
-        )
+        try:
+            heartbeat_state = helpers.wait_for_heartbeat_state(
+                client_host,
+                path=CLIENT_HEARTBEAT_STATE_FILE,
+                timeout_seconds=60.0,
+            )
+        except AssertionError as exc:
+            debug = _deploy_debug(client_host, server_host)
+            deploy_logs = _read_deploy_logs(client_host, server_host)
+            raise AssertionError(f"{exc}\n{debug}\n{deploy_logs}") from exc
         helpers.assert_heartbeat_entry(
             heartbeat_state,
             helpers.expected_proxy_tag(server_ip),
@@ -1167,4 +1173,87 @@ def _deploy_env() -> dict[str, str]:
         "XP2P_SERVER_INSTALL_DIR": DEPLOY_INSTALL_ROOT.as_posix(),
         "XP2P_CONFIG_ROOT": DEPLOY_CONFIG_ROOT.as_posix(),
         "XP2P_LOG_ROOT": DEPLOY_LOG_ROOT.as_posix(),
+        "XP2P_LOG_LEVEL": "debug",
+        "XP2P_GLOBAL_ARGS": "--log-level debug",
     }
+
+
+def _assert_server_config_exists(server_host: Host) -> None:
+    if helpers.path_exists(server_host, SERVER_CONFIG_FILE):
+        return
+    deploy_logs = _read_deploy_logs(None, server_host)
+    debug = _collect_host_debug(server_host, "server")
+    raise AssertionError(
+        "Server config file not found after deploy.\n"
+        f"Expected: {SERVER_CONFIG_FILE}\n"
+        f"{debug}\n{deploy_logs}"
+    )
+
+
+def _read_deploy_logs(client_host: Host | None, server_host: Host | None) -> str:
+    details = []
+    if client_host is not None:
+        tail = _read_optional_log(client_host, CLIENT_DEPLOY_LOG)
+        if tail:
+            details.append(f"{CLIENT_DEPLOY_LOG}:\n{_tail_lines(tail, 200)}")
+    if server_host is not None:
+        tail = _read_optional_log(server_host, SERVER_DEPLOY_LOG)
+        if tail:
+            details.append(f"{SERVER_DEPLOY_LOG}:\n{_tail_lines(tail, 200)}")
+        service_log = DEPLOY_LOG_ROOT / "server" / "service.log"
+        if helpers.path_exists(server_host, service_log):
+            content = helpers.read_text(server_host, service_log)
+            if content:
+                details.append(f"{service_log}:\n{_tail_lines(content, 120)}")
+    if not details:
+        return "Deploy logs: (no logs captured)"
+    return "Deploy logs:\n" + "\n\n".join(details)
+
+
+def _tail_lines(text: str, limit: int) -> str:
+    lines = text.splitlines()
+    if len(lines) <= limit:
+        return "\n".join(lines)
+    return "\n".join(lines[-limit:])
+
+
+def _deploy_debug(client_host: Host, server_host: Host) -> str:
+    return "\n\n".join(
+        [
+            _collect_host_debug(client_host, "client"),
+            _collect_host_debug(server_host, "server"),
+        ]
+    )
+
+
+def _collect_host_debug(host: Host, label: str) -> str:
+    paths = [
+        DEPLOY_INSTALL_ROOT,
+        DEPLOY_CONFIG_ROOT,
+        DEPLOY_CONFIG_ROOT / ".apply",
+        DEPLOY_CONFIG_ROOT / ".apply" / "pending",
+        CLIENT_CONFIG_DIR,
+        SERVER_CONFIG_DIR,
+    ]
+    details = []
+    for path in paths:
+        result = host.run(f"ls -la {shlex.quote(path.as_posix())}")
+        details.append(
+            f"{path} (rc={result.rc}):\n{result.stdout}\n{result.stderr}".rstrip()
+        )
+    result = host.run(
+        "sudo -n /bin/sh -c '"
+        "if [ -f \"/etc/xp2p/.apply/apply.request\" ]; then "
+        "echo \"apply.request:\"; cat /etc/xp2p/.apply/apply.request; fi; "
+        "if [ -f \"/etc/xp2p/.apply/pending/xp2p-client.toml\" ]; then "
+        "echo \"pending xp2p-client.toml:\"; cat /etc/xp2p/.apply/pending/xp2p-client.toml; fi; "
+        "if [ -f \"/etc/xp2p/.apply/pending/xp2p-server.toml\" ]; then "
+        "echo \"pending xp2p-server.toml:\"; cat /etc/xp2p/.apply/pending/xp2p-server.toml; fi; "
+        "if [ -f \"/etc/xp2p/xp2p-client.toml\" ]; then "
+        "echo \"live xp2p-client.toml:\"; cat /etc/xp2p/xp2p-client.toml; fi; "
+        "if [ -f \"/etc/xp2p/xp2p-server.toml\" ]; then "
+        "echo \"live xp2p-server.toml:\"; cat /etc/xp2p/xp2p-server.toml; fi; "
+        "find /etc/xp2p -maxdepth 4 -name \"state-heartbeat*.json\" -print 2>/dev/null'"
+    )
+    details.append(f"apply/heartbeat scan (rc={result.rc}):\n{result.stdout}\n{result.stderr}".rstrip())
+    return f"{label} host debug:\n" + "\n\n".join(details)

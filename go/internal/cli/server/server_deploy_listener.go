@@ -182,6 +182,10 @@ func (s *deployServer) Run(ctx context.Context) error {
 }
 
 func (s *deployServer) applyMode(installDir, configDir string, tunEnabled bool) error {
+	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
+	if _, err := server.EnsureServerXrayConfig(pendingPath); err != nil {
+		return err
+	}
 	updatedPath, err := config.UpdateTunEnabled("", "server", tunEnabled)
 	if err != nil {
 		return err

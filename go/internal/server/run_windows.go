@@ -170,6 +170,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 		onStart,
 		onReady,
 	)
+	if runErr != nil && errors.Is(runErr, context.Canceled) {
+		logging.Info("xp2p: server run canceled")
+		return nil
+	}
 	if runErr != nil && pendingApplied && rollback != nil {
 		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
 			logging.Warn("xp2p: tun ready failed; mode change remains pending", "err", runErr)

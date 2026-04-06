@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -134,7 +135,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 			return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
 		},
 	)
+	if runErr != nil && errors.Is(runErr, context.Canceled) {
+		logging.Info("xp2p: server run canceled")
+		return nil
+	}
 	if runErr != nil && pendingApplied && rollback != nil {
+		logging.Warn("xp2p: server run failed after apply", "err", runErr)
 		if err := rollback.Restore(config.AuditLogPath()); err != nil {
 			logging.Warn("xp2p: rollback failed after apply", "err", err)
 		} else {

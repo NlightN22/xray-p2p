@@ -13,6 +13,10 @@ func ensureServerXrayConfig(configFile string) (xrayconfig.ServerXrayConfig, err
 	return xrayconfig.EnsureServerConfig(configFile, config.AuditLogPath())
 }
 
+func EnsureServerXrayConfig(configFile string) (xrayconfig.ServerXrayConfig, error) {
+	return ensureServerXrayConfig(configFile)
+}
+
 func loadServerXrayConfig(configFile string) (xrayconfig.ServerXrayConfig, error) {
 	cfg, err := xrayconfig.LoadServerConfig(configFile)
 	if err == nil {
