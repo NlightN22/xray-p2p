@@ -39,6 +39,7 @@ CLIENT_DIAG_PORT = "62023"
 BUNDLE_ARTIFACT_ROOT = PurePosixPath("/tmp")
 BUNDLE_MARKER = "bundle-marker.txt"
 BUNDLE_BAD_ROOT = PurePosixPath("/srv/xray-p2p/tests/guest/fixtures/bundle-root")
+DEPLOY_SYNC_ROOT = linux_env.WORK_TREE / ".logs" / "deploy"
 
 
 @pytest.mark.host
@@ -49,6 +50,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
     trojan_user = "deploy-suite@example.com"
     trojan_password = "deploy-pass-123"
 
+    run_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     client_pid = None
     server_pid = None
     try:
@@ -146,6 +148,10 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         )
 
         _run_bundle_checks(client_host, server_host, xp2p_client_runner, server_ip)
+    except Exception:
+        _persist_deploy_artifacts(client_host, run_id, role="client")
+        _persist_deploy_artifacts(server_host, run_id, role="server")
+        raise
     finally:
         if client_pid:
             linux_env.stop_process(client_host, str(client_pid))
@@ -612,9 +618,19 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         wait_for_tun_ready()
 
         reverse_two = helpers.expected_reverse_tag(user_two, server_ip)
-        server_state = _read_server_config(server_host)
-        helpers.assert_server_reverse_state(server_state, reverse_one, user=user_one, host=server_ip)
-        helpers.assert_server_reverse_state(server_state, reverse_two, user=user_two, host=server_ip)
+        _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _wait_for_server_reverse_state(
+            server_host,
+            reverse_one,
+            user=user_one,
+            host_ip=server_ip,
+        )
+        _wait_for_server_reverse_state(
+            server_host,
+            reverse_two,
+            user=user_two,
+            host_ip=server_ip,
+        )
 
         xp2p_server_runner(
             "server",
@@ -1288,3 +1304,61 @@ def _collect_host_debug(host: Host, label: str) -> str:
     )
     details.append(f"apply/heartbeat scan (rc={result.rc}):\n{result.stdout}\n{result.stderr}".rstrip())
     return f"{label} host debug:\n" + "\n\n".join(details)
+
+
+def _persist_deploy_artifacts(host: Host, run_id: str, *, role: str) -> None:
+    if role == "client":
+        paths = [
+            CLIENT_DEPLOY_LOG,
+            DEPLOY_LOG_ROOT / "client" / "service.log",
+            DEPLOY_CONFIG_ROOT / ".apply",
+            DEPLOY_CONFIG_ROOT / "xp2p-client.toml",
+            DEPLOY_CONFIG_ROOT / "xp2p-client.state.json",
+            DEPLOY_INSTALL_ROOT / "config-client",
+            DEPLOY_INSTALL_ROOT / "state-heartbeat-client.json",
+        ]
+    else:
+        paths = [
+            SERVER_DEPLOY_LOG,
+            DEPLOY_LOG_ROOT / "server" / "service.log",
+            DEPLOY_CONFIG_ROOT / ".apply",
+            DEPLOY_CONFIG_ROOT / "xp2p-server.toml",
+            DEPLOY_CONFIG_ROOT / "xp2p-server.state.json",
+            DEPLOY_INSTALL_ROOT / "config-server",
+            DEPLOY_INSTALL_ROOT / "state-heartbeat-server.json",
+        ]
+    dest = DEPLOY_SYNC_ROOT / run_id / role
+    dest_arg = shlex.quote(dest.as_posix())
+    path_args = " ".join(shlex.quote(path.as_posix()) for path in paths)
+    script = (
+        'dest="$1"; shift; '
+        'mkdir -p "$dest"; '
+        'for path in "$@"; do '
+        'if [ -e "$path" ]; then cp -a "$path" "$dest"/; fi; '
+        "done"
+    )
+    host.run(f"sudo -n /bin/sh -c {shlex.quote(script)} -- {dest_arg} {path_args}")
+
+
+def _wait_for_server_reverse_state(
+    host: Host,
+    reverse_tag: str,
+    *,
+    user: str,
+    host_ip: str,
+    timeout_seconds: float = 30.0,
+    poll_interval: float = 1.5,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last_state = None
+    while time.time() < deadline:
+        last_state = _read_server_config(host)
+        try:
+            helpers.assert_server_reverse_state(last_state, reverse_tag, user=user, host=host_ip)
+            return
+        except AssertionError:
+            time.sleep(poll_interval)
+    raise AssertionError(
+        f"Reverse entry {reverse_tag} not recorded in server state after {timeout_seconds:.0f}s.\n"
+        f"Last state: {last_state}"
+    )

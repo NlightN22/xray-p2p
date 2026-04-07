@@ -151,8 +151,10 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
             check=True,
         )
 
-        assert helpers.path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to exist"
-        assert helpers.path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
+        live_cert = helpers.SERVER_CONFIG_DIR / "cert.pem"
+        live_key = helpers.SERVER_CONFIG_DIR / "key.pem"
+        assert helpers.path_exists(server_host, live_cert), "Expected cert.pem to exist"
+        assert helpers.path_exists(server_host, live_key), "Expected key.pem to exist"
 
         inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds)
@@ -161,8 +163,8 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
-        assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
+        assert primary_cert.get("certificateFile") == live_cert.as_posix()
+        assert primary_cert.get("keyFile") == live_key.as_posix()
 
         state_output = _read_cert_state(xp2p_server_runner)
         assert "Status:      OK" in state_output

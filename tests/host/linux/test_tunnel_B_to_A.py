@@ -373,8 +373,8 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_CONFIG_DIR_NAME,
     ):
         time.sleep(2.0)
-        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_PENDING_DIR / "inbounds.json")
-        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_PENDING_DIR / "inbounds.json")
+        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_CONFIG_DIR / "inbounds.json")
         _wait_for_port(env["server_host"], server_socks_port)
         _wait_for_port(env["client_host"], client_socks_port)
         yield
@@ -566,7 +566,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     chain_name = "xray_transparent_prerouting"
     client_listener_port = SERVER_DIAGNOSTICS_PORT
     server_listener_port = CLIENT_DIAGNOSTICS_PORT
-    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_PENDING_DIR / 'inbounds.json')}"
+    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_CONFIG_DIR / 'inbounds.json')}"
     client_nat_runner = _nat_runner(client_host, role="client")
     server_nat_runner = _nat_runner(server_host, role="server")
 
@@ -748,10 +748,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        client_inbounds = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "inbounds.json")
+        client_inbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
         client_dokodemo_ports = _dokodemo_ports(client_inbounds)
         assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
-        server_inbounds = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "inbounds.json")
+        server_inbounds = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 

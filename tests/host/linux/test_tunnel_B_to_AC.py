@@ -290,7 +290,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.CLIENT_CONFIG_DIR_NAME,
                         ):
-                client_socks_port = _socks_port(client_b, helpers.CLIENT_PENDING_DIR / "inbounds.json")
+                client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
                 _wait_for_port(client_b, client_socks_port)
                 for target in (SERVER_A_IP, SERVER_C_IP):
                     result = client_runner(
