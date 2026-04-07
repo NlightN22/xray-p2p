@@ -534,8 +534,7 @@ def _assert_verbose_flag_available(host, command: str) -> None:
     assert "--verbose" in combined, f"{command} --help missing --verbose flag"
 
 
-def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_runner, xp2p_linux_versions):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_runner):
     host_entry_added = False
     redirect_added = False
     service_started = False
@@ -783,11 +782,10 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
             )
 
 
-def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2p_client_runner, xp2p_linux_versions):
+def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2p_client_runner):
     if os.environ.get("XP2P_RUN_DESTRUCTIVE_TESTS", "").strip().lower() not in {"1", "true", "yes"}:
         pytest.skip("Set XP2P_RUN_DESTRUCTIVE_TESTS=1 to run destructive package purge test.")
 
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
     host_entry_added = False
     service_started = False
     package_removed = False
@@ -885,8 +883,7 @@ def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2
             )
 
 
-def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_client_runner, xp2p_linux_versions):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_client_runner):
     linux_env.run_guest_script(
         client_host,
         "scripts/linux/update_hosts_entry.sh",
@@ -952,15 +949,13 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
         )
 
 
-def test_client_verbose_flags_available(client_host, xp2p_linux_versions):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+def test_client_verbose_flags_available(client_host):
     _assert_verbose_flag_available(client_host, "xp2p client mode")
     _assert_verbose_flag_available(client_host, "xp2p client run")
     _assert_verbose_flag_available(client_host, "xp2p client service run")
 
 
-def test_client_redirect_default_route_rejected(client_host, xp2p_client_runner, xp2p_linux_versions):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+def test_client_redirect_default_route_rejected(client_host, xp2p_client_runner):
     _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
 
     ipv4_result = _client_redirect(
@@ -990,8 +985,7 @@ def test_client_redirect_default_route_rejected(client_host, xp2p_client_runner,
     assert "reserved for tun-mode full" in combined
 
 
-def test_client_tun_mode_full_unresolved_endpoint_fails(client_host, xp2p_client_runner, xp2p_linux_versions):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
+def test_client_tun_mode_full_unresolved_endpoint_fails(client_host, xp2p_client_runner):
     install_result = xp2p_client_runner(
         "client",
         "install",

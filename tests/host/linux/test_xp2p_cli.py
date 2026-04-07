@@ -8,9 +8,9 @@ from tests.host.linux import env as linux_env
 @pytest.mark.host
 @pytest.mark.linux
 @pytest.mark.parametrize("machine", linux_env.MACHINE_IDS, ids=linux_env.MACHINE_IDS)
-def test_xp2p_cli_is_installed_and_reports_version(machine: str, linux_host_factory, xp2p_linux_versions):
+def test_xp2p_cli_is_installed_and_reports_version(machine: str, linux_host_factory):
     host = linux_host_factory(machine)
-    versions = xp2p_linux_versions[machine]
+    versions = linux_env.ensure_xp2p_installed_cached(machine, host)
 
     source_version = versions["source"].strip()
     installed_version = versions["installed"].strip()

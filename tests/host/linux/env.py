@@ -161,6 +161,13 @@ def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     return versions
 
 
+def ensure_xp2p_installed_cached(machine: str, host: Host) -> dict[str, str]:
+    cached = _VERSION_CACHE.get(machine)
+    if cached is not None:
+        return cached
+    return ensure_xp2p_installed(machine, host)
+
+
 def run_xp2p(host: Host, *args: str) -> CommandResult:
     quoted_args = " ".join(shlex.quote(arg) for arg in args)
     command = f"sudo -n {INSTALL_PATH.as_posix()}"

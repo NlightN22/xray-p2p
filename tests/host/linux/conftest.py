@@ -18,6 +18,15 @@ def linux_host_factory() -> Callable[[str], Host]:
     return linux_env.machine_host_factory()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def xp2p_linux_install_session(linux_host_factory) -> None:
+    for machine in linux_env.MACHINE_IDS:
+        host = linux_host_factory(machine)
+        linux_env.ensure_xp2p_installed(machine, host)
+        linux_env.run_xp2p(host, "client", "service", "stop")
+        linux_env.run_xp2p(host, "server", "service", "stop")
+
+
 class _LazyLinuxVersions(Mapping[str, dict[str, str]]):
     def __init__(self, host_factory: Callable[[str], Host]) -> None:
         self._host_factory = host_factory

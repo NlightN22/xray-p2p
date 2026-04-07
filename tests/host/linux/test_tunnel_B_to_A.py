@@ -249,9 +249,7 @@ def _socks_port(host, config_path: PurePosixPath) -> int:
 
 
 @pytest.fixture
-def tunnel_environment(linux_host_factory, xp2p_linux_versions, xp2p_full_cleanup):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
-    _ = xp2p_linux_versions[linux_env.DEFAULT_SERVER]
+def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
     server_host = linux_host_factory(linux_env.DEFAULT_CLIENT)
     client_host = linux_host_factory(linux_env.DEFAULT_SERVER)
     server_runner = _runner(server_host)

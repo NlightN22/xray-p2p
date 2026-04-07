@@ -97,10 +97,7 @@ def _install_server(host, runner, host_ip: str):
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_tunnel_B_to_A_and_C(linux_host_factory, xp2p_linux_versions):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
-    _ = xp2p_linux_versions[linux_env.DEFAULT_SERVER]
-    _ = xp2p_linux_versions[linux_env.DEFAULT_AUX]
+def test_tunnel_B_to_A_and_C(linux_host_factory):
     server_a = linux_host_factory(linux_env.DEFAULT_CLIENT)
     client_b = linux_host_factory(linux_env.DEFAULT_SERVER)
     server_c = linux_host_factory(linux_env.DEFAULT_AUX)

@@ -223,20 +223,30 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             timeout=LOG_WAIT_TIMEOUT,
         )
 
-        cert_path = SERVER_CONFIG_DIR / "cert.pem"
-        key_path = SERVER_CONFIG_DIR / "key.pem"
-        assert helpers.path_exists(server_host, cert_path), f"Expected cert at {cert_path}"
-        assert helpers.path_exists(server_host, key_path), f"Expected key at {key_path}"
+        pending_cert_path = helpers.SERVER_PENDING_DIR / "cert.pem"
+        pending_key_path = helpers.SERVER_PENDING_DIR / "key.pem"
+        live_cert_path = SERVER_CONFIG_DIR / "cert.pem"
+        live_key_path = SERVER_CONFIG_DIR / "key.pem"
+        assert helpers.path_exists(server_host, pending_cert_path), f"Expected cert at {pending_cert_path}"
+        assert helpers.path_exists(server_host, pending_key_path), f"Expected key at {pending_key_path}"
 
-        inbounds = helpers.read_json(server_host, SERVER_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "inbounds.json")
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
-        expected_cert_paths = {cert_path.as_posix(), bad_cert.as_posix()}
-        expected_key_paths = {key_path.as_posix(), bad_key.as_posix()}
+        expected_cert_paths = {
+            pending_cert_path.as_posix(),
+            live_cert_path.as_posix(),
+            bad_cert.as_posix(),
+        }
+        expected_key_paths = {
+            pending_key_path.as_posix(),
+            live_key_path.as_posix(),
+            bad_key.as_posix(),
+        }
         assert primary.get("certificateFile") in expected_cert_paths
         assert primary.get("keyFile") in expected_key_paths
     finally:
@@ -253,10 +263,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
     server_host,
     xp2p_client_runner,
     xp2p_server_runner,
-    xp2p_linux_versions,
 ):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
-    _ = xp2p_linux_versions[linux_env.DEFAULT_SERVER]
     server_ip = _detect_host_ipv4(server_host)
     client_ip = helpers.detect_primary_ipv4(client_host)
     user_one = "deploy-tun-one@example.com"
@@ -986,6 +993,9 @@ def _remove_server_install_markers(host: Host) -> None:
     helpers.remove_path(host, SERVER_CONFIG_FILE)
     helpers.remove_path(host, helpers.SERVER_APPLIED_STATE_FILE)
     helpers.remove_path(host, SERVER_CONFIG_DIR / "inbounds.json")
+    helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "inbounds.json")
+    helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "cert.pem")
+    helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "key.pem")
 
 
 def _run_bundle_checks(

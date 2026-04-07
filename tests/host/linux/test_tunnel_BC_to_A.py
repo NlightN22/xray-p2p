@@ -219,10 +219,7 @@ def _assert_server_state_reports_users(
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_tunnel_BC_to_A(linux_host_factory, xp2p_linux_versions):
-    _ = xp2p_linux_versions[linux_env.DEFAULT_CLIENT]
-    _ = xp2p_linux_versions[linux_env.DEFAULT_SERVER]
-    _ = xp2p_linux_versions[linux_env.DEFAULT_AUX]
+def test_tunnel_BC_to_A(linux_host_factory):
     server_host = linux_host_factory(linux_env.DEFAULT_CLIENT)
     client_b = linux_host_factory(linux_env.DEFAULT_SERVER)
     client_c = linux_host_factory(linux_env.DEFAULT_AUX)
