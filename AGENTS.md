@@ -42,6 +42,7 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - For testing shell scripts, use Vagrant when needed.
 - The test environment is located in `infra/vagrant`.
 - The Vagrant environment scheme for shell scripts is located in `infra/vagrant/openwrt/scheme.drawio`.
+- Packages must create required directories during installation. Build scripts must not add directory creation as a workaround for packaging omissions.
 
 ## Go rules
 

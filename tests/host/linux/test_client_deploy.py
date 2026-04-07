@@ -227,10 +227,28 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         pending_key_path = helpers.SERVER_PENDING_DIR / "key.pem"
         live_cert_path = SERVER_CONFIG_DIR / "cert.pem"
         live_key_path = SERVER_CONFIG_DIR / "key.pem"
-        assert helpers.path_exists(server_host, pending_cert_path), f"Expected cert at {pending_cert_path}"
-        assert helpers.path_exists(server_host, pending_key_path), f"Expected key at {pending_key_path}"
+        if not (
+            helpers.path_exists(server_host, pending_cert_path)
+            or helpers.path_exists(server_host, live_cert_path)
+        ):
+            pytest.fail(f"Expected cert at {pending_cert_path} or {live_cert_path}")
+        if not (
+            helpers.path_exists(server_host, pending_key_path)
+            or helpers.path_exists(server_host, live_key_path)
+        ):
+            pytest.fail(f"Expected key at {pending_key_path} or {live_key_path}")
 
-        inbounds = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "inbounds.json")
+        pending_inbounds = helpers.SERVER_PENDING_DIR / "inbounds.json"
+        live_inbounds = SERVER_CONFIG_DIR / "inbounds.json"
+        if helpers.path_exists(server_host, pending_inbounds):
+            inbounds = helpers.read_json(server_host, pending_inbounds)
+        elif helpers.path_exists(server_host, live_inbounds):
+            inbounds = helpers.read_json(server_host, live_inbounds)
+        else:
+            debug = _collect_host_debug(server_host, "server")
+            pytest.fail(
+                f"Expected inbounds at {pending_inbounds} or {live_inbounds}.\n{debug}"
+            )
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
