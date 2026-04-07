@@ -236,7 +236,7 @@ def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: 
 
 
 def _socks_port(host, config_path: PurePosixPath) -> int:
-    data = helpers.read_json(host, config_path)
+    data = _read_json_with_pending(host, config_path)
     for inbound in data.get("inbounds", []) or []:
         if not isinstance(inbound, dict):
             continue
@@ -246,6 +246,13 @@ def _socks_port(host, config_path: PurePosixPath) -> int:
         if isinstance(port_val, int):
             return port_val
     return SOCKS_PORT
+
+
+def _read_json_with_pending(host, path: PurePosixPath) -> dict:
+    pending_path = helpers.pending_path(path)
+    if linux_env.path_exists(host, pending_path):
+        return helpers.read_json(host, pending_path)
+    return helpers.read_json(host, path)
 
 
 @pytest.fixture
@@ -748,10 +755,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        client_inbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        client_inbounds = _read_json_with_pending(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
         client_dokodemo_ports = _dokodemo_ports(client_inbounds)
         assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
-        server_inbounds = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        server_inbounds = _read_json_with_pending(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 

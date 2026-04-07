@@ -113,12 +113,14 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
         xp2p_server_runner("--log-level", "debug", "server", "service", "start", check=True)
         xp2p_client_runner("--log-level", "debug", "client", "service", "start", check=True)
         _wait_for_apply_request_clear(client_host, timeout_seconds=60.0)
+        _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
 
         _assert_internet_access(client_host)
 
         _assert_client_install_artifacts(client_host, server_ip, trojan_user, trojan_password)
         _assert_client_state(client_host, server_ip)
         _assert_client_routing(client_host, server_ip)
+        _wait_for_tunnel_ping(xp2p_client_runner, server_ip)
 
         try:
             heartbeat_state = helpers.wait_for_heartbeat_state(
@@ -482,6 +484,13 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         wait_for_tun_ready()
 
         reverse_one = helpers.expected_reverse_tag(user_one, server_ip)
+        _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _wait_for_server_reverse_state(
+            server_host,
+            reverse_one,
+            user=user_one,
+            host_ip=server_ip,
+        )
         xp2p_client_runner(
             "client",
             "redirect",
@@ -859,6 +868,30 @@ def _assert_internet_access(host: Host) -> None:
         )
 
 
+def _wait_for_tunnel_ping(runner, target: str, *, timeout_seconds: float = 60.0) -> None:
+    deadline = time.time() + timeout_seconds
+    last_result = None
+    while time.time() < deadline:
+        last_result = runner(
+            "ping",
+            target,
+            "-T",
+            "--count",
+            "3",
+            check=False,
+        )
+        stdout = (last_result.stdout or "").lower()
+        if "0% loss" in stdout:
+            return
+        time.sleep(2.0)
+    stdout = last_result.stdout if last_result else ""
+    stderr = last_result.stderr if last_result else ""
+    pytest.fail(
+        "xp2p ping -T did not report zero loss before heartbeat check.\n"
+        f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
+
+
 def _find_trojan_inbound(data: dict) -> dict:
     for inbound in data.get("inbounds", []):
         if inbound.get("protocol") == "trojan":
@@ -1004,6 +1037,13 @@ def _detect_host_ipv4(host: Host) -> str:
 
 def _read_server_config(host: Host) -> dict:
     return helpers.read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+
+
+def _read_server_config_with_pending(host: Host) -> dict:
+    pending_config = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    if linux_env.path_exists(host, pending_config):
+        return helpers.read_toml(host, pending_config).get("server") or {}
+    return _read_server_config(host)
 
 
 def _write_server_config(
@@ -1350,15 +1390,21 @@ def _wait_for_server_reverse_state(
     poll_interval: float = 1.5,
 ) -> None:
     deadline = time.time() + timeout_seconds
-    last_state = None
+    last_pending = None
+    last_live = None
     while time.time() < deadline:
-        last_state = _read_server_config(host)
+        last_pending = _read_server_config_with_pending(host)
+        last_live = _read_server_config(host)
         try:
-            helpers.assert_server_reverse_state(last_state, reverse_tag, user=user, host=host_ip)
+            helpers.assert_server_reverse_state(last_pending, reverse_tag, user=user, host=host_ip)
             return
         except AssertionError:
-            time.sleep(poll_interval)
+            try:
+                helpers.assert_server_reverse_state(last_live, reverse_tag, user=user, host=host_ip)
+                return
+            except AssertionError:
+                time.sleep(poll_interval)
     raise AssertionError(
         f"Reverse entry {reverse_tag} not recorded in server state after {timeout_seconds:.0f}s.\n"
-        f"Last state: {last_state}"
+        f"Last pending: {last_pending}\nLast live: {last_live}"
     )

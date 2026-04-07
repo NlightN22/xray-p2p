@@ -27,6 +27,8 @@ RESOLV_CONF = PurePosixPath("/etc/resolv.conf")
 SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 CLIENT_LIVE_CONFIG = helpers.CLIENT_CONFIG_FILE
 CLIENT_LIVE_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
+CLIENT_PENDING_CONFIG = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
+CLIENT_PENDING_ROUTING = helpers.CLIENT_PENDING_DIR / "routing.json"
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
 
@@ -55,6 +57,11 @@ def _start_service(runner, host) -> None:
     runner("client", "service", "stop")
     runner("client", "service", "start", check=True)
     _wait_for_service_state(runner, "client", expected_active=True)
+
+
+def _restart_service(runner, host) -> None:
+    _stop_service(runner)
+    _start_service(runner, host)
 
 
 def _stop_service(runner) -> None:
@@ -137,11 +144,11 @@ def _wait_for_condition(label: str, predicate, *, timeout: float = SERVICE_TIMEO
     raise AssertionError(f"{label} not reached within {timeout:.0f}s.\n{last_debug}")
 
 
-def _update_client_config(host, **updates) -> None:
-    original = helpers.read_text(host, CLIENT_LIVE_CONFIG)
+def _update_client_config(host, config_path: PurePosixPath, **updates) -> None:
+    original = linux_env.read_text(host, config_path)
     updated = _update_toml_section(original, "client", updates)
     if updated != original:
-        helpers.write_text(host, CLIENT_LIVE_CONFIG, updated)
+        linux_env.write_text(host, config_path, updated)
 
 
 def _update_toml_section(text: str, section: str, updates: dict) -> str:
@@ -457,8 +464,8 @@ def _client_tun_name(host) -> str:
     return tun_name or "xp2pc"
 
 
-def _routing_rules(host) -> list[dict]:
-    data = helpers.read_json(host, CLIENT_LIVE_ROUTING)
+def _routing_rules(host, routing_path: PurePosixPath = CLIENT_LIVE_ROUTING) -> list[dict]:
+    data = helpers.read_json(host, routing_path)
     routing = data.get("routing") or {}
     rules = routing.get("rules") or []
     if not isinstance(rules, list):
@@ -466,8 +473,12 @@ def _routing_rules(host) -> list[dict]:
     return [rule for rule in rules if isinstance(rule, dict)]
 
 
-def _assert_full_tunnel_rule_last(host, outbound_tag: str) -> None:
-    rules = _routing_rules(host)
+def _assert_full_tunnel_rule_last(
+    host,
+    outbound_tag: str,
+    routing_path: PurePosixPath = CLIENT_LIVE_ROUTING,
+) -> None:
+    rules = _routing_rules(host, routing_path)
     assert rules, "routing.json rules list is empty"
     last_rule = rules[-1]
     assert last_rule.get("outboundTag") == outbound_tag, f"Unexpected full-tunnel tag: {last_rule}"
@@ -555,14 +566,14 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
         _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
 
-        original_config = helpers.read_text(client_host, CLIENT_LIVE_CONFIG)
+        original_config = linux_env.read_text(client_host, CLIENT_PENDING_CONFIG)
         original_resolv = helpers.read_text(client_host, RESOLV_CONF)
         expected_tag = helpers.expected_proxy_tag(ENDPOINT_IP)
         resolved_domain_ip = _resolve_ipv4(client_host, ENDPOINT_DOMAIN)
         updated_config = _replace_endpoint_address(original_config, ENDPOINT_DOMAIN, resolved_domain_ip)
         if updated_config != original_config:
-            helpers.write_text(client_host, CLIENT_LIVE_CONFIG, updated_config)
-        _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
+            linux_env.write_text(client_host, CLIENT_PENDING_CONFIG, updated_config)
+        _update_client_config(client_host, CLIENT_PENDING_CONFIG, tun_mode="split", dns_servers=DNS_SERVERS)
         redirect_result = _client_redirect(
             xp2p_client_runner,
             "add",
@@ -596,6 +607,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
                 "xp2p client mode tun full failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
+        _restart_service(xp2p_client_runner, client_host)
         _wait_for_full_tunnel(
             client_host,
             tun_name,
@@ -662,6 +674,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
                 "xp2p client mode tun split failed.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
+        _restart_service(xp2p_client_runner, client_host)
         _wait_for_rollback(
             client_host,
             tun_name,
@@ -683,7 +696,8 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         )
         assert helpers.read_client_config(client_host).get("tun_mode") == "split"
 
-        _update_client_config(client_host, tun_mode="full", dns_servers=DNS_SERVERS)
+        _update_client_config(client_host, CLIENT_LIVE_CONFIG, tun_mode="full", dns_servers=DNS_SERVERS)
+        _restart_service(xp2p_client_runner, client_host)
         _wait_for_full_tunnel(
             client_host,
             tun_name,
@@ -695,6 +709,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         )
 
         _client_mode(xp2p_client_runner, "proxy")
+        _restart_service(xp2p_client_runner, client_host)
         _wait_for_proxy(client_host, tun_name, defaults4, defaults6)
 
         result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", expected_tag, check=False)
@@ -703,6 +718,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
                 "xp2p client mode tun full failed before remove.\n"
                 f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
+        _restart_service(xp2p_client_runner, client_host)
         _wait_for_full_tunnel(
             client_host,
             tun_name,
@@ -741,7 +757,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
 
         _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
         _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
-        _update_client_config(client_host, tun_mode="full", dns_servers=DNS_SERVERS)
+        _update_client_config(client_host, CLIENT_PENDING_CONFIG, tun_mode="full", dns_servers=DNS_SERVERS)
         _start_service(xp2p_client_runner, client_host)
         service_started = True
         _wait_for_full_tunnel(
@@ -758,7 +774,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         if service_started:
             _stop_service(xp2p_client_runner)
         if original_config is not None:
-            helpers.write_text(client_host, CLIENT_LIVE_CONFIG, original_config)
+            linux_env.write_text(client_host, CLIENT_PENDING_CONFIG, original_config)
         if original_resolv is not None:
             helpers.write_text(client_host, RESOLV_CONF, original_resolv)
         if redirect_added and expected_tag:
@@ -802,14 +818,14 @@ def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2
         _install_client_endpoint(xp2p_client_runner, ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
         _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
 
-        original_config = helpers.read_text(client_host, CLIENT_LIVE_CONFIG)
+        original_config = linux_env.read_text(client_host, CLIENT_PENDING_CONFIG)
         original_resolv = helpers.read_text(client_host, RESOLV_CONF)
         expected_tag = helpers.expected_proxy_tag(ENDPOINT_IP)
         resolved_domain_ip = _resolve_ipv4(client_host, ENDPOINT_DOMAIN)
         updated_config = _replace_endpoint_address(original_config, ENDPOINT_DOMAIN, resolved_domain_ip)
         if updated_config != original_config:
-            helpers.write_text(client_host, CLIENT_LIVE_CONFIG, updated_config)
-        _update_client_config(client_host, tun_mode="split", dns_servers=DNS_SERVERS)
+            linux_env.write_text(client_host, CLIENT_PENDING_CONFIG, updated_config)
+        _update_client_config(client_host, CLIENT_PENDING_CONFIG, tun_mode="split", dns_servers=DNS_SERVERS)
 
         _start_service(xp2p_client_runner, client_host)
         service_started = True
@@ -864,11 +880,11 @@ def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2
         if service_started and not package_removed:
             _stop_service(xp2p_client_runner)
         if original_config is not None and not package_removed:
-            helpers.write_text(client_host, CLIENT_LIVE_CONFIG, original_config)
+            linux_env.write_text(client_host, CLIENT_PENDING_CONFIG, original_config)
         if original_resolv is not None:
             helpers.write_text(client_host, RESOLV_CONF, original_resolv)
         if original_config is not None and package_removed:
-            helpers.write_text(client_host, CLIENT_LIVE_CONFIG, original_config)
+            linux_env.write_text(client_host, CLIENT_PENDING_CONFIG, original_config)
         if host_entry_added:
             linux_env.run_guest_script(
                 client_host,
@@ -891,14 +907,14 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
         _install_client_endpoint(xp2p_client_runner, ENDPOINT_DOMAIN, CLIENT_USER, CLIENT_PASSWORD)
         _install_client_endpoint(xp2p_client_runner, SECOND_ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
 
-        config_hash = helpers.file_sha256(client_host, CLIENT_LIVE_CONFIG)
-        routing_hash = helpers.file_sha256(client_host, CLIENT_LIVE_ROUTING)
+        config_hash = linux_env.file_sha256(client_host, CLIENT_PENDING_CONFIG)
+        routing_hash = linux_env.file_sha256(client_host, CLIENT_PENDING_ROUTING)
 
         quiet_result = _client_mode(xp2p_client_runner, "tun", "full", "--quiet", check=False)
         assert quiet_result.rc != 0
-        assert helpers.file_sha256(client_host, CLIENT_LIVE_CONFIG) == config_hash
-        assert helpers.file_sha256(client_host, CLIENT_LIVE_ROUTING) == routing_hash
-        assert helpers.read_client_config(client_host).get("tun_mode") != "full"
+        assert linux_env.file_sha256(client_host, CLIENT_PENDING_CONFIG) == config_hash
+        assert linux_env.file_sha256(client_host, CLIENT_PENDING_ROUTING) == routing_hash
+        assert helpers.read_pending_client_config(client_host).get("tun_mode") != "full"
 
         tag_for_ip = helpers.expected_proxy_tag(ENDPOINT_IP)
         tag_for_domain = helpers.expected_proxy_tag(ENDPOINT_DOMAIN)
@@ -906,20 +922,20 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
 
         result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", tag_for_ip, check=False)
         assert result.rc == 0, f"Mode with --tag failed: {result.stdout}\n{result.stderr}"
-        _assert_full_tunnel_rule_last(client_host, tag_for_ip)
-        assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_ip
+        _assert_full_tunnel_rule_last(client_host, tag_for_ip, CLIENT_PENDING_ROUTING)
+        assert helpers.read_pending_client_config(client_host).get("full_tunnel_tag") == tag_for_ip
 
         result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
         assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
 
         result = _client_mode(xp2p_client_runner, "tun", "full", "--host", ENDPOINT_DOMAIN, check=False)
         assert result.rc == 0, f"Mode with --host failed: {result.stdout}\n{result.stderr}"
-        _assert_full_tunnel_rule_last(client_host, tag_for_domain)
-        assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_domain
+        _assert_full_tunnel_rule_last(client_host, tag_for_domain, CLIENT_PENDING_ROUTING)
+        assert helpers.read_pending_client_config(client_host).get("full_tunnel_tag") == tag_for_domain
 
         result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
         assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"
-        _update_client_config(client_host, full_tunnel_tag="")
+        _update_client_config(client_host, CLIENT_PENDING_CONFIG, full_tunnel_tag="")
 
         entries = _client_list_entries(xp2p_client_runner)
         assert entries, "Expected client list entries for interactive selection"
@@ -930,8 +946,8 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
                 break
         assert selection_index is not None, "Could not locate interactive selection index"
         _run_client_mode_interactive(client_host, str(selection_index))
-        _assert_full_tunnel_rule_last(client_host, tag_for_second)
-        assert helpers.read_client_config(client_host).get("full_tunnel_tag") == tag_for_second
+        _assert_full_tunnel_rule_last(client_host, tag_for_second, CLIENT_PENDING_ROUTING)
+        assert helpers.read_pending_client_config(client_host).get("full_tunnel_tag") == tag_for_second
 
         result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
         assert result.rc == 0, f"Mode split failed: {result.stdout}\n{result.stderr}"

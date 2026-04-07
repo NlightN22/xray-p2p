@@ -289,18 +289,58 @@ def file_sha256(host: Host, path: str | Path | PurePosixPath) -> str:
 
 
 def kill_xp2p_processes(host: Host) -> None:
-    host.run(
-        "sudo -n /bin/sh -c "
-        "'for pattern in "
-        "\"xp2p client run\" "
-        "\"xp2p server run\" "
-        "\"xp2p client deploy\" "
-        "\"xp2p server deploy\" "
-        "\"/etc/xp2p/bin/xray\" "
-        "\"/usr/bin/xp2p\"; do "
-        "pkill -f \"$pattern\" >/dev/null 2>&1 || true; "
-        "done'"
-    )
+    patterns = [
+        "xp2p client run",
+        "xp2p server run",
+        "xp2p client deploy",
+        "xp2p server deploy",
+        "/etc/xp2p/bin/xray",
+        "/usr/bin/xp2p",
+    ]
+    pgrep_patterns = [
+        "[x]p2p client run",
+        "[x]p2p server run",
+        "[x]p2p client deploy",
+        "[x]p2p server deploy",
+        "/etc/xp2p/bin/[x]ray",
+        "/usr/bin/[x]p2p",
+    ]
+    for pattern in patterns:
+        quoted = shlex.quote(pattern)
+        host.run(
+            "sudo -n /bin/sh -c "
+            "'pkill -f \"$1\" >/dev/null 2>&1 || true' "
+            f"-- {quoted}"
+        )
+
+    for _ in range(10):
+        running = []
+        for pattern in pgrep_patterns:
+            quoted = shlex.quote(pattern)
+            result = host.run(
+                "sudo -n /bin/sh -c "
+                "'pgrep -f \"$1\" >/dev/null 2>&1' "
+                f"-- {quoted}"
+            )
+            if result.rc == 0:
+                running.append(pattern)
+        if not running:
+            return
+        time.sleep(1)
+
+    details = ["xp2p process cleanup failed"]
+    for pattern in running:
+        quoted = shlex.quote(pattern)
+        result = host.run(
+            "sudo -n /bin/sh -c "
+            "'pgrep -af \"$1\" || true' "
+            f"-- {quoted}"
+        )
+        if result.stdout:
+            details.append(f"still running: {pattern}\n{result.stdout.strip()}")
+        else:
+            details.append(f"still running: {pattern}")
+    raise RuntimeError("\n".join(details))
 
 
 @contextmanager

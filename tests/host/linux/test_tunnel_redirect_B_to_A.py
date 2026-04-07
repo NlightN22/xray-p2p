@@ -113,6 +113,140 @@ def _combined_output(result) -> str:
     return f"{result.stdout}\n{result.stderr}".lower()
 
 
+def _diag_cmd(host, label: str, command: str) -> str:
+    result = host.run(command)
+    header = f"{label} (rc={result.rc})"
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+    return f"{header}\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+
+
+def _collect_tunnel_diag(server_host, client_host) -> str:
+    sections = []
+    targets = [("server", server_host), ("client", client_host)]
+    for label, host in targets:
+        sections.append(f"== {label} host: {host.backend.hostname} ==")
+        sections.append(_diag_cmd(host, "date", "date -Iseconds || date"))
+        sections.append(_diag_cmd(host, "processes", "ps -ef | egrep 'xp2p|xray' | egrep -v 'egrep' || true"))
+        sections.append(_diag_cmd(host, "sockets", "sudo -n ss -lntp || true"))
+        sections.append(_diag_cmd(host, "ls /etc/xp2p", "sudo -n ls -la /etc/xp2p 2>/dev/null || true"))
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /etc/xp2p/config-client",
+                "sudo -n ls -la /etc/xp2p/config-client 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /etc/xp2p/config-client/.apply",
+                "sudo -n ls -la /etc/xp2p/config-client/.apply 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /etc/xp2p/config-client/.apply/pending",
+                "sudo -n ls -la /etc/xp2p/config-client/.apply/pending 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /etc/xp2p/config-server",
+                "sudo -n ls -la /etc/xp2p/config-server 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /etc/xp2p/config-server/.apply",
+                "sudo -n ls -la /etc/xp2p/config-server/.apply 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /etc/xp2p/config-server/.apply/pending",
+                "sudo -n ls -la /etc/xp2p/config-server/.apply/pending 2>/dev/null || true",
+            )
+        )
+        sections.append(_diag_cmd(host, "ls /var/log/xp2p", "sudo -n ls -la /var/log/xp2p 2>/dev/null || true"))
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /var/log/xp2p/client",
+                "sudo -n ls -la /var/log/xp2p/client 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "ls /var/log/xp2p/server",
+                "sudo -n ls -la /var/log/xp2p/server 2>/dev/null || true",
+            )
+        )
+        sections.append(_diag_cmd(host, "ls /tmp", "sudo -n ls -la /tmp 2>/dev/null || true"))
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /tmp/xp2p-client-run.log",
+                "sudo -n cat /tmp/xp2p-client-run.log 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /tmp/xp2p-server-run.log",
+                "sudo -n cat /tmp/xp2p-server-run.log 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /var/log/xp2p/client/service.log",
+                "sudo -n cat /var/log/xp2p/client/service.log 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /var/log/xp2p/server/service.log",
+                "sudo -n cat /var/log/xp2p/server/service.log 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /etc/xp2p/config-client/inbounds.json",
+                "sudo -n cat /etc/xp2p/config-client/inbounds.json 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /etc/xp2p/config-client/.apply/pending/inbounds.json",
+                "sudo -n cat /etc/xp2p/config-client/.apply/pending/inbounds.json 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /etc/xp2p/config-server/inbounds.json",
+                "sudo -n cat /etc/xp2p/config-server/inbounds.json 2>/dev/null || true",
+            )
+        )
+        sections.append(
+            _diag_cmd(
+                host,
+                "cat /etc/xp2p/config-server/.apply/pending/inbounds.json",
+                "sudo -n cat /etc/xp2p/config-server/.apply/pending/inbounds.json 2>/dev/null || true",
+            )
+        )
+    return "\n".join(sections)
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_tunnel_redirect_B_to_A(linux_host_factory):
@@ -228,8 +362,14 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
                 "--tunnel",
                 "--count",
                 "3",
-                check=True,
+                check=False,
             )
+            if redirected_ping.rc != 0:
+                pytest.fail(
+                    "xp2p ping through SOCKS tunnel failed after redirect add.\n"
+                    f"STDOUT:\n{redirected_ping.stdout}\nSTDERR:\n{redirected_ping.stderr}\n"
+                    f"{_collect_tunnel_diag(server_host, client_host)}"
+                )
             assert "0% loss" in _combined_output(redirected_ping)
 
             domain_before_rule = client_runner(
@@ -284,7 +424,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
         ).stdout or ""
         assert DIAG_DOMAIN in redirect_list
 
-        routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        routing = helpers.read_pending_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_domain_redirect_rule(routing, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP))
 
         client_runner(
@@ -302,7 +442,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
             check=True,
         )
 
-        routing_after_domain_removal = helpers.read_json(
+        routing_after_domain_removal = helpers.read_pending_json(
             client_host, helpers.CLIENT_CONFIG_DIR / "routing.json"
         )
         helpers.assert_redirect_rule(routing_after_domain_removal, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
@@ -317,8 +457,14 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
                 "--tunnel",
                 "--count",
                 "3",
-                check=True,
+                check=False,
             )
+            if redirected_ping_after_domain.rc != 0:
+                pytest.fail(
+                    "xp2p ping through SOCKS tunnel failed after domain removal.\n"
+                    f"STDOUT:\n{redirected_ping_after_domain.stdout}\nSTDERR:\n{redirected_ping_after_domain.stderr}\n"
+                    f"{_collect_tunnel_diag(server_host, client_host)}"
+                )
             assert "0% loss" in _combined_output(redirected_ping_after_domain)
 
         client_runner(
@@ -336,7 +482,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
             check=True,
         )
 
-        routing_after_remove = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        routing_after_remove = helpers.read_pending_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_no_redirect_rule(routing_after_remove, DIAG_CIDR)
         helpers.assert_no_domain_redirect_rule(routing_after_remove, DIAG_DOMAIN)
 
