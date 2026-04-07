@@ -8,5 +8,9 @@ fi
 
 target=$1
 encoded=$2
-mkdir -p "$(dirname "$target")"
+target_dir=$(dirname "$target")
+if [ ! -d "$target_dir" ]; then
+  echo "Destination directory does not exist: $target_dir" >&2
+  exit 3
+fi
 printf '%s' "$encoded" | base64 -d >"$target"

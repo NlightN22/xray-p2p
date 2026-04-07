@@ -137,13 +137,12 @@ def xp2p_full_cleanup(openwrt_host_factory):
             helpers.SERVER_HEARTBEAT_STATE_FILE,
             helpers.CLIENT_CONFIG_DIR / "inbounds.json",
             helpers.SERVER_CONFIG_DIR / "inbounds.json",
-            helpers.LOG_ROOT,
             PurePosixPath("/tmp/xp2p-client-deploy.log"),
             PurePosixPath("/tmp/xp2p-server-deploy.log"),
         ]
         quoted_paths = " ".join(shlex.quote(path.as_posix()) for path in cleanup_paths)
         host.run(f"/bin/sh -c 'rm -rf -- \"$@\"' -- {quoted_paths}")
-        openwrt_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", helpers.LOG_ROOT.as_posix(), "0777")
+        helpers._clear_log_root(host)
 
     for host in hosts:
         _cleanup_host(host)

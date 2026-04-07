@@ -12,7 +12,6 @@ DEPLOY_LINK=$3
 shift 3 || true
 
 : >"$LOG_PATH"
-chmod 600 "$LOG_PATH"
 
 ENV_ARGS=""
 EXTRA_ARGS=""

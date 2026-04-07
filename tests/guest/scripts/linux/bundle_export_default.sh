@@ -11,7 +11,10 @@ role=$2
 config_root=${3:-"-"}
 pattern="xp2p-${role}-backup-*.tar.gz"
 
-mkdir -p "$cwd"
+if [ ! -d "$cwd" ]; then
+  echo "Output directory is missing: $cwd" >&2
+  exit 1
+fi
 cd "$cwd"
 
 shopt -s nullglob

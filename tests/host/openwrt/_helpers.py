@@ -78,9 +78,7 @@ def cleanup_client_install(
         "--quiet",
     )
     print("client remove done")
-    remove_path(host, LOG_ROOT)
-    print(f"client log root cleared: {LOG_ROOT.as_posix()}")
-    openwrt_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
+    _clear_log_root(host)
     print("==== cleanup client done ====")
 
 
@@ -105,10 +103,20 @@ def cleanup_server_install(
         "--quiet",
     )
     print("server remove done")
-    remove_path(host, LOG_ROOT)
-    print(f"server log root cleared: {LOG_ROOT.as_posix()}")
-    openwrt_env.run_guest_script(host, "scripts/linux/ensure_dir.sh", LOG_ROOT.as_posix(), "0777")
+    _clear_log_root(host)
     print("==== cleanup server done ====")
+
+
+def _clear_log_root(host: Host) -> None:
+    target = shlex.quote(LOG_ROOT.as_posix())
+    host.run(
+        "/bin/sh -c "
+        "'if [ -d \"$1\" ]; then "
+        "rm -rf \"$1\"/* \"$1\"/.[!.]* \"$1\"/..?* >/dev/null 2>&1 || true; "
+        "fi' "
+        f"-- {target}"
+    )
+    print(f"log root cleared: {LOG_ROOT.as_posix()}")
 
 
 def find_tun_inbound(data: dict) -> dict | None:
@@ -229,7 +237,9 @@ def dump_install_dirs(host: Host, label: str) -> None:
 def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:
     target = _posix(_pending_candidate(_as_path(path)))
     directory = PurePosixPath(target).parent.as_posix()
-    host.run(f"mkdir -p {shlex.quote(directory)}")
+    check = host.run(f"test -d {shlex.quote(directory)}")
+    if check.rc != 0:
+        raise RuntimeError(f"Parent directory does not exist: {directory}")
     marker = "XP2P_EOF"
     command = (
         f"cat <<'{marker}' > {shlex.quote(target)}\n"

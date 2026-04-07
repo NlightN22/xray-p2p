@@ -15,7 +15,6 @@ TROJAN_PORT=$6
 shift 6 || true
 
 : >"$LOG_PATH"
-chmod 600 "$LOG_PATH"
 
 EXTRA_ARGS="$*"
 set -- client deploy --host "$REMOTE_HOST" --port "$DEPLOY_PORT" --user "$TROJAN_USER" --password "$TROJAN_PASSWORD"

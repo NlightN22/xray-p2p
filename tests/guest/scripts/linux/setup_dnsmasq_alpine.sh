@@ -30,7 +30,10 @@ if [ -z "$installer" ]; then
   exit 1
 fi
 
-chmod +x "$installer"
+if [ ! -x "$installer" ]; then
+  echo "dnsmasq installer is not executable: $installer" >&2
+  exit 3
+fi
 
 echo "Using dnsmasq installer: $installer"
 if [ -n "$timeout_cmd" ]; then

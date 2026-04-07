@@ -15,7 +15,6 @@ TROJAN_PORT=$6
 shift 6 || true
 
 touch "$LOG_PATH"
-chmod 600 "$LOG_PATH"
 
 GLOBAL_ARGS=()
 if [ -n "${XP2P_GLOBAL_ARGS:-}" ]; then

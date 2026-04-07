@@ -96,10 +96,6 @@ install_package() {
 
 install_package
 if [ ! -x "$INSTALL_BIN" ]; then
-  echo "xp2p binary is not executable: $(ls -l "$INSTALL_BIN" 2>/dev/null || true)" >&2
-  sudo -n chmod +x "$INSTALL_BIN" >/dev/null 2>&1 || true
-fi
-if [ ! -x "$INSTALL_BIN" ]; then
   echo "xp2p binary is still not executable: $(ls -l "$INSTALL_BIN" 2>/dev/null || true)" >&2
   emit_versions "$SOURCE_VERSION" ""
   exit 3

@@ -36,9 +36,9 @@ SERVER_TUN_CIDR = "198.18.0.4/30"
 SERVER_DEPLOY_DIAG_PORT = "62032"
 SERVER_DIAG_PORT = "62022"
 CLIENT_DIAG_PORT = "62023"
-BUNDLE_ARTIFACT_ROOT = PurePosixPath("/srv/xray-p2p/build/artifacts/bundle")
+BUNDLE_ARTIFACT_ROOT = PurePosixPath("/tmp")
 BUNDLE_MARKER = "bundle-marker.txt"
-BUNDLE_BAD_ROOT = BUNDLE_ARTIFACT_ROOT / "bad-root"
+BUNDLE_BAD_ROOT = PurePosixPath("/srv/xray-p2p/tests/guest/fixtures/bundle-root")
 
 
 @pytest.mark.host
@@ -1022,18 +1022,6 @@ def _run_bundle_checks(
     client_runner,
     server_ip: str,
 ) -> None:
-    linux_env.run_guest_script(
-        client_host,
-        "scripts/linux/ensure_dir.sh",
-        BUNDLE_ARTIFACT_ROOT.as_posix(),
-        "0777",
-    )
-    linux_env.run_guest_script(
-        server_host,
-        "scripts/linux/ensure_dir.sh",
-        BUNDLE_ARTIFACT_ROOT.as_posix(),
-        "0777",
-    )
     _run_bundle_explicit(client_host, "client", CLIENT_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
     _run_bundle_explicit(server_host, "server", SERVER_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
     _assert_tunnel_ping(client_runner, server_ip, "after explicit bundle import")
@@ -1133,8 +1121,9 @@ def _run_bundle_defaults(
 
 
 def _run_bundle_negative(host: Host) -> None:
-    helpers.remove_path(host, BUNDLE_BAD_ROOT)
-    linux_env.run_guest_script(host, "scripts/linux/bundle_setup.sh", BUNDLE_BAD_ROOT.as_posix())
+    if not helpers.path_exists(host, BUNDLE_BAD_ROOT / "config-client" / "inbounds.json"):
+        pytest.fail(f"Bundle fixture root missing at {BUNDLE_BAD_ROOT}")
+    host.run(f"/bin/sh -c 'rm -rf \"{BUNDLE_BAD_ROOT.as_posix()}.bak-\"*' || true")
     bad_archive = BUNDLE_ARTIFACT_ROOT / "bad-traversal.zip"
     linux_env.run_guest_script(
         host,

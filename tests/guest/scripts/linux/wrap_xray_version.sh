@@ -19,6 +19,7 @@ if [ ! -f "$BACKUP_PATH" ]; then
   mv "$XRAY_PATH" "$BACKUP_PATH"
 fi
 
+cp "$BACKUP_PATH" "$XRAY_PATH"
 cat >"$XRAY_PATH" <<EOF
 #!/bin/sh
 if [ "\${1:-}" = "-version" ] || [ "\${1:-}" = "--version" ]; then
@@ -27,5 +28,3 @@ if [ "\${1:-}" = "-version" ] || [ "\${1:-}" = "--version" ]; then
 fi
 exec "${BACKUP_PATH}" "\$@"
 EOF
-
-chmod +x "$XRAY_PATH"

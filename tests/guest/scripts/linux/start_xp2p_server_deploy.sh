@@ -12,7 +12,6 @@ DEPLOY_LINK=$3
 shift 3 || true
 
 touch "$LOG_PATH"
-chmod 600 "$LOG_PATH"
 
 GLOBAL_ARGS=()
 if [ -n "${XP2P_GLOBAL_ARGS:-}" ]; then

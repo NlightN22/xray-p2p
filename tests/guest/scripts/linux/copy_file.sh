@@ -14,5 +14,9 @@ if [ ! -f "$src" ]; then
   exit 3
 fi
 
-mkdir -p "$(dirname "$dst")"
+dst_dir=$(dirname "$dst")
+if [ ! -d "$dst_dir" ]; then
+  echo "Destination directory does not exist: $dst_dir" >&2
+  exit 3
+fi
 cp "$src" "$dst"

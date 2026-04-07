@@ -118,7 +118,12 @@ def _install_marker(marker: str, output: str | None) -> str | None:
 
 def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     global _DEB_BUILD_READY
-    host.run("sudo -n chmod +x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh >/dev/null 2>&1 || true")
+    exec_check = host.run("test -x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh")
+    if exec_check.rc != 0:
+        raise RuntimeError(
+            "build_deb_xp2p.sh is not executable on the guest. "
+            "Fix the repository permissions before running tests."
+        )
 
     install_timeout = 600
     if _DEB_BUILD_READY:
@@ -258,7 +263,8 @@ def write_text(host: Host, path: str | Path | PurePosixPath, content: str) -> No
     quoted_content = shlex.quote(encoded)
     result = host.run(
         "sudo -n /bin/sh -c "
-        "'mkdir -p \"$(dirname \"$1\")\"; printf %s \"$2\" | base64 -d >\"$1\"' "
+        "'if [ ! -d \"$(dirname \"$1\")\" ]; then exit 3; fi; "
+        "printf %s \"$2\" | base64 -d >\"$1\"' "
         f"-- {quoted_path} {quoted_content}"
     )
     if result.rc != 0:

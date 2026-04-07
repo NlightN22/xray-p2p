@@ -8,7 +8,10 @@ fi
 
 root=$1
 
-mkdir -p "$root/config-client" "$root/config-client/nested" "$root/config-server"
+if [ ! -d "$root/config-client" ] || [ ! -d "$root/config-client/nested" ] || [ ! -d "$root/config-server" ]; then
+  echo "Expected bundle fixture directories are missing under $root" >&2
+  exit 3
+fi
 
 cat >"$root/config-client/inbounds.json" <<'EOF'
 {"in":1}
