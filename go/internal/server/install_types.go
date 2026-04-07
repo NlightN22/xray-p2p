@@ -56,12 +56,18 @@ type CertificateOptions struct {
 
 // RunOptions controls execution of the xray-core process.
 type RunOptions struct {
-	InstallDir   string
-	ConfigDir    string
-	TunEnabled   bool
-	TunName      string
-	TunMTU       int
-	TunAddr      string
+	InstallDir string
+	ConfigDir  string
+	TunEnabled bool
+	TunName    string
+	TunMTU     int
+	TunAddr    string
+}
+
+// DeployRunOptions controls execution of xray-core during deploy without applying pending config.
+type DeployRunOptions struct {
+	InstallDir string
+	ConfigDir  string
 }
 
 // ServiceOptions controls execution of the managed server service.

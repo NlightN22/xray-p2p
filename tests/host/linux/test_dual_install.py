@@ -179,4 +179,24 @@ def test_client_and_server_install_support_extended_arguments(server_host):
         roles = _read_roles(server_host)
         assert {"client", "server"} <= set(roles.keys())
     finally:
-        pass
+        run(
+            "server",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            custom_server_config,
+            "--ignore-missing",
+            "--quiet",
+        )
+        run(
+            "client",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            custom_client_config,
+            "--all",
+            "--ignore-missing",
+            "--quiet",
+        )
