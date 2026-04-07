@@ -52,6 +52,7 @@ func RunDeploy(ctx context.Context, opts DeployRunOptions) error {
 		configDir,
 		configDir,
 		nil,
+		nil,
 		func(readyCtx context.Context) error {
 			addr, err := resolveServerSocksAddress(configFile)
 			if err != nil {
