@@ -122,7 +122,7 @@ def assert_reverse_cli_output(
 
 
 def read_json(host: Host, path: PurePosixPath | str) -> dict:
-    return linux_env.read_json(host, _resolve_config_path(host, _as_path(path)))
+    return linux_env.read_json(host, _as_path(path))
 
 
 def read_toml(host: Host, path: PurePosixPath) -> dict:
@@ -141,7 +141,7 @@ def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
 
 
 def read_text(host: Host, path: PurePosixPath | str) -> str:
-    return linux_env.read_text(host, _resolve_config_path(host, _as_path(path)))
+    return linux_env.read_text(host, _as_path(path))
 
 
 def path_exists(host: Host, path: PurePosixPath | str) -> bool:

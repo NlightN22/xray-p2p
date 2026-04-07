@@ -125,9 +125,18 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
                 timeout_seconds=60.0,
             )
         except AssertionError as exc:
+            ping = xp2p_client_runner(
+                "ping",
+                server_ip,
+                "-T",
+                "--count",
+                "3",
+                check=False,
+            )
+            ping_output = f"xp2p ping -T:\nSTDOUT:\n{ping.stdout}\nSTDERR:\n{ping.stderr}"
             debug = _deploy_debug(client_host, server_host)
             deploy_logs = _read_deploy_logs(client_host, server_host)
-            raise AssertionError(f"{exc}\n{debug}\n{deploy_logs}") from exc
+            raise AssertionError(f"{exc}\n{ping_output}\n{debug}\n{deploy_logs}") from exc
         helpers.assert_heartbeat_entry(
             heartbeat_state,
             helpers.expected_proxy_tag(server_ip),
@@ -1196,6 +1205,11 @@ def _read_deploy_logs(client_host: Host | None, server_host: Host | None) -> str
         tail = _read_optional_log(client_host, CLIENT_DEPLOY_LOG)
         if tail:
             details.append(f"{CLIENT_DEPLOY_LOG}:\n{_tail_lines(tail, 200)}")
+        service_log = DEPLOY_LOG_ROOT / "client" / "service.log"
+        if helpers.path_exists(client_host, service_log):
+            content = helpers.read_text(client_host, service_log)
+            if content:
+                details.append(f"{service_log}:\n{_tail_lines(content, 120)}")
     if server_host is not None:
         tail = _read_optional_log(server_host, SERVER_DEPLOY_LOG)
         if tail:

@@ -43,6 +43,32 @@ When a command updates configuration:
 This ensures that apply can generate all required runtime files (inbounds,
 outbounds, routing, logs) from a complete config snapshot.
 
+## Deploy Flow (Client + Server)
+
+This section describes the expected deploy sequence and where pending data
+is written.
+
+1. Client deploy generates a deploy link (`trojan://...`) and waits for the
+   server to connect.
+2. Server deploy receives the encrypted manifest, validates it, and prepares
+   the server-side pending config:
+   - `CONFIG_ROOT/.apply/pending/xp2p-server.toml` (full `server.xray`)
+   - `config-server/.apply/pending/` with `inbounds.json`, `outbounds.json`,
+     `routing.json`, `logs.json`, and cert/key files
+3. Server deploy adds or updates the user in the pending config and writes
+   `apply.request` with role `server`.
+4. Client deploy receives the link and installs locally into pending:
+   - `CONFIG_ROOT/.apply/pending/xp2p-client.toml` (full `client.xray`)
+   - `config-client/.apply/pending/` with `inbounds.json`, `outbounds.json`,
+     `routing.json`, `logs.json`
+5. Client deploy writes `apply.request` with role `client`.
+6. If the client was already installed, the deploy flow updates the existing
+   endpoint in pending instead of creating a new install root.
+7. Deploy does not start services. The operator starts services explicitly
+   (for example, `xp2p client service start` and `xp2p server service start`).
+8. Service layer applies pending config to live files, removes
+   `apply.request`, and clears pending artifacts on success.
+
 ## Apply Request
 
 The apply trigger file is created at:

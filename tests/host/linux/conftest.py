@@ -121,57 +121,66 @@ def xp2p_full_cleanup(request, linux_host_factory):
 
     hosts = [linux_host_factory(machine) for machine in sorted(needed)]
 
-    def _cleanup_host(host: Host) -> None:
-        runner = _xp2p_runner(host)
-        runner(
-            "client",
-            "remove",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            "--all",
-            "--ignore-missing",
-        )
-        runner(
-            "server",
-            "remove",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--ignore-missing",
-        )
-        runner("client", "service", "stop")
-        runner("server", "service", "stop")
-        linux_env.kill_xp2p_processes(host)
-        root = helpers.CONFIG_ROOT.as_posix()
-        quoted_root = shlex.quote(root)
-        host.run(
-            "sudo -n /bin/sh -c "
-            "'for path in \"$1\".bak-*; do [ -e \"$path\" ] || continue; rm -rf \"$path\"; done' "
-            f"-- {quoted_root}"
-        )
-        bundle_artifacts = linux_env.WORK_TREE / "build" / "artifacts" / "bundle"
-        cleanup_paths = [
-            helpers.CONFIG_ROOT / ".apply",
-            helpers.CLIENT_CONFIG_FILE,
-            helpers.SERVER_CONFIG_FILE,
-            helpers.CLIENT_APPLIED_STATE_FILE,
-            helpers.SERVER_APPLIED_STATE_FILE,
-            helpers.CLIENT_HEARTBEAT_STATE_FILE,
-            helpers.SERVER_HEARTBEAT_STATE_FILE,
-            helpers.CLIENT_CONFIG_DIR / "inbounds.json",
-            helpers.SERVER_CONFIG_DIR / "inbounds.json",
-                            *helpers.SERVICE_LOG_FILES,
-            helpers.CONFIG_ROOT / "bundle-marker.txt",
-            bundle_artifacts,
-            PurePosixPath("/tmp/xp2p-client-deploy.log"),
-            PurePosixPath("/tmp/xp2p-server-deploy.log"),
-        ]
-        quoted_paths = " ".join(shlex.quote(path.as_posix()) for path in cleanup_paths)
-        host.run(f"sudo -n /bin/sh -c 'rm -rf -- \"$@\"' -- {quoted_paths}")
-
     for host in hosts:
         _cleanup_host(host)
     yield
+
+
+@pytest.fixture(scope="session", autouse=True)
+def xp2p_session_cleanup(linux_host_factory):
+    yield
+    hosts = [linux_host_factory(machine) for machine in linux_env.MACHINE_IDS]
+    for host in hosts:
+        _cleanup_host(host)
+
+
+def _cleanup_host(host: Host) -> None:
+    runner = _xp2p_runner(host)
+    runner(
+        "client",
+        "remove",
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.CLIENT_CONFIG_DIR_NAME,
+        "--all",
+        "--ignore-missing",
+    )
+    runner(
+        "server",
+        "remove",
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.SERVER_CONFIG_DIR_NAME,
+        "--ignore-missing",
+    )
+    runner("client", "service", "stop")
+    runner("server", "service", "stop")
+    linux_env.kill_xp2p_processes(host)
+    root = helpers.CONFIG_ROOT.as_posix()
+    quoted_root = shlex.quote(root)
+    host.run(
+        "sudo -n /bin/sh -c "
+        "'for path in \"$1\".bak-*; do [ -e \"$path\" ] || continue; rm -rf \"$path\"; done' "
+        f"-- {quoted_root}"
+    )
+    bundle_artifacts = linux_env.WORK_TREE / "build" / "artifacts" / "bundle"
+    cleanup_paths = [
+        helpers.CONFIG_ROOT / ".apply",
+        helpers.CLIENT_CONFIG_FILE,
+        helpers.SERVER_CONFIG_FILE,
+        helpers.CLIENT_APPLIED_STATE_FILE,
+        helpers.SERVER_APPLIED_STATE_FILE,
+        helpers.CLIENT_HEARTBEAT_STATE_FILE,
+        helpers.SERVER_HEARTBEAT_STATE_FILE,
+        helpers.CLIENT_CONFIG_DIR / "inbounds.json",
+        helpers.SERVER_CONFIG_DIR / "inbounds.json",
+        *helpers.SERVICE_LOG_FILES,
+        helpers.CONFIG_ROOT / "bundle-marker.txt",
+        bundle_artifacts,
+        PurePosixPath("/tmp/xp2p-client-deploy.log"),
+        PurePosixPath("/tmp/xp2p-server-deploy.log"),
+    ]
+    quoted_paths = " ".join(shlex.quote(path.as_posix()) for path in cleanup_paths)
+    host.run(f"sudo -n /bin/sh -c 'rm -rf -- \"$@\"' -- {quoted_paths}")
