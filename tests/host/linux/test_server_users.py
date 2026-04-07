@@ -6,7 +6,7 @@ import pytest
 
 from tests.host.linux import _helpers as helpers
 
-SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
+SERVER_INBOUNDS = helpers.SERVER_PENDING_DIR / "inbounds.json"
 
 
 def _trojan_clients(server_host) -> list[dict]:

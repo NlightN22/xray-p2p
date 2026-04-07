@@ -6,12 +6,12 @@ import pytest
 
 from tests.host.linux import _helpers as helpers
 
-SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
-SERVER_OUTBOUNDS = helpers.SERVER_CONFIG_DIR / "outbounds.json"
-SERVER_LOGS_JSON = helpers.SERVER_CONFIG_DIR / "logs.json"
-SERVER_ROUTING_JSON = helpers.SERVER_CONFIG_DIR / "routing.json"
-SERVER_CERT_DEST = helpers.SERVER_CONFIG_DIR / "cert.pem"
-SERVER_KEY_DEST = helpers.SERVER_CONFIG_DIR / "key.pem"
+SERVER_INBOUNDS = helpers.SERVER_PENDING_DIR / "inbounds.json"
+SERVER_OUTBOUNDS = helpers.SERVER_PENDING_DIR / "outbounds.json"
+SERVER_LOGS_JSON = helpers.SERVER_PENDING_DIR / "logs.json"
+SERVER_ROUTING_JSON = helpers.SERVER_PENDING_DIR / "routing.json"
+SERVER_CERT_DEST = helpers.SERVER_PENDING_DIR / "cert.pem"
+SERVER_KEY_DEST = helpers.SERVER_PENDING_DIR / "key.pem"
 FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
 FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
@@ -367,8 +367,8 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
 @pytest.mark.host
 @pytest.mark.linux
 def test_server_cert_set_rejects_directory_paths(server_host, xp2p_server_runner):
-    cert_dir = PurePosixPath("/tmp/xp2p-cert-dir")
-    key_dir = PurePosixPath("/tmp/xp2p-key-dir")
+    cert_dir = PurePosixPath("/tmp")
+    key_dir = PurePosixPath("/tmp")
     try:
         xp2p_server_runner(
             "server",
@@ -384,9 +384,6 @@ def test_server_cert_set_rejects_directory_paths(server_host, xp2p_server_runner
             "--force",
             check=True,
         )
-
-        helpers.write_text(server_host, cert_dir / "dummy.txt", "cert")
-        helpers.write_text(server_host, key_dir / "dummy.txt", "key")
 
         result = xp2p_server_runner(
             "server",
@@ -409,8 +406,7 @@ def test_server_cert_set_rejects_directory_paths(server_host, xp2p_server_runner
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
     finally:
-        helpers.remove_path(server_host, cert_dir)
-        helpers.remove_path(server_host, key_dir)
+        pass
 
 
 @pytest.mark.host

@@ -294,8 +294,8 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
         assert credential["link"], "Expected trojan link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
 
-        server_state = helpers.read_server_config(server_host)
-        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        server_state = helpers.read_pending_server_config(server_host)
+        server_routing = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "routing.json")
         helpers.assert_server_reverse_state(
             server_state,
             reverse_tag,
@@ -316,8 +316,8 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
             "--force",
             check=True,
         )
-        client_state = helpers.read_client_config(client_host)
-        client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        client_state = helpers.read_pending_client_config(client_host)
+        client_routing = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
         helpers.assert_client_reverse_state(
@@ -373,8 +373,8 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_CONFIG_DIR_NAME,
     ):
         time.sleep(2.0)
-        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_CONFIG_DIR / "inbounds.json")
-        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_PENDING_DIR / "inbounds.json")
+        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_PENDING_DIR / "inbounds.json")
         _wait_for_port(env["server_host"], server_socks_port)
         _wait_for_port(env["client_host"], client_socks_port)
         yield
@@ -446,7 +446,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        client_state = helpers.read_client_config(client_host)
+        client_state = helpers.read_pending_client_config(client_host)
         entry = tunnel_common.forward_entry_for_target(
             client_state.get("forwards") or [], SERVER_IP, SERVER_DIAGNOSTICS_PORT
         )
@@ -501,7 +501,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        server_state = helpers.read_server_config(server_host)
+        server_state = helpers.read_pending_server_config(server_host)
         entry = tunnel_common.forward_entry_for_target(
             server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
         )
@@ -566,7 +566,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     chain_name = "xray_transparent_prerouting"
     client_listener_port = SERVER_DIAGNOSTICS_PORT
     server_listener_port = CLIENT_DIAGNOSTICS_PORT
-    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_CONFIG_DIR / 'inbounds.json')}"
+    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_PENDING_DIR / 'inbounds.json')}"
     client_nat_runner = _nat_runner(client_host, role="client")
     server_nat_runner = _nat_runner(server_host, role="server")
 
@@ -738,8 +738,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             check=True,
         )
         redirect_added = True
-        client_state = helpers.read_client_config(client_host)
-        client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        client_state = helpers.read_pending_client_config(client_host)
+        client_routing = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "routing.json")
         helpers.assert_redirect_rule(client_routing, CLIENT_REDIRECT_CIDR, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_state,
@@ -748,10 +748,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        client_inbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        client_inbounds = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "inbounds.json")
         client_dokodemo_ports = _dokodemo_ports(client_inbounds)
         assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
-        server_inbounds = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        server_inbounds = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "inbounds.json")
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
@@ -1069,7 +1069,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
     reverse_tag = tunnel_environment["reverse_tag"]
     client_host = tunnel_environment["client_host"]
     server_host = tunnel_environment["server_host"]
-    reverse_channels = helpers.read_server_config(server_host).get("reverse_channels") or {}
+    reverse_channels = helpers.read_pending_server_config(server_host).get("reverse_channels") or {}
     if reverse_tag not in reverse_channels:
         server_runner(
             "server",
@@ -1122,8 +1122,8 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 f"Server redirect list missing {alias_cidr} for tag {reverse_tag}"
             )
 
-            server_state = helpers.read_server_config(server_host)
-            server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+            server_state = helpers.read_pending_server_config(server_host)
+            server_routing = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "routing.json")
             helpers.assert_server_redirect_state(server_state, alias_cidr, reverse_tag)
             helpers.assert_server_redirect_rule(server_routing, alias_cidr, reverse_tag)
 
@@ -1154,7 +1154,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             )
             forward_added = True
 
-            server_state = helpers.read_server_config(server_host)
+            server_state = helpers.read_pending_server_config(server_host)
             entry = tunnel_common.forward_entry_for_target(
                 server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, CLIENT_DIAGNOSTICS_PORT
             )

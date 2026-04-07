@@ -151,7 +151,7 @@ def _write_apply_request(host, role: str) -> None:
 
 
 def _current_mode(host, role: str) -> str:
-    state = helpers.read_client_config(host) if role == "client" else helpers.read_server_config(host)
+    state = helpers.read_pending_client_config(host) if role == "client" else helpers.read_pending_server_config(host)
     tun_enabled = state.get("tun_enabled")
     if not isinstance(tun_enabled, bool):
         raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")

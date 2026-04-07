@@ -9,10 +9,10 @@ from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 from tests.host.tunnel import common as tunnel_common
 
-CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
+CLIENT_OUTBOUNDS = helpers.CLIENT_PENDING_DIR / "outbounds.json"
 CLIENT_LOG_PATH = helpers.CLIENT_LOG_FILE
-CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
-CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
+CLIENT_ROUTING = helpers.CLIENT_PENDING_DIR / "routing.json"
+CLIENT_STATE_FILE = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
 
 
 @pytest.mark.host
@@ -84,7 +84,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         helpers.assert_routing_rule(routing, "10.55.0.10")
         helpers.assert_routing_rule(routing, "10.55.0.11")
 
-        state = helpers.read_client_config(client_host)
+        state = helpers.read_pending_client_config(client_host)
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
         assert recorded_hosts == {"10.55.0.10", "10.55.0.11"}
 
@@ -434,7 +434,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             routing = helpers.read_json(client_host, CLIENT_ROUTING)
             helpers.assert_routing_rule(routing, "10.66.0.11")
 
-            state = helpers.read_client_config(client_host)
+            state = helpers.read_pending_client_config(client_host)
             hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
             assert hosts == {"10.66.0.11"}
 

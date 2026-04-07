@@ -118,11 +118,11 @@ def _install_marker(marker: str, output: str | None) -> str | None:
 
 def ensure_xp2p_installed(machine: str, host: Host) -> dict[str, str]:
     global _DEB_BUILD_READY
-    exec_check = host.run("test -x /srv/xray-p2p/scripts/build/build_deb_xp2p.sh")
-    if exec_check.rc != 0:
+    exists_check = host.run("test -f /srv/xray-p2p/scripts/build/build_deb_xp2p.sh")
+    if exists_check.rc != 0:
         raise RuntimeError(
-            "build_deb_xp2p.sh is not executable on the guest. "
-            "Fix the repository permissions before running tests."
+            "build_deb_xp2p.sh is missing on the guest. "
+            "Fix the repository sync before running tests."
         )
 
     install_timeout = 600

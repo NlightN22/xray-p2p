@@ -144,6 +144,36 @@ def read_text(host: Host, path: PurePosixPath | str) -> str:
     return linux_env.read_text(host, _as_path(path))
 
 
+def pending_path(path: PurePosixPath | str) -> PurePosixPath:
+    return _pending_candidate(_as_path(path))
+
+
+def read_pending_json(host: Host, path: PurePosixPath | str) -> dict:
+    return linux_env.read_json(host, pending_path(path))
+
+
+def read_pending_text(host: Host, path: PurePosixPath | str) -> str:
+    return linux_env.read_text(host, pending_path(path))
+
+
+def read_pending_toml(host: Host, path: PurePosixPath) -> dict:
+    content = read_pending_text(host, path)
+    try:
+        return tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def read_pending_client_config(host: Host) -> dict:
+    pending_config = CONFIG_PENDING_ROOT / "xp2p-client.toml"
+    return read_pending_toml(host, pending_config).get("client") or {}
+
+
+def read_pending_server_config(host: Host) -> dict:
+    pending_config = CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    return read_pending_toml(host, pending_config).get("server") or {}
+
+
 def path_exists(host: Host, path: PurePosixPath | str) -> bool:
     resolved = _as_path(path)
     pending = _pending_candidate(resolved)

@@ -12,8 +12,8 @@ from tests.host.linux import env as linux_env
 
 SERVER_A_IP = "10.62.10.11"  # deb-test-a
 SERVER_C_IP = "10.62.10.13"  # deb-test-c
-CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
-CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
+CLIENT_OUTBOUNDS = helpers.CLIENT_PENDING_DIR / "outbounds.json"
+CLIENT_ROUTING = helpers.CLIENT_PENDING_DIR / "routing.json"
 
 
 @dataclass
@@ -133,8 +133,8 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
             },
         ]
         for entry in server_entries:
-            server_state = helpers.read_server_config(entry["host"])
-            server_routing = helpers.read_json(entry["host"], helpers.SERVER_CONFIG_DIR / "routing.json")
+            server_state = helpers.read_pending_server_config(entry["host"])
+            server_routing = helpers.read_json(entry["host"], helpers.SERVER_PENDING_DIR / "routing.json")
             helpers.assert_server_reverse_state(
                 server_state,
                 entry["reverse_tag"],
@@ -175,7 +175,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
             check=True,
         )
 
-        client_state = helpers.read_client_config(client_b)
+        client_state = helpers.read_pending_client_config(client_b)
         client_routing = helpers.read_json(client_b, CLIENT_ROUTING)
 
         outbounds = helpers.read_json(client_b, CLIENT_OUTBOUNDS)
@@ -269,8 +269,8 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
                 assert redirect_domain in list_output.lower(), (
                     f"Server redirect list missing {redirect_domain} for {entry['ip']}"
                 )
-                server_state = helpers.read_server_config(entry["host"])
-                server_routing = helpers.read_json(entry["host"], helpers.SERVER_CONFIG_DIR / "routing.json")
+                server_state = helpers.read_pending_server_config(entry["host"])
+                server_routing = helpers.read_json(entry["host"], helpers.SERVER_PENDING_DIR / "routing.json")
                 helpers.assert_server_redirect_state(server_state, redirect_domain, entry["reverse_tag"])
                 helpers.assert_server_redirect_rule(server_routing, redirect_domain, entry["reverse_tag"])
 
@@ -290,7 +290,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.CLIENT_CONFIG_DIR_NAME,
                         ):
-                client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+                client_socks_port = _socks_port(client_b, helpers.CLIENT_PENDING_DIR / "inbounds.json")
                 _wait_for_port(client_b, client_socks_port)
                 for target in (SERVER_A_IP, SERVER_C_IP):
                     result = client_runner(

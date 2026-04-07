@@ -254,7 +254,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
         ).stdout or ""
         assert DIAG_CIDR in redirect_list
 
-        routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        routing = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "routing.json")
         helpers.assert_redirect_rule(routing, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
 
         client_runner(
@@ -284,7 +284,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
         ).stdout or ""
         assert DIAG_DOMAIN in redirect_list
 
-        routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        routing = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "routing.json")
         helpers.assert_domain_redirect_rule(routing, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP))
 
         client_runner(
@@ -303,7 +303,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
         )
 
         routing_after_domain_removal = helpers.read_json(
-            client_host, helpers.CLIENT_CONFIG_DIR / "routing.json"
+            client_host, helpers.CLIENT_PENDING_DIR / "routing.json"
         )
         helpers.assert_redirect_rule(routing_after_domain_removal, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
         helpers.assert_no_domain_redirect_rule(
@@ -336,7 +336,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
             check=True,
         )
 
-        routing_after_remove = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        routing_after_remove = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "routing.json")
         helpers.assert_no_redirect_rule(routing_after_remove, DIAG_CIDR)
         helpers.assert_no_domain_redirect_rule(routing_after_remove, DIAG_DOMAIN)
 
