@@ -128,7 +128,6 @@ def xp2p_full_cleanup(openwrt_host_factory):
         openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
 
         cleanup_paths = [
-            helpers.CONFIG_ROOT / ".apply",
             helpers.CLIENT_CONFIG_FILE,
             helpers.SERVER_CONFIG_FILE,
             helpers.CLIENT_APPLIED_STATE_FILE,

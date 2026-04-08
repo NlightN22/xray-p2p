@@ -486,9 +486,9 @@ def _dump_dns_forward_debug(
     parts.append("--- openwrt-b nft fw4 ---")
     parts.append((openwrt_client_host.run("nft list table inet fw4 2>/dev/null || true").stdout or "").strip())
     parts.append("--- openwrt-b inbounds.json ---")
-    parts.append((openwrt_client_host.run("cat /etc/xp2p/config-client/inbounds.json 2>/dev/null || true").stdout or "").strip())
+    parts.append(_safe_read_text(openwrt_client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json"))
     parts.append("--- openwrt-b routing.json ---")
-    parts.append((openwrt_client_host.run("cat /etc/xp2p/config-client/routing.json 2>/dev/null || true").stdout or "").strip())
+    parts.append(_safe_read_text(openwrt_client_host, helpers.CLIENT_CONFIG_DIR / "routing.json"))
     parts.append("--- openwrt-b xp2p client log ---")
     parts.append((openwrt_client_host.run("cat /tmp/xp2p-client.log 2>/dev/null || true").stdout or "").strip())
     parts.append("--- openwrt-a xp2p server log ---")
@@ -512,6 +512,15 @@ def _dump_dns_forward_debug(
     parts.append("--- c2 routes ---")
     parts.append((alpine_c2_host.run("ip route show || true").stdout or "").strip())
     return "\n".join(part for part in parts if part)
+
+
+def _safe_read_text(host, path) -> str:
+    if not helpers.path_exists(host, path):
+        return ""
+    try:
+        return (helpers.read_text(host, path) or "").strip()
+    except RuntimeError:
+        return ""
 
 
 def _ensure_dns_record(host, domain: str, ip: str) -> None:
