@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import PurePosixPath
 
 import pytest
@@ -80,6 +81,15 @@ def _remove_path(host: Host, path: PurePosixPath) -> None:
         )
 
 
+def _wait_for_path(host: Host, path: PurePosixPath, timeout_seconds: float = 20.0, interval: float = 1.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if helpers.path_exists_exact(host, path):
+            return
+        time.sleep(interval)
+    pytest.fail(f"Expected {path} to appear within {timeout_seconds}s")
+
+
 def _combined_output(result) -> str:
     return f"{result.stdout}\n{result.stderr}".strip()
 
@@ -151,6 +161,8 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
             "--force",
             check=True,
         )
+        _wait_for_path(openwrt_server_host, SERVER_CERT_PENDING)
+        _wait_for_path(openwrt_server_host, SERVER_KEY_PENDING)
         _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_source)
         _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_source)
         helpers.cleanup_server_install(openwrt_server_host, runner)
@@ -264,6 +276,8 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
             "--force",
             check=True,
         )
+        _wait_for_path(openwrt_server_host, SERVER_CERT_PENDING)
+        _wait_for_path(openwrt_server_host, SERVER_KEY_PENDING)
 
         _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_source)
         _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_source)
@@ -283,6 +297,8 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
             "--force",
             check=True,
         )
+        _wait_for_path(openwrt_server_host, SERVER_CERT_PENDING)
+        _wait_for_path(openwrt_server_host, SERVER_KEY_PENDING)
         _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, alt_key_source)
         helpers.cleanup_server_install(openwrt_server_host, runner)
 
@@ -485,8 +501,8 @@ def test_openwrt_server_cert_set_rejects_directory_paths(openwrt_server_host, xp
     runner = _runner(openwrt_server_host)
     openwrt_env.install_ipk_on_host(openwrt_server_host, xp2p_openwrt_ipk, force=True)
     helpers.cleanup_server_install(openwrt_server_host, runner)
-    cert_dir = PurePosixPath("/tmp/xp2p-cert-dir")
-    key_dir = PurePosixPath("/tmp/xp2p-key-dir")
+    cert_dir = PurePosixPath("/tmp")
+    key_dir = PurePosixPath("/tmp")
     try:
         runner(
             "server",
@@ -502,8 +518,6 @@ def test_openwrt_server_cert_set_rejects_directory_paths(openwrt_server_host, xp
             "--force",
             check=True,
         )
-        _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_dir / "dummy.txt")
-        _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_dir / "dummy.txt")
         helpers.cleanup_server_install(openwrt_server_host, runner)
 
         runner(
@@ -543,5 +557,3 @@ def test_openwrt_server_cert_set_rejects_directory_paths(openwrt_server_host, xp
         )
     finally:
         helpers.cleanup_server_install(openwrt_server_host, runner)
-        _remove_path(openwrt_server_host, cert_dir)
-        _remove_path(openwrt_server_host, key_dir)

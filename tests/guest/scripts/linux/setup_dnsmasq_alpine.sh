@@ -30,13 +30,14 @@ if [ -z "$installer" ]; then
   exit 1
 fi
 
-if [ ! -x "$installer" ]; then
-  echo "dnsmasq installer is not executable: $installer" >&2
-  exit 3
-fi
-
 echo "Using dnsmasq installer: $installer"
 if [ -n "$timeout_cmd" ]; then
-  exec $timeout_cmd "$installer" "$host_name"
+  if [ -x "$installer" ]; then
+    exec $timeout_cmd "$installer" "$host_name"
+  fi
+  exec $timeout_cmd sh "$installer" "$host_name"
 fi
-exec "$installer" "$host_name"
+if [ -x "$installer" ]; then
+  exec "$installer" "$host_name"
+fi
+exec sh "$installer" "$host_name"

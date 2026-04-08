@@ -56,9 +56,9 @@ def _alpine_guest(host, script: str, *args: str):
 
 def _current_mode(host, role: str) -> str:
     if role == "server":
-        config = helpers.read_server_config(host)
+        config = helpers.read_pending_server_config(host)
     elif role == "client":
-        config = helpers.read_client_config(host)
+        config = helpers.read_pending_client_config(host)
     else:
         raise ValueError(f"Unsupported role: {role}")
     tun_enabled = config.get("tun_enabled")
@@ -150,6 +150,8 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
                 "--force",
                 check=True,
             )
+        helpers.wait_for_pending_config(server_host, "server")
+        helpers.wait_for_pending_config(client_host, "client")
         yield {
             "server_host": server_host,
             "client_host": client_host,

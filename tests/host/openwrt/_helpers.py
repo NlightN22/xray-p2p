@@ -36,6 +36,7 @@ LOG_ROOT = linux_helpers.LOG_ROOT
 REVERSE_SUFFIX = linux_helpers.REVERSE_SUFFIX
 XRAY_BINARY = linux_helpers.XRAY_BINARY
 SERVICE_LOG_FILES = linux_helpers.SERVICE_LOG_FILES
+APPLY_REQUEST = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
 
 
 extract_trojan_credential = linux_helpers.extract_trojan_credential
@@ -191,6 +192,46 @@ def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
     raise AssertionError(f"None of the state files exist: {paths}")
 
 
+def pending_path(path: PurePosixPath | Path | str) -> PurePosixPath:
+    return _pending_candidate(_as_path(path))
+
+
+def read_pending_text(host: Host, path: PurePosixPath | Path | str) -> str:
+    target = _posix(_pending_candidate(_as_path(path)))
+    result = host.run(f"cat {shlex.quote(target)}")
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to read remote text {target}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return result.stdout or ""
+
+
+def read_pending_json(host: Host, path: PurePosixPath | Path | str) -> dict:
+    content = read_pending_text(host, path)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def read_pending_toml(host: Host, path: PurePosixPath | Path | str) -> dict:
+    content = read_pending_text(host, path)
+    try:
+        return linux_helpers.tomllib.loads(content)
+    except linux_helpers.tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def read_pending_client_config(host: Host) -> dict:
+    pending_config = CONFIG_PENDING_ROOT / "xp2p-client.toml"
+    return read_pending_toml(host, pending_config).get("client") or {}
+
+
+def read_pending_server_config(host: Host) -> dict:
+    pending_config = CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    return read_pending_toml(host, pending_config).get("server") or {}
+
+
 def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
     resolved = _as_path(path)
     pending = _pending_candidate(resolved)
@@ -199,6 +240,10 @@ def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
     target = _posix(resolved)
     result = host.run(f"test -e {shlex.quote(target)}")
     return result.rc == 0
+
+
+def path_exists_exact(host: Host, path: PurePosixPath | Path | str) -> bool:
+    return linux_helpers.path_exists(host, _as_path(path))
 
 
 def remove_path(host: Host, path: PurePosixPath | Path | str) -> None:
@@ -340,3 +385,38 @@ def wait_for_heartbeat_state(
     if last_error:
         raise AssertionError(f"Failed to read heartbeat state {target}: {last_error}") from last_error
     raise AssertionError(f"Heartbeat state {target} not found on {host.backend.hostname}")
+
+
+def wait_for_apply_request(host: Host, *, timeout_seconds: float = 30.0, poll_interval: float = 1.5) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if path_exists_exact(host, APPLY_REQUEST):
+            return
+        time.sleep(poll_interval)
+    raise AssertionError(f"apply.request did not appear within {timeout_seconds} seconds.")
+
+
+def wait_for_apply_request_clear(
+    host: Host, *, timeout_seconds: float = 60.0, poll_interval: float = 1.5
+) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if not path_exists_exact(host, APPLY_REQUEST):
+            return
+        time.sleep(poll_interval)
+    raise AssertionError(f"apply.request did not clear after {timeout_seconds} seconds.")
+
+
+def wait_for_pending_config(host: Host, role: str, *, timeout_seconds: float = 30.0, poll_interval: float = 1.5) -> None:
+    if role == "client":
+        target = CONFIG_PENDING_ROOT / "xp2p-client.toml"
+    elif role == "server":
+        target = CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if path_exists_exact(host, target):
+            return
+        time.sleep(poll_interval)
+    raise AssertionError(f"Pending config {target} did not appear within {timeout_seconds} seconds.")

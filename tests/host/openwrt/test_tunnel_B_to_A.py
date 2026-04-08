@@ -26,6 +26,7 @@ CLIENT_SOCKS_PORT = 51180
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
 CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
+REQUIRED_XRAY_CONFIGS = ("inbounds.json", "logs.json", "outbounds.json", "routing.json")
 
 
 def _runner(host):
@@ -41,11 +42,30 @@ def _runner(host):
     return _run
 
 
+def _xray_configs_missing(host, config_dir) -> list[str]:
+    pending_dir = config_dir / helpers.APPLY_DIR_NAME / helpers.PENDING_DIR_NAME
+    live_missing = [
+        (config_dir / name).as_posix()
+        for name in REQUIRED_XRAY_CONFIGS
+        if not helpers.path_exists_exact(host, config_dir / name)
+    ]
+    if not live_missing:
+        return []
+    pending_missing = [
+        (pending_dir / name).as_posix()
+        for name in REQUIRED_XRAY_CONFIGS
+        if not helpers.path_exists_exact(host, pending_dir / name)
+    ]
+    if not pending_missing:
+        return []
+    return live_missing + pending_missing
+
+
 def _current_mode(host, role: str) -> str:
     if role == "client":
-        config = helpers.read_client_config(host)
+        config = helpers.read_pending_client_config(host)
     elif role == "server":
-        config = helpers.read_server_config(host)
+        config = helpers.read_pending_server_config(host)
     else:
         raise ValueError(f"Unsupported role: {role}")
     tun_enabled = config.get("tun_enabled")
@@ -118,9 +138,10 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
         assert credential["link"], "Expected trojan link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
+        helpers.wait_for_pending_config(server_host, "server")
 
-        server_state = helpers.read_server_config(server_host)
-        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        server_state = helpers.read_pending_server_config(server_host)
+        server_routing = helpers.read_pending_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_reverse_state(
             server_state,
             reverse_tag,
@@ -141,8 +162,9 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             "--force",
             check=True,
         )
-        client_state = helpers.read_client_config(client_host)
-        client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        helpers.wait_for_pending_config(client_host, "client")
+        client_state = helpers.read_pending_client_config(client_host)
+        client_routing = helpers.read_pending_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
         helpers.assert_client_reverse_state(
@@ -185,6 +207,44 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
 
 @contextmanager
 def _active_tunnel_sessions(env: dict):
+    def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
+        if role == "client":
+            pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
+        elif role == "server":
+            pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
+        else:
+            raise ValueError(f"Unsupported role: {role}")
+        if not helpers.path_exists_exact(host, pending_path):
+            return
+        helpers.write_apply_request(host, role)
+        with openwrt_env.xp2p_run_session(
+            host,
+            role,
+            install_path,
+            config_dir,
+        ):
+            helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+
+    client_missing = _xray_configs_missing(env["client_host"], helpers.CLIENT_CONFIG_DIR)
+    if client_missing:
+        raise AssertionError(f"Missing client xray configs (live or pending): {client_missing}")
+
+    server_missing = _xray_configs_missing(env["server_host"], helpers.SERVER_CONFIG_DIR)
+    if server_missing:
+        raise AssertionError(f"Missing server xray configs (live or pending): {server_missing}")
+
+    _apply_pending_config(
+        env["server_host"],
+        "server",
+        env["server_install_path"],
+        helpers.SERVER_CONFIG_DIR_NAME,
+    )
+    _apply_pending_config(
+        env["client_host"],
+        "client",
+        helpers.INSTALL_ROOT.as_posix(),
+        helpers.CLIENT_CONFIG_DIR_NAME,
+    )
     with openwrt_env.xp2p_run_session(
         env["server_host"],
         "server",
@@ -198,6 +258,9 @@ def _active_tunnel_sessions(env: dict):
     ):
         time.sleep(2.0)
         _wait_for_listen_port(env["client_host"], CLIENT_SOCKS_PORT)
+        for host in (env["server_host"], env["client_host"]):
+            helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+        _verify_heartbeat_state(env)
         yield
 
 
@@ -277,7 +340,8 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        client_state = helpers.read_client_config(client_host)
+        helpers.wait_for_apply_request(client_host)
+        client_state = helpers.read_pending_client_config(client_host)
         entry = tunnel_common.forward_entry_for_target(
             client_state.get("forwards") or [], SERVER_IP, SERVER_DIAGNOSTICS_PORT
         )
@@ -332,7 +396,8 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        server_state = helpers.read_server_config(server_host)
+        helpers.wait_for_apply_request(server_host)
+        server_state = helpers.read_pending_server_config(server_host)
         entry = tunnel_common.forward_entry_for_target(
             server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
         )
@@ -529,6 +594,7 @@ def test_client_redirect_through_server(tunnel_environment):
         endpoint_tag,
         check=True,
     )
+    helpers.wait_for_apply_request(client_host)
     redirect_added = True
     server_redirect_added = False
     server_nat_added = False
@@ -541,8 +607,8 @@ def test_client_redirect_through_server(tunnel_environment):
         previous_client_mode = _ensure_mode(
             client_host, client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy"
         )
-        client_state = helpers.read_client_config(client_host)
-        client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        client_state = helpers.read_pending_client_config(client_host)
+        client_routing = helpers.read_pending_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_redirect_rule(client_routing, CLIENT_REDIRECT_CIDR, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_state,
@@ -551,10 +617,10 @@ def test_client_redirect_through_server(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        client_inbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        client_inbounds = helpers.read_pending_json(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
         client_dokodemo_ports = _dokodemo_ports(client_inbounds)
         assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
-        server_inbounds = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        server_inbounds = helpers.read_pending_json(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
@@ -578,6 +644,7 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         nat_added = True
+        helpers.wait_for_apply_request(client_host)
         time.sleep(2.0)
         nat_list = client_runner("nat-redirect", "list", check=True).stdout or ""
         assert CLIENT_REDIRECT_CIDR in nat_list
@@ -653,6 +720,7 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         server_redirect_added = True
+        helpers.wait_for_apply_request(server_host)
         server_runner(
             "nat-redirect",
             "add",
@@ -662,6 +730,7 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         server_nat_added = True
+        helpers.wait_for_apply_request(server_host)
         time.sleep(2.0)
         server_nat_list = server_runner("nat-redirect", "list", check=True).stdout or ""
         assert server_redirect_cidr in server_nat_list
@@ -750,6 +819,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             reverse_tag,
             check=True,
         )
+        helpers.wait_for_apply_request(server_host)
         forward_added = False
         try:
             list_output = server_runner(
@@ -764,8 +834,8 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             ).stdout or ""
             assert alias_cidr in list_output, f"Server redirect list missing {alias_cidr}"
 
-            server_state = helpers.read_server_config(server_host)
-            server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+            server_state = helpers.read_pending_server_config(server_host)
+            server_routing = helpers.read_pending_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
             helpers.assert_server_redirect_state(server_state, alias_cidr, reverse_tag)
             helpers.assert_server_redirect_rule(server_routing, alias_cidr, reverse_tag)
 
@@ -788,8 +858,9 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 check=True,
             )
             forward_added = True
+            helpers.wait_for_apply_request(server_host)
 
-            server_state = helpers.read_server_config(server_host)
+            server_state = helpers.read_pending_server_config(server_host)
             entry = tunnel_common.forward_entry_for_target(
                 server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, CLIENT_DIAGNOSTICS_PORT
             )
@@ -799,6 +870,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             with _active_tunnel_sessions(tunnel_environment):
                 _wait_for_listen_port(server_host, SERVER_FORWARD_PORT)
                 _verify_heartbeat_state(tunnel_environment)
+                time.sleep(2.5)
                 ping_result = server_runner(
                     "ping",
                     "127.0.0.1",

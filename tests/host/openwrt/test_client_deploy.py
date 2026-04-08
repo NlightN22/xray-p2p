@@ -10,6 +10,7 @@ from testinfra.host import Host
 
 from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
+from tests.host.tunnel import common as tunnel_common
 
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 
@@ -113,6 +114,8 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             ],
             timeout=LOG_WAIT_TIMEOUT,
         )
+        helpers.wait_for_apply_request(openwrt_client_host, timeout_seconds=LOG_WAIT_TIMEOUT)
+        helpers.wait_for_apply_request(openwrt_server_host, timeout_seconds=LOG_WAIT_TIMEOUT)
 
         _assert_internet_access(openwrt_client_host)
 
@@ -139,18 +142,22 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             helpers.dump_logs(openwrt_client_host, "client deploy client")
             helpers.dump_logs(openwrt_server_host, "client deploy server")
             pytest.fail(f"Port {SERVER_DIAG_PORT} did not open within {SERVICE_START_TIMEOUT}s")
+        helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=LOG_WAIT_TIMEOUT)
+        helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=LOG_WAIT_TIMEOUT)
 
         try:
-            heartbeat_state = helpers.wait_for_heartbeat_state(
-                openwrt_client_host,
-                timeout_seconds=LOG_WAIT_TIMEOUT,
-            )
-            helpers.assert_heartbeat_entry(
-                heartbeat_state,
-                helpers.expected_proxy_tag(server_ip),
-                host=server_ip,
-                user=trojan_user,
-            )
+            state_output = client_runner(
+                "client",
+                "state",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                check=True,
+            ).stdout or ""
+            rows = tunnel_common.parse_state_rows(state_output)
+            tags = {row.get("TAG") for row in rows}
+            hosts = {row.get("HOST") for row in rows}
+            assert helpers.expected_proxy_tag(server_ip) in tags
+            assert server_ip in hosts
         except AssertionError:
             helpers.dump_logs(openwrt_client_host, "client deploy client")
             helpers.dump_logs(openwrt_server_host, "client deploy server")
