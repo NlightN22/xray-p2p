@@ -90,19 +90,9 @@ def cleanup_client_install(
     cleanup_runtime_artifacts(host)
     install_path = (install_dir or INSTALL_ROOT).as_posix()
     config_name = config_dir or CLIENT_CONFIG_DIR_NAME
-    print(f"client remove start: {install_path} ({config_name})")
-    runner(
-        "client",
-        "remove",
-        "--path",
-        install_path,
-        "--config-dir",
-        config_name,
-        "--all",
-        "--ignore-missing",
-        "--quiet",
-    )
-    print("client remove done")
+    print(f"client cleanup start: {install_path} ({config_name})")
+    _purge_install_paths(host, install_path, config_name, "client")
+    print("client cleanup done")
     _clear_log_root(host)
     print("==== cleanup client done ====")
 
@@ -117,18 +107,9 @@ def cleanup_server_install(
     cleanup_runtime_artifacts(host)
     install_path = (install_dir or INSTALL_ROOT).as_posix()
     config_name = config_dir or SERVER_CONFIG_DIR_NAME
-    print(f"server remove start: {install_path} ({config_name})")
-    runner(
-        "server",
-        "remove",
-        "--path",
-        install_path,
-        "--config-dir",
-        config_name,
-        "--ignore-missing",
-        "--quiet",
-    )
-    print("server remove done")
+    print(f"server cleanup start: {install_path} ({config_name})")
+    _purge_install_paths(host, install_path, config_name, "server")
+    print("server cleanup done")
     _clear_log_root(host)
     print("==== cleanup server done ====")
 
@@ -149,6 +130,28 @@ def cleanup_runtime_artifacts(host: Host) -> None:
     openwrt_env._stop_xp2p_services(host)
     openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
     host.run("rm -f /tmp/xp2p-*.log >/dev/null 2>&1 || true")
+
+
+def _purge_install_paths(host: Host, install_path: str, config_name: str, role: str) -> None:
+    if role not in {"client", "server"}:
+        raise ValueError(f"Unsupported role: {role}")
+    config_path = f"{install_path.rstrip('/')}/{config_name}"
+    pending_root = CONFIG_PENDING_ROOT.as_posix()
+    pending_config = f"{pending_root}/xp2p-{role}.toml"
+    pending_heartbeat = f"{pending_root}/state-heartbeat-{role}.json"
+    state_files = CLIENT_STATE_FILES if role == "client" else SERVER_STATE_FILES
+    heartbeat = CLIENT_HEARTBEAT_STATE_FILE if role == "client" else SERVER_HEARTBEAT_STATE_FILE
+    targets = [
+        config_path,
+        pending_config,
+        pending_heartbeat,
+        APPLY_REQUEST.as_posix(),
+        heartbeat.as_posix(),
+    ]
+    for item in state_files:
+        targets.append(item.as_posix())
+    cmd = "/bin/sh -c 'rm -rf -- \"$@\"' -- " + " ".join(shlex.quote(p) for p in targets)
+    host.run(cmd)
 
 
 def find_tun_inbound(data: dict) -> dict | None:

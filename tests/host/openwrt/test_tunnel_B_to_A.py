@@ -609,6 +609,15 @@ def test_client_redirect_through_server(tunnel_environment):
         matches = re.findall(r"counter packets\s+(\d+)", result.stdout or "")
         return sum(int(value) for value in matches)
 
+    pending_list = client_runner("client", "redirect", "list", "--pending", check=False)
+    live_list = client_runner("client", "redirect", "list", check=False)
+    print("client redirect list --pending (pre-add):")
+    print((pending_list.stdout or "").strip())
+    print((pending_list.stderr or "").strip())
+    print("client redirect list --live (pre-add):")
+    print((live_list.stdout or "").strip())
+    print((live_list.stderr or "").strip())
+
     client_runner(
         "client",
         "redirect",
