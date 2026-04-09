@@ -25,9 +25,9 @@ C2_LAN_GATEWAY = "10.0.102.1"
 
 def _current_mode(host, role: str) -> str:
     if role == "client":
-        config = helpers.read_pending_client_config(host)
+        config = helpers.read_live_client_config(host)
     elif role == "server":
-        config = helpers.read_pending_server_config(host)
+        config = helpers.read_live_server_config(host)
     else:
         raise ValueError(f"Unsupported role: {role}")
     tun_enabled = config.get("tun_enabled")
@@ -78,10 +78,25 @@ def _ensure_apply_ready(host, role: str) -> None:
     raise AssertionError(f"Missing pending or live config for {role} on {host.backend.hostname}")
 
 
+def _apply_pending_config(host, role: str) -> None:
+    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
+    if not helpers.path_exists_exact(host, pending_path):
+        return
+    config_dir = helpers.SERVER_CONFIG_DIR_NAME if role == "server" else helpers.CLIENT_CONFIG_DIR_NAME
+    helpers.write_apply_request(host, role)
+    with openwrt_env.xp2p_run_session(
+        host,
+        role,
+        helpers.INSTALL_ROOT.as_posix(),
+        config_dir,
+    ):
+        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+
+
 @pytest.fixture(scope="module")
 def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
-    server_runner = lambda *args: openwrt_env.run_xp2p(openwrt_server_host, *args)
-    client_runner = lambda *args: openwrt_env.run_xp2p(openwrt_client_host, *args)
+    server_runner = lambda *args: openwrt_env.run_xp2p_live(openwrt_server_host, *args)
+    client_runner = lambda *args: openwrt_env.run_xp2p_live(openwrt_client_host, *args)
 
     for host in (openwrt_server_host, openwrt_client_host):
         openwrt_env.cleanup_xp2p(host)
@@ -147,6 +162,7 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         assert fw_show.rc == 0
         assert "Intercept-DNS" in (fw_show.stdout or "")
 
+        _apply_pending_config(openwrt_client_host, "client")
         forward_port = _detect_forward_port(openwrt_client_host, server_ip)
         _ensure_apply_ready(openwrt_server_host, "server")
         _ensure_apply_ready(openwrt_client_host, "client")
@@ -215,6 +231,7 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         assert fw_show.rc == 0
         assert "Intercept-DNS" in (fw_show.stdout or "")
 
+        _apply_pending_config(openwrt_server_host, "server")
         forward_port = _detect_forward_port(openwrt_server_host, client_ip, role="server")
         _ensure_apply_ready(openwrt_server_host, "server")
         _ensure_apply_ready(openwrt_client_host, "client")
@@ -281,7 +298,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
     redirect_added = False
     nat_added = False
     previous_client_mode = None
-    client_runner = lambda *args: openwrt_env.run_xp2p(openwrt_client_host, *args)
+    client_runner = lambda *args: openwrt_env.run_xp2p_live(openwrt_client_host, *args)
     endpoint_tag = helpers.expected_proxy_tag(SERVER_TUN_IP)
     try:
         c1_dns_ip = _detect_alpine_ipv4(alpine_c1_host)
@@ -292,7 +309,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         _alpine_guest(alpine_c1_host, "scripts/linux/start_xp2p_diag.sh", C1_DIAG_LISTEN, "tcp")
         diag_started = True
 
-        direct_ping = openwrt_env.run_xp2p(openwrt_server_host, "ping", c1_dns_ip, "--count", "1")
+        direct_ping = openwrt_env.run_xp2p_live(openwrt_server_host, "ping", c1_dns_ip, "--count", "1")
         if direct_ping.rc != 0:
             debug = _dump_dns_forward_debug(
                 openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
@@ -317,6 +334,8 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         assert add.rc == 0, f"add command failed: {add.stderr}"
         dns_forward_added = True
 
+        _ensure_apply_ready(openwrt_server_host, "server")
+        _ensure_apply_ready(openwrt_client_host, "client")
         with openwrt_env.xp2p_run_session(
             openwrt_server_host,
             role="server",
@@ -333,6 +352,11 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
             helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
             _wait_for_port(openwrt_client_host, "51180")
+            helpers.wait_for_heartbeat_state(
+                openwrt_server_host,
+                path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+            )
+            time.sleep(1.5)
             tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
             if tunnel_ping.rc != 0:
                 debug = _dump_dns_forward_debug(
@@ -360,9 +384,11 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         )
         assert redirect.rc == 0, f"redirect add failed: {redirect.stderr}"
         redirect_added = True
-        routing = helpers.read_json(openwrt_client_host, "/etc/xp2p/config-client/routing.json")
+        _apply_pending_config(openwrt_client_host, "client")
+        routing = helpers.read_live_json(openwrt_client_host, "/etc/xp2p/config-client/routing.json")
         helpers.assert_redirect_rule(routing, "10.0.101.0/24", endpoint_tag)
 
+        _apply_pending_config(openwrt_client_host, "client")
         forward_port = _detect_forward_port(openwrt_client_host, c1_dns_ip)
         _ensure_apply_ready(openwrt_server_host, "server")
         _ensure_apply_ready(openwrt_client_host, "client")
@@ -373,9 +399,10 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             helpers.CLIENT_CONFIG_DIR_NAME,
             "proxy",
         )
-        inbounds_path = helpers.CLIENT_PENDING_DIR / "inbounds.json"
+        _apply_pending_config(openwrt_client_host, "client")
+        inbounds_path = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
         if not helpers.path_exists_exact(openwrt_client_host, inbounds_path):
-            inbounds_path = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
+            raise AssertionError(f"Missing live client inbounds at {inbounds_path}")
         nat_port = _detect_dokodemo_port(openwrt_client_host, inbounds_path.as_posix())
         nat = client_runner(
             "nat-redirect",
@@ -388,7 +415,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         )
         assert nat.rc == 0, f"nat-redirect add failed: {nat.stderr}"
         nat_added = True
-        helpers.wait_for_apply_request(openwrt_client_host)
+        _apply_pending_config(openwrt_client_host, "client")
 
         with openwrt_env.xp2p_run_session(
             openwrt_server_host,
@@ -515,11 +542,11 @@ def _dump_dns_forward_debug(
 ) -> str:
     parts: list[str] = []
     parts.append("--- openwrt-b xp2p redirect list ---")
-    parts.append((openwrt_env.run_xp2p(openwrt_client_host, "client", "redirect", "list").stdout or "").strip())
+    parts.append((openwrt_env.run_xp2p_live(openwrt_client_host, "client", "redirect", "list").stdout or "").strip())
     parts.append("--- openwrt-b nat-redirect list ---")
     parts.append((openwrt_client_host.run("/usr/bin/xp2p nat-redirect list || true").stdout or "").strip())
     parts.append("--- openwrt-b xp2p forward list ---")
-    parts.append((openwrt_env.run_xp2p(openwrt_client_host, "client", "forward", "list").stdout or "").strip())
+    parts.append((openwrt_env.run_xp2p_live(openwrt_client_host, "client", "forward", "list").stdout or "").strip())
     parts.append("--- openwrt-b nft xray_transparent ---")
     parts.append((openwrt_client_host.run("nft list table inet xray_transparent 2>/dev/null || true").stdout or "").strip())
     parts.append("--- openwrt-b nft fw4 ---")
@@ -605,7 +632,7 @@ def _assert_rebind_allowed(output: str, base_domain: str) -> None:
 
 def _detect_forward_port(host, target_host: str, target_port: int = 53, role: str = "client") -> str:
     args = ("client", "forward", "list") if role == "client" else ("server", "forward", "list")
-    list_res = openwrt_env.run_xp2p(host, *args)
+    list_res = openwrt_env.run_xp2p_live(host, *args)
     assert list_res.rc == 0, f"forward list failed: {list_res.stderr}"
     output = list_res.stdout or ""
     # Expect a line like: "127.0.0.1:53331  tcp   <target_host>:<port>"

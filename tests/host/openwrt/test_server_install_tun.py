@@ -47,7 +47,7 @@ def test_server_install_default_creates_tun_inbound(openwrt_host, xp2p_openwrt_i
             "--force",
             check=True,
         )
-        inbounds = helpers.read_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_preferred_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         helpers.assert_tun_inbound(inbounds, "xp2ps")
     finally:
         helpers.cleanup_server_install(openwrt_host, runner)
@@ -77,7 +77,7 @@ def test_server_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
                 "xp2p command failed "
                 f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
-        inbounds = helpers.read_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_preferred_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         helpers.assert_no_tun_inbound(inbounds)
     finally:
         helpers.cleanup_server_install(openwrt_host, runner)

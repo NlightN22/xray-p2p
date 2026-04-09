@@ -59,7 +59,7 @@ def _read_remote_text(host: Host, path: PurePosixPath) -> str:
 
 def _read_remote_json(host: Host, path: PurePosixPath) -> dict:
     try:
-        return helpers.read_json(host, path)
+        return helpers.read_preferred_json(host, path)
     except RuntimeError as exc:
         pytest.fail(str(exc))
 

@@ -183,8 +183,8 @@ def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_op
             check=True,
         )
 
-        client_inbounds = helpers.read_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
-        server_inbounds = helpers.read_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        client_inbounds = helpers.read_preferred_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        server_inbounds = helpers.read_preferred_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         helpers.assert_tun_inbound(client_inbounds, "xp2pc")
         helpers.assert_tun_inbound(server_inbounds, "xp2ps")
     finally:
@@ -232,7 +232,7 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
         )
 
         client_config_path = helpers.INSTALL_ROOT / custom_client_config
-        outbounds = helpers.read_json(openwrt_host, client_config_path / "outbounds.json")
+        outbounds = helpers.read_preferred_json(openwrt_host, client_config_path / "outbounds.json")
         helpers.assert_outbound(
             outbounds,
             client_host,
@@ -240,9 +240,9 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
             client_user,
             client_sni,
         )
-        routing = helpers.read_json(openwrt_host, client_config_path / "routing.json")
+        routing = helpers.read_preferred_json(openwrt_host, client_config_path / "routing.json")
         helpers.assert_routing_rule(routing, client_host)
-        state = helpers.read_client_config(openwrt_host)
+        state = helpers.read_preferred_client_config(openwrt_host)
         recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert recorded_hosts == {client_host}
 
@@ -353,7 +353,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
         }
         expected_users = {default_cred["user"], user_b}
 
-        client_state = helpers.read_client_config(openwrt_host)
+        client_state = helpers.read_preferred_client_config(openwrt_host)
         recorded_hosts = {entry.get("hostname") for entry in client_state.get("endpoints", [])}
         recorded_tags = {entry.get("tag") for entry in client_state.get("endpoints", [])}
         recorded_users = {entry.get("user") for entry in client_state.get("endpoints", [])}
@@ -361,7 +361,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
         assert recorded_tags == expected_tags
         assert recorded_users == expected_users
 
-        server_state = helpers.read_server_config(openwrt_host)
+        server_state = helpers.read_preferred_server_config(openwrt_host)
         reverse_channels = server_state.get("reverse_channels", {})
         if not isinstance(reverse_channels, dict):
             pytest.fail("Server config missing reverse_channels map")

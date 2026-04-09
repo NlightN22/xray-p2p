@@ -25,7 +25,7 @@ CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
 
 def _runner(host):
     def _run(*args: str, check: bool = False):
-        result = openwrt_env.run_xp2p(host, *args)
+        result = openwrt_env.run_xp2p_live(host, *args)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "
@@ -34,6 +34,14 @@ def _runner(host):
         return result
 
     return _run
+
+
+def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
+    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
+    if not helpers.path_exists_exact(host, pending_path):
+        return
+    with openwrt_env.xp2p_run_session(host, role, install_path, config_dir):
+        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
 
 
 def _update_hosts_entry(host, action: str, domain: str, ip: str | None = None) -> None:
@@ -97,8 +105,10 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
         assert SERVER_DOMAIN in credential["link"], "Expected domain in trojan link"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_DOMAIN)
 
-        server_state = helpers.read_server_config(server_host)
-        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        helpers.wait_for_pending_config(server_host, "server")
+        _apply_pending_config(server_host, "server", server_install_path, helpers.SERVER_CONFIG_DIR_NAME)
+        server_state = helpers.read_live_server_config(server_host)
+        server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_reverse_state(
             server_state,
             reverse_tag,
@@ -119,9 +129,16 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        client_state = helpers.read_client_config(client_host)
-        client_routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
-        client_outbounds = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
+        helpers.wait_for_pending_config(client_host, "client")
+        _apply_pending_config(
+            client_host,
+            "client",
+            helpers.INSTALL_ROOT.as_posix(),
+            helpers.CLIENT_CONFIG_DIR_NAME,
+        )
+        client_state = helpers.read_live_client_config(client_host)
+        client_routing = helpers.read_live_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        client_outbounds = helpers.read_live_json(client_host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_DOMAIN)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
         helpers.assert_client_reverse_state(
@@ -142,14 +159,14 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             verify_peer_name=SERVER_DOMAIN,
         )
 
-        helpers.assert_reverse_cli_output(
+        helpers.assert_reverse_cli_output_live(
             server_runner,
             "server",
             server_install_path,
             helpers.SERVER_CONFIG_DIR_NAME,
             reverse_tag,
         )
-        helpers.assert_reverse_cli_output(
+        helpers.assert_reverse_cli_output_live(
             client_runner,
             "client",
             helpers.INSTALL_ROOT,
@@ -174,6 +191,18 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
 
 @contextmanager
 def _active_tunnel_sessions(env: dict):
+    _apply_pending_config(
+        env["server_host"],
+        "server",
+        env["server_install_path"],
+        helpers.SERVER_CONFIG_DIR_NAME,
+    )
+    _apply_pending_config(
+        env["client_host"],
+        "client",
+        helpers.INSTALL_ROOT.as_posix(),
+        helpers.CLIENT_CONFIG_DIR_NAME,
+    )
     with openwrt_env.xp2p_run_session(
         env["server_host"],
         "server",
@@ -186,6 +215,8 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_CONFIG_DIR_NAME,
     ):
         time.sleep(2.0)
+        for host in (env["server_host"], env["client_host"]):
+            helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
         yield
 
 
@@ -240,16 +271,21 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        client_state = helpers.read_client_config(client_host)
-        for entry in client_state.get("forwards") or []:
-            recorded_host = (entry.get("target_host") or "").strip()
-            recorded_port = int(entry.get("target_port") or entry.get("targetPort") or 0)
-            if recorded_host == SERVER_DOMAIN and recorded_port == SERVER_DIAGNOSTICS_PORT:
-                listen_port = tunnel_common.listen_port_from_entry(entry)
-                break
-        assert listen_port == CLIENT_FORWARD_PORT
-
+        _apply_pending_config(
+            client_host,
+            "client",
+            helpers.INSTALL_ROOT.as_posix(),
+            helpers.CLIENT_CONFIG_DIR_NAME,
+        )
         with _active_tunnel_sessions(env):
+            client_state = helpers.read_live_client_config(client_host)
+            for entry in client_state.get("forwards") or []:
+                recorded_host = (entry.get("target_host") or "").strip()
+                recorded_port = int(entry.get("target_port") or entry.get("targetPort") or 0)
+                if recorded_host == SERVER_DOMAIN and recorded_port == SERVER_DIAGNOSTICS_PORT:
+                    listen_port = tunnel_common.listen_port_from_entry(entry)
+                    break
+            assert listen_port == CLIENT_FORWARD_PORT
             ping_result = client_runner(
                 "ping",
                 "127.0.0.1",
@@ -297,13 +333,18 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        server_state = helpers.read_server_config(server_host)
-        entry = tunnel_common.forward_entry_for_target(
-            server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
+        _apply_pending_config(
+            server_host,
+            "server",
+            env["server_install_path"],
+            helpers.SERVER_CONFIG_DIR_NAME,
         )
-        listen_port = tunnel_common.listen_port_from_entry(entry)
-
         with _active_tunnel_sessions(env):
+            server_state = helpers.read_live_server_config(server_host)
+            entry = tunnel_common.forward_entry_for_target(
+                server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
+            )
+            listen_port = tunnel_common.listen_port_from_entry(entry)
             ping_result = server_runner(
                 "ping",
                 "127.0.0.1",

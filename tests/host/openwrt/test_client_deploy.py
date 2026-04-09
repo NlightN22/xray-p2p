@@ -262,7 +262,7 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         assert helpers.path_exists(openwrt_server_host, cert_path), f"Expected cert at {cert_path}"
         assert helpers.path_exists(openwrt_server_host, key_path), f"Expected key at {key_path}"
 
-        inbounds = helpers.read_json(openwrt_server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_preferred_json(openwrt_server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
@@ -366,7 +366,7 @@ def _start_server_deploy_with_args(
 
 def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, password: str) -> None:
     assert helpers.path_exists(host, helpers.CLIENT_CONFIG_DIR), "client config directory missing after deploy"
-    outbounds = helpers.read_json(host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
+    outbounds = helpers.read_preferred_json(host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
     helpers.assert_outbound(
         outbounds,
         server_ip,
@@ -379,13 +379,13 @@ def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, pass
 
 
 def _assert_client_state(host: Host, server_ip: str) -> None:
-    state = helpers.read_client_config(host)
+    state = helpers.read_preferred_client_config(host)
     recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
     assert recorded_hosts == {server_ip}, f"Unexpected endpoint entries recorded: {recorded_hosts}"
 
 
 def _assert_client_routing(host: Host, server_ip: str) -> None:
-    routing = helpers.read_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+    routing = helpers.read_preferred_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
     helpers.assert_routing_rule(routing, server_ip)
 
 

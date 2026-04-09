@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 from testinfra.host import Host
 
 from tests.host.linux import _helpers as linux_helpers
+from tests.host.linux import env as linux_env
 from tests.host.openwrt import env as openwrt_env
 
 INSTALL_ROOT = linux_helpers.INSTALL_ROOT
@@ -57,6 +58,28 @@ assert_no_redirect_rule = linux_helpers.assert_no_redirect_rule
 assert_outbound = linux_helpers.assert_outbound
 
 
+def assert_reverse_cli_output_live(
+    runner,
+    role: str,
+    install_dir: PurePosixPath | str,
+    config_dir: str,
+    reverse_tag: str,
+) -> None:
+    install_path = install_dir.as_posix() if isinstance(install_dir, PurePosixPath) else str(install_dir)
+    result = runner(
+        role,
+        "reverse",
+        "--path",
+        install_path,
+        "--config-dir",
+        config_dir,
+        check=True,
+    )
+    output = (result.stdout or "").lower()
+    tag = reverse_tag.strip().lower()
+    assert tag in output, f"{role} reverse list output missing {reverse_tag}. STDOUT: {result.stdout}"
+
+
 def cleanup_client_install(
     host: Host,
     runner,
@@ -64,6 +87,7 @@ def cleanup_client_install(
     config_dir: str | None = None,
 ) -> None:
     print(f"==== cleanup client on {host.backend.hostname} ====")
+    cleanup_runtime_artifacts(host)
     install_path = (install_dir or INSTALL_ROOT).as_posix()
     config_name = config_dir or CLIENT_CONFIG_DIR_NAME
     print(f"client remove start: {install_path} ({config_name})")
@@ -90,6 +114,7 @@ def cleanup_server_install(
     config_dir: str | None = None,
 ) -> None:
     print(f"==== cleanup server on {host.backend.hostname} ====")
+    cleanup_runtime_artifacts(host)
     install_path = (install_dir or INSTALL_ROOT).as_posix()
     config_name = config_dir or SERVER_CONFIG_DIR_NAME
     print(f"server remove start: {install_path} ({config_name})")
@@ -118,6 +143,12 @@ def _clear_log_root(host: Host) -> None:
         f"-- {target}"
     )
     print(f"log root cleared: {LOG_ROOT.as_posix()}")
+
+
+def cleanup_runtime_artifacts(host: Host) -> None:
+    openwrt_env._stop_xp2p_services(host)
+    openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+    host.run("rm -f /tmp/xp2p-*.log >/dev/null 2>&1 || true")
 
 
 def find_tun_inbound(data: dict) -> dict | None:
@@ -185,6 +216,36 @@ def read_toml(host: Host, path: PurePosixPath | Path | str) -> dict:
         raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
 
 
+def read_live_text(host: Host, path: PurePosixPath | Path | str) -> str:
+    return linux_env.read_text(host, _as_path(path))
+
+
+def read_live_json(host: Host, path: PurePosixPath | Path | str) -> dict:
+    content = read_live_text(host, path)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def read_live_toml(host: Host, path: PurePosixPath | Path | str) -> dict:
+    content = read_live_text(host, path)
+    try:
+        return linux_helpers.tomllib.loads(content)
+    except linux_helpers.tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def read_live_client_config(host: Host) -> dict:
+    config = CONFIG_ROOT / "xp2p-client.toml"
+    return read_live_toml(host, config).get("client") or {}
+
+
+def read_live_server_config(host: Host) -> dict:
+    config = CONFIG_ROOT / "xp2p-server.toml"
+    return read_live_toml(host, config).get("server") or {}
+
+
 def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
     for candidate in paths:
         if path_exists(host, candidate):
@@ -232,6 +293,39 @@ def read_pending_server_config(host: Host) -> dict:
     return read_pending_toml(host, pending_config).get("server") or {}
 
 
+def read_preferred_text(host: Host, path: PurePosixPath | Path | str) -> str:
+    target = _as_path(path)
+    if path_exists_live(host, target):
+        return read_live_text(host, target)
+    return read_text(host, target)
+
+
+def read_preferred_json(host: Host, path: PurePosixPath | Path | str) -> dict:
+    content = read_preferred_text(host, path)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Failed to parse JSON from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def read_preferred_toml(host: Host, path: PurePosixPath | Path | str) -> dict:
+    content = read_preferred_text(host, path)
+    try:
+        return linux_helpers.tomllib.loads(content)
+    except linux_helpers.tomllib.TOMLDecodeError as exc:
+        raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def read_preferred_client_config(host: Host) -> dict:
+    config = CONFIG_ROOT / "xp2p-client.toml"
+    return read_preferred_toml(host, config).get("client") or {}
+
+
+def read_preferred_server_config(host: Host) -> dict:
+    config = CONFIG_ROOT / "xp2p-server.toml"
+    return read_preferred_toml(host, config).get("server") or {}
+
+
 def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
     resolved = _as_path(path)
     pending = _pending_candidate(resolved)
@@ -244,6 +338,12 @@ def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
 
 def path_exists_exact(host: Host, path: PurePosixPath | Path | str) -> bool:
     return linux_helpers.path_exists(host, _as_path(path))
+
+
+def path_exists_live(host: Host, path: PurePosixPath | Path | str) -> bool:
+    target = _posix(_as_path(path))
+    result = host.run(f"test -e {shlex.quote(target)}")
+    return result.rc == 0
 
 
 def remove_path(host: Host, path: PurePosixPath | Path | str) -> None:
@@ -277,6 +377,40 @@ def dump_install_dirs(host: Host, label: str) -> None:
             if listing.stdout:
                 print(listing.stdout)
     print("==== END INSTALL DIRS ====")
+
+
+def dump_apply_dirs(host: Host, label: str) -> None:
+    dirs = [
+        CONFIG_ROOT / APPLY_DIR_NAME,
+        CONFIG_PENDING_ROOT,
+        CLIENT_CONFIG_DIR / APPLY_DIR_NAME,
+        CLIENT_PENDING_DIR,
+        SERVER_CONFIG_DIR / APPLY_DIR_NAME,
+        SERVER_PENDING_DIR,
+    ]
+    files = [
+        CONFIG_ROOT / "xp2p-client.toml",
+        CONFIG_ROOT / "xp2p-server.toml",
+        CONFIG_PENDING_ROOT / "xp2p-client.toml",
+        CONFIG_PENDING_ROOT / "xp2p-server.toml",
+        APPLY_REQUEST,
+    ]
+    print(f"==== APPLY DIRS ({label}) on {host.backend.hostname} ====")
+    for path in dirs:
+        target = path.as_posix()
+        exists = host.run(f"test -d {shlex.quote(target)}").rc == 0
+        status = "present" if exists else "missing"
+        print(f"{target}: {status}")
+        if exists:
+            listing = host.run(f"ls -lha {shlex.quote(target)}")
+            if listing.stdout:
+                print(listing.stdout)
+    for path in files:
+        target = path.as_posix()
+        exists = host.run(f"test -e {shlex.quote(target)}").rc == 0
+        status = "present" if exists else "missing"
+        print(f"{target}: {status}")
+    print("==== END APPLY DIRS ====")
 
 
 def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:

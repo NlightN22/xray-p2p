@@ -55,7 +55,7 @@ def test_client_install_default_creates_tun_inbound(openwrt_host, xp2p_openwrt_i
             check=True,
         )
 
-        inbounds = helpers.read_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_preferred_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
         helpers.assert_tun_inbound(inbounds, "xp2pc")
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
@@ -90,7 +90,7 @@ def test_client_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
                 f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
 
-        inbounds = helpers.read_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        inbounds = helpers.read_preferred_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
         helpers.assert_no_tun_inbound(inbounds)
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
@@ -118,7 +118,7 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
+        data = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data,
             "10.55.0.10",
@@ -145,7 +145,7 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        updated = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
+        updated = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             updated,
             "10.55.0.10",
@@ -163,11 +163,11 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             allow_insecure=False,
         )
 
-        routing = helpers.read_json(openwrt_host, CLIENT_ROUTING)
+        routing = helpers.read_preferred_json(openwrt_host, CLIENT_ROUTING)
         helpers.assert_routing_rule(routing, "10.55.0.10")
         helpers.assert_routing_rule(routing, "10.55.0.11")
 
-        state = helpers.read_client_config(openwrt_host)
+        state = helpers.read_preferred_client_config(openwrt_host)
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
         assert recorded_hosts == {"10.55.0.10", "10.55.0.11"}
 
@@ -210,7 +210,7 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        refreshed = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
+        refreshed = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             refreshed,
             "10.55.0.10",
@@ -255,7 +255,7 @@ def test_client_install_from_link(openwrt_host, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
+        data = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data,
             link_host,
@@ -292,7 +292,7 @@ def test_client_install_from_link_without_allow_insecure(openwrt_host, xp2p_open
             "--force",
             check=True,
         )
-        data = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
+        data = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             data, link_host, "linkpass", "link@example.com", "link.example.test", allow_insecure=False
         )
@@ -459,7 +459,7 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        outbounds = helpers.read_json(openwrt_host, CLIENT_OUTBOUNDS)
+        outbounds = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
         helpers.assert_outbound(
             outbounds,
             "10.66.0.11",
@@ -469,10 +469,10 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
         )
         _assert_no_endpoint("10.66.0.10", outbounds)
 
-        routing = helpers.read_json(openwrt_host, CLIENT_ROUTING)
+        routing = helpers.read_preferred_json(openwrt_host, CLIENT_ROUTING)
         helpers.assert_routing_rule(routing, "10.66.0.11")
 
-        state = helpers.read_client_config(openwrt_host)
+        state = helpers.read_preferred_client_config(openwrt_host)
         hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert hosts == {"10.66.0.11"}
 

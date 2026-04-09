@@ -33,7 +33,7 @@ def _timed(label: str):
 
 def _runner(host):
     def _run(*args: str, check: bool = False):
-        result = openwrt_env.run_xp2p(host, *args)
+        result = openwrt_env.run_xp2p_live(host, *args)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "
@@ -56,9 +56,9 @@ def _alpine_guest(host, script: str, *args: str):
 
 def _current_mode(host, role: str) -> str:
     if role == "server":
-        config = helpers.read_pending_server_config(host)
+        config = helpers.read_live_server_config(host)
     elif role == "client":
-        config = helpers.read_pending_client_config(host)
+        config = helpers.read_live_client_config(host)
     else:
         raise ValueError(f"Unsupported role: {role}")
     tun_enabled = config.get("tun_enabled")
@@ -85,6 +85,20 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
     if current != mode:
         _set_mode(runner, role, config_dir, mode)
     return current
+
+
+def _apply_pending_config(host, role: str) -> None:
+    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
+    if not helpers.path_exists_exact(host, pending_path):
+        return
+    config_dir = helpers.SERVER_CONFIG_DIR_NAME if role == "server" else helpers.CLIENT_CONFIG_DIR_NAME
+    with openwrt_env.xp2p_run_session(
+        host,
+        role,
+        helpers.INSTALL_ROOT.as_posix(),
+        config_dir,
+    ):
+        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
 
 
 @pytest.fixture(scope="module")
@@ -152,6 +166,8 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             )
         helpers.wait_for_pending_config(server_host, "server")
         helpers.wait_for_pending_config(client_host, "client")
+        _apply_pending_config(server_host, "server")
+        _apply_pending_config(client_host, "client")
         yield {
             "server_host": server_host,
             "client_host": client_host,
@@ -198,6 +214,8 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             previous_client_mode = _ensure_mode(
                 client_host, client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy"
             )
+            _apply_pending_config(server_host, "server")
+            _apply_pending_config(client_host, "client")
         with _timed("baseline direct ping"):
             initial_ping = server_runner(
                 "ping",
@@ -376,8 +394,10 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             client_host.run(f"ip route del blackhole {C1_LAN_CIDR} >/dev/null 2>&1 || true")
         if previous_server_mode and previous_server_mode != "proxy":
             _set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, previous_server_mode)
+            _apply_pending_config(server_host, "server")
         if previous_client_mode and previous_client_mode != "proxy":
             _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, previous_client_mode)
+            _apply_pending_config(client_host, "client")
         if redirect_added:
             client_runner(
                 "client",
@@ -433,6 +453,8 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
             previous_client_mode = _ensure_mode(
                 client_host, client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy"
             )
+            _apply_pending_config(server_host, "server")
+            _apply_pending_config(client_host, "client")
         with _timed("reverse baseline ping"):
             base_ping = openwrt_env.run_alpine_guest_script(
                 alpine_c1_host,
@@ -463,10 +485,6 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
                 check=True,
             )
         redirect_added = True
-        server_state = helpers.read_server_config(server_host)
-        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
-        helpers.assert_server_redirect_state(server_state, server_redirect_cidr, reverse_tag)
-        helpers.assert_server_redirect_rule(server_routing, server_redirect_cidr, reverse_tag)
 
         with _timed("reverse add nat-redirect"):
             server_runner(
@@ -492,6 +510,10 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
                 ):
             with _timed("reverse tunnel warmup"):
                 time.sleep(2.0)
+            server_state = helpers.read_live_server_config(server_host)
+            server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+            helpers.assert_server_redirect_state(server_state, server_redirect_cidr, reverse_tag)
+            helpers.assert_server_redirect_rule(server_routing, server_redirect_cidr, reverse_tag)
             with _timed("reverse wait heartbeat"):
                 tunnel_common.wait_for_alive_entry(
                     server_runner,
@@ -537,8 +559,10 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
     finally:
         if previous_server_mode and previous_server_mode != "proxy":
             _set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, previous_server_mode)
+            _apply_pending_config(server_host, "server")
         if previous_client_mode and previous_client_mode != "proxy":
             _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, previous_client_mode)
+            _apply_pending_config(client_host, "client")
         if nat_added:
             server_runner("nat-redirect", "remove", "--all", check=False)
         if redirect_added:

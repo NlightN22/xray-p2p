@@ -14,11 +14,12 @@ CLIENT_B_MACHINE = openwrt_env.OPENWRT_MACHINES[1]
 CLIENT_C_MACHINE = openwrt_env.OPENWRT_MACHINES[2]
 SERVER_IP = "10.63.30.11"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+REQUIRED_XRAY_CONFIGS = ("inbounds.json", "logs.json", "outbounds.json", "routing.json")
 
 
 def _runner(host):
     def _run(*args: str, check: bool = False):
-        result = openwrt_env.run_xp2p(host, *args)
+        result = openwrt_env.run_xp2p_live(host, *args)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "
@@ -53,6 +54,74 @@ def _install_client(host, runner, link: str):
     )
 
 
+def _apply_pending_config(host, role: str) -> None:
+    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
+    if not helpers.path_exists_exact(host, pending_path):
+        return
+    config_dir = helpers.SERVER_CONFIG_DIR_NAME if role == "server" else helpers.CLIENT_CONFIG_DIR_NAME
+    with openwrt_env.xp2p_run_session(
+        host,
+        role,
+        helpers.INSTALL_ROOT.as_posix(),
+        config_dir,
+    ):
+        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+
+
+def _wait_for_live_xray_configs(
+    host,
+    config_dir,
+    *,
+    timeout_seconds: float = 30.0,
+    interval: float = 1.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        missing = [
+            (config_dir / name).as_posix()
+            for name in REQUIRED_XRAY_CONFIGS
+            if not helpers.path_exists_exact(host, config_dir / name)
+        ]
+        if not missing:
+            return
+        time.sleep(interval)
+    raise AssertionError(
+        f"Live xray configs did not appear on {host.backend.hostname}: {missing}"
+    )
+
+
+def _wait_for_live_config(
+    host,
+    role: str,
+    *,
+    timeout_seconds: float = 30.0,
+    interval: float = 1.0,
+) -> None:
+    if role == "client":
+        live_path = helpers.CONFIG_ROOT / "xp2p-client.toml"
+    elif role == "server":
+        live_path = helpers.CONFIG_ROOT / "xp2p-server.toml"
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if helpers.path_exists_exact(host, live_path):
+            return
+        time.sleep(interval)
+    raise AssertionError(
+        f"Live config did not appear for {role} on {host.backend.hostname} within {timeout_seconds}s"
+    )
+
+
+def _pending_config_present(host, role: str) -> bool:
+    if role == "client":
+        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
+    elif role == "server":
+        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    return helpers.path_exists_exact(host, pending_path)
+
 def _strip_ansi(value: str | None) -> str:
     if not value:
         return ""
@@ -84,7 +153,7 @@ def _assert_server_state_reports_user(
     install_path = helpers.INSTALL_ROOT.as_posix()
     last_stdout = ""
     for _ in range(attempts):
-        result = openwrt_env.run_xp2p(
+        result = openwrt_env.run_xp2p_live(
             host,
             "server",
             "state",
@@ -120,7 +189,7 @@ def _assert_server_state_reports_users(
         pytest.fail("expected_users is empty")
     last_stdout = ""
     for _ in range(attempts):
-        result = openwrt_env.run_xp2p(
+        result = openwrt_env.run_xp2p_live(
             host,
             "server",
             "state",
@@ -156,7 +225,7 @@ def _assert_server_state_reports_users_alive(
         pytest.fail("expected_users is empty")
     last_stdout = ""
     for _ in range(attempts):
-        result = openwrt_env.run_xp2p(
+        result = openwrt_env.run_xp2p_live(
             host,
             "server",
             "state",
@@ -208,6 +277,16 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
     helpers.remove_path(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
     for host in (client_b, client_c):
         helpers.remove_path(host, helpers.HEARTBEAT_STATE_FILE)
+    for host in (server_host, client_b, client_c):
+        openwrt_env._stop_xp2p_services(host)
+        openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+        host.run("rm -f /tmp/xp2p-*.log >/dev/null 2>&1 || true")
+    helpers.dump_install_dirs(server_host, "tunnel BC to A after cleanup")
+    helpers.dump_install_dirs(client_b, "tunnel BC to A after cleanup")
+    helpers.dump_install_dirs(client_c, "tunnel BC to A after cleanup")
+    helpers.dump_apply_dirs(server_host, "tunnel BC to A after cleanup")
+    helpers.dump_apply_dirs(client_b, "tunnel BC to A after cleanup")
+    helpers.dump_apply_dirs(client_c, "tunnel BC to A after cleanup")
 
     try:
         server_install = server_runner(
@@ -224,8 +303,15 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
+        helpers.dump_apply_dirs(server_host, "tunnel BC to A after server install")
         default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
         reverse_default = helpers.expected_reverse_tag(default_cred["user"], SERVER_IP)
+        if _pending_config_present(server_host, "server"):
+            _apply_pending_config(server_host, "server")
+            helpers.wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _wait_for_live_config(server_host, "server")
+        _wait_for_live_xray_configs(server_host, helpers.SERVER_CONFIG_DIR)
+        _apply_pending_config(server_host, "server")
 
         user_add = server_runner(
             "server",
@@ -265,8 +351,11 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         )
         reverse_norev = helpers.expected_reverse_tag("client-norev@example.com", SERVER_IP)
 
-        server_state = helpers.read_server_config(server_host)
-        server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        _apply_pending_config(server_host, "server")
+        _wait_for_live_config(server_host, "server")
+        _wait_for_live_xray_configs(server_host, helpers.SERVER_CONFIG_DIR)
+        server_state = helpers.read_live_server_config(server_host)
+        server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         for reverse_tag, user in (
             (reverse_default, default_cred["user"]),
             (reverse_second, "client-two@example.com"),
@@ -282,7 +371,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         assert recorded_server_tags == {reverse_default, reverse_second}
         assert reverse_norev not in recorded_server_tags
         for reverse_tag in (reverse_default, reverse_second):
-            helpers.assert_reverse_cli_output(
+            helpers.assert_reverse_cli_output_live(
                 server_runner,
                 "server",
                 helpers.INSTALL_ROOT,
@@ -292,10 +381,20 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
 
         _install_client(client_b, client_b_runner, default_cred["link"])
         _install_client(client_c, client_c_runner, second_link)
+        helpers.dump_apply_dirs(client_b, "tunnel BC to A after client B install")
+        helpers.dump_apply_dirs(client_c, "tunnel BC to A after client C install")
 
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
-        client_b_state = helpers.read_client_config(client_b)
-        client_b_routing = helpers.read_json(client_b, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        if _pending_config_present(client_b, "client"):
+            _apply_pending_config(client_b, "client")
+            helpers.wait_for_apply_request_clear(client_b, timeout_seconds=60.0)
+        _wait_for_live_config(client_b, "client")
+        _wait_for_live_xray_configs(client_b, helpers.CLIENT_CONFIG_DIR)
+        _apply_pending_config(client_b, "client")
+        _wait_for_live_config(client_b, "client")
+        _wait_for_live_xray_configs(client_b, helpers.CLIENT_CONFIG_DIR)
+        client_b_state = helpers.read_live_client_config(client_b)
+        client_b_routing = helpers.read_live_json(client_b, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_client_reverse_artifacts(client_b_routing, reverse_default, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_b_state,
@@ -305,16 +404,24 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             host=SERVER_IP,
         )
         assert set((client_b_state.get("reverse") or {}).keys()) == {reverse_default}
-        helpers.assert_reverse_cli_output(
+        helpers.assert_reverse_cli_output_live(
             client_b_runner,
             "client",
             helpers.INSTALL_ROOT,
             helpers.CLIENT_CONFIG_DIR_NAME,
             reverse_default,
-        )
+            )
 
-        client_c_state = helpers.read_client_config(client_c)
-        client_c_routing = helpers.read_json(client_c, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        if _pending_config_present(client_c, "client"):
+            _apply_pending_config(client_c, "client")
+            helpers.wait_for_apply_request_clear(client_c, timeout_seconds=60.0)
+        _wait_for_live_config(client_c, "client")
+        _wait_for_live_xray_configs(client_c, helpers.CLIENT_CONFIG_DIR)
+        _apply_pending_config(client_c, "client")
+        _wait_for_live_config(client_c, "client")
+        _wait_for_live_xray_configs(client_c, helpers.CLIENT_CONFIG_DIR)
+        client_c_state = helpers.read_live_client_config(client_c)
+        client_c_routing = helpers.read_live_json(client_c, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_client_reverse_artifacts(client_c_routing, reverse_second, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_c_state,
@@ -324,7 +431,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             host=SERVER_IP,
         )
         assert set((client_c_state.get("reverse") or {}).keys()) == {reverse_second}
-        helpers.assert_reverse_cli_output(
+        helpers.assert_reverse_cli_output_live(
             client_c_runner,
             "client",
             helpers.INSTALL_ROOT,
@@ -351,6 +458,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     check=True,
                 )
                 redirect_domains.append({"domain": domain, "tag": reverse_tag})
+                _apply_pending_config(server_host, "server")
                 list_output = server_runner(
                     "server",
                     "redirect",
@@ -362,8 +470,8 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     check=True,
                 ).stdout or ""
                 assert domain in list_output.lower(), f"Server redirect list missing {domain}"
-                server_state = helpers.read_server_config(server_host)
-                server_routing = helpers.read_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+                server_state = helpers.read_live_server_config(server_host)
+                server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
                 helpers.assert_server_redirect_state(server_state, domain, reverse_tag)
                 helpers.assert_server_redirect_rule(server_routing, domain, reverse_tag)
 
@@ -481,6 +589,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     pytest.fail(
                         f"Failed to remove redirect {domain}:\nSTDOUT:\n{removal.stdout}\nSTDERR:\n{removal.stderr}"
                     )
+            _apply_pending_config(server_host, "server")
             final_list = server_runner(
                 "server",
                 "redirect",

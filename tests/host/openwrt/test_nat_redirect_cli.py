@@ -9,7 +9,7 @@ from tests.host.openwrt import env as openwrt_env
 
 
 def _current_mode(host) -> str:
-    state = helpers.read_client_config(host)
+    state = helpers.read_preferred_client_config(host)
     tun_enabled = state.get("tun_enabled")
     if not isinstance(tun_enabled, bool):
         raise AssertionError(f"Expected tun_enabled boolean in client config, got {tun_enabled!r}")

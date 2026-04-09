@@ -103,6 +103,7 @@ def xp2p_full_cleanup(openwrt_host_factory):
 
     def _cleanup_host(host: Host) -> None:
         runner = _xp2p_runner(host)
+        helpers.cleanup_runtime_artifacts(host)
         runner(
             "client",
             "remove",
@@ -124,8 +125,6 @@ def xp2p_full_cleanup(openwrt_host_factory):
             "--ignore-missing",
             "--quiet",
         )
-        openwrt_env._stop_xp2p_services(host)
-        openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
 
         cleanup_paths = [
             helpers.CLIENT_CONFIG_FILE,
@@ -146,3 +145,5 @@ def xp2p_full_cleanup(openwrt_host_factory):
     for host in hosts:
         _cleanup_host(host)
     yield
+    for host in hosts:
+        _cleanup_host(host)

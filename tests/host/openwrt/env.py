@@ -385,6 +385,17 @@ def opkg_install_local(host: Host, path: PurePosixPath) -> None:
         )
 
 
+
+
+def run_xp2p_live(host: Host, *args: str):
+    cmd = list(args)
+    quoted_args = " ".join(shlex.quote(arg) for arg in cmd)
+    command = "/usr/bin/xp2p"
+    if quoted_args:
+        command = f"{command} {quoted_args}"
+    return host.run(command)
+
+
 def run_xp2p(host: Host, *args: str):
     cmd = list(args)
     pending_targets = {
@@ -405,11 +416,7 @@ def run_xp2p(host: Host, *args: str):
             if tuple(cmd[: len(target)]) == target:
                 cmd.append("--pending")
                 break
-    quoted_args = " ".join(shlex.quote(arg) for arg in cmd)
-    command = "/usr/bin/xp2p"
-    if quoted_args:
-        command = f"{command} {quoted_args}"
-    return host.run(command)
+    return run_xp2p_live(host, *cmd)
 
 
 def run_xp2p_with_env(host: Host, env_vars: dict[str, str], *args: str):
@@ -515,7 +522,6 @@ def xp2p_run_session(
         f"setsid /usr/bin/xp2p {role} run "
         f"--path {shlex.quote(install_path)} "
         f"--config-dir {shlex.quote(config_dir)} "
-        f"--auto-install "
         f"--quiet{extra} >{shlex.quote(log_target)} 2>&1 & echo $!"
     )
     last_log = ""
