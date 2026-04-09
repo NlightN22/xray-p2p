@@ -103,10 +103,11 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if addErr != nil && !errors.Is(addErr, redirect.ErrRuleExists) {
 		return addErr
 	}
-	if !errors.Is(addErr, redirect.ErrRuleExists) {
-		if err := state.save(paths.configFile); err != nil {
-			return err
-		}
+	if errors.Is(addErr, redirect.ErrRuleExists) {
+		return nil
+	}
+	if err := state.save(paths.configFile); err != nil {
+		return err
 	}
 	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
 	if err != nil {

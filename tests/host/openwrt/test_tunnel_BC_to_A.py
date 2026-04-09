@@ -68,6 +68,11 @@ def _apply_pending_config(host, role: str) -> None:
         helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
 
 
+def _apply_pending_config_wait(host, role: str) -> None:
+    helpers.wait_for_pending_config(host, role)
+    _apply_pending_config(host, role)
+
+
 def _wait_for_live_xray_configs(
     host,
     config_dir,
@@ -307,11 +312,10 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
         reverse_default = helpers.expected_reverse_tag(default_cred["user"], SERVER_IP)
         if _pending_config_present(server_host, "server"):
-            _apply_pending_config(server_host, "server")
+            _apply_pending_config_wait(server_host, "server")
             helpers.wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
         _wait_for_live_config(server_host, "server")
         _wait_for_live_xray_configs(server_host, helpers.SERVER_CONFIG_DIR)
-        _apply_pending_config(server_host, "server")
 
         user_add = server_runner(
             "server",
@@ -351,7 +355,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         )
         reverse_norev = helpers.expected_reverse_tag("client-norev@example.com", SERVER_IP)
 
-        _apply_pending_config(server_host, "server")
+        _apply_pending_config_wait(server_host, "server")
         _wait_for_live_config(server_host, "server")
         _wait_for_live_xray_configs(server_host, helpers.SERVER_CONFIG_DIR)
         server_state = helpers.read_live_server_config(server_host)
@@ -385,12 +389,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         helpers.dump_apply_dirs(client_c, "tunnel BC to A after client C install")
 
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
-        if _pending_config_present(client_b, "client"):
-            _apply_pending_config(client_b, "client")
-            helpers.wait_for_apply_request_clear(client_b, timeout_seconds=60.0)
-        _wait_for_live_config(client_b, "client")
-        _wait_for_live_xray_configs(client_b, helpers.CLIENT_CONFIG_DIR)
-        _apply_pending_config(client_b, "client")
+        _apply_pending_config_wait(client_b, "client")
         _wait_for_live_config(client_b, "client")
         _wait_for_live_xray_configs(client_b, helpers.CLIENT_CONFIG_DIR)
         client_b_state = helpers.read_live_client_config(client_b)
@@ -412,12 +411,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             reverse_default,
             )
 
-        if _pending_config_present(client_c, "client"):
-            _apply_pending_config(client_c, "client")
-            helpers.wait_for_apply_request_clear(client_c, timeout_seconds=60.0)
-        _wait_for_live_config(client_c, "client")
-        _wait_for_live_xray_configs(client_c, helpers.CLIENT_CONFIG_DIR)
-        _apply_pending_config(client_c, "client")
+        _apply_pending_config_wait(client_c, "client")
         _wait_for_live_config(client_c, "client")
         _wait_for_live_xray_configs(client_c, helpers.CLIENT_CONFIG_DIR)
         client_c_state = helpers.read_live_client_config(client_c)
@@ -458,7 +452,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     check=True,
                 )
                 redirect_domains.append({"domain": domain, "tag": reverse_tag})
-                _apply_pending_config(server_host, "server")
+                _apply_pending_config_wait(server_host, "server")
                 list_output = server_runner(
                     "server",
                     "redirect",
@@ -589,7 +583,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                     pytest.fail(
                         f"Failed to remove redirect {domain}:\nSTDOUT:\n{removal.stdout}\nSTDERR:\n{removal.stderr}"
                     )
-            _apply_pending_config(server_host, "server")
+            _apply_pending_config_wait(server_host, "server")
             final_list = server_runner(
                 "server",
                 "redirect",

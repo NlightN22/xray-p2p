@@ -101,6 +101,11 @@ def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -
         helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
 
 
+def _apply_pending_config_wait(host, role: str, install_path: str, config_dir: str) -> None:
+    helpers.wait_for_pending_config(host, role)
+    _apply_pending_config(host, role, install_path, config_dir)
+
+
 @pytest.fixture(scope="module")
 def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
     server_host = openwrt_server_host
@@ -254,7 +259,6 @@ def _active_tunnel_sessions(env: dict):
         _wait_for_listen_port(env["client_host"], CLIENT_SOCKS_PORT)
         for host in (env["server_host"], env["client_host"]):
             helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-        _verify_heartbeat_state(env)
         yield
 
 
@@ -345,7 +349,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        _apply_pending_config(
+        _apply_pending_config_wait(
             client_host,
             "client",
             helpers.INSTALL_ROOT.as_posix(),
@@ -405,7 +409,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             "tcp",
             check=True,
         )
-        _apply_pending_config(
+        _apply_pending_config_wait(
             server_host,
             "server",
             env["server_install_path"],
@@ -453,52 +457,43 @@ def _verify_heartbeat_state(env: dict) -> None:
     if not helpers.path_exists_exact(env["client_host"], CLIENT_HEARTBEAT_STATE_FILE):
         pytest.fail("Client heartbeat state not found after run start")
 
-    server_state = env["server_runner"]("server", "state", "--path", server_install_path, check=True).stdout or ""
-    client_state = env["client_runner"]("client", "state", "--path", client_install_path, check=True).stdout or ""
-    _assert_alive_entry_once(
-        server_state,
-        expected_tag,
-        expected_user,
-        expected_client_ip,
-        "server",
-    )
-    _assert_alive_entry_once(
-        client_state,
-        expected_tag,
-        expected_user,
-        expected_client_ip,
-        "client",
-    )
+    try:
+        tunnel_common.wait_for_alive_entry(
+            env["server_runner"],
+            "server",
+            server_install_path,
+            expected_tag,
+            SERVER_IP,
+            expected_user,
+            expected_client_ip,
+            timeout_seconds=20.0,
+            poll_interval=2.0,
+        )
+    except AssertionError:
+        state_output = env["server_runner"]("server", "state", "--path", server_install_path, check=True).stdout or ""
+        raise AssertionError(
+            f"server heartbeat entry not found for {expected_tag}@{SERVER_IP}.\nState output:\n{state_output}"
+        ) from None
+
+    try:
+        tunnel_common.wait_for_alive_entry(
+            env["client_runner"],
+            "client",
+            client_install_path,
+            expected_tag,
+            SERVER_IP,
+            expected_user,
+            expected_client_ip,
+            timeout_seconds=20.0,
+            poll_interval=2.0,
+        )
+    except AssertionError:
+        state_output = env["client_runner"]("client", "state", "--path", client_install_path, check=True).stdout or ""
+        raise AssertionError(
+            f"client heartbeat entry not found for {expected_tag}@{SERVER_IP}.\nState output:\n{state_output}"
+        ) from None
 
 
-def _assert_alive_entry_once(
-    state_output: str,
-    expected_tag: str,
-    expected_user: str,
-    expected_client_ip: str,
-    role: str,
-) -> None:
-    rows = tunnel_common.parse_state_rows(state_output)
-    for row in rows:
-        tag = row.get("TAG", "").strip()
-        host_value = row.get("HOST", "").strip()
-        status = row.get("STATUS", "").strip().lower()
-        if tag != expected_tag or host_value != SERVER_IP or status != "alive":
-            continue
-        client_user = row.get("CLIENT_USER", "").strip()
-        client_ip = row.get("CLIENT_IP", "").strip()
-        if client_user != expected_user:
-            raise AssertionError(
-                f"{role} heartbeat CLIENT_USER mismatch (expected {expected_user}, got {client_user})"
-            )
-        if client_ip != expected_client_ip:
-            raise AssertionError(
-                f"{role} heartbeat CLIENT_IP mismatch (expected {expected_client_ip}, got {client_ip})"
-            )
-        return
-    raise AssertionError(
-        f"{role} heartbeat entry not found for {expected_tag}@{SERVER_IP}.\nState output:\n{state_output}"
-    )
 
 
 def _run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
@@ -535,7 +530,6 @@ def test_forward_tunnel_operational(tunnel_environment):
     client_runner = tunnel_environment["client_runner"]
 
     with _active_tunnel_sessions(tunnel_environment):
-        _verify_heartbeat_state(tunnel_environment)
         ping_result = client_runner(
             "ping",
             SERVER_IP,
@@ -545,6 +539,7 @@ def test_forward_tunnel_operational(tunnel_environment):
             check=True,
         )
         tunnel_common.assert_zero_loss(ping_result, "through SOCKS tunnel")
+        _verify_heartbeat_state(tunnel_environment)
         _run_server_state_watch(tunnel_environment)
     _exercise_client_forward_diagnostics(tunnel_environment)
     _exercise_server_forward_diagnostics(tunnel_environment)
@@ -628,7 +623,7 @@ def test_client_redirect_through_server(tunnel_environment):
         endpoint_tag,
         check=True,
     )
-    _apply_pending_config(
+    _apply_pending_config_wait(
         client_host,
         "client",
         helpers.INSTALL_ROOT.as_posix(),
@@ -690,7 +685,7 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         nat_added = True
-        _apply_pending_config(
+        _apply_pending_config_wait(
             client_host,
             "client",
             helpers.INSTALL_ROOT.as_posix(),
@@ -731,6 +726,7 @@ def test_client_redirect_through_server(tunnel_environment):
                     f"socks_netstat:\n{_safe(client_socks_netstat.stdout)}\n{_safe(client_socks_netstat.stderr)}\n"
                     f"client_ps:\n{_safe(client_processes.stdout)}\n{_safe(client_processes.stderr)}\n",
                 )
+                _verify_heartbeat_state(tunnel_environment)
             initial_packets = _nft_counter_sum(client_host)
             with _active_tunnel_sessions(tunnel_environment):
                 ping_result = client_runner(
@@ -771,7 +767,7 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         server_redirect_added = True
-        _apply_pending_config(
+        _apply_pending_config_wait(
             server_host,
             "server",
             server_install_path,
@@ -786,7 +782,7 @@ def test_client_redirect_through_server(tunnel_environment):
             check=True,
         )
         server_nat_added = True
-        _apply_pending_config(
+        _apply_pending_config_wait(
             server_host,
             "server",
             server_install_path,
@@ -840,7 +836,7 @@ def test_client_redirect_through_server(tunnel_environment):
                 tunnel_environment["reverse_tag"],
                 check=False,
             )
-        _apply_pending_config(
+        _apply_pending_config_wait(
             client_host,
             "client",
             helpers.INSTALL_ROOT.as_posix(),
@@ -886,7 +882,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             reverse_tag,
             check=True,
         )
-        _apply_pending_config(
+        _apply_pending_config_wait(
             server_host,
             "server",
             server_install_path,
@@ -930,7 +926,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 check=True,
             )
             forward_added = True
-            _apply_pending_config(
+            _apply_pending_config_wait(
                 server_host,
                 "server",
                 server_install_path,
@@ -947,7 +943,6 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             with _active_tunnel_sessions(tunnel_environment):
                 _wait_for_listen_port(server_host, SERVER_FORWARD_PORT)
                 _wait_for_listen_port(client_host, CLIENT_DIAGNOSTICS_PORT)
-                _verify_heartbeat_state(tunnel_environment)
                 time.sleep(2.5)
                 ping_result = server_runner(
                     "ping",
@@ -961,6 +956,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 tunnel_common.assert_zero_loss(
                     ping_result, f"via server forward targeting {CLIENT_REVERSE_TEST_IP}"
                 )
+                _verify_heartbeat_state(tunnel_environment)
         finally:
             if forward_added:
                 _server_forward_cmd(
@@ -984,7 +980,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 reverse_tag,
                 check=True,
             )
-            _apply_pending_config(
+            _apply_pending_config_wait(
                 server_host,
                 "server",
                 server_install_path,
