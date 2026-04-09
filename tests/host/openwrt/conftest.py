@@ -63,14 +63,20 @@ def openwrt_ipk_target() -> str:
 @pytest.fixture(scope="session")
 def xp2p_openwrt_ipk(openwrt_ipk_target):
     openwrt_env.IPK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    openwrt_env.require_ipk_builder_environment()
-    ipk_builder_host = openwrt_env.get_ipk_builder_host()
-    build_start = time.perf_counter()
-    openwrt_env.build_ipk(ipk_builder_host, openwrt_ipk_target)
-    build_elapsed = time.perf_counter() - build_start
-    print(f"TIMING: openwrt ipk build: {build_elapsed:.2f}s")
-    artifact = openwrt_env.latest_local_ipk()
-    assert artifact, "Expected build/ipk to contain a freshly built xp2p ipk"
+    skip_build = os.environ.get("XP2P_OPENWRT_SKIP_IPK_BUILD", "").strip().lower() in {"1", "true", "yes"}
+    if skip_build:
+        artifact = openwrt_env.latest_local_ipk()
+        assert artifact, "Expected build/ipk to contain an xp2p ipk when XP2P_OPENWRT_SKIP_IPK_BUILD is set"
+        print("TIMING: openwrt ipk build skipped (env XP2P_OPENWRT_SKIP_IPK_BUILD)")
+    else:
+        openwrt_env.require_ipk_builder_environment()
+        ipk_builder_host = openwrt_env.get_ipk_builder_host()
+        build_start = time.perf_counter()
+        openwrt_env.build_ipk(ipk_builder_host, openwrt_ipk_target)
+        build_elapsed = time.perf_counter() - build_start
+        print(f"TIMING: openwrt ipk build: {build_elapsed:.2f}s")
+        artifact = openwrt_env.latest_local_ipk()
+        assert artifact, "Expected build/ipk to contain a freshly built xp2p ipk"
     openwrt_env.ensure_packages_index_present()
     skip_sync = os.environ.get("XP2P_OPENWRT_SKIP_IPK_SYNC", "").strip().lower() in {"1", "true", "yes"}
     if not skip_sync:

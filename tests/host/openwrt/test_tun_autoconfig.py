@@ -107,8 +107,18 @@ def test_openwrt_tun_autoconfig_client_network(openwrt_host, xp2p_openwrt_ipk):
         output = _uci_show_network(openwrt_host, CLIENT_TUN)
         _assert_uci_interface(output, CLIENT_TUN, CLIENT_ADDR)
 
-        runner("client", "service", "stop")
-        helpers.cleanup_client_install(openwrt_host, runner)
+        runner(
+            "client",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--all",
+            "--ignore-missing",
+            "--quiet",
+        )
+        helpers.wait_for_apply_request_clear(openwrt_host)
         assert not _uci_show_network(openwrt_host, CLIENT_TUN).strip(), (
             "Expected UCI interface to be removed after xp2p client remove"
         )
@@ -143,8 +153,17 @@ def test_openwrt_tun_autoconfig_server_network(openwrt_host, xp2p_openwrt_ipk):
         output = _uci_show_network(openwrt_host, SERVER_TUN)
         _assert_uci_interface(output, SERVER_TUN, SERVER_ADDR)
 
-        runner("server", "service", "stop")
-        helpers.cleanup_server_install(openwrt_host, runner)
+        runner(
+            "server",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--ignore-missing",
+            "--quiet",
+        )
+        helpers.wait_for_apply_request_clear(openwrt_host)
         assert not _uci_show_network(openwrt_host, SERVER_TUN).strip(), (
             "Expected UCI interface to be removed after xp2p server remove"
         )
