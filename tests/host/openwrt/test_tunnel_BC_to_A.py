@@ -69,8 +69,12 @@ def _apply_pending_config(host, role: str) -> None:
 
 
 def _apply_pending_config_wait(host, role: str) -> None:
-    helpers.wait_for_pending_config(host, role)
-    _apply_pending_config(host, role)
+    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
+    if helpers.path_exists_exact(host, pending_path):
+        _apply_pending_config(host, role)
+        return
+    if helpers.path_exists_exact(host, helpers.APPLY_REQUEST):
+        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
 
 
 def _wait_for_live_xray_configs(

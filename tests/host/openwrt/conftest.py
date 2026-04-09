@@ -103,7 +103,6 @@ def xp2p_full_cleanup(openwrt_host_factory):
 
     def _cleanup_host(host: Host) -> None:
         runner = _xp2p_runner(host)
-        helpers.cleanup_runtime_artifacts(host)
         runner(
             "client",
             "remove",
@@ -125,21 +124,16 @@ def xp2p_full_cleanup(openwrt_host_factory):
             "--ignore-missing",
             "--quiet",
         )
-
-        cleanup_paths = [
-            helpers.CLIENT_CONFIG_FILE,
-            helpers.SERVER_CONFIG_FILE,
-            helpers.CLIENT_APPLIED_STATE_FILE,
-            helpers.SERVER_APPLIED_STATE_FILE,
-            helpers.CLIENT_HEARTBEAT_STATE_FILE,
-            helpers.SERVER_HEARTBEAT_STATE_FILE,
-            helpers.CLIENT_CONFIG_DIR / "inbounds.json",
-            helpers.SERVER_CONFIG_DIR / "inbounds.json",
-            PurePosixPath("/tmp/xp2p-client-deploy.log"),
-            PurePosixPath("/tmp/xp2p-server-deploy.log"),
-        ]
-        quoted_paths = " ".join(shlex.quote(path.as_posix()) for path in cleanup_paths)
-        host.run(f"/bin/sh -c 'rm -rf -- \"$@\"' -- {quoted_paths}")
+        helpers.cleanup_runtime_artifacts(host)
+        host.run(
+            "/bin/sh -c "
+            "'if [ -d /etc/xp2p ]; then "
+            "rm -rf /etc/xp2p/* /etc/xp2p/.[!.]* /etc/xp2p/..?* >/dev/null 2>&1 || true; "
+            "fi; "
+            "if [ -d /var/log/xp2p ]; then "
+            "rm -rf /var/log/xp2p/* /var/log/xp2p/.[!.]* /var/log/xp2p/..?* >/dev/null 2>&1 || true; "
+            "fi'"
+        )
         helpers._clear_log_root(host)
 
     for host in hosts:

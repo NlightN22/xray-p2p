@@ -102,8 +102,17 @@ def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -
 
 
 def _apply_pending_config_wait(host, role: str, install_path: str, config_dir: str) -> None:
-    helpers.wait_for_pending_config(host, role)
-    _apply_pending_config(host, role, install_path, config_dir)
+    if role == "client":
+        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
+    elif role == "server":
+        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    if helpers.path_exists_exact(host, pending_path):
+        _apply_pending_config(host, role, install_path, config_dir)
+        return
+    if helpers.path_exists_exact(host, helpers.APPLY_REQUEST):
+        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
 
 
 @pytest.fixture(scope="module")
@@ -609,11 +618,16 @@ def test_client_redirect_through_server(tunnel_environment):
         matches = re.findall(r"counter packets\s+(\d+)", result.stdout or "")
         return sum(int(value) for value in matches)
 
-    pending_list = client_runner("client", "redirect", "list", "--pending", check=False)
-    live_list = client_runner("client", "redirect", "list", check=False)
-    print("client redirect list --pending (pre-add):")
-    print((pending_list.stdout or "").strip())
-    print((pending_list.stderr or "").strip())
+    live_list = openwrt_env.run_xp2p_live(
+        client_host,
+        "client",
+        "redirect",
+        "list",
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.CLIENT_CONFIG_DIR_NAME,
+    )
     print("client redirect list --live (pre-add):")
     print((live_list.stdout or "").strip())
     print((live_list.stderr or "").strip())
@@ -851,7 +865,8 @@ def test_client_redirect_through_server(tunnel_environment):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
-        final_list = client_runner(
+        final_list = openwrt_env.run_xp2p_live(
+            client_host,
             "client",
             "redirect",
             "list",
@@ -859,7 +874,6 @@ def test_client_redirect_through_server(tunnel_environment):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
-            check=True,
         ).stdout or ""
         assert CLIENT_REDIRECT_CIDR not in final_list
         if previous_server_mode and previous_server_mode != "proxy":
@@ -899,7 +913,8 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
         )
         forward_added = False
         try:
-            list_output = server_runner(
+            list_output = openwrt_env.run_xp2p_live(
+                server_host,
                 "server",
                 "redirect",
                 "list",
@@ -907,7 +922,6 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                 server_install_path,
                 "--config-dir",
                 helpers.SERVER_CONFIG_DIR_NAME,
-                check=True,
             ).stdout or ""
             assert alias_cidr in list_output, f"Server redirect list missing {alias_cidr}"
             with _active_tunnel_sessions(tunnel_environment):
