@@ -14,6 +14,9 @@ import (
 func openReverseStorePending() (reverseStore, error) {
 	pendingPath := pendingConfigPath()
 	livePath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if err := ensurePendingServerConfigFile(pendingPath, livePath); err != nil {
+		return reverseStore{}, err
+	}
 	doc, err := loadServerStateDocWithFallback(pendingPath, livePath)
 	if err != nil {
 		return reverseStore{}, err
@@ -32,6 +35,9 @@ func openReverseStorePending() (reverseStore, error) {
 func openServerRedirectStorePending() (serverRedirectStore, error) {
 	pendingPath := pendingConfigPath()
 	livePath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if err := ensurePendingServerConfigFile(pendingPath, livePath); err != nil {
+		return serverRedirectStore{}, err
+	}
 	doc, err := loadServerStateDocWithFallback(pendingPath, livePath)
 	if err != nil {
 		return serverRedirectStore{}, err
@@ -55,6 +61,9 @@ func openServerRedirectStorePending() (serverRedirectStore, error) {
 func openServerForwardStorePending() (serverForwardStore, error) {
 	pendingPath := pendingConfigPath()
 	livePath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if err := ensurePendingServerConfigFile(pendingPath, livePath); err != nil {
+		return serverForwardStore{}, err
+	}
 	doc, err := loadServerStateDocWithFallback(pendingPath, livePath)
 	if err != nil {
 		return serverForwardStore{}, err

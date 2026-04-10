@@ -439,6 +439,8 @@ def _stop_xp2p_services(host: Host) -> None:
         host.run(f"{cmd} >/dev/null 2>&1 || true")
 
 
+
+
 def _kill_port_listeners(host: Host, port: str) -> None:
     kill_cmd = (
         "pids=$(netstat -lpn 2>/dev/null | grep ':%s ' | awk '{print $7}' | cut -d/ -f1 | tr -d \"-\" ); "

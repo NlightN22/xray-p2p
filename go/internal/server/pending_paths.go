@@ -11,6 +11,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -60,6 +61,31 @@ func resolveServerConfigPath() (string, error) {
 		}
 	}
 	return livePath, nil
+}
+
+func ensurePendingServerConfigFile(pendingPath, livePath string) error {
+	if strings.TrimSpace(pendingPath) == "" || strings.TrimSpace(livePath) == "" {
+		return nil
+	}
+	if _, err := os.Stat(pendingPath); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	data, err := os.ReadFile(livePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(pendingPath), 0o755); err != nil {
+		return err
+	}
+	return configio.WriteBytes(pendingPath, data, configio.WriteOptions{
+		AuditPath:         config.AuditLogPath(),
+		IgnoreAuditErrors: true,
+	})
 }
 
 func writeServerApplyRequest() error {

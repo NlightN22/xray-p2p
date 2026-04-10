@@ -27,6 +27,7 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
   ```
 - Services land under `/etc/init.d/xp2p-client` and `/etc/init.d/xp2p-server` and run `xp2p client|server service run` with default flags.
 - Manage lifecycle: `service xp2p-client start|stop|restart|status` or `xp2p client service start|status`; logs live in `/var/log/xp2p/`.
+- On a live OpenWrt system, `opkg install` triggers `default_postinst`, which enables and starts init.d services immediately. Expect `xp2p` service processes to come up right after install.
 - Remove: `opkg remove xp2p` (stops services and removes the package). To purge, delete `/etc/xp2p`, `/var/log/xp2p`, and the init scripts.
 - Optional manual feed setup: `echo "src-git xp2p https://github.com/NlightN22/xray-p2p.git;main" >> /etc/opkg/customfeeds.conf && opkg update && opkg install xp2p`.
 - From a local IPK: `opkg install /tmp/xp2p_<version>_<arch>.ipk`.

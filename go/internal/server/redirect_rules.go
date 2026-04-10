@@ -184,11 +184,12 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if addErr != nil && !errors.Is(addErr, redirect.ErrRuleExists) {
 		return addErr
 	}
-	if !errors.Is(addErr, redirect.ErrRuleExists) {
-		store.redirects = updated
-		if err := store.saveRedirects(); err != nil {
-			return err
-		}
+	if errors.Is(addErr, redirect.ErrRuleExists) {
+		return nil
+	}
+	store.redirects = updated
+	if err := store.saveRedirects(); err != nil {
+		return err
 	}
 	if err := rebuildServerRoutingFromPath(pendingConfigPath(), configDir); err != nil {
 		return err

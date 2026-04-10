@@ -128,8 +128,15 @@ def _clear_log_root(host: Host) -> None:
 
 def cleanup_runtime_artifacts(host: Host) -> None:
     openwrt_env._stop_xp2p_services(host)
+    host.run("/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true")
+    host.run("/etc/init.d/xp2p-server disable >/dev/null 2>&1 || true")
     openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
+    for port in ("62022", "62023", "52080", "52180", "51080", "51180"):
+        host.run(f"fuser -k {port}/tcp >/dev/null 2>&1 || true")
+        host.run(f"fuser -k {port}/udp >/dev/null 2>&1 || true")
+        openwrt_env._kill_port_listeners(host, port)
     host.run("rm -f /tmp/xp2p-*.log >/dev/null 2>&1 || true")
+    dump_runtime_state(host, "after cleanup")
 
 
 def _purge_install_paths(host: Host, install_path: str, config_name: str, role: str) -> None:
@@ -381,6 +388,22 @@ def dump_install_dirs(host: Host, label: str) -> None:
                 print(listing.stdout)
     print("==== END INSTALL DIRS ====")
 
+
+def dump_runtime_state(host: Host, label: str) -> None:
+    print(f"==== RUNTIME STATE ({label}) on {host.backend.hostname} ====")
+    host.run(
+        "sh -c "
+        + shlex.quote(
+            "echo '-- ps xp2p/xray'; "
+            "ps w | grep -E 'xp2p|xray' | grep -v grep || echo 'no xp2p/xray processes'; "
+            "echo '-- netstat listeners'; "
+            "netstat -lpn 2>/dev/null | egrep '62022|62023|52080|52180|51080|51180' || echo 'no xp2p listeners'; "
+            "echo '-- fuser ports'; "
+            "fuser -n tcp 62022 62023 52080 52180 51080 51180 2>/dev/null || echo 'no tcp fuser hits'; "
+            "fuser -n udp 62022 62023 52080 52180 51080 51180 2>/dev/null || echo 'no udp fuser hits'"
+        )
+    )
+    print("==== END RUNTIME STATE ====")
 
 def dump_apply_dirs(host: Host, label: str) -> None:
     dirs = [

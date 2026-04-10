@@ -16,6 +16,11 @@ guest suites -- the CI and fellow contributors expect these rules.
   that are not present on OpenWrt (for example `kdig` or `base64`). If a Linux
   test requires additional tooling, add it to the Linux provisioning scripts
   instead of bending OpenWrt tests to match.
+- **OpenWrt auto-starts services after install.** `opkg install` on a live
+  system runs `default_postinst`, which enables and starts init.d services. Do
+  not assume a clean "no service running" state immediately after package
+  installation; design OpenWrt tests to account for service processes that may
+  start on their own.
 - **Build automation stays under `scripts/build/`**. Tests may invoke those
   helpers from guests or hosts, but must not duplicate or relocate build logic
   inside `tests/guest` (e.g., no alternative OpenWrt/DEB/MSI builders under

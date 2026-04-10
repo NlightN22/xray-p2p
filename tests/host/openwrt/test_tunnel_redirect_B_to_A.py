@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import re
+import shlex
 import time
 
 import pytest
@@ -70,10 +71,15 @@ def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -
         pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
     else:
         raise ValueError(f"Unsupported role: {role}")
-    if not helpers.path_exists_exact(host, pending_path):
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists(host, APPLY_REQUEST):
+        return
+    if _is_xp2p_run_active(host, role):
+        _wait_for_apply_request_clear(host)
+        _wait_for_live_config(host, role)
         return
     with openwrt_env.xp2p_run_session(host, role, install_path, config_dir):
         _wait_for_apply_request_clear(host)
+        _wait_for_live_config(host, role)
 
 
 @contextmanager
@@ -107,6 +113,39 @@ def _run_sessions(server_host, client_host):
         _wait_for_apply_request_clear(server_host)
         _wait_for_apply_request_clear(client_host)
         yield
+
+
+def _wait_for_live_config(
+    host,
+    role: str,
+    *,
+    timeout_seconds: float = 30.0,
+    interval: float = 1.0,
+) -> None:
+    if role == "client":
+        live_path = helpers.CONFIG_ROOT / "xp2p-client.toml"
+    elif role == "server":
+        live_path = helpers.CONFIG_ROOT / "xp2p-server.toml"
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if helpers.path_exists_exact(host, live_path):
+            return
+        time.sleep(interval)
+    raise AssertionError(
+        f"Live config did not appear for {role} on {host.backend.hostname} within {timeout_seconds}s"
+    )
+
+
+def _is_xp2p_run_active(host, role: str) -> bool:
+    cmd = (
+        "ps w | "
+        "grep -E "
+        + shlex.quote(rf"xp2p {role} (run|service run)")
+        + " | grep -v grep >/dev/null 2>&1"
+    )
+    return host.run(cmd).rc == 0
 
 
 def _find_interface_for_ip(host, ip: str) -> str:
@@ -224,6 +263,12 @@ def _dump_client_inbounds(host, label: str) -> None:
         print(f"-- {path}")
         print(content)
     print("==== END CLIENT INBOUNDS ====")
+
+
+def _dump_config_state(host, label: str) -> None:
+    helpers.dump_install_dirs(host, label)
+    helpers.dump_apply_dirs(host, label)
+    helpers.dump_logs(host, label)
 
 
 def _warmup_reverse_tunnel():
@@ -635,6 +680,10 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
+        live_client = helpers.CONFIG_ROOT / "xp2p-client.toml"
+        if not helpers.path_exists_exact(client_host, live_client):
+            _dump_config_state(client_host, "tunnel redirect A to B missing live client config")
+            raise AssertionError("Missing live xp2p-client.toml after apply")
         client_state = helpers.read_live_client_config(client_host)
         client_routing = helpers.read_live_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
