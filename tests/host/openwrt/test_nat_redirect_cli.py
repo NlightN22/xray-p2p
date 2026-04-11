@@ -60,6 +60,7 @@ def xp2p_installed(openwrt_client_host, xp2p_openwrt_ipk):
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     helpers.ensure_service_running(openwrt_client_host, "client")
+    helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
     helpers.wait_for_live_config(openwrt_client_host, "client")
     return xp2p_openwrt_ipk
 

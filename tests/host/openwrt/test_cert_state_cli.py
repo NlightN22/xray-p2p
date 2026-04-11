@@ -9,7 +9,7 @@ from tests.host.openwrt import env as openwrt_env
 
 
 def _xp2p(host, *args: str, check: bool = False):
-    result = openwrt_env.run_xp2p(host, *args)
+    result = openwrt_env.run_xp2p_live(host, *args)
     if check and result.rc != 0:
         pytest.fail(
             f"xp2p command failed (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -43,6 +43,9 @@ def test_openwrt_server_cert_state_reports_valid_and_expired(openwrt_server_host
             "--force",
             check=True,
         )
+        helpers.ensure_service_running(openwrt_server_host, "server")
+        helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_server_host, "server")
 
         state = run(
             "server",
@@ -63,8 +66,8 @@ def test_openwrt_server_cert_state_reports_valid_and_expired(openwrt_server_host
         assert cert_ok, f"missing cert path\n{state.stdout}"
         assert key_ok, f"missing key path\n{state.stdout}"
 
-        helpers.write_text(openwrt_server_host, cert_path, _EXPIRED_CERT)
-        helpers.write_text(openwrt_server_host, key_path, _EXPIRED_KEY)
+        helpers.write_live_text(openwrt_server_host, cert_path, _EXPIRED_CERT)
+        helpers.write_live_text(openwrt_server_host, key_path, _EXPIRED_KEY)
 
         expired = run(
             "server",

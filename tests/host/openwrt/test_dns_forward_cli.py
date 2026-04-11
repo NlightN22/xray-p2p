@@ -296,9 +296,21 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         helpers.wait_for_live_config(openwrt_server_host, "server")
         helpers.wait_for_live_config(openwrt_client_host, "client")
         _wait_for_port(openwrt_client_host, "51180")
+        _ensure_mode(
+            openwrt_client_host,
+            client_runner,
+            "client",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "tun",
+        )
+        _apply_pending_config(openwrt_client_host, "client")
         helpers.wait_for_heartbeat_state(
             openwrt_server_host,
             path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+        )
+        helpers.wait_for_heartbeat_state(
+            openwrt_client_host,
+            path=helpers.CLIENT_HEARTBEAT_STATE_FILE,
         )
         time.sleep(1.5)
         tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")

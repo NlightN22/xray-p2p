@@ -21,7 +21,7 @@ SERVER_KEY_PENDING = helpers.SERVER_PENDING_DIR / "key.pem"
 
 def _runner(host: Host):
     def _run(*args: str, check: bool = False):
-        result = openwrt_env.run_xp2p(host, *args)
+        result = openwrt_env.run_xp2p_live(host, *args)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "

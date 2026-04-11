@@ -458,6 +458,25 @@ def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> No
         )
 
 
+def write_live_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:
+    target = _posix(_as_path(path))
+    directory = PurePosixPath(target).parent.as_posix()
+    check = host.run(f"test -d {shlex.quote(directory)}")
+    if check.rc != 0:
+        raise RuntimeError(f"Parent directory does not exist: {directory}")
+    marker = "XP2P_EOF"
+    command = (
+        f"cat <<'{marker}' > {shlex.quote(target)}\n"
+        f"{content}\n"
+        f"{marker}\n"
+    )
+    result = host.run(command)
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to write remote text {target}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def write_apply_request(host: Host, role: str) -> None:
     payload = f'{{"role":"{role}"}}\\n'
     path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
@@ -597,7 +616,7 @@ def wait_for_live_config(
         raise ValueError(f"Unsupported role: {role}")
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        if path_exists_exact(host, target):
+        if path_exists_live(host, target):
             return
         time.sleep(poll_interval)
     raise AssertionError(f"Live config {target} did not appear within {timeout_seconds} seconds.")
