@@ -55,6 +55,7 @@ def _alpine_guest(host, script: str, *args: str):
 
 
 def _current_mode(host, role: str) -> str:
+    helpers.wait_for_live_config(host, role)
     if role == "server":
         config = helpers.read_live_server_config(host)
     elif role == "client":
@@ -89,16 +90,13 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 def _apply_pending_config(host, role: str) -> None:
     pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path):
-        return
-    config_dir = helpers.SERVER_CONFIG_DIR_NAME if role == "server" else helpers.CLIENT_CONFIG_DIR_NAME
-    with openwrt_env.xp2p_run_session(
-        host,
-        role,
-        helpers.INSTALL_ROOT.as_posix(),
-        config_dir,
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
+        host, helpers.APPLY_REQUEST
     ):
-        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+        return
+    helpers.ensure_service_running(host, role)
+    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(host, role)
 
 
 @pytest.fixture(scope="module")
@@ -168,6 +166,8 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
         helpers.wait_for_pending_config(client_host, "client")
         _apply_pending_config(server_host, "server")
         _apply_pending_config(client_host, "client")
+        helpers.wait_for_live_config(server_host, "server")
+        helpers.wait_for_live_config(client_host, "client")
         yield {
             "server_host": server_host,
             "client_host": client_host,
@@ -216,6 +216,8 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             )
             _apply_pending_config(server_host, "server")
             _apply_pending_config(client_host, "client")
+            helpers.wait_for_live_config(server_host, "server")
+            helpers.wait_for_live_config(client_host, "client")
         with _timed("baseline direct ping"):
             initial_ping = server_runner(
                 "ping",
@@ -243,147 +245,142 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             )
         redirect_added = True
 
-        with openwrt_env.xp2p_run_session(
-            chain_environment["server_host"],
-            "server",
-            chain_environment["server_install_path"],
-            helpers.SERVER_CONFIG_DIR_NAME,
-            ), openwrt_env.xp2p_run_session(
-            chain_environment["client_host"],
-            "client",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.CLIENT_CONFIG_DIR_NAME,
-                ):
-            with _timed("tunnel warmup"):
-                time.sleep(2.0)
-            with _timed("tunnel ping"):
-                tunnel_ping = client_runner(
-                    "ping",
-                    SERVER_TUNNEL_IP,
-                    "--tunnel",
-                    "--count",
-                    "1",
-                    check=True,
-                )
-            tunnel_common.assert_zero_loss(tunnel_ping, "through SOCKS tunnel")
-
-            with _timed("redirect ping via tunnel"):
-                redirect_ping = client_runner(
-                    "ping",
-                    C1_LAN_GATEWAY,
-                    "--tunnel",
-                    "--count",
-                    "1",
-                    check=True,
-                )
-            tunnel_common.assert_zero_loss(redirect_ping, "redirect via SOCKS tunnel")
-
-            with _timed("prune direct route (if any)"):
-                route_result = client_host.run(f"ip route show {C1_LAN_CIDR}")
-                if route_result.rc == 0 and (route_result.stdout or "").strip():
-                    route_backup = [line.strip() for line in route_result.stdout.splitlines() if line.strip()]
-                    client_host.run(f"ip route del {C1_LAN_CIDR} >/dev/null 2>&1 || true")
-                blackhole_result = client_host.run(f"ip route replace blackhole {C1_LAN_CIDR}")
-                blackhole_added = blackhole_result.rc == 0
-
-            with _timed("ping without nat-redirect"):
-                missing_nat = client_runner(
-                    "ping",
-                    C1_LAN_GATEWAY,
-                    "--count",
-                    "1",
-                    check=False,
-                )
-            if missing_nat.rc == 0:
-                route_get = client_host.run(f"ip route get {C1_LAN_GATEWAY}")
-                route_tables = client_host.run("ip route show table main")
-                rules_output = client_host.run("ip rule show")
-                addr_output = client_host.run("ip -o -4 addr show")
-                fw4_pre = client_host.run("nft list chain inet fw4 xray_transparent_prerouting")
-                fw4_out = client_host.run("nft list chain inet fw4 xray_transparent_output")
-                nat_table = client_host.run("nft list table inet xray_transparent")
-                client_redirects = client_runner(
-                    "client",
-                    "redirect",
-                    "list",
-                    "--path",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    "--config-dir",
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                    check=False,
-                )
-                nat_list = client_runner("nat-redirect", "list", check=False)
-                pytest.fail(
-                    "expected ping to fail without nat-redirect.\n"
-                    f"STDOUT:\n{missing_nat.stdout}\nSTDERR:\n{missing_nat.stderr}"
-                    f"\nRoute:\n{route_result.stdout}\n{route_result.stderr}"
-                    f"\nRoute get:\n{route_get.stdout}\n{route_get.stderr}"
-                    f"\nRoutes (main table):\n{route_tables.stdout}\n{route_tables.stderr}"
-                    f"\nRules:\n{rules_output.stdout}\n{rules_output.stderr}"
-                    f"\nAddresses:\n{addr_output.stdout}\n{addr_output.stderr}"
-                    f"\nClient redirects:\n{client_redirects.stdout}\n{client_redirects.stderr}"
-                    f"\nClient nat-redirect:\n{nat_list.stdout}\n{nat_list.stderr}"
-                    f"\nNft fw4 prerouting:\n{fw4_pre.stdout}\n{fw4_pre.stderr}"
-                    f"\nNft fw4 output:\n{fw4_out.stdout}\n{fw4_out.stderr}"
-                    f"\nNft:\n{nat_table.stdout}\n{nat_table.stderr}"
-                )
-            if blackhole_added:
-                client_host.run(f"ip route del blackhole {C1_LAN_CIDR} >/dev/null 2>&1 || true")
-                blackhole_added = False
-
-            client_runner(
-                "nat-redirect",
-                "add",
-                "--cidr",
-                C1_LAN_CIDR,
-                "--quiet",
+        helpers.ensure_service_running(chain_environment["server_host"], "server")
+        helpers.ensure_service_running(chain_environment["client_host"], "client")
+        helpers.wait_for_apply_request_clear(chain_environment["server_host"], timeout_seconds=60.0)
+        helpers.wait_for_apply_request_clear(chain_environment["client_host"], timeout_seconds=60.0)
+        helpers.wait_for_live_config(chain_environment["server_host"], "server")
+        helpers.wait_for_live_config(chain_environment["client_host"], "client")
+        with _timed("tunnel warmup"):
+            time.sleep(2.0)
+        with _timed("tunnel ping"):
+            tunnel_ping = client_runner(
+                "ping",
+                SERVER_TUNNEL_IP,
+                "--tunnel",
+                "--count",
+                "1",
                 check=True,
             )
-            nat_added = True
-            with _timed("nat-redirect warmup"):
-                time.sleep(2.0)
+        tunnel_common.assert_zero_loss(tunnel_ping, "through SOCKS tunnel")
 
-            with _timed("ping with nat-redirect (gateway)"):
-                nat_ping = client_runner(
-                    "ping",
-                    C1_LAN_GATEWAY,
-                    "--count",
-                    "1",
-                    check=True,
-                )
-            tunnel_common.assert_zero_loss(nat_ping, "nat-redirect to gateway")
+        with _timed("redirect ping via tunnel"):
+            redirect_ping = client_runner(
+                "ping",
+                C1_LAN_GATEWAY,
+                "--tunnel",
+                "--count",
+                "1",
+                check=True,
+            )
+        tunnel_common.assert_zero_loss(redirect_ping, "redirect via SOCKS tunnel")
 
-            with _timed("ping with nat-redirect (c1 ip)"):
-                nat_c1 = client_runner(
-                    "ping",
-                    c1_ip,
-                    "--count",
-                    "1",
-                    check=True,
-                )
-            tunnel_common.assert_zero_loss(nat_c1, f"nat-redirect to {c1_ip}")
+        with _timed("prune direct route (if any)"):
+            route_result = client_host.run(f"ip route show {C1_LAN_CIDR}")
+            if route_result.rc == 0 and (route_result.stdout or "").strip():
+                route_backup = [line.strip() for line in route_result.stdout.splitlines() if line.strip()]
+                client_host.run(f"ip route del {C1_LAN_CIDR} >/dev/null 2>&1 || true")
+            blackhole_result = client_host.run(f"ip route replace blackhole {C1_LAN_CIDR}")
+            blackhole_added = blackhole_result.rc == 0
 
-            with _timed("c2 -> c1 ping"):
-                c2_ping = openwrt_env.run_alpine_guest_script(
-                    alpine_c2_host,
-                    "scripts/linux/xp2p_ping.sh",
-                    c1_ip,
-                    "--count",
-                    "1",
-                )
-            if c2_ping.rc != 0:
-                c2_net_dump = openwrt_env.run_alpine_guest_script(
-                    alpine_c2_host, "scripts/linux/net_dump.sh"
-                )
-                client_nat = client_runner("nat-redirect", "list", check=False).stdout or ""
-                client_chain = chain_environment["client_host"].run("nft list table inet fw4 || true")
-                pytest.fail(
-                    "c2 -> c1 ping failed.\n"
-                    f"STDOUT:\n{c2_ping.stdout}\nSTDERR:\n{c2_ping.stderr}"
-                    f"\nClient nat-redirect:\n{client_nat}"
-                    f"\nClient nft:\n{client_chain.stdout}\n{client_chain.stderr}"
-                    f"\nC2 net dump:\n{c2_net_dump.stdout}\n{c2_net_dump.stderr}"
-                )
+        with _timed("ping without nat-redirect"):
+            missing_nat = client_runner(
+                "ping",
+                C1_LAN_GATEWAY,
+                "--count",
+                "1",
+                check=False,
+            )
+        if missing_nat.rc == 0:
+            route_get = client_host.run(f"ip route get {C1_LAN_GATEWAY}")
+            route_tables = client_host.run("ip route show table main")
+            rules_output = client_host.run("ip rule show")
+            addr_output = client_host.run("ip -o -4 addr show")
+            fw4_pre = client_host.run("nft list chain inet fw4 xray_transparent_prerouting")
+            fw4_out = client_host.run("nft list chain inet fw4 xray_transparent_output")
+            nat_table = client_host.run("nft list table inet xray_transparent")
+            client_redirects = client_runner(
+                "client",
+                "redirect",
+                "list",
+                "--path",
+                helpers.INSTALL_ROOT.as_posix(),
+                "--config-dir",
+                helpers.CLIENT_CONFIG_DIR_NAME,
+                check=False,
+            )
+            nat_list = client_runner("nat-redirect", "list", check=False)
+            pytest.fail(
+                "expected ping to fail without nat-redirect.\n"
+                f"STDOUT:\n{missing_nat.stdout}\nSTDERR:\n{missing_nat.stderr}"
+                f"\nRoute:\n{route_result.stdout}\n{route_result.stderr}"
+                f"\nRoute get:\n{route_get.stdout}\n{route_get.stderr}"
+                f"\nRoutes (main table):\n{route_tables.stdout}\n{route_tables.stderr}"
+                f"\nRules:\n{rules_output.stdout}\n{rules_output.stderr}"
+                f"\nAddresses:\n{addr_output.stdout}\n{addr_output.stderr}"
+                f"\nClient redirects:\n{client_redirects.stdout}\n{client_redirects.stderr}"
+                f"\nClient nat-redirect:\n{nat_list.stdout}\n{nat_list.stderr}"
+                f"\nNft fw4 prerouting:\n{fw4_pre.stdout}\n{fw4_pre.stderr}"
+                f"\nNft fw4 output:\n{fw4_out.stdout}\n{fw4_out.stderr}"
+                f"\nNft:\n{nat_table.stdout}\n{nat_table.stderr}"
+            )
+        if blackhole_added:
+            client_host.run(f"ip route del blackhole {C1_LAN_CIDR} >/dev/null 2>&1 || true")
+            blackhole_added = False
+
+        client_runner(
+            "nat-redirect",
+            "add",
+            "--cidr",
+            C1_LAN_CIDR,
+            "--quiet",
+            check=True,
+        )
+        nat_added = True
+        with _timed("nat-redirect warmup"):
+            time.sleep(2.0)
+
+        with _timed("ping with nat-redirect (gateway)"):
+            nat_ping = client_runner(
+                "ping",
+                C1_LAN_GATEWAY,
+                "--count",
+                "1",
+                check=True,
+            )
+        tunnel_common.assert_zero_loss(nat_ping, "nat-redirect to gateway")
+
+        with _timed("ping with nat-redirect (c1 ip)"):
+            nat_c1 = client_runner(
+                "ping",
+                c1_ip,
+                "--count",
+                "1",
+                check=True,
+            )
+        tunnel_common.assert_zero_loss(nat_c1, f"nat-redirect to {c1_ip}")
+
+        with _timed("c2 -> c1 ping"):
+            c2_ping = openwrt_env.run_alpine_guest_script(
+                alpine_c2_host,
+                "scripts/linux/xp2p_ping.sh",
+                c1_ip,
+                "--count",
+                "1",
+            )
+        if c2_ping.rc != 0:
+            c2_net_dump = openwrt_env.run_alpine_guest_script(
+                alpine_c2_host, "scripts/linux/net_dump.sh"
+            )
+            client_nat = client_runner("nat-redirect", "list", check=False).stdout or ""
+            client_chain = chain_environment["client_host"].run("nft list table inet fw4 || true")
+            pytest.fail(
+                "c2 -> c1 ping failed.\n"
+                f"STDOUT:\n{c2_ping.stdout}\nSTDERR:\n{c2_ping.stderr}"
+                f"\nClient nat-redirect:\n{client_nat}"
+                f"\nClient nft:\n{client_chain.stdout}\n{client_chain.stderr}"
+                f"\nC2 net dump:\n{c2_net_dump.stdout}\n{c2_net_dump.stderr}"
+            )
     finally:
         if route_backup:
             for route in route_backup:
@@ -455,6 +452,8 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
             )
             _apply_pending_config(server_host, "server")
             _apply_pending_config(client_host, "client")
+            helpers.wait_for_live_config(server_host, "server")
+            helpers.wait_for_live_config(client_host, "client")
         with _timed("reverse baseline ping"):
             base_ping = openwrt_env.run_alpine_guest_script(
                 alpine_c1_host,
@@ -497,65 +496,60 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
             )
         nat_added = True
 
-        with openwrt_env.xp2p_run_session(
-            chain_environment["server_host"],
-            "server",
-            chain_environment["server_install_path"],
-            helpers.SERVER_CONFIG_DIR_NAME,
-            ), openwrt_env.xp2p_run_session(
-            chain_environment["client_host"],
-            "client",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.CLIENT_CONFIG_DIR_NAME,
-                ):
-            with _timed("reverse tunnel warmup"):
-                time.sleep(2.0)
-            server_state = helpers.read_live_server_config(server_host)
-            server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
-            helpers.assert_server_redirect_state(server_state, server_redirect_cidr, reverse_tag)
-            helpers.assert_server_redirect_rule(server_routing, server_redirect_cidr, reverse_tag)
-            with _timed("reverse wait heartbeat"):
-                tunnel_common.wait_for_alive_entry(
-                    server_runner,
-                    "server",
-                    chain_environment["server_install_path"],
-                    endpoint_tag,
-                    SERVER_TUNNEL_IP,
-                    client_user,
-                    client_primary_ip,
-                )
+        helpers.ensure_service_running(chain_environment["server_host"], "server")
+        helpers.ensure_service_running(chain_environment["client_host"], "client")
+        helpers.wait_for_apply_request_clear(chain_environment["server_host"], timeout_seconds=60.0)
+        helpers.wait_for_apply_request_clear(chain_environment["client_host"], timeout_seconds=60.0)
+        helpers.wait_for_live_config(chain_environment["server_host"], "server")
+        helpers.wait_for_live_config(chain_environment["client_host"], "client")
+        with _timed("reverse tunnel warmup"):
+            time.sleep(2.0)
+        server_state = helpers.read_live_server_config(server_host)
+        server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        helpers.assert_server_redirect_state(server_state, server_redirect_cidr, reverse_tag)
+        helpers.assert_server_redirect_rule(server_routing, server_redirect_cidr, reverse_tag)
+        with _timed("reverse wait heartbeat"):
+            tunnel_common.wait_for_alive_entry(
+                server_runner,
+                "server",
+                chain_environment["server_install_path"],
+                endpoint_tag,
+                SERVER_TUNNEL_IP,
+                client_user,
+                client_primary_ip,
+            )
 
-            with _timed("reverse ping c1 -> c2"):
-                c1_ping = openwrt_env.run_alpine_guest_script(
-                    alpine_c1_host,
-                    "scripts/linux/xp2p_ping.sh",
-                    c2_ip,
-                    "--count",
-                    "1",
-                )
-            if c1_ping.rc != 0:
-                c1_net_dump = openwrt_env.run_alpine_guest_script(
-                    alpine_c1_host, "scripts/linux/net_dump.sh"
-                )
-                server_state_output = server_runner(
-                    "server", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
-                ).stdout or ""
-                client_state_output = chain_environment["client_runner"](
-                    "client", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
-                ).stdout or ""
-                server_nat = server_runner("nat-redirect", "list", check=False).stdout or ""
-                server_chain = server_host.run("nft list table inet fw4 || true")
-                client_chain = chain_environment["client_host"].run("nft list table inet fw4 || true")
-                pytest.fail(
-                    "c1 -> c2 reverse ping failed.\n"
-                    f"STDOUT:\n{c1_ping.stdout}\nSTDERR:\n{c1_ping.stderr}"
-                    f"\nC1 net dump:\n{c1_net_dump.stdout}\n{c1_net_dump.stderr}"
-                    f"\nServer state:\n{server_state_output}"
-                    f"\nClient state:\n{client_state_output}"
-                    f"\nServer nat-redirect:\n{server_nat}"
-                    f"\nServer nft:\n{server_chain.stdout}\n{server_chain.stderr}"
-                    f"\nClient nft:\n{client_chain.stdout}\n{client_chain.stderr}"
-                )
+        with _timed("reverse ping c1 -> c2"):
+            c1_ping = openwrt_env.run_alpine_guest_script(
+                alpine_c1_host,
+                "scripts/linux/xp2p_ping.sh",
+                c2_ip,
+                "--count",
+                "1",
+            )
+        if c1_ping.rc != 0:
+            c1_net_dump = openwrt_env.run_alpine_guest_script(
+                alpine_c1_host, "scripts/linux/net_dump.sh"
+            )
+            server_state_output = server_runner(
+                "server", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
+            ).stdout or ""
+            client_state_output = chain_environment["client_runner"](
+                "client", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
+            ).stdout or ""
+            server_nat = server_runner("nat-redirect", "list", check=False).stdout or ""
+            server_chain = server_host.run("nft list table inet fw4 || true")
+            client_chain = chain_environment["client_host"].run("nft list table inet fw4 || true")
+            pytest.fail(
+                "c1 -> c2 reverse ping failed.\n"
+                f"STDOUT:\n{c1_ping.stdout}\nSTDERR:\n{c1_ping.stderr}"
+                f"\nC1 net dump:\n{c1_net_dump.stdout}\n{c1_net_dump.stderr}"
+                f"\nServer state:\n{server_state_output}"
+                f"\nClient state:\n{client_state_output}"
+                f"\nServer nat-redirect:\n{server_nat}"
+                f"\nServer nft:\n{server_chain.stdout}\n{server_chain.stderr}"
+                f"\nClient nft:\n{client_chain.stdout}\n{client_chain.stderr}"
+            )
     finally:
         if previous_server_mode and previous_server_mode != "proxy":
             _set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, previous_server_mode)

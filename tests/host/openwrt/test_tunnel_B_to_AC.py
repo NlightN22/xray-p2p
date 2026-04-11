@@ -82,16 +82,13 @@ def _install_server(host, runner, host_ip: str):
 
 def _apply_pending_config(host, role: str) -> None:
     pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path):
-        return
-    config_dir = helpers.SERVER_CONFIG_DIR_NAME if role == "server" else helpers.CLIENT_CONFIG_DIR_NAME
-    with openwrt_env.xp2p_run_session(
-        host,
-        role,
-        helpers.INSTALL_ROOT.as_posix(),
-        config_dir,
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
+        host, helpers.APPLY_REQUEST
     ):
-        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+        return
+    helpers.ensure_service_running(host, role)
+    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(host, role)
 
 
 @pytest.mark.host
@@ -144,6 +141,7 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
         ]
         for entry in server_entries:
             _apply_pending_config(entry["host"], "server")
+            helpers.wait_for_live_config(entry["host"], "server")
             server_state = helpers.read_live_server_config(entry["host"])
             server_routing = helpers.read_live_json(entry["host"], helpers.SERVER_CONFIG_DIR / "routing.json")
             helpers.assert_server_reverse_state(
@@ -188,6 +186,7 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
 
         helpers.wait_for_pending_config(client_b, "client")
         _apply_pending_config(client_b, "client")
+        helpers.wait_for_live_config(client_b, "client")
         client_state = helpers.read_live_client_config(client_b)
         client_routing = helpers.read_live_json(client_b, CLIENT_ROUTING)
 
@@ -270,6 +269,7 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
                     )
                 )
                 _apply_pending_config(entry["host"], "server")
+                helpers.wait_for_live_config(entry["host"], "server")
                 list_output = entry["runner"](
                     "server",
                     "redirect",
@@ -288,56 +288,49 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.assert_server_redirect_state(server_state, redirect_domain, entry["reverse_tag"])
                 helpers.assert_server_redirect_rule(server_routing, redirect_domain, entry["reverse_tag"])
 
-            with openwrt_env.xp2p_run_session(
-                server_a,
-                "server",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.SERVER_CONFIG_DIR_NAME,
-                    ), openwrt_env.xp2p_run_session(
-                server_c,
-                "server",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.SERVER_CONFIG_DIR_NAME,
-                    ), openwrt_env.xp2p_run_session(
-                client_b,
-                "client",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                        ):
-                try:
-                    client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
-                    _wait_for_port(client_b, client_socks_port)
-                    for target in (SERVER_A_IP, SERVER_C_IP):
-                        result = client_runner(
-                            "ping",
-                            target,
-                            "--tunnel",
-                            "--count",
-                            "3",
-                            check=True,
-                        )
-                        stdout = (result.stdout or "").lower()
-                        assert "0% loss" in stdout, (
-                            f"xp2p ping to {target} did not report zero loss:\n"
-                            f"{result.stdout}"
-                        )
-                    for entry in server_entries:
-                        heartbeat_state = helpers.wait_for_heartbeat_state(
-                            entry["host"],
-                            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-                        )
-                        helpers.assert_heartbeat_entry(
-                            heartbeat_state,
-                            helpers.expected_proxy_tag(entry["ip"]),
-                            host=entry["ip"],
-                            user=entry["credential"]["user"],
-                            client_ip=client_primary_ip,
-                        )
-                except BaseException:
-                    helpers.dump_logs(client_b, "tunnel B to A/C client")
-                    helpers.dump_logs(server_a, "tunnel B to A/C server A")
-                    helpers.dump_logs(server_c, "tunnel B to A/C server C")
-                    raise
+            helpers.ensure_service_running(server_a, "server")
+            helpers.ensure_service_running(server_c, "server")
+            helpers.ensure_service_running(client_b, "client")
+            helpers.wait_for_apply_request_clear(server_a, timeout_seconds=60.0)
+            helpers.wait_for_apply_request_clear(server_c, timeout_seconds=60.0)
+            helpers.wait_for_apply_request_clear(client_b, timeout_seconds=60.0)
+            helpers.wait_for_live_config(server_a, "server")
+            helpers.wait_for_live_config(server_c, "server")
+            helpers.wait_for_live_config(client_b, "client")
+            try:
+                client_socks_port = _socks_port(client_b, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+                _wait_for_port(client_b, client_socks_port)
+                for target in (SERVER_A_IP, SERVER_C_IP):
+                    result = client_runner(
+                        "ping",
+                        target,
+                        "--tunnel",
+                        "--count",
+                        "3",
+                        check=True,
+                    )
+                    stdout = (result.stdout or "").lower()
+                    assert "0% loss" in stdout, (
+                        f"xp2p ping to {target} did not report zero loss:\n"
+                        f"{result.stdout}"
+                    )
+                for entry in server_entries:
+                    heartbeat_state = helpers.wait_for_heartbeat_state(
+                        entry["host"],
+                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                    )
+                    helpers.assert_heartbeat_entry(
+                        heartbeat_state,
+                        helpers.expected_proxy_tag(entry["ip"]),
+                        host=entry["ip"],
+                        user=entry["credential"]["user"],
+                        client_ip=client_primary_ip,
+                    )
+            except BaseException:
+                helpers.dump_logs(client_b, "tunnel B to A/C client")
+                helpers.dump_logs(server_a, "tunnel B to A/C server A")
+                helpers.dump_logs(server_c, "tunnel B to A/C server C")
+                raise
         finally:
             for spec in redirect_specs:
                 spec.runner(
@@ -355,6 +348,7 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
                     check=False,
                 )
                 _apply_pending_config(spec.host, "server")
+                helpers.wait_for_live_config(spec.host, "server")
                 final_list = spec.runner(
                     "server",
                     "redirect",

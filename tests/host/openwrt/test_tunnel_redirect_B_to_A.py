@@ -73,13 +73,9 @@ def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -
         raise ValueError(f"Unsupported role: {role}")
     if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists(host, APPLY_REQUEST):
         return
-    if _is_xp2p_run_active(host, role):
-        _wait_for_apply_request_clear(host)
-        _wait_for_live_config(host, role)
-        return
-    with openwrt_env.xp2p_run_session(host, role, install_path, config_dir):
-        _wait_for_apply_request_clear(host)
-        _wait_for_live_config(host, role)
+    _ensure_service_running(host, role)
+    _wait_for_apply_request_clear(host)
+    _wait_for_live_config(host, role)
 
 
 @contextmanager
@@ -96,23 +92,16 @@ def _run_sessions(server_host, client_host):
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
     )
+    _wait_for_live_config(server_host, "server")
+    _wait_for_live_config(client_host, "client")
     _assert_config_ready(server_host, "server")
     _assert_config_ready(client_host, "client")
-    with openwrt_env.xp2p_run_session(
-        server_host,
-        "server",
-        helpers.INSTALL_ROOT.as_posix(),
-        helpers.SERVER_CONFIG_DIR_NAME,
-    ), openwrt_env.xp2p_run_session(
-        client_host,
-        "client",
-        helpers.INSTALL_ROOT.as_posix(),
-        helpers.CLIENT_CONFIG_DIR_NAME,
-    ):
-        _wait_for_port(client_host, SOCKS_PORT)
-        _wait_for_apply_request_clear(server_host)
-        _wait_for_apply_request_clear(client_host)
-        yield
+    _ensure_service_running(server_host, "server")
+    _ensure_service_running(client_host, "client")
+    _wait_for_port(client_host, SOCKS_PORT)
+    _wait_for_apply_request_clear(server_host)
+    _wait_for_apply_request_clear(client_host)
+    yield
 
 
 def _wait_for_live_config(
@@ -146,6 +135,44 @@ def _is_xp2p_run_active(host, role: str) -> bool:
         + " | grep -v grep >/dev/null 2>&1"
     )
     return host.run(cmd).rc == 0
+
+
+def _wait_for_service_state(
+    host,
+    role: str,
+    expected_active: bool,
+    *,
+    timeout_seconds: float = 45.0,
+    interval: float = 1.5,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    script = f"/etc/init.d/xp2p-{role}"
+    last = None
+    while time.time() < deadline:
+        result = host.run(f"{script} running")
+        active = result.rc == 0
+        if active == expected_active:
+            return
+        last = result
+        time.sleep(interval)
+    stdout = getattr(last, "stdout", "") or ""
+    stderr = getattr(last, "stderr", "") or ""
+    state = "active" if expected_active else "inactive"
+    raise AssertionError(
+        f"xp2p {role} service did not reach {state} state.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
+
+
+def _ensure_service_running(host, role: str) -> None:
+    if _is_xp2p_run_active(host, role):
+        return
+    start = host.run(f"/etc/init.d/xp2p-{role} start")
+    if start.rc != 0:
+        pytest.fail(
+            "Failed to start service "
+            f"xp2p-{role} on {host.backend.hostname}.\nSTDOUT:\n{start.stdout}\nSTDERR:\n{start.stderr}"
+        )
+    _wait_for_service_state(host, role, expected_active=True)
 
 
 def _find_interface_for_ip(host, ip: str) -> str:
@@ -399,6 +426,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.SERVER_CONFIG_DIR_NAME,
         )
+        _wait_for_live_config(server_host, "server")
 
         client_runner(
             "client",
@@ -419,6 +447,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
+        _wait_for_live_config(client_host, "client")
         helpers.dump_install_dirs(server_host, "tunnel redirect B to A after install")
         helpers.dump_install_dirs(client_host, "tunnel redirect B to A after install")
 
@@ -659,6 +688,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.SERVER_CONFIG_DIR_NAME,
         )
+        _wait_for_live_config(server_host, "server")
 
         client_runner(
             "client",
@@ -680,6 +710,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
+        _wait_for_live_config(client_host, "client")
         live_client = helpers.CONFIG_ROOT / "xp2p-client.toml"
         if not helpers.path_exists_exact(client_host, live_client):
             _dump_config_state(client_host, "tunnel redirect A to B missing live client config")
@@ -722,6 +753,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
+        _wait_for_live_config(client_host, "client")
 
         server_runner(
             "server",
@@ -743,18 +775,9 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.SERVER_CONFIG_DIR_NAME,
         )
+        _wait_for_live_config(server_host, "server")
 
-        with openwrt_env.xp2p_run_session(
-            server_host,
-            "server",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.SERVER_CONFIG_DIR_NAME,
-            ), openwrt_env.xp2p_run_session(
-            client_host,
-            "client",
-            helpers.INSTALL_ROOT.as_posix(),
-            helpers.CLIENT_CONFIG_DIR_NAME,
-                ):
+        with _run_sessions(server_host, client_host):
             try:
                 _wait_for_port(client_host, SOCKS_PORT)
                 _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)
@@ -828,21 +851,12 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.SERVER_CONFIG_DIR_NAME,
             )
+            _wait_for_live_config(server_host, "server")
 
             for host in (server_host, client_host):
                 _stop_xp2p_processes(host)
 
-            with openwrt_env.xp2p_run_session(
-                server_host,
-                "server",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.SERVER_CONFIG_DIR_NAME,
-                    ), openwrt_env.xp2p_run_session(
-                client_host,
-                "client",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                        ):
+            with _run_sessions(server_host, client_host):
                 try:
                     _wait_for_port(client_host, SOCKS_PORT)
                     _wait_for_port(client_host, CLIENT_DIAGNOSTICS_PORT)

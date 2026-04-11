@@ -580,3 +580,72 @@ def wait_for_pending_config(host: Host, role: str, *, timeout_seconds: float = 3
             return
         time.sleep(poll_interval)
     raise AssertionError(f"Pending config {target} did not appear within {timeout_seconds} seconds.")
+
+
+def wait_for_live_config(
+    host: Host,
+    role: str,
+    *,
+    timeout_seconds: float = 30.0,
+    poll_interval: float = 1.5,
+) -> None:
+    if role == "client":
+        target = CONFIG_ROOT / "xp2p-client.toml"
+    elif role == "server":
+        target = CONFIG_ROOT / "xp2p-server.toml"
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if path_exists_exact(host, target):
+            return
+        time.sleep(poll_interval)
+    raise AssertionError(f"Live config {target} did not appear within {timeout_seconds} seconds.")
+
+
+def is_xp2p_run_active(host: Host, role: str) -> bool:
+    cmd = (
+        "ps w | "
+        "grep -E "
+        + shlex.quote(rf"xp2p {role} (run|service run)")
+        + " | grep -v grep >/dev/null 2>&1"
+    )
+    return host.run(cmd).rc == 0
+
+
+def wait_for_service_state(
+    host: Host,
+    role: str,
+    expected_active: bool,
+    *,
+    timeout_seconds: float = 45.0,
+    poll_interval: float = 1.5,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    script = f"/etc/init.d/xp2p-{role}"
+    last = None
+    while time.time() < deadline:
+        result = host.run(f"{script} running")
+        active = result.rc == 0
+        if active == expected_active:
+            return
+        last = result
+        time.sleep(poll_interval)
+    stdout = getattr(last, "stdout", "") or ""
+    stderr = getattr(last, "stderr", "") or ""
+    state = "active" if expected_active else "inactive"
+    raise AssertionError(
+        f"xp2p {role} service did not reach {state} state.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
+
+
+def ensure_service_running(host: Host, role: str) -> None:
+    if is_xp2p_run_active(host, role):
+        return
+    start = host.run(f"/etc/init.d/xp2p-{role} start")
+    if start.rc != 0:
+        raise AssertionError(
+            "Failed to start service "
+            f"xp2p-{role} on {host.backend.hostname}.\nSTDOUT:\n{start.stdout}\nSTDERR:\n{start.stderr}"
+        )
+    wait_for_service_state(host, role, expected_active=True)

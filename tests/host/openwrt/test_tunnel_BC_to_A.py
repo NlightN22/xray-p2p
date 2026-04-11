@@ -56,25 +56,22 @@ def _install_client(host, runner, link: str):
 
 def _apply_pending_config(host, role: str) -> None:
     pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path):
-        return
-    config_dir = helpers.SERVER_CONFIG_DIR_NAME if role == "server" else helpers.CLIENT_CONFIG_DIR_NAME
-    with openwrt_env.xp2p_run_session(
-        host,
-        role,
-        helpers.INSTALL_ROOT.as_posix(),
-        config_dir,
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
+        host, helpers.APPLY_REQUEST
     ):
-        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+        return
+    helpers.ensure_service_running(host, role)
+    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(host, role)
 
 
 def _apply_pending_config_wait(host, role: str) -> None:
     pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if helpers.path_exists_exact(host, pending_path):
-        _apply_pending_config(host, role)
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
+        host, helpers.APPLY_REQUEST
+    ):
         return
-    if helpers.path_exists_exact(host, helpers.APPLY_REQUEST):
-        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    _apply_pending_config(host, role)
 
 
 def _wait_for_live_xray_configs(
@@ -96,29 +93,6 @@ def _wait_for_live_xray_configs(
         time.sleep(interval)
     raise AssertionError(
         f"Live xray configs did not appear on {host.backend.hostname}: {missing}"
-    )
-
-
-def _wait_for_live_config(
-    host,
-    role: str,
-    *,
-    timeout_seconds: float = 30.0,
-    interval: float = 1.0,
-) -> None:
-    if role == "client":
-        live_path = helpers.CONFIG_ROOT / "xp2p-client.toml"
-    elif role == "server":
-        live_path = helpers.CONFIG_ROOT / "xp2p-server.toml"
-    else:
-        raise ValueError(f"Unsupported role: {role}")
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if helpers.path_exists_exact(host, live_path):
-            return
-        time.sleep(interval)
-    raise AssertionError(
-        f"Live config did not appear for {role} on {host.backend.hostname} within {timeout_seconds}s"
     )
 
 
@@ -317,8 +291,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         reverse_default = helpers.expected_reverse_tag(default_cred["user"], SERVER_IP)
         if _pending_config_present(server_host, "server"):
             _apply_pending_config_wait(server_host, "server")
-            helpers.wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
-        _wait_for_live_config(server_host, "server")
+        helpers.wait_for_live_config(server_host, "server")
         _wait_for_live_xray_configs(server_host, helpers.SERVER_CONFIG_DIR)
 
         user_add = server_runner(
@@ -360,7 +333,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         reverse_norev = helpers.expected_reverse_tag("client-norev@example.com", SERVER_IP)
 
         _apply_pending_config_wait(server_host, "server")
-        _wait_for_live_config(server_host, "server")
+        helpers.wait_for_live_config(server_host, "server")
         _wait_for_live_xray_configs(server_host, helpers.SERVER_CONFIG_DIR)
         server_state = helpers.read_live_server_config(server_host)
         server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
@@ -394,7 +367,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
 
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         _apply_pending_config_wait(client_b, "client")
-        _wait_for_live_config(client_b, "client")
+        helpers.wait_for_live_config(client_b, "client")
         _wait_for_live_xray_configs(client_b, helpers.CLIENT_CONFIG_DIR)
         client_b_state = helpers.read_live_client_config(client_b)
         client_b_routing = helpers.read_live_json(client_b, helpers.CLIENT_CONFIG_DIR / "routing.json")
@@ -416,7 +389,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             )
 
         _apply_pending_config_wait(client_c, "client")
-        _wait_for_live_config(client_c, "client")
+        helpers.wait_for_live_config(client_c, "client")
         _wait_for_live_xray_configs(client_c, helpers.CLIENT_CONFIG_DIR)
         client_c_state = helpers.read_live_client_config(client_c)
         client_c_routing = helpers.read_live_json(client_c, helpers.CLIENT_CONFIG_DIR / "routing.json")
@@ -473,84 +446,57 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
                 helpers.assert_server_redirect_state(server_state, domain, reverse_tag)
                 helpers.assert_server_redirect_rule(server_routing, domain, reverse_tag)
 
-            server_session = openwrt_env.xp2p_run_session(
-                server_host,
-                "server",
-                helpers.INSTALL_ROOT.as_posix(),
-                helpers.SERVER_CONFIG_DIR_NAME,
-                        )
-            server_session.__enter__()
             try:
-                client_b_session = openwrt_env.xp2p_run_session(
-                    client_b,
-                    "client",
-                    helpers.INSTALL_ROOT.as_posix(),
-                    helpers.CLIENT_CONFIG_DIR_NAME,
-                                )
-                client_b_session.__enter__()
-                client_c_session = None
-                try:
-                    try:
-                        helpers.wait_for_heartbeat_state(
-                            server_host,
-                            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-                        )
-                        _assert_server_state_reports_user(server_host, default_cred["user"])
-                        client_c_session = openwrt_env.xp2p_run_session(
-                            client_c,
-                            "client",
-                            helpers.INSTALL_ROOT.as_posix(),
-                            helpers.CLIENT_CONFIG_DIR_NAME,
-                                                )
-                        client_c_session.__enter__()
-                        try:
-                            helpers.wait_for_heartbeat_state(
-                                server_host,
-                                path=helpers.SERVER_HEARTBEAT_STATE_FILE,
-                            )
-                            _assert_server_state_reports_users(
-                                server_host,
-                                {default_cred["user"], "client-two@example.com"},
-                            )
-                            _assert_server_state_reports_users_alive(
-                                server_host,
-                                {default_cred["user"], "client-two@example.com"},
-                            )
-                            for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
-                                result = runner(
-                                    "ping",
-                                    SERVER_IP,
-                                    "--tunnel",
-                                    "--count",
-                                    "3",
-                                    check=True,
-                                )
-                                stdout = (result.stdout or "").lower()
-                                assert "0% loss" in stdout, (
-                                    f"xp2p ping from {origin} did not report zero loss:\n"
-                                    f"{result.stdout}"
-                                )
-                        finally:
-                            pass
-                    except BaseException:
-                        helpers.dump_logs(server_host, "tunnel BC to A server")
-                        helpers.dump_logs(client_b, "tunnel BC to A client B")
-                        helpers.dump_logs(client_c, "tunnel BC to A client C")
-                        raise
-                    client_b_session.__exit__(None, None, None)
-                    client_b_session = None
-                    helpers.wait_for_heartbeat_state(
-                        server_host,
-                        path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                helpers.ensure_service_running(server_host, "server")
+                helpers.ensure_service_running(client_b, "client")
+                helpers.ensure_service_running(client_c, "client")
+                helpers.wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+                helpers.wait_for_apply_request_clear(client_b, timeout_seconds=60.0)
+                helpers.wait_for_apply_request_clear(client_c, timeout_seconds=60.0)
+                helpers.wait_for_live_config(server_host, "server")
+                helpers.wait_for_live_config(client_b, "client")
+                helpers.wait_for_live_config(client_c, "client")
+                helpers.wait_for_heartbeat_state(
+                    server_host,
+                    path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                )
+                _assert_server_state_reports_user(server_host, default_cred["user"])
+                helpers.wait_for_heartbeat_state(
+                    server_host,
+                    path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                )
+                _assert_server_state_reports_users(
+                    server_host,
+                    {default_cred["user"], "client-two@example.com"},
+                )
+                _assert_server_state_reports_users_alive(
+                    server_host,
+                    {default_cred["user"], "client-two@example.com"},
+                )
+                for runner, origin in ((client_b_runner, "client-b"), (client_c_runner, "client-c")):
+                    result = runner(
+                        "ping",
+                        SERVER_IP,
+                        "--tunnel",
+                        "--count",
+                        "3",
+                        check=True,
                     )
-                    _assert_server_state_reports_user(server_host, "client-two@example.com")
-                finally:
-                    if client_c_session is not None:
-                        client_c_session.__exit__(None, None, None)
-                    if client_b_session is not None:
-                        client_b_session.__exit__(None, None, None)
-            finally:
-                server_session.__exit__(None, None, None)
+                    stdout = (result.stdout or "").lower()
+                    assert "0% loss" in stdout, (
+                        f"xp2p ping from {origin} did not report zero loss:\n"
+                        f"{result.stdout}"
+                    )
+                helpers.wait_for_heartbeat_state(
+                    server_host,
+                    path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+                )
+                _assert_server_state_reports_user(server_host, "client-two@example.com")
+            except BaseException:
+                helpers.dump_logs(server_host, "tunnel BC to A server")
+                helpers.dump_logs(client_b, "tunnel BC to A client B")
+                helpers.dump_logs(client_c, "tunnel BC to A client C")
+                raise
         finally:
             while redirect_domains:
                 entry = redirect_domains.pop()

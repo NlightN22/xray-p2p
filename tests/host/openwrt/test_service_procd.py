@@ -78,7 +78,8 @@ def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
 
 
 def _current_mode(host, role: str) -> str:
-    state = helpers.read_preferred_client_config(host) if role == "client" else helpers.read_preferred_server_config(host)
+    helpers.wait_for_live_config(host, role)
+    state = helpers.read_live_client_config(host) if role == "client" else helpers.read_live_server_config(host)
     tun_enabled = state.get("tun_enabled")
     if not isinstance(tun_enabled, bool):
         raise AssertionError(f"Expected tun_enabled boolean in {role} config, got {tun_enabled!r}")

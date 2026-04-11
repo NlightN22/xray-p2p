@@ -25,6 +25,5 @@ xp2p_start_service() {
 	procd_set_param command "$XP2P_BIN" "$role" service run
 	procd_set_param stdout 1
 	procd_set_param stderr 1
-	procd_set_param respawn 3600 5 5
 	procd_close_instance
 }

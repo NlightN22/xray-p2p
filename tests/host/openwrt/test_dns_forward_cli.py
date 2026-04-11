@@ -24,6 +24,7 @@ C2_LAN_GATEWAY = "10.0.102.1"
 
 
 def _current_mode(host, role: str) -> str:
+    helpers.wait_for_live_config(host, role)
     if role == "client":
         config = helpers.read_live_client_config(host)
     elif role == "server":
@@ -60,37 +61,15 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
     return current
 
 
-def _ensure_apply_ready(host, role: str) -> None:
-    if role == "client":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
-        live_path = helpers.CLIENT_CONFIG_FILE
-    elif role == "server":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
-        live_path = helpers.SERVER_CONFIG_FILE
-    else:
-        raise ValueError(f"Unsupported role: {role}")
-    if helpers.path_exists_exact(host, pending_path):
-        if not helpers.path_exists_exact(host, helpers.APPLY_REQUEST):
-            helpers.write_apply_request(host, role)
-        return
-    if helpers.path_exists_exact(host, live_path):
-        return
-    raise AssertionError(f"Missing pending or live config for {role} on {host.backend.hostname}")
-
-
 def _apply_pending_config(host, role: str) -> None:
     pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path):
-        return
-    config_dir = helpers.SERVER_CONFIG_DIR_NAME if role == "server" else helpers.CLIENT_CONFIG_DIR_NAME
-    helpers.write_apply_request(host, role)
-    with openwrt_env.xp2p_run_session(
-        host,
-        role,
-        helpers.INSTALL_ROOT.as_posix(),
-        config_dir,
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
+        host, helpers.APPLY_REQUEST
     ):
-        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+        return
+    helpers.ensure_service_running(host, role)
+    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(host, role)
 
 
 @pytest.fixture(scope="module")
@@ -128,8 +107,8 @@ def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
         "--force",
     )
     helpers.wait_for_pending_config(openwrt_client_host, "client")
-    _ensure_apply_ready(openwrt_server_host, "server")
-    _ensure_apply_ready(openwrt_client_host, "client")
+    _apply_pending_config(openwrt_server_host, "server")
+    _apply_pending_config(openwrt_client_host, "client")
 
     yield xp2p_openwrt_ipk
 
@@ -164,28 +143,16 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
 
         _apply_pending_config(openwrt_client_host, "client")
         forward_port = _detect_forward_port(openwrt_client_host, server_ip)
-        _ensure_apply_ready(openwrt_server_host, "server")
-        _ensure_apply_ready(openwrt_client_host, "client")
-        with openwrt_env.xp2p_run_session(
-            openwrt_server_host,
-            role="server",
-            install_dir="/etc/xp2p",
-            config_dir="config-server",
-            log_path="/tmp/xp2p-server.log",
-            ):
-                with openwrt_env.xp2p_run_session(
-                    openwrt_client_host,
-                    role="client",
-                    install_dir="/etc/xp2p",
-                    config_dir="config-client",
-                    log_path="/tmp/xp2p-client.log",
-                ):
-                    helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
-                    helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
-                    _wait_for_port(openwrt_client_host, forward_port)
+        helpers.ensure_service_running(openwrt_server_host, "server")
+        helpers.ensure_service_running(openwrt_client_host, "client")
+        helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
+        helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_server_host, "server")
+        helpers.wait_for_live_config(openwrt_client_host, "client")
+        _wait_for_port(openwrt_client_host, forward_port)
 
-                    _assert_dns_response(openwrt_client_host, DOMAIN, DNS_IP, server=f"127.0.0.1:{forward_port}")
-                    _assert_dns_response(openwrt_client_host, DOMAIN, DNS_IP, server="127.0.0.1")
+        _assert_dns_response(openwrt_client_host, DOMAIN, DNS_IP, server=f"127.0.0.1:{forward_port}")
+        _assert_dns_response(openwrt_client_host, DOMAIN, DNS_IP, server="127.0.0.1")
 
         remove = openwrt_client_host.run(
             f"/usr/bin/xp2p client dns-forward remove --domain {DOMAIN} --intercept --quiet"
@@ -233,35 +200,23 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
 
         _apply_pending_config(openwrt_server_host, "server")
         forward_port = _detect_forward_port(openwrt_server_host, client_ip, role="server")
-        _ensure_apply_ready(openwrt_server_host, "server")
-        _ensure_apply_ready(openwrt_client_host, "client")
-        with openwrt_env.xp2p_run_session(
-            openwrt_server_host,
-            role="server",
-            install_dir="/etc/xp2p",
-            config_dir="config-server",
-            log_path="/tmp/xp2p-server.log",
-    ):
-            with openwrt_env.xp2p_run_session(
-                openwrt_client_host,
-                role="client",
-                install_dir="/etc/xp2p",
-                config_dir="config-client",
-                log_path="/tmp/xp2p-client.log",
-            ):
-                helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
-                helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
-                _wait_for_port(openwrt_server_host, forward_port)
+        helpers.ensure_service_running(openwrt_server_host, "server")
+        helpers.ensure_service_running(openwrt_client_host, "client")
+        helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
+        helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_server_host, "server")
+        helpers.wait_for_live_config(openwrt_client_host, "client")
+        _wait_for_port(openwrt_server_host, forward_port)
 
-                lookup_direct = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1:{forward_port} || true")
-                assert DNS_IP in (lookup_direct.stdout or ""), (
-                    f"Expected {DNS_IP} via dokodemo port (rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
-                )
+        lookup_direct = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1:{forward_port} || true")
+        assert DNS_IP in (lookup_direct.stdout or ""), (
+            f"Expected {DNS_IP} via dokodemo port (rc={lookup_direct.rc}): {lookup_direct.stdout} {lookup_direct.stderr}"
+        )
 
-                lookup_intercept = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1 || true")
-                assert DNS_IP in (lookup_intercept.stdout or ""), (
-                    f"Expected {DNS_IP} via intercept (rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
-                )
+        lookup_intercept = openwrt_server_host.run(f"nslookup {SERVER_DOMAIN} 127.0.0.1 || true")
+        assert DNS_IP in (lookup_intercept.stdout or ""), (
+            f"Expected {DNS_IP} via intercept (rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
+        )
 
         remove = openwrt_server_host.run(
             f"/usr/bin/xp2p server dns-forward remove --domain {SERVER_DOMAIN} --intercept --quiet"
@@ -334,40 +289,29 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         assert add.rc == 0, f"add command failed: {add.stderr}"
         dns_forward_added = True
 
-        _ensure_apply_ready(openwrt_server_host, "server")
-        _ensure_apply_ready(openwrt_client_host, "client")
-        with openwrt_env.xp2p_run_session(
+        helpers.ensure_service_running(openwrt_server_host, "server")
+        helpers.ensure_service_running(openwrt_client_host, "client")
+        helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
+        helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_server_host, "server")
+        helpers.wait_for_live_config(openwrt_client_host, "client")
+        _wait_for_port(openwrt_client_host, "51180")
+        helpers.wait_for_heartbeat_state(
             openwrt_server_host,
-            role="server",
-            install_dir="/etc/xp2p",
-            config_dir="config-server",
-            log_path="/tmp/xp2p-server.log",
-    ), openwrt_env.xp2p_run_session(
-            openwrt_client_host,
-            role="client",
-            install_dir="/etc/xp2p",
-            config_dir="config-client",
-            log_path="/tmp/xp2p-client.log",
-    ):
-            helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
-            helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
-            _wait_for_port(openwrt_client_host, "51180")
-            helpers.wait_for_heartbeat_state(
-                openwrt_server_host,
-                path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+            path=helpers.SERVER_HEARTBEAT_STATE_FILE,
+        )
+        time.sleep(1.5)
+        tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
+        if tunnel_ping.rc != 0:
+            debug = _dump_dns_forward_debug(
+                openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
             )
-            time.sleep(1.5)
-            tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
-            if tunnel_ping.rc != 0:
-                debug = _dump_dns_forward_debug(
-                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
-                )
-                raise AssertionError(
-                    "openwrt-b tunnel ping failed.\n"
-                    f"STDOUT:\n{tunnel_ping.stdout}\nSTDERR:\n{tunnel_ping.stderr}\n\n"
-                    f"DNS forward debug:\n{debug}"
-                )
-            tunnel_common.assert_zero_loss(tunnel_ping, f"tunnel to {SERVER_TUN_IP}")
+            raise AssertionError(
+                "openwrt-b tunnel ping failed.\n"
+                f"STDOUT:\n{tunnel_ping.stdout}\nSTDERR:\n{tunnel_ping.stderr}\n\n"
+                f"DNS forward debug:\n{debug}"
+            )
+        tunnel_common.assert_zero_loss(tunnel_ping, f"tunnel to {SERVER_TUN_IP}")
 
         redirect = client_runner(
             "client",
@@ -390,8 +334,6 @@ def test_dns_forward_openwrt_b_with_c1_c2(
 
         _apply_pending_config(openwrt_client_host, "client")
         forward_port = _detect_forward_port(openwrt_client_host, c1_dns_ip)
-        _ensure_apply_ready(openwrt_server_host, "server")
-        _ensure_apply_ready(openwrt_client_host, "client")
         previous_client_mode = _ensure_mode(
             openwrt_client_host,
             client_runner,
@@ -417,50 +359,41 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         nat_added = True
         _apply_pending_config(openwrt_client_host, "client")
 
-        with openwrt_env.xp2p_run_session(
-            openwrt_server_host,
-            role="server",
-            install_dir="/etc/xp2p",
-            config_dir="config-server",
-            log_path="/tmp/xp2p-server.log",
-    ), openwrt_env.xp2p_run_session(
-            openwrt_client_host,
-            role="client",
-            install_dir="/etc/xp2p",
-            config_dir="config-client",
-            log_path="/tmp/xp2p-client.log",
-    ):
-            helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
-            helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
-            _wait_for_port(openwrt_client_host, forward_port)
-            _assert_dns_response(
-                openwrt_client_host, C1_FQDN, c1_dns_ip, server=f"127.0.0.1:{forward_port}"
-            )
+        helpers.ensure_service_running(openwrt_server_host, "server")
+        helpers.ensure_service_running(openwrt_client_host, "client")
+        helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
+        helpers.wait_for_apply_request_clear(openwrt_client_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_server_host, "server")
+        helpers.wait_for_live_config(openwrt_client_host, "client")
+        _wait_for_port(openwrt_client_host, forward_port)
+        _assert_dns_response(
+            openwrt_client_host, C1_FQDN, c1_dns_ip, server=f"127.0.0.1:{forward_port}"
+        )
 
-            lookup_intercept = _openwrt_nslookup(openwrt_client_host, C1_FQDN)
-            assert c1_dns_ip in (lookup_intercept.stdout or ""), (
-                f"Expected {c1_dns_ip} from {C1_FQDN} via intercept "
-                f"(rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
-            )
+        lookup_intercept = _openwrt_nslookup(openwrt_client_host, C1_FQDN)
+        assert c1_dns_ip in (lookup_intercept.stdout or ""), (
+            f"Expected {c1_dns_ip} from {C1_FQDN} via intercept "
+            f"(rc={lookup_intercept.rc}): {lookup_intercept.stdout} {lookup_intercept.stderr}"
+        )
 
-            c2_lookup = _alpine_guest(alpine_c2_host, "scripts/linux/nslookup.sh", C1_FQDN)
-            assert c1_dns_ip in (c2_lookup.stdout or ""), (
-                f"Expected {c1_dns_ip} from {C1_FQDN} on c2:\n{c2_lookup.stdout}\n{c2_lookup.stderr}"
-            )
+        c2_lookup = _alpine_guest(alpine_c2_host, "scripts/linux/nslookup.sh", C1_FQDN)
+        assert c1_dns_ip in (c2_lookup.stdout or ""), (
+            f"Expected {c1_dns_ip} from {C1_FQDN} on c2:\n{c2_lookup.stdout}\n{c2_lookup.stderr}"
+        )
 
-            c2_ping = openwrt_env.run_alpine_guest_script(
-                alpine_c2_host, "scripts/linux/xp2p_ping.sh", C1_FQDN, "--count", "1"
+        c2_ping = openwrt_env.run_alpine_guest_script(
+            alpine_c2_host, "scripts/linux/xp2p_ping.sh", C1_FQDN, "--count", "1"
+        )
+        if c2_ping.rc != 0:
+            debug = _dump_dns_forward_debug(
+                openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
             )
-            if c2_ping.rc != 0:
-                debug = _dump_dns_forward_debug(
-                    openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip
-                )
-                raise AssertionError(
-                    "xp2p ping from c2 failed.\n"
-                    f"STDOUT:\n{c2_ping.stdout}\nSTDERR:\n{c2_ping.stderr}\n\n"
-                    f"DNS forward debug:\n{debug}"
-                )
-            tunnel_common.assert_zero_loss(c2_ping, f"to {C1_FQDN}")
+            raise AssertionError(
+                "xp2p ping from c2 failed.\n"
+                f"STDOUT:\n{c2_ping.stdout}\nSTDERR:\n{c2_ping.stderr}\n\n"
+                f"DNS forward debug:\n{debug}"
+            )
+        tunnel_common.assert_zero_loss(c2_ping, f"to {C1_FQDN}")
     except AssertionError as exc:
         debug = _dump_dns_forward_debug(
             openwrt_client_host, openwrt_server_host, alpine_c1_host, alpine_c2_host, c1_dns_ip

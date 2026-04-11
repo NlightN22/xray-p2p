@@ -52,14 +52,18 @@ def _copy_remote_file(host: Host, source: PurePosixPath, dest: PurePosixPath) ->
 
 def _read_remote_text(host: Host, path: PurePosixPath) -> str:
     try:
-        return helpers.read_text(host, path)
+        helpers.ensure_service_running(host, "server")
+        helpers.wait_for_live_config(host, "server")
+        return helpers.read_live_text(host, path)
     except RuntimeError as exc:
         pytest.fail(str(exc))
 
 
 def _read_remote_json(host: Host, path: PurePosixPath) -> dict:
     try:
-        return helpers.read_preferred_json(host, path)
+        helpers.ensure_service_running(host, "server")
+        helpers.wait_for_live_config(host, "server")
+        return helpers.read_live_json(host, path)
     except RuntimeError as exc:
         pytest.fail(str(exc))
 

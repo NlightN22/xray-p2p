@@ -38,10 +38,13 @@ def _runner(host):
 
 def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
     pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path):
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
+        host, helpers.APPLY_REQUEST
+    ):
         return
-    with openwrt_env.xp2p_run_session(host, role, install_path, config_dir):
-        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.ensure_service_running(host, role)
+    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(host, role)
 
 
 def _update_hosts_entry(host, action: str, domain: str, ip: str | None = None) -> None:
@@ -107,6 +110,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
 
         helpers.wait_for_pending_config(server_host, "server")
         _apply_pending_config(server_host, "server", server_install_path, helpers.SERVER_CONFIG_DIR_NAME)
+        helpers.wait_for_live_config(server_host, "server")
         server_state = helpers.read_live_server_config(server_host)
         server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_reverse_state(
@@ -136,6 +140,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             helpers.INSTALL_ROOT.as_posix(),
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
+        helpers.wait_for_live_config(client_host, "client")
         client_state = helpers.read_live_client_config(client_host)
         client_routing = helpers.read_live_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         client_outbounds = helpers.read_live_json(client_host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
@@ -203,21 +208,14 @@ def _active_tunnel_sessions(env: dict):
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
     )
-    with openwrt_env.xp2p_run_session(
-        env["server_host"],
-        "server",
-        env["server_install_path"],
-        helpers.SERVER_CONFIG_DIR_NAME,
-    ), openwrt_env.xp2p_run_session(
-        env["client_host"],
-        "client",
-        helpers.INSTALL_ROOT.as_posix(),
-        helpers.CLIENT_CONFIG_DIR_NAME,
-    ):
-        time.sleep(2.0)
-        for host in (env["server_host"], env["client_host"]):
-            helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-        yield
+    helpers.ensure_service_running(env["server_host"], "server")
+    helpers.ensure_service_running(env["client_host"], "client")
+    time.sleep(2.0)
+    for host in (env["server_host"], env["client_host"]):
+        helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(env["server_host"], "server")
+    helpers.wait_for_live_config(env["client_host"], "client")
+    yield
 
 
 def _server_forward_cmd(env: dict, subcommand: str, *extra: str, check: bool = False):

@@ -25,7 +25,9 @@ def _runner(host: Host):
 
 
 def _read_trojan_users(host: Host) -> dict[str, str]:
-    data = helpers.read_preferred_json(host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+    helpers.ensure_service_running(host, "server")
+    helpers.wait_for_live_config(host, "server")
+    data = helpers.read_live_json(host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
     for inbound in data.get("inbounds", []):
         if not isinstance(inbound, dict):
             continue

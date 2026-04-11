@@ -30,7 +30,7 @@ REQUIRED_XRAY_CONFIGS = ("inbounds.json", "logs.json", "outbounds.json", "routin
 
 def _runner(host):
     def _run(*args: str, check: bool = False):
-        result = openwrt_env.run_xp2p(host, *args)
+        result = openwrt_env.run_xp2p_live(host, *args)
         if check and result.rc != 0:
             pytest.fail(
                 "xp2p command failed "
@@ -72,11 +72,50 @@ def _wait_for_live_config(
     )
 
 
+def _wait_for_service_state(
+    host,
+    role: str,
+    expected_active: bool,
+    *,
+    timeout_seconds: float = 45.0,
+    interval: float = 1.5,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    script = f"/etc/init.d/xp2p-{role}"
+    last = None
+    while time.time() < deadline:
+        result = host.run(f"{script} running")
+        active = result.rc == 0
+        if active == expected_active:
+            return
+        last = result
+        time.sleep(interval)
+    stdout = getattr(last, "stdout", "") or ""
+    stderr = getattr(last, "stderr", "") or ""
+    state = "active" if expected_active else "inactive"
+    raise AssertionError(
+        f"xp2p {role} service did not reach {state} state.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
+
+
+def _ensure_service_running(host, role: str) -> None:
+    if _is_xp2p_run_active(host, role):
+        return
+    start = host.run(f"/etc/init.d/xp2p-{role} start")
+    if start.rc != 0:
+        pytest.fail(
+            "Failed to start service "
+            f"xp2p-{role} on {host.backend.hostname}.\nSTDOUT:\n{start.stdout}\nSTDERR:\n{start.stderr}"
+        )
+    _wait_for_service_state(host, role, expected_active=True)
+
+
 def _current_mode(host, role: str) -> str:
+    _wait_for_live_config(host, role)
     if role == "client":
-        config = helpers.read_preferred_client_config(host)
+        config = helpers.read_live_client_config(host)
     elif role == "server":
-        config = helpers.read_preferred_server_config(host)
+        config = helpers.read_live_server_config(host)
     else:
         raise ValueError(f"Unsupported role: {role}")
     tun_enabled = config.get("tun_enabled")
@@ -116,25 +155,13 @@ def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -
         host, helpers.APPLY_REQUEST
     ):
         return
+    _ensure_service_running(host, role)
     helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    _wait_for_live_config(host, role)
 
 
 def _apply_pending_config_wait(host, role: str, install_path: str, config_dir: str) -> None:
-    if role == "client":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
-    elif role == "server":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
-    else:
-        raise ValueError(f"Unsupported role: {role}")
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
-        host, helpers.APPLY_REQUEST
-    ):
-        return
-    if _is_xp2p_run_active(host, role):
-        _apply_pending_config(host, role, install_path, config_dir)
-        return
-    with openwrt_env.xp2p_run_session(host, role, install_path, config_dir):
-        _apply_pending_config(host, role, install_path, config_dir)
+    _apply_pending_config(host, role, install_path, config_dir)
 
 
 def _is_xp2p_run_active(host, role: str) -> bool:
@@ -200,8 +227,8 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             helpers.SERVER_CONFIG_DIR_NAME,
         )
         _wait_for_live_config(server_host, "server")
-        server_state = helpers.read_preferred_server_config(server_host)
-        server_routing = helpers.read_preferred_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+        server_state = helpers.read_live_server_config(server_host)
+        server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
         helpers.assert_server_reverse_state(
             server_state,
             reverse_tag,
@@ -231,8 +258,8 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
         _wait_for_live_config(client_host, "client")
-        client_state = helpers.read_preferred_client_config(client_host)
-        client_routing = helpers.read_preferred_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        client_state = helpers.read_live_client_config(client_host)
+        client_routing = helpers.read_live_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
         helpers.assert_client_reverse_state(
@@ -243,14 +270,14 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             host=SERVER_IP,
         )
 
-        helpers.assert_reverse_cli_output(
+        helpers.assert_reverse_cli_output_live(
             server_runner,
             "server",
             server_install_path,
             helpers.SERVER_CONFIG_DIR_NAME,
             reverse_tag,
         )
-        helpers.assert_reverse_cli_output(
+        helpers.assert_reverse_cli_output_live(
             client_runner,
             "client",
             helpers.INSTALL_ROOT,
@@ -277,88 +304,80 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
 def _active_tunnel_sessions(env: dict):
     heartbeat_timeout = 30.0
     heartbeat_interval = 2.0
-    with openwrt_env.xp2p_run_session(
-        env["server_host"],
-        "server",
-        env["server_install_path"],
-        helpers.SERVER_CONFIG_DIR_NAME,
-    ), openwrt_env.xp2p_run_session(
-        env["client_host"],
-        "client",
-        helpers.INSTALL_ROOT.as_posix(),
-        helpers.CLIENT_CONFIG_DIR_NAME,
-    ):
-        time.sleep(2.0)
-        client_missing = _xray_configs_missing(env["client_host"], helpers.CLIENT_CONFIG_DIR)
-        if client_missing:
-            raise AssertionError(f"Missing client xray configs (live): {client_missing}")
+    _ensure_service_running(env["server_host"], "server")
+    _ensure_service_running(env["client_host"], "client")
+    _wait_for_live_config(env["server_host"], "server")
+    _wait_for_live_config(env["client_host"], "client")
+    client_missing = _xray_configs_missing(env["client_host"], helpers.CLIENT_CONFIG_DIR)
+    if client_missing:
+        raise AssertionError(f"Missing client xray configs (live): {client_missing}")
 
-        server_missing = _xray_configs_missing(env["server_host"], helpers.SERVER_CONFIG_DIR)
-        if server_missing:
-            raise AssertionError(f"Missing server xray configs (live): {server_missing}")
-        _dump_run_logs(env["server_host"], "server", "before")
-        _dump_run_logs(env["client_host"], "client", "before")
-        time.sleep(2.0)
-        _dump_run_logs(env["server_host"], "server", "after-start")
-        _dump_run_logs(env["client_host"], "client", "after-start")
-        _wait_for_listen_port(env["client_host"], CLIENT_SOCKS_PORT)
-        helpers.wait_for_heartbeat_state(
-            env["server_host"],
-            SERVER_HEARTBEAT_STATE_FILE,
+    server_missing = _xray_configs_missing(env["server_host"], helpers.SERVER_CONFIG_DIR)
+    if server_missing:
+        raise AssertionError(f"Missing server xray configs (live): {server_missing}")
+    _dump_run_logs(env["server_host"], "server", "before")
+    _dump_run_logs(env["client_host"], "client", "before")
+    time.sleep(2.0)
+    _dump_run_logs(env["server_host"], "server", "after-start")
+    _dump_run_logs(env["client_host"], "client", "after-start")
+    _wait_for_listen_port(env["client_host"], CLIENT_SOCKS_PORT)
+    helpers.wait_for_heartbeat_state(
+        env["server_host"],
+        SERVER_HEARTBEAT_STATE_FILE,
+        timeout_seconds=heartbeat_timeout,
+        poll_interval=heartbeat_interval,
+    )
+    helpers.wait_for_heartbeat_state(
+        env["client_host"],
+        CLIENT_HEARTBEAT_STATE_FILE,
+        timeout_seconds=heartbeat_timeout,
+        poll_interval=heartbeat_interval,
+    )
+    try:
+        tunnel_common.wait_for_alive_entry(
+            env["server_runner"],
+            "server",
+            env["server_install_path"],
+            env["endpoint_tag"],
+            SERVER_IP,
+            env["client_user"],
+            env["client_primary_ip"],
             timeout_seconds=heartbeat_timeout,
             poll_interval=heartbeat_interval,
         )
-        helpers.wait_for_heartbeat_state(
-            env["client_host"],
-            CLIENT_HEARTBEAT_STATE_FILE,
+    except AssertionError:
+        state_output = env["server_runner"](
+            "server",
+            "state",
+            "--path",
+            env["server_install_path"],
+            check=True,
+        ).stdout or ""
+        rows = tunnel_common.parse_state_rows(state_output)
+        assert any(row.get("TAG") == env["endpoint_tag"] for row in rows), "Heartbeat entry missing on server"
+    try:
+        tunnel_common.wait_for_alive_entry(
+            env["client_runner"],
+            "client",
+            helpers.INSTALL_ROOT.as_posix(),
+            env["endpoint_tag"],
+            SERVER_IP,
+            env["client_user"],
+            env["client_primary_ip"],
             timeout_seconds=heartbeat_timeout,
             poll_interval=heartbeat_interval,
         )
-        try:
-            tunnel_common.wait_for_alive_entry(
-                env["server_runner"],
-                "server",
-                env["server_install_path"],
-                env["endpoint_tag"],
-                SERVER_IP,
-                env["client_user"],
-                env["client_primary_ip"],
-                timeout_seconds=heartbeat_timeout,
-                poll_interval=heartbeat_interval,
-            )
-        except AssertionError:
-            state_output = env["server_runner"](
-                "server",
-                "state",
-                "--path",
-                env["server_install_path"],
-                check=True,
-            ).stdout or ""
-            rows = tunnel_common.parse_state_rows(state_output)
-            assert any(row.get("TAG") == env["endpoint_tag"] for row in rows), "Heartbeat entry missing on server"
-        try:
-            tunnel_common.wait_for_alive_entry(
-                env["client_runner"],
-                "client",
-                helpers.INSTALL_ROOT.as_posix(),
-                env["endpoint_tag"],
-                SERVER_IP,
-                env["client_user"],
-                env["client_primary_ip"],
-                timeout_seconds=heartbeat_timeout,
-                poll_interval=heartbeat_interval,
-            )
-        except AssertionError:
-            state_output = env["client_runner"](
-                "client",
-                "state",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                check=True,
-            ).stdout or ""
-            rows = tunnel_common.parse_state_rows(state_output)
-            assert any(row.get("TAG") == env["endpoint_tag"] for row in rows), "Heartbeat entry missing on client"
-        yield
+    except AssertionError:
+        state_output = env["client_runner"](
+            "client",
+            "state",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            check=True,
+        ).stdout or ""
+        rows = tunnel_common.parse_state_rows(state_output)
+        assert any(row.get("TAG") == env["endpoint_tag"] for row in rows), "Heartbeat entry missing on client"
+    yield
 
 
 def _dump_run_logs(host, role: str, stage: str) -> None:
@@ -506,7 +525,7 @@ def _exercise_client_forward_diagnostics(env: dict) -> None:
             helpers.CLIENT_CONFIG_DIR_NAME,
         )
         with _active_tunnel_sessions(env):
-            client_state = helpers.read_preferred_client_config(client_host)
+            client_state = helpers.read_live_client_config(client_host)
             entry = tunnel_common.forward_entry_for_target(
                 client_state.get("forwards") or [], SERVER_IP, SERVER_DIAGNOSTICS_PORT
             )
@@ -566,7 +585,7 @@ def _exercise_server_forward_diagnostics(env: dict) -> None:
             helpers.SERVER_CONFIG_DIR_NAME,
         )
         with _active_tunnel_sessions(env):
-            server_state = helpers.read_preferred_server_config(server_host)
+            server_state = helpers.read_live_server_config(server_host)
             entry = tunnel_common.forward_entry_for_target(
                 server_state.get("forward_rules") or [], CLIENT_IP, CLIENT_DIAGNOSTICS_PORT
             )
@@ -1080,8 +1099,8 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             ).stdout or ""
             assert alias_cidr in list_output, f"Server redirect list missing {alias_cidr}"
             with _active_tunnel_sessions(tunnel_environment):
-                server_state = helpers.read_preferred_server_config(server_host)
-                server_routing = helpers.read_preferred_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
+                server_state = helpers.read_live_server_config(server_host)
+                server_routing = helpers.read_live_json(server_host, helpers.SERVER_CONFIG_DIR / "routing.json")
                 helpers.assert_server_redirect_state(server_state, alias_cidr, reverse_tag)
                 helpers.assert_server_redirect_rule(server_routing, alias_cidr, reverse_tag)
 
@@ -1113,7 +1132,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             )
             _dump_apply_state(server_host, "server", "after forward apply")
 
-            server_state = helpers.read_preferred_server_config(server_host)
+            server_state = helpers.read_live_server_config(server_host)
             entry = tunnel_common.forward_entry_for_target(
                 server_state.get("forward_rules") or [], CLIENT_REVERSE_TEST_IP, CLIENT_DIAGNOSTICS_PORT
             )

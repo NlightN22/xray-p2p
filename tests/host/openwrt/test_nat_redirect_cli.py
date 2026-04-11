@@ -9,7 +9,9 @@ from tests.host.openwrt import env as openwrt_env
 
 
 def _current_mode(host) -> str:
-    state = helpers.read_preferred_client_config(host)
+    helpers.ensure_service_running(host, "client")
+    helpers.wait_for_live_config(host, "client")
+    state = helpers.read_live_client_config(host)
     tun_enabled = state.get("tun_enabled")
     if not isinstance(tun_enabled, bool):
         raise AssertionError(f"Expected tun_enabled boolean in client config, got {tun_enabled!r}")
@@ -57,6 +59,8 @@ def xp2p_installed(openwrt_client_host, xp2p_openwrt_ipk):
             "xp2p client install failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+    helpers.ensure_service_running(openwrt_client_host, "client")
+    helpers.wait_for_live_config(openwrt_client_host, "client")
     return xp2p_openwrt_ipk
 
 
