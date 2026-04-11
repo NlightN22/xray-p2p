@@ -45,8 +45,25 @@ def _xray_configs_missing(host, config_dir) -> list[str]:
     return [
         (config_dir / name).as_posix()
         for name in REQUIRED_XRAY_CONFIGS
-        if not helpers.path_exists_exact(host, config_dir / name)
+        if not helpers.path_exists_live(host, config_dir / name)
     ]
+
+
+def _wait_for_xray_configs(
+    host,
+    config_dir,
+    *,
+    timeout_seconds: float = 30.0,
+    interval: float = 1.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        missing = _xray_configs_missing(host, config_dir)
+        if not missing:
+            return
+        time.sleep(interval)
+    missing = _xray_configs_missing(host, config_dir)
+    raise AssertionError(f"Missing xray configs (live): {missing}")
 
 
 def _wait_for_live_config(
@@ -56,19 +73,11 @@ def _wait_for_live_config(
     timeout_seconds: float = 30.0,
     interval: float = 1.0,
 ) -> None:
-    if role == "client":
-        live_path = helpers.CONFIG_ROOT / "xp2p-client.toml"
-    elif role == "server":
-        live_path = helpers.CONFIG_ROOT / "xp2p-server.toml"
-    else:
-        raise ValueError(f"Unsupported role: {role}")
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if helpers.path_exists_exact(host, live_path):
-            return
-        time.sleep(interval)
-    raise AssertionError(
-        f"Live config did not appear for {role} on {host.backend.hostname} within {timeout_seconds}s"
+    helpers.wait_for_live_config(
+        host,
+        role,
+        timeout_seconds=timeout_seconds,
+        poll_interval=interval,
     )
 
 
@@ -111,7 +120,7 @@ def _ensure_service_running(host, role: str) -> None:
 
 
 def _current_mode(host, role: str) -> str:
-    _wait_for_live_config(host, role)
+    helpers.wait_for_live_config(host, role)
     if role == "client":
         config = helpers.read_live_client_config(host)
     elif role == "server":
@@ -157,7 +166,7 @@ def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -
         return
     _ensure_service_running(host, role)
     helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-    _wait_for_live_config(host, role)
+    helpers.wait_for_live_config(host, role)
 
 
 def _apply_pending_config_wait(host, role: str, install_path: str, config_dir: str) -> None:
@@ -218,7 +227,6 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
         assert credential["link"], "Expected trojan link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
-        helpers.wait_for_pending_config(server_host, "server")
         _set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, "proxy")
         _apply_pending_config_wait(
             server_host,
@@ -249,7 +257,6 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             "--force",
             check=True,
         )
-        helpers.wait_for_pending_config(client_host, "client")
         _set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy")
         _apply_pending_config_wait(
             client_host,
@@ -306,21 +313,19 @@ def _active_tunnel_sessions(env: dict):
     heartbeat_interval = 2.0
     _ensure_service_running(env["server_host"], "server")
     _ensure_service_running(env["client_host"], "client")
-    _wait_for_live_config(env["server_host"], "server")
-    _wait_for_live_config(env["client_host"], "client")
-    client_missing = _xray_configs_missing(env["client_host"], helpers.CLIENT_CONFIG_DIR)
-    if client_missing:
-        raise AssertionError(f"Missing client xray configs (live): {client_missing}")
-
-    server_missing = _xray_configs_missing(env["server_host"], helpers.SERVER_CONFIG_DIR)
-    if server_missing:
-        raise AssertionError(f"Missing server xray configs (live): {server_missing}")
+    helpers.wait_for_apply_request_clear(env["server_host"], timeout_seconds=60.0)
+    helpers.wait_for_apply_request_clear(env["client_host"], timeout_seconds=60.0)
+    helpers.wait_for_live_config(env["server_host"], "server")
+    helpers.wait_for_live_config(env["client_host"], "client")
+    _wait_for_xray_configs(env["client_host"], helpers.CLIENT_CONFIG_DIR)
+    _wait_for_xray_configs(env["server_host"], helpers.SERVER_CONFIG_DIR)
     _dump_run_logs(env["server_host"], "server", "before")
     _dump_run_logs(env["client_host"], "client", "before")
     time.sleep(2.0)
     _dump_run_logs(env["server_host"], "server", "after-start")
     _dump_run_logs(env["client_host"], "client", "after-start")
     _wait_for_listen_port(env["client_host"], CLIENT_SOCKS_PORT)
+    time.sleep(2.0)
     helpers.wait_for_heartbeat_state(
         env["server_host"],
         SERVER_HEARTBEAT_STATE_FILE,
@@ -621,9 +626,9 @@ def _verify_heartbeat_state(env: dict) -> None:
     server_install_path = env["server_install_path"]
     client_install_path = helpers.INSTALL_ROOT.as_posix()
 
-    if not helpers.path_exists_exact(env["server_host"], SERVER_HEARTBEAT_STATE_FILE):
+    if not helpers.path_exists_live(env["server_host"], SERVER_HEARTBEAT_STATE_FILE):
         pytest.fail("Server heartbeat state not found after run start")
-    if not helpers.path_exists_exact(env["client_host"], CLIENT_HEARTBEAT_STATE_FILE):
+    if not helpers.path_exists_live(env["client_host"], CLIENT_HEARTBEAT_STATE_FILE):
         pytest.fail("Client heartbeat state not found after run start")
 
     try:
@@ -1150,6 +1155,8 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                     str(SERVER_FORWARD_PORT),
                     "--count",
                     "3",
+                    "--proto",
+                    "tcp",
                     check=True,
                 )
                 tunnel_common.assert_zero_loss(

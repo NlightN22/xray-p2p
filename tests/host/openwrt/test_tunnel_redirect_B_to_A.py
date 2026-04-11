@@ -46,7 +46,7 @@ def _runner(host):
 
 def _assert_config_ready(host, role: str) -> None:
     live = helpers.CONFIG_ROOT / f"xp2p-{role}.toml"
-    if helpers.path_exists_exact(host, live):
+    if helpers.path_exists_live(host, live):
         return
     pending_dir = (helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / helpers.PENDING_DIR_NAME).as_posix()
     listing = host.run(f"ls -lha {pending_dir} 2>/dev/null || true").stdout or ""
@@ -60,7 +60,7 @@ def _xray_configs_missing(host, config_dir) -> list[str]:
     return [
         (config_dir / name).as_posix()
         for name in REQUIRED_XRAY_CONFIGS
-        if not helpers.path_exists_exact(host, config_dir / name)
+        if not helpers.path_exists_live(host, config_dir / name)
     ]
 
 
@@ -71,11 +71,11 @@ def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -
         pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
     else:
         raise ValueError(f"Unsupported role: {role}")
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists(host, APPLY_REQUEST):
+    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_live(host, APPLY_REQUEST):
         return
     _ensure_service_running(host, role)
     _wait_for_apply_request_clear(host)
-    _wait_for_live_config(host, role)
+    helpers.wait_for_live_config(host, role)
 
 
 @contextmanager
@@ -92,13 +92,14 @@ def _run_sessions(server_host, client_host):
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
     )
-    _wait_for_live_config(server_host, "server")
-    _wait_for_live_config(client_host, "client")
+    helpers.wait_for_live_config(server_host, "server")
+    helpers.wait_for_live_config(client_host, "client")
     _assert_config_ready(server_host, "server")
     _assert_config_ready(client_host, "client")
     _ensure_service_running(server_host, "server")
     _ensure_service_running(client_host, "client")
     _wait_for_port(client_host, SOCKS_PORT)
+    time.sleep(REVERSE_TUNNEL_WARMUP_SECONDS)
     _wait_for_apply_request_clear(server_host)
     _wait_for_apply_request_clear(client_host)
     yield
@@ -111,19 +112,11 @@ def _wait_for_live_config(
     timeout_seconds: float = 30.0,
     interval: float = 1.0,
 ) -> None:
-    if role == "client":
-        live_path = helpers.CONFIG_ROOT / "xp2p-client.toml"
-    elif role == "server":
-        live_path = helpers.CONFIG_ROOT / "xp2p-server.toml"
-    else:
-        raise ValueError(f"Unsupported role: {role}")
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
-        if helpers.path_exists_exact(host, live_path):
-            return
-        time.sleep(interval)
-    raise AssertionError(
-        f"Live config did not appear for {role} on {host.backend.hostname} within {timeout_seconds}s"
+    helpers.wait_for_live_config(
+        host,
+        role,
+        timeout_seconds=timeout_seconds,
+        poll_interval=interval,
     )
 
 
@@ -419,7 +412,6 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         )
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
-        helpers.wait_for_pending_config(server_host, "server")
         _apply_pending_config(
             server_host,
             "server",
@@ -440,7 +432,6 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        helpers.wait_for_pending_config(client_host, "client")
         _apply_pending_config(
             client_host,
             "client",
@@ -681,7 +672,6 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
         )
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
-        helpers.wait_for_pending_config(server_host, "server")
         _apply_pending_config(
             server_host,
             "server",
@@ -703,7 +693,6 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             check=True,
         )
 
-        helpers.wait_for_pending_config(client_host, "client")
         _apply_pending_config(
             client_host,
             "client",
@@ -712,7 +701,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
         )
         _wait_for_live_config(client_host, "client")
         live_client = helpers.CONFIG_ROOT / "xp2p-client.toml"
-        if not helpers.path_exists_exact(client_host, live_client):
+        if not helpers.path_exists_live(client_host, live_client):
             _dump_config_state(client_host, "tunnel redirect A to B missing live client config")
             raise AssertionError("Missing live xp2p-client.toml after apply")
         client_state = helpers.read_live_client_config(client_host)
@@ -744,7 +733,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             raise AssertionError(f"Missing client xray configs (live or pending): {client_missing}")
 
         inbounds_path = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
-        if not helpers.path_exists_exact(client_host, inbounds_path):
+        if not helpers.path_exists_live(client_host, inbounds_path):
             raise AssertionError("Missing client inbounds.json in live config")
         client_host.run(f"sed -i 's/127\\.0\\.0\\.1/0.0.0.0/g' {inbounds_path.as_posix()}")
         _apply_pending_config(
