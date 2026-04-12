@@ -11,8 +11,3 @@ type ModeOptions struct {
 	TunMTU     int
 	TunAddr    string
 }
-
-// ApplyMode is not supported on this platform.
-func ApplyMode(ModeOptions) error {
-	return ErrUnsupported
-}

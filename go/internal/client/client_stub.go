@@ -161,6 +161,3 @@ func ListRedirects(_ RedirectListOptions) ([]RedirectRecord, error) {
 	return nil, ErrUnsupported
 }
 
-func ApplyMode(_ ModeOptions) error {
-	return ErrUnsupported
-}

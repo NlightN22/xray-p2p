@@ -12,15 +12,3 @@ type ModeOptions struct {
 	TunAddr    string
 }
 
-// ApplyMode updates inbounds and routes to match the selected mode.
-func ApplyMode(opts ModeOptions) error {
-	installDir, err := resolveInstallDir(opts.InstallDir)
-	if err != nil {
-		return err
-	}
-	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	return applyServerMode(installDir, configDir, opts)
-}

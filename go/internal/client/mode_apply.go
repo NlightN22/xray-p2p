@@ -8,14 +8,6 @@ import (
 	"strings"
 )
 
-func applyClientMode(paths clientPaths, opts ModeOptions) error {
-	state, err := loadClientInstallState(paths.configFile)
-	if err != nil {
-		return err
-	}
-	return applyClientDesiredConfig(paths, state, opts, false)
-}
-
 func applyClientDesiredConfig(paths clientPaths, state clientInstallState, opts ModeOptions, applyRoutes bool) error {
 	xrayCfg, err := loadClientXrayConfig(paths.configFile)
 	if err != nil {

@@ -105,7 +105,18 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 func writeServerInboundsFile(t *testing.T, path string) {
 	t.Helper()
 	doc := map[string]any{
-		"inbounds": []any{},
+		"inbounds": []any{
+			map[string]any{
+				"protocol": "trojan",
+				"port":     58443,
+				"settings": map[string]any{
+					"clients": []any{},
+				},
+				"streamSettings": map[string]any{
+					"security": "none",
+				},
+			},
+		},
 	}
 	data, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {

@@ -5,22 +5,7 @@ package server
 import (
 	"path/filepath"
 	"strings"
-
-	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
-
-func applyServerMode(installDir, configDir string, opts ModeOptions) error {
-	desired, err := loadServerDesiredConfig(installDir)
-	if err != nil {
-		return err
-	}
-	applied, err := loadServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)))
-	if err != nil {
-		return err
-	}
-	return applyServerDesiredConfig(installDir, configDir, desired, applied.Reverse, opts, false)
-}
 
 func applyServerDesiredConfig(installDir, configDir string, desired desiredServerConfig, previousReverse serverReverseState, opts ModeOptions, applyRoutes bool) error {
 	previousReverse = normalizeReverse(previousReverse)

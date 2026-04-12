@@ -21,15 +21,6 @@ type ModeOptions struct {
 	FullTunnelTag string
 }
 
-// ApplyMode updates inbounds and routes to match the selected mode.
-func ApplyMode(opts ModeOptions) error {
-	paths, err := resolveClientPaths(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	return applyClientMode(paths, opts)
-}
-
 // ApplyModePending updates pending inbounds and routes to match the selected mode.
 func ApplyModePending(opts ModeOptions) error {
 	paths, err := resolvePendingClientPaths(opts.InstallDir, opts.ConfigDir)

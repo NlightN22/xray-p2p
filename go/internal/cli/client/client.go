@@ -20,7 +20,6 @@ var (
 	clientRedirectAddFunc    = client.AddRedirect
 	clientRedirectRemoveFunc = client.RemoveRedirect
 	clientRedirectListFunc   = client.ListRedirects
-	clientModeFunc           = client.ApplyMode
 )
 
 // Execute runs the xp2p client command tree with the provided arguments.
