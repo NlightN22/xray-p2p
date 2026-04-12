@@ -651,6 +651,22 @@ def _verify_heartbeat_state(env: dict) -> None:
     if not helpers.path_exists_live(env["client_host"], CLIENT_HEARTBEAT_STATE_FILE):
         pytest.fail("Client heartbeat state not found after run start")
 
+    server_state = helpers.wait_for_heartbeat_state(
+        env["server_host"],
+        SERVER_HEARTBEAT_STATE_FILE,
+        timeout_seconds=20.0,
+        poll_interval=2.0,
+    )
+    server_entry = helpers.assert_heartbeat_entry(
+        server_state,
+        expected_tag,
+        host=SERVER_IP,
+        user=expected_user,
+    )
+    recorded_ip = (server_entry.get("client_ip") or "").strip()
+    if recorded_ip:
+        expected_client_ip = recorded_ip
+
     try:
         tunnel_common.wait_for_alive_entry(
             env["server_runner"],

@@ -76,6 +76,7 @@ def test_openwrt_client_service_brings_up_tun(openwrt_host, xp2p_openwrt_ipk):
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
     runner = lambda *cmd, check=False: _xp2p(openwrt_host, *cmd, check=check)
     helpers.cleanup_client_install(openwrt_host, runner)
+    openwrt_env._stop_xp2p_services(openwrt_host)
     try:
         runner(
             "client",
@@ -108,6 +109,7 @@ def test_openwrt_server_service_brings_up_tun(openwrt_host, xp2p_openwrt_ipk):
     openwrt_env.install_ipk_on_host(openwrt_host, xp2p_openwrt_ipk, force=True)
     runner = lambda *cmd, check=False: _xp2p(openwrt_host, *cmd, check=check)
     helpers.cleanup_server_install(openwrt_host, runner)
+    openwrt_env._stop_xp2p_services(openwrt_host)
     try:
         runner(
             "server",
