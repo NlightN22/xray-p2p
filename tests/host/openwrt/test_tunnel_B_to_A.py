@@ -1175,7 +1175,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             assert listen_port == SERVER_FORWARD_PORT
 
             ping_result = None
-            last_error: AssertionError | None = None
+            last_error: BaseException | None = None
             for attempt in range(2):
                 with _active_tunnel_sessions(tunnel_environment):
                     _wait_for_listen_port(server_host, SERVER_FORWARD_PORT)
@@ -1206,7 +1206,11 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
                         _verify_heartbeat_state(tunnel_environment)
                         last_error = None
                         break
-                    except AssertionError as exc:
+                    except BaseException as exc:
+                        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        helpers.dump_failure_state(server_host, "reverse forward ping failure (server)")
+                        helpers.dump_failure_state(client_host, "reverse forward ping failure (client)")
                         last_error = exc
                 if attempt == 0:
                     openwrt_env._stop_xp2p_services(server_host)

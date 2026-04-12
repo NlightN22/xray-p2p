@@ -39,6 +39,10 @@ When a command updates configuration:
   `CONFIG_ROOT/.apply/pending`.
 - The pending config must include the full `client.xray` or `server.xray`
   sections, not just the changed fields.
+- Pending is the source of truth for follow-up edits: if a pending config
+  exists, subsequent commands must read and update the pending snapshot
+  instead of mixing in live data. Live config is used only to seed pending
+  when no pending snapshot exists.
 
 This ensures that apply can generate all required runtime files (inbounds,
 outbounds, routing, logs) from a complete config snapshot.

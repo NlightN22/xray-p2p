@@ -28,6 +28,22 @@ func writeServerInboundsConfig(configDir string, cfg xrayconfig.ServerXrayConfig
 			allowInsecure = true
 		}
 	}
+	return writeServerInboundsConfigWithClients(
+		configDir,
+		cfg,
+		tunEnabled,
+		tunName,
+		tunMTU,
+		trojanPort,
+		certPath,
+		keyPath,
+		allowInsecure,
+		forwards,
+		clients,
+	)
+}
+
+func writeServerInboundsConfigWithClients(configDir string, cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, allowInsecure bool, forwards []forward.Rule, clients []trojanClient) error {
 	doc := buildServerInbounds(cfg, tunEnabled, tunName, tunMTU, trojanPort, certPath, keyPath, allowInsecure, forwards, clients)
 	return configio.WriteJSON(filepath.Join(configDir, "inbounds.json"), doc, configio.WriteOptions{
 		AuditPath:         config.AuditLogPath(),

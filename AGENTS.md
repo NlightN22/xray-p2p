@@ -54,6 +54,7 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - Packages must run `xp2p` binaries with default parameters only.
 - CLI commands must only update configuration and state files.
 - OS-level changes such as TUN setup, routes, and `nftables` must be applied only by `xp2p run` or the service layer.
+- Apply flow is strict: pending config is the single source of truth. If a pending snapshot exists, commands must read and update pending only, never mix live data. Live config is used only to seed pending when pending does not exist.
 
 ## CLI standards
 

@@ -439,6 +439,42 @@ def dump_apply_dirs(host: Host, label: str) -> None:
     print("==== END APPLY DIRS ====")
 
 
+def dump_failure_state(host: Host, label: str) -> None:
+    print(f"==== FAILURE DUMP ({label}) on {host.backend.hostname} ====")
+    dump_runtime_state(host, f"{label} runtime")
+    dump_install_dirs(host, f"{label} install dirs")
+    dump_apply_dirs(host, f"{label} apply dirs")
+    host.run(
+        "sh -c "
+        + shlex.quote(
+            " ; ".join(
+                (
+                    "echo '--- xp2p tree ---'",
+                    "find /etc/xp2p -maxdepth 4 -print 2>/dev/null || true",
+                    "echo '--- xp2p log tree ---'",
+                    "find /var/log/xp2p -maxdepth 4 -print 2>/dev/null || true",
+                    "echo '--- xp2p configs ---'",
+                    "for f in /etc/xp2p/xp2p-client.toml /etc/xp2p/xp2p-server.toml; do "
+                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+                    "for f in /etc/xp2p/.apply/pending/xp2p-client.toml /etc/xp2p/.apply/pending/xp2p-server.toml; do "
+                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+                    "for dir in /etc/xp2p/config-client /etc/xp2p/config-server; do "
+                    "if [ -d \"$dir\" ]; then "
+                    "for f in \"$dir\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+                    "fi; done",
+                    "for f in /etc/xp2p/*.state.json /etc/xp2p/*-state-*.json; do "
+                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+                    "echo '--- xp2p state ---'",
+                    "/usr/bin/xp2p server state --path /etc/xp2p 2>/dev/null || true",
+                    "/usr/bin/xp2p client state --path /etc/xp2p 2>/dev/null || true",
+                )
+            )
+        )
+    )
+    dump_logs(host, f"{label} logs")
+    print("==== END FAILURE DUMP ====")
+
+
 def write_text(host: Host, path: PurePosixPath | Path | str, content: str) -> None:
     target = _posix(_pending_candidate(_as_path(path)))
     directory = PurePosixPath(target).parent.as_posix()

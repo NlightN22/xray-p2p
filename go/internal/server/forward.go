@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -129,7 +130,11 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if strings.TrimSpace(cfg.Server.KeyFile) != "" {
 		keyPath = cfg.Server.KeyFile
 	}
-	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
+	clients, allowInsecure, err := resolvePendingTrojanClients(liveConfigDir, configDir, xrayCfg.Inbounds.Trojan.AllowInsecure)
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	if err := writeServerInboundsConfigWithClients(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, allowInsecure, store.forwards, clients); err != nil {
 		return ForwardAddResult{}, err
 	}
 
@@ -197,7 +202,12 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 	if strings.TrimSpace(cfg.Server.KeyFile) != "" {
 		keyPath = cfg.Server.KeyFile
 	}
-	if err := writeServerInboundsConfig(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, store.forwards); err != nil {
+	clients, allowInsecure, err := resolvePendingTrojanClients(liveConfigDir, configDir, xrayCfg.Inbounds.Trojan.AllowInsecure)
+	if err != nil {
+		store.insertAt(rule, idx)
+		return forward.Rule{}, err
+	}
+	if err := writeServerInboundsConfigWithClients(configDir, xrayCfg, tunEnabled, tunName, tunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, allowInsecure, store.forwards, clients); err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}
@@ -228,4 +238,32 @@ func ListForwards(opts ForwardListOptions) ([]forward.Rule, error) {
 	result := make([]forward.Rule, len(store.forwards))
 	copy(result, store.forwards)
 	return result, nil
+}
+
+func resolvePendingTrojanClients(liveConfigDir, pendingDir string, allowInsecure bool) ([]trojanClient, bool, error) {
+	pendingInbounds := filepath.Join(pendingDir, "inbounds.json")
+	if info, err := os.Stat(pendingInbounds); err == nil {
+		if info.IsDir() {
+			return nil, allowInsecure, fmt.Errorf("xp2p: %s is a directory, expected pending inbounds", pendingInbounds)
+		}
+		state, err := loadTrojanState(pendingDir)
+		if err != nil {
+			return nil, allowInsecure, err
+		}
+		if state.allowInsecure {
+			allowInsecure = true
+		}
+		return state.clients, allowInsecure, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, allowInsecure, fmt.Errorf("xp2p: inspect %s: %w", pendingInbounds, err)
+	}
+
+	state, err := loadTrojanState(liveConfigDir)
+	if err != nil {
+		return nil, allowInsecure, err
+	}
+	if state.allowInsecure {
+		allowInsecure = true
+	}
+	return state.clients, allowInsecure, nil
 }
