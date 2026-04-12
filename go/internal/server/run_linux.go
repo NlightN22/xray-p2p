@@ -36,6 +36,22 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
+	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName))
+	hasAppliedState := false
+	if info, err := os.Stat(appliedStatePath); err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("xp2p: %s is a directory, expected server applied state file", appliedStatePath)
+		}
+		hasAppliedState = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("xp2p: inspect server applied state %s: %w", appliedStatePath, err)
+	}
+
+	xrayPath, err := xray.ResolveBinaryPath()
+	if err != nil {
+		return err
+	}
+
 	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleServer, liveConfigDir)
 	if err != nil {
 		return err
@@ -67,7 +83,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	appliedState, err := loadServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)))
+	appliedState, err := loadServerAppliedState(appliedStatePath)
 	if err != nil {
 		return err
 	}
@@ -96,15 +112,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		if err := modemgr.ApplyNatRedirectMode(modeLabel(tunEnabled)); err != nil {
 			return err
 		}
-		if err := saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+		if err := saveServerAppliedState(appliedStatePath, desired.Reverse, desired.Redirects, desired.Forwards, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
 			return err
 		}
 	}
 
-	xrayPath, err := xray.ResolveBinaryPath()
-	if err != nil {
-		return err
-	}
 	runErr := runXrayWithConfig(
 		ctx,
 		xrayPath,
@@ -139,13 +151,15 @@ func Run(ctx context.Context, opts RunOptions) error {
 		logging.Info("xp2p: server run canceled")
 		return nil
 	}
-	if runErr != nil && pendingApplied && rollback != nil {
+	if runErr != nil && pendingApplied && rollback != nil && hasAppliedState {
 		logging.Warn("xp2p: server run failed after apply", "err", runErr)
 		if err := rollback.Restore(config.AuditLogPath()); err != nil {
 			logging.Warn("xp2p: rollback failed after apply", "err", err)
 		} else {
 			logging.Warn("xp2p: rollback completed after apply failure")
 		}
+	} else if runErr != nil && pendingApplied && rollback != nil {
+		logging.Warn("xp2p: rollback skipped; no applied state yet")
 	}
 	return runErr
 }

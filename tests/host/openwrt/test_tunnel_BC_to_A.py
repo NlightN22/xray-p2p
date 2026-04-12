@@ -55,22 +55,10 @@ def _install_client(host, runner, link: str):
 
 
 def _apply_pending_config(host, role: str) -> None:
-    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
-        host, helpers.APPLY_REQUEST
-    ):
-        return
-    helpers.ensure_service_running(host, role)
-    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-    helpers.wait_for_live_config(host, role)
+    helpers.apply_pending_config(host, role)
 
 
 def _apply_pending_config_wait(host, role: str) -> None:
-    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
-        host, helpers.APPLY_REQUEST
-    ):
-        return
     _apply_pending_config(host, role)
 
 
@@ -86,7 +74,7 @@ def _wait_for_live_xray_configs(
         missing = [
             (config_dir / name).as_posix()
             for name in REQUIRED_XRAY_CONFIGS
-            if not helpers.path_exists_exact(host, config_dir / name)
+            if not helpers.path_exists_live(host, config_dir / name)
         ]
         if not missing:
             return

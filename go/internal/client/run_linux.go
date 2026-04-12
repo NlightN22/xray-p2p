@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,6 +32,22 @@ func Run(ctx context.Context, opts RunOptions) error {
 	}
 
 	liveConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+
+	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
+	hasAppliedState := false
+	if info, err := os.Stat(appliedStatePath); err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("xp2p: %s is a directory, expected client applied state file", appliedStatePath)
+		}
+		hasAppliedState = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("xp2p: inspect client applied state %s: %w", appliedStatePath, err)
+	}
+
+	xrayPath, err := xray.ResolveBinaryPath()
 	if err != nil {
 		return err
 	}
@@ -127,10 +144,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 
-	xrayPath, err := xray.ResolveBinaryPath()
-	if err != nil {
-		return err
-	}
 	runErr := runXrayWithConfig(
 		ctx,
 		xrayPath,
@@ -162,10 +175,14 @@ func Run(ctx context.Context, opts RunOptions) error {
 		},
 	)
 	if runErr != nil && pendingApplied && rollback != nil {
-		if err := rollback.Restore(config.AuditLogPath()); err != nil {
-			logging.Warn("xp2p: rollback failed after apply", "err", err)
+		if hasAppliedState {
+			if err := rollback.Restore(config.AuditLogPath()); err != nil {
+				logging.Warn("xp2p: rollback failed after apply", "err", err)
+			} else {
+				logging.Warn("xp2p: rollback completed after apply failure")
+			}
 		} else {
-			logging.Warn("xp2p: rollback completed after apply failure")
+			logging.Warn("xp2p: rollback skipped; no applied state yet")
 		}
 	}
 	return runErr

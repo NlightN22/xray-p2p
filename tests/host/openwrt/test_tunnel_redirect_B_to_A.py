@@ -65,17 +65,7 @@ def _xray_configs_missing(host, config_dir) -> list[str]:
 
 
 def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
-    if role == "client":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
-    elif role == "server":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
-    else:
-        raise ValueError(f"Unsupported role: {role}")
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_live(host, APPLY_REQUEST):
-        return
-    _ensure_service_running(host, role)
-    _wait_for_apply_request_clear(host)
-    helpers.wait_for_live_config(host, role)
+    helpers.apply_pending_config(host, role)
 
 
 @contextmanager

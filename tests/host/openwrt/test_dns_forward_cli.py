@@ -62,14 +62,30 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 
 def _apply_pending_config(host, role: str) -> None:
-    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
-        host, helpers.APPLY_REQUEST
-    ):
-        return
-    helpers.ensure_service_running(host, role)
-    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-    helpers.wait_for_live_config(host, role)
+    helpers.apply_pending_config(host, role)
+
+
+def _wait_for_ping_ready(
+    runner,
+    target: str,
+    *args: str,
+    timeout_seconds: float = 30.0,
+    interval: float = 1.5,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last = None
+    ping_args = ["ping", target, "--count", "1", *args]
+    while time.time() < deadline:
+        last = runner(*ping_args)
+        if last.rc == 0:
+            return
+        time.sleep(interval)
+    stdout = getattr(last, "stdout", "") or ""
+    stderr = getattr(last, "stderr", "") or ""
+    pytest.fail(
+        f"xp2p ping did not become ready for {target} within {timeout_seconds}s.\n"
+        f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
 
 
 @pytest.fixture(scope="module")
@@ -93,7 +109,6 @@ def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
         server_ip,
         "--force",
     )
-    helpers.wait_for_pending_config(openwrt_server_host, "server")
     credential = helpers.extract_trojan_credential(server_install.stdout or "")
     client_runner(
         "client",
@@ -106,7 +121,6 @@ def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
         credential["link"],
         "--force",
     )
-    helpers.wait_for_pending_config(openwrt_client_host, "client")
     _apply_pending_config(openwrt_server_host, "server")
     _apply_pending_config(openwrt_client_host, "client")
 
@@ -313,6 +327,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             path=helpers.CLIENT_HEARTBEAT_STATE_FILE,
         )
         time.sleep(1.5)
+        _wait_for_ping_ready(client_runner, SERVER_TUN_IP, "--tunnel", timeout_seconds=45.0)
         tunnel_ping = client_runner("ping", SERVER_TUN_IP, "--tunnel", "--count", "1")
         if tunnel_ping.rc != 0:
             debug = _dump_dns_forward_debug(
@@ -355,7 +370,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
         )
         _apply_pending_config(openwrt_client_host, "client")
         inbounds_path = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
-        if not helpers.path_exists_exact(openwrt_client_host, inbounds_path):
+        if not helpers.path_exists_live(openwrt_client_host, inbounds_path):
             raise AssertionError(f"Missing live client inbounds at {inbounds_path}")
         nat_port = _detect_dokodemo_port(openwrt_client_host, inbounds_path.as_posix())
         nat = client_runner(

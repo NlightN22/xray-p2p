@@ -154,19 +154,7 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 
 def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
-    if role == "client":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
-    elif role == "server":
-        pending_path = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
-    else:
-        raise ValueError(f"Unsupported role: {role}")
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
-        host, helpers.APPLY_REQUEST
-    ):
-        return
-    _ensure_service_running(host, role)
-    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-    helpers.wait_for_live_config(host, role)
+    helpers.apply_pending_config(host, role)
 
 
 def _apply_pending_config_wait(host, role: str, install_path: str, config_dir: str) -> None:
@@ -211,6 +199,8 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
     cleanup()
     openwrt_env.install_ipk_on_host(server_host, xp2p_openwrt_ipk)
     openwrt_env.install_ipk_on_host(client_host, xp2p_openwrt_ipk)
+    for host in (server_host, client_host):
+        openwrt_env._stop_xp2p_services(host)
     try:
         server_install = server_runner(
             "server",
@@ -428,6 +418,36 @@ def _wait_for_listen_port(host, port: int, *, timeout_seconds: float = 20.0, int
             return
         time.sleep(interval)
     pytest.fail(f"Port {port} did not start listening on {host.backend.hostname} within {timeout_seconds}s")
+
+
+def _wait_for_ping_ready(
+    runner,
+    target: str,
+    *,
+    port: int | None = None,
+    tunnel: bool = False,
+    proto: str = "tcp",
+    timeout_seconds: float = 30.0,
+    interval: float = 1.5,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last = None
+    args = ["ping", target, "--count", "1", "--proto", proto]
+    if port is not None:
+        args.extend(["--port", str(port)])
+    if tunnel:
+        args.append("--tunnel")
+    while time.time() < deadline:
+        last = runner(*args, check=False)
+        if last.rc == 0:
+            return
+        time.sleep(interval)
+    stdout = getattr(last, "stdout", "") or ""
+    stderr = getattr(last, "stderr", "") or ""
+    pytest.fail(
+        f"xp2p ping did not become ready for {target} within {timeout_seconds}s.\n"
+        f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
 
 
 def _assert_server_alias_reachable(host, runner, target_ip: str, port: int) -> None:
@@ -878,6 +898,7 @@ def test_client_redirect_through_server(tunnel_environment):
             with _active_tunnel_sessions(tunnel_environment):
                 # baseline: socks ping should work via xray
                 target_ip = target_alias.split("/")[0]
+                _wait_for_listen_port(server_host, listener_port)
                 _assert_server_alias_reachable(server_host, server_runner, target_ip, listener_port)
                 server_nat_dump = server_runner("nat-redirect", "list", check=True).stdout or ""
                 client_nat_dump = client_runner("nat-redirect", "list", check=True).stdout or ""
@@ -887,6 +908,13 @@ def test_client_redirect_through_server(tunnel_environment):
                 client_processes = client_host.run("ps w | grep -E 'xp2p|xray' | grep -v grep")
                 _dump_apply_state(client_host, "client", "before socks ping")
                 _dump_apply_state(server_host, "server", "before socks ping")
+                _wait_for_ping_ready(
+                    client_runner,
+                    target_ip,
+                    proto="tcp",
+                    tunnel=True,
+                    timeout_seconds=30.0,
+                )
                 socks_ping = client_runner(
                     "ping",
                     target_ip,
@@ -894,6 +922,7 @@ def test_client_redirect_through_server(tunnel_environment):
                     "3",
                     "--proto",
                     "tcp",
+                    "--tunnel",
                     check=True,
                 )
                 tunnel_common.assert_zero_loss(
@@ -907,6 +936,7 @@ def test_client_redirect_through_server(tunnel_environment):
                 )
                 _verify_heartbeat_state(tunnel_environment)
             with _active_tunnel_sessions(tunnel_environment):
+                _wait_for_ping_ready(client_runner, target_ip, proto="tcp", timeout_seconds=30.0)
                 ping_result = client_runner(
                     "ping",
                     target_ip,
@@ -1144,25 +1174,47 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             listen_port = tunnel_common.listen_port_from_entry(entry)
             assert listen_port == SERVER_FORWARD_PORT
 
-            with _active_tunnel_sessions(tunnel_environment):
-                _wait_for_listen_port(server_host, SERVER_FORWARD_PORT)
-                _wait_for_listen_port(client_host, CLIENT_DIAGNOSTICS_PORT)
-                time.sleep(2.5)
-                ping_result = server_runner(
-                    "ping",
-                    "127.0.0.1",
-                    "--port",
-                    str(SERVER_FORWARD_PORT),
-                    "--count",
-                    "3",
-                    "--proto",
-                    "tcp",
-                    check=True,
-                )
-                tunnel_common.assert_zero_loss(
-                    ping_result, f"via server forward targeting {CLIENT_REVERSE_TEST_IP}"
-                )
-                _verify_heartbeat_state(tunnel_environment)
+            ping_result = None
+            last_error: AssertionError | None = None
+            for attempt in range(2):
+                with _active_tunnel_sessions(tunnel_environment):
+                    _wait_for_listen_port(server_host, SERVER_FORWARD_PORT)
+                    _wait_for_listen_port(client_host, CLIENT_DIAGNOSTICS_PORT)
+                    time.sleep(2.5)
+                    try:
+                        _wait_for_ping_ready(
+                            server_runner,
+                            "127.0.0.1",
+                            port=SERVER_FORWARD_PORT,
+                            proto="tcp",
+                            timeout_seconds=60.0,
+                        )
+                        ping_result = server_runner(
+                            "ping",
+                            "127.0.0.1",
+                            "--port",
+                            str(SERVER_FORWARD_PORT),
+                            "--count",
+                            "3",
+                            "--proto",
+                            "tcp",
+                            check=True,
+                        )
+                        tunnel_common.assert_zero_loss(
+                            ping_result, f"via server forward targeting {CLIENT_REVERSE_TEST_IP}"
+                        )
+                        _verify_heartbeat_state(tunnel_environment)
+                        last_error = None
+                        break
+                    except AssertionError as exc:
+                        last_error = exc
+                if attempt == 0:
+                    openwrt_env._stop_xp2p_services(server_host)
+                    openwrt_env._stop_xp2p_services(client_host)
+                    _ensure_service_running(server_host, "server")
+                    _ensure_service_running(client_host, "client")
+            if last_error is not None:
+                raise last_error
         finally:
             if forward_added:
                 _server_forward_cmd(

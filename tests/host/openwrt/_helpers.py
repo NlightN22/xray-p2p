@@ -668,3 +668,26 @@ def ensure_service_running(host: Host, role: str) -> None:
             f"xp2p-{role} on {host.backend.hostname}.\nSTDOUT:\n{start.stdout}\nSTDERR:\n{start.stderr}"
         )
     wait_for_service_state(host, role, expected_active=True)
+
+
+def apply_pending_config(
+    host: Host,
+    role: str,
+    *,
+    timeout_seconds: float = 60.0,
+    poll_interval: float = 1.5,
+) -> None:
+    if role == "client":
+        pending_path = CONFIG_PENDING_ROOT / "xp2p-client.toml"
+    elif role == "server":
+        pending_path = CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    if not path_exists_exact(host, pending_path) and not path_exists_exact(host, APPLY_REQUEST):
+        return
+    if is_xp2p_run_active(host, role):
+        host.run(f"/etc/init.d/xp2p-{role} stop >/dev/null 2>&1 || true")
+        wait_for_service_state(host, role, expected_active=False, timeout_seconds=30.0)
+    ensure_service_running(host, role)
+    wait_for_apply_request_clear(host, timeout_seconds=timeout_seconds, poll_interval=poll_interval)
+    wait_for_live_config(host, role, timeout_seconds=timeout_seconds, poll_interval=poll_interval)

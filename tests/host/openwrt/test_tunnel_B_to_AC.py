@@ -76,19 +76,11 @@ def _install_server(host, runner, host_ip: str):
         "--force",
         check=True,
     )
-    helpers.wait_for_pending_config(host, "server")
     return helpers.extract_trojan_credential(install.stdout or "")
 
 
 def _apply_pending_config(host, role: str) -> None:
-    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
-        host, helpers.APPLY_REQUEST
-    ):
-        return
-    helpers.ensure_service_running(host, role)
-    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-    helpers.wait_for_live_config(host, role)
+    helpers.apply_pending_config(host, role)
 
 
 @pytest.mark.host
@@ -184,7 +176,6 @@ def test_tunnel_B_to_A_and_C(openwrt_host_factory, xp2p_openwrt_ipk):
             check=True,
         )
 
-        helpers.wait_for_pending_config(client_b, "client")
         _apply_pending_config(client_b, "client")
         helpers.wait_for_live_config(client_b, "client")
         client_state = helpers.read_live_client_config(client_b)

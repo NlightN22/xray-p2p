@@ -37,6 +37,22 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
+	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
+	hasAppliedState := false
+	if info, err := os.Stat(appliedStatePath); err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("xp2p: %s is a directory, expected client applied state file", appliedStatePath)
+		}
+		hasAppliedState = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("xp2p: inspect client applied state %s: %w", appliedStatePath, err)
+	}
+
+	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
+	if _, err := os.Stat(xrayPath); err != nil {
+		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
+	}
+
 	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, liveConfigDir)
 	if err != nil {
 		return err
@@ -55,11 +71,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 			opts.FullTunnelVerbose = opts.FullTunnelVerbose || cfg.Client.FullTunnelVerbose
 			opts.FullTunnelTag = cfg.Client.FullTunnelTag
 		}
-	}
-
-	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
-	if _, err := os.Stat(xrayPath); err != nil {
-		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
 	}
 
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
@@ -272,7 +283,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		onStart,
 		onReady,
 	)
-	if runErr != nil && pendingApplied && rollback != nil {
+	if runErr != nil && pendingApplied && rollback != nil && hasAppliedState {
 		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
 			logging.Warn("xp2p: tun ready failed; mode change remains pending", "err", runErr)
 			return runErr
@@ -282,6 +293,8 @@ func Run(ctx context.Context, opts RunOptions) error {
 		} else {
 			logging.Warn("xp2p: rollback completed after apply failure")
 		}
+	} else if runErr != nil && pendingApplied && rollback != nil {
+		logging.Warn("xp2p: rollback skipped; no applied state yet")
 	}
 	return runErr
 }

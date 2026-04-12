@@ -37,14 +37,7 @@ def _runner(host):
 
 
 def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
-    pending_path = helpers.CONFIG_PENDING_ROOT / f"xp2p-{role}.toml"
-    if not helpers.path_exists_exact(host, pending_path) and not helpers.path_exists_exact(
-        host, helpers.APPLY_REQUEST
-    ):
-        return
-    helpers.ensure_service_running(host, role)
-    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
-    helpers.wait_for_live_config(host, role)
+    helpers.apply_pending_config(host, role)
 
 
 def _update_hosts_entry(host, action: str, domain: str, ip: str | None = None) -> None:
@@ -108,7 +101,6 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
         assert SERVER_DOMAIN in credential["link"], "Expected domain in trojan link"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_DOMAIN)
 
-        helpers.wait_for_pending_config(server_host, "server")
         _apply_pending_config(server_host, "server", server_install_path, helpers.SERVER_CONFIG_DIR_NAME)
         helpers.wait_for_live_config(server_host, "server")
         server_state = helpers.read_live_server_config(server_host)
@@ -133,7 +125,6 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        helpers.wait_for_pending_config(client_host, "client")
         _apply_pending_config(
             client_host,
             "client",

@@ -36,6 +36,22 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
+	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName))
+	hasAppliedState := false
+	if info, err := os.Stat(appliedStatePath); err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("xp2p: %s is a directory, expected server applied state file", appliedStatePath)
+		}
+		hasAppliedState = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("xp2p: inspect server applied state %s: %w", appliedStatePath, err)
+	}
+
+	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
+	if _, err := os.Stat(xrayPath); err != nil {
+		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
+	}
+
 	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleServer, liveConfigDir)
 	if err != nil {
 		return err
@@ -50,11 +66,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 			opts.TunMTU = cfg.Server.TunMTU
 			opts.TunAddr = cfg.Server.TunAddr
 		}
-	}
-
-	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
-	if _, err := os.Stat(xrayPath); err != nil {
-		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
 	}
 
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
@@ -72,7 +83,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	appliedState, err := loadServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)))
+	appliedState, err := loadServerAppliedState(appliedStatePath)
 	if err != nil {
 		return err
 	}
@@ -87,7 +98,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}, true); err != nil {
 			return err
 		}
-		if err := saveServerAppliedState(filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)), desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
+		if err := saveServerAppliedState(appliedStatePath, desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
 			return err
 		}
 	}
@@ -174,7 +185,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		logging.Info("xp2p: server run canceled")
 		return nil
 	}
-	if runErr != nil && pendingApplied && rollback != nil {
+	if runErr != nil && pendingApplied && rollback != nil && hasAppliedState {
 		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
 			logging.Warn("xp2p: tun ready failed; mode change remains pending", "err", runErr)
 			return runErr
@@ -184,6 +195,8 @@ func Run(ctx context.Context, opts RunOptions) error {
 		} else {
 			logging.Warn("xp2p: rollback completed after apply failure")
 		}
+	} else if runErr != nil && pendingApplied && rollback != nil {
+		logging.Warn("xp2p: rollback skipped; no applied state yet")
 	}
 	return runErr
 }
