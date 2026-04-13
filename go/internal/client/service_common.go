@@ -105,6 +105,17 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	defer logWatcherStop()
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
+		hasConfig, err := hasClientConfig(configDir)
+		if err != nil {
+			return err
+		}
+		if !hasConfig {
+			logging.Info("xp2p client service: no config available; stopping",
+				"config_dir", configDir,
+				"config_file", configPath,
+			)
+			return nil
+		}
 		if _, err := os.Stat(configDir); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				logging.Warn("xp2p client service: configuration directory missing; stopping", "path", configDir)
@@ -132,4 +143,31 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}
 	restoreFullTunnelOnStop(installDir, configDirName)
 	return nil
+}
+
+func hasClientConfig(configDir string) (bool, error) {
+	liveConfig := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if _, err := os.Stat(liveConfig); err == nil {
+		return true, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfig, err)
+	}
+
+	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	if pendingConfig != "" {
+		if _, err := os.Stat(pendingConfig); err == nil {
+			return true, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
+		}
+	}
+
+	if ok, err := configFilesPresent(configDir, runRequiredConfigFiles); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+
+	pendingDir := apply.PendingDir(configDir)
+	return configFilesPresent(pendingDir, runRequiredConfigFiles)
 }
