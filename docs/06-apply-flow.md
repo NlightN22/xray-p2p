@@ -68,9 +68,12 @@ is written.
 5. Client deploy writes `apply.request` with role `client`.
 6. If the client was already installed, the deploy flow updates the existing
    endpoint in pending instead of creating a new install root.
-7. Deploy does not start services. The operator starts services explicitly
-   (for example, `xp2p client service start` and `xp2p server service start`).
-8. Service layer applies pending config to live files, removes
+7. Deploy does not start services. During deploy, xp2p may start a temporary
+   xray-core instance using the pending config to validate the tunnel and
+   connectivity. This is part of the deploy process only.
+8. After a successful deploy, the operator starts services explicitly (for
+   example, `xp2p client service start` and `xp2p server service start`).
+9. Service layer applies pending config to live files, removes
    `apply.request`, and clears pending artifacts on success.
 
 ## Apply Request

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 from pathlib import PurePosixPath
 import time
 
@@ -635,6 +636,36 @@ def assert_server_redirect_state(state: dict, target: str, outbound_tag: str) ->
         if normalized in (domain_value, cidr_value):
             return
     raise AssertionError(f"Server state is missing redirect for {target} via {outbound_tag}")
+
+
+def dump_failure_state(host: Host, label: str) -> None:
+    print(f"==== FAILURE DUMP ({label}) on {host.backend.hostname} ====")
+    script = " ; ".join(
+        (
+            "echo '--- xp2p tree ---'",
+            "ls -la /etc/xp2p 2>/dev/null || true",
+            "find /etc/xp2p -maxdepth 4 -print 2>/dev/null || true",
+            "echo '--- xp2p apply dir ---'",
+            "ls -la /etc/xp2p/.apply 2>/dev/null || true",
+            "echo '--- xp2p configs ---'",
+            "for f in /etc/xp2p/xp2p-client.toml /etc/xp2p/xp2p-server.toml; do "
+            "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+            "for f in /etc/xp2p/.apply/pending/xp2p-client.toml /etc/xp2p/.apply/pending/xp2p-server.toml; do "
+            "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+            "echo '--- xp2p state ---'",
+            "for f in /etc/xp2p/*.state.json /etc/xp2p/*-state-*.json; do "
+            "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+            "echo '--- xp2p config dirs ---'",
+            "for d in /etc/xp2p/config-client /etc/xp2p/config-server; do "
+            "[ -d \"$d\" ] && ls -la \"$d\"; done",
+            "echo '--- xp2p logs ---'",
+            "find /var/log/xp2p -maxdepth 3 -print 2>/dev/null || true",
+            "for f in /var/log/xp2p/client/service.log /var/log/xp2p/server/service.log; do "
+            "[ -f \"$f\" ] && echo \"--- $f ---\" && tail -n 200 \"$f\"; done",
+        )
+    )
+    host.run(f"sudo -n /bin/sh -c {shlex.quote(script)}")
+    print("==== END FAILURE DUMP ====")
 
 
 def expected_forward_tag(port: int) -> str:

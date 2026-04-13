@@ -179,10 +179,15 @@ def _cleanup_host(host: Host) -> None:
         helpers.CONFIG_ROOT / ".apply",
         helpers.CLIENT_CONFIG_FILE,
         helpers.SERVER_CONFIG_FILE,
+        helpers.CONFIG_ROOT / "xp2p-client.toml.lkg",
+        helpers.CONFIG_ROOT / "xp2p-server.toml.lkg",
+        helpers.CONFIG_ROOT / "xp2p-client.tun-full.json",
         helpers.CLIENT_APPLIED_STATE_FILE,
         helpers.SERVER_APPLIED_STATE_FILE,
         helpers.CLIENT_HEARTBEAT_STATE_FILE,
         helpers.SERVER_HEARTBEAT_STATE_FILE,
+        helpers.CLIENT_CONFIG_DIR,
+        helpers.SERVER_CONFIG_DIR,
         helpers.CLIENT_CONFIG_DIR / "inbounds.json",
         helpers.SERVER_CONFIG_DIR / "inbounds.json",
         *helpers.SERVICE_LOG_FILES,
@@ -193,3 +198,4 @@ def _cleanup_host(host: Host) -> None:
     ]
     quoted_paths = " ".join(shlex.quote(path.as_posix()) for path in cleanup_paths)
     host.run(f"sudo -n /bin/sh -c 'rm -rf -- \"$@\"' -- {quoted_paths}")
+    host.run("sudo -n /bin/sh -c 'rm -rf /var/log/xp2p/*' || true")
