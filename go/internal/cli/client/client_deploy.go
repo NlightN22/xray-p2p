@@ -267,6 +267,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	completionState = "OK"
+	logClientServiceApplyHint(ctx)
 	logging.Info("xp2p client deploy: completed")
 	return 0
 }
@@ -551,7 +552,6 @@ func ensureClientServiceApplied(ctx context.Context, socksAddr string) (bool, er
 		return false, err
 	}
 	if !status.Active {
-		logging.Info("xp2p client deploy: service start skipped after deploy", "service_active", false)
 		return false, nil
 	}
 	if err := waitForApplyRequestClear(ctx, config.ApplyRequestPath(), applyRequestTimeout); err != nil {
@@ -565,6 +565,24 @@ func ensureClientServiceApplied(ctx context.Context, socksAddr string) (bool, er
 		return status.Active, err
 	}
 	return status.Active, nil
+}
+
+func logClientServiceApplyHint(ctx context.Context) {
+	ctrl := servicecontrol.Default()
+	status, err := ctrl.Status(ctx, servicecontrol.RoleClient)
+	if err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Warn("xp2p client deploy: service manager unavailable; start or restart service to apply pending changes")
+			return
+		}
+		logging.Warn("xp2p client deploy: service status check failed", "err", err)
+		return
+	}
+	if status.Active {
+		logging.Info("xp2p client deploy: service active; restart required to apply pending changes")
+	} else {
+		logging.Info("xp2p client deploy: service inactive; start required to apply pending changes")
+	}
 }
 
 func clientLiveConfigPresent() bool {

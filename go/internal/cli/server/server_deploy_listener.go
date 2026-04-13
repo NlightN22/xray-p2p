@@ -2,6 +2,7 @@ package servercmd
 
 import (
 	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 type deployServer struct {
@@ -205,7 +207,25 @@ func (s *deployServer) applyTunAndStartService(ctx context.Context, installDir, 
 	if err := s.applyMode(installDir, configDir, true); err != nil {
 		logging.Warn("xp2p server deploy: tun mode setup failed", "err", err)
 	}
-	logging.Info("xp2p server deploy: service start skipped after deploy")
+	logServerServiceApplyHint(ctx)
+}
+
+func logServerServiceApplyHint(ctx context.Context) {
+	ctrl := servicecontrol.Default()
+	status, err := ctrl.Status(ctx, servicecontrol.RoleServer)
+	if err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			logging.Warn("xp2p server deploy: service manager unavailable; start or restart service to apply pending changes")
+			return
+		}
+		logging.Warn("xp2p server deploy: service status check failed", "err", err)
+		return
+	}
+	if status.Active {
+		logging.Info("xp2p server deploy: service active; restart required to apply pending changes")
+	} else {
+		logging.Info("xp2p server deploy: service inactive; start required to apply pending changes")
+	}
 }
 
 func logDeployPaths(message, updatedPath string) {
