@@ -27,6 +27,15 @@ def stop_services(*hosts: Host) -> None:
         linux_env.run_xp2p(host, "server", "service", "stop")
 
 
+def restart_service(host: Host, role: str) -> None:
+    result = linux_env.run_xp2p(host, role, "service", "restart")
+    if result.rc != 0:
+        raise AssertionError(
+            f"xp2p {role} service restart failed "
+            f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 def deploy_client_to_server(
     client_host: Host,
     server_host: Host,

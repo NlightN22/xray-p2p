@@ -99,6 +99,9 @@ def test_dual_client_deploy_with_server_service_running(request, client_host, se
             LOG_ROOT / f"dual-server-b-{run_id}.log",
             "server deploy: starting xray-core",
         )
+        deploy_helpers.restart_service(server_host, "server")
+        deploy_helpers.wait_for_apply_request_clear(server_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
+        deploy_helpers.assert_service_active(server_runner, "server")
 
         deploy_helpers.assert_server_state_reports_users(server_host, {user_a, user_b})
         deploy_helpers.assert_client_endpoints(client_host, {server_ip})
@@ -192,6 +195,9 @@ def test_dual_server_deploy_with_client_service_running(request, client_host, se
             LOG_ROOT / f"dual-server-b-{run_id}.log",
             "start",
         )
+        deploy_helpers.restart_service(client_host, "client")
+        deploy_helpers.wait_for_apply_request_clear(client_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
+        deploy_helpers.assert_service_active(client_runner, "client")
 
         deploy_helpers.assert_client_endpoints(client_host, {server_a_ip, server_b_ip})
         deploy_helpers.assert_ping_ok(client_runner, server_a_ip)
