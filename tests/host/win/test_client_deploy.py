@@ -224,6 +224,12 @@ def test_windows_client_deploy_end_to_end(
                 user=trojan_user,
                 client_ip=client_host_ip,
                 )
+    except pytest.skip.Exception:
+        raise
+    except Exception:
+        win_env.dump_failure_state(client_host, label="client-deploy-end-to-end")
+        win_env.dump_failure_state(server_host, label="server-deploy-end-to-end")
+        raise
     finally:
         total = time.perf_counter() - test_start
         print(f"TIMING: test_windows_client_deploy_end_to_end total: {total:.2f}s")
@@ -827,9 +833,11 @@ def _wait_for_log_value(
         time.sleep(1)
     stdout_tail = "\n".join((last_stdout or "").splitlines()[-30:])
     stderr_tail = "\n".join((last_stderr or "").splitlines()[-30:])
+    dump_path = win_env.dump_failure_state(host, label=f"timeout-{description}")
     pytest.fail(
         "Timed out waiting for "
-        f"{description}.\nSTDOUT tail:\n{stdout_tail}\nSTDERR tail:\n{stderr_tail}"
+        f"{description}.\nFailure dump: {dump_path}\n"
+        f"STDOUT tail:\n{stdout_tail}\nSTDERR tail:\n{stderr_tail}"
     )
 
 
@@ -854,24 +862,25 @@ def _wait_for_ping_ok_or_server_failure(
         last_stderr = stderr_text or last_stderr
         server_logs = _read_combined_logs(server_host, server_proc)
         if "server deploy: xray-core start failed" in server_logs:
-            diagnostics = _collect_server_diagnostics(server_host)
+            dump_path = win_env.dump_failure_state(server_host, label="server-deploy-xray-failed")
             pytest.fail(
                 "Server deploy xray-core failed while waiting for client ping.\n"
-                f"Server logs:\n{server_logs}\n\nDiagnostics:\n{diagnostics}"
+                f"Server logs:\n{server_logs}\n\nFailure dump: {dump_path}"
         )
         if "server deploy: stopped" in server_logs:
             if not _service_running(server_host, "xp2p-server"):
-                diagnostics = _collect_server_diagnostics(server_host)
+                dump_path = win_env.dump_failure_state(server_host, label="server-deploy-stopped")
                 pytest.fail(
                     "Server deploy stopped while waiting for client ping.\n"
-                    f"Server logs:\n{server_logs}\n\nDiagnostics:\n{diagnostics}"
+                    f"Server logs:\n{server_logs}\n\nFailure dump: {dump_path}"
         )
         time.sleep(1)
     stdout_tail = "\n".join((last_stdout or "").splitlines()[-30:])
     stderr_tail = "\n".join((last_stderr or "").splitlines()[-30:])
+    dump_path = win_env.dump_failure_state(client_host, label="client-deploy-ping-timeout")
     pytest.fail(
         "Timed out waiting for 'client deploy: ping ok'.\n"
-        f"STDOUT tail:\n{stdout_tail}\nSTDERR tail:\n{stderr_tail}"
+        f"Failure dump: {dump_path}\nSTDOUT tail:\n{stdout_tail}\nSTDERR tail:\n{stderr_tail}"
     )
 
 
@@ -899,70 +908,6 @@ exit 4
     if result.rc in (3, 4):
         return False
     return False
-
-
-def _collect_server_diagnostics(host) -> str:
-    config_dir = str(SERVER_CONFIG_DIR)
-    files_raw = [
-        str(SERVER_CONFIG_FILE),
-        str(SERVER_APPLIED_STATE_FILE),
-        str(SERVER_INBOUNDS),
-        str(SERVER_CONFIG_DIR / "outbounds.json"),
-        str(SERVER_CONFIG_DIR / "routing.json"),
-        str(SERVER_CONFIG_DIR / "logs.json"),
-    ]
-    files_tail = [
-        str(SERVER_CONFIG_DIR / "access.log"),
-        str(SERVER_CONFIG_DIR / "error.log"),
-    ]
-    script = f"""
-$ErrorActionPreference = 'SilentlyContinue'
-$lines = New-Object System.Collections.Generic.List[string]
-$lines.Add("== processes ==")
-Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue |
-    Select-Object Id,ProcessName,Path,StartTime |
-    Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
-$lines.Add("== services ==")
-Get-Service -Name "xp2p*" -ErrorAction SilentlyContinue |
-    Select-Object Name,Status,StartType |
-    Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
-$lines.Add("== listen ports ==")
-$ports = @(62125, 58601)
-$netTcp = Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue
-if ($netTcp) {{
-    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
-        Where-Object {{ $ports -contains $_.LocalPort }} |
-        Select-Object LocalAddress,LocalPort,OwningProcess |
-        Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
-}} else {{
-    netstat -ano | Select-String -Pattern ":{DEPLOY_PORT}\\s|:{TROJAN_PORT}\\s" |
-        ForEach-Object {{ $lines.Add($_.Line) }}
-}}
-$lines.Add("== config dir ==")
-Get-ChildItem -Path {win_env.ps_quote(config_dir)} -Force -ErrorAction SilentlyContinue |
-    Select-Object Name,Length,LastWriteTime |
-    Format-Table -AutoSize | Out-String | ForEach-Object {{ $lines.Add($_) }}
-$lines.Add("== config files ==")
-$rawFiles = @({", ".join(win_env.ps_quote(path) for path in files_raw)})
-foreach ($path in $rawFiles) {{
-    if (Test-Path $path) {{
-        $lines.Add("-- $path --")
-        Get-Content -Path $path -Raw | ForEach-Object {{ $lines.Add($_) }}
-    }}
-}}
-$tailFiles = @({", ".join(win_env.ps_quote(path) for path in files_tail)})
-foreach ($path in $tailFiles) {{
-    if (Test-Path $path) {{
-        $lines.Add("-- $path (tail) --")
-        Get-Content -Path $path -Tail 200 | ForEach-Object {{ $lines.Add($_) }}
-    }}
-}}
-$lines -join "`n"
-"""
-    result = win_env.run_powershell(host, script, label="server_diagnostics")
-    if result.rc != 0:
-        return f"Diagnostics collection failed (rc={result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    return result.stdout or ""
 
 
 def _read_optional_text(host, path_value) -> str:

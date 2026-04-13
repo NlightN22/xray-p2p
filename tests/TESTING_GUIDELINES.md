@@ -89,8 +89,8 @@ guest suites -- the CI and fellow contributors expect these rules.
   Tests may write their own logs only under the synced `build/logs/<platform>` tree
   (for example `C:\xp2p\build\logs\win`, `/srv/xray-p2p/build/logs/linux`).
 - Use the shared failure dump helpers on any test failure (for example
-  `tests/host/openwrt/_helpers.dump_failure_state`) instead of ad-hoc
-  diagnostic dumps.
+  `tests/host/openwrt/_helpers.dump_failure_state` or
+  `tests/host/win/env.dump_failure_state`) instead of ad-hoc diagnostic dumps.
 - **OpenWrt reverse tunnel redirects**
   - Add redirect rules only on the ingress side of the tunnel. For client->server
     flows (B->A) this means `xp2p client redirect add --domain ...` on the client

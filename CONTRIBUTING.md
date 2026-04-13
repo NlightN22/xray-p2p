@@ -27,7 +27,7 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Integration suite (requires additional dependencies): `go test -tags=integration ./...`
 - Windows smoke workflows are described in `tests/README.md`. They run automatically in CI when triggered.
 - Deployment packages: `go test ./go/internal/deploy` checks the embedded templates and archive layout.
-- When adding or modifying tests, use the shared failure dump helpers (for example `tests/host/openwrt/_helpers.dump_failure_state`) instead of ad-hoc diagnostic dumps.
+- When adding or modifying tests, use the shared failure dump helpers (for example `tests/host/openwrt/_helpers.dump_failure_state` or `tests/host/win/env.dump_failure_state`) instead of ad-hoc diagnostic dumps.
 
 ## Versioning and releases
 
