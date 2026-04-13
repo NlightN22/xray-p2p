@@ -210,7 +210,7 @@ func waitForServiceState(ctx context.Context, ctrl servicecontrol.Controller, ro
 			}
 			return err
 		}
-		if strings.EqualFold(status.State, desired) {
+		if serviceStateMatches(status.State, desired) {
 			return nil
 		}
 		if time.Now().After(deadline) {
@@ -221,6 +221,19 @@ func waitForServiceState(ctx context.Context, ctrl servicecontrol.Controller, ro
 			return ctx.Err()
 		case <-time.After(500 * time.Millisecond):
 		}
+	}
+}
+
+func serviceStateMatches(state, desired string) bool {
+	state = strings.ToLower(strings.TrimSpace(state))
+	desired = strings.ToLower(strings.TrimSpace(desired))
+	switch desired {
+	case "stopped":
+		return state == "inactive" || state == "failed" || state == "dead" || state == "stopped"
+	case "running":
+		return state == "active" || state == "running"
+	default:
+		return state == desired
 	}
 }
 

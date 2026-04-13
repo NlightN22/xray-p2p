@@ -85,6 +85,9 @@ func (s *deployServer) Run(ctx context.Context) error {
 					diagCancel()
 					diagCancel = nil
 				}
+				if s.Once && runCancel == nil && sig.applyHandled {
+					return nil
+				}
 				if runCancel != nil {
 					runCancel()
 					switchToTun = !sig.applyHandled
