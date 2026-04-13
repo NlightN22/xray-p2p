@@ -60,7 +60,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if pendingApplied {
 		configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
-			logging.Warn("xp2p: reload client config after apply failed", "err", err)
+			logging.Warn("reload client config after apply failed", "err", err)
 		} else {
 			opts.TunEnabled = cfg.Client.TunEnabled
 			opts.TunName = cfg.Client.TunName
@@ -118,7 +118,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	wantFull := opts.TunEnabled && strings.EqualFold(strings.TrimSpace(opts.TunMode), "full")
 	if !wantFull {
 		if windowsRoutesDisabled {
-			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel restore")
+			logging.Info("windows route apply disabled; skipping full-tunnel restore")
 		} else {
 			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
 				return err
@@ -130,10 +130,10 @@ func Run(ctx context.Context, opts RunOptions) error {
 			return
 		}
 		if windowsRoutesDisabled {
-			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel rollback")
+			logging.Info("windows route apply disabled; skipping full-tunnel rollback")
 		} else {
 			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-				logging.Warn("xp2p: full-tunnel rollback failed", "err", err)
+				logging.Warn("full-tunnel rollback failed", "err", err)
 			}
 		}
 	}()
@@ -144,9 +144,9 @@ func Run(ctx context.Context, opts RunOptions) error {
 
 	wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
 	if result, err := winnet.CleanupWintunAdapter(wintunPath, opts.TunName); err != nil {
-		logging.Warn("xp2p: wintun adapter cleanup failed", "interface", opts.TunName, "result", "error", "err", err)
+		logging.Warn("wintun adapter cleanup failed", "interface", opts.TunName, "result", "error", "err", err)
 	} else {
-		logging.Info("xp2p: wintun adapter cleanup", "interface", opts.TunName, "result", result)
+		logging.Info("wintun adapter cleanup", "interface", opts.TunName, "result", result)
 	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
@@ -163,20 +163,20 @@ func Run(ctx context.Context, opts RunOptions) error {
 			if windowsRoutesDisabled {
 				waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 				defer cancel()
-				logging.Info("xp2p: ensuring tun IPv4 (routes disabled)", "timeout", "120s")
+				logging.Info("ensuring tun IPv4 (routes disabled)", "timeout", "120s")
 				ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose)
 				if err != nil {
-					logging.Warn("xp2p: tun IPv4 ensure failed", "err", err)
+					logging.Warn("tun IPv4 ensure failed", "err", err)
 					if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
 						return err
 					}
 					return nil
 				}
-				logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
+				logging.Info("tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
 				if wantFull {
-					logging.Info("xp2p: full-tunnel pending (routes disabled)")
+					logging.Info("full-tunnel pending (routes disabled)")
 				}
-				logging.Info("xp2p: windows route apply disabled; skipping redirect/full-tunnel routes")
+				logging.Info("windows route apply disabled; skipping redirect/full-tunnel routes")
 				return nil
 			}
 			waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -190,7 +190,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 					},
 					LastError: err.Error(),
 				})
-				logging.Warn("xp2p: tun IPv4 ensure failed; skipping route apply", "err", err)
+				logging.Warn("tun IPv4 ensure failed; skipping route apply", "err", err)
 				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
 					return err
 				}
@@ -220,7 +220,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 					"dadState", dad,
 				)
 			} else {
-				logging.Info("xp2p: tun IPv4 ready; applying routes", "ifIndex", ifIndex, "ip", ip)
+				logging.Info("tun IPv4 ready; applying routes", "ifIndex", ifIndex, "ip", ip)
 			}
 			if ctx.Err() != nil {
 				return nil
@@ -229,7 +229,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 			redirectCount := len(collectRedirectCIDRs(desired.Redirects))
 			redirectApplied := false
 			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
-				logging.Warn("xp2p: redirect route setup failed", "err", err)
+				logging.Warn("redirect route setup failed", "err", err)
 			} else {
 				redirectApplied = true
 			}
@@ -237,7 +237,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 			fullBypassCount := 0
 			if wantFull {
 				if applied, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
-					logging.Warn("xp2p: full-tunnel apply failed", "err", err)
+					logging.Warn("full-tunnel apply failed", "err", err)
 				} else {
 					fullApplied = applied
 				}
@@ -252,7 +252,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 				FullBypassCount: fullBypassCount,
 			}
 			if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
-				logging.Warn("xp2p: client runtime state update failed", "err", err)
+				logging.Warn("client runtime state update failed", "err", err)
 			}
 		}
 		return nil
@@ -261,7 +261,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	onReady := func(readyCtx context.Context) error {
 		addr, err := resolveClientSocksAddress(paths.configFile)
 		if err != nil {
-			logging.Warn("xp2p: client socks health check using defaults", "err", err)
+			logging.Warn("client socks health check using defaults", "err", err)
 		}
 		readyErr := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
 		runtime := clientRuntimeState{SocksReady: readyErr == nil}
@@ -269,7 +269,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 			runtime.LastError = readyErr.Error()
 		}
 		if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
-			logging.Warn("xp2p: client runtime state update failed", "err", err)
+			logging.Warn("client runtime state update failed", "err", err)
 		}
 		return readyErr
 	}
@@ -285,16 +285,16 @@ func Run(ctx context.Context, opts RunOptions) error {
 	)
 	if runErr != nil && pendingApplied && rollback != nil && hasAppliedState {
 		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
-			logging.Warn("xp2p: tun ready failed; mode change remains pending", "err", runErr)
+			logging.Warn("tun ready failed; mode change remains pending", "err", runErr)
 			return runErr
 		}
 		if err := rollback.Restore(config.AuditLogPath()); err != nil {
-			logging.Warn("xp2p: rollback failed after apply", "err", err)
+			logging.Warn("rollback failed after apply", "err", err)
 		} else {
-			logging.Warn("xp2p: rollback completed after apply failure")
+			logging.Warn("rollback completed after apply failure")
 		}
 	} else if runErr != nil && pendingApplied && rollback != nil {
-		logging.Warn("xp2p: rollback skipped; no applied state yet")
+		logging.Warn("rollback skipped; no applied state yet")
 	}
 	return runErr
 }

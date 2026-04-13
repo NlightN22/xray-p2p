@@ -49,7 +49,7 @@ func EnsureTunInterface(name, addr string) error {
 		return err
 	}
 	if exists && !managed {
-		logging.Warn("xp2p: OpenWrt interface exists and is not managed; overwriting", "interface", name)
+		logging.Warn("OpenWrt interface exists and is not managed; overwriting", "interface", name)
 	}
 
 	if exists {
@@ -79,7 +79,7 @@ func EnsureTunInterface(name, addr string) error {
 		return err
 	}
 
-	logging.Info("xp2p: OpenWrt TUN interface configured", "interface", name, "addr", addr)
+	logging.Info("OpenWrt TUN interface configured", "interface", name, "addr", addr)
 	return nil
 }
 
@@ -154,7 +154,7 @@ func RemoveTunInterfaceIfManaged(name string) error {
 		return nil
 	}
 	if !managed {
-		logging.Info("xp2p: OpenWrt interface not managed; skipping cleanup", "interface", name)
+		logging.Info("OpenWrt interface not managed; skipping cleanup", "interface", name)
 		return nil
 	}
 
@@ -167,7 +167,7 @@ func RemoveTunInterfaceIfManaged(name string) error {
 	if err := runCommand("/etc/init.d/network", "reload"); err != nil {
 		return err
 	}
-	logging.Info("xp2p: OpenWrt TUN interface removed", "interface", name)
+	logging.Info("OpenWrt TUN interface removed", "interface", name)
 	return nil
 }
 

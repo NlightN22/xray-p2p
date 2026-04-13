@@ -14,7 +14,7 @@ import (
 
 func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bool, error) {
 	reqPath := config.ApplyRequestPath()
-	logging.Debug("xp2p: apply request check",
+	logging.Debug("apply request check",
 		"role", role,
 		"apply_request", reqPath,
 		"apply_request_exists", fileExists(reqPath),
@@ -54,16 +54,16 @@ func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bo
 	}
 	if applied {
 		if err := apply.CleanupPending(pendingSet); err != nil {
-			logging.Warn("xp2p: pending cleanup failed", "role", role, "err", err)
+			logging.Warn("pending cleanup failed", "role", role, "err", err)
 		}
 	}
 	if err := apply.RemoveRequest(reqPath); err != nil {
-		logging.Warn("xp2p: apply request cleanup failed", "path", reqPath, "err", err)
+		logging.Warn("apply request cleanup failed", "path", reqPath, "err", err)
 	}
 	if applied {
-		logging.Info("xp2p: pending config applied", "role", role, "request_id", req.ID)
+		logging.Info("pending config applied", "role", role, "request_id", req.ID)
 	} else {
-		logging.Warn("xp2p: apply request skipped (no pending data)", "role", role, "request_id", req.ID)
+		logging.Warn("apply request skipped (no pending data)", "role", role, "request_id", req.ID)
 	}
 	return rollback, applied, nil
 }

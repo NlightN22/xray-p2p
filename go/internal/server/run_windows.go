@@ -59,7 +59,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if pendingApplied {
 		configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
-			logging.Warn("xp2p: reload server config after apply failed", "err", err)
+			logging.Warn("reload server config after apply failed", "err", err)
 		} else {
 			opts.TunEnabled = cfg.Server.TunEnabled
 			opts.TunName = cfg.Server.TunName
@@ -119,24 +119,24 @@ func Run(ctx context.Context, opts RunOptions) error {
 			if windowsRoutesDisabled {
 				waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 				defer cancel()
-				logging.Info("xp2p: ensuring tun IPv4 (routes disabled)", "timeout", "120s")
+				logging.Info("ensuring tun IPv4 (routes disabled)", "timeout", "120s")
 				ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false)
 				if err != nil {
-					logging.Warn("xp2p: tun IPv4 ensure failed", "err", err)
+					logging.Warn("tun IPv4 ensure failed", "err", err)
 					if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
 						return err
 					}
 					return nil
 				}
-				logging.Info("xp2p: tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
-				logging.Info("xp2p: windows route apply disabled; skipping redirect routes")
+				logging.Info("tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
+				logging.Info("windows route apply disabled; skipping redirect routes")
 				return nil
 			}
 			waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			ifIndex, ip, err := winnet.WaitForTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false)
 			if err != nil {
-				logging.Warn("xp2p: tun IPv4 wait failed; skipping route apply", "err", err)
+				logging.Warn("tun IPv4 wait failed; skipping route apply", "err", err)
 				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
 					return err
 				}
@@ -151,14 +151,14 @@ func Run(ctx context.Context, opts RunOptions) error {
 					"dadState", winnet.InterfaceDadStateName(details.DadState),
 				)
 			} else {
-				logging.Info("xp2p: tun IPv4 ready; applying routes", "ifIndex", ifIndex, "ip", ip)
+				logging.Info("tun IPv4 ready; applying routes", "ifIndex", ifIndex, "ip", ip)
 			}
 			if ctx.Err() != nil {
 				return nil
 			}
 			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
 			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
-				logging.Warn("xp2p: redirect route setup failed", "err", err)
+				logging.Warn("redirect route setup failed", "err", err)
 			}
 		}
 		return nil
@@ -167,7 +167,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	onReady := func(readyCtx context.Context) error {
 		addr, err := resolveServerSocksAddress(configFile)
 		if err != nil {
-			logging.Warn("xp2p: server socks health check using defaults", "err", err)
+			logging.Warn("server socks health check using defaults", "err", err)
 		}
 		return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
 	}
@@ -182,21 +182,21 @@ func Run(ctx context.Context, opts RunOptions) error {
 		onReady,
 	)
 	if runErr != nil && errors.Is(runErr, context.Canceled) {
-		logging.Info("xp2p: server run canceled")
+		logging.Info("server run canceled")
 		return nil
 	}
 	if runErr != nil && pendingApplied && rollback != nil && hasAppliedState {
 		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
-			logging.Warn("xp2p: tun ready failed; mode change remains pending", "err", runErr)
+			logging.Warn("tun ready failed; mode change remains pending", "err", runErr)
 			return runErr
 		}
 		if err := rollback.Restore(config.AuditLogPath()); err != nil {
-			logging.Warn("xp2p: rollback failed after apply", "err", err)
+			logging.Warn("rollback failed after apply", "err", err)
 		} else {
-			logging.Warn("xp2p: rollback completed after apply failure")
+			logging.Warn("rollback completed after apply failure")
 		}
 	} else if runErr != nil && pendingApplied && rollback != nil {
-		logging.Warn("xp2p: rollback skipped; no applied state yet")
+		logging.Warn("rollback skipped; no applied state yet")
 	}
 	return runErr
 }

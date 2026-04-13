@@ -19,7 +19,7 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 		return false, nil
 	}
 	if strings.TrimSpace(opts.FullTunnelTag) == "" {
-		logging.Warn("xp2p: full-tunnel outbound tag missing; routing rule not added")
+		logging.Warn("full-tunnel outbound tag missing; routing rule not added")
 	}
 	state, err := loadFullTunnelState(paths.fullState)
 	if err != nil {

@@ -18,7 +18,7 @@ func ensureRedirectRoute(tunName, cidr string) error {
 	}
 	if err := openwrt.EnsureTunRoute(tun, cidr); err != nil {
 		if isMissingDeviceError(err) {
-			logging.Warn("xp2p: redirect route setup deferred (tun missing)", "cidr", cidr, "err", err)
+			logging.Warn("redirect route setup deferred (tun missing)", "cidr", cidr, "err", err)
 			return nil
 		}
 		return err
@@ -33,14 +33,14 @@ func removeRedirectRoute(tunName, cidr string) error {
 	}
 	if err := openwrt.RemoveTunRoute(tun, cidr); err != nil {
 		if linuxnet.IsTunPermissionError(err) {
-			logging.Warn("xp2p: redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
+			logging.Warn("redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
 			return nil
 		}
 		return err
 	}
 	if err := linuxnet.RemoveRoute(tun, cidr); err != nil {
 		if linuxnet.IsTunPermissionError(err) {
-			logging.Warn("xp2p: redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
+			logging.Warn("redirect route cleanup skipped (permission denied)", "cidr", cidr, "err", err)
 			return nil
 		}
 		return err
@@ -68,7 +68,7 @@ func applyRedirectRoutes(tunName, _ string, redirects []redirect.Rule) error {
 		seen[key] = struct{}{}
 		if err := ensureRedirectRoute(tunName, value); err != nil {
 			if linuxnet.IsTunPermissionError(err) {
-				logging.Warn("xp2p: redirect route setup skipped (permission denied)", "cidr", value, "err", err)
+				logging.Warn("redirect route setup skipped (permission denied)", "cidr", value, "err", err)
 				continue
 			}
 			return err

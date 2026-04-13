@@ -350,7 +350,7 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 					luid = 0
 				}
 				if verbose {
-					logging.Info("xp2p: full-tunnel tun interface resolved by addr", "interface", name, "addr", trimmedAddr, "ifIndex", ifIndex, "ifLuid", luid, "attempt", attempt)
+					logging.Info("full-tunnel tun interface resolved by addr", "interface", name, "addr", trimmedAddr, "ifIndex", ifIndex, "ifLuid", luid, "attempt", attempt)
 				}
 				return ifIndex, luid, nil
 			}
@@ -361,7 +361,7 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 		ifIndex, ifLuid, matched, matchErr := winnet.InterfaceByNamePrefix(name)
 		if matchErr == nil && ifIndex > 0 {
 			if verbose {
-				logging.Info("xp2p: full-tunnel tun interface resolved by prefix", "interface", name, "match", matched, "ifIndex", ifIndex, "ifLuid", ifLuid, "attempt", attempt)
+				logging.Info("full-tunnel tun interface resolved by prefix", "interface", name, "match", matched, "ifIndex", ifIndex, "ifLuid", ifLuid, "attempt", attempt)
 			}
 			return ifIndex, ifLuid, nil
 		}
@@ -372,7 +372,7 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 				luid = 0
 			}
 			if verbose {
-				logging.Info("xp2p: full-tunnel tun interface resolved", "interface", name, "ifIndex", index, "ifLuid", luid, "attempt", attempt)
+				logging.Info("full-tunnel tun interface resolved", "interface", name, "ifIndex", index, "ifLuid", luid, "attempt", attempt)
 			}
 			return index, luid, nil
 		}
@@ -382,7 +382,7 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 			ifIndex, ifLuid, matched, matchErr = winnet.InterfaceByDescriptionContains(hints)
 			if matchErr == nil && ifIndex > 0 {
 				if verbose {
-					logging.Info("xp2p: full-tunnel tun interface resolved by description", "interface", name, "match", matched, "ifIndex", ifIndex, "ifLuid", ifLuid, "attempt", attempt)
+					logging.Info("full-tunnel tun interface resolved by description", "interface", name, "match", matched, "ifIndex", ifIndex, "ifLuid", ifLuid, "attempt", attempt)
 				}
 				return ifIndex, ifLuid, nil
 			}
@@ -397,7 +397,7 @@ func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string
 			return 0, 0, lastErr
 		}
 		if verbose {
-			logging.Info("xp2p: full-tunnel waiting for tun interface", "interface", name, "attempt", attempt)
+			logging.Info("full-tunnel waiting for tun interface", "interface", name, "attempt", attempt)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -414,7 +414,7 @@ func waitForWindowsIPv4(ctx context.Context, ifIndex int, verbose bool) error {
 		}
 		if strings.TrimSpace(value) != "" {
 			if verbose {
-				logging.Info("xp2p: full-tunnel tun IPv4 ready", "ifIndex", ifIndex, "ip", value, "attempt", attempt)
+				logging.Info("full-tunnel tun IPv4 ready", "ifIndex", ifIndex, "ip", value, "attempt", attempt)
 			}
 			return nil
 		}
@@ -425,7 +425,7 @@ func waitForWindowsIPv4(ctx context.Context, ifIndex int, verbose bool) error {
 			return fmt.Errorf("xp2p: tun IPv4 address unavailable for interface %d", ifIndex)
 		}
 		if verbose {
-			logging.Info("xp2p: full-tunnel waiting for tun IPv4", "ifIndex", ifIndex, "attempt", attempt)
+			logging.Info("full-tunnel waiting for tun IPv4", "ifIndex", ifIndex, "attempt", attempt)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -445,7 +445,7 @@ func waitForWindowsInterfaceUp(ctx context.Context, ifIndex int, tunName string,
 			return nil
 		}
 		if !logged {
-			logging.Info("xp2p: full-tunnel apply deferred: adapter not connected", "interface", tunName, "ifIndex", ifIndex)
+			logging.Info("full-tunnel apply deferred: adapter not connected", "interface", tunName, "ifIndex", ifIndex)
 			logged = true
 		}
 		if ctx.Err() != nil {
@@ -455,7 +455,7 @@ func waitForWindowsInterfaceUp(ctx context.Context, ifIndex int, tunName string,
 			return fmt.Errorf("xp2p: tun adapter not connected: %s (%d)", tunName, ifIndex)
 		}
 		if verbose {
-			logging.Info("xp2p: full-tunnel waiting for tun adapter", "interface", tunName, "ifIndex", ifIndex, "attempt", attempt)
+			logging.Info("full-tunnel waiting for tun adapter", "interface", tunName, "ifIndex", ifIndex, "attempt", attempt)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}

@@ -28,7 +28,7 @@ func applyWindowsDNS(ctx context.Context, tunName string, servers []string, verb
 		return nil, err
 	}
 	logFullTunnelDNSVerbose(verbose, "xp2p: full-tunnel DNS override applied", backup, target, tunName)
-	logging.Info("xp2p: full-tunnel DNS servers applied", "interface", tunName)
+	logging.Info("full-tunnel DNS servers applied", "interface", tunName)
 	return &fullTunnelDNSBackup{
 		WindowsIPv4: backup.IPv4,
 		WindowsIPv6: backup.IPv6,
@@ -38,7 +38,7 @@ func applyWindowsDNS(ctx context.Context, tunName string, servers []string, verb
 func restoreWindowsDNS(ctx context.Context, backup *fullTunnelDNSBackup, tunName string, verbose bool) error {
 	if backup == nil || strings.TrimSpace(tunName) == "" {
 		if verbose {
-			logging.Info("xp2p: full-tunnel DNS unchanged (no backup)", "interface", tunName)
+			logging.Info("full-tunnel DNS unchanged (no backup)", "interface", tunName)
 		}
 		return nil
 	}
@@ -57,7 +57,7 @@ func restoreWindowsDNS(ctx context.Context, backup *fullTunnelDNSBackup, tunName
 		if verbose {
 			logFullTunnelDNSVerbose(verbose, "xp2p: full-tunnel DNS restored", before, target, tunName)
 		}
-		logging.Info("xp2p: full-tunnel DNS servers restored", "interface", tunName)
+		logging.Info("full-tunnel DNS servers restored", "interface", tunName)
 	}
 	return err
 }

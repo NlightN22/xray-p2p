@@ -52,9 +52,9 @@ func applyFullTunnelRoutes(ctx context.Context, paths clientPaths, opts RunOptio
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
-		logging.Info("xp2p: full-tunnel sync skipped (not enabled)")
+		logging.Info("full-tunnel sync skipped (not enabled)")
 		if windowsRoutesDisabled {
-			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel restore")
+			logging.Info("windows route apply disabled; skipping full-tunnel restore")
 		} else {
 			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
 				return false, err
@@ -63,7 +63,7 @@ func applyFullTunnelRoutes(ctx context.Context, paths clientPaths, opts RunOptio
 		return false, nil
 	}
 	if strings.TrimSpace(opts.FullTunnelTag) == "" {
-		logging.Warn("xp2p: full-tunnel outbound tag missing; routing rule not added")
+		logging.Warn("full-tunnel outbound tag missing; routing rule not added")
 	}
 
 	state, err := loadFullTunnelState(paths.fullState)
@@ -86,7 +86,7 @@ func applyFullTunnelRoutes(ctx context.Context, paths clientPaths, opts RunOptio
 	}
 
 	if windowsRoutesDisabled {
-		logging.Warn("xp2p: full-tunnel route apply disabled on windows")
+		logging.Warn("full-tunnel route apply disabled on windows")
 		return false, nil
 	}
 	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)

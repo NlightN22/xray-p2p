@@ -44,21 +44,21 @@ func DisableIPv6BindingWithRetry(ctx context.Context, adapterName string) {
 		}
 		result, err := disableIPv6BindingOnce(ctx, name)
 		if err != nil {
-			logging.Warn("xp2p: failed to disable IPv6 binding", "interface", name, "err", err)
+			logging.Warn("failed to disable IPv6 binding", "interface", name, "err", err)
 			return
 		}
 		switch result {
 		case ipv6ResultMissing:
 			if time.Now().After(deadline) {
-				logging.Warn("xp2p: IPv6 binding disable skipped (interface not found)", "interface", name)
+				logging.Warn("IPv6 binding disable skipped (interface not found)", "interface", name)
 				return
 			}
 			time.Sleep(ipv6DisablePollInterval)
 		case ipv6ResultDisabled:
-			logging.Info("xp2p: IPv6 binding disabled", "interface", name, "component", ipv6ComponentID)
+			logging.Info("IPv6 binding disabled", "interface", name, "component", ipv6ComponentID)
 			return
 		default:
-			logging.Info("xp2p: IPv6 binding already disabled", "interface", name, "component", ipv6ComponentID)
+			logging.Info("IPv6 binding already disabled", "interface", name, "component", ipv6ComponentID)
 			return
 		}
 	}

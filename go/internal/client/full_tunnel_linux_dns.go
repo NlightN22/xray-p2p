@@ -36,16 +36,16 @@ func applyDNSOverrides(servers []string, verbose bool) (*fullTunnelDNSBackup, er
 	if verbose {
 		before := parseResolvConfServers(string(data))
 		after := parseResolvConfServers(content)
-		logging.Info("xp2p: full-tunnel DNS override applied", "path", resolvConfPath, "before", before, "after", after)
+		logging.Info("full-tunnel DNS override applied", "path", resolvConfPath, "before", before, "after", after)
 	}
-	logging.Info("xp2p: full-tunnel DNS servers applied", "path", resolvConfPath)
+	logging.Info("full-tunnel DNS servers applied", "path", resolvConfPath)
 	return backup, nil
 }
 
 func restoreDNSOverrides(backup *fullTunnelDNSBackup, verbose bool) error {
 	if backup == nil || backup.ResolvConf == "" {
 		if verbose {
-			logging.Info("xp2p: full-tunnel DNS unchanged (no backup)", "path", resolvConfPath)
+			logging.Info("full-tunnel DNS unchanged (no backup)", "path", resolvConfPath)
 		}
 		return nil
 	}
@@ -64,9 +64,9 @@ func restoreDNSOverrides(backup *fullTunnelDNSBackup, verbose bool) error {
 	}
 	if verbose {
 		after := parseResolvConfServers(backup.ResolvConf)
-		logging.Info("xp2p: full-tunnel DNS restored", "path", path, "before", before, "after", after)
+		logging.Info("full-tunnel DNS restored", "path", path, "before", before, "after", after)
 	}
-	logging.Info("xp2p: full-tunnel DNS servers restored", "path", path)
+	logging.Info("full-tunnel DNS servers restored", "path", path)
 	return nil
 }
 

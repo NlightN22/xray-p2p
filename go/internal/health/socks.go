@@ -22,7 +22,7 @@ func WaitForSocksProxy(ctx context.Context, addr string, timeout, interval time.
 		interval = defaultProbeInterval
 	}
 
-	logging.Info("xp2p: socks health check starting", "addr", addr, "timeout", timeout, "interval", interval)
+	logging.Info("socks health check starting", "addr", addr, "timeout", timeout, "interval", interval)
 
 	var deadline time.Time
 	if timeout > 0 {
@@ -37,7 +37,7 @@ func WaitForSocksProxy(ctx context.Context, addr string, timeout, interval time.
 		conn, err := net.DialTimeout("tcp", addr, interval)
 		if err == nil {
 			_ = conn.Close()
-			logging.Info("xp2p: socks health check ok", "addr", addr)
+			logging.Info("socks health check ok", "addr", addr)
 			return nil
 		}
 		lastErr = err

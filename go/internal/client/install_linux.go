@@ -62,13 +62,13 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return fmt.Errorf("xp2p: create log root: %w", err)
 	}
 	if err := os.Chmod(logRoot, 0o777); err != nil {
-		logging.Warn("xp2p: chmod log root failed", "path", logRoot, "err", err)
+		logging.Warn("chmod log root failed", "path", logRoot, "err", err)
 	}
 	if err := os.MkdirAll(state.logsDir, 0o777); err != nil {
 		return fmt.Errorf("xp2p: create log directory: %w", err)
 	}
 	if err := os.Chmod(state.logsDir, 0o777); err != nil {
-		logging.Warn("xp2p: chmod log directory failed", "path", state.logsDir, "err", err)
+		logging.Warn("chmod log directory failed", "path", state.logsDir, "err", err)
 	}
 	if err := ensureClientTunConfig(state.Force, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr, state.TunMode, state.TunModeSet); err != nil {
 		return err

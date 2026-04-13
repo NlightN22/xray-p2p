@@ -17,6 +17,6 @@ func warnIfKeyTooPermissive(path string) {
 		return
 	}
 	if info.Mode().Perm()&0o004 != 0 {
-		logging.Warn("xp2p: key file is world-readable", "path", path)
+		logging.Warn("key file is world-readable", "path", path)
 	}
 }

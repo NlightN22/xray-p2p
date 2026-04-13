@@ -146,7 +146,7 @@ func (m *TunnelManager) ApplySplitRoutes(ctx context.Context, req ports.SplitRou
 	err := winnet.SyncRedirectRoutes(req.Name, tunAddr, req.CIDRs)
 	if err != nil {
 		if errors.Is(err, winnet.ErrInterfaceMissing) || errors.Is(err, winnet.ErrTunIPv4Missing) {
-			logging.Warn("xp2p: redirect route setup skipped", "interface", strings.TrimSpace(req.Name), "err", err)
+			logging.Warn("redirect route setup skipped", "interface", strings.TrimSpace(req.Name), "err", err)
 			return ports.RouteResult{Applied: false}, nil
 		}
 		return ports.RouteResult{Applied: false}, err

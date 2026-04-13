@@ -65,20 +65,20 @@ func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose
 					"dadState", dad,
 				)
 				if verbose {
-					logging.Info("xp2p: tun IPv4 ready details", "ifIndex", ifIndex, "attempt", attempt)
+					logging.Info("tun IPv4 ready details", "ifIndex", ifIndex, "attempt", attempt)
 				}
 				return ifIndex, ip, nil
 			}
 			lastErr = ErrTunIPv4Missing
 			if verbose {
-				logging.Info("xp2p: waiting for tun IPv4", "ifIndex", ifIndex, "operStatus", oper, "dadState", dad, "attempt", attempt)
+				logging.Info("waiting for tun IPv4", "ifIndex", ifIndex, "operStatus", oper, "dadState", dad, "attempt", attempt)
 			}
 		} else if err != nil && !errors.Is(err, ErrInterfaceNotFound) {
 			return 0, "", err
 		} else {
 			lastErr = ErrInterfaceNotFound
 			if verbose {
-				logging.Info("xp2p: waiting for tun interface", "interface", name, "attempt", attempt)
+				logging.Info("waiting for tun interface", "interface", name, "attempt", attempt)
 			}
 		}
 		if ctx.Err() != nil {
@@ -173,7 +173,7 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 					if err := ensureInterfaceIPv4(ctx, ifIndex, assignIP, assignPrefix); err != nil {
 						lastErr = err
 						if verbose {
-							logging.Info("xp2p: tun IPv4 assign attempt failed", "ifIndex", ifIndex, "attempt", attempt, "err", err)
+							logging.Info("tun IPv4 assign attempt failed", "ifIndex", ifIndex, "attempt", attempt, "err", err)
 						}
 					}
 				}
@@ -187,20 +187,20 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 					"dadState", dad,
 				)
 				if verbose {
-					logging.Info("xp2p: tun IPv4 ready details", "ifIndex", ifIndex, "attempt", attempt)
+					logging.Info("tun IPv4 ready details", "ifIndex", ifIndex, "attempt", attempt)
 				}
 				return ifIndex, ip, nil
 			}
 			lastErr = ErrTunIPv4Missing
 			if verbose {
-				logging.Info("xp2p: waiting for tun IPv4", "ifIndex", ifIndex, "operStatus", oper, "dadState", dad, "attempt", attempt)
+				logging.Info("waiting for tun IPv4", "ifIndex", ifIndex, "operStatus", oper, "dadState", dad, "attempt", attempt)
 			}
 		} else if err != nil && !errors.Is(err, ErrInterfaceNotFound) {
 			return 0, "", err
 		} else {
 			lastErr = ErrInterfaceNotFound
 			if verbose {
-				logging.Info("xp2p: waiting for tun interface", "interface", name, "attempt", attempt)
+				logging.Info("waiting for tun interface", "interface", name, "attempt", attempt)
 			}
 		}
 		if ctx.Err() != nil {
@@ -224,12 +224,12 @@ func ensureInterfaceIPv4(ctx context.Context, ifIndex int, ip string, prefix int
 		return ErrTunIPv4Missing
 	}
 	if err := assignInterfaceIPv4Native(ifIndex, ip, prefix); err == nil {
-		logging.Info("xp2p: tun IPv4 assigned", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "method", "native")
+		logging.Info("tun IPv4 assigned", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "method", "native")
 		return nil
 	} else if !isUnicastIPHelperUnsupported(err) {
-		logging.Warn("xp2p: native tun IPv4 assign failed; falling back to PowerShell", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "err", err)
+		logging.Warn("native tun IPv4 assign failed; falling back to PowerShell", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "err", err)
 	} else {
-		logging.Warn("xp2p: native tun IPv4 assign unsupported; falling back to PowerShell", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "err", err)
+		logging.Warn("native tun IPv4 assign unsupported; falling back to PowerShell", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "err", err)
 	}
 	script := strings.Join([]string{
 		`$ErrorActionPreference = "Stop"`,
@@ -243,7 +243,7 @@ func ensureInterfaceIPv4(ctx context.Context, ifIndex int, ip string, prefix int
 	}, "; ")
 	_, err := runPowerShell(ctx, script)
 	if err == nil {
-		logging.Info("xp2p: tun IPv4 assigned", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "method", "powershell")
+		logging.Info("tun IPv4 assigned", "ifIndex", ifIndex, "ip", ip, "prefix", prefix, "method", "powershell")
 	}
 	return err
 }

@@ -50,10 +50,10 @@ func SyncRedirectRoutes(tunName, tunAddr string, cidrs []string) error {
 						"dadState", InterfaceDadStateName(details.DadState),
 					)
 				} else {
-					logging.Info("xp2p: tun IPv4 available", "interface", name, "addr", addr)
+					logging.Info("tun IPv4 available", "interface", name, "addr", addr)
 				}
 			} else {
-				logging.Info("xp2p: tun IPv4 available", "interface", name, "addr", addr)
+				logging.Info("tun IPv4 available", "interface", name, "addr", addr)
 			}
 		}
 	}

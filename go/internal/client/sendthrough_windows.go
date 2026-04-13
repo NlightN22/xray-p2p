@@ -17,10 +17,10 @@ func updateSendThroughOutbound(ctx context.Context, paths clientPaths, tunEnable
 	if tunEnabled {
 		value, err := winnet.DefaultSendThroughIPv4(ctx)
 		if err != nil {
-			logging.Warn("xp2p: failed to detect sendThrough IPv4", "err", err)
+			logging.Warn("failed to detect sendThrough IPv4", "err", err)
 			return nil
 		} else if value == "" {
-			logging.Warn("xp2p: sendThrough IPv4 not detected, leaving default outbound binding")
+			logging.Warn("sendThrough IPv4 not detected, leaving default outbound binding")
 			return nil
 		}
 		sendThrough = value

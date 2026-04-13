@@ -16,9 +16,9 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
-		logging.Info("xp2p: full-tunnel sync skipped (not enabled)")
+		logging.Info("full-tunnel sync skipped (not enabled)")
 		if windowsRoutesDisabled {
-			logging.Info("xp2p: windows route apply disabled; skipping full-tunnel restore")
+			logging.Info("windows route apply disabled; skipping full-tunnel restore")
 		} else {
 			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
 				return false, err
@@ -27,7 +27,7 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 		return false, nil
 	}
 	if strings.TrimSpace(opts.FullTunnelTag) == "" {
-		logging.Warn("xp2p: full-tunnel outbound tag missing; routing rule not added")
+		logging.Warn("full-tunnel outbound tag missing; routing rule not added")
 	}
 	state, err := loadFullTunnelState(paths.fullState)
 	if err != nil {
@@ -44,14 +44,14 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 		}
 	}
 	if windowsRoutesDisabled {
-		logging.Warn("xp2p: full-tunnel route apply disabled on windows")
+		logging.Warn("full-tunnel route apply disabled on windows")
 		return false, nil
 	}
 	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
 }
 
 func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState, state fullTunnelState, endpointIPv4 []string, endpointIPv6 []string, resolvedEndpoints map[string]fullTunnelEndpointIPs) (enabled bool, err error) {
-	logging.Info("xp2p: full-tunnel apply start", "tun_name", opts.TunName, "tun_addr", opts.TunAddr)
+	logging.Info("full-tunnel apply start", "tun_name", opts.TunName, "tun_addr", opts.TunAddr)
 	ifIndex, _, err := resolveWindowsInterface(ctx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose, true)
 	if err != nil {
 		return false, err
@@ -153,18 +153,18 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		return false, err
 	}
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes applied", "count", len(bypassRoutes))
-	logging.Info("xp2p: full-tunnel apply complete", "bypass_routes", len(bypassRoutes))
+	logging.Info("full-tunnel apply complete", "bypass_routes", len(bypassRoutes))
 	return true, nil
 }
 
 func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) error {
-	logging.Info("xp2p: full-tunnel restore start")
+	logging.Info("full-tunnel restore start")
 	state, err := loadFullTunnelState(paths.fullState)
 	if err != nil {
 		return err
 	}
 	if !state.Enabled {
-		logging.Info("xp2p: full-tunnel restore skipped (disabled)")
+		logging.Info("full-tunnel restore skipped (disabled)")
 		return nil
 	}
 
@@ -199,7 +199,7 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	if err := saveFullTunnelState(paths.fullState, state); err != nil {
 		return err
 	}
-	logging.Info("xp2p: full-tunnel restore complete")
+	logging.Info("full-tunnel restore complete")
 	return nil
 }
 
@@ -207,24 +207,24 @@ func rollbackFullTunnel(ctx context.Context, paths clientPaths, verbose bool, st
 	if err := restoreFullTunnel(ctx, paths, verbose); err == nil {
 		return nil
 	}
-	logging.Warn("xp2p: full-tunnel restore failed; attempting manual rollback")
+	logging.Warn("full-tunnel restore failed; attempting manual rollback")
 	if tun := strings.TrimSpace(state.TunName); tun != "" {
 		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv4")
 		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv6")
 	}
 	if err := removeWindowsBypassRoutes(ctx, state.BypassRoutes); err != nil {
-		logging.Warn("xp2p: full-tunnel bypass rollback failed", "err", err)
+		logging.Warn("full-tunnel bypass rollback failed", "err", err)
 	}
 	if len(defaults) == 0 {
 		defaults = decodeWindowsRoutes(state)
 	}
 	for _, route := range defaults {
 		if err := winnet.ApplyRoute(ctx, route); err != nil {
-			logging.Warn("xp2p: full-tunnel default rollback failed", "route", route, "err", err)
+			logging.Warn("full-tunnel default rollback failed", "route", route, "err", err)
 		}
 	}
 	if err := restoreWindowsDNS(ctx, state.DNSBackup, state.TunName, verbose); err != nil {
-		logging.Warn("xp2p: full-tunnel DNS rollback failed", "err", err)
+		logging.Warn("full-tunnel DNS rollback failed", "err", err)
 	}
 	return errors.New("xp2p: full-tunnel rollback attempted after restore failure")
 }

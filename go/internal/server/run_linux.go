@@ -59,7 +59,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if pendingApplied {
 		configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
-			logging.Warn("xp2p: reload server config after apply failed", "err", err)
+			logging.Warn("reload server config after apply failed", "err", err)
 		} else {
 			opts.TunEnabled = cfg.Server.TunEnabled
 			opts.TunName = cfg.Server.TunName
@@ -129,12 +129,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 			}
 			go func() {
 				if err := linuxnet.EnsureTunAddress(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
-					logging.Warn("xp2p: tun address setup failed", "interface", opts.TunName, "err", err)
+					logging.Warn("tun address setup failed", "interface", opts.TunName, "err", err)
 				}
 			}()
 			go func() {
 				if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
-					logging.Warn("xp2p: redirect route setup failed", "err", err)
+					logging.Warn("redirect route setup failed", "err", err)
 				}
 			}()
 			return nil
@@ -142,24 +142,24 @@ func Run(ctx context.Context, opts RunOptions) error {
 		func(readyCtx context.Context) error {
 			addr, err := resolveServerSocksAddress(configFile)
 			if err != nil {
-				logging.Warn("xp2p: server socks health check using defaults", "err", err)
+				logging.Warn("server socks health check using defaults", "err", err)
 			}
 			return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
 		},
 	)
 	if runErr != nil && errors.Is(runErr, context.Canceled) {
-		logging.Info("xp2p: server run canceled")
+		logging.Info("server run canceled")
 		return nil
 	}
 	if runErr != nil && pendingApplied && rollback != nil && hasAppliedState {
-		logging.Warn("xp2p: server run failed after apply", "err", runErr)
+		logging.Warn("server run failed after apply", "err", runErr)
 		if err := rollback.Restore(config.AuditLogPath()); err != nil {
-			logging.Warn("xp2p: rollback failed after apply", "err", err)
+			logging.Warn("rollback failed after apply", "err", err)
 		} else {
-			logging.Warn("xp2p: rollback completed after apply failure")
+			logging.Warn("rollback completed after apply failure")
 		}
 	} else if runErr != nil && pendingApplied && rollback != nil {
-		logging.Warn("xp2p: rollback skipped; no applied state yet")
+		logging.Warn("rollback skipped; no applied state yet")
 	}
 	return runErr
 }
