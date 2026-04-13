@@ -16,78 +16,6 @@ from tests.host.linux import env as linux_env
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
-def install_client(
-    runner,
-    *,
-    host: str,
-    port: str,
-    user: str,
-    password: str,
-) -> None:
-    runner(
-        "client",
-        "install",
-        "--path",
-        helpers.INSTALL_ROOT.as_posix(),
-        "--config-dir",
-        helpers.CLIENT_CONFIG_DIR_NAME,
-        "--host",
-        host,
-        "--port",
-        port,
-        "--user",
-        user,
-        "--password",
-        password,
-        "--force",
-        check=True,
-    )
-
-
-def install_server(runner, host: str, *, port: str) -> None:
-    runner(
-        "server",
-        "install",
-        "--path",
-        helpers.INSTALL_ROOT.as_posix(),
-        "--config-dir",
-        helpers.SERVER_CONFIG_DIR_NAME,
-        "--host",
-        host,
-        "--port",
-        port,
-        "--force",
-        check=True,
-    )
-
-
-def set_mode(runner, role: str, config_dir: str, mode: str) -> None:
-    runner(
-        role,
-        "mode",
-        mode,
-        "--path",
-        helpers.INSTALL_ROOT.as_posix(),
-        "--config-dir",
-        config_dir,
-        check=True,
-    )
-
-
-def remove_client_endpoint(runner, target: str) -> None:
-    runner(
-        "client",
-        "remove",
-        target,
-        "--path",
-        helpers.INSTALL_ROOT.as_posix(),
-        "--config-dir",
-        helpers.CLIENT_CONFIG_DIR_NAME,
-        "--quiet",
-        check=True,
-    )
-
-
 def ensure_log_dir(host: Host, log_root: PurePosixPath) -> None:
     script = f"mkdir -p {shlex.quote(log_root.as_posix())}"
     host.run(f"sudo -n /bin/sh -c {shlex.quote(script)}")
@@ -273,6 +201,30 @@ def assert_deploy_service_hint(host: Host, log_path: PurePosixPath, action: str)
         )
 
 
+def assert_log_phrase_present(host: Host, log_path: PurePosixPath, phrase: str) -> None:
+    content = helpers.read_text(host, log_path)
+    normalized = " ".join(content.lower().split())
+    expected = " ".join(phrase.lower().split())
+    if expected not in normalized:
+        raise AssertionError(
+            "Deploy log missing expected phrase.\n"
+            f"Expected: {phrase}\n"
+            f"Log: {log_path}"
+        )
+
+
+def assert_log_phrase_absent(host: Host, log_path: PurePosixPath, phrase: str) -> None:
+    content = helpers.read_text(host, log_path)
+    normalized = " ".join(content.lower().split())
+    expected = " ".join(phrase.lower().split())
+    if expected in normalized:
+        raise AssertionError(
+            "Deploy log included unexpected phrase.\n"
+            f"Unexpected: {phrase}\n"
+            f"Log: {log_path}"
+        )
+
+
 def assert_server_state_reports_users(
     host: Host,
     expected_users: set[str],
@@ -326,6 +278,11 @@ def _collect_host_debug(host: Host, label: str, *, deploy_log: PurePosixPath) ->
     parts.append(_run_cmd(host, f"sudo -n ls -la /var/log/xp2p/{label} 2>/dev/null || true"))
     parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /var/log/xp2p/{label}/*.log; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; tail -n 200 \"$f\"; done'"))
     parts.append(_run_cmd(host, "sudo -n ss -lntp | sed -n '1,120p'"))
+    parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/bin 2>/dev/null || true"))
+    parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'ls -l /etc/xp2p/bin/xray 2>/dev/null || true'"))
+    parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'stat /etc/xp2p/bin/xray 2>/dev/null || true'"))
+    parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'mount | sed -n \"1,160p\"'"))
+    parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'getfacl /etc/xp2p/bin/xray 2>/dev/null || true'"))
     parts.append(_run_cmd(host, "ps aux | grep -E 'xp2p|xray' | grep -v grep || true"))
     parts.append(_run_cmd(host, f"sudo -n {linux_env.INSTALL_PATH.as_posix()} {label} service status || true"))
     parts.append(_run_cmd(host, "sudo -n cat /etc/xp2p/.apply/apply.request 2>/dev/null || true"))
