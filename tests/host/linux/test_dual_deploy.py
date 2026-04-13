@@ -45,6 +45,10 @@ def test_dual_client_deploy_with_server_service_running(request, client_host, se
     try:
         deploy_helpers.install_server(server_runner, server_ip, port="62170")
         deploy_helpers.set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, "proxy")
+        server_runner("server", "service", "start", check=True)
+        deploy_helpers.wait_for_apply_request_clear(server_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
+        deploy_helpers.assert_service_active(server_runner, "server")
+        server_log_offset = deploy_helpers.log_offset(server_host, SERVER_SERVICE_LOG)
 
         deploy_helpers.deploy_client_to_server(
             client_host,
@@ -58,12 +62,15 @@ def test_dual_client_deploy_with_server_service_running(request, client_host, se
             trojan_port=TROJAN_PORT,
             log_wait_timeout=LOG_WAIT_TIMEOUT,
         )
-        server_runner("server", "service", "start", check=True)
         client_a_runner("client", "service", "start", check=True)
         deploy_helpers.wait_for_apply_request_clear(client_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
         deploy_helpers.wait_for_apply_request_clear(server_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
         deploy_helpers.assert_service_active(server_runner, "server")
-        server_log_offset = deploy_helpers.log_offset(server_host, SERVER_SERVICE_LOG)
+        deploy_helpers.assert_deploy_service_hint(
+            server_host,
+            LOG_ROOT / f"dual-server-a-{run_id}.log",
+            "restart",
+        )
 
         deploy_helpers.deploy_client_to_server(
             aux_host,
@@ -82,6 +89,11 @@ def test_dual_client_deploy_with_server_service_running(request, client_host, se
         deploy_helpers.wait_for_apply_request_clear(server_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
         deploy_helpers.assert_service_active(server_runner, "server")
         deploy_helpers.assert_no_service_stop(server_host, SERVER_SERVICE_LOG, server_log_offset, "server")
+        deploy_helpers.assert_deploy_service_hint(
+            server_host,
+            LOG_ROOT / f"dual-server-b-{run_id}.log",
+            "restart",
+        )
 
         deploy_helpers.assert_server_state_reports_users(server_host, {user_a, user_b})
         deploy_helpers.assert_client_endpoints(client_host, {server_ip})
@@ -127,6 +139,12 @@ def test_dual_server_deploy_with_client_service_running(request, client_host, se
             password="dual-client-base-pass",
         )
         deploy_helpers.set_mode(client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME, "proxy")
+        client_runner("client", "service", "start", check=True)
+        deploy_helpers.wait_for_apply_request_clear(client_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
+        deploy_helpers.remove_client_endpoint(client_runner, "198.51.100.21")
+        deploy_helpers.wait_for_apply_request_clear(client_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
+        deploy_helpers.assert_service_active(client_runner, "client")
+        client_log_offset = deploy_helpers.log_offset(client_host, CLIENT_SERVICE_LOG)
 
         deploy_helpers.deploy_client_to_server(
             client_host,
@@ -141,11 +159,19 @@ def test_dual_server_deploy_with_client_service_running(request, client_host, se
             log_wait_timeout=LOG_WAIT_TIMEOUT,
         )
         server_a_runner("server", "service", "start", check=True)
-        client_runner("client", "service", "start", check=True)
         deploy_helpers.wait_for_apply_request_clear(server_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
         deploy_helpers.wait_for_apply_request_clear(client_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
         deploy_helpers.assert_service_active(client_runner, "client")
-        client_log_offset = deploy_helpers.log_offset(client_host, CLIENT_SERVICE_LOG)
+        deploy_helpers.assert_deploy_service_hint(
+            client_host,
+            LOG_ROOT / f"dual-client-a-{run_id}.log",
+            "restart",
+        )
+        deploy_helpers.assert_deploy_service_hint(
+            server_host,
+            LOG_ROOT / f"dual-server-a-{run_id}.log",
+            "start",
+        )
 
         deploy_helpers.deploy_client_to_server(
             client_host,
@@ -164,6 +190,16 @@ def test_dual_server_deploy_with_client_service_running(request, client_host, se
         deploy_helpers.wait_for_apply_request_clear(client_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
         deploy_helpers.assert_service_active(client_runner, "client")
         deploy_helpers.assert_no_service_stop(client_host, CLIENT_SERVICE_LOG, client_log_offset, "client")
+        deploy_helpers.assert_deploy_service_hint(
+            client_host,
+            LOG_ROOT / f"dual-client-b-{run_id}.log",
+            "restart",
+        )
+        deploy_helpers.assert_deploy_service_hint(
+            aux_host,
+            LOG_ROOT / f"dual-server-b-{run_id}.log",
+            "start",
+        )
 
         deploy_helpers.assert_client_endpoints(client_host, {server_a_ip, server_b_ip})
         deploy_helpers.assert_ping_ok(client_runner, server_a_ip)

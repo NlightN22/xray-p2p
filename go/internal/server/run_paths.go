@@ -14,6 +14,10 @@ import (
 
 var runRequiredConfigFiles = []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
 
+func HasRunConfigFiles(dir string) (bool, error) {
+	return configFilesPresent(dir, runRequiredConfigFiles)
+}
+
 func adjustRunPaths(configDir string) (string, string, error) {
 	liveConfig := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))

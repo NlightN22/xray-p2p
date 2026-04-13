@@ -25,6 +25,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 const (
@@ -355,18 +356,48 @@ installDone:
 		return
 	}
 
+	plan, err := s.buildDeployRunPlan(ctx, resolvedConfigDir)
+	if err != nil {
+		_ = writeLine(rw, "EXIT 1")
+		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
+		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
+		_ = writeLine(rw, "DONE")
+		notifyFailure(results)
+		return
+	}
+	if plan.usePending {
+		if err := ensureDeployCertificates(resolvedConfigDir); err != nil {
+			_ = writeLine(rw, "EXIT 1")
+			_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
+			_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
+			_ = writeLine(rw, "DONE")
+			notifyFailure(results)
+			return
+		}
+	}
+
 	_ = writeLine(rw, "EXIT 0")
 	_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
 	_ = writeLine(rw, "LINK "+link.Link)
 	_ = writeLine(rw, "DONE")
 	if results != nil {
-		logging.Info("xp2p server deploy: starting xray-core", "install_dir", installDir, "config_dir", configDir)
-		results <- runSignal{ok: true, installDir: installDir, configDir: configDir}
+		if plan.skipRun {
+			logging.Info("xp2p server deploy: service active; skipping xray-core start", "config_dir", configDir)
+		} else {
+			logging.Info("xp2p server deploy: starting xray-core", "install_dir", installDir, "config_dir", plan.runConfigDir)
+		}
+		results <- runSignal{
+			ok:           true,
+			installDir:   installDir,
+			configDir:    configDir,
+			runConfigDir: plan.runConfigDir,
+			skipRun:      plan.skipRun,
+		}
 	}
-	s.waitForCompletion(conn, rw, results)
+	s.waitForCompletion(conn, rw, results, installDir, configDir)
 }
 
-func (s *deployServer) waitForCompletion(conn net.Conn, rw *bufio.ReadWriter, results chan<- runSignal) {
+func (s *deployServer) waitForCompletion(conn net.Conn, rw *bufio.ReadWriter, results chan<- runSignal, installDir, configDir string) {
 	if conn != nil {
 		_ = conn.SetDeadline(time.Now().Add(serverDeployCompletionTimeout))
 	}
@@ -384,8 +415,13 @@ func (s *deployServer) waitForCompletion(conn net.Conn, rw *bufio.ReadWriter, re
 			logging.Warn("xp2p server deploy: completion ack failed", "err", ackErr)
 		}
 	}
+	applyHandled := false
+	if s.Once {
+		s.applyTunAndStartService(context.Background(), installDir, configDir)
+		applyHandled = true
+	}
 	if results != nil {
-		results <- runSignal{completed: true, status: status}
+		results <- runSignal{completed: true, status: status, applyHandled: applyHandled}
 	}
 }
 
@@ -399,6 +435,87 @@ func validateWindowsDeployInstallDir(installDir string) error {
 	}
 	if strings.HasPrefix(installDir, "/") && !strings.HasPrefix(installDir, "//") {
 		return fmt.Errorf("invalid install_dir for Windows: %q", installDir)
+	}
+	return nil
+}
+
+type deployRunPlan struct {
+	runConfigDir string
+	skipRun      bool
+	usePending   bool
+}
+
+func (s *deployServer) buildDeployRunPlan(ctx context.Context, liveConfigDir string) (deployRunPlan, error) {
+	status, err := servicecontrol.Default().Status(ctx, servicecontrol.RoleServer)
+	if err == nil && status.Active {
+		return deployRunPlan{skipRun: true}, nil
+	}
+	if err != nil && !errors.Is(err, servicecontrol.ErrUnsupported) {
+		logging.Warn("xp2p server deploy: service status check failed", "err", err)
+	}
+
+	hasLive, err := server.HasRunConfigFiles(liveConfigDir)
+	if err != nil {
+		return deployRunPlan{}, err
+	}
+	if hasLive {
+		return deployRunPlan{runConfigDir: liveConfigDir}, nil
+	}
+
+	pendingDir := apply.PendingDir(liveConfigDir)
+	hasPending, err := server.HasRunConfigFiles(pendingDir)
+	if err != nil {
+		return deployRunPlan{}, err
+	}
+	if hasPending {
+		return deployRunPlan{runConfigDir: pendingDir, usePending: true}, nil
+	}
+
+	return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: no configuration files available for validation")
+}
+
+func ensureDeployCertificates(liveConfigDir string) error {
+	pendingDir := apply.PendingDir(liveConfigDir)
+	certPending := filepath.Join(pendingDir, "cert.pem")
+	keyPending := filepath.Join(pendingDir, "key.pem")
+	certLive := filepath.Join(liveConfigDir, "cert.pem")
+	keyLive := filepath.Join(liveConfigDir, "key.pem")
+
+	if fileExists(certLive) && fileExists(keyLive) {
+		return nil
+	}
+	if !fileExists(certPending) || !fileExists(keyPending) {
+		return fmt.Errorf("xp2p: server deploy: pending certificates missing")
+	}
+	if err := copyFile(certPending, certLive); err != nil {
+		return err
+	}
+	if err := copyFile(keyPending, keyLive); err != nil {
+		return err
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("xp2p: copy %s: %w", src, err)
+	}
+	defer in.Close()
+
+	info, err := in.Stat()
+	if err != nil {
+		return fmt.Errorf("xp2p: stat %s: %w", src, err)
+	}
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return fmt.Errorf("xp2p: copy %s: %w", dst, err)
+	}
+	defer func() { _ = out.Close() }()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("xp2p: copy %s: %w", dst, err)
 	}
 	return nil
 }

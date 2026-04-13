@@ -258,6 +258,21 @@ def assert_no_service_stop(host: Host, path: PurePosixPath, offset: int, label: 
             raise AssertionError(f"{label} service log reported {marker} after deploys.\nLog tail:\n{recent}")
 
 
+def assert_deploy_service_hint(host: Host, log_path: PurePosixPath, action: str) -> None:
+    content = helpers.read_text(host, log_path)
+    normalized = " ".join(content.lower().split())
+    expected = action.strip().lower()
+    if expected not in {"start", "restart"}:
+        raise ValueError(f"unsupported action {action}")
+    phrase = f"{expected} required to apply pending changes"
+    if phrase not in normalized:
+        raise AssertionError(
+            "Deploy log missing service apply hint.\n"
+            f"Expected: {phrase}\n"
+            f"Log: {log_path}"
+        )
+
+
 def assert_server_state_reports_users(
     host: Host,
     expected_users: set[str],

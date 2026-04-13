@@ -27,11 +27,14 @@ type deployServer struct {
 }
 
 type runSignal struct {
-	ok         bool
-	completed  bool
-	status     string
-	installDir string
-	configDir  string
+	ok           bool
+	completed    bool
+	status       string
+	installDir   string
+	configDir    string
+	runConfigDir string
+	skipRun      bool
+	applyHandled bool
 }
 
 func (s *deployServer) Run(ctx context.Context) error {
@@ -84,8 +87,8 @@ func (s *deployServer) Run(ctx context.Context) error {
 				}
 				if runCancel != nil {
 					runCancel()
-					switchToTun = true
-				} else if s.Once {
+					switchToTun = !sig.applyHandled
+				} else if s.Once && !sig.applyHandled {
 					s.applyTunAndStartService(ctx, lastInstallDir, lastConfigDir)
 					return nil
 				}
@@ -107,6 +110,9 @@ func (s *deployServer) Run(ctx context.Context) error {
 				if sig.configDir != "" {
 					lastConfigDir = sig.configDir
 				}
+				if sig.skipRun {
+					continue
+				}
 				if err := s.applyMode(sig.installDir, sig.configDir, false); err != nil {
 					logging.Warn("xp2p server deploy: proxy mode setup failed", "err", err)
 				}
@@ -124,13 +130,13 @@ func (s *deployServer) Run(ctx context.Context) error {
 				runCancel = runStop
 				runDone := make(chan error, 1)
 				runDoneCh = runDone
-				logging.Info("xp2p server deploy: starting xray-core", "install_dir", sig.installDir, "config_dir", sig.configDir)
+				logging.Info("xp2p server deploy: starting xray-core", "install_dir", sig.installDir, "config_dir", sig.runConfigDir)
 				go func(installDir, configDir string) {
 					runDone <- server.RunDeploy(runCtx, server.DeployRunOptions{
 						InstallDir: installDir,
 						ConfigDir:  configDir,
 					})
-				}(sig.installDir, sig.configDir)
+				}(sig.installDir, sig.runConfigDir)
 			}
 		case err := <-runDoneCh:
 			runDoneCh = nil
@@ -212,7 +218,9 @@ func (s *deployServer) applyTunAndStartService(ctx context.Context, installDir, 
 
 func logServerServiceApplyHint(ctx context.Context) {
 	ctrl := servicecontrol.Default()
-	status, err := ctrl.Status(ctx, servicecontrol.RoleServer)
+	statusCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	status, err := ctrl.Status(statusCtx, servicecontrol.RoleServer)
 	if err != nil {
 		if errors.Is(err, servicecontrol.ErrUnsupported) {
 			logging.Warn("xp2p server deploy: service manager unavailable; start or restart service to apply pending changes")
