@@ -6,15 +6,18 @@ and safe to apply from services without relying on CLI flags.
 
 ## Key Files and Directories
 
-- `CONFIG_ROOT/.apply/`
-- `CONFIG_ROOT/.apply/pending/`
-- `CONFIG_ROOT/.apply/apply.request`
+- `CONFIG_ROOT/.state/`
+- `CONFIG_ROOT/.state/pending/`
+- `CONFIG_ROOT/.state/live/`
+- `CONFIG_ROOT/.state/lkg/`
+- `CONFIG_ROOT/.state/apply.request`
 - `CONFIG_ROOT/xp2p-client.toml`
 - `CONFIG_ROOT/xp2p-server.toml`
+- `config-client/`
+- `config-server/`
 
-Pending config artifacts live under `CONFIG_ROOT/.apply/pending`. The
-`apply.request` file is the trigger that asks the service layer to apply
-pending changes.
+Pending snapshots live under `CONFIG_ROOT/.state/pending`. The `apply.request`
+file is the trigger that asks the service layer to apply pending changes.
 
 ## Actors
 
@@ -47,34 +50,51 @@ When a command updates configuration:
 This ensures that apply can generate all required runtime files (inbounds,
 outbounds, routing, logs) from a complete config snapshot.
 
-## Deploy Flow (Client + Server)
+## Edit + Rollback Flow
 
-This section describes the expected deploy sequence and where pending data
-is written.
+This section describes the flow for manual edits, CLI edits, and rollback
+using a clear split between Desired, Pending, Live, and LKG.
 
-1. Client deploy generates a deploy link (`trojan://...`) and waits for the
-   server to connect.
-2. Server deploy receives the encrypted manifest, validates it, and prepares
-   the server-side pending config:
-   - `CONFIG_ROOT/.apply/pending/xp2p-server.toml` (full `server.xray`)
-   - `config-server/.apply/pending/` with `inbounds.json`, `outbounds.json`,
-     `routing.json`, `logs.json`, and cert/key files
-3. Server deploy adds or updates the user in the pending config and writes
-   `apply.request` with role `server`.
-4. Client deploy receives the link and installs locally into pending:
-   - `CONFIG_ROOT/.apply/pending/xp2p-client.toml` (full `client.xray`)
-   - `config-client/.apply/pending/` with `inbounds.json`, `outbounds.json`,
-     `routing.json`, `logs.json`
-5. Client deploy writes `apply.request` with role `client`.
-6. If the client was already installed, the deploy flow updates the existing
-   endpoint in pending instead of creating a new install root.
-7. Deploy does not start services. During deploy, xp2p may start a temporary
-   xray-core instance using the pending config to validate the tunnel and
-   connectivity. This is part of the deploy process only.
-8. After a successful deploy, the operator starts services explicitly (for
-   example, `xp2p client service start` and `xp2p server service start`).
-9. Service layer applies pending config to live files, removes
-   `apply.request`, and clears pending artifacts on success.
+### Directory Roles
+
+- Desired: user-editable config inputs
+  - `CONFIG_ROOT/xp2p-*.toml`
+  - `config-client/*.json`, `config-server/*.json`
+- Pending: apply snapshot
+  - `CONFIG_ROOT/.state/pending/`
+- Live: active runtime config
+  - `CONFIG_ROOT/.state/live/`
+- LKG: last known good snapshot (hidden)
+  - `CONFIG_ROOT/.state/lkg/`
+
+### Manual Edit Flow
+
+1. User edits Desired files under `CONFIG_ROOT/` or `config-*/`.
+2. Watchers detect changes and write a complete snapshot to Pending.
+3. `apply.request` is created to trigger service apply.
+4. Service applies Pending to Live and clears Pending.
+5. On success, the full Live snapshot is written to LKG.
+
+### CLI Edit Flow
+
+1. CLI writes updates into Pending (or into Desired, then Pending).
+2. `apply.request` is created to trigger service apply.
+3. Service applies Pending to Live and clears Pending.
+4. On success, the full Live snapshot is written to LKG.
+
+### Rollback Flow
+
+1. Apply fails (service/xray/health checks).
+2. Service restores Live from LKG.
+3. Pending is cleared and `apply.request` removed or preserved with an error
+   marker (policy decision).
+4. Service restarts using restored Live and logs the failure.
+
+## Deploy Flow
+
+Deploy flow details (including pending updates, temporary tunnel validation,
+and service start requirements) live in `docs/07-deploy-flow.md` to avoid
+duplication.
 
 ## Apply Request
 
