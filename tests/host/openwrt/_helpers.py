@@ -4,6 +4,8 @@ import json
 import shlex
 import time
 from pathlib import Path, PurePosixPath
+import uuid
+from datetime import datetime, timezone
 
 from testinfra.host import Host
 
@@ -41,6 +43,7 @@ REVERSE_SUFFIX = linux_helpers.REVERSE_SUFFIX
 XRAY_BINARY = linux_helpers.XRAY_BINARY
 SERVICE_LOG_FILES = linux_helpers.SERVICE_LOG_FILES
 APPLY_REQUEST = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
+APPLY_ERROR = CONFIG_ROOT / APPLY_DIR_NAME / "apply.error"
 
 
 extract_trojan_credential = linux_helpers.extract_trojan_credential
@@ -167,6 +170,7 @@ def _purge_install_paths(host: Host, install_path: str, config_name: str, role: 
         live_config,
         lkg_config,
         APPLY_REQUEST.as_posix(),
+        APPLY_ERROR.as_posix(),
         heartbeat.as_posix(),
         (CONFIG_ROOT / "xp2p-client.toml.lkg").as_posix(),
         (CONFIG_ROOT / "xp2p-server.toml.lkg").as_posix(),
@@ -458,6 +462,7 @@ def dump_apply_dirs(host: Host, label: str) -> None:
         CONFIG_LKG_ROOT / "xp2p-client.toml",
         CONFIG_LKG_ROOT / "xp2p-server.toml",
         APPLY_REQUEST,
+        APPLY_ERROR,
     ]
     print(f"==== APPLY DIRS ({label}) on {host.backend.hostname} ====")
     for path in dirs:
@@ -570,7 +575,14 @@ def write_live_text(host: Host, path: PurePosixPath | Path | str, content: str) 
 
 
 def write_apply_request(host: Host, role: str) -> None:
-    payload = f'{{"role":"{role}"}}\\n'
+    payload = json.dumps(
+        {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "role": role,
+        }
+    )
+    payload = f"{payload}\n"
     path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
     write_text(host, path, payload)
 

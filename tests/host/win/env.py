@@ -1420,6 +1420,7 @@ def cleanup_xp2p_install(
         CONFIG_ROOT / ".apply",
         CONFIG_ROOT / APPLY_DIR_NAME,
         CONFIG_ROOT / APPLY_DIR_NAME / "apply.request",
+        CONFIG_ROOT / APPLY_DIR_NAME / "apply.error",
         CONFIG_ROOT / "xp2p-client.toml",
         CONFIG_ROOT / "xp2p-server.toml",
         CONFIG_ROOT / "xp2p-client.toml.lkg",
@@ -1694,6 +1695,14 @@ exit 0
 
 
 def write_apply_request(host: Host, role: str) -> None:
-    payload = f'{{"role":"{role}"}}\\n'
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    payload = json.dumps(
+        {
+            "id": str(uuid.uuid4()),
+            "timestamp": timestamp,
+            "role": role,
+        }
+    )
+    payload = f"{payload}\n"
     path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
     write_text(host, path, payload)

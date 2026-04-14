@@ -12,14 +12,14 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bool, error) {
+func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bool, apply.Request, error) {
 	pendingConfigDir, err := config.PendingConfigDir(configDir)
 	if err != nil {
-		return nil, false, err
+		return nil, false, apply.Request{}, err
 	}
 	liveConfigDir, err := config.LiveConfigDir(configDir)
 	if err != nil {
-		return nil, false, err
+		return nil, false, apply.Request{}, err
 	}
 	reqPath := config.ApplyRequestPath()
 	logging.Debug("apply request check",
@@ -41,13 +41,20 @@ func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bo
 	)
 	req, exists, err := apply.ReadRequest(reqPath)
 	if err != nil {
-		return nil, false, err
+		return nil, false, apply.Request{}, err
 	}
 	if !exists {
-		return nil, false, nil
+		return nil, false, apply.Request{}, nil
 	}
 	if !req.MatchesRole(role) {
-		return nil, false, nil
+		return nil, false, apply.Request{}, nil
+	}
+	errorPath := config.ApplyErrorPath()
+	if marker, markerExists, err := apply.ReadError(errorPath); err != nil {
+		return nil, false, apply.Request{}, err
+	} else if markerExists && marker.RequestID != "" && marker.RequestID == req.ID {
+		logging.Warn("apply request skipped (previous failure)", "role", role, "request_id", req.ID, "reason", marker.Reason)
+		return nil, false, req, nil
 	}
 	pendingSet := apply.PendingSet{
 		LiveConfigFile:    filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
@@ -60,22 +67,34 @@ func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bo
 	}
 	rollback, applied, err := apply.ApplyPending(pendingSet)
 	if err != nil {
-		return nil, false, err
+		if cleanupErr := apply.CleanupPending(pendingSet); cleanupErr != nil {
+			logging.Warn("pending cleanup failed after apply error", "role", role, "err", cleanupErr)
+		}
+		_ = apply.WriteError(errorPath, apply.ErrorMarker{
+			RequestID: req.ID,
+			Role:      role,
+			Reason:    err.Error(),
+		}, config.AuditLogPath())
+		logging.Warn("pending apply failed; rollback restored live config", "role", role, "request_id", req.ID, "err", err)
+		return nil, false, req, nil
+	}
+	if !applied {
+		if err := apply.RemoveRequest(reqPath); err != nil {
+			logging.Warn("apply request cleanup failed", "path", reqPath, "err", err)
+		}
+		if err := apply.RemoveError(errorPath); err != nil {
+			logging.Warn("apply error cleanup failed", "path", errorPath, "err", err)
+		}
+		logging.Warn("apply request skipped (no pending data)", "role", role, "request_id", req.ID)
+		return nil, false, req, nil
 	}
 	if applied {
 		if err := apply.CleanupPending(pendingSet); err != nil {
 			logging.Warn("pending cleanup failed", "role", role, "err", err)
 		}
 	}
-	if err := apply.RemoveRequest(reqPath); err != nil {
-		logging.Warn("apply request cleanup failed", "path", reqPath, "err", err)
-	}
-	if applied {
-		logging.Info("pending config applied", "role", role, "request_id", req.ID)
-	} else {
-		logging.Warn("apply request skipped (no pending data)", "role", role, "request_id", req.ID)
-	}
-	return rollback, applied, nil
+	logging.Info("pending config applied", "role", role, "request_id", req.ID)
+	return rollback, applied, req, nil
 }
 
 func fileExists(path string) bool {

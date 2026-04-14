@@ -56,7 +56,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, desiredConfigDir)
+	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleClient, desiredConfigDir)
 	if err != nil {
 		return err
 	}
@@ -148,12 +148,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 
-		runErr := runXrayWithConfig(
-			ctx,
-			xrayPath,
-			configDir,
-			configDir,
-			nil,
+	runErr := runXrayWithConfig(
+		ctx,
+		xrayPath,
+		configDir,
+		configDir,
+		nil,
 		func() error {
 			if !tunEnabled {
 				return nil
@@ -170,22 +170,28 @@ func Run(ctx context.Context, opts RunOptions) error {
 			}()
 			return nil
 		},
-			func(readyCtx context.Context) error {
-				addr, err := resolveClientSocksAddress(paths.configFile)
-				if err != nil {
-					logging.Warn("client socks health check using defaults", "err", err)
+		func(readyCtx context.Context) error {
+			addr, err := resolveClientSocksAddress(paths.configFile)
+			if err != nil {
+				logging.Warn("client socks health check using defaults", "err", err)
+			}
+			if err := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval); err != nil {
+				return err
+			}
+			if pendingApplied {
+				if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
+					logging.Warn("lkg snapshot update failed", "err", err)
 				}
-				if err := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval); err != nil {
-					return err
+				if err := apply.RemoveRequest(config.ApplyRequestPath()); err != nil {
+					logging.Warn("apply request cleanup failed", "err", err)
 				}
-				if pendingApplied {
-					if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
-						logging.Warn("lkg snapshot update failed", "err", err)
-					}
+				if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
+					logging.Warn("apply error cleanup failed", "err", err)
 				}
-				return nil
-			},
-		)
+			}
+			return nil
+		},
+	)
 	if runErr != nil && pendingApplied && rollback != nil {
 		if hasAppliedState {
 			if err := rollback.Restore(config.AuditLogPath()); err != nil {
@@ -195,6 +201,13 @@ func Run(ctx context.Context, opts RunOptions) error {
 			}
 		} else {
 			logging.Warn("rollback skipped; no applied state yet")
+		}
+		if request.ID != "" {
+			_ = apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
+				RequestID: request.ID,
+				Role:      apply.RoleClient,
+				Reason:    runErr.Error(),
+			}, config.AuditLogPath())
 		}
 	}
 	return runErr

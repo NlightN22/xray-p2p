@@ -56,7 +56,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleServer, desiredConfigDir)
+	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleServer, desiredConfigDir)
 	if err != nil {
 		return err
 	}
@@ -155,6 +155,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 				if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
 					logging.Warn("lkg snapshot update failed", "err", err)
 				}
+				if err := apply.RemoveRequest(config.ApplyRequestPath()); err != nil {
+					logging.Warn("apply request cleanup failed", "err", err)
+				}
+				if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
+					logging.Warn("apply error cleanup failed", "err", err)
+				}
 			}
 			return nil
 		},
@@ -169,6 +175,13 @@ func Run(ctx context.Context, opts RunOptions) error {
 			logging.Warn("rollback failed after apply", "err", err)
 		} else {
 			logging.Warn("rollback completed after apply failure")
+		}
+		if request.ID != "" {
+			_ = apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
+				RequestID: request.ID,
+				Role:      apply.RoleServer,
+				Reason:    runErr.Error(),
+			}, config.AuditLogPath())
 		}
 	} else if runErr != nil && pendingApplied && rollback != nil {
 		logging.Warn("rollback skipped; no applied state yet")

@@ -38,6 +38,8 @@ const (
 	LkgDirName = "lkg"
 	// ApplyRequestFileName is the trigger file for applying pending changes.
 	ApplyRequestFileName = "apply.request"
+	// ApplyErrorFileName stores the last apply failure details for a request.
+	ApplyErrorFileName = "apply.error"
 	// HeartbeatStateFileName is retained for legacy shared heartbeat storage.
 	HeartbeatStateFileName = "state-heartbeat.json"
 	// ClientHeartbeatStateFileName stores client-side heartbeat snapshots.

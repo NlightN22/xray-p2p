@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import PurePosixPath
 import time
+import uuid
+from datetime import datetime, timezone
 
 from testinfra.host import Host
 
@@ -182,6 +185,7 @@ def _cleanup_state(host: Host) -> None:
         CONFIG_LIVE_ROOT,
         CONFIG_LKG_ROOT,
         STATE_ROOT / "apply.request",
+        STATE_ROOT / "apply.error",
         CONFIG_ROOT / "xp2p-client.toml",
         CONFIG_ROOT / "xp2p-server.toml",
         CONFIG_ROOT / "xp2p-client.toml.lkg",
@@ -222,7 +226,14 @@ def file_sha256(host: Host, path: PurePosixPath | str) -> str:
 
 
 def write_apply_request(host: Host, role: str) -> None:
-    payload = f'{{"role":"{role}"}}\\n'
+    payload = json.dumps(
+        {
+            "id": str(uuid.uuid4()),
+            "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "role": role,
+        }
+    )
+    payload = f"{payload}\n"
     path = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
     linux_env.write_text(host, path, payload)
 

@@ -79,6 +79,11 @@ func ApplyRequestPath() string {
 	return filepath.Join(StateRoot(), layout.ApplyRequestFileName)
 }
 
+// ApplyErrorPath returns the full path to apply.error.
+func ApplyErrorPath() string {
+	return filepath.Join(StateRoot(), layout.ApplyErrorFileName)
+}
+
 // LogRoot returns the default log root for the current platform.
 func LogRoot() string {
 	if override := strings.TrimSpace(os.Getenv(envLogRoot)); override != "" {

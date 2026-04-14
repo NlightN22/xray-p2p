@@ -11,6 +11,7 @@ and safe to apply from services without relying on CLI flags.
 - `CONFIG_ROOT/.state/live/`
 - `CONFIG_ROOT/.state/lkg/`
 - `CONFIG_ROOT/.state/apply.request`
+- `CONFIG_ROOT/.state/apply.error`
 - `CONFIG_ROOT/xp2p-client.toml`
 - `CONFIG_ROOT/xp2p-server.toml`
 - `config-client/`
@@ -30,7 +31,8 @@ file is the trigger that asks the service layer to apply pending changes.
 1. Update configuration in pending mode.
 2. Write `apply.request`.
 3. Service detects request and applies pending config.
-4. Service clears `apply.request` and pending artifacts.
+4. Service clears `apply.request` and pending artifacts on success, or writes
+   `apply.error` on failure.
 5. Runtime behavior updates OS routes and TUN state (service layer only).
 
 ## Pending Updates
@@ -108,9 +110,11 @@ Pending, Live, and LKG keep a mirrored structure that includes:
 
 1. Apply fails (service/xray/health checks).
 2. Service restores Live from LKG.
-3. Pending is cleared and `apply.request` removed or preserved with an error
-   marker (policy decision).
-4. Service restarts using restored Live and logs the failure.
+3. Pending is cleared and `apply.error` is written with the request ID and
+   failure reason.
+4. `apply.request` remains so operators can see the pending change, but the
+   service skips repeated apply attempts for the same request ID.
+5. Service restarts using restored Live and logs the failure.
 
 ## Deploy Flow
 
@@ -123,10 +127,12 @@ duplication.
 The apply trigger file is created at:
 
 - `CONFIG_ROOT/.state/apply.request`
+- `CONFIG_ROOT/.state/apply.error`
 
 It includes a role (`client` or `server`) and a request ID. The service
 process watches for this file and treats it as the single source of truth
-for pending work.
+for pending work. When apply fails, the service writes `apply.error` with
+the same request ID and failure reason.
 
 ## Service Apply
 
@@ -139,7 +145,9 @@ On service start (or restart), the service:
 5. Cleans up pending artifacts on success.
 
 If apply fails, the service logs the error and keeps `apply.request` so the
-operator can investigate or retry.
+operator can investigate or retry. The service will not retry the same
+request ID once `apply.error` is recorded; a new apply request must be
+created after fixing the pending snapshot.
 
 ## Routes and OS Changes
 
