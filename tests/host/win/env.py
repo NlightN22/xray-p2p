@@ -1416,7 +1416,28 @@ def cleanup_xp2p_install(
     extra_paths: Iterable[Path] = (),
 ) -> None:
     targets: list[Path | str] = []
-    for path in [*config_dirs, *state_files, *extra_paths]:
+    extra_state = [
+        CONFIG_ROOT / APPLY_DIR_NAME / "apply.request",
+        CONFIG_ROOT / "xp2p-client.toml",
+        CONFIG_ROOT / "xp2p-server.toml",
+        CONFIG_ROOT / "xp2p-client.state.json",
+        CONFIG_ROOT / "xp2p-server.state.json",
+        CONFIG_ROOT / "xp2p-client.tun-full.json",
+        CONFIG_ROOT / "xp2p-server.tun-full.json",
+        CONFIG_ROOT / "state-heartbeat.json",
+        CONFIG_ROOT / "state-heartbeat-client.json",
+        CONFIG_ROOT / "state-heartbeat-server.json",
+        CONFIG_PENDING_ROOT,
+        CONFIG_LIVE_ROOT,
+        CONFIG_LKG_ROOT,
+        CLIENT_PENDING_DIR,
+        SERVER_PENDING_DIR,
+        CLIENT_LIVE_DIR,
+        SERVER_LIVE_DIR,
+        CLIENT_CONFIG_DIR,
+        SERVER_CONFIG_DIR,
+    ]
+    for path in [*config_dirs, *state_files, *extra_paths, *extra_state]:
         resolved = _as_path(path)
         pending = _pending_candidate(resolved)
         targets.append(pending)

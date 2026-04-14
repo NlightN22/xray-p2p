@@ -70,6 +70,7 @@ def cleanup_client_install(
         "--ignore-missing",
         "--quiet",
     )
+    _cleanup_state(host)
     remove_log_files(host)
 
 
@@ -91,6 +92,7 @@ def cleanup_server_install(
         "--ignore-missing",
         "--quiet",
     )
+    _cleanup_state(host)
     remove_log_files(host)
 
 
@@ -169,6 +171,32 @@ def remove_path(host: Host, path: PurePosixPath) -> None:
 
 def remove_log_files(host: Host) -> None:
     for path in (CLIENT_LOG_FILE, SERVER_LOG_FILE, *SERVICE_LOG_FILES):
+        linux_env.remove_path(host, path)
+
+
+def _cleanup_state(host: Host) -> None:
+    cleanup_paths = [
+        STATE_ROOT,
+        CONFIG_PENDING_ROOT,
+        CONFIG_LIVE_ROOT,
+        CONFIG_LKG_ROOT,
+        STATE_ROOT / "apply.request",
+        CONFIG_ROOT / "xp2p-client.toml",
+        CONFIG_ROOT / "xp2p-server.toml",
+        CONFIG_ROOT / "xp2p-client.state.json",
+        CONFIG_ROOT / "xp2p-server.state.json",
+        CONFIG_ROOT / "xp2p-client.tun-full.json",
+        CONFIG_ROOT / "xp2p-server.tun-full.json",
+        CLIENT_HEARTBEAT_STATE_FILE,
+        SERVER_HEARTBEAT_STATE_FILE,
+        CLIENT_CONFIG_DIR,
+        SERVER_CONFIG_DIR,
+        CLIENT_PENDING_DIR,
+        SERVER_PENDING_DIR,
+        CLIENT_LIVE_DIR,
+        SERVER_LIVE_DIR,
+    ]
+    for path in cleanup_paths:
         linux_env.remove_path(host, path)
 
 

@@ -22,6 +22,7 @@ PENDING_DIR_NAME = linux_helpers.PENDING_DIR_NAME
 CONFIG_PENDING_ROOT = linux_helpers.CONFIG_PENDING_ROOT
 CONFIG_LIVE_ROOT = linux_helpers.CONFIG_LIVE_ROOT
 CONFIG_LKG_ROOT = linux_helpers.CONFIG_LKG_ROOT
+STATE_ROOT = linux_helpers.STATE_ROOT
 CLIENT_PENDING_DIR = linux_helpers.CLIENT_PENDING_DIR
 SERVER_PENDING_DIR = linux_helpers.SERVER_PENDING_DIR
 CLIENT_CONFIG_FILE = linux_helpers.CLIENT_CONFIG_FILE
@@ -156,12 +157,20 @@ def _purge_install_paths(host: Host, install_path: str, config_name: str, role: 
     heartbeat = CLIENT_HEARTBEAT_STATE_FILE if role == "client" else SERVER_HEARTBEAT_STATE_FILE
     targets = [
         config_path,
+        STATE_ROOT.as_posix(),
+        CONFIG_PENDING_ROOT.as_posix(),
+        CONFIG_LIVE_ROOT.as_posix(),
+        CONFIG_LKG_ROOT.as_posix(),
         pending_config,
         pending_heartbeat,
         live_config,
         lkg_config,
         APPLY_REQUEST.as_posix(),
         heartbeat.as_posix(),
+        CLIENT_PENDING_DIR.as_posix(),
+        SERVER_PENDING_DIR.as_posix(),
+        CLIENT_LIVE_DIR.as_posix(),
+        SERVER_LIVE_DIR.as_posix(),
     ]
     for item in state_files:
         targets.append(item.as_posix())
