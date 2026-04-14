@@ -33,7 +33,7 @@ def start_linux_client_deploy(
     *,
     log_path: PurePosixPath,
     remote_host: str,
-    deploy_port: str,
+    deploy_port: str | None = None,
     trojan_user: str,
     trojan_password: str,
     trojan_port: str,
@@ -42,11 +42,12 @@ def start_linux_client_deploy(
     args = [
         log_path.as_posix(),
         remote_host,
-        deploy_port,
         trojan_user,
         trojan_password,
         trojan_port,
     ]
+    if deploy_port:
+        args.insert(2, deploy_port)
     if install_dir:
         args += ["--install-dir", install_dir]
     result = linux_env.run_guest_script(host, "scripts/linux/start_xp2p_client_deploy.sh", *args)
@@ -68,16 +69,14 @@ def start_linux_server_deploy(
     host: Host,
     *,
     log_path: PurePosixPath,
-    listen_addr: str,
+    listen_addr: str | None = None,
     deploy_link: str,
 ) -> int:
-    result = linux_env.run_guest_script(
-        host,
-        "scripts/linux/start_xp2p_server_deploy.sh",
-        log_path.as_posix(),
-        listen_addr,
-        deploy_link,
-    )
+    args = [log_path.as_posix()]
+    if listen_addr:
+        args.append(listen_addr)
+    args.append(deploy_link)
+    result = linux_env.run_guest_script(host, "scripts/linux/start_xp2p_server_deploy.sh", *args)
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p server deploy.\n"

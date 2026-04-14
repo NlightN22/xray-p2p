@@ -15,7 +15,6 @@ pytestmark = [
     pytest.mark.linux,
 ]
 
-DEPLOY_PORT = "62145"
 TROJAN_PORT = "58621"
 LOG_WAIT_TIMEOUT = 60
 APPLY_WAIT_TIMEOUT = 90
@@ -49,7 +48,6 @@ def test_dual_client_deploy_with_server_service_running(request, client_host, se
             client_log=LOG_ROOT / f"dual-client-a-{run_id}.log",
             server_log=LOG_ROOT / f"dual-server-a-{run_id}.log",
             server_ip=server_ip,
-            deploy_port=DEPLOY_PORT,
             trojan_user=user_a,
             trojan_password=pass_a,
             trojan_port=TROJAN_PORT,
@@ -73,7 +71,6 @@ def test_dual_client_deploy_with_server_service_running(request, client_host, se
             client_log=LOG_ROOT / f"dual-client-b-{run_id}.log",
             server_log=LOG_ROOT / f"dual-server-b-{run_id}.log",
             server_ip=server_ip,
-            deploy_port=DEPLOY_PORT,
             trojan_user=user_b,
             trojan_password=pass_b,
             trojan_port=str(int(TROJAN_PORT) + 1),
@@ -145,7 +142,6 @@ def test_dual_server_deploy_with_client_service_running(request, client_host, se
             client_log=LOG_ROOT / f"dual-client-a-{run_id}.log",
             server_log=LOG_ROOT / f"dual-server-a-{run_id}.log",
             server_ip=server_a_ip,
-            deploy_port=DEPLOY_PORT,
             trojan_user=user_a,
             trojan_password=pass_a,
             trojan_port=TROJAN_PORT,
@@ -174,7 +170,6 @@ def test_dual_server_deploy_with_client_service_running(request, client_host, se
             client_log=LOG_ROOT / f"dual-client-b-{run_id}.log",
             server_log=LOG_ROOT / f"dual-server-b-{run_id}.log",
             server_ip=server_b_ip,
-            deploy_port=DEPLOY_PORT,
             trojan_user=user_b,
             trojan_password=pass_b,
             trojan_port=str(int(TROJAN_PORT) + 1),

@@ -1,15 +1,25 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ "$#" -lt 3 ]; then
-  echo "Usage: start_xp2p_server_deploy.sh <log_path> <listen_addr> <deploy_link> [extra...]" >&2
+if [ "$#" -lt 2 ]; then
+  echo "Usage: start_xp2p_server_deploy.sh <log_path> [listen_addr] <deploy_link> [extra...]" >&2
   exit 2
 fi
 
 LOG_PATH=$1
-LISTEN_ADDR=$2
-DEPLOY_LINK=$3
-shift 3 || true
+if echo "$2" | grep -q '^trojan://'; then
+  LISTEN_ADDR=""
+  DEPLOY_LINK=$2
+  shift 2 || true
+else
+  LISTEN_ADDR=$2
+  DEPLOY_LINK=$3
+  if [ -z "$DEPLOY_LINK" ]; then
+    echo "Usage: start_xp2p_server_deploy.sh <log_path> [listen_addr] <deploy_link> [extra...]" >&2
+    exit 2
+  fi
+  shift 3 || true
+fi
 
 touch "$LOG_PATH"
 
@@ -18,7 +28,10 @@ if [ -n "${XP2P_GLOBAL_ARGS:-}" ]; then
   read -r -a GLOBAL_ARGS <<<"$XP2P_GLOBAL_ARGS"
 fi
 
-CMD=(/usr/bin/xp2p "${GLOBAL_ARGS[@]}" server deploy --listen "$LISTEN_ADDR" --link "$DEPLOY_LINK")
+CMD=(/usr/bin/xp2p "${GLOBAL_ARGS[@]}" server deploy --link "$DEPLOY_LINK")
+if [ -n "$LISTEN_ADDR" ]; then
+  CMD+=("--listen" "$LISTEN_ADDR")
+fi
 if [ "$#" -gt 0 ]; then
   CMD+=("$@")
 fi

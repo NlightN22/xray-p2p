@@ -43,7 +43,6 @@ def deploy_client_to_server(
     client_log: PurePosixPath,
     server_log: PurePosixPath,
     server_ip: str,
-    deploy_port: str,
     trojan_user: str,
     trojan_password: str,
     trojan_port: str,
@@ -53,13 +52,12 @@ def deploy_client_to_server(
     server_pid = None
     try:
         client_pid = cross_linux.start_linux_client_deploy(
-            client_host,
-            log_path=client_log,
-            remote_host=server_ip,
-            deploy_port=deploy_port,
-            trojan_user=trojan_user,
-            trojan_password=trojan_password,
-            trojan_port=trojan_port,
+        client_host,
+        log_path=client_log,
+        remote_host=server_ip,
+        trojan_user=trojan_user,
+        trojan_password=trojan_password,
+        trojan_port=trojan_port,
         )
         link = cross_linux.wait_for_client_link_linux(
             client_host,
@@ -67,11 +65,10 @@ def deploy_client_to_server(
             timeout=log_wait_timeout,
         )
         server_pid = cross_linux.start_linux_server_deploy(
-            server_host,
-            log_path=server_log,
-            listen_addr=f":{deploy_port}",
-            deploy_link=link,
-        )
+        server_host,
+        log_path=server_log,
+        deploy_link=link,
+    )
         try:
             wait_for_any_log_phrase(
                 server_host,
