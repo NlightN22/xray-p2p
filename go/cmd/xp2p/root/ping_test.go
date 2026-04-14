@@ -23,13 +23,14 @@ func TestResolveSocksAddressExplicit(t *testing.T) {
 func TestResolveSocksAddressAutoPrefersClient(t *testing.T) {
 	cfg := config.Config{}
 	tmp := t.TempDir()
-	cfg.Client.InstallDir = filepath.Join(tmp, "client")
+	t.Setenv("XP2P_CONFIG_ROOT", tmp)
+	cfg.Client.InstallDir = tmp
 	cfg.Client.ConfigDir = "config-client"
-	cfg.Server.InstallDir = filepath.Join(tmp, "server")
+	cfg.Server.InstallDir = tmp
 	cfg.Server.ConfigDir = "config-server"
 
-	writeSocksInbound(t, filepath.Join(cfg.Client.InstallDir, cfg.Client.ConfigDir), "127.0.0.1", 1111)
-	writeSocksInbound(t, filepath.Join(cfg.Server.InstallDir, cfg.Server.ConfigDir), "127.0.0.1", 2222)
+	writeSocksInbound(t, filepath.Join(tmp, ".state", "live", cfg.Client.ConfigDir), "127.0.0.1", 1111)
+	writeSocksInbound(t, filepath.Join(tmp, ".state", "live", cfg.Server.ConfigDir), "127.0.0.1", 2222)
 
 	addr, err := resolveSocksAddress(cfg, tunnelConfigSentinel)
 	if err != nil {
@@ -43,13 +44,14 @@ func TestResolveSocksAddressAutoPrefersClient(t *testing.T) {
 func TestResolveSocksAddressAutoFallsBackToServer(t *testing.T) {
 	cfg := config.Config{}
 	tmp := t.TempDir()
-	cfg.Client.InstallDir = filepath.Join(tmp, "client")
+	t.Setenv("XP2P_CONFIG_ROOT", tmp)
+	cfg.Client.InstallDir = tmp
 	cfg.Client.ConfigDir = "config-client"
-	cfg.Server.InstallDir = filepath.Join(tmp, "server")
+	cfg.Server.InstallDir = tmp
 	cfg.Server.ConfigDir = "config-server"
 
-	writeNonSocksInbound(t, filepath.Join(cfg.Client.InstallDir, cfg.Client.ConfigDir))
-	writeSocksInbound(t, filepath.Join(cfg.Server.InstallDir, cfg.Server.ConfigDir), "127.0.0.1", 3333)
+	writeNonSocksInbound(t, filepath.Join(tmp, ".state", "live", cfg.Client.ConfigDir))
+	writeSocksInbound(t, filepath.Join(tmp, ".state", "live", cfg.Server.ConfigDir), "127.0.0.1", 3333)
 
 	addr, err := resolveSocksAddress(cfg, tunnelConfigSentinel)
 	if err != nil {
@@ -80,13 +82,13 @@ func TestDetectSocksProxiesIgnoresDefaultClientWhenMissingConfig(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", tmp)
 
 	cfg := config.Config{}
-	cfg.Client.InstallDir = filepath.Join(tmp, "client")
+	cfg.Client.InstallDir = tmp
 	cfg.Client.ConfigDir = "config-client"
 	cfg.Client.SocksAddress = "127.0.0.1:51180"
-	cfg.Server.InstallDir = filepath.Join(tmp, "server")
+	cfg.Server.InstallDir = tmp
 	cfg.Server.ConfigDir = "config-server"
 
-	writeSocksInbound(t, filepath.Join(cfg.Server.InstallDir, cfg.Server.ConfigDir), "127.0.0.1", 51080)
+	writeSocksInbound(t, filepath.Join(tmp, ".state", "live", cfg.Server.ConfigDir), "127.0.0.1", 51080)
 
 	clientAddr, serverAddr, err := detectSocksProxies(cfg)
 	if err != nil {

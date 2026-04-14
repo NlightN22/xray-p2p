@@ -178,19 +178,14 @@ func hasServerConfig(liveConfigDir, pendingConfigDir string) (bool, error) {
 		return true, nil
 	}
 
-	if _, err := os.Stat(config.ApplyRequestPath()); err == nil {
-		pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
-		if pendingConfig != "" {
-			if _, err := os.Stat(pendingConfig); err == nil {
-				return true, nil
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
-			}
+	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
+	if pendingConfig != "" {
+		if _, err := os.Stat(pendingConfig); err == nil {
+			return true, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
 		}
-		return configFilesPresent(pendingConfigDir, runRequiredConfigFiles)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return false, fmt.Errorf("xp2p: stat %s: %w", config.ApplyRequestPath(), err)
 	}
 
-	return false, nil
+	return configFilesPresent(pendingConfigDir, runRequiredConfigFiles)
 }
