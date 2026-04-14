@@ -672,10 +672,16 @@ def dump_failure_state(host: Host, label: str) -> None:
             "find /etc/xp2p -maxdepth 4 -print 2>/dev/null || true",
             "echo '--- xp2p apply dir ---'",
             "ls -la /etc/xp2p/.state 2>/dev/null || true",
+            "echo '--- xp2p state tree ---'",
+            "find /etc/xp2p/.state -maxdepth 5 -print 2>/dev/null || true",
             "echo '--- xp2p configs ---'",
             "for f in /etc/xp2p/xp2p-client.toml /etc/xp2p/xp2p-server.toml; do "
             "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
             "for f in /etc/xp2p/.state/pending/xp2p-client.toml /etc/xp2p/.state/pending/xp2p-server.toml; do "
+            "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+            "for f in /etc/xp2p/.state/live/xp2p-client.toml /etc/xp2p/.state/live/xp2p-server.toml; do "
+            "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+            "for f in /etc/xp2p/.state/lkg/xp2p-client.toml /etc/xp2p/.state/lkg/xp2p-server.toml; do "
             "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
             "echo '--- xp2p state ---'",
             "for f in /etc/xp2p/*.state.json /etc/xp2p/*-state-*.json; do "
@@ -683,6 +689,31 @@ def dump_failure_state(host: Host, label: str) -> None:
             "echo '--- xp2p config dirs ---'",
             "for d in /etc/xp2p/config-client /etc/xp2p/config-server; do "
             "[ -d \"$d\" ] && ls -la \"$d\"; done",
+            "for d in /etc/xp2p/config-client /etc/xp2p/config-server; do "
+            "if [ -d \"$d\" ]; then "
+            "for f in \"$d\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+            "fi; done",
+            "echo '--- xp2p pending config dirs ---'",
+            "for d in /etc/xp2p/.state/pending/config-client /etc/xp2p/.state/pending/config-server; do "
+            "[ -d \"$d\" ] && ls -la \"$d\"; done",
+            "for d in /etc/xp2p/.state/pending/config-client /etc/xp2p/.state/pending/config-server; do "
+            "if [ -d \"$d\" ]; then "
+            "for f in \"$d\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+            "fi; done",
+            "echo '--- xp2p live config dirs ---'",
+            "for d in /etc/xp2p/.state/live/config-client /etc/xp2p/.state/live/config-server; do "
+            "[ -d \"$d\" ] && ls -la \"$d\"; done",
+            "for d in /etc/xp2p/.state/live/config-client /etc/xp2p/.state/live/config-server; do "
+            "if [ -d \"$d\" ]; then "
+            "for f in \"$d\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+            "fi; done",
+            "echo '--- xp2p lkg config dirs ---'",
+            "for d in /etc/xp2p/.state/lkg/config-client /etc/xp2p/.state/lkg/config-server; do "
+            "[ -d \"$d\" ] && ls -la \"$d\"; done",
+            "for d in /etc/xp2p/.state/lkg/config-client /etc/xp2p/.state/lkg/config-server; do "
+            "if [ -d \"$d\" ]; then "
+            "for f in \"$d\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+            "fi; done",
             "echo '--- xp2p logs ---'",
             "find /var/log/xp2p -maxdepth 3 -print 2>/dev/null || true",
             "for f in /var/log/xp2p/client/service.log /var/log/xp2p/server/service.log; do "

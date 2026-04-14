@@ -1545,10 +1545,18 @@ if (Test-Path {target}) {{
         CONFIG_LIVE_ROOT / "config-server" / "outbounds.json",
         CONFIG_LIVE_ROOT / "config-server" / "routing.json",
         CONFIG_LIVE_ROOT / "config-server" / "logs.json",
+        CONFIG_LKG_ROOT / "config-client" / "inbounds.json",
+        CONFIG_LKG_ROOT / "config-client" / "outbounds.json",
+        CONFIG_LKG_ROOT / "config-client" / "routing.json",
+        CONFIG_LKG_ROOT / "config-client" / "logs.json",
+        CONFIG_LKG_ROOT / "config-server" / "inbounds.json",
+        CONFIG_LKG_ROOT / "config-server" / "outbounds.json",
+        CONFIG_LKG_ROOT / "config-server" / "routing.json",
+        CONFIG_LKG_ROOT / "config-server" / "logs.json",
     ]
     files.extend(Path(path) for path in extra_paths)
     file_list = ", ".join(ps_quote(str(path)) for path in files)
-    roots = ", ".join(ps_quote(str(path)) for path in [CONFIG_ROOT, LOGS_DIR])
+    roots = ", ".join(ps_quote(str(path)) for path in [CONFIG_ROOT, LOGS_DIR, CONFIG_PENDING_ROOT, CONFIG_LIVE_ROOT, CONFIG_LKG_ROOT])
     script = f"""
 $ErrorActionPreference = 'SilentlyContinue'
 $out = {target}

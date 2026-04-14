@@ -426,14 +426,22 @@ def dump_apply_dirs(host: Host, label: str) -> None:
     dirs = [
         CONFIG_ROOT / APPLY_DIR_NAME,
         CONFIG_PENDING_ROOT,
+        CONFIG_LIVE_ROOT,
+        CONFIG_LKG_ROOT,
         CLIENT_PENDING_DIR,
         SERVER_PENDING_DIR,
+        CLIENT_LIVE_DIR,
+        SERVER_LIVE_DIR,
     ]
     files = [
         CONFIG_ROOT / "xp2p-client.toml",
         CONFIG_ROOT / "xp2p-server.toml",
         CONFIG_PENDING_ROOT / "xp2p-client.toml",
         CONFIG_PENDING_ROOT / "xp2p-server.toml",
+        CONFIG_LIVE_ROOT / "xp2p-client.toml",
+        CONFIG_LIVE_ROOT / "xp2p-server.toml",
+        CONFIG_LKG_ROOT / "xp2p-client.toml",
+        CONFIG_LKG_ROOT / "xp2p-server.toml",
         APPLY_REQUEST,
     ]
     print(f"==== APPLY DIRS ({label}) on {host.backend.hostname} ====")
@@ -466,6 +474,8 @@ def dump_failure_state(host: Host, label: str) -> None:
                 (
                     "echo '--- xp2p tree ---'",
                     "find /etc/xp2p -maxdepth 4 -print 2>/dev/null || true",
+                    "echo '--- xp2p state tree ---'",
+                    "find /etc/xp2p/.state -maxdepth 5 -print 2>/dev/null || true",
                     "echo '--- xp2p log tree ---'",
                     "find /var/log/xp2p -maxdepth 4 -print 2>/dev/null || true",
                     "echo '--- xp2p configs ---'",
@@ -473,7 +483,23 @@ def dump_failure_state(host: Host, label: str) -> None:
                     "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
                     "for f in /etc/xp2p/.state/pending/xp2p-client.toml /etc/xp2p/.state/pending/xp2p-server.toml; do "
                     "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+                    "for f in /etc/xp2p/.state/live/xp2p-client.toml /etc/xp2p/.state/live/xp2p-server.toml; do "
+                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+                    "for f in /etc/xp2p/.state/lkg/xp2p-client.toml /etc/xp2p/.state/lkg/xp2p-server.toml; do "
+                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
                     "for dir in /etc/xp2p/config-client /etc/xp2p/config-server; do "
+                    "if [ -d \"$dir\" ]; then "
+                    "for f in \"$dir\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+                    "fi; done",
+                    "for dir in /etc/xp2p/.state/pending/config-client /etc/xp2p/.state/pending/config-server; do "
+                    "if [ -d \"$dir\" ]; then "
+                    "for f in \"$dir\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+                    "fi; done",
+                    "for dir in /etc/xp2p/.state/live/config-client /etc/xp2p/.state/live/config-server; do "
+                    "if [ -d \"$dir\" ]; then "
+                    "for f in \"$dir\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
+                    "fi; done",
+                    "for dir in /etc/xp2p/.state/lkg/config-client /etc/xp2p/.state/lkg/config-server; do "
                     "if [ -d \"$dir\" ]; then "
                     "for f in \"$dir\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
                     "fi; done",
