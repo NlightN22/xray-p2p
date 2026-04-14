@@ -29,12 +29,15 @@ func AddEndpoint(ctx context.Context, opts InstallOptions) error {
 	if err != nil {
 		return err
 	}
-	pendingConfigDir := apply.PendingDir(configDir)
+	pendingConfigDir, err := config.PendingConfigDir(configDir)
+	if err != nil {
+		return err
+	}
 	base, err := buildClientInstallBase(installDir, configDir, opts)
 	if err != nil {
 		return err
 	}
-	liveConfigFile := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	liveConfigFile := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if err := seedPendingClientConfig(base.configFile, liveConfigFile); err != nil {
 		return err
 	}

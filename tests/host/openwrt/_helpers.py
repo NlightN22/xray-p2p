@@ -19,9 +19,11 @@ CLIENT_CONFIG_DIR = linux_helpers.CLIENT_CONFIG_DIR
 SERVER_CONFIG_DIR = linux_helpers.SERVER_CONFIG_DIR
 APPLY_DIR_NAME = linux_helpers.APPLY_DIR_NAME
 PENDING_DIR_NAME = linux_helpers.PENDING_DIR_NAME
-CONFIG_PENDING_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / PENDING_DIR_NAME
-CLIENT_PENDING_DIR = CLIENT_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
-SERVER_PENDING_DIR = SERVER_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
+CONFIG_PENDING_ROOT = linux_helpers.CONFIG_PENDING_ROOT
+CONFIG_LIVE_ROOT = linux_helpers.CONFIG_LIVE_ROOT
+CONFIG_LKG_ROOT = linux_helpers.CONFIG_LKG_ROOT
+CLIENT_PENDING_DIR = linux_helpers.CLIENT_PENDING_DIR
+SERVER_PENDING_DIR = linux_helpers.SERVER_PENDING_DIR
 CLIENT_CONFIG_FILE = linux_helpers.CLIENT_CONFIG_FILE
 SERVER_CONFIG_FILE = linux_helpers.SERVER_CONFIG_FILE
 CLIENT_APPLIED_STATE_FILE = linux_helpers.CLIENT_APPLIED_STATE_FILE
@@ -144,7 +146,11 @@ def _purge_install_paths(host: Host, install_path: str, config_name: str, role: 
         raise ValueError(f"Unsupported role: {role}")
     config_path = f"{install_path.rstrip('/')}/{config_name}"
     pending_root = CONFIG_PENDING_ROOT.as_posix()
+    live_root = CONFIG_LIVE_ROOT.as_posix()
+    lkg_root = CONFIG_LKG_ROOT.as_posix()
     pending_config = f"{pending_root}/xp2p-{role}.toml"
+    live_config = f"{live_root}/xp2p-{role}.toml"
+    lkg_config = f"{lkg_root}/xp2p-{role}.toml"
     pending_heartbeat = f"{pending_root}/state-heartbeat-{role}.json"
     state_files = CLIENT_STATE_FILES if role == "client" else SERVER_STATE_FILES
     heartbeat = CLIENT_HEARTBEAT_STATE_FILE if role == "client" else SERVER_HEARTBEAT_STATE_FILE
@@ -152,6 +158,8 @@ def _purge_install_paths(host: Host, install_path: str, config_name: str, role: 
         config_path,
         pending_config,
         pending_heartbeat,
+        live_config,
+        lkg_config,
         APPLY_REQUEST.as_posix(),
         heartbeat.as_posix(),
     ]
@@ -247,12 +255,12 @@ def read_live_toml(host: Host, path: PurePosixPath | Path | str) -> dict:
 
 
 def read_live_client_config(host: Host) -> dict:
-    config = CONFIG_ROOT / "xp2p-client.toml"
+    config = CONFIG_LIVE_ROOT / "xp2p-client.toml"
     return read_live_toml(host, config).get("client") or {}
 
 
 def read_live_server_config(host: Host) -> dict:
-    config = CONFIG_ROOT / "xp2p-server.toml"
+    config = CONFIG_LIVE_ROOT / "xp2p-server.toml"
     return read_live_toml(host, config).get("server") or {}
 
 
@@ -409,9 +417,7 @@ def dump_apply_dirs(host: Host, label: str) -> None:
     dirs = [
         CONFIG_ROOT / APPLY_DIR_NAME,
         CONFIG_PENDING_ROOT,
-        CLIENT_CONFIG_DIR / APPLY_DIR_NAME,
         CLIENT_PENDING_DIR,
-        SERVER_CONFIG_DIR / APPLY_DIR_NAME,
         SERVER_PENDING_DIR,
     ]
     files = [
@@ -456,7 +462,7 @@ def dump_failure_state(host: Host, label: str) -> None:
                     "echo '--- xp2p configs ---'",
                     "for f in /etc/xp2p/xp2p-client.toml /etc/xp2p/xp2p-server.toml; do "
                     "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
-                    "for f in /etc/xp2p/.apply/pending/xp2p-client.toml /etc/xp2p/.apply/pending/xp2p-server.toml; do "
+                    "for f in /etc/xp2p/.state/pending/xp2p-client.toml /etc/xp2p/.state/pending/xp2p-server.toml; do "
                     "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
                     "for dir in /etc/xp2p/config-client /etc/xp2p/config-server; do "
                     "if [ -d \"$dir\" ]; then "
@@ -536,18 +542,8 @@ def dump_logs(host: Host, label: str, paths: list[PurePosixPath] | None = None, 
 
 
 def _pending_candidate(path: PurePosixPath) -> PurePosixPath:
-    if path.is_relative_to(CONFIG_ROOT / APPLY_DIR_NAME):
+    if path.is_relative_to(CONFIG_PENDING_ROOT):
         return path
-    if path.is_relative_to(CLIENT_CONFIG_DIR / APPLY_DIR_NAME):
-        return path
-    if path.is_relative_to(SERVER_CONFIG_DIR / APPLY_DIR_NAME):
-        return path
-    if path.is_relative_to(INSTALL_ROOT):
-        relative = path.relative_to(INSTALL_ROOT)
-        if relative.parts:
-            config_root = relative.parts[0]
-            if config_root.startswith("config-"):
-                return INSTALL_ROOT / config_root / APPLY_DIR_NAME / PENDING_DIR_NAME / PurePosixPath(*relative.parts[1:])
     if path.is_relative_to(CLIENT_CONFIG_DIR):
         return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
     if path.is_relative_to(SERVER_CONFIG_DIR):
@@ -645,9 +641,9 @@ def wait_for_live_config(
     poll_interval: float = 1.5,
 ) -> None:
     if role == "client":
-        target = CONFIG_ROOT / "xp2p-client.toml"
+        target = CONFIG_LIVE_ROOT / "xp2p-client.toml"
     elif role == "server":
-        target = CONFIG_ROOT / "xp2p-server.toml"
+        target = CONFIG_LIVE_ROOT / "xp2p-server.toml"
     else:
         raise ValueError(f"Unsupported role: {role}")
     deadline = time.time() + timeout_seconds

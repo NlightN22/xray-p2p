@@ -20,14 +20,18 @@ func resolveClientPaths(installDir, configDir string) (clientPaths, error) {
 	if err != nil {
 		return clientPaths{}, err
 	}
-	cfgDir, err := ResolveConfigDir(dir, configDir)
+	desiredConfigDir, err := ResolveConfigDir(dir, configDir)
+	if err != nil {
+		return clientPaths{}, err
+	}
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
 	if err != nil {
 		return clientPaths{}, err
 	}
 	return clientPaths{
 		installDir: dir,
-		configDir:  cfgDir,
-		configFile: filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
+		configDir:  liveConfigDir,
+		configFile: filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName)),
 		stateFile:  filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)),
 		fullState:  filepath.Clean(config.ConfigPath(layout.ClientFullTunnelStateFileName)),
 	}, nil

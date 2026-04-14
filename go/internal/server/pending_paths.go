@@ -19,8 +19,8 @@ func pendingConfigPath() string {
 	return filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
 }
 
-func pendingConfigDir(liveConfigDir string) string {
-	return apply.PendingDir(liveConfigDir)
+func pendingConfigDir(configDir string) (string, error) {
+	return config.PendingConfigDir(configDir)
 }
 
 func readConfigWithFallback(pendingPath, livePath string) ([]byte, error) {
@@ -47,11 +47,11 @@ func loadServerConfigWithFallback() (config.Config, error) {
 			return config.Config{}, err
 		}
 	}
-	return config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName)})
+	return config.Load(config.Options{Path: config.LiveConfigPath(layout.ServerConfigFileName)})
 }
 
 func resolveServerConfigPath() (string, error) {
-	livePath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	livePath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 	pendingPath := pendingConfigPath()
 	if pendingPath != "" {
 		if _, err := os.Stat(pendingPath); err == nil {

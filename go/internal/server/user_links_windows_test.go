@@ -18,10 +18,14 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	prepareTrojanConfig(t, configDir, true)
 
 	certPath, keyPath := createTestCertificateFiles(t, dir, "links.example.test")
-	if err := os.Rename(certPath, filepath.Join(configDir, "cert.pem")); err != nil {
+	pendingDir := mustPendingConfigDir(t, configDir)
+	if err := os.MkdirAll(pendingDir, 0o755); err != nil {
+		t.Fatalf("mkdir pending: %v", err)
+	}
+	if err := os.Rename(certPath, filepath.Join(pendingDir, "cert.pem")); err != nil {
 		t.Fatalf("rename cert: %v", err)
 	}
-	if err := os.Rename(keyPath, filepath.Join(configDir, "key.pem")); err != nil {
+	if err := os.Rename(keyPath, filepath.Join(pendingDir, "key.pem")); err != nil {
 		t.Fatalf("rename key: %v", err)
 	}
 
@@ -52,7 +56,7 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	if users[0].Password != "secret" {
 		t.Fatalf("unexpected password: %s", users[0].Password)
 	}
-	pin, err := certificateFingerprintSHA256(filepath.Join(configDir, "cert.pem"))
+	pin, err := certificateFingerprintSHA256(filepath.Join(pendingDir, "cert.pem"))
 	if err != nil {
 		t.Fatalf("fingerprint cert: %v", err)
 	}
@@ -117,10 +121,14 @@ func TestListUsersSelfSignedAddsPinnedPeerCert(t *testing.T) {
 	prepareTrojanConfig(t, configDir, true)
 
 	certPath, keyPath := createTestCertificateFiles(t, dir, "self.example.test")
-	if err := os.Rename(certPath, filepath.Join(configDir, "cert.pem")); err != nil {
+	pendingDir := mustPendingConfigDir(t, configDir)
+	if err := os.MkdirAll(pendingDir, 0o755); err != nil {
+		t.Fatalf("mkdir pending: %v", err)
+	}
+	if err := os.Rename(certPath, filepath.Join(pendingDir, "cert.pem")); err != nil {
 		t.Fatalf("rename cert: %v", err)
 	}
-	if err := os.Rename(keyPath, filepath.Join(configDir, "key.pem")); err != nil {
+	if err := os.Rename(keyPath, filepath.Join(pendingDir, "key.pem")); err != nil {
 		t.Fatalf("rename key: %v", err)
 	}
 
@@ -145,7 +153,7 @@ func TestListUsersSelfSignedAddsPinnedPeerCert(t *testing.T) {
 	if len(users) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(users))
 	}
-	pin, err := certificateFingerprintSHA256(filepath.Join(configDir, "cert.pem"))
+	pin, err := certificateFingerprintSHA256(filepath.Join(pendingDir, "cert.pem"))
 	if err != nil {
 		t.Fatalf("fingerprint cert: %v", err)
 	}

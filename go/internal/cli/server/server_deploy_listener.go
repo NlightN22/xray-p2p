@@ -245,11 +245,11 @@ func logDeployPaths(message, updatedPath string) {
 	logging.Info(
 		message,
 		"mode_config", updatedPath,
-		"live_config", config.ConfigPath(layout.ServerConfigFileName),
+		"live_config", config.LiveConfigPath(layout.ServerConfigFileName),
 		"pending_config", config.PendingConfigPath(layout.ServerConfigFileName),
 		"apply_dir", applyDir,
 		"apply_request", applyPath,
-		"live_exists", fileExists(config.ConfigPath(layout.ServerConfigFileName)),
+		"live_exists", fileExists(config.LiveConfigPath(layout.ServerConfigFileName)),
 		"pending_exists", fileExists(config.PendingConfigPath(layout.ServerConfigFileName)),
 		"apply_dir_exists", dirExists(applyDir),
 		"apply_request_exists", fileExists(applyPath),

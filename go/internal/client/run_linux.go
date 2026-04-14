@@ -31,7 +31,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	liveConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
 	if err != nil {
 		return err
 	}
@@ -52,12 +56,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, liveConfigDir)
+	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, desiredConfigDir)
 	if err != nil {
 		return err
 	}
 	if pendingApplied {
-		configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+		configPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
 			logging.Warn("reload client config after apply failed", "err", err)
 		} else {
@@ -144,12 +148,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 
-	runErr := runXrayWithConfig(
-		ctx,
-		xrayPath,
-		configDir,
-		configDir,
-		nil,
+		runErr := runXrayWithConfig(
+			ctx,
+			xrayPath,
+			configDir,
+			configDir,
+			nil,
 		func() error {
 			if !tunEnabled {
 				return nil
@@ -166,14 +170,22 @@ func Run(ctx context.Context, opts RunOptions) error {
 			}()
 			return nil
 		},
-		func(readyCtx context.Context) error {
-			addr, err := resolveClientSocksAddress(paths.configFile)
-			if err != nil {
-				logging.Warn("client socks health check using defaults", "err", err)
-			}
-			return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
-		},
-	)
+			func(readyCtx context.Context) error {
+				addr, err := resolveClientSocksAddress(paths.configFile)
+				if err != nil {
+					logging.Warn("client socks health check using defaults", "err", err)
+				}
+				if err := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval); err != nil {
+					return err
+				}
+				if pendingApplied {
+					if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
+						logging.Warn("lkg snapshot update failed", "err", err)
+					}
+				}
+				return nil
+			},
+		)
 	if runErr != nil && pendingApplied && rollback != nil {
 		if hasAppliedState {
 			if err := rollback.Restore(config.AuditLogPath()); err != nil {

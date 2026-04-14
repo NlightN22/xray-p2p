@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -44,7 +43,7 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 	}
 
 	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := apply.PendingDir(liveConfigDir)
+	configDir := mustPendingConfigDir(t, liveConfigDir)
 	for _, name := range []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"} {
 		if _, err := os.Stat(filepath.Join(configDir, name)); err != nil {
 			t.Fatalf("expected %s to be created: %v", name, err)
@@ -116,7 +115,7 @@ func TestInstallRewritesInboundsAndLogs(t *testing.T) {
 	}
 
 	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := apply.PendingDir(liveConfigDir)
+	configDir := mustPendingConfigDir(t, liveConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}

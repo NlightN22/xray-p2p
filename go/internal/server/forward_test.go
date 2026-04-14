@@ -8,17 +8,29 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 )
 
 func TestServerAddForwardUpdatesState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	configDir := filepath.Join(dir, DefaultServerConfigDir)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	desiredConfigDir := filepath.Join(dir, DefaultServerConfigDir)
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	if err != nil {
+		t.Fatalf("live config dir: %v", err)
+	}
+	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
+	if err != nil {
+		t.Fatalf("pending config dir: %v", err)
+	}
+	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}
-	writeServerInboundsFile(t, filepath.Join(configDir, "inbounds.json"))
+	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
+		t.Fatalf("mkdir pending: %v", err)
+	}
+	writeServerInboundsFile(t, filepath.Join(liveConfigDir, "inbounds.json"))
 
 	result, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
@@ -48,7 +60,7 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 		t.Fatalf("expected forward state entry, got %v", doc[serverForwardRulesKey])
 	}
 
-	inbounds := readServerInboundsDoc(t, filepath.Join(pendingConfigDir(configDir), "inbounds.json"))
+	inbounds := readServerInboundsDoc(t, filepath.Join(mustPendingConfigDir(t, desiredConfigDir), "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
 	if !hasInboundTag(items, result.Rule.Tag) {
 		t.Fatalf("expected forward inbound tag %q to be present", result.Rule.Tag)
@@ -58,11 +70,22 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 func TestServerRemoveForwardClearsState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	configDir := filepath.Join(dir, DefaultServerConfigDir)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	desiredConfigDir := filepath.Join(dir, DefaultServerConfigDir)
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	if err != nil {
+		t.Fatalf("live config dir: %v", err)
+	}
+	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
+	if err != nil {
+		t.Fatalf("pending config dir: %v", err)
+	}
+	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}
-	writeServerInboundsFile(t, filepath.Join(configDir, "inbounds.json"))
+	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
+		t.Fatalf("mkdir pending: %v", err)
+	}
+	writeServerInboundsFile(t, filepath.Join(liveConfigDir, "inbounds.json"))
 
 	addRes, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
@@ -95,7 +118,7 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 		t.Fatalf("expected forward rules to be removed, got %v", doc[serverForwardRulesKey])
 	}
 
-	inbounds := readServerInboundsDoc(t, filepath.Join(pendingConfigDir(configDir), "inbounds.json"))
+	inbounds := readServerInboundsDoc(t, filepath.Join(mustPendingConfigDir(t, desiredConfigDir), "inbounds.json"))
 	items := inbounds["inbounds"].([]any)
 	if hasInboundTag(items, addRes.Rule.Tag) {
 		t.Fatalf("expected forward inbound tag %q to be removed", addRes.Rule.Tag)

@@ -15,7 +15,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
@@ -282,7 +281,11 @@ func loadSocksAddress(installDir, configDir string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			pendingPath := filepath.Join(apply.PendingDir(dir), "inbounds.json")
+			pendingDir, err := config.PendingConfigDir(dir)
+			if err != nil {
+				return "", err
+			}
+			pendingPath := filepath.Join(pendingDir, "inbounds.json")
 			data, err = os.ReadFile(pendingPath)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {

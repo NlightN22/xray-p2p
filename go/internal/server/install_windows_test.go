@@ -48,7 +48,7 @@ func TestInstallGeneratesSelfSignedCertificate(t *testing.T) {
 	}
 
 	liveConfigDir := filepath.Join(config.ConfigRoot(), "config-server")
-	pendingDir := pendingConfigDir(liveConfigDir)
+	pendingDir := mustPendingConfigDir(t, liveConfigDir)
 	certPath := filepath.Join(pendingDir, "cert.pem")
 	cert := loadCertificate(t, certPath)
 	if len(cert.DNSNames) != 1 || cert.DNSNames[0] != "example.test" {
@@ -104,7 +104,7 @@ func TestInstallGeneratesSelfSignedCertificateForIP(t *testing.T) {
 	}
 
 	liveConfigDir := filepath.Join(config.ConfigRoot(), "config-server")
-	pendingDir := pendingConfigDir(liveConfigDir)
+	pendingDir := mustPendingConfigDir(t, liveConfigDir)
 	certPath := filepath.Join(pendingDir, "cert.pem")
 	cert := loadCertificate(t, certPath)
 	if len(cert.DNSNames) != 0 {

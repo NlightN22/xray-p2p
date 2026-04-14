@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -29,14 +28,22 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		configDirName = DefaultClientConfigDir
 	}
 
-	configDir, err := ResolveConfigDir(installDir, configDirName)
+	desiredConfigDir, err := ResolveConfigDir(installDir, configDirName)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
+	if err != nil {
+		return err
+	}
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(desiredConfigDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
-	if err := os.MkdirAll(apply.PendingDir(configDir), 0o755); err != nil {
+	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create pending config directory: %w", err)
 	}
 
@@ -69,7 +76,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		FullTunnelVerbose: opts.FullTunnelVerbose,
 		FullTunnelTag:     opts.FullTunnelTag,
 	}
-	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	configPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 
 	stateRoot := installDir
 	if runtime.GOOS == "windows" {
@@ -94,9 +101,9 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 
 	logWatcherStop, err := service.StartLogWatcher(ctx, service.LogWatchOptions{
 		Name:          "client",
-		Paths:         []string{configDir},
+		Paths:         []string{desiredConfigDir},
 		Files:         []string{filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))},
-		IgnorePrefix:  []string{apply.ApplyDir(configDir)},
+		IgnorePrefix:  []string{config.StateRoot()},
 		WatchDebounce: 400 * time.Millisecond,
 	})
 	if err != nil {
@@ -105,23 +112,23 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	defer logWatcherStop()
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
-		hasConfig, err := hasClientConfig(configDir)
+		hasConfig, err := hasClientConfig(liveConfigDir, pendingConfigDir)
 		if err != nil {
 			return err
 		}
 		if !hasConfig {
 			logging.Info("xp2p client service: no config available; stopping",
-				"config_dir", configDir,
+				"config_dir", liveConfigDir,
 				"config_file", configPath,
 			)
 			return nil
 		}
-		if _, err := os.Stat(configDir); err != nil {
+		if _, err := os.Stat(liveConfigDir); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				logging.Warn("xp2p client service: configuration directory missing; stopping", "path", configDir)
+				logging.Warn("xp2p client service: configuration directory missing; stopping", "path", liveConfigDir)
 				return nil
 			}
-			return fmt.Errorf("xp2p: configuration directory check failed at %s: %w", configDir, err)
+			return fmt.Errorf("xp2p: configuration directory check failed at %s: %w", liveConfigDir, err)
 		}
 		runOpts := baseRunOpts
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
@@ -145,8 +152,8 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	return nil
 }
 
-func hasClientConfig(configDir string) (bool, error) {
-	liveConfig := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+func hasClientConfig(liveConfigDir, pendingConfigDir string) (bool, error) {
+	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if _, err := os.Stat(liveConfig); err == nil {
 		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -162,12 +169,11 @@ func hasClientConfig(configDir string) (bool, error) {
 		}
 	}
 
-	if ok, err := configFilesPresent(configDir, runRequiredConfigFiles); err != nil {
+	if ok, err := configFilesPresent(liveConfigDir, runRequiredConfigFiles); err != nil {
 		return false, err
 	} else if ok {
 		return true, nil
 	}
 
-	pendingDir := apply.PendingDir(configDir)
-	return configFilesPresent(pendingDir, runRequiredConfigFiles)
+	return configFilesPresent(pendingConfigDir, runRequiredConfigFiles)
 }

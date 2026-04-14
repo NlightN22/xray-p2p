@@ -43,12 +43,6 @@ func WriteBytes(path string, data []byte, opts WriteOptions) error {
 		return nil
 	}
 
-	if opts.KeepLastKnownGood && oldHash != "" {
-		if err := writeBackup(path); err != nil {
-			return err
-		}
-	}
-
 	if err := writeAtomic(path, data); err != nil {
 		return err
 	}
@@ -138,21 +132,6 @@ func readFileHash(path string) (string, int64, error) {
 func hashBytes(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
-}
-
-func writeBackup(path string) error {
-	source, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("configio: read backup source %s: %w", path, err)
-	}
-	backup := path + ".lkg"
-	if err := os.WriteFile(backup, source, 0o644); err != nil {
-		return fmt.Errorf("configio: write backup %s: %w", backup, err)
-	}
-	return nil
 }
 
 func writeAtomic(path string, data []byte) error {

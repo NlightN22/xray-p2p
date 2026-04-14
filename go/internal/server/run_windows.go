@@ -31,7 +31,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	liveConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
 	if err != nil {
 		return err
 	}
@@ -52,12 +56,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
 	}
 
-	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleServer, liveConfigDir)
+	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleServer, desiredConfigDir)
 	if err != nil {
 		return err
 	}
 	if pendingApplied {
-		configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+		configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
 			logging.Warn("reload server config after apply failed", "err", err)
 		} else {
@@ -79,7 +83,7 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
-	desired, err := loadServerDesiredConfigWithFallback(pendingConfigPath(), filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)))
+	desired, err := loadServerDesiredConfigWithFallback(pendingConfigPath(), filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)))
 	if err != nil {
 		return err
 	}
@@ -169,7 +173,15 @@ func Run(ctx context.Context, opts RunOptions) error {
 		if err != nil {
 			logging.Warn("server socks health check using defaults", "err", err)
 		}
-		return health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval)
+		if err := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval); err != nil {
+			return err
+		}
+		if pendingApplied {
+			if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
+				logging.Warn("lkg snapshot update failed", "err", err)
+			}
+		}
+		return nil
 	}
 
 	runErr := runXrayWithConfig(

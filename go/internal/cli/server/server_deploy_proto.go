@@ -264,7 +264,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		TunAddr:               s.Cfg.Server.TunAddr,
 	}
 	if installed {
-		logging.Info("xp2p server deploy: installation detected, running in append mode", "config", config.ConfigPath(layout.ServerConfigFileName))
+		logging.Info("xp2p server deploy: installation detected, running in append mode", "config", config.LiveConfigPath(layout.ServerConfigFileName))
 		goto installDone
 	}
 	if err := server.Install(ctx, inst); err != nil {
@@ -356,7 +356,16 @@ installDone:
 		return
 	}
 
-	plan, err := s.buildDeployRunPlan(ctx, resolvedConfigDir)
+	liveConfigDir, err := config.LiveConfigDir(resolvedConfigDir)
+	if err != nil {
+		_ = writeLine(rw, "EXIT 1")
+		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
+		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
+		_ = writeLine(rw, "DONE")
+		notifyFailure(results)
+		return
+	}
+	plan, err := s.buildDeployRunPlan(ctx, liveConfigDir)
 	if err != nil {
 		_ = writeLine(rw, "EXIT 1")
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
@@ -366,7 +375,7 @@ installDone:
 		return
 	}
 	if plan.usePending {
-		if err := ensureDeployCertificates(resolvedConfigDir); err != nil {
+		if err := ensureDeployCertificates(liveConfigDir); err != nil {
 			_ = writeLine(rw, "EXIT 1")
 			_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 			_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
@@ -462,7 +471,10 @@ func (s *deployServer) buildDeployRunPlan(ctx context.Context, liveConfigDir str
 		return deployRunPlan{runConfigDir: liveConfigDir}, nil
 	}
 
-	pendingDir := apply.PendingDir(liveConfigDir)
+	pendingDir, err := config.PendingConfigDirFromLive(liveConfigDir)
+	if err != nil {
+		return deployRunPlan{}, err
+	}
 	hasPending, err := server.HasRunConfigFiles(pendingDir)
 	if err != nil {
 		return deployRunPlan{}, err
@@ -475,7 +487,10 @@ func (s *deployServer) buildDeployRunPlan(ctx context.Context, liveConfigDir str
 }
 
 func ensureDeployCertificates(liveConfigDir string) error {
-	pendingDir := apply.PendingDir(liveConfigDir)
+	pendingDir, err := config.PendingConfigDirFromLive(liveConfigDir)
+	if err != nil {
+		return err
+	}
 	certPending := filepath.Join(pendingDir, "cert.pem")
 	keyPending := filepath.Join(pendingDir, "key.pem")
 	certLive := filepath.Join(liveConfigDir, "cert.pem")

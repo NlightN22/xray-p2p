@@ -13,6 +13,7 @@ import (
 
 func TestNormalizeInstallOptionsLinux(t *testing.T) {
 	tempDir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", tempDir)
 	certPath, keyPath := writeTestCertificateFiles(t, tempDir, "vpn.example")
 
 	opts := InstallOptions{

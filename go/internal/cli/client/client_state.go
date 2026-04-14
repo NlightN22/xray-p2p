@@ -100,7 +100,7 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 }
 
 func clientStateInstallPresent(installDir string) (bool, error) {
-	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	configPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if found, err := pathExists(configPath); err != nil {
 		return false, err
 	} else if found {
@@ -157,7 +157,7 @@ func snapshotClientState(installDir, configDir, statePath string, ttl time.Durat
 		state.Entries = make(map[string]heartbeat.Entry)
 	}
 
-	liveConfig := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	pending := false
 	if found, err := pathExists(liveConfig); err != nil {
 		return nil, err

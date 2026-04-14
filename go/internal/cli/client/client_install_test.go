@@ -241,7 +241,10 @@ func TestRunClientInstallRejectsTunModeConflictWithoutForce(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", root)
 
-	configPath := filepath.Join(root, layout.ClientConfigFileName)
+	configPath := config.LiveConfigPath(layout.ClientConfigFileName)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
 	if err := os.WriteFile(configPath, []byte("[client]\n  tun_mode = \"split\"\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}

@@ -202,6 +202,7 @@ func captureStdout(t *testing.T, fn func()) string {
 
 func prepareInstallation(t *testing.T, installDir, configDirName string) {
 	t.Helper()
+	t.Setenv("XP2P_CONFIG_ROOT", installDir)
 	binDir := filepath.Join(installDir, layout.BinDirName)
 	if err := os.MkdirAll(binDir, 0o755); err != nil {
 		t.Fatalf("mkdir %s: %v", binDir, err)
@@ -215,12 +216,16 @@ func prepareInstallation(t *testing.T, installDir, configDirName string) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	configDir := filepath.Join(installDir, configDirName)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", configDir, err)
+	desiredConfigDir := filepath.Join(installDir, configDirName)
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	if err != nil {
+		t.Fatalf("live config dir: %v", err)
+	}
+	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", liveConfigDir, err)
 	}
 	for _, name := range []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"} {
-		path := filepath.Join(configDir, name)
+		path := filepath.Join(liveConfigDir, name)
 		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
 			t.Fatalf("write %s: %v", path, err)
 		}

@@ -114,33 +114,29 @@ type PendingSet struct {
 	PendingConfigFile string
 	LiveConfigDir     string
 	PendingConfigDir  string
+	LiveRoot          string
+	LkgRoot           string
 	AuditPath         string
 }
 
 type Rollback struct {
-	backups []fileBackup
+	liveRoot string
+	lkgRoot  string
 }
 
 func (r *Rollback) Restore(auditPath string) error {
-	for _, backup := range r.backups {
-		if backup.exists {
-			if err := configio.WriteBytes(backup.path, backup.data, configio.WriteOptions{
-				AuditPath:         auditPath,
-				IgnoreAuditErrors: true,
-			}); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.Remove(backup.path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("apply: remove %s: %w", backup.path, err)
-		}
+	_ = auditPath
+	if r == nil {
+		return nil
 	}
-	return nil
+	if strings.TrimSpace(r.liveRoot) == "" || strings.TrimSpace(r.lkgRoot) == "" {
+		return fmt.Errorf("apply: rollback paths are not set")
+	}
+	return RestoreLiveFromLkg(r.liveRoot, r.lkgRoot)
 }
 
 func ApplyPending(set PendingSet) (*Rollback, bool, error) {
-	pendingFiles, err := listPendingFiles(set.PendingConfigDir)
+	pendingFiles, err := listFilesInDir(set.PendingConfigDir)
 	if err != nil {
 		return nil, false, err
 	}
@@ -150,31 +146,6 @@ func ApplyPending(set PendingSet) (*Rollback, bool, error) {
 	}
 	if !pendingConfigExists && len(pendingFiles) == 0 {
 		return nil, false, nil
-	}
-
-	seen := make(map[string]struct{})
-	backups := make([]fileBackup, 0, len(pendingFiles)+1)
-	if pendingConfigExists {
-		if backup, ok, err := buildBackup(set.LiveConfigFile); err != nil {
-			return nil, false, err
-		} else if ok {
-			backups = append(backups, backup)
-		}
-		seen[filepath.Clean(set.LiveConfigFile)] = struct{}{}
-	}
-
-	for _, rel := range pendingFiles {
-		target := filepath.Join(set.LiveConfigDir, rel)
-		clean := filepath.Clean(target)
-		if _, ok := seen[clean]; ok {
-			continue
-		}
-		seen[clean] = struct{}{}
-		if backup, ok, err := buildBackup(clean); err != nil {
-			return nil, false, err
-		} else if ok {
-			backups = append(backups, backup)
-		}
 	}
 
 	if pendingConfigExists {
@@ -187,6 +158,7 @@ func ApplyPending(set PendingSet) (*Rollback, bool, error) {
 			KeepLastKnownGood: true,
 			IgnoreAuditErrors: true,
 		}); err != nil {
+			_ = RestoreLiveFromLkg(set.LiveRoot, set.LkgRoot)
 			return nil, false, err
 		}
 	}
@@ -200,46 +172,22 @@ func ApplyPending(set PendingSet) (*Rollback, bool, error) {
 		target := filepath.Join(set.LiveConfigDir, rel)
 		if err := configio.WriteBytes(target, data, configio.WriteOptions{
 			AuditPath:         set.AuditPath,
-			KeepLastKnownGood: true,
 			IgnoreAuditErrors: true,
 		}); err != nil {
+			_ = RestoreLiveFromLkg(set.LiveRoot, set.LkgRoot)
 			return nil, false, err
 		}
 	}
 
-	return &Rollback{backups: backups}, true, nil
-}
-
-func ApplyDir(base string) string {
-	return filepath.Join(filepath.Clean(base), layout.ApplyDirName)
-}
-
-func PendingDir(base string) string {
-	return filepath.Join(ApplyDir(base), layout.PendingDirName)
-}
-
-type fileBackup struct {
-	path   string
-	data   []byte
-	exists bool
-}
-
-func buildBackup(path string) (fileBackup, bool, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fileBackup{path: path, exists: false}, true, nil
-		}
-		return fileBackup{}, false, fmt.Errorf("apply: read %s: %w", path, err)
+	if err := removeMissingLiveFiles(set.LiveConfigDir, pendingFiles); err != nil {
+		_ = RestoreLiveFromLkg(set.LiveRoot, set.LkgRoot)
+		return nil, false, err
 	}
-	return fileBackup{
-		path:   path,
-		data:   data,
-		exists: true,
-	}, true, nil
+
+	return &Rollback{liveRoot: set.LiveRoot, lkgRoot: set.LkgRoot}, true, nil
 }
 
-func listPendingFiles(dir string) ([]string, error) {
+func listFilesInDir(dir string) ([]string, error) {
 	if strings.TrimSpace(dir) == "" {
 		return nil, nil
 	}
@@ -255,7 +203,7 @@ func listPendingFiles(dir string) ([]string, error) {
 			return walkErr
 		}
 		if entry.IsDir() {
-			if entry.Name() == layout.ApplyDirName {
+			if entry.Name() == layout.StateDirName {
 				return filepath.SkipDir
 			}
 			return nil
@@ -271,6 +219,62 @@ func listPendingFiles(dir string) ([]string, error) {
 		return nil, fmt.Errorf("apply: list pending dir %s: %w", dir, err)
 	}
 	return files, nil
+}
+
+func removeMissingLiveFiles(liveDir string, pendingFiles []string) error {
+	if strings.TrimSpace(liveDir) == "" {
+		return nil
+	}
+	liveFiles, err := listFilesInDir(liveDir)
+	if err != nil {
+		return err
+	}
+	if len(liveFiles) == 0 {
+		return nil
+	}
+	keep := make(map[string]struct{}, len(pendingFiles))
+	for _, rel := range pendingFiles {
+		keep[filepath.Clean(rel)] = struct{}{}
+	}
+	for _, rel := range liveFiles {
+		clean := filepath.Clean(rel)
+		if _, ok := keep[clean]; ok {
+			continue
+		}
+		if err := os.Remove(filepath.Join(liveDir, clean)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("apply: remove live file %s: %w", filepath.Join(liveDir, clean), err)
+		}
+	}
+	return removeEmptyDirs(liveDir)
+}
+
+func removeEmptyDirs(root string) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("apply: read dir %s: %w", root, err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		child := filepath.Join(root, entry.Name())
+		if err := removeEmptyDirs(child); err != nil {
+			return err
+		}
+	}
+	entries, err = os.ReadDir(root)
+	if err != nil {
+		return fmt.Errorf("apply: read dir %s: %w", root, err)
+	}
+	if len(entries) == 0 {
+		if err := os.Remove(root); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("apply: remove dir %s: %w", root, err)
+		}
+	}
+	return nil
 }
 
 func fileExists(path string) (bool, error) {

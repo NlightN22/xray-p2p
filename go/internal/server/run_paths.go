@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -19,7 +18,7 @@ func HasRunConfigFiles(dir string) (bool, error) {
 }
 
 func adjustRunPaths(configDir string) (string, string, error) {
-	liveConfig := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
 	configFile := liveConfig
 	if _, err := os.Stat(liveConfig); err != nil {
@@ -39,7 +38,10 @@ func adjustRunPaths(configDir string) (string, string, error) {
 	if ok, err := configFilesPresent(configDir, runRequiredConfigFiles); err != nil {
 		return "", "", err
 	} else if !ok {
-		pendingDir := apply.PendingDir(configDir)
+		pendingDir, err := config.PendingConfigDirFromLive(configDir)
+		if err != nil {
+			return "", "", err
+		}
 		if ok, err := configFilesPresent(pendingDir, runRequiredConfigFiles); err != nil {
 			return "", "", err
 		} else if ok {

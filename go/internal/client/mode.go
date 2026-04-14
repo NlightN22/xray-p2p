@@ -27,7 +27,7 @@ func ApplyModePending(opts ModeOptions) error {
 	if err != nil {
 		return err
 	}
-	livePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	livePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallStateWithFallback(paths.configFile, livePath)
 	if err != nil {
 		return err

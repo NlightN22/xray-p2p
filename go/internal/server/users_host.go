@@ -46,7 +46,10 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 	if err != nil {
 		return err
 	}
-	configDir := pendingConfigDir(liveConfigDir)
+	configDir, err := pendingConfigDir(liveConfigDir)
+	if err != nil {
+		return err
+	}
 
 	var (
 		channel serverReverseChannel
@@ -170,7 +173,10 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 	if err != nil {
 		return err
 	}
-	configDir := pendingConfigDir(liveConfigDir)
+	configDir, err := pendingConfigDir(liveConfigDir)
+	if err != nil {
+		return err
+	}
 
 	var (
 		channel serverReverseChannel
@@ -287,7 +293,11 @@ func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {
 	}
 
 	if opts.Pending {
-		configDir = pendingConfigDir(configDir)
+		pendingDir, err := pendingConfigDir(configDir)
+		if err != nil {
+			return nil, err
+		}
+		configDir = pendingDir
 	}
 	return listUsersFromConfig(configDir, strings.TrimSpace(opts.Host))
 }
@@ -303,7 +313,11 @@ func GetUserLink(ctx context.Context, opts UserLinkOptions) (UserLink, error) {
 	}
 
 	if opts.Pending {
-		configDir = pendingConfigDir(configDir)
+		pendingDir, err := pendingConfigDir(configDir)
+		if err != nil {
+			return UserLink{}, err
+		}
+		configDir = pendingDir
 	}
 	return userLinkFromConfig(configDir, strings.TrimSpace(opts.Host), opts.UserID)
 }

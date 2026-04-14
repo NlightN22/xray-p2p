@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 // ReverseListOptions controls server reverse enumeration.
@@ -31,7 +33,11 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	if err != nil {
+		return nil, err
+	}
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +55,13 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 		return nil, err
 	}
 
-	routingPath := filepath.Join(configDir, "routing.json")
+	routingPath := filepath.Join(liveConfigDir, "routing.json")
 	if opts.Pending {
-		routingPath = filepath.Join(pendingConfigDir(configDir), "routing.json")
+		pendingDir, err := pendingConfigDir(desiredConfigDir)
+		if err != nil {
+			return nil, err
+		}
+		routingPath = filepath.Join(pendingDir, "routing.json")
 	}
 	routingDoc, err := loadServerRouting(routingPath)
 	if err != nil {

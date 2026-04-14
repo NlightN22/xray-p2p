@@ -62,7 +62,7 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 
 def _apply_pending_config(host, role: str) -> None:
-    helpers.apply_pending_config(host, role)
+    helpers.state_pending_config(host, role)
 
 
 def _wait_for_ping_ready(

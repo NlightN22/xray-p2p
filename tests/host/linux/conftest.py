@@ -176,11 +176,11 @@ def _cleanup_host(host: Host) -> None:
     )
     bundle_artifacts = linux_env.WORK_TREE / "build" / "artifacts" / "bundle"
     cleanup_paths = [
-        helpers.CONFIG_ROOT / ".apply",
+        helpers.CONFIG_ROOT / ".state",
         helpers.CLIENT_CONFIG_FILE,
         helpers.SERVER_CONFIG_FILE,
-        helpers.CONFIG_ROOT / "xp2p-client.toml.lkg",
-        helpers.CONFIG_ROOT / "xp2p-server.toml.lkg",
+        helpers.CONFIG_LKG_ROOT / "xp2p-client.toml",
+        helpers.CONFIG_LKG_ROOT / "xp2p-server.toml",
         helpers.CONFIG_ROOT / "xp2p-client.tun-full.json",
         helpers.CLIENT_APPLIED_STATE_FILE,
         helpers.SERVER_APPLIED_STATE_FILE,

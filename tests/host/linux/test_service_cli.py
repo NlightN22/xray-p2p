@@ -21,7 +21,7 @@ CLIENT_SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 SERVER_SERVICE_LOG = helpers.LOG_ROOT / "server" / "service.log"
 CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
 SERVER_CONFIG = helpers.SERVER_CONFIG_FILE
-APPLY_REQUEST = helpers.CONFIG_ROOT / ".apply" / "apply.request"
+APPLY_REQUEST = helpers.CONFIG_ROOT / ".state" / "apply.request"
 CLIENT_DIAG_PORT = "62023"
 SERVER_DIAG_PORT = "62022"
 
@@ -138,7 +138,7 @@ def _wait_for_log_entry(host, path, substring: str, timeout: float = 60.0) -> No
 
 def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
     deadline = time.time() + timeout
-    request_path = helpers.CONFIG_ROOT / ".apply" / "apply.request"
+    request_path = helpers.CONFIG_ROOT / ".state" / "apply.request"
     while time.time() < deadline:
         if not linux_env.path_exists(host, request_path):
             return

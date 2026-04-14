@@ -20,13 +20,13 @@ pending configuration and service startup.
 
 1. Client deploy generates a deploy link and listens for the server.
 2. Server deploy receives the encrypted manifest and writes pending config:
-   - `CONFIG_ROOT/.apply/pending/xp2p-server.toml` with full `server.xray`.
-   - `config-server/.apply/pending/` with `inbounds.json`, `outbounds.json`,
+   - `CONFIG_ROOT/.state/pending/xp2p-server.toml` with full `server.xray`.
+   - `CONFIG_ROOT/.state/pending/config-server/` with `inbounds.json`, `outbounds.json`,
      `routing.json`, `logs.json`, and cert/key files.
 3. Server deploy writes `apply.request` for the server role.
 4. Client deploy receives the link and writes pending config:
-   - `CONFIG_ROOT/.apply/pending/xp2p-client.toml` with full `client.xray`.
-   - `config-client/.apply/pending/` with `inbounds.json`, `outbounds.json`,
+   - `CONFIG_ROOT/.state/pending/xp2p-client.toml` with full `client.xray`.
+   - `CONFIG_ROOT/.state/pending/config-client/` with `inbounds.json`, `outbounds.json`,
      `routing.json`, `logs.json`.
 5. Client deploy writes `apply.request` for the client role.
 

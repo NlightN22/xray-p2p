@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -28,14 +27,22 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		configDirName = DefaultServerConfigDir
 	}
 
-	configDir, err := ResolveConfigDir(installDir, configDirName)
+	desiredConfigDir, err := ResolveConfigDir(installDir, configDirName)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
+	if err != nil {
+		return err
+	}
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(desiredConfigDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
-	if err := os.MkdirAll(apply.PendingDir(configDir), 0o755); err != nil {
+	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create pending config directory: %w", err)
 	}
 
@@ -87,9 +94,9 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 
 	logWatcherStop, err := service.StartLogWatcher(ctx, service.LogWatchOptions{
 		Name:          "server",
-		Paths:         []string{configDir},
+		Paths:         []string{desiredConfigDir},
 		Files:         []string{filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))},
-		IgnorePrefix:  []string{apply.ApplyDir(configDir)},
+		IgnorePrefix:  []string{config.StateRoot()},
 		WatchDebounce: 400 * time.Millisecond,
 	})
 	if err != nil {
@@ -98,14 +105,14 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	defer logWatcherStop()
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
-		hasConfig, err := hasServerConfig(configDir)
+		hasConfig, err := hasServerConfig(liveConfigDir, pendingConfigDir)
 		if err != nil {
 			return err
 		}
 		if !hasConfig {
 			logging.Info("xp2p server service: no config available; stopping",
-				"config_dir", configDir,
-				"config_file", filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
+				"config_dir", liveConfigDir,
+				"config_file", filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
 			)
 			return nil
 		}
@@ -116,8 +123,8 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	return nil
 }
 
-func hasServerConfig(configDir string) (bool, error) {
-	liveConfig := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+func hasServerConfig(liveConfigDir, pendingConfigDir string) (bool, error) {
+	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 	if _, err := os.Stat(liveConfig); err == nil {
 		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -133,12 +140,11 @@ func hasServerConfig(configDir string) (bool, error) {
 		}
 	}
 
-	if ok, err := configFilesPresent(configDir, runRequiredConfigFiles); err != nil {
+	if ok, err := configFilesPresent(liveConfigDir, runRequiredConfigFiles); err != nil {
 		return false, err
 	} else if ok {
 		return true, nil
 	}
 
-	pendingDir := apply.PendingDir(configDir)
-	return configFilesPresent(pendingDir, runRequiredConfigFiles)
+	return configFilesPresent(pendingConfigDir, runRequiredConfigFiles)
 }

@@ -214,7 +214,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 
 // ListRedirects returns configured redirect entries.
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if opts.Pending {
 		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)

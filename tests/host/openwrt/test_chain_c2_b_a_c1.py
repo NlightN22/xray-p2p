@@ -89,7 +89,7 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 
 def _apply_pending_config(host, role: str) -> None:
-    helpers.apply_pending_config(host, role)
+    helpers.state_pending_config(host, role)
 
 
 @pytest.fixture(scope="module")

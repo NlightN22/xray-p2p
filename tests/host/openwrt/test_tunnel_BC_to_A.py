@@ -55,7 +55,7 @@ def _install_client(host, runner, link: str):
 
 
 def _apply_pending_config(host, role: str) -> None:
-    helpers.apply_pending_config(host, role)
+    helpers.state_pending_config(host, role)
 
 
 def _apply_pending_config_wait(host, role: str) -> None:

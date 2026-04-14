@@ -1,14 +1,12 @@
-package client
+package server
 
 import (
 	"testing"
-
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 func mustPendingConfigDir(t *testing.T, liveConfigDir string) string {
 	t.Helper()
-	dir, err := config.PendingConfigDir(liveConfigDir)
+	dir, err := pendingConfigDir(liveConfigDir)
 	if err != nil {
 		t.Fatalf("pending config dir: %v", err)
 	}

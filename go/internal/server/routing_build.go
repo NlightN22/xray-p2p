@@ -8,7 +8,7 @@ import (
 )
 
 func rebuildServerRouting(installDir string, configDir string) error {
-	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 	return rebuildServerRoutingFromPath(configPath, configDir)
 }
 

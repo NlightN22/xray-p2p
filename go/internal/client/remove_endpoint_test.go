@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -20,7 +19,7 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
 	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := apply.PendingDir(liveConfigDir)
+	configDirPath := mustPendingConfigDir(t, liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
@@ -139,7 +138,7 @@ func TestRemoveEndpointRemovesAllWhenNoEndpointsRemain(t *testing.T) {
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
 	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := apply.PendingDir(liveConfigDir)
+	configDirPath := mustPendingConfigDir(t, liveConfigDir)
 	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}

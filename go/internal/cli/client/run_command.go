@@ -163,23 +163,30 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, fmt.Errorf("xp2p: expected file at %s", binPath)
 	}
 
-	configInfo, err := os.Stat(configDirPath)
+	liveConfigDir, err := config.LiveConfigDir(configDirPath)
+	if err != nil {
+		return false, err
+	}
+	configInfo, err := os.Stat(liveConfigDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
-		return false, fmt.Errorf("xp2p: stat %s: %w", configDirPath, err)
+		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfigDir, err)
 	}
 	if !configInfo.IsDir() {
-		return false, fmt.Errorf("xp2p: %s is not a directory", configDirPath)
+		return false, fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
 	}
 
-	if present, err := configFilesPresent(configDirPath, requiredClientConfigFiles); err != nil {
+	if present, err := configFilesPresent(liveConfigDir, requiredClientConfigFiles); err != nil {
 		return false, err
 	} else if present {
 		return true, nil
 	}
-	pendingDir := apply.PendingDir(configDirPath)
+	pendingDir, err := config.PendingConfigDir(configDirPath)
+	if err != nil {
+		return false, err
+	}
 	return configFilesPresent(pendingDir, requiredClientConfigFiles)
 }
 
@@ -211,7 +218,7 @@ func resolveClientConfigDirPath(installDir, configDir string) (string, error) {
 }
 
 func ensureClientApplyRequestIfPendingOnly(configDirPath string) error {
-	liveConfig := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if _, err := os.Stat(liveConfig); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -226,7 +233,10 @@ func ensureClientApplyRequestIfPendingOnly(configDirPath string) error {
 		return err
 	}
 
-	pendingDir := apply.PendingDir(configDirPath)
+	pendingDir, err := config.PendingConfigDir(configDirPath)
+	if err != nil {
+		return err
+	}
 	pendingDirPresent, err := configFilesPresent(pendingDir, requiredClientConfigFiles)
 	if err != nil {
 		return err

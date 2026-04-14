@@ -154,7 +154,7 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 
 def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
-    helpers.apply_pending_config(host, role)
+    helpers.state_pending_config(host, role)
 
 
 def _apply_pending_config_wait(host, role: str, install_path: str, config_dir: str) -> None:
@@ -397,11 +397,11 @@ def _dump_apply_state(host, role: str, stage: str) -> None:
             " ; ".join(
                 (
                     f"echo '--- {role} apply state ({stage}) ---'",
-                    "ls -la /etc/xp2p/.apply 2>/dev/null || echo 'missing /etc/xp2p/.apply'",
-                    "ls -la /etc/xp2p/.apply/pending 2>/dev/null || echo 'missing /etc/xp2p/.apply/pending'",
+                    "ls -la /etc/xp2p/.state 2>/dev/null || echo 'missing /etc/xp2p/.state'",
+                    "ls -la /etc/xp2p/.state/pending 2>/dev/null || echo 'missing /etc/xp2p/.state/pending'",
                     f"ls -la {config_dir.as_posix()} 2>/dev/null || echo 'missing {config_dir.as_posix()}'",
                     f"if [ -f /etc/xp2p/xp2p-{role}.toml ]; then echo 'live xp2p-{role}.toml: present'; else echo 'live xp2p-{role}.toml: missing'; fi",
-                    "if [ -f /etc/xp2p/.apply/apply.request ]; then echo 'apply.request: present'; else echo 'apply.request: missing'; fi",
+                    "if [ -f /etc/xp2p/.state/apply.request ]; then echo 'apply.request: present'; else echo 'apply.request: missing'; fi",
                     f"/usr/bin/xp2p {role} state --path /etc/xp2p 2>/dev/null || true",
                     f"if [ -f /var/log/xp2p/{role}/service.log ]; then tail -n 200 /var/log/xp2p/{role}/service.log; else echo '/var/log/xp2p/{role}/service.log missing'; fi",
                 )

@@ -24,7 +24,7 @@ func updateSendThroughOutbound(ctx context.Context, configDir string, tunEnabled
 		}
 	}
 
-	xrayCfg, err := ensureServerXrayConfig(config.ConfigPath(layout.ServerConfigFileName))
+	xrayCfg, err := ensureServerXrayConfig(config.LiveConfigPath(layout.ServerConfigFileName))
 	if err != nil {
 		return err
 	}

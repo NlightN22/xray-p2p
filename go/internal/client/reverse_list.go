@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -42,7 +41,7 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 		return nil, err
 	}
 
-	liveStatePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	liveStatePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	pendingStatePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	statePath := liveStatePath
 	usePending := false
@@ -61,7 +60,11 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 
 	routingPath := filepath.Join(paths.configDir, "routing.json")
 	if usePending {
-		routingPath = filepath.Join(apply.PendingDir(paths.configDir), "routing.json")
+		pendingDir, err := config.PendingConfigDirFromLive(paths.configDir)
+		if err != nil {
+			return nil, err
+		}
+		routingPath = filepath.Join(pendingDir, "routing.json")
 	}
 	routingDoc, err := loadClientRoutingDoc(routingPath)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -13,7 +12,10 @@ func TestApplyClientEndpointConfigDoesNotInheritAllowInsecure(t *testing.T) {
 	baseDir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", baseDir)
 	liveConfigDir := filepath.Join(baseDir, "config-client")
-	configDir := apply.PendingDir(liveConfigDir)
+	configDir, err := config.PendingConfigDir(liveConfigDir)
+	if err != nil {
+		t.Fatalf("pending config dir: %v", err)
+	}
 	configPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 
 	state := clientInstallState{

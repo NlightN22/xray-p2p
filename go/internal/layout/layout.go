@@ -28,10 +28,14 @@ const (
 	ServerAppliedStateFileName = "xp2p-server.state.json"
 	// AuditLogFileName stores configuration change audit logs.
 	AuditLogFileName = "audit.log"
-	// ApplyDirName stores apply request and pending configuration data.
-	ApplyDirName = ".apply"
+	// StateDirName stores apply requests and state snapshots.
+	StateDirName = ".state"
 	// PendingDirName stores staged configuration updates.
 	PendingDirName = "pending"
+	// LiveDirName stores active configuration snapshots.
+	LiveDirName = "live"
+	// LkgDirName stores last known good configuration snapshots.
+	LkgDirName = "lkg"
 	// ApplyRequestFileName is the trigger file for applying pending changes.
 	ApplyRequestFileName = "apply.request"
 	// HeartbeatStateFileName is retained for legacy shared heartbeat storage.

@@ -364,9 +364,9 @@ func loadOrCreateModeToml(path string, role string) (*toml.Tree, error) {
 func liveConfigPath(role string) string {
 	switch strings.ToLower(strings.TrimSpace(role)) {
 	case "client":
-		return filepath.Clean(ConfigPath(layout.ClientConfigFileName))
+		return filepath.Clean(LiveConfigPath(layout.ClientConfigFileName))
 	case "server":
-		return filepath.Clean(ConfigPath(layout.ServerConfigFileName))
+		return filepath.Clean(LiveConfigPath(layout.ServerConfigFileName))
 	default:
 		return ""
 	}

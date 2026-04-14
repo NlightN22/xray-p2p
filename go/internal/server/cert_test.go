@@ -33,7 +33,7 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 		t.Fatalf("SetCertificate failed: %v", err)
 	}
 
-	pendingDir := pendingConfigDir(configDir)
+	pendingDir := mustPendingConfigDir(t, configDir)
 	certPath := filepath.Join(pendingDir, "cert.pem")
 	keyPath := filepath.Join(pendingDir, "key.pem")
 
@@ -106,7 +106,7 @@ func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 		t.Fatalf("SetCertificate failed: %v", err)
 	}
 
-	configPath := filepath.Join(pendingConfigDir(configDir), "inbounds.json")
+	configPath := filepath.Join(mustPendingConfigDir(t, configDir), "inbounds.json")
 	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(srcCert), filepath.ToSlash(srcKey))
 
 	data, err := os.ReadFile(configPath)

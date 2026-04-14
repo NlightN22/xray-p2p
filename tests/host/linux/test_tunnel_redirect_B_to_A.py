@@ -140,15 +140,15 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "ls /etc/xp2p/config-client/.apply",
-                "sudo -n ls -la /etc/xp2p/config-client/.apply 2>/dev/null || true",
+                "ls /etc/xp2p/.state",
+                "sudo -n ls -la /etc/xp2p/.state 2>/dev/null || true",
             )
         )
         sections.append(
             _diag_cmd(
                 host,
-                "ls /etc/xp2p/config-client/.apply/pending",
-                "sudo -n ls -la /etc/xp2p/config-client/.apply/pending 2>/dev/null || true",
+                "ls /etc/xp2p/.state/pending",
+                "sudo -n ls -la /etc/xp2p/.state/pending 2>/dev/null || true",
             )
         )
         sections.append(
@@ -161,15 +161,15 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "ls /etc/xp2p/config-server/.apply",
-                "sudo -n ls -la /etc/xp2p/config-server/.apply 2>/dev/null || true",
+                "ls /etc/xp2p/.state",
+                "sudo -n ls -la /etc/xp2p/.state 2>/dev/null || true",
             )
         )
         sections.append(
             _diag_cmd(
                 host,
-                "ls /etc/xp2p/config-server/.apply/pending",
-                "sudo -n ls -la /etc/xp2p/config-server/.apply/pending 2>/dev/null || true",
+                "ls /etc/xp2p/.state/pending",
+                "sudo -n ls -la /etc/xp2p/.state/pending 2>/dev/null || true",
             )
         )
         sections.append(_diag_cmd(host, "ls /var/log/xp2p", "sudo -n ls -la /var/log/xp2p 2>/dev/null || true"))
@@ -226,8 +226,8 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "cat /etc/xp2p/config-client/.apply/pending/inbounds.json",
-                "sudo -n cat /etc/xp2p/config-client/.apply/pending/inbounds.json 2>/dev/null || true",
+                "cat /etc/xp2p/.state/pending/config-client/inbounds.json",
+                "sudo -n cat /etc/xp2p/.state/pending/config-client/inbounds.json 2>/dev/null || true",
             )
         )
         sections.append(
@@ -240,8 +240,8 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "cat /etc/xp2p/config-server/.apply/pending/inbounds.json",
-                "sudo -n cat /etc/xp2p/config-server/.apply/pending/inbounds.json 2>/dev/null || true",
+                "cat /etc/xp2p/.state/pending/config-server/inbounds.json",
+                "sudo -n cat /etc/xp2p/.state/pending/config-server/inbounds.json 2>/dev/null || true",
             )
         )
     return "\n".join(sections)

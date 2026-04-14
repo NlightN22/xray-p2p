@@ -147,7 +147,7 @@ def test_client_and_server_install_support_extended_arguments(server_host):
         )
 
         client_config_path = helpers.INSTALL_ROOT / custom_client_config
-        outbounds = helpers.read_json(server_host, client_config_path / ".apply" / "pending" / "outbounds.json")
+        outbounds = helpers.read_json(server_host, client_config_path / ".state" / "pending" / "outbounds.json")
         helpers.assert_outbound(
             outbounds,
             client_host,
@@ -155,7 +155,7 @@ def test_client_and_server_install_support_extended_arguments(server_host):
             client_user,
             client_sni,
         )
-        routing = helpers.read_json(server_host, client_config_path / ".apply" / "pending" / "routing.json")
+        routing = helpers.read_json(server_host, client_config_path / ".state" / "pending" / "routing.json")
         helpers.assert_routing_rule(routing, client_host)
         client_state = helpers.read_pending_client_config(server_host)
         recorded_hosts = {entry.get("hostname") for entry in client_state.get("endpoints", [])}

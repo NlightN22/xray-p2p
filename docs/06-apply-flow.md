@@ -39,7 +39,7 @@ When a command updates configuration:
 
 - The live config is used as a base.
 - The update is written to the pending config under
-  `CONFIG_ROOT/.apply/pending`.
+  `CONFIG_ROOT/.state/pending/`.
 - The pending config must include the full `client.xray` or `server.xray`
   sections, not just the changed fields.
 - Pending is the source of truth for follow-up edits: if a pending config
@@ -67,6 +67,11 @@ using a clear split between Desired, Pending, Live, and LKG.
 - LKG: last known good snapshot (hidden)
   - `CONFIG_ROOT/.state/lkg/`
 
+Pending, Live, and LKG keep a mirrored structure that includes:
+
+- `xp2p-client.toml`, `xp2p-server.toml`
+- `config-client/*.json`, `config-server/*.json`
+
 ### Manual Edit Flow
 
 1. User edits Desired files under `CONFIG_ROOT/` or `config-*/`.
@@ -76,8 +81,8 @@ using a clear split between Desired, Pending, Live, and LKG.
    avoid partial pending state.
 4. `apply.request` is created after the snapshot is fully written to trigger
    service apply.
-4. Service applies Pending to Live and clears Pending.
-5. On success, the full Live snapshot is written to LKG.
+5. Service applies Pending to Live and clears Pending.
+6. On success, the full Live snapshot is written to LKG.
 
 ### CLI Edit Flow
 
@@ -104,7 +109,7 @@ duplication.
 
 The apply trigger file is created at:
 
-- `CONFIG_ROOT/.apply/apply.request`
+- `CONFIG_ROOT/.state/apply.request`
 
 It includes a role (`client` or `server`) and a request ID. The service
 process watches for this file and treats it as the single source of truth

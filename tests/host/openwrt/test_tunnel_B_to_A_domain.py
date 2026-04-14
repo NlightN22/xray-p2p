@@ -37,7 +37,7 @@ def _runner(host):
 
 
 def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
-    helpers.apply_pending_config(host, role)
+    helpers.state_pending_config(host, role)
 
 
 def _update_hosts_entry(host, action: str, domain: str, ip: str | None = None) -> None:

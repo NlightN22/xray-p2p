@@ -86,6 +86,7 @@ func TestRunServerRun(t *testing.T) {
 }
 
 func execRun(t *testing.T, cfg config.Config, opts serverRunCommandOptions, host string, autoPrep bool, onInstall func(*testing.T, config.Config, server.InstallOptions), onRun func(*testing.T, config.Config, server.RunOptions)) (int, []server.InstallOptions, []server.RunOptions) {
+	t.Setenv("XP2P_CONFIG_ROOT", cfg.Server.InstallDir)
 	var installs []server.InstallOptions
 	restoreInstall := stubServerInstall(func(ctx context.Context, opts server.InstallOptions) error {
 		installs = append(installs, opts)

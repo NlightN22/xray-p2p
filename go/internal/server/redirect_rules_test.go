@@ -44,7 +44,7 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 		t.Fatalf("expected redirect entry, got %+v", stateDoc[serverRedirectRulesKey])
 	}
 
-	routingPath := filepath.Join(pendingConfigDir(configDir), "routing.json")
+	routingPath := filepath.Join(mustPendingConfigDir(t, configDir), "routing.json")
 	routingDoc := readJSONFile(t, routingPath)
 	routingObj, _ := routingDoc["routing"].(map[string]any)
 	rules := extractInterfaceSlice(routingObj["rules"])
@@ -105,7 +105,7 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 		t.Fatalf("expected redirect rules cleared, got %+v", stateDoc[serverRedirectRulesKey])
 	}
 
-	routingDoc := readJSONFile(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
+	routingDoc := readJSONFile(t, filepath.Join(mustPendingConfigDir(t, configDir), "routing.json"))
 	routingObj, _ := routingDoc["routing"].(map[string]any)
 	rules := extractInterfaceSlice(routingObj["rules"])
 	if hasRedirectRule(rules, "", "10.50.0.0/16", "10.50.0.0/16") {

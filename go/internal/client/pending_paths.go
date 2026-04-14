@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -18,13 +17,16 @@ func resolvePendingClientPaths(installDir, configDir string) (clientPaths, error
 	if err != nil {
 		return clientPaths{}, err
 	}
-	liveConfigDir, err := ResolveConfigDir(dir, configDir)
+	desiredConfigDir, err := ResolveConfigDir(dir, configDir)
 	if err != nil {
 		return clientPaths{}, err
 	}
-	pendingDir := apply.PendingDir(liveConfigDir)
+	pendingDir, err := config.PendingConfigDir(desiredConfigDir)
+	if err != nil {
+		return clientPaths{}, err
+	}
 	pendingConfigFile := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-	liveConfigFile := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	liveConfigFile := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if err := ensurePendingConfigFile(pendingConfigFile, liveConfigFile); err != nil {
 		return clientPaths{}, err
 	}

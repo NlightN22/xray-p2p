@@ -13,23 +13,31 @@ import (
 )
 
 func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bool, error) {
+	pendingConfigDir, err := config.PendingConfigDir(configDir)
+	if err != nil {
+		return nil, false, err
+	}
+	liveConfigDir, err := config.LiveConfigDir(configDir)
+	if err != nil {
+		return nil, false, err
+	}
 	reqPath := config.ApplyRequestPath()
 	logging.Debug("apply request check",
 		"role", role,
 		"apply_request", reqPath,
 		"apply_request_exists", fileExists(reqPath),
-		"apply_root", config.ApplyRoot(),
-		"apply_root_exists", dirExists(config.ApplyRoot()),
+		"state_root", config.StateRoot(),
+		"state_root_exists", dirExists(config.StateRoot()),
 		"pending_root", config.PendingRoot(),
 		"pending_root_exists", dirExists(config.PendingRoot()),
 		"pending_config", config.PendingConfigPath(layout.ServerConfigFileName),
 		"pending_config_exists", fileExists(config.PendingConfigPath(layout.ServerConfigFileName)),
-		"pending_dir", apply.PendingDir(configDir),
-		"pending_dir_exists", dirExists(apply.PendingDir(configDir)),
-		"live_config", config.ConfigPath(layout.ServerConfigFileName),
-		"live_config_exists", fileExists(config.ConfigPath(layout.ServerConfigFileName)),
-		"live_config_dir", configDir,
-		"live_config_dir_exists", dirExists(configDir),
+		"pending_dir", pendingConfigDir,
+		"pending_dir_exists", dirExists(pendingConfigDir),
+		"live_config", config.LiveConfigPath(layout.ServerConfigFileName),
+		"live_config_exists", fileExists(config.LiveConfigPath(layout.ServerConfigFileName)),
+		"live_config_dir", liveConfigDir,
+		"live_config_dir_exists", dirExists(liveConfigDir),
 	)
 	req, exists, err := apply.ReadRequest(reqPath)
 	if err != nil {
@@ -42,10 +50,12 @@ func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bo
 		return nil, false, nil
 	}
 	pendingSet := apply.PendingSet{
-		LiveConfigFile:    filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
+		LiveConfigFile:    filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
 		PendingConfigFile: filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName)),
-		LiveConfigDir:     configDir,
-		PendingConfigDir:  apply.PendingDir(configDir),
+		LiveConfigDir:     liveConfigDir,
+		PendingConfigDir:  pendingConfigDir,
+		LiveRoot:          config.LiveRoot(),
+		LkgRoot:           config.LkgRoot(),
 		AuditPath:         config.AuditLogPath(),
 	}
 	rollback, applied, err := apply.ApplyPending(pendingSet)

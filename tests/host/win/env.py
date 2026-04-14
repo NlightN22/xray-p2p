@@ -28,9 +28,21 @@ PROGRAM_FILES_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 PROGRAM_FILES_X86_INSTALL_DIR = Path(r"C:\Program Files (x86)\xp2p")
 PROGRAM_DATA_ROOT = Path(os.environ.get("ProgramData", r"C:\ProgramData")) / "xp2p"
 CONFIG_ROOT = Path(os.environ.get("XP2P_CONFIG_ROOT", str(PROGRAM_DATA_ROOT)))
-APPLY_DIR_NAME = ".apply"
+APPLY_DIR_NAME = ".state"
 PENDING_DIR_NAME = "pending"
+LIVE_DIR_NAME = "live"
+LKG_DIR_NAME = "lkg"
+CLIENT_CONFIG_DIR_NAME = "config-client"
+SERVER_CONFIG_DIR_NAME = "config-server"
+CLIENT_CONFIG_DIR = CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
+SERVER_CONFIG_DIR = CONFIG_ROOT / SERVER_CONFIG_DIR_NAME
 CONFIG_PENDING_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / PENDING_DIR_NAME
+CONFIG_LIVE_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / LIVE_DIR_NAME
+CONFIG_LKG_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / LKG_DIR_NAME
+CLIENT_PENDING_DIR = CONFIG_PENDING_ROOT / CLIENT_CONFIG_DIR_NAME
+SERVER_PENDING_DIR = CONFIG_PENDING_ROOT / SERVER_CONFIG_DIR_NAME
+CLIENT_LIVE_DIR = CONFIG_LIVE_ROOT / CLIENT_CONFIG_DIR_NAME
+SERVER_LIVE_DIR = CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME
 LOGS_DIR = Path(os.environ.get("XP2P_LOG_ROOT", str(CONFIG_ROOT / "logs")))
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
@@ -998,15 +1010,14 @@ def _as_path(path: Path | str) -> Path:
 
 
 def _pending_candidate(path: Path) -> Path:
-    if path.is_relative_to(CONFIG_ROOT / APPLY_DIR_NAME):
+    if path.is_relative_to(CONFIG_PENDING_ROOT):
         return path
+    if path.is_relative_to(CLIENT_CONFIG_DIR):
+        return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
+    if path.is_relative_to(SERVER_CONFIG_DIR):
+        return SERVER_PENDING_DIR / path.relative_to(SERVER_CONFIG_DIR)
     if path.is_relative_to(CONFIG_ROOT):
-        relative = path.relative_to(CONFIG_ROOT)
-        if relative.parts:
-            config_root = relative.parts[0]
-            if config_root.startswith("config-"):
-                return CONFIG_ROOT / config_root / APPLY_DIR_NAME / PENDING_DIR_NAME / Path(*relative.parts[1:])
-        return CONFIG_PENDING_ROOT / relative
+        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_ROOT)
     return path
 
 
@@ -1485,8 +1496,10 @@ if (Test-Path {target}) {{
         CONFIG_ROOT / APPLY_DIR_NAME / "apply.request",
         CONFIG_PENDING_ROOT / "xp2p-client.toml",
         CONFIG_PENDING_ROOT / "xp2p-server.toml",
-        CONFIG_PENDING_ROOT / "xp2p-client.state.json",
-        CONFIG_PENDING_ROOT / "xp2p-server.state.json",
+        CONFIG_LIVE_ROOT / "xp2p-client.toml",
+        CONFIG_LIVE_ROOT / "xp2p-server.toml",
+        CONFIG_LKG_ROOT / "xp2p-client.toml",
+        CONFIG_LKG_ROOT / "xp2p-server.toml",
         CONFIG_ROOT / "config-client" / "inbounds.json",
         CONFIG_ROOT / "config-client" / "outbounds.json",
         CONFIG_ROOT / "config-client" / "routing.json",
@@ -1495,6 +1508,22 @@ if (Test-Path {target}) {{
         CONFIG_ROOT / "config-server" / "outbounds.json",
         CONFIG_ROOT / "config-server" / "routing.json",
         CONFIG_ROOT / "config-server" / "logs.json",
+        CONFIG_PENDING_ROOT / "config-client" / "inbounds.json",
+        CONFIG_PENDING_ROOT / "config-client" / "outbounds.json",
+        CONFIG_PENDING_ROOT / "config-client" / "routing.json",
+        CONFIG_PENDING_ROOT / "config-client" / "logs.json",
+        CONFIG_PENDING_ROOT / "config-server" / "inbounds.json",
+        CONFIG_PENDING_ROOT / "config-server" / "outbounds.json",
+        CONFIG_PENDING_ROOT / "config-server" / "routing.json",
+        CONFIG_PENDING_ROOT / "config-server" / "logs.json",
+        CONFIG_LIVE_ROOT / "config-client" / "inbounds.json",
+        CONFIG_LIVE_ROOT / "config-client" / "outbounds.json",
+        CONFIG_LIVE_ROOT / "config-client" / "routing.json",
+        CONFIG_LIVE_ROOT / "config-client" / "logs.json",
+        CONFIG_LIVE_ROOT / "config-server" / "inbounds.json",
+        CONFIG_LIVE_ROOT / "config-server" / "outbounds.json",
+        CONFIG_LIVE_ROOT / "config-server" / "routing.json",
+        CONFIG_LIVE_ROOT / "config-server" / "logs.json",
     ]
     files.extend(Path(path) for path in extra_paths)
     file_list = ", ".join(ps_quote(str(path)) for path in files)

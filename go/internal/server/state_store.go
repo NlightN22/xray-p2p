@@ -18,7 +18,7 @@ import (
 )
 
 func serverStatePath(string) string {
-	return filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	return filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 }
 
 func loadServerStateDoc(path string) (map[string]any, error) {

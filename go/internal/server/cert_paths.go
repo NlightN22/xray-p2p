@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 func certificatePathsFromStream(stream map[string]any) (string, string, error) {
@@ -86,15 +86,9 @@ func isPendingConfigDir(configDir string) bool {
 }
 
 func liveDirFromPending(configDir string) (string, bool) {
-	clean := filepath.Clean(configDir)
-	pendingSuffix := filepath.Join(layout.ApplyDirName, layout.PendingDirName)
-	if !strings.HasSuffix(clean, pendingSuffix) {
+	liveDir, err := config.LiveConfigDirFromPending(configDir)
+	if err != nil {
 		return "", false
 	}
-	base := strings.TrimSuffix(clean, pendingSuffix)
-	base = strings.TrimSuffix(base, string(filepath.Separator))
-	if strings.TrimSpace(base) == "" {
-		return "", false
-	}
-	return base, true
+	return liveDir, true
 }

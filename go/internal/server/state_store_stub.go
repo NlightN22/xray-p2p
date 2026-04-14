@@ -8,7 +8,7 @@ import (
 )
 
 func serverStatePath(string) string {
-	return config.ConfigPath(layout.ServerConfigFileName)
+	return config.LiveConfigPath(layout.ServerConfigFileName)
 }
 
 func loadServerStateDoc(string) (map[string]any, error) {

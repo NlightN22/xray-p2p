@@ -291,12 +291,12 @@ def _collect_host_debug(host: Host, label: str, *, deploy_log: PurePosixPath) ->
     parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'getfacl /etc/xp2p/bin/xray 2>/dev/null || true'"))
     parts.append(_run_cmd(host, "ps aux | grep -E 'xp2p|xray' | grep -v grep || true"))
     parts.append(_run_cmd(host, f"sudo -n {linux_env.INSTALL_PATH.as_posix()} {label} service status || true"))
-    parts.append(_run_cmd(host, "sudo -n cat /etc/xp2p/.apply/apply.request 2>/dev/null || true"))
-    parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/.apply /etc/xp2p/.apply/pending 2>/dev/null || true"))
-    parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'for f in /etc/xp2p/.apply/pending/*.toml; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
+    parts.append(_run_cmd(host, "sudo -n cat /etc/xp2p/.state/apply.request 2>/dev/null || true"))
+    parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/.state /etc/xp2p/.state/pending 2>/dev/null || true"))
+    parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'for f in /etc/xp2p/.state/pending/*.toml; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
     parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/config-client /etc/xp2p/config-server 2>/dev/null || true"))
     parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /etc/xp2p/config-{label}/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
-    parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /etc/xp2p/config-{label}/.apply/pending/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
+    parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /etc/xp2p/config-{label}/.state/pending/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
     return "\n".join(parts)
 
 

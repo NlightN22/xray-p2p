@@ -225,14 +225,18 @@ func resolveTunState(cfg config.Config) (bool, bool, error) {
 
 func pendingInboundsPath(path string) string {
 	cleaned := filepath.Clean(path)
-	applyDir := string(os.PathSeparator) + layout.ApplyDirName + string(os.PathSeparator) + layout.PendingDirName + string(os.PathSeparator)
-	if strings.Contains(cleaned, applyDir) {
+	pendingRoot := filepath.Clean(config.PendingRoot())
+	if strings.HasPrefix(cleaned, pendingRoot+string(os.PathSeparator)) || cleaned == pendingRoot {
 		return cleaned
 	}
 	dir := filepath.Dir(cleaned)
 	base := filepath.Base(cleaned)
 	if strings.HasSuffix(dir, string(os.PathSeparator)+layout.ClientConfigDir) || strings.HasSuffix(dir, string(os.PathSeparator)+layout.ServerConfigDir) {
-		return filepath.Join(dir, layout.ApplyDirName, layout.PendingDirName, base)
+		pendingDir, err := config.PendingConfigDir(dir)
+		if err != nil {
+			return cleaned
+		}
+		return filepath.Join(pendingDir, base)
 	}
 	return cleaned
 }

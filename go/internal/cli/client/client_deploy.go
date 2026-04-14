@@ -500,7 +500,7 @@ func applyClientDeployMode(installOpts client.InstallOptions, cfg config.Config,
 }
 
 func loadDeployClientConfig() (config.Config, error) {
-	path := config.ConfigPath(layout.ClientConfigFileName)
+	path := config.LiveConfigPath(layout.ClientConfigFileName)
 	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			path = config.PendingConfigPath(layout.ClientConfigFileName)
@@ -555,7 +555,7 @@ func ensureClientServiceApplied(ctx context.Context, socksAddr string) (bool, er
 		return false, nil
 	}
 	if err := waitForApplyRequestClear(ctx, config.ApplyRequestPath(), applyRequestTimeout); err != nil {
-		logDeployPaths("xp2p client deploy: apply request timeout", config.ConfigPath(layout.ClientConfigFileName))
+		logDeployPaths("xp2p client deploy: apply request timeout", config.LiveConfigPath(layout.ClientConfigFileName))
 		return status.Active, err
 	}
 	if strings.TrimSpace(socksAddr) == "" {
@@ -586,7 +586,7 @@ func logClientServiceApplyHint(ctx context.Context) {
 }
 
 func clientLiveConfigPresent() bool {
-	path := config.ConfigPath(layout.ClientConfigFileName)
+	path := config.LiveConfigPath(layout.ClientConfigFileName)
 	if _, err := os.Stat(path); err != nil {
 		return false
 	}
@@ -616,11 +616,11 @@ func logDeployPaths(message, updatedPath string) {
 	logging.Info(
 		message,
 		"mode_config", updatedPath,
-		"live_config", config.ConfigPath(layout.ClientConfigFileName),
+		"live_config", config.LiveConfigPath(layout.ClientConfigFileName),
 		"pending_config", config.PendingConfigPath(layout.ClientConfigFileName),
 		"apply_dir", applyDir,
 		"apply_request", applyPath,
-		"live_exists", fileExists(config.ConfigPath(layout.ClientConfigFileName)),
+		"live_exists", fileExists(config.LiveConfigPath(layout.ClientConfigFileName)),
 		"pending_exists", fileExists(config.PendingConfigPath(layout.ClientConfigFileName)),
 		"apply_dir_exists", dirExists(applyDir),
 		"apply_request_exists", fileExists(applyPath),

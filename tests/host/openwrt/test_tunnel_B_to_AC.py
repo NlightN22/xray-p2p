@@ -80,7 +80,7 @@ def _install_server(host, runner, host_ip: str):
 
 
 def _apply_pending_config(host, role: str) -> None:
-    helpers.apply_pending_config(host, role)
+    helpers.state_pending_config(host, role)
 
 
 @pytest.mark.host

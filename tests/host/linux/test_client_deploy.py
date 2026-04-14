@@ -1317,8 +1317,8 @@ def _collect_host_debug(host: Host, label: str) -> str:
     paths = [
         DEPLOY_INSTALL_ROOT,
         DEPLOY_CONFIG_ROOT,
-        DEPLOY_CONFIG_ROOT / ".apply",
-        DEPLOY_CONFIG_ROOT / ".apply" / "pending",
+        DEPLOY_CONFIG_ROOT / ".state",
+        DEPLOY_CONFIG_ROOT / ".state" / "pending",
         CLIENT_CONFIG_DIR,
         SERVER_CONFIG_DIR,
     ]
@@ -1330,12 +1330,12 @@ def _collect_host_debug(host: Host, label: str) -> str:
         )
     result = host.run(
         "sudo -n /bin/sh -c '"
-        "if [ -f \"/etc/xp2p/.apply/apply.request\" ]; then "
-        "echo \"apply.request:\"; cat /etc/xp2p/.apply/apply.request; fi; "
-        "if [ -f \"/etc/xp2p/.apply/pending/xp2p-client.toml\" ]; then "
-        "echo \"pending xp2p-client.toml:\"; cat /etc/xp2p/.apply/pending/xp2p-client.toml; fi; "
-        "if [ -f \"/etc/xp2p/.apply/pending/xp2p-server.toml\" ]; then "
-        "echo \"pending xp2p-server.toml:\"; cat /etc/xp2p/.apply/pending/xp2p-server.toml; fi; "
+        "if [ -f \"/etc/xp2p/.state/apply.request\" ]; then "
+        "echo \"apply.request:\"; cat /etc/xp2p/.state/apply.request; fi; "
+        "if [ -f \"/etc/xp2p/.state/pending/xp2p-client.toml\" ]; then "
+        "echo \"pending xp2p-client.toml:\"; cat /etc/xp2p/.state/pending/xp2p-client.toml; fi; "
+        "if [ -f \"/etc/xp2p/.state/pending/xp2p-server.toml\" ]; then "
+        "echo \"pending xp2p-server.toml:\"; cat /etc/xp2p/.state/pending/xp2p-server.toml; fi; "
         "if [ -f \"/etc/xp2p/xp2p-client.toml\" ]; then "
         "echo \"live xp2p-client.toml:\"; cat /etc/xp2p/xp2p-client.toml; fi; "
         "if [ -f \"/etc/xp2p/xp2p-server.toml\" ]; then "
@@ -1351,7 +1351,7 @@ def _persist_deploy_artifacts(host: Host, run_id: str, *, role: str) -> None:
         paths = [
             CLIENT_DEPLOY_LOG,
             DEPLOY_LOG_ROOT / "client" / "service.log",
-            DEPLOY_CONFIG_ROOT / ".apply",
+            DEPLOY_CONFIG_ROOT / ".state",
             DEPLOY_CONFIG_ROOT / "xp2p-client.toml",
             DEPLOY_CONFIG_ROOT / "xp2p-client.state.json",
             DEPLOY_INSTALL_ROOT / "config-client",
@@ -1361,7 +1361,7 @@ def _persist_deploy_artifacts(host: Host, run_id: str, *, role: str) -> None:
         paths = [
             SERVER_DEPLOY_LOG,
             DEPLOY_LOG_ROOT / "server" / "service.log",
-            DEPLOY_CONFIG_ROOT / ".apply",
+            DEPLOY_CONFIG_ROOT / ".state",
             DEPLOY_CONFIG_ROOT / "xp2p-server.toml",
             DEPLOY_CONFIG_ROOT / "xp2p-server.state.json",
             DEPLOY_INSTALL_ROOT / "config-server",

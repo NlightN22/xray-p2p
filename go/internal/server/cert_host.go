@@ -32,7 +32,10 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 		return err
 	}
 
-	pendingDir := pendingConfigDir(state.configDir)
+	pendingDir, err := pendingConfigDir(state.configDir)
+	if err != nil {
+		return err
+	}
 	configPath := filepath.Join(pendingDir, "inbounds.json")
 	livePath := filepath.Join(state.configDir, "inbounds.json")
 	contents, err := readConfigWithFallback(configPath, livePath)

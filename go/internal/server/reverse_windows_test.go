@@ -19,7 +19,7 @@ func TestAddUserCreatesReverseArtifacts(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	pendingDir := pendingConfigDir(configDir)
+	pendingDir := mustPendingConfigDir(t, configDir)
 	writeEmptyRouting(t, filepath.Join(pendingDir, "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
@@ -67,7 +67,7 @@ func TestRemoveUserCleansReverseArtifacts(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	pendingDir := pendingConfigDir(configDir)
+	pendingDir := mustPendingConfigDir(t, configDir)
 	writeEmptyRouting(t, filepath.Join(pendingDir, "routing.json"))
 
 	opts := AddUserOptions{
@@ -112,7 +112,7 @@ func TestAddUserDetectsReverseConflicts(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
+	writeEmptyRouting(t, filepath.Join(mustPendingConfigDir(t, configDir), "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -142,7 +142,7 @@ func TestAddUserRejectsDuplicateUser(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
+	writeEmptyRouting(t, filepath.Join(mustPendingConfigDir(t, configDir), "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -172,7 +172,7 @@ func TestAddUserAllowsForceUpdate(t *testing.T) {
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
 	configDir := filepath.Join(dir, "config-server")
 	prepareTrojanConfig(t, configDir, true)
-	writeEmptyRouting(t, filepath.Join(pendingConfigDir(configDir), "routing.json"))
+	writeEmptyRouting(t, filepath.Join(mustPendingConfigDir(t, configDir), "routing.json"))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -195,7 +195,7 @@ func TestAddUserAllowsForceUpdate(t *testing.T) {
 		t.Fatalf("AddUser force: %v", err)
 	}
 
-	state, err := loadTrojanState(pendingConfigDir(configDir))
+	state, err := loadTrojanState(mustPendingConfigDir(t, configDir))
 	if err != nil {
 		t.Fatalf("loadTrojanState: %v", err)
 	}

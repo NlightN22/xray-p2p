@@ -113,6 +113,18 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err != nil {
 		return err
 	}
+	pendingDir, err := config.PendingConfigDir(configDir)
+	if err != nil {
+		return err
+	}
+	liveDir, err := config.LiveConfigDir(configDir)
+	if err != nil {
+		return err
+	}
+	lkgDir, err := config.LkgConfigDir(configDir)
+	if err != nil {
+		return err
+	}
 	paths, err := resolveClientPaths(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
@@ -130,6 +142,15 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err := os.RemoveAll(configDir); err != nil {
 		return fmt.Errorf("xp2p: remove client config dir: %w", err)
 	}
+	if err := os.RemoveAll(pendingDir); err != nil {
+		return fmt.Errorf("xp2p: remove client pending dir: %w", err)
+	}
+	if err := os.RemoveAll(liveDir); err != nil {
+		return fmt.Errorf("xp2p: remove client live dir: %w", err)
+	}
+	if err := os.RemoveAll(lkgDir); err != nil {
+		return fmt.Errorf("xp2p: remove client lkg dir: %w", err)
+	}
 
 	stateRemoved := false
 
@@ -137,6 +158,22 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err := os.Remove(configPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("xp2p: remove client config file: %w", err)
+		}
+	} else {
+		stateRemoved = true
+	}
+	liveConfigPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
+	if err := os.Remove(liveConfigPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove client live config: %w", err)
+		}
+	} else {
+		stateRemoved = true
+	}
+	lkgConfigPath := filepath.Clean(config.LkgConfigPath(layout.ClientConfigFileName))
+	if err := os.Remove(lkgConfigPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove client lkg config: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -276,7 +313,10 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 
 	logsDir := filepath.Join(config.LogRoot(), "client")
 
-	pendingDir := apply.PendingDir(configDir)
+	pendingDir, err := config.PendingConfigDir(configDir)
+	if err != nil {
+		return installState{}, err
+	}
 	state := installState{
 		InstallOptions: base.installOpts,
 		installDir:     base.installDir,

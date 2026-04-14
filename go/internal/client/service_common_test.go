@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -13,27 +12,27 @@ import (
 func TestHasClientConfig(t *testing.T) {
 	cases := []struct {
 		name  string
-		setup func(root, configDir string) error
+		setup func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error
 		want  bool
 	}{
 		{
 			name: "no config",
-			setup: func(root, configDir string) error {
+			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
 				return nil
 			},
 			want: false,
 		},
 		{
 			name: "live config file",
-			setup: func(root, configDir string) error {
-				path := config.ConfigPath(layout.ClientConfigFileName)
+			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
+				path := config.LiveConfigPath(layout.ClientConfigFileName)
 				return writeTestFile(path, "client = {}\n")
 			},
 			want: true,
 		},
 		{
 			name: "pending config file",
-			setup: func(root, configDir string) error {
+			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
 				path := config.PendingConfigPath(layout.ClientConfigFileName)
 				return writeTestFile(path, "client = {}\n")
 			},
@@ -41,15 +40,15 @@ func TestHasClientConfig(t *testing.T) {
 		},
 		{
 			name: "live config files",
-			setup: func(root, configDir string) error {
-				return writeConfigFiles(configDir)
+			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
+				return writeConfigFiles(liveConfigDir)
 			},
 			want: true,
 		},
 		{
 			name: "pending config files",
-			setup: func(root, configDir string) error {
-				return writeConfigFiles(apply.PendingDir(configDir))
+			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
+				return writeConfigFiles(pendingConfigDir)
 			},
 			want: true,
 		},
@@ -59,12 +58,20 @@ func TestHasClientConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
 			t.Setenv("XP2P_CONFIG_ROOT", root)
-			configDir := filepath.Join(root, "config-client")
-			if err := tc.setup(root, configDir); err != nil {
+			desiredConfigDir := filepath.Join(root, "config-client")
+			liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+			if err != nil {
+				t.Fatalf("live config dir: %v", err)
+			}
+			pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
+			if err != nil {
+				t.Fatalf("pending config dir: %v", err)
+			}
+			if err := tc.setup(root, desiredConfigDir, liveConfigDir, pendingConfigDir); err != nil {
 				t.Fatalf("setup failed: %v", err)
 			}
 
-			got, err := hasClientConfig(configDir)
+			got, err := hasClientConfig(liveConfigDir, pendingConfigDir)
 			if err != nil {
 				t.Fatalf("hasClientConfig error: %v", err)
 			}

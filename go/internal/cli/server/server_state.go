@@ -101,7 +101,7 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 }
 
 func serverStateInstallPresent(installDir string) (bool, error) {
-	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 	if found, err := pathExists(configPath); err != nil {
 		return false, err
 	} else if found {
@@ -187,7 +187,7 @@ func resolveServerHeartbeatStatePath(installDir string) (string, error) {
 }
 
 func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
-	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 	if doc, found, err := loadServerConfigDoc(configPath); err != nil {
 		return nil, err
 	} else if found {

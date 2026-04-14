@@ -65,7 +65,7 @@ def _xray_configs_missing(host, config_dir) -> list[str]:
 
 
 def _apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
-    helpers.apply_pending_config(host, role)
+    helpers.state_pending_config(host, role)
 
 
 @contextmanager

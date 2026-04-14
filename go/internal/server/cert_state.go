@@ -19,7 +19,11 @@ func CertificateStateFromConfig(opts CertificateStateOptions) (CertificateState,
 		return CertificateState{}, err
 	}
 	if opts.Pending {
-		configDir = pendingConfigDir(configDir)
+		pendingDir, err := pendingConfigDir(configDir)
+		if err != nil {
+			return CertificateState{}, err
+		}
+		configDir = pendingDir
 	}
 	if err := ensureConfigExists(configDir); err != nil {
 		return CertificateState{}, err

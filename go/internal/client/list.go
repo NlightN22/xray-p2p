@@ -29,7 +29,7 @@ type EndpointRecord struct {
 
 // ListEndpoints returns all configured endpoints.
 func ListEndpoints(opts ListOptions) ([]EndpointRecord, error) {
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if opts.Pending {
 		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)

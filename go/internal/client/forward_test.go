@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -17,7 +16,7 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := apply.PendingDir(liveConfigDir)
+	configDir := mustPendingConfigDir(t, liveConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}
@@ -71,7 +70,7 @@ func TestRemoveForwardCleansState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := apply.PendingDir(liveConfigDir)
+	configDir := mustPendingConfigDir(t, liveConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}
@@ -121,7 +120,7 @@ func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := apply.PendingDir(liveConfigDir)
+	configDir := mustPendingConfigDir(t, liveConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config: %v", err)
 	}

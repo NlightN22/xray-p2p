@@ -195,7 +195,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 
 // ListForwards reports all configured forwards.
 func ListForwards(opts ForwardListOptions) ([]forward.Rule, error) {
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	if opts.Pending {
 		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)

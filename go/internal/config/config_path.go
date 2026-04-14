@@ -27,14 +27,24 @@ func ConfigPath(name string) string {
 	return filepath.Join(root, filepath.Clean(name))
 }
 
-// ApplyRoot returns the configuration apply root directory.
-func ApplyRoot() string {
-	return filepath.Join(filepath.Clean(ConfigRoot()), layout.ApplyDirName)
+// StateRoot returns the configuration state root directory.
+func StateRoot() string {
+	return filepath.Join(filepath.Clean(ConfigRoot()), layout.StateDirName)
 }
 
 // PendingRoot returns the configuration pending root directory.
 func PendingRoot() string {
-	return filepath.Join(ApplyRoot(), layout.PendingDirName)
+	return filepath.Join(StateRoot(), layout.PendingDirName)
+}
+
+// LiveRoot returns the configuration live root directory.
+func LiveRoot() string {
+	return filepath.Join(StateRoot(), layout.LiveDirName)
+}
+
+// LkgRoot returns the configuration last known good root directory.
+func LkgRoot() string {
+	return filepath.Join(StateRoot(), layout.LkgDirName)
 }
 
 // PendingConfigPath returns the full path inside the pending root.
@@ -46,9 +56,27 @@ func PendingConfigPath(name string) string {
 	return filepath.Join(root, filepath.Clean(name))
 }
 
+// LiveConfigPath returns the full path inside the live root.
+func LiveConfigPath(name string) string {
+	root := filepath.Clean(LiveRoot())
+	if root == "." || root == "" {
+		return filepath.Clean(name)
+	}
+	return filepath.Join(root, filepath.Clean(name))
+}
+
+// LkgConfigPath returns the full path inside the last known good root.
+func LkgConfigPath(name string) string {
+	root := filepath.Clean(LkgRoot())
+	if root == "." || root == "" {
+		return filepath.Clean(name)
+	}
+	return filepath.Join(root, filepath.Clean(name))
+}
+
 // ApplyRequestPath returns the full path to apply.request.
 func ApplyRequestPath() string {
-	return filepath.Join(ApplyRoot(), layout.ApplyRequestFileName)
+	return filepath.Join(StateRoot(), layout.ApplyRequestFileName)
 }
 
 // LogRoot returns the default log root for the current platform.

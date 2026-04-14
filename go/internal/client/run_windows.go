@@ -32,7 +32,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return err
 	}
 
-	liveConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	if err != nil {
+		return err
+	}
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
 	if err != nil {
 		return err
 	}
@@ -53,12 +57,12 @@ func Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
 	}
 
-	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, liveConfigDir)
+	rollback, pendingApplied, err := applyPendingIfRequested(apply.RoleClient, desiredConfigDir)
 	if err != nil {
 		return err
 	}
 	if pendingApplied {
-		configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+		configPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
 			logging.Warn("reload client config after apply failed", "err", err)
 		} else {
@@ -270,6 +274,11 @@ func Run(ctx context.Context, opts RunOptions) error {
 		}
 		if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
 			logging.Warn("client runtime state update failed", "err", err)
+		}
+		if readyErr == nil && pendingApplied {
+			if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
+				logging.Warn("lkg snapshot update failed", "err", err)
+			}
 		}
 		return readyErr
 	}

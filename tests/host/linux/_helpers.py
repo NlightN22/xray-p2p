@@ -20,11 +20,18 @@ CLIENT_CONFIG_DIR_NAME = "config-client"
 SERVER_CONFIG_DIR_NAME = "config-server"
 CLIENT_CONFIG_DIR = INSTALL_ROOT / CLIENT_CONFIG_DIR_NAME
 SERVER_CONFIG_DIR = INSTALL_ROOT / SERVER_CONFIG_DIR_NAME
-APPLY_DIR_NAME = ".apply"
+APPLY_DIR_NAME = ".state"
 PENDING_DIR_NAME = "pending"
-CONFIG_PENDING_ROOT = CONFIG_ROOT / APPLY_DIR_NAME / PENDING_DIR_NAME
-CLIENT_PENDING_DIR = CLIENT_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
-SERVER_PENDING_DIR = SERVER_CONFIG_DIR / APPLY_DIR_NAME / PENDING_DIR_NAME
+LIVE_DIR_NAME = "live"
+LKG_DIR_NAME = "lkg"
+STATE_ROOT = CONFIG_ROOT / APPLY_DIR_NAME
+CONFIG_PENDING_ROOT = STATE_ROOT / PENDING_DIR_NAME
+CONFIG_LIVE_ROOT = STATE_ROOT / LIVE_DIR_NAME
+CONFIG_LKG_ROOT = STATE_ROOT / LKG_DIR_NAME
+CLIENT_PENDING_DIR = CONFIG_PENDING_ROOT / CLIENT_CONFIG_DIR_NAME
+SERVER_PENDING_DIR = CONFIG_PENDING_ROOT / SERVER_CONFIG_DIR_NAME
+CLIENT_LIVE_DIR = CONFIG_LIVE_ROOT / CLIENT_CONFIG_DIR_NAME
+SERVER_LIVE_DIR = CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME
 CLIENT_CONFIG_FILE = CONFIG_ROOT / "xp2p-client.toml"
 SERVER_CONFIG_FILE = CONFIG_ROOT / "xp2p-server.toml"
 CLIENT_APPLIED_STATE_FILE = CONFIG_ROOT / "xp2p-client.state.json"
@@ -212,18 +219,8 @@ def write_apply_request(host: Host, role: str) -> None:
 
 def _pending_candidate(path: PurePosixPath | str) -> PurePosixPath:
     path = _as_path(path)
-    if path.is_relative_to(CONFIG_ROOT / APPLY_DIR_NAME):
+    if path.is_relative_to(CONFIG_PENDING_ROOT):
         return path
-    if path.is_relative_to(CLIENT_CONFIG_DIR / APPLY_DIR_NAME):
-        return path
-    if path.is_relative_to(SERVER_CONFIG_DIR / APPLY_DIR_NAME):
-        return path
-    if path.is_relative_to(INSTALL_ROOT):
-        relative = path.relative_to(INSTALL_ROOT)
-        if relative.parts:
-            config_root = relative.parts[0]
-            if config_root.startswith("config-"):
-                return INSTALL_ROOT / config_root / APPLY_DIR_NAME / PENDING_DIR_NAME / PurePosixPath(*relative.parts[1:])
     if path.is_relative_to(CLIENT_CONFIG_DIR):
         return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
     if path.is_relative_to(SERVER_CONFIG_DIR):
@@ -646,11 +643,11 @@ def dump_failure_state(host: Host, label: str) -> None:
             "ls -la /etc/xp2p 2>/dev/null || true",
             "find /etc/xp2p -maxdepth 4 -print 2>/dev/null || true",
             "echo '--- xp2p apply dir ---'",
-            "ls -la /etc/xp2p/.apply 2>/dev/null || true",
+            "ls -la /etc/xp2p/.state 2>/dev/null || true",
             "echo '--- xp2p configs ---'",
             "for f in /etc/xp2p/xp2p-client.toml /etc/xp2p/xp2p-server.toml; do "
             "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
-            "for f in /etc/xp2p/.apply/pending/xp2p-client.toml /etc/xp2p/.apply/pending/xp2p-server.toml; do "
+            "for f in /etc/xp2p/.state/pending/xp2p-client.toml /etc/xp2p/.state/pending/xp2p-server.toml; do "
             "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
             "echo '--- xp2p state ---'",
             "for f in /etc/xp2p/*.state.json /etc/xp2p/*-state-*.json; do "

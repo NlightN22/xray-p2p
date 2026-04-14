@@ -142,6 +142,18 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err != nil {
 		return err
 	}
+	pendingDir, err := config.PendingConfigDir(configDir)
+	if err != nil {
+		return err
+	}
+	liveDir, err := config.LiveConfigDir(configDir)
+	if err != nil {
+		return err
+	}
+	lkgDir, err := config.LkgConfigDir(configDir)
+	if err != nil {
+		return err
+	}
 	if err := removeNetworkdConfig(opts.TunName); err != nil {
 		return err
 	}
@@ -152,11 +164,32 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err := os.RemoveAll(configDir); err != nil {
 		return fmt.Errorf("xp2p: remove server config dir: %w", err)
 	}
+	if err := os.RemoveAll(pendingDir); err != nil {
+		return fmt.Errorf("xp2p: remove server pending dir: %w", err)
+	}
+	if err := os.RemoveAll(liveDir); err != nil {
+		return fmt.Errorf("xp2p: remove server live dir: %w", err)
+	}
+	if err := os.RemoveAll(lkgDir); err != nil {
+		return fmt.Errorf("xp2p: remove server lkg dir: %w", err)
+	}
 
 	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	if err := os.Remove(configPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("xp2p: remove server config file: %w", err)
+		}
+	}
+	liveConfigPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
+	if err := os.Remove(liveConfigPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove server live config: %w", err)
+		}
+	}
+	lkgConfigPath := filepath.Clean(config.LkgConfigPath(layout.ServerConfigFileName))
+	if err := os.Remove(lkgConfigPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: remove server lkg config: %w", err)
 		}
 	}
 	pendingConfigPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
@@ -277,6 +310,10 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 	if err != nil {
 		return installState{}, err
 	}
+	pendingDir, err := config.PendingConfigDir(configDir)
+	if err != nil {
+		return installState{}, err
+	}
 
 	logsDir := filepath.Join(config.LogRoot(), "server")
 
@@ -284,7 +321,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		InstallOptions: base.installOpts,
 		installDir:     base.installDir,
 		configDir:      base.configDir,
-		pendingDir:     apply.PendingDir(base.configDir),
+		pendingDir:     pendingDir,
 		logsDir:        logsDir,
 		portValue:      base.portVal,
 		selfSigned:     base.selfSigned,

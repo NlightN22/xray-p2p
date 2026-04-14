@@ -146,11 +146,14 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 
-	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
-	configDir := pendingConfigDir(liveConfigDir)
+	configDir, err := pendingConfigDir(desiredConfigDir)
+	if err != nil {
+		return err
+	}
 
 	store, err := openServerRedirectStorePending()
 	if err != nil {
@@ -204,11 +207,14 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return err
 	}
 
-	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return err
 	}
-	configDir := pendingConfigDir(liveConfigDir)
+	configDir, err := pendingConfigDir(desiredConfigDir)
+	if err != nil {
+		return err
+	}
 
 	store, err := openServerRedirectStorePending()
 	if err != nil {

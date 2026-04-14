@@ -40,7 +40,11 @@ func InstallPresent(role InstallRole, installDir, configDirName string) (bool, e
 	if err != nil {
 		return false, err
 	}
-	inboundsPath := filepath.Join(configDir, "inbounds.json")
+	liveConfigDir, err := config.LiveConfigDir(configDir)
+	if err != nil {
+		return false, err
+	}
+	inboundsPath := filepath.Join(liveConfigDir, "inbounds.json")
 	if found, err := pathExists(inboundsPath); err != nil {
 		return false, err
 	} else if found {
@@ -52,11 +56,11 @@ func InstallPresent(role InstallRole, installDir, configDirName string) (bool, e
 func roleConfigPaths(role InstallRole) (string, string, error) {
 	switch role {
 	case InstallRoleClient:
-		return filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
+		return filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName)),
 			filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)),
 			nil
 	case InstallRoleServer:
-		return filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
+		return filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
 			filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)),
 			nil
 	default:

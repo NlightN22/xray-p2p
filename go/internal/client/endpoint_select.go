@@ -3,10 +3,10 @@ package client
 import (
 	"errors"
 	"fmt"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -16,7 +16,7 @@ var (
 )
 
 func ResolveMarkerTarget(installDir, host, tag string, index int) (string, int, error) {
-	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
 	if err != nil {

@@ -84,10 +84,10 @@ func TestRunClientRun(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			configRoot := t.TempDir()
+			cfg := tt.cfg(t)
+			configRoot := cfg.Client.InstallDir
 			t.Setenv("XP2P_CONFIG_ROOT", configRoot)
 			t.Setenv("XP2P_LOG_ROOT", filepath.Join(configRoot, "logs"))
-			cfg := tt.cfg(t)
 			if tt.prepared {
 				prepareClientInstallation(t, cfg.Client.InstallDir, cfg.Client.ConfigDir)
 			}

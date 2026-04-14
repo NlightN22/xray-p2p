@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 )
 
@@ -63,11 +64,18 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
-	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
-	configDir := pendingConfigDir(liveConfigDir)
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
+	configDir, err := pendingConfigDir(desiredConfigDir)
+	if err != nil {
+		return ForwardAddResult{}, err
+	}
 
 	store, err := openServerForwardStorePending()
 	if err != nil {
@@ -163,11 +171,18 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, err
 	}
 
-	liveConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
+	desiredConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
 	if err != nil {
 		return forward.Rule{}, err
 	}
-	configDir := pendingConfigDir(liveConfigDir)
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	if err != nil {
+		return forward.Rule{}, err
+	}
+	configDir, err := pendingConfigDir(desiredConfigDir)
+	if err != nil {
+		return forward.Rule{}, err
+	}
 
 	store, err := openServerForwardStorePending()
 	if err != nil {
