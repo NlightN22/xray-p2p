@@ -70,8 +70,12 @@ using a clear split between Desired, Pending, Live, and LKG.
 ### Manual Edit Flow
 
 1. User edits Desired files under `CONFIG_ROOT/` or `config-*/`.
-2. Watchers detect changes and write a complete snapshot to Pending.
-3. `apply.request` is created to trigger service apply.
+2. Watchers debounce bursts of writes and then capture a complete snapshot
+   into Pending.
+3. Snapshot writes are atomic (write temp files, then rename into place) to
+   avoid partial pending state.
+4. `apply.request` is created after the snapshot is fully written to trigger
+   service apply.
 4. Service applies Pending to Live and clears Pending.
 5. On success, the full Live snapshot is written to LKG.
 
