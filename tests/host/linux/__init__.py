@@ -176,6 +176,7 @@ def remove_log_files(host: Host) -> None:
 
 def _cleanup_state(host: Host) -> None:
     cleanup_paths = [
+        CONFIG_ROOT / ".apply",
         STATE_ROOT,
         CONFIG_PENDING_ROOT,
         CONFIG_LIVE_ROOT,
@@ -183,14 +184,26 @@ def _cleanup_state(host: Host) -> None:
         STATE_ROOT / "apply.request",
         CONFIG_ROOT / "xp2p-client.toml",
         CONFIG_ROOT / "xp2p-server.toml",
+        CONFIG_ROOT / "xp2p-client.toml.lkg",
+        CONFIG_ROOT / "xp2p-server.toml.lkg",
         CONFIG_ROOT / "xp2p-client.state.json",
         CONFIG_ROOT / "xp2p-server.state.json",
+        CONFIG_ROOT / "xp2p-client.state.json.lkg",
+        CONFIG_ROOT / "xp2p-server.state.json.lkg",
         CONFIG_ROOT / "xp2p-client.tun-full.json",
         CONFIG_ROOT / "xp2p-server.tun-full.json",
         CLIENT_HEARTBEAT_STATE_FILE,
         SERVER_HEARTBEAT_STATE_FILE,
         CLIENT_CONFIG_DIR,
         SERVER_CONFIG_DIR,
+        CLIENT_CONFIG_DIR / "inbounds.json.lkg",
+        CLIENT_CONFIG_DIR / "outbounds.json.lkg",
+        CLIENT_CONFIG_DIR / "routing.json.lkg",
+        CLIENT_CONFIG_DIR / "logs.json.lkg",
+        SERVER_CONFIG_DIR / "inbounds.json.lkg",
+        SERVER_CONFIG_DIR / "outbounds.json.lkg",
+        SERVER_CONFIG_DIR / "routing.json.lkg",
+        SERVER_CONFIG_DIR / "logs.json.lkg",
         CLIENT_PENDING_DIR,
         SERVER_PENDING_DIR,
         CLIENT_LIVE_DIR,
@@ -218,6 +231,8 @@ def _pending_candidate(path: PurePosixPath | str) -> PurePosixPath:
     path = _as_path(path)
     if path.is_relative_to(CONFIG_PENDING_ROOT):
         return path
+    if path.is_relative_to(CONFIG_LIVE_ROOT) or path.is_relative_to(CONFIG_LKG_ROOT):
+        return path
     if path.is_relative_to(CLIENT_CONFIG_DIR):
         return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
     if path.is_relative_to(SERVER_CONFIG_DIR):
@@ -241,10 +256,16 @@ def _as_path(path: PurePosixPath | str) -> PurePosixPath:
 
 
 def read_client_config(host: Host) -> dict:
+    live_path = CONFIG_LIVE_ROOT / "xp2p-client.toml"
+    if linux_env.path_exists(host, live_path):
+        return read_toml(host, live_path).get("client") or {}
     return read_toml(host, CLIENT_CONFIG_FILE).get("client") or {}
 
 
 def read_server_config(host: Host) -> dict:
+    live_path = CONFIG_LIVE_ROOT / "xp2p-server.toml"
+    if linux_env.path_exists(host, live_path):
+        return read_toml(host, live_path).get("server") or {}
     return read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
 
 

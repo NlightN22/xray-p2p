@@ -1417,11 +1417,17 @@ def cleanup_xp2p_install(
 ) -> None:
     targets: list[Path | str] = []
     extra_state = [
+        CONFIG_ROOT / ".apply",
+        CONFIG_ROOT / APPLY_DIR_NAME,
         CONFIG_ROOT / APPLY_DIR_NAME / "apply.request",
         CONFIG_ROOT / "xp2p-client.toml",
         CONFIG_ROOT / "xp2p-server.toml",
+        CONFIG_ROOT / "xp2p-client.toml.lkg",
+        CONFIG_ROOT / "xp2p-server.toml.lkg",
         CONFIG_ROOT / "xp2p-client.state.json",
         CONFIG_ROOT / "xp2p-server.state.json",
+        CONFIG_ROOT / "xp2p-client.state.json.lkg",
+        CONFIG_ROOT / "xp2p-server.state.json.lkg",
         CONFIG_ROOT / "xp2p-client.tun-full.json",
         CONFIG_ROOT / "xp2p-server.tun-full.json",
         CONFIG_ROOT / "state-heartbeat.json",
@@ -1436,6 +1442,15 @@ def cleanup_xp2p_install(
         SERVER_LIVE_DIR,
         CLIENT_CONFIG_DIR,
         SERVER_CONFIG_DIR,
+        CLIENT_CONFIG_DIR / "inbounds.json.lkg",
+        CLIENT_CONFIG_DIR / "outbounds.json.lkg",
+        CLIENT_CONFIG_DIR / "routing.json.lkg",
+        CLIENT_CONFIG_DIR / "logs.json.lkg",
+        SERVER_CONFIG_DIR / "inbounds.json.lkg",
+        SERVER_CONFIG_DIR / "outbounds.json.lkg",
+        SERVER_CONFIG_DIR / "routing.json.lkg",
+        SERVER_CONFIG_DIR / "logs.json.lkg",
+        LOGS_DIR,
     ]
     for path in [*config_dirs, *state_files, *extra_paths, *extra_state]:
         resolved = _as_path(path)
@@ -1556,7 +1571,18 @@ if (Test-Path {target}) {{
     ]
     files.extend(Path(path) for path in extra_paths)
     file_list = ", ".join(ps_quote(str(path)) for path in files)
-    roots = ", ".join(ps_quote(str(path)) for path in [CONFIG_ROOT, LOGS_DIR, CONFIG_PENDING_ROOT, CONFIG_LIVE_ROOT, CONFIG_LKG_ROOT])
+    roots = ", ".join(
+        ps_quote(str(path))
+        for path in [
+            CONFIG_ROOT,
+            CONFIG_ROOT / APPLY_DIR_NAME,
+            CONFIG_ROOT / ".apply",
+            LOGS_DIR,
+            CONFIG_PENDING_ROOT,
+            CONFIG_LIVE_ROOT,
+            CONFIG_LKG_ROOT,
+        ]
+    )
     script = f"""
 $ErrorActionPreference = 'SilentlyContinue'
 $out = {target}

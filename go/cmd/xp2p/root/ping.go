@@ -235,17 +235,12 @@ func detectSocksProxies(cfg config.Config) (string, string, error) {
 }
 
 func clientConfigPresent() bool {
-	path := config.ConfigPath(layout.ClientConfigFileName)
-	_, err := os.Stat(path)
+	live := config.LiveConfigPath(layout.ClientConfigFileName)
+	_, err := os.Stat(live)
 	if err == nil {
 		return true
 	}
-	pending := config.PendingConfigPath(layout.ClientConfigFileName)
-	if pending == "" {
-		return false
-	}
-	_, err = os.Stat(pending)
-	return err == nil
+	return false
 }
 
 func resolveAutoSocks(preferServer bool, clientAddr, serverAddr string) (string, error) {
@@ -277,26 +272,17 @@ func loadSocksAddress(installDir, configDir string) (string, error) {
 		dir = filepath.Join(base, dir)
 	}
 
-	path := filepath.Join(dir, "inbounds.json")
+	liveDir, err := config.LiveConfigDir(dir)
+	if err != nil || strings.TrimSpace(liveDir) == "" {
+		return "", errSocksInboundNotFound
+	}
+	path := filepath.Join(liveDir, "inbounds.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			pendingDir, err := config.PendingConfigDir(dir)
-			if err != nil {
-				return "", err
-			}
-			pendingPath := filepath.Join(pendingDir, "inbounds.json")
-			data, err = os.ReadFile(pendingPath)
-			if err != nil {
-				if errors.Is(err, os.ErrNotExist) {
-					return "", errSocksInboundNotFound
-				}
-				return "", fmt.Errorf("read %s: %w", pendingPath, err)
-			}
-			path = pendingPath
-		} else {
-			return "", fmt.Errorf("read %s: %w", path, err)
+			return "", errSocksInboundNotFound
 		}
+		return "", fmt.Errorf("read %s: %w", path, err)
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(data))

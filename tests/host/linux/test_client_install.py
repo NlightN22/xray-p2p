@@ -296,7 +296,11 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
             check=True,
         )
         _wait_for_apply_request_clear(client_host, timeout_seconds=30.0)
-        _wait_for_path_present(client_host, helpers.CLIENT_CONFIG_FILE, timeout_seconds=30.0)
+        _wait_for_path_present(
+            client_host,
+            helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml",
+            timeout_seconds=30.0,
+        )
 
         result = xp2p_client_runner(
             "client",

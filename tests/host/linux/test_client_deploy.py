@@ -17,10 +17,12 @@ SERVER_DEPLOY_LOG = PurePosixPath("/tmp/xp2p-server-deploy.log")
 DEPLOY_INSTALL_ROOT = helpers.INSTALL_ROOT
 DEPLOY_CONFIG_ROOT = helpers.CONFIG_ROOT
 DEPLOY_LOG_ROOT = helpers.LOG_ROOT
-CLIENT_CONFIG_DIR = DEPLOY_INSTALL_ROOT / helpers.CLIENT_CONFIG_DIR_NAME
-SERVER_CONFIG_DIR = DEPLOY_INSTALL_ROOT / helpers.SERVER_CONFIG_DIR_NAME
-CLIENT_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-client.toml"
-SERVER_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-server.toml"
+CLIENT_LIVE_DIR = helpers.CLIENT_LIVE_DIR
+SERVER_LIVE_DIR = helpers.SERVER_LIVE_DIR
+CLIENT_LIVE_CONFIG_FILE = helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml"
+SERVER_LIVE_CONFIG_FILE = helpers.CONFIG_LIVE_ROOT / "xp2p-server.toml"
+CLIENT_DESIRED_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-client.toml"
+SERVER_DESIRED_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-server.toml"
 CLIENT_HEARTBEAT_STATE_FILE = DEPLOY_INSTALL_ROOT / "state-heartbeat-client.json"
 SERVER_HEARTBEAT_STATE_FILE = DEPLOY_INSTALL_ROOT / "state-heartbeat-server.json"
 DEPLOY_PORT = "62125"
@@ -233,8 +235,8 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
 
         pending_cert_path = helpers.SERVER_PENDING_DIR / "cert.pem"
         pending_key_path = helpers.SERVER_PENDING_DIR / "key.pem"
-        live_cert_path = SERVER_CONFIG_DIR / "cert.pem"
-        live_key_path = SERVER_CONFIG_DIR / "key.pem"
+        live_cert_path = SERVER_LIVE_DIR / "cert.pem"
+        live_key_path = SERVER_LIVE_DIR / "key.pem"
         if not (
             helpers.path_exists(server_host, pending_cert_path)
             or helpers.path_exists(server_host, live_cert_path)
@@ -247,7 +249,7 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             pytest.fail(f"Expected key at {pending_key_path} or {live_key_path}")
 
         pending_inbounds = helpers.SERVER_PENDING_DIR / "inbounds.json"
-        live_inbounds = SERVER_CONFIG_DIR / "inbounds.json"
+        live_inbounds = SERVER_LIVE_DIR / "inbounds.json"
         if helpers.path_exists(server_host, pending_inbounds):
             inbounds = helpers.read_json(server_host, pending_inbounds)
         elif helpers.path_exists(server_host, live_inbounds):
@@ -672,7 +674,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             check=True,
         )
         _restart_services()
-        server_routing = helpers.read_json(server_host, SERVER_CONFIG_DIR / "routing.json")
+        server_routing = helpers.read_json(server_host, SERVER_LIVE_DIR / "routing.json")
         helpers.assert_server_redirect_rule(server_routing, CLIENT_TUN_CIDR, reverse_two)
         _wait_for_port(server_host, SERVER_DIAG_PORT)
         _wait_for_port(client_host, CLIENT_DIAG_PORT)
@@ -829,8 +831,8 @@ def _start_server_deploy_with_args(
 
 
 def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, password: str) -> None:
-    assert helpers.path_exists(host, CLIENT_CONFIG_DIR), "client config directory missing after deploy"
-    outbounds = helpers.read_json(host, CLIENT_CONFIG_DIR / "outbounds.json")
+    assert helpers.path_exists(host, CLIENT_LIVE_DIR), "client config directory missing after deploy"
+    outbounds = helpers.read_json(host, CLIENT_LIVE_DIR / "outbounds.json")
     helpers.assert_outbound(
         outbounds,
         server_ip,
@@ -843,19 +845,19 @@ def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, pass
 
 
 def _assert_client_state(host: Host, server_ip: str) -> None:
-    state = helpers.read_toml(host, CLIENT_CONFIG_FILE)
+    state = helpers.read_toml(host, CLIENT_LIVE_CONFIG_FILE)
     client_state = state.get("client") or {}
     recorded_hosts = {entry.get("hostname") for entry in client_state.get("endpoints", [])}
     if recorded_hosts != {server_ip}:
         raise AssertionError(
             "Unexpected endpoint entries recorded.\n"
             f"Recorded: {recorded_hosts}\n"
-            f"Config:\n{helpers.read_text(host, CLIENT_CONFIG_FILE)}"
+            f"Config:\n{helpers.read_text(host, CLIENT_LIVE_CONFIG_FILE)}"
         )
 
 
 def _assert_client_routing(host: Host, server_ip: str) -> None:
-    routing = helpers.read_json(host, CLIENT_CONFIG_DIR / "routing.json")
+    routing = helpers.read_json(host, CLIENT_LIVE_DIR / "routing.json")
     helpers.assert_routing_rule(routing, server_ip)
 
 
@@ -1036,7 +1038,7 @@ def _detect_host_ipv4(host: Host) -> str:
 
 
 def _read_server_config(host: Host) -> dict:
-    return helpers.read_toml(host, SERVER_CONFIG_FILE).get("server") or {}
+    return helpers.read_toml(host, SERVER_LIVE_CONFIG_FILE).get("server") or {}
 
 
 def _read_server_config_with_pending(host: Host) -> dict:
@@ -1060,13 +1062,13 @@ def _write_server_config(
         lines.append(f'certificate = "{certificate.as_posix()}"')
     if key is not None:
         lines.append(f'key = "{key.as_posix()}"')
-    helpers.write_text(host, SERVER_CONFIG_FILE, "\n".join(lines) + "\n")
+    helpers.write_text(host, SERVER_DESIRED_CONFIG_FILE, "\n".join(lines) + "\n")
 
 
 def _remove_server_install_markers(host: Host) -> None:
-    helpers.remove_path(host, SERVER_CONFIG_FILE)
+    helpers.remove_path(host, SERVER_DESIRED_CONFIG_FILE)
     helpers.remove_path(host, helpers.SERVER_APPLIED_STATE_FILE)
-    helpers.remove_path(host, SERVER_CONFIG_DIR / "inbounds.json")
+    helpers.remove_path(host, SERVER_LIVE_DIR / "inbounds.json")
     helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "inbounds.json")
     helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "cert.pem")
     helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "key.pem")
@@ -1078,11 +1080,11 @@ def _run_bundle_checks(
     client_runner,
     server_ip: str,
 ) -> None:
-    _run_bundle_explicit(client_host, "client", CLIENT_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
-    _run_bundle_explicit(server_host, "server", SERVER_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
+    _run_bundle_explicit(client_host, "client", CLIENT_LIVE_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
+    _run_bundle_explicit(server_host, "server", SERVER_LIVE_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
     _assert_tunnel_ping(client_runner, server_ip, "after explicit bundle import")
-    _run_bundle_defaults(client_host, "client", CLIENT_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
-    _run_bundle_defaults(server_host, "server", SERVER_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
+    _run_bundle_defaults(client_host, "client", CLIENT_LIVE_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
+    _run_bundle_defaults(server_host, "server", SERVER_LIVE_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
     _assert_tunnel_ping(client_runner, server_ip, "after default bundle import")
     _run_bundle_negative(server_host)
 
@@ -1261,13 +1263,16 @@ def _deploy_env() -> dict[str, str]:
 
 
 def _assert_server_config_exists(server_host: Host) -> None:
-    if helpers.path_exists(server_host, SERVER_CONFIG_FILE):
+    pending_config = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
+    if helpers.path_exists(server_host, SERVER_LIVE_CONFIG_FILE):
+        return
+    if helpers.path_exists(server_host, pending_config):
         return
     deploy_logs = _read_deploy_logs(None, server_host)
     debug = _collect_host_debug(server_host, "server")
     raise AssertionError(
         "Server config file not found after deploy.\n"
-        f"Expected: {SERVER_CONFIG_FILE}\n"
+        f"Expected: {SERVER_LIVE_CONFIG_FILE} or {pending_config}\n"
         f"{debug}\n{deploy_logs}"
     )
 
@@ -1319,8 +1324,10 @@ def _collect_host_debug(host: Host, label: str) -> str:
         DEPLOY_CONFIG_ROOT,
         DEPLOY_CONFIG_ROOT / ".state",
         DEPLOY_CONFIG_ROOT / ".state" / "pending",
-        CLIENT_CONFIG_DIR,
-        SERVER_CONFIG_DIR,
+        DEPLOY_CONFIG_ROOT / ".state" / "live",
+        DEPLOY_CONFIG_ROOT / ".state" / "lkg",
+        CLIENT_LIVE_DIR,
+        SERVER_LIVE_DIR,
     ]
     details = []
     for path in paths:
@@ -1336,10 +1343,10 @@ def _collect_host_debug(host: Host, label: str) -> str:
         "echo \"pending xp2p-client.toml:\"; cat /etc/xp2p/.state/pending/xp2p-client.toml; fi; "
         "if [ -f \"/etc/xp2p/.state/pending/xp2p-server.toml\" ]; then "
         "echo \"pending xp2p-server.toml:\"; cat /etc/xp2p/.state/pending/xp2p-server.toml; fi; "
-        "if [ -f \"/etc/xp2p/xp2p-client.toml\" ]; then "
-        "echo \"live xp2p-client.toml:\"; cat /etc/xp2p/xp2p-client.toml; fi; "
-        "if [ -f \"/etc/xp2p/xp2p-server.toml\" ]; then "
-        "echo \"live xp2p-server.toml:\"; cat /etc/xp2p/xp2p-server.toml; fi; "
+        "if [ -f \"/etc/xp2p/.state/live/xp2p-client.toml\" ]; then "
+        "echo \"live xp2p-client.toml:\"; cat /etc/xp2p/.state/live/xp2p-client.toml; fi; "
+        "if [ -f \"/etc/xp2p/.state/live/xp2p-server.toml\" ]; then "
+        "echo \"live xp2p-server.toml:\"; cat /etc/xp2p/.state/live/xp2p-server.toml; fi; "
         "find /etc/xp2p -maxdepth 4 -name \"state-heartbeat*.json\" -print 2>/dev/null'"
     )
     details.append(f"apply/heartbeat scan (rc={result.rc}):\n{result.stdout}\n{result.stderr}".rstrip())
@@ -1352,9 +1359,9 @@ def _persist_deploy_artifacts(host: Host, run_id: str, *, role: str) -> None:
             CLIENT_DEPLOY_LOG,
             DEPLOY_LOG_ROOT / "client" / "service.log",
             DEPLOY_CONFIG_ROOT / ".state",
-            DEPLOY_CONFIG_ROOT / "xp2p-client.toml",
+            CLIENT_LIVE_CONFIG_FILE,
             DEPLOY_CONFIG_ROOT / "xp2p-client.state.json",
-            DEPLOY_INSTALL_ROOT / "config-client",
+            CLIENT_LIVE_DIR,
             DEPLOY_INSTALL_ROOT / "state-heartbeat-client.json",
         ]
     else:
@@ -1362,9 +1369,9 @@ def _persist_deploy_artifacts(host: Host, run_id: str, *, role: str) -> None:
             SERVER_DEPLOY_LOG,
             DEPLOY_LOG_ROOT / "server" / "service.log",
             DEPLOY_CONFIG_ROOT / ".state",
-            DEPLOY_CONFIG_ROOT / "xp2p-server.toml",
+            SERVER_LIVE_CONFIG_FILE,
             DEPLOY_CONFIG_ROOT / "xp2p-server.state.json",
-            DEPLOY_INSTALL_ROOT / "config-server",
+            SERVER_LIVE_DIR,
             DEPLOY_INSTALL_ROOT / "state-heartbeat-server.json",
         ]
     dest = DEPLOY_SYNC_ROOT / run_id / role

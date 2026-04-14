@@ -122,8 +122,10 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == cert_source.as_posix()
-        assert primary_cert.get("keyFile") == key_source.as_posix()
+        expected_cert = (helpers.SERVER_LIVE_DIR / "cert.pem").as_posix()
+        expected_key = (helpers.SERVER_LIVE_DIR / "key.pem").as_posix()
+        assert primary_cert.get("certificateFile") == expected_cert
+        assert primary_cert.get("keyFile") == expected_key
         assert _parse_self_signed(_read_cert_state(xp2p_server_runner)) in {True, False}
         assert "allowInsecure" not in tls_settings
         assert helpers.path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to exist in config-server"
@@ -151,10 +153,10 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
             check=True,
         )
 
-        live_cert = helpers.SERVER_CONFIG_DIR / "cert.pem"
-        live_key = helpers.SERVER_CONFIG_DIR / "key.pem"
-        assert helpers.path_exists(server_host, live_cert), "Expected cert.pem to exist"
-        assert helpers.path_exists(server_host, live_key), "Expected key.pem to exist"
+        pending_cert = helpers.SERVER_PENDING_DIR / "cert.pem"
+        pending_key = helpers.SERVER_PENDING_DIR / "key.pem"
+        assert helpers.path_exists(server_host, pending_cert), "Expected cert.pem to exist"
+        assert helpers.path_exists(server_host, pending_key), "Expected key.pem to exist"
 
         inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
         trojan = _trojan_inbound(inbounds)
@@ -163,8 +165,10 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == live_cert.as_posix()
-        assert primary_cert.get("keyFile") == live_key.as_posix()
+        expected_cert = (helpers.SERVER_LIVE_DIR / "cert.pem").as_posix()
+        expected_key = (helpers.SERVER_LIVE_DIR / "key.pem").as_posix()
+        assert primary_cert.get("certificateFile") == expected_cert
+        assert primary_cert.get("keyFile") == expected_key
 
         state_output = _read_cert_state(xp2p_server_runner)
         assert "Status:      OK" in state_output

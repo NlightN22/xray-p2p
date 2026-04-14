@@ -101,8 +101,8 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	}
 
 	opts := client.RunOptions{
-		InstallDir:   installDir,
-		ConfigDir:    configDirName,
+		InstallDir: installDir,
+		ConfigDir:  configDirName,
 		Heartbeat: client.HeartbeatOptions{
 			Enabled:      *hbEnabled,
 			Interval:     *hbInterval,
@@ -170,6 +170,21 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 	configInfo, err := os.Stat(liveConfigDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			pendingDir, err := config.PendingConfigDir(configDirPath)
+			if err != nil {
+				return false, err
+			}
+			if present, err := configFilesPresent(pendingDir, requiredClientConfigFiles); err != nil {
+				return false, err
+			} else if present {
+				return true, nil
+			}
+			pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+			if _, err := os.Stat(pendingConfig); err == nil {
+				return true, nil
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
+			}
 			return false, nil
 		}
 		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfigDir, err)
@@ -178,16 +193,7 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
 	}
 
-	if present, err := configFilesPresent(liveConfigDir, requiredClientConfigFiles); err != nil {
-		return false, err
-	} else if present {
-		return true, nil
-	}
-	pendingDir, err := config.PendingConfigDir(configDirPath)
-	if err != nil {
-		return false, err
-	}
-	return configFilesPresent(pendingDir, requiredClientConfigFiles)
+	return configFilesPresent(liveConfigDir, requiredClientConfigFiles)
 }
 
 func configFilesPresent(dir string, names []string) (bool, error) {

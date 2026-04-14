@@ -157,6 +157,7 @@ def _purge_install_paths(host: Host, install_path: str, config_name: str, role: 
     heartbeat = CLIENT_HEARTBEAT_STATE_FILE if role == "client" else SERVER_HEARTBEAT_STATE_FILE
     targets = [
         config_path,
+        (CONFIG_ROOT / ".apply").as_posix(),
         STATE_ROOT.as_posix(),
         CONFIG_PENDING_ROOT.as_posix(),
         CONFIG_LIVE_ROOT.as_posix(),
@@ -167,10 +168,24 @@ def _purge_install_paths(host: Host, install_path: str, config_name: str, role: 
         lkg_config,
         APPLY_REQUEST.as_posix(),
         heartbeat.as_posix(),
+        (CONFIG_ROOT / "xp2p-client.toml.lkg").as_posix(),
+        (CONFIG_ROOT / "xp2p-server.toml.lkg").as_posix(),
+        (CONFIG_ROOT / "xp2p-client.state.json.lkg").as_posix(),
+        (CONFIG_ROOT / "xp2p-server.state.json.lkg").as_posix(),
+        (CONFIG_ROOT / "xp2p-client.tun-full.json").as_posix(),
+        (CONFIG_ROOT / "xp2p-server.tun-full.json").as_posix(),
         CLIENT_PENDING_DIR.as_posix(),
         SERVER_PENDING_DIR.as_posix(),
         CLIENT_LIVE_DIR.as_posix(),
         SERVER_LIVE_DIR.as_posix(),
+        (CLIENT_CONFIG_DIR / "inbounds.json.lkg").as_posix(),
+        (CLIENT_CONFIG_DIR / "outbounds.json.lkg").as_posix(),
+        (CLIENT_CONFIG_DIR / "routing.json.lkg").as_posix(),
+        (CLIENT_CONFIG_DIR / "logs.json.lkg").as_posix(),
+        (SERVER_CONFIG_DIR / "inbounds.json.lkg").as_posix(),
+        (SERVER_CONFIG_DIR / "outbounds.json.lkg").as_posix(),
+        (SERVER_CONFIG_DIR / "routing.json.lkg").as_posix(),
+        (SERVER_CONFIG_DIR / "logs.json.lkg").as_posix(),
     ]
     for item in state_files:
         targets.append(item.as_posix())
@@ -579,6 +594,8 @@ def dump_logs(host: Host, label: str, paths: list[PurePosixPath] | None = None, 
 def _pending_candidate(path: PurePosixPath) -> PurePosixPath:
     if path.is_relative_to(CONFIG_PENDING_ROOT):
         return path
+    if path.is_relative_to(CONFIG_LIVE_ROOT):
+        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_LIVE_ROOT)
     if path.is_relative_to(CLIENT_CONFIG_DIR):
         return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
     if path.is_relative_to(SERVER_CONFIG_DIR):

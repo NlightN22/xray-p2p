@@ -388,6 +388,10 @@ func serverArtifactsPresent(state installState) (bool, string, error) {
 func deployConfiguration(state installState) error {
 	var certPath string
 	var keyPath string
+	liveDir, err := config.LiveConfigDir(state.configDir)
+	if err != nil {
+		return err
+	}
 	if state.certDest != "" {
 		if state.selfSigned {
 			logging.Info("xp2p server install generating self-signed certificate",
@@ -410,12 +414,12 @@ func deployConfiguration(state installState) error {
 			if err := copyFile(state.KeyFile, state.keyDest, 0o600); err != nil {
 				return fmt.Errorf("xp2p: copy key: %w", err)
 			}
-			certPath = filepath.ToSlash(state.certDest)
-			keyPath = filepath.ToSlash(state.keyDest)
+			certPath = filepath.ToSlash(filepath.Join(liveDir, "cert.pem"))
+			keyPath = filepath.ToSlash(filepath.Join(liveDir, "key.pem"))
 		}
 		if certPath == "" && keyPath == "" {
-			certPath = filepath.ToSlash(filepath.Join(state.configDir, "cert.pem"))
-			keyPath = filepath.ToSlash(filepath.Join(state.configDir, "key.pem"))
+			certPath = filepath.ToSlash(filepath.Join(liveDir, "cert.pem"))
+			keyPath = filepath.ToSlash(filepath.Join(liveDir, "key.pem"))
 		}
 	}
 

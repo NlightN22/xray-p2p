@@ -133,8 +133,8 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "ls /etc/xp2p/config-client",
-                "sudo -n ls -la /etc/xp2p/config-client 2>/dev/null || true",
+                "ls /etc/xp2p/.state/live/config-client",
+                "sudo -n ls -la /etc/xp2p/.state/live/config-client 2>/dev/null || true",
             )
         )
         sections.append(
@@ -154,8 +154,8 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "ls /etc/xp2p/config-server",
-                "sudo -n ls -la /etc/xp2p/config-server 2>/dev/null || true",
+                "ls /etc/xp2p/.state/live/config-server",
+                "sudo -n ls -la /etc/xp2p/.state/live/config-server 2>/dev/null || true",
             )
         )
         sections.append(
@@ -219,8 +219,8 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "cat /etc/xp2p/config-client/inbounds.json",
-                "sudo -n cat /etc/xp2p/config-client/inbounds.json 2>/dev/null || true",
+                "cat /etc/xp2p/.state/live/config-client/inbounds.json",
+                "sudo -n cat /etc/xp2p/.state/live/config-client/inbounds.json 2>/dev/null || true",
             )
         )
         sections.append(
@@ -233,8 +233,8 @@ def _collect_tunnel_diag(server_host, client_host) -> str:
         sections.append(
             _diag_cmd(
                 host,
-                "cat /etc/xp2p/config-server/inbounds.json",
-                "sudo -n cat /etc/xp2p/config-server/inbounds.json 2>/dev/null || true",
+                "cat /etc/xp2p/.state/live/config-server/inbounds.json",
+                "sudo -n cat /etc/xp2p/.state/live/config-server/inbounds.json 2>/dev/null || true",
             )
         )
         sections.append(
@@ -394,7 +394,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
         ).stdout or ""
         assert DIAG_CIDR in redirect_list
 
-        routing = helpers.read_json(client_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        routing = helpers.read_json(client_host, helpers.CLIENT_LIVE_DIR / "routing.json")
         helpers.assert_redirect_rule(routing, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
 
         client_runner(

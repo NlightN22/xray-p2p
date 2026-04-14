@@ -380,8 +380,8 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_CONFIG_DIR_NAME,
     ):
         time.sleep(2.0)
-        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_CONFIG_DIR / "inbounds.json")
-        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_LIVE_DIR / "inbounds.json")
+        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_LIVE_DIR / "inbounds.json")
         _wait_for_port(env["server_host"], server_socks_port)
         _wait_for_port(env["client_host"], client_socks_port)
         yield
@@ -573,7 +573,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     chain_name = "xray_transparent_prerouting"
     client_listener_port = SERVER_DIAGNOSTICS_PORT
     server_listener_port = CLIENT_DIAGNOSTICS_PORT
-    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_CONFIG_DIR / 'inbounds.json')}"
+    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_LIVE_DIR / 'inbounds.json')}"
     client_nat_runner = _nat_runner(client_host, role="client")
     server_nat_runner = _nat_runner(server_host, role="server")
 
@@ -669,12 +669,12 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         server_iptables = server_host.run("sudo -n /usr/sbin/iptables -t nat -L XRAY_TRANSPARENT -v -n")
         sockets = client_host.run("sudo -n netstat -lpn 2>/dev/null | grep '51180|51080|52080|62022|62023' || true")
         processes = client_host.run("ps w | grep -E 'xp2p|xray' | grep -v grep")
-        client_inbounds = client_host.run(f"cat {helpers.CLIENT_CONFIG_DIR / 'inbounds.json'} 2>/dev/null || true")
-        server_inbounds = server_host.run(f"cat {helpers.SERVER_CONFIG_DIR / 'inbounds.json'} 2>/dev/null || true")
-        client_routing = client_host.run(f"cat {helpers.CLIENT_CONFIG_DIR / 'routing.json'} 2>/dev/null || true")
-        server_routing = server_host.run(f"cat {helpers.SERVER_CONFIG_DIR / 'routing.json'} 2>/dev/null || true")
-        client_logs_json = client_host.run(f"cat {helpers.CLIENT_CONFIG_DIR / 'logs.json'} 2>/dev/null || true")
-        server_logs_json = server_host.run(f"cat {helpers.SERVER_CONFIG_DIR / 'logs.json'} 2>/dev/null || true")
+        client_inbounds = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'inbounds.json'} 2>/dev/null || true")
+        server_inbounds = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'inbounds.json'} 2>/dev/null || true")
+        client_routing = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'routing.json'} 2>/dev/null || true")
+        server_routing = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'routing.json'} 2>/dev/null || true")
+        client_logs_json = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'logs.json'} 2>/dev/null || true")
+        server_logs_json = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'logs.json'} 2>/dev/null || true")
         client_run_log = client_host.run("cat /tmp/xp2p-*-run.log 2>/dev/null || true")
         server_run_log = server_host.run("cat /tmp/xp2p-*-run.log 2>/dev/null || true")
         client_err_log = client_host.run("cat /var/log/xp2p/*.err 2>/dev/null || true")
@@ -755,10 +755,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        client_inbounds = _read_json_with_pending(client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
+        client_inbounds = _read_json_with_pending(client_host, helpers.CLIENT_LIVE_DIR / "inbounds.json")
         client_dokodemo_ports = _dokodemo_ports(client_inbounds)
         assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
-        server_inbounds = _read_json_with_pending(server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        server_inbounds = _read_json_with_pending(server_host, helpers.SERVER_LIVE_DIR / "inbounds.json")
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
@@ -1052,8 +1052,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             server_entries = _parse_redirect_output(server_redirect_list)
         assert not _has_redirect_entry(client_entries, CLIENT_REDIRECT_CIDR, endpoint_tag)
         if _has_redirect_entry(server_entries, SERVER_REDIRECT_CIDR, reverse_tag):
-            server_config = server_host.run("cat /etc/xp2p/xp2p-server.toml 2>/dev/null || true")
-            server_routing = server_host.run(f"cat {helpers.SERVER_CONFIG_DIR / 'routing.json'} 2>/dev/null || true")
+            server_config = server_host.run("cat /etc/xp2p/.state/live/xp2p-server.toml 2>/dev/null || true")
+            server_routing = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'routing.json'} 2>/dev/null || true")
             remove_details = ""
             for idx, result in enumerate(remove_results, start=1):
                 remove_details += (

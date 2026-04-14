@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
@@ -58,7 +60,11 @@ func TestSetCertificateGeneratesSelfSigned(t *testing.T) {
 	}
 
 	configPath := filepath.Join(pendingDir, "inbounds.json")
-	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(filepath.Join(configDir, "cert.pem")), filepath.ToSlash(filepath.Join(configDir, "key.pem")))
+	liveConfigDir, err := config.LiveConfigDir(configDir)
+	if err != nil {
+		t.Fatalf("live config dir: %v", err)
+	}
+	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(filepath.Join(liveConfigDir, "cert.pem")), filepath.ToSlash(filepath.Join(liveConfigDir, "key.pem")))
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -106,8 +112,13 @@ func TestSetCertificateUsesProvidedPaths(t *testing.T) {
 		t.Fatalf("SetCertificate failed: %v", err)
 	}
 
-	configPath := filepath.Join(mustPendingConfigDir(t, configDir), "inbounds.json")
-	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(srcCert), filepath.ToSlash(srcKey))
+	pendingDir := mustPendingConfigDir(t, configDir)
+	configPath := filepath.Join(pendingDir, "inbounds.json")
+	liveConfigDir, err := config.LiveConfigDir(configDir)
+	if err != nil {
+		t.Fatalf("live config dir: %v", err)
+	}
+	assertTLSConfigUpdated(t, configPath, filepath.ToSlash(filepath.Join(liveConfigDir, "cert.pem")), filepath.ToSlash(filepath.Join(liveConfigDir, "key.pem")))
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {

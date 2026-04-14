@@ -123,13 +123,6 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 			)
 			return nil
 		}
-		if _, err := os.Stat(liveConfigDir); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				logging.Warn("xp2p client service: configuration directory missing; stopping", "path", liveConfigDir)
-				return nil
-			}
-			return fmt.Errorf("xp2p: configuration directory check failed at %s: %w", liveConfigDir, err)
-		}
 		runOpts := baseRunOpts
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
 			logging.Warn("xp2p client service: failed to reload config", "err", err)
@@ -160,20 +153,25 @@ func hasClientConfig(liveConfigDir, pendingConfigDir string) (bool, error) {
 		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfig, err)
 	}
 
-	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-	if pendingConfig != "" {
-		if _, err := os.Stat(pendingConfig); err == nil {
-			return true, nil
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
-		}
-	}
-
 	if ok, err := configFilesPresent(liveConfigDir, runRequiredConfigFiles); err != nil {
 		return false, err
 	} else if ok {
 		return true, nil
 	}
 
-	return configFilesPresent(pendingConfigDir, runRequiredConfigFiles)
+	if _, err := os.Stat(config.ApplyRequestPath()); err == nil {
+		pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+		if pendingConfig != "" {
+			if _, err := os.Stat(pendingConfig); err == nil {
+				return true, nil
+			} else if !errors.Is(err, os.ErrNotExist) {
+				return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
+			}
+		}
+		return configFilesPresent(pendingConfigDir, runRequiredConfigFiles)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("xp2p: stat %s: %w", config.ApplyRequestPath(), err)
+	}
+
+	return false, nil
 }

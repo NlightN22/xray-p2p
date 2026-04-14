@@ -108,11 +108,13 @@ def _heartbeat_debug(server_host, client_hosts) -> str:
     server_run_log = _tail_log(server_host, "/tmp/xp2p-server-run.log")
     server_err_log = _tail_log(server_host, helpers.SERVER_LOG_FILE.as_posix())
     server_listen = server_host.run("sudo -n ss -lntp | grep -E ':(62022|51080|52080) ' || true").stdout or ""
-    server_inbounds = server_host.run("sudo -n cat /etc/xp2p/config-server/inbounds.json 2>/dev/null || true").stdout or ""
+    server_inbounds = server_host.run(
+        "sudo -n cat /etc/xp2p/.state/live/config-server/inbounds.json 2>/dev/null || true"
+    ).stdout or ""
     client_logs = []
     listen_cmd = "sudo -n ss -lntp | grep -E ':(51180|52180) ' || true"
-    marker_cmd = "sudo -n grep -n '127\\.255' /etc/xp2p/config-client/routing.json 2>/dev/null || true"
-    outbounds_cmd = "sudo -n cat /etc/xp2p/config-client/outbounds.json 2>/dev/null || true"
+    marker_cmd = "sudo -n grep -n '127\\.255' /etc/xp2p/.state/live/config-client/routing.json 2>/dev/null || true"
+    outbounds_cmd = "sudo -n cat /etc/xp2p/.state/live/config-client/outbounds.json 2>/dev/null || true"
     for host in client_hosts:
         listening = host.run(listen_cmd).stdout or ""
         marker_rules = host.run(marker_cmd).stdout or ""

@@ -155,14 +155,14 @@ def assert_ping_ok(runner, target: str) -> None:
 
 
 def assert_client_endpoints(host: Host, expected_hosts: set[str]) -> None:
-    state = helpers.read_client_config(host)
+    state = helpers.read_toml(host, helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml").get("client") or {}
     endpoints = state.get("endpoints", []) or []
     recorded_hosts = {entry.get("hostname") for entry in endpoints if entry.get("hostname")}
     if recorded_hosts != expected_hosts:
         raise AssertionError(
             "Unexpected client endpoints recorded.\n"
             f"Recorded: {recorded_hosts}\nExpected: {expected_hosts}\n"
-            f"Config:\n{helpers.read_text(host, helpers.CLIENT_CONFIG_FILE)}"
+            f"Config:\n{helpers.read_text(host, helpers.CONFIG_LIVE_ROOT / 'xp2p-client.toml')}"
         )
 
 
@@ -292,11 +292,11 @@ def _collect_host_debug(host: Host, label: str, *, deploy_log: PurePosixPath) ->
     parts.append(_run_cmd(host, "ps aux | grep -E 'xp2p|xray' | grep -v grep || true"))
     parts.append(_run_cmd(host, f"sudo -n {linux_env.INSTALL_PATH.as_posix()} {label} service status || true"))
     parts.append(_run_cmd(host, "sudo -n cat /etc/xp2p/.state/apply.request 2>/dev/null || true"))
-    parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/.state /etc/xp2p/.state/pending 2>/dev/null || true"))
+    parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/.state /etc/xp2p/.state/pending /etc/xp2p/.state/live /etc/xp2p/.state/lkg 2>/dev/null || true"))
     parts.append(_run_cmd(host, "sudo -n /bin/sh -c 'for f in /etc/xp2p/.state/pending/*.toml; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
-    parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/config-client /etc/xp2p/config-server 2>/dev/null || true"))
-    parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /etc/xp2p/config-{label}/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
-    parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /etc/xp2p/config-{label}/.state/pending/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
+    parts.append(_run_cmd(host, "sudo -n ls -la /etc/xp2p/.state/live/config-client /etc/xp2p/.state/live/config-server 2>/dev/null || true"))
+    parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /etc/xp2p/.state/live/config-{label}/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
+    parts.append(_run_cmd(host, f"sudo -n /bin/sh -c 'for f in /etc/xp2p/.state/pending/config-{label}/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done'"))
     return "\n".join(parts)
 
 

@@ -50,6 +50,19 @@ When a command updates configuration:
 This ensures that apply can generate all required runtime files (inbounds,
 outbounds, routing, logs) from a complete config snapshot.
 
+## Read Rules and Exceptions
+
+- Pending is authoritative only for staging edits and apply.
+- Runtime behavior (service run, diagnostics, ping, OS routing) reads live
+  config only, never pending.
+- If pending exists without live, the runtime should request apply
+  (`apply.request`) and wait for service apply instead of running from pending.
+- Limited exceptions are allowed:
+  - Asset presence checks may treat pending as "installed" to avoid triggering
+    `--auto-install` when a full pending snapshot already exists.
+  - Deploy validation may start temporary xray-core using the pending snapshot,
+    but it must not write to live or bypass apply.
+
 ## Edit + Rollback Flow
 
 This section describes the flow for manual edits, CLI edits, and rollback

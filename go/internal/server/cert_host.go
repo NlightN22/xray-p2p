@@ -68,8 +68,22 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 		}
 		state.certDest = filepath.Join(pendingDir, "cert.pem")
 		state.keyDest = filepath.Join(pendingDir, "key.pem")
-		state.certPath = filepath.Join(state.configDir, "cert.pem")
-		state.keyPath = filepath.Join(state.configDir, "key.pem")
+		state.certPath = filepath.Join(state.liveConfigDir, "cert.pem")
+		state.keyPath = filepath.Join(state.liveConfigDir, "key.pem")
+	} else if state.certSource == CertificateSourcePath {
+		if err := os.MkdirAll(pendingDir, 0o755); err != nil {
+			return fmt.Errorf("xp2p: create pending config directory: %w", err)
+		}
+		state.certDest = filepath.Join(pendingDir, "cert.pem")
+		state.keyDest = filepath.Join(pendingDir, "key.pem")
+		if err := copyFile(state.certPath, state.certDest, 0o644); err != nil {
+			return fmt.Errorf("xp2p: copy certificate: %w", err)
+		}
+		if err := copyFile(state.keyPath, state.keyDest, 0o600); err != nil {
+			return fmt.Errorf("xp2p: copy key: %w", err)
+		}
+		state.certPath = filepath.Join(state.liveConfigDir, "cert.pem")
+		state.keyPath = filepath.Join(state.liveConfigDir, "key.pem")
 	}
 	if err := provisionCertificateFiles(state); err != nil {
 		return err
@@ -101,6 +115,7 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 
 type certificateState struct {
 	configDir          string
+	liveConfigDir      string
 	certDest           string
 	keyDest            string
 	certPath           string
@@ -124,6 +139,10 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 	}
 
 	configDir, err := resolveCertificateConfigDir(installDir, opts.ConfigDir)
+	if err != nil {
+		return certificateState{}, err
+	}
+	liveConfigDir, err := config.LiveConfigDir(configDir)
 	if err != nil {
 		return certificateState{}, err
 	}
@@ -152,12 +171,13 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 	certPath := inputs.certPath
 	keyPath := inputs.keyPath
 	if inputs.selfSigned {
-		certPath = filepath.Join(configDir, "cert.pem")
-		keyPath = filepath.Join(configDir, "key.pem")
+		certPath = filepath.Join(liveConfigDir, "cert.pem")
+		keyPath = filepath.Join(liveConfigDir, "key.pem")
 	}
 
 	return certificateState{
 		configDir:          configDir,
+		liveConfigDir:      liveConfigDir,
 		certDest:           filepath.Join(configDir, "cert.pem"),
 		keyDest:            filepath.Join(configDir, "key.pem"),
 		certPath:           certPath,

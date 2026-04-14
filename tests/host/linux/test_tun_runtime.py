@@ -40,7 +40,9 @@ def _dump_diagnostics(host, role: str) -> None:
     ]
     for cmd in commands:
         result = host.run(f"sudo -n {cmd}")
-        print(f"[diag] {cmd}\n{result.stdout}\n{result.stderr}")
+        stdout = helpers.safe_output(result.stdout)
+        stderr = helpers.safe_output(result.stderr)
+        print(f"[diag] {cmd}\n{stdout}\n{stderr}")
 
 
 def _assert_tun_addr(host, name: str, addr: str) -> None:

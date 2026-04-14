@@ -55,6 +55,16 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - CLI commands must only update configuration and state files.
 - OS-level changes such as TUN setup, routes, and `nftables` must be applied only by `xp2p run` or the service layer.
 - Apply flow is strict: pending config is the single source of truth. If a pending snapshot exists, commands must read and update pending only, never mix live data. Live config is used only to seed pending when pending does not exist.
+- Runtime behavior (service run, diagnostics, ping, OS routing) reads live config only, never pending. Pending is for staging/apply.
+- Allowed exceptions to the live-only runtime rule:
+  - Asset presence checks may treat pending as installed to avoid triggering `--auto-install` when a full pending snapshot already exists.
+  - Deploy validation may start temporary xray-core using the pending snapshot without touching live.
+
+## Testing rules
+
+- Tests must read pending snapshots only when asserting staged configuration changes.
+- Tests must read live config when asserting runtime behavior or service state.
+- Failure dumps should include the full `.state` tree structure (pending/live/lkg/apply.request) when available.
 
 ## CLI standards
 

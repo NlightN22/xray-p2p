@@ -405,11 +405,19 @@ func filterCompletions(values []string, prefix string) []string {
 }
 
 func resolveConfigPath(name string) string {
-	live := config.ConfigPath(name)
+	pending := config.PendingConfigPath(name)
+	if _, err := os.Stat(pending); err == nil {
+		return pending
+	}
+	live := config.LiveConfigPath(name)
 	if _, err := os.Stat(live); err == nil {
 		return live
 	}
-	return config.PendingConfigPath(name)
+	desired := config.ConfigPath(name)
+	if _, err := os.Stat(desired); err == nil {
+		return desired
+	}
+	return pending
 }
 
 func restartClientServiceIfActive(ctx context.Context) error {

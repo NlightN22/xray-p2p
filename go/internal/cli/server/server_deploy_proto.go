@@ -232,8 +232,14 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 			"routing.json",
 			"logs.json",
 		}
+		liveConfigDir, err := config.LiveConfigDir(resolvedConfigDir)
+		if err != nil {
+			_ = writeLine(rw, "ERR "+err.Error())
+			notifyFailure(results)
+			return
+		}
 		for _, name := range required {
-			path := filepath.Join(resolvedConfigDir, name)
+			path := filepath.Join(liveConfigDir, name)
 			if _, err := os.Stat(path); err != nil {
 				if errors.Is(err, os.ErrNotExist) {
 					_ = writeLine(rw, "ERR xp2p: server install incomplete: missing "+name)
@@ -501,6 +507,9 @@ func ensureDeployCertificates(liveConfigDir string) error {
 	}
 	if !fileExists(certPending) || !fileExists(keyPending) {
 		return fmt.Errorf("xp2p: server deploy: pending certificates missing")
+	}
+	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
+		return fmt.Errorf("xp2p: create %s: %w", liveConfigDir, err)
 	}
 	if err := copyFile(certPending, certLive); err != nil {
 		return err
