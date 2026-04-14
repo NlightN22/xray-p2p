@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -103,6 +104,46 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		return err
 	}
 	defer logWatcherStop()
+
+	pendingWatcherStop, err := service.StartConfigWatcher(ctx, service.ConfigWatchOptions{
+		Paths:         []string{desiredConfigDir},
+		Files:         []string{filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))},
+		IgnorePrefix:  []string{config.StateRoot()},
+		WatchDebounce: 400 * time.Millisecond,
+		OnChange: func(path string) {
+			wrote, snapErr := apply.SnapshotPendingFromDesired(apply.PendingSnapshotOptions{
+				DesiredConfigFile: filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
+				DesiredConfigDir:  desiredConfigDir,
+				LiveConfigFile:    filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
+				LiveConfigDir:     liveConfigDir,
+				PendingConfigFile: filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName)),
+				PendingConfigDir:  pendingConfigDir,
+				AuditPath:         config.AuditLogPath(),
+			})
+			if snapErr != nil {
+				logging.Warn("xp2p server watcher: pending snapshot failed", "path", path, "err", snapErr)
+				return
+			}
+			if !wrote {
+				return
+			}
+			if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
+				logging.Warn("xp2p server watcher: apply error cleanup failed", "err", err)
+			}
+			req, err := apply.NewRequest(apply.RoleServer)
+			if err != nil {
+				logging.Warn("xp2p server watcher: apply request create failed", "err", err)
+				return
+			}
+			if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+				logging.Warn("xp2p server watcher: apply request write failed", "err", err)
+			}
+		},
+	})
+	if err != nil {
+		return err
+	}
+	defer pendingWatcherStop()
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
 		hasConfig, err := hasServerConfig(liveConfigDir, pendingConfigDir)

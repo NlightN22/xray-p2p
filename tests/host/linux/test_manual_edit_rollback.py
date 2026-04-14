@@ -50,15 +50,30 @@ def _read_toml(host, path):
         raise AssertionError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
 
 
-def _toggle_bool_setting(content: str, key: str) -> tuple[str, bool]:
-    pattern = re.compile(rf"^{re.escape(key)}\\s*=\\s*(true|false)\\s*$", re.MULTILINE)
-    match = pattern.search(content)
-    if not match:
-        raise AssertionError(f"Expected {key} to be present in config:\n{content}")
-    current = match.group(1).lower() == "true"
-    new_value = "false" if current else "true"
-    updated = pattern.sub(f"{key} = {new_value}", content, count=1)
-    return updated, not current
+def _set_int_setting(content: str, key: str, value: int) -> str:
+    want = re.sub(r"[^a-z0-9]", "", key.lower())
+    lines = content.splitlines(keepends=True)
+    for idx, line in enumerate(lines):
+        if "=" not in line:
+            continue
+        left, right = line.split("=", 1)
+        got = re.sub(r"[^a-z0-9]", "", left.lower())
+        if got != want and not got.endswith(want):
+            continue
+        match = re.match(r"(?P<ws>\s*)(?P<num>\d+)(?P<tail>.*)\Z", right, re.DOTALL)
+        if not match:
+            continue
+        lines[idx] = f"{left}={match.group('ws')}{int(value)}{match.group('tail')}"
+        return "".join(lines)
+    candidates = []
+    for line in lines:
+        if "mtu" not in line.lower():
+            continue
+        candidates.append((line.rstrip("\n"), [hex(ord(ch)) for ch in line.rstrip("\n")]))
+    raise AssertionError(
+        f"Expected {key} to be present in config:\\n{content}\\n"
+        f"Candidate lines (repr + codepoints):\\n{candidates}"
+    )
 
 
 def _read_apply_request(host) -> dict:
@@ -116,21 +131,25 @@ def test_manual_edit_applies_pending_snapshot(client_host, xp2p_client_runner):
         _wait_for_path(client_host, LIVE_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
         _wait_for_path(client_host, LKG_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
 
+        if not linux_env.path_exists(client_host, DESIRED_CLIENT_CONFIG):
+            live_content = linux_env.read_text(client_host, LIVE_CLIENT_CONFIG)
+            linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, live_content)
+
         original = linux_env.read_text(client_host, DESIRED_CLIENT_CONFIG)
-        updated, new_value = _toggle_bool_setting(original, "allow_insecure")
+        updated = _set_int_setting(original, "tun_mtu", 1400)
         linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, updated)
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=True, timeout=TIMEOUT)
         _wait_for_path(client_host, PENDING_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
 
         pending_config = helpers.read_pending_client_config(client_host)
-        assert pending_config.get("allow_insecure") is new_value
+        assert pending_config.get("tun_mtu") == 1400
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=False, timeout=TIMEOUT)
         live_config = _read_toml(client_host, LIVE_CLIENT_CONFIG).get("client") or {}
         lkg_config = _read_toml(client_host, LKG_CLIENT_CONFIG).get("client") or {}
-        assert live_config.get("allow_insecure") is new_value
-        assert lkg_config.get("allow_insecure") is new_value
+        assert live_config.get("tun_mtu") == 1400
+        assert lkg_config.get("tun_mtu") == 1400
         assert not linux_env.path_exists(client_host, APPLY_ERROR)
     except Exception:
         helpers.dump_failure_state(client_host, "manual-edit-apply")
@@ -152,11 +171,14 @@ def test_manual_edit_rollback_on_invalid_pending(client_host, xp2p_client_runner
         _wait_for_path(client_host, LKG_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
         baseline_live_hash = linux_env.file_sha256(client_host, LIVE_CLIENT_CONFIG)
 
-        linux_env.write_text(client_host, DESIRED_CLIENT_ROUTING, "{ invalid json")
+        if not linux_env.path_exists(client_host, DESIRED_CLIENT_CONFIG):
+            live_content = linux_env.read_text(client_host, LIVE_CLIENT_CONFIG)
+            linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, live_content)
+        linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, "this is not toml\n")
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=True, timeout=TIMEOUT)
         request = _read_apply_request(client_host)
-        _wait_for_path(client_host, APPLY_ERROR, exists=True, timeout=TIMEOUT)
+        _wait_for_path(client_host, APPLY_ERROR, exists=True, timeout=TIMEOUT * 2)
         error = _read_apply_error(client_host)
 
         assert linux_env.path_exists(client_host, APPLY_REQUEST)

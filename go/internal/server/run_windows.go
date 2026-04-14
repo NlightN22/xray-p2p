@@ -21,7 +21,7 @@ import (
 )
 
 // Run launches xray-core using the installed configuration directory and blocks until the process exits.
-func Run(ctx context.Context, opts RunOptions) error {
+func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -60,6 +60,33 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if retErr == nil || !pendingApplied || rollback == nil {
+			return
+		}
+		if errors.Is(retErr, context.Canceled) || errors.Is(retErr, context.DeadlineExceeded) {
+			return
+		}
+		if errors.Is(retErr, winnet.ErrTunIPv4TentativeTimeout) {
+			return
+		}
+		if hasAppliedState {
+			if restoreErr := rollback.Restore(config.AuditLogPath()); restoreErr != nil {
+				logging.Warn("rollback failed after apply", "err", restoreErr)
+			} else {
+				logging.Warn("rollback completed after apply failure")
+			}
+		} else {
+			logging.Warn("rollback skipped; no applied state yet")
+		}
+		if request.ID != "" {
+			_ = apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
+				RequestID: request.ID,
+				Role:      apply.RoleServer,
+				Reason:    retErr.Error(),
+			}, config.AuditLogPath())
+		}
+	}()
 	if pendingApplied {
 		configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
@@ -203,25 +230,9 @@ func Run(ctx context.Context, opts RunOptions) error {
 		logging.Info("server run canceled")
 		return nil
 	}
-	if runErr != nil && pendingApplied && rollback != nil && hasAppliedState {
-		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
-			logging.Warn("tun ready failed; mode change remains pending", "err", runErr)
-			return runErr
-		}
-		if err := rollback.Restore(config.AuditLogPath()); err != nil {
-			logging.Warn("rollback failed after apply", "err", err)
-		} else {
-			logging.Warn("rollback completed after apply failure")
-		}
-		if request.ID != "" {
-			_ = apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
-				RequestID: request.ID,
-				Role:      apply.RoleServer,
-				Reason:    runErr.Error(),
-			}, config.AuditLogPath())
-		}
-	} else if runErr != nil && pendingApplied && rollback != nil {
-		logging.Warn("rollback skipped; no applied state yet")
+	if runErr != nil && errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
+		logging.Warn("tun ready failed; mode change remains pending", "err", runErr)
+		return runErr
 	}
 	return runErr
 }

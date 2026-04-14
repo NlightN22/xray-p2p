@@ -21,7 +21,7 @@ import (
 )
 
 // Run launches xray-core using the installed client configuration directory and blocks until the process exits.
-func Run(ctx context.Context, opts RunOptions) error {
+func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -60,6 +60,30 @@ func Run(ctx context.Context, opts RunOptions) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if retErr == nil || !pendingApplied || rollback == nil {
+			return
+		}
+		if errors.Is(retErr, context.Canceled) || errors.Is(retErr, context.DeadlineExceeded) {
+			return
+		}
+		if hasAppliedState {
+			if restoreErr := rollback.Restore(config.AuditLogPath()); restoreErr != nil {
+				logging.Warn("rollback failed after apply", "err", restoreErr)
+			} else {
+				logging.Warn("rollback completed after apply failure")
+			}
+		} else {
+			logging.Warn("rollback skipped; no applied state yet")
+		}
+		if request.ID != "" {
+			_ = apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
+				RequestID: request.ID,
+				Role:      apply.RoleClient,
+				Reason:    retErr.Error(),
+			}, config.AuditLogPath())
+		}
+	}()
 	if pendingApplied {
 		configPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
 		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
@@ -192,24 +216,6 @@ func Run(ctx context.Context, opts RunOptions) error {
 			return nil
 		},
 	)
-	if runErr != nil && pendingApplied && rollback != nil {
-		if hasAppliedState {
-			if err := rollback.Restore(config.AuditLogPath()); err != nil {
-				logging.Warn("rollback failed after apply", "err", err)
-			} else {
-				logging.Warn("rollback completed after apply failure")
-			}
-		} else {
-			logging.Warn("rollback skipped; no applied state yet")
-		}
-		if request.ID != "" {
-			_ = apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
-				RequestID: request.ID,
-				Role:      apply.RoleClient,
-				Reason:    runErr.Error(),
-			}, config.AuditLogPath())
-		}
-	}
 	return runErr
 }
 
