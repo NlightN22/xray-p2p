@@ -109,6 +109,8 @@ def xp2p_full_cleanup(openwrt_host_factory):
 
     def _cleanup_host(host: Host) -> None:
         runner = _xp2p_runner(host)
+        runner("client", "service", "stop", "--quiet")
+        runner("server", "service", "stop", "--quiet")
         runner(
             "client",
             "remove",

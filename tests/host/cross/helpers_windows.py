@@ -57,6 +57,8 @@ def windows_runner(host: Host):
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
+            if cmd[0] == "server" or "--all" in cmd:
+                win_env.run_xp2p(host, [cmd[0], "service", "stop", "--quiet"])
         result = win_env.run_xp2p(host, cmd)
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:

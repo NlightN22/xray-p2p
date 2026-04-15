@@ -425,6 +425,8 @@ def xp2p_client_runner(
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
+            if cmd[0] == "server" or "--all" in cmd:
+                win_env.run_xp2p(client_host, [cmd[0], "service", "stop", "--quiet"])
         result = win_env.run_xp2p(client_host, cmd)
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:
@@ -473,6 +475,8 @@ def xp2p_server_runner(
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
+            if cmd[0] == "server" or "--all" in cmd:
+                win_env.run_xp2p(server_host, [cmd[0], "service", "stop", "--quiet"])
         result = win_env.run_xp2p(server_host, cmd)
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:
