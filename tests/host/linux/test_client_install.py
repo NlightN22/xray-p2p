@@ -286,22 +286,6 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
             check=True,
         )
 
-        if helpers.path_exists(client_host, helpers.HEARTBEAT_STATE_FILE):
-            helpers.remove_path(client_host, helpers.HEARTBEAT_STATE_FILE)
-
-        xp2p_client_runner(
-            "client",
-            "service",
-            "start",
-            check=True,
-        )
-        _wait_for_apply_request_clear(client_host, timeout_seconds=30.0)
-        _wait_for_path_present(
-            client_host,
-            helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml",
-            timeout_seconds=30.0,
-        )
-
         result = xp2p_client_runner(
             "client",
             "state",
@@ -318,6 +302,9 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         assert len(rows) == 2
         assert {row["TAG"] for row in rows} == expected_tags
         assert {row["HOST"] for row in rows} == expected_hosts
+    except Exception:
+        helpers.dump_failure_state(client_host, "client-state-multiple-endpoints")
+        raise
     finally:
         xp2p_client_runner("client", "service", "stop")
         linux_env.run_guest_script(

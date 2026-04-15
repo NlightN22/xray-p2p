@@ -179,9 +179,11 @@ func ApplyPending(set PendingSet) (*Rollback, bool, error) {
 		}
 	}
 
-	if err := removeMissingLiveFiles(set.LiveConfigDir, pendingFiles); err != nil {
-		_ = RestoreLiveFromLkg(set.LiveRoot, set.LkgRoot)
-		return nil, false, err
+	if len(pendingFiles) > 0 {
+		if err := removeMissingLiveFiles(set.LiveConfigDir, pendingFiles); err != nil {
+			_ = RestoreLiveFromLkg(set.LiveRoot, set.LkgRoot)
+			return nil, false, err
+		}
 	}
 
 	return &Rollback{liveRoot: set.LiveRoot, lkgRoot: set.LkgRoot}, true, nil

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import sys
 from pathlib import PurePosixPath
 import time
 import uuid
@@ -712,6 +713,8 @@ def dump_failure_state(host: Host, label: str) -> None:
             "find /etc/xp2p -maxdepth 4 -print 2>/dev/null || true",
             "echo '--- xp2p apply dir ---'",
             "ls -la /etc/xp2p/.state 2>/dev/null || true",
+            "for f in /etc/xp2p/.state/apply.request /etc/xp2p/.state/apply.error; do "
+            "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
             "echo '--- xp2p state tree ---'",
             "find /etc/xp2p/.state -maxdepth 5 -print 2>/dev/null || true",
             "echo '--- xp2p configs ---'",
@@ -758,9 +761,29 @@ def dump_failure_state(host: Host, label: str) -> None:
             "find /var/log/xp2p -maxdepth 3 -print 2>/dev/null || true",
             "for f in /var/log/xp2p/client/service.log /var/log/xp2p/server/service.log; do "
             "[ -f \"$f\" ] && echo \"--- $f ---\" && tail -n 200 \"$f\"; done",
+            "echo '--- processes (xp2p/xray) ---'",
+            "ps auxww 2>/dev/null | head -n 5 || true",
+            "ps auxww 2>/dev/null | grep -E '(^|/)(xp2p|xray)(\\s|$)' | head -n 200 || true",
+            "pgrep -af xp2p 2>/dev/null || true",
+            "pgrep -af xray 2>/dev/null || true",
+            "echo '--- sockets ---'",
+            "if command -v ss >/dev/null 2>&1; then ss -ltnp 2>/dev/null || true; fi",
+            "echo '--- systemd status ---'",
+            "systemctl --no-pager --full status xp2p-client 2>/dev/null || true",
+            "systemctl --no-pager --full status xp2p-server 2>/dev/null || true",
+            "echo '--- journalctl (xp2p-client) ---'",
+            "journalctl --no-pager -u xp2p-client -n 200 2>/dev/null || true",
+            "echo '--- journalctl (xp2p-server) ---'",
+            "journalctl --no-pager -u xp2p-server -n 200 2>/dev/null || true",
+            "true",
         )
     )
-    host.run(f"sudo -n /bin/sh -c {shlex.quote(script)}")
+    result = host.run(f"sudo -n /bin/sh -c {shlex.quote(script)}")
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    if result.stdout:
+        print(result.stdout.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+    if result.stderr:
+        print(result.stderr.encode(encoding, errors="replace").decode(encoding, errors="replace"))
     print("==== END FAILURE DUMP ====")
 
 

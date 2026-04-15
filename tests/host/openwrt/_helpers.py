@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shlex
+import sys
 import time
 from pathlib import Path, PurePosixPath
 import uuid
@@ -487,7 +488,7 @@ def dump_failure_state(host: Host, label: str) -> None:
     dump_runtime_state(host, f"{label} runtime")
     dump_install_dirs(host, f"{label} install dirs")
     dump_apply_dirs(host, f"{label} apply dirs")
-    host.run(
+    result = host.run(
         "sh -c "
         + shlex.quote(
             " ; ".join(
@@ -528,10 +529,16 @@ def dump_failure_state(host: Host, label: str) -> None:
                     "echo '--- xp2p state ---'",
                     "/usr/bin/xp2p server state --path /etc/xp2p 2>/dev/null || true",
                     "/usr/bin/xp2p client state --path /etc/xp2p 2>/dev/null || true",
+                    "true",
                 )
             )
         )
     )
+    encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+    if result.stdout:
+        print(result.stdout.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+    if result.stderr:
+        print(result.stderr.encode(encoding, errors="replace").decode(encoding, errors="replace"))
     dump_logs(host, f"{label} logs")
     print("==== END FAILURE DUMP ====")
 

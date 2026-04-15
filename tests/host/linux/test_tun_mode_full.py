@@ -729,6 +729,8 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
             original_resolv,
         )
 
+        _stop_service(xp2p_client_runner)
+        service_started = False
         remove_result = xp2p_client_runner(
             "client",
             "remove",
