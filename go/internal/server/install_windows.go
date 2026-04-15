@@ -20,6 +20,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 //go:embed assets/templates/*
@@ -129,6 +130,13 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if opts.KeepFiles {
 		logging.Info("xp2p server remove skipping files", "install_dir", installDir)
 		return nil
+	}
+
+	if err := ensureServiceInactive(ctx, control.RoleServer, "xp2p server service stop"); err != nil {
+		return err
+	}
+	if err := apply.RemoveRoleMarkers(config.ApplyRequestPath(), config.ApplyErrorPath(), apply.RoleServer); err != nil {
+		return err
 	}
 
 	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)

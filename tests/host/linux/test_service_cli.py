@@ -406,6 +406,11 @@ def test_package_uninstall_removes_services(server_host):
             print("DEBUG: xp2p cached install completed", flush=True)
 
         _run_logged(
+            "stop services",
+            "sudo -n systemctl stop xp2p-client.service xp2p-server.service >/dev/null 2>&1 || true",
+        )
+
+        _run_logged(
             "remove client config",
             "sudo -n /usr/bin/xp2p client remove --path /etc/xp2p --config-dir config-client --all --ignore-missing --quiet"
         )

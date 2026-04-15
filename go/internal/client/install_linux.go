@@ -17,6 +17,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
+	"github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 type installState struct {
@@ -107,6 +108,13 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if opts.KeepFiles {
 		logging.Info("xp2p client remove skipping files", "install_dir", installDir)
 		return nil
+	}
+
+	if err := ensureServiceInactive(ctx, control.RoleClient, "xp2p client service stop"); err != nil {
+		return err
+	}
+	if err := apply.RemoveRoleMarkers(config.ApplyRequestPath(), config.ApplyErrorPath(), apply.RoleClient); err != nil {
+		return err
 	}
 
 	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
