@@ -66,6 +66,42 @@ For each role (client/server), the service/apply layer performs:
 
 xp2p merges JSON snippets into the managed base in a role-specific way. The merge is explicit and deterministic.
 
+## Supported Extension Files
+
+JSON snippets live in:
+
+- `CONFIG_ROOT/config-client/`
+- `CONFIG_ROOT/config-server/`
+
+All files are optional. For discoverability, xp2p ships blank templates in:
+
+- `config_templates/extensions/config-client/`
+- `config_templates/extensions/config-server/`
+
+### Client
+
+- `routing.rules.after-xp2p-system.json`
+  - Shape: `{ "rules": [ ... ] }`
+  - Inserted after managed endpoint-bypass + system glue rules.
+  - Use for high-priority rules that should win over redirects/forwards.
+- `routing.rules.after-xp2p-managed.json`
+  - Shape: `{ "rules": [ ... ] }`
+  - Inserted after all managed rules and before the full-tunnel rule (when enabled).
+  - Use for additional rules that should not override core safety rules.
+- `inbounds.append.json`
+  - Shape: `{ "inbounds": [ ... ] }`
+  - Appended to managed inbounds.
+- `outbounds.append.json`
+  - Shape: `{ "outbounds": [ ... ] }`
+  - Appended to managed outbounds.
+
+### Server
+
+- `routing.rules.after-xp2p-system.json` (same meaning as client)
+- `routing.rules.after-xp2p-managed.json` (same meaning as client)
+- `inbounds.append.json` (append to managed inbounds)
+- `outbounds.append.json` (append to managed outbounds)
+
 ### Reserved Namespace
 
 xp2p reserves identifiers it manages (tags, remarks, internal routing domains).
@@ -85,7 +121,7 @@ The final routing rule order is stable:
 1. Managed endpoint bypass rules (used for safe tunnel reachability).
 2. Managed system rules (reverse/marker glue, internal responders).
 3. Managed redirect/forward rules.
-4. User rules (optional) inserted at extension points (for example `routing.rules.before.json` / `routing.rules.after.json`).
+4. User rules (optional) inserted at extension points (see Supported Extension Files above).
 5. Managed full-tunnel rule (when enabled).
 
 If user routing snippets are present, they are inserted at the configured extension points only.

@@ -44,6 +44,8 @@ Desired inputs are always user-editable and live at stable paths:
 
 xp2p reads these inputs and compiles them into a final Xray configuration used by the runtime.
 
+For recommended snippet filenames and routing rule insertion points, see `docs/08-config-compilation.md`.
+
 ## Read Rules and Exceptions
 
 - Runtime behavior (service run, diagnostics, ping, OS routing) reads live runtime
