@@ -544,6 +544,12 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             debug_hosts=[client_host, server_host],
         )
 
+        xp2p_client_runner("client", "service", "stop")
+        deadline = time.time() + 15.0
+        while time.time() < deadline:
+            if client_host.run("sudo -n systemctl is-active xp2p-client.service >/dev/null 2>&1").rc != 0:
+                break
+            time.sleep(1.0)
         xp2p_client_runner(
             "client",
             "remove",

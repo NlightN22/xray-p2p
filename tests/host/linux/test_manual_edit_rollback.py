@@ -23,9 +23,12 @@ APPLY_REQUEST = helpers.STATE_ROOT / "apply.request"
 APPLY_ERROR = helpers.STATE_ROOT / "apply.error"
 DESIRED_CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
 DESIRED_CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
+DESIRED_CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
 PENDING_CLIENT_CONFIG = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
 LIVE_CLIENT_CONFIG = helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml"
 LKG_CLIENT_CONFIG = helpers.CONFIG_LKG_ROOT / "xp2p-client.toml"
+PENDING_CLIENT_OUTBOUNDS = helpers.CLIENT_PENDING_DIR / "outbounds.json"
+LIVE_CLIENT_OUTBOUNDS = helpers.CLIENT_LIVE_DIR / "outbounds.json"
 
 POLL_INTERVAL = 1.5
 TIMEOUT = 60.0
@@ -48,6 +51,18 @@ def _read_toml(host, path):
         return tomllib.loads(content)
     except tomllib.TOMLDecodeError as exc:
         raise AssertionError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
+
+
+def _read_json(host, path) -> dict:
+    raw = linux_env.read_text(host, path)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"Failed to parse JSON from {path}: {exc}\nContent:\n{raw}") from exc
+
+
+def _write_json(host, path, payload: dict) -> None:
+    linux_env.write_text(host, path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
 def _set_int_setting(content: str, key: str, value: int) -> str:
@@ -135,21 +150,40 @@ def test_manual_edit_applies_pending_snapshot(client_host, xp2p_client_runner):
             live_content = linux_env.read_text(client_host, LIVE_CLIENT_CONFIG)
             linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, live_content)
 
+        if not linux_env.path_exists(client_host, DESIRED_CLIENT_OUTBOUNDS):
+            live_outbounds = linux_env.read_text(client_host, LIVE_CLIENT_OUTBOUNDS)
+            linux_env.write_text(client_host, DESIRED_CLIENT_OUTBOUNDS, live_outbounds)
+
+        extra_tag = "user-manual-extra"
+        outbounds = _read_json(client_host, DESIRED_CLIENT_OUTBOUNDS)
+        outbound_list = outbounds.get("outbounds")
+        if not isinstance(outbound_list, list):
+            outbound_list = []
+            outbounds["outbounds"] = outbound_list
+        if not any(isinstance(item, dict) and item.get("tag") == extra_tag for item in outbound_list):
+            outbound_list.append({"protocol": "freedom", "settings": {}, "tag": extra_tag})
+            _write_json(client_host, DESIRED_CLIENT_OUTBOUNDS, outbounds)
+
         original = linux_env.read_text(client_host, DESIRED_CLIENT_CONFIG)
         updated = _set_int_setting(original, "tun_mtu", 1400)
         linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, updated)
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=True, timeout=TIMEOUT)
         _wait_for_path(client_host, PENDING_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
+        _wait_for_path(client_host, PENDING_CLIENT_OUTBOUNDS, exists=True, timeout=TIMEOUT)
 
         pending_config = helpers.read_pending_client_config(client_host)
         assert pending_config.get("tun_mtu") == 1400
+        pending_outbounds = _read_json(client_host, PENDING_CLIENT_OUTBOUNDS)
+        assert any(item.get("tag") == extra_tag for item in (pending_outbounds.get("outbounds") or []) if isinstance(item, dict))
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=False, timeout=TIMEOUT)
         live_config = _read_toml(client_host, LIVE_CLIENT_CONFIG).get("client") or {}
         lkg_config = _read_toml(client_host, LKG_CLIENT_CONFIG).get("client") or {}
         assert live_config.get("tun_mtu") == 1400
         assert lkg_config.get("tun_mtu") == 1400
+        live_outbounds = _read_json(client_host, LIVE_CLIENT_OUTBOUNDS)
+        assert any(item.get("tag") == extra_tag for item in (live_outbounds.get("outbounds") or []) if isinstance(item, dict))
         assert not linux_env.path_exists(client_host, APPLY_ERROR)
     except Exception:
         helpers.dump_failure_state(client_host, "manual-edit-apply")

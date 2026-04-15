@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 import shlex
+import time
 from collections.abc import Mapping
 from typing import Callable
 
@@ -145,6 +146,18 @@ def xp2p_session_cleanup(linux_host_factory):
 
 def _cleanup_host(host: Host) -> None:
     runner = _xp2p_runner(host)
+    for unit in ("xp2p-client.service", "xp2p-server.service"):
+        host.run(f"sudo -n systemctl stop {unit} >/dev/null 2>&1 || true")
+    deadline = time.time() + 15.0
+    while time.time() < deadline:
+        if host.run("sudo -n systemctl is-active xp2p-client.service >/dev/null 2>&1").rc != 0 and host.run(
+            "sudo -n systemctl is-active xp2p-server.service >/dev/null 2>&1"
+        ).rc != 0:
+            break
+        time.sleep(1.0)
+    linux_env.kill_xp2p_processes(host)
+    for unit in ("xp2p-client.service", "xp2p-server.service"):
+        host.run(f"sudo -n systemctl stop {unit} >/dev/null 2>&1 || true")
     runner(
         "client",
         "remove",
@@ -164,9 +177,6 @@ def _cleanup_host(host: Host) -> None:
         helpers.SERVER_CONFIG_DIR_NAME,
         "--ignore-missing",
     )
-    runner("client", "service", "stop")
-    runner("server", "service", "stop")
-    linux_env.kill_xp2p_processes(host)
     root = helpers.CONFIG_ROOT.as_posix()
     quoted_root = shlex.quote(root)
     host.run(
