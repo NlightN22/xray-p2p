@@ -74,7 +74,7 @@ using a clear split between Desired, Pending, Live, and LKG.
 
 - Desired: user-editable config inputs
   - `CONFIG_ROOT/xp2p-*.toml`
-  - `config-client/*.json`, `config-server/*.json`
+  - `config-client/user/*.json`, `config-server/user/*.json`
 - Pending: apply snapshot
   - `CONFIG_ROOT/.state/pending/`
 - Live: active runtime config

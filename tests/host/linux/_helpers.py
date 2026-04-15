@@ -54,6 +54,38 @@ SERVICE_LOG_FILES = (
 )
 XRAY_BINARY = INSTALL_ROOT / "bin" / "xray"
 REVERSE_SUFFIX = ".rev"
+SERVER_DIAG_PORT = "62022"
+CLIENT_DIAG_PORT = "62023"
+
+
+def assert_diag_ping(runner, target_ip: str, *, port: str, label: str) -> None:
+    time.sleep(2.0)
+    result = runner(
+        "ping",
+        target_ip,
+        "--port",
+        str(port),
+        "--count",
+        "3",
+        check=False,
+    )
+    output = (result.stdout or "") + (result.stderr or "")
+    if result.rc != 0 or "0% loss" not in output.lower():
+        raise AssertionError(
+            f"xp2p ping failed {label}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def assert_tunnel_ping_bidirectional(
+    client_runner,
+    server_runner,
+    *,
+    client_ip: str,
+    server_ip: str,
+    label: str,
+) -> None:
+    assert_diag_ping(client_runner, server_ip, port=SERVER_DIAG_PORT, label=f"{label} client->server")
+    assert_diag_ping(server_runner, client_ip, port=CLIENT_DIAG_PORT, label=f"{label} server->client")
 
 
 def safe_output(value: str | None) -> str:

@@ -6,6 +6,7 @@ nav:
   - Redirects Within A-B: 02-redirects.md
   - Chain (C2-B-A-C1): 03-chain.md
   - Advanced Variants: 04-advanced.md
+  - Config Compilation: 08-config-compilation.md
 theme:
   name: material
   font:

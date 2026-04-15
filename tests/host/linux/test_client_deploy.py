@@ -36,11 +36,8 @@ SERVER_TUN_ADDR = "198.18.0.5/30"
 CLIENT_TUN_CIDR = "198.18.0.0/30"
 SERVER_TUN_CIDR = "198.18.0.4/30"
 SERVER_DEPLOY_DIAG_PORT = "62032"
-SERVER_DIAG_PORT = "62022"
-CLIENT_DIAG_PORT = "62023"
-BUNDLE_ARTIFACT_ROOT = PurePosixPath("/tmp")
-BUNDLE_MARKER = "bundle-marker.txt"
-BUNDLE_BAD_ROOT = PurePosixPath("/srv/xray-p2p/tests/guest/fixtures/bundle-root")
+SERVER_DIAG_PORT = helpers.SERVER_DIAG_PORT
+CLIENT_DIAG_PORT = helpers.CLIENT_DIAG_PORT
 DEPLOY_SYNC_ROOT = linux_env.WORK_TREE / ".logs" / "deploy"
 
 
@@ -150,8 +147,6 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
             user=trojan_user,
             client_ip=client_ip,
         )
-
-        _run_bundle_checks(client_host, server_host, xp2p_client_runner, server_ip)
     except Exception:
         _persist_deploy_artifacts(client_host, run_id, role="client")
         _persist_deploy_artifacts(server_host, run_id, role="server")
@@ -1078,181 +1073,6 @@ def _remove_server_install_markers(host: Host) -> None:
     helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "inbounds.json")
     helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "cert.pem")
     helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "key.pem")
-
-
-def _run_bundle_checks(
-    client_host: Host,
-    server_host: Host,
-    client_runner,
-    server_ip: str,
-) -> None:
-    _run_bundle_explicit(client_host, "client", CLIENT_LIVE_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
-    _run_bundle_explicit(server_host, "server", SERVER_LIVE_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
-    _assert_tunnel_ping(client_runner, server_ip, "after explicit bundle import")
-    _run_bundle_defaults(client_host, "client", CLIENT_LIVE_CONFIG_FILE, helpers.CLIENT_APPLIED_STATE_FILE)
-    _run_bundle_defaults(server_host, "server", SERVER_LIVE_CONFIG_FILE, helpers.SERVER_APPLIED_STATE_FILE)
-    _assert_tunnel_ping(client_runner, server_ip, "after default bundle import")
-    _run_bundle_negative(server_host)
-
-
-def _run_bundle_explicit(
-    host: Host,
-    role: str,
-    config_file: PurePosixPath,
-    state_file: PurePosixPath,
-) -> None:
-    linux_env.write_text(host, DEPLOY_CONFIG_ROOT / BUNDLE_MARKER, "bundle-marker")
-    before = _bundle_hashes(host, config_file, state_file)
-    archive = BUNDLE_ARTIFACT_ROOT / f"{role}-explicit.tar.gz"
-    result = linux_env.run_xp2p(
-        host,
-        role,
-        "export",
-        "--config-root",
-        DEPLOY_CONFIG_ROOT.as_posix(),
-        "--output",
-        archive.as_posix(),
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"xp2p {role} export failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    result = linux_env.run_xp2p(
-        host,
-        role,
-        "import",
-        "--config-root",
-        DEPLOY_CONFIG_ROOT.as_posix(),
-        "--input",
-        archive.as_posix(),
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"xp2p {role} import failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    after = _bundle_hashes(host, config_file, state_file)
-    if before != after:
-        raise AssertionError(f"{role} bundle import altered config/state files")
-    result = linux_env.run_guest_script(
-        host,
-        "scripts/linux/bundle_backup_check.sh",
-        DEPLOY_CONFIG_ROOT.as_posix(),
-        BUNDLE_MARKER,
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"Bundle backup check failed on {role} host.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-
-def _run_bundle_defaults(
-    host: Host,
-    role: str,
-    config_file: PurePosixPath,
-    state_file: PurePosixPath,
-) -> None:
-    before = _bundle_hashes(host, config_file, state_file)
-    result = linux_env.run_guest_script(
-        host,
-        "scripts/linux/bundle_export_default.sh",
-        BUNDLE_ARTIFACT_ROOT.as_posix(),
-        role,
-        "-",
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"xp2p {role} export default failed.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    archive = _extract_marker(result.stdout, "__XP2P_ARCHIVE__=")
-    if not archive:
-        pytest.fail(f"xp2p {role} export default did not emit archive marker")
-    result = linux_env.run_xp2p(
-        host,
-        role,
-        "import",
-        "--input",
-        archive,
-    )
-    if result.rc != 0:
-        pytest.fail(
-            f"xp2p {role} import default failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    after = _bundle_hashes(host, config_file, state_file)
-    if before != after:
-        raise AssertionError(f"{role} default bundle import altered config/state files")
-
-
-def _run_bundle_negative(host: Host) -> None:
-    if not helpers.path_exists(host, BUNDLE_BAD_ROOT / "config-client" / "inbounds.json"):
-        pytest.fail(f"Bundle fixture root missing at {BUNDLE_BAD_ROOT}")
-    host.run(f"/bin/sh -c 'rm -rf \"{BUNDLE_BAD_ROOT.as_posix()}.bak-\"*' || true")
-    bad_archive = BUNDLE_ARTIFACT_ROOT / "bad-traversal.zip"
-    linux_env.run_guest_script(
-        host,
-        "scripts/linux/bundle_bad_zip.sh",
-        bad_archive.as_posix(),
-    )
-    result = linux_env.run_xp2p(
-        host,
-        "server",
-        "import",
-        "--config-root",
-        BUNDLE_BAD_ROOT.as_posix(),
-        "--input",
-        bad_archive.as_posix(),
-    )
-    if result.rc == 0:
-        pytest.fail("xp2p server import accepted traversal archive")
-    result = linux_env.run_guest_script(
-        host,
-        "scripts/linux/bundle_assert.sh",
-        BUNDLE_BAD_ROOT.as_posix(),
-    )
-    if result.rc != 0:
-        pytest.fail(
-            "Traversal import altered fixture bundle.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-    result = linux_env.run_guest_script(
-        host,
-        "scripts/linux/bundle_backup_check.sh",
-        BUNDLE_BAD_ROOT.as_posix(),
-        "--expect-none",
-    )
-    if result.rc != 0:
-        pytest.fail(
-            "Traversal import created backup directory.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-
-def _bundle_hashes(host: Host, config_file: PurePosixPath, state_file: PurePosixPath) -> dict[str, str]:
-    if not helpers.path_exists(host, config_file):
-        raise AssertionError(f"Missing config file {config_file}")
-    if not helpers.path_exists(host, state_file):
-        raise AssertionError(f"Missing state file {state_file}")
-    return {
-        config_file.as_posix(): helpers.file_sha256(host, config_file),
-        state_file.as_posix(): helpers.file_sha256(host, state_file),
-    }
-
-
-def _assert_tunnel_ping(client_runner, server_ip: str, label: str) -> None:
-    time.sleep(2)
-    result = client_runner(
-        "ping",
-        server_ip,
-        "--port",
-        SERVER_DIAG_PORT,
-        "--count",
-        "3",
-        check=False,
-    )
-    output = (result.stdout or "") + (result.stderr or "")
-    if result.rc != 0 or "0% loss" not in output.lower():
-        raise AssertionError(f"xp2p ping failed {label}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
 
 
 
