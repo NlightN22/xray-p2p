@@ -6,12 +6,9 @@ import pytest
 
 from tests.host.linux import _helpers as helpers
 
-SERVER_INBOUNDS = helpers.SERVER_PENDING_DIR / "inbounds.json"
-SERVER_OUTBOUNDS = helpers.SERVER_PENDING_DIR / "outbounds.json"
-SERVER_LOGS_JSON = helpers.SERVER_PENDING_DIR / "logs.json"
-SERVER_ROUTING_JSON = helpers.SERVER_PENDING_DIR / "routing.json"
-SERVER_CERT_DEST = helpers.SERVER_PENDING_DIR / "cert.pem"
-SERVER_KEY_DEST = helpers.SERVER_PENDING_DIR / "key.pem"
+SERVER_EXT_DIR = helpers.CONFIG_ROOT / helpers.SERVER_CONFIG_DIR_NAME
+SERVER_CERT_DEST = helpers.CONFIG_ROOT / "tls" / "server" / "cert.pem"
+SERVER_KEY_DEST = helpers.CONFIG_ROOT / "tls" / "server" / "key.pem"
 FIXTURE_CERT = Path("tests/fixtures/tls/integration-cert.pem")
 FIXTURE_KEY = Path("tests/fixtures/tls/integration-key.pem")
 
@@ -88,12 +85,13 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
 
         assert helpers.path_exists(server_host, helpers.XRAY_BINARY), f"Expected xray binary at {helpers.XRAY_BINARY}"
         for config_path in (
-            SERVER_INBOUNDS,
-            SERVER_OUTBOUNDS,
-            SERVER_LOGS_JSON,
-            SERVER_ROUTING_JSON,
-    ):
-            assert helpers.path_exists(server_host, config_path), f"Missing config file {config_path}"
+            helpers.SERVER_CONFIG_FILE,
+            SERVER_EXT_DIR / "routing.rules.after-xp2p-system.json",
+            SERVER_EXT_DIR / "routing.rules.after-xp2p-managed.json",
+            SERVER_EXT_DIR / "inbounds.append.json",
+            SERVER_EXT_DIR / "outbounds.append.json",
+        ):
+            assert helpers.path_exists(server_host, config_path), f"Missing desired input {config_path}"
 
         helpers.write_text(server_host, cert_source, cert_content)
         helpers.write_text(server_host, key_source, key_content)
@@ -115,15 +113,15 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(server_ho
             check=True,
         )
 
-        inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         trojan = _trojan_inbound(inbounds)
         assert trojan.get("port") == 62001
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        expected_cert = (helpers.SERVER_LIVE_DIR / "cert.pem").as_posix()
-        expected_key = (helpers.SERVER_LIVE_DIR / "key.pem").as_posix()
+        expected_cert = SERVER_CERT_DEST.as_posix()
+        expected_key = SERVER_KEY_DEST.as_posix()
         assert primary_cert.get("certificateFile") == expected_cert
         assert primary_cert.get("keyFile") == expected_key
         assert _parse_self_signed(_read_cert_state(xp2p_server_runner)) in {True, False}
@@ -153,20 +151,18 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
             check=True,
         )
 
-        pending_cert = helpers.SERVER_PENDING_DIR / "cert.pem"
-        pending_key = helpers.SERVER_PENDING_DIR / "key.pem"
-        assert helpers.path_exists(server_host, pending_cert), "Expected cert.pem to exist"
-        assert helpers.path_exists(server_host, pending_key), "Expected key.pem to exist"
+        assert helpers.path_exists(server_host, SERVER_CERT_DEST), f"Expected certificate at {SERVER_CERT_DEST}"
+        assert helpers.path_exists(server_host, SERVER_KEY_DEST), f"Expected key at {SERVER_KEY_DEST}"
 
-        inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         trojan = _trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        expected_cert = (helpers.SERVER_LIVE_DIR / "cert.pem").as_posix()
-        expected_key = (helpers.SERVER_LIVE_DIR / "key.pem").as_posix()
+        expected_cert = SERVER_CERT_DEST.as_posix()
+        expected_key = SERVER_KEY_DEST.as_posix()
         assert primary_cert.get("certificateFile") == expected_cert
         assert primary_cert.get("keyFile") == expected_key
 
@@ -182,7 +178,7 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
 def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_runner):
     cert_source = PurePosixPath("/tmp/xp2p-mismatch-cert.pem")
     cert_content = FIXTURE_CERT.read_text(encoding="utf-8")
-    pending_key = helpers.SERVER_PENDING_DIR / "key.pem"
+    existing_key = SERVER_KEY_DEST
     try:
         xp2p_server_runner(
             "server",
@@ -199,9 +195,9 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             check=True,
         )
 
-        assert helpers.path_exists(server_host, pending_key), (
-            f"Expected generated key at {pending_key}"
-        )
+        assert helpers.path_exists(server_host, existing_key), f"Expected generated key at {existing_key}"
+        before_cert = helpers.file_sha256(server_host, SERVER_CERT_DEST) if helpers.path_exists(server_host, SERVER_CERT_DEST) else ""
+        before_key = helpers.file_sha256(server_host, SERVER_KEY_DEST) if helpers.path_exists(server_host, SERVER_KEY_DEST) else ""
         helpers.write_text(server_host, cert_source, cert_content)
 
         result = xp2p_server_runner(
@@ -215,7 +211,7 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             "--cert",
             cert_source.as_posix(),
             "--key",
-            pending_key.as_posix(),
+            existing_key.as_posix(),
             "--force",
             check=False,
         )
@@ -224,6 +220,10 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
         assert "certificate and key do not match" in combined, (
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
+        after_cert = helpers.file_sha256(server_host, SERVER_CERT_DEST) if helpers.path_exists(server_host, SERVER_CERT_DEST) else ""
+        after_key = helpers.file_sha256(server_host, SERVER_KEY_DEST) if helpers.path_exists(server_host, SERVER_KEY_DEST) else ""
+        assert after_cert == before_cert, "Expected certificate to remain unchanged after mismatch"
+        assert after_key == before_key, "Expected key to remain unchanged after mismatch"
     finally:
         pass
 
@@ -343,7 +343,9 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             check=True,
         )
 
-        before = helpers.read_text(server_host, SERVER_INBOUNDS)
+        before_config = helpers.read_text(server_host, helpers.SERVER_CONFIG_FILE)
+        before_cert = helpers.file_sha256(server_host, SERVER_CERT_DEST) if helpers.path_exists(server_host, SERVER_CERT_DEST) else ""
+        before_key = helpers.file_sha256(server_host, SERVER_KEY_DEST) if helpers.path_exists(server_host, SERVER_KEY_DEST) else ""
 
         result = xp2p_server_runner(
             "server",
@@ -364,8 +366,12 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
 
-        after = helpers.read_text(server_host, SERVER_INBOUNDS)
-        assert after == before, "Expected config to remain unchanged after win-store error"
+        after_config = helpers.read_text(server_host, helpers.SERVER_CONFIG_FILE)
+        after_cert = helpers.file_sha256(server_host, SERVER_CERT_DEST) if helpers.path_exists(server_host, SERVER_CERT_DEST) else ""
+        after_key = helpers.file_sha256(server_host, SERVER_KEY_DEST) if helpers.path_exists(server_host, SERVER_KEY_DEST) else ""
+        assert after_config == before_config, "Expected desired config to remain unchanged after win-store error"
+        assert after_cert == before_cert, "Expected certificate to remain unchanged after win-store error"
+        assert after_key == before_key, "Expected key to remain unchanged after win-store error"
     finally:
         pass
 

@@ -9,10 +9,8 @@ from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 from tests.host.tunnel import common as tunnel_common
 
-CLIENT_OUTBOUNDS = helpers.CLIENT_PENDING_DIR / "outbounds.json"
 CLIENT_LOG_PATH = helpers.CLIENT_LOG_FILE
-CLIENT_ROUTING = helpers.CLIENT_PENDING_DIR / "routing.json"
-CLIENT_STATE_FILE = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
+CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
 
 
 @pytest.mark.host
@@ -35,7 +33,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             check=True,
         )
 
-        data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        data = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_outbound(
             data,
             "10.55.0.10",
@@ -62,7 +60,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             check=True,
         )
 
-        updated = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        updated = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_outbound(
             updated,
             "10.55.0.10",
@@ -80,7 +78,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             allow_insecure=False,
         )
 
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = updated
         helpers.assert_routing_rule(routing, "10.55.0.10")
         helpers.assert_routing_rule(routing, "10.55.0.11")
 
@@ -127,7 +125,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
             check=True,
         )
 
-        refreshed = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        refreshed = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_outbound(
             refreshed,
             "10.55.0.10",
@@ -177,7 +175,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner):
             "--force",
             check=True,
         )
-        data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        data = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_outbound(
             data,
             "link.example.test",
@@ -224,7 +222,7 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
             "--force",
             check=True,
         )
-        data = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+        data = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_outbound(
             data,
             "link.example.test",
@@ -412,7 +410,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         )
 
         try:
-            outbounds = helpers.read_json(client_host, CLIENT_OUTBOUNDS)
+            outbounds = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
             helpers.assert_outbound(
                 outbounds,
                 "10.66.0.11",
@@ -422,7 +420,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             )
             _assert_no_endpoint("10.66.0.10", outbounds)
 
-            routing = helpers.read_json(client_host, CLIENT_ROUTING)
+            routing = outbounds
             helpers.assert_routing_rule(routing, "10.66.0.11")
 
             state = helpers.read_pending_client_config(client_host)
@@ -458,7 +456,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             if isinstance(exc, KeyboardInterrupt):
                 raise
             debug = []
-            for path in (CLIENT_OUTBOUNDS, CLIENT_ROUTING, CLIENT_STATE_FILE):
+            for path in (CLIENT_STATE_FILE,):
                 if helpers.path_exists(client_host, path):
                     tail = "\n".join((helpers.read_text(client_host, path) or "").splitlines()[-200:])
                     debug.append(f"{path}:\n{tail}")
@@ -617,8 +615,8 @@ def test_client_install_recovers_without_state_marker(client_host, xp2p_client_r
             check=True,
         )
 
-        pending_config = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
-        assert helpers.path_exists(client_host, pending_config), "Expected pending client config to be recreated"
+        desired_config = helpers.CLIENT_CONFIG_FILE
+        assert helpers.path_exists(client_host, desired_config), "Expected desired client config to be recreated"
     finally:
         pass
 

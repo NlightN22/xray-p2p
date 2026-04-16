@@ -12,8 +12,6 @@ from tests.host.linux import env as linux_env
 
 SERVER_A_IP = "10.62.10.11"  # deb-test-a
 SERVER_C_IP = "10.62.10.13"  # deb-test-c
-CLIENT_OUTBOUNDS = helpers.CLIENT_PENDING_DIR / "outbounds.json"
-CLIENT_ROUTING = helpers.CLIENT_PENDING_DIR / "routing.json"
 
 
 @dataclass
@@ -134,7 +132,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
         ]
         for entry in server_entries:
             server_state = helpers.read_pending_server_config(entry["host"])
-            server_routing = helpers.read_json(entry["host"], helpers.SERVER_PENDING_DIR / "routing.json")
+            server_routing = helpers.render_xray(entry["host"], entry["runner"], "server", desired=True)
             helpers.assert_server_reverse_state(
                 server_state,
                 entry["reverse_tag"],
@@ -176,9 +174,9 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
         )
 
         client_state = helpers.read_pending_client_config(client_b)
-        client_routing = helpers.read_json(client_b, CLIENT_ROUTING)
-
-        outbounds = helpers.read_json(client_b, CLIENT_OUTBOUNDS)
+        client_xray = helpers.render_xray(client_b, client_runner, "client", desired=True)
+        client_routing = client_xray
+        outbounds = client_xray
         helpers.assert_outbound(
             outbounds,
             SERVER_A_IP,
@@ -270,7 +268,7 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
                     f"Server redirect list missing {redirect_domain} for {entry['ip']}"
                 )
                 server_state = helpers.read_pending_server_config(entry["host"])
-                server_routing = helpers.read_json(entry["host"], helpers.SERVER_PENDING_DIR / "routing.json")
+                server_routing = helpers.render_xray(entry["host"], entry["runner"], "server", desired=True)
                 helpers.assert_server_redirect_state(server_state, redirect_domain, entry["reverse_tag"])
                 helpers.assert_server_redirect_rule(server_routing, redirect_domain, entry["reverse_tag"])
 

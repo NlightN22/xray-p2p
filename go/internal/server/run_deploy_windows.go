@@ -49,7 +49,7 @@ func RunDeploy(ctx context.Context, opts DeployRunOptions) error {
 	runErr := runXrayWithConfig(
 		ctx,
 		xrayPath,
-		configDir,
+		configFile,
 		configDir,
 		nil,
 		nil,

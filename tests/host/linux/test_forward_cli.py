@@ -4,8 +4,6 @@ import pytest
 
 from tests.host.linux import _helpers as helpers
 
-CLIENT_INBOUNDS = helpers.CLIENT_PENDING_DIR / "inbounds.json"
-SERVER_INBOUNDS = helpers.SERVER_PENDING_DIR / "inbounds.json"
 FORWARD_BASE_PORT = 53331
 SERVER_INSTALL_HOST = "forward-server.example"
 
@@ -150,7 +148,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
         )
         first_port = int(first_entry.get("listen_port", 0))
         assert first_port == FORWARD_BASE_PORT
-        client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
+        client_inbounds = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_forward_inbound_entry(
             client_inbounds,
             first_port,
@@ -197,7 +195,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             protocol="tcp",
         )
         explicit_tag = explicit_entry.get("tag") or helpers.expected_forward_tag(explicit_port)
-        client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
+        client_inbounds = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_forward_inbound_entry(
             client_inbounds,
             explicit_port,
@@ -233,7 +231,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
             target_port=second_target_port,
             protocol="udp",
         )
-        client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
+        client_inbounds = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_forward_inbound_entry(
             client_inbounds,
             second_port,
@@ -259,7 +257,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
         )
         client_state = helpers.read_pending_client_config(client_host)
         helpers.assert_no_forward_rule_entry(client_state.get("forwards") or [], first_port)
-        client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
+        client_inbounds = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_no_forward_inbound_entry(client_inbounds, first_port)
 
         # Remove via tag.
@@ -274,7 +272,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
         )
         client_state = helpers.read_pending_client_config(client_host)
         helpers.assert_no_forward_rule_entry(client_state.get("forwards") or [], explicit_port)
-        client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
+        client_inbounds = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_no_forward_inbound_entry(client_inbounds, explicit_port)
 
         # Remove via remark.
@@ -292,7 +290,7 @@ def test_client_forward_cli_flow(client_host, xp2p_client_runner):
         )
         client_state = helpers.read_pending_client_config(client_host)
         helpers.assert_no_forward_rule_entry(client_state.get("forwards") or [], second_port)
-        client_inbounds = helpers.read_json(client_host, CLIENT_INBOUNDS)
+        client_inbounds = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_no_forward_inbound_entry(client_inbounds, second_port)
         _assert_forward_list_empty(xp2p_client_runner, "client", helpers.CLIENT_CONFIG_DIR_NAME)
     finally:
@@ -329,7 +327,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
         )
         first_port = int(first_entry.get("listen_port", 0))
         assert first_port == FORWARD_BASE_PORT
-        server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        server_inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         helpers.assert_forward_inbound_entry(
             server_inbounds,
             first_port,
@@ -366,7 +364,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             protocol="tcp",
         )
         explicit_tag = explicit_entry.get("tag") or helpers.expected_forward_tag(explicit_port)
-        server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        server_inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         helpers.assert_forward_inbound_entry(
             server_inbounds,
             explicit_port,
@@ -402,7 +400,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
             target_port=second_target_port,
             protocol="udp",
         )
-        server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        server_inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         helpers.assert_forward_inbound_entry(
             server_inbounds,
             second_port,
@@ -424,7 +422,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
         )
         server_state = helpers.read_pending_server_config(server_host)
         helpers.assert_no_forward_rule_entry(server_state.get("forward_rules") or [], first_port)
-        server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        server_inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         helpers.assert_no_forward_inbound_entry(server_inbounds, first_port)
 
         # Remove via tag.
@@ -439,7 +437,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
         )
         server_state = helpers.read_pending_server_config(server_host)
         helpers.assert_no_forward_rule_entry(server_state.get("forward_rules") or [], explicit_port)
-        server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        server_inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         helpers.assert_no_forward_inbound_entry(server_inbounds, explicit_port)
 
         # Remove via remark.
@@ -457,7 +455,7 @@ def test_server_forward_cli_flow(server_host, xp2p_server_runner):
         )
         server_state = helpers.read_pending_server_config(server_host)
         helpers.assert_no_forward_rule_entry(server_state.get("forward_rules") or [], second_port)
-        server_inbounds = helpers.read_json(server_host, SERVER_INBOUNDS)
+        server_inbounds = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         helpers.assert_no_forward_inbound_entry(server_inbounds, second_port)
         _assert_forward_list_empty(xp2p_server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME)
     finally:

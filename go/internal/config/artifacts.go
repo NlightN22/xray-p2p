@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -39,9 +41,39 @@ func DesiredConfigPathForRole(role string) (string, error) {
 }
 
 func DesiredExtensionsDirForRole(role string) (string, error) {
-	name, err := RoleConfigDirName(role)
+	configPath, err := DesiredConfigPathForRole(role)
 	if err != nil {
 		return "", err
+	}
+
+	var cfg Config
+	if _, statErr := os.Stat(configPath); statErr == nil {
+		loaded, err := Load(Options{Path: configPath, AllowInvalid: true})
+		if err != nil {
+			return "", err
+		}
+		cfg = loaded
+	} else if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+		return "", fmt.Errorf("config: stat %s: %w", configPath, statErr)
+	} else {
+		cfg = Config{}
+		normalize(&cfg)
+	}
+
+	name := ""
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "client":
+		name = strings.TrimSpace(cfg.Client.ConfigDir)
+	case "server":
+		name = strings.TrimSpace(cfg.Server.ConfigDir)
+	default:
+		return "", fmt.Errorf("config: unsupported role %q", role)
+	}
+	if name == "" {
+		name, err = RoleConfigDirName(role)
+		if err != nil {
+			return "", err
+		}
 	}
 	return filepath.Clean(ConfigPath(name)), nil
 }
@@ -93,4 +125,3 @@ func LkgRuntimeMetaPath(role string) (string, error) {
 	}
 	return filepath.Join(dir, layout.RuntimeMetaFileName), nil
 }
-

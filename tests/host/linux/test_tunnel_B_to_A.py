@@ -249,9 +249,6 @@ def _socks_port(host, config_path: PurePosixPath) -> int:
 
 
 def _read_json_with_pending(host, path: PurePosixPath) -> dict:
-    pending_path = helpers.pending_path(path)
-    if linux_env.path_exists(host, pending_path):
-        return helpers.read_json(host, pending_path)
     return helpers.read_json(host, path)
 
 
@@ -302,7 +299,7 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
 
         server_state = helpers.read_pending_server_config(server_host)
-        server_routing = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "routing.json")
+        server_routing = helpers.render_xray(server_host, server_runner, "server", desired=True)
         helpers.assert_server_reverse_state(
             server_state,
             reverse_tag,
@@ -324,7 +321,7 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
             check=True,
         )
         client_state = helpers.read_pending_client_config(client_host)
-        client_routing = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "routing.json")
+        client_routing = helpers.render_xray(client_host, client_runner, "client", desired=True)
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         helpers.assert_client_reverse_artifacts(client_routing, reverse_tag, endpoint_tag)
         helpers.assert_client_reverse_state(
@@ -380,8 +377,8 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_CONFIG_DIR_NAME,
     ):
         time.sleep(2.0)
-        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_LIVE_DIR / "inbounds.json")
-        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_LIVE_DIR / "inbounds.json")
+        server_socks_port = _socks_port(env["server_host"], helpers.SERVER_LIVE_DIR / "xray.json")
+        client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_LIVE_DIR / "xray.json")
         _wait_for_port(env["server_host"], server_socks_port)
         _wait_for_port(env["client_host"], client_socks_port)
         yield
@@ -573,7 +570,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     chain_name = "xray_transparent_prerouting"
     client_listener_port = SERVER_DIAGNOSTICS_PORT
     server_listener_port = CLIENT_DIAGNOSTICS_PORT
-    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_LIVE_DIR / 'inbounds.json')}"
+    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_LIVE_DIR / 'xray.json')}"
     client_nat_runner = _nat_runner(client_host, role="client")
     server_nat_runner = _nat_runner(server_host, role="server")
 
@@ -746,7 +743,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         )
         redirect_added = True
         client_state = helpers.read_pending_client_config(client_host)
-        client_routing = helpers.read_json(client_host, helpers.CLIENT_PENDING_DIR / "routing.json")
+        client_routing = helpers.render_xray(client_host, client_runner, "client", desired=True)
         helpers.assert_redirect_rule(client_routing, CLIENT_REDIRECT_CIDR, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_state,
@@ -755,10 +752,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        client_inbounds = _read_json_with_pending(client_host, helpers.CLIENT_LIVE_DIR / "inbounds.json")
+        client_inbounds = _read_json_with_pending(client_host, helpers.CLIENT_LIVE_DIR / "xray.json")
         client_dokodemo_ports = _dokodemo_ports(client_inbounds)
         assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
-        server_inbounds = _read_json_with_pending(server_host, helpers.SERVER_LIVE_DIR / "inbounds.json")
+        server_inbounds = _read_json_with_pending(server_host, helpers.SERVER_LIVE_DIR / "xray.json")
         server_dokodemo_ports = _dokodemo_ports(server_inbounds)
         assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
@@ -1130,7 +1127,7 @@ def test_reverse_redirect_via_server_portal(tunnel_environment):
             )
 
             server_state = helpers.read_pending_server_config(server_host)
-            server_routing = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "routing.json")
+            server_routing = helpers.render_xray(server_host, server_runner, "server", desired=True)
             helpers.assert_server_redirect_state(server_state, alias_cidr, reverse_tag)
             helpers.assert_server_redirect_rule(server_routing, alias_cidr, reverse_tag)
 

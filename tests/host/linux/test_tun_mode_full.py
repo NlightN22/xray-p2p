@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import hashlib
+import json
 import os
 import shlex
 import time
@@ -26,9 +28,9 @@ FULL_STATE_FILE = helpers.CONFIG_ROOT / "xp2p-client.tun-full.json"
 RESOLV_CONF = PurePosixPath("/etc/resolv.conf")
 SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 CLIENT_LIVE_CONFIG = helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml"
-CLIENT_LIVE_ROUTING = helpers.CLIENT_LIVE_DIR / "routing.json"
-CLIENT_PENDING_CONFIG = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
-CLIENT_PENDING_ROUTING = helpers.CLIENT_PENDING_DIR / "routing.json"
+CLIENT_LIVE_ROUTING = helpers.CLIENT_LIVE_DIR / "xray.json"
+CLIENT_PENDING_CONFIG = helpers.CLIENT_CONFIG_FILE
+CLIENT_PENDING_ROUTING = PurePosixPath("/tmp/xp2p-client-rendered-routing.json")
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
 
@@ -464,8 +466,8 @@ def _client_tun_name(host) -> str:
     return tun_name or "xp2pc"
 
 
-def _routing_rules(host, routing_path: PurePosixPath = CLIENT_LIVE_ROUTING) -> list[dict]:
-    data = helpers.read_json(host, routing_path)
+def _routing_rules(host, routing_source: PurePosixPath | dict = CLIENT_LIVE_ROUTING) -> list[dict]:
+    data = routing_source if isinstance(routing_source, dict) else helpers.read_json(host, routing_source)
     routing = data.get("routing") or {}
     rules = routing.get("rules") or []
     if not isinstance(rules, list):
@@ -476,9 +478,9 @@ def _routing_rules(host, routing_path: PurePosixPath = CLIENT_LIVE_ROUTING) -> l
 def _assert_full_tunnel_rule_last(
     host,
     outbound_tag: str,
-    routing_path: PurePosixPath = CLIENT_LIVE_ROUTING,
+    routing_source: PurePosixPath | dict = CLIENT_LIVE_ROUTING,
 ) -> None:
-    rules = _routing_rules(host, routing_path)
+    rules = _routing_rules(host, routing_source)
     assert rules, "routing.json rules list is empty"
     last_rule = rules[-1]
     assert last_rule.get("outboundTag") == outbound_tag, f"Unexpected full-tunnel tag: {last_rule}"
@@ -696,7 +698,7 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         )
         assert helpers.read_client_config(client_host).get("tun_mode") == "split"
 
-        _update_client_config(client_host, CLIENT_LIVE_CONFIG, tun_mode="full", dns_servers=DNS_SERVERS)
+        _update_client_config(client_host, CLIENT_PENDING_CONFIG, tun_mode="full", dns_servers=DNS_SERVERS)
         _restart_service(xp2p_client_runner, client_host)
         _wait_for_full_tunnel(
             client_host,
@@ -910,12 +912,22 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
         _install_client_endpoint(xp2p_client_runner, SECOND_ENDPOINT_IP, CLIENT_USER, CLIENT_PASSWORD)
 
         config_hash = linux_env.file_sha256(client_host, CLIENT_PENDING_CONFIG)
-        routing_hash = linux_env.file_sha256(client_host, CLIENT_PENDING_ROUTING)
+        routing_hash = hashlib.sha256(
+            json.dumps(
+                (helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True) or {}).get("routing", {}),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
 
         quiet_result = _client_mode(xp2p_client_runner, "tun", "full", "--quiet", check=False)
         assert quiet_result.rc != 0
         assert linux_env.file_sha256(client_host, CLIENT_PENDING_CONFIG) == config_hash
-        assert linux_env.file_sha256(client_host, CLIENT_PENDING_ROUTING) == routing_hash
+        assert hashlib.sha256(
+            json.dumps(
+                (helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True) or {}).get("routing", {}),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest() == routing_hash
         assert helpers.read_pending_client_config(client_host).get("tun_mode") != "full"
 
         tag_for_ip = helpers.expected_proxy_tag(ENDPOINT_IP)
@@ -924,7 +936,7 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
 
         result = _client_mode(xp2p_client_runner, "tun", "full", "--tag", tag_for_ip, check=False)
         assert result.rc == 0, f"Mode with --tag failed: {result.stdout}\n{result.stderr}"
-        _assert_full_tunnel_rule_last(client_host, tag_for_ip, CLIENT_PENDING_ROUTING)
+        _assert_full_tunnel_rule_last(client_host, tag_for_ip, helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True))
         assert helpers.read_pending_client_config(client_host).get("full_tunnel_tag") == tag_for_ip
 
         result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
@@ -932,7 +944,7 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
 
         result = _client_mode(xp2p_client_runner, "tun", "full", "--host", ENDPOINT_DOMAIN, check=False)
         assert result.rc == 0, f"Mode with --host failed: {result.stdout}\n{result.stderr}"
-        _assert_full_tunnel_rule_last(client_host, tag_for_domain, CLIENT_PENDING_ROUTING)
+        _assert_full_tunnel_rule_last(client_host, tag_for_domain, helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True))
         assert helpers.read_pending_client_config(client_host).get("full_tunnel_tag") == tag_for_domain
 
         result = _client_mode(xp2p_client_runner, "tun", "split", check=False)
@@ -948,7 +960,7 @@ def test_client_tun_mode_full_tunnel_selection_and_prompt(client_host, xp2p_clie
                 break
         assert selection_index is not None, "Could not locate interactive selection index"
         _run_client_mode_interactive(client_host, str(selection_index))
-        _assert_full_tunnel_rule_last(client_host, tag_for_second, CLIENT_PENDING_ROUTING)
+        _assert_full_tunnel_rule_last(client_host, tag_for_second, helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True))
         assert helpers.read_pending_client_config(client_host).get("full_tunnel_tag") == tag_for_second
 
         result = _client_mode(xp2p_client_runner, "tun", "split", check=False)

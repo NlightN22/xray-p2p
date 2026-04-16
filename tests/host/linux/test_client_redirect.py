@@ -4,7 +4,6 @@ import pytest
 
 from tests.host.linux import _helpers as helpers
 
-CLIENT_ROUTING = helpers.CLIENT_PENDING_DIR / "routing.json"
 CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
 INSTALL_PATH = helpers.INSTALL_ROOT.as_posix()
 CONFIG_DIR = helpers.CLIENT_CONFIG_DIR_NAME
@@ -130,7 +129,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             for rec in records
         )
 
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_redirect_rule(routing, REDIRECT_CIDR, primary_tag)
         helpers.assert_routing_rule(routing, PRIMARY_HOST)
         helpers.assert_routing_rule(routing, SECONDARY_HOST)
@@ -145,7 +144,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             check=True,
         )
 
-        routing_after_remove = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing_after_remove = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_no_redirect_rule(routing_after_remove, REDIRECT_CIDR)
         _, after_records = _list_redirects(xp2p_client_runner)
         assert all(rec.get("cidr") != REDIRECT_CIDR for rec in after_records)
@@ -161,7 +160,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         )
         list_output, records = _list_redirects(xp2p_client_runner)
         assert any(rec["host"] == SECONDARY_HOST for rec in records)
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
 
         _redirect_cmd(
@@ -173,7 +172,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             SECONDARY_HOST,
             check=True,
         )
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_no_redirect_rule(routing, REDIRECT_CIDR)
 
         invalid_tag_result = _redirect_cmd(
@@ -209,7 +208,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             SECONDARY_HOST,
             check=True,
         )
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
         list_output, records = _list_redirects(xp2p_client_runner)
         assert any(
@@ -228,7 +227,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             SECONDARY_HOST,
             check=True,
         )
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
         helpers.assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
         list_output, records = _list_redirects(xp2p_client_runner)
@@ -244,7 +243,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             SECONDARY_HOST,
             check=True,
         )
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
         helpers.assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
 
@@ -264,7 +263,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         assert REDIRECT_CIDR not in auto_output
         assert all(rec["value"] == f"{PRIMARY_HOST}/32" for rec in auto_records)
 
-        routing = helpers.read_json(client_host, CLIENT_ROUTING)
+        routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
         helpers.assert_no_redirect_rule(routing, REDIRECT_CIDR)
         helpers.assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
         helpers.assert_routing_rule(routing, PRIMARY_HOST)

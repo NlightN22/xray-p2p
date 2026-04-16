@@ -43,7 +43,7 @@ xp2p nat-redirect (Linux only)
   Subcommands: add, remove, list
 
 xp2p client
-  Subcommands: install, remove, list, run, service, state, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
+  Subcommands: install, remove, list, run, service, state, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
 
 xp2p server
-  Subcommands: install, remove, run, service, state, export, import, user, redirect, forward, reverse, cert, deploy, mode, dns-forward (Linux only)
+  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, dns-forward (Linux only)

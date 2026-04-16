@@ -380,16 +380,6 @@ installDone:
 		notifyFailure(results)
 		return
 	}
-	if plan.usePending {
-		if err := ensureDeployCertificates(liveConfigDir); err != nil {
-			_ = writeLine(rw, "EXIT 1")
-			_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
-			_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
-			_ = writeLine(rw, "DONE")
-			notifyFailure(results)
-			return
-		}
-	}
 
 	_ = writeLine(rw, "EXIT 0")
 	_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
@@ -406,6 +396,7 @@ installDone:
 			installDir:   installDir,
 			configDir:    configDir,
 			runConfigDir: plan.runConfigDir,
+			cleanupDir:   plan.cleanupDir,
 			skipRun:      plan.skipRun,
 		}
 	}
@@ -457,7 +448,7 @@ func validateWindowsDeployInstallDir(installDir string) error {
 type deployRunPlan struct {
 	runConfigDir string
 	skipRun      bool
-	usePending   bool
+	cleanupDir   string
 }
 
 func (s *deployServer) buildDeployRunPlan(ctx context.Context, liveConfigDir string) (deployRunPlan, error) {
@@ -477,69 +468,38 @@ func (s *deployServer) buildDeployRunPlan(ctx context.Context, liveConfigDir str
 		return deployRunPlan{runConfigDir: liveConfigDir}, nil
 	}
 
-	pendingDir, err := config.PendingConfigDirFromLive(liveConfigDir)
+	configPath, err := config.DesiredConfigPathForRole(apply.RoleServer)
 	if err != nil {
 		return deployRunPlan{}, err
 	}
-	hasPending, err := server.HasRunConfigFiles(pendingDir)
+	extensionsDir, err := config.DesiredExtensionsDirForRole(apply.RoleServer)
 	if err != nil {
 		return deployRunPlan{}, err
 	}
-	if hasPending {
-		return deployRunPlan{runConfigDir: pendingDir, usePending: true}, nil
-	}
-
-	return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: no configuration files available for validation")
-}
-
-func ensureDeployCertificates(liveConfigDir string) error {
-	pendingDir, err := config.PendingConfigDirFromLive(liveConfigDir)
+	artifacts, err := server.CompileDesiredArtifacts(configPath, extensionsDir)
 	if err != nil {
-		return err
+		return deployRunPlan{}, err
 	}
-	certPending := filepath.Join(pendingDir, "cert.pem")
-	keyPending := filepath.Join(pendingDir, "key.pem")
-	certLive := filepath.Join(liveConfigDir, "cert.pem")
-	keyLive := filepath.Join(liveConfigDir, "key.pem")
-
-	if fileExists(certLive) && fileExists(keyLive) {
-		return nil
-	}
-	if !fileExists(certPending) || !fileExists(keyPending) {
-		return fmt.Errorf("xp2p: server deploy: pending certificates missing")
-	}
-	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create %s: %w", liveConfigDir, err)
-	}
-	if err := copyFile(certPending, certLive); err != nil {
-		return err
-	}
-	if err := copyFile(keyPending, keyLive); err != nil {
-		return err
-	}
-	return nil
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+	tmpDir, err := os.MkdirTemp("", "xp2p-server-deploy-")
 	if err != nil {
-		return fmt.Errorf("xp2p: copy %s: %w", src, err)
+		return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: create temp dir: %w", err)
 	}
-	defer in.Close()
-
-	info, err := in.Stat()
-	if err != nil {
-		return fmt.Errorf("xp2p: stat %s: %w", src, err)
+	if err := os.WriteFile(filepath.Join(tmpDir, layout.XrayConfigFileName), artifacts.XrayJSON, 0o644); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: write xray.json: %w", err)
 	}
-
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
-	if err != nil {
-		return fmt.Errorf("xp2p: copy %s: %w", dst, err)
+	if err := os.WriteFile(filepath.Join(tmpDir, layout.RuntimeMetaFileName), artifacts.RuntimeMetaJSON, 0o644); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: write runtime.json: %w", err)
 	}
-	defer func() { _ = out.Close() }()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return fmt.Errorf("xp2p: copy %s: %w", dst, err)
+	for name, data := range artifacts.Extra {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, filepath.Clean(name)), data, 0o644); err != nil {
+			_ = os.RemoveAll(tmpDir)
+			return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: write artifact %s: %w", name, err)
+		}
 	}
-	return nil
+	return deployRunPlan{runConfigDir: tmpDir, cleanupDir: tmpDir}, nil
 }

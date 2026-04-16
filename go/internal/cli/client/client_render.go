@@ -93,7 +93,7 @@ func newClientRenderXrayCmd() *cobra.Command {
 		},
 	}
 	flags := cmd.Flags()
-	flags.BoolVarP(&live, "live", "l", false, "render live runtime artifacts")
+	flags.BoolVarP(&live, "live", "L", false, "render live runtime artifacts")
 	flags.BoolVarP(&desired, "desired", "d", false, "compile Desired inputs without applying")
 	flags.StringVarP(&output, "output", "o", "-", "output path ('-' for stdout)")
 	return cmd

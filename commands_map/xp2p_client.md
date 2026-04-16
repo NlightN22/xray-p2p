@@ -10,7 +10,7 @@
 ## Command tree
 
 xp2p client
-  Subcommands: install, remove, list, run, service, state, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
+  Subcommands: install, remove, list, run, service, state, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
 
 xp2p client install
 Options:
@@ -96,6 +96,24 @@ Includes: Global options
 - --watch, -w            Continuously refresh state until interrupted
 - --interval, -i <dur>   Refresh interval for --watch
 - --ttl, -T <dur>        Heartbeat TTL for alive status
+
+xp2p client render
+  Subcommands: xray
+
+xp2p client render xray
+Options:
+Includes: Global options
+- --live, -L             Render live runtime artifacts
+- --desired, -d          Compile Desired inputs without applying
+- --output, -o <path>    Output path ('-' for stdout)
+
+xp2p client debug
+  Subcommands: bundle
+
+xp2p client debug bundle
+Options:
+Includes: Global options
+- --output, -o <path>    Archive output path
 
 xp2p client export
 Options:

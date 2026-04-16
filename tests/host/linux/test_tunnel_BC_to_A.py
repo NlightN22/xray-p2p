@@ -293,7 +293,7 @@ def test_tunnel_BC_to_A(linux_host_factory):
         reverse_norev = helpers.expected_reverse_tag("client-norev@example.com", SERVER_IP)
 
         server_state = helpers.read_pending_server_config(server_host)
-        server_routing = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "routing.json")
+        server_routing = helpers.render_xray(server_host, server_runner, "server", desired=True)
         for reverse_tag, user in (
             (reverse_default, default_cred["user"]),
             (reverse_second, "client-two@example.com"),
@@ -322,7 +322,7 @@ def test_tunnel_BC_to_A(linux_host_factory):
 
         endpoint_tag = helpers.expected_proxy_tag(SERVER_IP)
         client_b_state = helpers.read_pending_client_config(client_b)
-        client_b_routing = helpers.read_json(client_b, helpers.CLIENT_PENDING_DIR / "routing.json")
+        client_b_routing = helpers.render_xray(client_b, client_b_runner, "client", desired=True)
         helpers.assert_client_reverse_artifacts(client_b_routing, reverse_default, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_b_state,
@@ -341,7 +341,7 @@ def test_tunnel_BC_to_A(linux_host_factory):
         )
 
         client_c_state = helpers.read_pending_client_config(client_c)
-        client_c_routing = helpers.read_json(client_c, helpers.CLIENT_PENDING_DIR / "routing.json")
+        client_c_routing = helpers.render_xray(client_c, client_c_runner, "client", desired=True)
         helpers.assert_client_reverse_artifacts(client_c_routing, reverse_second, endpoint_tag)
         helpers.assert_client_reverse_state(
             client_c_state,
@@ -390,7 +390,7 @@ def test_tunnel_BC_to_A(linux_host_factory):
                 ).stdout or ""
                 assert domain in list_output.lower(), f"Server redirect list missing {domain}"
                 server_state = helpers.read_pending_server_config(server_host)
-                server_routing = helpers.read_json(server_host, helpers.SERVER_PENDING_DIR / "routing.json")
+                server_routing = helpers.render_xray(server_host, server_runner, "server", desired=True)
                 helpers.assert_server_redirect_state(server_state, domain, reverse_tag)
                 helpers.assert_server_redirect_rule(server_routing, domain, reverse_tag)
 

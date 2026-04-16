@@ -22,12 +22,12 @@ pytestmark = [pytest.mark.host, pytest.mark.linux, pytest.mark.skipif(SKIP_MANUA
 APPLY_REQUEST = helpers.STATE_ROOT / "apply.request"
 APPLY_ERROR = helpers.STATE_ROOT / "apply.error"
 DESIRED_CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
-DESIRED_CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
-DESIRED_CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
-PENDING_CLIENT_CONFIG = helpers.CONFIG_PENDING_ROOT / "xp2p-client.toml"
+DESIRED_CLIENT_ROUTING = helpers.CLIENT_LIVE_DIR / "xray.json"
+DESIRED_CLIENT_OUTBOUNDS = helpers.CLIENT_LIVE_DIR / "xray.json"
+PENDING_CLIENT_CONFIG = DESIRED_CLIENT_CONFIG
 LIVE_CLIENT_CONFIG = helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml"
 LKG_CLIENT_CONFIG = helpers.CONFIG_LKG_ROOT / "xp2p-client.toml"
-PENDING_CLIENT_OUTBOUNDS = helpers.CLIENT_PENDING_DIR / "outbounds.json"
+PENDING_CLIENT_OUTBOUNDS = helpers.CLIENT_LIVE_DIR / "xray.json"
 LIVE_CLIENT_OUTBOUNDS = helpers.CLIENT_LIVE_DIR / "outbounds.json"
 
 POLL_INTERVAL = 1.5

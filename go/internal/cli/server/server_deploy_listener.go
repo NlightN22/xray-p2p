@@ -33,6 +33,7 @@ type runSignal struct {
 	installDir   string
 	configDir    string
 	runConfigDir string
+	cleanupDir   string
 	skipRun      bool
 	applyHandled bool
 }
@@ -53,6 +54,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 		runCancel      context.CancelFunc
 		diagCancel     context.CancelFunc
 		runDoneCh      chan error
+		runCleanupDir  string
 		lastInstallDir string
 		lastConfigDir  string
 		switchToTun    bool
@@ -75,6 +77,10 @@ func (s *deployServer) Run(ctx context.Context) error {
 					logging.Warn("xp2p server deploy: shutdown timed out waiting for xray-core")
 				}
 				runDoneCh = nil
+			}
+			if runCleanupDir != "" {
+				_ = os.RemoveAll(runCleanupDir)
+				runCleanupDir = ""
 			}
 			return ctx.Err()
 		case sig := <-results:
@@ -116,6 +122,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 				if sig.skipRun {
 					continue
 				}
+				runCleanupDir = strings.TrimSpace(sig.cleanupDir)
 				if err := s.applyMode(sig.installDir, sig.configDir, false); err != nil {
 					logging.Warn("xp2p server deploy: proxy mode setup failed", "err", err)
 				}
@@ -147,6 +154,10 @@ func (s *deployServer) Run(ctx context.Context) error {
 			if diagCancel != nil {
 				diagCancel()
 				diagCancel = nil
+			}
+			if runCleanupDir != "" {
+				_ = os.RemoveAll(runCleanupDir)
+				runCleanupDir = ""
 			}
 			if switchToTun {
 				s.applyTunAndStartService(ctx, lastInstallDir, lastConfigDir)

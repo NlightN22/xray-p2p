@@ -228,50 +228,22 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             timeout=LOG_WAIT_TIMEOUT,
         )
 
-        pending_cert_path = helpers.SERVER_PENDING_DIR / "cert.pem"
-        pending_key_path = helpers.SERVER_PENDING_DIR / "key.pem"
-        live_cert_path = SERVER_LIVE_DIR / "cert.pem"
-        live_key_path = SERVER_LIVE_DIR / "key.pem"
-        if not (
-            helpers.path_exists(server_host, pending_cert_path)
-            or helpers.path_exists(server_host, live_cert_path)
-        ):
-            pytest.fail(f"Expected cert at {pending_cert_path} or {live_cert_path}")
-        if not (
-            helpers.path_exists(server_host, pending_key_path)
-            or helpers.path_exists(server_host, live_key_path)
-        ):
-            pytest.fail(f"Expected key at {pending_key_path} or {live_key_path}")
+        cert_path = helpers.CONFIG_ROOT / "tls" / "server" / "cert.pem"
+        key_path = helpers.CONFIG_ROOT / "tls" / "server" / "key.pem"
+        assert helpers.path_exists(server_host, cert_path), f"Expected cert at {cert_path}"
+        assert helpers.path_exists(server_host, key_path), f"Expected key at {key_path}"
 
-        pending_inbounds = helpers.SERVER_PENDING_DIR / "inbounds.json"
-        live_inbounds = SERVER_LIVE_DIR / "inbounds.json"
-        if helpers.path_exists(server_host, pending_inbounds):
-            inbounds = helpers.read_json(server_host, pending_inbounds)
-        elif helpers.path_exists(server_host, live_inbounds):
-            inbounds = helpers.read_json(server_host, live_inbounds)
-        else:
-            debug = _collect_host_debug(server_host, "server")
-            pytest.fail(
-                f"Expected inbounds at {pending_inbounds} or {live_inbounds}.\n{debug}"
-            )
-        trojan = _find_trojan_inbound(inbounds)
+        xray = helpers.render_xray(server_host, server_runner, "server", desired=True)
+        trojan = _find_trojan_inbound(xray)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
-        expected_cert_paths = {
-            pending_cert_path.as_posix(),
-            live_cert_path.as_posix(),
-            bad_cert.as_posix(),
-        }
-        expected_key_paths = {
-            pending_key_path.as_posix(),
-            live_key_path.as_posix(),
-            bad_key.as_posix(),
-        }
-        assert primary.get("certificateFile") in expected_cert_paths
-        assert primary.get("keyFile") in expected_key_paths
+        assert primary.get("certificateFile") == cert_path.as_posix()
+        assert primary.get("keyFile") == key_path.as_posix()
+        assert primary.get("certificateFile") != bad_cert.as_posix()
+        assert primary.get("keyFile") != bad_key.as_posix()
     finally:
         if client_pid:
             linux_env.stop_process(client_host, str(client_pid))
@@ -675,7 +647,7 @@ def test_deploy_tun_with_multiple_reverse_redirects(
             check=True,
         )
         _restart_services()
-        server_routing = helpers.read_json(server_host, SERVER_LIVE_DIR / "routing.json")
+        server_routing = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=False)
         helpers.assert_server_redirect_rule(server_routing, CLIENT_TUN_CIDR, reverse_two)
         _wait_for_port(server_host, SERVER_DIAG_PORT)
         _wait_for_port(client_host, CLIENT_DIAG_PORT)
@@ -1043,9 +1015,8 @@ def _read_server_config(host: Host) -> dict:
 
 
 def _read_server_config_with_pending(host: Host) -> dict:
-    pending_config = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
-    if linux_env.path_exists(host, pending_config):
-        return helpers.read_toml(host, pending_config).get("server") or {}
+    if linux_env.path_exists(host, SERVER_DESIRED_CONFIG_FILE):
+        return helpers.read_toml(host, SERVER_DESIRED_CONFIG_FILE).get("server") or {}
     return _read_server_config(host)
 
 
@@ -1069,10 +1040,10 @@ def _write_server_config(
 def _remove_server_install_markers(host: Host) -> None:
     helpers.remove_path(host, SERVER_DESIRED_CONFIG_FILE)
     helpers.remove_path(host, helpers.SERVER_APPLIED_STATE_FILE)
-    helpers.remove_path(host, SERVER_LIVE_DIR / "inbounds.json")
-    helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "inbounds.json")
-    helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "cert.pem")
-    helpers.remove_path(host, helpers.SERVER_PENDING_DIR / "key.pem")
+    helpers.remove_path(host, SERVER_LIVE_DIR / "xray.json")
+    helpers.remove_path(host, SERVER_LIVE_DIR / "runtime.json")
+    helpers.remove_path(host, helpers.CONFIG_ROOT / "tls" / "server" / "cert.pem")
+    helpers.remove_path(host, helpers.CONFIG_ROOT / "tls" / "server" / "key.pem")
 
 
 
@@ -1089,16 +1060,13 @@ def _deploy_env() -> dict[str, str]:
 
 
 def _assert_server_config_exists(server_host: Host) -> None:
-    pending_config = helpers.CONFIG_PENDING_ROOT / "xp2p-server.toml"
-    if helpers.path_exists(server_host, SERVER_LIVE_CONFIG_FILE):
-        return
-    if helpers.path_exists(server_host, pending_config):
+    if helpers.path_exists(server_host, SERVER_DESIRED_CONFIG_FILE):
         return
     deploy_logs = _read_deploy_logs(None, server_host)
     debug = _collect_host_debug(server_host, "server")
     raise AssertionError(
         "Server config file not found after deploy.\n"
-        f"Expected: {SERVER_LIVE_CONFIG_FILE} or {pending_config}\n"
+        f"Expected: {SERVER_DESIRED_CONFIG_FILE}\n"
         f"{debug}\n{deploy_logs}"
     )
 

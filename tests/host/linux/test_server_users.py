@@ -6,11 +6,8 @@ import pytest
 
 from tests.host.linux import _helpers as helpers
 
-SERVER_INBOUNDS = helpers.SERVER_PENDING_DIR / "inbounds.json"
-
-
-def _trojan_clients(server_host) -> list[dict]:
-    data = helpers.read_json(server_host, SERVER_INBOUNDS)
+def _trojan_clients(server_host, xp2p_server_runner) -> list[dict]:
+    data = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
     inbounds = data.get("inbounds", [])
     for entry in inbounds:
         if entry.get("protocol") == "trojan":
@@ -20,7 +17,7 @@ def _trojan_clients(server_host) -> list[dict]:
 
 
 def _remove_default_user(server_host, xp2p_server_runner, host: str):
-    clients = _trojan_clients(server_host)
+    clients = _trojan_clients(server_host, xp2p_server_runner)
     assert clients, "Expected default client from server install"
     default_client = clients[0]
     xp2p_server_runner(
@@ -37,7 +34,7 @@ def _remove_default_user(server_host, xp2p_server_runner, host: str):
         host,
         check=True,
     )
-    assert _trojan_clients(server_host) == []
+    assert _trojan_clients(server_host, xp2p_server_runner) == []
     return default_client
 
 
@@ -68,7 +65,7 @@ def test_server_install_provisions_default_user(server_host, xp2p_server_runner)
     try:
         host = "srv-install.xp2p.test"
         _install_server(server_host, xp2p_server_runner, "62040", host)
-        default_client = _trojan_clients(server_host)[0]
+        default_client = _trojan_clients(server_host, xp2p_server_runner)[0]
         assert default_client["email"].startswith("client-")
 
         removed = _remove_default_user(server_host, xp2p_server_runner, host)
@@ -102,7 +99,7 @@ def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_serv
             check=True,
         )
 
-        first = _trojan_clients(server_host)
+        first = _trojan_clients(server_host, xp2p_server_runner)
         assert len(first) == 1 and first[0]["password"] == "secret-one"
 
         result = xp2p_server_runner(
@@ -123,7 +120,7 @@ def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_serv
         )
         assert result.rc != 0, "Expected duplicate user add without --force to fail"
         assert "already exists" in (result.stderr or "").lower()
-        second = _trojan_clients(server_host)
+        second = _trojan_clients(server_host, xp2p_server_runner)
         assert len(second) == 1 and second[0]["password"] == "secret-one"
 
         result = xp2p_server_runner(
@@ -143,7 +140,7 @@ def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_serv
             host,
             check=True,
         )
-        final = _trojan_clients(server_host)
+        final = _trojan_clients(server_host, xp2p_server_runner)
         assert len(final) == 1 and final[0]["password"] == "secret-two"
     finally:
         pass
@@ -204,7 +201,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
             check=True,
         )
 
-        assert _trojan_clients(server_host) == []
+        assert _trojan_clients(server_host, xp2p_server_runner) == []
     finally:
         pass
 
@@ -231,7 +228,7 @@ def test_server_user_add_validates_password(server_host, xp2p_server_runner):
             host,
             check=True,
         )
-        clients = _trojan_clients(server_host)
+        clients = _trojan_clients(server_host, xp2p_server_runner)
         assert len(clients) == 1
         assert clients[0].get("email") == "charlie"
         assert _is_unreserved(clients[0].get("password") or "")
@@ -253,7 +250,7 @@ def test_server_user_add_validates_password(server_host, xp2p_server_runner):
             check=False,
         )
         assert invalid_password.rc != 0, "Expected invalid password to fail"
-        clients = _trojan_clients(server_host)
+        clients = _trojan_clients(server_host, xp2p_server_runner)
         assert len(clients) == 1
         assert clients[0].get("email") == "charlie"
     finally:

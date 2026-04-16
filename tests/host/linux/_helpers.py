@@ -25,15 +25,11 @@ SERVER_CONFIG_DIR_NAME = "config-server"
 CLIENT_CONFIG_DIR = INSTALL_ROOT / CLIENT_CONFIG_DIR_NAME
 SERVER_CONFIG_DIR = INSTALL_ROOT / SERVER_CONFIG_DIR_NAME
 APPLY_DIR_NAME = ".state"
-PENDING_DIR_NAME = "pending"
 LIVE_DIR_NAME = "live"
 LKG_DIR_NAME = "lkg"
 STATE_ROOT = CONFIG_ROOT / APPLY_DIR_NAME
-CONFIG_PENDING_ROOT = STATE_ROOT / PENDING_DIR_NAME
 CONFIG_LIVE_ROOT = STATE_ROOT / LIVE_DIR_NAME
 CONFIG_LKG_ROOT = STATE_ROOT / LKG_DIR_NAME
-CLIENT_PENDING_DIR = CONFIG_PENDING_ROOT / CLIENT_CONFIG_DIR_NAME
-SERVER_PENDING_DIR = CONFIG_PENDING_ROOT / SERVER_CONFIG_DIR_NAME
 CLIENT_LIVE_DIR = CONFIG_LIVE_ROOT / CLIENT_CONFIG_DIR_NAME
 SERVER_LIVE_DIR = CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME
 CLIENT_CONFIG_FILE = CONFIG_ROOT / "xp2p-client.toml"
@@ -185,6 +181,26 @@ def read_toml(host: Host, path: PurePosixPath) -> dict:
         raise RuntimeError(f"Failed to parse TOML from {path}: {exc}\nContent:\n{content}") from exc
 
 
+def render_xray(host: Host, runner, role: str, *, desired: bool) -> dict:
+    output = PurePosixPath(f"/tmp/xp2p-render-{role}-{uuid.uuid4().hex}.json")
+    try:
+        args = [role, "render", "xray"]
+        if desired:
+            args.append("--desired")
+        else:
+            args.append("--live")
+        args.extend(["--output", output.as_posix()])
+        result = runner(*args, check=False)
+        if result.rc != 0:
+            raise AssertionError(
+                "xp2p render xray failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        return read_json(host, output)
+    finally:
+        remove_path(host, output)
+
+
 def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
     for path in paths:
         if linux_env.path_exists(host, path):
@@ -217,13 +233,11 @@ def read_pending_toml(host: Host, path: PurePosixPath) -> dict:
 
 
 def read_pending_client_config(host: Host) -> dict:
-    pending_config = CONFIG_PENDING_ROOT / "xp2p-client.toml"
-    return read_pending_toml(host, pending_config).get("client") or {}
+    return read_pending_toml(host, CLIENT_CONFIG_FILE).get("client") or {}
 
 
 def read_pending_server_config(host: Host) -> dict:
-    pending_config = CONFIG_PENDING_ROOT / "xp2p-server.toml"
-    return read_pending_toml(host, pending_config).get("server") or {}
+    return read_pending_toml(host, SERVER_CONFIG_FILE).get("server") or {}
 
 
 def path_exists(host: Host, path: PurePosixPath | str) -> bool:
@@ -251,7 +265,6 @@ def _cleanup_state(host: Host) -> None:
     cleanup_paths = [
         CONFIG_ROOT / ".apply",
         STATE_ROOT,
-        CONFIG_PENDING_ROOT,
         CONFIG_LIVE_ROOT,
         CONFIG_LKG_ROOT,
         STATE_ROOT / "apply.request",
@@ -278,8 +291,6 @@ def _cleanup_state(host: Host) -> None:
         SERVER_CONFIG_DIR / "outbounds.json.lkg",
         SERVER_CONFIG_DIR / "routing.json.lkg",
         SERVER_CONFIG_DIR / "logs.json.lkg",
-        CLIENT_PENDING_DIR,
-        SERVER_PENDING_DIR,
         CLIENT_LIVE_DIR,
         SERVER_LIVE_DIR,
     ]
@@ -288,11 +299,11 @@ def _cleanup_state(host: Host) -> None:
 
 
 def write_text(host: Host, path: PurePosixPath | str, content: str) -> None:
-    linux_env.write_text(host, _pending_candidate(_as_path(path)), content)
+    linux_env.write_text(host, _as_path(path), content)
 
 
 def file_sha256(host: Host, path: PurePosixPath | str) -> str:
-    return linux_env.file_sha256(host, _resolve_config_path(host, _as_path(path)))
+    return linux_env.file_sha256(host, _as_path(path))
 
 
 def write_apply_request(host: Host, role: str) -> None:
@@ -309,26 +320,10 @@ def write_apply_request(host: Host, role: str) -> None:
 
 
 def _pending_candidate(path: PurePosixPath | str) -> PurePosixPath:
-    path = _as_path(path)
-    if path.is_relative_to(CONFIG_PENDING_ROOT):
-        return path
-    if path.is_relative_to(CONFIG_LIVE_ROOT):
-        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_LIVE_ROOT)
-    if path.is_relative_to(CONFIG_LKG_ROOT):
-        return path
-    if path.is_relative_to(CLIENT_CONFIG_DIR):
-        return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
-    if path.is_relative_to(SERVER_CONFIG_DIR):
-        return SERVER_PENDING_DIR / path.relative_to(SERVER_CONFIG_DIR)
-    if path.is_relative_to(CONFIG_ROOT):
-        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_ROOT)
-    return path
+    return _as_path(path)
 
 
 def _resolve_config_path(host: Host, path: PurePosixPath) -> PurePosixPath:
-    pending = _pending_candidate(path)
-    if pending != path and linux_env.path_exists(host, pending):
-        return pending
     return path
 
 

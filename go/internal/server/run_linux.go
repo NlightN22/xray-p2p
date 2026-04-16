@@ -99,7 +99,6 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	}
 
 	configDir := liveConfigDir
-	configFile := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	appliedState, err := loadServerAppliedState(appliedStatePath)
 	if err != nil {
 		return err
@@ -128,7 +127,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		ctx,
 		xrayPath,
 		filepath.Join(configDir, layout.XrayConfigFileName),
-		configDir,
+		installDir,
 		nil,
 		func() error {
 			if !tunEnabled {
