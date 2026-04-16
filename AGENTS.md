@@ -52,19 +52,19 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 
 - System services (`systemd`, `procd`, `Windows SCM`) must not rely on CLI flags.
 - Packages must run `xp2p` binaries with default parameters only.
-- CLI commands must only update configuration and state files.
+- CLI commands must only update Desired inputs under `CONFIG_ROOT` and apply marker files under `.state/`.
 - OS-level changes such as TUN setup, routes, and `nftables` must be applied only by `xp2p run` or the service layer.
-- Apply flow is strict: pending config is the single source of truth. If a pending snapshot exists, commands must read and update pending only, never mix live data. Live config is used only to seed pending when pending does not exist.
-- Runtime behavior (service run, diagnostics, ping, OS routing) reads live config only, never pending. Pending is for staging/apply.
+- Desired inputs are user-owned and must not be rewritten by the runtime/service layer.
+- Apply flow is strict: Desired inputs are the source of truth. Apply compiles Desired inputs into Live runtime artifacts atomically and may keep an LKG snapshot for rollback.
+- Runtime behavior (service run, diagnostics, ping, OS routing) reads Live runtime artifacts only and never reads Desired inputs directly.
 - Allowed exceptions to the live-only runtime rule:
-  - Asset presence checks may treat pending as installed to avoid triggering `--auto-install` when a full pending snapshot already exists.
-  - Deploy validation may start temporary xray-core using the pending snapshot without touching live.
+  - Deploy validation may start temporary xray-core using a compiled config derived from Desired inputs without touching Live.
 
 ## Testing rules
 
-- Tests must read pending snapshots only when asserting staged configuration changes.
+- Tests must read Desired inputs only when asserting staged configuration changes.
 - Tests must read live config when asserting runtime behavior or service state.
-- Failure dumps should include the full `.state` tree structure (pending/live/lkg/apply.request) when available.
+- Failure dumps should include the full `.state` tree structure (live/lkg/apply.request/apply.error) when available.
 
 ## CLI standards
 
