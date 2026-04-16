@@ -3,8 +3,6 @@
 package client
 
 import (
-	"path/filepath"
-
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -29,16 +27,7 @@ type EndpointRecord struct {
 
 // ListEndpoints returns all configured endpoints.
 func ListEndpoints(opts ListOptions) ([]EndpointRecord, error) {
-	statePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-	if opts.Pending {
-		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
-		if err != nil {
-			return nil, err
-		}
-		return toEndpointRecords(state), nil
-	}
-	state, err := loadClientInstallState(statePath)
+	state, err := loadClientInstallState(config.ConfigPath(layout.ClientConfigFileName))
 	if err != nil {
 		return nil, err
 	}

@@ -199,7 +199,7 @@ func prepareRunOptions(ctx context.Context, cfg config.Config, opts serverRunCom
 	if err := ensureServerAssets(ctx, cfg, installDir, configDirName, configDirPath, opts.AutoInstall, opts.Quiet); err != nil {
 		return server.RunOptions{}, err
 	}
-	if err := ensureServerApplyRequestIfPendingOnly(configDirPath); err != nil {
+	if err := ensureServerApplyRequestIfDesiredOnly(); err != nil {
 		return server.RunOptions{}, err
 	}
 

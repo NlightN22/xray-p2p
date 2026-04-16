@@ -6,11 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-
-	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
 var (
@@ -18,9 +14,7 @@ var (
 	errPasswordRequired = errors.New("xp2p: password is required")
 )
 
-// AddUser ensures that a Trojan client with the provided identifier and password exists.
-// When the client is already present with the same password the operation is a no-op.
-// If the client exists with a different password it is updated in-place.
+// AddUser ensures a Trojan client exists in Desired inputs.
 func AddUser(ctx context.Context, opts AddUserOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -35,123 +29,42 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		return errPasswordRequired
 	}
 
-	host := strings.TrimSpace(opts.Host)
-
-	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
+	configPath := pendingConfigPath()
+	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return err
 	}
 
-	liveConfigDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	configDir, err := pendingConfigDir(liveConfigDir)
-	if err != nil {
-		return err
-	}
-
-	var (
-		channel serverReverseChannel
-		store   reverseStore
-	)
-	if host != "" && !opts.NoReverse {
-		var storeErr error
-		channel, err = buildServerReverseChannel(userID, host)
-		if err != nil {
-			return err
-		}
-		store, storeErr = openReverseStorePending()
-		if storeErr != nil {
-			return storeErr
-		}
-		if err := store.ensureAvailable(channel); err != nil {
-			return err
-		}
-	}
-
-	livePath := filepath.Join(liveConfigDir, "inbounds.json")
-	configPath := filepath.Join(configDir, "inbounds.json")
-	contents, err := readConfigWithFallback(configPath, livePath)
-	if err != nil {
-		return err
-	}
-
-	root, err := parseInbounds(contents)
-	if err != nil {
-		return err
-	}
-
-	trojan, err := selectTrojanInbound(root)
-	if err != nil {
-		return err
-	}
-
-	settings, err := extractSettings(trojan)
-	if err != nil {
-		return err
-	}
-
-	clients, err := extractClients(settings)
-	if err != nil {
-		return err
-	}
-
+	users := desired.Users
 	updated := false
 	found := false
-	for idx := range clients {
-		client := clients[idx]
-		if !strings.EqualFold(client.Email, userID) {
+	for idx := range users {
+		if !strings.EqualFold(strings.TrimSpace(users[idx].Email), userID) {
 			continue
 		}
 		found = true
 		if !opts.Force {
 			return fmt.Errorf("xp2p: user %s already exists (use --force to update)", userID)
 		}
-		if client.Password != password {
-			clients[idx].Password = password
+		if users[idx].Password != password {
+			users[idx].Password = password
 			updated = true
 		}
 		break
 	}
-
-	if !updated && !found {
-		clients = append(clients, trojanClient{
-			Email:    userID,
-			Password: password,
-		})
+	if !found {
+		users = append(users, trojanClient{Email: userID, Password: password})
 		updated = true
 	}
-
-	if found && !updated {
-		if host == "" || opts.NoReverse {
-			return nil
-		}
-		if err := applyServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
-			return err
-		}
-		return writeServerApplyRequest()
-	}
-
-	settings["clients"] = clientsToInterfaces(clients)
-	if err := writeInbounds(configPath, root); err != nil {
-		return err
-	}
-
-	logging.Info("xp2p server user added or updated",
-		"user_id", userID,
-		"config", configPath,
-		"updated", updated,
-	)
-	if host != "" && !opts.NoReverse {
-		if err := applyServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
+	if updated {
+		if err := saveServerTrojanUsers(configPath, users); err != nil {
 			return err
 		}
 	}
 	return writeServerApplyRequest()
 }
 
-// RemoveUser removes the Trojan client with the provided identifier. The operation is idempotent.
+// RemoveUser deletes the Trojan client from Desired inputs. The operation is idempotent.
 func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -162,144 +75,62 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		return errUserIDRequired
 	}
 
-	host := strings.TrimSpace(opts.Host)
-
-	resolvedInstallDir, err := resolveInstallDir(opts.InstallDir)
+	configPath := pendingConfigPath()
+	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return err
 	}
 
-	liveConfigDir, err := resolveUserConfigDir(resolvedInstallDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	configDir, err := pendingConfigDir(liveConfigDir)
-	if err != nil {
-		return err
-	}
-
-	var (
-		channel serverReverseChannel
-		store   reverseStore
-	)
-	if host != "" {
-		channel, err = buildServerReverseChannel(userID, host)
-		if err != nil {
-			return err
-		}
-		store, err = openReverseStorePending()
-		if err != nil {
-			return err
-		}
-	}
-
-	livePath := filepath.Join(liveConfigDir, "inbounds.json")
-	configPath := filepath.Join(configDir, "inbounds.json")
-	contents, err := readConfigWithFallback(configPath, livePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: %s: %w", livePath, err)
-		}
-		return err
-	}
-
-	root, err := parseInbounds(contents)
-	if err != nil {
-		return err
-	}
-
-	trojan, err := selectTrojanInbound(root)
-	if err != nil {
-		return err
-	}
-
-	settings, err := extractSettings(trojan)
-	if err != nil {
-		return err
-	}
-
-	clients, err := extractClients(settings)
-	if err != nil {
-		return err
-	}
-
-	filtered := clients[:0]
+	users := desired.Users
+	filtered := make([]trojanClient, 0, len(users))
 	removed := false
-	for _, client := range clients {
-		if strings.EqualFold(client.Email, userID) {
+	for _, user := range users {
+		if strings.EqualFold(strings.TrimSpace(user.Email), userID) {
 			removed = true
 			continue
 		}
-		filtered = append(filtered, client)
+		filtered = append(filtered, user)
 	}
-
-	if !removed {
-		logging.Info("xp2p server user remove skipped; client not found",
-			"user_id", userID,
-			"config", configPath,
-		)
-		if host != "" {
-			if err := purgeServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
-				return err
-			}
-			return writeServerApplyRequest()
-		}
-		return nil
-	}
-
-	settings["clients"] = clientsToInterfaces(filtered)
-	if err := writeInbounds(configPath, root); err != nil {
-		return err
-	}
-
-	logging.Info("xp2p server user removed",
-		"user_id", userID,
-		"config", configPath,
-	)
-	if host != "" {
-		if err := purgeServerReverseChannelWithConfig(&store, pendingConfigPath(), configDir, channel); err != nil {
+	if removed {
+		if err := saveServerTrojanUsers(configPath, filtered); err != nil {
 			return err
 		}
 	}
 	return writeServerApplyRequest()
 }
 
-func resolveUserConfigDir(installDir, configDir string) (string, error) {
-	cfg := strings.TrimSpace(configDir)
-	if cfg != "" && filepath.IsAbs(cfg) {
-		return cfg, nil
-	}
-
-	base := strings.TrimSpace(installDir)
-	if base == "" {
-		return "", errors.New("xp2p: install directory is required when config dir is relative")
-	}
-
-	resolvedBase, err := resolveInstallDir(base)
-	if err != nil {
-		return "", err
-	}
-	return ResolveConfigDir(resolvedBase, cfg)
-}
-
 func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-
-	configDir, err := resolveUserConfigDir(opts.InstallDir, opts.ConfigDir)
+	configPath := pendingConfigPath()
+	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return nil, err
 	}
 
-	if opts.Pending {
-		pendingDir, err := pendingConfigDir(configDir)
+	result := make([]UserLink, 0, len(desired.Users))
+	for _, user := range desired.Users {
+		link, err := GetUserLink(ctx, UserLinkOptions{
+			InstallDir: opts.InstallDir,
+			ConfigDir:  opts.ConfigDir,
+			Host:       opts.Host,
+			UserID:     user.Email,
+			Pending:    true,
+		})
 		if err != nil {
-			return nil, err
+			result = append(result, UserLink{
+				UserID:   user.Email,
+				Password: user.Password,
+			})
+			continue
 		}
-		configDir = pendingDir
+		if link.Password == "" {
+			link.Password = user.Password
+		}
+		result = append(result, link)
 	}
-	return listUsersFromConfig(configDir, strings.TrimSpace(opts.Host))
+	return result, nil
 }
 
 func GetUserLink(ctx context.Context, opts UserLinkOptions) (UserLink, error) {
@@ -307,17 +138,43 @@ func GetUserLink(ctx context.Context, opts UserLinkOptions) (UserLink, error) {
 		return UserLink{}, err
 	}
 
-	configDir, err := resolveUserConfigDir(opts.InstallDir, opts.ConfigDir)
+	userID := strings.TrimSpace(opts.UserID)
+	if userID == "" {
+		return UserLink{}, errUserIDRequired
+	}
+
+	configPath := pendingConfigPath()
+	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return UserLink{}, err
 	}
 
-	if opts.Pending {
-		pendingDir, err := pendingConfigDir(configDir)
-		if err != nil {
-			return UserLink{}, err
+	var client trojanClient
+	found := false
+	for _, entry := range desired.Users {
+		if strings.EqualFold(strings.TrimSpace(entry.Email), userID) {
+			client = entry
+			found = true
+			break
 		}
-		configDir = pendingDir
 	}
-	return userLinkFromConfig(configDir, strings.TrimSpace(opts.Host), opts.UserID)
+	if !found {
+		return UserLink{}, fmt.Errorf("xp2p: user %s not found", userID)
+	}
+
+	params, err := resolveTrojanLinkParams(configPath, "", strings.TrimSpace(opts.Host))
+	if err != nil {
+		return UserLink{}, err
+	}
+
+	link, err := buildTrojanLink(params.host, params.port, client.Password, client.Email, params.tlsEnabled, params.pinnedPeerSHA256, params.verifyPeerCertName)
+	if err != nil {
+		return UserLink{}, err
+	}
+
+	return UserLink{
+		UserID:   client.Email,
+		Password: client.Password,
+		Link:     link,
+	}, nil
 }

@@ -31,11 +31,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 
-	desiredConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleClient)
 	if err != nil {
 		return err
 	}
@@ -56,7 +52,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 
-	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleClient, desiredConfigDir)
+	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleClient)
 	if err != nil {
 		return err
 	}
@@ -84,20 +80,19 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			}, config.AuditLogPath())
 		}
 	}()
-	if pendingApplied {
-		configPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
-			logging.Warn("reload client config after apply failed", "err", err)
-		} else {
-			opts.TunEnabled = cfg.Client.TunEnabled
-			opts.TunName = cfg.Client.TunName
-			opts.TunMTU = cfg.Client.TunMTU
-			opts.TunAddr = cfg.Client.TunAddr
-			opts.TunMode = cfg.Client.TunMode
-			opts.DNSServers = cfg.Client.DNSServers
-			opts.FullTunnelVerbose = opts.FullTunnelVerbose || cfg.Client.FullTunnelVerbose
-			opts.FullTunnelTag = cfg.Client.FullTunnelTag
-		}
+	meta, metaErr := loadLiveRuntimeMeta(liveConfigDir)
+	if metaErr != nil {
+		return metaErr
+	}
+	desired := runtimeDesiredToClientInstallState(meta.Desired)
+	opts.TunEnabled = meta.TunEnabled
+	opts.TunName = meta.TunName
+	opts.TunMTU = meta.TunMTU
+	opts.TunAddr = meta.TunAddr
+	opts.TunMode = meta.TunMode
+	opts.DNSServers = meta.DNSServers
+	if meta.FullTag != "" {
+		opts.FullTunnelTag = meta.FullTag
 	}
 
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
@@ -116,10 +111,6 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 	configDir := paths.configDir
-	desired, err := loadClientInstallState(paths.configFile)
-	if err != nil {
-		return err
-	}
 	appliedState, err := loadClientAppliedState(paths.stateFile)
 	if err != nil {
 		return err
@@ -136,18 +127,6 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	}
 
 	if !appliedState.matches(desired, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
-		if err := applyClientDesiredConfig(paths, desired, ModeOptions{
-			InstallDir:    installDir,
-			ConfigDir:     opts.ConfigDir,
-			TunEnabled:    tunEnabled,
-			TunName:       opts.TunName,
-			TunMTU:        opts.TunMTU,
-			TunAddr:       opts.TunAddr,
-			TunMode:       opts.TunMode,
-			FullTunnelTag: opts.FullTunnelTag,
-		}, true); err != nil {
-			return err
-		}
 		if err := modemgr.ApplyNatRedirectMode(modeLabel(tunEnabled)); err != nil {
 			return err
 		}
@@ -175,7 +154,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	runErr := runXrayWithConfig(
 		ctx,
 		xrayPath,
-		configDir,
+		filepath.Join(configDir, layout.XrayConfigFileName),
 		configDir,
 		nil,
 		func() error {
@@ -195,23 +174,12 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			return nil
 		},
 		func(readyCtx context.Context) error {
-			addr, err := resolveClientSocksAddress(paths.configFile)
+			addr, err := resolveClientSocksAddress(filepath.Join(configDir, layout.XrayConfigFileName))
 			if err != nil {
 				logging.Warn("client socks health check using defaults", "err", err)
 			}
 			if err := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval); err != nil {
 				return err
-			}
-			if pendingApplied {
-				if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
-					logging.Warn("lkg snapshot update failed", "err", err)
-				}
-				if err := apply.RemoveRequest(config.ApplyRequestPath()); err != nil {
-					logging.Warn("apply request cleanup failed", "err", err)
-				}
-				if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
-					logging.Warn("apply error cleanup failed", "err", err)
-				}
 			}
 			return nil
 		},

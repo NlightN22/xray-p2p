@@ -127,7 +127,7 @@ func writeSocksInbound(t *testing.T, dir, listen string, port int) {
 	if err != nil {
 		t.Fatalf("marshal inbounds: %v", err)
 	}
-	path := filepath.Join(dir, "inbounds.json")
+	path := filepath.Join(dir, "xray.json")
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
@@ -151,7 +151,7 @@ func writeNonSocksInbound(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatalf("marshal inbounds: %v", err)
 	}
-	path := filepath.Join(dir, "inbounds.json")
+	path := filepath.Join(dir, "xray.json")
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}

@@ -20,16 +20,6 @@ func TestApplyPendingIfRequested_SkipsWhenPreviousFailureMatchesRequestID(t *tes
 		t.Fatalf("mkdir state: %v", err)
 	}
 
-	desiredConfigDir := filepath.Join(root, "config-server")
-	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
-	if err != nil {
-		t.Fatalf("PendingConfigDir: %v", err)
-	}
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
-	if err != nil {
-		t.Fatalf("LiveConfigDir: %v", err)
-	}
-
 	req := apply.Request{ID: "req-1", Role: apply.RoleServer}
 	if err := apply.WriteRequest(config.ApplyRequestPath(), req, ""); err != nil {
 		t.Fatalf("WriteRequest: %v", err)
@@ -42,19 +32,7 @@ func TestApplyPendingIfRequested_SkipsWhenPreviousFailureMatchesRequestID(t *tes
 		t.Fatalf("WriteError: %v", err)
 	}
 
-	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir pending: %v", err)
-	}
-	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir live: %v", err)
-	}
-
-	pendingConfig := config.PendingConfigPath(layout.ServerConfigFileName)
-	if err := os.WriteFile(pendingConfig, []byte("pending\n"), 0o644); err != nil {
-		t.Fatalf("write pending: %v", err)
-	}
-
-	rollback, applied, gotReq, err := applyPendingIfRequested(apply.RoleServer, desiredConfigDir)
+	rollback, applied, gotReq, err := applyPendingIfRequested(apply.RoleServer)
 	if err != nil {
 		t.Fatalf("applyPendingIfRequested: %v", err)
 	}
@@ -68,11 +46,11 @@ func TestApplyPendingIfRequested_SkipsWhenPreviousFailureMatchesRequestID(t *tes
 		t.Fatalf("request id mismatch: %q", gotReq.ID)
 	}
 
-	liveConfig := config.LiveConfigPath(layout.ServerConfigFileName)
-	if _, err := os.Stat(liveConfig); err == nil {
-		t.Fatalf("expected live config to be untouched")
+	liveDir, err := config.LiveRoleDir(apply.RoleServer)
+	if err != nil {
+		t.Fatalf("LiveRoleDir: %v", err)
 	}
-	if _, err := os.Stat(pendingConfig); err != nil {
-		t.Fatalf("expected pending config to remain: %v", err)
+	if _, err := os.Stat(filepath.Join(liveDir, layout.XrayConfigFileName)); err == nil {
+		t.Fatalf("expected live artifacts to be untouched")
 	}
 }

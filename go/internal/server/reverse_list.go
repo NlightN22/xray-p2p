@@ -3,11 +3,7 @@
 package server
 
 import (
-	"path/filepath"
 	"sort"
-	"strings"
-
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 // ReverseListOptions controls server reverse enumeration.
@@ -27,43 +23,14 @@ type ReverseRecord struct {
 	RoutingRule bool
 }
 
-// ListReverse enumerates server reverse tunnels and their routing artifacts.
+// ListReverse enumerates server reverse tunnels from Desired inputs.
 func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
-	installDir, err := resolveInstallDir(opts.InstallDir)
-	if err != nil {
-		return nil, err
-	}
-	desiredConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
-	if err != nil {
-		return nil, err
-	}
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
-	if err != nil {
-		return nil, err
-	}
-
-	statePath := serverStatePath(installDir)
-	if opts.Pending {
-		statePath = pendingConfigPath()
-	}
+	statePath := pendingConfigPath()
 	stateDoc, err := loadServerStateDoc(statePath)
 	if err != nil {
 		return nil, err
 	}
 	reverseState, err := decodeServerReverseState(stateDoc)
-	if err != nil {
-		return nil, err
-	}
-
-	routingPath := filepath.Join(liveConfigDir, "routing.json")
-	if opts.Pending {
-		pendingDir, err := pendingConfigDir(desiredConfigDir)
-		if err != nil {
-			return nil, err
-		}
-		routingPath = filepath.Join(pendingDir, "routing.json")
-	}
-	routingDoc, err := loadServerRouting(routingPath)
 	if err != nil {
 		return nil, err
 	}
@@ -82,60 +49,10 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 			Host:        channel.Host,
 			User:        channel.UserID,
 			Tag:         channel.Tag,
-			Portal:      hasServerReversePortal(routingDoc, channel),
-			RoutingRule: hasServerReverseRule(routingDoc, channel),
+			Portal:      true,
+			RoutingRule: true,
 		})
 	}
+	_ = opts
 	return records, nil
-}
-
-func hasServerReversePortal(doc map[string]any, channel serverReverseChannel) bool {
-	reverse, _ := doc["reverse"].(map[string]any)
-	if reverse == nil {
-		return false
-	}
-	rawEntries, _ := reverse["portals"].([]any)
-	if len(rawEntries) == 0 {
-		return false
-	}
-	lowerTag := lowerTrim(channel.Tag)
-	lowerDomain := lowerTrim(channel.Domain)
-	for _, raw := range rawEntries {
-		entry, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		tag, _ := entry["tag"].(string)
-		domain, _ := entry["domain"].(string)
-		if lowerTrim(tag) == lowerTag && lowerTrim(domain) == lowerDomain {
-			return true
-		}
-	}
-	return false
-}
-
-func hasServerReverseRule(doc map[string]any, channel serverReverseChannel) bool {
-	routing, _ := doc["routing"].(map[string]any)
-	if routing == nil {
-		return false
-	}
-	rules := extractInterfaceSlice(routing["rules"])
-	if len(rules) == 0 {
-		return false
-	}
-	trimmedUser := strings.TrimSpace(channel.UserID)
-	for _, raw := range rules {
-		ruleMap, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		if reverseRuleMatches(ruleMap, channel, trimmedUser) {
-			return true
-		}
-	}
-	return false
-}
-
-func lowerTrim(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
 }

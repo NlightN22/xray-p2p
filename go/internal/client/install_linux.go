@@ -12,7 +12,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/configio"
+	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -24,7 +24,6 @@ type installState struct {
 	InstallOptions
 	installDir string
 	configDir  string
-	pendingDir string
 	logsDir    string
 	serverPort int
 	serverName string
@@ -55,9 +54,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
-	if err := os.MkdirAll(state.pendingDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create pending config directory: %w", err)
-	}
 	logRoot := config.LogRoot()
 	if err := os.MkdirAll(logRoot, 0o777); err != nil {
 		return fmt.Errorf("xp2p: create log root: %w", err)
@@ -80,7 +76,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 
-	if err := deployConfiguration(state); err != nil {
+	if err := deployDesiredConfiguration(state); err != nil {
 		return err
 	}
 	req, err := apply.NewRequest(apply.RoleClient)
@@ -166,30 +162,6 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err := os.Remove(configPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("xp2p: remove client config file: %w", err)
-		}
-	} else {
-		stateRemoved = true
-	}
-	liveConfigPath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-	if err := os.Remove(liveConfigPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client live config: %w", err)
-		}
-	} else {
-		stateRemoved = true
-	}
-	lkgConfigPath := filepath.Clean(config.LkgConfigPath(layout.ClientConfigFileName))
-	if err := os.Remove(lkgConfigPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client lkg config: %w", err)
-		}
-	} else {
-		stateRemoved = true
-	}
-	pendingConfigPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-	if err := os.Remove(pendingConfigPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client pending config: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -310,7 +282,7 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		return installState{}, err
 	}
 
-	configDir, err := ResolveConfigDir(dir, opts.ConfigDir)
+	configDir, err := config.DesiredExtensionsDirForRole(apply.RoleClient)
 	if err != nil {
 		return installState{}, err
 	}
@@ -320,16 +292,10 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 	}
 
 	logsDir := filepath.Join(config.LogRoot(), "client")
-
-	pendingDir, err := config.PendingConfigDir(configDir)
-	if err != nil {
-		return installState{}, err
-	}
 	state := installState{
 		InstallOptions: base.installOpts,
 		installDir:     base.installDir,
 		configDir:      base.configDir,
-		pendingDir:     pendingDir,
 		logsDir:        logsDir,
 		serverPort:     base.portVal,
 		serverName:     base.serverName,
@@ -367,28 +333,14 @@ func ResolveConfigDir(base, cfg string) (string, error) {
 	return filepath.Join(base, cfg), nil
 }
 
-func deployConfiguration(state installState) error {
-	xrayCfg, err := ensureClientXrayConfigForce(state.configFile, state.Force)
-	if err != nil {
+func deployDesiredConfiguration(state installState) error {
+	if _, err := ensureClientXrayConfigForce(state.configFile, state.Force); err != nil {
 		return err
 	}
-
-	inboundsPath := filepath.Join(state.pendingDir, "inbounds.json")
-	if err := configio.WriteJSON(inboundsPath, buildClientInbounds(xrayCfg, state.TunEnabled, state.TunName, state.TunMTU), configio.WriteOptions{
-		AuditPath:         config.AuditLogPath(),
-		KeepLastKnownGood: true,
-	}); err != nil {
+	if err := extensions.EnsureTemplates(state.configDir); err != nil {
 		return err
 	}
-
-	if err := configio.WriteJSON(filepath.Join(state.pendingDir, "logs.json"), buildLogs(xrayCfg.Logs), configio.WriteOptions{
-		AuditPath:         config.AuditLogPath(),
-		KeepLastKnownGood: true,
-	}); err != nil {
-		return err
-	}
-
-	_, err = applyClientEndpointConfig(state.pendingDir, state.configFile, endpointConfig{
+	_, err := applyClientEndpointConfig("", state.configFile, endpointConfig{
 		Hostname:              state.serverHost,
 		Port:                  state.serverPort,
 		User:                  state.User,

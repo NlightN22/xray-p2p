@@ -51,11 +51,15 @@ func TestServerCertStateCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			t.Setenv("XP2P_CONFIG_ROOT", dir)
-			configDir := filepath.Join(dir, layout.ServerConfigDir)
-			writeTLSConfigFile(t, configDir)
-
-			certPath := filepath.Join(configDir, "cert.pem")
-			keyPath := filepath.Join(configDir, "key.pem")
+			if err := os.WriteFile(filepath.Join(dir, layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+				t.Fatalf("write server config: %v", err)
+			}
+			tlsDir := filepath.Join(dir, "tls", "server")
+			if err := os.MkdirAll(tlsDir, 0o755); err != nil {
+				t.Fatalf("mkdir tls dir: %v", err)
+			}
+			certPath := filepath.Join(tlsDir, "cert.pem")
+			keyPath := filepath.Join(tlsDir, "key.pem")
 			writeTestCertificate(t, certPath, keyPath, tt.notBefore, tt.notAfter, "cli.state.test")
 
 			cfg := config.Config{
@@ -101,37 +105,6 @@ func executeCertState(t *testing.T, cfg config.Config, args ...string) (string, 
 		code = 0
 	})
 	return output, code
-}
-
-func writeTLSConfigFile(t *testing.T, configDir string) {
-	t.Helper()
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", configDir, err)
-	}
-
-	contents := `{
-    "inbounds": [
-        {
-            "protocol": "trojan",
-            "port": 62022,
-            "settings": { "clients": [] },
-            "streamSettings": {
-                "security": "tls",
-                "tlsSettings": {
-                    "certificates": [
-                        {
-                            "certificateFile": "cert.pem",
-                            "keyFile": "key.pem"
-                        }
-                    ]
-                }
-            }
-        }
-    ]
-}`
-	if err := os.WriteFile(filepath.Join(configDir, "inbounds.json"), []byte(contents), 0o644); err != nil {
-		t.Fatalf("write inbounds: %v", err)
-	}
 }
 
 func writeTestCertificate(t *testing.T, certPath, keyPath string, notBefore, notAfter time.Time, host string) {

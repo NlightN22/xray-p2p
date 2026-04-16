@@ -57,19 +57,10 @@ type RedirectRecord struct {
 	Hostname string
 }
 
-type redirectPaths struct {
-	clientPaths
-	routing string
-}
-
 // AddRedirect registers a custom CIDR redirect.
 func AddRedirect(opts RedirectAddOptions) error {
-	paths, err := resolveRedirectPathsPending(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-
-	state, err := loadClientInstallState(paths.configFile)
+	configFile := config.ConfigPath(layout.ClientConfigFileName)
+	state, err := loadClientInstallState(configFile)
 	if err != nil {
 		return err
 	}
@@ -106,25 +97,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if errors.Is(addErr, redirect.ErrRuleExists) {
 		return nil
 	}
-	if err := state.save(paths.configFile); err != nil {
-		return err
-	}
-	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
-	if err != nil {
-		return err
-	}
-	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(paths.configFile)
-	if err != nil {
-		return err
-	}
-	var endpointIPs map[string]fullTunnelEndpointIPs
-	if fullEnabled {
-		endpointIPs, err = loadFullTunnelEndpointCache()
-		if err != nil {
-			return err
-		}
-	}
-	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false); err != nil {
+	if err := state.save(configFile); err != nil {
 		return err
 	}
 	req, err := apply.NewRequest(apply.RoleClient)
@@ -151,12 +124,8 @@ func isDefaultRoute(value string) bool {
 
 // RemoveRedirect deletes redirect rules.
 func RemoveRedirect(opts RedirectRemoveOptions) error {
-	paths, err := resolveRedirectPathsPending(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-
-	state, err := loadClientInstallState(paths.configFile)
+	configFile := config.ConfigPath(layout.ClientConfigFileName)
+	state, err := loadClientInstallState(configFile)
 	if err != nil {
 		return err
 	}
@@ -184,25 +153,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return fmt.Errorf("xp2p: redirect %s not found", ruleTarget.Describe())
 	}
 	state.Redirects = updated
-	if err := state.save(paths.configFile); err != nil {
-		return err
-	}
-	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
-	if err != nil {
-		return err
-	}
-	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(paths.configFile)
-	if err != nil {
-		return err
-	}
-	var endpointIPs map[string]fullTunnelEndpointIPs
-	if fullEnabled {
-		endpointIPs, err = loadFullTunnelEndpointCache()
-		if err != nil {
-			return err
-		}
-	}
-	if err := updateRoutingConfig(paths.routing, xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, endpointIPs, false); err != nil {
+	if err := state.save(configFile); err != nil {
 		return err
 	}
 	req, err := apply.NewRequest(apply.RoleClient)
@@ -214,19 +165,12 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 
 // ListRedirects returns configured redirect entries.
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
-	statePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-	if opts.Pending {
-		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
-		if err != nil {
-			return nil, err
-		}
-		return buildRedirectRecords(state), nil
-	}
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		return nil, err
 	}
+	_ = opts.Pending
 	return buildRedirectRecords(state), nil
 }
 
@@ -268,28 +212,6 @@ func buildRedirectRecords(state clientInstallState) []RedirectRecord {
 		})
 	}
 	return records
-}
-
-func resolveRedirectPaths(installDir, configDir string) (redirectPaths, error) {
-	paths, err := resolveClientPaths(installDir, configDir)
-	if err != nil {
-		return redirectPaths{}, err
-	}
-	return redirectPaths{
-		clientPaths: paths,
-		routing:     filepath.Join(paths.configDir, "routing.json"),
-	}, nil
-}
-
-func resolveRedirectPathsPending(installDir, configDir string) (redirectPaths, error) {
-	paths, err := resolvePendingClientPaths(installDir, configDir)
-	if err != nil {
-		return redirectPaths{}, err
-	}
-	return redirectPaths{
-		clientPaths: paths,
-		routing:     filepath.Join(paths.configDir, "routing.json"),
-	}, nil
 }
 
 func resolveRedirectTarget(tag, host string, endpoints []clientEndpointRecord) (string, string, error) {

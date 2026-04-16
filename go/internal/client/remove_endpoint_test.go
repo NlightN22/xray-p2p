@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,13 +17,12 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
+	extensionsDir := filepath.Join(dir, configDirName)
+	if err := os.MkdirAll(extensionsDir, 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -88,45 +86,27 @@ func TestRemoveEndpointUpdatesStateAndConfigs(t *testing.T) {
 		}
 	}
 
-	outboundsPath := filepath.Join(configDirPath, "outbounds.json")
-	data, err := os.ReadFile(outboundsPath)
-	if err != nil {
-		t.Fatalf("read outbounds: %v", err)
+	doc := compileDesiredDoc(t, statePath, extensionsDir)
+	outbounds, ok := doc["outbounds"].([]any)
+	if !ok {
+		t.Fatalf("expected outbounds array, got %T", doc["outbounds"])
 	}
-	var out struct {
-		Outbounds []struct {
-			Tag string `json:"tag"`
-		} `json:"outbounds"`
+	if len(outbounds) != 2 {
+		t.Fatalf("expected 2 outbounds, got %d", len(outbounds))
 	}
-	if err := json.Unmarshal(data, &out); err != nil {
-		t.Fatalf("parse outbounds: %v", err)
-	}
-	if len(out.Outbounds) != 2 {
-		t.Fatalf("expected 2 outbounds, got %d", len(out.Outbounds))
-	}
-	if out.Outbounds[0].Tag != "proxy-server-b" {
-		t.Fatalf("unexpected trojan outbound %s", out.Outbounds[0].Tag)
+	first, _ := outbounds[0].(map[string]any)
+	if tag, _ := first["tag"].(string); tag != "proxy-server-b" {
+		t.Fatalf("unexpected first outbound tag %q", tag)
 	}
 
-	routingPath := filepath.Join(configDirPath, "routing.json")
-	routing, err := os.ReadFile(routingPath)
-	if err != nil {
-		t.Fatalf("read routing: %v", err)
-	}
-	var doc struct {
-		Routing struct {
-			Rules []struct {
-				OutboundTag string   `json:"outboundTag"`
-				IP          []string `json:"ip"`
-				Domains     []string `json:"domains"`
-			} `json:"rules"`
-		} `json:"routing"`
-	}
-	if err := json.Unmarshal(routing, &doc); err != nil {
-		t.Fatalf("parse routing: %v", err)
-	}
-	for _, rule := range doc.Routing.Rules {
-		if strings.Contains(rule.OutboundTag, "server-a") {
+	rules := extractRoutingRules(t, doc)
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		outbound, _ := rule["outboundTag"].(string)
+		if strings.Contains(outbound, "server-a") {
 			t.Fatalf("found rule for removed endpoint: %+v", rule)
 		}
 	}
@@ -137,13 +117,8 @@ func TestRemoveEndpointRemovesAllWhenNoEndpointsRemain(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
-	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{

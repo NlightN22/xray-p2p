@@ -31,76 +31,14 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 	if err := ensureConfigExists(state.configDir); err != nil {
 		return err
 	}
-
-	pendingDir, err := pendingConfigDir(state.configDir)
-	if err != nil {
-		return err
-	}
-	configPath := filepath.Join(pendingDir, "inbounds.json")
-	livePath := filepath.Join(state.configDir, "inbounds.json")
-	contents, err := readConfigWithFallback(configPath, livePath)
-	if err != nil {
-		return err
-	}
-
-	root, err := parseInbounds(contents)
-	if err != nil {
-		return err
-	}
-
-	trojan, err := selectTrojanInbound(root)
-	if err != nil {
-		return err
-	}
-
-	streamSettings, err := extractStreamSettings(trojan)
-	if err != nil {
-		return err
-	}
-
-	if hasTLSConfigured(streamSettings) && !state.force {
-		return ErrCertificateConfigured
-	}
-
-	if state.generateSelfSigned {
-		if err := os.MkdirAll(pendingDir, 0o755); err != nil {
-			return fmt.Errorf("xp2p: create pending config directory: %w", err)
-		}
-		state.certDest = filepath.Join(pendingDir, "cert.pem")
-		state.keyDest = filepath.Join(pendingDir, "key.pem")
-		state.certPath = filepath.Join(state.liveConfigDir, "cert.pem")
-		state.keyPath = filepath.Join(state.liveConfigDir, "key.pem")
-	} else if state.certSource == CertificateSourcePath {
-		if err := os.MkdirAll(pendingDir, 0o755); err != nil {
-			return fmt.Errorf("xp2p: create pending config directory: %w", err)
-		}
-		state.certDest = filepath.Join(pendingDir, "cert.pem")
-		state.keyDest = filepath.Join(pendingDir, "key.pem")
-		if err := copyFile(state.certPath, state.certDest, 0o644); err != nil {
-			return fmt.Errorf("xp2p: copy certificate: %w", err)
-		}
-		if err := copyFile(state.keyPath, state.keyDest, 0o600); err != nil {
-			return fmt.Errorf("xp2p: copy key: %w", err)
-		}
-		state.certPath = filepath.Join(state.liveConfigDir, "cert.pem")
-		state.keyPath = filepath.Join(state.liveConfigDir, "key.pem")
-	}
 	if err := provisionCertificateFiles(state); err != nil {
-		return err
-	}
-
-	updateStreamSettings(streamSettings, state)
-	trojan["streamSettings"] = streamSettings
-
-	if err := writeInbounds(configPath, root); err != nil {
 		return err
 	}
 	if err := writeServerApplyRequest(); err != nil {
 		return err
 	}
-
 	logFields := []any{
-		"config_dir", state.configDir,
+		"tls_dir", defaultTLSDir(),
 		"cert_path", state.certPath,
 	}
 	if state.generateSelfSigned {
@@ -142,10 +80,6 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 	if err != nil {
 		return certificateState{}, err
 	}
-	liveConfigDir, err := config.LiveConfigDir(configDir)
-	if err != nil {
-		return certificateState{}, err
-	}
 
 	inputs, err := resolveCertificateInputs(opts.CertificateStore, opts.CertificateFile, opts.KeyFile, opts.RelaxedPathValidation)
 	if err != nil {
@@ -171,15 +105,15 @@ func normalizeCertificateOptions(opts CertificateOptions) (certificateState, err
 	certPath := inputs.certPath
 	keyPath := inputs.keyPath
 	if inputs.selfSigned {
-		certPath = filepath.Join(liveConfigDir, "cert.pem")
-		keyPath = filepath.Join(liveConfigDir, "key.pem")
+		certPath = defaultCertPath()
+		keyPath = defaultKeyPath()
 	}
 
 	return certificateState{
 		configDir:          configDir,
-		liveConfigDir:      liveConfigDir,
-		certDest:           filepath.Join(configDir, "cert.pem"),
-		keyDest:            filepath.Join(configDir, "key.pem"),
+		liveConfigDir:      "",
+		certDest:           defaultCertPath(),
+		keyDest:            defaultKeyPath(),
 		certPath:           certPath,
 		keyPath:            keyPath,
 		host:               host,
@@ -220,6 +154,21 @@ func hasTLSConfigured(stream map[string]any) bool {
 }
 
 func provisionCertificateFiles(state certificateState) error {
+	if err := os.MkdirAll(filepath.Dir(state.certDest), 0o755); err != nil {
+		return fmt.Errorf("xp2p: create tls dir: %w", err)
+	}
+	if !state.force {
+		if _, err := os.Stat(state.certDest); err == nil {
+			return ErrCertificateConfigured
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: stat %s: %w", state.certDest, err)
+		}
+		if _, err := os.Stat(state.keyDest); err == nil {
+			return ErrCertificateConfigured
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("xp2p: stat %s: %w", state.keyDest, err)
+		}
+	}
 	if state.generateSelfSigned {
 		logging.Info("xp2p server cert set generating self-signed certificate",
 			"host", state.host,
@@ -227,6 +176,14 @@ func provisionCertificateFiles(state certificateState) error {
 			"valid_years", 10,
 		)
 		return generateSelfSignedCertificate(state.host, state.certDest, state.keyDest)
+	}
+	if state.certSource == CertificateSourcePath {
+		if err := copyFile(state.certPath, state.certDest, 0o644); err != nil {
+			return fmt.Errorf("xp2p: copy certificate: %w", err)
+		}
+		if err := copyFile(state.keyPath, state.keyDest, 0o600); err != nil {
+			return fmt.Errorf("xp2p: copy key: %w", err)
+		}
 	}
 	return nil
 }

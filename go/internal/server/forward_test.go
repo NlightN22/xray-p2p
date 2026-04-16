@@ -3,34 +3,22 @@
 package server
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestServerAddForwardUpdatesState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	desiredConfigDir := filepath.Join(dir, DefaultServerConfigDir)
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
-	if err != nil {
-		t.Fatalf("live config dir: %v", err)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
 	}
-	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
-	if err != nil {
-		t.Fatalf("pending config dir: %v", err)
-	}
-	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir config: %v", err)
-	}
-	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir pending: %v", err)
-	}
-	writeServerInboundsFile(t, filepath.Join(liveConfigDir, "inbounds.json"))
+	extensionsDir := filepath.Join(dir, layout.ServerConfigDir)
 
 	result, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
@@ -60,8 +48,11 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 		t.Fatalf("expected forward state entry, got %v", doc[serverForwardRulesKey])
 	}
 
-	inbounds := readServerInboundsDoc(t, filepath.Join(mustPendingConfigDir(t, desiredConfigDir), "inbounds.json"))
-	items := inbounds["inbounds"].([]any)
+	compiled := compileDesiredDoc(t, pendingConfigPath(), extensionsDir)
+	items, ok := compiled["inbounds"].([]any)
+	if !ok {
+		t.Fatalf("expected inbounds array, got %T", compiled["inbounds"])
+	}
 	if !hasInboundTag(items, result.Rule.Tag) {
 		t.Fatalf("expected forward inbound tag %q to be present", result.Rule.Tag)
 	}
@@ -70,22 +61,10 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 func TestServerRemoveForwardClearsState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	desiredConfigDir := filepath.Join(dir, DefaultServerConfigDir)
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
-	if err != nil {
-		t.Fatalf("live config dir: %v", err)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
 	}
-	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
-	if err != nil {
-		t.Fatalf("pending config dir: %v", err)
-	}
-	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir config: %v", err)
-	}
-	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir pending: %v", err)
-	}
-	writeServerInboundsFile(t, filepath.Join(liveConfigDir, "inbounds.json"))
+	extensionsDir := filepath.Join(dir, layout.ServerConfigDir)
 
 	addRes, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
@@ -118,50 +97,14 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 		t.Fatalf("expected forward rules to be removed, got %v", doc[serverForwardRulesKey])
 	}
 
-	inbounds := readServerInboundsDoc(t, filepath.Join(mustPendingConfigDir(t, desiredConfigDir), "inbounds.json"))
-	items := inbounds["inbounds"].([]any)
+	compiled := compileDesiredDoc(t, pendingConfigPath(), extensionsDir)
+	items, ok := compiled["inbounds"].([]any)
+	if !ok {
+		t.Fatalf("expected inbounds array, got %T", compiled["inbounds"])
+	}
 	if hasInboundTag(items, addRes.Rule.Tag) {
 		t.Fatalf("expected forward inbound tag %q to be removed", addRes.Rule.Tag)
 	}
-}
-
-func writeServerInboundsFile(t *testing.T, path string) {
-	t.Helper()
-	doc := map[string]any{
-		"inbounds": []any{
-			map[string]any{
-				"protocol": "trojan",
-				"port":     58443,
-				"settings": map[string]any{
-					"clients": []any{},
-				},
-				"streamSettings": map[string]any{
-					"security": "none",
-				},
-			},
-		},
-	}
-	data, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal inbounds: %v", err)
-	}
-	data = append(data, '\n')
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatalf("write inbounds: %v", err)
-	}
-}
-
-func readServerInboundsDoc(t *testing.T, path string) map[string]any {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read inbounds: %v", err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse inbounds: %v", err)
-	}
-	return doc
 }
 
 func hasInboundTag(items []any, tag string) bool {

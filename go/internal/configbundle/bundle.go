@@ -12,6 +12,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 type Format string
@@ -58,6 +61,10 @@ func DefaultArchiveName(role string, format Format, now time.Time) string {
 }
 
 func ExportConfigRoot(root, outputPath string) error {
+	return ExportRoleConfigRoot("any", root, outputPath)
+}
+
+func ExportRoleConfigRoot(role, root, outputPath string) error {
 	cleanRoot := filepath.Clean(strings.TrimSpace(root))
 	if cleanRoot == "" {
 		return fmt.Errorf("configbundle: config root is empty")
@@ -93,10 +100,22 @@ func ExportConfigRoot(root, outputPath string) error {
 		_ = os.Remove(tmpPath)
 	}()
 
+	stagingDir, err := os.MkdirTemp(outputDir, ".xp2p-export-stage-")
+	if err != nil {
+		return fmt.Errorf("configbundle: create export staging dir: %w", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(stagingDir)
+	}()
+
+	if err := stageRoleDesiredInputs(role, cleanRoot, stagingDir); err != nil {
+		return err
+	}
+
 	switch format {
 	case FormatZip:
 		writer := zip.NewWriter(tmpFile)
-		if err := writeZip(cleanRoot, writer); err != nil {
+		if err := writeZip(stagingDir, writer); err != nil {
 			_ = writer.Close()
 			return err
 		}
@@ -106,7 +125,7 @@ func ExportConfigRoot(root, outputPath string) error {
 	case FormatTarGz:
 		gz := gzip.NewWriter(tmpFile)
 		tw := tar.NewWriter(gz)
-		if err := writeTarGz(cleanRoot, tw); err != nil {
+		if err := writeTarGz(stagingDir, tw); err != nil {
 			_ = tw.Close()
 			_ = gz.Close()
 			return err
@@ -135,6 +154,10 @@ func ExportConfigRoot(root, outputPath string) error {
 }
 
 func ImportConfigRoot(root, inputPath string) error {
+	return ImportRoleConfigRoot("any", root, inputPath)
+}
+
+func ImportRoleConfigRoot(role, root, inputPath string) error {
 	cleanRoot := filepath.Clean(strings.TrimSpace(root))
 	if cleanRoot == "" {
 		return fmt.Errorf("configbundle: config root is empty")
@@ -150,10 +173,6 @@ func ImportConfigRoot(root, inputPath string) error {
 	}
 
 	parent := filepath.Dir(cleanRoot)
-	desiredRootMode := os.FileMode(0o755)
-	if info, err := os.Stat(cleanRoot); err == nil {
-		desiredRootMode = info.Mode().Perm()
-	}
 	tempDir, err := os.MkdirTemp(parent, ".xp2p-import-")
 	if err != nil {
 		return fmt.Errorf("configbundle: create temp dir: %w", err)
@@ -161,34 +180,20 @@ func ImportConfigRoot(root, inputPath string) error {
 	defer func() {
 		_ = os.RemoveAll(tempDir)
 	}()
-	if err := os.Chmod(tempDir, desiredRootMode); err != nil {
-		return fmt.Errorf("configbundle: set temp root permissions: %w", err)
-	}
 
 	if err := extractArchive(cleanInput, tempDir, format); err != nil {
 		return err
 	}
 
-	backup := ""
-	if exists, err := pathExists(cleanRoot); err != nil {
+	if err := validateRoleBundle(role, tempDir); err != nil {
 		return err
-	} else if exists {
-		backup, err = nextBackupPath(cleanRoot)
-		if err != nil {
-			return err
-		}
-		if err := os.Rename(cleanRoot, backup); err != nil {
-			return fmt.Errorf("configbundle: backup root: %w", err)
-		}
 	}
-
-	if err := os.Rename(tempDir, cleanRoot); err != nil {
-		if backup != "" {
-			_ = os.Rename(backup, cleanRoot)
-		}
-		return fmt.Errorf("configbundle: activate new root: %w", err)
+	if err := applyRoleBundle(role, tempDir, cleanRoot); err != nil {
+		return err
 	}
-
+	if err := ensureApplyRequest(role, cleanRoot); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -442,30 +447,225 @@ func validateArchivePath(name string) (string, error) {
 	return rel, nil
 }
 
-func nextBackupPath(root string) (string, error) {
-	ts := time.Now().UTC().Format("20060102-150405")
-	base := root + ".bak-" + ts
-	for i := 0; i < 100; i++ {
-		candidate := base
-		if i > 0 {
-			candidate = fmt.Sprintf("%s-%d", base, i)
+func stageRoleDesiredInputs(role, root, staging string) error {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role == "" {
+		role = "any"
+	}
+
+	includeClient := role == "client" || role == "any"
+	includeServer := role == "server" || role == "any"
+
+	if includeClient {
+		if err := stageIfPresent(root, staging, layout.ClientConfigFileName); err != nil {
+			return err
 		}
-		if exists, err := pathExists(candidate); err != nil {
-			return "", err
-		} else if !exists {
-			return candidate, nil
+		if err := stageJSONDir(root, staging, layout.ClientConfigDir); err != nil {
+			return err
 		}
 	}
-	return "", fmt.Errorf("configbundle: unable to allocate backup path")
+	if includeServer {
+		if err := stageIfPresent(root, staging, layout.ServerConfigFileName); err != nil {
+			return err
+		}
+		if err := stageJSONDir(root, staging, layout.ServerConfigDir); err != nil {
+			return err
+		}
+		if err := stageDirIfPresent(root, staging, filepath.Join("tls", "server")); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func pathExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
+func stageIfPresent(root, staging, rel string) error {
+	src := filepath.Join(root, rel)
+	info, err := os.Stat(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("configbundle: stat %s: %w", src, err)
 	}
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
+	if info.IsDir() {
+		return nil
 	}
-	return false, err
+	dst := filepath.Join(staging, rel)
+	return copyFile(src, dst, info.Mode())
+}
+
+func stageDirIfPresent(root, staging, rel string) error {
+	src := filepath.Join(root, rel)
+	info, err := os.Stat(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("configbundle: stat %s: %w", src, err)
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("configbundle: symlink not supported: %s", path)
+		}
+		relPath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(staging, relPath)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return os.MkdirAll(target, normalizeDirMode(info.Mode()))
+		}
+		return copyFile(path, target, info.Mode())
+	})
+}
+
+func stageJSONDir(root, staging, rel string) error {
+	src := filepath.Join(root, rel)
+	info, err := os.Stat(src)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("configbundle: stat %s: %w", src, err)
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("configbundle: symlink not supported: %s", path)
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			relPath, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(filepath.Join(staging, relPath), normalizeDirMode(info.Mode()))
+		}
+		if strings.ToLower(filepath.Ext(d.Name())) != ".json" {
+			return nil
+		}
+		relPath, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		return copyFile(path, filepath.Join(staging, relPath), info.Mode())
+	})
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return fmt.Errorf("configbundle: create parent dir %s: %w", filepath.Dir(dst), err)
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("configbundle: open %s: %w", src, err)
+	}
+	defer in.Close()
+	return writeFileFromReader(dst, in, mode)
+}
+
+func validateRoleBundle(role, extractedRoot string) error {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role == "" {
+		role = "any"
+	}
+	includeClient := role == "client" || role == "any"
+	includeServer := role == "server" || role == "any"
+
+	return filepath.WalkDir(extractedRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(extractedRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if strings.HasPrefix(rel, layout.StateDirName+"/") {
+			return fmt.Errorf("configbundle: runtime artifacts are not allowed in import: %s", rel)
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		allowed := false
+		switch {
+		case includeClient && rel == layout.ClientConfigFileName:
+			allowed = true
+		case includeServer && rel == layout.ServerConfigFileName:
+			allowed = true
+		case includeClient && strings.HasPrefix(rel, layout.ClientConfigDir+"/") && strings.HasSuffix(strings.ToLower(rel), ".json"):
+			allowed = true
+		case includeServer && strings.HasPrefix(rel, layout.ServerConfigDir+"/") && strings.HasSuffix(strings.ToLower(rel), ".json"):
+			allowed = true
+		case includeServer && strings.HasPrefix(rel, "tls/server/"):
+			allowed = true
+		}
+		if !allowed {
+			return fmt.Errorf("configbundle: unexpected file in import: %s", rel)
+		}
+		return nil
+	})
+}
+
+func applyRoleBundle(role, extractedRoot, targetRoot string) error {
+	return filepath.WalkDir(extractedRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(extractedRoot, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(targetRoot, rel)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return os.MkdirAll(target, normalizeDirMode(info.Mode()))
+		}
+		return copyFile(path, target, info.Mode())
+	})
+}
+
+func ensureApplyRequest(role, root string) error {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role == "" {
+		role = "any"
+	}
+	if role != apply.RoleClient && role != apply.RoleServer && role != apply.RoleAny {
+		role = apply.RoleAny
+	}
+	req, err := apply.NewRequest(role)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(root, layout.StateDirName, layout.ApplyRequestFileName)
+	auditPath := filepath.Join(root, layout.AuditLogFileName)
+	return apply.WriteRequest(path, req, auditPath)
 }

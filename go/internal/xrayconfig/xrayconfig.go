@@ -278,6 +278,31 @@ func LoadClientConfig(path string) (ClientXrayConfig, error) {
 	return merged, nil
 }
 
+// LoadClientConfigWithDefaults returns the merged xray config; missing [client.xray] falls back to defaults.
+func LoadClientConfigWithDefaults(path string) (ClientXrayConfig, error) {
+	defaults := DefaultClientConfig()
+	if strings.TrimSpace(path) == "" {
+		return ClientXrayConfig{}, errors.New("xrayconfig: config path is empty")
+	}
+	tree, err := loadExistingToml(path)
+	if err != nil {
+		return ClientXrayConfig{}, err
+	}
+	raw := tree.GetPath([]string{"client", "xray"})
+	loaded, ok, err := decodeClientConfig(raw)
+	if err != nil {
+		return ClientXrayConfig{}, err
+	}
+	if !ok {
+		return defaults, nil
+	}
+	merged := mergeClientConfig(loaded, defaults)
+	if err := validateClientConfig(merged); err != nil {
+		return ClientXrayConfig{}, err
+	}
+	return merged, nil
+}
+
 func LoadServerConfig(path string) (ServerXrayConfig, error) {
 	cfg := DefaultServerConfig()
 	if strings.TrimSpace(path) == "" {
@@ -296,6 +321,31 @@ func LoadServerConfig(path string) (ServerXrayConfig, error) {
 		return ServerXrayConfig{}, fmt.Errorf("xrayconfig: server xray config not found in %s", path)
 	}
 	merged := mergeServerConfig(loaded, cfg)
+	if err := validateServerConfig(merged); err != nil {
+		return ServerXrayConfig{}, err
+	}
+	return merged, nil
+}
+
+// LoadServerConfigWithDefaults returns the merged xray config; missing [server.xray] falls back to defaults.
+func LoadServerConfigWithDefaults(path string) (ServerXrayConfig, error) {
+	defaults := DefaultServerConfig()
+	if strings.TrimSpace(path) == "" {
+		return ServerXrayConfig{}, errors.New("xrayconfig: config path is empty")
+	}
+	tree, err := loadExistingToml(path)
+	if err != nil {
+		return ServerXrayConfig{}, err
+	}
+	raw := tree.GetPath([]string{"server", "xray"})
+	loaded, ok, err := decodeServerConfig(raw)
+	if err != nil {
+		return ServerXrayConfig{}, err
+	}
+	if !ok {
+		return defaults, nil
+	}
+	merged := mergeServerConfig(loaded, defaults)
 	if err := validateServerConfig(merged); err != nil {
 		return ServerXrayConfig{}, err
 	}

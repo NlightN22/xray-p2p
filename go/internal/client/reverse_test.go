@@ -1,8 +1,6 @@
 package client
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -13,12 +11,8 @@ import (
 func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	liveConfigDir := filepath.Join(dir, "config-client")
-	configDir := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatalf("mkdir config: %v", err)
-	}
-	configFile := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	extensionsDir := filepath.Join(dir, layout.ClientConfigDir)
+	configFile := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
 	endpoint := endpointConfig{
 		Hostname:   "server.example",
@@ -27,12 +21,11 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		Password:   "secret",
 		ServerName: "server.example",
 	}
-	if _, err := applyClientEndpointConfig(configDir, configFile, endpoint, true); err != nil {
+	if _, err := applyClientEndpointConfig("", configFile, endpoint, true); err != nil {
 		t.Fatalf("applyClientEndpointConfig: %v", err)
 	}
 
-	routingPath := filepath.Join(configDir, "routing.json")
-	doc := loadClientRouting(t, routingPath)
+	doc := compileDesiredDoc(t, configFile, extensionsDir)
 	reverse := doc["reverse"].(map[string]any)
 	bridges := reverse["bridges"].([]any)
 	if len(bridges) != 1 {
@@ -43,10 +36,7 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 		t.Fatalf("unexpected bridge entry: %+v", entry)
 	}
 
-	rules := doc["routing"].(map[string]any)["rules"].([]any)
-	if len(rules) != 4+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 4+windowsRuleBonus(), len(rules))
-	}
+	rules := extractRoutingRules(t, doc)
 	domainRule := findRuleWithDomainRule(rules, "full:reverse-userserver-example.rev")
 	if domainRule == nil {
 		t.Fatalf("expected reverse domain rule, got %+v", rules)
@@ -70,19 +60,6 @@ func TestApplyClientEndpointConfigAddsReverseRules(t *testing.T) {
 	if _, ok := state.Reverse["reverse-userserver-example.rev"]; !ok {
 		t.Fatalf("expected reverse entry in state, got %v", state.Reverse)
 	}
-}
-
-func loadClientRouting(t *testing.T, path string) map[string]any {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read routing: %v", err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse routing: %v", err)
-	}
-	return doc
 }
 
 func findRuleWithDomainRule(rules []any, domain string) map[string]any {

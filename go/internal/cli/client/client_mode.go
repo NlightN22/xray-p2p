@@ -187,19 +187,6 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 			return 1
 		}
 	}
-	if err := client.ApplyModePending(client.ModeOptions{
-		InstallDir:    installDir,
-		ConfigDir:     configDirName,
-		TunEnabled:    tunEnabled,
-		TunName:       loadedCfg.Client.TunName,
-		TunMTU:        loadedCfg.Client.TunMTU,
-		TunAddr:       loadedCfg.Client.TunAddr,
-		TunMode:       tunMode,
-		FullTunnelTag: fullTunnelTag,
-	}); err != nil {
-		logging.Error("xp2p client mode: update pending config failed", "err", err)
-		return 1
-	}
 
 	req, err := apply.NewRequest(apply.RoleClient)
 	if err != nil {

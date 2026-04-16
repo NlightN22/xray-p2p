@@ -8,26 +8,23 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
-	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true)
-
-	certPath, keyPath := createTestCertificateFiles(t, dir, "links.example.test")
-	pendingDir := mustPendingConfigDir(t, configDir)
-	if err := os.MkdirAll(pendingDir, 0o755); err != nil {
-		t.Fatalf("mkdir pending: %v", err)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
 	}
-	if err := os.Rename(certPath, filepath.Join(pendingDir, "cert.pem")); err != nil {
-		t.Fatalf("rename cert: %v", err)
+	if err := os.MkdirAll(defaultTLSDir(), 0o755); err != nil {
+		t.Fatalf("mkdir tls dir: %v", err)
 	}
-	if err := os.Rename(keyPath, filepath.Join(pendingDir, "key.pem")); err != nil {
-		t.Fatalf("rename key: %v", err)
-	}
+	writeCertificateFile(t, defaultCertPath(), defaultKeyPath(), "links.example.test", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -56,7 +53,7 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 	if users[0].Password != "secret" {
 		t.Fatalf("unexpected password: %s", users[0].Password)
 	}
-	pin, err := certificateFingerprintSHA256(filepath.Join(pendingDir, "cert.pem"))
+	pin, err := certificateFingerprintSHA256(defaultCertPath())
 	if err != nil {
 		t.Fatalf("fingerprint cert: %v", err)
 	}
@@ -75,8 +72,9 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
-	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, false)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -117,20 +115,13 @@ func TestListUsersSelfSignedAddsPinnedPeerCert(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
-	configDir := filepath.Join(dir, "config-server")
-	prepareTrojanConfig(t, configDir, true)
-
-	certPath, keyPath := createTestCertificateFiles(t, dir, "self.example.test")
-	pendingDir := mustPendingConfigDir(t, configDir)
-	if err := os.MkdirAll(pendingDir, 0o755); err != nil {
-		t.Fatalf("mkdir pending: %v", err)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
 	}
-	if err := os.Rename(certPath, filepath.Join(pendingDir, "cert.pem")); err != nil {
-		t.Fatalf("rename cert: %v", err)
+	if err := os.MkdirAll(defaultTLSDir(), 0o755); err != nil {
+		t.Fatalf("mkdir tls dir: %v", err)
 	}
-	if err := os.Rename(keyPath, filepath.Join(pendingDir, "key.pem")); err != nil {
-		t.Fatalf("rename key: %v", err)
-	}
+	writeCertificateFile(t, defaultCertPath(), defaultKeyPath(), "self.example.test", time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
 
 	if err := AddUser(context.Background(), AddUserOptions{
 		InstallDir: dir,
@@ -153,7 +144,7 @@ func TestListUsersSelfSignedAddsPinnedPeerCert(t *testing.T) {
 	if len(users) != 1 {
 		t.Fatalf("expected 1 user, got %d", len(users))
 	}
-	pin, err := certificateFingerprintSHA256(filepath.Join(pendingDir, "cert.pem"))
+	pin, err := certificateFingerprintSHA256(defaultCertPath())
 	if err != nil {
 		t.Fatalf("fingerprint cert: %v", err)
 	}

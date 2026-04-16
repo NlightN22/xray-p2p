@@ -76,7 +76,7 @@ func runClientExport(_ config.Config, opts clientExportOptions) int {
 		return 2
 	}
 
-	if err := configbundle.ExportConfigRoot(root, output); err != nil {
+	if err := configbundle.ExportRoleConfigRoot("client", root, output); err != nil {
 		logging.Error("xp2p client export: failed", "err", err)
 		return 1
 	}
@@ -95,7 +95,7 @@ func runClientImport(_ config.Config, opts clientImportOptions) int {
 		return 2
 	}
 
-	if err := configbundle.ImportConfigRoot(root, input); err != nil {
+	if err := configbundle.ImportRoleConfigRoot("client", root, input); err != nil {
 		logging.Error("xp2p client import: failed", "err", err)
 		return 1
 	}

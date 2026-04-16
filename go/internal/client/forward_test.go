@@ -1,7 +1,6 @@
 package client
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,12 +14,10 @@ import (
 func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatalf("mkdir config: %v", err)
+	extensionsDir := filepath.Join(dir, layout.ClientConfigDir)
+	if err := os.MkdirAll(extensionsDir, 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
-	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
 
 	reserved := map[int]struct{}{}
 	listenPort := findAvailablePort(t, reserved)
@@ -43,7 +40,7 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 		t.Fatalf("expected Routed=false when no redirect rules")
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -59,8 +56,11 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 		t.Fatalf("unexpected protocol %s", entry.Protocol)
 	}
 
-	inbounds := readInbounds(t, filepath.Join(configDir, "inbounds.json"))
-	items := inbounds["inbounds"].([]any)
+	doc := compileDesiredDoc(t, statePath, extensionsDir)
+	items, ok := doc["inbounds"].([]any)
+	if !ok {
+		t.Fatalf("expected inbounds array, got %T", doc["inbounds"])
+	}
 	if !hasInboundTag(items, entry.Tag) {
 		t.Fatalf("expected forward inbound tag %q to be present", entry.Tag)
 	}
@@ -69,12 +69,10 @@ func TestAddForwardUpdatesStateAndInbounds(t *testing.T) {
 func TestRemoveForwardCleansState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatalf("mkdir config: %v", err)
+	extensionsDir := filepath.Join(dir, layout.ClientConfigDir)
+	if err := os.MkdirAll(extensionsDir, 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
-	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
 
 	reserved := map[int]struct{}{}
 	listenPort := findAvailablePort(t, reserved)
@@ -100,7 +98,7 @@ func TestRemoveForwardCleansState(t *testing.T) {
 		t.Fatalf("RemoveForward returned error: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -109,8 +107,11 @@ func TestRemoveForwardCleansState(t *testing.T) {
 		t.Fatalf("expected forwards cleared, got %+v", state.Forwards)
 	}
 
-	inbounds := readInbounds(t, filepath.Join(configDir, "inbounds.json"))
-	items := inbounds["inbounds"].([]any)
+	doc := compileDesiredDoc(t, statePath, extensionsDir)
+	items, ok := doc["inbounds"].([]any)
+	if !ok {
+		t.Fatalf("expected inbounds array, got %T", doc["inbounds"])
+	}
 	if hasInboundTag(items, forward.TagForPort(listenPort)) {
 		t.Fatalf("expected forward inbound tag %q to be removed", forward.TagForPort(listenPort))
 	}
@@ -119,12 +120,9 @@ func TestRemoveForwardCleansState(t *testing.T) {
 func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	liveConfigDir := filepath.Join(dir, DefaultClientConfigDir)
-	configDir := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		t.Fatalf("mkdir config: %v", err)
+	if err := os.MkdirAll(filepath.Join(dir, layout.ClientConfigDir), 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
-	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
 
 	reserved := map[int]struct{}{}
 	listenPort := findAvailablePort(t, reserved)
@@ -140,8 +138,6 @@ func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 		t.Fatalf("AddForward returned error: %v", err)
 	}
 
-	writeEmptyInbounds(t, filepath.Join(configDir, "inbounds.json"))
-
 	if _, err := RemoveForward(ForwardRemoveOptions{
 		InstallDir: dir,
 		ConfigDir:  DefaultClientConfigDir,
@@ -153,7 +149,7 @@ func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 		t.Fatalf("RemoveForward returned error: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state, err := loadClientInstallState(statePath)
 	if err != nil {
 		t.Fatalf("load state: %v", err)
@@ -161,34 +157,6 @@ func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 	if len(state.Forwards) != 0 {
 		t.Fatalf("expected forwards cleared, got %+v", state.Forwards)
 	}
-}
-
-func writeEmptyInbounds(t *testing.T, path string) {
-	t.Helper()
-	doc := map[string]any{
-		"inbounds": []any{},
-	}
-	data, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal inbounds: %v", err)
-	}
-	data = append(data, '\n')
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatalf("write inbounds: %v", err)
-	}
-}
-
-func readInbounds(t *testing.T, path string) map[string]any {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read inbounds: %v", err)
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse inbounds: %v", err)
-	}
-	return doc
 }
 
 func findAvailablePort(t *testing.T, reserved map[int]struct{}) int {
@@ -216,7 +184,7 @@ func hasInboundTag(items []any, tag string) bool {
 func TestListForwardsReturnsCopyOfState(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 
 	state := clientInstallState{
 		Forwards: []forward.Rule{

@@ -22,7 +22,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
-var requiredServerConfigFiles = []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
+var requiredServerArtifacts = []string{layout.XrayConfigFileName, layout.RuntimeMetaFileName}
 
 func ensureServerAssets(ctx context.Context, cfg config.Config, installDir, configDirName, configDirPath string, autoInstall, quiet bool) error {
 	present, err := serverAssetsPresent(installDir, configDirPath)
@@ -98,37 +98,23 @@ func serverAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, fmt.Errorf("xp2p: expected file at %s", binPath)
 	}
 
-	liveConfigDir, err := config.LiveConfigDir(configDirPath)
+	_ = configDirPath
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleServer)
 	if err != nil {
 		return false, err
 	}
-	configInfo, err := os.Stat(liveConfigDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			pendingDir, err := config.PendingConfigDir(configDirPath)
-			if err != nil {
-				return false, err
-			}
-			if present, err := configFilesPresent(pendingDir, requiredServerConfigFiles); err != nil {
-				return false, err
-			} else if present {
-				return true, nil
-			}
-			pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
-			if _, err := os.Stat(pendingConfig); err == nil {
-				return true, nil
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
-			}
-			return false, nil
-		}
+	if ok, err := configFilesPresent(liveConfigDir, requiredServerArtifacts); err != nil {
 		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfigDir, err)
-	}
-	if !configInfo.IsDir() {
-		return false, fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
+	} else if ok {
+		return true, nil
 	}
 
-	return configFilesPresent(liveConfigDir, requiredServerConfigFiles)
+	if ok, err := desiredInputsPresent(apply.RoleServer); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	return false, nil
 }
 
 func configFilesPresent(dir string, names []string) (bool, error) {
@@ -180,31 +166,24 @@ func resolveConfigDirPath(installDir, configDir string) (string, error) {
 	return filepath.Join(installDir, cfgDir), nil
 }
 
-func ensureServerApplyRequestIfPendingOnly(configDirPath string) error {
-	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
-	if _, err := os.Stat(liveConfig); err == nil {
+func ensureServerApplyRequestIfDesiredOnly() error {
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleServer)
+	if err != nil {
+		return err
+	}
+	livePresent, err := configFilesPresent(liveConfigDir, requiredServerArtifacts)
+	if err != nil {
+		return err
+	}
+	if livePresent {
 		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
 	}
 
-	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
-	pendingConfigPresent := false
-	if _, err := os.Stat(pendingConfig); err == nil {
-		pendingConfigPresent = true
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-
-	pendingDir, err := config.PendingConfigDir(configDirPath)
+	desiredPresent, err := desiredInputsPresent(apply.RoleServer)
 	if err != nil {
 		return err
 	}
-	pendingDirPresent, err := configFilesPresent(pendingDir, requiredServerConfigFiles)
-	if err != nil {
-		return err
-	}
-	if !pendingConfigPresent && !pendingDirPresent {
+	if !desiredPresent {
 		return nil
 	}
 
@@ -223,10 +202,23 @@ func ensureServerApplyRequestIfPendingOnly(configDirPath string) error {
 		return err
 	}
 	logging.Info("xp2p server run: apply request recorded for pending-only configuration",
-		"pending_config", pendingConfig,
-		"pending_dir", pendingDir,
+		"desired_config", config.ConfigPath(layout.ServerConfigFileName),
+		"extensions_dir", config.ConfigPath(layout.ServerConfigDir),
 	)
 	return nil
+}
+
+func desiredInputsPresent(role string) (bool, error) {
+	desiredConfig, err := config.DesiredConfigPathForRole(role)
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(desiredConfig); err == nil {
+		return true, nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	return false, nil
 }
 
 func validatePortValue(port string) error {

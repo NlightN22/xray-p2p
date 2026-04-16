@@ -40,6 +40,10 @@ const (
 	ApplyRequestFileName = "apply.request"
 	// ApplyErrorFileName stores the last apply failure details for a request.
 	ApplyErrorFileName = "apply.error"
+	// XrayConfigFileName stores the compiled xray-core runtime configuration.
+	XrayConfigFileName = "xray.json"
+	// RuntimeMetaFileName stores xp2p runtime metadata compiled from Desired inputs.
+	RuntimeMetaFileName = "runtime.json"
 	// HeartbeatStateFileName is retained for legacy shared heartbeat storage.
 	HeartbeatStateFileName = "state-heartbeat.json"
 	// ClientHeartbeatStateFileName stores client-side heartbeat snapshots.

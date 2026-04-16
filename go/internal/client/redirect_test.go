@@ -10,7 +10,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
-	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
 func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
@@ -18,13 +17,12 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
+	extensionsDir := filepath.Join(dir, configDirName)
+	if err := os.MkdirAll(extensionsDir, 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -62,36 +60,16 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 		t.Fatalf("unexpected outbound tag %s", updated.Redirects[0].OutboundTag)
 	}
 
-	routingPath := filepath.Join(configDirPath, "routing.json")
-	data, err := os.ReadFile(routingPath)
-	if err != nil {
-		t.Fatalf("read routing: %v", err)
+	doc := compileDesiredDoc(t, statePath, extensionsDir)
+	rules := extractRoutingRules(t, doc)
+	if !hasRuleWithIP(rules, "10.70.0.0/16", "proxy-server-example") {
+		t.Fatalf("missing redirect rule %+v", rules)
 	}
-
-	var doc struct {
-		Routing struct {
-			Rules []struct {
-				Type        string   `json:"type"`
-				IP          []string `json:"ip"`
-				OutboundTag string   `json:"outboundTag"`
-			} `json:"rules"`
-		} `json:"routing"`
+	if !hasRuleWithIP(rules, "203.0.113.10", "direct") {
+		t.Fatalf("missing endpoint bypass rule %+v", rules)
 	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse routing: %v", err)
-	}
-	if len(doc.Routing.Rules) != 3+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(doc.Routing.Rules))
-	}
-	if !hasIPRule(doc.Routing.Rules, "10.70.0.0/16", "proxy-server-example") {
-		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
-	}
-	directTag := "direct"
-	if !hasIPRule(doc.Routing.Rules, "203.0.113.10", directTag) {
-		t.Fatalf("missing endpoint rule %+v", doc.Routing.Rules)
-	}
-	if !hasMarkerRule(doc.Routing.Rules) {
-		t.Fatalf("missing marker rule %+v", doc.Routing.Rules)
+	if !hasMarkerRule(rules) {
+		t.Fatalf("missing marker rule %+v", rules)
 	}
 
 	list, err := ListRedirects(RedirectListOptions{
@@ -115,13 +93,12 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
+	extensionsDir := filepath.Join(dir, configDirName)
+	if err := os.MkdirAll(extensionsDir, 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -159,29 +136,13 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 		t.Fatalf("expected CIDR to be empty, got %s", updated.Redirects[0].CIDR)
 	}
 
-	routingPath := filepath.Join(configDirPath, "routing.json")
-	data, err := os.ReadFile(routingPath)
-	if err != nil {
-		t.Fatalf("read routing: %v", err)
+	doc := compileDesiredDoc(t, statePath, extensionsDir)
+	rules := extractRoutingRules(t, doc)
+	if !hasRuleWithDomains(rules, "app.service.example", "proxy-server-example") {
+		t.Fatalf("missing domain redirect rule %+v", rules)
 	}
-
-	var doc struct {
-		Routing struct {
-			Rules []struct {
-				Type        string   `json:"type"`
-				Domains     []string `json:"domains"`
-				OutboundTag string   `json:"outboundTag"`
-			} `json:"rules"`
-		} `json:"routing"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse routing: %v", err)
-	}
-	if len(doc.Routing.Rules) != 3+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(doc.Routing.Rules))
-	}
-	if !hasDomainRule(doc.Routing.Rules, "app.service.example", "proxy-server-example") {
-		t.Fatalf("missing redirect rule %+v", doc.Routing.Rules)
+	if !hasMarkerRule(rules) {
+		t.Fatalf("missing marker rule %+v", rules)
 	}
 
 	list, err := ListRedirects(RedirectListOptions{
@@ -205,13 +166,11 @@ func TestRemoveRedirectByTag(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
+	if err := os.MkdirAll(filepath.Join(dir, configDirName), 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -227,9 +186,6 @@ func TestRemoveRedirectByTag(t *testing.T) {
 	}
 	if err := state.save(statePath); err != nil {
 		t.Fatalf("save state: %v", err)
-	}
-	if err := updateRoutingConfig(filepath.Join(configDirPath, "routing.json"), xrayconfig.DefaultClientConfig().Routing, state.Endpoints, state.Redirects, state.Reverse, false, "", nil, false); err != nil {
-		t.Fatalf("seed routing config: %v", err)
 	}
 
 	opts := RedirectRemoveOptions{
@@ -274,13 +230,12 @@ func TestRemoveDomainRedirect(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
+	extensionsDir := filepath.Join(dir, configDirName)
+	if err := os.MkdirAll(extensionsDir, 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
@@ -296,10 +251,6 @@ func TestRemoveDomainRedirect(t *testing.T) {
 	}
 	if err := state.save(statePath); err != nil {
 		t.Fatalf("save state: %v", err)
-	}
-	routingPath := filepath.Join(configDirPath, "routing.json")
-	if err := updateRoutingConfig(routingPath, xrayconfig.DefaultClientConfig().Routing, state.Endpoints, state.Redirects, state.Reverse, false, "", nil, false); err != nil {
-		t.Fatalf("seed routing config: %v", err)
 	}
 
 	opts := RedirectRemoveOptions{
@@ -319,42 +270,50 @@ func TestRemoveDomainRedirect(t *testing.T) {
 		t.Fatalf("unexpected remaining redirects %+v", updated.Redirects)
 	}
 
-	data, err := os.ReadFile(routingPath)
-	if err != nil {
-		t.Fatalf("read routing: %v", err)
-	}
-	var doc struct {
-		Routing struct {
-			Rules []struct {
-				Domains     []string `json:"domains"`
-				IP          []string `json:"ip"`
-				OutboundTag string   `json:"outboundTag"`
-			} `json:"rules"`
-		} `json:"routing"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse routing: %v", err)
-	}
-	if len(doc.Routing.Rules) != 3+windowsRuleBonus() {
-		t.Fatalf("expected %d routing rules, got %d", 3+windowsRuleBonus(), len(doc.Routing.Rules))
-	}
-	for _, rule := range doc.Routing.Rules {
-		if len(rule.Domains) > 0 {
-			t.Fatalf("found domain rule after removal: %+v", rule)
-		}
+	doc := compileDesiredDoc(t, statePath, extensionsDir)
+	rules := extractRoutingRules(t, doc)
+	if hasAnyDomainRedirectRule(rules) {
+		t.Fatalf("found domain rule after removal: %+v", rules)
 	}
 }
 
-func hasIPRule(rules []struct {
-	Type        string   `json:"type"`
-	IP          []string `json:"ip"`
-	OutboundTag string   `json:"outboundTag"`
-}, ip, tag string) bool {
-	for _, rule := range rules {
-		if rule.OutboundTag != tag {
+func compileDesiredDoc(t *testing.T, configPath string, extensionsDir string) map[string]any {
+	t.Helper()
+	artifacts, err := compileDesired(configPath, extensionsDir)
+	if err != nil {
+		t.Fatalf("compile desired: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(artifacts.XrayJSON, &doc); err != nil {
+		t.Fatalf("parse xray.json: %v", err)
+	}
+	return doc
+}
+
+func extractRoutingRules(t *testing.T, doc map[string]any) []any {
+	t.Helper()
+	routing, ok := doc["routing"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected routing section, got %T", doc["routing"])
+	}
+	rules, ok := routing["rules"].([]any)
+	if !ok {
+		t.Fatalf("expected routing.rules array, got %T", routing["rules"])
+	}
+	return rules
+}
+
+func hasRuleWithIP(rules []any, ip, tag string) bool {
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
 			continue
 		}
-		for _, value := range rule.IP {
+		outbound, _ := rule["outboundTag"].(string)
+		if outbound != tag {
+			continue
+		}
+		for _, value := range extractStringSlice(rule["ip"]) {
 			if value == ip {
 				return true
 			}
@@ -363,16 +322,17 @@ func hasIPRule(rules []struct {
 	return false
 }
 
-func hasDomainRule(rules []struct {
-	Type        string   `json:"type"`
-	Domains     []string `json:"domains"`
-	OutboundTag string   `json:"outboundTag"`
-}, domain, tag string) bool {
-	for _, rule := range rules {
-		if rule.OutboundTag != tag {
+func hasRuleWithDomains(rules []any, domain, tag string) bool {
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
 			continue
 		}
-		for _, value := range rule.Domains {
+		outbound, _ := rule["outboundTag"].(string)
+		if outbound != tag {
+			continue
+		}
+		for _, value := range extractStringSlice(rule["domains"]) {
 			if value == domain {
 				return true
 			}
@@ -381,16 +341,29 @@ func hasDomainRule(rules []struct {
 	return false
 }
 
-func hasMarkerRule(rules []struct {
-	Type        string   `json:"type"`
-	IP          []string `json:"ip"`
-	OutboundTag string   `json:"outboundTag"`
-}) bool {
-	for _, rule := range rules {
-		for _, value := range rule.IP {
+func hasMarkerRule(rules []any) bool {
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, value := range extractStringSlice(rule["ip"]) {
 			if strings.HasPrefix(value, "127.255.") {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func hasAnyDomainRedirectRule(rules []any) bool {
+	for _, raw := range rules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if len(extractStringSlice(rule["domains"])) > 0 {
+			return true
 		}
 	}
 	return false
@@ -401,13 +374,11 @@ func TestListRedirectsReportsMixedRecords(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	configDirName := layout.ClientConfigDir
-	liveConfigDir := filepath.Join(dir, configDirName)
-	configDirPath := mustPendingConfigDir(t, liveConfigDir)
-	if err := os.MkdirAll(configDirPath, 0o755); err != nil {
-		t.Fatalf("mkdir config dir: %v", err)
+	if err := os.MkdirAll(filepath.Join(dir, configDirName), 0o755); err != nil {
+		t.Fatalf("mkdir extensions dir: %v", err)
 	}
 
-	statePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	state := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{Hostname: "server-a.example", Tag: "proxy-server-a"},

@@ -7,43 +7,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
-var runRequiredConfigFiles = []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
+var runRequiredConfigFiles = []string{layout.XrayConfigFileName, layout.RuntimeMetaFileName}
 
 func adjustRunPaths(paths clientPaths) (clientPaths, error) {
-	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-	if paths.configFile == liveConfig {
-		if _, err := os.Stat(liveConfig); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				if pendingConfig != "" {
-					if _, pendingErr := os.Stat(pendingConfig); pendingErr == nil {
-						paths.configFile = pendingConfig
-					} else if !errors.Is(pendingErr, os.ErrNotExist) {
-						return paths, pendingErr
-					}
-				}
-			} else {
-				return paths, err
-			}
-		}
-	}
-
 	if ok, err := configFilesPresent(paths.configDir, runRequiredConfigFiles); err != nil {
 		return paths, err
 	} else if !ok {
-		pendingDir, err := config.PendingConfigDirFromLive(paths.configDir)
-		if err != nil {
-			return paths, err
-		}
-		if ok, err := configFilesPresent(pendingDir, runRequiredConfigFiles); err != nil {
-			return paths, err
-		} else if ok {
-			paths.configDir = pendingDir
-		}
+		return paths, os.ErrNotExist
 	}
 
 	return paths, nil

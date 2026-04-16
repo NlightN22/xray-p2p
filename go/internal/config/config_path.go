@@ -34,7 +34,7 @@ func StateRoot() string {
 
 // PendingRoot returns the configuration pending root directory.
 func PendingRoot() string {
-	return filepath.Join(StateRoot(), layout.PendingDirName)
+	return filepath.Clean(ConfigRoot())
 }
 
 // LiveRoot returns the configuration live root directory.
@@ -49,11 +49,7 @@ func LkgRoot() string {
 
 // PendingConfigPath returns the full path inside the pending root.
 func PendingConfigPath(name string) string {
-	root := filepath.Clean(PendingRoot())
-	if root == "." || root == "" {
-		return filepath.Clean(name)
-	}
-	return filepath.Join(root, filepath.Clean(name))
+	return ConfigPath(name)
 }
 
 // LiveConfigPath returns the full path inside the live root.

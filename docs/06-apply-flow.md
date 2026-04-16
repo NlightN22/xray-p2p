@@ -13,8 +13,8 @@ audited, and safe to apply from services without relying on CLI flags.
 - `CONFIG_ROOT/.state/apply.error`
 - `CONFIG_ROOT/xp2p-client.toml`
 - `CONFIG_ROOT/xp2p-server.toml`
-- `config-client/`
-- `config-server/`
+- `CONFIG_ROOT/config-client/`
+- `CONFIG_ROOT/config-server/`
 
 The `apply.request` file is the trigger that asks the service layer to compile
 and apply Desired inputs.
@@ -57,7 +57,8 @@ For recommended snippet filenames and routing rule insertion points, see `docs/0
 ## Edit + Rollback Flow
 
 This section describes the flow for manual edits, CLI edits, and rollback
-using a clear split between Desired, Pending, Live, and LKG.
+using a clear split between Desired, Live, and LKG. Apply requests are tracked
+via a marker file.
 
 ### Directory Roles
 
@@ -91,13 +92,13 @@ Live and LKG store compiled runtime artifacts (for example `xray.json`) together
 1. Apply fails (service/xray/health checks).
 2. Service restores live runtime artifacts from LKG (when available).
 3. `apply.error` is written with the request ID and failure reason.
-4. `apply.request` remains so operators can see the pending change, but the service
+4. `apply.request` remains so operators can see the requested change, but the service
    skips repeated apply attempts for the same request ID.
 5. Service restarts using restored live artifacts and logs the failure.
 
 ## Deploy Flow
 
-Deploy flow details (including pending updates, temporary tunnel validation,
+Deploy flow details (including apply requests, temporary tunnel validation,
 and service start requirements) live in `docs/07-deploy-flow.md` to avoid
 duplication.
 
@@ -110,7 +111,7 @@ The apply trigger file is created at:
 
 It includes a role (`client` or `server`) and a request ID. The service
 process watches for this file and treats it as the single source of truth
-for pending work. When apply fails, the service writes `apply.error` with
+for apply work. When apply fails, the service writes `apply.error` with
 the same request ID and failure reason.
 
 ## Service Apply
@@ -119,13 +120,13 @@ On service start (or restart), the service:
 
 1. Reads `apply.request`.
 2. Compiles Desired inputs into live runtime artifacts.
-4. Removes `apply.request`.
-5. Writes LKG metadata on success (optional).
+3. Removes `apply.request`.
+4. Writes LKG metadata on success (optional).
 
 If apply fails, the service logs the error and keeps `apply.request` so the
 operator can investigate or retry. The service will not retry the same
 request ID once `apply.error` is recorded; a new apply request must be
-created after fixing the pending snapshot.
+created after fixing Desired inputs.
 
 ## Routes and OS Changes
 

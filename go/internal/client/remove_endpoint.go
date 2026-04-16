@@ -6,11 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 // RemoveEndpointOptions control removal of a specific endpoint.
@@ -31,12 +31,8 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 		return errors.New("xp2p: endpoint hostname or tag is required")
 	}
 
-	paths, err := resolvePendingClientPaths(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-
-	state, err := loadClientInstallState(paths.configFile)
+	configFile := config.ConfigPath(layout.ClientConfigFileName)
+	state, err := loadClientInstallState(configFile)
 	if err != nil {
 		return err
 	}
@@ -52,32 +48,7 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 	state.removeRedirectsByTag(record.Tag)
 	state.removeReverseChannelsByTag(record.Tag)
 
-	if err := state.save(paths.configFile); err != nil {
-		return err
-	}
-	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
-	if err != nil {
-		return err
-	}
-	endpointIPs, err := resolveEndpointIPMapWithCache(ctx, state.Endpoints)
-	if err != nil {
-		return err
-	}
-	if err := writeOutboundsConfig(filepath.Join(paths.configDir, "outbounds.json"), xrayCfg.DirectOutbound, state.Endpoints, endpointIPs, true); err != nil {
-		return err
-	}
-	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(paths.configFile)
-	if err != nil {
-		return err
-	}
-	routeEndpointIPs := map[string]fullTunnelEndpointIPs(nil)
-	if fullEnabled {
-		routeEndpointIPs, err = loadFullTunnelEndpointCache()
-		if err != nil {
-			return err
-		}
-	}
-	if err := updateRoutingConfig(filepath.Join(paths.configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, routeEndpointIPs, false); err != nil {
+	if err := state.save(configFile); err != nil {
 		return err
 	}
 	req, err := apply.NewRequest(apply.RoleClient)

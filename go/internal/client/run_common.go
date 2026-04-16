@@ -18,7 +18,7 @@ type readyCheck func(context.Context) error
 func runXrayWithConfig(
 	ctx context.Context,
 	xrayPath string,
-	configDir string,
+	configPath string,
 	cmdDir string,
 	configureCmd cmdConfigurator,
 	onStart startHook,
@@ -30,7 +30,7 @@ func runXrayWithConfig(
 		return err
 	}
 
-	args := []string{"-confdir", configDir}
+	args := []string{"-config", configPath}
 	cmd := exec.CommandContext(ctx, xrayPath, args...)
 	cmd.Dir = cmdDir
 	if configureCmd != nil {

@@ -3,18 +3,23 @@
 package server
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	configDir := filepath.Join(dir, "config-server")
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	configDir := filepath.Join(dir, layout.ServerConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
@@ -44,10 +49,8 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 		t.Fatalf("expected redirect entry, got %+v", stateDoc[serverRedirectRulesKey])
 	}
 
-	routingPath := filepath.Join(mustPendingConfigDir(t, configDir), "routing.json")
-	routingDoc := readJSONFile(t, routingPath)
-	routingObj, _ := routingDoc["routing"].(map[string]any)
-	rules := extractInterfaceSlice(routingObj["rules"])
+	compiled := compileDesiredDoc(t, pendingConfigPath(), configDir)
+	rules := extractRoutingRules(t, compiled)
 	if !hasRedirectRule(rules, "alphaedge-example.rev", "svc.example.net", "") {
 		t.Fatalf("expected redirect rule for svc.example.net, got %v", rules)
 	}
@@ -69,7 +72,10 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	configDir := filepath.Join(dir, "config-server")
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	configDir := filepath.Join(dir, layout.ServerConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
@@ -105,9 +111,8 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 		t.Fatalf("expected redirect rules cleared, got %+v", stateDoc[serverRedirectRulesKey])
 	}
 
-	routingDoc := readJSONFile(t, filepath.Join(mustPendingConfigDir(t, configDir), "routing.json"))
-	routingObj, _ := routingDoc["routing"].(map[string]any)
-	rules := extractInterfaceSlice(routingObj["rules"])
+	compiled := compileDesiredDoc(t, pendingConfigPath(), configDir)
+	rules := extractRoutingRules(t, compiled)
 	if hasRedirectRule(rules, "", "10.50.0.0/16", "10.50.0.0/16") {
 		t.Fatalf("expected redirect rule to be removed, got %+v", rules)
 	}
@@ -117,7 +122,10 @@ func TestServerAddRedirectFailsWithoutReverse(t *testing.T) {
 
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
-	configDir := filepath.Join(dir, "config-server")
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	configDir := filepath.Join(dir, layout.ServerConfigDir)
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
@@ -148,22 +156,6 @@ func writeServerStateFile(t *testing.T, installDir string, reverse map[string]se
 	}
 }
 
-func readJSONFile(t *testing.T, path string) map[string]any {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	if len(data) == 0 {
-		return map[string]any{}
-	}
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatalf("parse %s: %v", path, err)
-	}
-	return doc
-}
-
 func readServerStateDoc(t *testing.T, path string) map[string]any {
 	t.Helper()
 	doc, err := loadServerStateDoc(path)
@@ -189,9 +181,6 @@ func hasRedirectRule(rules []any, outboundTag string, domain string, cidr string
 		}
 		if wantDomain != "" {
 			domains := extractStringSlice(ruleMap["domains"])
-			if len(domains) == 0 {
-				domains = extractStringSlice(ruleMap["domain"])
-			}
 			for _, value := range domains {
 				if strings.EqualFold(value, wantDomain) {
 					return true

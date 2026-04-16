@@ -18,7 +18,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-var requiredClientConfigFiles = []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"}
+var requiredClientArtifacts = []string{layout.XrayConfigFileName, layout.RuntimeMetaFileName}
 
 func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p client run", flag.ContinueOnError)
@@ -90,7 +90,7 @@ func runClientRun(ctx context.Context, cfg config.Config, args []string) int {
 		}
 	}
 
-	if err := ensureClientApplyRequestIfPendingOnly(configDirPath); err != nil {
+	if err := ensureClientApplyRequestIfDesiredOnly(); err != nil {
 		logging.Error("xp2p client run: apply request check failed", "err", err)
 		return 1
 	}
@@ -163,37 +163,23 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, fmt.Errorf("xp2p: expected file at %s", binPath)
 	}
 
-	liveConfigDir, err := config.LiveConfigDir(configDirPath)
+	_ = configDirPath
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleClient)
 	if err != nil {
 		return false, err
 	}
-	configInfo, err := os.Stat(liveConfigDir)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			pendingDir, err := config.PendingConfigDir(configDirPath)
-			if err != nil {
-				return false, err
-			}
-			if present, err := configFilesPresent(pendingDir, requiredClientConfigFiles); err != nil {
-				return false, err
-			} else if present {
-				return true, nil
-			}
-			pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-			if _, err := os.Stat(pendingConfig); err == nil {
-				return true, nil
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
-			}
-			return false, nil
-		}
+	if ok, err := configFilesPresent(liveConfigDir, requiredClientArtifacts); err != nil {
 		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfigDir, err)
-	}
-	if !configInfo.IsDir() {
-		return false, fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
+	} else if ok {
+		return true, nil
 	}
 
-	return configFilesPresent(liveConfigDir, requiredClientConfigFiles)
+	if ok, err := desiredInputsPresent(apply.RoleClient); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	return false, nil
 }
 
 func configFilesPresent(dir string, names []string) (bool, error) {
@@ -223,31 +209,24 @@ func resolveClientConfigDirPath(installDir, configDir string) (string, error) {
 	return filepath.Join(installDir, cfgDir), nil
 }
 
-func ensureClientApplyRequestIfPendingOnly(configDirPath string) error {
-	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-	if _, err := os.Stat(liveConfig); err == nil {
+func ensureClientApplyRequestIfDesiredOnly() error {
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	livePresent, err := configFilesPresent(liveConfigDir, requiredClientArtifacts)
+	if err != nil {
+		return err
+	}
+	if livePresent {
 		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
 	}
 
-	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-	pendingConfigPresent := false
-	if _, err := os.Stat(pendingConfig); err == nil {
-		pendingConfigPresent = true
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-
-	pendingDir, err := config.PendingConfigDir(configDirPath)
+	desiredPresent, err := desiredInputsPresent(apply.RoleClient)
 	if err != nil {
 		return err
 	}
-	pendingDirPresent, err := configFilesPresent(pendingDir, requiredClientConfigFiles)
-	if err != nil {
-		return err
-	}
-	if !pendingConfigPresent && !pendingDirPresent {
+	if !desiredPresent {
 		return nil
 	}
 
@@ -266,8 +245,21 @@ func ensureClientApplyRequestIfPendingOnly(configDirPath string) error {
 		return err
 	}
 	logging.Info("xp2p client run: apply request recorded for pending-only configuration",
-		"pending_config", pendingConfig,
-		"pending_dir", pendingDir,
+		"desired_config", config.ConfigPath(layout.ClientConfigFileName),
+		"extensions_dir", config.ConfigPath(layout.ClientConfigDir),
 	)
 	return nil
+}
+
+func desiredInputsPresent(role string) (bool, error) {
+	desiredConfig, err := config.DesiredConfigPathForRole(role)
+	if err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(desiredConfig); err == nil {
+		return true, nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	return false, nil
 }

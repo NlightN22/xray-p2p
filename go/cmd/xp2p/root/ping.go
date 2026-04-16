@@ -276,7 +276,7 @@ func loadSocksAddress(installDir, configDir string) (string, error) {
 	if err != nil || strings.TrimSpace(liveDir) == "" {
 		return "", errSocksInboundNotFound
 	}
-	path := filepath.Join(liveDir, "inbounds.json")
+	path := filepath.Join(liveDir, layout.XrayConfigFileName)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

@@ -346,30 +346,7 @@ func loadOrCreateModeToml(path string, role string) (*toml.Tree, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("config: read %s: %w", path, err)
 	}
-
-	live := liveConfigPath(role)
-	if live == "" {
-		return toml.TreeFromMap(map[string]any{})
-	}
-	if _, err := os.Stat(live); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return toml.TreeFromMap(map[string]any{})
-		}
-		return nil, fmt.Errorf("config: read %s: %w", live, err)
-	}
-
-	return loadOrCreateToml(live)
-}
-
-func liveConfigPath(role string) string {
-	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "client":
-		return filepath.Clean(LiveConfigPath(layout.ClientConfigFileName))
-	case "server":
-		return filepath.Clean(LiveConfigPath(layout.ServerConfigFileName))
-	default:
-		return ""
-	}
+	return toml.TreeFromMap(map[string]any{})
 }
 
 func loadOrCreateToml(path string) (*toml.Tree, error) {

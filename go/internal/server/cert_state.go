@@ -9,45 +9,46 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 func CertificateStateFromConfig(opts CertificateStateOptions) (CertificateState, error) {
-	configDir, err := resolveCertificateConfigDir(opts.InstallDir, opts.ConfigDir)
+	_ = opts.InstallDir
+	_ = opts.ConfigDir
+	_ = opts.Pending
+
+	cfg, err := config.Load(config.Options{
+		Path:         pendingConfigPath(),
+		AllowInvalid: true,
+	})
 	if err != nil {
-		return CertificateState{}, err
-	}
-	if opts.Pending {
-		pendingDir, err := pendingConfigDir(configDir)
-		if err != nil {
-			return CertificateState{}, err
-		}
-		configDir = pendingDir
-	}
-	if err := ensureConfigExists(configDir); err != nil {
 		return CertificateState{}, err
 	}
 
-	trojan, err := loadTrojanState(configDir)
-	if err != nil {
-		return CertificateState{}, err
+	certPath := strings.TrimSpace(cfg.Server.CertificateFile)
+	keyPath := strings.TrimSpace(cfg.Server.KeyFile)
+	if certPath == "" && keyPath == "" && defaultTLSConfigured() {
+		certPath = defaultCertPath()
+		keyPath = defaultKeyPath()
+	}
+	if certPath == "" || keyPath == "" {
+		certPath = ""
+		keyPath = ""
 	}
 
 	state := CertificateState{
-		CertPath: filepath.Join(configDir, "cert.pem"),
-		KeyPath:  filepath.Join(configDir, "key.pem"),
+		CertPath: certPath,
+		KeyPath:  keyPath,
 		Status:   CertificateStatusMissing,
 	}
 
-	certRel, keyRel, err := certificatePathsFromStream(trojan.stream)
-	if err != nil {
-		state.Issues = append(state.Issues, err.Error())
+	if certPath == "" || keyPath == "" {
+		state.Issues = append(state.Issues, "xp2p: certificate paths are not configured")
 		return state, nil
 	}
-
-	state.CertPath = resolveCertificatePathWithPending(configDir, certRel, opts.Pending)
-	state.KeyPath = resolveCertificatePathWithPending(configDir, keyRel, opts.Pending)
 
 	cert, status, issue := loadCertificateDetails(state.CertPath)
 	state.Status = status

@@ -31,11 +31,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 
-	desiredConfigDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleServer)
 	if err != nil {
 		return err
 	}
@@ -56,7 +52,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
 	}
 
-	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleServer, desiredConfigDir)
+	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleServer)
 	if err != nil {
 		return err
 	}
@@ -87,17 +83,15 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			}, config.AuditLogPath())
 		}
 	}()
-	if pendingApplied {
-		configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
-		if cfg, err := config.Load(config.Options{Path: configPath}); err != nil {
-			logging.Warn("reload server config after apply failed", "err", err)
-		} else {
-			opts.TunEnabled = cfg.Server.TunEnabled
-			opts.TunName = cfg.Server.TunName
-			opts.TunMTU = cfg.Server.TunMTU
-			opts.TunAddr = cfg.Server.TunAddr
-		}
+	meta, metaErr := loadLiveRuntimeMeta(liveConfigDir)
+	if metaErr != nil {
+		return metaErr
 	}
+	desired := meta.Desired
+	opts.TunEnabled = meta.TunEnabled
+	opts.TunName = meta.TunName
+	opts.TunMTU = meta.TunMTU
+	opts.TunAddr = meta.TunAddr
 
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
 		if err != nil {
@@ -106,37 +100,18 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
 	}
 
-	configDir, configFile, err := adjustRunPaths(liveConfigDir)
-	if err != nil {
-		return err
-	}
-	desired, err := loadServerDesiredConfigWithFallback(pendingConfigPath(), filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)))
-	if err != nil {
-		return err
-	}
+	configDir := liveConfigDir
 	appliedState, err := loadServerAppliedState(appliedStatePath)
 	if err != nil {
 		return err
 	}
 	if !appliedState.matches(desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {
-		if err := applyServerDesiredConfig(installDir, configDir, desired, appliedState.Reverse, ModeOptions{
-			InstallDir: installDir,
-			ConfigDir:  opts.ConfigDir,
-			TunEnabled: opts.TunEnabled,
-			TunName:    opts.TunName,
-			TunMTU:     opts.TunMTU,
-			TunAddr:    opts.TunAddr,
-		}, true); err != nil {
-			return err
-		}
 		if err := saveServerAppliedState(appliedStatePath, desired.Reverse, desired.Redirects, desired.Forwards, opts.TunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr); err != nil {
 			return err
 		}
 	}
 
-	if err := updateSendThroughOutbound(ctx, configDir, opts.TunEnabled); err != nil {
-		return err
-	}
+	// sendThrough is compiled into xray.json during apply.
 
 	configureCmd := func(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -196,23 +171,12 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	}
 
 	onReady := func(readyCtx context.Context) error {
-		addr, err := resolveServerSocksAddress(configFile)
+		addr, err := resolveServerSocksAddress(filepath.Join(configDir, layout.XrayConfigFileName))
 		if err != nil {
 			logging.Warn("server socks health check using defaults", "err", err)
 		}
 		if err := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval); err != nil {
 			return err
-		}
-		if pendingApplied {
-			if err := apply.UpdateLastKnownGood(config.LiveRoot(), config.LkgRoot()); err != nil {
-				logging.Warn("lkg snapshot update failed", "err", err)
-			}
-			if err := apply.RemoveRequest(config.ApplyRequestPath()); err != nil {
-				logging.Warn("apply request cleanup failed", "err", err)
-			}
-			if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
-				logging.Warn("apply error cleanup failed", "err", err)
-			}
 		}
 		return nil
 	}
@@ -220,7 +184,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	runErr := runXrayWithConfig(
 		ctx,
 		xrayPath,
-		configDir,
+		filepath.Join(configDir, layout.XrayConfigFileName),
 		installDir,
 		configureCmd,
 		onStart,

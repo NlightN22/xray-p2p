@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"net"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -16,6 +14,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
@@ -75,12 +74,11 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		return nil, fmt.Errorf("invalid heartbeat port %q", portStr)
 	}
 
-	liveStatePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-	pendingStatePath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-	state, err := loadClientInstallStateWithFallback(pendingStatePath, liveStatePath)
+	meta, err := loadLiveRuntimeMeta(configDir)
 	if err != nil {
 		return nil, err
 	}
+	state := runtimeDesiredToClientInstallState(meta.Desired)
 	if len(state.Endpoints) == 0 {
 		return nil, fmt.Errorf("no client endpoints configured")
 	}
@@ -95,7 +93,6 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		return nil, err
 	}
 	endpoints := append([]clientEndpointRecord(nil), state.Endpoints...)
-	endpoints = fillEndpointUsersFromOutbounds(endpoints, configDir)
 
 	return &heartbeatRunner{
 		store:     store,
@@ -205,74 +202,6 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 		}
 	}
 	return nil
-}
-
-func fillEndpointUsersFromOutbounds(endpoints []clientEndpointRecord, configDir string) []clientEndpointRecord {
-	needsUser := false
-	for _, endpoint := range endpoints {
-		if strings.TrimSpace(endpoint.User) == "" {
-			needsUser = true
-			break
-		}
-	}
-	if !needsUser || strings.TrimSpace(configDir) == "" {
-		return endpoints
-	}
-	users, err := loadOutboundUsers(configDir)
-	if err != nil {
-		logging.Warn("client heartbeat: unable to load outbound users", "err", err)
-		return endpoints
-	}
-	updated := make([]clientEndpointRecord, len(endpoints))
-	for i, endpoint := range endpoints {
-		endpoint.User = strings.TrimSpace(endpoint.User)
-		if endpoint.User == "" {
-			if user := users[strings.ToLower(strings.TrimSpace(endpoint.Tag))]; user != "" {
-				endpoint.User = user
-			}
-		}
-		updated[i] = endpoint
-	}
-	return updated
-}
-
-func loadOutboundUsers(configDir string) (map[string]string, error) {
-	path := filepath.Join(configDir, "outbounds.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var doc struct {
-		Outbounds []struct {
-			Tag      string `json:"tag"`
-			Settings struct {
-				Servers []struct {
-					Email string `json:"email"`
-				} `json:"servers"`
-			} `json:"settings"`
-		} `json:"outbounds"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, err
-	}
-
-	users := make(map[string]string, len(doc.Outbounds))
-	for _, outbound := range doc.Outbounds {
-		tag := strings.ToLower(strings.TrimSpace(outbound.Tag))
-		if tag == "" {
-			continue
-		}
-		for _, server := range outbound.Settings.Servers {
-			user := strings.TrimSpace(server.Email)
-			if user == "" {
-				continue
-			}
-			users[tag] = user
-			break
-		}
-	}
-	return users, nil
 }
 
 func detectLocalIP(targetHost string) string {

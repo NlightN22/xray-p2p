@@ -17,6 +17,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/installstate"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -32,10 +33,7 @@ type installState struct {
 	binDir     string
 	logsDir    string
 	configDir  string
-	pendingDir string
 	xrayPath   string
-	certDest   string
-	keyDest    string
 	portValue  int
 	selfSigned bool
 	stateFile  string
@@ -77,9 +75,6 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
 	}
-	if err := os.MkdirAll(state.pendingDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create pending config directory: %w", err)
-	}
 
 	if _, err := config.EnsureTunSettings("", "server", state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr); err != nil {
 		if state.Force && errors.Is(err, config.ErrConfigParse) {
@@ -98,7 +93,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := ensureXrayBinaryPresent(state.xrayPath); err != nil {
 		return err
 	}
-	if err := deployConfiguration(state); err != nil {
+	if err := deployDesiredConfiguration(state); err != nil {
 		return err
 	}
 	if err := installstate.Write(state.stateFile, installstate.KindServer); err != nil {
@@ -139,28 +134,21 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 		return err
 	}
 
-	configDir, err := ResolveConfigDir(installDir, opts.ConfigDir)
+	configDir, err := config.DesiredExtensionsDirForRole(apply.RoleServer)
 	if err != nil {
 		return err
 	}
-	pendingDir, err := config.PendingConfigDir(configDir)
+	liveDir, err := config.LiveRoleDir(apply.RoleServer)
 	if err != nil {
 		return err
 	}
-	liveDir, err := config.LiveConfigDir(configDir)
-	if err != nil {
-		return err
-	}
-	lkgDir, err := config.LkgConfigDir(configDir)
+	lkgDir, err := config.LkgRoleDir(apply.RoleServer)
 	if err != nil {
 		return err
 	}
 
 	if err := os.RemoveAll(configDir); err != nil {
 		return fmt.Errorf("xp2p: remove server config dir: %w", err)
-	}
-	if err := os.RemoveAll(pendingDir); err != nil {
-		return fmt.Errorf("xp2p: remove server pending dir: %w", err)
 	}
 	if err := os.RemoveAll(liveDir); err != nil {
 		return fmt.Errorf("xp2p: remove server live dir: %w", err)
@@ -173,24 +161,6 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	if err := os.Remove(configPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("xp2p: remove server config file: %w", err)
-		}
-	}
-	liveConfigPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
-	if err := os.Remove(liveConfigPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove server live config: %w", err)
-		}
-	}
-	lkgConfigPath := filepath.Clean(config.LkgConfigPath(layout.ServerConfigFileName))
-	if err := os.Remove(lkgConfigPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove server lkg config: %w", err)
-		}
-	}
-	pendingConfigPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
-	if err := os.Remove(pendingConfigPath); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove server pending config: %w", err)
 		}
 	}
 
@@ -238,15 +208,11 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		return installState{}, err
 	}
 
-	configDir, err := ResolveConfigDir(dir, opts.ConfigDir)
+	configDir, err := config.DesiredExtensionsDirForRole(apply.RoleServer)
 	if err != nil {
 		return installState{}, err
 	}
 	base, err := buildServerInstallBase(dir, configDir, opts)
-	if err != nil {
-		return installState{}, err
-	}
-	pendingDir, err := config.PendingConfigDir(configDir)
 	if err != nil {
 		return installState{}, err
 	}
@@ -257,15 +223,12 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 		binDir:         filepath.Join(dir, layout.BinDirName),
 		logsDir:        config.LogRoot(),
 		configDir:      base.configDir,
-		pendingDir:     pendingDir,
 		xrayPath:       filepath.Join(dir, layout.BinDirName, "xray.exe"),
 		portValue:      base.portVal,
 		selfSigned:     base.selfSigned,
 		certSource:     base.certSource,
 	}
 
-	state.certDest = filepath.Join(state.pendingDir, "cert.pem")
-	state.keyDest = filepath.Join(state.pendingDir, "key.pem")
 	state.stateFile = filepath.Clean(config.ConfigPath(layout.ServerStateFileName))
 
 	return state, nil
@@ -300,27 +263,29 @@ func ResolveConfigDir(base, cfg string) (string, error) {
 }
 
 func serverArtifactsPresent(state installState) (bool, string, error) {
-	_, err := installstate.Read(state.stateFile, installstate.KindServer)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled) {
-			return false, "", nil
-		}
+	if _, err := installstate.Read(state.stateFile, installstate.KindServer); err == nil {
+		return true, fmt.Sprintf("state file %s", state.stateFile), nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, installstate.ErrRoleNotInstalled) {
 		return false, "", fmt.Errorf("xp2p: read server state: %w", err)
 	}
-	inboundsPath := filepath.Join(state.configDir, "inbounds.json")
-	if _, err := os.Stat(inboundsPath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			pendingInbounds := filepath.Join(state.pendingDir, "inbounds.json")
-			if _, pendingErr := os.Stat(pendingInbounds); pendingErr == nil {
-				return true, fmt.Sprintf("state file %s", state.stateFile), nil
-			} else if !errors.Is(pendingErr, os.ErrNotExist) {
-				return false, "", fmt.Errorf("xp2p: stat %s: %w", pendingInbounds, pendingErr)
-			}
-			return false, "", nil
-		}
-		return false, "", fmt.Errorf("xp2p: stat %s: %w", inboundsPath, err)
+
+	desiredPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if _, err := os.Stat(desiredPath); err == nil {
+		return true, fmt.Sprintf("desired config %s", desiredPath), nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, "", fmt.Errorf("xp2p: stat %s: %w", desiredPath, err)
 	}
-	return true, fmt.Sprintf("state file %s", state.stateFile), nil
+
+	liveXray, err := config.LiveXrayPath(apply.RoleServer)
+	if err != nil {
+		return false, "", err
+	}
+	if _, err := os.Stat(liveXray); err == nil {
+		return true, fmt.Sprintf("live artifact %s", liveXray), nil
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, "", fmt.Errorf("xp2p: stat %s: %w", liveXray, err)
+	}
+	return false, "", nil
 }
 
 func isSafeInstallDir(path string) bool {
@@ -348,59 +313,34 @@ func isSafeInstallDir(path string) bool {
 	return true
 }
 
-func deployConfiguration(state installState) error {
-	var certPath string
-	var keyPath string
-	liveDir, err := config.LiveConfigDir(state.configDir)
-	if err != nil {
+func deployDesiredConfiguration(state installState) error {
+	if _, err := ensureServerXrayConfigForce(pendingConfigPath(), state.Force); err != nil {
 		return err
 	}
-	if state.certDest != "" {
+	if err := extensions.EnsureTemplates(state.configDir); err != nil {
+		return err
+	}
+	if state.selfSigned || state.certSource == CertificateSourcePath {
+		if err := os.MkdirAll(defaultTLSDir(), 0o755); err != nil {
+			return fmt.Errorf("xp2p: create tls dir: %w", err)
+		}
 		if state.selfSigned {
 			logging.Info("xp2p server install generating self-signed certificate",
 				"host", state.Host,
 				"valid_years", 10,
-				"destination", state.certDest,
+				"destination", defaultCertPath(),
 			)
-			if err := generateSelfSignedCertificate(state.Host, state.certDest, state.keyDest); err != nil {
+			if err := generateSelfSignedCertificate(state.Host, defaultCertPath(), defaultKeyPath()); err != nil {
 				return err
 			}
-		} else if state.certSource == CertificateSourcePath {
-			selfSigned, err := isSelfSignedCertificatePath(state.CertificateFile)
-			if err != nil {
-				return err
-			}
-			_ = selfSigned
-			if err := copyFile(state.CertificateFile, state.certDest, 0o644); err != nil {
+		} else {
+			if err := copyFile(state.CertificateFile, defaultCertPath(), 0o644); err != nil {
 				return fmt.Errorf("xp2p: copy certificate: %w", err)
 			}
-			if err := copyFile(state.KeyFile, state.keyDest, 0o600); err != nil {
+			if err := copyFile(state.KeyFile, defaultKeyPath(), 0o600); err != nil {
 				return fmt.Errorf("xp2p: copy key: %w", err)
 			}
-			certPath = filepath.ToSlash(filepath.Join(liveDir, "cert.pem"))
-			keyPath = filepath.ToSlash(filepath.Join(liveDir, "key.pem"))
 		}
-		if certPath == "" && keyPath == "" {
-			certPath = filepath.ToSlash(filepath.Join(liveDir, "cert.pem"))
-			keyPath = filepath.ToSlash(filepath.Join(liveDir, "key.pem"))
-		}
-	}
-
-	xrayCfg, err := ensureServerXrayConfigForce(pendingConfigPath(), state.Force)
-	if err != nil {
-		return err
-	}
-	if err := writeServerInboundsConfig(state.pendingDir, xrayCfg, state.TunEnabled, state.TunName, state.TunMTU, state.portValue, certPath, keyPath, false, nil); err != nil {
-		return err
-	}
-	if err := writeServerLogs(state.pendingDir, xrayCfg.Logs); err != nil {
-		return err
-	}
-	if err := writeServerOutbounds(state.pendingDir, xrayCfg.DirectOutbound); err != nil {
-		return err
-	}
-	if err := writeServerRouting(state.pendingDir, xrayCfg, nil, nil); err != nil {
-		return err
 	}
 	return nil
 }

@@ -76,7 +76,7 @@ func runServerExport(_ config.Config, opts serverExportOptions) int {
 		return 2
 	}
 
-	if err := configbundle.ExportConfigRoot(root, output); err != nil {
+	if err := configbundle.ExportRoleConfigRoot("server", root, output); err != nil {
 		logging.Error("xp2p server export: failed", "err", err)
 		return 1
 	}
@@ -95,7 +95,7 @@ func runServerImport(_ config.Config, opts serverImportOptions) int {
 		return 2
 	}
 
-	if err := configbundle.ImportConfigRoot(root, input); err != nil {
+	if err := configbundle.ImportRoleConfigRoot("server", root, input); err != nil {
 		logging.Error("xp2p server import: failed", "err", err)
 		return 1
 	}

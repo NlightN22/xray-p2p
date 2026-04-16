@@ -58,6 +58,7 @@ func TestRunServerRedirectRemoveHandlesErrors(t *testing.T) {
 	cfg := config.Config{}
 	code := runServerRedirectRemove(context.Background(), cfg, serverRedirectRemoveOptions{
 		CIDR: "10.60.0.0/16",
+		Tag:  "alpha.rev",
 	})
 	if code != 1 {
 		t.Fatalf("expected failure exit code, got %d", code)

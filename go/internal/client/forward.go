@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
-	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
@@ -63,12 +62,9 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 		proto = forward.ProtocolBoth
 	}
 
-	paths, err := resolvePendingClientPaths(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return ForwardAddResult{}, err
-	}
+	configFile := config.ConfigPath(layout.ClientConfigFileName)
 
-	state, err := loadClientInstallState(paths.configFile)
+	state, err := loadClientInstallState(configFile)
 	if err != nil {
 		return ForwardAddResult{}, err
 	}
@@ -110,18 +106,7 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err := state.addForward(rule); err != nil {
 		return ForwardAddResult{}, err
 	}
-	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
-	if err != nil {
-		return ForwardAddResult{}, err
-	}
-	tunEnabled, tunName, tunMTU, err := loadClientTunSettings(paths.configFile)
-	if err != nil {
-		return ForwardAddResult{}, err
-	}
-	if err := writeClientInboundsConfig(paths.configDir, xrayCfg, tunEnabled, tunName, tunMTU, state.Forwards); err != nil {
-		return ForwardAddResult{}, err
-	}
-	if err := state.save(paths.configFile); err != nil {
+	if err := state.save(configFile); err != nil {
 		return ForwardAddResult{}, err
 	}
 
@@ -148,12 +133,9 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, errors.New("xp2p: --listen-port, --tag, or --remark is required")
 	}
 
-	paths, err := resolvePendingClientPaths(opts.InstallDir, opts.ConfigDir)
-	if err != nil {
-		return forward.Rule{}, err
-	}
+	configFile := config.ConfigPath(layout.ClientConfigFileName)
 
-	state, err := loadClientInstallState(paths.configFile)
+	state, err := loadClientInstallState(configFile)
 	if err != nil {
 		return forward.Rule{}, err
 	}
@@ -163,21 +145,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, fmt.Errorf("xp2p: forward rule not found")
 	}
 
-	xrayCfg, err := ensureClientXrayConfig(paths.configFile)
-	if err != nil {
-		state.insertForwardAt(rule, idx)
-		return forward.Rule{}, err
-	}
-	tunEnabled, tunName, tunMTU, err := loadClientTunSettings(paths.configFile)
-	if err != nil {
-		state.insertForwardAt(rule, idx)
-		return forward.Rule{}, err
-	}
-	if err := writeClientInboundsConfig(paths.configDir, xrayCfg, tunEnabled, tunName, tunMTU, state.Forwards); err != nil {
-		state.insertForwardAt(rule, idx)
-		return forward.Rule{}, err
-	}
-	if err := state.save(paths.configFile); err != nil {
+	if err := state.save(configFile); err != nil {
 		state.insertForwardAt(rule, idx)
 		return forward.Rule{}, err
 	}
@@ -195,18 +163,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 
 // ListForwards reports all configured forwards.
 func ListForwards(opts ForwardListOptions) ([]forward.Rule, error) {
-	statePath := filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName))
-	if opts.Pending {
-		pendingPath := filepath.Clean(config.PendingConfigPath(layout.ClientConfigFileName))
-		state, err := loadClientInstallStateWithFallback(pendingPath, statePath)
-		if err != nil {
-			return nil, err
-		}
-		result := make([]forward.Rule, len(state.Forwards))
-		copy(result, state.Forwards)
-		return result, nil
-	}
-	state, err := loadClientInstallState(statePath)
+	state, err := loadClientInstallState(config.ConfigPath(layout.ClientConfigFileName))
 	if err != nil {
 		return nil, err
 	}

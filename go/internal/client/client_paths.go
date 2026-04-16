@@ -1,6 +1,7 @@
 package client
 
 import (
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"path/filepath"
 
@@ -20,18 +21,14 @@ func resolveClientPaths(installDir, configDir string) (clientPaths, error) {
 	if err != nil {
 		return clientPaths{}, err
 	}
-	desiredConfigDir, err := ResolveConfigDir(dir, configDir)
-	if err != nil {
-		return clientPaths{}, err
-	}
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleClient)
 	if err != nil {
 		return clientPaths{}, err
 	}
 	return clientPaths{
 		installDir: dir,
 		configDir:  liveConfigDir,
-		configFile: filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName)),
+		configFile: filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
 		stateFile:  filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)),
 		fullState:  filepath.Clean(config.ConfigPath(layout.ClientFullTunnelStateFileName)),
 	}, nil

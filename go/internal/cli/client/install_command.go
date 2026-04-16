@@ -177,7 +177,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	if tunModeProvided && !*force {
-		configPath := config.LiveConfigPath(layout.ClientConfigFileName)
+		configPath := config.ConfigPath(layout.ClientConfigFileName)
 		if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
 			existing, loadErr := config.Load(config.Options{
 				Path:         configPath,

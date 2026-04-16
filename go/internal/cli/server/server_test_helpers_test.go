@@ -216,18 +216,8 @@ func prepareInstallation(t *testing.T, installDir, configDirName string) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	desiredConfigDir := filepath.Join(installDir, configDirName)
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
-	if err != nil {
-		t.Fatalf("live config dir: %v", err)
-	}
-	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", liveConfigDir, err)
-	}
-	for _, name := range []string{"inbounds.json", "logs.json", "outbounds.json", "routing.json"} {
-		path := filepath.Join(liveConfigDir, name)
-		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
-			t.Fatalf("write %s: %v", path, err)
-		}
+	_ = configDirName
+	if err := os.WriteFile(filepath.Join(installDir, layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
 	}
 }

@@ -40,7 +40,7 @@ Deploy may start xray-core with a compiled config to validate connectivity:
 If service is already running, deploy must not stop or restart it. Deploy must
 still validate the tunnel and must not rely on the service runtime for that
 validation. After a successful deploy, the operator must restart the service
-to apply pending changes. If the service is not running, start it instead.
+to apply the requested changes. If the service is not running, start it instead.
 
 ## Deploy With Live Config And Running Service
 
@@ -53,8 +53,8 @@ service:
 - The temporary deploy xray-core is used only for tunnel validation and must
   not overwrite or reuse the service runtime.
 - After a successful deploy:
-  - If the service is running, restart it to apply pending changes.
-  - If the service is not running, start it to apply pending changes.
+  - If the service is running, restart it to apply the requested changes.
+  - If the service is not running, start it to apply the requested changes.
 
 ## Service Startup After Deploy
 

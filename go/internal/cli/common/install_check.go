@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
-	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
 type InstallRole string
@@ -22,11 +19,11 @@ const (
 
 // InstallPresent checks whether an installation is present for the given role.
 func InstallPresent(role InstallRole, installDir, configDirName string) (bool, error) {
-	configPath, statePath, err := roleConfigPaths(role)
+	desiredPath, statePath, err := roleConfigPaths(role)
 	if err != nil {
 		return false, err
 	}
-	if found, err := pathExists(configPath); err != nil {
+	if found, err := pathExists(desiredPath); err != nil {
 		return false, err
 	} else if found {
 		return true, nil
@@ -36,16 +33,11 @@ func InstallPresent(role InstallRole, installDir, configDirName string) (bool, e
 	} else if found {
 		return true, nil
 	}
-	configDir, err := resolveConfigDir(role, installDir, configDirName)
+	liveXray, err := config.LiveXrayPath(string(role))
 	if err != nil {
 		return false, err
 	}
-	liveConfigDir, err := config.LiveConfigDir(configDir)
-	if err != nil {
-		return false, err
-	}
-	inboundsPath := filepath.Join(liveConfigDir, "inbounds.json")
-	if found, err := pathExists(inboundsPath); err != nil {
+	if found, err := pathExists(liveXray); err != nil {
 		return false, err
 	} else if found {
 		return true, nil
@@ -56,30 +48,15 @@ func InstallPresent(role InstallRole, installDir, configDirName string) (bool, e
 func roleConfigPaths(role InstallRole) (string, string, error) {
 	switch role {
 	case InstallRoleClient:
-		return filepath.Clean(config.LiveConfigPath(layout.ClientConfigFileName)),
+		return filepath.Clean(config.ConfigPath(layout.ClientConfigFileName)),
 			filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName)),
 			nil
 	case InstallRoleServer:
-		return filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
+		return filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
 			filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)),
 			nil
 	default:
 		return "", "", fmt.Errorf("xp2p: unknown install role %q", role)
-	}
-}
-
-func resolveConfigDir(role InstallRole, installDir, configDirName string) (string, error) {
-	installDir = strings.TrimSpace(installDir)
-	if installDir == "" {
-		return "", errors.New("xp2p: install directory is required")
-	}
-	switch role {
-	case InstallRoleClient:
-		return client.ResolveConfigDir(installDir, configDirName)
-	case InstallRoleServer:
-		return server.ResolveConfigDir(installDir, configDirName)
-	default:
-		return "", fmt.Errorf("xp2p: unknown install role %q", role)
 	}
 }
 

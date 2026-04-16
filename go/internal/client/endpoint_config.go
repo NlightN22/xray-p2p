@@ -1,9 +1,7 @@
 package client
 
 import (
-	"context"
 	"errors"
-	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -24,6 +22,7 @@ type endpointConfig struct {
 }
 
 func applyClientEndpointConfig(configDir, configFile string, endpoint endpointConfig, force bool) (clientInstallState, error) {
+	_ = configDir
 	host := strings.TrimSpace(endpoint.Hostname)
 	if host == "" {
 		return clientInstallState{}, errors.New("xp2p: endpoint hostname is required")
@@ -81,38 +80,6 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	}
 
 	if err := state.save(configFile); err != nil {
-		return clientInstallState{}, err
-	}
-	xrayCfg, err := ensureClientXrayConfig(configFile)
-	if err != nil {
-		return clientInstallState{}, err
-	}
-	endpointIPs, err := resolveEndpointIPMap(context.Background(), state.Endpoints, nil)
-	if err != nil {
-		return clientInstallState{}, err
-	}
-	requireEndpointIPs := true
-	if err := writeOutboundsConfig(
-		filepath.Join(configDir, "outbounds.json"),
-		xrayCfg.DirectOutbound,
-		state.Endpoints,
-		endpointIPs,
-		requireEndpointIPs,
-	); err != nil {
-		return clientInstallState{}, err
-	}
-	fullEnabled, fullTag, err := loadFullTunnelRouteSettings(configFile)
-	if err != nil {
-		return clientInstallState{}, err
-	}
-	routeEndpointIPs := map[string]fullTunnelEndpointIPs(nil)
-	if fullEnabled {
-		routeEndpointIPs, err = loadFullTunnelEndpointCache()
-		if err != nil {
-			return clientInstallState{}, err
-		}
-	}
-	if err := updateRoutingConfig(filepath.Join(configDir, "routing.json"), xrayCfg.Routing, state.Endpoints, state.Redirects, state.Reverse, fullEnabled, fullTag, routeEndpointIPs, false); err != nil {
 		return clientInstallState{}, err
 	}
 	return state, nil

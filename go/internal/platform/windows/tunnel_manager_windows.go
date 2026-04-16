@@ -231,8 +231,6 @@ func (m *TunnelManager) applyClientModeConfig(ctx context.Context, req ports.Mod
 	if strings.TrimSpace(cfg.Client.InstallDir) == "" {
 		return errors.New("xp2p: install directory is required")
 	}
-	tunName := firstNonEmpty(req.TunName, cfg.Client.TunName)
-	tunAddr := firstNonEmpty(req.TunAddr, cfg.Client.TunAddr)
 	tunMTU := req.TunMTU
 	if tunMTU <= 0 {
 		tunMTU = cfg.Client.TunMTU
@@ -252,19 +250,6 @@ func (m *TunnelManager) applyClientModeConfig(ctx context.Context, req ports.Mod
 		if _, err := config.UpdateFullTunnelTag(req.ConfigPath, fullTag); err != nil {
 			return err
 		}
-	}
-
-	if err := client.ApplyModePending(client.ModeOptions{
-		InstallDir:    cfg.Client.InstallDir,
-		ConfigDir:     cfg.Client.ConfigDir,
-		TunEnabled:    true,
-		TunName:       tunName,
-		TunMTU:        tunMTU,
-		TunAddr:       tunAddr,
-		TunMode:       string(req.Mode),
-		FullTunnelTag: fullTag,
-	}); err != nil {
-		return err
 	}
 
 	reqApply, err := apply.NewRequest(apply.RoleClient)

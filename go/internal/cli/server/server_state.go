@@ -101,14 +101,8 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 }
 
 func serverStateInstallPresent(installDir string) (bool, error) {
-	configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
+	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	if found, err := pathExists(configPath); err != nil {
-		return false, err
-	} else if found {
-		return true, nil
-	}
-	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
-	if found, err := pathExists(pendingPath); err != nil {
 		return false, err
 	} else if found {
 		return true, nil
@@ -177,24 +171,12 @@ func resolveServerHeartbeatStatePath(installDir string) (string, error) {
 	} else if found {
 		return livePath, nil
 	}
-	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ServerHeartbeatStateFileName))
-	if found, err := pathExists(pendingPath); err != nil {
-		return "", err
-	} else if found {
-		return pendingPath, nil
-	}
 	return livePath, nil
 }
 
 func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
-	configPath := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
+	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	if doc, found, err := loadServerConfigDoc(configPath); err != nil {
-		return nil, err
-	} else if found {
-		return extractServerReversePairs(doc), nil
-	}
-	pendingPath := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
-	if doc, found, err := loadServerConfigDoc(pendingPath); err != nil {
 		return nil, err
 	} else if found {
 		return extractServerReversePairs(doc), nil

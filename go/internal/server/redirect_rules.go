@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"runtime"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -146,15 +145,6 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 
-	desiredConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	configDir, err := pendingConfigDir(desiredConfigDir)
-	if err != nil {
-		return err
-	}
-
 	store, err := openServerRedirectStorePending()
 	if err != nil {
 		return err
@@ -194,24 +184,13 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if err := store.saveRedirects(); err != nil {
 		return err
 	}
-	if err := rebuildServerRoutingFromPath(pendingConfigPath(), configDir); err != nil {
-		return err
-	}
+	_ = installDir
 	return writeServerApplyRequest()
 }
 
 // RemoveRedirect removes a server redirect rule.
 func RemoveRedirect(opts RedirectRemoveOptions) error {
 	installDir, err := resolveInstallDir(opts.InstallDir)
-	if err != nil {
-		return err
-	}
-
-	desiredConfigDir, err := resolveUserConfigDir(installDir, opts.ConfigDir)
-	if err != nil {
-		return err
-	}
-	configDir, err := pendingConfigDir(desiredConfigDir)
 	if err != nil {
 		return err
 	}
@@ -246,10 +225,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	if err := store.saveRedirects(); err != nil {
 		return err
 	}
-
-	if err := rebuildServerRoutingFromPath(pendingConfigPath(), configDir); err != nil {
-		return err
-	}
+	_ = installDir
 	return writeServerApplyRequest()
 }
 
@@ -341,78 +317,4 @@ func resolveServerRedirectBinding(tag, host string, bindings []redirect.Binding)
 		}
 	}
 	return binding, nil
-}
-
-func updateServerRedirectRouting(path string, rules []redirect.Rule) error {
-	doc, err := loadServerRouting(path)
-	if err != nil {
-		return err
-	}
-	routing := ensureObject(doc, "routing")
-	existing := extractInterfaceSlice(routing["rules"])
-	filtered := filterServerRedirectRules(existing)
-	for _, rule := range rules {
-		filtered = append(filtered, buildServerRedirectRule(rule))
-	}
-	if runtime.GOOS == "windows" {
-		filtered = applyWindowsDirectRules(filtered)
-	}
-	routing["rules"] = filtered
-	return writeServerRoutingDoc(path, doc)
-}
-
-func filterServerRedirectRules(rules []any) []any {
-	if len(rules) == 0 {
-		return []any{}
-	}
-	filtered := make([]any, 0, len(rules))
-	for _, raw := range rules {
-		ruleMap, ok := raw.(map[string]any)
-		if !ok || !isServerRedirectRule(ruleMap) {
-			filtered = append(filtered, raw)
-			continue
-		}
-	}
-	return filtered
-}
-
-func isServerRedirectRule(ruleMap map[string]any) bool {
-	if typ, _ := ruleMap["type"].(string); !strings.EqualFold(strings.TrimSpace(typ), "field") {
-		return false
-	}
-	if inbound := extractStringSlice(ruleMap["inboundTag"]); len(inbound) > 0 {
-		return false
-	}
-	outbound, _ := ruleMap["outboundTag"].(string)
-	if strings.TrimSpace(outbound) == "" {
-		return false
-	}
-	hasDomains := len(extractStringSlice(ruleMap["domains"])) > 0
-	hasIP := len(extractStringSlice(ruleMap["ip"])) > 0
-	if hasDomains && hasIP {
-		return false
-	}
-	if !hasDomains && !hasIP {
-		return false
-	}
-	if len(extractStringSlice(ruleMap["domain"])) > 0 {
-		return false
-	}
-	if len(extractStringSlice(ruleMap["user"])) > 0 {
-		return false
-	}
-	return true
-}
-
-func buildServerRedirectRule(rule redirect.Rule) map[string]any {
-	entry := map[string]any{
-		"type":        "field",
-		"outboundTag": rule.OutboundTag,
-	}
-	if rule.Kind() == redirect.KindDomain {
-		entry["domains"] = []string{rule.Value()}
-	} else {
-		entry["ip"] = []string{rule.Value()}
-	}
-	return entry
 }

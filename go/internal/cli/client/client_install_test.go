@@ -241,7 +241,7 @@ func TestRunClientInstallRejectsTunModeConflictWithoutForce(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", root)
 
-	configPath := config.LiveConfigPath(layout.ClientConfigFileName)
+	configPath := config.ConfigPath(layout.ClientConfigFileName)
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}

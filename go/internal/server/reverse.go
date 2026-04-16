@@ -3,12 +3,7 @@
 package server
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -121,7 +116,9 @@ func applyServerReverseChannelWithConfig(store *reverseStore, configPath string,
 	if err := store.save(); err != nil {
 		return err
 	}
-	return rebuildServerRoutingFromPath(configPath, configDir)
+	_ = configPath
+	_ = configDir
+	return nil
 }
 
 func purgeServerReverseChannelWithConfig(store *reverseStore, configPath string, configDir string, channel serverReverseChannel) error {
@@ -129,73 +126,8 @@ func purgeServerReverseChannelWithConfig(store *reverseStore, configPath string,
 	if err := store.save(); err != nil {
 		return err
 	}
-	return rebuildServerRoutingFromPath(configPath, configDir)
-}
-
-func ensureServerRoutingConfig(configDir string, channel serverReverseChannel) error {
-	path := filepath.Join(configDir, "routing.json")
-	doc, err := loadServerRouting(path)
-	if err != nil {
-		return err
-	}
-	changed := ensureReversePortal(doc, channel)
-	if ensureReverseRule(doc, channel) {
-		changed = true
-	}
-	if !changed {
-		return nil
-	}
-	return writeServerRoutingDoc(path, doc)
-}
-
-func removeServerRoutingConfig(configDir string, channel serverReverseChannel) error {
-	path := filepath.Join(configDir, "routing.json")
-	doc, err := loadServerRouting(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	changed := removeReversePortal(doc, channel)
-	if removeReverseRules(doc, channel) {
-		changed = true
-	}
-	if !changed {
-		return nil
-	}
-	return writeServerRoutingDoc(path, doc)
-}
-
-func loadServerRouting(path string) (map[string]any, error) {
-	doc := make(map[string]any)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return doc, nil
-		}
-		return nil, fmt.Errorf("xp2p: read routing %s: %w", path, err)
-	}
-	if len(bytes.TrimSpace(data)) == 0 {
-		return doc, nil
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("xp2p: parse routing %s: %w", path, err)
-	}
-	return doc, nil
-}
-
-func writeServerRoutingDoc(path string, doc map[string]any) error {
-	data, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		return fmt.Errorf("xp2p: encode routing %s: %w", path, err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure routing dir %s: %w", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write routing %s: %w", path, err)
-	}
+	_ = configPath
+	_ = configDir
 	return nil
 }
 

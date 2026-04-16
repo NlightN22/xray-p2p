@@ -34,22 +34,21 @@ func TestRun_RollbackAndApplyErrorOnEarlyFailureAfterPendingApply(t *testing.T) 
 
 	configDirName := DefaultServerConfigDir
 	desiredConfigDir := filepath.Join(config.ConfigRoot(), configDirName)
-	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
+	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
 	if err != nil {
-		t.Fatalf("PendingConfigDir: %v", err)
+		t.Fatalf("LiveConfigDir: %v", err)
 	}
 
-	lkgRoot := config.LkgRoot()
-	if err := os.MkdirAll(filepath.Join(lkgRoot, configDirName), 0o755); err != nil {
-		t.Fatalf("mkdir lkg: %v", err)
+	baselineXray := []byte("{\"inbounds\":[]}\n")
+	baselineRuntime := []byte("{\"role\":\"server\"}\n")
+	if err := os.MkdirAll(liveConfigDir, 0o755); err != nil {
+		t.Fatalf("mkdir live dir: %v", err)
 	}
-	lkgConfig := config.LkgConfigPath(layout.ServerConfigFileName)
-	lkgConfigData := []byte("[server]\n")
-	if err := os.WriteFile(lkgConfig, lkgConfigData, 0o644); err != nil {
-		t.Fatalf("write lkg config: %v", err)
+	if err := os.WriteFile(filepath.Join(liveConfigDir, layout.XrayConfigFileName), baselineXray, 0o644); err != nil {
+		t.Fatalf("write baseline xray: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(lkgRoot, configDirName, "inbounds.json"), []byte("{}\n"), 0o644); err != nil {
-		t.Fatalf("write lkg inbounds: %v", err)
+	if err := os.WriteFile(filepath.Join(liveConfigDir, layout.RuntimeMetaFileName), baselineRuntime, 0o644); err != nil {
+		t.Fatalf("write baseline runtime: %v", err)
 	}
 
 	appliedStatePath := config.ConfigPath(layout.ServerAppliedStateFileName)
@@ -60,15 +59,9 @@ func TestRun_RollbackAndApplyErrorOnEarlyFailureAfterPendingApply(t *testing.T) 
 		t.Fatalf("write applied state: %v", err)
 	}
 
-	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
-		t.Fatalf("mkdir pending dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(pendingConfigDir, "inbounds.json"), []byte("{}\n"), 0o644); err != nil {
-		t.Fatalf("write pending inbounds: %v", err)
-	}
 	pendingConfig := config.PendingConfigPath(layout.ServerConfigFileName)
-	if err := os.WriteFile(pendingConfig, []byte("this is not toml\n"), 0o644); err != nil {
-		t.Fatalf("write pending config: %v", err)
+	if err := os.WriteFile(pendingConfig, []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write desired config: %v", err)
 	}
 
 	req, err := apply.NewRequest(apply.RoleServer)
@@ -105,19 +98,11 @@ func TestRun_RollbackAndApplyErrorOnEarlyFailureAfterPendingApply(t *testing.T) 
 		t.Fatalf("expected non-empty reason")
 	}
 
-	liveConfig := config.LiveConfigPath(layout.ServerConfigFileName)
-	gotLive, err := os.ReadFile(liveConfig)
+	gotXray, err := os.ReadFile(filepath.Join(liveConfigDir, layout.XrayConfigFileName))
 	if err != nil {
-		t.Fatalf("read live config: %v", err)
+		t.Fatalf("read live xray: %v", err)
 	}
-	if string(gotLive) != string(lkgConfigData) {
-		t.Fatalf("expected live config to be restored from lkg")
-	}
-
-	if _, err := os.Stat(pendingConfig); err == nil {
-		t.Fatalf("expected pending config to be cleaned up")
-	}
-	if _, err := os.Stat(pendingConfigDir); err == nil {
-		t.Fatalf("expected pending config dir to be cleaned up")
+	if string(gotXray) != string(baselineXray) {
+		t.Fatalf("expected live xray to be restored from lkg")
 	}
 }

@@ -28,23 +28,16 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		configDirName = DefaultServerConfigDir
 	}
 
-	desiredConfigDir, err := ResolveConfigDir(installDir, configDirName)
+	desiredConfigDir, err := config.DesiredExtensionsDirForRole(apply.RoleServer)
 	if err != nil {
 		return err
 	}
-	pendingConfigDir, err := config.PendingConfigDir(desiredConfigDir)
-	if err != nil {
-		return err
-	}
-	liveConfigDir, err := config.LiveConfigDir(desiredConfigDir)
+	liveConfigDir, err := config.LiveRoleDir(apply.RoleServer)
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(desiredConfigDir, 0o755); err != nil {
 		return fmt.Errorf("xp2p: create config directory: %w", err)
-	}
-	if err := os.MkdirAll(pendingConfigDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create pending config directory: %w", err)
 	}
 
 	var diagCancel context.CancelFunc
@@ -105,28 +98,12 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}
 	defer logWatcherStop()
 
-	pendingWatcherStop, err := service.StartConfigWatcher(ctx, service.ConfigWatchOptions{
+	desiredWatcherStop, err := service.StartConfigWatcher(ctx, service.ConfigWatchOptions{
 		Paths:         []string{desiredConfigDir},
 		Files:         []string{filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))},
 		IgnorePrefix:  []string{config.StateRoot()},
 		WatchDebounce: 400 * time.Millisecond,
 		OnChange: func(path string) {
-			wrote, snapErr := apply.SnapshotPendingFromDesired(apply.PendingSnapshotOptions{
-				DesiredConfigFile: filepath.Clean(config.ConfigPath(layout.ServerConfigFileName)),
-				DesiredConfigDir:  desiredConfigDir,
-				LiveConfigFile:    filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
-				LiveConfigDir:     liveConfigDir,
-				PendingConfigFile: filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName)),
-				PendingConfigDir:  pendingConfigDir,
-				AuditPath:         config.AuditLogPath(),
-			})
-			if snapErr != nil {
-				logging.Warn("xp2p server watcher: pending snapshot failed", "path", path, "err", snapErr)
-				return
-			}
-			if !wrote {
-				return
-			}
 			if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
 				logging.Warn("xp2p server watcher: apply error cleanup failed", "err", err)
 			}
@@ -143,17 +120,17 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err != nil {
 		return err
 	}
-	defer pendingWatcherStop()
+	defer desiredWatcherStop()
 
 	if err := service.Run(ctx, runnerOpts, func(runCtx context.Context) error {
-		hasConfig, err := hasServerConfig(liveConfigDir, pendingConfigDir)
+		hasConfig, err := hasServerConfig(liveConfigDir)
 		if err != nil {
 			return err
 		}
 		if !hasConfig {
 			logging.Info("xp2p server service: no config available; stopping",
 				"config_dir", liveConfigDir,
-				"config_file", filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
+				"xray", filepath.Join(liveConfigDir, layout.XrayConfigFileName),
 			)
 			return nil
 		}
@@ -164,28 +141,13 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	return nil
 }
 
-func hasServerConfig(liveConfigDir, pendingConfigDir string) (bool, error) {
-	liveConfig := filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName))
-	if _, err := os.Stat(liveConfig); err == nil {
+func hasServerConfig(liveConfigDir string) (bool, error) {
+	if _, err := os.Stat(config.ApplyRequestPath()); err == nil {
 		return true, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfig, err)
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, fmt.Errorf("xp2p: stat apply.request: %w", err)
 	}
 
-	if ok, err := configFilesPresent(liveConfigDir, runRequiredConfigFiles); err != nil {
-		return false, err
-	} else if ok {
-		return true, nil
-	}
-
-	pendingConfig := filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName))
-	if pendingConfig != "" {
-		if _, err := os.Stat(pendingConfig); err == nil {
-			return true, nil
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return false, fmt.Errorf("xp2p: stat %s: %w", pendingConfig, err)
-		}
-	}
-
-	return configFilesPresent(pendingConfigDir, runRequiredConfigFiles)
+	required := []string{layout.XrayConfigFileName, layout.RuntimeMetaFileName}
+	return configFilesPresent(liveConfigDir, required)
 }

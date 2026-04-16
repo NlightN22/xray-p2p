@@ -124,6 +124,13 @@ type Rollback struct {
 	lkgRoot  string
 }
 
+func NewRollback(liveRoot, lkgRoot string) *Rollback {
+	return &Rollback{
+		liveRoot: liveRoot,
+		lkgRoot:  lkgRoot,
+	}
+}
+
 func (r *Rollback) Restore(auditPath string) error {
 	_ = auditPath
 	if r == nil {

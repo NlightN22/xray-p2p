@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 func TestHasClientConfig(t *testing.T) {
@@ -23,32 +22,16 @@ func TestHasClientConfig(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "live config file",
+			name: "apply request",
 			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
-				path := config.LiveConfigPath(layout.ClientConfigFileName)
-				return writeTestFile(path, "client = {}\n")
+				return writeTestFile(config.ApplyRequestPath(), "{}\n")
 			},
 			want: true,
 		},
 		{
-			name: "pending config file",
-			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
-				path := config.PendingConfigPath(layout.ClientConfigFileName)
-				return writeTestFile(path, "client = {}\n")
-			},
-			want: true,
-		},
-		{
-			name: "live config files",
+			name: "live artifacts",
 			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
 				return writeConfigFiles(liveConfigDir)
-			},
-			want: true,
-		},
-		{
-			name: "pending config files",
-			setup: func(root, desiredConfigDir, liveConfigDir, pendingConfigDir string) error {
-				return writeConfigFiles(pendingConfigDir)
 			},
 			want: true,
 		},
@@ -71,7 +54,7 @@ func TestHasClientConfig(t *testing.T) {
 				t.Fatalf("setup failed: %v", err)
 			}
 
-			got, err := hasClientConfig(liveConfigDir, pendingConfigDir)
+			got, err := hasClientConfig(liveConfigDir)
 			if err != nil {
 				t.Fatalf("hasClientConfig error: %v", err)
 			}

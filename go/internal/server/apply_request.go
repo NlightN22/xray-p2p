@@ -4,7 +4,6 @@ package server
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -12,32 +11,18 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bool, apply.Request, error) {
-	pendingConfigDir, err := config.PendingConfigDir(configDir)
-	if err != nil {
-		return nil, false, apply.Request{}, err
-	}
-	liveConfigDir, err := config.LiveConfigDir(configDir)
-	if err != nil {
-		return nil, false, apply.Request{}, err
-	}
+func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request, error) {
 	reqPath := config.ApplyRequestPath()
+	desiredConfigPath, desiredPathErr := config.DesiredConfigPathForRole(role)
 	logging.Debug("apply request check",
 		"role", role,
 		"apply_request", reqPath,
 		"apply_request_exists", fileExists(reqPath),
 		"state_root", config.StateRoot(),
 		"state_root_exists", dirExists(config.StateRoot()),
-		"pending_root", config.PendingRoot(),
-		"pending_root_exists", dirExists(config.PendingRoot()),
-		"pending_config", config.PendingConfigPath(layout.ServerConfigFileName),
-		"pending_config_exists", fileExists(config.PendingConfigPath(layout.ServerConfigFileName)),
-		"pending_dir", pendingConfigDir,
-		"pending_dir_exists", dirExists(pendingConfigDir),
-		"live_config", config.LiveConfigPath(layout.ServerConfigFileName),
-		"live_config_exists", fileExists(config.LiveConfigPath(layout.ServerConfigFileName)),
-		"live_config_dir", liveConfigDir,
-		"live_config_dir_exists", dirExists(liveConfigDir),
+		"desired_config", desiredConfigPath,
+		"desired_config_exists", fileExists(desiredConfigPath),
+		"desired_config_error", desiredPathErr,
 	)
 	req, exists, err := apply.ReadRequest(reqPath)
 	if err != nil {
@@ -56,45 +41,55 @@ func applyPendingIfRequested(role string, configDir string) (*apply.Rollback, bo
 		logging.Warn("apply request skipped (previous failure)", "role", role, "request_id", req.ID, "reason", marker.Reason)
 		return nil, false, req, nil
 	}
-	pendingSet := apply.PendingSet{
-		LiveConfigFile:    filepath.Clean(config.LiveConfigPath(layout.ServerConfigFileName)),
-		PendingConfigFile: filepath.Clean(config.PendingConfigPath(layout.ServerConfigFileName)),
-		LiveConfigDir:     liveConfigDir,
-		PendingConfigDir:  pendingConfigDir,
-		LiveRoot:          config.LiveRoot(),
-		LkgRoot:           config.LkgRoot(),
-		AuditPath:         config.AuditLogPath(),
-	}
-	rollback, applied, err := apply.ApplyPending(pendingSet)
+
+	desiredConfig, err := config.DesiredConfigPathForRole(role)
 	if err != nil {
-		if cleanupErr := apply.CleanupPending(pendingSet); cleanupErr != nil {
-			logging.Warn("pending cleanup failed after apply error", "role", role, "err", cleanupErr)
-		}
+		return nil, false, req, err
+	}
+	extensionsDir, err := config.DesiredExtensionsDirForRole(role)
+	if err != nil {
+		return nil, false, req, err
+	}
+	liveDir, err := config.LiveRoleDir(role)
+	if err != nil {
+		return nil, false, req, err
+	}
+	lkgDir, err := config.LkgRoleDir(role)
+	if err != nil {
+		return nil, false, req, err
+	}
+	artifacts, err := compileDesired(desiredConfig, extensionsDir)
+	if err != nil {
 		_ = apply.WriteError(errorPath, apply.ErrorMarker{
 			RequestID: req.ID,
 			Role:      role,
 			Reason:    err.Error(),
 		}, config.AuditLogPath())
-		logging.Warn("pending apply failed; rollback restored live config", "role", role, "request_id", req.ID, "err", err)
+		logging.Warn("apply compilation failed", "role", role, "request_id", req.ID, "err", err)
 		return nil, false, req, nil
 	}
-	if !applied {
-		if err := apply.RemoveRequest(reqPath); err != nil {
-			logging.Warn("apply request cleanup failed", "path", reqPath, "err", err)
-		}
-		if err := apply.RemoveError(errorPath); err != nil {
-			logging.Warn("apply error cleanup failed", "path", errorPath, "err", err)
-		}
-		logging.Warn("apply request skipped (no pending data)", "role", role, "request_id", req.ID)
+	files := map[string][]byte{
+		layout.XrayConfigFileName:  artifacts.XrayJSON,
+		layout.RuntimeMetaFileName: artifacts.MetaJSON,
+	}
+	for name, data := range artifacts.Extra {
+		files[name] = data
+	}
+	if err := apply.ReplaceRoleLiveDir(liveDir, lkgDir, files); err != nil {
+		_ = apply.WriteError(errorPath, apply.ErrorMarker{
+			RequestID: req.ID,
+			Role:      role,
+			Reason:    err.Error(),
+		}, config.AuditLogPath())
+		logging.Warn("apply write failed", "role", role, "request_id", req.ID, "err", err)
 		return nil, false, req, nil
 	}
-	if applied {
-		if err := apply.CleanupPending(pendingSet); err != nil {
-			logging.Warn("pending cleanup failed", "role", role, "err", err)
-		}
+
+	if err := apply.RemoveRoleMarkers(reqPath, errorPath, role); err != nil {
+		logging.Warn("apply marker cleanup failed", "role", role, "err", err)
 	}
-	logging.Info("pending config applied", "role", role, "request_id", req.ID)
-	return rollback, applied, req, nil
+	logging.Info("desired config compiled into live artifacts", "role", role, "request_id", req.ID, "live_dir", liveDir)
+	return apply.NewRollback(liveDir, lkgDir), true, req, nil
 }
 
 func fileExists(path string) bool {
