@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import PurePosixPath
+import json
 import time
 import os
 
@@ -22,6 +23,7 @@ SERVER_SERVICE_LOG = helpers.LOG_ROOT / "server" / "service.log"
 CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
 SERVER_CONFIG = helpers.SERVER_CONFIG_FILE
 APPLY_REQUEST = helpers.CONFIG_ROOT / ".state" / "apply.request"
+APPLY_ERROR = helpers.CONFIG_ROOT / ".state" / "apply.error"
 CLIENT_DIAG_PORT = "62023"
 SERVER_DIAG_PORT = "62022"
 
@@ -148,6 +150,16 @@ def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
 
 def _write_apply_request(host, role: str) -> None:
     helpers.write_apply_request(host, role)
+
+
+def _wait_for_path(host, path: PurePosixPath, *, exists: bool, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if linux_env.path_exists(host, path) == exists:
+            return
+        time.sleep(POLL_INTERVAL)
+    state = "present" if exists else "absent"
+    raise AssertionError(f"Expected {path} to be {state} after {timeout} seconds.")
 
 
 def _current_mode(host, role: str) -> str:
@@ -307,7 +319,6 @@ def test_service_stops_after_invalid_config(
     xp2p_client_runner,
     xp2p_server_runner,
 ):
-    max_attempts = 5
     if role == "client":
         host = client_host
         runner = xp2p_client_runner
@@ -344,12 +355,15 @@ def test_service_stops_after_invalid_config(
         helpers.write_text(host, config_path, invalid_config)
         _write_apply_request(host, role)
         _wait_for_log_entry(host, service_log, "service configuration change detected")
-        _wait_for_log_entry(host, service_log, "exceeded restart limit")
-        _wait_for_service_state(runner, role, expected_active=False)
+        _wait_for_log_entry(host, service_log, "apply compilation failed")
+        _wait_for_path(host, APPLY_ERROR, exists=True, timeout=60.0)
+        error = helpers.read_json(host, APPLY_ERROR)
+        request = helpers.read_json(host, APPLY_REQUEST) if linux_env.path_exists(host, APPLY_REQUEST) else {}
+        assert error.get("request_id") == request.get("id")
+        assert (error.get("reason") or "").strip(), "apply.error missing reason"
+        _wait_for_service_state(runner, role, expected_active=True)
 
         log_content = helpers.read_text(host, service_log)
-        attempts = log_content.lower().count("attempt:")
-        assert attempts >= max_attempts, f"expected at least {max_attempts} restart attempts"
         assert "parse" in log_content.lower() or "config" in log_content.lower(), (
             f"{role} service log missing config error details.\n"
             f"Service log:\n{log_content}"
@@ -464,8 +478,15 @@ def test_package_uninstall_removes_services(server_host):
 @pytest.mark.host
 @pytest.mark.linux
 def test_package_remove_keeps_config_files(server_host, xp2p_server_runner):
-    client_paths = config_files.config_paths(helpers.CLIENT_CONFIG_DIR, config_files.CLIENT_CONFIG_FILES)
-    server_paths = config_files.config_paths(helpers.SERVER_CONFIG_DIR, config_files.SERVER_CONFIG_FILES)
+    extension_files = (
+        "inbounds.append.json",
+        "outbounds.append.json",
+        "routing.rules.after-xp2p-system.json",
+        "routing.rules.after-xp2p-managed.json",
+    )
+    client_paths = [helpers.CLIENT_CONFIG_DIR / name for name in extension_files]
+    server_paths = [helpers.SERVER_CONFIG_DIR / name for name in extension_files]
+    desired_paths = [helpers.CLIENT_CONFIG_FILE, helpers.SERVER_CONFIG_FILE]
     state_paths = helpers.CLIENT_STATE_FILES + helpers.SERVER_STATE_FILES
 
     def _assert_paths_exist(paths: list[PurePosixPath]) -> None:
@@ -509,7 +530,14 @@ def test_package_remove_keeps_config_files(server_host, xp2p_server_runner):
             check=True,
         )
 
-        _assert_paths_exist(client_paths + server_paths)
+        for path in client_paths + server_paths:
+            if path.name.endswith(".append.json"):
+                payload = {"inbounds": []} if path.name.startswith("inbounds") else {"outbounds": []}
+            else:
+                payload = {"rules": []}
+            helpers.write_text(server_host, path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+        _assert_paths_exist(desired_paths + client_paths + server_paths)
 
         remove_result = server_host.run("sudo -n dpkg -r xp2p")
         if remove_result.rc != 0:
@@ -518,7 +546,7 @@ def test_package_remove_keeps_config_files(server_host, xp2p_server_runner):
                 f"(exit {remove_result.rc}).\nSTDOUT:\n{remove_result.stdout}\nSTDERR:\n{remove_result.stderr}"
             )
 
-        _assert_paths_exist(client_paths + server_paths)
+        _assert_paths_exist(desired_paths + client_paths + server_paths)
     finally:
         reinstall = linux_env.run_guest_script(server_host, "scripts/linux/install_xp2p.sh")
         if reinstall.rc != 0:

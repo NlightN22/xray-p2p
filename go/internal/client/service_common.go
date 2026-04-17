@@ -110,15 +110,17 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		IgnorePrefix:  []string{config.StateRoot()},
 		WatchDebounce: 400 * time.Millisecond,
 		OnChange: func(path string) {
-			if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
-				logging.Warn("xp2p client watcher: apply error cleanup failed", "err", err)
+			reqPath := config.ApplyRequestPath()
+			errPath := config.ApplyErrorPath()
+			if err := apply.RemoveRoleMarkers(reqPath, errPath, apply.RoleClient); err != nil {
+				logging.Warn("xp2p client watcher: apply marker cleanup failed", "err", err)
 			}
 			req, err := apply.NewRequest(apply.RoleClient)
 			if err != nil {
 				logging.Warn("xp2p client watcher: apply request create failed", "err", err)
 				return
 			}
-			if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+			if err := apply.WriteRequest(reqPath, req, config.AuditLogPath()); err != nil {
 				logging.Warn("xp2p client watcher: apply request write failed", "err", err)
 			}
 		},

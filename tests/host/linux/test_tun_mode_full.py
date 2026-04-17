@@ -25,6 +25,11 @@ REDIRECT_CIDR = "203.0.113.10/32"
 DNS_SERVERS = ["1.1.1.1", "9.9.9.9"]
 
 FULL_STATE_FILE = helpers.CONFIG_ROOT / "xp2p-client.tun-full.json"
+FULL_PHASE_DISABLED = "disabled"
+FULL_PHASE_SPLIT = "split"
+FULL_PHASE_PENDING = "full_pending"
+FULL_PHASE_APPLIED = "full_applied"
+FULL_PHASE_ERROR = "error_latched"
 RESOLV_CONF = PurePosixPath("/etc/resolv.conf")
 SERVICE_LOG = helpers.LOG_ROOT / "client" / "service.log"
 CLIENT_LIVE_CONFIG = helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml"
@@ -33,6 +38,28 @@ CLIENT_PENDING_CONFIG = helpers.CLIENT_CONFIG_FILE
 CLIENT_PENDING_ROUTING = PurePosixPath("/tmp/xp2p-client-rendered-routing.json")
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
+
+
+def _read_full_tunnel_state(host) -> dict:
+    if not helpers.path_exists(host, FULL_STATE_FILE):
+        return {}
+    try:
+        return helpers.read_json(host, FULL_STATE_FILE)
+    except Exception:
+        return {}
+
+
+def _full_tunnel_phase(state: dict) -> str:
+    return str(state.get("phase") or "").strip().lower()
+
+
+def _full_tunnel_enabled(state: dict) -> bool | None:
+    if "enabled" not in state:
+        return None
+    enabled = state.get("enabled")
+    if isinstance(enabled, bool):
+        return enabled
+    return None
 
 
 def _wait_for_service_state(runner, role: str, expected_active: bool) -> None:
@@ -233,6 +260,10 @@ def _wait_for_full_tunnel(
         current_defaults4 = _list_default_routes(host, "-4")
         current_defaults6 = _list_default_routes(host, "-6")
         state_exists = helpers.path_exists(host, FULL_STATE_FILE)
+        state = _read_full_tunnel_state(host) if state_exists else {}
+        state_enabled = _full_tunnel_enabled(state)
+        state_phase = _full_tunnel_phase(state)
+        last_error = (state.get("last_error") or "").strip() if isinstance(state, dict) else ""
         resolv = helpers.read_text(host, RESOLV_CONF)
         bypass_ok = True
         missing_bypass: list[str] = []
@@ -263,9 +294,12 @@ def _wait_for_full_tunnel(
             route not in current_defaults6 for route in defaults6
         )
 
-        ok = state_exists and defaults_ok and defaults_removed and bypass_ok and dns_ok and resolv != original_resolv
+        phase_ok = state_phase in ("", FULL_PHASE_APPLIED)
+        state_ok = bool(state_exists and state_enabled is True and phase_ok)
+        ok = state_ok and defaults_ok and defaults_removed and bypass_ok and dns_ok and resolv != original_resolv
         debug = (
-            f"state_exists={state_exists} defaults_ok={defaults_ok} defaults_removed={defaults_removed} "
+            f"state_exists={state_exists} enabled={state_enabled} phase={state_phase!r} last_error={last_error!r} "
+            f"defaults_ok={defaults_ok} defaults_removed={defaults_removed} "
             f"bypass_ok={bypass_ok} dns_ok={dns_ok}\n"
             f"defaults4={current_defaults4}\n"
             f"defaults6={current_defaults6}\n"
@@ -333,13 +367,10 @@ def _wait_for_rollback(
         current_defaults4 = _list_default_routes(host, "-4")
         current_defaults6 = _list_default_routes(host, "-6")
         state_exists = helpers.path_exists(host, FULL_STATE_FILE)
-        state_enabled = False
-        if state_exists:
-            try:
-                state = helpers.read_json(host, FULL_STATE_FILE)
-                state_enabled = bool(state.get("enabled"))
-            except Exception:
-                state_enabled = True
+        state = _read_full_tunnel_state(host) if state_exists else {}
+        state_enabled = _full_tunnel_enabled(state)
+        state_phase = _full_tunnel_phase(state)
+        last_error = (state.get("last_error") or "").strip() if isinstance(state, dict) else ""
         resolv = helpers.read_text(host, RESOLV_CONF)
         bypass_left: list[str] = []
         for route in bypass_routes:
@@ -353,9 +384,12 @@ def _wait_for_rollback(
         defaults_ok = (not defaults4 or not _has_default_via_tun(current_defaults4, tun_name)) and (
             not defaults6 or not _has_default_via_tun(current_defaults6, tun_name)
         )
-        ok = (not state_exists or not state_enabled) and defaults_ok and defaults_restored and not bypass_left and resolv == original_resolv
+        phase_ok = state_phase in ("", FULL_PHASE_DISABLED, FULL_PHASE_SPLIT)
+        state_ok = (not state_exists) or (state_enabled is False and phase_ok)
+        ok = state_ok and defaults_ok and defaults_restored and not bypass_left and resolv == original_resolv
         debug = (
-            f"state_exists={state_exists} state_enabled={state_enabled} defaults_ok={defaults_ok} defaults_restored={defaults_restored} "
+            f"state_exists={state_exists} enabled={state_enabled} phase={state_phase!r} last_error={last_error!r} "
+            f"defaults_ok={defaults_ok} defaults_restored={defaults_restored} "
             f"bypass_left={bypass_left}\n"
             f"defaults4={current_defaults4}\n"
             f"defaults6={current_defaults6}\n"
@@ -419,17 +453,16 @@ def _wait_for_proxy(
             not defaults6 or not _has_default_via_tun(current_defaults6, tun_name)
         )
         state_exists = helpers.path_exists(host, FULL_STATE_FILE)
-        state_enabled = False
-        if state_exists:
-            try:
-                state = helpers.read_json(host, FULL_STATE_FILE)
-                state_enabled = bool(state.get("enabled"))
-            except Exception:
-                state_enabled = True
-        ok = defaults_ok and defaults_restored and (not state_exists or not state_enabled)
+        state = _read_full_tunnel_state(host) if state_exists else {}
+        state_enabled = _full_tunnel_enabled(state)
+        state_phase = _full_tunnel_phase(state)
+        last_error = (state.get("last_error") or "").strip() if isinstance(state, dict) else ""
+        phase_ok = state_phase in ("", FULL_PHASE_DISABLED, FULL_PHASE_SPLIT)
+        state_ok = (not state_exists) or (state_enabled is False and phase_ok)
+        ok = defaults_ok and defaults_restored and state_ok
         debug = (
             f"defaults_ok={defaults_ok} defaults_restored={defaults_restored} "
-            f"state_exists={state_exists} state_enabled={state_enabled}\n"
+            f"state_exists={state_exists} enabled={state_enabled} phase={state_phase!r} last_error={last_error!r}\n"
             f"defaults4={current_defaults4}\n"
             f"defaults6={current_defaults6}"
         )
@@ -690,6 +723,19 @@ def test_client_tun_mode_full_tunnel_routes_and_dns(client_host, xp2p_client_run
         assert redirect_rule_index != -1, "Redirect routing rule missing from routing.json"
         assert redirect_rule_index < len(rules) - 1, "Redirect rule should appear before full-tunnel rule"
         assert helpers.read_client_config(client_host).get("full_tunnel_tag") == expected_tag
+        _restart_service(xp2p_client_runner, client_host)
+        _wait_for_full_tunnel(
+            client_host,
+            tun_name,
+            defaults4,
+            defaults6,
+            bypass_routes,
+            DNS_SERVERS,
+            original_resolv,
+        )
+        state = _read_full_tunnel_state(client_host)
+        assert _full_tunnel_enabled(state) is True
+        assert _full_tunnel_phase(state) in ("", FULL_PHASE_APPLIED)
 
         _stop_service(xp2p_client_runner)
         service_started = False

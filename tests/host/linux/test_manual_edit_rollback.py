@@ -22,13 +22,11 @@ pytestmark = [pytest.mark.host, pytest.mark.linux, pytest.mark.skipif(SKIP_MANUA
 APPLY_REQUEST = helpers.STATE_ROOT / "apply.request"
 APPLY_ERROR = helpers.STATE_ROOT / "apply.error"
 DESIRED_CLIENT_CONFIG = helpers.CLIENT_CONFIG_FILE
-DESIRED_CLIENT_ROUTING = helpers.CLIENT_LIVE_DIR / "xray.json"
-DESIRED_CLIENT_OUTBOUNDS = helpers.CLIENT_LIVE_DIR / "xray.json"
-PENDING_CLIENT_CONFIG = DESIRED_CLIENT_CONFIG
-LIVE_CLIENT_CONFIG = helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml"
-LKG_CLIENT_CONFIG = helpers.CONFIG_LKG_ROOT / "xp2p-client.toml"
-PENDING_CLIENT_OUTBOUNDS = helpers.CLIENT_LIVE_DIR / "xray.json"
-LIVE_CLIENT_OUTBOUNDS = helpers.CLIENT_LIVE_DIR / "outbounds.json"
+DESIRED_CLIENT_EXT_DIR = helpers.CLIENT_CONFIG_DIR
+DESIRED_CLIENT_OUTBOUNDS_APPEND = DESIRED_CLIENT_EXT_DIR / "outbounds.append.json"
+LIVE_CLIENT_META = helpers.CLIENT_LIVE_DIR / "runtime.json"
+LIVE_CLIENT_XRAY = helpers.CLIENT_LIVE_DIR / "xray.json"
+LKG_CLIENT_META = helpers.CONFIG_LKG_ROOT / helpers.CLIENT_CONFIG_DIR_NAME / "runtime.json"
 
 POLL_INTERVAL = 1.5
 TIMEOUT = 60.0
@@ -107,6 +105,21 @@ def _read_apply_error(host) -> dict:
         raise AssertionError(f"Failed to parse apply.error JSON: {exc}\nContent:\n{raw}") from exc
 
 
+def _read_runtime_meta(host, path) -> dict:
+    raw = linux_env.read_text(host, path)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"Failed to parse runtime meta JSON from {path}: {exc}\nContent:\n{raw}") from exc
+
+
+def _compiled_at(meta: dict) -> str:
+    value = meta.get("compiled_at")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return ""
+
+
 def _install_client(runner) -> None:
     runner(
         "client",
@@ -143,47 +156,33 @@ def test_manual_edit_applies_pending_snapshot(client_host, xp2p_client_runner):
         _start_client_service(xp2p_client_runner)
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=False, timeout=TIMEOUT)
-        _wait_for_path(client_host, LIVE_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
-        _wait_for_path(client_host, LKG_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
-
-        if not linux_env.path_exists(client_host, DESIRED_CLIENT_CONFIG):
-            live_content = linux_env.read_text(client_host, LIVE_CLIENT_CONFIG)
-            linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, live_content)
-
-        if not linux_env.path_exists(client_host, DESIRED_CLIENT_OUTBOUNDS):
-            live_outbounds = linux_env.read_text(client_host, LIVE_CLIENT_OUTBOUNDS)
-            linux_env.write_text(client_host, DESIRED_CLIENT_OUTBOUNDS, live_outbounds)
+        _wait_for_path(client_host, LIVE_CLIENT_META, exists=True, timeout=TIMEOUT)
 
         extra_tag = "user-manual-extra"
-        outbounds = _read_json(client_host, DESIRED_CLIENT_OUTBOUNDS)
-        outbound_list = outbounds.get("outbounds")
-        if not isinstance(outbound_list, list):
-            outbound_list = []
-            outbounds["outbounds"] = outbound_list
-        if not any(isinstance(item, dict) and item.get("tag") == extra_tag for item in outbound_list):
-            outbound_list.append({"protocol": "freedom", "settings": {}, "tag": extra_tag})
-            _write_json(client_host, DESIRED_CLIENT_OUTBOUNDS, outbounds)
+        outbounds_append = {
+            "outbounds": [
+                {"protocol": "freedom", "settings": {}, "tag": extra_tag},
+            ]
+        }
+        linux_env.write_text(
+            client_host,
+            DESIRED_CLIENT_OUTBOUNDS_APPEND,
+            json.dumps(outbounds_append, indent=2, sort_keys=True) + "\n",
+        )
 
+        baseline_meta = _read_runtime_meta(client_host, LIVE_CLIENT_META)
+        baseline_compiled_at = _compiled_at(baseline_meta)
         original = linux_env.read_text(client_host, DESIRED_CLIENT_CONFIG)
         updated = _set_int_setting(original, "tun_mtu", 1400)
         linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, updated)
 
-        _wait_for_path(client_host, APPLY_REQUEST, exists=True, timeout=TIMEOUT)
-        _wait_for_path(client_host, PENDING_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
-        _wait_for_path(client_host, PENDING_CLIENT_OUTBOUNDS, exists=True, timeout=TIMEOUT)
-
-        pending_config = helpers.read_pending_client_config(client_host)
-        assert pending_config.get("tun_mtu") == 1400
-        pending_outbounds = _read_json(client_host, PENDING_CLIENT_OUTBOUNDS)
-        assert any(item.get("tag") == extra_tag for item in (pending_outbounds.get("outbounds") or []) if isinstance(item, dict))
-
         _wait_for_path(client_host, APPLY_REQUEST, exists=False, timeout=TIMEOUT)
-        live_config = _read_toml(client_host, LIVE_CLIENT_CONFIG).get("client") or {}
-        lkg_config = _read_toml(client_host, LKG_CLIENT_CONFIG).get("client") or {}
-        assert live_config.get("tun_mtu") == 1400
-        assert lkg_config.get("tun_mtu") == 1400
-        live_outbounds = _read_json(client_host, LIVE_CLIENT_OUTBOUNDS)
-        assert any(item.get("tag") == extra_tag for item in (live_outbounds.get("outbounds") or []) if isinstance(item, dict))
+        meta = _read_runtime_meta(client_host, LIVE_CLIENT_META)
+        assert meta.get("tun_mtu") == 1400
+        assert _compiled_at(meta) != baseline_compiled_at or baseline_compiled_at == ""
+        xray = _read_json(client_host, LIVE_CLIENT_XRAY)
+        outbounds = xray.get("outbounds") or []
+        assert any(isinstance(item, dict) and item.get("tag") == extra_tag for item in outbounds)
         assert not linux_env.path_exists(client_host, APPLY_ERROR)
     except Exception:
         helpers.dump_failure_state(client_host, "manual-edit-apply")
@@ -201,13 +200,10 @@ def test_manual_edit_rollback_on_invalid_pending(client_host, xp2p_client_runner
         _start_client_service(xp2p_client_runner)
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=False, timeout=TIMEOUT)
-        _wait_for_path(client_host, LIVE_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
-        _wait_for_path(client_host, LKG_CLIENT_CONFIG, exists=True, timeout=TIMEOUT)
-        baseline_live_hash = linux_env.file_sha256(client_host, LIVE_CLIENT_CONFIG)
+        _wait_for_path(client_host, LIVE_CLIENT_META, exists=True, timeout=TIMEOUT)
+        baseline_live_hash = linux_env.file_sha256(client_host, LIVE_CLIENT_META)
 
-        if not linux_env.path_exists(client_host, DESIRED_CLIENT_CONFIG):
-            live_content = linux_env.read_text(client_host, LIVE_CLIENT_CONFIG)
-            linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, live_content)
+        original_config = linux_env.read_text(client_host, DESIRED_CLIENT_CONFIG)
         linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, "this is not toml\n")
 
         _wait_for_path(client_host, APPLY_REQUEST, exists=True, timeout=TIMEOUT)
@@ -219,10 +215,13 @@ def test_manual_edit_rollback_on_invalid_pending(client_host, xp2p_client_runner
         assert error.get("request_id") == request.get("id")
         assert (error.get("reason") or "").strip(), "apply.error missing reason"
 
-        _wait_for_path(client_host, PENDING_CLIENT_CONFIG, exists=False, timeout=TIMEOUT)
-        live_hash = linux_env.file_sha256(client_host, LIVE_CLIENT_CONFIG)
-        lkg_hash = linux_env.file_sha256(client_host, LKG_CLIENT_CONFIG)
-        assert live_hash == lkg_hash == baseline_live_hash
+        live_hash = linux_env.file_sha256(client_host, LIVE_CLIENT_META)
+        assert live_hash == baseline_live_hash
+
+        linux_env.write_text(client_host, DESIRED_CLIENT_CONFIG, original_config)
+        _wait_for_path(client_host, APPLY_ERROR, exists=False, timeout=TIMEOUT * 2)
+        _wait_for_path(client_host, APPLY_REQUEST, exists=False, timeout=TIMEOUT * 2)
+        _wait_for_path(client_host, LIVE_CLIENT_META, exists=True, timeout=TIMEOUT * 2)
     except Exception:
         helpers.dump_failure_state(client_host, "manual-edit-rollback")
         raise

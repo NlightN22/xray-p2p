@@ -159,14 +159,27 @@ def assert_ping_ok(runner, target: str) -> None:
 
 
 def assert_client_endpoints(host: Host, expected_hosts: set[str]) -> None:
-    state = helpers.read_toml(host, helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml").get("client") or {}
-    endpoints = state.get("endpoints", []) or []
-    recorded_hosts = {entry.get("hostname") for entry in endpoints if entry.get("hostname")}
+    runtime_meta_path = helpers.CLIENT_LIVE_DIR / "runtime.json"
+    meta = helpers.read_json(host, runtime_meta_path)
+    desired = meta.get("desired") or {}
+    endpoints = desired.get("endpoints") or []
+    if not isinstance(endpoints, list):
+        endpoints = []
+    recorded_hosts: set[str] = set()
+    for entry in endpoints:
+        if not isinstance(entry, dict):
+            continue
+        address = (entry.get("address") or "").strip()
+        hostname = (entry.get("hostname") or "").strip()
+        if address:
+            recorded_hosts.add(address)
+        elif hostname:
+            recorded_hosts.add(hostname)
     if recorded_hosts != expected_hosts:
         raise AssertionError(
             "Unexpected client endpoints recorded.\n"
             f"Recorded: {recorded_hosts}\nExpected: {expected_hosts}\n"
-            f"Config:\n{helpers.read_text(host, helpers.CONFIG_LIVE_ROOT / 'xp2p-client.toml')}"
+            f"Runtime meta:\n{helpers.read_text(host, runtime_meta_path)}"
         )
 
 
