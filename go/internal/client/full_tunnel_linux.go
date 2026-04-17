@@ -172,6 +172,10 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	state.Phase = string(OSStatePhaseDisabled)
 	state.LastError = ""
 	state.LastErrorAt = time.Time{}
+	state.PendingReason = ""
+	state.PendingSince = time.Time{}
+	state.RetryCount = 0
+	state.NextRetryAt = time.Time{}
 	state.TunName = ""
 	state.TunMode = ""
 	state.IPv4Defaults = nil

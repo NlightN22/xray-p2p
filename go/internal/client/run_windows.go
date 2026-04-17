@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -64,7 +63,8 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		if errors.Is(retErr, context.Canceled) || errors.Is(retErr, context.DeadlineExceeded) {
 			return
 		}
-		if errors.Is(retErr, winnet.ErrTunIPv4TentativeTimeout) {
+		var pendingRetry *PendingRetryError
+		if errors.As(retErr, &pendingRetry) || errors.Is(retErr, winnet.ErrTunIPv4TentativeTimeout) {
 			return
 		}
 		if hasAppliedState {
@@ -137,12 +137,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		Install:           desired,
 	}
 	orchestrator := NewOSStateOrchestrator(paths, newWindowsOSStateDriver(paths, opts))
-	if plan, err := orchestrator.Plan(ApplyStagePreStart, desiredOS, ObservedOSState{}); err != nil {
-		return err
-	} else {
-		if _, err := orchestrator.Apply(ctx, plan); err != nil {
-			return err
-		}
+	reconcileReason := ReconcileReasonServiceRestart
+	if pendingApplied && request.ID != "" {
+		reconcileReason = ReconcileReasonApplyRequest
 	}
 
 	// sendThrough is compiled into xray.json during apply.
@@ -164,86 +161,22 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	}
 
 	onStart := func() error {
-		if opts.TunEnabled {
-			if windowsRoutesDisabled {
-				waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-				defer cancel()
-				logging.Info("ensuring tun IPv4 (routes disabled)", "timeout", "120s")
-				ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose)
-				if err != nil {
-					logging.Warn("tun IPv4 ensure failed", "err", err)
-					if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
-						return err
-					}
-					return nil
-				}
-				logging.Info("tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
-				logging.Info("windows route apply disabled; skipping redirect/full-tunnel routes")
-				return nil
-			}
-			waitCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-			defer cancel()
-			ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, opts.FullTunnelVerbose)
-			if err != nil {
-				_ = updateClientRuntimeState(paths.stateFile, clientRuntimeState{
-					Tun: tunRuntimeState{
-						Name:      strings.TrimSpace(opts.TunName),
-						LastError: err.Error(),
-					},
-					LastError: err.Error(),
-				})
-				logging.Warn("tun IPv4 ensure failed; skipping route apply", "err", err)
-				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
-					if desiredOS.Mode() == OSModeFull {
-						_ = orchestrator.MarkFullPending(err)
-					}
-					return err
-				}
-				return nil
-			}
-			runtime := clientRuntimeState{
-				Tun: tunRuntimeState{
-					Name:    strings.TrimSpace(opts.TunName),
-					IfIndex: ifIndex,
-					IPv4:    strings.TrimSpace(ip),
-				},
-			}
-			if details, detailErr := winnet.InterfaceIPv4Details(ifIndex); detailErr == nil {
-				oper := winnet.InterfaceOperStatusName(details.OperStatus)
-				dad := winnet.InterfaceDadStateName(details.DadState)
-				runtime.Tun.Prefix = int(details.Prefix)
-				runtime.Tun.OperStatus = oper
-				runtime.Tun.DadState = dad
-				runtime.Tun.Ready = details.IP != "" &&
-					strings.EqualFold(oper, "up") &&
-					strings.EqualFold(dad, "preferred")
-				logging.Info(
-					"tun IPv4 ready; applying routes",
-					"ifIndex", ifIndex,
-					"ip", ip,
-					"operStatus", oper,
-					"dadState", dad,
-				)
-			} else {
-				logging.Info("tun IPv4 ready; applying routes", "ifIndex", ifIndex, "ip", ip)
-			}
-			if ctx.Err() != nil {
-				return nil
-			}
-			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
-			plan, err := orchestrator.Plan(ApplyStagePostReady, desiredOS, ObservedOSState{
-				TunReady:      true,
-				TunIfIndex:    ifIndex,
-				TunIPv4:       strings.TrimSpace(ip),
-				TunOperStatus: runtime.Tun.OperStatus,
-				TunDadState:   runtime.Tun.DadState,
+		result, err := orchestrator.Reconcile(ctx, desiredOS, reconcileReason)
+		if err != nil {
+			_ = updateClientRuntimeState(paths.stateFile, clientRuntimeState{
+				LastError: err.Error(),
 			})
-			if err != nil {
-				return err
-			}
-			result, err := orchestrator.Apply(ctx, plan)
-			if err != nil {
-				return err
+			return err
+		}
+		runtime := clientRuntimeState{}
+		if opts.TunEnabled {
+			runtime.Tun = tunRuntimeState{
+				Name:       strings.TrimSpace(opts.TunName),
+				IfIndex:    result.Observed.TunIfIndex,
+				IPv4:       strings.TrimSpace(result.Observed.TunIPv4),
+				OperStatus: strings.TrimSpace(result.Observed.TunOperStatus),
+				DadState:   strings.TrimSpace(result.Observed.TunDadState),
+				Ready:      result.Observed.TunReady,
 			}
 			runtime.Routes = routeRuntimeState{
 				RedirectApplied: result.RedirectApplied,
@@ -251,9 +184,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 				FullApplied:     result.FullApplied,
 				FullBypassCount: result.FullBypassCount,
 			}
-			if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
-				logging.Warn("client runtime state update failed", "err", err)
-			}
+		}
+		if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
+			logging.Warn("client runtime state update failed", "err", err)
 		}
 		return nil
 	}
@@ -283,9 +216,17 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		onStart,
 		onReady,
 	)
-	if runErr != nil && errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
-		logging.Warn("tun ready failed; mode change remains pending", "err", runErr)
-		return runErr
+	if runErr != nil {
+		var pendingRetry *PendingRetryError
+		if errors.As(runErr, &pendingRetry) {
+			logging.Warn("tun ready failed; mode change remains pending", "err", runErr)
+			sleepWithContext(ctx, pendingRetry.Delay)
+			return runErr
+		}
+		if errors.Is(runErr, winnet.ErrTunIPv4TentativeTimeout) {
+			logging.Warn("tun ready failed; mode change remains pending", "err", runErr)
+			return runErr
+		}
 	}
 	return runErr
 }

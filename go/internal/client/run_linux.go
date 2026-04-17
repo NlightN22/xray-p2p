@@ -147,16 +147,14 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		Install:           desired,
 	}
 	orchestrator := NewOSStateOrchestrator(paths, newLinuxOSStateDriver(paths, opts))
-	if plan, err := orchestrator.Plan(ApplyStagePreStart, desiredOS, ObservedOSState{}); err != nil {
-		return err
-	} else {
-		if _, err := orchestrator.Apply(ctx, plan); err != nil {
-			return err
-		}
-	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
+
+	reconcileReason := ReconcileReasonServiceRestart
+	if pendingApplied && request.ID != "" {
+		reconcileReason = ReconcileReasonApplyRequest
+	}
 
 	runErr := runXrayWithConfig(
 		ctx,
@@ -165,20 +163,8 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		configDir,
 		nil,
 		func() error {
-			go func() {
-				if !tunEnabled {
-					return
-				}
-				if err := linuxnet.EnsureTunAddress(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
-					logging.Warn("tun address setup failed", "interface", opts.TunName, "err", err)
-				}
-			}()
-			if plan, err := orchestrator.Plan(ApplyStagePostReady, desiredOS, ObservedOSState{TunReady: tunEnabled}); err != nil {
+			if _, err := orchestrator.Reconcile(ctx, desiredOS, reconcileReason); err != nil {
 				return err
-			} else {
-				if _, err := orchestrator.Apply(ctx, plan); err != nil {
-					return err
-				}
 			}
 			return nil
 		},

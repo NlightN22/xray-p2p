@@ -60,13 +60,6 @@ type ObservedOSState struct {
 	TunDadState   string
 }
 
-type ApplyStage string
-
-const (
-	ApplyStagePreStart  ApplyStage = "pre_start"
-	ApplyStagePostReady ApplyStage = "post_ready"
-)
-
 type RollbackReason string
 
 const (
@@ -76,8 +69,7 @@ const (
 )
 
 type OSStatePlan struct {
-	Stage   ApplyStage
-	Desired DesiredOSState
+	Desired  DesiredOSState
 	Observed ObservedOSState
 
 	WasFullEnabled bool
@@ -92,6 +84,7 @@ type OSStatePlan struct {
 
 type OSStateResult struct {
 	Phase          OSStatePhase
+	Observed       ObservedOSState
 	RedirectApplied bool
 	RedirectCount   int
 	FullApplied     bool
@@ -99,16 +92,12 @@ type OSStateResult struct {
 }
 
 type OSStateOrchestrator interface {
-	Plan(stage ApplyStage, desired DesiredOSState, observed ObservedOSState) (OSStatePlan, error)
-	Apply(ctx context.Context, plan OSStatePlan) (OSStateResult, error)
+	Reconcile(ctx context.Context, desired DesiredOSState, reason ReconcileReason) (OSStateResult, error)
 	Rollback(ctx context.Context, reason RollbackReason, desired DesiredOSState) error
-	OnServiceStart(ctx context.Context) error
-	OnServiceStop(ctx context.Context, desired DesiredOSState) error
-	OnXrayRestart(ctx context.Context, desired DesiredOSState) error
-	MarkFullPending(err error) error
 }
 
 type osStateDriver interface {
+	EnsureTunReady(ctx context.Context, desired DesiredOSState) (ObservedOSState, error)
 	EnsureSplit(ctx context.Context, desired DesiredOSState) (bool, error)
 	RemoveSplit(ctx context.Context, desired DesiredOSState) error
 	EnsureFull(ctx context.Context, desired DesiredOSState) (bool, error)
@@ -127,30 +116,7 @@ func NewOSStateOrchestrator(paths clientPaths, driver osStateDriver) OSStateOrch
 	}
 }
 
-func (o *osStateOrchestrator) OnServiceStart(_ context.Context) error {
-	return nil
-}
-
-func (o *osStateOrchestrator) OnServiceStop(ctx context.Context, desired DesiredOSState) error {
-	return o.Rollback(ctx, RollbackReasonServiceStop, desired)
-}
-
-func (o *osStateOrchestrator) OnXrayRestart(_ context.Context, _ DesiredOSState) error {
-	return nil
-}
-
-func (o *osStateOrchestrator) MarkFullPending(err error) error {
-	state, loadErr := loadFullTunnelState(o.paths.fullState)
-	if loadErr != nil {
-		return loadErr
-	}
-	state.Phase = string(OSStatePhaseFullPending)
-	state.LastError = errString(err)
-	state.LastErrorAt = nowOrZero(err)
-	return saveFullTunnelState(o.paths.fullState, state)
-}
-
-func (o *osStateOrchestrator) Plan(stage ApplyStage, desired DesiredOSState, observed ObservedOSState) (OSStatePlan, error) {
+func (o *osStateOrchestrator) plan(desired DesiredOSState, observed ObservedOSState) (OSStatePlan, error) {
 	fullState, err := loadFullTunnelState(o.paths.fullState)
 	if err != nil {
 		return OSStatePlan{}, err
@@ -158,31 +124,22 @@ func (o *osStateOrchestrator) Plan(stage ApplyStage, desired DesiredOSState, obs
 
 	desiredMode := desired.Mode()
 	plan := OSStatePlan{
-		Stage:          stage,
 		Desired:        desired,
 		Observed:       observed,
 		WasFullEnabled: fullState.Enabled,
 	}
 
-	switch stage {
-	case ApplyStagePreStart:
-		plan.RollbackFull = fullState.Enabled && desiredMode != OSModeFull
-		plan.RemoveSplit = desiredMode == OSModeDisabled
-	case ApplyStagePostReady:
-		if desiredMode == OSModeFull {
-			plan.EnsureFull = true
-		}
-		if desiredMode == OSModeSplit {
-			plan.EnsureSplit = true
-		}
-	}
+	plan.RollbackFull = fullState.Enabled && desiredMode != OSModeFull
+	plan.RemoveSplit = desiredMode == OSModeDisabled
+	plan.EnsureFull = desiredMode == OSModeFull && observed.TunReady
+	plan.EnsureSplit = desiredMode != OSModeDisabled && desired.TunEnabled && observed.TunReady
 
 	switch desiredMode {
 	case OSModeFull:
-		if stage == ApplyStagePreStart {
-			plan.TargetPhase = OSStatePhaseFullPending
-		} else {
+		if observed.TunReady {
 			plan.TargetPhase = OSStatePhaseFullApplied
+		} else {
+			plan.TargetPhase = OSStatePhaseFullPending
 		}
 	case OSModeSplit:
 		plan.TargetPhase = OSStatePhaseSplit
@@ -193,13 +150,14 @@ func (o *osStateOrchestrator) Plan(stage ApplyStage, desired DesiredOSState, obs
 	return plan, nil
 }
 
-func (o *osStateOrchestrator) Apply(ctx context.Context, plan OSStatePlan) (OSStateResult, error) {
+func (o *osStateOrchestrator) apply(ctx context.Context, plan OSStatePlan) (OSStateResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	result := OSStateResult{
-		Phase: plan.TargetPhase,
+		Phase:    plan.TargetPhase,
+		Observed: plan.Observed,
 	}
 
 	if plan.RollbackFull {
@@ -248,6 +206,68 @@ func (o *osStateOrchestrator) Apply(ctx context.Context, plan OSStatePlan) (OSSt
 	return result, nil
 }
 
+type ReconcileReason string
+
+const (
+	ReconcileReasonServiceStart   ReconcileReason = "service_start"
+	ReconcileReasonServiceRestart ReconcileReason = "service_restart"
+	ReconcileReasonApplyRequest   ReconcileReason = "apply_request"
+	ReconcileReasonModeSwitch     ReconcileReason = "mode_switch"
+)
+
+func (o *osStateOrchestrator) Reconcile(ctx context.Context, desired DesiredOSState, reason ReconcileReason) (OSStateResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	observed, obsErr := o.driver.EnsureTunReady(ctx, desired)
+	if obsErr != nil {
+		if desired.Mode() == OSModeFull {
+			if pendingReason, ok := isPendingErr(obsErr); ok {
+				pending, recordErr := o.recordPending(pendingReason, obsErr)
+				if recordErr != nil {
+					return OSStateResult{Phase: OSStatePhaseErrorLatched, Observed: observed}, recordErr
+				}
+				logPendingRetry(pending.Reason, pending.Err, pending.Delay, reason)
+				return OSStateResult{Phase: OSStatePhaseFullPending, Observed: observed}, pending
+			}
+		}
+		return OSStateResult{Phase: OSStatePhaseErrorLatched, Observed: observed}, obsErr
+	}
+
+	plan, err := o.plan(desired, observed)
+	if err != nil {
+		return OSStateResult{Phase: OSStatePhaseErrorLatched, Observed: observed}, err
+	}
+	return o.apply(ctx, plan)
+}
+
+func (o *osStateOrchestrator) recordPending(reason string, err error) (*PendingRetryError, error) {
+	now := time.Now().UTC()
+	state, loadErr := loadFullTunnelState(o.paths.fullState)
+	if loadErr != nil {
+		return nil, loadErr
+	}
+
+	if state.Phase != string(OSStatePhaseFullPending) || state.PendingSince.IsZero() {
+		state.PendingSince = now
+		state.RetryCount = 0
+	} else {
+		state.RetryCount++
+	}
+	delay := computeRetryBackoff(state.RetryCount)
+	state.NextRetryAt = now.Add(delay)
+	state.PendingReason = strings.TrimSpace(reason)
+	state.Phase = string(OSStatePhaseFullPending)
+	state.LastError = errString(err)
+	state.LastErrorAt = nowOrZero(err)
+
+	if saveErr := saveFullTunnelState(o.paths.fullState, state); saveErr != nil {
+		return nil, saveErr
+	}
+	return &PendingRetryError{Reason: reason, Err: err, Delay: delay}, nil
+}
+
 func (o *osStateOrchestrator) Rollback(ctx context.Context, reason RollbackReason, desired DesiredOSState) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -280,10 +300,18 @@ func (o *osStateOrchestrator) setPhase(phase OSStatePhase) error {
 	if err != nil {
 		return err
 	}
+	prevPhase := strings.TrimSpace(state.Phase)
 	state.Phase = string(phase)
 	if phase != OSStatePhaseFullPending {
 		state.LastError = ""
 		state.LastErrorAt = time.Time{}
+		state.PendingReason = ""
+		state.PendingSince = time.Time{}
+		state.RetryCount = 0
+		state.NextRetryAt = time.Time{}
+	}
+	if strings.EqualFold(prevPhase, string(OSStatePhaseFullPending)) && phase == OSStatePhaseFullApplied {
+		logging.Info("full-tunnel pending resolved")
 	}
 	return saveFullTunnelState(o.paths.fullState, state)
 }
@@ -296,6 +324,10 @@ func (o *osStateOrchestrator) latchError(phase OSStatePhase, err error) error {
 	state.Phase = string(phase)
 	state.LastError = errString(err)
 	state.LastErrorAt = nowOrZero(err)
+	state.PendingReason = ""
+	state.PendingSince = time.Time{}
+	state.RetryCount = 0
+	state.NextRetryAt = time.Time{}
 	return saveFullTunnelState(o.paths.fullState, state)
 }
 

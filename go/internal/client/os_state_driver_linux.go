@@ -2,7 +2,12 @@
 
 package client
 
-import "context"
+import (
+	"context"
+
+	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
+)
 
 type linuxOSStateDriver struct {
 	paths clientPaths
@@ -14,6 +19,16 @@ func newLinuxOSStateDriver(paths clientPaths, opts RunOptions) osStateDriver {
 		paths: paths,
 		opts:  opts,
 	}
+}
+
+func (d *linuxOSStateDriver) EnsureTunReady(ctx context.Context, desired DesiredOSState) (ObservedOSState, error) {
+	if !desired.TunEnabled {
+		return ObservedOSState{}, nil
+	}
+	if err := linuxnet.EnsureTunAddress(desired.TunName, desired.TunAddr, desired.TunMTU); err != nil {
+		logging.Warn("tun address setup failed", "interface", desired.TunName, "err", err)
+	}
+	return ObservedOSState{TunReady: true}, nil
 }
 
 func (d *linuxOSStateDriver) EnsureSplit(ctx context.Context, desired DesiredOSState) (bool, error) {
@@ -37,4 +52,3 @@ func (d *linuxOSStateDriver) EnsureFull(ctx context.Context, desired DesiredOSSt
 func (d *linuxOSStateDriver) RollbackFull(ctx context.Context, desired DesiredOSState) error {
 	return restoreFullTunnel(ctx, d.paths, desired.FullTunnelVerbose)
 }
-

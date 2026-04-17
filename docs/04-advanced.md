@@ -44,6 +44,14 @@ Full-tunnel is a service runtime mode and must remain armed while Desired mode i
 - When the adapter is not ready (`Tentative` / disconnected / missing IPv4), the service keeps full-tunnel in a pending state and retries adapter bring-up across restarts (with rate limits).
 - Routes and DNS override should be applied only after the adapter reports `up`/`preferred` to avoid connectivity flapping.
 
+##### Pending retry backoff
+
+When full-tunnel is Desired but the adapter is not ready, the runtime enters `FullPending` and logs:
+
+- `full-tunnel pending; deferring route apply until restart`
+
+Retries use an exponential backoff capped at 30 seconds (starting at 2 seconds). The pending state and the retry schedule are persisted to `CONFIG_ROOT/xp2p-client.tun-full.json` (`phase`, `pending_reason`, `retry_count`, `next_retry_at`) so restarts follow the same contract.
+
 ## DNS per-domain routing
 
 ```sh

@@ -171,6 +171,15 @@ route/DNS rollback if Desired remains in full-tunnel mode.
 - A child-run cancellation (graceful restart) is not a mode change.
 - Rollback/restore is allowed only on explicit stop, explicit mode switch, or hard failures that require leaving the mode.
 
+### Pending State and Retry (Windows)
+
+On Windows, TUN readiness can be delayed or unstable across restarts (adapter disconnected, IPv4 missing, DAD not preferred).
+When Desired is full-tunnel but the adapter is not ready, runtime enters a pending state instead of rolling back OS state.
+
+- Pending state is recorded in `CONFIG_ROOT/xp2p-client.tun-full.json` as `phase = "full_pending"` with a stable `pending_reason`.
+- While pending, routes and DNS override are not applied.
+- The service retries through restarts using exponential backoff (2s, 4s, 8s, ... capped at 30s) until the adapter is `up`/`preferred`.
+
 ## Mode Switching
 
 Mode changes (split/full):
