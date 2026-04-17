@@ -157,13 +157,13 @@ func TestConsoleHandlerFormatsGroups(t *testing.T) {
 	}
 }
 
-func TestConsoleHandlerTrimsServicePrefixAndFormatsErrors(t *testing.T) {
+func TestConsoleHandlerFormatsErrorsAndAttributes(t *testing.T) {
 	var buf bytes.Buffer
 	var lvl slog.LevelVar
 	lvl.Set(slog.LevelError)
 	handler := newConsoleHandler(&buf, &lvl)
 
-	record := slog.NewRecord(time.Unix(0, 0), slog.LevelError, "xp2p server install: failed to resolve public host", 0)
+	record := slog.NewRecord(time.Unix(0, 0), slog.LevelError, "server install: failed to resolve public host", 0)
 	record.AddAttrs(
 		slog.String("service", "xp2p"),
 		slog.String("err", "netutil: unable to detect public host"),
@@ -174,9 +174,6 @@ func TestConsoleHandlerTrimsServicePrefixAndFormatsErrors(t *testing.T) {
 	}
 
 	out := buf.String()
-	if strings.Contains(out, "xp2p") {
-		t.Fatalf("expected no service prefix in console output, got %q", out)
-	}
 	if strings.Count(out, "server install: failed to resolve public host") != 1 {
 		t.Fatalf("expected message kept once, got %q", out)
 	}

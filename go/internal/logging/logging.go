@@ -215,10 +215,6 @@ func (h *consoleHandler) Handle(_ context.Context, record slog.Record) error {
 	}
 
 	message := record.Message
-	if service != "" {
-		prefix := service + " "
-		message = strings.TrimPrefix(message, prefix)
-	}
 
 	var b strings.Builder
 	b.WriteString(record.Time.UTC().Format(time.RFC3339))

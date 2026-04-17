@@ -80,6 +80,7 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - Log files must live under `XP2P_LOG_ROOT`.
 - The default log root is `/var/log/xp2p`.
 - The audit log file name must be `audit.log`.
+- All log messages and error strings must not include any `xp2p`-style prefixes (for example `xp2p:` or `[xp2p]`); prefixes/formatting belong to the logger/CLI formatter only.
 
 ## UI and use case boundaries
 
