@@ -135,18 +135,6 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			}
 		}
 	}
-	defer func() {
-		if !wantFull {
-			return
-		}
-		if windowsRoutesDisabled {
-			logging.Info("windows route apply disabled; skipping full-tunnel rollback")
-		} else {
-			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-				logging.Warn("full-tunnel rollback failed", "err", err)
-			}
-		}
-	}()
 
 	// sendThrough is compiled into xray.json during apply.
 

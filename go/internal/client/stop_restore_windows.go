@@ -21,7 +21,7 @@ func restoreFullTunnelOnStop(installDir, configDirName string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := restoreFullTunnel(ctx, paths, false); err != nil {
+	if err := restoreFullTunnel(ctx, paths, true); err != nil {
 		logging.Warn("full-tunnel restore on stop failed", "err", err)
 	}
 }

@@ -164,28 +164,26 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 		}
 	}
 
-	updatedPath, err := config.UpdateTunEnabled(*configPath, "client", tunEnabled)
+	update := config.ClientModeUpdate{
+		TunEnabled: tunEnabled,
+	}
+	if *verbose {
+		update.SetFullTunnelVerbose = true
+		update.FullTunnelVerbose = true
+	}
+	if fs.NArg() == 2 {
+		update.SetTunMode = true
+		update.TunMode = tunMode
+	}
+	if tunEnabled && tunMode == "full" && strings.TrimSpace(fullTunnelTag) != "" {
+		update.SetFullTunnelTag = true
+		update.FullTunnelTag = fullTunnelTag
+	}
+
+	updatedPath, err := config.UpdateClientMode(*configPath, update)
 	if err != nil {
 		logging.Error("xp2p client mode: update config failed", "err", err)
 		return 1
-	}
-	if *verbose {
-		if _, err := config.UpdateFullTunnelVerbose(*configPath, true); err != nil {
-			logging.Error("xp2p client mode: update verbose flag failed", "err", err)
-			return 1
-		}
-	}
-	if fs.NArg() == 2 {
-		if _, err := config.UpdateTunMode(*configPath, "client", tunMode); err != nil {
-			logging.Error("xp2p client mode: update tun mode failed", "err", err)
-			return 1
-		}
-	}
-	if tunEnabled && tunMode == "full" && strings.TrimSpace(fullTunnelTag) != "" {
-		if _, err := config.UpdateFullTunnelTag(*configPath, fullTunnelTag); err != nil {
-			logging.Error("xp2p client mode: update full-tunnel tag failed", "err", err)
-			return 1
-		}
 	}
 
 	req, err := apply.NewRequest(apply.RoleClient)

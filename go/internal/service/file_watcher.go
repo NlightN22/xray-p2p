@@ -149,6 +149,13 @@ func (f *fileWatcher) refreshHash(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if hash == "" {
+		// Missing files are treated as "no-op" changes. The service layer uses file watchers
+		// to detect new/updated requests (such as apply.request), but a file removal should
+		// not trigger a restart loop.
+		f.lastHashes[path] = ""
+		return false, nil
+	}
 	prev := f.lastHashes[path]
 	if prev == hash {
 		return false, nil

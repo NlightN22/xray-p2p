@@ -158,6 +158,10 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 }
 
 func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) error {
+	if ctx != nil && ctx.Err() != nil {
+		return nil
+	}
+
 	logging.Info("full-tunnel restore start")
 	state, err := loadFullTunnelState(paths.fullState)
 	if err != nil {

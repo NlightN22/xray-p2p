@@ -135,18 +135,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		}
 	}
 
-	fullEnabled, err := syncFullTunnel(ctx, paths, opts, desired)
-	if err != nil {
+	if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
 		return err
 	}
-	defer func() {
-		if !fullEnabled {
-			return
-		}
-		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-			logging.Warn("full-tunnel rollback failed", "err", err)
-		}
-	}()
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
