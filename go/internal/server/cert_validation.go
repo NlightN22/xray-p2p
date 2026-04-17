@@ -54,7 +54,7 @@ func resolveCertificateInputs(certStore, certPath, keyPath string, relaxed bool)
 	certPath = strings.TrimSpace(certPath)
 	keyPath = strings.TrimSpace(keyPath)
 	if certPath == "" && keyPath != "" {
-		return certificateInputs{}, certificateValidationError{err: errors.New("xp2p: key file provided without certificate file")}
+		return certificateInputs{}, certificateValidationError{err: errors.New("key file provided without certificate file")}
 	}
 
 	source, err := normalizeCertificateSource(certStore, certPath, keyPath)
@@ -67,7 +67,7 @@ func resolveCertificateInputs(certStore, certPath, keyPath string, relaxed bool)
 		return certificateInputs{source: source, selfSigned: true}, nil
 	case CertificateSourcePath:
 		if certPath == "" {
-			return certificateInputs{}, certificateValidationError{err: errors.New("xp2p: certificate file is required for certificate source path")}
+			return certificateInputs{}, certificateValidationError{err: errors.New("certificate file is required for certificate source path")}
 		}
 		if keyPath == "" {
 			keyPath = certPath
@@ -86,11 +86,11 @@ func resolveCertificateInputs(certStore, certPath, keyPath string, relaxed bool)
 		}, nil
 	case CertificateSourceWinStore:
 		if strings.TrimSpace(certStore) == "" {
-			return certificateInputs{}, certificateValidationError{err: errors.New("xp2p: certificate store reference is required")}
+			return certificateInputs{}, certificateValidationError{err: errors.New("certificate store reference is required")}
 		}
-		return certificateInputs{}, certificateValidationError{err: errors.New("xp2p: certificate source win-store is not implemented")}
+		return certificateInputs{}, certificateValidationError{err: errors.New("certificate source win-store is not implemented")}
 	default:
-		return certificateInputs{}, certificateValidationError{err: fmt.Errorf("xp2p: unsupported certificate source %q", source)}
+		return certificateInputs{}, certificateValidationError{err: fmt.Errorf("unsupported certificate source %q", source)}
 	}
 }
 
@@ -119,20 +119,20 @@ func validateCertificateFiles(certPath, keyPath string, mode pathValidationMode)
 
 func validateAbsolutePath(label, path string, mode pathValidationMode) error {
 	if path == "" {
-		return fmt.Errorf("xp2p: %s path is empty", label)
+		return fmt.Errorf("%s path is empty", label)
 	}
 	clean := strings.TrimSpace(path)
 	if clean == "" {
-		return fmt.Errorf("xp2p: %s path is empty", label)
+		return fmt.Errorf("%s path is empty", label)
 	}
 	switch mode {
 	case pathValidationBasic:
 		if !isBasicAbsolutePath(clean) {
-			return fmt.Errorf("xp2p: %s path must be absolute: %s", label, path)
+			return fmt.Errorf("%s path must be absolute: %s", label, path)
 		}
 	default:
 		if !filepath.IsAbs(clean) {
-			return fmt.Errorf("xp2p: %s path must be absolute: %s", label, path)
+			return fmt.Errorf("%s path must be absolute: %s", label, path)
 		}
 	}
 	return nil
@@ -154,17 +154,17 @@ func isBasicAbsolutePath(path string) bool {
 func validateReadableFile(label, path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("xp2p: %s file %s: %w", label, path, err)
+		return fmt.Errorf("%s file %s: %w", label, path, err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("xp2p: %s file %s is a directory", label, path)
+		return fmt.Errorf("%s file %s is a directory", label, path)
 	}
 	handle, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("xp2p: %s file %s: %w", label, path, err)
+		return fmt.Errorf("%s file %s: %w", label, path, err)
 	}
 	if err := handle.Close(); err != nil {
-		return fmt.Errorf("xp2p: %s file %s: %w", label, path, err)
+		return fmt.Errorf("%s file %s: %w", label, path, err)
 	}
 	return nil
 }
@@ -187,7 +187,7 @@ func validateCertificateKeyMatch(certPath, keyPath string) error {
 		return err
 	}
 	if !matches {
-		return fmt.Errorf("xp2p: certificate and key do not match")
+		return fmt.Errorf("certificate and key do not match")
 	}
 	return nil
 }
@@ -195,7 +195,7 @@ func validateCertificateKeyMatch(certPath, keyPath string) error {
 func loadCertificateFromFile(path string) (*x509.Certificate, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: read certificate %s: %w", path, err)
+		return nil, fmt.Errorf("read certificate %s: %w", path, err)
 	}
 	var block *pem.Block
 	for len(data) > 0 {
@@ -208,11 +208,11 @@ func loadCertificateFromFile(path string) (*x509.Certificate, error) {
 		}
 	}
 	if block == nil || block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("xp2p: decode certificate %s: invalid PEM data", path)
+		return nil, fmt.Errorf("decode certificate %s: invalid PEM data", path)
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: parse certificate %s: %w", path, err)
+		return nil, fmt.Errorf("parse certificate %s: %w", path, err)
 	}
 	return cert, nil
 }
@@ -220,7 +220,7 @@ func loadCertificateFromFile(path string) (*x509.Certificate, error) {
 func loadPrivateKeyFromFile(path string) (any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: read key %s: %w", path, err)
+		return nil, fmt.Errorf("read key %s: %w", path, err)
 	}
 	for len(data) > 0 {
 		var block *pem.Block
@@ -232,24 +232,24 @@ func loadPrivateKeyFromFile(path string) (any, error) {
 		case "RSA PRIVATE KEY":
 			key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 			if err != nil {
-				return nil, fmt.Errorf("xp2p: parse key %s: %w", path, err)
+				return nil, fmt.Errorf("parse key %s: %w", path, err)
 			}
 			return key, nil
 		case "EC PRIVATE KEY":
 			key, err := x509.ParseECPrivateKey(block.Bytes)
 			if err != nil {
-				return nil, fmt.Errorf("xp2p: parse key %s: %w", path, err)
+				return nil, fmt.Errorf("parse key %s: %w", path, err)
 			}
 			return key, nil
 		case "PRIVATE KEY":
 			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 			if err != nil {
-				return nil, fmt.Errorf("xp2p: parse key %s: %w", path, err)
+				return nil, fmt.Errorf("parse key %s: %w", path, err)
 			}
 			return key, nil
 		}
 	}
-	return nil, fmt.Errorf("xp2p: decode key %s: invalid PEM data", path)
+	return nil, fmt.Errorf("decode key %s: invalid PEM data", path)
 }
 
 func publicKeyFromPrivateKey(key any) (any, error) {
@@ -263,18 +263,18 @@ func publicKeyFromPrivateKey(key any) (any, error) {
 	case crypto.Signer:
 		return k.Public(), nil
 	default:
-		return nil, fmt.Errorf("xp2p: unsupported private key type %T", key)
+		return nil, fmt.Errorf("unsupported private key type %T", key)
 	}
 }
 
 func publicKeysMatch(certKey, key any) (bool, error) {
 	certBytes, err := x509.MarshalPKIXPublicKey(certKey)
 	if err != nil {
-		return false, fmt.Errorf("xp2p: encode certificate public key: %w", err)
+		return false, fmt.Errorf("encode certificate public key: %w", err)
 	}
 	keyBytes, err := x509.MarshalPKIXPublicKey(key)
 	if err != nil {
-		return false, fmt.Errorf("xp2p: encode key public key: %w", err)
+		return false, fmt.Errorf("encode key public key: %w", err)
 	}
 	return bytes.Equal(certBytes, keyBytes), nil
 }

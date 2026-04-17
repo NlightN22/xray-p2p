@@ -40,16 +40,16 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	hasAppliedState := false
 	if info, err := os.Stat(appliedStatePath); err == nil {
 		if info.IsDir() {
-			return fmt.Errorf("xp2p: %s is a directory, expected server applied state file", appliedStatePath)
+			return fmt.Errorf("%s is a directory, expected server applied state file", appliedStatePath)
 		}
 		hasAppliedState = true
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: inspect server applied state %s: %w", appliedStatePath, err)
+		return fmt.Errorf("inspect server applied state %s: %w", appliedStatePath, err)
 	}
 
 	xrayPath := filepath.Join(installDir, layout.BinDirName, "xray.exe")
 	if _, err := os.Stat(xrayPath); err != nil {
-		return fmt.Errorf("xp2p: xray binary not found at %s: %w", xrayPath, err)
+		return fmt.Errorf("xray binary not found at %s: %w", xrayPath, err)
 	}
 
 	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleServer)
@@ -95,9 +95,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
 		if err != nil {
-			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", liveConfigDir, err)
+			return fmt.Errorf("configuration directory not found at %s: %w", liveConfigDir, err)
 		}
-		return fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
+		return fmt.Errorf("%s is not a directory", liveConfigDir)
 	}
 
 	configDir := liveConfigDir
@@ -150,7 +150,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			}
 			if details, detailErr := winnet.InterfaceIPv4Details(ifIndex); detailErr == nil {
 				logging.Info(
-					"xp2p: tun IPv4 ready; applying routes",
+					"tun IPv4 ready; applying routes",
 					"ifIndex", ifIndex,
 					"ip", ip,
 					"operStatus", winnet.InterfaceOperStatusName(details.OperStatus),

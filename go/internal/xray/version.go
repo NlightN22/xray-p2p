@@ -39,14 +39,14 @@ func VerifyPinnedVersion(ctx context.Context, xrayPath string) error {
 		logging.Warn("xray version mismatch allowed", "expected", pinned, "actual", actual)
 		return nil
 	}
-	return fmt.Errorf("xp2p: xray version mismatch (expected %s, got %s)", pinned, actual)
+	return fmt.Errorf("xray version mismatch (expected %s, got %s)", pinned, actual)
 }
 
 func readVersion(ctx context.Context, xrayPath string) (string, error) {
 	cmd := execCommand(ctx, xrayPath, "-version")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("xp2p: read xray version: %w", err)
+		return "", fmt.Errorf("read xray version: %w", err)
 	}
 	return parseVersionOutput(string(out))
 }
@@ -54,11 +54,11 @@ func readVersion(ctx context.Context, xrayPath string) (string, error) {
 func parseVersionOutput(output string) (string, error) {
 	fields := strings.Fields(output)
 	if len(fields) < 2 {
-		return "", errors.New("xp2p: unexpected xray --version output")
+		return "", errors.New("unexpected xray --version output")
 	}
 	version := strings.TrimSpace(fields[1])
 	if version == "" {
-		return "", errors.New("xp2p: xray version is empty")
+		return "", errors.New("xray version is empty")
 	}
 	return version, nil
 }

@@ -125,4 +125,3 @@ func TestCertificateStateStatuses(t *testing.T) {
 		})
 	}
 }
-

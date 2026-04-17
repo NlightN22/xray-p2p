@@ -311,7 +311,7 @@ try {
             throw "xp2p binary missing at $binaryOut before completion step"
         }
         & $binaryOut completion powershell |
-            Where-Object { $_ -notmatch '^\d{4}-\d{2}-\d{2}T.*\bxp2p:' } |
+            Where-Object { $_ -notmatch '^\d{4}-\d{2}-\d{2}T.*\b(DEBUG|INFO|WARN|ERROR)\b' } |
             Set-Content -Path $completionOut -Encoding utf8
         if ($LASTEXITCODE -ne 0) {
             throw "xp2p completion powershell failed with exit code $LASTEXITCODE"

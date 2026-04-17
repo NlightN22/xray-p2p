@@ -54,4 +54,3 @@ func newServerDebugBundleCmd() *cobra.Command {
 	flags.StringVarP(&output, "output", "o", "", "archive output path")
 	return cmd
 }
-

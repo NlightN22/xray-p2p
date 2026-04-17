@@ -100,6 +100,7 @@ def _runner(host):
                     break
         result = linux_env.run_xp2p(host, *cmd)
         if check and result.rc != 0:
+            helpers.dump_failure_state(host, f"tunnel-B-to-A-runner-{host.backend.hostname}")
             pytest.fail(
                 "xp2p command failed "
                 f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -115,6 +116,7 @@ def _nat_runner(host, *, role: str):
     def _run(*args: str, check: bool = False):
         result = linux_env.run_xp2p_with_env(host, env, *args)
         if check and result.rc != 0:
+            helpers.dump_failure_state(host, f"tunnel-B-to-A-nat-{role}-{host.backend.hostname}")
             pytest.fail(
                 "xp2p command failed "
                 f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
@@ -235,6 +237,25 @@ def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: 
     pytest.fail(f"Port {port} did not open on {host.backend.hostname} within {timeout_seconds}s")
 
 
+def _wait_for_path(host, path: PurePosixPath, *, timeout_seconds: float = 45.0, interval: float = 1.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if linux_env.path_exists(host, path):
+            return
+        time.sleep(interval)
+    pytest.fail(f"Expected {path} to exist on {host.backend.hostname} within {timeout_seconds}s")
+
+
+def _wait_for_apply_request_clear(host, *, timeout_seconds: float = 90.0, interval: float = 1.0) -> None:
+    path = helpers.STATE_ROOT / "apply.request"
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if not linux_env.path_exists(host, path):
+            return
+        time.sleep(interval)
+    pytest.fail(f"Expected {path} to be removed on {host.backend.hostname} within {timeout_seconds}s")
+
+
 def _socks_port(host, config_path: PurePosixPath) -> int:
     data = _read_json_with_pending(host, config_path)
     for inbound in data.get("inbounds", []) or []:
@@ -271,7 +292,7 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
                 "do sudo -n fuser -k ${p}/tcp ${p}/udp >/dev/null 2>&1 || true; done"
             )
             host.run("sudo -n pkill -f '/usr/bin/xp2p' >/dev/null 2>&1 || true")
-            host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+            host.run(f"sudo -n pkill -f {helpers.XRAY_BINARY.as_posix()!r} >/dev/null 2>&1 || true")
             host.run("sudo -n nft delete table inet xray_transparent >/dev/null 2>&1 || true")
             host.run("sudo -n rm -f /etc/nftables.d/xray-transparent.nft /etc/xp2p/nftables/xray-transparent.nft >/dev/null 2>&1 || true")
             host.run(
@@ -377,6 +398,12 @@ def _active_tunnel_sessions(env: dict):
         helpers.CLIENT_CONFIG_DIR_NAME,
     ):
         time.sleep(2.0)
+        _wait_for_apply_request_clear(env["server_host"])
+        _wait_for_apply_request_clear(env["client_host"])
+        _wait_for_path(env["server_host"], helpers.SERVER_LIVE_DIR / "xray.json")
+        _wait_for_path(env["server_host"], helpers.SERVER_LIVE_DIR / "runtime.json")
+        _wait_for_path(env["client_host"], helpers.CLIENT_LIVE_DIR / "xray.json")
+        _wait_for_path(env["client_host"], helpers.CLIENT_LIVE_DIR / "runtime.json")
         server_socks_port = _socks_port(env["server_host"], helpers.SERVER_LIVE_DIR / "xray.json")
         client_socks_port = _socks_port(env["client_host"], helpers.CLIENT_LIVE_DIR / "xray.json")
         _wait_for_port(env["server_host"], server_socks_port)
@@ -570,7 +597,6 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
     chain_name = "xray_transparent_prerouting"
     client_listener_port = SERVER_DIAGNOSTICS_PORT
     server_listener_port = CLIENT_DIAGNOSTICS_PORT
-    server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_LIVE_DIR / 'xray.json')}"
     client_nat_runner = _nat_runner(client_host, role="client")
     server_nat_runner = _nat_runner(server_host, role="server")
 
@@ -666,12 +692,10 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         server_iptables = server_host.run("sudo -n /usr/sbin/iptables -t nat -L XRAY_TRANSPARENT -v -n")
         sockets = client_host.run("sudo -n netstat -lpn 2>/dev/null | grep '51180|51080|52080|62022|62023' || true")
         processes = client_host.run("ps w | grep -E 'xp2p|xray' | grep -v grep")
-        client_inbounds = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'inbounds.json'} 2>/dev/null || true")
-        server_inbounds = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'inbounds.json'} 2>/dev/null || true")
-        client_routing = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'routing.json'} 2>/dev/null || true")
-        server_routing = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'routing.json'} 2>/dev/null || true")
-        client_logs_json = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'logs.json'} 2>/dev/null || true")
-        server_logs_json = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'logs.json'} 2>/dev/null || true")
+        client_xray = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'xray.json'} 2>/dev/null || true")
+        server_xray = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'xray.json'} 2>/dev/null || true")
+        client_runtime = client_host.run(f"cat {helpers.CLIENT_LIVE_DIR / 'runtime.json'} 2>/dev/null || true")
+        server_runtime = server_host.run(f"cat {helpers.SERVER_LIVE_DIR / 'runtime.json'} 2>/dev/null || true")
         client_run_log = client_host.run("cat /tmp/xp2p-*-run.log 2>/dev/null || true")
         server_run_log = server_host.run("cat /tmp/xp2p-*-run.log 2>/dev/null || true")
         client_err_log = client_host.run("cat /var/log/xp2p/*.err 2>/dev/null || true")
@@ -688,9 +712,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             f"client_iptables:\n{_safe(client_iptables.stdout)}\n{_safe(client_iptables.stderr)}\n"
             f"client_netstat:\n{_safe(sockets.stdout)}\n{_safe(sockets.stderr)}\n"
             f"client_ps:\n{_safe(processes.stdout)}\n{_safe(processes.stderr)}\n"
-            f"client_inbounds:\n{_safe(client_inbounds.stdout)}\nserver_inbounds:\n{_safe(server_inbounds.stdout)}\n"
-            f"client_routing:\n{_safe(client_routing.stdout)}\nserver_routing:\n{_safe(server_routing.stdout)}\n"
-            f"client_logs_json:\n{_safe(client_logs_json.stdout)}\nserver_logs_json:\n{_safe(server_logs_json.stdout)}\n"
+            f"client_xray:\n{_safe(client_xray.stdout)}\nserver_xray:\n{_safe(server_xray.stdout)}\n"
+            f"client_runtime:\n{_safe(client_runtime.stdout)}\nserver_runtime:\n{_safe(server_runtime.stdout)}\n"
             f"client_run_log:\n{_safe(client_run_log.stdout)}\nserver_run_log:\n{_safe(server_run_log.stdout)}\n"
             f"client_err_log:\n{_safe(client_err_log.stdout)}\nserver_err_log:\n{_safe(server_err_log.stdout)}\n"
             f"client_snippet:\n{_safe(client_snippet.stdout)}\nserver_snippet:\n{_safe(server_snippet.stdout)}\n"
@@ -752,21 +775,28 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             user=tunnel_environment["client_user"],
             host=SERVER_IP,
         )
-        client_inbounds = _read_json_with_pending(client_host, helpers.CLIENT_LIVE_DIR / "xray.json")
-        client_dokodemo_ports = _dokodemo_ports(client_inbounds)
-        assert client_dokodemo_ports, f"Expected dokodemo-door with followRedirect in client inbounds.json: {client_inbounds}"
-        server_inbounds = _read_json_with_pending(server_host, helpers.SERVER_LIVE_DIR / "xray.json")
-        server_dokodemo_ports = _dokodemo_ports(server_inbounds)
-        assert server_dokodemo_ports, f"Expected dokodemo-door with followRedirect in server inbounds.json: {server_inbounds}"
 
         with _active_tunnel_sessions(tunnel_environment):
-            pass
+            client_inbounds = _read_json_with_pending(client_host, helpers.CLIENT_LIVE_DIR / "xray.json")
+            client_dokodemo_ports = _dokodemo_ports(client_inbounds)
+            assert client_dokodemo_ports, (
+                "Expected dokodemo-door with followRedirect in client xray.json inbounds: "
+                f"{client_inbounds}"
+            )
+            server_inbounds = _read_json_with_pending(server_host, helpers.SERVER_LIVE_DIR / "xray.json")
+            server_dokodemo_ports = _dokodemo_ports(server_inbounds)
+            assert server_dokodemo_ports, (
+                "Expected dokodemo-door with followRedirect in server xray.json inbounds: "
+                f"{server_inbounds}"
+            )
 
         plan_output = client_nat_runner(
             "nat-redirect",
             "add",
             "--cidr",
             CLIENT_REDIRECT_CIDR,
+            "--inbounds",
+            (helpers.CLIENT_LIVE_DIR / "xray.json").as_posix(),
             "--print-only",
             "--quiet",
             check=True,
@@ -778,6 +808,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             "add",
             "--cidr",
             CLIENT_REDIRECT_CIDR,
+            "--inbounds",
+            (helpers.CLIENT_LIVE_DIR / "xray.json").as_posix(),
             "--quiet",
             check=True,
         )
@@ -866,6 +898,8 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
             "add",
             "--cidr",
             SERVER_REDIRECT_CIDR,
+            "--inbounds",
+            (helpers.SERVER_LIVE_DIR / "xray.json").as_posix(),
             "--quiet",
             check=True,
         )
@@ -877,6 +911,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
         with _ip_alias(client_host, server_target_alias):
             reverse_ip = server_target_alias.split("/")[0]
             with _active_tunnel_sessions(tunnel_environment):
+                server_socks_addr = f"127.0.0.1:{_socks_port(server_host, helpers.SERVER_LIVE_DIR / 'xray.json')}"
                 socks_ping = server_runner(
                     "ping",
                     reverse_ip,

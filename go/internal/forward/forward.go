@@ -123,19 +123,19 @@ func TagForPort(port int) string {
 func ParseTarget(value string) (string, int, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", 0, errors.New("xp2p: --target is required")
+		return "", 0, errors.New("--target is required")
 	}
 	host, portValue, err := net.SplitHostPort(trimmed)
 	if err != nil {
-		return "", 0, fmt.Errorf("xp2p: invalid --target %q: %w", value, err)
+		return "", 0, fmt.Errorf("invalid --target %q: %w", value, err)
 	}
 	host = strings.TrimSpace(host)
 	if host == "" {
-		return "", 0, errors.New("xp2p: --target host is required")
+		return "", 0, errors.New("--target host is required")
 	}
 	port, err := strconv.Atoi(portValue)
 	if err != nil || port < 1 || port > 65535 {
-		return "", 0, fmt.Errorf("xp2p: invalid --target port %q", portValue)
+		return "", 0, fmt.Errorf("invalid --target port %q", portValue)
 	}
 	return host, port, nil
 }
@@ -148,7 +148,7 @@ func NormalizeListenAddress(value string) (string, error) {
 	}
 	addr, err := netip.ParseAddr(trimmed)
 	if err != nil {
-		return "", fmt.Errorf("xp2p: invalid --listen address %q: %w", value, err)
+		return "", fmt.Errorf("invalid --listen address %q: %w", value, err)
 	}
 	return addr.String(), nil
 }
@@ -167,7 +167,7 @@ func ParseProtocol(value string) (Protocol, error) {
 	case string(ProtocolBoth):
 		return ProtocolBoth, nil
 	default:
-		return "", fmt.Errorf("xp2p: invalid --proto value %q (expected tcp, udp, or both)", value)
+		return "", fmt.Errorf("invalid --proto value %q (expected tcp, udp, or both)", value)
 	}
 }
 
@@ -192,12 +192,12 @@ func (p Protocol) RequiresUDP() bool {
 }
 
 // ErrPortUnavailable indicates the address is already bound.
-var ErrPortUnavailable = errors.New("xp2p: port unavailable")
+var ErrPortUnavailable = errors.New("port unavailable")
 
 // CheckPort ensures that the provided listener address is available for all requested protocols.
 func CheckPort(listen string, port int, proto Protocol) error {
 	if port < 1 || port > 65535 {
-		return fmt.Errorf("xp2p: invalid --listen-port %d", port)
+		return fmt.Errorf("invalid --listen-port %d", port)
 	}
 	if proto.RequiresTCP() {
 		if err := probeTCP(listen, port); err != nil {
@@ -229,7 +229,7 @@ func FindAvailablePort(listen string, start int, proto Protocol, reserved map[in
 		}
 		return port, nil
 	}
-	return 0, fmt.Errorf("xp2p: no free ports available from %d to 65535", start)
+	return 0, fmt.Errorf("no free ports available from %d to 65535", start)
 }
 
 func probeTCP(listen string, port int) error {
@@ -239,7 +239,7 @@ func probeTCP(listen string, port int) error {
 		if isAddrUnavailable(err) {
 			return ErrPortUnavailable
 		}
-		return fmt.Errorf("xp2p: bind TCP %s: %w", addr, err)
+		return fmt.Errorf("bind TCP %s: %w", addr, err)
 	}
 	return ln.Close()
 }
@@ -247,7 +247,7 @@ func probeTCP(listen string, port int) error {
 func probeUDP(listen string, port int) error {
 	ip := net.ParseIP(listen)
 	if ip == nil {
-		return fmt.Errorf("xp2p: invalid listen address %q", listen)
+		return fmt.Errorf("invalid listen address %q", listen)
 	}
 	addr := &net.UDPAddr{IP: ip, Port: port}
 	conn, err := net.ListenUDP("udp", addr)
@@ -255,7 +255,7 @@ func probeUDP(listen string, port int) error {
 		if isAddrUnavailable(err) {
 			return ErrPortUnavailable
 		}
-		return fmt.Errorf("xp2p: bind UDP %s: %w", addr.String(), err)
+		return fmt.Errorf("bind UDP %s: %w", addr.String(), err)
 	}
 	return conn.Close()
 }

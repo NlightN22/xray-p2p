@@ -10,6 +10,7 @@ import (
 
 type endpointConfig struct {
 	Hostname              string
+	Address               string
 	Port                  int
 	User                  string
 	Password              string
@@ -25,7 +26,11 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	_ = configDir
 	host := strings.TrimSpace(endpoint.Hostname)
 	if host == "" {
-		return clientInstallState{}, errors.New("xp2p: endpoint hostname is required")
+		return clientInstallState{}, errors.New("endpoint hostname is required")
+	}
+	address := strings.TrimSpace(endpoint.Address)
+	if address == "" {
+		address = host
 	}
 
 	tag := buildProxyTag(host)
@@ -33,7 +38,7 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	if err != nil {
 		if force && errors.Is(err, ErrClientConfigParse) {
 			logging.Warn(
-				"xp2p: invalid client config ignored due to --force",
+				"invalid client config ignored due to --force",
 				"path", configFile,
 				"error", err,
 			)
@@ -56,7 +61,7 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	record := clientEndpointRecord{
 		Hostname:             host,
 		Tag:                  tag,
-		Address:              host,
+		Address:              address,
 		Port:                 endpoint.Port,
 		User:                 endpoint.User,
 		Password:             endpoint.Password,

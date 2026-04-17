@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	errUserIDRequired   = errors.New("xp2p: user identifier is required")
-	errPasswordRequired = errors.New("xp2p: password is required")
+	errUserIDRequired   = errors.New("user identifier is required")
+	errPasswordRequired = errors.New("password is required")
 )
 
 // AddUser ensures a Trojan client exists in Desired inputs.
@@ -44,7 +44,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		}
 		found = true
 		if !opts.Force {
-			return fmt.Errorf("xp2p: user %s already exists (use --force to update)", userID)
+			return fmt.Errorf("user %s already exists (use --force to update)", userID)
 		}
 		if users[idx].Password != password {
 			users[idx].Password = password
@@ -58,6 +58,27 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 	}
 	if updated {
 		if err := saveServerTrojanUsers(configPath, users); err != nil {
+			return err
+		}
+	}
+
+	if !opts.NoReverse {
+		params, err := resolveTrojanLinkParams(configPath, "", strings.TrimSpace(opts.Host))
+		if err != nil {
+			return err
+		}
+		channel, err := buildServerReverseChannel(userID, params.host)
+		if err != nil {
+			return err
+		}
+		store, err := openReverseStore(opts.InstallDir)
+		if err != nil {
+			return err
+		}
+		if err := store.ensureAvailable(channel); err != nil {
+			return err
+		}
+		if err := applyServerReverseChannel(&store, opts.InstallDir, opts.ConfigDir, channel); err != nil {
 			return err
 		}
 	}
@@ -94,6 +115,15 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 	if removed {
 		if err := saveServerTrojanUsers(configPath, filtered); err != nil {
 			return err
+		}
+	}
+
+	params, err := resolveTrojanLinkParams(configPath, "", strings.TrimSpace(opts.Host))
+	if err == nil {
+		if channel, channelErr := buildServerReverseChannel(userID, params.host); channelErr == nil {
+			if store, storeErr := openReverseStore(opts.InstallDir); storeErr == nil {
+				_ = purgeServerReverseChannel(&store, opts.InstallDir, opts.ConfigDir, channel)
+			}
 		}
 	}
 	return writeServerApplyRequest()
@@ -159,7 +189,7 @@ func GetUserLink(ctx context.Context, opts UserLinkOptions) (UserLink, error) {
 		}
 	}
 	if !found {
-		return UserLink{}, fmt.Errorf("xp2p: user %s not found", userID)
+		return UserLink{}, fmt.Errorf("user %s not found", userID)
 	}
 
 	params, err := resolveTrojanLinkParams(configPath, "", strings.TrimSpace(opts.Host))

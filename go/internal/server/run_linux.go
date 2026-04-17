@@ -40,16 +40,11 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	hasAppliedState := false
 	if info, err := os.Stat(appliedStatePath); err == nil {
 		if info.IsDir() {
-			return fmt.Errorf("xp2p: %s is a directory, expected server applied state file", appliedStatePath)
+			return fmt.Errorf("%s is a directory, expected server applied state file", appliedStatePath)
 		}
 		hasAppliedState = true
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: inspect server applied state %s: %w", appliedStatePath, err)
-	}
-
-	xrayPath, err := xray.ResolveBinaryPath()
-	if err != nil {
-		return err
+		return fmt.Errorf("inspect server applied state %s: %w", appliedStatePath, err)
 	}
 
 	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleServer)
@@ -91,11 +86,16 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	opts.TunMTU = meta.TunMTU
 	opts.TunAddr = meta.TunAddr
 
+	xrayPath, err := xray.ResolveBinaryPathForInstallDir(installDir)
+	if err != nil {
+		return err
+	}
+
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
 		if err != nil {
-			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", liveConfigDir, err)
+			return fmt.Errorf("configuration directory not found at %s: %w", liveConfigDir, err)
 		}
-		return fmt.Errorf("xp2p: %s is not a directory", liveConfigDir)
+		return fmt.Errorf("%s is not a directory", liveConfigDir)
 	}
 
 	configDir := liveConfigDir
@@ -164,5 +164,5 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 }
 
 func tunSetupErrorWithHint(action string, err error) error {
-	return fmt.Errorf("xp2p: tun setup failed during %s: %w (set XP2P_SERVER_TUN_ENABLED=false or run \"xp2p server mode proxy\")", action, err)
+	return fmt.Errorf("tun setup failed during %s: %w (set XP2P_SERVER_TUN_ENABLED=false or run \"xp2p server mode proxy\")", action, err)
 }

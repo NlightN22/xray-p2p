@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import time
 from pathlib import PurePosixPath
@@ -19,10 +19,10 @@ DEPLOY_CONFIG_ROOT = helpers.CONFIG_ROOT
 DEPLOY_LOG_ROOT = helpers.LOG_ROOT
 CLIENT_LIVE_DIR = helpers.CLIENT_LIVE_DIR
 SERVER_LIVE_DIR = helpers.SERVER_LIVE_DIR
-CLIENT_LIVE_CONFIG_FILE = helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml"
-SERVER_LIVE_CONFIG_FILE = helpers.CONFIG_LIVE_ROOT / "xp2p-server.toml"
 CLIENT_DESIRED_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-client.toml"
 SERVER_DESIRED_CONFIG_FILE = DEPLOY_CONFIG_ROOT / "xp2p-server.toml"
+CLIENT_LIVE_CONFIG_FILE = CLIENT_DESIRED_CONFIG_FILE
+SERVER_LIVE_CONFIG_FILE = SERVER_DESIRED_CONFIG_FILE
 CLIENT_HEARTBEAT_STATE_FILE = DEPLOY_INSTALL_ROOT / "state-heartbeat-client.json"
 SERVER_HEARTBEAT_STATE_FILE = DEPLOY_INSTALL_ROOT / "state-heartbeat-server.json"
 DEPLOY_PORT = "62125"
@@ -233,7 +233,7 @@ def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
         assert helpers.path_exists(server_host, cert_path), f"Expected cert at {cert_path}"
         assert helpers.path_exists(server_host, key_path), f"Expected key at {key_path}"
 
-        xray = helpers.render_xray(server_host, server_runner, "server", desired=True)
+        xray = helpers.render_xray(server_host, xp2p_server_runner, "server", desired=True)
         trojan = _find_trojan_inbound(xray)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
@@ -805,9 +805,9 @@ def _start_server_deploy_with_args(
 
 def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, password: str) -> None:
     assert helpers.path_exists(host, CLIENT_LIVE_DIR), "client config directory missing after deploy"
-    outbounds = helpers.read_json(host, CLIENT_LIVE_DIR / "outbounds.json")
+    xray_doc = helpers.read_json(host, CLIENT_LIVE_DIR / "xray.json")
     helpers.assert_outbound(
-        outbounds,
+        xray_doc,
         server_ip,
         password,
         user,
@@ -830,8 +830,8 @@ def _assert_client_state(host: Host, server_ip: str) -> None:
 
 
 def _assert_client_routing(host: Host, server_ip: str) -> None:
-    routing = helpers.read_json(host, CLIENT_LIVE_DIR / "routing.json")
-    helpers.assert_routing_rule(routing, server_ip)
+    xray_doc = helpers.read_json(host, CLIENT_LIVE_DIR / "xray.json")
+    helpers.assert_routing_rule(xray_doc, server_ip)
 
 
 def _assert_internet_access(host: Host) -> None:
@@ -897,7 +897,7 @@ def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
 
 
 def _wait_for_log_phrase(host: Host, path: PurePosixPath, phrase: str, *, timeout: int) -> None:
-    expected_variants = (phrase, f"xp2p: {phrase}")
+    expected_variants = (phrase, f"{phrase}")
 
     def _matcher(text: str) -> bool | None:
         for variant in expected_variants:
@@ -921,7 +921,7 @@ def _wait_for_any_log_phrase(
     *,
     timeout: int,
 ) -> str:
-    expected_variants = [(phrase, f"xp2p: {phrase}") for phrase in phrases]
+    expected_variants = [(phrase, f"{phrase}") for phrase in phrases]
 
     def _matcher(text: str) -> str | None:
         for phrase, prefixed in expected_variants:

@@ -39,15 +39,15 @@ func runXrayWithConfig(
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("xp2p: capture stdout: %w", err)
+		return fmt.Errorf("capture stdout: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("xp2p: capture stderr: %w", err)
+		return fmt.Errorf("capture stderr: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("xp2p: start xray-core: %w", err)
+		return fmt.Errorf("start xray-core: %w", err)
 	}
 
 	logging.Info("xray-core process started", "path", xrayPath)
@@ -57,7 +57,7 @@ func runXrayWithConfig(
 				_ = cmd.Process.Kill()
 				_ = cmd.Wait()
 			}
-			return fmt.Errorf("xp2p: xray-core health check failed: %w", err)
+			return fmt.Errorf("xray-core health check failed: %w", err)
 		}
 	}
 	if onStart != nil {
@@ -89,7 +89,7 @@ func runXrayWithConfig(
 		return nil
 	}
 	if waitErr != nil {
-		return fmt.Errorf("xp2p: xray-core exited: %w", waitErr)
+		return fmt.Errorf("xray-core exited: %w", waitErr)
 	}
 	return nil
 }

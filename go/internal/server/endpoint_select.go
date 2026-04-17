@@ -7,15 +7,15 @@ import (
 )
 
 var (
-	ErrServerReverseMissing      = errors.New("xp2p: no server reverse channels found")
-	ErrServerReverseNotFound     = errors.New("xp2p: server reverse channel not found")
-	ErrServerReverseNotSpecified = errors.New("xp2p: reverse user or tag is required")
-	ErrServerReverseAmbiguous    = errors.New("xp2p: reverse user matches multiple channels")
+	ErrServerReverseMissing      = errors.New("no server reverse channels found")
+	ErrServerReverseNotFound     = errors.New("server reverse channel not found")
+	ErrServerReverseNotSpecified = errors.New("reverse user or tag is required")
+	ErrServerReverseAmbiguous    = errors.New("reverse user matches multiple channels")
 )
 
 func ResolveServerMarkerTarget(installDir, userOrTag string, index int) (string, int, error) {
 	if index > 0 {
-		return "", 0, errors.New("xp2p: server reverse selection does not support --index")
+		return "", 0, errors.New("server reverse selection does not support --index")
 	}
 	stateDoc, err := loadServerStateDoc(serverStatePath(installDir))
 	if err != nil {

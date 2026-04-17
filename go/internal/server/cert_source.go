@@ -15,7 +15,7 @@ func normalizeCertificateSource(storeRef, certPath, keyPath string) (string, err
 	hasStore := strings.TrimSpace(storeRef) != ""
 	hasCert := strings.TrimSpace(certPath) != "" || strings.TrimSpace(keyPath) != ""
 	if hasStore && hasCert {
-		return "", fmt.Errorf("xp2p: certificate store cannot be combined with --cert/--key")
+		return "", fmt.Errorf("certificate store cannot be combined with --cert/--key")
 	}
 	if hasStore {
 		return CertificateSourceWinStore, nil

@@ -24,7 +24,7 @@ type serverInstallBase struct {
 func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (serverInstallBase, error) {
 	host := strings.TrimSpace(opts.Host)
 	if host == "" {
-		return serverInstallBase{}, errors.New("xp2p: host is required")
+		return serverInstallBase{}, errors.New("host is required")
 	}
 	if err := validateCertificateHost(host); err != nil {
 		return serverInstallBase{}, err
@@ -36,7 +36,7 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 	}
 	portVal, err := strconv.Atoi(portStr)
 	if err != nil || portVal <= 0 || portVal > 65535 {
-		return serverInstallBase{}, fmt.Errorf("xp2p: invalid port %q", portStr)
+		return serverInstallBase{}, fmt.Errorf("invalid port %q", portStr)
 	}
 
 	inputs, err := resolveCertificateInputs(opts.CertificateStore, opts.CertificateFile, opts.KeyFile, opts.RelaxedPathValidation)

@@ -27,11 +27,11 @@ type clientAppliedState struct {
 }
 
 type clientRuntimeState struct {
-	Tun       tunRuntimeState   `json:"tun,omitempty"`
-	Routes    routeRuntimeState `json:"routes,omitempty"`
-	SocksReady bool             `json:"socks_ready,omitempty"`
-	LastError string            `json:"last_error,omitempty"`
-	Timestamp time.Time         `json:"timestamp,omitempty"`
+	Tun        tunRuntimeState   `json:"tun,omitempty"`
+	Routes     routeRuntimeState `json:"routes,omitempty"`
+	SocksReady bool              `json:"socks_ready,omitempty"`
+	LastError  string            `json:"last_error,omitempty"`
+	Timestamp  time.Time         `json:"timestamp,omitempty"`
 }
 
 type tunRuntimeState struct {
@@ -46,10 +46,10 @@ type tunRuntimeState struct {
 }
 
 type routeRuntimeState struct {
-	RedirectApplied  bool `json:"redirect_applied,omitempty"`
-	RedirectCount    int  `json:"redirect_count,omitempty"`
-	FullApplied      bool `json:"full_applied,omitempty"`
-	FullBypassCount  int  `json:"full_bypass_count,omitempty"`
+	RedirectApplied bool `json:"redirect_applied,omitempty"`
+	RedirectCount   int  `json:"redirect_count,omitempty"`
+	FullApplied     bool `json:"full_applied,omitempty"`
+	FullBypassCount int  `json:"full_bypass_count,omitempty"`
 }
 
 func loadClientAppliedState(path string) (clientAppliedState, error) {
@@ -58,14 +58,14 @@ func loadClientAppliedState(path string) (clientAppliedState, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return clientAppliedState{}, nil
 		}
-		return clientAppliedState{}, fmt.Errorf("xp2p: read client state %s: %w", path, err)
+		return clientAppliedState{}, fmt.Errorf("read client state %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return clientAppliedState{}, nil
 	}
 	var state clientAppliedState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return clientAppliedState{}, fmt.Errorf("xp2p: parse client state %s: %w", path, err)
+		return clientAppliedState{}, fmt.Errorf("parse client state %s: %w", path, err)
 	}
 	state.Config.normalize()
 	state.TunName = strings.TrimSpace(state.TunName)
@@ -121,13 +121,13 @@ func writeClientAppliedState(path string, state clientAppliedState) error {
 	state.TunAddr = strings.TrimSpace(state.TunAddr)
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return fmt.Errorf("xp2p: encode client state %s: %w", path, err)
+		return fmt.Errorf("encode client state %s: %w", path, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure client state dir %s: %w", filepath.Dir(path), err)
+		return fmt.Errorf("ensure client state dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write client state %s: %w", path, err)
+		return fmt.Errorf("write client state %s: %w", path, err)
 	}
 	return nil
 }

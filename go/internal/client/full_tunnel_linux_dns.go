@@ -19,11 +19,11 @@ func applyDNSOverrides(servers []string, verbose bool) (*fullTunnelDNSBackup, er
 		return nil, nil
 	}
 	if len(trimmed) == 0 {
-		return nil, fmt.Errorf("xp2p: dns servers list is empty")
+		return nil, fmt.Errorf("dns servers list is empty")
 	}
 	data, err := os.ReadFile(resolvConfPath)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: read resolv.conf: %w", err)
+		return nil, fmt.Errorf("read resolv.conf: %w", err)
 	}
 	backup := &fullTunnelDNSBackup{
 		ResolvConf: string(data),
@@ -31,7 +31,7 @@ func applyDNSOverrides(servers []string, verbose bool) (*fullTunnelDNSBackup, er
 	}
 	content := buildResolvConf(string(data), trimmed)
 	if err := os.WriteFile(resolvConfPath, []byte(content), 0o644); err != nil {
-		return nil, fmt.Errorf("xp2p: write resolv.conf: %w", err)
+		return nil, fmt.Errorf("write resolv.conf: %w", err)
 	}
 	if verbose {
 		before := parseResolvConfServers(string(data))
@@ -60,7 +60,7 @@ func restoreDNSOverrides(backup *fullTunnelDNSBackup, verbose bool) error {
 		}
 	}
 	if err := os.WriteFile(path, []byte(backup.ResolvConf), 0o644); err != nil {
-		return fmt.Errorf("xp2p: restore resolv.conf: %w", err)
+		return fmt.Errorf("restore resolv.conf: %w", err)
 	}
 	if verbose {
 		after := parseResolvConfServers(backup.ResolvConf)

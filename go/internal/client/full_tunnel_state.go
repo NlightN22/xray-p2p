@@ -54,14 +54,14 @@ func loadFullTunnelState(path string) (fullTunnelState, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return fullTunnelState{}, nil
 		}
-		return fullTunnelState{}, fmt.Errorf("xp2p: read full tunnel state %s: %w", path, err)
+		return fullTunnelState{}, fmt.Errorf("read full tunnel state %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return fullTunnelState{}, nil
 	}
 	var state fullTunnelState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fullTunnelState{}, fmt.Errorf("xp2p: parse full tunnel state %s: %w", path, err)
+		return fullTunnelState{}, fmt.Errorf("parse full tunnel state %s: %w", path, err)
 	}
 	return state, nil
 }
@@ -70,20 +70,20 @@ func saveFullTunnelState(path string, state fullTunnelState) error {
 	state.Timestamp = time.Now().UTC()
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return fmt.Errorf("xp2p: encode full tunnel state %s: %w", path, err)
+		return fmt.Errorf("encode full tunnel state %s: %w", path, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure full tunnel state dir %s: %w", filepath.Dir(path), err)
+		return fmt.Errorf("ensure full tunnel state dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write full tunnel state %s: %w", path, err)
+		return fmt.Errorf("write full tunnel state %s: %w", path, err)
 	}
 	return nil
 }
 
 func clearFullTunnelState(path string) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove full tunnel state %s: %w", path, err)
+		return fmt.Errorf("remove full tunnel state %s: %w", path, err)
 	}
 	return nil
 }

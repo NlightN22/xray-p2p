@@ -84,4 +84,3 @@ func writeCertificateFile(t *testing.T, certPath, keyPath, host string, notBefor
 		t.Fatalf("write key: %v", err)
 	}
 }
-

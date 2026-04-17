@@ -40,7 +40,7 @@ func ReverseTag(userID, host string) (string, error) {
 	user := SanitizeLabel(userID)
 	hostLabel := SanitizeLabel(host)
 	if user == "" || hostLabel == "" {
-		return "", fmt.Errorf("xp2p: unable to derive reverse identifier from %q/%q", strings.TrimSpace(userID), strings.TrimSpace(host))
+		return "", fmt.Errorf("unable to derive reverse identifier from %q/%q", strings.TrimSpace(userID), strings.TrimSpace(host))
 	}
 	return user + hostLabel + reverseSuffix, nil
 }

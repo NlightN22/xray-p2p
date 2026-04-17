@@ -52,17 +52,17 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	)
 
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create config directory: %w", err)
+		return fmt.Errorf("create config directory: %w", err)
 	}
 	logRoot := config.LogRoot()
 	if err := os.MkdirAll(logRoot, 0o777); err != nil {
-		return fmt.Errorf("xp2p: create log root: %w", err)
+		return fmt.Errorf("create log root: %w", err)
 	}
 	if err := os.Chmod(logRoot, 0o777); err != nil {
 		logging.Warn("chmod log root failed", "path", logRoot, "err", err)
 	}
 	if err := os.MkdirAll(state.logsDir, 0o777); err != nil {
-		return fmt.Errorf("xp2p: create log directory: %w", err)
+		return fmt.Errorf("create log directory: %w", err)
 	}
 	if err := os.Chmod(state.logsDir, 0o777); err != nil {
 		logging.Warn("chmod log directory failed", "path", state.logsDir, "err", err)
@@ -76,7 +76,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 
-	if err := deployDesiredConfiguration(state); err != nil {
+	if err := deployDesiredConfiguration(ctx, state); err != nil {
 		return err
 	}
 	req, err := apply.NewRequest(apply.RoleClient)
@@ -144,16 +144,16 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	if err := os.RemoveAll(configDir); err != nil {
-		return fmt.Errorf("xp2p: remove client config dir: %w", err)
+		return fmt.Errorf("remove client config dir: %w", err)
 	}
 	if err := os.RemoveAll(pendingDir); err != nil {
-		return fmt.Errorf("xp2p: remove client pending dir: %w", err)
+		return fmt.Errorf("remove client pending dir: %w", err)
 	}
 	if err := os.RemoveAll(liveDir); err != nil {
-		return fmt.Errorf("xp2p: remove client live dir: %w", err)
+		return fmt.Errorf("remove client live dir: %w", err)
 	}
 	if err := os.RemoveAll(lkgDir); err != nil {
-		return fmt.Errorf("xp2p: remove client lkg dir: %w", err)
+		return fmt.Errorf("remove client lkg dir: %w", err)
 	}
 
 	stateRemoved := false
@@ -161,7 +161,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	if err := os.Remove(configPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client config file: %w", err)
+			return fmt.Errorf("remove client config file: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -170,7 +170,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	appliedPath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
 	if err := os.Remove(appliedPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client applied state: %w", err)
+			return fmt.Errorf("remove client applied state: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -178,7 +178,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	clientHeartbeatPath := filepath.Join(installDir, layout.ClientHeartbeatStateFileName)
 	if err := os.Remove(clientHeartbeatPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove client heartbeat state: %w", err)
+		return fmt.Errorf("remove client heartbeat state: %w", err)
 	}
 
 	clientStatePath := filepath.Join(installDir, layout.ClientStateFileName)
@@ -186,7 +186,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	if err := os.Remove(clientStatePath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client state file: %w", err)
+			return fmt.Errorf("remove client state file: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -194,7 +194,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	if err := installstate.Remove(legacyStatePath, installstate.KindClient); err != nil {
 		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, installstate.ErrRoleNotInstalled) {
-			return fmt.Errorf("xp2p: remove client state file: %w", err)
+			return fmt.Errorf("remove client state file: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -207,7 +207,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	if !stateRemoved && !opts.IgnoreMissing {
-		return fmt.Errorf("xp2p: remove client state file: %w", os.ErrNotExist)
+		return fmt.Errorf("remove client state file: %w", os.ErrNotExist)
 	}
 
 	logging.Info("xp2p client configuration removed", "install_dir", installDir, "config_dir", configDir)
@@ -231,7 +231,7 @@ func removeInstallDirIfUnused(installDir string) error {
 		return nil
 	}
 	if err := os.RemoveAll(installDir); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove install dir: %w", err)
+		return fmt.Errorf("remove install dir: %w", err)
 	}
 	return nil
 }
@@ -251,7 +251,7 @@ func removeNetworkdConfig(tunName string) error {
 	}
 	path := filepath.Join("/etc/systemd/network", fmt.Sprintf("90-%s.network", name))
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove networkd config: %w", err)
+		return fmt.Errorf("remove networkd config: %w", err)
 	}
 	return nil
 }
@@ -310,12 +310,12 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 func resolveInstallDir(raw string) (string, error) {
 	cleaned := strings.TrimSpace(raw)
 	if cleaned == "" {
-		return "", errors.New("xp2p: install directory is required")
+		return "", errors.New("install directory is required")
 	}
 	if !filepath.IsAbs(cleaned) {
 		abs, err := filepath.Abs(cleaned)
 		if err != nil {
-			return "", fmt.Errorf("xp2p: resolve install directory: %w", err)
+			return "", fmt.Errorf("resolve install directory: %w", err)
 		}
 		cleaned = abs
 	}
@@ -333,15 +333,20 @@ func ResolveConfigDir(base, cfg string) (string, error) {
 	return filepath.Join(base, cfg), nil
 }
 
-func deployDesiredConfiguration(state installState) error {
+func deployDesiredConfiguration(ctx context.Context, state installState) error {
 	if _, err := ensureClientXrayConfigForce(state.configFile, state.Force); err != nil {
 		return err
 	}
 	if err := extensions.EnsureTemplates(state.configDir); err != nil {
 		return err
 	}
-	_, err := applyClientEndpointConfig("", state.configFile, endpointConfig{
+	resolved, err := resolveEndpointPrimaryAddress(ctx, state.serverHost)
+	if err != nil {
+		return err
+	}
+	_, err = applyClientEndpointConfig("", state.configFile, endpointConfig{
 		Hostname:              state.serverHost,
+		Address:               resolved,
 		Port:                  state.serverPort,
 		User:                  state.User,
 		Password:              state.Password,

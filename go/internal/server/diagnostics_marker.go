@@ -9,7 +9,7 @@ const (
 
 func markerIPForIndex(index int) (string, error) {
 	if index < 0 || index >= diagnosticsMarkerMax {
-		return "", fmt.Errorf("xp2p: marker index %d is out of range", index)
+		return "", fmt.Errorf("marker index %d is out of range", index)
 	}
 	value := index + 1
 	octet2 := value / 256

@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	ErrHostEmpty      = errors.New("xp2p: deploy manifest requires host")
-	ErrVersionInvalid = errors.New("xp2p: deploy manifest requires positive version")
-	ErrCredentialPair = errors.New("xp2p: deploy manifest user and password must both be set or both be empty")
+	ErrHostEmpty      = errors.New("deploy manifest requires host")
+	ErrVersionInvalid = errors.New("deploy manifest requires positive version")
+	ErrCredentialPair = errors.New("deploy manifest user and password must both be set or both be empty")
 )
 
 // Manifest represents the encrypted deploy payload shared between client and server.
@@ -68,7 +68,7 @@ func Marshal(m Manifest) ([]byte, error) {
 func Unmarshal(data []byte) (Manifest, error) {
 	var m Manifest
 	if err := json.Unmarshal(data, &m); err != nil {
-		return Manifest{}, fmt.Errorf("xp2p: decode deploy manifest: %w", err)
+		return Manifest{}, fmt.Errorf("decode deploy manifest: %w", err)
 	}
 	m = Normalize(m)
 	if err := Validate(m); err != nil {
@@ -81,7 +81,7 @@ func Unmarshal(data []byte) (Manifest, error) {
 func Read(r io.Reader) (Manifest, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return Manifest{}, fmt.Errorf("xp2p: read deploy manifest: %w", err)
+		return Manifest{}, fmt.Errorf("read deploy manifest: %w", err)
 	}
 	return Unmarshal(data)
 }
@@ -93,7 +93,7 @@ func Write(w io.Writer, m Manifest) error {
 		return err
 	}
 	if _, err := w.Write(append(data, '\n')); err != nil {
-		return fmt.Errorf("xp2p: write deploy manifest: %w", err)
+		return fmt.Errorf("write deploy manifest: %w", err)
 	}
 	return nil
 }

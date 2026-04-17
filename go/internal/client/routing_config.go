@@ -56,7 +56,7 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	for idx, ep := range endpoints {
 		markerIP, err := markerIPForIndex(idx)
 		if err != nil {
-			return fmt.Errorf("xp2p: allocate diagnostics marker for %s: %w", ep.Tag, err)
+			return fmt.Errorf("allocate diagnostics marker for %s: %w", ep.Tag, err)
 		}
 		markerCIDR := markerIP + "/32"
 		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], map[string]any{

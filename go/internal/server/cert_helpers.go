@@ -19,13 +19,13 @@ import (
 func generateSelfSignedCertificate(host, certDest, keyDest string) error {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		return fmt.Errorf("xp2p: generate private key: %w", err)
+		return fmt.Errorf("generate private key: %w", err)
 	}
 
 	serialLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialLimit)
 	if err != nil {
-		return fmt.Errorf("xp2p: generate certificate serial: %w", err)
+		return fmt.Errorf("generate certificate serial: %w", err)
 	}
 
 	now := time.Now()
@@ -51,24 +51,24 @@ func generateSelfSignedCertificate(host, certDest, keyDest string) error {
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
 	if err != nil {
-		return fmt.Errorf("xp2p: create certificate: %w", err)
+		return fmt.Errorf("create certificate: %w", err)
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	if certPEM == nil {
-		return errors.New("xp2p: encode certificate: empty result")
+		return errors.New("encode certificate: empty result")
 	}
 	if err := os.WriteFile(certDest, certPEM, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write certificate: %w", err)
+		return fmt.Errorf("write certificate: %w", err)
 	}
 
 	keyDER := x509.MarshalPKCS1PrivateKey(privateKey)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER})
 	if keyPEM == nil {
-		return errors.New("xp2p: encode private key: empty result")
+		return errors.New("encode private key: empty result")
 	}
 	if err := os.WriteFile(keyDest, keyPEM, 0o600); err != nil {
-		return fmt.Errorf("xp2p: write private key: %w", err)
+		return fmt.Errorf("write private key: %w", err)
 	}
 
 	return nil

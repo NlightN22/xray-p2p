@@ -50,4 +50,3 @@ func isManagedWindowsDirectRule(rule map[string]any) bool {
 	}
 	return strings.Contains(network, "udp")
 }
-

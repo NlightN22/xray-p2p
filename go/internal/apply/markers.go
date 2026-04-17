@@ -43,4 +43,3 @@ func RemoveRoleMarkers(requestPath, errorPath, role string) error {
 
 	return nil
 }
-

@@ -28,14 +28,14 @@ func loadServerStateDoc(path string) (map[string]any, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return doc, nil
 		}
-		return nil, fmt.Errorf("xp2p: read server config %s: %w", path, err)
+		return nil, fmt.Errorf("read server config %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return doc, nil
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: parse server config %s: %w", path, err)
+		return nil, fmt.Errorf("parse server config %s: %w", path, err)
 	}
 	raw := tree.GetPath([]string{"server"})
 	switch value := raw.(type) {
@@ -82,11 +82,11 @@ func decodeServerReverseState(doc map[string]any) (serverReverseState, error) {
 	}
 	buf, err := json.Marshal(raw)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: encode server reverse state: %w", err)
+		return nil, fmt.Errorf("encode server reverse state: %w", err)
 	}
 	var state serverReverseState
 	if err := json.Unmarshal(buf, &state); err != nil {
-		return nil, fmt.Errorf("xp2p: parse server reverse state: %w", err)
+		return nil, fmt.Errorf("parse server reverse state: %w", err)
 	}
 	state.ensure()
 	return state, nil
@@ -98,36 +98,36 @@ func loadOrCreateServerToml(path string) (*toml.Tree, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			tree, err := toml.TreeFromMap(map[string]any{})
 			if err != nil {
-				return nil, fmt.Errorf("xp2p: create empty server config tree: %w", err)
+				return nil, fmt.Errorf("create empty server config tree: %w", err)
 			}
 			return tree, nil
 		}
-		return nil, fmt.Errorf("xp2p: read server config %s: %w", path, err)
+		return nil, fmt.Errorf("read server config %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		tree, err := toml.TreeFromMap(map[string]any{})
 		if err != nil {
-			return nil, fmt.Errorf("xp2p: create empty server config tree: %w", err)
+			return nil, fmt.Errorf("create empty server config tree: %w", err)
 		}
 		return tree, nil
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: parse server config %s: %w", path, err)
+		return nil, fmt.Errorf("parse server config %s: %w", path, err)
 	}
 	return tree, nil
 }
 
 func writeServerTomlTree(path string, tree *toml.Tree) error {
 	if tree == nil {
-		return errors.New("xp2p: config tree is nil")
+		return errors.New("config tree is nil")
 	}
 	data, err := toml.Marshal(tree.ToMap())
 	if err != nil {
-		return fmt.Errorf("xp2p: encode server config %s: %w", path, err)
+		return fmt.Errorf("encode server config %s: %w", path, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure server config dir %s: %w", filepath.Dir(path), err)
+		return fmt.Errorf("ensure server config dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := configio.WriteBytes(path, data, configio.WriteOptions{
 		AuditPath: config.AuditLogPath(),

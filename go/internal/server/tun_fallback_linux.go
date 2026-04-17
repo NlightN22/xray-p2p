@@ -22,5 +22,5 @@ func fallbackToProxyMode(tunEnabled *bool, err error, action string) bool {
 }
 
 func tunSetupError(action string, err error) error {
-	return fmt.Errorf("xp2p: tun setup failed during %s: %w", action, err)
+	return fmt.Errorf("tun setup failed during %s: %w", action, err)
 }

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import time
@@ -512,7 +512,7 @@ def _wait_for_log_phrases(
     expected_variants = []
     for phrase in phrases:
         expected_variants.append(phrase)
-        expected_variants.append(f"xp2p: {phrase}")
+        expected_variants.append(f"{phrase}")
 
     def _matcher(text: str) -> bool | None:
         for variant in expected_variants:

@@ -11,10 +11,10 @@ import (
 const DefaultClientConfigDir = layout.ClientConfigDir
 
 // ErrUnsupported indicates that the requested operation is not supported on this platform.
-var ErrUnsupported = errors.New("xp2p: client installation is not supported on this platform")
+var ErrUnsupported = errors.New("client installation is not supported on this platform")
 
 // ErrServiceUnsupported indicates that service mode is unavailable on this platform.
-var ErrServiceUnsupported = errors.New("xp2p: client service is not supported on this platform")
+var ErrServiceUnsupported = errors.New("client service is not supported on this platform")
 
 // InstallOptions describes how the client-side components should be provisioned.
 type InstallOptions struct {

@@ -35,14 +35,14 @@ func loadServerAppliedState(path string) (serverAppliedState, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return serverAppliedState{}, nil
 		}
-		return serverAppliedState{}, fmt.Errorf("xp2p: read server state %s: %w", path, err)
+		return serverAppliedState{}, fmt.Errorf("read server state %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return serverAppliedState{}, nil
 	}
 	var state serverAppliedState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return serverAppliedState{}, fmt.Errorf("xp2p: parse server state %s: %w", path, err)
+		return serverAppliedState{}, fmt.Errorf("parse server state %s: %w", path, err)
 	}
 	state.normalize()
 	return state, nil
@@ -76,13 +76,13 @@ func saveServerAppliedState(path string, reverse serverReverseState, redirects [
 	}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return fmt.Errorf("xp2p: encode server state %s: %w", path, err)
+		return fmt.Errorf("encode server state %s: %w", path, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure server state dir %s: %w", filepath.Dir(path), err)
+		return fmt.Errorf("ensure server state dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write server state %s: %w", path, err)
+		return fmt.Errorf("write server state %s: %w", path, err)
 	}
 	return nil
 }

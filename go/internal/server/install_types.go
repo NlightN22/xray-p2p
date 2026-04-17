@@ -14,10 +14,10 @@ const DefaultTrojanPort = 58443
 const DefaultServerConfigDir = layout.ServerConfigDir
 
 // ErrUnsupported indicates that the requested operation is not supported on this platform.
-var ErrUnsupported = errors.New("xp2p: server installation is not supported on this platform")
+var ErrUnsupported = errors.New("server installation is not supported on this platform")
 
 // ErrServiceUnsupported indicates that service mode is unavailable on this platform.
-var ErrServiceUnsupported = errors.New("xp2p: server service is not supported on this platform")
+var ErrServiceUnsupported = errors.New("server service is not supported on this platform")
 
 // InstallOptions describes how the server-side components should be provisioned.
 type InstallOptions struct {

@@ -29,7 +29,7 @@ type clientInstallBase struct {
 func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (clientInstallBase, error) {
 	address := strings.TrimSpace(opts.ServerAddress)
 	if address == "" {
-		return clientInstallBase{}, errors.New("xp2p: client server address is required")
+		return clientInstallBase{}, errors.New("client server address is required")
 	}
 
 	portStr := strings.TrimSpace(opts.ServerPort)
@@ -38,17 +38,17 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 	}
 	portVal, err := strconv.Atoi(portStr)
 	if err != nil || portVal <= 0 || portVal > 65535 {
-		return clientInstallBase{}, fmt.Errorf("xp2p: invalid client server port %q", portStr)
+		return clientInstallBase{}, fmt.Errorf("invalid client server port %q", portStr)
 	}
 
 	password := strings.TrimSpace(opts.Password)
 	if password == "" {
-		return clientInstallBase{}, errors.New("xp2p: client password is required")
+		return clientInstallBase{}, errors.New("client password is required")
 	}
 
 	user := strings.TrimSpace(opts.User)
 	if user == "" {
-		return clientInstallBase{}, errors.New("xp2p: client user email is required")
+		return clientInstallBase{}, errors.New("client user email is required")
 	}
 
 	serverName := strings.TrimSpace(opts.ServerName)

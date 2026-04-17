@@ -34,14 +34,14 @@ type TunStatus struct {
 }
 
 type ModeConfigRequest struct {
-	Role        string
-	Mode        TunnelMode
-	TunName     string
-	TunAddr     string
-	TunMTU      int
-	FullTag     string
-	ConfigPath  string
-	Force       bool
+	Role       string
+	Mode       TunnelMode
+	TunName    string
+	TunAddr    string
+	TunMTU     int
+	FullTag    string
+	ConfigPath string
+	Force      bool
 }
 
 type ServiceWaitRequest struct {
@@ -50,20 +50,20 @@ type ServiceWaitRequest struct {
 }
 
 type SplitRouteRequest struct {
-	Name        string
-	Addr        string
-	CIDRs       []string
-	AssignIP    bool
-	AssignWait  string
-	Verbose     bool
+	Name       string
+	Addr       string
+	CIDRs      []string
+	AssignIP   bool
+	AssignWait string
+	Verbose    bool
 }
 
 type FullRouteRequest struct {
-	Name           string
-	Addr           string
-	BypassTargets  []string
-	ForceDefault   bool
-	Verbose        bool
+	Name          string
+	Addr          string
+	BypassTargets []string
+	ForceDefault  bool
+	Verbose       bool
 }
 
 type RouteRestoreRequest struct {

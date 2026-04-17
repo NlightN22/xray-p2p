@@ -125,7 +125,7 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 			return ListEntry{}, err
 		}
 		if !found {
-			return ListEntry{}, fmt.Errorf("xp2p: no forwards configured; add one or use --with-forward")
+			return ListEntry{}, fmt.Errorf("no forwards configured; add one or use --with-forward")
 		}
 		serverIP = rule.ListenAddress
 		serverPort = rule.ListenPort
@@ -207,7 +207,7 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 	}
 
 	if len(domains) == 0 {
-		return nil, errors.New("xp2p: no dns-forward entries found")
+		return nil, errors.New("no dns-forward entries found")
 	}
 
 	removedCount := 0
@@ -250,7 +250,7 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 		}
 	}
 	if removedCount == 0 && !opts.All {
-		return nil, fmt.Errorf("xp2p: dns-forward entry for %s not found", domains[0])
+		return nil, fmt.Errorf("dns-forward entry for %s not found", domains[0])
 	}
 
 	if err := m.commitDNS(); err != nil {
@@ -310,13 +310,13 @@ func (m *Manager) List() ([]ListEntry, bool, error) {
 
 func selectForward(forwards []forward.Rule, quiet bool) (forward.Rule, bool, error) {
 	if len(forwards) == 0 {
-		return forward.Rule{}, false, fmt.Errorf("xp2p: no forwards configured; add one or use --with-forward")
+		return forward.Rule{}, false, fmt.Errorf("no forwards configured; add one or use --with-forward")
 	}
 	if len(forwards) == 1 {
 		return forwards[0], true, nil
 	}
 	if quiet {
-		return forward.Rule{}, false, fmt.Errorf("xp2p: multiple forwards found; rerun with --with-forward to create one automatically")
+		return forward.Rule{}, false, fmt.Errorf("multiple forwards found; rerun with --with-forward to create one automatically")
 	}
 
 	fmt.Println("Select a forward to use for DNS:")

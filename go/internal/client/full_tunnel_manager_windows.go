@@ -50,7 +50,7 @@ func RestoreFullTunnelRoutes(ctx context.Context, installDir, configDir string, 
 
 func applyFullTunnelRoutes(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState, forceDefault bool) (bool, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
 		logging.Info("full-tunnel sync skipped (not enabled)")
 		if windowsRoutesDisabled {

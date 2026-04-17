@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	modiphlpapiUnicast                 = windows.NewLazySystemDLL("iphlpapi.dll")
+	modiphlpapiUnicast                  = windows.NewLazySystemDLL("iphlpapi.dll")
 	procInitializeUnicastIpAddressEntry = modiphlpapiUnicast.NewProc("InitializeUnicastIpAddressEntry")
 	procCreateUnicastIpAddressEntry     = modiphlpapiUnicast.NewProc("CreateUnicastIpAddressEntry")
 	procSetUnicastIpAddressEntry        = modiphlpapiUnicast.NewProc("SetUnicastIpAddressEntry")
@@ -43,11 +43,11 @@ func assignInterfaceIPv4Native(ifIndex int, ip string, prefix int) error {
 func unicastRowFromIPv4(ifIndex int, addr string, prefix int) (windows.MibUnicastIpAddressRow, error) {
 	ip := net.ParseIP(strings.TrimSpace(addr))
 	if ip == nil {
-		return windows.MibUnicastIpAddressRow{}, fmt.Errorf("xp2p: parse ip address: %s", addr)
+		return windows.MibUnicastIpAddressRow{}, fmt.Errorf("parse ip address: %s", addr)
 	}
 	raw, family, ok := rawSockaddrFromIPUnicast(ip)
 	if !ok || family != "IPv4" {
-		return windows.MibUnicastIpAddressRow{}, fmt.Errorf("xp2p: ipv4 address required: %s", addr)
+		return windows.MibUnicastIpAddressRow{}, fmt.Errorf("ipv4 address required: %s", addr)
 	}
 	var row windows.MibUnicastIpAddressRow
 	if err := initializeUnicastIpAddressEntry(&row); err != nil {

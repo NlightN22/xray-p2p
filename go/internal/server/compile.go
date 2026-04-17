@@ -16,16 +16,16 @@ import (
 )
 
 type runtimeMeta struct {
-	Role       string           `json:"role"`
-	Version    string           `json:"version"`
-	CompiledAt time.Time        `json:"compiled_at"`
-	TunEnabled bool             `json:"tun_enabled"`
-	TunName    string           `json:"tun_name"`
-	TunMTU     int              `json:"tun_mtu"`
-	TunAddr    string           `json:"tun_addr"`
-	Desired    runtimeDesired    `json:"desired"`
-	CertPath   string           `json:"cert_path,omitempty"`
-	KeyPath    string           `json:"key_path,omitempty"`
+	Role       string         `json:"role"`
+	Version    string         `json:"version"`
+	CompiledAt time.Time      `json:"compiled_at"`
+	TunEnabled bool           `json:"tun_enabled"`
+	TunName    string         `json:"tun_name"`
+	TunMTU     int            `json:"tun_mtu"`
+	TunAddr    string         `json:"tun_addr"`
+	Desired    runtimeDesired `json:"desired"`
+	CertPath   string         `json:"cert_path,omitempty"`
+	KeyPath    string         `json:"key_path,omitempty"`
 }
 
 type runtimeDesired struct {
@@ -75,7 +75,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 	}
 	xrayBytes, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		return compiledArtifacts{}, fmt.Errorf("xp2p: encode xray.json: %w", err)
+		return compiledArtifacts{}, fmt.Errorf("encode xray.json: %w", err)
 	}
 	xrayBytes = append(xrayBytes, '\n')
 
@@ -92,12 +92,12 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 			Redirects: desired.Redirects,
 			Forwards:  desired.Forwards,
 		},
-		CertPath:   certPath,
-		KeyPath:    keyPath,
+		CertPath: certPath,
+		KeyPath:  keyPath,
 	}
 	metaBytes, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
-		return compiledArtifacts{}, fmt.Errorf("xp2p: encode runtime metadata: %w", err)
+		return compiledArtifacts{}, fmt.Errorf("encode runtime metadata: %w", err)
 	}
 	metaBytes = append(metaBytes, '\n')
 

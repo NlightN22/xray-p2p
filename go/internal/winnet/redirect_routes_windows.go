@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	ErrInterfaceMissing = errors.New("xp2p: tun interface not found")
-	ErrTunIPv4Missing   = errors.New("xp2p: tun IPv4 address unavailable")
+	ErrInterfaceMissing = errors.New("tun interface not found")
+	ErrTunIPv4Missing   = errors.New("tun IPv4 address unavailable")
 )
 
 func SyncRedirectRoutes(tunName, tunAddr string, cidrs []string) error {
@@ -43,7 +43,7 @@ func SyncRedirectRoutes(tunName, tunAddr string, cidrs []string) error {
 			if err == nil && ifIndex > 0 {
 				if details, stateErr := InterfaceIPv4Details(ifIndex); stateErr == nil {
 					logging.Info(
-						"xp2p: tun IPv4 available",
+						"tun IPv4 available",
 						"interface", name,
 						"addr", addr,
 						"operStatus", InterfaceOperStatusName(details.OperStatus),

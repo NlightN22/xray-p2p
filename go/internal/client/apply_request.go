@@ -69,8 +69,8 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 		return nil, false, req, nil
 	}
 	if err := apply.ReplaceRoleLiveDir(liveDir, lkgDir, map[string][]byte{
-		layout.XrayConfigFileName:       artifacts.XrayJSON,
-		layout.RuntimeMetaFileName:      artifacts.MetaJSON,
+		layout.XrayConfigFileName:  artifacts.XrayJSON,
+		layout.RuntimeMetaFileName: artifacts.MetaJSON,
 	}); err != nil {
 		_ = apply.WriteError(errorPath, apply.ErrorMarker{
 			RequestID: req.ID,

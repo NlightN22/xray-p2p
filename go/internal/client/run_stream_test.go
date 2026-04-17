@@ -23,10 +23,10 @@ func TestStreamPipeWritesExtraAndLogs(t *testing.T) {
 		}
 
 		out := logBuf.String()
-		if !strings.Contains(out, "ERROR xp2p: xray_core stderr: hello") {
+		if !strings.Contains(out, "ERROR xray_core stderr: hello") {
 			t.Fatalf("stderr log missing hello: %s", out)
 		}
-		if !strings.Contains(out, "ERROR xp2p: xray_core stderr: world") {
+		if !strings.Contains(out, "ERROR xray_core stderr: world") {
 			t.Fatalf("stderr log missing world: %s", out)
 		}
 	})
@@ -39,7 +39,7 @@ func TestStreamPipeWritesExtraAndLogs(t *testing.T) {
 		streamPipe(strings.NewReader("ok\n"), "stdout", nil)
 
 		out := logBuf.String()
-		if !strings.Contains(out, "INFO xp2p: xray_core stdout: ok") {
+		if !strings.Contains(out, "INFO xray_core stdout: ok") {
 			t.Fatalf("stdout log missing ok: %s", out)
 		}
 	})

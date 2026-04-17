@@ -95,9 +95,9 @@ func ResolveRule(cidr, domain string) (Target, error) {
 	hasDomain := strings.TrimSpace(domain) != ""
 	switch {
 	case hasCIDR && hasDomain:
-		return Target{}, errors.New("xp2p: specify only one of --cidr or --domain")
+		return Target{}, errors.New("specify only one of --cidr or --domain")
 	case !hasCIDR && !hasDomain:
-		return Target{}, errors.New("xp2p: --cidr or --domain is required")
+		return Target{}, errors.New("--cidr or --domain is required")
 	case hasCIDR:
 		normalized, err := NormalizeCIDR(cidr)
 		if err != nil {
@@ -117,11 +117,11 @@ func ResolveRule(cidr, domain string) (Target, error) {
 func NormalizeCIDR(value string) (string, error) {
 	clean := strings.TrimSpace(value)
 	if clean == "" {
-		return "", errors.New("xp2p: --cidr is required")
+		return "", errors.New("--cidr is required")
 	}
 	_, network, err := net.ParseCIDR(clean)
 	if err != nil {
-		return "", fmt.Errorf("xp2p: invalid CIDR %q: %w", value, err)
+		return "", fmt.Errorf("invalid CIDR %q: %w", value, err)
 	}
 	return network.String(), nil
 }
@@ -130,10 +130,10 @@ func NormalizeCIDR(value string) (string, error) {
 func NormalizeDomain(value string) (string, error) {
 	clean := strings.TrimSpace(value)
 	if clean == "" {
-		return "", errors.New("xp2p: --domain is required")
+		return "", errors.New("--domain is required")
 	}
 	if strings.ContainsAny(clean, " \t\r\n") {
-		return "", fmt.Errorf("xp2p: invalid domain %q", value)
+		return "", fmt.Errorf("invalid domain %q", value)
 	}
 	return strings.ToLower(clean), nil
 }
@@ -182,11 +182,11 @@ func AddRule(rules []Rule, rule Rule) ([]Rule, error) {
 	kind := rule.Kind()
 	value := rule.Value()
 	if value == "" {
-		return rules, errors.New("xp2p: redirect value is required")
+		return rules, errors.New("redirect value is required")
 	}
 	trimmedTag := strings.TrimSpace(rule.OutboundTag)
 	if trimmedTag == "" {
-		return rules, errors.New("xp2p: outbound tag is required")
+		return rules, errors.New("outbound tag is required")
 	}
 	for _, existing := range rules {
 		if existing.Kind() != kind {
@@ -196,7 +196,7 @@ func AddRule(rules []Rule, rule Rule) ([]Rule, error) {
 			continue
 		}
 		if strings.EqualFold(existing.OutboundTag, trimmedTag) {
-			return rules, fmt.Errorf("xp2p: redirect %s via %s already exists: %w", Describe(kind, value), trimmedTag, ErrRuleExists)
+			return rules, fmt.Errorf("redirect %s via %s already exists: %w", Describe(kind, value), trimmedTag, ErrRuleExists)
 		}
 	}
 	rule.OutboundTag = trimmedTag

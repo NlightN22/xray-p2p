@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 import json
@@ -764,7 +764,7 @@ def _wait_for_client_link(host, proc_info: dict[str, str | int]) -> str:
 
 
 def _wait_for_log_phrase(host, proc_info: dict[str, str | int], phrase: str, *, timeout: int) -> None:
-    expected_variants = (phrase, f"xp2p: {phrase}")
+    expected_variants = (phrase, f"{phrase}")
 
     def _matcher(text: str) -> bool | None:
         for variant in expected_variants:
@@ -782,7 +782,7 @@ def _wait_for_any_log_phrase(
     *,
     timeout: int,
 ) -> str:
-    expected_variants = [(phrase, f"xp2p: {phrase}") for phrase in phrases]
+    expected_variants = [(phrase, f"{phrase}") for phrase in phrases]
 
     def _matcher(text: str) -> str | None:
         for phrase, prefixed in expected_variants:
@@ -856,7 +856,7 @@ def _wait_for_ping_ok_or_server_failure(
         stdout_text = _read_optional_text(client_host, client_proc["stdout"])
         stderr_text = _read_optional_text(client_host, client_proc["stderr"])
         combined = "\n".join(filter(None, [stdout_text, stderr_text]))
-        if "client deploy: ping ok" in combined or "xp2p: client deploy: ping ok" in combined:
+        if "client deploy: ping ok" in combined or "client deploy: ping ok" in combined:
             return
         last_stdout = stdout_text or last_stdout
         last_stderr = stderr_text or last_stderr

@@ -26,7 +26,7 @@ func main() {
 		if errors.As(err, &ec) {
 			os.Exit(ec.ExitCode())
 		}
-		fmt.Fprintf(os.Stderr, "xp2p: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 }

@@ -38,7 +38,7 @@ func (m *TunnelManager) ApplyModeConfig(ctx context.Context, req ports.ModeConfi
 	case "server":
 		return m.applyServerModeConfig(ctx, req)
 	default:
-		return fmt.Errorf("xp2p: unsupported role %q", req.Role)
+		return fmt.Errorf("unsupported role %q", req.Role)
 	}
 }
 
@@ -90,10 +90,10 @@ func (m *TunnelManager) Status(ctx context.Context, req ports.TunStatusRequest) 
 		return status, winnet.ErrTunIPv4Missing
 	}
 	if req.RequireUp && !strings.EqualFold(status.OperStatus, "up") {
-		return status, fmt.Errorf("xp2p: tun interface not up (%s)", status.OperStatus)
+		return status, fmt.Errorf("tun interface not up (%s)", status.OperStatus)
 	}
 	if req.RequireReady && !status.Ready {
-		return status, fmt.Errorf("xp2p: tun interface not ready (%s/%s)", status.OperStatus, status.DadState)
+		return status, fmt.Errorf("tun interface not ready (%s/%s)", status.OperStatus, status.DadState)
 	}
 	return status, nil
 }
@@ -164,7 +164,7 @@ func (m *TunnelManager) ApplyFullRoutes(ctx context.Context, req ports.FullRoute
 		return ports.RouteResult{}, err
 	}
 	if strings.TrimSpace(cfg.Client.InstallDir) == "" {
-		return ports.RouteResult{}, errors.New("xp2p: install directory is required")
+		return ports.RouteResult{}, errors.New("install directory is required")
 	}
 	tunName := firstNonEmpty(req.Name, cfg.Client.TunName)
 	tunAddr := firstNonEmpty(req.Addr, cfg.Client.TunAddr)
@@ -195,7 +195,7 @@ func (m *TunnelManager) RestoreRoutes(ctx context.Context, req ports.RouteRestor
 		return ports.RouteResult{}, err
 	}
 	if strings.TrimSpace(cfg.Client.InstallDir) == "" {
-		return ports.RouteResult{}, errors.New("xp2p: install directory is required")
+		return ports.RouteResult{}, errors.New("install directory is required")
 	}
 	if err := client.RestoreFullTunnelRoutes(ctx, cfg.Client.InstallDir, cfg.Client.ConfigDir, req.Verbose); err != nil {
 		return ports.RouteResult{}, err
@@ -222,14 +222,14 @@ func (m *TunnelManager) CleanupTun(ctx context.Context, req ports.TunCleanupRequ
 
 func (m *TunnelManager) applyClientModeConfig(ctx context.Context, req ports.ModeConfigRequest) error {
 	if req.Mode != ports.TunnelModeSplit && req.Mode != ports.TunnelModeFull {
-		return fmt.Errorf("xp2p: invalid tun mode %q", req.Mode)
+		return fmt.Errorf("invalid tun mode %q", req.Mode)
 	}
 	cfg, err := loadConfigForRole(req.ConfigPath, "client")
 	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(cfg.Client.InstallDir) == "" {
-		return errors.New("xp2p: install directory is required")
+		return errors.New("install directory is required")
 	}
 	tunMTU := req.TunMTU
 	if tunMTU <= 0 {
@@ -303,7 +303,7 @@ func waitForApplyRequestClear(ctx context.Context) error {
 			if errors.Is(err, os.ErrNotExist) {
 				return nil
 			}
-			return fmt.Errorf("xp2p: read apply request: %w", err)
+			return fmt.Errorf("read apply request: %w", err)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -335,7 +335,7 @@ func mapServiceRole(role string) (servicecontrol.Role, error) {
 	case "server":
 		return servicecontrol.RoleServer, nil
 	default:
-		return "", fmt.Errorf("xp2p: unsupported role %q", role)
+		return "", fmt.Errorf("unsupported role %q", role)
 	}
 }
 

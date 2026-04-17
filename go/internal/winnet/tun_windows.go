@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var ErrTunIPv4TentativeTimeout = errors.New("xp2p: tun IPv4 remained tentative")
+var ErrTunIPv4TentativeTimeout = errors.New("tun IPv4 remained tentative")
 
 const tunTentativeTimeout = 10 * time.Second
 
@@ -21,7 +21,7 @@ func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose
 	name := strings.TrimSpace(tunName)
 	addr := strings.TrimSpace(tunAddr)
 	if name == "" && addr == "" {
-		return 0, "", errors.New("xp2p: tun name or addr required for IPv4 wait")
+		return 0, "", errors.New("tun name or addr required for IPv4 wait")
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	if ctxDeadline, ok := ctx.Deadline(); ok {
@@ -45,7 +45,7 @@ func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose
 				}
 				if time.Since(tentativeSince) >= tunTentativeTimeout {
 					logging.Warn(
-						"xp2p: tun IPv4 remained tentative",
+						"tun IPv4 remained tentative",
 						"ifIndex", ifIndex,
 						"ip", ip,
 						"operStatus", oper,
@@ -58,7 +58,7 @@ func WaitForTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose
 			}
 			if ready {
 				logging.Info(
-					"xp2p: tun IPv4 ready",
+					"tun IPv4 ready",
 					"ifIndex", ifIndex,
 					"ip", ip,
 					"operStatus", oper,
@@ -131,7 +131,7 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 	name := strings.TrimSpace(tunName)
 	addr := strings.TrimSpace(tunAddr)
 	if name == "" && addr == "" {
-		return 0, "", errors.New("xp2p: tun name or addr required for IPv4 ensure")
+		return 0, "", errors.New("tun name or addr required for IPv4 ensure")
 	}
 	assignIP, assignPrefix, assignOK := parseTunAddr(addr)
 	deadline := time.Now().Add(10 * time.Second)
@@ -156,7 +156,7 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 				}
 				if time.Since(tentativeSince) >= tunTentativeTimeout {
 					logging.Warn(
-						"xp2p: tun IPv4 remained tentative",
+						"tun IPv4 remained tentative",
 						"ifIndex", ifIndex,
 						"ip", ip,
 						"operStatus", oper,
@@ -180,7 +180,7 @@ func EnsureTunIPv4(ctx context.Context, tunName string, tunAddr string, verbose 
 			}
 			if ready {
 				logging.Info(
-					"xp2p: tun IPv4 ready",
+					"tun IPv4 ready",
 					"ifIndex", ifIndex,
 					"ip", ip,
 					"operStatus", oper,

@@ -76,7 +76,7 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if listenPort > 0 {
 		if err := forward.CheckPort(listenAddr, listenPort, proto); err != nil {
 			if errors.Is(err, forward.ErrPortUnavailable) {
-				return ForwardAddResult{}, fmt.Errorf("xp2p: listen port %d is already in use on %s", listenPort, listenAddr)
+				return ForwardAddResult{}, fmt.Errorf("listen port %d is already in use on %s", listenPort, listenAddr)
 			}
 			return ForwardAddResult{}, err
 		}
@@ -125,7 +125,7 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 // RemoveForward deletes a server forward rule.
 func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 	if opts.Selector.Empty() {
-		return forward.Rule{}, errors.New("xp2p: --listen-port, --tag, or --remark is required")
+		return forward.Rule{}, errors.New("--listen-port, --tag, or --remark is required")
 	}
 
 	installDir, err := resolveInstallDir(opts.InstallDir)
@@ -140,7 +140,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 
 	rule, idx, removed := store.remove(opts.Selector)
 	if !removed {
-		return forward.Rule{}, fmt.Errorf("xp2p: forward rule not found")
+		return forward.Rule{}, fmt.Errorf("forward rule not found")
 	}
 
 	if err := store.saveForwards(); err != nil {

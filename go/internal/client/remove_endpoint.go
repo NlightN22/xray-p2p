@@ -28,7 +28,7 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 
 	target := strings.TrimSpace(opts.Target)
 	if target == "" {
-		return errors.New("xp2p: endpoint hostname or tag is required")
+		return errors.New("endpoint hostname or tag is required")
 	}
 
 	configFile := config.ConfigPath(layout.ClientConfigFileName)
@@ -37,12 +37,12 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 		return err
 	}
 	if len(state.Endpoints) == 0 {
-		return fmt.Errorf("xp2p: client endpoint %q not found", target)
+		return fmt.Errorf("client endpoint %q not found", target)
 	}
 
 	record, removed := state.removeEndpoint(target)
 	if !removed {
-		return fmt.Errorf("xp2p: client endpoint %q not found", target)
+		return fmt.Errorf("client endpoint %q not found", target)
 	}
 
 	state.removeRedirectsByTag(record.Tag)

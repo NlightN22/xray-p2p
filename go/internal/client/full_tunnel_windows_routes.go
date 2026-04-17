@@ -56,7 +56,7 @@ func filterBypassIPv4(endpoints []string, tunIfIndex int, verbose bool) []string
 	for _, ip := range endpoints {
 		route, prefixLen, ok, err := winnet.BestRouteForIP(ip)
 		if err != nil {
-			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass route lookup failed", "ip", ip, "err", err)
+			logFullTunnelVerbose(verbose, "full-tunnel bypass route lookup failed", "ip", ip, "err", err)
 			filtered = append(filtered, ip)
 			continue
 		}
@@ -65,7 +65,7 @@ func filterBypassIPv4(endpoints []string, tunIfIndex int, verbose bool) []string
 			continue
 		}
 		if route.InterfaceIndex != tunIfIndex && prefixLen > 0 && !isDefaultRoutePrefix(route.DestinationPrefix) {
-			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass skipped (direct route exists)", "ip", ip, "route", route.DestinationPrefix, "ifIndex", route.InterfaceIndex)
+			logFullTunnelVerbose(verbose, "full-tunnel bypass skipped (direct route exists)", "ip", ip, "route", route.DestinationPrefix, "ifIndex", route.InterfaceIndex)
 			continue
 		}
 		filtered = append(filtered, ip)
@@ -78,7 +78,7 @@ func filterBypassIPv6(endpoints []string, tunIfIndex int, verbose bool) []string
 	for _, ip := range endpoints {
 		route, prefixLen, ok, err := winnet.BestRouteForIP(ip)
 		if err != nil {
-			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass route lookup failed", "ip", ip, "err", err)
+			logFullTunnelVerbose(verbose, "full-tunnel bypass route lookup failed", "ip", ip, "err", err)
 			filtered = append(filtered, ip)
 			continue
 		}
@@ -87,7 +87,7 @@ func filterBypassIPv6(endpoints []string, tunIfIndex int, verbose bool) []string
 			continue
 		}
 		if route.InterfaceIndex != tunIfIndex && prefixLen > 0 && !isDefaultRoutePrefix(route.DestinationPrefix) {
-			logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass skipped (direct route exists)", "ip", ip, "route", route.DestinationPrefix, "ifIndex", route.InterfaceIndex)
+			logFullTunnelVerbose(verbose, "full-tunnel bypass skipped (direct route exists)", "ip", ip, "route", route.DestinationPrefix, "ifIndex", route.InterfaceIndex)
 			continue
 		}
 		filtered = append(filtered, ip)
@@ -113,13 +113,13 @@ func syncWindowsBypassRoutes(ctx context.Context, desired []fullTunnelRoute, exi
 		if _, ok := desiredSet[windowsRouteKey(route)]; ok {
 			continue
 		}
-		logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass route remove", "route", route)
+		logFullTunnelVerbose(verbose, "full-tunnel bypass route remove", "route", route)
 		if err := winnet.RemoveRoute(ctx, toWindowsRoute(route)); err != nil {
 			return err
 		}
 	}
 	for _, route := range desired {
-		logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass route apply", "route", route)
+		logFullTunnelVerbose(verbose, "full-tunnel bypass route apply", "route", route)
 		if err := winnet.ApplyRoute(ctx, toWindowsRoute(route)); err != nil {
 			return err
 		}
@@ -141,7 +141,7 @@ func removeWindowsBypassRoutes(ctx context.Context, routes []fullTunnelRoute) er
 
 func ensureWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr string, family string, verbose bool) error {
 	if strings.TrimSpace(tunName) == "" {
-		return errors.New("xp2p: tun name is required for full-tunnel default route")
+		return errors.New("tun name is required for full-tunnel default route")
 	}
 	dest := "0.0.0.0/0"
 	nextHop := "0.0.0.0"
@@ -171,7 +171,7 @@ func ensureWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr stri
 				PolicyStore:       "ActiveStore",
 				AddressFamily:     family,
 			}
-			logFullTunnelVerbose(verbose, "xp2p: full-tunnel default route apply", "interface", tunName, "route", route, "attempt", attempt+1)
+			logFullTunnelVerbose(verbose, "full-tunnel default route apply", "interface", tunName, "route", route, "attempt", attempt+1)
 			if err := winnet.ApplyRoute(ctx, route); err != nil {
 				lastErr = err
 				if winnet.IsRouteNotFoundError(err) {
@@ -187,7 +187,7 @@ func ensureWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr stri
 	if lastErr != nil {
 		return lastErr
 	}
-	return errors.New("xp2p: full-tunnel default route apply failed")
+	return errors.New("full-tunnel default route apply failed")
 }
 
 func removeWindowsDefaultRoute(ctx context.Context, tunName string, tunAddr string, family string) error {
@@ -331,7 +331,7 @@ func parseUint64(value string) uint64 {
 func resolveWindowsInterface(ctx context.Context, tunName string, tunAddr string, verbose bool, wait bool) (int, uint64, error) {
 	name := strings.TrimSpace(tunName)
 	if name == "" {
-		return 0, 0, errors.New("xp2p: tun name is required for interface lookup")
+		return 0, 0, errors.New("tun name is required for interface lookup")
 	}
 	trimmedAddr := strings.TrimSpace(tunAddr)
 	deadline := time.Now()
@@ -422,7 +422,7 @@ func waitForWindowsIPv4(ctx context.Context, ifIndex int, verbose bool) error {
 			return ctx.Err()
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("xp2p: tun IPv4 address unavailable for interface %d", ifIndex)
+			return fmt.Errorf("tun IPv4 address unavailable for interface %d", ifIndex)
 		}
 		if verbose {
 			logging.Info("full-tunnel waiting for tun IPv4", "ifIndex", ifIndex, "attempt", attempt)
@@ -452,7 +452,7 @@ func waitForWindowsInterfaceUp(ctx context.Context, ifIndex int, tunName string,
 			return ctx.Err()
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("xp2p: tun adapter not connected: %s (%d)", tunName, ifIndex)
+			return fmt.Errorf("tun adapter not connected: %s (%d)", tunName, ifIndex)
 		}
 		if verbose {
 			logging.Info("full-tunnel waiting for tun adapter", "interface", tunName, "ifIndex", ifIndex, "attempt", attempt)

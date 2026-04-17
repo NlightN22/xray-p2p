@@ -126,9 +126,9 @@ func buildLogs(cfg xrayconfig.LogsConfig) map[string]any {
 				},
 			},
 			"system": map[string]any{
-				"statsInboundUplink":   boolValue(cfg.Policy.System.StatsInboundUplink, true),
-				"statsInboundDownlink": boolValue(cfg.Policy.System.StatsInboundDownlink, true),
-				"statsOutboundUplink":  boolValue(cfg.Policy.System.StatsOutboundUplink, true),
+				"statsInboundUplink":    boolValue(cfg.Policy.System.StatsInboundUplink, true),
+				"statsInboundDownlink":  boolValue(cfg.Policy.System.StatsInboundDownlink, true),
+				"statsOutboundUplink":   boolValue(cfg.Policy.System.StatsOutboundUplink, true),
 				"statsOutboundDownlink": boolValue(cfg.Policy.System.StatsOutboundDownlink, true),
 			},
 		}
@@ -142,4 +142,3 @@ func boolValue(value *bool, fallback bool) bool {
 	}
 	return *value
 }
-

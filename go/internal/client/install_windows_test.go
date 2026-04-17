@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -32,11 +32,11 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 	opts := InstallOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultClientConfigDir,
-		ServerAddress: "edge.example.com",
+		ServerAddress: "localhost",
 		ServerPort:    "58443",
 		User:          "user@example.com",
 		Password:      "secret",
-		ServerName:    "edge.example.com",
+		ServerName:    "localhost",
 	}
 	if err := Install(context.Background(), opts); err != nil {
 		t.Fatalf("Install returned error: %v", err)
@@ -66,7 +66,7 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 		t.Fatalf("expected 1 endpoint, got %d", len(state.Endpoints))
 	}
 	ep := state.Endpoints[0]
-	if ep.Hostname != "edge.example.com" || ep.Port != 58443 {
+	if ep.Hostname != "localhost" || ep.Port != 58443 {
 		t.Fatalf("unexpected endpoint record: %+v", ep)
 	}
 	if ep.User != "user@example.com" || ep.Password != "secret" {
@@ -122,11 +122,11 @@ func TestInstallRewritesInboundsAndLogs(t *testing.T) {
 	opts := InstallOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultClientConfigDir,
-		ServerAddress: "edge.example.com",
+		ServerAddress: "localhost",
 		ServerPort:    "58443",
 		User:          "user@example.com",
 		Password:      "secret",
-		ServerName:    "edge.example.com",
+		ServerName:    "localhost",
 	}
 	if err := Install(context.Background(), opts); err != nil {
 		t.Fatalf("Install returned error: %v", err)

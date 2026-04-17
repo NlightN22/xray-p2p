@@ -45,7 +45,7 @@ func (procdController) Status(ctx context.Context, role Role) (Status, error) {
 
 	detail, detailErr := runInitScriptOutput(ctx, script, "status")
 	if detailErr != nil && active {
-		return Status{}, fmt.Errorf("xp2p: procd status %s: %w", script, detailErr)
+		return Status{}, fmt.Errorf("procd status %s: %w", script, detailErr)
 	}
 
 	return Status{
@@ -66,7 +66,7 @@ func initScriptPath(role Role) (string, error) {
 		return "", fmt.Errorf("unsupported role %q", role)
 	}
 	if _, err := os.Stat(script); err != nil {
-		return "", fmt.Errorf("xp2p: init script %s not found: %w", script, err)
+		return "", fmt.Errorf("init script %s not found: %w", script, err)
 	}
 	return script, nil
 }
@@ -75,7 +75,7 @@ func runInitScript(ctx context.Context, script string, arg string) error {
 	cmd := exec.CommandContext(ctx, script, arg)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("xp2p: %s %s failed: %w (output: %s)", script, arg, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("%s %s failed: %w (output: %s)", script, arg, err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }

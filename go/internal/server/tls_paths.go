@@ -28,4 +28,3 @@ func defaultTLSConfigured() bool {
 	}
 	return true
 }
-

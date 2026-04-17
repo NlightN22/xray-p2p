@@ -34,4 +34,3 @@ func EnsureTemplates(dir string) error {
 	}
 	return nil
 }
-

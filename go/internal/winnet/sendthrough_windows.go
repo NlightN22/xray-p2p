@@ -42,5 +42,5 @@ func DefaultSendThroughIPv4(ctx context.Context) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("xp2p: unexpected IPv4 address output %q", strings.TrimSpace(out))
+	return "", fmt.Errorf("unexpected IPv4 address output %q", strings.TrimSpace(out))
 }

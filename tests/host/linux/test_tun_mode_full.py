@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import PurePosixPath
 import hashlib
@@ -507,7 +507,7 @@ def _client_list_entries(runner) -> list[dict[str, str]]:
     lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
     lines = [
         line for line in lines
-        if "HOSTNAME" not in line and "INFO xp2p:" not in line
+        if "HOSTNAME" not in line and "INFO " not in line
     ]
     if not lines or lines[0].lower().startswith("no client endpoints"):
         return []

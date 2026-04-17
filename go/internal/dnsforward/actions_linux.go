@@ -33,7 +33,7 @@ func (m *Manager) ensureIntercept() error {
 	}
 	section = strings.TrimSpace(created)
 	if section == "" {
-		return fmt.Errorf("xp2p: unable to create firewall redirect section")
+		return fmt.Errorf("unable to create firewall redirect section")
 	}
 	commands := []string{
 		fmt.Sprintf("firewall.%s.name=Intercept-DNS", section),
@@ -250,7 +250,7 @@ func (m *Manager) dnsmasqSection() (string, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("xp2p: dnsmasq section not found in %s", m.dnsConfig)
+	return "", fmt.Errorf("dnsmasq section not found in %s", m.dnsConfig)
 }
 
 func dnsmasqServicePath() string {

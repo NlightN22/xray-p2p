@@ -8,4 +8,3 @@ func CompileDesiredXrayJSON(configPath string, extensionsDir string) ([]byte, er
 	}
 	return artifacts.XrayJSON, nil
 }
-

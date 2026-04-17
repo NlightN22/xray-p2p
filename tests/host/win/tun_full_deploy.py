@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
@@ -101,7 +101,7 @@ def start_deploy_tunnel(
         server_proc,
         [
             "server deploy: apply request written",
-            "xp2p: pending config applied",
+            "pending config applied",
             "server deploy: completion requested",
             "xray-core process started",
             "server deploy: xray-core start failed",

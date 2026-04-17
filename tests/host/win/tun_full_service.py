@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import time
@@ -18,7 +18,7 @@ CLIENT_SERVICE_LOG = _env.LOGS_DIR / "client" / "service.log"
 SERVICE_REG_PATH = r"HKLM:\SYSTEM\CurrentControlSet\Services\xp2p-client"
 SUCCESS_MARKERS = {
     "proxy": "socks health check ok",
-    "tun": "xp2p: tun ipv4 available",
+    "tun": "tun ipv4 available",
 }
 FAIL_MARKERS = [
     "context cancel",

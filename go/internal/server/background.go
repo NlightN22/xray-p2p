@@ -66,7 +66,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 		proto = "both"
 	case "tcp", "udp", "both":
 	default:
-		return fmt.Errorf("xp2p: unsupported diagnostics protocol %q", opts.Proto)
+		return fmt.Errorf("unsupported diagnostics protocol %q", opts.Proto)
 	}
 
 	storePath := ""
@@ -132,7 +132,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 	}
 
 	if !started {
-		return errors.New("xp2p: unable to bind diagnostics listeners")
+		return errors.New("unable to bind diagnostics listeners")
 	}
 
 	go func() {

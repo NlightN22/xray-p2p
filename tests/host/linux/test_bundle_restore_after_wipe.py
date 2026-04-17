@@ -82,10 +82,12 @@ def test_backup_restore_after_full_wipe(client_host, server_host, xp2p_client_ru
 
         _stop_role_service_and_wait_inactive(client_host, "client", xp2p_client_runner)
         _stop_role_service_and_wait_inactive(server_host, "server", xp2p_server_runner)
-        _wipe_installation_roots(client_host)
-        _wipe_installation_roots(server_host)
-        assert not linux_env.path_exists(client_host, helpers.CONFIG_ROOT), f"{helpers.CONFIG_ROOT} should be removed"
-        assert not linux_env.path_exists(server_host, helpers.CONFIG_ROOT), f"{helpers.CONFIG_ROOT} should be removed"
+        _wipe_config_roots_keep_binaries(client_host)
+        _wipe_config_roots_keep_binaries(server_host)
+        assert linux_env.path_exists(client_host, helpers.CONFIG_ROOT), f"{helpers.CONFIG_ROOT} should exist"
+        assert linux_env.path_exists(server_host, helpers.CONFIG_ROOT), f"{helpers.CONFIG_ROOT} should exist"
+        assert linux_env.path_exists(client_host, helpers.XRAY_BINARY), f"{helpers.XRAY_BINARY} should be preserved"
+        assert linux_env.path_exists(server_host, helpers.XRAY_BINARY), f"{helpers.XRAY_BINARY} should be preserved"
 
         xp2p_client_runner(
             "client",
@@ -113,8 +115,10 @@ def test_backup_restore_after_full_wipe(client_host, server_host, xp2p_client_ru
         xp2p_client_runner("client", "service", "start", check=True)
         deploy_helpers.wait_for_apply_request_clear(client_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
         deploy_helpers.wait_for_apply_request_clear(server_host, timeout_seconds=APPLY_WAIT_TIMEOUT)
-        _wait_for_path(client_host, helpers.CONFIG_LIVE_ROOT / "xp2p-client.toml")
-        _wait_for_path(server_host, helpers.CONFIG_LIVE_ROOT / "xp2p-server.toml")
+        _wait_for_path(client_host, helpers.CLIENT_LIVE_DIR / "xray.json")
+        _wait_for_path(client_host, helpers.CLIENT_LIVE_DIR / "runtime.json")
+        _wait_for_path(server_host, helpers.SERVER_LIVE_DIR / "xray.json")
+        _wait_for_path(server_host, helpers.SERVER_LIVE_DIR / "runtime.json")
         _wait_for_diag_listener(client_host, helpers.CLIENT_DIAG_PORT)
         _wait_for_diag_listener(server_host, helpers.SERVER_DIAG_PORT)
 
@@ -158,11 +162,19 @@ def _stop_role_service_and_wait_inactive(host: Host, role: str, runner) -> None:
 
 
 def _wipe_installation_roots(host: Host) -> None:
+    _wipe_config_roots_keep_binaries(host)
+
+
+def _wipe_config_roots_keep_binaries(host: Host) -> None:
     root_arg = shlex.quote(helpers.CONFIG_ROOT.as_posix())
     log_arg = shlex.quote(helpers.LOG_ROOT.as_posix())
     script = (
-        "rm -rf -- \"$1\" \"$2\"; "
-        "for path in \"$1\".bak-*; do [ -e \"$path\" ] || continue; rm -rf \"$path\"; done"
+        "root=\"$1\"; log=\"$2\"; "
+        "if [ -d \"$root\" ]; then "
+        "find \"$root\" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf -- {} +; "
+        "fi; "
+        "rm -rf -- \"$log\"; "
+        "for path in \"$root\".bak-*; do [ -e \"$path\" ] || continue; rm -rf \"$path\"; done"
     )
     host.run(f"sudo -n /bin/sh -c {shlex.quote(script)} -- {root_arg} {log_arg}")
 

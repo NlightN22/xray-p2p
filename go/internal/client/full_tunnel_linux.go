@@ -53,15 +53,15 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			return false, err
 		}
 		if len(defaults4) == 0 && len(defaults6) == 0 {
-			return false, errors.New("xp2p: no default routes found for full-tunnel")
+			return false, errors.New("no default routes found for full-tunnel")
 		}
-		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes captured", "ipv4", defaults4, "ipv6", defaults6)
+		logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default routes captured", "ipv4", defaults4, "ipv6", defaults6)
 	}
 
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
 	bypass4 := buildBypassRoutes(defaults4, endpointIPv4, 32)
 	bypass6 := buildBypassRoutes(defaults6, endpointIPv6, 128)
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes prepared", "ipv4", bypass4, "ipv6", bypass6)
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel bypass routes prepared", "ipv4", bypass4, "ipv6", bypass6)
 
 	if !state.Enabled {
 		state = fullTunnelState{
@@ -81,7 +81,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			}
 			state.DNSBackup = backup
 		} else {
-			logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel DNS unchanged (no servers configured)")
+			logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel DNS unchanged (no servers configured)")
 		}
 		if err := saveFullTunnelState(paths.fullState, state); err != nil {
 			return false, err
@@ -95,7 +95,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
-		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes removed", "ipv4", defaults4, "ipv6", defaults6)
+		logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default routes removed", "ipv4", defaults4, "ipv6", defaults6)
 	} else {
 		if len(resolvedEndpoints) > 0 {
 			state.EndpointIPs = resolvedEndpoints
@@ -132,14 +132,14 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			return false, err
 		}
 	}
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes set to tun", "interface", opts.TunName, "ipv4", len(defaults4) > 0, "ipv6", len(defaults6) > 0)
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default routes set to tun", "interface", opts.TunName, "ipv4", len(defaults4) > 0, "ipv6", len(defaults6) > 0)
 
 	state.BypassRoutes = addedRoutes
 	if err := saveFullTunnelState(paths.fullState, state); err != nil {
 		_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 		return false, err
 	}
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes applied", "count", len(addedRoutes))
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel bypass routes applied", "count", len(addedRoutes))
 	return true, nil
 }
 
@@ -155,20 +155,20 @@ func restoreFullTunnel(_ context.Context, paths clientPaths, verbose bool) error
 	if tun := strings.TrimSpace(state.TunName); tun != "" {
 		_ = removeTunDefaultRoute(tun, "-4")
 		_ = removeTunDefaultRoute(tun, "-6")
-		logFullTunnelVerbose(verbose, "xp2p: full-tunnel default routes removed from tun", "interface", tun)
+		logFullTunnelVerbose(verbose, "full-tunnel default routes removed from tun", "interface", tun)
 	}
 
 	if err := removeStoredBypassRoutes(state.BypassRoutes); err != nil {
 		return err
 	}
-	logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass routes removed", "count", len(state.BypassRoutes))
+	logFullTunnelVerbose(verbose, "full-tunnel bypass routes removed", "count", len(state.BypassRoutes))
 	if err := restoreDefaultRoutes(state.IPv4Defaults, "-4"); err != nil {
 		return err
 	}
 	if err := restoreDefaultRoutes(state.IPv6Defaults, "-6"); err != nil {
 		return err
 	}
-	logFullTunnelVerbose(verbose, "xp2p: full-tunnel default routes restored", "ipv4", state.IPv4Defaults, "ipv6", state.IPv6Defaults)
+	logFullTunnelVerbose(verbose, "full-tunnel default routes restored", "ipv4", state.IPv4Defaults, "ipv6", state.IPv6Defaults)
 	if err := restoreDNSOverrides(state.DNSBackup, verbose); err != nil {
 		return err
 	}

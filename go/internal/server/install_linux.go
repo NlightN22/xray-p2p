@@ -54,7 +54,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		if occupied, reason, err := serverArtifactsPresent(state); err != nil {
 			return err
 		} else if occupied {
-			return fmt.Errorf("xp2p: server files already present (%s) (use --force to overwrite)", reason)
+			return fmt.Errorf("server files already present (%s) (use --force to overwrite)", reason)
 		}
 	}
 
@@ -66,17 +66,17 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	)
 
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create config directory: %w", err)
+		return fmt.Errorf("create config directory: %w", err)
 	}
 	logRoot := config.LogRoot()
 	if err := os.MkdirAll(logRoot, 0o777); err != nil {
-		return fmt.Errorf("xp2p: create log root: %w", err)
+		return fmt.Errorf("create log root: %w", err)
 	}
 	if err := os.Chmod(logRoot, 0o777); err != nil {
 		logging.Warn("chmod log root failed", "path", logRoot, "err", err)
 	}
 	if err := os.MkdirAll(state.logsDir, 0o777); err != nil {
-		return fmt.Errorf("xp2p: create log directory: %w", err)
+		return fmt.Errorf("create log directory: %w", err)
 	}
 	if err := os.Chmod(state.logsDir, 0o777); err != nil {
 		logging.Warn("chmod log directory failed", "path", state.logsDir, "err", err)
@@ -104,7 +104,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return err
 	}
 	if err := installstate.Write(state.stateFile, installstate.KindServer); err != nil {
-		return fmt.Errorf("xp2p: write server state: %w", err)
+		return fmt.Errorf("write server state: %w", err)
 	}
 	req, err := apply.NewRequest(apply.RoleServer)
 	if err != nil {
@@ -161,44 +161,44 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	if err := os.RemoveAll(configDir); err != nil {
-		return fmt.Errorf("xp2p: remove server config dir: %w", err)
+		return fmt.Errorf("remove server config dir: %w", err)
 	}
 	if err := os.RemoveAll(liveDir); err != nil {
-		return fmt.Errorf("xp2p: remove server live dir: %w", err)
+		return fmt.Errorf("remove server live dir: %w", err)
 	}
 	if err := os.RemoveAll(lkgDir); err != nil {
-		return fmt.Errorf("xp2p: remove server lkg dir: %w", err)
+		return fmt.Errorf("remove server lkg dir: %w", err)
 	}
 
 	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	if err := os.Remove(configPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove server config file: %w", err)
+			return fmt.Errorf("remove server config file: %w", err)
 		}
 	}
 
 	appliedPath := filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName))
 	if err := os.Remove(appliedPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove server applied state: %w", err)
+			return fmt.Errorf("remove server applied state: %w", err)
 		}
 	}
 
 	serverHeartbeatPath := filepath.Join(installDir, layout.ServerHeartbeatStateFileName)
 	if err := os.Remove(serverHeartbeatPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove server heartbeat state: %w", err)
+		return fmt.Errorf("remove server heartbeat state: %w", err)
 	}
 
 	statePath := filepath.Join(installDir, installstate.FileNameForKind(installstate.KindServer))
 	if err := installstate.Remove(statePath, installstate.KindServer); err != nil {
 		if !(opts.IgnoreMissing && (errors.Is(err, os.ErrNotExist) || errors.Is(err, installstate.ErrRoleNotInstalled))) {
-			return fmt.Errorf("xp2p: remove server state file: %w", err)
+			return fmt.Errorf("remove server state file: %w", err)
 		}
 	}
 	legacyStatePath := filepath.Join(installDir, layout.StateFileName)
 	if err := installstate.Remove(legacyStatePath, installstate.KindServer); err != nil {
 		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, installstate.ErrRoleNotInstalled) {
-			return fmt.Errorf("xp2p: remove legacy server state: %w", err)
+			return fmt.Errorf("remove legacy server state: %w", err)
 		}
 	}
 
@@ -229,7 +229,7 @@ func removeInstallDirIfUnused(installDir string) error {
 		return nil
 	}
 	if err := os.RemoveAll(installDir); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove install dir: %w", err)
+		return fmt.Errorf("remove install dir: %w", err)
 	}
 	return nil
 }
@@ -249,7 +249,7 @@ func removeNetworkdConfig(tunName string) error {
 	}
 	path := filepath.Join("/etc/systemd/network", fmt.Sprintf("90-%s.network", name))
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("xp2p: remove networkd config: %w", err)
+		return fmt.Errorf("remove networkd config: %w", err)
 	}
 	return nil
 }
@@ -308,12 +308,12 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 func resolveInstallDir(raw string) (string, error) {
 	cleaned := strings.TrimSpace(raw)
 	if cleaned == "" {
-		return "", errors.New("xp2p: install directory is required")
+		return "", errors.New("install directory is required")
 	}
 	if !filepath.IsAbs(cleaned) {
 		abs, err := filepath.Abs(cleaned)
 		if err != nil {
-			return "", fmt.Errorf("xp2p: resolve install directory: %w", err)
+			return "", fmt.Errorf("resolve install directory: %w", err)
 		}
 		cleaned = abs
 	}
@@ -335,14 +335,14 @@ func serverArtifactsPresent(state installState) (bool, string, error) {
 	if _, err := installstate.Read(state.stateFile, installstate.KindServer); err == nil {
 		return true, fmt.Sprintf("state file %s", state.stateFile), nil
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) && !errors.Is(err, installstate.ErrRoleNotInstalled) {
-		return false, "", fmt.Errorf("xp2p: read server state: %w", err)
+		return false, "", fmt.Errorf("read server state: %w", err)
 	}
 
 	desiredPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	if _, err := os.Stat(desiredPath); err == nil {
 		return true, fmt.Sprintf("desired config %s", desiredPath), nil
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, "", fmt.Errorf("xp2p: stat %s: %w", desiredPath, err)
+		return false, "", fmt.Errorf("stat %s: %w", desiredPath, err)
 	}
 
 	liveXray, err := config.LiveXrayPath(apply.RoleServer)
@@ -352,7 +352,7 @@ func serverArtifactsPresent(state installState) (bool, string, error) {
 	if _, err := os.Stat(liveXray); err == nil {
 		return true, fmt.Sprintf("live artifact %s", liveXray), nil
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, "", fmt.Errorf("xp2p: stat %s: %w", liveXray, err)
+		return false, "", fmt.Errorf("stat %s: %w", liveXray, err)
 	}
 	return false, "", nil
 }
@@ -366,7 +366,7 @@ func deployDesiredConfiguration(state installState) error {
 	}
 	if state.selfSigned || state.certSource == CertificateSourcePath {
 		if err := os.MkdirAll(defaultTLSDir(), 0o755); err != nil {
-			return fmt.Errorf("xp2p: create tls dir: %w", err)
+			return fmt.Errorf("create tls dir: %w", err)
 		}
 		if state.selfSigned {
 			logging.Info("xp2p server install generating self-signed certificate",
@@ -379,10 +379,10 @@ func deployDesiredConfiguration(state installState) error {
 			}
 		} else {
 			if err := copyFile(state.CertificateFile, defaultCertPath(), 0o644); err != nil {
-				return fmt.Errorf("xp2p: copy certificate: %w", err)
+				return fmt.Errorf("copy certificate: %w", err)
 			}
 			if err := copyFile(state.KeyFile, defaultKeyPath(), 0o600); err != nil {
-				return fmt.Errorf("xp2p: copy key: %w", err)
+				return fmt.Errorf("copy key: %w", err)
 			}
 		}
 	}
@@ -416,7 +416,7 @@ func copyFile(src, dst string, perm os.FileMode) error {
 func renderTemplateToFile(name, dest string, data any) error {
 	content, err := serverTemplates.ReadFile(name)
 	if err != nil {
-		return fmt.Errorf("xp2p: load template %s: %w", name, err)
+		return fmt.Errorf("load template %s: %w", name, err)
 	}
 	tmpl, err := templateFromBytes(name, content)
 	if err != nil {
@@ -425,16 +425,16 @@ func renderTemplateToFile(name, dest string, data any) error {
 
 	file, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
-		return fmt.Errorf("xp2p: create config %s: %w", dest, err)
+		return fmt.Errorf("create config %s: %w", dest, err)
 	}
 	defer file.Close()
 
 	writer := bufio.NewWriter(file)
 	if err := tmpl.Execute(writer, data); err != nil {
-		return fmt.Errorf("xp2p: render template %s: %w", name, err)
+		return fmt.Errorf("render template %s: %w", name, err)
 	}
 	if err := writer.Flush(); err != nil {
-		return fmt.Errorf("xp2p: flush config %s: %w", dest, err)
+		return fmt.Errorf("flush config %s: %w", dest, err)
 	}
 
 	return nil
@@ -443,7 +443,7 @@ func renderTemplateToFile(name, dest string, data any) error {
 func templateFromBytes(name string, content []byte) (*template.Template, error) {
 	tmpl, err := template.New(filepath.Base(name)).Parse(string(content))
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: parse template %s: %w", name, err)
+		return nil, fmt.Errorf("parse template %s: %w", name, err)
 	}
 	return tmpl, nil
 }
@@ -451,10 +451,10 @@ func templateFromBytes(name string, content []byte) (*template.Template, error) 
 func writeEmbeddedFile(name, dest string, perm os.FileMode) error {
 	content, err := serverTemplates.ReadFile(name)
 	if err != nil {
-		return fmt.Errorf("xp2p: load template %s: %w", name, err)
+		return fmt.Errorf("load template %s: %w", name, err)
 	}
 	if err := os.WriteFile(dest, content, perm); err != nil {
-		return fmt.Errorf("xp2p: write template %s: %w", dest, err)
+		return fmt.Errorf("write template %s: %w", dest, err)
 	}
 	return nil
 }
@@ -465,29 +465,29 @@ func validateCertificateHost(host string) error {
 	}
 
 	if len(host) > 253 {
-		return fmt.Errorf("xp2p: invalid host %q", host)
+		return fmt.Errorf("invalid host %q", host)
 	}
 
 	// Allow optional trailing dot for FQDN and ignore it for validation.
 	host = strings.TrimSuffix(host, ".")
 	if host == "" {
-		return fmt.Errorf("xp2p: invalid host")
+		return fmt.Errorf("invalid host")
 	}
 
 	labels := strings.Split(host, ".")
 	for _, label := range labels {
 		if len(label) == 0 || len(label) > 63 {
-			return fmt.Errorf("xp2p: invalid host label %q", label)
+			return fmt.Errorf("invalid host label %q", label)
 		}
 		if label[0] == '-' || label[len(label)-1] == '-' {
-			return fmt.Errorf("xp2p: invalid host label %q", label)
+			return fmt.Errorf("invalid host label %q", label)
 		}
 		for i := 0; i < len(label); i++ {
 			ch := label[i]
 			if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' {
 				continue
 			}
-			return fmt.Errorf("xp2p: invalid host label %q", label)
+			return fmt.Errorf("invalid host label %q", label)
 		}
 	}
 	return nil

@@ -158,9 +158,9 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
-		return false, fmt.Errorf("xp2p: stat %s: %w", binPath, err)
+		return false, fmt.Errorf("stat %s: %w", binPath, err)
 	} else if info.IsDir() {
-		return false, fmt.Errorf("xp2p: expected file at %s", binPath)
+		return false, fmt.Errorf("expected file at %s", binPath)
 	}
 
 	_ = configDirPath
@@ -169,7 +169,7 @@ func clientAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, err
 	}
 	if ok, err := configFilesPresent(liveConfigDir, requiredClientArtifacts); err != nil {
-		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfigDir, err)
+		return false, fmt.Errorf("stat %s: %w", liveConfigDir, err)
 	} else if ok {
 		return true, nil
 	}
@@ -189,7 +189,7 @@ func configFilesPresent(dir string, names []string) (bool, error) {
 			if errors.Is(err, os.ErrNotExist) {
 				return false, nil
 			}
-			return false, fmt.Errorf("xp2p: stat %s: %w", path, err)
+			return false, fmt.Errorf("stat %s: %w", path, err)
 		}
 	}
 	return true, nil

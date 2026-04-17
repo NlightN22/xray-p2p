@@ -14,7 +14,7 @@ SERVER_HOSTNAME = "pinned-version.local"
 SERVER_PORT = 62101
 RUN_LOG_SERVER = PurePosixPath("/tmp/xp2p-server-run.log")
 RUN_LOG_CLIENT = PurePosixPath("/tmp/xp2p-client-run.log")
-XRAY_BACKUP = PurePosixPath("/etc/xp2p/bin/xray.pinned.bak")
+XRAY_BACKUP = helpers.XRAY_BINARY.parent / "xray.pinned.bak"
 
 
 def _add_hosts_entry(host, ip: str, name: str) -> None:

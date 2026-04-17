@@ -125,12 +125,12 @@ func trojanOutbound(ep clientEndpointRecord, endpointIPs map[string]fullTunnelEn
 	if requireEndpointIPs {
 		host := endpointHost(ep)
 		if host == "" {
-			return nil, fmt.Errorf("xp2p: endpoint host is required for full-tunnel outbound")
+			return nil, fmt.Errorf("endpoint host is required for full-tunnel outbound")
 		}
 		entry := endpointIPs[strings.ToLower(host)]
 		ips := uniqueEndpointIPs(entry)
 		if len(ips) == 0 {
-			return nil, fmt.Errorf("xp2p: endpoint %s has no resolved IPs", host)
+			return nil, fmt.Errorf("endpoint %s has no resolved IPs", host)
 		}
 		address = ips[0]
 	}

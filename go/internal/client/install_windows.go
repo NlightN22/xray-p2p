@@ -52,13 +52,13 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	)
 
 	if err := os.MkdirAll(state.binDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create bin directory: %w", err)
+		return fmt.Errorf("create bin directory: %w", err)
 	}
 	if err := os.MkdirAll(state.logsDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create logs directory: %w", err)
+		return fmt.Errorf("create logs directory: %w", err)
 	}
 	if err := os.MkdirAll(state.configDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create config directory: %w", err)
+		return fmt.Errorf("create config directory: %w", err)
 	}
 
 	if err := ensureClientTunConfig(state.Force, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr, state.TunMode, state.TunModeSet); err != nil {
@@ -68,7 +68,7 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := ensureXrayBinaryPresent(state.binDir); err != nil {
 		return err
 	}
-	if err := deployDesiredConfiguration(state); err != nil {
+	if err := deployDesiredConfiguration(ctx, state); err != nil {
 		return err
 	}
 
@@ -131,16 +131,16 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	}
 
 	if err := os.RemoveAll(configDir); err != nil {
-		return fmt.Errorf("xp2p: remove client config dir: %w", err)
+		return fmt.Errorf("remove client config dir: %w", err)
 	}
 	if err := os.RemoveAll(pendingDir); err != nil {
-		return fmt.Errorf("xp2p: remove client pending dir: %w", err)
+		return fmt.Errorf("remove client pending dir: %w", err)
 	}
 	if err := os.RemoveAll(liveDir); err != nil {
-		return fmt.Errorf("xp2p: remove client live dir: %w", err)
+		return fmt.Errorf("remove client live dir: %w", err)
 	}
 	if err := os.RemoveAll(lkgDir); err != nil {
-		return fmt.Errorf("xp2p: remove client lkg dir: %w", err)
+		return fmt.Errorf("remove client lkg dir: %w", err)
 	}
 
 	stateRemoved := false
@@ -148,7 +148,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	configPath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
 	if err := os.Remove(configPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client config file: %w", err)
+			return fmt.Errorf("remove client config file: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -157,7 +157,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 	appliedPath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
 	if err := os.Remove(appliedPath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client applied state: %w", err)
+			return fmt.Errorf("remove client applied state: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -168,7 +168,7 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	if err := os.Remove(clientStatePath); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: remove client state file: %w", err)
+			return fmt.Errorf("remove client state file: %w", err)
 		}
 	} else {
 		stateRemoved = true
@@ -176,14 +176,14 @@ func Remove(ctx context.Context, opts RemoveOptions) error {
 
 	if err := installstate.Remove(legacyStatePath, installstate.KindClient); err != nil {
 		if !errors.Is(err, os.ErrNotExist) && !errors.Is(err, installstate.ErrRoleNotInstalled) {
-			return fmt.Errorf("xp2p: remove client state file: %w", err)
+			return fmt.Errorf("remove client state file: %w", err)
 		}
 	} else {
 		stateRemoved = true
 	}
 
 	if !stateRemoved && !opts.IgnoreMissing {
-		return fmt.Errorf("xp2p: remove client state file: %w", os.ErrNotExist)
+		return fmt.Errorf("remove client state file: %w", os.ErrNotExist)
 	}
 
 	logging.Info("xp2p client configuration removed", "install_dir", installDir, "config_dir", configDir)
@@ -224,15 +224,15 @@ func normalizeInstallOptions(opts InstallOptions) (installState, error) {
 func resolveInstallDir(raw string) (string, error) {
 	cleaned := strings.TrimSpace(raw)
 	if cleaned == "" {
-		return "", errors.New("xp2p: install directory is required")
+		return "", errors.New("install directory is required")
 	}
 	abs, err := filepath.Abs(cleaned)
 	if err != nil {
-		return "", fmt.Errorf("xp2p: resolve install directory: %w", err)
+		return "", fmt.Errorf("resolve install directory: %w", err)
 	}
 
 	if !isSafeInstallDir(abs) {
-		return "", fmt.Errorf("xp2p: install directory %q is not allowed", abs)
+		return "", fmt.Errorf("install directory %q is not allowed", abs)
 	}
 
 	return abs, nil
@@ -273,15 +273,20 @@ func isSafeInstallDir(path string) bool {
 	return true
 }
 
-func deployDesiredConfiguration(state installState) error {
+func deployDesiredConfiguration(ctx context.Context, state installState) error {
 	if _, err := ensureClientXrayConfigForce(state.configFile, state.Force); err != nil {
 		return err
 	}
 	if err := extensions.EnsureTemplates(state.configDir); err != nil {
 		return err
 	}
-	_, err := applyClientEndpointConfig("", state.configFile, endpointConfig{
+	resolved, err := resolveEndpointPrimaryAddress(ctx, state.serverRemote)
+	if err != nil {
+		return err
+	}
+	_, err = applyClientEndpointConfig("", state.configFile, endpointConfig{
 		Hostname:              state.serverRemote,
+		Address:               resolved,
 		Port:                  state.serverPort,
 		User:                  state.User,
 		Password:              state.Password,
@@ -303,12 +308,12 @@ func ensureXrayBinaryPresent(binDir string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: xray binary missing at %s (copy xray.exe into this directory before running install)", path)
+			return fmt.Errorf("xray binary missing at %s (copy xray.exe into this directory before running install)", path)
 		}
-		return fmt.Errorf("xp2p: inspect xray binary at %s: %w", path, err)
+		return fmt.Errorf("inspect xray binary at %s: %w", path, err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("xp2p: expected file at %s, found directory", path)
+		return fmt.Errorf("expected file at %s, found directory", path)
 	}
 	return nil
 }

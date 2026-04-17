@@ -15,7 +15,7 @@ xp2p_start_service() {
 	local role="$1"
 	local config_dir="$2"
 	if [ ! -x "$XP2P_BIN" ]; then
-		echo "[xp2p] binary $XP2P_BIN not found" >&2
+		echo "binary $XP2P_BIN not found" >&2
 		return 1
 	fi
 	[ -n "$config_dir" ] || config_dir="config-${role}"

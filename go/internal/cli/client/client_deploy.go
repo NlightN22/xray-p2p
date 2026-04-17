@@ -391,7 +391,7 @@ func ensureDeployTargetAvailable(cfg config.Config, opts deployOptions) error {
 		host = strings.TrimSpace(opts.runtime.remoteHost)
 	}
 	if host == "" {
-		return fmt.Errorf("xp2p: deploy host is required")
+		return fmt.Errorf("deploy host is required")
 	}
 	portStr := strings.TrimSpace(opts.manifest.trojanPort)
 	if portStr == "" {
@@ -399,7 +399,7 @@ func ensureDeployTargetAvailable(cfg config.Config, opts deployOptions) error {
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil || port <= 0 || port > 65535 {
-		return fmt.Errorf("xp2p: invalid trojan port %q", portStr)
+		return fmt.Errorf("invalid trojan port %q", portStr)
 	}
 
 	records, err := clientListFunc(client.ListOptions{
@@ -412,7 +412,7 @@ func ensureDeployTargetAvailable(cfg config.Config, opts deployOptions) error {
 	}
 	for _, record := range records {
 		if strings.EqualFold(record.Hostname, host) && record.Port == port {
-			return fmt.Errorf("xp2p: endpoint %s:%d already exists", host, port)
+			return fmt.Errorf("endpoint %s:%d already exists", host, port)
 		}
 	}
 	return nil
@@ -523,7 +523,7 @@ func resolveDeployFullTunnelTag(installDir, configDir string, link trojanLink, r
 		host = strings.TrimSpace(runtime.remoteHost)
 	}
 	if host == "" {
-		return "", fmt.Errorf("xp2p: deploy host is required for full-tunnel")
+		return "", fmt.Errorf("deploy host is required for full-tunnel")
 	}
 
 	records, err := clientListFunc(client.ListOptions{
@@ -539,7 +539,7 @@ func resolveDeployFullTunnelTag(installDir, configDir string, link trojanLink, r
 			return record.Tag, nil
 		}
 	}
-	return "", fmt.Errorf("xp2p: full-tunnel endpoint %s not found", host)
+	return "", fmt.Errorf("full-tunnel endpoint %s not found", host)
 }
 
 func ensureClientServiceApplied(ctx context.Context, socksAddr string) (bool, error) {

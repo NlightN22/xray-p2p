@@ -47,7 +47,7 @@ type clientReverseChannel struct {
 	EndpointTag string `json:"endpoint_tag" toml:"endpoint_tag"`
 }
 
-var ErrClientConfigParse = errors.New("xp2p: client config parse error")
+var ErrClientConfigParse = errors.New("client config parse error")
 
 func loadClientInstallState(path string) (clientInstallState, error) {
 	data, err := os.ReadFile(path)
@@ -55,7 +55,7 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return clientInstallState{}, nil
 		}
-		return clientInstallState{}, fmt.Errorf("xp2p: read client config %s: %w", path, err)
+		return clientInstallState{}, fmt.Errorf("read client config %s: %w", path, err)
 	}
 
 	if len(bytes.TrimSpace(data)) == 0 {
@@ -80,11 +80,11 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 	}
 	buf, err := json.Marshal(raw)
 	if err != nil {
-		return clientInstallState{}, fmt.Errorf("xp2p: encode client config %s: %w", path, err)
+		return clientInstallState{}, fmt.Errorf("encode client config %s: %w", path, err)
 	}
 	var state clientInstallState
 	if err := json.Unmarshal(buf, &state); err != nil {
-		return clientInstallState{}, fmt.Errorf("xp2p: decode client config %s: %w", path, err)
+		return clientInstallState{}, fmt.Errorf("decode client config %s: %w", path, err)
 	}
 	state.normalize()
 	return state, nil
@@ -95,12 +95,11 @@ func loadClientInstallStateWithFallback(pendingPath, livePath string) (clientIns
 		if _, err := os.Stat(pendingPath); err == nil {
 			return loadClientInstallState(pendingPath)
 		} else if !errors.Is(err, os.ErrNotExist) {
-			return clientInstallState{}, fmt.Errorf("xp2p: stat client config %s: %w", pendingPath, err)
+			return clientInstallState{}, fmt.Errorf("stat client config %s: %w", pendingPath, err)
 		}
 	}
 	return loadClientInstallState(livePath)
 }
-
 
 func (s *clientInstallState) normalize() {
 	if s.Endpoints == nil {
@@ -206,7 +205,7 @@ func (s *clientInstallState) ensureReverseChannel(userID, host, endpointTag stri
 	user := strings.TrimSpace(userID)
 	trimmedHost := strings.TrimSpace(host)
 	if user == "" || trimmedHost == "" {
-		return clientReverseChannel{}, fmt.Errorf("xp2p: reverse channels require user and host")
+		return clientReverseChannel{}, fmt.Errorf("reverse channels require user and host")
 	}
 	tag, err := naming.ReverseTag(user, trimmedHost)
 	if err != nil {
@@ -221,10 +220,10 @@ func (s *clientInstallState) ensureReverseChannel(userID, host, endpointTag stri
 	}
 	if existing, ok := s.Reverse[tag]; ok {
 		if !strings.EqualFold(existing.UserID, channel.UserID) || !strings.EqualFold(existing.Host, channel.Host) {
-			return clientReverseChannel{}, fmt.Errorf("xp2p: reverse tag %s already assigned to %s@%s", tag, existing.UserID, existing.Host)
+			return clientReverseChannel{}, fmt.Errorf("reverse tag %s already assigned to %s@%s", tag, existing.UserID, existing.Host)
 		}
 		if !strings.EqualFold(existing.EndpointTag, endpointTag) {
-			return clientReverseChannel{}, fmt.Errorf("xp2p: reverse tag %s already routed via %s", tag, existing.EndpointTag)
+			return clientReverseChannel{}, fmt.Errorf("reverse tag %s already routed via %s", tag, existing.EndpointTag)
 		}
 		return existing, nil
 	}
@@ -253,20 +252,20 @@ func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) err
 		samePort := existing.Port == record.Port
 		if sameHost && samePort {
 			if !force {
-				return fmt.Errorf("xp2p: endpoint %s:%d already exists (use --force to update)", record.Hostname, record.Port)
+				return fmt.Errorf("endpoint %s:%d already exists (use --force to update)", record.Hostname, record.Port)
 			}
 			s.Endpoints[idx] = record
 			return nil
 		}
 		if sameHost {
 			if !force {
-				return fmt.Errorf("xp2p: endpoint %s already exists (use --force to update)", record.Hostname)
+				return fmt.Errorf("endpoint %s already exists (use --force to update)", record.Hostname)
 			}
 			s.Endpoints[idx] = record
 			return nil
 		}
 		if strings.EqualFold(existing.Tag, record.Tag) {
-			return fmt.Errorf("xp2p: outbound tag %s is already assigned to %s", record.Tag, existing.Hostname)
+			return fmt.Errorf("outbound tag %s is already assigned to %s", record.Tag, existing.Hostname)
 		}
 	}
 	s.Endpoints = append(s.Endpoints, record)
@@ -283,13 +282,13 @@ func (s *clientInstallState) addForward(rule forward.Rule) error {
 	s.normalize()
 	for _, existing := range s.Forwards {
 		if existing.ListenPort == rule.ListenPort {
-			return fmt.Errorf("xp2p: forward listener on port %d already exists", rule.ListenPort)
+			return fmt.Errorf("forward listener on port %d already exists", rule.ListenPort)
 		}
 		if strings.EqualFold(existing.Tag, rule.Tag) {
-			return fmt.Errorf("xp2p: forward tag %s already exists", rule.Tag)
+			return fmt.Errorf("forward tag %s already exists", rule.Tag)
 		}
 		if strings.EqualFold(existing.Remark, rule.Remark) {
-			return fmt.Errorf("xp2p: forward remark %s already exists", rule.Remark)
+			return fmt.Errorf("forward remark %s already exists", rule.Remark)
 		}
 	}
 	s.Forwards = append(s.Forwards, rule)
@@ -329,36 +328,36 @@ func loadOrCreateToml(path string) (*toml.Tree, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			tree, err := toml.TreeFromMap(map[string]any{})
 			if err != nil {
-				return nil, fmt.Errorf("xp2p: create empty client config tree: %w", err)
+				return nil, fmt.Errorf("create empty client config tree: %w", err)
 			}
 			return tree, nil
 		}
-		return nil, fmt.Errorf("xp2p: read client config %s: %w", path, err)
+		return nil, fmt.Errorf("read client config %s: %w", path, err)
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		tree, err := toml.TreeFromMap(map[string]any{})
 		if err != nil {
-			return nil, fmt.Errorf("xp2p: create empty client config tree: %w", err)
+			return nil, fmt.Errorf("create empty client config tree: %w", err)
 		}
 		return tree, nil
 	}
 	tree, err := toml.LoadBytes(data)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: parse client config %s: %w", path, err)
+		return nil, fmt.Errorf("parse client config %s: %w", path, err)
 	}
 	return tree, nil
 }
 
 func writeTomlTree(path string, tree *toml.Tree) error {
 	if tree == nil {
-		return errors.New("xp2p: config tree is nil")
+		return errors.New("config tree is nil")
 	}
 	data, err := toml.Marshal(tree.ToMap())
 	if err != nil {
-		return fmt.Errorf("xp2p: encode client config %s: %w", path, err)
+		return fmt.Errorf("encode client config %s: %w", path, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure client config dir %s: %w", filepath.Dir(path), err)
+		return fmt.Errorf("ensure client config dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := configio.WriteBytes(path, data, configio.WriteOptions{
 		AuditPath: config.AuditLogPath(),

@@ -31,6 +31,7 @@ func ReplaceRoleLiveDir(liveDir, lkgDir string, files map[string][]byte) error {
 	}
 	parent := filepath.Dir(liveDir)
 	tempDir := filepath.Join(parent, fmt.Sprintf(".tmp-role-%d-%d", os.Getpid(), time.Now().UnixNano()))
+	backupDir := filepath.Join(parent, fmt.Sprintf(".bak-role-%d-%d", os.Getpid(), time.Now().UnixNano()))
 	if err := os.RemoveAll(tempDir); err != nil {
 		return fmt.Errorf("apply: clear temp dir %s: %w", tempDir, err)
 	}
@@ -54,15 +55,33 @@ func ReplaceRoleLiveDir(liveDir, lkgDir string, files map[string][]byte) error {
 		return err
 	}
 
-	if err := os.RemoveAll(liveDir); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := os.RemoveAll(backupDir); err != nil && !errors.Is(err, os.ErrNotExist) {
 		_ = os.RemoveAll(tempDir)
-		return fmt.Errorf("apply: clear live dir %s: %w", liveDir, err)
+		return fmt.Errorf("apply: clear backup dir %s: %w", backupDir, err)
 	}
+
+	backupCreated := false
+	if _, err := os.Stat(liveDir); err == nil {
+		if err := os.Rename(liveDir, backupDir); err != nil {
+			_ = os.RemoveAll(tempDir)
+			return fmt.Errorf("apply: backup live dir %s: %w", liveDir, err)
+		}
+		backupCreated = true
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		_ = os.RemoveAll(tempDir)
+		return fmt.Errorf("apply: stat live dir %s: %w", liveDir, err)
+	}
+
 	if err := os.Rename(tempDir, liveDir); err != nil {
 		_ = os.RemoveAll(tempDir)
+		if backupCreated {
+			_ = os.Rename(backupDir, liveDir)
+		}
 		_ = RestoreRoleLiveFromLkg(liveDir, lkgDir)
 		return fmt.Errorf("apply: activate live dir %s: %w", liveDir, err)
 	}
+	if backupCreated {
+		_ = os.RemoveAll(backupDir)
+	}
 	return nil
 }
-

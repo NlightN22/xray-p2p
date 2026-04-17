@@ -28,27 +28,27 @@ func CleanupWintunAdapter(wintunPath string, adapterName string) (WintunCleanupR
 	}
 	path := strings.TrimSpace(wintunPath)
 	if path == "" {
-		return WintunCleanupSkipped, errors.New("xp2p: wintun dll path is empty")
+		return WintunCleanupSkipped, errors.New("wintun dll path is empty")
 	}
 	if _, err := os.Stat(path); err != nil {
-		return WintunCleanupSkipped, fmt.Errorf("xp2p: wintun dll not found at %s: %w", path, err)
+		return WintunCleanupSkipped, fmt.Errorf("wintun dll not found at %s: %w", path, err)
 	}
 	dll := windows.NewLazyDLL(path)
 	if err := dll.Load(); err != nil {
-		return WintunCleanupSkipped, fmt.Errorf("xp2p: load wintun dll: %w", err)
+		return WintunCleanupSkipped, fmt.Errorf("load wintun dll: %w", err)
 	}
 	openProc := dll.NewProc("WintunOpenAdapter")
 	if err := openProc.Find(); err != nil {
-		return WintunCleanupSkipped, fmt.Errorf("xp2p: find WintunOpenAdapter: %w", err)
+		return WintunCleanupSkipped, fmt.Errorf("find WintunOpenAdapter: %w", err)
 	}
 	closeProc := dll.NewProc("WintunCloseAdapter")
 	if err := closeProc.Find(); err != nil {
-		return WintunCleanupSkipped, fmt.Errorf("xp2p: find WintunCloseAdapter: %w", err)
+		return WintunCleanupSkipped, fmt.Errorf("find WintunCloseAdapter: %w", err)
 	}
 
 	namePtr, err := windows.UTF16PtrFromString(name)
 	if err != nil {
-		return WintunCleanupSkipped, fmt.Errorf("xp2p: encode adapter name: %w", err)
+		return WintunCleanupSkipped, fmt.Errorf("encode adapter name: %w", err)
 	}
 
 	handle, _, callErr := openProc.Call(uintptr(unsafe.Pointer(namePtr)))
@@ -57,7 +57,7 @@ func CleanupWintunAdapter(wintunPath string, adapterName string) (WintunCleanupR
 		if err == nil || errors.Is(err, windows.ERROR_FILE_NOT_FOUND) {
 			return WintunCleanupNotFound, nil
 		}
-		return WintunCleanupNotFound, fmt.Errorf("xp2p: open wintun adapter: %w", err)
+		return WintunCleanupNotFound, fmt.Errorf("open wintun adapter: %w", err)
 	}
 	closeProc.Call(handle)
 	return WintunCleanupClosed, nil

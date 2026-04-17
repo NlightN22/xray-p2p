@@ -93,9 +93,9 @@ func serverAssetsPresent(installDir, configDirPath string) (bool, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
-		return false, fmt.Errorf("xp2p: stat %s: %w", binPath, err)
+		return false, fmt.Errorf("stat %s: %w", binPath, err)
 	} else if info.IsDir() {
-		return false, fmt.Errorf("xp2p: expected file at %s", binPath)
+		return false, fmt.Errorf("expected file at %s", binPath)
 	}
 
 	_ = configDirPath
@@ -104,7 +104,7 @@ func serverAssetsPresent(installDir, configDirPath string) (bool, error) {
 		return false, err
 	}
 	if ok, err := configFilesPresent(liveConfigDir, requiredServerArtifacts); err != nil {
-		return false, fmt.Errorf("xp2p: stat %s: %w", liveConfigDir, err)
+		return false, fmt.Errorf("stat %s: %w", liveConfigDir, err)
 	} else if ok {
 		return true, nil
 	}
@@ -124,7 +124,7 @@ func configFilesPresent(dir string, names []string) (bool, error) {
 			if errors.Is(err, os.ErrNotExist) {
 				return false, nil
 			}
-			return false, fmt.Errorf("xp2p: stat %s: %w", path, err)
+			return false, fmt.Errorf("stat %s: %w", path, err)
 		}
 	}
 	return true, nil
@@ -142,12 +142,12 @@ func skipInstallForSystemBinary(installDir string) (bool, error) {
 	info, err := os.Stat(binPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return true, fmt.Errorf("xp2p: xray binary not found at %s (install the system package or set XP2P_XRAY_BIN)", binPath)
+			return true, fmt.Errorf("xray binary not found at %s (install the system package or set XP2P_XRAY_BIN)", binPath)
 		}
-		return true, fmt.Errorf("xp2p: inspect xray binary at %s: %w", binPath, err)
+		return true, fmt.Errorf("inspect xray binary at %s: %w", binPath, err)
 	}
 	if info.IsDir() {
-		return true, fmt.Errorf("xp2p: expected xray binary file at %s", binPath)
+		return true, fmt.Errorf("expected xray binary file at %s", binPath)
 	}
 	return true, nil
 }
@@ -265,7 +265,7 @@ func provisionCredential(ctx context.Context, installOpts server.InstallOptions,
 	user := strings.TrimSpace(userID)
 	pass := strings.TrimSpace(password)
 	if user == "" || pass == "" {
-		return credentialResult{}, errors.New("xp2p: trojan credential requires user and password")
+		return credentialResult{}, errors.New("trojan credential requires user and password")
 	}
 
 	addOpts := server.AddUserOptions{

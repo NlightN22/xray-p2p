@@ -30,11 +30,11 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 	}
 	buf, err := json.Marshal(raw)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: encode server trojan users: %w", err)
+		return nil, fmt.Errorf("encode server trojan users: %w", err)
 	}
 	var users []trojanClient
 	if err := json.Unmarshal(buf, &users); err != nil {
-		return nil, fmt.Errorf("xp2p: decode server trojan users: %w", err)
+		return nil, fmt.Errorf("decode server trojan users: %w", err)
 	}
 	if users == nil {
 		users = []trojanClient{}
@@ -72,11 +72,11 @@ func clientsToInterfaces(clients []trojanClient) []any {
 func buildTrojanLink(host string, port int, password, label string, tlsEnabled bool, pinnedPeerCertSHA256, verifyPeerCertByName string) (string, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
-		return "", errors.New("xp2p: host is required to build trojan link")
+		return "", errors.New("host is required to build trojan link")
 	}
 	password = strings.TrimSpace(password)
 	if password == "" {
-		return "", errors.New("xp2p: password is required to build trojan link")
+		return "", errors.New("password is required to build trojan link")
 	}
 
 	u := &url.URL{
@@ -110,17 +110,17 @@ func buildTrojanLink(host string, port int, password, label string, tlsEnabled b
 func resolveLinkHostFromCertificate(certPath string) ([]string, error) {
 	data, err := os.ReadFile(certPath)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: read certificate %s: %w", certPath, err)
+		return nil, fmt.Errorf("read certificate %s: %w", certPath, err)
 	}
 
 	block, _ := pem.Decode(data)
 	if block == nil || block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("xp2p: decode certificate %s: invalid PEM data", certPath)
+		return nil, fmt.Errorf("decode certificate %s: invalid PEM data", certPath)
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: parse certificate %s: %w", certPath, err)
+		return nil, fmt.Errorf("parse certificate %s: %w", certPath, err)
 	}
 
 	candidates := make([]string, 0, len(cert.DNSNames)+len(cert.IPAddresses)+1)
@@ -149,7 +149,7 @@ func resolveLinkHostFromCertificate(certPath string) ([]string, error) {
 	add(cert.Subject.CommonName)
 
 	if len(candidates) == 0 {
-		return nil, errors.New("xp2p: unable to infer host from certificate")
+		return nil, errors.New("unable to infer host from certificate")
 	}
 	return candidates, nil
 }
@@ -171,7 +171,7 @@ func ResolveLinkHostCandidates(_ string, certPathOverride string) ([]string, err
 		}
 	}
 	if certPath == "" {
-		return nil, errors.New("xp2p: TLS certificate path is not configured")
+		return nil, errors.New("TLS certificate path is not configured")
 	}
 	return resolveLinkHostFromCertificate(certPath)
 }
@@ -214,7 +214,7 @@ func resolveTrojanLinkParams(configPath string, configDir string, hostOverride s
 		host = candidates[0]
 	}
 	if host == "" {
-		return trojanLinkParams{}, errors.New("xp2p: host is required when TLS is disabled")
+		return trojanLinkParams{}, errors.New("host is required when TLS is disabled")
 	}
 
 	pinnedSHA := ""

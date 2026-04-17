@@ -12,7 +12,7 @@ import (
 
 func listDefaultRoutes(family string) ([]string, error) {
 	if _, err := exec.LookPath("ip"); err != nil {
-		return nil, errors.New("xp2p: ip command not found")
+		return nil, errors.New("ip command not found")
 	}
 	out, err := captureIPCommand(family, "route", "show", "default")
 	if err != nil {
@@ -54,7 +54,7 @@ func restoreDefaultRoutes(routes []string, family string) error {
 func ensureDefaultRoute(tunName string, family string) error {
 	name := strings.TrimSpace(tunName)
 	if name == "" {
-		return errors.New("xp2p: tun name is required for full-tunnel default route")
+		return errors.New("tun name is required for full-tunnel default route")
 	}
 	return runIPCommand(family, "route", "replace", "default", "dev", name)
 }
@@ -161,7 +161,7 @@ func runIPCommand(family string, args ...string) error {
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("xp2p: ip %s: %v (%s)", strings.Join(cmdArgs, " "), err, strings.TrimSpace(buf.String()))
+		return fmt.Errorf("ip %s: %v (%s)", strings.Join(cmdArgs, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return nil
 }
@@ -172,7 +172,7 @@ func captureIPCommand(args ...string) (string, error) {
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("xp2p: ip %s: %v (%s)", strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
+		return "", fmt.Errorf("ip %s: %v (%s)", strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return strings.TrimSpace(buf.String()), nil
 }

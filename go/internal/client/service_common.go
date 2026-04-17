@@ -38,7 +38,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		return err
 	}
 	if err := os.MkdirAll(desiredConfigDir, 0o755); err != nil {
-		return fmt.Errorf("xp2p: create config directory: %w", err)
+		return fmt.Errorf("create config directory: %w", err)
 	}
 
 	var diagCancel context.CancelFunc
@@ -153,7 +153,7 @@ func hasClientConfig(liveConfigDir string) (bool, error) {
 	if _, err := os.Stat(config.ApplyRequestPath()); err == nil {
 		return true, nil
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, fmt.Errorf("xp2p: stat apply.request: %w", err)
+		return false, fmt.Errorf("stat apply.request: %w", err)
 	}
 
 	required := []string{layout.XrayConfigFileName, layout.RuntimeMetaFileName}

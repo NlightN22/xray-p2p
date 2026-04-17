@@ -68,4 +68,3 @@ func hasRuleWithDomainAndOutbound(rules []any, domain string, outboundTag string
 	}
 	return false
 }
-

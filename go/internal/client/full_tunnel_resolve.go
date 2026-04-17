@@ -17,6 +17,40 @@ var lookupIPAddrs = func(ctx context.Context, host string) ([]net.IPAddr, error)
 	return net.DefaultResolver.LookupIPAddr(ctx, host)
 }
 
+func resolveEndpointPrimaryAddress(ctx context.Context, host string) (string, error) {
+	if net.ParseIP(host) != nil {
+		return host, nil
+	}
+	resolveCtx := ctx
+	if resolveCtx == nil {
+		resolveCtx = context.Background()
+	}
+	resolveCtx, cancel := context.WithTimeout(resolveCtx, resolverTimeout)
+	addrs, err := lookupIPAddrs(resolveCtx, host)
+	cancel()
+	if err != nil {
+		return "", fmt.Errorf("resolve endpoint %s: %w", host, err)
+	}
+	if len(addrs) == 0 {
+		return "", fmt.Errorf("resolve endpoint %s: no records", host)
+	}
+	for _, addr := range addrs {
+		if addr.IP == nil {
+			continue
+		}
+		if ip4 := addr.IP.To4(); ip4 != nil {
+			return ip4.String(), nil
+		}
+	}
+	for _, addr := range addrs {
+		if addr.IP == nil {
+			continue
+		}
+		return addr.IP.String(), nil
+	}
+	return "", fmt.Errorf("resolve endpoint %s: no records", host)
+}
+
 func resolveEndpointIPs(ctx context.Context, endpoints []clientEndpointRecord, cache map[string]fullTunnelEndpointIPs) ([]string, []string, map[string]fullTunnelEndpointIPs, error) {
 	seen4 := make(map[string]struct{})
 	seen6 := make(map[string]struct{})
@@ -55,9 +89,9 @@ func resolveEndpointIPs(ctx context.Context, endpoints []clientEndpointRecord, c
 				continue
 			}
 			if err != nil {
-				return nil, nil, nil, fmt.Errorf("xp2p: resolve endpoint %s: %w", host, err)
+				return nil, nil, nil, fmt.Errorf("resolve endpoint %s: %w", host, err)
 			}
-			return nil, nil, nil, fmt.Errorf("xp2p: resolve endpoint %s: no records", host)
+			return nil, nil, nil, fmt.Errorf("resolve endpoint %s: no records", host)
 		}
 
 		entry := fullTunnelEndpointIPs{ResolvedAt: now}

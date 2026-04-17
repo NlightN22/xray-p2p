@@ -35,9 +35,9 @@ func RunDeploy(ctx context.Context, opts DeployRunOptions) error {
 
 	if stat, err := os.Stat(configDir); err != nil || !stat.IsDir() {
 		if err != nil {
-			return fmt.Errorf("xp2p: configuration directory not found at %s: %w", configDir, err)
+			return fmt.Errorf("configuration directory not found at %s: %w", configDir, err)
 		}
-		return fmt.Errorf("xp2p: %s is not a directory", configDir)
+		return fmt.Errorf("%s is not a directory", configDir)
 	}
 
 	xrayPath, err := xray.ResolveBinaryPath()

@@ -103,11 +103,11 @@ func decodeServerRedirectRules(doc map[string]any) ([]redirect.Rule, error) {
 	}
 	buf, err := json.Marshal(raw)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: encode server redirect state: %w", err)
+		return nil, fmt.Errorf("encode server redirect state: %w", err)
 	}
 	var rules []redirect.Rule
 	if err := json.Unmarshal(buf, &rules); err != nil {
-		return nil, fmt.Errorf("xp2p: parse server redirect state: %w", err)
+		return nil, fmt.Errorf("parse server redirect state: %w", err)
 	}
 	return rules, nil
 }
@@ -150,7 +150,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 	if len(store.reverse) == 0 {
-		return errors.New("xp2p: no reverse portals configured (add xp2p server users first)")
+		return errors.New("no reverse portals configured (add xp2p server users first)")
 	}
 
 	binding, err := resolveServerRedirectBinding(opts.Tag, opts.Hostname, store.bindings())
@@ -200,7 +200,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return err
 	}
 	if len(store.redirects) == 0 {
-		return errors.New("xp2p: no server redirect rules configured")
+		return errors.New("no server redirect rules configured")
 	}
 
 	target, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
@@ -219,7 +219,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 
 	updated, removed := redirect.RemoveRule(store.redirects, target, tagFilter)
 	if !removed {
-		return fmt.Errorf("xp2p: redirect %s not found", target.Describe())
+		return fmt.Errorf("redirect %s not found", target.Describe())
 	}
 	store.redirects = updated
 	if err := store.saveRedirects(); err != nil {
@@ -285,14 +285,14 @@ func resolveServerRedirectBinding(tag, host string, bindings []redirect.Binding)
 			}
 		}
 		if !found {
-			return redirect.Binding{}, fmt.Errorf("xp2p: outbound tag %q is not registered", trimmedTag)
+			return redirect.Binding{}, fmt.Errorf("outbound tag %q is not registered", trimmedTag)
 		}
 		if trimmedHost != "" && !strings.EqualFold(strings.TrimSpace(matched.Host), trimmedHost) {
 			resolvedHost := matched.Host
 			if strings.TrimSpace(resolvedHost) == "" {
 				resolvedHost = trimmedHost
 			}
-			return redirect.Binding{}, fmt.Errorf("xp2p: tag %q does not match reverse host %q", trimmedTag, resolvedHost)
+			return redirect.Binding{}, fmt.Errorf("tag %q does not match reverse host %q", trimmedTag, resolvedHost)
 		}
 		return matched, nil
 	}
@@ -301,17 +301,17 @@ func resolveServerRedirectBinding(tag, host string, bindings []redirect.Binding)
 	if err != nil {
 		switch {
 		case errors.Is(err, redirect.ErrBindingNotSpecified):
-			return redirect.Binding{}, errors.New("xp2p: --tag or --host is required")
+			return redirect.Binding{}, errors.New("--tag or --host is required")
 		case errors.Is(err, redirect.ErrBindingHostNotFound):
-			return redirect.Binding{}, fmt.Errorf("xp2p: reverse portal host %q not found", strings.TrimSpace(host))
+			return redirect.Binding{}, fmt.Errorf("reverse portal host %q not found", strings.TrimSpace(host))
 		case errors.Is(err, redirect.ErrBindingTagNotFound):
-			return redirect.Binding{}, fmt.Errorf("xp2p: outbound tag %q is not registered", strings.TrimSpace(tag))
+			return redirect.Binding{}, fmt.Errorf("outbound tag %q is not registered", strings.TrimSpace(tag))
 		case errors.Is(err, redirect.ErrBindingTagMismatch):
 			resolvedHost := binding.Host
 			if strings.TrimSpace(resolvedHost) == "" {
 				resolvedHost = strings.TrimSpace(host)
 			}
-			return redirect.Binding{}, fmt.Errorf("xp2p: tag %q does not match reverse host %q", tag, resolvedHost)
+			return redirect.Binding{}, fmt.Errorf("tag %q does not match reverse host %q", tag, resolvedHost)
 		default:
 			return redirect.Binding{}, err
 		}

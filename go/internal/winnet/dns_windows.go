@@ -31,7 +31,7 @@ func GetDNSServers(ctx context.Context, adapterName string) (DNSServers, error) 
 	}
 	var servers DNSServers
 	if err := json.Unmarshal([]byte(raw), &servers); err != nil {
-		return DNSServers{}, fmt.Errorf("xp2p: parse dns servers: %w", err)
+		return DNSServers{}, fmt.Errorf("parse dns servers: %w", err)
 	}
 	return servers, nil
 }

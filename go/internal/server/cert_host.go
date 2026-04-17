@@ -23,7 +23,7 @@ func SetCertificate(ctx context.Context, opts CertificateOptions) error {
 	state, err := normalizeCertificateOptions(opts)
 	if err != nil {
 		if errors.Is(err, errHostRequired) {
-			return fmt.Errorf("xp2p: host is required to generate self-signed certificate (use --host or configure server.host)")
+			return fmt.Errorf("host is required to generate self-signed certificate (use --host or configure server.host)")
 		}
 		return err
 	}
@@ -64,7 +64,7 @@ type certificateState struct {
 	certSource         string
 }
 
-var errHostRequired = errors.New("xp2p: host required")
+var errHostRequired = errors.New("host required")
 
 func normalizeCertificateOptions(opts CertificateOptions) (certificateState, error) {
 	installDir := opts.InstallDir
@@ -138,12 +138,12 @@ func ensureConfigExists(configDir string) error {
 	info, err := os.Stat(configDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: configuration directory %s does not exist (run server install first)", configDir)
+			return fmt.Errorf("configuration directory %s does not exist (run server install first)", configDir)
 		}
-		return fmt.Errorf("xp2p: stat %s: %w", configDir, err)
+		return fmt.Errorf("stat %s: %w", configDir, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("xp2p: %s is not a directory", configDir)
+		return fmt.Errorf("%s is not a directory", configDir)
 	}
 	return nil
 }
@@ -155,18 +155,18 @@ func hasTLSConfigured(stream map[string]any) bool {
 
 func provisionCertificateFiles(state certificateState) error {
 	if err := os.MkdirAll(filepath.Dir(state.certDest), 0o755); err != nil {
-		return fmt.Errorf("xp2p: create tls dir: %w", err)
+		return fmt.Errorf("create tls dir: %w", err)
 	}
 	if !state.force {
 		if _, err := os.Stat(state.certDest); err == nil {
 			return ErrCertificateConfigured
 		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: stat %s: %w", state.certDest, err)
+			return fmt.Errorf("stat %s: %w", state.certDest, err)
 		}
 		if _, err := os.Stat(state.keyDest); err == nil {
 			return ErrCertificateConfigured
 		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: stat %s: %w", state.keyDest, err)
+			return fmt.Errorf("stat %s: %w", state.keyDest, err)
 		}
 	}
 	if state.generateSelfSigned {
@@ -179,10 +179,10 @@ func provisionCertificateFiles(state certificateState) error {
 	}
 	if state.certSource == CertificateSourcePath {
 		if err := copyFile(state.certPath, state.certDest, 0o644); err != nil {
-			return fmt.Errorf("xp2p: copy certificate: %w", err)
+			return fmt.Errorf("copy certificate: %w", err)
 		}
 		if err := copyFile(state.keyPath, state.keyDest, 0o600); err != nil {
-			return fmt.Errorf("xp2p: copy key: %w", err)
+			return fmt.Errorf("copy key: %w", err)
 		}
 	}
 	return nil

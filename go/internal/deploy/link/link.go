@@ -109,15 +109,15 @@ func CanonicalLink(manifest spec.Manifest) (string, error) {
 	}
 	port := strings.TrimSpace(manifest.TrojanPort)
 	if port == "" {
-		return "", fmt.Errorf("xp2p: deploy manifest missing trojan port")
+		return "", fmt.Errorf("deploy manifest missing trojan port")
 	}
 	password := strings.TrimSpace(manifest.TrojanPassword)
 	if password == "" {
-		return "", fmt.Errorf("xp2p: deploy manifest missing trojan password")
+		return "", fmt.Errorf("deploy manifest missing trojan password")
 	}
 	user := strings.TrimSpace(manifest.TrojanUser)
 	if user == "" {
-		return "", fmt.Errorf("xp2p: deploy manifest missing trojan user")
+		return "", fmt.Errorf("deploy manifest missing trojan user")
 	}
 
 	params := url.Values{}
@@ -139,10 +139,10 @@ func CanonicalLink(manifest spec.Manifest) (string, error) {
 // Decrypt decrypts an encrypted manifest using the canonical trojan link as key material.
 func Decrypt(link string, ciphertext []byte) (spec.Manifest, error) {
 	if strings.TrimSpace(link) == "" {
-		return spec.Manifest{}, fmt.Errorf("xp2p: link is empty")
+		return spec.Manifest{}, fmt.Errorf("link is empty")
 	}
 	if len(ciphertext) == 0 {
-		return spec.Manifest{}, fmt.Errorf("xp2p: ciphertext is empty")
+		return spec.Manifest{}, fmt.Errorf("ciphertext is empty")
 	}
 
 	key, nonce := deriveKeyNonce(link)

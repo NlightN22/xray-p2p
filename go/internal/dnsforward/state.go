@@ -28,7 +28,7 @@ func loadState(path string) (state, error) {
 		if os.IsNotExist(err) {
 			return state{}, nil
 		}
-		return state{}, fmt.Errorf("xp2p: read dns-forward state %s: %w", path, err)
+		return state{}, fmt.Errorf("read dns-forward state %s: %w", path, err)
 	}
 	if len(data) == 0 {
 		return state{}, nil
@@ -36,7 +36,7 @@ func loadState(path string) (state, error) {
 
 	var s state
 	if err := json.Unmarshal(data, &s); err != nil {
-		return state{}, fmt.Errorf("xp2p: parse dns-forward state %s: %w", path, err)
+		return state{}, fmt.Errorf("parse dns-forward state %s: %w", path, err)
 	}
 	if s.Entries == nil {
 		s.Entries = make(map[string]stateEntry)
@@ -50,13 +50,13 @@ func (s *state) save(path string) error {
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
-		return fmt.Errorf("xp2p: encode dns-forward state %s: %w", path, err)
+		return fmt.Errorf("encode dns-forward state %s: %w", path, err)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("xp2p: ensure dns-forward state dir %s: %w", filepath.Dir(path), err)
+		return fmt.Errorf("ensure dns-forward state dir %s: %w", filepath.Dir(path), err)
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("xp2p: write dns-forward state %s: %w", path, err)
+		return fmt.Errorf("write dns-forward state %s: %w", path, err)
 	}
 	return nil
 }

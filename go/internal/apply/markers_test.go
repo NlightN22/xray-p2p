@@ -54,4 +54,3 @@ func TestRemoveRoleMarkersPreservesAnyRequest(t *testing.T) {
 		t.Fatalf("expected request preserved, stat err=%v", err)
 	}
 }
-

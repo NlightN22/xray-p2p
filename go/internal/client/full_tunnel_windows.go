@@ -14,7 +14,7 @@ import (
 
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
 	if !opts.TunEnabled || mode != "full" {
 		logging.Info("full-tunnel sync skipped (not enabled)")
 		if windowsRoutesDisabled {
@@ -68,23 +68,23 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			return false, err
 		}
 		if len(defaults) == 0 {
-			return false, errors.New("xp2p: no default routes found for full-tunnel")
+			return false, errors.New("no default routes found for full-tunnel")
 		}
-		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes captured", "routes", defaults)
+		logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default routes captured", "routes", defaults)
 	}
 
 	endpointIPv4 = filterBypassIPv4(endpointIPv4, ifIndex, opts.FullTunnelVerbose)
 	endpointIPv6 = filterBypassIPv6(endpointIPv6, ifIndex, opts.FullTunnelVerbose)
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel endpoints resolved", "ipv4", endpointIPv4, "ipv6", endpointIPv6)
 	bypassRoutes := buildWindowsBypassRoutes(defaults, endpointIPv4, endpointIPv6)
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes prepared", "routes", bypassRoutes)
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel bypass routes prepared", "routes", bypassRoutes)
 
 	defer func() {
 		if err == nil {
 			return
 		}
 		if rollbackErr := rollbackFullTunnel(ctx, paths, opts.FullTunnelVerbose, state, defaults); rollbackErr != nil {
-			err = fmt.Errorf("xp2p: full-tunnel apply failed: %w (rollback failed: %v)", err, rollbackErr)
+			err = fmt.Errorf("full-tunnel apply failed: %w (rollback failed: %v)", err, rollbackErr)
 		}
 	}()
 
@@ -107,7 +107,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			}
 			state.DNSBackup = backup
 		} else {
-			logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel DNS unchanged (no servers configured)")
+			logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel DNS unchanged (no servers configured)")
 		}
 		if err = saveFullTunnelState(paths.fullState, state); err != nil {
 			return false, err
@@ -128,16 +128,16 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 			return false, err
 		}
 	}
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes set to tun", "interface", opts.TunName, "ipv4", hasFamily(defaults, "IPv4"), "ipv6", hasFamily(defaults, "IPv6"))
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default routes set to tun", "interface", opts.TunName, "ipv4", hasFamily(defaults, "IPv4"), "ipv6", hasFamily(defaults, "IPv6"))
 
 	if removeDefaults {
 		for _, route := range defaults {
-			logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default route remove", "route", route)
+			logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default route remove", "route", route)
 			if err = winnet.RemoveRoute(ctx, route); err != nil {
 				return false, err
 			}
 		}
-		logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel default routes removed", "routes", defaults)
+		logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default routes removed", "routes", defaults)
 	}
 
 	if state.Enabled {
@@ -152,7 +152,7 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 	if err = saveFullTunnelState(paths.fullState, state); err != nil {
 		return false, err
 	}
-	logFullTunnelVerbose(opts.FullTunnelVerbose, "xp2p: full-tunnel bypass routes applied", "count", len(bypassRoutes))
+	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel bypass routes applied", "count", len(bypassRoutes))
 	logging.Info("full-tunnel apply complete", "bypass_routes", len(bypassRoutes))
 	return true, nil
 }
@@ -171,12 +171,12 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	if tun := strings.TrimSpace(state.TunName); tun != "" {
 		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv4")
 		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv6")
-		logFullTunnelVerbose(verbose, "xp2p: full-tunnel default routes removed from tun", "interface", tun)
+		logFullTunnelVerbose(verbose, "full-tunnel default routes removed from tun", "interface", tun)
 	}
 	if err := removeWindowsBypassRoutes(ctx, state.BypassRoutes); err != nil {
 		return err
 	}
-	logFullTunnelVerbose(verbose, "xp2p: full-tunnel bypass routes removed", "count", len(state.BypassRoutes))
+	logFullTunnelVerbose(verbose, "full-tunnel bypass routes removed", "count", len(state.BypassRoutes))
 
 	defaults := decodeWindowsRoutes(state)
 	for _, route := range defaults {
@@ -184,7 +184,7 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 			return err
 		}
 	}
-	logFullTunnelVerbose(verbose, "xp2p: full-tunnel default routes restored", "routes", defaults)
+	logFullTunnelVerbose(verbose, "full-tunnel default routes restored", "routes", defaults)
 	if err := restoreWindowsDNS(ctx, state.DNSBackup, state.TunName, verbose); err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func rollbackFullTunnel(ctx context.Context, paths clientPaths, verbose bool, st
 	if err := restoreWindowsDNS(ctx, state.DNSBackup, state.TunName, verbose); err != nil {
 		logging.Warn("full-tunnel DNS rollback failed", "err", err)
 	}
-	return errors.New("xp2p: full-tunnel rollback attempted after restore failure")
+	return errors.New("full-tunnel rollback attempted after restore failure")
 }
 
 func logFullTunnelVerbose(enabled bool, message string, args ...any) {

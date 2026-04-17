@@ -32,16 +32,16 @@ func EnsureTunInterface(name, addr string) error {
 	name = strings.TrimSpace(name)
 	addr = strings.TrimSpace(addr)
 	if name == "" {
-		return errors.New("xp2p: tun name is required for OpenWrt setup")
+		return errors.New("tun name is required for OpenWrt setup")
 	}
 	if addr == "" {
-		return errors.New("xp2p: tun address is required for OpenWrt setup")
+		return errors.New("tun address is required for OpenWrt setup")
 	}
 	if !isOpenWrtSystem() {
 		return nil
 	}
 	if _, err := exec.LookPath("uci"); err != nil {
-		return errors.New("xp2p: uci command not found (OpenWrt required)")
+		return errors.New("uci command not found (OpenWrt required)")
 	}
 
 	managed, exists, err := isManagedInterface(name)
@@ -93,7 +93,7 @@ func EnsureTunRoute(name, cidr string) error {
 		return nil
 	}
 	if _, err := exec.LookPath("ip"); err != nil {
-		return errors.New("xp2p: ip command not found (OpenWrt required)")
+		return errors.New("ip command not found (OpenWrt required)")
 	}
 	var lastErr error
 	for attempt := 0; attempt < 17; attempt++ {
@@ -123,7 +123,7 @@ func RemoveTunRoute(name, cidr string) error {
 		return nil
 	}
 	if _, err := exec.LookPath("ip"); err != nil {
-		return errors.New("xp2p: ip command not found (OpenWrt required)")
+		return errors.New("ip command not found (OpenWrt required)")
 	}
 	if err := runCommand("ip", "route", "del", cidr, "dev", name); err != nil {
 		if isMissingRouteError(err) {
@@ -143,7 +143,7 @@ func RemoveTunInterfaceIfManaged(name string) error {
 		return nil
 	}
 	if _, err := exec.LookPath("uci"); err != nil {
-		return errors.New("xp2p: uci command not found (OpenWrt required)")
+		return errors.New("uci command not found (OpenWrt required)")
 	}
 
 	managed, exists, err := isManagedInterface(name)
@@ -177,7 +177,7 @@ func isManagedInterface(name string) (bool, bool, error) {
 		return false, false, nil
 	}
 	if err != nil {
-		return false, false, fmt.Errorf("xp2p: uci show network.%s: %w", name, err)
+		return false, false, fmt.Errorf("uci show network.%s: %w", name, err)
 	}
 	sections := parseUCIShow(out)
 	section, ok := sections[name]
@@ -262,7 +262,7 @@ func runCommand(name string, args ...string) error {
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("xp2p: %s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
+		return fmt.Errorf("%s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return nil
 }

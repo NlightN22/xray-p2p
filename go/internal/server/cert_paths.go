@@ -12,23 +12,23 @@ import (
 func certificatePathsFromStream(stream map[string]any) (string, string, error) {
 	tlsSettings, ok := stream["tlsSettings"].(map[string]any)
 	if !ok {
-		return "", "", errors.New("xp2p: tlsSettings missing in trojan stream settings")
+		return "", "", errors.New("tlsSettings missing in trojan stream settings")
 	}
 
 	rawCerts, ok := tlsSettings["certificates"].([]any)
 	if !ok || len(rawCerts) == 0 {
-		return "", "", errors.New("xp2p: no TLS certificates configured")
+		return "", "", errors.New("no TLS certificates configured")
 	}
 
 	entry, ok := rawCerts[0].(map[string]any)
 	if !ok {
-		return "", "", errors.New("xp2p: tls certificate entry invalid")
+		return "", "", errors.New("tls certificate entry invalid")
 	}
 
 	rawCertPath, _ := entry["certificateFile"].(string)
 	certPath := strings.TrimSpace(rawCertPath)
 	if certPath == "" {
-		return "", "", errors.New("xp2p: certificateFile missing in TLS configuration")
+		return "", "", errors.New("certificateFile missing in TLS configuration")
 	}
 
 	rawKeyPath, _ := entry["keyFile"].(string)

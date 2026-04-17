@@ -37,13 +37,13 @@ func endpointBypassRules(endpoints []clientEndpointRecord, endpointIPs map[strin
 	for _, endpoint := range endpoints {
 		host := endpointHost(endpoint)
 		if host == "" {
-			return nil, fmt.Errorf("xp2p: endpoint host is required for full-tunnel routing")
+			return nil, fmt.Errorf("endpoint host is required for full-tunnel routing")
 		}
 		entry := endpointIPs[strings.ToLower(host)]
 		ips := uniqueEndpointIPs(entry)
 		if len(ips) == 0 {
 			if requireIPs {
-				return nil, fmt.Errorf("xp2p: endpoint %s has no resolved IPs", host)
+				return nil, fmt.Errorf("endpoint %s has no resolved IPs", host)
 			}
 			rules = append(rules, endpointBypassRule(endpoint))
 			continue

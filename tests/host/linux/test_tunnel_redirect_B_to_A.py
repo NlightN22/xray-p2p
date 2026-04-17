@@ -259,7 +259,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
         for host in (server_host, client_host):
             host.run("sudo -n pkill -f '/usr/bin/xp2p server run' >/dev/null 2>&1 || true")
             host.run("sudo -n pkill -f '/usr/bin/xp2p client run' >/dev/null 2>&1 || true")
-            host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+            host.run(f"sudo -n pkill -f {helpers.XRAY_BINARY.as_posix()!r} >/dev/null 2>&1 || true")
         helpers.remove_path(server_host, SERVER_HEARTBEAT_STATE_FILE)
         helpers.remove_path(client_host, CLIENT_HEARTBEAT_STATE_FILE)
         for cidr in (DIAG_CIDR, DIAG_DOMAIN_CIDR):

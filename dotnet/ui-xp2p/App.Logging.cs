@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 
@@ -26,7 +26,7 @@ internal sealed partial class App
             {
                 Directory.CreateDirectory(logDir);
             }
-            var line = $"{DateTime.UtcNow:O} INFO xp2p: {message}";
+            var line = $"{DateTime.UtcNow:O} INFO {message}";
             File.AppendAllText(logPath, line + Environment.NewLine);
         }
         catch

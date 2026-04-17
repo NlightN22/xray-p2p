@@ -32,4 +32,3 @@ func extractRoutingRules(t *testing.T, doc map[string]any) []any {
 	}
 	return rules
 }
-

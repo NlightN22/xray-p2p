@@ -284,11 +284,11 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
                 helpers.SERVER_CONFIG_DIR_NAME,
                     ), linux_env.xp2p_run_session(
                 client_b,
-                "client",
+                        "client",
                 helpers.INSTALL_ROOT.as_posix(),
                 helpers.CLIENT_CONFIG_DIR_NAME,
                         ):
-                client_socks_port = _socks_port(client_b, helpers.CLIENT_LIVE_DIR / "inbounds.json")
+                client_socks_port = _socks_port(client_b, helpers.CLIENT_LIVE_DIR / "xray.json")
                 _wait_for_port(client_b, client_socks_port)
                 for target in (SERVER_A_IP, SERVER_C_IP):
                     result = client_runner(

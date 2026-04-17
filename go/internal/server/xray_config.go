@@ -23,7 +23,7 @@ func loadServerXrayConfig(configFile string) (xrayconfig.ServerXrayConfig, error
 		return cfg, nil
 	}
 	if errors.Is(err, xrayconfig.ErrConfigMissing) || errors.Is(err, xrayconfig.ErrConfigEmpty) {
-		return cfg, fmt.Errorf("xp2p: server config is missing at %s (run install or deploy first)", configFile)
+		return cfg, fmt.Errorf("server config is missing at %s (run install or deploy first)", configFile)
 	}
 	return cfg, err
 }

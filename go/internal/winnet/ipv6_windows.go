@@ -83,7 +83,7 @@ func runPowerShell(ctx context.Context, script string) (string, error) {
 	cmd := exec.CommandContext(ctx, psPath, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("xp2p: powershell failed: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("powershell failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
 }
@@ -93,8 +93,8 @@ func escapePowerShellString(value string) string {
 }
 
 var (
-	errPowerShellNotFound    = errors.New("xp2p: powershell.exe not found")
-	errPowerShellUnsupported = errors.New("xp2p: NetAdapterBinding cmdlets unavailable")
+	errPowerShellNotFound    = errors.New("powershell.exe not found")
+	errPowerShellUnsupported = errors.New("NetAdapterBinding cmdlets unavailable")
 )
 
 func disableIPv6BindingWithPowerShell(ctx context.Context, adapterName string) (ipv6DisableResult, error) {
@@ -128,7 +128,7 @@ func disableIPv6BindingWithPowerShell(ctx context.Context, adapterName string) (
 	case "noop":
 		return ipv6ResultNoChange, nil
 	default:
-		return ipv6ResultNoChange, fmt.Errorf("xp2p: unexpected PowerShell output: %q", out)
+		return ipv6ResultNoChange, fmt.Errorf("unexpected PowerShell output: %q", out)
 	}
 }
 
@@ -152,12 +152,12 @@ func disableIPv6BindingWithNetsh(ctx context.Context, adapterName string) (ipv6D
 func runNetsh(ctx context.Context, adapterName string) error {
 	netshPath, err := lookPathSystem32("netsh.exe")
 	if err != nil {
-		return fmt.Errorf("xp2p: netsh.exe not found: %w", err)
+		return fmt.Errorf("netsh.exe not found: %w", err)
 	}
 	cmd := exec.CommandContext(ctx, netshPath, "interface", "ipv6", "set", "interface", fmt.Sprintf("interface=%s", adapterName), "disabled")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("xp2p: netsh failed: %w: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("netsh failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -165,12 +165,12 @@ func runNetsh(ctx context.Context, adapterName string) error {
 func getNetshIPv6InterfaceState(ctx context.Context, adapterName string) (string, error) {
 	netshPath, err := lookPathSystem32("netsh.exe")
 	if err != nil {
-		return "", fmt.Errorf("xp2p: netsh.exe not found: %w", err)
+		return "", fmt.Errorf("netsh.exe not found: %w", err)
 	}
 	cmd := exec.CommandContext(ctx, netshPath, "interface", "ipv6", "show", "interface")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("xp2p: netsh show interface failed: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("netsh show interface failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	target := strings.ToLower(strings.TrimSpace(adapterName))
 	for _, line := range strings.Split(string(out), "\n") {
@@ -216,5 +216,5 @@ func lookPathSystem32(name string) (string, error) {
 			}
 		}
 	}
-	return "", fmt.Errorf("xp2p: %s not found", name)
+	return "", fmt.Errorf("%s not found", name)
 }

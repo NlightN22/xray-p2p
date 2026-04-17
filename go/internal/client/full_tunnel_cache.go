@@ -15,4 +15,3 @@ func loadFullTunnelEndpointCache() (map[string]fullTunnelEndpointIPs, error) {
 	}
 	return state.EndpointIPs, nil
 }
-

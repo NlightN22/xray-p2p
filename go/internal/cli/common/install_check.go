@@ -56,7 +56,7 @@ func roleConfigPaths(role InstallRole) (string, string, error) {
 			filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName)),
 			nil
 	default:
-		return "", "", fmt.Errorf("xp2p: unknown install role %q", role)
+		return "", "", fmt.Errorf("unknown install role %q", role)
 	}
 }
 

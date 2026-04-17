@@ -18,7 +18,7 @@ func pendingConfigPath() string {
 
 func pendingConfigDir(configDir string) (string, error) {
 	if strings.TrimSpace(configDir) == "" {
-		return "", fmt.Errorf("xp2p: config dir is empty")
+		return "", fmt.Errorf("config dir is empty")
 	}
 	return filepath.Clean(configDir), nil
 }

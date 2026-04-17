@@ -15,17 +15,17 @@ import (
 )
 
 type runtimeMeta struct {
-	Role       string           `json:"role"`
-	Version    string           `json:"version"`
-	CompiledAt time.Time        `json:"compiled_at"`
-	TunEnabled bool             `json:"tun_enabled"`
-	TunName    string           `json:"tun_name"`
-	TunMTU     int              `json:"tun_mtu"`
-	TunAddr    string           `json:"tun_addr"`
-	TunMode    string           `json:"tun_mode"`
-	DNSServers []string         `json:"dns_servers,omitempty"`
-	FullTag    string           `json:"full_tunnel_tag,omitempty"`
-	Desired    runtimeDesired    `json:"desired"`
+	Role       string         `json:"role"`
+	Version    string         `json:"version"`
+	CompiledAt time.Time      `json:"compiled_at"`
+	TunEnabled bool           `json:"tun_enabled"`
+	TunName    string         `json:"tun_name"`
+	TunMTU     int            `json:"tun_mtu"`
+	TunAddr    string         `json:"tun_addr"`
+	TunMode    string         `json:"tun_mode"`
+	DNSServers []string       `json:"dns_servers,omitempty"`
+	FullTag    string         `json:"full_tunnel_tag,omitempty"`
+	Desired    runtimeDesired `json:"desired"`
 }
 
 type runtimeDesired struct {
@@ -77,7 +77,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 
 	xrayBytes, err := json.MarshalIndent(base, "", "  ")
 	if err != nil {
-		return compiledArtifacts{}, fmt.Errorf("xp2p: encode xray.json: %w", err)
+		return compiledArtifacts{}, fmt.Errorf("encode xray.json: %w", err)
 	}
 	xrayBytes = append(xrayBytes, '\n')
 
@@ -99,7 +99,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 	}
 	metaBytes, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
-		return compiledArtifacts{}, fmt.Errorf("xp2p: encode runtime metadata: %w", err)
+		return compiledArtifacts{}, fmt.Errorf("encode runtime metadata: %w", err)
 	}
 	metaBytes = append(metaBytes, '\n')
 
@@ -197,7 +197,7 @@ func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState
 	for idx, ep := range desired.Endpoints {
 		markerIP, err := markerIPForIndex(idx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("xp2p: allocate diagnostics marker for %s: %w", ep.Tag, err)
+			return nil, nil, fmt.Errorf("allocate diagnostics marker for %s: %w", ep.Tag, err)
 		}
 		markerCIDR := markerIP + "/32"
 		systemRules = append(systemRules, map[string]any{

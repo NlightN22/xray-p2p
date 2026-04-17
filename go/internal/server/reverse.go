@@ -59,7 +59,7 @@ func (s *reverseStore) ensureAvailable(channel serverReverseChannel) error {
 	if strings.EqualFold(existing.UserID, channel.UserID) {
 		return nil
 	}
-	return fmt.Errorf("xp2p: reverse tag %s already assigned to %s", channel.Tag, existing.UserID)
+	return fmt.Errorf("reverse tag %s already assigned to %s", channel.Tag, existing.UserID)
 }
 
 func (s *reverseStore) put(channel serverReverseChannel) {

@@ -46,7 +46,7 @@ func CertificateStateFromConfig(opts CertificateStateOptions) (CertificateState,
 	}
 
 	if certPath == "" || keyPath == "" {
-		state.Issues = append(state.Issues, "xp2p: certificate paths are not configured")
+		state.Issues = append(state.Issues, "certificate paths are not configured")
 		return state, nil
 	}
 
@@ -82,19 +82,19 @@ func loadCertificateDetails(certPath string) (*x509.Certificate, CertificateStat
 	data, err := os.ReadFile(certPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, CertificateStatusMissing, fmt.Errorf("xp2p: certificate %s not found", certPath)
+			return nil, CertificateStatusMissing, fmt.Errorf("certificate %s not found", certPath)
 		}
-		return nil, CertificateStatusParseError, fmt.Errorf("xp2p: read certificate %s: %w", certPath, err)
+		return nil, CertificateStatusParseError, fmt.Errorf("read certificate %s: %w", certPath, err)
 	}
 
 	block, _ := pem.Decode(data)
 	if block == nil || block.Type != "CERTIFICATE" {
-		return nil, CertificateStatusParseError, fmt.Errorf("xp2p: decode certificate %s: invalid PEM data", certPath)
+		return nil, CertificateStatusParseError, fmt.Errorf("decode certificate %s: invalid PEM data", certPath)
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, CertificateStatusParseError, fmt.Errorf("xp2p: parse certificate %s: %w", certPath, err)
+		return nil, CertificateStatusParseError, fmt.Errorf("parse certificate %s: %w", certPath, err)
 	}
 
 	now := time.Now()
@@ -111,9 +111,9 @@ func loadCertificateDetails(certPath string) (*x509.Certificate, CertificateStat
 func probeKeyFile(path string) error {
 	if _, err := os.Stat(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("xp2p: key %s not found", path)
+			return fmt.Errorf("key %s not found", path)
 		}
-		return fmt.Errorf("xp2p: key %s: %w", path, err)
+		return fmt.Errorf("key %s: %w", path, err)
 	}
 	return nil
 }

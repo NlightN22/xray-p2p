@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 import shlex
@@ -113,7 +113,7 @@ def wait_for_any_log_phrase(
     *,
     timeout: int,
 ) -> str:
-    expected_variants = [(phrase, f"xp2p: {phrase}") for phrase in phrases]
+    expected_variants = [(phrase, f"{phrase}") for phrase in phrases]
 
     def _matcher(text: str) -> str | None:
         for phrase, prefixed in expected_variants:
@@ -137,6 +137,10 @@ def wait_for_apply_request_clear(host: Host, *, timeout_seconds: float) -> None:
         if not linux_env.path_exists(host, apply_path):
             return
         time.sleep(1.0)
+    try:
+        helpers.dump_failure_state(host, "apply-request-timeout")
+    except BaseException as exc:
+        print(f"dump_failure_state failed: {exc}", flush=True)
     pytest.fail(f"apply.request not cleared within {timeout_seconds:.0f}s at {apply_path}")
 
 

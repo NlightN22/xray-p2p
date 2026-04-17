@@ -114,13 +114,13 @@ func createFixtureRoot(t *testing.T, root string) {
 		filepath.Join("config-client", "inbounds.json"):        `{"in":1}`,
 		filepath.Join("config-client", "nested", "route.json"): `{"route":true}`,
 		filepath.Join("config-server", "inbounds.json"):        `{"in":2}`,
-		"xp2p-client.toml":          "client=1\n",
-		"xp2p-server.toml":          "server=1\n",
-		filepath.Join("tls", "server", "cert.pem"): "cert\n",
-		filepath.Join("tls", "server", "key.pem"):  "key\n",
+		"xp2p-client.toml":                                            "client=1\n",
+		"xp2p-server.toml":                                            "server=1\n",
+		filepath.Join("tls", "server", "cert.pem"):                    "cert\n",
+		filepath.Join("tls", "server", "key.pem"):                     "key\n",
 		filepath.Join(".state", "live", "config-client", "xray.json"): "{}\n",
 		filepath.Join(".state", "live", "config-server", "xray.json"): "{}\n",
-		"audit.log": "audit\n",
+		"audit.log":  "audit\n",
 		"random.tmp": "tmp\n",
 	}
 
@@ -183,4 +183,3 @@ func writeZipWithEntry(path, name, content string) error {
 	}
 	return writer.Close()
 }
-

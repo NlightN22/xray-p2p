@@ -19,7 +19,7 @@ func loadClientXrayConfig(configFile string) (xrayconfig.ClientXrayConfig, error
 		return cfg, nil
 	}
 	if errors.Is(err, xrayconfig.ErrConfigMissing) || errors.Is(err, xrayconfig.ErrConfigEmpty) {
-		return cfg, fmt.Errorf("xp2p: client config is missing at %s (run install or deploy first)", configFile)
+		return cfg, fmt.Errorf("client config is missing at %s (run install or deploy first)", configFile)
 	}
 	return cfg, err
 }

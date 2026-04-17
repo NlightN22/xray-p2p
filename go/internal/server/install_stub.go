@@ -49,5 +49,5 @@ func GetUserLink(_ context.Context, _ UserLinkOptions) (UserLink, error) {
 
 // ResolveConfigDir is not supported on this platform.
 func ResolveConfigDir(_, _ string) (string, error) {
-	return "", fmt.Errorf("xp2p: server install is not supported on this platform")
+	return "", fmt.Errorf("server install is not supported on this platform")
 }

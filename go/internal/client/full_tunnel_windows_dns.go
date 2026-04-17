@@ -22,12 +22,12 @@ func applyWindowsDNS(ctx context.Context, tunName string, servers []string, verb
 	}
 	target := splitDNSServers(servers)
 	if len(target.IPv4) == 0 && len(target.IPv6) == 0 {
-		return nil, errors.New("xp2p: dns servers list is empty")
+		return nil, errors.New("dns servers list is empty")
 	}
 	if err := winnet.SetDNSServers(ctx, tunName, target); err != nil {
 		return nil, err
 	}
-	logFullTunnelDNSVerbose(verbose, "xp2p: full-tunnel DNS override applied", backup, target, tunName)
+	logFullTunnelDNSVerbose(verbose, "full-tunnel DNS override applied", backup, target, tunName)
 	logging.Info("full-tunnel DNS servers applied", "interface", tunName)
 	return &fullTunnelDNSBackup{
 		WindowsIPv4: backup.IPv4,
@@ -55,7 +55,7 @@ func restoreWindowsDNS(ctx context.Context, backup *fullTunnelDNSBackup, tunName
 	err := winnet.SetDNSServers(ctx, tunName, target)
 	if err == nil {
 		if verbose {
-			logFullTunnelDNSVerbose(verbose, "xp2p: full-tunnel DNS restored", before, target, tunName)
+			logFullTunnelDNSVerbose(verbose, "full-tunnel DNS restored", before, target, tunName)
 		}
 		logging.Info("full-tunnel DNS servers restored", "interface", tunName)
 	}

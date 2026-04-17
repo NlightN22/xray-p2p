@@ -24,12 +24,12 @@ func detectDNSConfig() (string, error) {
 	if hasFile("/etc/config/dhcp") {
 		return "dhcp", nil
 	}
-	return "", errors.New("xp2p: dnsmasq config not found (expected /etc/config/dnsmasq or /etc/config/dhcp)")
+	return "", errors.New("dnsmasq config not found (expected /etc/config/dnsmasq or /etc/config/dhcp)")
 }
 
 func ensureOpenWrt() error {
 	if _, err := exec.LookPath("uci"); err != nil {
-		return errors.New("xp2p: uci command not found (OpenWrt required)")
+		return errors.New("uci command not found (OpenWrt required)")
 	}
 	if os.Getenv("XP2P_DNSFORWARD_FORCE_OPENWRT") == "1" {
 		return nil
@@ -51,13 +51,13 @@ func hasFile(path string) bool {
 func normalizeDomain(domain string) (string, error) {
 	trimmed := strings.TrimSpace(domain)
 	if trimmed == "" {
-		return "", errors.New("xp2p: --domain is required")
+		return "", errors.New("--domain is required")
 	}
 	if strings.HasPrefix(trimmed, ".") || strings.HasSuffix(trimmed, ".") {
 		trimmed = strings.Trim(trimmed, ".")
 	}
 	if !domainPattern.MatchString(trimmed) {
-		return "", fmt.Errorf("xp2p: invalid domain %q", domain)
+		return "", fmt.Errorf("invalid domain %q", domain)
 	}
 	return strings.ToLower(trimmed), nil
 }
@@ -65,7 +65,7 @@ func normalizeDomain(domain string) (string, error) {
 func parseTarget(target string) (netip.Addr, int, error) {
 	addrPort, err := netip.ParseAddrPort(strings.TrimSpace(target))
 	if err != nil {
-		return netip.Addr{}, 0, fmt.Errorf("xp2p: invalid --target %q: %w", target, err)
+		return netip.Addr{}, 0, fmt.Errorf("invalid --target %q: %w", target, err)
 	}
 	return addrPort.Addr(), int(addrPort.Port()), nil
 }

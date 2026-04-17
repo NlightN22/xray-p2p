@@ -61,11 +61,11 @@ func decodeServerForwardRules(doc map[string]any) ([]forward.Rule, error) {
 	}
 	buf, err := json.Marshal(raw)
 	if err != nil {
-		return nil, fmt.Errorf("xp2p: encode server forward state: %w", err)
+		return nil, fmt.Errorf("encode server forward state: %w", err)
 	}
 	var rules []forward.Rule
 	if err := json.Unmarshal(buf, &rules); err != nil {
-		return nil, fmt.Errorf("xp2p: parse server forward state: %w", err)
+		return nil, fmt.Errorf("parse server forward state: %w", err)
 	}
 	return rules, nil
 }
@@ -82,13 +82,13 @@ func (s *serverForwardStore) saveForwards() error {
 func (s *serverForwardStore) add(rule forward.Rule) error {
 	for _, existing := range s.forwards {
 		if existing.ListenPort == rule.ListenPort {
-			return fmt.Errorf("xp2p: forward listener on port %d already exists", rule.ListenPort)
+			return fmt.Errorf("forward listener on port %d already exists", rule.ListenPort)
 		}
 		if strings.EqualFold(existing.Tag, rule.Tag) {
-			return fmt.Errorf("xp2p: forward tag %s already exists", rule.Tag)
+			return fmt.Errorf("forward tag %s already exists", rule.Tag)
 		}
 		if strings.EqualFold(existing.Remark, rule.Remark) {
-			return fmt.Errorf("xp2p: forward remark %s already exists", rule.Remark)
+			return fmt.Errorf("forward remark %s already exists", rule.Remark)
 		}
 	}
 	s.forwards = append(s.forwards, rule)

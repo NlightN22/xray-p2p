@@ -90,7 +90,7 @@ func runCommand(name string, args ...string) error {
 	cmd.Stderr = &buf
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("xp2p: %s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
+		return fmt.Errorf("%s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return nil
 }

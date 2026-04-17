@@ -65,7 +65,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 	if len(state.Endpoints) == 0 {
-		return errors.New("xp2p: no client endpoints found (run xp2p client install first)")
+		return errors.New("no client endpoints found (run xp2p client install first)")
 	}
 
 	tag, _, err := resolveRedirectTarget(opts.Tag, opts.Hostname, state.Endpoints)
@@ -78,7 +78,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return err
 	}
 	if ruleTarget.Kind == redirect.KindCIDR && isDefaultRoute(ruleTarget.Value) {
-		return errors.New("xp2p: default route redirects are reserved for tun-mode full")
+		return errors.New("default route redirects are reserved for tun-mode full")
 	}
 	rule := redirect.Rule{
 		OutboundTag: tag,
@@ -130,7 +130,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return err
 	}
 	if len(state.Redirects) == 0 {
-		return errors.New("xp2p: no redirect rules configured")
+		return errors.New("no redirect rules configured")
 	}
 
 	ruleTarget, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
@@ -150,7 +150,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 
 	updated, removed := state.removeRedirect(ruleTarget, tagFilter)
 	if !removed {
-		return fmt.Errorf("xp2p: redirect %s not found", ruleTarget.Describe())
+		return fmt.Errorf("redirect %s not found", ruleTarget.Describe())
 	}
 	state.Redirects = updated
 	if err := state.save(configFile); err != nil {
@@ -226,17 +226,17 @@ func resolveRedirectTarget(tag, host string, endpoints []clientEndpointRecord) (
 	if err != nil {
 		switch {
 		case errors.Is(err, redirect.ErrBindingNotSpecified):
-			return "", "", errors.New("xp2p: --tag or --host is required")
+			return "", "", errors.New("--tag or --host is required")
 		case errors.Is(err, redirect.ErrBindingHostNotFound):
-			return "", "", fmt.Errorf("xp2p: client endpoint %q not found", strings.TrimSpace(host))
+			return "", "", fmt.Errorf("client endpoint %q not found", strings.TrimSpace(host))
 		case errors.Is(err, redirect.ErrBindingTagNotFound):
-			return "", "", fmt.Errorf("xp2p: outbound tag %q is not registered", strings.TrimSpace(tag))
+			return "", "", fmt.Errorf("outbound tag %q is not registered", strings.TrimSpace(tag))
 		case errors.Is(err, redirect.ErrBindingTagMismatch):
 			resolvedHost := binding.Host
 			if strings.TrimSpace(resolvedHost) == "" {
 				resolvedHost = strings.TrimSpace(host)
 			}
-			return "", "", fmt.Errorf("xp2p: tag %q does not match host %q", tag, resolvedHost)
+			return "", "", fmt.Errorf("tag %q does not match host %q", tag, resolvedHost)
 		default:
 			return "", "", err
 		}

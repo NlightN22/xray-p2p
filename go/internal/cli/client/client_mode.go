@@ -294,12 +294,12 @@ func resolveFullTunnelBinding(installDir, configDir, tag, host, existingTag stri
 			return strings.TrimSpace(existingTag), "", nil
 		}
 		if quiet {
-			return "", "", errors.New("xp2p: --tag or --host is required for full-tunnel")
+			return "", "", errors.New("--tag or --host is required for full-tunnel")
 		}
 		selection, err := promptClientRedirectBinding(installDir, configDir)
 		if err != nil {
 			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
-				return "", "", errors.New("xp2p: --tag or --host is required for full-tunnel")
+				return "", "", errors.New("--tag or --host is required for full-tunnel")
 			}
 			return "", "", err
 		}
@@ -314,11 +314,11 @@ func resolveFullTunnelBinding(installDir, configDir, tag, host, existingTag stri
 	if err != nil {
 		switch {
 		case errors.Is(err, redirect.ErrBindingHostNotFound):
-			return "", "", errors.New("xp2p: client endpoint not found")
+			return "", "", errors.New("client endpoint not found")
 		case errors.Is(err, redirect.ErrBindingTagNotFound):
-			return "", "", errors.New("xp2p: outbound tag is not registered")
+			return "", "", errors.New("outbound tag is not registered")
 		case errors.Is(err, redirect.ErrBindingTagMismatch):
-			return binding.Tag, binding.Host, errors.New("xp2p: tag does not match host")
+			return binding.Tag, binding.Host, errors.New("tag does not match host")
 		default:
 			return "", "", err
 		}

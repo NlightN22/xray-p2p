@@ -16,16 +16,16 @@ func EnsureTunInterface(name, addr string, mtu int) error {
 	name = strings.TrimSpace(name)
 	addr = strings.TrimSpace(addr)
 	if name == "" {
-		return errors.New("xp2p: tun name is required for Linux setup")
+		return errors.New("tun name is required for Linux setup")
 	}
 	if addr == "" {
-		return errors.New("xp2p: tun address is required for Linux setup")
+		return errors.New("tun address is required for Linux setup")
 	}
 	if isOpenWrtSystem() {
 		return nil
 	}
 	if _, err := execLookPath("ip"); err != nil {
-		return errors.New("xp2p: ip command not found")
+		return errors.New("ip command not found")
 	}
 	if !linkExists(name) {
 		if err := runCommand("ip", "tuntap", "add", "dev", name, "mode", "tun"); err != nil {
@@ -53,16 +53,16 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 	name = strings.TrimSpace(name)
 	addr = strings.TrimSpace(addr)
 	if name == "" {
-		return errors.New("xp2p: tun name is required for Linux setup")
+		return errors.New("tun name is required for Linux setup")
 	}
 	if addr == "" {
-		return errors.New("xp2p: tun address is required for Linux setup")
+		return errors.New("tun address is required for Linux setup")
 	}
 	if isOpenWrtSystem() {
 		return nil
 	}
 	if _, err := execLookPath("ip"); err != nil {
-		return errors.New("xp2p: ip command not found")
+		return errors.New("ip command not found")
 	}
 
 	deadline := time.Now().Add(12 * time.Second)
@@ -85,7 +85,7 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("xp2p: tun interface %s not found", name)
+	return fmt.Errorf("tun interface %s not found", name)
 }
 
 func EnsureRoute(name, cidr string) error {
@@ -98,7 +98,7 @@ func EnsureRoute(name, cidr string) error {
 		return nil
 	}
 	if _, err := execLookPath("ip"); err != nil {
-		return errors.New("xp2p: ip command not found")
+		return errors.New("ip command not found")
 	}
 	return runCommand("ip", "route", "replace", cidr, "dev", name)
 }
@@ -113,7 +113,7 @@ func RemoveRoute(name, cidr string) error {
 		return nil
 	}
 	if _, err := execLookPath("ip"); err != nil {
-		return errors.New("xp2p: ip command not found")
+		return errors.New("ip command not found")
 	}
 	if err := runCommand("ip", "route", "del", cidr, "dev", name); err != nil {
 		if isMissingRouteError(err) {
@@ -167,7 +167,7 @@ func runCommand(name string, args ...string) error {
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("xp2p: %s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
+		return fmt.Errorf("%s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return nil
 }

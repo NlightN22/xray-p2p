@@ -82,7 +82,7 @@ def _reset_host(host) -> None:
         "do sudo -n fuser -k ${p}/tcp ${p}/udp >/dev/null 2>&1 || true; done"
     )
     host.run("sudo -n pkill -f '/usr/bin/xp2p' >/dev/null 2>&1 || true")
-    host.run("sudo -n pkill -f '/etc/xp2p/bin/xray' >/dev/null 2>&1 || true")
+    host.run(f"sudo -n pkill -f {helpers.XRAY_BINARY.as_posix()!r} >/dev/null 2>&1 || true")
     host.run("sudo -n nft delete table inet xray_transparent >/dev/null 2>&1 || true")
     host.run("sudo -n rm -f /etc/nftables.d/xray-transparent.nft /etc/xp2p/nftables/xray-transparent.nft >/dev/null 2>&1 || true")
     host.run(

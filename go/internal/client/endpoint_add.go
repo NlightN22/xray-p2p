@@ -22,8 +22,13 @@ func AddEndpoint(ctx context.Context, opts InstallOptions) error {
 	if err != nil {
 		return err
 	}
+	resolved, err := resolveEndpointPrimaryAddress(ctx, base.address)
+	if err != nil {
+		return err
+	}
 	_, err = applyClientEndpointConfig("", base.configFile, endpointConfig{
 		Hostname:              base.address,
+		Address:               resolved,
 		Port:                  base.portVal,
 		User:                  base.user,
 		Password:              base.password,

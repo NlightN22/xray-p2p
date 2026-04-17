@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import time
 from pathlib import PurePosixPath
@@ -125,7 +125,7 @@ def wait_for_log_value_linux(
 
 
 def wait_for_log_phrase_linux(host: Host, path: PurePosixPath, phrase: str, *, timeout: int) -> None:
-    expected_variants = (phrase, f"xp2p: {phrase}")
+    expected_variants = (phrase, f"{phrase}")
 
     def _matcher(text: str) -> bool | None:
         for variant in expected_variants:

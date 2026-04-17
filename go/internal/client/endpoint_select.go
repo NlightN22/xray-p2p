@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	ErrClientEndpointsMissing = errors.New("xp2p: no client endpoints found")
-	ErrClientEndpointNotFound = errors.New("xp2p: client endpoint not found")
+	ErrClientEndpointsMissing = errors.New("no client endpoints found")
+	ErrClientEndpointNotFound = errors.New("client endpoint not found")
 )
 
 func ResolveMarkerTarget(installDir, host, tag string, index int) (string, int, error) {
@@ -21,6 +21,9 @@ func ResolveMarkerTarget(installDir, host, tag string, index int) (string, int, 
 	}
 	meta, err := loadLiveRuntimeMeta(liveDir)
 	if err != nil {
+		if strings.Contains(err.Error(), "runtime metadata missing at ") {
+			return "", 0, endpointsMissingError{}
+		}
 		return "", 0, err
 	}
 	state := runtimeDesiredToClientInstallState(meta.Desired)
@@ -42,15 +45,15 @@ func ResolveMarkerTarget(installDir, host, tag string, index int) (string, int, 
 func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, index int) (clientEndpointRecord, int, error) {
 	trimmedHost := strings.TrimSpace(host)
 	if trimmedHost == "" {
-		return clientEndpointRecord{}, -1, errors.New("xp2p: host is required")
+		return clientEndpointRecord{}, -1, errors.New("host is required")
 	}
 
 	trimmedTag := strings.TrimSpace(tag)
 	if trimmedTag != "" && index > 0 {
-		return clientEndpointRecord{}, -1, errors.New("xp2p: --endpoint and --index cannot be used together")
+		return clientEndpointRecord{}, -1, errors.New("--endpoint and --index cannot be used together")
 	}
 	if index < 0 {
-		return clientEndpointRecord{}, -1, fmt.Errorf("xp2p: endpoint index %d is invalid", index)
+		return clientEndpointRecord{}, -1, fmt.Errorf("endpoint index %d is invalid", index)
 	}
 
 	matches := make([]indexedEndpoint, 0, len(endpoints))
@@ -70,7 +73,7 @@ func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, in
 				return ep, idx, nil
 			}
 		}
-		return clientEndpointRecord{}, -1, fmt.Errorf("xp2p: outbound tag %q is not registered", trimmedTag)
+		return clientEndpointRecord{}, -1, fmt.Errorf("outbound tag %q is not registered", trimmedTag)
 	}
 
 	if len(matches) == 0 && len(userMatches) > 0 {
@@ -82,7 +85,7 @@ func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, in
 
 	if index > 0 {
 		if index > len(matches) {
-			return clientEndpointRecord{}, -1, fmt.Errorf("xp2p: endpoint index %d is out of range for host %q", index, trimmedHost)
+			return clientEndpointRecord{}, -1, fmt.Errorf("endpoint index %d is out of range for host %q", index, trimmedHost)
 		}
 		selected := matches[index-1]
 		return selected.record, selected.index, nil
@@ -102,7 +105,7 @@ type endpointNotFoundError struct {
 }
 
 func (e endpointNotFoundError) Error() string {
-	return fmt.Sprintf("xp2p: client endpoint %q not found", e.host)
+	return fmt.Sprintf("client endpoint %q not found", e.host)
 }
 
 func (e endpointNotFoundError) Is(target error) bool {
@@ -112,7 +115,7 @@ func (e endpointNotFoundError) Is(target error) bool {
 type endpointsMissingError struct{}
 
 func (e endpointsMissingError) Error() string {
-	return "xp2p: no client endpoints found (run xp2p client install first)"
+	return "no client endpoints found (run xp2p client install first)"
 }
 
 func (e endpointsMissingError) Is(target error) bool {

@@ -160,4 +160,3 @@ func RemoveRedirect(_ RedirectRemoveOptions) error {
 func ListRedirects(_ RedirectListOptions) ([]RedirectRecord, error) {
 	return nil, ErrUnsupported
 }
-

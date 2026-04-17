@@ -224,16 +224,8 @@ func (h *consoleHandler) Handle(_ context.Context, record slog.Record) error {
 	b.WriteString(record.Time.UTC().Format(time.RFC3339))
 	b.WriteString(" ")
 	b.WriteString(strings.ToUpper(record.Level.String()))
-	if service != "" {
-		b.WriteString(" ")
-		b.WriteString(service)
-	}
 	if message != "" {
-		if service != "" {
-			b.WriteString(": ")
-		} else {
-			b.WriteString(" ")
-		}
+		b.WriteString(" ")
 		b.WriteString(message)
 	}
 	if len(attrTexts) > 0 {

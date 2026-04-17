@@ -12,16 +12,16 @@ import (
 
 func TestLoggerIncludesServiceAttribute(t *testing.T) {
 	var buf bytes.Buffer
-	Configure(Options{Level: "info", Output: &buf})
+	Configure(Options{Level: "info", Output: &buf, Format: FormatJSON})
 	t.Cleanup(func() {
 		SetLevel("info")
-		Configure(Options{Output: os.Stderr})
+		Configure(Options{Output: os.Stderr, Format: FormatText})
 	})
 
 	Logger().Info("started")
 	out := buf.String()
-	if !strings.Contains(out, "INFO xp2p: started") {
-		t.Fatalf("expected message in log output, got %q", out)
+	if !strings.Contains(out, `"msg":"started"`) || !strings.Contains(out, `"service":"xp2p"`) {
+		t.Fatalf("expected message and service attribute in log output, got %q", out)
 	}
 }
 
@@ -174,8 +174,8 @@ func TestConsoleHandlerTrimsServicePrefixAndFormatsErrors(t *testing.T) {
 	}
 
 	out := buf.String()
-	if strings.Count(out, "xp2p") != 1 {
-		t.Fatalf("expected single service prefix, got %q", out)
+	if strings.Contains(out, "xp2p") {
+		t.Fatalf("expected no service prefix in console output, got %q", out)
 	}
 	if strings.Count(out, "server install: failed to resolve public host") != 1 {
 		t.Fatalf("expected message kept once, got %q", out)

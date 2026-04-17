@@ -11,11 +11,11 @@ FEED_DIR="/etc/opkg/customfeeds.d"
 FEED_FALLBACK="${FEED_DIR}/99-xp2p.conf"
 
 log() {
-    echo "[xp2p] $*"
+    echo "$*"
 }
 
 fail() {
-    echo "[xp2p] ERROR: $*" >&2
+    echo "ERROR: $*" >&2
     exit 1
 }
 

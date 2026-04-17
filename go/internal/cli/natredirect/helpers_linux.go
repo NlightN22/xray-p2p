@@ -177,7 +177,7 @@ func ensureProxyMode(cfg config.Config, inboundsPath string) error {
 			}
 		}
 		if hasTun, err := inboundsHasTun(checked); err == nil && hasTun {
-			return fmt.Errorf("xp2p: nat-redirect is available only in proxy mode (disable tun to proceed)")
+			return fmt.Errorf("nat-redirect is available only in proxy mode (disable tun to proceed)")
 		}
 	}
 	clientTun, serverTun, err := resolveTunState(cfg)
@@ -185,7 +185,7 @@ func ensureProxyMode(cfg config.Config, inboundsPath string) error {
 		return err
 	}
 	if clientTun && serverTun {
-		return fmt.Errorf("xp2p: nat-redirect is available only in proxy mode (set tun_enabled=false)")
+		return fmt.Errorf("nat-redirect is available only in proxy mode (set tun_enabled=false)")
 	}
 	return nil
 }
@@ -269,7 +269,7 @@ func inboundsHasTun(path string) (bool, error) {
 		return false, err
 	}
 	if info.IsDir() {
-		return false, fmt.Errorf("xp2p: inbounds path %s is a directory", path)
+		return false, fmt.Errorf("inbounds path %s is a directory", path)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

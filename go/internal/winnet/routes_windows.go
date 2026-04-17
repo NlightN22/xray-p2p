@@ -27,14 +27,14 @@ type Route struct {
 	AddressFamily     string `json:"AddressFamily"`
 }
 
-var ErrInterfaceNotFound = errors.New("xp2p: interface not found")
+var ErrInterfaceNotFound = errors.New("interface not found")
 
 func DefaultRoutes(ctx context.Context) ([]Route, error) {
 	routes, err := defaultRoutesFromIPHelper()
 	if err == nil {
 		return routes, nil
 	}
-	return nil, fmt.Errorf("xp2p: route lookup failed: %w", err)
+	return nil, fmt.Errorf("route lookup failed: %w", err)
 }
 
 // BestRouteForIP returns the most specific route that matches the given IP.
@@ -203,7 +203,7 @@ func ApplyRoute(ctx context.Context, route Route) error {
 	}
 	nextHop := strings.TrimSpace(route.NextHop)
 	if nextHop == "" {
-		return fmt.Errorf("xp2p: next hop required for %s", dest)
+		return fmt.Errorf("next hop required for %s", dest)
 	}
 	if err := applyRouteNative(route); err != nil {
 		if isIPHelperUnsupported(err) {
@@ -443,7 +443,7 @@ func removeRouteLegacy(ctx context.Context, route Route) error {
 func buildRouteArgs(action string, route Route) ([]string, error) {
 	dest := strings.TrimSpace(route.DestinationPrefix)
 	if dest == "" {
-		return nil, errors.New("xp2p: route destination required")
+		return nil, errors.New("route destination required")
 	}
 	nextHop := strings.TrimSpace(route.NextHop)
 	if nextHop == "" {
@@ -451,12 +451,12 @@ func buildRouteArgs(action string, route Route) ([]string, error) {
 	}
 	ifIndex := route.InterfaceIndex
 	if ifIndex <= 0 {
-		return nil, errors.New("xp2p: interface index required")
+		return nil, errors.New("interface index required")
 	}
 	metric := route.RouteMetric
 	ip, ipNet, err := net.ParseCIDR(dest)
 	if err != nil || ipNet == nil || ip == nil {
-		return nil, fmt.Errorf("xp2p: parse route destination: %s", dest)
+		return nil, fmt.Errorf("parse route destination: %s", dest)
 	}
 	if ip.To4() == nil {
 		args := []string{"-6", action, dest, nextHop, "if", strconv.Itoa(ifIndex)}
@@ -490,7 +490,7 @@ func runRouteCommand(ctx context.Context, args []string, ignoreNotFound bool) er
 			return nil
 		}
 	}
-	return fmt.Errorf("xp2p: route.exe failed: %w: %s", err, output)
+	return fmt.Errorf("route.exe failed: %w: %s", err, output)
 }
 
 var (
@@ -539,24 +539,24 @@ func mibRouteFromRoute(route Route) (windows.MibIpForwardRow2, error) {
 	dest := strings.TrimSpace(route.DestinationPrefix)
 	nextHop := strings.TrimSpace(route.NextHop)
 	if dest == "" || nextHop == "" {
-		return windows.MibIpForwardRow2{}, errors.New("xp2p: route destination and next hop required")
+		return windows.MibIpForwardRow2{}, errors.New("route destination and next hop required")
 	}
 	ip, ipNet, err := net.ParseCIDR(dest)
 	if err != nil || ipNet == nil || ip == nil {
-		return windows.MibIpForwardRow2{}, fmt.Errorf("xp2p: parse route destination: %s", dest)
+		return windows.MibIpForwardRow2{}, fmt.Errorf("parse route destination: %s", dest)
 	}
 	ones, _ := ipNet.Mask.Size()
 	prefix, _, ok := rawSockaddrFromIP(ip)
 	if !ok {
-		return windows.MibIpForwardRow2{}, fmt.Errorf("xp2p: parse route destination: %s", dest)
+		return windows.MibIpForwardRow2{}, fmt.Errorf("parse route destination: %s", dest)
 	}
 	nextHopIP := net.ParseIP(nextHop)
 	if nextHopIP == nil {
-		return windows.MibIpForwardRow2{}, fmt.Errorf("xp2p: parse route next hop: %s", nextHop)
+		return windows.MibIpForwardRow2{}, fmt.Errorf("parse route next hop: %s", nextHop)
 	}
 	nextHopRaw, _, ok := rawSockaddrFromIP(nextHopIP)
 	if !ok {
-		return windows.MibIpForwardRow2{}, fmt.Errorf("xp2p: parse route next hop: %s", nextHop)
+		return windows.MibIpForwardRow2{}, fmt.Errorf("parse route next hop: %s", nextHop)
 	}
 	var row windows.MibIpForwardRow2
 	if err := initializeIpForwardEntry2(&row); err != nil {
@@ -725,7 +725,7 @@ func wrapRouteError(err error) error {
 	if strings.Contains(lower, "access is denied") ||
 		strings.Contains(lower, "access denied") ||
 		strings.Contains(lower, "requested operation requires elevation") {
-		return fmt.Errorf("xp2p: route change requires administrator privileges: %w", err)
+		return fmt.Errorf("route change requires administrator privileges: %w", err)
 	}
 	return err
 }

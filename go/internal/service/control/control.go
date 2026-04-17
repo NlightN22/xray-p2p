@@ -16,7 +16,7 @@ const (
 )
 
 // ErrUnsupported indicates that the current platform has no service manager integration.
-var ErrUnsupported = errors.New("xp2p: service manager is not available on this platform")
+var ErrUnsupported = errors.New("service manager is not available on this platform")
 
 // Status describes the current unit state.
 type Status struct {

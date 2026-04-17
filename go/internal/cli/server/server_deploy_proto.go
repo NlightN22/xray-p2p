@@ -226,23 +226,25 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		return
 	}
 	if installed {
-		required := []string{
-			"inbounds.json",
-			"outbounds.json",
-			"routing.json",
-			"logs.json",
-		}
-		liveConfigDir, err := config.LiveConfigDir(resolvedConfigDir)
-		if err != nil {
+		required := []string{}
+		if liveXray, err := config.LiveXrayPath(apply.RoleServer); err != nil {
 			_ = writeLine(rw, "ERR "+err.Error())
 			notifyFailure(results)
 			return
+		} else {
+			required = append(required, liveXray)
 		}
-		for _, name := range required {
-			path := filepath.Join(liveConfigDir, name)
+		if liveMeta, err := config.LiveRuntimeMetaPath(apply.RoleServer); err != nil {
+			_ = writeLine(rw, "ERR "+err.Error())
+			notifyFailure(results)
+			return
+		} else {
+			required = append(required, liveMeta)
+		}
+		for _, path := range required {
 			if _, err := os.Stat(path); err != nil {
 				if errors.Is(err, os.ErrNotExist) {
-					_ = writeLine(rw, "ERR xp2p: server install incomplete: missing "+name)
+					_ = writeLine(rw, "ERR server install incomplete: missing "+filepath.Base(path))
 					notifyFailure(results)
 					return
 				}
@@ -482,15 +484,15 @@ func (s *deployServer) buildDeployRunPlan(ctx context.Context, liveConfigDir str
 	}
 	tmpDir, err := os.MkdirTemp("", "xp2p-server-deploy-")
 	if err != nil {
-		return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: create temp dir: %w", err)
+		return deployRunPlan{}, fmt.Errorf("server deploy: create temp dir: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, layout.XrayConfigFileName), artifacts.XrayJSON, 0o644); err != nil {
 		_ = os.RemoveAll(tmpDir)
-		return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: write xray.json: %w", err)
+		return deployRunPlan{}, fmt.Errorf("server deploy: write xray.json: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, layout.RuntimeMetaFileName), artifacts.RuntimeMetaJSON, 0o644); err != nil {
 		_ = os.RemoveAll(tmpDir)
-		return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: write runtime.json: %w", err)
+		return deployRunPlan{}, fmt.Errorf("server deploy: write runtime.json: %w", err)
 	}
 	for name, data := range artifacts.Extra {
 		if strings.TrimSpace(name) == "" {
@@ -498,7 +500,7 @@ func (s *deployServer) buildDeployRunPlan(ctx context.Context, liveConfigDir str
 		}
 		if err := os.WriteFile(filepath.Join(tmpDir, filepath.Clean(name)), data, 0o644); err != nil {
 			_ = os.RemoveAll(tmpDir)
-			return deployRunPlan{}, fmt.Errorf("xp2p: server deploy: write artifact %s: %w", name, err)
+			return deployRunPlan{}, fmt.Errorf("server deploy: write artifact %s: %w", name, err)
 		}
 	}
 	return deployRunPlan{runConfigDir: tmpDir, cleanupDir: tmpDir}, nil
