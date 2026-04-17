@@ -36,6 +36,14 @@ dns_servers = ["1.1.1.1", "8.8.8.8"]
 
 On Windows Server 2016, the Wintun adapter can intermittently stay disconnected after restarts (IPv4 remains `Tentative`, routes do not apply). When this happens, `xp2p` keeps the mode change pending and retries through service restarts until the adapter reports `up`/`preferred`. Cleanup runs before each start. The following xray logs are expected during adapter recreation: `Failed to find matching adapter name`, `Removed orphaned adapter`.
 
+#### Full-tunnel stability contract
+
+Full-tunnel is a service runtime mode and must remain armed while Desired mode is full-tunnel.
+
+- Service restarts triggered by apply/watchers must not roll back routes or DNS if Desired remains `tun_mode=full`.
+- When the adapter is not ready (`Tentative` / disconnected / missing IPv4), the service keeps full-tunnel in a pending state and retries adapter bring-up across restarts (with rate limits).
+- Routes and DNS override should be applied only after the adapter reports `up`/`preferred` to avoid connectivity flapping.
+
 ## DNS per-domain routing
 
 ```sh

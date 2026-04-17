@@ -138,6 +138,39 @@ OS changes are applied only by the service layer:
 
 CLI commands and UI flows update Desired inputs and request apply. They do not touch OS-level state directly.
 
+## Runtime OS State Contract (TUN / routes / DNS)
+
+This section defines the runtime contract for service-owned OS state to avoid visible flapping during restarts.
+
+### Ownership and Scope
+
+- The service layer owns OS state (TUN, routes, DNS).
+- The service layer must keep OS state consistent with the current Desired runtime mode.
+- CLI/UI/manual edits must not directly modify OS state.
+
+### Mode-Driven Transitions
+
+OS state transitions are driven by mode transitions, not by internal restarts:
+
+- Enter full-tunnel (`client.tun_enabled=true` and `client.tun_mode=full`):
+  - Replace default routes with the TUN interface.
+  - Add bypass routes to all configured endpoints.
+  - Apply DNS override to `client.dns_servers` (when configured).
+  - Keep full-tunnel active while Desired remains in full-tunnel mode.
+- Exit full-tunnel (Desired changes away from full-tunnel):
+  - Restore baseline default routes and remove bypass routes.
+  - Restore baseline DNS.
+- Service stop/uninstall:
+  - Restore baseline routes/DNS (best effort) before exiting.
+
+### Restart and Cancellation Semantics
+
+Service restarts caused by `apply.request`, file watchers, health checks, or crash recovery must not cause
+route/DNS rollback if Desired remains in full-tunnel mode.
+
+- A child-run cancellation (graceful restart) is not a mode change.
+- Rollback/restore is allowed only on explicit stop, explicit mode switch, or hard failures that require leaving the mode.
+
 ## Mode Switching
 
 Mode changes (split/full):

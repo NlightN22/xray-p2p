@@ -274,7 +274,51 @@ def _wait_for_full_tunnel(
         )
         return ok, debug
 
-    _wait_for_condition("Full-tunnel state", _check)
+    try:
+        _wait_for_condition("Full-tunnel state", _check)
+    except AssertionError:
+        _dump_full_tunnel_debug(host, tun_name)
+        helpers.dump_failure_state(host, "tun_mode_full_wait_for_full_tunnel")
+        raise
+
+
+def _dump_full_tunnel_debug(host, tun_name: str) -> None:
+    print("==== FULL-TUNNEL DEBUG DUMP ====")
+    script = " ; ".join(
+        (
+            "set -eu",
+            "echo '--- time ---'",
+            "date -u || true",
+            "echo '--- interfaces ---'",
+            "ip link show 2>/dev/null || true",
+            f"echo '--- tun link ({tun_name}) ---'",
+            f"ip link show dev {shlex.quote(tun_name)} 2>/dev/null || true",
+            f"ip addr show dev {shlex.quote(tun_name)} 2>/dev/null || true",
+            "echo '--- routes (ipv4) ---'",
+            "ip -4 route show 2>/dev/null || true",
+            "echo '--- routes (ipv6) ---'",
+            "ip -6 route show 2>/dev/null || true",
+            "echo '--- rules ---'",
+            "ip rule show 2>/dev/null || true",
+            "echo '--- resolv.conf ---'",
+            "ls -la /etc/resolv.conf 2>/dev/null || true",
+            "cat /etc/resolv.conf 2>/dev/null || true",
+            "echo '--- systemd-resolved ---'",
+            "systemctl --no-pager --full status systemd-resolved 2>/dev/null || true",
+            "resolvectl status 2>/dev/null || true",
+            "journalctl --no-pager -u systemd-resolved -n 200 2>/dev/null || true",
+            "echo '--- tun-full state file ---'",
+            f"ls -la {shlex.quote(FULL_STATE_FILE.as_posix())} 2>/dev/null || true",
+            f"cat {shlex.quote(FULL_STATE_FILE.as_posix())} 2>/dev/null || true",
+            "true",
+        )
+    )
+    result = host.run(f"sudo -n /bin/sh -c {shlex.quote(script)}")
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
+    print("==== END FULL-TUNNEL DEBUG DUMP ====")
 
 
 def _wait_for_rollback(
