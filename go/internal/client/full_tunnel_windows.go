@@ -5,30 +5,24 @@ package client
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
 
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
+	return ensureFullTunnel(ctx, paths, opts, desired)
+}
+
+func ensureFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel sync start", "tun_enabled", opts.TunEnabled, "tun_mode", mode, "tun_name", opts.TunName)
-	if !opts.TunEnabled || mode != "full" {
-		logging.Info("full-tunnel sync skipped (not enabled)")
-		if windowsRoutesDisabled {
-			logging.Info("windows route apply disabled; skipping full-tunnel restore")
-		} else {
-			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-				return false, err
-			}
-		}
-		return false, nil
-	}
 	if strings.TrimSpace(opts.FullTunnelTag) == "" {
 		logging.Warn("full-tunnel outbound tag missing; routing rule not added")
 	}
+
 	state, err := loadFullTunnelState(paths.fullState)
 	if err != nil {
 		return false, err
@@ -42,10 +36,6 @@ func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, des
 		if err := saveFullTunnelState(paths.fullState, state); err != nil {
 			return false, err
 		}
-	}
-	if windowsRoutesDisabled {
-		logging.Warn("full-tunnel route apply disabled on windows")
-		return false, nil
 	}
 	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
 }
@@ -79,23 +69,14 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 	bypassRoutes := buildWindowsBypassRoutes(defaults, endpointIPv4, endpointIPv6)
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel bypass routes prepared", "routes", bypassRoutes)
 
-	defer func() {
-		if err == nil {
-			return
-		}
-		if rollbackErr := rollbackFullTunnel(ctx, paths, opts.FullTunnelVerbose, state, defaults); rollbackErr != nil {
-			err = fmt.Errorf("full-tunnel apply failed: %w (rollback failed: %v)", err, rollbackErr)
-		}
-	}()
-
 	removeDefaults := !state.Enabled
 	if removeDefaults {
-		state = fullTunnelState{
-			Enabled: true,
-			TunName: strings.TrimSpace(opts.TunName),
-			TunMode: "full",
-			TunAddr: strings.TrimSpace(opts.TunAddr),
-		}
+		state.Enabled = true
+		state.TunName = strings.TrimSpace(opts.TunName)
+		state.TunMode = "full"
+		state.TunAddr = strings.TrimSpace(opts.TunAddr)
+		state.BypassRoutes = nil
+		state.DNSBackup = nil
 		if len(resolvedEndpoints) > 0 {
 			state.EndpointIPs = resolvedEndpoints
 		}
@@ -193,6 +174,9 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 		return err
 	}
 	state.Enabled = false
+	state.Phase = string(OSStatePhaseDisabled)
+	state.LastError = ""
+	state.LastErrorAt = time.Time{}
 	state.TunName = ""
 	state.TunMode = ""
 	state.TunAddr = ""
@@ -205,32 +189,6 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	}
 	logging.Info("full-tunnel restore complete")
 	return nil
-}
-
-func rollbackFullTunnel(ctx context.Context, paths clientPaths, verbose bool, state fullTunnelState, defaults []winnet.Route) error {
-	if err := restoreFullTunnel(ctx, paths, verbose); err == nil {
-		return nil
-	}
-	logging.Warn("full-tunnel restore failed; attempting manual rollback")
-	if tun := strings.TrimSpace(state.TunName); tun != "" {
-		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv4")
-		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv6")
-	}
-	if err := removeWindowsBypassRoutes(ctx, state.BypassRoutes); err != nil {
-		logging.Warn("full-tunnel bypass rollback failed", "err", err)
-	}
-	if len(defaults) == 0 {
-		defaults = decodeWindowsRoutes(state)
-	}
-	for _, route := range defaults {
-		if err := winnet.ApplyRoute(ctx, route); err != nil {
-			logging.Warn("full-tunnel default rollback failed", "route", route, "err", err)
-		}
-	}
-	if err := restoreWindowsDNS(ctx, state.DNSBackup, state.TunName, verbose); err != nil {
-		logging.Warn("full-tunnel DNS rollback failed", "err", err)
-	}
-	return errors.New("full-tunnel rollback attempted after restore failure")
 }
 
 func logFullTunnelVerbose(enabled bool, message string, args ...any) {

@@ -12,6 +12,9 @@ import (
 
 type fullTunnelState struct {
 	Enabled      bool                             `json:"enabled"`
+	Phase        string                           `json:"phase,omitempty"`
+	LastError    string                           `json:"last_error,omitempty"`
+	LastErrorAt  time.Time                        `json:"last_error_at,omitempty"`
 	TunName      string                           `json:"tun_name,omitempty"`
 	TunMode      string                           `json:"tun_mode,omitempty"`
 	TunAddr      string                           `json:"tun_addr,omitempty"`

@@ -125,14 +125,23 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		}
 	}
 
-	wantFull := opts.TunEnabled && strings.EqualFold(strings.TrimSpace(opts.TunMode), "full")
-	if !wantFull {
-		if windowsRoutesDisabled {
-			logging.Info("windows route apply disabled; skipping full-tunnel restore")
-		} else {
-			if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-				return err
-			}
+	desiredOS := DesiredOSState{
+		TunEnabled:        opts.TunEnabled,
+		TunName:           opts.TunName,
+		TunAddr:           opts.TunAddr,
+		TunMTU:            opts.TunMTU,
+		TunMode:           opts.TunMode,
+		DNSServers:        opts.DNSServers,
+		FullTunnelVerbose: opts.FullTunnelVerbose,
+		FullTunnelTag:     opts.FullTunnelTag,
+		Install:           desired,
+	}
+	orchestrator := NewOSStateOrchestrator(paths, newWindowsOSStateDriver(paths, opts))
+	if plan, err := orchestrator.Plan(ApplyStagePreStart, desiredOS, ObservedOSState{}); err != nil {
+		return err
+	} else {
+		if _, err := orchestrator.Apply(ctx, plan); err != nil {
+			return err
 		}
 	}
 
@@ -169,9 +178,6 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 					return nil
 				}
 				logging.Info("tun IPv4 ready", "ifIndex", ifIndex, "ip", ip)
-				if wantFull {
-					logging.Info("full-tunnel pending (routes disabled)")
-				}
 				logging.Info("windows route apply disabled; skipping redirect/full-tunnel routes")
 				return nil
 			}
@@ -188,6 +194,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 				})
 				logging.Warn("tun IPv4 ensure failed; skipping route apply", "err", err)
 				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {
+					if desiredOS.Mode() == OSModeFull {
+						_ = orchestrator.MarkFullPending(err)
+					}
 					return err
 				}
 				return nil
@@ -222,30 +231,25 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 				return nil
 			}
 			go winnet.DisableIPv6BindingWithRetry(ctx, opts.TunName)
-			redirectCount := len(collectRedirectCIDRs(desired.Redirects))
-			redirectApplied := false
-			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
-				logging.Warn("redirect route setup failed", "err", err)
-			} else {
-				redirectApplied = true
+			plan, err := orchestrator.Plan(ApplyStagePostReady, desiredOS, ObservedOSState{
+				TunReady:      true,
+				TunIfIndex:    ifIndex,
+				TunIPv4:       strings.TrimSpace(ip),
+				TunOperStatus: runtime.Tun.OperStatus,
+				TunDadState:   runtime.Tun.DadState,
+			})
+			if err != nil {
+				return err
 			}
-			fullApplied := false
-			fullBypassCount := 0
-			if wantFull {
-				if applied, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
-					logging.Warn("full-tunnel apply failed", "err", err)
-				} else {
-					fullApplied = applied
-				}
-				if fullState, err := loadFullTunnelState(paths.fullState); err == nil {
-					fullBypassCount = len(fullState.BypassRoutes)
-				}
+			result, err := orchestrator.Apply(ctx, plan)
+			if err != nil {
+				return err
 			}
 			runtime.Routes = routeRuntimeState{
-				RedirectApplied: redirectApplied,
-				RedirectCount:   redirectCount,
-				FullApplied:     fullApplied,
-				FullBypassCount: fullBypassCount,
+				RedirectApplied: result.RedirectApplied,
+				RedirectCount:   result.RedirectCount,
+				FullApplied:     result.FullApplied,
+				FullBypassCount: result.FullBypassCount,
 			}
 			if err := updateClientRuntimeState(paths.stateFile, runtime); err != nil {
 				logging.Warn("client runtime state update failed", "err", err)

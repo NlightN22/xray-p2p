@@ -6,18 +6,16 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
 func syncFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
-	mode := strings.ToLower(strings.TrimSpace(opts.TunMode))
-	if !opts.TunEnabled || mode != "full" {
-		if err := restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose); err != nil {
-			return false, err
-		}
-		return false, nil
-	}
+	return ensureFullTunnel(ctx, paths, opts, desired)
+}
+
+func ensureFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, desired clientInstallState) (bool, error) {
 	if strings.TrimSpace(opts.FullTunnelTag) == "" {
 		logging.Warn("full-tunnel outbound tag missing; routing rule not added")
 	}
@@ -64,13 +62,14 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel bypass routes prepared", "ipv4", bypass4, "ipv6", bypass6)
 
 	if !state.Enabled {
-		state = fullTunnelState{
-			Enabled:      true,
-			TunName:      strings.TrimSpace(opts.TunName),
-			TunMode:      "full",
-			IPv4Defaults: defaults4,
-			IPv6Defaults: defaults6,
-		}
+		state.Enabled = true
+		state.TunName = strings.TrimSpace(opts.TunName)
+		state.TunMode = "full"
+		state.TunAddr = ""
+		state.IPv4Defaults = defaults4
+		state.IPv6Defaults = defaults6
+		state.BypassRoutes = nil
+		state.DNSBackup = nil
 		if len(resolvedEndpoints) > 0 {
 			state.EndpointIPs = resolvedEndpoints
 		}
@@ -88,11 +87,9 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 		}
 
 		if err := removeDefaultRoutes(defaults4, "-4"); err != nil {
-			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
 		if err := removeDefaultRoutes(defaults6, "-6"); err != nil {
-			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
 		logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel default routes removed", "ipv4", defaults4, "ipv6", defaults6)
@@ -106,14 +103,12 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 
 	addedRoutes := make([]fullTunnelRoute, 0, len(bypass4)+len(bypass6))
 	if err := syncBypassRoutes(bypass4, state.BypassRoutes, "-4"); err != nil {
-		_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 		return false, err
 	}
 	for _, route := range bypass4 {
 		addedRoutes = append(addedRoutes, fullTunnelRoute{Family: "ipv4", Route: route})
 	}
 	if err := syncBypassRoutes(bypass6, state.BypassRoutes, "-6"); err != nil {
-		_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 		return false, err
 	}
 	for _, route := range bypass6 {
@@ -122,13 +117,11 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 
 	if len(defaults4) > 0 {
 		if err := ensureDefaultRoute(opts.TunName, "-4"); err != nil {
-			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
 	}
 	if len(defaults6) > 0 {
 		if err := ensureDefaultRoute(opts.TunName, "-6"); err != nil {
-			_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 			return false, err
 		}
 	}
@@ -136,7 +129,6 @@ func enableFullTunnel(ctx context.Context, paths clientPaths, opts RunOptions, d
 
 	state.BypassRoutes = addedRoutes
 	if err := saveFullTunnelState(paths.fullState, state); err != nil {
-		_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
 		return false, err
 	}
 	logFullTunnelVerbose(opts.FullTunnelVerbose, "full-tunnel bypass routes applied", "count", len(addedRoutes))
@@ -177,6 +169,9 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 		return err
 	}
 	state.Enabled = false
+	state.Phase = string(OSStatePhaseDisabled)
+	state.LastError = ""
+	state.LastErrorAt = time.Time{}
 	state.TunName = ""
 	state.TunMode = ""
 	state.IPv4Defaults = nil

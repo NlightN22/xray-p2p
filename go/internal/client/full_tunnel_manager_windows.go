@@ -89,7 +89,12 @@ func applyFullTunnelRoutes(ctx context.Context, paths clientPaths, opts RunOptio
 		logging.Warn("full-tunnel route apply disabled on windows")
 		return false, nil
 	}
-	return enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
+	applied, err := enableFullTunnel(ctx, paths, opts, desired, state, endpointIPv4, endpointIPv6, resolvedEndpoints)
+	if err != nil {
+		_ = restoreFullTunnel(ctx, paths, opts.FullTunnelVerbose)
+		return false, err
+	}
+	return applied, nil
 }
 
 func appendBypassTargets(endpoints []clientEndpointRecord, targets []string) []clientEndpointRecord {

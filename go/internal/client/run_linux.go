@@ -135,8 +135,24 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		}
 	}
 
-	if _, err := syncFullTunnel(ctx, paths, opts, desired); err != nil {
+	desiredOS := DesiredOSState{
+		TunEnabled:        opts.TunEnabled,
+		TunName:           opts.TunName,
+		TunAddr:           opts.TunAddr,
+		TunMTU:            opts.TunMTU,
+		TunMode:           opts.TunMode,
+		DNSServers:        opts.DNSServers,
+		FullTunnelVerbose: opts.FullTunnelVerbose,
+		FullTunnelTag:     opts.FullTunnelTag,
+		Install:           desired,
+	}
+	orchestrator := NewOSStateOrchestrator(paths, newLinuxOSStateDriver(paths, opts))
+	if plan, err := orchestrator.Plan(ApplyStagePreStart, desiredOS, ObservedOSState{}); err != nil {
 		return err
+	} else {
+		if _, err := orchestrator.Apply(ctx, plan); err != nil {
+			return err
+		}
 	}
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
@@ -149,19 +165,21 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		configDir,
 		nil,
 		func() error {
-			if !tunEnabled {
-				return nil
-			}
 			go func() {
+				if !tunEnabled {
+					return
+				}
 				if err := linuxnet.EnsureTunAddress(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
 					logging.Warn("tun address setup failed", "interface", opts.TunName, "err", err)
 				}
 			}()
-			go func() {
-				if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
-					logging.Warn("redirect route setup failed", "err", err)
+			if plan, err := orchestrator.Plan(ApplyStagePostReady, desiredOS, ObservedOSState{TunReady: tunEnabled}); err != nil {
+				return err
+			} else {
+				if _, err := orchestrator.Apply(ctx, plan); err != nil {
+					return err
 				}
-			}()
+			}
 			return nil
 		},
 		func(readyCtx context.Context) error {
