@@ -11,23 +11,23 @@ import (
 )
 
 type fullTunnelState struct {
-	Enabled      bool                             `json:"enabled"`
-	Phase        string                           `json:"phase,omitempty"`
-	LastError    string                           `json:"last_error,omitempty"`
-	LastErrorAt  time.Time                        `json:"last_error_at,omitempty"`
-	PendingReason string                          `json:"pending_reason,omitempty"`
-	PendingSince  time.Time                       `json:"pending_since,omitempty"`
-	RetryCount    int                             `json:"retry_count,omitempty"`
-	NextRetryAt   time.Time                       `json:"next_retry_at,omitempty"`
-	TunName      string                           `json:"tun_name,omitempty"`
-	TunMode      string                           `json:"tun_mode,omitempty"`
-	TunAddr      string                           `json:"tun_addr,omitempty"`
-	IPv4Defaults []string                         `json:"ipv4_defaults,omitempty"`
-	IPv6Defaults []string                         `json:"ipv6_defaults,omitempty"`
-	BypassRoutes []fullTunnelRoute                `json:"bypass_routes,omitempty"`
-	DNSBackup    *fullTunnelDNSBackup             `json:"dns_backup,omitempty"`
-	EndpointIPs  map[string]fullTunnelEndpointIPs `json:"endpoint_ips,omitempty"`
-	Timestamp    time.Time                        `json:"timestamp"`
+	Enabled       bool                             `json:"enabled"`
+	Phase         string                           `json:"phase,omitempty"`
+	LastError     string                           `json:"last_error,omitempty"`
+	LastErrorAt   time.Time                        `json:"last_error_at,omitempty"`
+	PendingReason string                           `json:"pending_reason,omitempty"`
+	PendingSince  time.Time                        `json:"pending_since,omitempty"`
+	RetryCount    int                              `json:"retry_count,omitempty"`
+	NextRetryAt   time.Time                        `json:"next_retry_at,omitempty"`
+	TunName       string                           `json:"tun_name,omitempty"`
+	TunMode       string                           `json:"tun_mode,omitempty"`
+	TunAddr       string                           `json:"tun_addr,omitempty"`
+	IPv4Defaults  []string                         `json:"ipv4_defaults,omitempty"`
+	IPv6Defaults  []string                         `json:"ipv6_defaults,omitempty"`
+	BypassRoutes  []fullTunnelRoute                `json:"bypass_routes,omitempty"`
+	DNSBackup     *fullTunnelDNSBackup             `json:"dns_backup,omitempty"`
+	EndpointIPs   map[string]fullTunnelEndpointIPs `json:"endpoint_ips,omitempty"`
+	Timestamp     time.Time                        `json:"timestamp"`
 }
 
 type fullTunnelRoute struct {

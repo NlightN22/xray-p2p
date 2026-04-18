@@ -1,0 +1,98 @@
+//go:build linux
+
+package dnsforward
+
+import (
+	"errors"
+	"fmt"
+	"sort"
+)
+
+func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
+	if err := ensureOpenWrt(); err != nil {
+		return nil, err
+	}
+	state, _ := loadState(m.statePath)
+	stateChanged := false
+
+	var domains []string
+	if opts.All {
+		for domain := range state.Entries {
+			domains = append(domains, domain)
+		}
+	} else {
+		domain, err := normalizeDomain(opts.Domain)
+		if err != nil {
+			return nil, err
+		}
+		domains = []string{domain}
+	}
+
+	if len(domains) == 0 {
+		return nil, errors.New("no dns-forward entries found")
+	}
+
+	removedCount := 0
+	dnsSection, err := m.dnsmasqSection()
+	if err != nil {
+		return nil, err
+	}
+	for _, domain := range domains {
+		rebind := baseDomain(domain)
+		entry, hasState := state.Entries[domain]
+
+		value := fmt.Sprintf("/%s/%s", domain, entry.Server)
+		_ = runCommand("uci", "del_list", fmt.Sprintf("%s.%s.server=%s", m.dnsConfig, dnsSection, value))
+
+		sections, err := m.readDNSSections()
+		if err == nil {
+			for name, sec := range sections {
+				if !sec.isManagedDNS() {
+					continue
+				}
+				if sec.option("name") != domain {
+					continue
+				}
+				_ = runCommand("uci", "delete", fmt.Sprintf("%s.%s", m.dnsConfig, name))
+			}
+		}
+
+		if opts.WithForward && hasState && entry.ForwardListenPort > 0 && entry.AutoForward {
+			m.removeForward(entry.ForwardListenPort)
+		}
+		if hasState {
+			state.remove(domain)
+			stateChanged = true
+			removedCount++
+		}
+		if !m.rebindInUse(rebind, domains, sections, state) {
+			_ = m.removeRebind(rebind)
+		}
+	}
+	if removedCount == 0 && !opts.All {
+		return nil, fmt.Errorf("dns-forward entry for %s not found", domains[0])
+	}
+
+	if err := m.commitDNS(); err != nil {
+		return nil, err
+	}
+	if err := m.reloadDNS(); err != nil {
+		return nil, err
+	}
+
+	if opts.Intercept {
+		_ = m.removeIntercept()
+		if err := m.commitFirewall(); err == nil {
+			_ = m.reloadFirewall()
+		}
+	}
+
+	if stateChanged {
+		if err := state.save(m.statePath); err != nil {
+			return nil, err
+		}
+	}
+
+	sort.Strings(domains)
+	return domains, nil
+}

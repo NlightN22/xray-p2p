@@ -88,4 +88,3 @@ func logPendingRetry(reason string, err error, delay time.Duration, trigger Reco
 	}
 	logging.Info(msg, fields...)
 }
-

@@ -165,4 +165,3 @@ func TestOSStateReconcileFullFailureDoesNotRollbackWhenAlreadyEnabled(t *testing
 		t.Fatalf("expected rollbackFullCalls=0 when already enabled, got %d", driver.rollbackFullCalls)
 	}
 }
-
