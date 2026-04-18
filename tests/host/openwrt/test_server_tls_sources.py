@@ -13,10 +13,8 @@ from tests.host.openwrt import env as openwrt_env
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 
 SERVER_INBOUNDS = helpers.SERVER_CONFIG_DIR / "inbounds.json"
-SERVER_CERT_DEST = helpers.SERVER_CONFIG_DIR / "cert.pem"
-SERVER_KEY_DEST = helpers.SERVER_CONFIG_DIR / "key.pem"
-SERVER_CERT_PENDING = helpers.SERVER_PENDING_DIR / "cert.pem"
-SERVER_KEY_PENDING = helpers.SERVER_PENDING_DIR / "key.pem"
+SERVER_CERT_DEST = PurePosixPath("/etc/xp2p/tls/server/cert.pem")
+SERVER_KEY_DEST = PurePosixPath("/etc/xp2p/tls/server/key.pem")
 
 
 def _runner(host: Host):
@@ -99,10 +97,6 @@ def _combined_output(result) -> str:
 
 
 def _resolve_server_path(host: Host, path: PurePosixPath) -> PurePosixPath:
-    if path == SERVER_CERT_DEST and helpers.path_exists(host, SERVER_CERT_PENDING):
-        return SERVER_CERT_PENDING
-    if path == SERVER_KEY_DEST and helpers.path_exists(host, SERVER_KEY_PENDING):
-        return SERVER_KEY_PENDING
     return path
 
 
@@ -165,8 +159,8 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
             "--force",
             check=True,
         )
-        _wait_for_path(openwrt_server_host, SERVER_CERT_PENDING)
-        _wait_for_path(openwrt_server_host, SERVER_KEY_PENDING)
+        _wait_for_path(openwrt_server_host, SERVER_CERT_DEST)
+        _wait_for_path(openwrt_server_host, SERVER_KEY_DEST)
         _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_source)
         _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_source)
         helpers.cleanup_server_install(openwrt_server_host, runner)
@@ -196,16 +190,14 @@ def test_openwrt_server_install_uses_path_certificate_source(openwrt_server_host
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        expected_cert_paths = {SERVER_CERT_DEST.as_posix(), SERVER_CERT_PENDING.as_posix()}
-        expected_key_paths = {SERVER_KEY_DEST.as_posix(), SERVER_KEY_PENDING.as_posix()}
-        assert primary_cert.get("certificateFile") in expected_cert_paths
-        assert primary_cert.get("keyFile") in expected_key_paths
+        assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
+        assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
 
         expected_allow_insecure = _parse_self_signed(_read_cert_state(runner))
         assert expected_allow_insecure in {True, False}
         assert "allowInsecure" not in tls_settings
-        assert _path_exists(openwrt_server_host, SERVER_CERT_DEST), "Expected cert.pem to exist in config-server"
-        assert _path_exists(openwrt_server_host, SERVER_KEY_DEST), "Expected key.pem to exist in config-server"
+        assert _path_exists(openwrt_server_host, SERVER_CERT_DEST), "Expected cert.pem to exist"
+        assert _path_exists(openwrt_server_host, SERVER_KEY_DEST), "Expected key.pem to exist"
     finally:
         helpers.cleanup_server_install(openwrt_server_host, runner)
         _remove_path(openwrt_server_host, cert_source)
@@ -244,10 +236,8 @@ def test_openwrt_server_install_generates_self_signed_certificate(openwrt_server
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates to be configured"
         primary_cert = certificates[0]
-        expected_cert_paths = {SERVER_CERT_DEST.as_posix(), SERVER_CERT_PENDING.as_posix()}
-        expected_key_paths = {SERVER_KEY_DEST.as_posix(), SERVER_KEY_PENDING.as_posix()}
-        assert primary_cert.get("certificateFile") in expected_cert_paths
-        assert primary_cert.get("keyFile") in expected_key_paths
+        assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
+        assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
 
         state_output = _read_cert_state(runner)
         assert "Status:      OK" in state_output
@@ -280,8 +270,8 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
             "--force",
             check=True,
         )
-        _wait_for_path(openwrt_server_host, SERVER_CERT_PENDING)
-        _wait_for_path(openwrt_server_host, SERVER_KEY_PENDING)
+        _wait_for_path(openwrt_server_host, SERVER_CERT_DEST)
+        _wait_for_path(openwrt_server_host, SERVER_KEY_DEST)
 
         _copy_remote_file(openwrt_server_host, SERVER_CERT_DEST, cert_source)
         _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, key_source)
@@ -301,8 +291,8 @@ def test_openwrt_server_cert_set_rejects_mismatched_cert_key(openwrt_server_host
             "--force",
             check=True,
         )
-        _wait_for_path(openwrt_server_host, SERVER_CERT_PENDING)
-        _wait_for_path(openwrt_server_host, SERVER_KEY_PENDING)
+        _wait_for_path(openwrt_server_host, SERVER_CERT_DEST)
+        _wait_for_path(openwrt_server_host, SERVER_KEY_DEST)
         _copy_remote_file(openwrt_server_host, SERVER_KEY_DEST, alt_key_source)
         helpers.cleanup_server_install(openwrt_server_host, runner)
 
@@ -472,7 +462,7 @@ def test_openwrt_server_cert_set_win_store_not_implemented(openwrt_server_host, 
             check=True,
         )
 
-        before = _read_remote_text(openwrt_server_host, SERVER_INBOUNDS)
+        before = helpers.read_text(openwrt_server_host, helpers.SERVER_CONFIG_FILE)
 
         result = runner(
             "server",
@@ -493,8 +483,8 @@ def test_openwrt_server_cert_set_win_store_not_implemented(openwrt_server_host, 
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
 
-        after = _read_remote_text(openwrt_server_host, SERVER_INBOUNDS)
-        assert after == before, "Expected config to remain unchanged after win-store error"
+        after = helpers.read_text(openwrt_server_host, helpers.SERVER_CONFIG_FILE)
+        assert after == before, "Expected server config to remain unchanged after win-store error"
     finally:
         helpers.cleanup_server_install(openwrt_server_host, runner)
 

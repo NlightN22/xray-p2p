@@ -100,10 +100,11 @@ mkdir -p /etc/xp2p
 mkdir -p /etc/xp2p/bin
 mkdir -p /etc/xp2p/config-client
 mkdir -p /etc/xp2p/config-server
-mkdir -p /etc/xp2p/.apply
-mkdir -p /etc/xp2p/.apply/pending
+mkdir -p /etc/xp2p/.state
+mkdir -p /etc/xp2p/.state/live
+mkdir -p /etc/xp2p/.state/lkg
 mkdir -p /var/log/xp2p
-chmod 0755 /etc/xp2p /etc/xp2p/bin /etc/xp2p/config-client /etc/xp2p/config-server /etc/xp2p/.apply /etc/xp2p/.apply/pending /var/log/xp2p
+chmod 0755 /etc/xp2p /etc/xp2p/bin /etc/xp2p/config-client /etc/xp2p/config-server /etc/xp2p/.state /etc/xp2p/.state/live /etc/xp2p/.state/lkg /var/log/xp2p
 exit 0
 endef
 

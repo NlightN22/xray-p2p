@@ -369,10 +369,11 @@ def test_dns_forward_openwrt_b_with_c1_c2(
             "proxy",
         )
         _apply_pending_config(openwrt_client_host, "client")
-        inbounds_path = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
-        if not helpers.path_exists_live(openwrt_client_host, inbounds_path):
-            raise AssertionError(f"Missing live client inbounds at {inbounds_path}")
-        nat_port = _detect_dokodemo_port(openwrt_client_host, inbounds_path.as_posix())
+        state = helpers.read_preferred_client_config(openwrt_client_host)
+        dokodemo = (((state.get("xray") or {}).get("inbounds") or {}).get("dokodemo")) or {}
+        nat_port = int(dokodemo.get("port") or 0)
+        if nat_port <= 0:
+            raise AssertionError(f"Invalid dokodemo port in desired config: {dokodemo!r}")
         nat = client_runner(
             "nat-redirect",
             "add",
@@ -511,10 +512,10 @@ def _dump_dns_forward_debug(
     parts.append((openwrt_client_host.run("nft list table inet xray_transparent 2>/dev/null || true").stdout or "").strip())
     parts.append("--- openwrt-b nft fw4 ---")
     parts.append((openwrt_client_host.run("nft list table inet fw4 2>/dev/null || true").stdout or "").strip())
-    parts.append("--- openwrt-b inbounds.json ---")
-    parts.append(_safe_read_text(openwrt_client_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json"))
-    parts.append("--- openwrt-b routing.json ---")
-    parts.append(_safe_read_text(openwrt_client_host, helpers.CLIENT_CONFIG_DIR / "routing.json"))
+    parts.append("--- openwrt-b xp2p-client.toml ---")
+    parts.append(_safe_read_text(openwrt_client_host, helpers.CLIENT_CONFIG_FILE))
+    parts.append("--- openwrt-b live xray.json ---")
+    parts.append(_safe_read_text(openwrt_client_host, helpers.CLIENT_LIVE_DIR / "xray.json"))
     parts.append("--- openwrt-b xp2p client log ---")
     parts.append((openwrt_client_host.run("cat /tmp/xp2p-client.log 2>/dev/null || true").stdout or "").strip())
     parts.append("--- openwrt-a xp2p server log ---")

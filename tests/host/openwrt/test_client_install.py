@@ -6,11 +6,13 @@ from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
 from tests.host.tunnel import common as tunnel_common
 
-CLIENT_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.json"
-CLIENT_ROUTING = helpers.CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_STATE_FILE = helpers.CLIENT_CONFIG_FILE
 
 pytestmark = [pytest.mark.host, pytest.mark.linux]
+
+CLIENT_APPEND_OUTBOUNDS = helpers.CLIENT_CONFIG_DIR / "outbounds.append.json"
+CLIENT_APPEND_INBOUNDS = helpers.CLIENT_CONFIG_DIR / "inbounds.append.json"
+CLIENT_ROUTING_AFTER_MANAGED = helpers.CLIENT_CONFIG_DIR / "routing.rules.after-xp2p-managed.json"
 
 
 def _runner(host):
@@ -34,6 +36,51 @@ def _prepare_host(openwrt_host, xp2p_openwrt_ipk):
     return runner
 
 
+def _assert_endpoint(
+    state: dict,
+    host: str,
+    password: str,
+    user: str,
+    server_name: str,
+    *,
+    allow_insecure: bool | None = None,
+    pinned_peer_sha256: str | None = None,
+    verify_peer_name: str | None = None,
+) -> None:
+    endpoints = state.get("endpoints", []) or []
+    for endpoint in endpoints:
+        if not isinstance(endpoint, dict):
+            continue
+        if (endpoint.get("hostname") or endpoint.get("address")) != host:
+            continue
+        assert endpoint.get("password") == password
+        assert endpoint.get("user") == user
+        assert endpoint.get("server_name") == server_name
+        if allow_insecure is not None:
+            assert bool(endpoint.get("allow_insecure")) is bool(allow_insecure)
+        if pinned_peer_sha256 is not None:
+            assert (endpoint.get("pinned_peer_cert_sha256") or "") == pinned_peer_sha256
+        if verify_peer_name is not None:
+            assert (endpoint.get("verify_peer_cert_by_name") or "") == verify_peer_name
+        return
+    raise AssertionError(f"Endpoint for host {host} not found in client state: {endpoints}")
+
+
+def _assert_no_endpoint(host: str, state: dict) -> None:
+    endpoints = state.get("endpoints", []) or []
+    for endpoint in endpoints:
+        if not isinstance(endpoint, dict):
+            continue
+        if (endpoint.get("hostname") or endpoint.get("address")) == host:
+            pytest.fail(f"Unexpected endpoint for host {host} still present")
+
+
+def _ensure_client_live_config(openwrt_host, runner) -> None:
+    runner("client", "service", "start", check=True)
+    helpers.wait_for_apply_request_clear(openwrt_host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(openwrt_host, "client", timeout_seconds=60.0)
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_install_default_creates_tun_inbound(openwrt_host, xp2p_openwrt_ipk):
@@ -55,8 +102,11 @@ def test_client_install_default_creates_tun_inbound(openwrt_host, xp2p_openwrt_i
             check=True,
         )
 
-        inbounds = helpers.read_preferred_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
-        helpers.assert_tun_inbound(inbounds, "xp2pc")
+        state = helpers.read_preferred_client_config(openwrt_host)
+        assert state.get("tun_enabled") is True
+        assert state.get("tun_name") == "xp2pc"
+        tun = (((state.get("xray") or {}).get("inbounds") or {}).get("tun")) or {}
+        assert tun.get("protocol") == "tun"
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
         helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
@@ -90,8 +140,8 @@ def test_client_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
                 f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
 
-        inbounds = helpers.read_preferred_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
-        helpers.assert_no_tun_inbound(inbounds)
+        state = helpers.read_preferred_client_config(openwrt_host)
+        assert state.get("tun_enabled") is False
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
         helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
@@ -118,14 +168,8 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        data = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(
-            data,
-            "10.55.0.10",
-            "test_password123",
-            "alpha@example.com",
-            "10.55.0.10",
-        )
+        state = helpers.read_preferred_client_config(openwrt_host)
+        _assert_endpoint(state, "10.55.0.10", "test_password123", "alpha@example.com", "10.55.0.10")
 
         runner(
             "client",
@@ -145,25 +189,25 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        updated = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(
-            updated,
+        state = helpers.read_preferred_client_config(openwrt_host)
+        _assert_endpoint(
+            state,
             "10.55.0.10",
             "test_password123",
             "alpha@example.com",
             "10.55.0.10",
             allow_insecure=False,
         )
-        helpers.assert_outbound(
-            updated,
+        _assert_endpoint(
+            state,
             "10.55.0.11",
             "override_password456",
             "beta@example.com",
             "vpn.example.local",
             allow_insecure=False,
         )
-
-        routing = helpers.read_preferred_json(openwrt_host, CLIENT_ROUTING)
+        _ensure_client_live_config(openwrt_host, runner)
+        routing = helpers.read_live_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
         helpers.assert_routing_rule(routing, "10.55.0.10")
         helpers.assert_routing_rule(routing, "10.55.0.11")
 
@@ -210,17 +254,17 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        refreshed = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(
-            refreshed,
+        state = helpers.read_preferred_client_config(openwrt_host)
+        _assert_endpoint(
+            state,
             "10.55.0.10",
             "forcepass",
             "gamma@example.com",
             "override.linux",
             allow_insecure=False,
         )
-        helpers.assert_outbound(
-            refreshed,
+        _assert_endpoint(
+            state,
             "10.55.0.11",
             "override_password456",
             "beta@example.com",
@@ -255,14 +299,14 @@ def test_client_install_from_link(openwrt_host, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        data = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(
-            data,
+        state = helpers.read_preferred_client_config(openwrt_host)
+        _assert_endpoint(
+            state,
             link_host,
             "linkpass",
             "link@example.com",
             "link.example.test",
-            pinned_peer_sha256="",
+            pinned_peer_sha256="deadbeef",
             verify_peer_name="link.example.test",
         )
     finally:
@@ -292,9 +336,14 @@ def test_client_install_from_link_without_allow_insecure(openwrt_host, xp2p_open
             "--force",
             check=True,
         )
-        data = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(
-            data, link_host, "linkpass", "link@example.com", "link.example.test", allow_insecure=False
+        state = helpers.read_preferred_client_config(openwrt_host)
+        _assert_endpoint(
+            state,
+            link_host,
+            "linkpass",
+            "link@example.com",
+            "link.example.test",
+            allow_insecure=False,
         )
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
@@ -361,13 +410,6 @@ def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk)
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
         helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
-
-
-def _assert_no_endpoint(host: str, data: dict):
-    tag = helpers.expected_proxy_tag(host)
-    for outbound in data.get("outbounds", []):
-        if outbound.get("tag") == tag:
-            pytest.fail(f"Unexpected outbound {tag} still present")
 
 
 @pytest.mark.host
@@ -447,6 +489,11 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
         ).stdout or ""
         assert redirect_cidr in redirect_list
 
+        runner("client", "service", "stop")
+        openwrt_host.run("/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true")
+        openwrt_host.run("/etc/init.d/xp2p-client stop >/dev/null 2>&1 || true")
+        openwrt_env.run_guest_script(openwrt_host, "scripts/linux/kill_xp2p_processes.sh")
+        helpers.wait_for_service_state(openwrt_host, "client", expected_active=False, timeout_seconds=30.0)
         runner(
             "client",
             "remove",
@@ -459,18 +506,9 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
             check=True,
         )
 
-        outbounds = helpers.read_preferred_json(openwrt_host, CLIENT_OUTBOUNDS)
-        helpers.assert_outbound(
-            outbounds,
-            "10.66.0.11",
-            "echo-pass",
-            "echo@example.com",
-            "10.66.0.11",
-        )
-        _assert_no_endpoint("10.66.0.10", outbounds)
-
-        routing = helpers.read_preferred_json(openwrt_host, CLIENT_ROUTING)
-        helpers.assert_routing_rule(routing, "10.66.0.11")
+        state = helpers.read_preferred_client_config(openwrt_host)
+        _assert_endpoint(state, "10.66.0.11", "echo-pass", "echo@example.com", "10.66.0.11")
+        _assert_no_endpoint("10.66.0.10", state)
 
         state = helpers.read_preferred_client_config(openwrt_host)
         hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
@@ -633,11 +671,11 @@ def test_client_install_recovers_without_state_marker(openwrt_host, xp2p_openwrt
         assert helpers.path_exists(openwrt_host, helpers.CLIENT_CONFIG_FILE), (
             "Expected client config to be recreated"
         )
-        assert helpers.path_exists(openwrt_host, CLIENT_OUTBOUNDS), (
-            "Expected client outbounds to be recreated"
-        )
-        assert helpers.path_exists(openwrt_host, CLIENT_ROUTING), (
-            "Expected client routing to be recreated"
+        assert helpers.path_exists(openwrt_host, helpers.CLIENT_CONFIG_DIR), "Expected client config directory to exist"
+        assert helpers.path_exists(openwrt_host, CLIENT_APPEND_OUTBOUNDS), "Expected outbounds append file to exist"
+        assert helpers.path_exists(openwrt_host, CLIENT_APPEND_INBOUNDS), "Expected inbounds append file to exist"
+        assert helpers.path_exists(openwrt_host, CLIENT_ROUTING_AFTER_MANAGED), (
+            "Expected managed routing rules file to exist"
         )
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)

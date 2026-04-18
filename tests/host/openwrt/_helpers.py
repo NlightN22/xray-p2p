@@ -21,13 +21,16 @@ SERVER_CONFIG_DIR_NAME = linux_helpers.SERVER_CONFIG_DIR_NAME
 CLIENT_CONFIG_DIR = linux_helpers.CLIENT_CONFIG_DIR
 SERVER_CONFIG_DIR = linux_helpers.SERVER_CONFIG_DIR
 APPLY_DIR_NAME = linux_helpers.APPLY_DIR_NAME
-PENDING_DIR_NAME = linux_helpers.PENDING_DIR_NAME
-CONFIG_PENDING_ROOT = linux_helpers.CONFIG_PENDING_ROOT
+LIVE_DIR_NAME = linux_helpers.LIVE_DIR_NAME
+LKG_DIR_NAME = linux_helpers.LKG_DIR_NAME
+CONFIG_PENDING_ROOT = CONFIG_ROOT
 CONFIG_LIVE_ROOT = linux_helpers.CONFIG_LIVE_ROOT
 CONFIG_LKG_ROOT = linux_helpers.CONFIG_LKG_ROOT
 STATE_ROOT = linux_helpers.STATE_ROOT
-CLIENT_PENDING_DIR = linux_helpers.CLIENT_PENDING_DIR
-SERVER_PENDING_DIR = linux_helpers.SERVER_PENDING_DIR
+CLIENT_PENDING_DIR = CLIENT_CONFIG_DIR
+SERVER_PENDING_DIR = SERVER_CONFIG_DIR
+CLIENT_LIVE_DIR = linux_helpers.CLIENT_LIVE_DIR
+SERVER_LIVE_DIR = linux_helpers.SERVER_LIVE_DIR
 CLIENT_CONFIG_FILE = linux_helpers.CLIENT_CONFIG_FILE
 SERVER_CONFIG_FILE = linux_helpers.SERVER_CONFIG_FILE
 CLIENT_APPLIED_STATE_FILE = linux_helpers.CLIENT_APPLIED_STATE_FILE
@@ -133,6 +136,18 @@ def _clear_log_root(host: Host) -> None:
     print(f"log root cleared: {LOG_ROOT.as_posix()}")
 
 
+def reset_install_root_preserve_bin(host: Host) -> None:
+    install_root = shlex.quote(INSTALL_ROOT.as_posix())
+    cmd = (
+        "/bin/sh -c "
+        "'if [ -d \"$1\" ]; then "
+        "find \"$1\" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} + >/dev/null 2>&1 || true; "
+        "fi' "
+        f"-- {install_root}"
+    )
+    host.run(cmd)
+
+
 def cleanup_runtime_artifacts(host: Host) -> None:
     openwrt_env._stop_xp2p_services(host)
     host.run("/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true")
@@ -149,53 +164,7 @@ def cleanup_runtime_artifacts(host: Host) -> None:
 def _purge_install_paths(host: Host, install_path: str, config_name: str, role: str) -> None:
     if role not in {"client", "server"}:
         raise ValueError(f"Unsupported role: {role}")
-    config_path = f"{install_path.rstrip('/')}/{config_name}"
-    pending_root = CONFIG_PENDING_ROOT.as_posix()
-    live_root = CONFIG_LIVE_ROOT.as_posix()
-    lkg_root = CONFIG_LKG_ROOT.as_posix()
-    pending_config = f"{pending_root}/xp2p-{role}.toml"
-    live_config = f"{live_root}/xp2p-{role}.toml"
-    lkg_config = f"{lkg_root}/xp2p-{role}.toml"
-    pending_heartbeat = f"{pending_root}/state-heartbeat-{role}.json"
-    state_files = CLIENT_STATE_FILES if role == "client" else SERVER_STATE_FILES
-    heartbeat = CLIENT_HEARTBEAT_STATE_FILE if role == "client" else SERVER_HEARTBEAT_STATE_FILE
-    targets = [
-        config_path,
-        (CONFIG_ROOT / ".apply").as_posix(),
-        STATE_ROOT.as_posix(),
-        CONFIG_PENDING_ROOT.as_posix(),
-        CONFIG_LIVE_ROOT.as_posix(),
-        CONFIG_LKG_ROOT.as_posix(),
-        pending_config,
-        pending_heartbeat,
-        live_config,
-        lkg_config,
-        APPLY_REQUEST.as_posix(),
-        APPLY_ERROR.as_posix(),
-        heartbeat.as_posix(),
-        (CONFIG_ROOT / "xp2p-client.toml.lkg").as_posix(),
-        (CONFIG_ROOT / "xp2p-server.toml.lkg").as_posix(),
-        (CONFIG_ROOT / "xp2p-client.state.json.lkg").as_posix(),
-        (CONFIG_ROOT / "xp2p-server.state.json.lkg").as_posix(),
-        (CONFIG_ROOT / "xp2p-client.tun-full.json").as_posix(),
-        (CONFIG_ROOT / "xp2p-server.tun-full.json").as_posix(),
-        CLIENT_PENDING_DIR.as_posix(),
-        SERVER_PENDING_DIR.as_posix(),
-        CLIENT_LIVE_DIR.as_posix(),
-        SERVER_LIVE_DIR.as_posix(),
-        (CLIENT_CONFIG_DIR / "inbounds.json.lkg").as_posix(),
-        (CLIENT_CONFIG_DIR / "outbounds.json.lkg").as_posix(),
-        (CLIENT_CONFIG_DIR / "routing.json.lkg").as_posix(),
-        (CLIENT_CONFIG_DIR / "logs.json.lkg").as_posix(),
-        (SERVER_CONFIG_DIR / "inbounds.json.lkg").as_posix(),
-        (SERVER_CONFIG_DIR / "outbounds.json.lkg").as_posix(),
-        (SERVER_CONFIG_DIR / "routing.json.lkg").as_posix(),
-        (SERVER_CONFIG_DIR / "logs.json.lkg").as_posix(),
-    ]
-    for item in state_files:
-        targets.append(item.as_posix())
-    cmd = "/bin/sh -c 'rm -rf -- \"$@\"' -- " + " ".join(shlex.quote(p) for p in targets)
-    host.run(cmd)
+    reset_install_root_preserve_bin(host)
 
 
 def find_tun_inbound(data: dict) -> dict | None:
@@ -268,7 +237,22 @@ def read_live_text(host: Host, path: PurePosixPath | Path | str) -> str:
 
 
 def read_live_json(host: Host, path: PurePosixPath | Path | str) -> dict:
-    content = read_live_text(host, path)
+    requested = _as_path(path)
+    legacy = _legacy_xray_fragment(requested)
+    if legacy:
+        role, fragment = legacy
+        live_dir = CLIENT_LIVE_DIR if role == "client" else SERVER_LIVE_DIR
+        xray_path = live_dir / "xray.json"
+        content = read_live_text(host, xray_path)
+        try:
+            xray = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Failed to parse JSON from {xray_path}: {exc}\nContent:\n{content}"
+            ) from exc
+        return _extract_legacy_xray_fragment(xray, fragment)
+
+    content = read_live_text(host, requested)
     try:
         return json.loads(content)
     except json.JSONDecodeError as exc:
@@ -284,13 +268,80 @@ def read_live_toml(host: Host, path: PurePosixPath | Path | str) -> dict:
 
 
 def read_live_client_config(host: Host) -> dict:
-    config = CONFIG_LIVE_ROOT / "xp2p-client.toml"
-    return read_live_toml(host, config).get("client") or {}
+    meta_path = CLIENT_LIVE_DIR / "runtime.json"
+    meta = read_live_json(host, meta_path)
+    out: dict = {}
+    for key in (
+        "tun_enabled",
+        "tun_name",
+        "tun_mtu",
+        "tun_addr",
+        "tun_mode",
+        "dns_servers",
+        "full_tunnel_tag",
+        "desired",
+        "version",
+        "compiled_at",
+    ):
+        if key in meta:
+            out[key] = meta.get(key)
+    desired_meta = meta.get("desired") if isinstance(meta, dict) else None
+    if isinstance(desired_meta, dict):
+        endpoints = desired_meta.get("endpoints")
+        if isinstance(endpoints, list):
+            out["endpoints"] = endpoints
+    try:
+        desired = read_preferred_client_config(host)
+    except Exception:
+        desired = {}
+    reverse = desired.get("reverse")
+    if isinstance(reverse, dict):
+        out["reverse"] = reverse
+    forwards = desired.get("forwards")
+    if isinstance(forwards, list):
+        out["forward_rules"] = forwards
+        out.setdefault("forwards", forwards)
+
+    try:
+        applied_state = read_client_applied_state(host)
+    except Exception:
+        applied_state = None
+    if isinstance(applied_state, dict):
+        applied_forwards = applied_state.get("forwards")
+        if isinstance(applied_forwards, list):
+            out["forwards"] = applied_forwards
+    return out
 
 
 def read_live_server_config(host: Host) -> dict:
-    config = CONFIG_LIVE_ROOT / "xp2p-server.toml"
-    return read_live_toml(host, config).get("server") or {}
+    meta_path = SERVER_LIVE_DIR / "runtime.json"
+    meta = read_live_json(host, meta_path)
+    out: dict = {}
+    for key in (
+        "tun_enabled",
+        "tun_name",
+        "tun_mtu",
+        "tun_addr",
+        "desired",
+        "cert_path",
+        "key_path",
+        "version",
+        "compiled_at",
+    ):
+        if key in meta:
+            out[key] = meta.get(key)
+    desired = meta.get("desired") if isinstance(meta, dict) else None
+    if isinstance(desired, dict):
+        reverse = desired.get("reverse")
+        if isinstance(reverse, dict):
+            out["reverse_channels"] = reverse
+        redirects = desired.get("redirects")
+        if isinstance(redirects, list):
+            out["server_redirects"] = redirects
+        forwards = desired.get("forwards")
+        if isinstance(forwards, list):
+            out["forward_rules"] = forwards
+    return out
 
 
 def read_first_existing_json(host: Host, paths: list[PurePosixPath]) -> dict:
@@ -373,10 +424,55 @@ def read_preferred_server_config(host: Host) -> dict:
     return read_preferred_toml(host, config).get("server") or {}
 
 
+def _legacy_xray_fragment(path: PurePosixPath) -> tuple[str, str] | None:
+    if path.name not in {"inbounds.json", "outbounds.json", "routing.json", "logs.json"}:
+        return None
+    if path.is_relative_to(CLIENT_CONFIG_DIR):
+        return ("client", path.name)
+    if path.is_relative_to(SERVER_CONFIG_DIR):
+        return ("server", path.name)
+    if path.is_absolute():
+        if path.as_posix().startswith(CLIENT_CONFIG_DIR.as_posix() + "/"):
+            return ("client", path.name)
+        if path.as_posix().startswith(SERVER_CONFIG_DIR.as_posix() + "/"):
+            return ("server", path.name)
+    return None
+
+
+def _extract_legacy_xray_fragment(xray: dict, fragment_name: str) -> dict:
+    if fragment_name == "inbounds.json":
+        return {"inbounds": xray.get("inbounds") or []}
+    if fragment_name == "outbounds.json":
+        return {"outbounds": xray.get("outbounds") or []}
+    if fragment_name == "routing.json":
+        return {
+            "routing": xray.get("routing") or {},
+            "reverse": xray.get("reverse") or {},
+        }
+    if fragment_name == "logs.json":
+        out: dict = {}
+        for key in ("log", "api", "stats", "policy"):
+            if key in xray:
+                out[key] = xray.get(key)
+        return out
+    raise ValueError(f"Unsupported legacy fragment: {fragment_name}")
+
+
+def wait_for_apply_error(
+    host: Host, *, timeout_seconds: float = 60.0, poll_interval: float = 1.5
+) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if path_exists_exact(host, APPLY_ERROR):
+            return
+        time.sleep(poll_interval)
+    raise AssertionError(f"apply.error did not appear within {timeout_seconds} seconds.")
+
+
 def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
     resolved = _as_path(path)
     pending = _pending_candidate(resolved)
-    if pending != resolved and linux_helpers.path_exists(host, pending):
+    if pending != resolved and path_exists_exact(host, pending):
         return True
     target = _posix(resolved)
     result = host.run(f"test -e {shlex.quote(target)}")
@@ -384,7 +480,9 @@ def path_exists(host: Host, path: PurePosixPath | Path | str) -> bool:
 
 
 def path_exists_exact(host: Host, path: PurePosixPath | Path | str) -> bool:
-    return linux_helpers.path_exists(host, _as_path(path))
+    target = _posix(_as_path(path))
+    result = host.run(f"test -e {shlex.quote(target)}")
+    return result.rc == 0
 
 
 def path_exists_live(host: Host, path: PurePosixPath | Path | str) -> bool:
@@ -493,6 +591,20 @@ def dump_failure_state(host: Host, label: str) -> None:
         + shlex.quote(
             " ; ".join(
                 (
+                    "echo '--- init.d service status ---'",
+                    "for s in /etc/init.d/xp2p-client /etc/init.d/xp2p-server; do "
+                    "if [ -x \"$s\" ]; then echo \"-- $s status\"; \"$s\" status 2>/dev/null || true; \"$s\" running 2>/dev/null || true; "
+                    "else echo \"-- $s missing\"; fi; "
+                    "done",
+                    "echo '--- networking (ip link/addr/route) ---'",
+                    "ip link show 2>/dev/null || true",
+                    "ip -4 addr show 2>/dev/null || true",
+                    "ip -6 addr show 2>/dev/null || true",
+                    "ip -4 route show 2>/dev/null || true",
+                    "ip -6 route show 2>/dev/null || true",
+                    "echo '--- DNS (/etc/resolv.conf) ---'",
+                    "ls -la /etc/resolv.conf 2>/dev/null || true",
+                    "cat /etc/resolv.conf 2>/dev/null || true",
                     "echo '--- xp2p tree ---'",
                     "find /etc/xp2p -maxdepth 4 -print 2>/dev/null || true",
                     "echo '--- xp2p state tree ---'",
@@ -502,17 +614,19 @@ def dump_failure_state(host: Host, label: str) -> None:
                     "echo '--- xp2p configs ---'",
                     "for f in /etc/xp2p/xp2p-client.toml /etc/xp2p/xp2p-server.toml; do "
                     "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
-                    "for f in /etc/xp2p/.state/pending/xp2p-client.toml /etc/xp2p/.state/pending/xp2p-server.toml; do "
-                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
-                    "for f in /etc/xp2p/.state/live/xp2p-client.toml /etc/xp2p/.state/live/xp2p-server.toml; do "
-                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
-                    "for f in /etc/xp2p/.state/lkg/xp2p-client.toml /etc/xp2p/.state/lkg/xp2p-server.toml; do "
-                    "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+                    "for f in "
+                    "/etc/xp2p/.state/live/config-client/runtime.json "
+                    "/etc/xp2p/.state/live/config-server/runtime.json "
+                    "/etc/xp2p/.state/live/config-client/xray.json "
+                    "/etc/xp2p/.state/live/config-server/xray.json "
+                    "; do [ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
+                    "for f in "
+                    "/etc/xp2p/.state/lkg/config-client/runtime.json "
+                    "/etc/xp2p/.state/lkg/config-server/runtime.json "
+                    "/etc/xp2p/.state/lkg/config-client/xray.json "
+                    "/etc/xp2p/.state/lkg/config-server/xray.json "
+                    "; do [ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
                     "for dir in /etc/xp2p/config-client /etc/xp2p/config-server; do "
-                    "if [ -d \"$dir\" ]; then "
-                    "for f in \"$dir\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
-                    "fi; done",
-                    "for dir in /etc/xp2p/.state/pending/config-client /etc/xp2p/.state/pending/config-server; do "
                     "if [ -d \"$dir\" ]; then "
                     "for f in \"$dir\"/*.json; do [ -f \"$f\" ] || continue; echo \"--- $f ---\"; cat \"$f\"; done; "
                     "fi; done",
@@ -611,22 +725,24 @@ def dump_logs(host: Host, label: str, paths: list[PurePosixPath] | None = None, 
 
 
 def _pending_candidate(path: PurePosixPath) -> PurePosixPath:
-    if path.is_relative_to(CONFIG_PENDING_ROOT):
-        return path
     if path.is_relative_to(CONFIG_LIVE_ROOT):
         return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_LIVE_ROOT)
+    if path.is_relative_to(CONFIG_LKG_ROOT):
+        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_LKG_ROOT)
+    if path.is_relative_to(CLIENT_LIVE_DIR):
+        return CLIENT_PENDING_DIR / path.relative_to(CLIENT_LIVE_DIR)
+    if path.is_relative_to(SERVER_LIVE_DIR):
+        return SERVER_PENDING_DIR / path.relative_to(SERVER_LIVE_DIR)
     if path.is_relative_to(CLIENT_CONFIG_DIR):
         return CLIENT_PENDING_DIR / path.relative_to(CLIENT_CONFIG_DIR)
     if path.is_relative_to(SERVER_CONFIG_DIR):
         return SERVER_PENDING_DIR / path.relative_to(SERVER_CONFIG_DIR)
-    if path.is_relative_to(CONFIG_ROOT):
-        return CONFIG_PENDING_ROOT / path.relative_to(CONFIG_ROOT)
     return path
 
 
 def _resolve_config_path(host: Host, path: PurePosixPath) -> PurePosixPath:
     pending = _pending_candidate(path)
-    if pending != path and linux_helpers.path_exists(host, pending):
+    if pending != path and path_exists_exact(host, pending):
         return pending
     return path
 
@@ -712,9 +828,9 @@ def wait_for_live_config(
     poll_interval: float = 1.5,
 ) -> None:
     if role == "client":
-        target = CONFIG_LIVE_ROOT / "xp2p-client.toml"
+        target = CLIENT_LIVE_DIR / "runtime.json"
     elif role == "server":
-        target = CONFIG_LIVE_ROOT / "xp2p-server.toml"
+        target = SERVER_LIVE_DIR / "runtime.json"
     else:
         raise ValueError(f"Unsupported role: {role}")
     deadline = time.time() + timeout_seconds
@@ -791,6 +907,20 @@ def apply_pending_config(
     if is_xp2p_run_active(host, role):
         host.run(f"/etc/init.d/xp2p-{role} stop >/dev/null 2>&1 || true")
         wait_for_service_state(host, role, expected_active=False, timeout_seconds=30.0)
+    ensure_service_running(host, role)
+    wait_for_apply_request_clear(host, timeout_seconds=timeout_seconds, poll_interval=poll_interval)
+    wait_for_live_config(host, role, timeout_seconds=timeout_seconds, poll_interval=poll_interval)
+
+
+def state_pending_config(
+    host: Host,
+    role: str,
+    *,
+    timeout_seconds: float = 90.0,
+    poll_interval: float = 1.5,
+) -> None:
+    if role not in {"client", "server"}:
+        raise ValueError(f"Unsupported role: {role}")
     ensure_service_running(host, role)
     wait_for_apply_request_clear(host, timeout_seconds=timeout_seconds, poll_interval=poll_interval)
     wait_for_live_config(host, role, timeout_seconds=timeout_seconds, poll_interval=poll_interval)

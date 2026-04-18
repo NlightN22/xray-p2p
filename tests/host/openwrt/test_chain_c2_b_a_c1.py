@@ -92,6 +92,33 @@ def _apply_pending_config(host, role: str) -> None:
     helpers.state_pending_config(host, role)
 
 
+def _dokodemo_ports(config: dict) -> list[int]:
+    ports: list[int] = []
+    for inbound in config.get("inbounds", []) or []:
+        if not isinstance(inbound, dict):
+            continue
+        if inbound.get("protocol") != "dokodemo-door":
+            continue
+        if inbound.get("settings", {}).get("followRedirect") is not True:
+            continue
+        port_val = inbound.get("port")
+        if isinstance(port_val, int):
+            ports.append(port_val)
+    return ports
+
+
+def _first_dokodemo_port(host, role: str) -> int:
+    inbounds_path = (
+        helpers.SERVER_CONFIG_DIR / "inbounds.json"
+        if role == "server"
+        else helpers.CLIENT_CONFIG_DIR / "inbounds.json"
+    )
+    inbounds = helpers.read_live_json(host, inbounds_path)
+    ports = _dokodemo_ports(inbounds)
+    assert ports, f"Expected dokodemo-door with followRedirect in {inbounds_path}: {inbounds}"
+    return int(ports[0])
+
+
 @pytest.fixture(scope="module")
 def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
     server_host = openwrt_host_factory(SERVER_MACHINE)
@@ -264,7 +291,7 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
                 "1",
                 check=True,
             )
-        tunnel_common.assert_zero_loss(redirect_ping, "redirect via SOCKS tunnel")
+            tunnel_common.assert_zero_loss(redirect_ping, "redirect via SOCKS tunnel")
 
         with _timed("prune direct route (if any)"):
             route_result = client_host.run(f"ip route show {C1_LAN_CIDR}")
@@ -319,11 +346,14 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             client_host.run(f"ip route del blackhole {C1_LAN_CIDR} >/dev/null 2>&1 || true")
             blackhole_added = False
 
+        client_dokodemo_port = _first_dokodemo_port(client_host, "client")
         client_runner(
             "nat-redirect",
             "add",
             "--cidr",
             C1_LAN_CIDR,
+            "--port",
+            str(client_dokodemo_port),
             "--quiet",
             check=True,
         )
@@ -476,12 +506,15 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
             )
         redirect_added = True
 
+        server_dokodemo_port = _first_dokodemo_port(server_host, "server")
         with _timed("reverse add nat-redirect"):
             server_runner(
                 "nat-redirect",
                 "add",
                 "--cidr",
                 server_redirect_cidr,
+                "--port",
+                str(server_dokodemo_port),
                 "--quiet",
                 check=True,
             )

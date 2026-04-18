@@ -357,10 +357,10 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
         helpers.write_apply_request(openwrt_host, role)
 
         _wait_for_log_entry(openwrt_host, service_log, "service configuration change detected")
-        _wait_for_log_entry(openwrt_host, service_log, "exceeded restart limit")
-        _wait_for_service_state(openwrt_host, role, expected_active=False)
+        _wait_for_log_entry(openwrt_host, service_log, "apply compilation failed")
+        helpers.wait_for_apply_error(openwrt_host, timeout_seconds=60.0)
+        _wait_for_service_state(openwrt_host, role, expected_active=True)
         log_content = helpers.read_text(openwrt_host, service_log)
-        assert "attempt" in log_content.lower()
         assert "parse" in log_content.lower() or "config" in log_content.lower(), (
             f"{role} service log missing config error details.\n"
             f"Service log:\n{log_content}"
@@ -381,8 +381,12 @@ def test_openwrt_opkg_removal_and_purge_cleanup(openwrt_host, xp2p_openwrt_ipk):
     runner = lambda *cmd, check=False: _xp2p(openwrt_host, *cmd, check=check)
     helpers.cleanup_client_install(openwrt_host, runner)
     helpers.cleanup_server_install(openwrt_host, runner)
-    client_paths = config_files.config_paths(helpers.CLIENT_CONFIG_DIR, config_files.CLIENT_CONFIG_FILES)
-    server_paths = config_files.config_paths(helpers.SERVER_CONFIG_DIR, config_files.SERVER_CONFIG_FILES)
+    client_paths = [helpers.CLIENT_CONFIG_FILE]
+    server_paths = [
+        helpers.SERVER_CONFIG_FILE,
+        PurePosixPath("/etc/xp2p/tls/server/cert.pem"),
+        PurePosixPath("/etc/xp2p/tls/server/key.pem"),
+    ]
 
     def _install_roles():
         runner(

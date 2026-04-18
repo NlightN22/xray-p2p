@@ -56,6 +56,8 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
     ):
         runner("client", "service", "stop")
         runner("server", "service", "stop")
+        host.run("/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true")
+        host.run("/etc/init.d/xp2p-server disable >/dev/null 2>&1 || true")
         openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
     helpers.dump_install_dirs(openwrt_client_host, "client deploy after install")
     helpers.dump_install_dirs(openwrt_server_host, "client deploy after install")
@@ -126,9 +128,26 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             trojan_user=trojan_user,
             trojan_password=trojan_password,
         )
-        _assert_client_install_artifacts(openwrt_client_host, server_ip, trojan_user, trojan_password)
+        _assert_client_install_artifacts(
+            openwrt_client_host,
+            server_ip,
+            trojan_user,
+            trojan_password,
+            deploy_link=link,
+            deploy_log_path=CLIENT_DEPLOY_LOG,
+        )
         _assert_client_state(openwrt_client_host, server_ip)
         _assert_client_routing(openwrt_client_host, server_ip)
+
+        for host, runner in (
+            (openwrt_client_host, client_runner),
+            (openwrt_server_host, server_runner),
+        ):
+            runner("client", "service", "stop")
+            runner("server", "service", "stop")
+            host.run("/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true")
+            host.run("/etc/init.d/xp2p-server disable >/dev/null 2>&1 || true")
+            openwrt_env.run_guest_script(host, "scripts/linux/kill_xp2p_processes.sh")
 
         _wait_for_port_closed(openwrt_client_host, CLIENT_DIAG_PORT, timeout=SERVICE_START_TIMEOUT)
         _wait_for_port_closed(openwrt_server_host, SERVER_DIAG_PORT, timeout=SERVICE_START_TIMEOUT)
@@ -255,24 +274,23 @@ def test_openwrt_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             timeout=LOG_WAIT_TIMEOUT,
         )
 
-        cert_path = helpers.SERVER_CONFIG_DIR / "cert.pem"
-        key_path = helpers.SERVER_CONFIG_DIR / "key.pem"
-        pending_cert_path = helpers.SERVER_PENDING_DIR / "cert.pem"
-        pending_key_path = helpers.SERVER_PENDING_DIR / "key.pem"
+        cert_path = PurePosixPath("/etc/xp2p/tls/server/cert.pem")
+        key_path = PurePosixPath("/etc/xp2p/tls/server/key.pem")
         assert helpers.path_exists(openwrt_server_host, cert_path), f"Expected cert at {cert_path}"
         assert helpers.path_exists(openwrt_server_host, key_path), f"Expected key at {key_path}"
 
-        inbounds = helpers.read_preferred_json(openwrt_server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
+        helpers.ensure_service_running(openwrt_server_host, "server")
+        helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_server_host, "server")
+        inbounds = helpers.read_live_json(openwrt_server_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
         trojan = _find_trojan_inbound(inbounds)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
         certificates = tls_settings.get("certificates", [])
         assert certificates, "Expected TLS certificates after deploy fallback"
         primary = certificates[0]
-        expected_cert_paths = {cert_path.as_posix(), pending_cert_path.as_posix()}
-        expected_key_paths = {key_path.as_posix(), pending_key_path.as_posix()}
-        assert primary.get("certificateFile") in expected_cert_paths
-        assert primary.get("keyFile") in expected_key_paths
+        assert primary.get("certificateFile") == cert_path.as_posix()
+        assert primary.get("keyFile") == key_path.as_posix()
     finally:
         if client_pid:
             openwrt_env.stop_process(openwrt_client_host, client_pid)
@@ -364,18 +382,56 @@ def _start_server_deploy_with_args(
     return int(pid)
 
 
-def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, password: str) -> None:
+def _pinned_peer_cert_sha256_from_link(link: str) -> str | None:
+    parsed = parse.urlparse(link)
+    query = parse.parse_qs(parsed.query)
+    values = query.get("pinnedPeerCertSha256") or []
+    if not values:
+        return None
+    if len(values) != 1 or not values[0]:
+        raise AssertionError(f"pinnedPeerCertSha256 invalid: {query}")
+    return values[0]
+
+
+def _received_trojan_link_from_deploy_log(host: Host, log_path: PurePosixPath) -> str | None:
+    text = _read_text(host, log_path)
+    for line in text.splitlines():
+        if "client deploy: trojan link received" not in line:
+            continue
+        if "link:" not in line:
+            continue
+        return line.split("link:", 1)[1].strip()
+    return None
+
+
+def _assert_client_install_artifacts(
+    host: Host,
+    server_ip: str,
+    user: str,
+    password: str,
+    *,
+    deploy_link: str,
+    deploy_log_path: PurePosixPath,
+) -> None:
     assert helpers.path_exists(host, helpers.CLIENT_CONFIG_DIR), "client config directory missing after deploy"
-    outbounds = helpers.read_preferred_json(host, helpers.CLIENT_CONFIG_DIR / "outbounds.json")
-    helpers.assert_outbound(
-        outbounds,
-        server_ip,
-        password,
-        user,
-        server_ip,
-        pinned_peer_sha256="",
-        verify_peer_name=server_ip,
-    )
+    state = helpers.read_preferred_client_config(host)
+    endpoints = state.get("endpoints", []) or []
+    received_link = _received_trojan_link_from_deploy_log(host, deploy_log_path)
+    expected_pin = _pinned_peer_cert_sha256_from_link(received_link or deploy_link)
+    for endpoint in endpoints:
+        if not isinstance(endpoint, dict):
+            continue
+        if (endpoint.get("hostname") or endpoint.get("address")) != server_ip:
+            continue
+        assert endpoint.get("password") == password
+        assert endpoint.get("user") == user
+        assert endpoint.get("server_name") == server_ip
+        actual_pin = (endpoint.get("pinned_peer_cert_sha256") or "").strip()
+        if expected_pin is not None:
+            assert actual_pin == expected_pin
+        assert (endpoint.get("verify_peer_cert_by_name") or "") == server_ip
+        return
+    raise AssertionError(f"Endpoint for {server_ip} not found: {endpoints}")
 
 
 def _assert_client_state(host: Host, server_ip: str) -> None:
@@ -385,7 +441,10 @@ def _assert_client_state(host: Host, server_ip: str) -> None:
 
 
 def _assert_client_routing(host: Host, server_ip: str) -> None:
-    routing = helpers.read_preferred_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+    helpers.ensure_service_running(host, "client")
+    helpers.wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    helpers.wait_for_live_config(host, "client")
+    routing = helpers.read_live_json(host, helpers.CLIENT_CONFIG_DIR / "routing.json")
     helpers.assert_routing_rule(routing, server_ip)
 
 
@@ -565,7 +624,13 @@ def _wait_for_port_closed(host: Host, port: str, *, timeout: int) -> None:
         if result.rc != 0:
             return
         time.sleep(1)
-    pytest.fail(f"Port {port} did not close within {timeout}s")
+    listeners = host.run(f"netstat -lnptu 2>/dev/null | grep ':{port} ' || true")
+    ps_output = host.run("ps w | grep -E 'xp2p|xray' | grep -v grep || true")
+    pytest.fail(
+        f"Port {port} did not close within {timeout}s.\n"
+        f"Listeners:\n{listeners.stdout}\n{listeners.stderr}\n"
+        f"Processes:\n{ps_output.stdout}\n{ps_output.stderr}"
+    )
 
 
 def _wait_for_port_open(host: Host, port: str, *, timeout: int) -> bool:

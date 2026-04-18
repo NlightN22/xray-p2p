@@ -107,6 +107,8 @@ def test_openwrt_tun_autoconfig_client_network(openwrt_host, xp2p_openwrt_ipk):
         output = _uci_show_network(openwrt_host, CLIENT_TUN)
         _assert_uci_interface(output, CLIENT_TUN, CLIENT_ADDR)
 
+        runner("client", "service", "stop")
+        helpers.wait_for_service_state(openwrt_host, "client", expected_active=False, timeout_seconds=45.0)
         runner(
             "client",
             "remove",
@@ -117,8 +119,13 @@ def test_openwrt_tun_autoconfig_client_network(openwrt_host, xp2p_openwrt_ipk):
             "--all",
             "--ignore-missing",
             "--quiet",
+            check=True,
         )
-        helpers.wait_for_apply_request_clear(openwrt_host)
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            if not _uci_show_network(openwrt_host, CLIENT_TUN).strip():
+                break
+            time.sleep(1.5)
         assert not _uci_show_network(openwrt_host, CLIENT_TUN).strip(), (
             "Expected UCI interface to be removed after xp2p client remove"
         )
@@ -153,6 +160,8 @@ def test_openwrt_tun_autoconfig_server_network(openwrt_host, xp2p_openwrt_ipk):
         output = _uci_show_network(openwrt_host, SERVER_TUN)
         _assert_uci_interface(output, SERVER_TUN, SERVER_ADDR)
 
+        runner("server", "service", "stop")
+        helpers.wait_for_service_state(openwrt_host, "server", expected_active=False, timeout_seconds=45.0)
         runner(
             "server",
             "remove",
@@ -162,8 +171,13 @@ def test_openwrt_tun_autoconfig_server_network(openwrt_host, xp2p_openwrt_ipk):
             helpers.SERVER_CONFIG_DIR_NAME,
             "--ignore-missing",
             "--quiet",
+            check=True,
         )
-        helpers.wait_for_apply_request_clear(openwrt_host)
+        deadline = time.time() + 30.0
+        while time.time() < deadline:
+            if not _uci_show_network(openwrt_host, SERVER_TUN).strip():
+                break
+            time.sleep(1.5)
         assert not _uci_show_network(openwrt_host, SERVER_TUN).strip(), (
             "Expected UCI interface to be removed after xp2p server remove"
         )

@@ -25,7 +25,7 @@ CLIENT_SOCKS_PORT = 51180
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
 CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
-REQUIRED_XRAY_CONFIGS = ("inbounds.json", "logs.json", "outbounds.json", "routing.json")
+REQUIRED_LIVE_ARTIFACTS = ("runtime.json", "xray.json")
 
 
 def _runner(host):
@@ -42,10 +42,16 @@ def _runner(host):
 
 
 def _xray_configs_missing(host, config_dir) -> list[str]:
+    if config_dir == helpers.CLIENT_CONFIG_DIR:
+        live_dir = helpers.CLIENT_LIVE_DIR
+    elif config_dir == helpers.SERVER_CONFIG_DIR:
+        live_dir = helpers.SERVER_LIVE_DIR
+    else:
+        raise ValueError(f"Unsupported config dir: {config_dir}")
     return [
-        (config_dir / name).as_posix()
-        for name in REQUIRED_XRAY_CONFIGS
-        if not helpers.path_exists_live(host, config_dir / name)
+        (live_dir / name).as_posix()
+        for name in REQUIRED_LIVE_ARTIFACTS
+        if not helpers.path_exists_live(host, live_dir / name)
     ]
 
 
@@ -877,11 +883,15 @@ def test_client_redirect_through_server(tunnel_environment):
                 f"{server_inbounds}"
             )
 
+        client_dokodemo_port = int(client_dokodemo_ports[0])
+        server_dokodemo_port = int(server_dokodemo_ports[0])
         plan_output = client_runner(
             "nat-redirect",
             "add",
             "--cidr",
             CLIENT_REDIRECT_CIDR,
+            "--port",
+            str(client_dokodemo_port),
             "--print-only",
             "--quiet",
             check=True,
@@ -893,6 +903,8 @@ def test_client_redirect_through_server(tunnel_environment):
             "add",
             "--cidr",
             CLIENT_REDIRECT_CIDR,
+            "--port",
+            str(client_dokodemo_port),
             "--quiet",
             check=True,
         )
@@ -1000,6 +1012,8 @@ def test_client_redirect_through_server(tunnel_environment):
             "add",
             "--cidr",
             server_redirect_cidr,
+            "--port",
+            str(server_dokodemo_port),
             "--quiet",
             check=True,
         )

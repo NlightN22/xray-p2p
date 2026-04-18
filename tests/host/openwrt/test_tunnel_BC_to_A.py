@@ -14,7 +14,7 @@ CLIENT_B_MACHINE = openwrt_env.OPENWRT_MACHINES[1]
 CLIENT_C_MACHINE = openwrt_env.OPENWRT_MACHINES[2]
 SERVER_IP = "10.63.30.11"
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-REQUIRED_XRAY_CONFIGS = ("inbounds.json", "logs.json", "outbounds.json", "routing.json")
+REQUIRED_LIVE_ARTIFACTS = ("runtime.json", "xray.json")
 
 
 def _runner(host):
@@ -71,10 +71,16 @@ def _wait_for_live_xray_configs(
 ) -> None:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
+        if config_dir == helpers.CLIENT_CONFIG_DIR:
+            live_dir = helpers.CLIENT_LIVE_DIR
+        elif config_dir == helpers.SERVER_CONFIG_DIR:
+            live_dir = helpers.SERVER_LIVE_DIR
+        else:
+            raise ValueError(f"Unsupported config dir: {config_dir}")
         missing = [
-            (config_dir / name).as_posix()
-            for name in REQUIRED_XRAY_CONFIGS
-            if not helpers.path_exists_live(host, config_dir / name)
+            (live_dir / name).as_posix()
+            for name in REQUIRED_LIVE_ARTIFACTS
+            if not helpers.path_exists_live(host, live_dir / name)
         ]
         if not missing:
             return

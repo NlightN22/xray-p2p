@@ -28,7 +28,7 @@ REVERSE_TUNNEL_WARMUP_SECONDS = 2.5
 SERVER_HEARTBEAT_STATE_FILE = helpers.SERVER_HEARTBEAT_STATE_FILE
 CLIENT_HEARTBEAT_STATE_FILE = helpers.CLIENT_HEARTBEAT_STATE_FILE
 APPLY_REQUEST = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
-REQUIRED_XRAY_CONFIGS = ("inbounds.json", "logs.json", "outbounds.json", "routing.json")
+REQUIRED_LIVE_ARTIFACTS = ("runtime.json", "xray.json")
 
 
 def _runner(host):
@@ -45,22 +45,32 @@ def _runner(host):
 
 
 def _assert_config_ready(host, role: str) -> None:
-    live = helpers.CONFIG_ROOT / f"xp2p-{role}.toml"
-    if helpers.path_exists_live(host, live):
-        return
-    pending_dir = (helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / helpers.PENDING_DIR_NAME).as_posix()
-    listing = host.run(f"ls -lha {pending_dir} 2>/dev/null || true").stdout or ""
-    raise AssertionError(
-        f"Missing {role} config for xp2p run on {host.backend.hostname}.\n"
-        f"Pending dir listing:\n{listing}"
-    )
+    if role == "client":
+        live_dir = helpers.CLIENT_LIVE_DIR
+    elif role == "server":
+        live_dir = helpers.SERVER_LIVE_DIR
+    else:
+        raise ValueError(f"Unsupported role: {role}")
+    for name in ("runtime.json", "xray.json"):
+        target = live_dir / name
+        if not helpers.path_exists_live(host, target):
+            raise AssertionError(
+                f"Missing {role} live artifact for xp2p run on {host.backend.hostname}.\n"
+                f"Expected live artifact at {target.as_posix()}"
+            )
 
 
 def _xray_configs_missing(host, config_dir) -> list[str]:
+    if config_dir == helpers.CLIENT_CONFIG_DIR:
+        live_dir = helpers.CLIENT_LIVE_DIR
+    elif config_dir == helpers.SERVER_CONFIG_DIR:
+        live_dir = helpers.SERVER_LIVE_DIR
+    else:
+        raise ValueError(f"Unsupported config dir: {config_dir}")
     return [
-        (config_dir / name).as_posix()
-        for name in REQUIRED_XRAY_CONFIGS
-        if not helpers.path_exists_live(host, config_dir / name)
+        (live_dir / name).as_posix()
+        for name in REQUIRED_LIVE_ARTIFACTS
+        if not helpers.path_exists_live(host, live_dir / name)
     ]
 
 
@@ -722,10 +732,12 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
         if client_missing:
             raise AssertionError(f"Missing client xray configs (live or pending): {client_missing}")
 
-        inbounds_path = helpers.CLIENT_CONFIG_DIR / "inbounds.json"
-        if not helpers.path_exists_live(client_host, inbounds_path):
-            raise AssertionError("Missing client inbounds.json in live config")
-        client_host.run(f"sed -i 's/127\\.0\\.0\\.1/0.0.0.0/g' {inbounds_path.as_posix()}")
+        client_cfg_path = helpers.CLIENT_CONFIG_FILE
+        client_cfg_text = helpers.read_text(client_host, client_cfg_path)
+        updated_cfg_text = client_cfg_text.replace('listen = "127.0.0.1"', 'listen = "0.0.0.0"', 1)
+        if updated_cfg_text == client_cfg_text:
+            raise AssertionError("Failed to update client socks listen address in xp2p-client.toml")
+        helpers.write_text(client_host, client_cfg_path, updated_cfg_text)
         _apply_pending_config(
             client_host,
             "client",

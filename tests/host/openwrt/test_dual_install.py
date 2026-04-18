@@ -183,10 +183,12 @@ def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_op
             check=True,
         )
 
-        client_inbounds = helpers.read_preferred_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "inbounds.json")
-        server_inbounds = helpers.read_preferred_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
-        helpers.assert_tun_inbound(client_inbounds, "xp2pc")
-        helpers.assert_tun_inbound(server_inbounds, "xp2ps")
+        client_state = helpers.read_preferred_client_config(openwrt_host)
+        server_state = helpers.read_preferred_server_config(openwrt_host)
+        assert client_state.get("tun_enabled") is True
+        assert client_state.get("tun_name") == "xp2pc"
+        assert server_state.get("tun_enabled") is True
+        assert server_state.get("tun_name") == "xp2ps"
     finally:
         helpers.cleanup_server_install(openwrt_host, run)
         helpers.cleanup_client_install(openwrt_host, run)
@@ -231,20 +233,14 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
             check=True,
         )
 
-        client_config_path = helpers.INSTALL_ROOT / custom_client_config
-        outbounds = helpers.read_preferred_json(openwrt_host, client_config_path / "outbounds.json")
-        helpers.assert_outbound(
-            outbounds,
-            client_host,
-            client_password,
-            client_user,
-            client_sni,
-        )
-        routing = helpers.read_preferred_json(openwrt_host, client_config_path / "routing.json")
-        helpers.assert_routing_rule(routing, client_host)
         state = helpers.read_preferred_client_config(openwrt_host)
         recorded_hosts = {entry.get("hostname") for entry in state.get("endpoints", [])}
         assert recorded_hosts == {client_host}
+        helpers.ensure_service_running(openwrt_host, "client")
+        helpers.wait_for_apply_request_clear(openwrt_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_host, "client")
+        routing = helpers.read_live_json(openwrt_host, helpers.CLIENT_CONFIG_DIR / "routing.json")
+        helpers.assert_routing_rule(routing, client_host)
 
         run(
             "server",
@@ -261,12 +257,17 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
             check=True,
         )
 
+        helpers.ensure_service_running(openwrt_host, "server")
+        helpers.wait_for_apply_request_clear(openwrt_host, timeout_seconds=60.0)
+        helpers.wait_for_live_config(openwrt_host, "server")
         server_roles = _read_roles(openwrt_host)
         assert {"client", "server"} <= set(server_roles.keys()), f"Unexpected roles: {server_roles}"
-        custom_server_path = helpers.INSTALL_ROOT / custom_server_config
         assert helpers.path_exists(
-            openwrt_host, custom_server_path / "inbounds.json"
-        ), "Server config directory missing expected inbounds.json"
+            openwrt_host, helpers.SERVER_LIVE_DIR / "runtime.json"
+        ), "Server live runtime.json missing after install"
+        assert helpers.path_exists(
+            openwrt_host, helpers.SERVER_LIVE_DIR / "xray.json"
+        ), "Server live xray.json missing after install"
     finally:
         helpers.cleanup_server_install(openwrt_host, run, config_dir=custom_server_config)
         helpers.cleanup_client_install(openwrt_host, run, config_dir=custom_client_config)
