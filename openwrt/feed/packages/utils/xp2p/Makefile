@@ -62,7 +62,7 @@ define Build/Prepare
 	cp "$(XP2P_COMPLETIONS)/fish/xp2p.fish" $(PKG_BUILD_DIR)/completions/xp2p.fish
 	chmod 0755 $(PKG_BUILD_DIR)/xp2p
 	[ -f $(PKG_BUILD_DIR)/xray ] && chmod 0755 $(PKG_BUILD_DIR)/xray || true
-	find $(PKG_BUILD_DIR) -maxdepth 1 -type f ! -name 'xray' ! -name 'xp2p' -exec chmod 0644 {} +
+	find $(PKG_BUILD_DIR) -maxdepth 1 -type f ! -name 'xray' ! -name 'xp2p' ! -name '.*' -exec chmod 0644 {} +
 endef
 
 define Build/Compile
@@ -81,7 +81,7 @@ define Package/xp2p/install
 	if [ -f $(PKG_BUILD_DIR)/xray ]; then \
 		$(INSTALL_BIN) $(PKG_BUILD_DIR)/xray $(1)/etc/xp2p/bin/xray; \
 	fi
-	find $(PKG_BUILD_DIR) -maxdepth 1 -type f ! -name 'xp2p' ! -name 'xray' -exec $(INSTALL_DATA) {} $(1)/etc/xp2p/bin/ \;
+	find $(PKG_BUILD_DIR) -maxdepth 1 -type f ! -name 'xp2p' ! -name 'xray' ! -name '.*' -exec $(INSTALL_DATA) {} $(1)/etc/xp2p/bin/ \;
 	$(INSTALL_BIN) ./files/etc/init.d/xp2p-client $(1)/etc/init.d/xp2p-client
 	$(INSTALL_BIN) ./files/etc/init.d/xp2p-server $(1)/etc/init.d/xp2p-server
 	$(INSTALL_DATA) ./files/usr/lib/xp2p/procd-service.sh $(1)/usr/lib/xp2p/procd-service.sh
