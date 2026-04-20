@@ -1,14 +1,13 @@
-import json
 from pathlib import Path
 
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.flows.render import render_desired_xray_json
 
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
-CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-client.toml"
 CLIENT_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-client.state.json"
 CLIENT_STATE_FILES = [
@@ -43,26 +42,6 @@ def _install_endpoint(runner, host: str, user: str, password: str) -> None:
         password,
         check=True,
     )
-
-
-def _read_remote_json(client_host, path: Path) -> dict:
-    resolved = _env.resolve_config_path(client_host, path)
-    quoted = _env.ps_quote(str(resolved))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path {quoted})) {{
-    exit 3
-}}
-Get-Content -Raw {quoted}
-"""
-    result = _env.run_powershell(client_host, script)
-    assert result.rc == 0, (
-        f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{result.stdout}")
 
 
 def _expected_tag(host: str) -> str:
@@ -223,7 +202,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             for rec in records
         )
 
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_redirect_rule(routing, REDIRECT_CIDR, primary_tag)
         _assert_routing_rule(routing, PRIMARY_HOST)
         _assert_routing_rule(routing, SECONDARY_HOST)
@@ -237,7 +216,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             PRIMARY_HOST,
             check=True,
             )
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_no_redirect_rule(routing, REDIRECT_CIDR)
 
         _redirect_cmd(
@@ -251,7 +230,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             )
         list_output, records = _list_redirects(xp2p_client_runner)
         assert any(rec["host"] == SECONDARY_HOST for rec in records)
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
 
         _redirect_cmd(
@@ -263,7 +242,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             SECONDARY_HOST,
             check=True,
             )
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_no_redirect_rule(routing, REDIRECT_CIDR)
 
         invalid_tag_result = _redirect_cmd(
@@ -299,7 +278,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             SECONDARY_HOST,
             check=True,
             )
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
         list_output, records = _list_redirects(xp2p_client_runner)
         assert any(
@@ -318,7 +297,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             SECONDARY_HOST,
             check=True,
             )
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
         _assert_domain_redirect_rule(routing, REDIRECT_DOMAIN, secondary_tag)
         list_output, records = _list_redirects(xp2p_client_runner)
@@ -334,7 +313,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             SECONDARY_HOST,
             check=True,
             )
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
         _assert_redirect_rule(routing, REDIRECT_CIDR, secondary_tag)
 
@@ -349,7 +328,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
         assert "no redirect rules configured" in auto_output.lower()
         assert auto_records == []
 
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+        routing = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_no_redirect_rule(routing, REDIRECT_CIDR)
         _assert_no_domain_redirect_rule(routing, REDIRECT_DOMAIN)
         _assert_routing_rule(routing, PRIMARY_HOST)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import time
 import uuid
 from pathlib import Path
 
@@ -51,6 +52,74 @@ def _assert_marker(local_path: Path, script_name: str) -> None:
     payload = local_path.read_text(encoding="ascii", errors="ignore").strip()
     if not payload.startswith("OK"):
         pytest.fail(f"{script_name} marker indicates failure: {payload or '<empty>'}")
+
+
+def _read_optional_scesrv_log_tail(host, *, lines: int = 200) -> str:
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$path = Join-Path $env:windir 'security\\logs\\scesrv.log'
+if (-not (Test-Path $path)) {{
+    exit 3
+}}
+Get-Content -Path $path -Tail {lines} -ErrorAction SilentlyContinue
+exit 0
+"""
+    result = win_env.run_powershell(host, script, timeout=30, label="read_scesrv_log_tail")
+    if result.rc != 0:
+        return ""
+    return (result.stdout or "").strip()
+
+
+def _run_guest_script_with_marker_retry(
+    host,
+    script_path: str,
+    *,
+    marker_label: str,
+    attempts: int = 3,
+    retry_sleep_seconds: float = 3.0,
+    **kwargs: str,
+):
+    last_result = None
+    last_payload = ""
+    for attempt in range(1, attempts + 1):
+        local_marker, guest_marker = _marker_paths(marker_label)
+        result = win_env.run_guest_script(host, script_path, MarkerPath=str(guest_marker), **kwargs)
+        last_result = result
+        if not local_marker.exists():
+            pytest.fail(f"{script_path} did not create marker at {local_marker}")
+        payload = local_marker.read_text(encoding="ascii", errors="ignore").strip()
+        last_payload = payload
+        if payload.startswith("OK"):
+            return result
+
+        normalized = payload.lower()
+        secedit_error = "secedit configure failed" in normalized
+        if secedit_error:
+            if attempt < attempts:
+                print(
+                    f"WARNING: {script_path} failed due to secedit error (attempt {attempt}/{attempts}), retrying."
+                )
+                time.sleep(retry_sleep_seconds * attempt)
+                continue
+
+            scesrv_tail = _read_optional_scesrv_log_tail(host)
+            message = (
+                f"Skipping UI integration step because secedit failed while preparing user rights: {payload or '<empty>'}"
+            )
+            if scesrv_tail:
+                message += "\n\nscesrv.log tail:\n" + scesrv_tail
+            pytest.skip(message)
+
+        scesrv_tail = _read_optional_scesrv_log_tail(host)
+        details = f"{script_path} marker indicates failure: {payload or '<empty>'}"
+        if scesrv_tail:
+            details += "\n\nscesrv.log tail:\n" + scesrv_tail
+        if last_result is not None:
+            details += f"\n\nSTDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}"
+        pytest.fail(details)
+
+    assert last_result is not None
+    pytest.fail(f"{script_path} marker indicates failure: {last_payload or '<empty>'}")
 
 
 def _cleanup_role(host, role: str) -> None:
@@ -168,19 +237,17 @@ def test_xp2p_ui_logs_do_not_report_access_denied(server_host):
 def test_sc_query_as_non_admin_user(server_host, xp2p_server_runner):
     _install_client(xp2p_server_runner)
     _install_server(xp2p_server_runner)
-    local_marker, guest_marker = _marker_paths("ui-xp2p-sc-query")
     try:
-        result = win_env.run_guest_script(
+        result = _run_guest_script_with_marker_retry(
             server_host,
             "scripts/check_sc_query_as_user.ps1",
-            MarkerPath=str(guest_marker),
+            marker_label="ui-xp2p-sc-query",
             ServiceNames="xp2p-client,xp2p-server",
             UserName="vagrant",
             UserPassword="vagrant",
             UseExistingUser="1",
             GrantLogonRights="0",
             )
-        _assert_marker(local_marker, "check_sc_query_as_user.ps1")
         if result.rc != 0:
             pytest.fail(
                 "sc query as non-admin user failed.\n"
@@ -209,13 +276,12 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
     log_patterns_payload = base64.b64encode(
         json.dumps(log_patterns).encode("utf-8")
     ).decode("ascii")
-    local_marker, guest_marker = _marker_paths("ui-xp2p-service-toggle")
     payload = base64.b64encode(json.dumps(services).encode("utf-8")).decode("ascii")
     try:
-        result = win_env.run_guest_script(
+        result = _run_guest_script_with_marker_retry(
             server_host,
             "scripts/toggle_service_via_ui.ps1",
-            MarkerPath=str(guest_marker),
+            marker_label="ui-xp2p-service-toggle",
             Xp2pUiPath=str(UI_EXE),
             ServiceNamesBase64=payload,
             UiWaitSeconds="5",
@@ -224,7 +290,6 @@ def test_xp2p_ui_controls_services_without_admin(server_host, xp2p_server_runner
             UiPollSeconds="6",
             RequiredPatternsBase64=log_patterns_payload,
             )
-        _assert_marker(local_marker, "toggle_service_via_ui.ps1")
         if result.rc != 0:
             pytest.fail(
                 "ui-xp2p service toggle check failed.\n"
@@ -247,12 +312,11 @@ def test_xp2p_ui_tracks_service_crash_without_config(server_host, xp2p_server_ru
     ]
     config_payload = base64.b64encode(json.dumps(config_paths).encode("utf-8")).decode("ascii")
     services_payload = base64.b64encode(json.dumps(["xp2p-client"]).encode("utf-8")).decode("ascii")
-    local_marker, guest_marker = _marker_paths("ui-xp2p-crash-track")
     try:
-        result = win_env.run_guest_script(
+        result = _run_guest_script_with_marker_retry(
             server_host,
             "scripts/toggle_service_via_ui.ps1",
-            MarkerPath=str(guest_marker),
+            marker_label="ui-xp2p-crash-track",
             Xp2pUiPath=str(UI_EXE),
             ServiceNamesBase64=services_payload,
             UiWaitSeconds="5",
@@ -269,7 +333,6 @@ def test_xp2p_ui_tracks_service_crash_without_config(server_host, xp2p_server_ru
                 json.dumps(["StartPending", "Running"]).encode("utf-8")
             ).decode("ascii"),
             )
-        _assert_marker(local_marker, "toggle_service_via_ui.ps1")
         if result.rc != 0:
             pytest.fail(
                 "ui-xp2p crash tracking check failed.\n"

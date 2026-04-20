@@ -125,7 +125,59 @@ def ensure_machine_running(machine: str) -> None:
 
 
 def get_ssh_host(machine: str) -> Host:
-    return common.get_ssh_host(VAGRANT_DIR, machine)
+    probe_timeout = 30
+
+    def _probe(host: Host) -> None:
+        result = run_powershell(
+            host,
+            "[Environment]::MachineName; whoami",
+            timeout=probe_timeout,
+            label="ssh_probe",
+        )
+        if result.rc != 0:
+            raise RuntimeError(
+                "SSH probe command failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+
+    last_exc: BaseException | None = None
+    for attempt in range(1, 3):
+        try:
+            host = common.get_ssh_host(VAGRANT_DIR, machine, connect_timeout=probe_timeout)
+            setattr(host, "_xp2p_machine", machine)
+            _probe(host)
+            return host
+        except pytest.skip.Exception as exc:
+            last_exc = exc
+        except Exception as exc:
+            last_exc = exc
+
+        if attempt == 1:
+            print(
+                f"WARNING: SSH probe failed for guest {machine} ({type(last_exc).__name__}). "
+                "Reloading the VM and retrying once."
+            )
+            try:
+                common.vagrant_reload_force(VAGRANT_DIR, machine)
+            finally:
+                common.invalidate_ssh_config_cache()
+            time.sleep(5)
+
+    if last_exc is None:
+        raise RuntimeError(f"Failed to connect to guest {machine} via SSH.")
+    raise last_exc
+
+
+def _refresh_ssh_host(host: Host, *, connect_timeout: int) -> Host | None:
+    machine = getattr(host, "_xp2p_machine", None)
+    if not machine:
+        return None
+    try:
+        refreshed = common.get_ssh_host(VAGRANT_DIR, machine, connect_timeout=connect_timeout)
+    except Exception:
+        return None
+    setattr(refreshed, "_xp2p_machine", machine)
+    return refreshed
 
 
 def encode_powershell(script: str) -> str:
@@ -137,6 +189,28 @@ DEFAULT_GUEST_SCRIPT_TIMEOUT = 120
 DEFAULT_XP2P_COMMAND_TIMEOUT = 120
 ADMIN_XP2P_SUBCOMMANDS = {"run", "service"}
 GUEST_BUILD_ROOT = Path(r"C:\xp2p\build")
+
+
+def _ssh_run_with_refresh(
+    host: Host,
+    command: str,
+    *,
+    timeout: int | float,
+    label: str | None,
+) -> CommandResult:
+    try:
+        return host.run(command, timeout=timeout)
+    except pytest.skip.Exception as exc:
+        refreshed = _refresh_ssh_host(host, connect_timeout=30)
+        if refreshed is None:
+            raise
+        print(
+            f"WARNING: SSH command skipped, retrying once with refreshed connection (label={label or 'n/a'})."
+        )
+        try:
+            return refreshed.run(command, timeout=timeout)
+        except pytest.skip.Exception:
+            raise exc
 
 
 def run_powershell(
@@ -160,9 +234,11 @@ def run_powershell(
         if len(lines) > 1:
             summary = f"{summary} (+{len(lines) - 1} lines)"
     print(f"Guest PowerShell script summary: {summary}")
-    result = host.run(
+    result = _ssh_run_with_refresh(
+        host,
         f"powershell -NoProfile -NonInteractive -NoLogo -EncodedCommand {encoded}",
         timeout=effective_timeout,
+        label=label,
     )
     elapsed_ms = int((time.monotonic() - started) * 1000)
     if elapsed_ms > 2000:
@@ -276,7 +352,12 @@ def run_guest_script(
         print(f"Guest script start: {relative_path} (timeout={effective_timeout}s)")
         if parameters:
             print(f"Guest script params: {sorted(parameters.keys())}")
-        return host.run(command, timeout=effective_timeout)
+        return _ssh_run_with_refresh(
+            host,
+            command,
+            timeout=effective_timeout,
+            label=f"guest_script:{relative_path}",
+        )
 
     try:
         result = _invoke(script_path)
@@ -318,39 +399,54 @@ def run_xp2p(
     timeout: int | float | None = None,
 ) -> CommandResult:
     effective_timeout = DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout
-    timeout_marker, guest_timeout_marker = _xp2p_timeout_marker()
-    if timeout_marker.exists():
-        timeout_marker.unlink(missing_ok=True)
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(_run_xp2p_with_timeout_marker, host, args, effective_timeout, guest_timeout_marker)
-    deadline = time.monotonic() + float(effective_timeout)
-    try:
-        while True:
-            if future.done():
-                result = future.result()
+
+    def _run(attempt_host: Host) -> CommandResult:
+        timeout_marker, guest_timeout_marker = _xp2p_timeout_marker()
+        if timeout_marker.exists():
+            timeout_marker.unlink(missing_ok=True)
+        executor = ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(
+            _run_xp2p_with_timeout_marker, attempt_host, args, effective_timeout, guest_timeout_marker
+        )
+        deadline = time.monotonic() + float(effective_timeout)
+        try:
+            while True:
+                if future.done():
+                    result = future.result()
+                    if timeout_marker.exists():
+                        marker = timeout_marker.read_text(encoding="ascii", errors="ignore").strip()
+                        raise RuntimeError(
+                            "xp2p command timed out (marker observed after completion).\n"
+                            f"Marker: {marker or '<empty>'}\nPath: {timeout_marker}"
+                        )
+                    return result
                 if timeout_marker.exists():
                     marker = timeout_marker.read_text(encoding="ascii", errors="ignore").strip()
                     raise RuntimeError(
-                        "xp2p command timed out (marker observed after completion).\n"
+                        "xp2p command timed out while waiting for guest completion.\n"
                         f"Marker: {marker or '<empty>'}\nPath: {timeout_marker}"
-        )
-                return result
-            if timeout_marker.exists():
-                marker = timeout_marker.read_text(encoding="ascii", errors="ignore").strip()
-                raise RuntimeError(
-                    "xp2p command timed out while waiting for guest completion.\n"
-                    f"Marker: {marker or '<empty>'}\nPath: {timeout_marker}"
-        )
-            if time.monotonic() > deadline:
-                raise RuntimeError(
-                    "xp2p command timed out before any guest marker appeared.\n"
-                    f"Timeout marker path: {timeout_marker}"
-        )
-            time.sleep(0.5)
-    finally:
-        executor.shutdown(wait=False)
-        if future.done() and timeout_marker.exists():
-            timeout_marker.unlink(missing_ok=True)
+                    )
+                if time.monotonic() > deadline:
+                    raise RuntimeError(
+                        "xp2p command timed out before any guest marker appeared.\n"
+                        f"Timeout marker path: {timeout_marker}"
+                    )
+                time.sleep(0.5)
+        finally:
+            executor.shutdown(wait=False)
+            if future.done() and timeout_marker.exists():
+                timeout_marker.unlink(missing_ok=True)
+
+    try:
+        return _run(host)
+    except RuntimeError as exc:
+        if "timed out before any guest marker appeared" not in str(exc):
+            raise
+        refreshed = _refresh_ssh_host(host, connect_timeout=30)
+        if refreshed is None:
+            raise
+        print("WARNING: xp2p command timed out without guest markers; retrying once with refreshed SSH connection.")
+        return _run(refreshed)
 
 
 def _run_xp2p_admin(

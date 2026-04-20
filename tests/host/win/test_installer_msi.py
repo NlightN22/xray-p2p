@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from tests.host import config_files
 from tests.host.win import env as _env
 
 MSI_CACHE_DIR_X64 = _env.MSI_CACHE_DIR_X64
@@ -133,14 +132,20 @@ def test_windows_installer_preserves_config_files(server_host, xp2p_msi_path, xp
         check=True,
     )
 
-    client_files = config_files.config_paths(client_dir, config_files.CLIENT_CONFIG_FILES)
-    server_files = config_files.config_paths(server_dir, config_files.SERVER_CONFIG_FILES)
-    _assert_paths_exist(server_host, client_files + server_files)
+    preserved = _snapshot_preserved_config_files(server_host)
+    _assert_paths_exist(
+        server_host,
+        [
+            _env.CONFIG_ROOT / "xp2p-client.toml",
+            _env.CONFIG_ROOT / "xp2p-server.toml",
+        ],
+    )
+    _assert_paths_exist(server_host, preserved)
 
     skip_reason = None
     try:
         _env.uninstall_xp2p_from_msi(server_host, xp2p_msi_path, purge_files=True)
-        _assert_paths_exist(server_host, client_files + server_files)
+        _assert_paths_exist(server_host, preserved)
         _assert_binaries_removed(server_host, install_dir)
         _assert_services_removed(server_host)
     finally:
@@ -175,6 +180,43 @@ def test_windows_installer_registers_powershell_completion(server_host, xp2p_msi
             "PowerShell completion registration check failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
+
+
+def _snapshot_preserved_config_files(host) -> list[Path]:
+    root = _env.ps_quote(str(_env.CONFIG_ROOT))
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$files = New-Object System.Collections.Generic.List[string]
+$root = {root}
+$rootFiles = @(
+    (Join-Path $root 'xp2p-client.toml')
+    (Join-Path $root 'xp2p-server.toml')
+)
+foreach ($path in $rootFiles) {{
+    if (Test-Path $path) {{
+        $files.Add($path) | Out-Null
+    }}
+}}
+$dirs = @(
+    (Join-Path $root 'config-client')
+    (Join-Path $root 'config-server')
+)
+foreach ($dir in $dirs) {{
+    if (-not (Test-Path $dir)) {{
+        continue
+    }}
+    Get-ChildItem -Path $dir -Recurse -File -Force -ErrorAction SilentlyContinue |
+        ForEach-Object {{ $files.Add($_.FullName) | Out-Null }}
+}}
+$files | Sort-Object -Unique
+"""
+    result = _env.run_powershell(host, script)
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to snapshot preserved config files.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    return [Path(line.strip()) for line in (result.stdout or "").splitlines() if line.strip()]
 
 
 def _remote_path_exists(host, path: Path) -> bool:

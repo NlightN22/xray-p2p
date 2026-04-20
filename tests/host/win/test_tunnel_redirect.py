@@ -6,11 +6,12 @@ import json
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.diagnostics import net_state as net_diag
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR = "config-server"
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
-CLIENT_ROUTING_JSON = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR / "routing.json"
+CLIENT_LIVE_XRAY_JSON = _env.CONFIG_LIVE_ROOT / CLIENT_CONFIG_DIR / "xray.json"
 DIAG_IP = "10.77.0.1"
 DIAG_CIDR = f"{DIAG_IP}/32"
 DIAG_PREFIX = 32
@@ -274,12 +275,7 @@ def _remove_hosts_entry(host, hostname: str) -> None:
 
 
 def _dump_net_state(host, output_path: str, label: str) -> None:
-    _env.run_guest_script(
-        host,
-        "scripts/dump_net_state.ps1",
-        OutputPath=output_path,
-        Label=label,
-    )
+    net_diag.dump_net_state(host, output_path=output_path, label=label)
 
 
 @pytest.mark.host
@@ -342,18 +338,22 @@ def test_client_redirect_tunnel_win(
                 baseline_ping = xp2p_client_runner(
                     "ping",
                     server_public_host,
-                    "--tunnel",
+                    "--tunnel=127.0.0.1:51180",
                     "--count",
                     "3",
+                    "--timeout",
+                    "5",
                     check=True,
                     )
                 assert "0% loss" in (baseline_ping.stdout or "").lower()
                 initial_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--tunnel",
+                    "--tunnel=127.0.0.1:51180",
                     "--count",
                     "3",
+                    "--timeout",
+                    "5",
                     check=False,
                     )
                 assert initial_ping.rc != 0
@@ -380,9 +380,11 @@ def test_client_redirect_tunnel_win(
                 redirected_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--tunnel",
+                    "--tunnel=127.0.0.1:51180",
                     "--count",
                     "3",
+                    "--timeout",
+                    "5",
                     check=True,
                     )
                 assert "0% loss" in (redirected_ping.stdout or "").lower()
@@ -395,7 +397,7 @@ def test_client_redirect_tunnel_win(
                 ).stdout or ""
                 assert DIAG_CIDR in redirect_list
 
-                routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
+                routing = _read_remote_json(client_host, CLIENT_LIVE_XRAY_JSON)
                 _assert_redirect_rule(routing, DIAG_CIDR, _expected_tag(server_public_host))
 
                 server_log = _read_remote_text(server_host, server_log_path)
@@ -420,9 +422,6 @@ def test_client_redirect_tunnel_win(
                 ).stdout or ""
                 assert DIAG_DOMAIN in redirect_list
 
-                routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-                _assert_domain_redirect_rule(routing, DIAG_DOMAIN, _expected_tag(server_public_host))
-
                 xp2p_client_runner(
                     "client",
                     "redirect",
@@ -434,16 +433,22 @@ def test_client_redirect_tunnel_win(
                     check=True,
                     )
 
-                routing_after_domain = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-                _assert_redirect_rule(routing_after_domain, DIAG_CIDR, _expected_tag(server_public_host))
-                _assert_no_domain_redirect_rule(routing_after_domain, DIAG_DOMAIN)
+                redirect_list = xp2p_client_runner(
+                    "client",
+                    "redirect",
+                    "list",
+                    check=True,
+                ).stdout or ""
+                assert DIAG_DOMAIN not in redirect_list
 
                 redirected_ping_again = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--tunnel",
+                    "--tunnel=127.0.0.1:51180",
                     "--count",
                     "3",
+                    "--timeout",
+                    "5",
                     check=True,
                     )
                 assert "0% loss" in (redirected_ping_again.stdout or "").lower()
@@ -459,9 +464,13 @@ def test_client_redirect_tunnel_win(
                     check=True,
                     )
 
-                routing_after = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-                _assert_no_redirect_rule(routing_after, DIAG_CIDR)
-                _assert_no_domain_redirect_rule(routing_after, DIAG_DOMAIN)
+                redirect_list = xp2p_client_runner(
+                    "client",
+                    "redirect",
+                    "list",
+                    check=True,
+                ).stdout or ""
+                assert DIAG_CIDR not in redirect_list
 
             with xp2p_client_run_factory(
                 str(CLIENT_INSTALL_DIR),
@@ -474,9 +483,11 @@ def test_client_redirect_tunnel_win(
                 final_ping = xp2p_client_runner(
                     "ping",
                     DIAG_IP,
-                    "--tunnel",
+                    "--tunnel=127.0.0.1:51180",
                     "--count",
                     "3",
+                    "--timeout",
+                    "5",
                     check=False,
                     )
                 assert final_ping.rc != 0

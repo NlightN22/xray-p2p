@@ -4,19 +4,14 @@ import pytest
 from testinfra.host import Host
 
 from . import env as _env
+from .flows import apply as apply_flow
 
 CLIENT_RUN_STABILIZE_SECONDS = 15
-APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
 APPLY_REQUEST_TIMEOUT = 90.0
 
 
 def _wait_for_apply_request_clear(host: Host, timeout: float = APPLY_REQUEST_TIMEOUT) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if not _env.path_exists(host, APPLY_REQUEST):
-            return
-        time.sleep(1.0)
-    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
+    apply_flow.wait_for_apply_request_clear(host, timeout=timeout)
 
 
 def _start_xp2p_client_run(

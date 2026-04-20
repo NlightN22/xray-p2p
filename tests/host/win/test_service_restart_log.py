@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.diagnostics import net_state as net_diag
 from tests.host.win import tun_full_diagnostics as diag
 from tests.host.win import tun_full_service as svc
 
@@ -129,12 +130,7 @@ def _collect_restart_debug(host) -> str:
         log_path = Path("<missing>")
 
     dump_path = Path(r"C:\Windows\Temp\xp2p-restart-net-state.log")
-    result = _env.run_guest_script(
-        host,
-        "scripts/dump_net_state.ps1",
-        OutputPath=str(dump_path),
-        Label="restart-debug",
-    )
+    result = net_diag.dump_net_state(host, output_path=dump_path, label="restart-debug")
     if result.rc != 0:
         net_state = f"<failed to dump net state>\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     else:

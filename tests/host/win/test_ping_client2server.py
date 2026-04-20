@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.diagnostics import net_state as net_diag
 
 CLIENT_SUBNET_HOST = "10.62.10.22"
 FIREWALL_RULE_NAME = "xp2p-test-block-client"
@@ -12,12 +13,7 @@ NET_LOG_DIR = Path(r"C:\xp2p\build\logs\win")
 
 def _dump_net_state(host, label: str) -> str:
     path = NET_LOG_DIR / f"ping-client2server-{label}.log"
-    result = _env.run_guest_script(
-        host,
-        "scripts/dump_net_state.ps1",
-        OutputPath=str(path),
-        Label=label,
-    )
+    result = net_diag.dump_net_state(host, output_path=path, label=label)
     if result.rc != 0:
         return (
             f"Failed to dump net state ({label}).\n"

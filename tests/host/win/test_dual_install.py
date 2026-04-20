@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.flows.render import extract_first_json
 
 INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR = "config-client"
@@ -176,6 +177,26 @@ def _assert_routing_rule(data: dict, host: str) -> None:
         if rule.get("outboundTag") == "direct" and host in rule.get("ip", []):
             return
     raise AssertionError(f"Expected routing rule for {host} -> direct")
+
+
+def _render_desired_xray_json(run, *, role: str, config_file: Path) -> dict:
+    result = run(
+        "--config",
+        str(config_file),
+        role,
+        "render",
+        "xray",
+        "--desired",
+        "--output",
+        "-",
+        check=True,
+    )
+    value = extract_first_json(
+        result.stdout or "", label=f"xp2p {role} render xray --desired"
+    )
+    if not isinstance(value, dict):
+        pytest.fail(f"Unexpected JSON type from rendered xray config: {type(value).__name__}")
+    return value
 
 
 @pytest.mark.host
@@ -353,17 +374,15 @@ def test_client_and_server_install_support_extended_arguments(server_host, xp2p_
             check=True,
             )
 
-        client_config_path = _env.CONFIG_ROOT / custom_client_config
-        outbounds = _read_remote_json(server_host, client_config_path / "outbounds.json")
+        client_xray = _render_desired_xray_json(run, role="client", config_file=CLIENT_CONFIG_FILE)
         _assert_outbound_entry(
-            outbounds,
+            client_xray,
             client_host,
             client_password,
             client_user,
             client_sni,
             )
-        routing = _read_remote_json(server_host, client_config_path / "routing.json")
-        _assert_routing_rule(routing, client_host)
+        _assert_routing_rule(client_xray, client_host)
         roles_after_client = _read_roles(server_host)
         assert "client" in roles_after_client
 

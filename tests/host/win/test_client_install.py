@@ -4,12 +4,11 @@ from pathlib import Path
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.flows.render import render_desired_xray_json
 
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
-CLIENT_CONFIG_OUTBOUNDS = CLIENT_CONFIG_DIR / "outbounds.json"
-CLIENT_ROUTING_JSON = CLIENT_CONFIG_DIR / "routing.json"
 CLIENT_RUN_LOG = Path(r"C:\xp2p\build\logs\win\xp2p-client-run.out")
 CLIENT_CONFIG_FILE = _env.CONFIG_ROOT / "xp2p-client.toml"
 CLIENT_APPLIED_STATE_FILE = _env.CONFIG_ROOT / "xp2p-client.state.json"
@@ -29,26 +28,6 @@ def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
         state_files=CLIENT_STATE_FILES,
         extra_paths=[CLIENT_RUN_LOG],
     )
-
-
-def _read_remote_json(client_host, path: Path) -> dict:
-    resolved = _env.resolve_config_path(client_host, path)
-    quoted = _env.ps_quote(str(resolved))
-    script = f"""
-$ErrorActionPreference = 'Stop'
-if (-not (Test-Path {quoted})) {{
-    exit 3
-}}
-Get-Content -Raw {quoted}
-"""
-    result = _env.run_powershell(client_host, script)
-    assert result.rc == 0, (
-        f"Failed to read remote JSON {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-    )
-    try:
-        return json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        pytest.fail(f"Failed to parse JSON from {path}: {exc}\nContent:\n{result.stdout}")
 
 
 def _remote_path_exists(client_host, path: Path) -> bool:
@@ -221,7 +200,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             check=True,
             )
 
-        data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        data = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_outbound_entry(data, "10.62.10.10", "test_password123", "alpha@example.com", "10.62.10.10")
 
         xp2p_client_runner(
@@ -238,7 +217,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             check=True,
             )
 
-        updated_outbounds = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        updated_outbounds = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_outbound_entry(
             updated_outbounds,
             "10.62.10.10",
@@ -255,10 +234,8 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             "vpn.example.local",
             allow_insecure=False,
             )
-
-        routing = _read_remote_json(client_host, CLIENT_ROUTING_JSON)
-        _assert_routing_rule(routing, "10.62.10.10")
-        _assert_routing_rule(routing, "10.62.10.11")
+        _assert_routing_rule(updated_outbounds, "10.62.10.10")
+        _assert_routing_rule(updated_outbounds, "10.62.10.11")
 
         state = _env.read_toml(client_host, CLIENT_CONFIG_FILE).get("client") or {}
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
@@ -294,7 +271,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner, xp
             check=True,
             )
 
-        refreshed = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        refreshed = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_outbound_entry(
             refreshed,
             "10.62.10.10",
@@ -337,7 +314,7 @@ def test_client_install_from_link(client_host, xp2p_client_runner, xp2p_msi_path
             check=True,
             )
 
-        data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        data = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_outbound_entry_any_host(
             data,
             {LINK_HOST, LINK_HOST_IP},
@@ -374,7 +351,7 @@ def test_client_install_from_link_without_allow_insecure(client_host, xp2p_clien
             check=True,
             )
 
-        data = _read_remote_json(client_host, CLIENT_CONFIG_OUTBOUNDS)
+        data = render_desired_xray_json(xp2p_client_runner, role="client")
         _assert_outbound_entry_any_host(
             data, {LINK_HOST, LINK_HOST_IP}, "linkpass", "link@example.com", LINK_HOST, allow_insecure=False
         )

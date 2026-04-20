@@ -19,8 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SSH_CONNECT_TIMEOUT = 120
 SSH_COMMAND_TIMEOUT = 120
 VAGRANT_COMMAND_TIMEOUT = 120
-SSH_BANNER_TIMEOUT = 120
-SSH_AUTH_TIMEOUT = 120
+SSH_BANNER_TIMEOUT = 10
+SSH_AUTH_TIMEOUT = 30
+VAGRANT_RELOAD_TIMEOUT = 600
 
 
 class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
@@ -28,13 +29,16 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
     def client(self) -> "paramiko_backend.paramiko.SSHClient":
         client = paramiko_backend.paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko_backend.paramiko.WarningPolicy())
+        connect_timeout = self.timeout
+        banner_timeout = min(SSH_BANNER_TIMEOUT, connect_timeout)
+        auth_timeout = min(SSH_AUTH_TIMEOUT, connect_timeout)
         cfg = {
             "hostname": self.host.name,
             "port": int(self.host.port) if self.host.port else 22,
             "username": self.host.user,
-            "timeout": self.timeout,
-            "banner_timeout": SSH_BANNER_TIMEOUT,
-            "auth_timeout": SSH_AUTH_TIMEOUT,
+            "timeout": connect_timeout,
+            "banner_timeout": banner_timeout,
+            "auth_timeout": auth_timeout,
             "password": self.host.password,
             "look_for_keys": False,
             "allow_agent": False,
@@ -88,7 +92,6 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         if len(short) > 240:
             short = short[:240] + "..."
         print(f"SSH run start (timeout={kwargs.get('timeout')}): {short}")
-        self._reset_client()
         try:
             result = super().run(command, *args, **kwargs)
             print(f"SSH run done (rc={result.rc})")
@@ -103,13 +106,14 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
             self._reset_client()
             error_text = str(exc).lower()
             if "no existing session" in error_text or "error reading ssh protocol banner" in error_text:
-                for attempt in range(1, 7):
-                    time.sleep(5)
+                max_attempts = 2 if self.timeout <= 30 else 4
+                for attempt in range(1, max_attempts + 1):
+                    time.sleep(1)
                     try:
                         return super().run(command, *args, **kwargs)
                     except paramiko_backend.paramiko.SSHException:
                         self._reset_client()
-                        if attempt == 6:
+                        if attempt == max_attempts:
                             print("WARNING: SSH banner retry limit reached.")
             try:
                 return super().run(command, *args, **kwargs)
@@ -263,7 +267,19 @@ def _ssh_config(vagrant_dir: Path, machine: str) -> str:
     return output
 
 
-def get_ssh_host(vagrant_dir: Path, machine: str) -> Host:
+def invalidate_ssh_config_cache() -> None:
+    _ssh_config.cache_clear()
+
+
+def vagrant_reload_force(vagrant_dir: Path, machine: str, *, timeout: int = VAGRANT_RELOAD_TIMEOUT) -> None:
+    _run_vagrant_command(
+        ["vagrant", "reload", "--force", machine],
+        cwd=vagrant_dir,
+        timeout=timeout,
+    )
+
+
+def get_ssh_host(vagrant_dir: Path, machine: str, *, connect_timeout: int = SSH_CONNECT_TIMEOUT) -> Host:
     ensure_machine_running(vagrant_dir, machine)
     _patch_paramiko_backend()
     raw = _ssh_config(vagrant_dir, machine)
@@ -276,5 +292,5 @@ def get_ssh_host(vagrant_dir: Path, machine: str) -> Host:
     return testinfra.get_host(
         f"paramiko://{config['user']}@{config['hostname']}:{config['port']}",
         ssh_identity_file=config["identityfile"],
-        timeout=SSH_CONNECT_TIMEOUT,
+        timeout=connect_timeout,
     )

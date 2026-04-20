@@ -5,11 +5,12 @@ import pytest
 import time
 
 from tests.host.win import env as _env
+from tests.host.win.flows import apply as apply_flow
 
 from .test_server_install import (
     SERVER_CONFIG_DIR_NAME,
-    SERVER_INBOUNDS,
     SERVER_INSTALL_DIR,
+    SERVER_LIVE_XRAY_JSON,
     SERVER_STATE_FILES,
     _read_remote_json,
     _trojan_inbound,
@@ -26,7 +27,7 @@ def _trojan_clients(data: dict) -> list[dict]:
 
 
 def _initial_install_client(server_host) -> dict:
-    current = _read_remote_json(server_host, SERVER_INBOUNDS)
+    current = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
     clients = _trojan_clients(current)
     assert len(clients) == 1, "xp2p server install should provision a single default client"
     default = clients[0]
@@ -49,24 +50,20 @@ def _remove_initial_install_client(server_host, xp2p_server_runner):
         default_client["email"],
         check=True,
     )
-    cleared = _read_remote_json(server_host, SERVER_INBOUNDS)
+    _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory=None)
+    cleared = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
     assert _trojan_clients(cleared) == []
     return default_client
 
 
 def _wait_for_apply_request_clear(host, *, timeout: float = 60.0) -> None:
-    apply_path = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if not _env.path_exists(host, apply_path):
-            return
-        time.sleep(1.0)
-    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
+    apply_flow.wait_for_apply_request_clear(host, timeout=timeout)
 
 
-def _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory) -> None:
-    live_inbounds = SERVER_INBOUNDS
-    if _env.path_exists(server_host, live_inbounds):
+def _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory) -> None:
+    have_live = _env.path_exists(server_host, SERVER_LIVE_XRAY_JSON)
+    apply_requested = _env.path_exists(server_host, apply_flow.apply_request_path())
+    if have_live and not apply_requested:
         return
     if xp2p_server_run_factory is not None:
         with xp2p_server_run_factory(str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME) as session:
@@ -79,11 +76,11 @@ def _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_facto
         xp2p_server_runner("server", "service", "stop", check=True)
     deadline = time.time() + 30.0
     while time.time() < deadline:
-        if _env.path_exists(server_host, live_inbounds):
+        if _env.path_exists(server_host, SERVER_LIVE_XRAY_JSON):
             break
         time.sleep(1.0)
-    if not _env.path_exists(server_host, live_inbounds):
-        pytest.fail("Live inbounds.json was not created after apply request.")
+    if not _env.path_exists(server_host, SERVER_LIVE_XRAY_JSON):
+        pytest.fail("Live xray.json was not created after apply request.")
 
 
 def _is_unreserved(value: str) -> bool:
@@ -113,7 +110,7 @@ def test_server_install_creates_and_allows_removing_default_user(
             "--force",
             check=True,
             )
-        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
+        _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         default_client = _initial_install_client(server_host)
         assert default_client["email"].startswith("client-")
@@ -143,7 +140,7 @@ def test_server_user_add_and_idempotent(
             "--force",
             check=True,
             )
-        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
+        _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -162,8 +159,9 @@ def test_server_user_add_and_idempotent(
             "--password",
             "secret-one",
             )
+        _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
-        first_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
+        first_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         first_clients = _trojan_clients(first_inbounds)
         assert len(first_clients) == 1
         assert first_clients[0].get("email") == "alpha"
@@ -186,7 +184,7 @@ def test_server_user_add_and_idempotent(
             )
         assert duplicate.rc != 0, "Expected failure when adding duplicate user without --force"
 
-        second_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
+        second_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         second_clients = _trojan_clients(second_inbounds)
         assert len(second_clients) == 1
         assert second_clients[0].get("password") == "secret-one"
@@ -208,8 +206,9 @@ def test_server_user_add_and_idempotent(
             "--force",
             check=True,
             )
+        _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
-        final_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
+        final_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         final_clients = _trojan_clients(final_inbounds)
         assert len(final_clients) == 1
         assert final_clients[0].get("password") == "secret-two"
@@ -237,7 +236,7 @@ def test_server_user_remove_is_idempotent(
             "--force",
             check=True,
             )
-        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
+        _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -271,7 +270,7 @@ def test_server_user_remove_is_idempotent(
             check=True,
             )
 
-        after_remove = _read_remote_json(server_host, SERVER_INBOUNDS)
+        after_remove = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         assert _trojan_clients(after_remove) == []
 
         xp2p_server_runner(
@@ -310,7 +309,7 @@ def test_server_user_add_validates_input(
             "--force",
             check=True,
             )
-        _ensure_live_inbounds(server_host, xp2p_server_runner, xp2p_server_run_factory)
+        _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
         _remove_initial_install_client(server_host, xp2p_server_runner)
 
@@ -328,8 +327,9 @@ def test_server_user_add_validates_input(
             "charlie",
             check=True,
             )
+        _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory)
 
-        current_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
+        current_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         clients = _trojan_clients(current_inbounds)
         assert len(clients) == 1
         assert clients[0].get("email") == "charlie"
@@ -367,7 +367,7 @@ def test_server_user_add_validates_input(
             )
         assert missing_id.rc != 0, "Expected failure when identifier is missing"
 
-        current_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
+        current_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         clients = _trojan_clients(current_inbounds)
         assert len(clients) == 1
         assert clients[0].get("email") == "charlie"

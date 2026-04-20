@@ -7,16 +7,19 @@ from typing import Iterable
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.flows import apply as apply_flow
+from tests.host.win.flows.render import render_desired_xray_json
 
 SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR_NAME = "config-server"
 SERVER_CONFIG_DIR = _env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME
-SERVER_INBOUNDS = SERVER_CONFIG_DIR / "inbounds.json"
+SERVER_LIVE_XRAY_JSON = _env.CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME / "xray.json"
 SERVER_LOGS_JSON = SERVER_CONFIG_DIR / "logs.json"
-SERVER_OUTBOUNDS_JSON = SERVER_CONFIG_DIR / "outbounds.json"
-SERVER_ROUTING_JSON = SERVER_CONFIG_DIR / "routing.json"
 SERVER_CERT_DEST = SERVER_CONFIG_DIR / "cert.pem"
 SERVER_KEY_DEST = SERVER_CONFIG_DIR / "key.pem"
+TLS_SERVER_DIR = _env.CONFIG_ROOT / "tls" / "server"
+TLS_CERT_DEST = TLS_SERVER_DIR / "cert.pem"
+TLS_KEY_DEST = TLS_SERVER_DIR / "key.pem"
 SERVER_BIN_DIR = SERVER_INSTALL_DIR / "bin"
 XRAY_BINARY = SERVER_BIN_DIR / "xray.exe"
 SERVER_RUN_LOG = _env.LOGS_DIR / "xp2p-server-run.out"
@@ -92,10 +95,27 @@ def _path_variants(path: Path) -> set[str]:
 def _expect_tls_paths() -> tuple[set[str], set[str]]:
     cert_paths = set()
     key_paths = set()
-    cert_paths.update(_path_variants(SERVER_CERT_DEST))
-    key_paths.update(_path_variants(SERVER_KEY_DEST))
-    cert_paths.update(_path_variants(_env.pending_candidate(SERVER_CERT_DEST)))
-    key_paths.update(_path_variants(_env.pending_candidate(SERVER_KEY_DEST)))
+    for cert_path in (
+        SERVER_CERT_DEST,
+        TLS_CERT_DEST,
+        _env.CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME / "cert.pem",
+        _env.CONFIG_PENDING_ROOT / SERVER_CONFIG_DIR_NAME / "cert.pem",
+        _env.CONFIG_LIVE_ROOT / "tls" / "server" / "cert.pem",
+        _env.CONFIG_PENDING_ROOT / "tls" / "server" / "cert.pem",
+    ):
+        cert_paths.update(_path_variants(cert_path))
+        cert_paths.update(_path_variants(_env.pending_candidate(cert_path)))
+
+    for key_path in (
+        SERVER_KEY_DEST,
+        TLS_KEY_DEST,
+        _env.CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME / "key.pem",
+        _env.CONFIG_PENDING_ROOT / SERVER_CONFIG_DIR_NAME / "key.pem",
+        _env.CONFIG_LIVE_ROOT / "tls" / "server" / "key.pem",
+        _env.CONFIG_PENDING_ROOT / "tls" / "server" / "key.pem",
+    ):
+        key_paths.update(_path_variants(key_path))
+        key_paths.update(_path_variants(_env.pending_candidate(key_path)))
     return cert_paths, key_paths
 
 
@@ -104,6 +124,22 @@ def _trojan_inbound(data: dict) -> dict:
         if entry.get("protocol") == "trojan":
             return entry
     pytest.fail("Trojan inbound not found in configuration data")
+
+
+def _ensure_live_xray(server_host, runner) -> None:
+    if _env.path_exists(server_host, SERVER_LIVE_XRAY_JSON):
+        return
+    if not _env.service_exists(server_host, "xp2p-server"):
+        pytest.skip("xp2p-server service is not registered; MSI install required.")
+    runner("server", "service", "start", check=True)
+    apply_flow.wait_for_apply_request_clear(server_host, timeout=90.0)
+    runner("server", "service", "stop", check=True)
+    deadline = time.time() + 30.0
+    while time.time() < deadline:
+        if _env.path_exists(server_host, SERVER_LIVE_XRAY_JSON):
+            return
+        time.sleep(1.0)
+    pytest.fail(f"Live xray.json was not created at {SERVER_LIVE_XRAY_JSON}.")
 
 
 def _decode_remote_certificate(host, path: Path) -> dict:
@@ -116,6 +152,19 @@ def _decode_remote_certificate(host, path: Path) -> dict:
         f"Failed to decode certificate {path}:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
     return json.loads(result.stdout)
+
+
+def _primary_tls_files(data: dict) -> tuple[str, str]:
+    trojan = _trojan_inbound(data)
+    tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
+    certificates = tls_settings.get("certificates", [])
+    assert certificates, "Expected TLS certificates in configuration"
+    primary = certificates[0] if isinstance(certificates, list) else {}
+    cert_file = (primary.get("certificateFile") or "").strip()
+    key_file = (primary.get("keyFile") or "").strip()
+    assert cert_file, "certificateFile missing in TLS configuration"
+    assert key_file, "keyFile missing in TLS configuration"
+    return cert_file, key_file
 
 
 def _combined_output(result) -> str:
@@ -154,15 +203,7 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
         assert _remote_path_exists(server_host, XRAY_BINARY), (
             f"Expected xray binary at {XRAY_BINARY}"
         )
-        for config_path in (
-            SERVER_INBOUNDS,
-            SERVER_LOGS_JSON,
-            SERVER_OUTBOUNDS_JSON,
-            SERVER_ROUTING_JSON,
-            ):
-            assert _remote_path_exists(server_host, config_path), (
-                f"Expected config file {config_path}"
-        )
+        assert _remote_path_exists(server_host, _env.CONFIG_ROOT / "xp2p-server.toml")
 
         xp2p_server_runner(
             "server",
@@ -182,24 +223,48 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
             check=True,
             )
 
-        inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
-        trojan = _trojan_inbound(inbounds_data)
+        _ensure_live_xray(server_host, xp2p_server_runner)
+        xray = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
+        trojan = _trojan_inbound(xray)
         assert trojan.get("port") == 62001
         stream_settings = trojan.get("streamSettings", {})
         assert stream_settings.get("security") == "tls"
         tls_settings = stream_settings.get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
-        certificates = tls_settings.get("certificates", [])
-        assert certificates, "Expected TLS certificates in configuration"
-        expected_cert = str(cert_source).replace("\\", "/")
-        expected_key = str(key_source).replace("\\", "/")
-        primary_cert = certificates[0]
-        assert primary_cert.get("certificateFile") == expected_cert
-        assert primary_cert.get("keyFile") == expected_key
+        cert_value, key_value = _primary_tls_files(xray)
+        expected_cert_paths, expected_key_paths = _expect_tls_paths()
+        assert cert_value in expected_cert_paths
+        assert key_value in expected_key_paths
+        assert _env.path_exists(server_host, Path(cert_value)), f"Expected certificateFile to exist: {cert_value}"
+        assert _env.path_exists(server_host, Path(key_value)), f"Expected keyFile to exist: {key_value}"
+        remote_cert = _read_remote_text(server_host, Path(cert_value)).replace("\r\n", "\n").strip()
+        remote_key = _read_remote_text(server_host, Path(key_value)).replace("\r\n", "\n").strip()
+        assert remote_cert == cert_content.replace("\r\n", "\n").strip()
+        assert remote_key == key_content.replace("\r\n", "\n").strip()
+
+        xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
+        )
+
+        updated_desired = render_desired_xray_json(xp2p_server_runner, role="server")
+        updated_cert_value, _ = _primary_tls_files(updated_desired)
+        updated_cert = _read_remote_text(server_host, Path(updated_cert_value)).replace("\r\n", "\n").strip()
+        assert updated_cert != cert_content.replace("\r\n", "\n").strip(), (
+            "Expected self-signed cert generation to overwrite the previous certificate."
+        )
 
         _write_remote_text(server_host, cert_source, cert_content)
         _write_remote_text(server_host, key_source, key_content)
-
         xp2p_server_runner(
             "server",
             "cert",
@@ -216,20 +281,23 @@ def test_server_install_uses_provided_certificate_and_force_overwrites(
             SERVER_HOST_VALUE,
             "--force",
             check=True,
-            )
+        )
 
-        updated_inbounds = _read_remote_json(server_host, SERVER_INBOUNDS)
-        updated_trojan = _trojan_inbound(updated_inbounds)
+        _ensure_live_xray(server_host, xp2p_server_runner)
+        updated_xray = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
+        updated_trojan = _trojan_inbound(updated_xray)
         assert updated_trojan.get("port") == 62001
         updated_stream = updated_trojan.get("streamSettings", {})
         assert updated_stream.get("security") == "tls"
         updated_tls = updated_stream.get("tlsSettings", {})
         assert "allowInsecure" not in updated_tls
-        updated_certificates = updated_tls.get("certificates", [])
-        assert updated_certificates, "Expected TLS certificates after certificate update"
-        updated_primary = updated_certificates[0]
-        assert updated_primary.get("certificateFile") == expected_cert
-        assert updated_primary.get("keyFile") == expected_key
+        updated_cert_value, updated_key_value = _primary_tls_files(updated_xray)
+        assert updated_cert_value in expected_cert_paths
+        assert updated_key_value in expected_key_paths
+        updated_remote_cert = _read_remote_text(server_host, Path(updated_cert_value)).replace("\r\n", "\n").strip()
+        updated_remote_key = _read_remote_text(server_host, Path(updated_key_value)).replace("\r\n", "\n").strip()
+        assert updated_remote_cert == cert_content.replace("\r\n", "\n").strip()
+        assert updated_remote_key == key_content.replace("\r\n", "\n").strip()
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
         _remove_remote_paths(server_host, [cert_source, key_source])
@@ -268,19 +336,17 @@ def test_server_install_uses_path_certificate_source(server_host, xp2p_server_ru
             check=True,
             )
 
-        inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
-        trojan = _trojan_inbound(inbounds_data)
+        _ensure_live_xray(server_host, xp2p_server_runner)
+        xray = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
+        trojan = _trojan_inbound(xray)
         tls_settings = trojan.get("streamSettings", {}).get("tlsSettings", {})
         assert "allowInsecure" not in tls_settings
-        certificates = tls_settings.get("certificates", [])
-        assert certificates, "Expected TLS certificates in configuration"
-        primary_cert = certificates[0]
+        cert_value, key_value = _primary_tls_files(xray)
         expected_cert_paths, expected_key_paths = _expect_tls_paths()
-        assert primary_cert.get("certificateFile") in expected_cert_paths
-        assert primary_cert.get("keyFile") in expected_key_paths
-
-        assert _remote_path_exists(server_host, SERVER_CERT_DEST), "Expected cert.pem to be copied"
-        assert _remote_path_exists(server_host, SERVER_KEY_DEST), "Expected key.pem to be copied"
+        assert cert_value in expected_cert_paths
+        assert key_value in expected_key_paths
+        assert _env.path_exists(server_host, Path(cert_value)), f"Expected certificateFile to exist: {cert_value}"
+        assert _env.path_exists(server_host, Path(key_value)), f"Expected keyFile to exist: {key_value}"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
@@ -321,16 +387,12 @@ def test_server_install_generates_self_signed_certificate(
             check=True,
             )
 
-        cert_path = SERVER_CERT_DEST
-        pending_cert = _env.pending_candidate(SERVER_CERT_DEST)
-        if _env.path_exists(server_host, pending_cert):
-            cert_path = pending_cert
-        key_path = SERVER_KEY_DEST
-        pending_key = _env.pending_candidate(SERVER_KEY_DEST)
-        if _env.path_exists(server_host, pending_key):
-            key_path = pending_key
-        assert _remote_path_exists(server_host, cert_path), "Expected cert.pem to exist"
-        assert _remote_path_exists(server_host, key_path), "Expected key.pem to exist"
+        desired_xray = render_desired_xray_json(xp2p_server_runner, role="server")
+        cert_value, key_value = _primary_tls_files(desired_xray)
+        cert_path = Path(cert_value)
+        key_path = Path(key_value)
+        assert _remote_path_exists(server_host, cert_path), f"Expected certificateFile to exist: {cert_value}"
+        assert _remote_path_exists(server_host, key_path), f"Expected keyFile to exist: {key_value}"
 
         cert_info = _decode_remote_certificate(server_host, cert_path)
         subject_cn = cert_info.get("SubjectCN")
@@ -361,8 +423,9 @@ def test_server_install_generates_self_signed_certificate(
         key_content = _read_remote_text(server_host, key_path)
         assert "BEGIN RSA PRIVATE KEY" in key_content
 
-        inbounds_data = _read_remote_json(server_host, SERVER_INBOUNDS)
-        trojan = _trojan_inbound(inbounds_data)
+        _ensure_live_xray(server_host, xp2p_server_runner)
+        xray = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
+        trojan = _trojan_inbound(xray)
         stream_settings = trojan.get("streamSettings", {})
         assert stream_settings.get("security") == "tls"
         tls_settings = stream_settings.get("tlsSettings", {})
@@ -417,13 +480,23 @@ def test_server_cert_set_rejects_mismatched_cert_key(server_host, xp2p_server_ru
             check=True,
             )
 
-        key_path = SERVER_KEY_DEST
-        pending_key = _env.pending_candidate(SERVER_KEY_DEST)
-        if _env.path_exists(server_host, pending_key):
-            key_path = pending_key
-        assert _remote_path_exists(server_host, key_path), (
-            f"Expected generated key at {key_path}"
+        xp2p_server_runner(
+            "server",
+            "cert",
+            "set",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            "--host",
+            SERVER_HOST_VALUE,
+            "--force",
+            check=True,
         )
+        desired_xray = render_desired_xray_json(xp2p_server_runner, role="server")
+        _, key_value = _primary_tls_files(desired_xray)
+        key_path = Path(key_value)
+        assert _remote_path_exists(server_host, key_path), f"Expected generated key at {key_value}"
 
         result = xp2p_server_runner(
             "server",
@@ -572,7 +645,11 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             check=True,
             )
 
-        before = _read_remote_text(server_host, SERVER_INBOUNDS)
+        before = render_desired_xray_json(
+            xp2p_server_runner,
+            role="server",
+            config_path=str(_env.CONFIG_ROOT / "xp2p-server.toml"),
+        )
 
         result = xp2p_server_runner(
             "server",
@@ -593,7 +670,11 @@ def test_server_cert_set_win_store_not_implemented(server_host, xp2p_server_runn
             f"Unexpected error output:\n{result.stdout}\n{result.stderr}"
         )
 
-        after = _read_remote_text(server_host, SERVER_INBOUNDS)
+        after = render_desired_xray_json(
+            xp2p_server_runner,
+            role="server",
+            config_path=str(_env.CONFIG_ROOT / "xp2p-server.toml"),
+        )
         assert after == before, "Expected config to remain unchanged after win-store error"
     finally:
         _cleanup_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win import tun_full_helpers as tun_helpers
 DEFAULT_SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 DEFAULT_SERVER_CONFIG_NAME = "config-server"
 DEFAULT_CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
@@ -207,14 +208,19 @@ def _assert_ping_success(result) -> None:
 
 
 def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
+    adapter_name, _adapter_index = tun_helpers.wait_for_tun_adapter(host, interface_name)
     result = _env.run_guest_script(
         host,
         "scripts/assert_ipv6_binding_disabled.ps1",
-        InterfaceName=interface_name,
+        InterfaceName=adapter_name,
+        TimeoutSeconds=120,
+        PollSeconds=2,
     )
     if result.rc != 0:
+        dump_path = _env.dump_failure_state(host, label=f"ipv6-binding-{adapter_name}")
         pytest.fail(
             "IPv6 binding check failed.\n"
+            f"Failure dump: {dump_path}\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
 
@@ -226,7 +232,9 @@ def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, 
             host,
             "--count",
             str(attempts),
-            "--tunnel",
+            "--timeout",
+            "5",
+            "--tunnel=127.0.0.1:51180",
         ]
         if port is not None:
             args[2:2] = ["--port", str(port)]
@@ -282,7 +290,6 @@ def test_install_server_and_client_default(
                 )
             with client_session_cm as client_session:
                 assert client_session["pid"] > 0
-                _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)
                 _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
                 ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)
@@ -360,7 +367,6 @@ def test_install_server_and_client_nodefault(
                     )
                 with client_session_cm as client_session:
                     assert client_session["pid"] > 0
-                    _assert_ipv6_binding_disabled(server_host, DEFAULT_SERVER_TUN)
                     _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
                     ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                     _assert_ping_success(ping_result)

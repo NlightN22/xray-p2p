@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 
 from tests.host.win import env as _env
+from tests.host.win.flows import apply as apply_flow
 from tests.host.win import tun_full_diagnostics as diag
 from tests.host.win import tun_full_helpers as tun
 
 SERVICE_TIMEOUT = 90.0
 POLL_INTERVAL = 2.0
-APPLY_REQUEST = _env.CONFIG_ROOT / _env.APPLY_DIR_NAME / "apply.request"
 CLIENT_CONFIG = _env.CONFIG_ROOT / "xp2p-client.toml"
 CLIENT_SERVICE_LOG = _env.LOGS_DIR / "client" / "service.log"
 SERVICE_REG_PATH = r"HKLM:\SYSTEM\CurrentControlSet\Services\xp2p-client"
@@ -69,21 +69,19 @@ def wait_for_role_service_state(runner, role: str, expected_active: bool) -> Non
 
 
 def wait_for_apply_request_clear(host, timeout: float = 90.0) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if not _env.path_exists(host, APPLY_REQUEST):
-            return
-        time.sleep(POLL_INTERVAL)
-    pytest.fail(f"apply.request did not clear after {timeout} seconds.")
+    apply_flow.wait_for_apply_request_clear(
+        host,
+        timeout=timeout,
+        poll_seconds=POLL_INTERVAL,
+    )
 
 
 def wait_for_apply_request_set(host, timeout: float = 60.0) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if _env.path_exists(host, APPLY_REQUEST):
-            return
-        time.sleep(POLL_INTERVAL)
-    pytest.fail(f"apply.request did not appear after {timeout} seconds.")
+    apply_flow.wait_for_apply_request_set(
+        host,
+        timeout=timeout,
+        poll_seconds=POLL_INTERVAL,
+    )
 
 
 def wait_for_client_config(host, timeout: float = 90.0) -> None:
