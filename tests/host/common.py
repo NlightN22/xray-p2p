@@ -279,6 +279,14 @@ def vagrant_reload_force(vagrant_dir: Path, machine: str, *, timeout: int = VAGR
     )
 
 
+def vagrant_reload_provision(vagrant_dir: Path, machine: str, *, timeout: int = VAGRANT_RELOAD_TIMEOUT) -> None:
+    _run_vagrant_command(
+        ["vagrant", "reload", "--provision", machine],
+        cwd=vagrant_dir,
+        timeout=timeout,
+    )
+
+
 def get_ssh_host(vagrant_dir: Path, machine: str, *, connect_timeout: int = SSH_CONNECT_TIMEOUT) -> Host:
     ensure_machine_running(vagrant_dir, machine)
     _patch_paramiko_backend()

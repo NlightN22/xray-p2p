@@ -380,6 +380,16 @@ def test_client_run_starts_xray_core(
             "--force",
             check=True,
             )
+        xp2p_client_runner(
+            "client",
+            "mode",
+            "proxy",
+            "--path",
+            str(CLIENT_INSTALL_DIR),
+            "--config-dir",
+            CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        )
 
         with xp2p_client_run_factory(
             str(CLIENT_INSTALL_DIR), CLIENT_CONFIG_DIR_NAME

@@ -132,10 +132,8 @@ def _ensure_default_routes_restored(client_host, xp2p_client_runner) -> None:
 
 def _skip_if_not_direct_file(request) -> None:
     args = [str(arg).replace("\\", "/").lower() for arg in request.config.args]
-    if len(args) == 1:
-        target = args[0]
-        if target.endswith("tests/host/win/test_tun_mode_full.py") or target.endswith("test_tun_mode_full.py"):
-            return
+    if any(arg.endswith("tests/host/win/test_tun_mode_full.py") or arg.endswith("test_tun_mode_full.py") for arg in args):
+        return
     pytest.skip("Long-running full-tunnel test; run this file directly to execute.")
 
 

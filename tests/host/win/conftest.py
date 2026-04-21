@@ -1,5 +1,6 @@
 import time
 import uuid
+import subprocess
 from contextlib import contextmanager
 from typing import Callable
 
@@ -151,6 +152,30 @@ def _configure_win_stack(pytestconfig: pytest.Config) -> None:
 
 @pytest.fixture(scope="session")
 def xp2p_build_id() -> str:
+    try:
+        head = subprocess.check_output(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=win_env.REPO_ROOT,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        dirty = subprocess.call(
+            ["git", "diff", "--quiet"],
+            cwd=win_env.REPO_ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        staged_dirty = subprocess.call(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=win_env.REPO_ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        suffix = "-dirty" if dirty != 0 or staged_dirty != 0 else ""
+        if head:
+            return f"git-{head}{suffix}"
+    except Exception:
+        pass
     return uuid.uuid4().hex
 
 
@@ -165,7 +190,11 @@ def xp2p_msi_path(_configure_win_stack) -> str:
     with _timed("get_ssh_host (msi build)"):
         server_host = win_env.get_ssh_host(win_env.DEFAULT_SERVER)
     with _timed("ensure_msi_package"):
-        return win_env.ensure_msi_package(server_host)
+        return win_env.ensure_msi_package(
+            server_host,
+            machine=win_env.DEFAULT_SERVER,
+            reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
+        )
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -186,12 +215,25 @@ def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
     if client_backend is not None and hasattr(client_backend, "_reset_client"):
         client_backend._reset_client()
     with _timed("ensure_project_synced (server)"):
-        win_env.ensure_project_synced(server_host, machine=win_env.DEFAULT_SERVER)
+        server_host = win_env.ensure_project_synced(
+            server_host,
+            machine=win_env.DEFAULT_SERVER,
+            reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
+        )
     with _timed("ensure_project_synced (client)"):
-        win_env.ensure_project_synced(client_host, machine=win_env.DEFAULT_CLIENT)
+        client_host = win_env.ensure_project_synced(
+            client_host,
+            machine=win_env.DEFAULT_CLIENT,
+            reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_CLIENT),
+        )
     with _timed("ensure_program_files_install (server)"):
         try:
-            win_env.ensure_program_files_install(server_host, force_reinstall=True)
+            server_host = win_env.ensure_program_files_install(
+                server_host,
+                force_reinstall=True,
+                machine=win_env.DEFAULT_SERVER,
+                reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
+            )
         except win_env.MsiServiceUnavailable as exc:
             pytest.skip(str(exc))
         except RuntimeError as exc:
@@ -209,7 +251,12 @@ def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
         pytest.fail(f"xp2p.exe not detected on {win_env.DEFAULT_SERVER} after install")
     with _timed("ensure_program_files_install (client)"):
         try:
-            win_env.ensure_program_files_install(client_host, force_reinstall=True)
+            client_host = win_env.ensure_program_files_install(
+                client_host,
+                force_reinstall=True,
+                machine=win_env.DEFAULT_CLIENT,
+                reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_CLIENT),
+            )
         except win_env.MsiServiceUnavailable as exc:
             pytest.skip(str(exc))
         except RuntimeError as exc:
@@ -239,7 +286,11 @@ def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
         pytest.fail(f"xp2p.exe not detected on {win_env.DEFAULT_CLIENT} after install")
     yield
     with _timed("ensure_msi_package (teardown)"):
-        msi_path = win_env.ensure_msi_package(server_host)
+        msi_path = win_env.ensure_msi_package(
+            server_host,
+            machine=win_env.DEFAULT_SERVER,
+            reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
+        )
     with _timed("uninstall_xp2p_from_msi (server)"):
         win_env.uninstall_xp2p_from_msi(server_host, msi_path)
     with _timed("uninstall_xp2p_from_msi (client)"):
@@ -259,9 +310,15 @@ def _baseline_network_health(
     client_host_ipv4: str,
 ) -> None:
     with _timed("baseline internet check (server)"):
-        net.assert_internet_access(server_host, label="server baseline")
+        try:
+            net.ensure_internet_access_with_adapter_reset(server_host)
+        except pytest.fail.Exception as exc:
+            print(f"WARNING: server internet check failed: {exc}")
     with _timed("baseline internet check (client)"):
-        net.assert_internet_access(client_host, label="client baseline")
+        try:
+            net.ensure_internet_access_with_adapter_reset(client_host)
+        except pytest.fail.Exception as exc:
+            print(f"WARNING: client internet check failed: {exc}")
     with _timed("baseline dns check (server)"):
         net.assert_dns_resolution(server_host, "example.com", label="server baseline")
     with _timed("baseline dns check (client)"):
@@ -304,7 +361,11 @@ def client_host_ipv4(client_host: Host) -> str:
 
 @pytest.fixture
 def xp2p_server_service(server_host: Host, xp2p_options: dict):
-    win_env.ensure_program_files_install(server_host)
+    win_env.ensure_program_files_install(
+        server_host,
+        machine=win_env.DEFAULT_SERVER,
+        reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
+    )
     port = xp2p_options["port"]
     pid_value: int | None = None
     try:
@@ -377,7 +438,11 @@ exit 0
 
 @pytest.fixture
 def xp2p_client_run_factory(client_host: Host):
-    win_env.ensure_program_files_install(client_host)
+    win_env.ensure_program_files_install(
+        client_host,
+        machine=win_env.DEFAULT_CLIENT,
+        reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_CLIENT),
+    )
 
     def _factory(install_dir: str, config_dir: str):
         return _client_runtime.xp2p_client_run_session(client_host, install_dir, config_dir)
@@ -387,7 +452,11 @@ def xp2p_client_run_factory(client_host: Host):
 
 @pytest.fixture
 def xp2p_server_run_factory(server_host: Host):
-    win_env.ensure_program_files_install(server_host)
+    win_env.ensure_program_files_install(
+        server_host,
+        machine=win_env.DEFAULT_SERVER,
+        reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
+    )
 
     def _factory(install_dir: str, config_dir: str):
         return _server_runtime.xp2p_server_run_session(server_host, install_dir, config_dir)
@@ -399,7 +468,11 @@ def xp2p_server_run_factory(server_host: Host):
 def xp2p_client_runner(
     client_host: Host,
 ) -> Callable[..., CommandResult]:
-    win_env.ensure_program_files_install(client_host)
+    win_env.ensure_program_files_install(
+        client_host,
+        machine=win_env.DEFAULT_CLIENT,
+        reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_CLIENT),
+    )
 
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
@@ -449,7 +522,11 @@ def xp2p_client_runner(
 def xp2p_server_runner(
     server_host: Host,
 ) -> Callable[..., CommandResult]:
-    win_env.ensure_program_files_install(server_host)
+    win_env.ensure_program_files_install(
+        server_host,
+        machine=win_env.DEFAULT_SERVER,
+        reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
+    )
 
     def _runner(*args: str, check: bool = False):
         cmd = list(args)

@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -44,6 +44,7 @@ SERVER_PENDING_DIR = CONFIG_PENDING_ROOT / SERVER_CONFIG_DIR_NAME
 CLIENT_LIVE_DIR = CONFIG_LIVE_ROOT / CLIENT_CONFIG_DIR_NAME
 SERVER_LIVE_DIR = CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME
 LOGS_DIR = Path(os.environ.get("XP2P_LOG_ROOT", str(CONFIG_ROOT / "logs")))
+LOG_ROOT = LOGS_DIR
 XP2P_EXE = PROGRAM_FILES_INSTALL_DIR / "xp2p.exe"
 SERVICE_START_TIMEOUT = 60
 GUEST_TESTS_ROOT = Path(r"C:\xp2p\tests\guest")
@@ -564,12 +565,22 @@ def _encode_args_payload(args: Iterable[str]) -> str:
     return base64.b64encode(raw.encode("utf-8")).decode("ascii")
 
 
-def ensure_msi_package(host: Host) -> str:
+def ensure_msi_package(
+    host: Host,
+    *,
+    machine: str | None = None,
+    reconnect: Callable[[], Host] | None = None,
+) -> str:
     global _MSI_CACHE_PATH_X64
     if _MSI_CACHE_PATH_X64 and path_exists(host, _MSI_CACHE_PATH_X64):
         return _MSI_CACHE_PATH_X64
 
-    ensure_project_synced(host)
+    if machine is None:
+        host = ensure_project_synced(host)
+    else:
+        if reconnect is None:
+            reconnect = lambda: get_ssh_host(machine)
+        host = ensure_project_synced(host, machine=machine, reconnect=reconnect)
     path = _build_msi_package(
         host,
         architecture="amd64",
@@ -580,12 +591,22 @@ def ensure_msi_package(host: Host) -> str:
     return path
 
 
-def ensure_msi_package_x86(host: Host) -> str:
+def ensure_msi_package_x86(
+    host: Host,
+    *,
+    machine: str | None = None,
+    reconnect: Callable[[], Host] | None = None,
+) -> str:
     global _MSI_CACHE_PATH_X86
     if _MSI_CACHE_PATH_X86 and path_exists(host, _MSI_CACHE_PATH_X86):
         return _MSI_CACHE_PATH_X86
 
-    ensure_project_synced(host)
+    if machine is None:
+        host = ensure_project_synced(host)
+    else:
+        if reconnect is None:
+            reconnect = lambda: get_ssh_host(machine)
+        host = ensure_project_synced(host, machine=machine, reconnect=reconnect)
     path = _build_msi_package(
         host,
         architecture="x86",
@@ -643,7 +664,7 @@ if ($process.ExitCode -ne 0) {{
 }}
 exit 0
 """
-    result = run_powershell(host, script, label="path_exists_raw")
+    result = run_powershell(host, script, timeout=420, label="msi_install")
     if result.rc != 0:
         log_path = Path(r"C:\xp2p\build\logs\win\msi-install.log")
         log_tail = _read_msi_log_tail(host, log_path)
@@ -665,10 +686,11 @@ foreach ($policyRoot in @(
 sc.exe config msiserver start= demand | Out-Null
 Start-Service -Name 'msiserver' -ErrorAction SilentlyContinue | Out-Null
 Start-Process -FilePath 'msiexec.exe' -ArgumentList '/unregister' -Wait -ErrorAction SilentlyContinue | Out-Null
-Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAction SilentlyContinue | Out-Null
+ Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAction SilentlyContinue | Out-Null
 """,
+                timeout=120,
         )
-            result = run_powershell(host, script)
+            result = run_powershell(host, script, timeout=420, label="msi_install_retry")
             if result.rc == 0:
                 return
             raise MsiServiceUnavailable(
@@ -676,7 +698,7 @@ Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAct
         )
         if "MSI ExitCode=1603" in stdout:
             _cleanup_orphaned_xp2p_msi(host)
-            result = run_powershell(host, script)
+            result = run_powershell(host, script, timeout=420, label="msi_install_retry")
             if result.rc == 0:
                 return
         raise RuntimeError(
@@ -687,64 +709,74 @@ Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAct
 
 
 def _cleanup_orphaned_xp2p_msi(host: Host) -> None:
-    script = """
+    script = r"""
 $ErrorActionPreference = 'Stop'
+$services = @('xp2p-client', 'xp2p-server')
+foreach ($svc in $services) {
+    $service = Get-Service -Name $svc -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -ne 'Stopped') {
+        Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+    }
+}
+Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
 $productNamePattern = '^xp2p'
 $roots = @(
-    'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
-    'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
 )
 $items = Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object {
     $_.DisplayName -and $_.DisplayName -match $productNamePattern
 }
+
 foreach ($item in $items) {
     $code = $item.PSChildName
-    if ($code -and $code -match '^\\{[0-9A-Fa-f-]+\\}$') {
+    if ($code -and $code -match '^\{[0-9A-Fa-f-]+\}$') {
         $args = @('/x', $code, '/qn', '/norestart')
         $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -PassThru
-        $proc.WaitForExit(300000) | Out-Null
+        $proc.WaitForExit(120000) | Out-Null
+        if (-not $proc.HasExited) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        }
+        continue
     }
+    $cmd = $null
     if ($item.QuietUninstallString) {
         $cmd = $item.QuietUninstallString
     } elseif ($item.UninstallString) {
         $cmd = $item.UninstallString
-    } else {
-        $cmd = $null
     }
     if ($cmd) {
         $cmd = $cmd -replace '/I', '/X'
         Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $cmd) -Wait -ErrorAction SilentlyContinue | Out-Null
     }
-    if ($item.PSPath) {
-        Remove-Item -Path $item.PSPath -Recurse -Force -ErrorAction SilentlyContinue
-    }
 }
+
+$deadline = (Get-Date).AddSeconds(120)
 $installerRoots = @(
-    'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products',
-    'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Installer\\UserData\\S-1-5-18\\Products'
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products',
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products'
 )
-$productKeys = @()
+$productKeys = New-Object System.Collections.Generic.List[string]
 foreach ($root in $installerRoots) {
+    if ((Get-Date) -gt $deadline) { break }
     $children = Get-ChildItem -Path $root -ErrorAction SilentlyContinue
     foreach ($child in $children) {
+        if ((Get-Date) -gt $deadline) { break }
         $propsPath = Join-Path $child.PSPath 'InstallProperties'
         $props = Get-ItemProperty -Path $propsPath -ErrorAction SilentlyContinue
-        if (-not $props) {
-            continue
-        }
+        if (-not $props) { continue }
         $name = $props.DisplayName
-        if (-not $name) {
-            $name = $props.ProductName
-        }
+        if (-not $name) { $name = $props.ProductName }
         if ($name -and $name -match $productNamePattern) {
-            $productKeys += $child.PSChildName
+            $productKeys.Add($child.PSChildName) | Out-Null
             Remove-Item -Path $child.PSPath -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }
 $classRoots = @(
-    'HKLM:\\SOFTWARE\\Classes\\Installer\\Products',
-    'HKLM:\\SOFTWARE\\WOW6432Node\\Classes\\Installer\\Products'
+    'HKLM:\SOFTWARE\Classes\Installer\Products',
+    'HKLM:\SOFTWARE\WOW6432Node\Classes\Installer\Products'
 )
 foreach ($root in $classRoots) {
     foreach ($key in $productKeys) {
@@ -754,8 +786,19 @@ foreach ($root in $classRoots) {
         }
     }
 }
+
+$dirs = @(
+    'C:\ProgramData\xp2p',
+    'C:\Program Files\xp2p',
+    'C:\Program Files (x86)\xp2p'
+)
+foreach ($dir in $dirs) {
+    if (Test-Path $dir) {
+        Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 """
-    run_powershell(host, script)
+    run_powershell(host, script, timeout=300, label="msi_cleanup_orphans")
 
 
 def _read_msi_log_tail(host: Host, path: Path, lines: int = 200) -> str:
@@ -856,7 +899,7 @@ if (Test-Path {install_dir}) {{
     script += """
 exit 0
     """
-    result = run_powershell(host, script, label="get_remote_file_size")
+    result = run_powershell(host, script, timeout=360, label="msi_uninstall")
     if result.rc != 0:
         stdout = result.stdout or ""
         if "MSI ExitCode=1601" in stdout:
@@ -883,15 +926,25 @@ exit 0
     remove_services(host, ["xp2p-client", "xp2p-server"])
 
 
-def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -> None:
+def ensure_program_files_install(
+    host: Host,
+    *,
+    force_reinstall: bool = False,
+    machine: str | None = None,
+    reconnect: Callable[[], Host] | None = None,
+) -> Host:
+    if machine is not None:
+        if reconnect is None:
+            reconnect = lambda: get_ssh_host(machine)
+        host = ensure_project_synced(host, machine=machine, reconnect=reconnect)
     if not force_reinstall:
         detected = _detect_xp2p_exe(host)
         if detected is not None:
             _set_install_paths_from_exe(detected)
-            return
+            return host
 
     start = time.perf_counter()
-    msi_path = ensure_msi_package(host)
+    msi_path = ensure_msi_package(host, machine=machine, reconnect=reconnect)
     print(f"TIMING: ensure_msi_package: {time.perf_counter() - start:.2f}s")
     start = time.perf_counter()
     try:
@@ -900,12 +953,28 @@ def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -
         detected = _detect_xp2p_exe(host)
         if detected is not None:
             _set_install_paths_from_exe(detected)
-            return
+            return host
         _manual_install_from_msi_bin(host)
         detected = _detect_xp2p_exe(host)
         if detected is not None:
             _set_install_paths_from_exe(detected)
-            return
+            return host
+        raise
+    except RuntimeError as exc:
+        detected = _detect_xp2p_exe(host)
+        if detected is not None:
+            print(f"WARNING: MSI install reported failure, but xp2p.exe exists at {detected}. {exc}")
+            _set_install_paths_from_exe(detected)
+            return host
+        try:
+            _manual_install_from_msi_bin(host)
+        except Exception:
+            raise
+        detected = _detect_xp2p_exe(host)
+        if detected is not None:
+            print(f"WARNING: Using xp2p.exe from MSI bin install at {detected}. {exc}")
+            _set_install_paths_from_exe(detected)
+            return host
         raise
     print(f"TIMING: install_xp2p_from_msi: {time.perf_counter() - start:.2f}s")
 
@@ -918,6 +987,7 @@ def ensure_program_files_install(host: Host, *, force_reinstall: bool = False) -
             f"Checked: {PROGRAM_FILES_INSTALL_DIR} and {PROGRAM_FILES_X86_INSTALL_DIR}."
         )
     _set_install_paths_from_exe(detected)
+    return host
 
 
 def get_program_files_install_dir(host: Host) -> Path:
@@ -1273,6 +1343,8 @@ def _path_exists_raw(host: Host, path: Path | str) -> bool:
     result = run_powershell(
         host,
         f"if (Test-Path {target}) {{ exit 0 }} else {{ exit 3 }}",
+        timeout=30,
+        label="path_exists",
     )
     return result.rc == 0
 
@@ -1291,9 +1363,45 @@ def ensure_project_synced(
     *,
     timeout: int = 60,
     machine: str | None = None,
-) -> None:
+    reconnect: Callable[[], Host] | None = None,
+) -> Host:
     if _wait_for_sync_marker(host, timeout=timeout):
-        return
+        return host
+
+    if machine and reconnect is not None:
+        reload_steps: list[tuple[str, Callable[[Path, str], None]]] = [
+            ("reload --force", common.vagrant_reload_force),
+            ("reload --provision", common.vagrant_reload_provision),
+        ]
+        for step_label, reload_fn in reload_steps:
+            print(
+                f"WARNING: Project sync marker missing on guest {machine}. "
+                f"Attempting '{step_label}' once to re-mount synced folder."
+            )
+            try:
+                reload_fn(VAGRANT_DIR, machine)
+            finally:
+                common.invalidate_ssh_config_cache()
+            host = reconnect()
+            if _wait_for_sync_marker(host, timeout=timeout):
+                return host
+
+    if machine:
+        print(
+            f"WARNING: Project sync marker missing on guest {machine}. "
+            "Reloading with provision once to re-mount synced folder."
+        )
+        try:
+            common.vagrant_reload_provision(VAGRANT_DIR, machine)
+        finally:
+            common.invalidate_ssh_config_cache()
+            backend = getattr(host, "backend", None)
+            if backend is not None and hasattr(backend, "_reset_client"):
+                backend._reset_client()
+
+        if _wait_for_sync_marker(host, timeout=timeout):
+            return host
+
     hint = ""
     if machine:
         hint = f" Re-mount the synced folder (try 'vagrant reload --provision {machine}')."
@@ -1339,10 +1447,16 @@ $addresses
 
 
 def get_default_ipv4_sendthrough(host: Host) -> str | None:
-    result = run_guest_script(
-        host,
-        "scripts/get_default_ipv4_sendthrough.ps1",
-    )
+    def _read() -> CommandResult:
+        return run_guest_script(
+            host,
+            "scripts/get_default_ipv4_sendthrough.ps1",
+        )
+
+    result = _read()
+    if result.rc != 0:
+        ensure_default_ipv4_route(host, timeout=60.0)
+        result = _read()
     if result.rc != 0:
         raise RuntimeError(
             "Failed to detect default IPv4 route address.\n"
@@ -1352,6 +1466,97 @@ def get_default_ipv4_sendthrough(host: Host) -> str | None:
     if not values:
         return None
     return values[-1]
+
+
+def ensure_default_ipv4_route(host: Host, *, timeout: float = 60.0) -> None:
+    script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+
+function Has-DefaultRoute {
+    $routes = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.NextHop -and $_.NextHop -ne '0.0.0.0' }
+    return ($null -ne $routes -and @($routes).Count -gt 0)
+}
+
+if (Has-DefaultRoute) {
+    Write-Output "OK: default route present"
+    exit 0
+}
+
+Write-Output "WARN: default route missing; attempting DHCP renew"
+try { ipconfig /renew | Out-Null } catch {}
+Start-Sleep -Seconds 2
+if (Has-DefaultRoute) {
+    Write-Output "OK: default route restored after renew"
+    exit 0
+}
+
+Write-Output "WARN: default route still missing; attempting to recycle connected adapter"
+$iface = Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.ConnectionState -eq 'Connected' -and
+        $_.InterfaceAlias -notmatch '^xp2p' -and
+        $_.InterfaceAlias -notmatch '^Loopback'
+    } |
+    Sort-Object -Property InterfaceMetric |
+    Select-Object -First 1
+if ($iface) {
+    $alias = $iface.InterfaceAlias
+    Disable-NetAdapter -Name $alias -Confirm:$false | Out-Null
+    Start-Sleep -Seconds 3
+    Enable-NetAdapter -Name $alias -Confirm:$false | Out-Null
+    try { ipconfig /renew | Out-Null } catch {}
+    Start-Sleep -Seconds 2
+    if (Has-DefaultRoute) {
+        Write-Output ("OK: default route restored after recycle ({0})" -f $alias)
+        exit 0
+    }
+}
+
+Write-Output "WARN: attempting to add default route from IPv4DefaultGateway"
+$cfg = Get-NetIPConfiguration -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPv4Address -and $_.NetAdapter -and $_.NetAdapter.Status -eq 'Up' }
+$picked = $cfg | Where-Object { $_.IPv4DefaultGateway -and $_.IPv4DefaultGateway.NextHop } | Select-Object -First 1
+$ifIndex = $null
+$gw = $null
+if ($picked) {
+    $ifIndex = $picked.InterfaceIndex
+    $gw = $picked.IPv4DefaultGateway.NextHop
+}
+if (-not $gw) {
+    $nat = $cfg | Where-Object { $_.IPv4Address.IPAddress -like '10.0.2.*' } | Select-Object -First 1
+    if ($nat) {
+        $ifIndex = $nat.InterfaceIndex
+        $gw = '10.0.2.2'
+    }
+}
+if ($ifIndex -and $gw) {
+    try {
+        New-NetRoute -DestinationPrefix '0.0.0.0/0' -InterfaceIndex $ifIndex -NextHop $gw -PolicyStore ActiveStore | Out-Null
+    } catch {}
+    Start-Sleep -Seconds 1
+    if (Has-DefaultRoute) {
+        Write-Output ("OK: default route added ifIndex={0} gw={1}" -f $ifIndex, $gw)
+        exit 0
+    }
+}
+
+Write-Output "ERROR: failed to restore default route"
+Write-Output "=== route print ==="
+route print
+exit 3
+"""
+    deadline = time.time() + timeout
+    last: CommandResult | None = None
+    while time.time() < deadline:
+        last = run_powershell(host, script, timeout=60, label="ensure_default_ipv4_route")
+        if last.rc == 0:
+            return
+        time.sleep(2)
+    raise RuntimeError(
+        "Failed to restore default IPv4 route within timeout.\n"
+        f"STDOUT:\n{(last.stdout if last else '')}\nSTDERR:\n{(last.stderr if last else '')}"
+    )
 
 
 def get_interface_index(host: Host, interface_name: str) -> int:

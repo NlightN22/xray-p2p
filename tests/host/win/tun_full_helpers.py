@@ -223,7 +223,7 @@ def poll_for_routes_restored(
     def _check():
         defaults = default_routes(host)
         tun_routes = [route for route in defaults if is_tun_route(route, tun_name, tun_index)]
-        defaults_restored = any(route_id(route) in old_default_ids for route in defaults)
+        defaults_restored = any(route_id(route) in old_default_ids for route in defaults) if old_default_ids else bool(defaults)
         bypass_left: list[str] = []
         for ip in endpoint_ips:
             routes = _env.get_net_routes(host, f"{ip}/32")

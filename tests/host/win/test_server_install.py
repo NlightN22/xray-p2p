@@ -701,6 +701,16 @@ def test_server_run_starts_xray_core(
             "--force",
             check=True,
             )
+        xp2p_server_runner(
+            "server",
+            "mode",
+            "proxy",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            check=True,
+        )
 
         with xp2p_server_run_factory(
             str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME

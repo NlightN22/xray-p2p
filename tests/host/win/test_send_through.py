@@ -4,13 +4,13 @@ import pytest
 
 from tests.host.win import env as _env
 from tests.host.win.diagnostics import live_files
+from tests.host.win.assertions import socks as socks_assert
 from tests.host.win.flows import live_xray
 
 CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 CLIENT_CONFIG_DIR_NAME = "config-client"
 CLIENT_CONFIG_DIR = _env.CONFIG_ROOT / CLIENT_CONFIG_DIR_NAME
 CLIENT_LIVE_XRAY_JSON = _env.CONFIG_LIVE_ROOT / CLIENT_CONFIG_DIR_NAME / "xray.json"
-CLIENT_TUN_NAME = "xp2pc"
 CLIENT_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-client.toml",
     _env.CONFIG_ROOT / "xp2p-client.state.json",
@@ -20,11 +20,11 @@ SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 SERVER_CONFIG_DIR_NAME = "config-server"
 SERVER_CONFIG_DIR = _env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME
 SERVER_LIVE_XRAY_JSON = _env.CONFIG_LIVE_ROOT / SERVER_CONFIG_DIR_NAME / "xray.json"
-SERVER_TUN_NAME = "xp2ps"
 SERVER_STATE_FILES = [
     _env.CONFIG_ROOT / "xp2p-server.toml",
     _env.CONFIG_ROOT / "xp2p-server.state.json",
 ]
+SERVER_PORT = 62021
 
 
 def _cleanup_client_install(client_host) -> None:
@@ -59,32 +59,6 @@ def _send_through_value(outbound: dict) -> str | None:
     return str(value)
 
 
-def _assert_tun_interface(host, interface_name: str) -> None:
-    result = _env.run_guest_script(
-        host,
-        "scripts/assert_tun_interface.ps1",
-        InterfaceName=interface_name,
-    )
-    if result.rc != 0:
-        pytest.fail(
-            "TUN interface check failed.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-
-def _assert_dns_resolution(host, name: str) -> None:
-    result = _env.run_guest_script(
-        host,
-        "scripts/resolve_dns.ps1",
-        Name=name,
-    )
-    if result.rc != 0:
-        pytest.fail(
-            "DNS resolution check failed.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-
 @pytest.mark.host
 @pytest.mark.win
 def test_client_run_sets_send_through(
@@ -104,6 +78,16 @@ def test_client_run_sets_send_through(
             "--force",
             check=True,
             )
+        xp2p_client_runner(
+            "client",
+            "mode",
+            "proxy",
+            "--path",
+            str(CLIENT_INSTALL_DIR),
+            "--config-dir",
+            CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        )
         live_xray.ensure_live_xray_json(
             client_host,
             xp2p_client_runner,
@@ -115,8 +99,7 @@ def test_client_run_sets_send_through(
             str(CLIENT_INSTALL_DIR), CLIENT_CONFIG_DIR_NAME
         ) as session:
             assert session["pid"] > 0
-            _assert_tun_interface(client_host, CLIENT_TUN_NAME)
-            _assert_dns_resolution(client_host, "2ip.ru")
+            socks_assert.wait_for_socks_listener(client_host, port=51180, timeout=30)
 
         xray = live_files.read_json(client_host, CLIENT_LIVE_XRAY_JSON, label="read_live_xray_json")
         direct = _find_outbound(xray, "direct")
@@ -145,12 +128,22 @@ def test_server_run_sets_send_through(
             "--config-dir",
             SERVER_CONFIG_DIR_NAME,
             "--port",
-            "62021",
+            str(SERVER_PORT),
             "--host",
             "sendthrough.test.local",
             "--force",
             check=True,
             )
+        xp2p_server_runner(
+            "server",
+            "mode",
+            "proxy",
+            "--path",
+            str(SERVER_INSTALL_DIR),
+            "--config-dir",
+            SERVER_CONFIG_DIR_NAME,
+            check=True,
+        )
         live_xray.ensure_live_xray_json(
             server_host,
             xp2p_server_runner,
@@ -162,8 +155,7 @@ def test_server_run_sets_send_through(
             str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME
         ) as session:
             assert session["pid"] > 0
-            _assert_tun_interface(server_host, SERVER_TUN_NAME)
-            _assert_dns_resolution(server_host, "2ip.ru")
+            socks_assert.wait_for_tcp_listener(server_host, port=SERVER_PORT, timeout=30)
 
         xray = live_files.read_json(server_host, SERVER_LIVE_XRAY_JSON, label="read_live_xray_json")
         direct_udp = _find_outbound(xray, "direct-udp")

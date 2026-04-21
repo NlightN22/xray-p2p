@@ -104,6 +104,26 @@ def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_cl
         "--force",
         check=True,
     )
+    xp2p_server_runner(
+        "server",
+        "mode",
+        "proxy",
+        "--path",
+        str(_install_dir(server_host)),
+        "--config-dir",
+        SERVER_CONFIG_NAME,
+        check=True,
+    )
+    xp2p_client_runner(
+        "client",
+        "mode",
+        "proxy",
+        "--path",
+        str(_install_dir(client_host)),
+        "--config-dir",
+        CLIENT_CONFIG_NAME,
+        check=True,
+    )
     return credential
 
 

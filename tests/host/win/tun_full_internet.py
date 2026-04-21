@@ -159,18 +159,35 @@ def ensure_internet_access_with_adapter_reset(host) -> None:
         return
     script = """
 $ErrorActionPreference = 'SilentlyContinue'
-$route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' |
+$route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
     Where-Object { $_.InterfaceAlias -notmatch '^xp2p' } |
     Sort-Object -Property RouteMetric |
     Select-Object -First 1
-if (-not $route) {
-    Write-Output "No default route found for non-xp2p interface."
+$alias = $null
+if ($route) {
+    $alias = $route.InterfaceAlias
+}
+if (-not $alias) {
+    $iface = Get-NetIPInterface -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.ConnectionState -eq 'Connected' -and
+            $_.InterfaceAlias -notmatch '^xp2p' -and
+            $_.InterfaceAlias -notmatch '^Loopback'
+        } |
+        Sort-Object -Property InterfaceMetric |
+        Select-Object -First 1
+    if ($iface) {
+        $alias = $iface.InterfaceAlias
+    }
+}
+if (-not $alias) {
+    Write-Output "No connected non-xp2p interface found to recycle."
     exit 2
 }
-$alias = $route.InterfaceAlias
 Disable-NetAdapter -Name $alias -Confirm:$false | Out-Null
 Start-Sleep -Seconds 3
 Enable-NetAdapter -Name $alias -Confirm:$false | Out-Null
+try { ipconfig /renew | Out-Null } catch {}
 Write-Output ("Recycled interface: {0}" -f $alias)
 """
     reset_result = _env.run_powershell(host, script, label="recycle_default_adapter")

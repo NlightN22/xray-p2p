@@ -7,7 +7,7 @@ from contextlib import contextmanager
 import pytest
 
 from tests.host.win import env as _env
-from tests.host.win import tun_full_helpers as tun_helpers
+from tests.host.win.assertions import socks as socks_assert
 DEFAULT_SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
 DEFAULT_SERVER_CONFIG_NAME = "config-server"
 DEFAULT_CLIENT_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
@@ -25,8 +25,6 @@ CUSTOM_CERT_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-cert.pem")
 CUSTOM_KEY_PATH = Path(r"C:\xp2p\tests\fixtures\tls\integration-key.pem")
 XRAY_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\xray.exe")
 WINTUN_SOURCE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\wintun.dll")
-DEFAULT_SERVER_TUN = "xp2ps"
-DEFAULT_CLIENT_TUN = "xp2pc"
 
 
 @contextmanager
@@ -207,24 +205,6 @@ def _assert_ping_success(result) -> None:
         )
 
 
-def _assert_ipv6_binding_disabled(host, interface_name: str) -> None:
-    adapter_name, _adapter_index = tun_helpers.wait_for_tun_adapter(host, interface_name)
-    result = _env.run_guest_script(
-        host,
-        "scripts/assert_ipv6_binding_disabled.ps1",
-        InterfaceName=adapter_name,
-        TimeoutSeconds=120,
-        PollSeconds=2,
-    )
-    if result.rc != 0:
-        dump_path = _env.dump_failure_state(host, label=f"ipv6-binding-{adapter_name}")
-        pytest.fail(
-            "IPv6 binding check failed.\n"
-            f"Failure dump: {dump_path}\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        )
-
-
 def _run_ping_via_socks(xp2p_client_runner, host: str, port: int | None = None, attempts: int = 3):
     with _timed("ping via socks"):
         args = [
@@ -267,6 +247,16 @@ def test_install_server_and_client_default(
         credential = _extract_generated_credential(server_install.stdout or "")
         assert credential["link"], "Trojan link was not emitted for default install"
         assert credential["link"].startswith("trojan://")
+        xp2p_server_runner(
+            "server",
+            "mode",
+            "proxy",
+            "--path",
+            str(DEFAULT_SERVER_INSTALL_DIR),
+            "--config-dir",
+            DEFAULT_SERVER_CONFIG_NAME,
+            check=True,
+        )
 
         server_session_cm = xp2p_server_run_factory(
             str(DEFAULT_SERVER_INSTALL_DIR),
@@ -283,6 +273,16 @@ def test_install_server_and_client_default(
                 "--force",
                 check=True,
                 )
+            xp2p_client_runner(
+                "client",
+                "mode",
+                "proxy",
+                "--path",
+                str(DEFAULT_CLIENT_INSTALL_DIR),
+                "--config-dir",
+                DEFAULT_CLIENT_CONFIG_NAME,
+                check=True,
+            )
 
             client_session_cm = xp2p_client_run_factory(
                 str(DEFAULT_CLIENT_INSTALL_DIR),
@@ -290,7 +290,7 @@ def test_install_server_and_client_default(
                 )
             with client_session_cm as client_session:
                 assert client_session["pid"] > 0
-                _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
+                socks_assert.wait_for_socks_listener(client_host, port=51180, timeout=30)
                 ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                 _assert_ping_success(ping_result)
     finally:
@@ -337,6 +337,16 @@ def test_install_server_and_client_nodefault(
             check=True,
             )
         credential = _extract_generated_credential(server_install.stdout or "")
+        xp2p_server_runner(
+            "server",
+            "mode",
+            "proxy",
+            "--path",
+            str(CUSTOM_SERVER_INSTALL_DIR),
+            "--config-dir",
+            CUSTOM_SERVER_CONFIG_NAME,
+            check=True,
+        )
 
         server_session_cm = xp2p_server_run_factory(
             str(CUSTOM_SERVER_INSTALL_DIR),
@@ -360,6 +370,16 @@ def test_install_server_and_client_nodefault(
                     "--force",
                     check=True,
                     )
+                xp2p_client_runner(
+                    "client",
+                    "mode",
+                    "proxy",
+                    "--path",
+                    str(CUSTOM_CLIENT_INSTALL_DIR),
+                    "--config-dir",
+                    CUSTOM_CLIENT_CONFIG_NAME,
+                    check=True,
+                )
 
                 client_session_cm = xp2p_client_run_factory(
                     str(CUSTOM_CLIENT_INSTALL_DIR),
@@ -367,7 +387,7 @@ def test_install_server_and_client_nodefault(
                     )
                 with client_session_cm as client_session:
                     assert client_session["pid"] > 0
-                    _assert_ipv6_binding_disabled(client_host, DEFAULT_CLIENT_TUN)
+                    socks_assert.wait_for_socks_listener(client_host, port=51180, timeout=30)
                     ping_result = _run_ping_via_socks(xp2p_client_runner, server_public_host)
                     _assert_ping_success(ping_result)
             finally:

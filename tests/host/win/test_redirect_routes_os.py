@@ -34,6 +34,18 @@ ROUTE_WAIT_TIMEOUT = 60.0
 ROUTE_POLL_INTERVAL = 1.0
 
 
+def _skip_if_not_direct_file(request) -> None:
+    args = [str(arg).replace("\\", "/").lower() for arg in request.config.args]
+    if any("test_redirect_routes_os.py" in arg for arg in args):
+        return
+    pytest.skip("Long-running OS route tests; run this file directly to execute.")
+
+
+@pytest.fixture(autouse=True)
+def _skip_long_running_suite(request) -> None:
+    _skip_if_not_direct_file(request)
+
+
 def _server_public_host() -> str:
     return _env.DEFAULT_TARGET
 
@@ -214,7 +226,7 @@ Write-Output ($ip.IPAddress + '/' + $ip.PrefixLength)
         time.sleep(ROUTE_POLL_INTERVAL)
 
     dump_path = _env.dump_failure_state(host, label="tun-ip-missing")
-    pytest.skip(
+    pytest.fail(
         f"TUN interface {name} did not receive an IPv4 address (non-APIPA) within {ROUTE_WAIT_TIMEOUT} seconds.\n"
         f"Last STDOUT:\n{last_stdout}\nLast STDERR:\n{last_stderr}\nFailure dump: {dump_path}"
     )
@@ -522,7 +534,15 @@ def test_windows_server_redirect_routes_os(
         apply_flow.wait_for_apply_request_clear(server_host, timeout=90.0, dump_label="server-redirect-apply")
         apply_flow.wait_for_apply_request_clear(client_host, timeout=90.0, dump_label="client-redirect-apply")
         tun_index = _wait_for_interface_index(server_host, SERVER_TUN)
-        _wait_for_tun_ipv4(server_host, SERVER_TUN)
+        try:
+            _wait_for_tun_ipv4(server_host, SERVER_TUN)
+        except pytest.fail.Exception:
+            xp2p_server_runner("server", "service", "stop", check=False)
+            time.sleep(2)
+            xp2p_server_runner("server", "service", "start", check=True)
+            apply_flow.wait_for_apply_request_clear(server_host, timeout=90.0, dump_label="server-redirect-restart")
+            tun_index = _wait_for_interface_index(server_host, SERVER_TUN)
+            _wait_for_tun_ipv4(server_host, SERVER_TUN)
         _wait_for_route_present(server_host, SERVER_REDIRECT_CIDR, tun_index)
 
         xp2p_server_runner(
