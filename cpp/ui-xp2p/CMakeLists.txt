@@ -1,27 +1,59 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(ui-xp2p LANGUAGES CXX RC)
+if(WIN32)
+    project(ui-xp2p LANGUAGES CXX RC)
+else()
+    project(ui-xp2p LANGUAGES CXX)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_executable(ui-xp2p WIN32
-    resources/ui-xp2p.rc
-    src/logging.cpp
-    src/logging.h
-    src/path_utils.cpp
-    src/path_utils.h
-    src/service_manager.cpp
-    src/service_manager.h
-    src/tray_app.cpp
-    src/tray_app.h
-    src/main.cpp
+option(XP2P_UI_BUILD_TESTS "Build ui-xp2p unit tests" OFF)
+option(XP2P_UI_ENABLE_COVERAGE "Enable coverage flags (GNU only)" OFF)
+
+add_library(ui-xp2p-logic STATIC
+    src/ui_logic.cpp
+    src/ui_logic.h
 )
+target_compile_definitions(ui-xp2p-logic PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
 
-target_compile_definitions(ui-xp2p PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-target_compile_options(ui-xp2p PRIVATE /W4 /WX-)
+if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(ui-xp2p-logic PRIVATE -O0 -g --coverage)
+    target_link_options(ui-xp2p-logic PRIVATE --coverage)
+endif()
 
-set_property(TARGET ui-xp2p PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+if(WIN32)
+    add_executable(ui-xp2p WIN32
+        resources/ui-xp2p.rc
+        src/logging.cpp
+        src/logging.h
+        src/path_utils.cpp
+        src/path_utils.h
+        src/service_manager.cpp
+        src/service_manager.h
+        src/tray_app.cpp
+        src/tray_app.h
+        src/main.cpp
+    )
 
-target_link_libraries(ui-xp2p PRIVATE advapi32 shell32 user32)
+    target_compile_definitions(ui-xp2p PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_options(ui-xp2p PRIVATE /W4 /WX-)
 
+    set_property(TARGET ui-xp2p PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+    target_link_libraries(ui-xp2p PRIVATE ui-xp2p-logic advapi32 shell32 user32)
+endif()
+
+if(XP2P_UI_BUILD_TESTS)
+    enable_testing()
+    add_executable(ui-xp2p-tests
+        tests/ui_logic_tests.cpp
+    )
+    target_link_libraries(ui-xp2p-tests PRIVATE ui-xp2p-logic)
+    if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(ui-xp2p-tests PRIVATE -O0 -g --coverage)
+        target_link_options(ui-xp2p-tests PRIVATE --coverage)
+    endif()
+    add_test(NAME ui-xp2p-tests COMMAND ui-xp2p-tests)
+endif()

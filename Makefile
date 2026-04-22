@@ -41,6 +41,9 @@ test:
 ui-test-cover:
 	powershell -NoProfile -Command "$$ErrorActionPreference = 'Stop'; dotnet test .\dotnet\ui-xp2p.tests\ui-xp2p.tests.csproj -v:m --nologo --logger 'console;verbosity=detailed' /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=build\\dotnet\\ui-xp2p.tests\\coverage\\; if ($$LASTEXITCODE -eq 0) { Write-Host 'OK' } else { Write-Host 'FAIL'; exit $$LASTEXITCODE }"
 
+ui-native-test-cover-wsl:
+	wsl bash -lc "set -euo pipefail; cd /mnt/d/Programming/Go/xray-p2p; rm -rf build/cpp/ui-xp2p-cover-wsl; cmake -S cpp/ui-xp2p -B build/cpp/ui-xp2p-cover-wsl -G Ninja -DXP2P_UI_BUILD_TESTS=ON -DXP2P_UI_ENABLE_COVERAGE=ON; cmake --build build/cpp/ui-xp2p-cover-wsl; ctest --test-dir build/cpp/ui-xp2p-cover-wsl --output-on-failure; mkdir -p build/cpp/ui-xp2p-cover-wsl/coverage; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp' --html-details --output build/cpp/ui-xp2p-cover-wsl/coverage/index.html; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp' --xml-pretty --output build/cpp/ui-xp2p-cover-wsl/coverage/coverage.xml; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp'"
+
 test-wsl:
 	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
 

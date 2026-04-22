@@ -3,6 +3,7 @@
 #include "logging.h"
 #include "path_utils.h"
 #include "service_manager.h"
+#include "ui_logic.h"
 
 #include <shellapi.h>
 
@@ -217,17 +218,15 @@ void TrayApp::ShowContextMenu() {
     AppendMenuW(root, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(root, MF_STRING, IDM_EXIT, L"Exit");
 
-    const bool clientRunning = clientStatus_ == "Running";
-    const bool clientStopped = clientStatus_ == "Stopped";
-    SetMenuItemEnabled(client, IDM_CLIENT_START, !busy_ && !clientRunning);
-    SetMenuItemEnabled(client, IDM_CLIENT_STOP, !busy_ && !clientStopped);
-    SetMenuItemEnabled(client, IDM_CLIENT_RESTART, !busy_);
+    const ServiceButtons clientButtons = GetServiceButtons(clientStatus_, busy_);
+    SetMenuItemEnabled(client, IDM_CLIENT_START, clientButtons.startEnabled);
+    SetMenuItemEnabled(client, IDM_CLIENT_STOP, clientButtons.stopEnabled);
+    SetMenuItemEnabled(client, IDM_CLIENT_RESTART, clientButtons.restartEnabled);
 
-    const bool serverRunning = serverStatus_ == "Running";
-    const bool serverStopped = serverStatus_ == "Stopped";
-    SetMenuItemEnabled(server, IDM_SERVER_START, !busy_ && !serverRunning);
-    SetMenuItemEnabled(server, IDM_SERVER_STOP, !busy_ && !serverStopped);
-    SetMenuItemEnabled(server, IDM_SERVER_RESTART, !busy_);
+    const ServiceButtons serverButtons = GetServiceButtons(serverStatus_, busy_);
+    SetMenuItemEnabled(server, IDM_SERVER_START, serverButtons.startEnabled);
+    SetMenuItemEnabled(server, IDM_SERVER_STOP, serverButtons.stopEnabled);
+    SetMenuItemEnabled(server, IDM_SERVER_RESTART, serverButtons.restartEnabled);
 
     POINT pt{};
     GetCursorPos(&pt);
@@ -253,12 +252,7 @@ void TrayApp::UpdateTooltip() {
     if (!trayAdded_) {
         return;
     }
-    std::wstring tip = L"xp2p";
-    tip += L" | client: " + ToWide(clientStatus_);
-    tip += L" | server: " + ToWide(serverStatus_);
-    if (busy_) {
-        tip += L" | busy";
-    }
+    std::wstring tip = ToWide(BuildTrayTooltip(clientStatus_, serverStatus_, busy_));
     if (tip.size() >= 127) {
         tip.resize(126);
     }
@@ -278,7 +272,7 @@ void TrayApp::LogStatusIfChanged() {
         return;
     }
     lastLoggedKey_ = key;
-    LogInfo("tray status: client=" + clientStatus_ + " server=" + serverStatus_ + " busy=" + (busy_ ? "1" : "0"));
+    LogInfo(BuildTrayStatusLogLine(clientStatus_, serverStatus_, busy_));
 }
 
 void TrayApp::StartServiceAction(const wchar_t* serviceName, const char* serviceKey, int actionId) {
