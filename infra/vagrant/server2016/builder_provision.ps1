@@ -226,15 +226,108 @@ function Ensure-DotNetSdk {
 
     Ensure-ChocoPackage -Package "dotnet-8.0-sdk" -Version $dotnetVersion
 
+    function Resolve-DotNetExePath {
+        $candidates = New-Object System.Collections.Generic.List[string]
+        $candidates.Add("C:\Program Files\dotnet\dotnet.exe") | Out-Null
+        $candidates.Add("C:\Program Files (x86)\dotnet\dotnet.exe") | Out-Null
+        $candidates.Add("C:\tools\dotnet\dotnet.exe") | Out-Null
+        $candidates.Add("C:\ProgramData\dotnet\dotnet.exe") | Out-Null
+        $candidates.Add("C:\ProgramData\chocolatey\bin\dotnet.exe") | Out-Null
+
+        $sharedHostKeys = @(
+            "HKLM:\SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost",
+            "HKLM:\SOFTWARE\WOW6432Node\dotnet\Setup\InstalledVersions\x64\sharedhost",
+            "HKLM:\SOFTWARE\dotnet\Setup\InstalledVersions\x86\sharedhost",
+            "HKLM:\SOFTWARE\WOW6432Node\dotnet\Setup\InstalledVersions\x86\sharedhost"
+        )
+        foreach ($key in $sharedHostKeys) {
+            try {
+                if (Test-Path $key) {
+                    $props = Get-ItemProperty -Path $key -ErrorAction Stop
+                    $base = $props.Path
+                    if ($base) {
+                        $candidates.Add((Join-Path $base "dotnet.exe")) | Out-Null
+                    }
+                }
+            }
+            catch {
+                # ignore
+            }
+        }
+
+        foreach ($candidate in ($candidates | Select-Object -Unique)) {
+            if ($candidate -and (Test-Path $candidate)) {
+                return $candidate
+            }
+        }
+        return $null
+    }
+
+    $dotnetExe = Resolve-DotNetExePath
+
     if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
-        $dotnetPath = "C:\Program Files\dotnet"
-        if (Test-Path (Join-Path $dotnetPath "dotnet.exe")) {
+        if ($dotnetExe) {
+            $dotnetPath = Split-Path -Parent $dotnetExe
             Write-Info "Adding dotnet path '$dotnetPath' to the current session PATH."
             $env:Path = "$dotnetPath;$env:Path"
         }
     }
 
     if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
+        Write-Info "dotnet.exe still missing after initial install; forcing Chocolatey reinstall."
+        $installArgs = @("install", "dotnet-8.0-sdk", "--yes", "--no-progress", "--force")
+        if ($dotnetVersion) {
+            $installArgs += @("--version", $dotnetVersion)
+        }
+        choco @installArgs | Write-Host
+
+        $dotnetExe = Resolve-DotNetExePath
+        if ($dotnetExe) {
+            $dotnetPath = Split-Path -Parent $dotnetExe
+            if ($env:Path -notlike "$dotnetPath*") {
+                Write-Info "Adding dotnet path '$dotnetPath' to the current session PATH."
+                $env:Path = "$dotnetPath;$env:Path"
+            }
+        }
+    }
+
+    if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
+        Write-Info "dotnet.exe still missing; attempting fallback install via dotnet-install.ps1."
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $installScript = Join-Path $env:TEMP "dotnet-install.ps1"
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri "https://dot.net/v1/dotnet-install.ps1" -OutFile $installScript
+        }
+        catch {
+            throw "Failed to download dotnet-install.ps1: $($_.Exception.Message)"
+        }
+
+        $installDir = "C:\Program Files\dotnet"
+        $args = @("-InstallDir", $installDir, "-Architecture", "x64")
+        if ($dotnetVersion) {
+            $args += @("-Version", $dotnetVersion)
+        }
+        else {
+            $args += @("-Channel", "8.0")
+        }
+
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $installScript @args | Write-Host
+
+        $dotnetExe = Resolve-DotNetExePath
+        if ($dotnetExe) {
+            $dotnetPath = Split-Path -Parent $dotnetExe
+            if ($env:Path -notlike "$dotnetPath*") {
+                Write-Info "Adding dotnet path '$dotnetPath' to the current session PATH."
+                $env:Path = "$dotnetPath;$env:Path"
+            }
+        }
+    }
+
+    if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
+        $existing = Resolve-DotNetExePath
+        if ($existing) {
+            throw "dotnet.exe exists at '$existing' but is not discoverable via PATH."
+        }
         throw "dotnet.exe not found after installation. Ensure .NET SDK is available."
     }
 
