@@ -607,6 +607,18 @@ def ensure_msi_package_x86(
         if reconnect is None:
             reconnect = lambda: get_ssh_host(machine)
         host = ensure_project_synced(host, machine=machine, reconnect=reconnect)
+    # Some guests end up with a corrupted Go build cache which breaks GOARCH=386 builds
+    # with errors like "can't find export data (bufio: buffer full)". Clean caches to
+    # stabilize x86 MSI builds without relying on test order.
+    script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+if (-not (Get-Command -Name go.exe -ErrorAction SilentlyContinue)) {
+    exit 0
+}
+& go.exe clean -cache -testcache 2>$null | Out-Null
+exit 0
+"""
+    run_powershell(host, script, timeout=120, label="go_clean_cache")
     path = _build_msi_package(
         host,
         architecture="x86",
@@ -1031,6 +1043,50 @@ Copy-Item -Path $wintun -Destination (Join-Path $bin 'wintun.dll') -Force
     run_powershell(host, script)
 
 
+WINTUN_DLL_SOURCE_BUNDLE_X64 = Path(r"C:\xp2p\distro\windows\bundle\x86_64\wintun.dll")
+WINTUN_DLL_SOURCE_MSI_BIN_X64 = Path(r"C:\xp2p\build\msi-bin\bundle\wintun.dll")
+
+
+def ensure_wintun_dll(host: Host, install_dir: Path | None = None) -> Path:
+    if install_dir is None:
+        install_dir = get_program_files_install_dir(host)
+    dest = Path(install_dir) / "bin" / "wintun.dll"
+    if path_exists(host, dest):
+        return dest
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$dest = {ps_quote(str(dest))}
+$binDir = Split-Path -Parent $dest
+if ($binDir -and -not (Test-Path $binDir)) {{
+    New-Item -ItemType Directory -Path $binDir -Force | Out-Null
+}}
+$sources = @(
+    {ps_quote(str(WINTUN_DLL_SOURCE_MSI_BIN_X64))},
+    {ps_quote(str(WINTUN_DLL_SOURCE_BUNDLE_X64))}
+)
+$src = $null
+foreach ($candidate in $sources) {{
+    if (Test-Path $candidate) {{
+        $src = $candidate
+        break
+    }}
+}}
+if (-not $src) {{
+    throw "wintun.dll not found in any known source path."
+}}
+Copy-Item -Path $src -Destination $dest -Force
+"""
+    result = run_powershell(host, script, timeout=60, label="ensure_wintun_dll")
+    if result.rc != 0:
+        raise RuntimeError(
+            "Failed to place wintun.dll into the install directory.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    if not path_exists(host, dest):
+        raise RuntimeError(f"wintun.dll missing after copy: {dest}")
+    return dest
+
+
 def _set_install_paths_from_exe(exe_path: Path) -> Path:
     global PROGRAM_FILES_INSTALL_DIR, CONFIG_ROOT, LOGS_DIR, XP2P_EXE
     install_dir = exe_path.parent
@@ -1280,42 +1336,123 @@ def _build_msi_package(
     wix_source: str,
 ) -> str:
     local_marker, guest_start, guest_done = _msi_build_markers()
+    token = local_marker.stem
+    if token.startswith("msi-build-"):
+        token = token[len("msi-build-"):]
     if local_marker.exists():
         local_marker.unlink(missing_ok=True)
-    result = run_guest_script(
-        host,
-        "scripts/build_msi_package.ps1",
-        Architecture=architecture,
-        CacheDir=str(cache_dir),
-        WixSource=wix_source,
-        BuildId=_MSI_BUILD_ID or "",
-        Marker=MSI_MARKER,
-        StartMarkerPath=str(guest_start),
-        DoneMarkerPath=str(guest_done),
-        timeout=120,
-    )
-    if result.rc != 0:
-        start_probe = run_powershell(
-            host,
-            f"if (Test-Path {ps_quote(str(guest_start))}) {{ exit 0 }} else {{ exit 3 }}",
-            )
-        done_probe = run_powershell(
-            host,
-            f"if (Test-Path {ps_quote(str(guest_done))}) {{ exit 0 }} else {{ exit 3 }}",
-            )
+
+    build_log_out = Path(r"C:\xp2p\build\logs\win") / f"msi-build-{architecture}-{token}-out.log"
+    build_log_err = Path(r"C:\xp2p\build\logs\win") / f"msi-build-{architecture}-{token}-err.log"
+    build_script = GUEST_TESTS_ROOT / "scripts" / "build_msi_package.ps1"
+
+    def _tail_logs(label: str) -> str:
+        tail_script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$out = {ps_quote(str(build_log_out))}
+$err = {ps_quote(str(build_log_err))}
+if (Test-Path $out) {{
+    Write-Output '=== msi build stdout (tail) ==='
+    Get-Content -Path $out -Tail 200
+}}
+if (Test-Path $err) {{
+    Write-Output '=== msi build stderr (tail) ==='
+    Get-Content -Path $err -Tail 200
+}}
+"""
+        result = run_powershell(host, tail_script, timeout=30, label=label)
+        return (result.stdout or "").strip()
+
+    run_script = f"""
+$ErrorActionPreference = 'Stop'
+$logOutPath = {ps_quote(str(build_log_out))}
+$logErrPath = {ps_quote(str(build_log_err))}
+$logDir = Split-Path -Parent $logOutPath
+if ($logDir -and -not (Test-Path $logDir)) {{
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}}
+foreach ($p in @($logOutPath, $logErrPath)) {{
+    if (Test-Path $p) {{
+        Remove-Item -Path $p -Force -ErrorAction SilentlyContinue
+    }}
+}}
+$startMarker = {ps_quote(str(guest_start))}
+$doneMarker = {ps_quote(str(guest_done))}
+Remove-Item -Path $startMarker, $doneMarker -Force -ErrorAction SilentlyContinue
+$scriptPath = {ps_quote(str(build_script))}
+if (-not (Test-Path $scriptPath)) {{
+    throw "MSI build script not found at $scriptPath. Re-mount the synced folder (try 'vagrant reload --provision')."
+}}
+$arguments = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', $scriptPath,
+    '-Architecture', {ps_quote(architecture)},
+    '-CacheDir', {ps_quote(str(cache_dir))},
+    '-WixSource', {ps_quote(wix_source)},
+    '-BuildId', {ps_quote(_MSI_BUILD_ID or "")},
+    '-Marker', {ps_quote(MSI_MARKER)},
+    '-StartMarkerPath', $startMarker,
+    '-DoneMarkerPath', $doneMarker
+)
+$proc = Start-Process -FilePath 'powershell' -ArgumentList $arguments -PassThru -RedirectStandardOutput $logOutPath -RedirectStandardError $logErrPath -WindowStyle Hidden
+if (-not $proc.WaitForExit(600000)) {{
+    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+    exit 124
+}}
+exit $proc.ExitCode
+"""
+    run_result = run_powershell(host, run_script, timeout=660, label=f"msi_build_run:{architecture}")
+    if run_result.rc != 0:
+        tail = _tail_logs(f"msi_build_logs_failed:{architecture}")
         local_marker.write_text(
-            f"start={start_probe.rc == 0} done={done_probe.rc == 0}",
+            f"start={_path_exists_raw(host, guest_start)} done={_path_exists_raw(host, guest_done)}",
             encoding="ascii",
+        )
+        if run_result.rc == 124:
+            raise RuntimeError(
+                f"MSI build timed out after 600s for {architecture}.\n"
+                f"Build log tail:\n{tail or '<empty>'}"
             )
         raise RuntimeError(
-            f"Failed to build MSI package for {architecture}.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"MSI build failed with exit code {run_result.rc} for {architecture}.\n"
+            f"Build log tail:\n{tail or '<empty>'}"
         )
-    path = _extract_marker(result.stdout, MSI_MARKER)
+
+    path: str | None = None
+    path_result = run_powershell(
+        host,
+        f"if (Test-Path {ps_quote(str(guest_done))}) {{ (Get-Content -Raw -Path {ps_quote(str(guest_done))}).Trim() }} else {{ exit 3 }}",
+        timeout=30,
+        label="msi_build_done_read",
+    )
+    if path_result.rc == 0:
+        path = (path_result.stdout or "").strip()
     if not path:
+        out_result = run_powershell(
+            host,
+            f"if (Test-Path {ps_quote(str(build_log_out))}) {{ Get-Content -Path {ps_quote(str(build_log_out))} -Tail 400 }}",
+            timeout=30,
+            label="msi_build_log_out_tail",
+        )
+        path = _extract_marker(out_result.stdout or "", MSI_MARKER)
+        if path:
+            path = path.strip()
+    if not path:
+        tail = _tail_logs(f"msi_build_logs_missing_marker:{architecture}")
+        local_marker.write_text(
+            f"start={_path_exists_raw(host, guest_start)} done={_path_exists_raw(host, guest_done)}",
+            encoding="ascii",
+        )
         raise RuntimeError(
-            f"MSI build script ({architecture}) did not return artifact path.\n"
-            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            f"MSI build completed but artifact path marker is missing for {architecture}.\n"
+            f"Build log tail:\n{tail or '<empty>'}"
+        )
+    if not path_exists(host, path):
+        tail = _tail_logs(f"msi_build_logs_missing_artifact:{architecture}")
+        raise RuntimeError(
+            f"MSI build reported path does not exist: {path}\n"
+            f"Build log tail:\n{tail or '<empty>'}"
         )
     return path
 
@@ -1989,6 +2126,31 @@ $encoding = New-Object System.Text.UTF8Encoding($false)
 exit 0
 """
     result = run_powershell(host, script)
+    if result.rc != 0:
+        raise RuntimeError(
+            f"Failed to write remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def write_text_exact(host: Host, path: Path | str, content: str) -> None:
+    encoded = base64.b64encode(content.encode("utf-8")).decode("ascii")
+    target = ps_quote(str(_as_path(path)))
+    payload = ps_quote(encoded)
+    script = f"""
+$ErrorActionPreference = 'Stop'
+$target = {target}
+$payload = {payload}
+$bytes = [System.Convert]::FromBase64String($payload)
+$text = [System.Text.Encoding]::UTF8.GetString($bytes)
+$dir = Split-Path -Parent $target
+if ($dir -and -not (Test-Path $dir)) {{
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+}}
+$encoding = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($target, $text, $encoding)
+exit 0
+"""
+    result = run_powershell(host, script, label="write_text_exact")
     if result.rc != 0:
         raise RuntimeError(
             f"Failed to write remote text {path}.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"

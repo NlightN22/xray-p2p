@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import json
+import uuid
 from pathlib import Path
 
 import pytest
@@ -135,8 +136,8 @@ def _ensure_tun_defaults(host, *, role: str, tun_name: str, tun_addr: str) -> No
             end = i
             break
 
-    existing_keys: set[str] = set()
-    for raw in lines[start + 1 : end]:
+    key_to_index: dict[str, int] = {}
+    for idx, raw in enumerate(lines[start + 1 : end], start=start + 1):
         stripped = raw.strip()
         if not stripped or stripped.startswith("#") or stripped.startswith(";"):
             continue
@@ -144,22 +145,39 @@ def _ensure_tun_defaults(host, *, role: str, tun_name: str, tun_addr: str) -> No
             continue
         key = stripped.split("=", 1)[0].strip()
         if key:
-            existing_keys.add(key)
+            key_to_index.setdefault(key, idx)
 
     additions: list[str] = []
-    if "tun_enabled" not in existing_keys:
-        additions.append("tun_enabled = true")
-    if "tun_name" not in existing_keys:
-        additions.append(f"tun_name = {_toml_string(tun_name)}")
-    if "tun_addr" not in existing_keys:
-        additions.append(f"tun_addr = {_toml_string(tun_addr)}")
+    updated_any = False
+    desired_enabled = "tun_enabled = true"
+    desired_name = f"tun_name = {_toml_string(tun_name)}"
+    desired_addr = f"tun_addr = {_toml_string(tun_addr)}"
 
-    if not additions:
+    if "tun_enabled" in key_to_index:
+        if lines[key_to_index["tun_enabled"]].strip() != desired_enabled:
+            lines[key_to_index["tun_enabled"]] = desired_enabled
+            updated_any = True
+    else:
+        additions.append(desired_enabled)
+    if "tun_name" in key_to_index:
+        if lines[key_to_index["tun_name"]].strip() != desired_name:
+            lines[key_to_index["tun_name"]] = desired_name
+            updated_any = True
+    else:
+        additions.append(desired_name)
+    if "tun_addr" in key_to_index:
+        if lines[key_to_index["tun_addr"]].strip() != desired_addr:
+            lines[key_to_index["tun_addr"]] = desired_addr
+            updated_any = True
+    else:
+        additions.append(desired_addr)
+
+    if not additions and not updated_any:
         return
 
     updated = lines[:end] + additions + lines[end:]
     new_content = "\n".join(updated).rstrip("\n") + "\n"
-    _env.write_text(host, config_path, new_content)
+    _env.write_text_exact(host, config_path, new_content)
 
 
 def _set_client_mode(runner, mode: str) -> None:
@@ -198,13 +216,27 @@ def _wait_for_interface_index(host, name: str) -> int:
     pytest.fail(f"Interface {name} not available: {last_error}")
 
 
-def _wait_for_tun_ipv4(host, name: str) -> str:
-    deadline = time.time() + ROUTE_WAIT_TIMEOUT
+def _wait_for_tun_ipv4(
+    host,
+    name: str,
+    *,
+    expected_cidr: str | None = None,
+    timeout: float = ROUTE_WAIT_TIMEOUT,
+) -> str:
+    deadline = time.time() + float(timeout)
     target = _env.ps_quote(name)
     script = f"""
 $ErrorActionPreference = 'Stop'
-$name = {target}
-$ip = Get-NetIPAddress -InterfaceAlias $name -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+$prefix = {target}
+$adapter = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.Name -like "$prefix*" }} |
+    Sort-Object -Property ifIndex |
+    Select-Object -First 1
+if (-not $adapter) {{
+    exit 4
+}}
+$idx = $adapter.ifIndex
+$ip = Get-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object {{ $_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -ne '0.0.0.0' }} |
     Sort-Object PrefixLength -Descending |
     Select-Object -First 1
@@ -213,8 +245,56 @@ if (-not $ip) {{
 }}
 Write-Output ($ip.IPAddress + '/' + $ip.PrefixLength)
 """
+    recycle_script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$prefix = {target}
+$adapter = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.Name -like "$prefix*" }} |
+    Sort-Object -Property ifIndex |
+    Select-Object -First 1
+if (-not $adapter) {{
+    Write-Output "No adapter found for recycle: $prefix"
+    exit 3
+}}
+$name = $adapter.Name
+Disable-NetAdapter -Name $name -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+Start-Sleep -Seconds 2
+Enable-NetAdapter -Name $name -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+Write-Output ("Recycled adapter: " + $name)
+"""
+    force_addr_script = None
+    if expected_cidr:
+        expected_value = _env.ps_quote(str(expected_cidr))
+        force_addr_script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$prefix = {target}
+$cidr = {expected_value}
+$adapter = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Where-Object {{ $_.Name -like "$prefix*" }} |
+    Sort-Object -Property ifIndex |
+    Select-Object -First 1
+if (-not $adapter) {{
+    Write-Output "No adapter found for address set: $prefix"
+    exit 3
+}}
+$idx = $adapter.ifIndex
+$parts = $cidr.Split('/', 2)
+if ($parts.Count -ne 2) {{
+    Write-Output "Invalid CIDR: $cidr"
+    exit 4
+}}
+$ip = $parts[0]
+$plen = [int] $parts[1]
+Get-NetIPAddress -InterfaceIndex $idx -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+New-NetIPAddress -InterfaceIndex $idx -IPAddress $ip -PrefixLength $plen -AddressFamily IPv4 -Type Unicast -ErrorAction SilentlyContinue | Out-Null
+Write-Output ("Assigned IPv4: " + $cidr + " on ifIndex=" + $idx)
+"""
     last_stdout = ""
     last_stderr = ""
+    recycled = False
+    forced = False
+    recycle_at = time.time() + (float(timeout) / 2.0)
     while time.time() < deadline:
         result = _env.run_powershell(host, script, label="wait_tun_ipv4")
         last_stdout = result.stdout or ""
@@ -223,11 +303,22 @@ Write-Output ($ip.IPAddress + '/' + $ip.PrefixLength)
             value = (result.stdout or "").strip().splitlines()
             if value and value[-1].strip():
                 return value[-1].strip()
+        if force_addr_script and not forced and result.rc == 3:
+            force_result = _env.run_powershell(host, force_addr_script, label="force_tun_ipv4")
+            last_stdout = (force_result.stdout or "") + "\n" + last_stdout
+            last_stderr = (force_result.stderr or "") + "\n" + last_stderr
+            if force_result.rc == 0:
+                forced = True
+        if not recycled and time.time() >= recycle_at:
+            recycle_result = _env.run_powershell(host, recycle_script, label="recycle_tun_adapter")
+            last_stdout = (recycle_result.stdout or "") + "\n" + last_stdout
+            last_stderr = (recycle_result.stderr or "") + "\n" + last_stderr
+            recycled = True
         time.sleep(ROUTE_POLL_INTERVAL)
 
     dump_path = _env.dump_failure_state(host, label="tun-ip-missing")
     pytest.fail(
-        f"TUN interface {name} did not receive an IPv4 address (non-APIPA) within {ROUTE_WAIT_TIMEOUT} seconds.\n"
+        f"TUN interface {name} did not receive an IPv4 address (non-APIPA) within {timeout} seconds.\n"
         f"Last STDOUT:\n{last_stdout}\nLast STDERR:\n{last_stderr}\nFailure dump: {dump_path}"
     )
 
@@ -394,6 +485,9 @@ def test_windows_client_redirect_routes_os(
         if original_mode != "tun":
             _set_client_mode(xp2p_client_runner, "tun")
 
+        _env.ensure_wintun_dll(server_host, INSTALL_DIR)
+        _env.ensure_wintun_dll(client_host, INSTALL_DIR)
+
         with xp2p_server_run_factory(
             str(INSTALL_DIR),
             SERVER_CONFIG_DIR,
@@ -453,6 +547,9 @@ def test_windows_server_redirect_routes_os(
     server_public_host = _server_public_host()
     reverse_tag: str | None = None
     try:
+        token = uuid.uuid4().hex[:6]
+        server_tun = f"{SERVER_TUN}-{token}"
+        client_tun = f"{CLIENT_TUN}-{token}"
         server_install = xp2p_server_runner(
             "server",
             "install",
@@ -504,15 +601,17 @@ def test_windows_server_redirect_routes_os(
         _ensure_tun_defaults(
             server_host,
             role="server",
-            tun_name=SERVER_TUN,
+            tun_name=server_tun,
             tun_addr=DEFAULT_SERVER_TUN_ADDR,
         )
         _ensure_tun_defaults(
             client_host,
             role="client",
-            tun_name=CLIENT_TUN,
+            tun_name=client_tun,
             tun_addr=DEFAULT_CLIENT_TUN_ADDR,
         )
+        _env.ensure_wintun_dll(server_host, INSTALL_DIR)
+        _env.ensure_wintun_dll(client_host, INSTALL_DIR)
 
         xp2p_server_runner(
             "server",
@@ -529,20 +628,22 @@ def test_windows_server_redirect_routes_os(
             timeout=10.0,
             dump_label="server-redirect-add",
         )
+        _env.remove_tun_adapters(server_host, [SERVER_TUN, "Xray Tunnel"])
         xp2p_server_runner("server", "service", "start", check=True)
         xp2p_client_runner("client", "service", "start", check=True)
         apply_flow.wait_for_apply_request_clear(server_host, timeout=90.0, dump_label="server-redirect-apply")
         apply_flow.wait_for_apply_request_clear(client_host, timeout=90.0, dump_label="client-redirect-apply")
-        tun_index = _wait_for_interface_index(server_host, SERVER_TUN)
+        tun_index = _wait_for_interface_index(server_host, server_tun)
         try:
-            _wait_for_tun_ipv4(server_host, SERVER_TUN)
+            _wait_for_tun_ipv4(server_host, server_tun, expected_cidr=DEFAULT_SERVER_TUN_ADDR)
         except pytest.fail.Exception:
             xp2p_server_runner("server", "service", "stop", check=False)
             time.sleep(2)
+            _env.remove_tun_adapters(server_host, [SERVER_TUN, "Xray Tunnel"])
             xp2p_server_runner("server", "service", "start", check=True)
             apply_flow.wait_for_apply_request_clear(server_host, timeout=90.0, dump_label="server-redirect-restart")
-            tun_index = _wait_for_interface_index(server_host, SERVER_TUN)
-            _wait_for_tun_ipv4(server_host, SERVER_TUN)
+            tun_index = _wait_for_interface_index(server_host, server_tun)
+            _wait_for_tun_ipv4(server_host, server_tun, expected_cidr=DEFAULT_SERVER_TUN_ADDR)
         _wait_for_route_present(server_host, SERVER_REDIRECT_CIDR, tun_index)
 
         xp2p_server_runner(

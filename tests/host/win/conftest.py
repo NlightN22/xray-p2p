@@ -1,6 +1,7 @@
 import time
 import uuid
 import subprocess
+import hashlib
 from contextlib import contextmanager
 from typing import Callable
 
@@ -171,7 +172,26 @@ def xp2p_build_id() -> str:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        suffix = "-dirty" if dirty != 0 or staged_dirty != 0 else ""
+        suffix = ""
+        if dirty != 0 or staged_dirty != 0:
+            try:
+                diff_text = subprocess.check_output(
+                    ["git", "diff", "--no-color"],
+                    cwd=win_env.REPO_ROOT,
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                )
+                staged_text = subprocess.check_output(
+                    ["git", "diff", "--cached", "--no-color"],
+                    cwd=win_env.REPO_ROOT,
+                    text=True,
+                    stderr=subprocess.DEVNULL,
+                )
+                combined = (diff_text or "") + "\n" + (staged_text or "")
+                digest = hashlib.sha256(combined.encode("utf-8")).hexdigest()[:12]
+                suffix = f"-dirty-{digest}"
+            except Exception:
+                suffix = "-dirty"
         if head:
             return f"git-{head}{suffix}"
     except Exception:
@@ -474,6 +494,19 @@ def xp2p_client_runner(
         reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_CLIENT),
     )
 
+    def _wait_for_service_inactive(role: str, timeout_seconds: float = 90.0) -> None:
+        deadline = time.time() + timeout_seconds
+        last = None
+        while time.time() < deadline:
+            last = win_env.run_xp2p(client_host, [role, "service", "status"])
+            if last.rc != 0:
+                return
+            time.sleep(2.0)
+        pytest.fail(
+            f"xp2p {role} service did not stop within {timeout_seconds:.0f}s.\n"
+            f"STDOUT:\n{last.stdout if last else ''}\nSTDERR:\n{last.stderr if last else ''}"
+        )
+
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
         pending_targets = {
@@ -499,8 +532,13 @@ def xp2p_client_runner(
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
             if cmd[0] == "server" or "--all" in cmd:
-                win_env.run_xp2p(client_host, [cmd[0], "service", "stop", "--quiet"])
+                win_env.run_xp2p(client_host, [cmd[0], "service", "stop"])
+                _wait_for_service_inactive(cmd[0])
         result = win_env.run_xp2p(client_host, cmd)
+        if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
+            if cmd[0] == "server" or "--all" in cmd:
+                win_env.run_xp2p(client_host, [cmd[0], "service", "stop"])
+                _wait_for_service_inactive(cmd[0])
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(
@@ -528,6 +566,19 @@ def xp2p_server_runner(
         reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
     )
 
+    def _wait_for_service_inactive(role: str, timeout_seconds: float = 90.0) -> None:
+        deadline = time.time() + timeout_seconds
+        last = None
+        while time.time() < deadline:
+            last = win_env.run_xp2p(server_host, [role, "service", "status"])
+            if last.rc != 0:
+                return
+            time.sleep(2.0)
+        pytest.fail(
+            f"xp2p {role} service did not stop within {timeout_seconds:.0f}s.\n"
+            f"STDOUT:\n{last.stdout if last else ''}\nSTDERR:\n{last.stderr if last else ''}"
+        )
+
     def _runner(*args: str, check: bool = False):
         cmd = list(args)
         pending_targets = {
@@ -553,8 +604,13 @@ def xp2p_server_runner(
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
             if cmd[0] == "server" or "--all" in cmd:
-                win_env.run_xp2p(server_host, [cmd[0], "service", "stop", "--quiet"])
+                win_env.run_xp2p(server_host, [cmd[0], "service", "stop"])
+                _wait_for_service_inactive(cmd[0])
         result = win_env.run_xp2p(server_host, cmd)
+        if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
+            if cmd[0] == "server" or "--all" in cmd:
+                win_env.run_xp2p(server_host, [cmd[0], "service", "stop"])
+                _wait_for_service_inactive(cmd[0])
         stdout = result.stdout or ""
         if "__XP2P_MISSING__" in stdout:
             pytest.skip(

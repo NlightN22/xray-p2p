@@ -229,7 +229,7 @@ function Ensure-BatchLogonRight([string] $userPath) {
     $policyDir = "C:\\xp2p\\build\\ui-secpol"
     New-Item -ItemType Directory -Path $policyDir -Force | Out-Null
     $cfgPath = Join-Path $policyDir ("secpol-{0}-{1}.cfg" -f (Get-Date -Format "yyyyMMddHHmmss"), ([System.Guid]::NewGuid().ToString("N").Substring(0, 6)))
-    $dbPath = Join-Path $policyDir "secpol.sdb"
+    $dbPath = Join-Path $policyDir ("secpol-{0}-{1}.sdb" -f (Get-Date -Format "yyyyMMddHHmmss"), ([System.Guid]::NewGuid().ToString("N").Substring(0, 6)))
 
     $exportOutput = & secedit.exe /export /cfg $cfgPath /areas USER_RIGHTS 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -269,6 +269,7 @@ function Ensure-BatchLogonRight([string] $userPath) {
         Set-Content -Path $cfgPath -Value $lines -Encoding Unicode
     }
 
+    Remove-Item -Path $dbPath -Force -ErrorAction SilentlyContinue
     $applyOutput = & secedit.exe /configure /db $dbPath /cfg $cfgPath /areas USER_RIGHTS 2>&1
     if ($LASTEXITCODE -ne 0) {
         $detail = ($applyOutput | Out-String).Trim()
@@ -277,6 +278,8 @@ function Ensure-BatchLogonRight([string] $userPath) {
         }
         throw "secedit configure failed (exit $LASTEXITCODE)"
     }
+
+    Remove-Item -Path $dbPath -Force -ErrorAction SilentlyContinue
 }
 
 $exitCode = 0
@@ -286,8 +289,9 @@ $userName = $null
 $password = $null
 $userCreated = $false
 $uiProc = $null
+$uiOwned = $false
 $expectCrashFlag = $false
-
+ 
 try {
     if ($ExpectCrash) {
         if ($ExpectCrash -is [string]) {
@@ -321,9 +325,18 @@ try {
         }
         $uiRunning = Get-Process -Id $uiProc.Id -ErrorAction SilentlyContinue
         if (-not $uiRunning) {
-            Write-Output "ui-xp2p exited before service toggle"
-            $exitCode = 4
-            return
+            $existing = Get-Process -Name 'ui-xp2p' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($existing) {
+                Write-Output ("ui-xp2p already running (pid={0}), continuing." -f $existing.Id)
+                $uiProc = $existing
+                $uiOwned = $false
+            } else {
+                Write-Output "ui-xp2p exited before service toggle"
+                $exitCode = 4
+                return
+            }
+        } else {
+            $uiOwned = $true
         }
         Wait-ForLog $LogPath 10
     }
@@ -458,7 +471,7 @@ try {
     Write-Output "toggle_service_via_ui failed: $errorDetail"
     $exitCode = 10
 } finally {
-    if ($uiProc -and -not $uiProc.HasExited) {
+    if ($uiOwned -and $uiProc -and -not $uiProc.HasExited) {
         Stop-Process -Id $uiProc.Id -Force -ErrorAction SilentlyContinue
     }
     if ($userName -and $userCreated) {

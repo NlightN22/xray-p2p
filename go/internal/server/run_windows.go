@@ -140,7 +140,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			}
 			waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			ifIndex, ip, err := winnet.WaitForTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false)
+			ifIndex, ip, err := winnet.EnsureTunIPv4(waitCtx, opts.TunName, opts.TunAddr, false)
 			if err != nil {
 				logging.Warn("tun IPv4 wait failed; skipping route apply", "err", err)
 				if errors.Is(err, winnet.ErrTunIPv4TentativeTimeout) {

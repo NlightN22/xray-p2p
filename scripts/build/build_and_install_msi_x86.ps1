@@ -26,6 +26,26 @@ function Ensure-Directory {
     }
 }
 
+function Invoke-GoCommand {
+    param([string[]] $CommandArgs)
+
+    $cmdArgs = @($CommandArgs | Where-Object { $_ -ne $null -and $_ -ne "" })
+    if ($cmdArgs.Count -eq 0) {
+        throw "Invoke-GoCommand called with empty arguments."
+    }
+    Write-Info ("Running go {0}" -f ($cmdArgs -join " "))
+
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $output = & go @cmdArgs 2>&1
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    return @{
+        Output = $output
+        ExitCode = $exitCode
+    }
+}
+
 function Invoke-WixTool {
     param(
         [Parameter(Mandatory = $true)]
@@ -115,7 +135,11 @@ $msiPath = $null
 $xp2pRsrcPrefix = Join-Path $RepoRoot 'go\cmd\xp2p\rsrc'
 try {
     Write-Info "Resolving xp2p version"
-    $version = (& go run .\go\cmd\xp2p --version).Trim()
+    $versionResult = Invoke-GoCommand -CommandArgs @("run", ".\\go\\cmd\\xp2p", "--version")
+    if ($versionResult.ExitCode -ne 0) {
+        throw ("xp2p --version failed with exit code {0}.\n{1}" -f $versionResult.ExitCode, ($versionResult.Output -join "`n"))
+    }
+    $version = ($versionResult.Output | Where-Object { $_ -ne $null -and $_.ToString().Trim() } | Select-Object -Last 1).ToString().Trim()
     if ([string]::IsNullOrWhiteSpace($version)) {
         throw "xp2p --version returned empty output."
     }
@@ -146,9 +170,23 @@ try {
             }
 
             Get-ChildItem "$RsrcPrefix*_windows_*.syso" -ErrorAction SilentlyContinue | Remove-Item -Force
-            go run github.com/tc-hib/go-winres@v0.2.0 make --in $ConfigPath --out $RsrcPrefix --arch $Arch --product-version $version --file-version $version
-            if ($LASTEXITCODE -ne 0) {
-                throw "go-winres failed for $Label with exit code $LASTEXITCODE"
+            $res = Invoke-GoCommand -CommandArgs @(
+                "run",
+                "github.com/tc-hib/go-winres@v0.2.0",
+                "make",
+                "--in",
+                $ConfigPath,
+                "--out",
+                $RsrcPrefix,
+                "--arch",
+                $Arch,
+                "--product-version",
+                $version,
+                "--file-version",
+                $version
+            )
+            if ($res.ExitCode -ne 0) {
+                throw ("go-winres failed for {0} with exit code {1}.\n{2}" -f $Label, $res.ExitCode, ($res.Output -join "`n"))
             }
         }
 
@@ -159,9 +197,12 @@ try {
     Invoke-Step -Name "Building xp2p.exe (x86)" -Action {
         $env:GOARCH = '386'
         $env:GOOS = 'windows'
-        go build -trimpath -ldflags $ldflags -o $binaryOut .\go\cmd\xp2p
+        $buildResult = Invoke-GoCommand -CommandArgs @("build", "-trimpath", "-ldflags", $ldflags, "-o", $binaryOut, ".\\go\\cmd\\xp2p")
         Remove-Item Env:GOARCH
         Remove-Item Env:GOOS
+        if ($buildResult.ExitCode -ne 0) {
+            throw ("go build (x86) failed with exit code {0}.\n{1}" -f $buildResult.ExitCode, ($buildResult.Output -join "`n"))
+        }
     }
     if (-not (Test-Path $binaryOut)) {
         throw "xp2p binary missing at $binaryOut"

@@ -48,7 +48,7 @@ function Ensure-UserRight([string] $userPath, [string] $rightName) {
     $policyDir = "C:\\xp2p\\build\\ui-sc"
     New-Item -ItemType Directory -Path $policyDir -Force | Out-Null
     $cfgPath = Join-Path $policyDir ("secpol-{0}-{1}.cfg" -f (Get-Date -Format "yyyyMMddHHmmss"), ([System.Guid]::NewGuid().ToString("N").Substring(0, 6)))
-    $dbPath = Join-Path $policyDir "secpol.sdb"
+    $dbPath = Join-Path $policyDir ("secpol-{0}-{1}.sdb" -f (Get-Date -Format "yyyyMMddHHmmss"), ([System.Guid]::NewGuid().ToString("N").Substring(0, 6)))
 
     $exportOutput = & secedit.exe /export /cfg $cfgPath /areas USER_RIGHTS 2>&1
     if ($LASTEXITCODE -ne 0) {
@@ -88,6 +88,7 @@ function Ensure-UserRight([string] $userPath, [string] $rightName) {
         Set-Content -Path $cfgPath -Value $lines -Encoding Unicode
     }
 
+    Remove-Item -Path $dbPath -Force -ErrorAction SilentlyContinue
     $applyOutput = & secedit.exe /configure /db $dbPath /cfg $cfgPath /areas USER_RIGHTS 2>&1
     if ($LASTEXITCODE -ne 0) {
         $detail = ($applyOutput | Out-String).Trim()
@@ -96,6 +97,8 @@ function Ensure-UserRight([string] $userPath, [string] $rightName) {
         }
         throw "secedit configure failed (exit $LASTEXITCODE)"
     }
+
+    Remove-Item -Path $dbPath -Force -ErrorAction SilentlyContinue
 }
 
 function Get-DenyLogonInfo([string] $userPath) {

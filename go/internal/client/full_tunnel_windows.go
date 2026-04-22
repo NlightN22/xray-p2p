@@ -154,8 +154,18 @@ func restoreFullTunnel(ctx context.Context, paths clientPaths, verbose bool) err
 	}
 
 	if tun := strings.TrimSpace(state.TunName); tun != "" {
-		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv4")
-		_ = removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv6")
+		if err := removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv4"); err != nil {
+			logging.Warn("full-tunnel IPv4 default route removal failed", "interface", tun, "err", err)
+		}
+		if err := removeWindowsDefaultRoute(ctx, tun, state.TunAddr, "IPv6"); err != nil {
+			logging.Warn("full-tunnel IPv6 default route removal failed", "interface", tun, "err", err)
+		}
+		if err := winnet.ForceRemoveDefaultRoutesByPrefix(ctx, tun, "IPv4"); err != nil {
+			logging.Warn("full-tunnel IPv4 default route force removal failed", "interface", tun, "err", err)
+		}
+		if err := winnet.ForceRemoveDefaultRoutesByPrefix(ctx, tun, "IPv6"); err != nil {
+			logging.Warn("full-tunnel IPv6 default route force removal failed", "interface", tun, "err", err)
+		}
 		logFullTunnelVerbose(verbose, "full-tunnel default routes removed from tun", "interface", tun)
 	}
 	if err := removeWindowsBypassRoutes(ctx, state.BypassRoutes); err != nil {

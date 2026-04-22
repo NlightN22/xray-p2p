@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	"golang.org/x/sys/windows"
 )
 
 var ErrTunIPv4TentativeTimeout = errors.New("tun IPv4 remained tentative")
@@ -260,6 +259,6 @@ func interfaceIPv4ReadyState(ifIndex int) (string, string, string, bool, error) 
 func statusFromIPv4Details(details IPv4Details) (string, string, string, bool) {
 	oper := InterfaceOperStatusName(details.OperStatus)
 	dad := InterfaceDadStateName(details.DadState)
-	ready := details.IP != "" && details.OperStatus == windows.IfOperStatusUp && details.DadState == dadStatePreferred
+	ready := details.IP != "" && details.DadState == dadStatePreferred
 	return details.IP, oper, dad, ready
 }

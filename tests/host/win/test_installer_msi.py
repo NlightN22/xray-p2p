@@ -39,6 +39,52 @@ exit 0
         pytest.skip("Windows Installer service is unavailable on this guest.")
 
 
+def _require_go_windows_386(host) -> None:
+    script = r"""
+$ErrorActionPreference = 'Continue'
+if (-not (Get-Command -Name go.exe -ErrorAction SilentlyContinue)) {
+    Write-Output '__NO_GO__'
+    exit 3
+}
+$path = 'C:\Windows\Temp\xp2p-go-hello386.go'
+Set-Content -Path $path -Value "package main`nfunc main() {}`n" -Encoding ASCII
+$env:GOARCH = '386'
+$env:GOOS = 'windows'
+& go.exe build -trimpath -o C:\Windows\Temp\xp2p-go-hello386.exe $path
+$rc = $LASTEXITCODE
+Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
+Remove-Item Env:GOOS -ErrorAction SilentlyContinue
+if ($rc -eq 0 -and (Test-Path 'C:\Windows\Temp\xp2p-go-hello386.exe')) {
+    Write-Output '__OK__'
+    exit 0
+}
+Write-Output ("__RC__=" + $rc)
+Write-Output '__GO_CLEAN__'
+& go.exe clean -cache -testcache
+$env:GOARCH = '386'
+$env:GOOS = 'windows'
+& go.exe build -trimpath -o C:\Windows\Temp\xp2p-go-hello386.exe $path
+$rc2 = $LASTEXITCODE
+Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
+Remove-Item Env:GOOS -ErrorAction SilentlyContinue
+Write-Output ("__RC2__=" + $rc2)
+if ($rc2 -ne 0) {
+    exit 4
+}
+if (-not (Test-Path 'C:\Windows\Temp\xp2p-go-hello386.exe')) {
+    exit 5
+}
+Write-Output '__OK2__'
+exit 0
+"""
+    result = _env.run_powershell(host, script, timeout=180, label="go_386_probe")
+    if result.rc != 0:
+        pytest.fail(
+            "Go toolchain cannot build windows/386 on this guest (required for x86 MSI build).\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
 @pytest.mark.host
 @pytest.mark.win
 def test_windows_installer_builds_msi(server_host, pytestconfig: pytest.Config):
@@ -60,6 +106,7 @@ def test_windows_installer_builds_msi(server_host, pytestconfig: pytest.Config):
 def test_windows_installer_builds_msi_x86(server_host, pytestconfig: pytest.Config):
     if not pytestconfig.getoption("run_msi_build_tests"):
         pytest.skip("MSI build tests are skipped by default.")
+    _require_go_windows_386(server_host)
     msi_path = _env.ensure_msi_package_x86(server_host)
     assert msi_path.startswith(str(MSI_CACHE_DIR_X86)), (
         f"Expected x86 MSI to be placed under {MSI_CACHE_DIR_X86}, got {msi_path}"
