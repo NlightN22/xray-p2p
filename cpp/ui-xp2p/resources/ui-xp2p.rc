@@ -1,0 +1,6 @@
+#include <windows.h>
+
+#define IDI_XP2P_APPICON 101
+
+IDI_XP2P_APPICON ICON "../../assets/xp2p.ico"
+

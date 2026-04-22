@@ -35,8 +35,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_inst
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi_x86.ps1
 ```
 The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed. Additional parameters let you control the WiX source (`-WixSourceRelative`), the MSI name suffix (`-MsiArchLabel`), and whether the script should only build the MSI (`-BuildOnly`) instead of running `msiexec`. Use `-OutputMarker '__MSI_PATH__='` when another tool needs to parse the resulting path from `stdout`.
-The MSI build scripts compile the WPF UI via `dotnet publish` and embed the resulting `ui-xp2p.exe` into the installer. By default the UI is published as framework-dependent single-file to keep the installer small (requires the .NET Desktop Runtime on the target machine). Pass `-UiSelfContained` to produce a self-contained UI (larger, but no runtime prerequisite). Ensure the .NET SDK is available on the build host.
-The WPF project outputs `bin/` and `obj/` artifacts under `build/dotnet/ui-xp2p/` to keep the repo clean.
+The MSI build scripts embed a tray UI binary as `ui-xp2p.exe`. By default the UI is built from the native Win32 (C++) project via CMake (`-UiBackend native`). Use `-UiBackend dotnet` to roll back to the existing WPF UI build. The `-UiSelfContained` switch applies only to the dotnet UI publish (self-contained builds remove the .NET Desktop Runtime prerequisite but increase size). Ensure the matching toolchain is available on the build host (CMake + MSVC for native, .NET SDK for dotnet).
+The WPF project outputs `bin/` and `obj/` artifacts under `build/dotnet/ui-xp2p/` to keep the repo clean when `-UiBackend dotnet` is used.
 
 ### Uninstall notes (development builds)
 
