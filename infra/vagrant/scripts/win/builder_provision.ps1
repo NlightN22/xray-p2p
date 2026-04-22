@@ -273,6 +273,72 @@ function Ensure-NuGetSources {
     }
 }
 
+function Ensure-CMakeToolchain {
+    $cmakeVersion = $env:XP2P_CMAKE_VERSION
+    if (-not $cmakeVersion) {
+        $cmakeVersion = $null
+    }
+
+    $ninjaVersion = $env:XP2P_NINJA_VERSION
+    if (-not $ninjaVersion) {
+        $ninjaVersion = $null
+    }
+
+    $vsBuildToolsVersion = $env:XP2P_VS_BUILD_TOOLS_VERSION
+    if (-not $vsBuildToolsVersion) {
+        $vsBuildToolsVersion = $null
+    }
+
+    $vsVcToolsWorkloadVersion = $env:XP2P_VS_VCTOOLS_WORKLOAD_VERSION
+    if (-not $vsVcToolsWorkloadVersion) {
+        $vsVcToolsWorkloadVersion = $null
+    }
+
+    Ensure-ChocoPackage -Package "cmake" -Version $cmakeVersion
+    Ensure-ChocoPackage -Package "ninja" -Version $ninjaVersion
+    Ensure-ChocoPackage -Package "visualstudio2022buildtools" -Version $vsBuildToolsVersion
+    Ensure-ChocoPackage -Package "visualstudio2022-workload-vctools" -Version $vsVcToolsWorkloadVersion
+
+    if (-not (Get-Command -Name cmake.exe -ErrorAction SilentlyContinue)) {
+        throw "cmake.exe not found after installation. Ensure CMake is available."
+    }
+    if (-not (Get-Command -Name ninja.exe -ErrorAction SilentlyContinue)) {
+        throw "ninja.exe not found after installation. Ensure Ninja is available."
+    }
+
+    $vswhereCandidates = @(
+        "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe",
+        "C:\Program Files\Microsoft Visual Studio\Installer\vswhere.exe"
+    )
+    $vswhere = $vswhereCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $vswhere) {
+        Write-Info "vswhere.exe not found; CMake will attempt to locate MSVC via registry."
+    }
+    else {
+        Write-Info ("vswhere ready: {0}" -f $vswhere)
+    }
+
+    $msbuildCandidates = @(
+        "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe",
+        "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+    )
+    $msbuild = $msbuildCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $msbuild) {
+        Write-Info "MSBuild.exe not found at expected locations; Visual Studio Build Tools installation may be incomplete."
+    }
+    else {
+        Write-Info ("MSBuild ready: {0}" -f $msbuild)
+    }
+
+    $cmakeInfo = & cmake.exe --version | Select-Object -First 1
+    $ninjaInfo = & ninja.exe --version 2>$null
+    Write-Info ("CMake ready: {0}" -f $cmakeInfo)
+    if ($ninjaInfo) {
+        Write-Info ("Ninja ready: {0}" -f $ninjaInfo)
+    }
+    Write-Info "MSVC build tools provisioned."
+}
+
 Write-Info "Provisioning role detected."
 
 Ensure-IsElevated
@@ -280,6 +346,7 @@ Ensure-Chocolatey
 Ensure-Go
 Ensure-DotNetSdk
 Ensure-NuGetSources
+Ensure-CMakeToolchain
 Ensure-WiX
 Ensure-WindowsInstallerEnabled
 Disable-WindowsAutoUpdate
