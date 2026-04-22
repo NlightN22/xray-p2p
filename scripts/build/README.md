@@ -38,6 +38,19 @@ The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot
 The MSI build scripts compile the WPF UI via `dotnet publish` and embed the resulting `ui-xp2p.exe` into the installer. By default the UI is published as framework-dependent single-file to keep the installer small (requires the .NET Desktop Runtime on the target machine). Pass `-UiSelfContained` to produce a self-contained UI (larger, but no runtime prerequisite). Ensure the .NET SDK is available on the build host.
 The WPF project outputs `bin/` and `obj/` artifacts under `build/dotnet/ui-xp2p/` to keep the repo clean.
 
+### Uninstall notes (development builds)
+
+Development builds use a new MSI `ProductCode` on each build (`Product Id="*"` in WiX), even when the version stays the same. As a result, uninstalling by double-clicking an arbitrary MSI file may fail with exit code `1605` ("not installed") if that MSI does not match the installed product code.
+
+Use one of the following methods instead:
+
+- Uninstall via "Apps & features" / "Programs and Features".
+- Run the helper script that uninstalls by the installed product code:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\windows\uninstall_xp2p.ps1 -Quiet -Purge
+```
+
 ## OpenWrt SDK fetcher
 
 `ensure_openwrt_sdk.sh` downloads (or refreshes) the OpenWrt SDK for selected targets and drops them into `~/openwrt-sdk-<identifier>`. Supported identifiers currently include `linux-amd64`, `linux-386`, `linux-arm64`, `linux-armhf`, and `linux-mipsle-softfloat`.

@@ -54,6 +54,7 @@ MSI_MARKER = "__MSI_PATH__="
 MSI_CACHE_DIR_X64 = Path(r"C:\xp2p\build\msi-cache")
 MSI_CACHE_DIR_X86 = Path(r"C:\xp2p\build\msi-cache-x86")
 PROJECT_SYNC_MARKER = Path(r"C:\xp2p\scripts\build\build_and_install_msi.ps1")
+XP2P_UNINSTALL_SCRIPT = Path(r"C:\xp2p\scripts\windows\uninstall_xp2p.ps1")
 
 _MSI_CACHE_PATH_X64: str | None = None
 _MSI_CACHE_PATH_X86: str | None = None
@@ -730,7 +731,36 @@ foreach ($svc in $services) {
         Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
     }
 }
-Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name xp2p,xray,ui-xp2p -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+foreach ($sid in (Get-ChildItem Registry::HKEY_USERS -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName)) {
+    $runKey = "Registry::HKEY_USERS\$sid\Software\Microsoft\Windows\CurrentVersion\Run"
+    if (Test-Path $runKey) {
+        Remove-ItemProperty -Path $runKey -Name 'ui-xp2p' -ErrorAction SilentlyContinue
+    }
+    $xp2pKey = "Registry::HKEY_USERS\$sid\Software\xp2p"
+    if (Test-Path $xp2pKey) {
+        Remove-Item -Path $xp2pKey -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+$profileRoots = @('C:\Users')
+foreach ($root in $profileRoots) {
+    Get-ChildItem -Path $root -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $userDir = $_.FullName
+        $desktopShortcut = Join-Path $userDir 'Desktop\ui-xp2p.lnk'
+        $startMenuShortcut = Join-Path $userDir 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\xp2p\ui-xp2p.lnk'
+        Remove-Item -Path $desktopShortcut -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $startMenuShortcut -Force -ErrorAction SilentlyContinue
+        $startMenuDir = Split-Path -Parent $startMenuShortcut
+        if ($startMenuDir -and (Test-Path $startMenuDir)) {
+            $remaining = Get-ChildItem -Path $startMenuDir -ErrorAction SilentlyContinue
+            if (-not $remaining) {
+                Remove-Item -Path $startMenuDir -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
 
 $productNamePattern = '^xp2p'
 $roots = @(
@@ -811,6 +841,21 @@ foreach ($dir in $dirs) {
 }
 """
     run_powershell(host, script, timeout=300, label="msi_cleanup_orphans")
+    purge_xp2p_install(host, purge=True, label="msi_cleanup_orphans_purge")
+
+
+def purge_xp2p_install(host: Host, *, purge: bool = True, label: str = "xp2p_purge") -> None:
+    script_path = ps_quote(str(XP2P_UNINSTALL_SCRIPT))
+    flags = "-Quiet" + (" -Purge" if purge else "")
+    script = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$path = {script_path}
+if (Test-Path $path) {{
+    & $path {flags} | Out-Null
+}}
+exit 0
+"""
+    run_powershell(host, script, timeout=240, label=label)
 
 
 def _read_msi_log_tail(host: Host, path: Path, lines: int = 200) -> str:
@@ -880,8 +925,31 @@ foreach ($svc in $services) {{
         Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
     }}
 }}
-Get-Process -Name xp2p,xray -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-$arguments = @('/x', $msi, '/qn', '/norestart')
+Get-Process -Name xp2p,xray,ui-xp2p -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+$productCodes = @()
+$roots = @(
+    'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+    'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
+)
+foreach ($root in $roots) {{
+    $items = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue | Where-Object {{
+        $_.DisplayName -and $_.DisplayName -match '^xp2p(\\s|$)'
+    }}
+    foreach ($item in $items) {{
+        $code = $item.PSChildName
+        if ($code -and $code -match '^\\{{[0-9A-Fa-f-]+\\}}$') {{
+            $productCodes += $code
+        }}
+    }}
+}}
+$productCodes = $productCodes | Select-Object -Unique
+
+$arguments = $null
+if ($productCodes.Count -gt 0) {{
+    $arguments = @('/x', $productCodes[0], '/qn', '/norestart')
+}} else {{
+    $arguments = @('/x', $msi, '/qn', '/norestart')
+}}
 $attempt = 0
 do {{
     $attempt++
@@ -901,6 +969,17 @@ do {{
 if ($successCodes -notcontains $process.ExitCode) {{
     exit $process.ExitCode
 }}
+
+foreach ($sid in (Get-ChildItem Registry::HKEY_USERS -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName)) {{
+    $runKey = "Registry::HKEY_USERS\\$sid\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+    if (Test-Path $runKey) {{
+        Remove-ItemProperty -Path $runKey -Name 'ui-xp2p' -ErrorAction SilentlyContinue
+    }}
+    $xp2pKey = "Registry::HKEY_USERS\\$sid\\Software\\xp2p"
+    if (Test-Path $xp2pKey) {{
+        Remove-Item -Path $xp2pKey -Recurse -Force -ErrorAction SilentlyContinue
+    }}
+}}
 """
     if purge_files:
         script += f"""
@@ -910,7 +989,7 @@ if (Test-Path {install_dir}) {{
 """
     script += """
 exit 0
-    """
+"""
     result = run_powershell(host, script, timeout=360, label="msi_uninstall")
     if result.rc != 0:
         stdout = result.stdout or ""
@@ -936,6 +1015,8 @@ exit 0
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
     remove_services(host, ["xp2p-client", "xp2p-server"])
+    if purge_files:
+        purge_xp2p_install(host, purge=True, label="msi_uninstall_purge")
 
 
 def ensure_program_files_install(
