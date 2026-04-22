@@ -12,7 +12,8 @@ public sealed class ModeManagerTests
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
 
-        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+        var configPath = Path.Combine(env.Root, "xp2p-client.toml");
+        File.WriteAllText(configPath,
             "[[client.endpoints]]\n" +
             "tag = \"proxy-alpha\"\n" +
             "hostname = \"edge.example\"\n");
@@ -20,9 +21,8 @@ public sealed class ModeManagerTests
         var result = manager.ApplyClientMode(ClientMode.TunFull);
 
         Assert.True(result.Success);
-        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
-        Assert.True(File.Exists(pendingPath));
-        var content = File.ReadAllText(pendingPath);
+        Assert.True(File.Exists(configPath));
+        var content = File.ReadAllText(configPath);
         Assert.Contains("[client]", content, StringComparison.Ordinal);
         Assert.Contains("tun_enabled = true", content, StringComparison.Ordinal);
         Assert.Contains("tun_mode = \"full\"", content, StringComparison.Ordinal);
@@ -35,16 +35,16 @@ public sealed class ModeManagerTests
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
 
-        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+        var configPath = Path.Combine(env.Root, "xp2p-client.toml");
+        File.WriteAllText(configPath,
             "[client]\n" +
             "endpoints = [{ tag = \"proxy-inline\", hostname = \"edge.example\" }]\n");
 
         var result = manager.ApplyClientMode(ClientMode.TunFull);
 
         Assert.True(result.Success);
-        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
-        Assert.True(File.Exists(pendingPath));
-        var content = File.ReadAllText(pendingPath);
+        Assert.True(File.Exists(configPath));
+        var content = File.ReadAllText(configPath);
         Assert.Contains("full_tunnel_tag = \"proxy-inline\"", content, StringComparison.Ordinal);
     }
 
@@ -54,7 +54,15 @@ public sealed class ModeManagerTests
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
 
-        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+        var configPath = Path.Combine(env.Root, "xp2p-client.toml");
+        var original = "[[client.endpoints]]\n" +
+                       "tag = \"proxy-alpha\"\n" +
+                       "hostname = \"edge.example\"\n" +
+                       "\n" +
+                       "[[client.endpoints]]\n" +
+                       "tag = \"proxy-beta\"\n" +
+                       "hostname = \"edge2.example\"\n";
+        File.WriteAllText(configPath,
             "[[client.endpoints]]\n" +
             "tag = \"proxy-alpha\"\n" +
             "hostname = \"edge.example\"\n" +
@@ -66,17 +74,17 @@ public sealed class ModeManagerTests
         var result = manager.ApplyClientMode(ClientMode.TunFull);
 
         Assert.False(result.Success);
-        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
-        Assert.False(File.Exists(pendingPath));
+        Assert.Equal(original, File.ReadAllText(configPath));
     }
 
     [Fact]
-    public void ApplyClientMode_FullWithOverrideTagWritesPending()
+    public void ApplyClientMode_FullWithOverrideTagWritesDesired()
     {
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
 
-        File.WriteAllText(Path.Combine(env.Root, "xp2p-client.toml"),
+        var configPath = Path.Combine(env.Root, "xp2p-client.toml");
+        File.WriteAllText(configPath,
             "[[client.endpoints]]\n" +
             "tag = \"proxy-alpha\"\n" +
             "hostname = \"edge.example\"\n" +
@@ -88,14 +96,13 @@ public sealed class ModeManagerTests
         var result = manager.ApplyClientMode(ClientMode.TunFull, "proxy-beta");
 
         Assert.True(result.Success);
-        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
-        Assert.True(File.Exists(pendingPath));
-        var content = File.ReadAllText(pendingPath);
+        Assert.True(File.Exists(configPath));
+        var content = File.ReadAllText(configPath);
         Assert.Contains("full_tunnel_tag = \"proxy-beta\"", content, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ApplyClientMode_SplitWritesPending()
+    public void ApplyClientMode_SplitWritesDesired()
     {
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
@@ -103,18 +110,18 @@ public sealed class ModeManagerTests
         var result = manager.ApplyClientMode(ClientMode.TunSplit);
 
         Assert.True(result.Success);
-        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
-        Assert.True(File.Exists(pendingPath));
-        var content = File.ReadAllText(pendingPath);
+        var configPath = Path.Combine(env.Root, "xp2p-client.toml");
+        Assert.True(File.Exists(configPath));
+        var content = File.ReadAllText(configPath);
         Assert.Contains("[client]", content, StringComparison.Ordinal);
         Assert.Contains("tun_enabled = true", content, StringComparison.Ordinal);
         Assert.Contains("tun_mode = \"split\"", content, StringComparison.Ordinal);
-        var requestPath = Path.Combine(env.Root, ".apply", "apply.request");
+        var requestPath = Path.Combine(env.Root, ".state", "apply.request");
         Assert.True(File.Exists(requestPath));
     }
 
     [Fact]
-    public void ApplyClientMode_ProxyWritesPending()
+    public void ApplyClientMode_ProxyWritesDesired()
     {
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
@@ -122,15 +129,15 @@ public sealed class ModeManagerTests
         var result = manager.ApplyClientMode(ClientMode.Proxy);
 
         Assert.True(result.Success);
-        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-client.toml");
-        Assert.True(File.Exists(pendingPath));
-        var content = File.ReadAllText(pendingPath);
+        var configPath = Path.Combine(env.Root, "xp2p-client.toml");
+        Assert.True(File.Exists(configPath));
+        var content = File.ReadAllText(configPath);
         Assert.Contains("[client]", content, StringComparison.Ordinal);
         Assert.Contains("tun_enabled = false", content, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ApplyServerMode_TunWritesPending()
+    public void ApplyServerMode_TunWritesDesired()
     {
         using var env = new TempConfigRoot();
         var manager = new ModeManager();
@@ -138,12 +145,12 @@ public sealed class ModeManagerTests
         var result = manager.ApplyServerMode(ServerMode.Tun);
 
         Assert.True(result.Success);
-        var pendingPath = Path.Combine(env.Root, ".apply", "pending", "xp2p-server.toml");
-        Assert.True(File.Exists(pendingPath));
-        var content = File.ReadAllText(pendingPath);
+        var configPath = Path.Combine(env.Root, "xp2p-server.toml");
+        Assert.True(File.Exists(configPath));
+        var content = File.ReadAllText(configPath);
         Assert.Contains("[server]", content, StringComparison.Ordinal);
         Assert.Contains("tun_enabled = true", content, StringComparison.Ordinal);
-        var requestPath = Path.Combine(env.Root, ".apply", "apply.request");
+        var requestPath = Path.Combine(env.Root, ".state", "apply.request");
         Assert.True(File.Exists(requestPath));
     }
 

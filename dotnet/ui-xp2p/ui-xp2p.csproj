@@ -15,18 +15,6 @@
     <Resource Include="..\..\assets\xp2p.ico">
       <Link>assets\xp2p.ico</Link>
     </Resource>
-    <Resource Include="..\..\assets\Base.png">
-      <Link>assets\Base.png</Link>
-    </Resource>
-    <Resource Include="..\..\assets\Disabled.png">
-      <Link>assets\Disabled.png</Link>
-    </Resource>
-    <Resource Include="..\..\assets\Enabled.png">
-      <Link>assets\Enabled.png</Link>
-    </Resource>
-    <Resource Include="..\..\assets\Enabling.png">
-      <Link>assets\Enabling.png</Link>
-    </Resource>
   </ItemGroup>
 
   <ItemGroup>
@@ -42,22 +30,6 @@
     <EmbeddedResource Include="..\..\assets\Enabling.png">
       <LogicalName>assets/Enabling.png</LogicalName>
     </EmbeddedResource>
-    <Content Include="..\..\assets\Base.png">
-      <Link>assets\Base.png</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\assets\Disabled.png">
-      <Link>assets\Disabled.png</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\assets\Enabled.png">
-      <Link>assets\Enabled.png</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\assets\Enabling.png">
-      <Link>assets\Enabling.png</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
 
   <ItemGroup>

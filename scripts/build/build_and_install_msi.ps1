@@ -3,6 +3,7 @@ param(
     [string] $CacheDir = 'C:\xp2p\build\msi-cache',
     [string] $WixSourceRelative = 'installer\wix\xp2p.wxs',
     [string] $MsiArchLabel = 'amd64',
+    [switch] $UiSelfContained = $false,
     [switch] $BuildOnly = $false,
     [string] $OutputMarker = ''
 )
@@ -261,14 +262,26 @@ try {
         $uiPublishDir = Join-Path $binaryDir 'ui-xp2p-publish'
         Ensure-Directory $uiPublishDir
         $runtimeId = Resolve-UiRuntimeId -ArchLabel $MsiArchLabel
-        Write-Info ("Publishing WPF UI (RID={0})" -f $runtimeId)
-        $dotnetOutput = & dotnet publish $uiProject -c Release -r $runtimeId `
-            /p:SelfContained=true `
-            /p:PublishSingleFile=true `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:DebugType=None `
-            /p:DebugSymbols=false `
-            -o $uiPublishDir 2>&1
+        Write-Info ("Publishing WPF UI (RID={0}, selfContained={1})" -f $runtimeId, ($UiSelfContained -eq $true))
+
+        $uiPublishProps = @(
+            "/p:PublishSingleFile=true",
+            "/p:DebugType=None",
+            "/p:DebugSymbols=false",
+            "/p:PublishReadyToRun=false"
+        )
+        if ($UiSelfContained) {
+            $uiPublishProps += @(
+                "/p:SelfContained=true",
+                "/p:IncludeNativeLibrariesForSelfExtract=true",
+                "/p:EnableCompressionInSingleFile=true"
+            )
+        }
+        else {
+            $uiPublishProps += "/p:SelfContained=false"
+        }
+
+        $dotnetOutput = & dotnet publish $uiProject -c Release -r $runtimeId @uiPublishProps -o $uiPublishDir 2>&1
         if ($dotnetOutput) {
             $dotnetOutput | ForEach-Object { Write-Host $_ }
         }
@@ -278,6 +291,13 @@ try {
         $publishedExe = Join-Path $uiPublishDir 'ui-xp2p.exe'
         if (-not (Test-Path $publishedExe)) {
             throw "WPF UI publish output missing at $publishedExe"
+        }
+        if (-not $UiSelfContained) {
+            $extraFiles = @(Get-ChildItem $uiPublishDir -File | Where-Object { $_.Name -ne 'ui-xp2p.exe' })
+            if ($extraFiles.Count -gt 0) {
+                $names = ($extraFiles | Select-Object -ExpandProperty Name) -join ", "
+                throw "Framework-dependent UI publish produced extra files: $names. MSI currently embeds only ui-xp2p.exe; use -UiSelfContained or update packaging."
+            }
         }
         Copy-Item -Path $publishedExe -Destination $uiBinaryOut -Force
     }

@@ -24,11 +24,11 @@ internal sealed class ModeManager
         var desiredTunEnabled = mode != ClientMode.Proxy;
         var desiredTunMode = mode == ClientMode.TunFull ? "full" : "split";
         var configPath = GetConfigPath("xp2p-client.toml");
-        var pendingPath = GetPendingConfigPath("xp2p-client.toml");
-        var sourcePath = ResolveSourceConfig(configPath, pendingPath);
+        var legacyPendingPath = GetPendingConfigPath("xp2p-client.toml");
+        var sourcePath = ResolveSourceConfig(configPath, legacyPendingPath);
 
         Log($"mode manager: client mode request {ModeLogic.FormatClientMode(mode)}");
-        Log($"mode manager: client config source={sourcePath} pending={pendingPath}");
+        Log($"mode manager: client config source={sourcePath} desired={configPath}");
 
         var content = ReadTextOrEmpty(sourcePath);
         content = UpdateTomlValue(content, "client", "tun_enabled", desiredTunEnabled ? "true" : "false");
@@ -65,8 +65,8 @@ internal sealed class ModeManager
 
         try
         {
-            WriteFileWithAudit(pendingPath, content, ignoreAuditErrors: false);
-            Log($"mode manager: client pending config written {pendingPath}");
+            WriteFileWithAudit(configPath, content, ignoreAuditErrors: false);
+            Log($"mode manager: client desired config written {configPath}");
             WriteApplyRequest("client");
             return OperationResult.Ok($"Client mode requested: {ModeLogic.FormatClientMode(mode)}.");
         }
@@ -81,19 +81,19 @@ internal sealed class ModeManager
     {
         var desiredTunEnabled = mode == ServerMode.Tun;
         var configPath = GetConfigPath("xp2p-server.toml");
-        var pendingPath = GetPendingConfigPath("xp2p-server.toml");
-        var sourcePath = ResolveSourceConfig(configPath, pendingPath);
+        var legacyPendingPath = GetPendingConfigPath("xp2p-server.toml");
+        var sourcePath = ResolveSourceConfig(configPath, legacyPendingPath);
 
         Log($"mode manager: server mode request {ModeLogic.FormatServerMode(mode)}");
-        Log($"mode manager: server config source={sourcePath} pending={pendingPath}");
+        Log($"mode manager: server config source={sourcePath} desired={configPath}");
 
         var content = ReadTextOrEmpty(sourcePath);
         content = UpdateTomlValue(content, "server", "tun_enabled", desiredTunEnabled ? "true" : "false");
 
         try
         {
-            WriteFileWithAudit(pendingPath, content, ignoreAuditErrors: false);
-            Log($"mode manager: server pending config written {pendingPath}");
+            WriteFileWithAudit(configPath, content, ignoreAuditErrors: false);
+            Log($"mode manager: server desired config written {configPath}");
             WriteApplyRequest("server");
             return OperationResult.Ok($"Server mode requested: {ModeLogic.FormatServerMode(mode)}.");
         }
@@ -260,8 +260,8 @@ internal sealed class ModeManager
     public ClientFullTunnelTagState GetClientFullTunnelTagState()
     {
         var configPath = GetConfigPath("xp2p-client.toml");
-        var pendingPath = GetPendingConfigPath("xp2p-client.toml");
-        var sourcePath = ResolveSourceConfig(configPath, pendingPath);
+        var legacyPendingPath = GetPendingConfigPath("xp2p-client.toml");
+        var sourcePath = ResolveSourceConfig(configPath, legacyPendingPath);
         var content = ReadTextOrEmpty(sourcePath);
         var existing = ReadTomlValue(content, "client", "full_tunnel_tag") ?? "";
         var tags = ReadEndpointTags(content);
@@ -590,9 +590,14 @@ internal sealed class ModeManager
         return Path.Combine(GetConfigRoot(), ".apply", "pending", fileName);
     }
 
+    private string GetStateRoot()
+    {
+        return Path.Combine(GetConfigRoot(), ".state");
+    }
+
     private string GetApplyRequestPath()
     {
-        return Path.Combine(GetConfigRoot(), ".apply", "apply.request");
+        return Path.Combine(GetStateRoot(), "apply.request");
     }
 
     private static string NormalizeLineEndings(string text)
