@@ -1,30 +1,15 @@
 #include "../src/ui_logic.h"
 
+#include "test_harness.h"
+
 #include <cstdlib>
 #include <iostream>
 #include <string>
 
 namespace {
 
-int failures = 0;
-
-void Expect(bool cond, const char* message) {
-    if (cond) {
-        return;
-    }
-    failures++;
-    std::cerr << "FAIL: " << message << "\n";
-}
-
-void ExpectEq(const std::string& got, const std::string& want, const char* message) {
-    if (got == want) {
-        return;
-    }
-    failures++;
-    std::cerr << "FAIL: " << message << "\n";
-    std::cerr << "  got : " << got << "\n";
-    std::cerr << "  want: " << want << "\n";
-}
+using xp2p::ui::tests::Expect;
+using xp2p::ui::tests::ExpectEq;
 
 void TestServiceStatusPredicates() {
     Expect(xp2p::ui::IsServiceRunning("Running"), "IsServiceRunning(Running)");
@@ -85,13 +70,18 @@ void TestTooltipAndLogLine() {
 
 } // namespace
 
+void RunModeManagerTests();
+void RunRuntimeTests();
+
 int main() {
     TestServiceStatusPredicates();
     TestButtons();
     TestTooltipAndLogLine();
+    RunModeManagerTests();
+    RunRuntimeTests();
 
-    if (failures > 0) {
-        std::cerr << failures << " test(s) failed.\n";
+    if (xp2p::ui::tests::g_failures > 0) {
+        std::cerr << xp2p::ui::tests::g_failures << " test(s) failed.\n";
         return 1;
     }
     std::cout << "OK\n";

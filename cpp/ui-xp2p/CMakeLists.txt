@@ -13,10 +13,29 @@ option(XP2P_UI_BUILD_TESTS "Build ui-xp2p unit tests" OFF)
 option(XP2P_UI_ENABLE_COVERAGE "Enable coverage flags (GNU only)" OFF)
 
 add_library(ui-xp2p-logic STATIC
+    src/mode_logic.cpp
+    src/mode_logic.h
+    src/mode_manager.cpp
+    src/mode_manager.h
+    src/platform.h
     src/ui_logic.cpp
     src/ui_logic.h
+    src/runtime_state.cpp
+    src/runtime_state.h
+    src/runtime_view.cpp
+    src/runtime_view.h
+    src/simple_json.cpp
+    src/simple_json.h
+    src/toml_edit.cpp
+    src/toml_edit.h
 )
 target_compile_definitions(ui-xp2p-logic PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+
+if(WIN32)
+    target_sources(ui-xp2p-logic PRIVATE src/platform_win.cpp)
+else()
+    target_sources(ui-xp2p-logic PRIVATE src/platform_posix.cpp)
+endif()
 
 if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(ui-xp2p-logic PRIVATE -O0 -g --coverage)
@@ -48,8 +67,13 @@ if(WIN32)
         src/path_utils.h
         src/service_manager.cpp
         src/service_manager.h
-        src/tray_app.cpp
         src/tray_app.h
+        src/tray_app_actions.cpp
+        src/tray_app_internal.h
+        src/tray_app_main.cpp
+        src/tray_app_menu.cpp
+        src/tray_app_status.cpp
+        src/tray_app_trayicon.cpp
         src/main.cpp
     )
 
@@ -66,12 +90,19 @@ if(WIN32)
     if(MINGW)
         target_link_options(ui-xp2p PRIVATE -municode)
     endif()
+
+    if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(ui-xp2p PRIVATE -O0 -g --coverage)
+        target_link_options(ui-xp2p PRIVATE --coverage)
+    endif()
 endif()
 
 if(XP2P_UI_BUILD_TESTS)
     enable_testing()
     add_executable(ui-xp2p-tests
         tests/ui_logic_tests.cpp
+        tests/mode_manager_tests.cpp
+        tests/runtime_tests.cpp
     )
     target_link_libraries(ui-xp2p-tests PRIVATE ui-xp2p-logic)
     if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

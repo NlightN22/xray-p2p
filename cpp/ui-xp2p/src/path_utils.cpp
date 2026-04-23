@@ -5,6 +5,22 @@
 
 namespace xp2p::ui {
 
+static std::wstring GetEnvWide(const wchar_t* key) {
+    DWORD needed = GetEnvironmentVariableW(key, nullptr, 0);
+    if (needed == 0) {
+        return L"";
+    }
+    std::wstring out(static_cast<size_t>(needed), L'\0');
+    DWORD got = GetEnvironmentVariableW(key, out.data(), needed);
+    if (got == 0) {
+        return L"";
+    }
+    if (!out.empty() && out.back() == L'\0') {
+        out.pop_back();
+    }
+    return out;
+}
+
 static std::wstring JoinPath(const std::wstring& left, const std::wstring& right) {
     if (left.empty()) {
         return right;
@@ -55,7 +71,15 @@ std::wstring GetProgramDataDir() {
 }
 
 std::wstring GetXp2pLogsDir() {
-    return JoinPath(JoinPath(GetProgramDataDir(), L"xp2p"), L"logs");
+    std::wstring overrideLogRoot = GetEnvWide(L"XP2P_LOG_ROOT");
+    if (!overrideLogRoot.empty()) {
+        return overrideLogRoot;
+    }
+    std::wstring configRoot = GetEnvWide(L"XP2P_CONFIG_ROOT");
+    if (configRoot.empty()) {
+        configRoot = JoinPath(GetProgramDataDir(), L"xp2p");
+    }
+    return JoinPath(configRoot, L"logs");
 }
 
 std::wstring GetUiLogPath() {
@@ -63,4 +87,3 @@ std::wstring GetUiLogPath() {
 }
 
 }
-

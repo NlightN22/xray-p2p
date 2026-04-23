@@ -24,6 +24,10 @@ private:
     void UpdateTrayIconState();
     void LogStatusIfChanged();
     void StartServiceAction(const wchar_t* serviceName, const char* serviceKey, int actionId);
+    void RequestClientMode(int actionId, const std::string& tagOverride);
+    void RequestServerMode(int actionId);
+    void RequestShutdown();
+    void StopAllServicesAndExit();
     void ShowServiceStatusDialog(const wchar_t* serviceName, const wchar_t* title);
     void OpenLogsFolder();
 
@@ -39,6 +43,13 @@ private:
     std::string clientStatus_;
     std::string serverStatus_;
     std::string lastLoggedKey_;
+
+    std::string clientModeLabel_;
+    std::string serverModeLabel_;
+    bool clientModePending_ = false;
+    bool serverModePending_ = false;
+    std::string pendingClientModeLabel_;
+    std::string pendingServerModeLabel_;
 };
 
 }
