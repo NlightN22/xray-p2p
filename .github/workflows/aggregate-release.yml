@@ -46,8 +46,8 @@ jobs:
           fi
           sha="$(git rev-parse "refs/tags/$tag^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          mode="branch"
-          value="${GITHUB_REF_NAME}"
+          mode="sha"
+          value="$sha"
           echo "artifact_mode=$mode" >> "$GITHUB_OUTPUT"
           echo "artifact_value=$value" >> "$GITHUB_OUTPUT"
 
@@ -101,24 +101,31 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ inputs.tag }}"
-          existing=$(gh release view "$tag" --json body -q .body)
-          export EXISTING_NOTES="$existing"
-          export INPUT_RELEASE_NOTES="${{ inputs.release_notes }}"
-          export INPUT_RELEASE_NOTES_B64="${{ inputs.release_notes_b64 }}"
-          export FEED_NOTE="OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
+          gh release view "$tag" --json body -q .body > existing_notes.txt
           python3 - <<'PY'
+          import json
           import os
+          import pathlib
 
-          existing = os.environ.get("EXISTING_NOTES", "")
-          notes_raw = os.environ.get("INPUT_RELEASE_NOTES", "")
-          notes_b64 = os.environ.get("INPUT_RELEASE_NOTES_B64", "")
+          event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+          if not event_path:
+              raise SystemExit("GITHUB_EVENT_PATH is empty")
+
+          payload = json.loads(pathlib.Path(event_path).read_text(encoding="utf-8"))
+          inputs = payload.get("inputs", {}) or {}
+
+          existing = pathlib.Path("existing_notes.txt").read_text(encoding="utf-8")
+
+          notes_raw = inputs.get("release_notes", "") or ""
+          notes_b64 = inputs.get("release_notes_b64", "") or ""
           notes = ""
           if notes_b64:
               import base64
               notes = base64.b64decode(notes_b64).decode("utf-8")
           else:
-              notes = notes_raw.replace("\\n", "\n")
-          feed = os.environ.get("FEED_NOTE", "")
+              notes = notes_raw
+
+          feed = "OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
 
           parts = []
           if existing:
