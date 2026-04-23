@@ -24,8 +24,16 @@ if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
 endif()
 
 if(WIN32)
+    set(XP2P_UI_ICON_PATH "${CMAKE_CURRENT_LIST_DIR}/../../assets/xp2p.ico")
+    file(TO_CMAKE_PATH "${XP2P_UI_ICON_PATH}" XP2P_UI_ICON_PATH)
+    configure_file(
+        "${CMAKE_CURRENT_LIST_DIR}/resources/ui-xp2p.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/ui-xp2p.rc"
+        @ONLY
+    )
+
     add_executable(ui-xp2p WIN32
-        resources/ui-xp2p.rc
+        "${CMAKE_CURRENT_BINARY_DIR}/ui-xp2p.rc"
         src/logging.cpp
         src/logging.h
         src/path_utils.cpp
@@ -38,11 +46,18 @@ if(WIN32)
     )
 
     target_compile_definitions(ui-xp2p PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_compile_options(ui-xp2p PRIVATE /W4 /WX-)
 
-    set_property(TARGET ui-xp2p PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    if(MSVC)
+        target_compile_options(ui-xp2p PRIVATE /W4 /WX-)
+        set_property(TARGET ui-xp2p PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    else()
+        target_compile_options(ui-xp2p PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 
-    target_link_libraries(ui-xp2p PRIVATE ui-xp2p-logic advapi32 shell32 user32)
+    target_link_libraries(ui-xp2p PRIVATE ui-xp2p-logic advapi32 shell32 user32 ole32)
+    if(MINGW)
+        target_link_options(ui-xp2p PRIVATE -municode)
+    endif()
 endif()
 
 if(XP2P_UI_BUILD_TESTS)

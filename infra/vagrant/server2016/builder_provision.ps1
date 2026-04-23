@@ -85,7 +85,20 @@ function Ensure-ChocoPackage {
 
     if (-not (choco list --local-only $Package | Select-String -Quiet "^$Package ")) {
         Write-Info ("Installing Chocolatey package '{0}' (version: {1})" -f $Package, $Version)
-        choco $installArgs | Write-Host
+        $attempt = 0
+        do {
+            $attempt++
+            choco @installArgs | Write-Host
+            $code = $LASTEXITCODE
+            if ($code -eq 0) {
+                break
+            }
+            Write-Info ("Chocolatey install failed for '{0}' (exit={1}, attempt={2}/3)" -f $Package, $code, $attempt)
+            Start-Sleep -Seconds (5 * $attempt)
+        } while ($attempt -lt 3)
+        if ($code -ne 0) {
+            throw "Chocolatey failed to install package '$Package' (exit code $code)."
+        }
     }
     else {
         Write-Info "Chocolatey package '$Package' already installed."
@@ -365,20 +378,71 @@ function Ensure-CMakeToolchain {
         $vsBuildToolsVersion = $null
     }
 
-    $vsVcToolsWorkloadVersion = $env:XP2P_VS_VCTOOLS_WORKLOAD_VERSION
-    if (-not $vsVcToolsWorkloadVersion) {
-        $vsVcToolsWorkloadVersion = $null
-    }
-
     Ensure-ChocoPackage -Package "cmake" -Version $cmakeVersion
     Ensure-ChocoPackage -Package "ninja" -Version $ninjaVersion
     Ensure-ChocoPackage -Package "visualstudio2022buildtools" -Version $vsBuildToolsVersion
-    Ensure-ChocoPackage -Package "visualstudio2022-workload-vctools" -Version $vsVcToolsWorkloadVersion
+
+    $hasCl = Test-Path "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
+    if (-not $hasCl) {
+        Write-Info "MSVC C++ tools not detected; installing VC Tools workload via visualstudio2022buildtools parameters."
+        $params = "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --includeOptional --passive --norestart"
+        $installArgs = @("install", "visualstudio2022buildtools", "--yes", "--no-progress", "--force", "--package-parameters", $params)
+        choco @installArgs | Write-Host
+        if ($LASTEXITCODE -ne 0) {
+            throw "Chocolatey failed to install Visual Studio VC Tools workload (exit code $LASTEXITCODE)."
+        }
+    }
+
+    $cmakeExeCandidates = @(
+        "C:\Program Files\CMake\bin\cmake.exe",
+        "C:\Program Files (x86)\CMake\bin\cmake.exe",
+        "C:\ProgramData\chocolatey\bin\cmake.exe"
+    )
+    $ninjaExeCandidates = @(
+        "C:\ProgramData\chocolatey\bin\ninja.exe",
+        "C:\ProgramData\chocolatey\lib\ninja\tools\ninja.exe"
+    )
+
+    function Resolve-ExistingPath {
+        param([string[]] $Candidates)
+        foreach ($candidate in $Candidates) {
+            if ($candidate -and (Test-Path $candidate)) {
+                return $candidate
+            }
+        }
+        return $null
+    }
 
     if (-not (Get-Command -Name cmake.exe -ErrorAction SilentlyContinue)) {
+        $cmakeExe = Resolve-ExistingPath -Candidates $cmakeExeCandidates
+        if ($cmakeExe) {
+            $cmakeBin = Split-Path -Parent $cmakeExe
+            Write-Info "Adding CMake path '$cmakeBin' to the current session PATH."
+            $env:Path = "$cmakeBin;$env:Path"
+        }
+    }
+
+    if (-not (Get-Command -Name ninja.exe -ErrorAction SilentlyContinue)) {
+        $ninjaExe = Resolve-ExistingPath -Candidates $ninjaExeCandidates
+        if ($ninjaExe) {
+            $ninjaBin = Split-Path -Parent $ninjaExe
+            Write-Info "Adding Ninja path '$ninjaBin' to the current session PATH."
+            $env:Path = "$ninjaBin;$env:Path"
+        }
+    }
+
+    if (-not (Get-Command -Name cmake.exe -ErrorAction SilentlyContinue)) {
+        $existing = Resolve-ExistingPath -Candidates $cmakeExeCandidates
+        if ($existing) {
+            throw "cmake.exe exists at '$existing' but is not discoverable via PATH."
+        }
         throw "cmake.exe not found after installation. Ensure CMake is available."
     }
     if (-not (Get-Command -Name ninja.exe -ErrorAction SilentlyContinue)) {
+        $existing = Resolve-ExistingPath -Candidates $ninjaExeCandidates
+        if ($existing) {
+            throw "ninja.exe exists at '$existing' but is not discoverable via PATH."
+        }
         throw "ninja.exe not found after installation. Ensure Ninja is available."
     }
 

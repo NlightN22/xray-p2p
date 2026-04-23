@@ -2,5 +2,5 @@
 
 #define IDI_XP2P_APPICON 101
 
-IDI_XP2P_APPICON ICON "../../assets/xp2p.ico"
+IDI_XP2P_APPICON ICON "@XP2P_UI_ICON_PATH@"
 

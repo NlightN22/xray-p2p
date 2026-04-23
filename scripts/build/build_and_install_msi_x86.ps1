@@ -102,7 +102,10 @@ function Ensure-CMake {
     }
 
     $candidates = @(
-        "C:\\Program Files\\CMake\\bin\\cmake.exe"
+        "C:\\Program Files\\CMake\\bin\\cmake.exe",
+        "C:\\ProgramData\\chocolatey\\bin\\cmake.exe",
+        "C:\\ProgramData\\chocolatey\\lib\\cmake.install\\tools\\cmake\\bin\\cmake.exe",
+        "C:\\ProgramData\\chocolatey\\lib\\cmake\\tools\\cmake\\bin\\cmake.exe"
     )
     foreach ($candidate in $candidates) {
         if (Test-Path $candidate) {
@@ -114,6 +117,34 @@ function Ensure-CMake {
     if (-not (Get-Command -Name cmake.exe -ErrorAction SilentlyContinue)) {
         throw "cmake.exe not found. Install CMake or ensure it is on PATH."
     }
+}
+
+function Resolve-CMakeGenerator {
+    $vswhere = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe"
+    if (Test-Path $vswhere) {
+        $installPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+        if ($LASTEXITCODE -eq 0 -and $installPath -and $installPath.ToString().Trim()) {
+            return "Visual Studio 17 2022"
+        }
+    }
+
+    if (Get-Command -Name ninja.exe -ErrorAction SilentlyContinue) {
+        return "Ninja"
+    }
+    return ""
+}
+
+function Invoke-Cmd {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $CommandLine
+    )
+    $output = & cmd.exe /c $CommandLine 2>&1
+    $exitCode = $LASTEXITCODE
+    if ($output) {
+        $output | ForEach-Object { Write-Host $_ }
+    }
+    return $exitCode
 }
 
 function Resolve-UiRuntimeId {
@@ -305,30 +336,35 @@ try {
         $nativeBuildDir = Join-Path $binaryDir "ui-xp2p-native-build"
         Ensure-Directory $nativeBuildDir
         $platform = Resolve-CMakePlatform -ArchLabel $MsiArchLabel
+        $generator = Resolve-CMakeGenerator
+        if (-not $generator) {
+            throw "No suitable CMake generator found (expected Visual Studio Build Tools or ninja)."
+        }
         Write-Info ("Building native UI via CMake (platform={0})" -f $platform)
 
-        $configureArgs = @(
-            "-S", $nativeUiDir,
-            "-B", $nativeBuildDir,
+        $configure = @(
+            "cmake",
+            "-S", "`"$nativeUiDir`"",
+            "-B", "`"$nativeBuildDir`"",
+            "-G", "`"$generator`"",
             "-DCMAKE_BUILD_TYPE=Release"
         )
-        if ($platform) {
-            $configureArgs += @("-A", $platform)
-        }
-        $cmakeConfigure = & cmake @configureArgs 2>&1
-        if ($cmakeConfigure) {
-            $cmakeConfigure | ForEach-Object { Write-Host $_ }
-        }
-        if ($LASTEXITCODE -ne 0) {
-            throw "cmake configure failed with exit code $LASTEXITCODE"
+        if ($generator -like "Visual Studio*") {
+            if ($platform) {
+                $configure += @("-A", "`"$platform`"")
+            }
         }
 
-        $cmakeBuild = & cmake --build $nativeBuildDir --config Release 2>&1
-        if ($cmakeBuild) {
-            $cmakeBuild | ForEach-Object { Write-Host $_ }
+        $configureLine = ($configure -join " ")
+        $configureExit = Invoke-Cmd -CommandLine $configureLine
+        if ($configureExit -ne 0) {
+            throw "cmake configure failed with exit code $configureExit"
         }
-        if ($LASTEXITCODE -ne 0) {
-            throw "cmake build failed with exit code $LASTEXITCODE"
+
+        $buildLine = "cmake --build `"$nativeBuildDir`" --config Release"
+        $buildExit = Invoke-Cmd -CommandLine $buildLine
+        if ($buildExit -ne 0) {
+            throw "cmake build failed with exit code $buildExit"
         }
 
         $candidates = @(
