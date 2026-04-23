@@ -1,4 +1,4 @@
-name: build-msi
+name: build-msi-old-dotnet
 
 on:
   workflow_dispatch:
@@ -40,28 +40,26 @@ jobs:
       - name: Install WiX Toolset
         run: choco install wixtoolset --no-progress -y
 
-      - name: Build MSI (amd64, native UI)
+      - name: Build MSI (amd64)
         id: msi_amd64
         run: |
           $out = powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi.ps1 `
             -RepoRoot "$PWD" `
             -CacheDir "$PWD\\build\\msi-cache" `
             -MsiArchLabel "amd64" `
-            -UiBackend native `
             -BuildOnly `
             -OutputMarker "MSI_PATH="
           $msiPath = ($out | Select-String -Pattern "^MSI_PATH=" | Select-Object -Last 1).Line -replace "^MSI_PATH=", ""
           if (-not $msiPath) { throw "MSI path not found in output" }
           "msi_path=$msiPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
-      - name: Build MSI (x86, native UI)
+      - name: Build MSI (x86)
         id: msi_x86
         run: |
           $out = powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi_x86.ps1 `
             -RepoRoot "$PWD" `
-            -CacheDir "$PWD\\build\\msi-cache-x86" `
+            -CacheDir "$PWD\\build\\msi-cache" `
             -MsiArchLabel "x86" `
-            -UiBackend native `
             -BuildOnly `
             -OutputMarker "MSI_PATH="
           $msiPath = ($out | Select-String -Pattern "^MSI_PATH=" | Select-Object -Last 1).Line -replace "^MSI_PATH=", ""
