@@ -31,6 +31,7 @@ static ServiceStatus MakeError(const char* prefix, DWORD err) {
     ServiceStatus status{};
     status.ok = false;
     status.error = err;
+    status.state = 0;
     status.label = std::string(prefix) + "(" + std::to_string(err) + ")";
     return status;
 }
@@ -44,6 +45,7 @@ static ServiceStatus QueryStatusByHandle(SC_HANDLE svc) {
     ServiceStatus status{};
     status.ok = true;
     status.error = 0;
+    status.state = ssp.dwCurrentState;
     status.label = StateToLabel(ssp.dwCurrentState);
     return status;
 }
@@ -61,6 +63,7 @@ ServiceStatus QueryServiceStatus(const wchar_t* serviceName) {
             ServiceStatus status{};
             status.ok = false;
             status.error = err;
+            status.state = 0;
             status.label = "NotInstalled";
             return status;
         }
@@ -81,7 +84,7 @@ static ServiceStatus WaitForState(SC_HANDLE svc, DWORD desiredState, DWORD timeo
         if (!cur.ok) {
             return cur;
         }
-        if (cur.label == StateToLabel(desiredState)) {
+        if (cur.state == desiredState) {
             return cur;
         }
         Sleep(pollMs);
@@ -153,4 +156,3 @@ ServiceStatus RestartServiceAndWait(const wchar_t* serviceName, unsigned long ti
 }
 
 }
-

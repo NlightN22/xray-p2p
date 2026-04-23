@@ -8,6 +8,7 @@ struct ServiceStatus {
     std::string label;
     bool ok;
     unsigned long error;
+    unsigned long state;
 };
 
 ServiceStatus QueryServiceStatus(const wchar_t* serviceName);
@@ -16,4 +17,3 @@ ServiceStatus StopServiceAndWait(const wchar_t* serviceName, unsigned long timeo
 ServiceStatus RestartServiceAndWait(const wchar_t* serviceName, unsigned long timeoutMs);
 
 }
-

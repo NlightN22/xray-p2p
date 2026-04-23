@@ -26,6 +26,12 @@ endif()
 if(WIN32)
     set(XP2P_UI_ICON_PATH "${CMAKE_CURRENT_LIST_DIR}/../../assets/xp2p.ico")
     file(TO_CMAKE_PATH "${XP2P_UI_ICON_PATH}" XP2P_UI_ICON_PATH)
+    set(XP2P_UI_PNG_DISABLED_PATH "${CMAKE_CURRENT_LIST_DIR}/../../assets/Disabled.png")
+    set(XP2P_UI_PNG_ENABLED_PATH "${CMAKE_CURRENT_LIST_DIR}/../../assets/Enabled.png")
+    set(XP2P_UI_PNG_ENABLING_PATH "${CMAKE_CURRENT_LIST_DIR}/../../assets/Enabling.png")
+    file(TO_CMAKE_PATH "${XP2P_UI_PNG_DISABLED_PATH}" XP2P_UI_PNG_DISABLED_PATH)
+    file(TO_CMAKE_PATH "${XP2P_UI_PNG_ENABLED_PATH}" XP2P_UI_PNG_ENABLED_PATH)
+    file(TO_CMAKE_PATH "${XP2P_UI_PNG_ENABLING_PATH}" XP2P_UI_PNG_ENABLING_PATH)
     configure_file(
         "${CMAKE_CURRENT_LIST_DIR}/resources/ui-xp2p.rc.in"
         "${CMAKE_CURRENT_BINARY_DIR}/ui-xp2p.rc"
@@ -34,6 +40,8 @@ if(WIN32)
 
     add_executable(ui-xp2p WIN32
         "${CMAKE_CURRENT_BINARY_DIR}/ui-xp2p.rc"
+        src/png_icon.cpp
+        src/png_icon.h
         src/logging.cpp
         src/logging.h
         src/path_utils.cpp
@@ -54,7 +62,7 @@ if(WIN32)
         target_compile_options(ui-xp2p PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    target_link_libraries(ui-xp2p PRIVATE ui-xp2p-logic advapi32 shell32 user32 ole32)
+    target_link_libraries(ui-xp2p PRIVATE ui-xp2p-logic advapi32 shell32 user32 ole32 gdiplus)
     if(MINGW)
         target_link_options(ui-xp2p PRIVATE -municode)
     endif()

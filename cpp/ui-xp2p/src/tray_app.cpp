@@ -2,6 +2,7 @@
 
 #include "logging.h"
 #include "path_utils.h"
+#include "png_icon.h"
 #include "service_manager.h"
 #include "ui_logic.h"
 
@@ -13,6 +14,7 @@ namespace {
 
 constexpr UINT WM_TRAYICON = WM_APP + 1;
 constexpr UINT_PTR TIMER_STATUS = 1;
+constexpr UINT WM_ACTION_DONE = WM_APP + 3;
 
 constexpr int IDM_CLIENT_START = 1001;
 constexpr int IDM_CLIENT_STOP = 1002;
@@ -29,6 +31,11 @@ constexpr int IDM_EXIT = 1102;
 
 const wchar_t* kServiceClient = L"xp2p-client";
 const wchar_t* kServiceServer = L"xp2p-server";
+
+constexpr int IDI_XP2P_APPICON = 101;
+constexpr int IDR_PNG_DISABLED = 201;
+constexpr int IDR_PNG_ENABLED = 202;
+constexpr int IDR_PNG_ENABLING = 203;
 
 static void SetMenuItemEnabled(HMENU menu, UINT id, bool enabled) {
     EnableMenuItem(menu, id, MF_BYCOMMAND | (enabled ? MF_ENABLED : (MF_DISABLED | MF_GRAYED)));
@@ -47,6 +54,40 @@ static std::wstring ToWide(const std::string& s) {
     return out;
 }
 
+struct ServiceActionContext {
+    HWND hwnd = nullptr;
+    const wchar_t* serviceName = nullptr;
+    const char* serviceKey = nullptr;
+    int actionId = 0;
+};
+
+static DWORD WINAPI ServiceActionThreadProc(LPVOID param) {
+    auto* ctx = static_cast<ServiceActionContext*>(param);
+    if (!ctx) {
+        return 0;
+    }
+    ServiceStatus result{};
+    if (ctx->actionId == IDM_CLIENT_START || ctx->actionId == IDM_SERVER_START) {
+        result = StartServiceAndWait(ctx->serviceName, 60000);
+    } else if (ctx->actionId == IDM_CLIENT_STOP || ctx->actionId == IDM_SERVER_STOP) {
+        result = StopServiceAndWait(ctx->serviceName, 60000);
+    } else {
+        result = RestartServiceAndWait(ctx->serviceName, 90000);
+    }
+
+    if (result.ok) {
+        LogInfo(std::string("service action: ") + ctx->serviceKey + " ok status=" + result.label);
+    } else {
+        LogWarn(std::string("service action: ") + ctx->serviceKey + " failed code=" + std::to_string(result.error));
+    }
+
+    if (ctx->hwnd) {
+        PostMessageW(ctx->hwnd, WM_ACTION_DONE, 0, 0);
+    }
+    delete ctx;
+    return 0;
+}
+
 } // namespace
 
 TrayApp::TrayApp(HINSTANCE instance) : instance_(instance) {}
@@ -59,7 +100,7 @@ int TrayApp::Run() {
     wc.lpfnWndProc = TrayApp::WndProc;
     wc.hInstance = instance_;
     wc.lpszClassName = className;
-    wc.hIcon = LoadIconW(instance_, MAKEINTRESOURCEW(101));
+    wc.hIcon = LoadIconW(instance_, MAKEINTRESOURCEW(IDI_XP2P_APPICON));
     wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
 
     if (!RegisterClassExW(&wc)) {
@@ -83,7 +124,11 @@ int TrayApp::Run() {
         return 3;
     }
 
-    icon_ = LoadIconW(instance_, MAKEINTRESOURCEW(101));
+    const int iconSize = GetSystemMetrics(SM_CXSMICON);
+    iconDisabled_ = CreateIconFromPngResource(instance_, IDR_PNG_DISABLED, iconSize);
+    iconEnabled_ = CreateIconFromPngResource(instance_, IDR_PNG_ENABLED, iconSize);
+    iconBusy_ = CreateIconFromPngResource(instance_, IDR_PNG_ENABLING, iconSize);
+    iconCurrent_ = iconDisabled_ ? iconDisabled_ : LoadIconW(instance_, MAKEINTRESOURCEW(IDI_XP2P_APPICON));
     EnsureTrayIcon();
     RefreshStatus();
     SetTimer(hwnd_, TIMER_STATUS, 2000, nullptr);
@@ -94,6 +139,19 @@ int TrayApp::Run() {
         DispatchMessageW(&msg);
     }
     RemoveTrayIcon();
+    if (iconDisabled_) {
+        DestroyIcon(iconDisabled_);
+        iconDisabled_ = nullptr;
+    }
+    if (iconEnabled_) {
+        DestroyIcon(iconEnabled_);
+        iconEnabled_ = nullptr;
+    }
+    if (iconBusy_) {
+        DestroyIcon(iconBusy_);
+        iconBusy_ = nullptr;
+    }
+    iconCurrent_ = nullptr;
     return 0;
 }
 
@@ -122,6 +180,11 @@ LRESULT TrayApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam
             if (wparam == TIMER_STATUS) {
                 RefreshStatus();
             }
+            return 0;
+        }
+        case WM_ACTION_DONE: {
+            busy_ = false;
+            RefreshStatus();
             return 0;
         }
         case WM_COMMAND: {
@@ -172,7 +235,7 @@ void TrayApp::EnsureTrayIcon() {
     nid.uID = 1;
     nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = icon_;
+    nid.hIcon = iconCurrent_;
     wcscpy_s(nid.szTip, L"xp2p");
     trayAdded_ = Shell_NotifyIconW(NIM_ADD, &nid) != 0;
 }
@@ -245,6 +308,7 @@ void TrayApp::RefreshStatus() {
     clientStatus_ = client.label;
     serverStatus_ = server.label;
     UpdateTooltip();
+    UpdateTrayIconState();
     LogStatusIfChanged();
 }
 
@@ -266,6 +330,43 @@ void TrayApp::UpdateTooltip() {
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
+void TrayApp::UpdateTrayIcon() {
+    if (!trayAdded_) {
+        return;
+    }
+    NOTIFYICONDATAW nid{};
+    nid.cbSize = sizeof(nid);
+    nid.hWnd = hwnd_;
+    nid.uID = 1;
+    nid.uFlags = NIF_ICON;
+    nid.hIcon = iconCurrent_;
+    Shell_NotifyIconW(NIM_MODIFY, &nid);
+}
+
+void TrayApp::UpdateTrayIconState() {
+    HICON desired = iconDisabled_;
+    if (busy_) {
+        desired = iconBusy_ ? iconBusy_ : iconDisabled_;
+    } else if (IsServiceRunning(clientStatus_) || IsServiceRunning(serverStatus_)) {
+        desired = iconEnabled_ ? iconEnabled_ : iconDisabled_;
+    }
+    if (!desired) {
+        desired = LoadIconW(instance_, MAKEINTRESOURCEW(IDI_XP2P_APPICON));
+    }
+    if (desired == iconCurrent_) {
+        return;
+    }
+    iconCurrent_ = desired;
+    UpdateTrayIcon();
+    if (busy_) {
+        LogInfo("tray icon: busy");
+    } else if (IsServiceRunning(clientStatus_) || IsServiceRunning(serverStatus_)) {
+        LogInfo("tray icon: enabled");
+    } else {
+        LogInfo("tray icon: disabled");
+    }
+}
+
 void TrayApp::LogStatusIfChanged() {
     std::string key = clientStatus_ + "|" + serverStatus_ + "|" + (busy_ ? "1" : "0");
     if (key == lastLoggedKey_) {
@@ -282,25 +383,23 @@ void TrayApp::StartServiceAction(const wchar_t* serviceName, const char* service
     busy_ = true;
     LogInfo(std::string("tray action: ") + serviceKey);
     UpdateTooltip();
+    UpdateTrayIconState();
     LogStatusIfChanged();
 
-    ServiceStatus result{};
-    if (actionId == IDM_CLIENT_START || actionId == IDM_SERVER_START) {
-        result = StartServiceAndWait(serviceName, 20000);
-    } else if (actionId == IDM_CLIENT_STOP || actionId == IDM_SERVER_STOP) {
-        result = StopServiceAndWait(serviceName, 20000);
-    } else {
-        result = RestartServiceAndWait(serviceName, 30000);
+    auto* ctx = new ServiceActionContext();
+    ctx->hwnd = hwnd_;
+    ctx->serviceName = serviceName;
+    ctx->serviceKey = serviceKey;
+    ctx->actionId = actionId;
+    HANDLE thread = CreateThread(nullptr, 0, ServiceActionThreadProc, ctx, 0, nullptr);
+    if (!thread) {
+        delete ctx;
+        busy_ = false;
+        RefreshStatus();
+        LogError(std::string("service action: ") + serviceKey + " failed to start worker");
+        return;
     }
-
-    if (result.ok) {
-        LogInfo(std::string("service action: ") + serviceKey + " ok status=" + result.label);
-    } else {
-        LogWarn(std::string("service action: ") + serviceKey + " failed code=" + std::to_string(result.error));
-    }
-
-    busy_ = false;
-    RefreshStatus();
+    CloseHandle(thread);
 }
 
 void TrayApp::ShowServiceStatusDialog(const wchar_t* serviceName, const wchar_t* title) {

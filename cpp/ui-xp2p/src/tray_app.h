@@ -20,6 +20,8 @@ private:
     void ShowContextMenu();
     void RefreshStatus();
     void UpdateTooltip();
+    void UpdateTrayIcon();
+    void UpdateTrayIconState();
     void LogStatusIfChanged();
     void StartServiceAction(const wchar_t* serviceName, const char* serviceKey, int actionId);
     void ShowServiceStatusDialog(const wchar_t* serviceName, const wchar_t* title);
@@ -27,7 +29,10 @@ private:
 
     HINSTANCE instance_ = nullptr;
     HWND hwnd_ = nullptr;
-    HICON icon_ = nullptr;
+    HICON iconCurrent_ = nullptr;
+    HICON iconDisabled_ = nullptr;
+    HICON iconEnabled_ = nullptr;
+    HICON iconBusy_ = nullptr;
     bool trayAdded_ = false;
     bool busy_ = false;
 
@@ -37,4 +42,3 @@ private:
 };
 
 }
-
