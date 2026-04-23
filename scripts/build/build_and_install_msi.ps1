@@ -169,10 +169,16 @@ function Resolve-CMakeGenerator {
         if ($LASTEXITCODE -eq 0 -and $installPath -and $installPath.ToString().Trim()) {
             return "Visual Studio 17 2022"
         }
-    }
 
-    if (Get-Command -Name ninja.exe -ErrorAction SilentlyContinue) {
-        return "Ninja"
+        $installPath = & $vswhere -latest -products * -property installationPath 2>$null
+        if ($LASTEXITCODE -eq 0 -and $installPath -and $installPath.ToString().Trim()) {
+            $cl = Get-ChildItem -Path (Join-Path $installPath "VC\\Tools\\MSVC") -Recurse -Filter cl.exe -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -match "\\\\bin\\\\Hostx64\\\\x64\\\\cl\\.exe$" } |
+                Select-Object -First 1
+            if ($cl) {
+                return "Visual Studio 17 2022"
+            }
+        }
     }
     return ""
 }
@@ -182,8 +188,25 @@ function Invoke-Cmd {
         [Parameter(Mandatory = $true)]
         [string] $CommandLine
     )
-    $output = & cmd.exe /c $CommandLine 2>&1
-    $exitCode = $LASTEXITCODE
+    $oldEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $hadNativePref = $false
+    $oldNativePref = $false
+    if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue) {
+        $hadNativePref = $true
+        $oldNativePref = $global:PSNativeCommandUseErrorActionPreference
+        $global:PSNativeCommandUseErrorActionPreference = $false
+    }
+    try {
+        $output = & cmd.exe /c $CommandLine 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        if ($hadNativePref) {
+            $global:PSNativeCommandUseErrorActionPreference = $oldNativePref
+        }
+        $ErrorActionPreference = $oldEap
+    }
     if ($output) {
         $output | ForEach-Object { Write-Host $_ }
     }
@@ -382,7 +405,7 @@ try {
         $platform = Resolve-CMakePlatform -ArchLabel $MsiArchLabel
         $generator = Resolve-CMakeGenerator
         if (-not $generator) {
-            throw "No suitable CMake generator found (expected Visual Studio Build Tools or ninja)."
+            throw "Visual Studio Build Tools (VC Tools workload) not found. MSI packaging requires MSVC to produce a self-contained ui-xp2p.exe (MinGW/Ninja builds may depend on libgcc/libwinpthread DLLs)."
         }
         Write-Info ("Building native UI via CMake (platform={0})" -f $platform)
 

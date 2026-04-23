@@ -37,6 +37,10 @@ else()
     target_sources(ui-xp2p-logic PRIVATE src/platform_posix.cpp)
 endif()
 
+if(MSVC)
+    set_property(TARGET ui-xp2p-logic PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     target_compile_options(ui-xp2p-logic PRIVATE -O0 -g --coverage)
     target_link_options(ui-xp2p-logic PRIVATE --coverage)
@@ -88,7 +92,9 @@ if(WIN32)
 
     target_link_libraries(ui-xp2p PRIVATE ui-xp2p-logic advapi32 shell32 user32 ole32 gdiplus)
     if(MINGW)
-        target_link_options(ui-xp2p PRIVATE -municode)
+        # Make the MSI self-contained even when built via MinGW.
+        # This avoids shipping libgcc_s_seh-1.dll / libstdc++-6.dll alongside ui-xp2p.exe.
+        target_link_options(ui-xp2p PRIVATE -municode -static-libgcc -static-libstdc++ -Wl,-Bstatic -lwinpthread -Wl,-Bdynamic)
     endif()
 
     if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -105,6 +111,9 @@ if(XP2P_UI_BUILD_TESTS)
         tests/runtime_tests.cpp
     )
     target_link_libraries(ui-xp2p-tests PRIVATE ui-xp2p-logic)
+    if(MSVC)
+        set_property(TARGET ui-xp2p-tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    endif()
     if(XP2P_UI_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         target_compile_options(ui-xp2p-tests PRIVATE -O0 -g --coverage)
         target_link_options(ui-xp2p-tests PRIVATE --coverage)
