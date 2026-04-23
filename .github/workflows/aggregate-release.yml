@@ -46,6 +46,19 @@ jobs:
           fi
           sha="$(git rev-parse "refs/tags/$tag^{commit}")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+          prev=""
+          mapfile -t tags < <(git tag --list 'v*' --sort=version:refname)
+          for i in "${!tags[@]}"; do
+            if [ "${tags[$i]}" = "$tag" ]; then
+              if [ "$i" -gt 0 ]; then
+                prev="${tags[$((i-1))]}"
+              fi
+              break
+            fi
+          done
+          echo "prev_tag=$prev" >> "$GITHUB_OUTPUT"
+
           mode="sha"
           value="$sha"
           echo "artifact_mode=$mode" >> "$GITHUB_OUTPUT"
@@ -93,11 +106,14 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           files: release/*
-          generate_release_notes: true
+          generate_release_notes: false
 
       - name: Append release notes and OpenWrt feed link
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          PREV_TAG: ${{ steps.ref.outputs.prev_tag }}
         run: |
           set -euo pipefail
           tag="${{ inputs.tag }}"
@@ -106,6 +122,7 @@ jobs:
           import json
           import os
           import pathlib
+          import re
 
           event_path = os.environ.get("GITHUB_EVENT_PATH", "")
           if not event_path:
@@ -115,6 +132,7 @@ jobs:
           inputs = payload.get("inputs", {}) or {}
 
           existing = pathlib.Path("existing_notes.txt").read_text(encoding="utf-8")
+          existing = re.sub(r"(?im)^full changelog:.*\\n?", "", existing).strip()
 
           notes_raw = inputs.get("release_notes", "") or ""
           notes_b64 = inputs.get("release_notes_b64", "") or ""
@@ -127,6 +145,14 @@ jobs:
 
           feed = "OpenWrt feed: https://nlightn22.github.io/xray-p2p/"
 
+          repo = os.environ.get("REPO", "").strip()
+          tag = os.environ.get("TAG", "").strip()
+          prev_tag = os.environ.get("PREV_TAG", "").strip()
+          full_changelog = ""
+          if repo and tag and prev_tag:
+              url = f"https://github.com/{repo}/compare/{prev_tag}...{tag}"
+              full_changelog = f"Full Changelog: [{prev_tag}...{tag}]({url})"
+
           parts = []
           if existing:
               parts.append(existing)
@@ -134,6 +160,8 @@ jobs:
               parts.append(notes)
           if feed and feed not in existing:
               parts.append(feed)
+          if full_changelog and full_changelog not in existing:
+              parts.append(full_changelog)
 
           content = "\n\n".join(parts).strip() + "\n"
           with open("release_notes.txt", "w", encoding="utf-8") as handle:
