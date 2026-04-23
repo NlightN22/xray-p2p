@@ -54,7 +54,7 @@ XRAY-p2p delivers a cross-platform Trojan tunnel built on top of `xray-core`. Th
 - Service management (start/stop/status) is available to Builtin Users without admin elevation.
 - Tray controller `ui-xp2p` ships with the MSI and auto-starts via the current user's Run key; disable with `XP2P_UI_AUTOSTART=0`.
 
-Need to build from source or generate packages? Follow [`scripts/build/README.md`](scripts/build/README.md).
+Need to build the Windows MSI on a Windows host (and run install/smoke tests on Windows guests)? Follow [`scripts/build/README.md`](scripts/build/README.md) for prerequisites, validation commands, and the output paths under `build/msi-cache/`.
 
 ## Platform quick start
 

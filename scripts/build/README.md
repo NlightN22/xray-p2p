@@ -26,14 +26,75 @@ The resulting package installs `xp2p` under `/usr/bin` and drops shell completio
 
 Two PowerShell helpers exist: `build_and_install_msi.ps1` (amd64) and `build_and_install_msi_x86.ps1` (32-bit). Both compile xp2p.exe, copy the full `distro/windows/bundle/<arch>/` contents (xray + optional data files), drive WiX (`installer/wix/xp2p*.wxs`), and optionally install the resulting MSI.
 
-### Run on Windows host or Vagrant guest
-```
-# amd64
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi.ps1
+### Host build prerequisites (native UI)
 
-# x86
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi_x86.ps1
+- WiX Toolset v3.x (expects `candle.exe`, `light.exe`, `heat.exe` under `C:\Program Files (x86)\WiX Toolset*\bin\`).
+- Visual Studio 2022 Build Tools with the VC Tools workload (MSVC) and a Windows SDK.
+- CMake (the scripts require the Visual Studio generator; Ninja is not required).
+- Go toolchain.
+- Optional: .NET SDK only when using `-UiBackend dotnet`.
+
+#### Install with Chocolatey (PowerShell as Administrator)
+
+```powershell
+# Install Chocolatey (skip if already present)
+Set-ExecutionPolicy Bypass -Scope Process -Force
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+# Required for MSI builds (native UI)
+choco install -y wixtoolset
+choco install -y visualstudio2022buildtools visualstudio2022-workload-vctools
+choco install -y windows-sdk-10.0
+choco install -y cmake
+choco install -y golang
 ```
+
+### Build MSI on Windows host (recommended)
+
+The MSI build requires the bundled `xray` binary to be present:
+
+- amd64: `distro\windows\bundle\x86_64\xray.exe`
+- x86: `distro\windows\bundle\x86\xray.exe`
+
+```powershell
+# amd64 (build only; do not install)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi.ps1 `
+  -RepoRoot "$PWD" `
+  -CacheDir "$PWD\\build\\msi-cache" `
+  -BuildOnly `
+  -UiBackend native
+
+# x86 (build only; do not install)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi_x86.ps1 `
+  -RepoRoot "$PWD" `
+  -CacheDir "$PWD\\build\\msi-cache-x86" `
+  -BuildOnly `
+  -UiBackend native
+```
+
+### Environment validation (before build)
+
+```powershell
+cmake --version
+go version
+
+$vswhere = \"${env:ProgramFiles(x86)}\\Microsoft Visual Studio\\Installer\\vswhere.exe\"
+& $vswhere -latest -products * -property installationPath
+& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -find \"**\\bin\\Hostx64\\x64\\cl.exe\"
+
+$wixRoot = \"${env:ProgramFiles(x86)}\"
+Get-ChildItem $wixRoot -Filter \"WiX Toolset*\" -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+Test-Path \"$wixRoot\\WiX Toolset*\\bin\\candle.exe\"
+Test-Path \"$wixRoot\\WiX Toolset*\\bin\\light.exe\"
+Test-Path \"$wixRoot\\WiX Toolset*\\bin\\heat.exe\"
+```
+
+### Artifacts
+
+- Staging dir (recreated each run): `build\msi-bin\` (amd64) / `build\msi-bin-x86\` (x86).
+- Final MSI output: `build\msi-cache\xp2p-<version>-windows-amd64.msi` and `build\msi-cache-x86\xp2p-<version>-windows-x86.msi` (or whatever `-CacheDir`/`-MsiArchLabel` you supplied).
+
 The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed. Additional parameters let you control the WiX source (`-WixSourceRelative`), the MSI name suffix (`-MsiArchLabel`), and whether the script should only build the MSI (`-BuildOnly`) instead of running `msiexec`. Use `-OutputMarker '__MSI_PATH__='` when another tool needs to parse the resulting path from `stdout`.
 The MSI build scripts embed a tray UI binary as `ui-xp2p.exe`. By default the UI is built from the native Win32 (C++) project via CMake (`-UiBackend native`). Use `-UiBackend dotnet` to roll back to the existing WPF UI build. The `-UiSelfContained` switch applies only to the dotnet UI publish (self-contained builds remove the .NET Desktop Runtime prerequisite but increase size). Ensure the matching toolchain is available on the build host (CMake + MSVC for native, .NET SDK for dotnet).
 The WPF project outputs `bin/` and `obj/` artifacts under `build/dotnet/ui-xp2p/` to keep the repo clean when `-UiBackend dotnet` is used.

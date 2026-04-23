@@ -497,12 +497,26 @@ try {
         }
     }
 
-    Write-Info "Locating WiX Toolset"
-    $wixDir = Get-ChildItem "C:\Program Files (x86)" -Filter "WiX Toolset*" -Directory |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
+    Write-Info "Locating WiX Toolset (v3.x)"
+    $wixRoot = "C:\Program Files (x86)"
+    $wixCandidates = Get-ChildItem $wixRoot -Filter "WiX Toolset*" -Directory -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending
+    $wixDir = $null
+    foreach ($candidate in $wixCandidates) {
+        $bin = Join-Path $candidate.FullName 'bin'
+        $hasTools =
+            (Test-Path (Join-Path $bin 'candle.exe')) -and
+            (Test-Path (Join-Path $bin 'light.exe')) -and
+            (Test-Path (Join-Path $bin 'heat.exe')) -and
+            (Test-Path (Join-Path $bin 'WixUtilExtension.dll')) -and
+            (Test-Path (Join-Path $bin 'WixUIExtension.dll'))
+        if ($hasTools) {
+            $wixDir = $candidate
+            break
+        }
+    }
     if (-not $wixDir) {
-        throw "WiX Toolset installation directory not found."
+        throw "WiX Toolset v3.x not found under $wixRoot. Install WiX Toolset v3.14 (for example, choco install wixtoolset -y)."
     }
     $candle = Join-Path $wixDir.FullName 'bin\candle.exe'
     $heat = Join-Path $wixDir.FullName 'bin\heat.exe'
