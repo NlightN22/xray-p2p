@@ -40,6 +40,7 @@ std::optional<ClientStateFile> TryLoadClientStateFile(const std::string& path) {
         return out;
     }
     ClientRuntimeState runtime{};
+    runtime.hasSocksReady = HasKey(*runtimeObj, "socks_ready");
     runtime.socksReady = ExtractBool(*runtimeObj, "socks_ready").value_or(false);
     runtime.lastError = ExtractString(*runtimeObj, "last_error").value_or("");
     runtime.hasTimestamp = HasKey(*runtimeObj, "timestamp");
@@ -86,4 +87,3 @@ std::optional<ServerStateFile> TryLoadServerStateFile(const std::string& path) {
 }
 
 }
-

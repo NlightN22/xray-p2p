@@ -49,6 +49,9 @@ ClientRuntimeView BuildClientRuntimeView(const std::string& serviceStatus, const
     }
 
     if (!state.tunEnabled) {
+        if (!runtime.hasSocksReady) {
+            return ClientRuntimeView{ClientRuntimeStatus::Ready, "Proxy: Ready", "Proxy: Ready", "", true};
+        }
         if (runtime.socksReady) {
             return ClientRuntimeView{ClientRuntimeStatus::Ready, "Proxy: Ready (SOCKS)", "Proxy: Ready (SOCKS)", "", true};
         }
@@ -74,4 +77,3 @@ ClientRuntimeView BuildClientRuntimeView(const std::string& serviceStatus, const
 }
 
 }
-

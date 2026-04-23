@@ -18,7 +18,7 @@ void TrayApp::ShowContextMenu() {
     AppendMenuW(client, MF_STRING, internal::IDM_CLIENT_STOP, L"Stop");
     AppendMenuW(client, MF_STRING, internal::IDM_CLIENT_RESTART, L"Restart");
     AppendMenuW(client, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(client, MF_STRING, internal::IDM_CLIENT_STATUS, L"Status");
+    // Status dialog removed (menu already shows current state and mode).
     AppendMenuW(client, MF_SEPARATOR, 0, nullptr);
 
     HMENU clientMode = CreatePopupMenu();
@@ -44,17 +44,18 @@ void TrayApp::ShowContextMenu() {
         AppendMenuW(clientMode, MF_POPUP, reinterpret_cast<UINT_PTR>(clientFullTags), L"Tun Full");
     }
 
-    std::wstring clientModeLabel = L"Mode: " + internal::ToWide(clientModeLabel_.empty() ? "Unknown" : clientModeLabel_);
-    if (clientModePending_) {
-        clientModeLabel = L"Mode: " + internal::ToWide(FormatPending(clientModeLabel_.empty() ? "Unknown" : clientModeLabel_));
+    std::string displayClientMode = clientModeLabel_.empty() ? "Unknown" : clientModeLabel_;
+    if (pendingClientMode_.has_value()) {
+        displayClientMode = FormatPending(FormatClientMode(*pendingClientMode_));
     }
+    std::wstring clientModeLabel = L"Mode: " + internal::ToWide(displayClientMode);
     AppendMenuW(client, MF_POPUP, reinterpret_cast<UINT_PTR>(clientMode), clientModeLabel.c_str());
 
     AppendMenuW(server, MF_STRING, internal::IDM_SERVER_START, L"Start");
     AppendMenuW(server, MF_STRING, internal::IDM_SERVER_STOP, L"Stop");
     AppendMenuW(server, MF_STRING, internal::IDM_SERVER_RESTART, L"Restart");
     AppendMenuW(server, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(server, MF_STRING, internal::IDM_SERVER_STATUS, L"Status");
+    // Status dialog removed (menu already shows current state and mode).
     AppendMenuW(server, MF_SEPARATOR, 0, nullptr);
 
     HMENU serverMode = CreatePopupMenu();
@@ -62,10 +63,11 @@ void TrayApp::ShowContextMenu() {
     AppendMenuW(serverMode, MF_STRING, internal::IDM_SERVER_MODE_TUN, L"Tun");
     AppendMenuW(serverMode, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(serverMode, MF_STRING | MF_DISABLED | MF_GRAYED, 0, L"Split/Full modes are not supported on server.");
-    std::wstring serverModeLabel = L"Mode: " + internal::ToWide(serverModeLabel_.empty() ? "Unknown" : serverModeLabel_);
-    if (serverModePending_) {
-        serverModeLabel = L"Mode: " + internal::ToWide(FormatPending(serverModeLabel_.empty() ? "Unknown" : serverModeLabel_));
+    std::string displayServerMode = serverModeLabel_.empty() ? "Unknown" : serverModeLabel_;
+    if (pendingServerMode_.has_value()) {
+        displayServerMode = FormatPending(FormatServerMode(*pendingServerMode_));
     }
+    std::wstring serverModeLabel = L"Mode: " + internal::ToWide(displayServerMode);
     AppendMenuW(server, MF_POPUP, reinterpret_cast<UINT_PTR>(serverMode), serverModeLabel.c_str());
 
     std::wstring clientLabel = L"Client service: " + internal::ToWide(clientStatus_);
@@ -89,10 +91,19 @@ void TrayApp::ShowContextMenu() {
     internal::SetMenuItemEnabled(server, internal::IDM_SERVER_RESTART, serverButtons.restartEnabled);
 
     const bool disableClientMode = clientModePending_ || busy_;
-    internal::SetMenuItemEnabled(clientMode, internal::IDM_CLIENT_MODE_PROXY, !disableClientMode && clientModeLabel_ != "Proxy");
-    internal::SetMenuItemEnabled(clientMode, internal::IDM_CLIENT_MODE_SPLIT, !disableClientMode && clientModeLabel_ != "Tun Split");
+    internal::SetMenuItemEnabled(
+        clientMode,
+        internal::IDM_CLIENT_MODE_PROXY,
+        !disableClientMode && (!currentClientMode_.has_value() || *currentClientMode_ != ClientMode::Proxy));
+    internal::SetMenuItemEnabled(
+        clientMode,
+        internal::IDM_CLIENT_MODE_SPLIT,
+        !disableClientMode && (!currentClientMode_.has_value() || *currentClientMode_ != ClientMode::TunSplit));
     if (canInlineFull) {
-        internal::SetMenuItemEnabled(clientMode, internal::IDM_CLIENT_MODE_FULL, !disableClientMode && clientModeLabel_ != "Tun Full");
+        internal::SetMenuItemEnabled(
+            clientMode,
+            internal::IDM_CLIENT_MODE_FULL,
+            !disableClientMode && (!currentClientMode_.has_value() || *currentClientMode_ != ClientMode::TunFull));
     } else if (clientFullTags) {
         for (size_t i = 0; i < tagState.candidateTags.size(); i++) {
             internal::SetMenuItemEnabled(
@@ -103,8 +114,14 @@ void TrayApp::ShowContextMenu() {
     }
 
     const bool disableServerMode = serverModePending_ || busy_;
-    internal::SetMenuItemEnabled(serverMode, internal::IDM_SERVER_MODE_PROXY, !disableServerMode && serverModeLabel_ != "Proxy");
-    internal::SetMenuItemEnabled(serverMode, internal::IDM_SERVER_MODE_TUN, !disableServerMode && serverModeLabel_ != "Tun");
+    internal::SetMenuItemEnabled(
+        serverMode,
+        internal::IDM_SERVER_MODE_PROXY,
+        !disableServerMode && (!currentServerMode_.has_value() || *currentServerMode_ != ServerMode::Proxy));
+    internal::SetMenuItemEnabled(
+        serverMode,
+        internal::IDM_SERVER_MODE_TUN,
+        !disableServerMode && (!currentServerMode_.has_value() || *currentServerMode_ != ServerMode::Tun));
 
     POINT pt{};
     GetCursorPos(&pt);
@@ -115,4 +132,3 @@ void TrayApp::ShowContextMenu() {
 }
 
 }
-

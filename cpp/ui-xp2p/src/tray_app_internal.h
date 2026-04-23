@@ -16,12 +16,10 @@ constexpr UINT WM_STOPALL_DONE = WM_APP + 5;
 constexpr int IDM_CLIENT_START = 1001;
 constexpr int IDM_CLIENT_STOP = 1002;
 constexpr int IDM_CLIENT_RESTART = 1003;
-constexpr int IDM_CLIENT_STATUS = 1004;
 
 constexpr int IDM_SERVER_START = 1011;
 constexpr int IDM_SERVER_STOP = 1012;
 constexpr int IDM_SERVER_RESTART = 1013;
-constexpr int IDM_SERVER_STATUS = 1014;
 
 constexpr int IDM_OPEN_LOGS = 1101;
 constexpr int IDM_EXIT = 1102;
@@ -73,4 +71,3 @@ inline UINT GetStatusPollMs() {
 }
 
 }
-

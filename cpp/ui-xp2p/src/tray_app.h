@@ -1,10 +1,14 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include <windows.h>
 
 namespace xp2p::ui {
+
+enum class ClientMode;
+enum class ServerMode;
 
 class TrayApp final {
 public:
@@ -19,6 +23,7 @@ private:
     void RemoveTrayIcon();
     void ShowContextMenu();
     void RefreshStatus();
+    void EnsureStatusTimer(UINT intervalMs);
     void UpdateTooltip();
     void UpdateTrayIcon();
     void UpdateTrayIconState();
@@ -28,7 +33,6 @@ private:
     void RequestServerMode(int actionId);
     void RequestShutdown();
     void StopAllServicesAndExit();
-    void ShowServiceStatusDialog(const wchar_t* serviceName, const wchar_t* title);
     void OpenLogsFolder();
 
     HINSTANCE instance_ = nullptr;
@@ -39,6 +43,7 @@ private:
     HICON iconBusy_ = nullptr;
     bool trayAdded_ = false;
     bool busy_ = false;
+    UINT statusPollMs_ = 0;
 
     std::string clientStatus_;
     std::string serverStatus_;
@@ -48,8 +53,10 @@ private:
     std::string serverModeLabel_;
     bool clientModePending_ = false;
     bool serverModePending_ = false;
-    std::string pendingClientModeLabel_;
-    std::string pendingServerModeLabel_;
+    std::optional<ClientMode> currentClientMode_;
+    std::optional<ServerMode> currentServerMode_;
+    std::optional<ClientMode> pendingClientMode_;
+    std::optional<ServerMode> pendingServerMode_;
 };
 
 }

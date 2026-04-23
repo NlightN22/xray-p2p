@@ -25,32 +25,45 @@ void TrayApp::RefreshStatus() {
     auto clientState = TryLoadClientStateFile(mm.GetClientStatePath());
     auto serverState = TryLoadServerStateFile(mm.GetServerStatePath());
 
+    const ClientRuntimeView clientRuntime = BuildClientRuntimeView(clientStatus_, clientState);
+
     if (clientState.has_value()) {
         const bool routesFull = clientState->runtime.has_value() && clientState->runtime->routes.has_value() && clientState->runtime->routes->fullApplied;
         const bool routesRedirect =
             clientState->runtime.has_value() && clientState->runtime->routes.has_value() && clientState->runtime->routes->redirectApplied;
         const ClientMode mode = ResolveClientMode(clientState->tunEnabled, clientState->mode, routesFull, routesRedirect);
+        currentClientMode_ = mode;
         clientModeLabel_ = FormatClientMode(mode);
-        if (clientModePending_ && clientModeLabel_ == pendingClientModeLabel_) {
+        if (pendingClientMode_.has_value() && mode == *pendingClientMode_) {
             clientModePending_ = false;
+            pendingClientMode_.reset();
         }
     } else {
+        currentClientMode_.reset();
         clientModeLabel_.clear();
     }
 
     if (serverState.has_value()) {
         const ServerMode mode = ResolveServerMode(serverState->tunEnabled, serverState->mode);
+        currentServerMode_ = mode;
         serverModeLabel_ = FormatServerMode(mode);
-        if (serverModePending_ && serverModeLabel_ == pendingServerModeLabel_) {
+        if (pendingServerMode_.has_value() && mode == *pendingServerMode_) {
             serverModePending_ = false;
+            pendingServerMode_.reset();
         }
     } else {
+        currentServerMode_.reset();
         serverModeLabel_.clear();
     }
 
     UpdateTooltip();
     UpdateTrayIconState();
     LogStatusIfChanged();
+
+    const UINT basePoll = internal::GetStatusPollMs();
+    const bool fastPoll = busy_ || clientModePending_ || serverModePending_ || IsServicePending(clientStatus_) || IsServicePending(serverStatus_) ||
+        (clientRuntime.status == ClientRuntimeStatus::Pending);
+    EnsureStatusTimer(fastPoll ? 500u : basePoll);
 }
 
 void TrayApp::UpdateTooltip() {
@@ -147,12 +160,6 @@ void TrayApp::LogStatusIfChanged() {
     }
     lastLoggedKey_ = key;
     LogInfo(BuildTrayStatusLogLine(clientStatus_, serverStatus_, busy_));
-}
-
-void TrayApp::ShowServiceStatusDialog(const wchar_t* serviceName, const wchar_t* title) {
-    ServiceStatus s = QueryServiceStatus(serviceName);
-    std::wstring body = L"Status: " + internal::ToWide(s.label);
-    MessageBoxW(hwnd_, body.c_str(), title, MB_OK | MB_ICONINFORMATION);
 }
 
 void TrayApp::OpenLogsFolder() {

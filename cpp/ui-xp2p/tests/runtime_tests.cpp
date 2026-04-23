@@ -51,6 +51,21 @@ void TestRuntimeViewProxyReady() {
     ExpectContains(view.summary, "Proxy: Ready", "proxy ready summary");
 }
 
+void TestRuntimeViewProxyReadyWithoutSocksKey() {
+    const std::string json = R"({
+  "tun_enabled": false,
+  "mode": "proxy",
+  "runtime": {
+    "timestamp": "2026-01-01T00:00:00Z"
+  }
+})";
+    auto path = WriteTemp("client-proxy-nosocks.json", json);
+    auto state = xp2p::ui::TryLoadClientStateFile(path.string());
+    auto view = xp2p::ui::BuildClientRuntimeView("Running", state);
+    Expect(view.status == xp2p::ui::ClientRuntimeStatus::Ready, "proxy ready status without socks_ready");
+    ExpectContains(view.summary, "Proxy: Ready", "proxy ready summary without socks_ready");
+}
+
 void TestRuntimeViewTunReadySplit() {
     const std::string json = R"({
   "tun_enabled": true,
@@ -82,7 +97,7 @@ void TestModeLogicResolveClient() {
 void RunRuntimeTests() {
     TestSimpleJsonBasics();
     TestRuntimeViewProxyReady();
+    TestRuntimeViewProxyReadyWithoutSocksKey();
     TestRuntimeViewTunReadySplit();
     TestModeLogicResolveClient();
 }
-

@@ -23,6 +23,7 @@ struct RuntimeRoutesState {
 
 struct ClientRuntimeState {
     bool socksReady = false;
+    bool hasSocksReady = false;
     std::string lastError;
     bool hasTimestamp = false;
     std::optional<RuntimeTunState> tun;
@@ -45,4 +46,3 @@ std::optional<ClientStateFile> TryLoadClientStateFile(const std::string& path);
 std::optional<ServerStateFile> TryLoadServerStateFile(const std::string& path);
 
 }
-

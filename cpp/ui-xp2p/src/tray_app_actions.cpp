@@ -85,7 +85,7 @@ DWORD WINAPI ModeActionThreadProc(LPVOID param) {
     }
 
     if (ctx->hwnd) {
-        PostMessageW(ctx->hwnd, internal::WM_MODE_DONE, ctx->isClient ? 1 : 0, ctx->modeActionId);
+        PostMessageW(ctx->hwnd, internal::WM_MODE_DONE, result.success ? 1 : 0, ctx->isClient ? 1 : 0);
     }
     delete ctx;
     return 0;
@@ -134,9 +134,9 @@ void TrayApp::RequestClientMode(int actionId, const std::string& tagOverride) {
         return;
     }
     busy_ = true;
-    pendingClientModeLabel_ = (actionId == internal::IDM_CLIENT_MODE_PROXY)
-        ? "Proxy"
-        : (actionId == internal::IDM_CLIENT_MODE_SPLIT) ? "Tun Split" : "Tun Full";
+    pendingClientMode_ = (actionId == internal::IDM_CLIENT_MODE_PROXY) ? ClientMode::Proxy
+        : (actionId == internal::IDM_CLIENT_MODE_SPLIT)                ? ClientMode::TunSplit
+                                                                       : ClientMode::TunFull;
     clientModePending_ = true;
     UpdateTrayIconState();
     UpdateTooltip();
@@ -164,7 +164,7 @@ void TrayApp::RequestServerMode(int actionId) {
         return;
     }
     busy_ = true;
-    pendingServerModeLabel_ = (actionId == internal::IDM_SERVER_MODE_TUN) ? "Tun" : "Proxy";
+    pendingServerMode_ = (actionId == internal::IDM_SERVER_MODE_TUN) ? ServerMode::Tun : ServerMode::Proxy;
     serverModePending_ = true;
     UpdateTrayIconState();
     UpdateTooltip();

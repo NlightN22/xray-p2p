@@ -52,7 +52,7 @@ int TrayApp::Run() {
 
     EnsureTrayIcon();
     RefreshStatus();
-    SetTimer(hwnd_, internal::TIMER_STATUS, internal::GetStatusPollMs(), nullptr);
+    EnsureStatusTimer(internal::GetStatusPollMs());
 
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
@@ -76,6 +76,21 @@ int TrayApp::Run() {
     }
     iconCurrent_ = nullptr;
     return 0;
+}
+
+void TrayApp::EnsureStatusTimer(UINT intervalMs) {
+    if (!hwnd_) {
+        return;
+    }
+    if (intervalMs == 0) {
+        intervalMs = 1000;
+    }
+    if (statusPollMs_ == intervalMs) {
+        return;
+    }
+    KillTimer(hwnd_, internal::TIMER_STATUS);
+    SetTimer(hwnd_, internal::TIMER_STATUS, intervalMs, nullptr);
+    statusPollMs_ = intervalMs;
 }
 
 LRESULT CALLBACK TrayApp::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
@@ -108,6 +123,16 @@ LRESULT TrayApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam
         case internal::WM_ACTION_DONE:
         case internal::WM_MODE_DONE: {
             busy_ = false;
+            if (msg == internal::WM_MODE_DONE && wparam == 0) {
+                const bool isClient = (lparam != 0);
+                if (isClient) {
+                    clientModePending_ = false;
+                    pendingClientMode_.reset();
+                } else {
+                    serverModePending_ = false;
+                    pendingServerMode_.reset();
+                }
+            }
             RefreshStatus();
             return 0;
         }
@@ -128,12 +153,6 @@ LRESULT TrayApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam
                 case internal::IDM_SERVER_STOP:
                 case internal::IDM_SERVER_RESTART:
                     StartServiceAction(internal::kServiceServer, "server", id);
-                    return 0;
-                case internal::IDM_CLIENT_STATUS:
-                    ShowServiceStatusDialog(internal::kServiceClient, L"Client service");
-                    return 0;
-                case internal::IDM_SERVER_STATUS:
-                    ShowServiceStatusDialog(internal::kServiceServer, L"Server service");
                     return 0;
                 case internal::IDM_OPEN_LOGS:
                     OpenLogsFolder();
@@ -172,4 +191,3 @@ LRESULT TrayApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam
 }
 
 }
-
