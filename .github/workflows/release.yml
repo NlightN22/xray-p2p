@@ -205,7 +205,6 @@ jobs:
             -RepoRoot "$PWD" `
             -CacheDir "$PWD\\build\\msi-cache" `
             -MsiArchLabel "amd64" `
-            -UiBackend native `
             -BuildOnly `
             -OutputMarker "MSI_PATH="
           $msiPath = ($out | Select-String -Pattern "^MSI_PATH=" | Select-Object -Last 1).Line -replace "^MSI_PATH=", ""
@@ -219,7 +218,6 @@ jobs:
             -RepoRoot "$PWD" `
             -CacheDir "$PWD\\build\\msi-cache-x86" `
             -MsiArchLabel "x86" `
-            -UiBackend native `
             -BuildOnly `
             -OutputMarker "MSI_PATH="
           $msiPath = ($out | Select-String -Pattern "^MSI_PATH=" | Select-Object -Last 1).Line -replace "^MSI_PATH=", ""

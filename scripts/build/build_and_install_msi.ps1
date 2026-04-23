@@ -3,9 +3,6 @@ param(
     [string] $CacheDir = 'C:\xp2p\build\msi-cache',
     [string] $WixSourceRelative = 'installer\wix\xp2p.wxs',
     [string] $MsiArchLabel = 'amd64',
-    [ValidateSet('native', 'dotnet')]
-    [string] $UiBackend = 'native',
-    [switch] $UiSelfContained = $false,
     [switch] $BuildOnly = $false,
     [string] $OutputMarker = ''
 )
@@ -119,26 +116,6 @@ function Ensure-GoToolchain {
     }
 }
 
-function Ensure-DotNetSdk {
-    if (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue) {
-        return
-    }
-
-    $candidates = @(
-        "C:\Program Files\dotnet\dotnet.exe"
-    )
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) {
-            Add-ToPath (Split-Path $candidate -Parent)
-            break
-        }
-    }
-
-    if (-not (Get-Command -Name dotnet.exe -ErrorAction SilentlyContinue)) {
-        throw "dotnet.exe not found. Install .NET SDK or ensure it is on PATH."
-    }
-}
-
 function Ensure-CMake {
     if (Get-Command -Name cmake.exe -ErrorAction SilentlyContinue) {
         return
@@ -213,16 +190,6 @@ function Invoke-Cmd {
     return $exitCode
 }
 
-function Resolve-UiRuntimeId {
-    param([string] $ArchLabel)
-
-    switch ($ArchLabel) {
-        "amd64" { return "win-x64" }
-        "x86" { return "win-x86" }
-        default { throw "Unsupported UI runtime arch '$ArchLabel'." }
-    }
-}
-
 function Resolve-CMakePlatform {
     param([string] $ArchLabel)
 
@@ -254,12 +221,7 @@ Write-Info "Preparing MSI build directories"
 Ensure-Directory $RepoRoot
 Ensure-Directory $CacheDir
 Ensure-GoToolchain
-if ($UiBackend -eq 'dotnet') {
-    Ensure-DotNetSdk
-}
-else {
-    Ensure-CMake
-}
+Ensure-CMake
 
 $version = Get-Xp2pVersion -RepoRoot $RepoRoot
 $msiPath = Join-Path $CacheDir ("xp2p-$version-windows-$MsiArchLabel.msi")
@@ -346,55 +308,6 @@ try {
 
     $uiBinaryOut = Join-Path $binaryDir 'ui-xp2p.exe'
     Invoke-Step -Name "Building ui-xp2p.exe" -Action {
-        if ($UiBackend -eq 'dotnet') {
-            $uiProject = Join-Path $RepoRoot "dotnet\\ui-xp2p\\ui-xp2p.csproj"
-            if (-not (Test-Path $uiProject)) {
-                throw "WPF UI project not found at $uiProject"
-            }
-            $uiPublishDir = Join-Path $binaryDir 'ui-xp2p-publish'
-            Ensure-Directory $uiPublishDir
-            $runtimeId = Resolve-UiRuntimeId -ArchLabel $MsiArchLabel
-            Write-Info ("Publishing WPF UI (RID={0}, selfContained={1})" -f $runtimeId, ($UiSelfContained -eq $true))
-
-            $uiPublishProps = @(
-                "/p:PublishSingleFile=true",
-                "/p:DebugType=None",
-                "/p:DebugSymbols=false",
-                "/p:PublishReadyToRun=false"
-            )
-            if ($UiSelfContained) {
-                $uiPublishProps += @(
-                    "/p:SelfContained=true",
-                    "/p:IncludeNativeLibrariesForSelfExtract=true",
-                    "/p:EnableCompressionInSingleFile=true"
-                )
-            }
-            else {
-                $uiPublishProps += "/p:SelfContained=false"
-            }
-
-            $dotnetOutput = & dotnet publish $uiProject -c Release -r $runtimeId @uiPublishProps -o $uiPublishDir 2>&1
-            if ($dotnetOutput) {
-                $dotnetOutput | ForEach-Object { Write-Host $_ }
-            }
-            if ($LASTEXITCODE -ne 0) {
-                throw "dotnet publish failed with exit code $LASTEXITCODE"
-            }
-            $publishedExe = Join-Path $uiPublishDir 'ui-xp2p.exe'
-            if (-not (Test-Path $publishedExe)) {
-                throw "WPF UI publish output missing at $publishedExe"
-            }
-            if (-not $UiSelfContained) {
-                $extraFiles = @(Get-ChildItem $uiPublishDir -File | Where-Object { $_.Name -ne 'ui-xp2p.exe' })
-                if ($extraFiles.Count -gt 0) {
-                    $names = ($extraFiles | Select-Object -ExpandProperty Name) -join ", "
-                    throw "Framework-dependent UI publish produced extra files: $names. MSI currently embeds only ui-xp2p.exe; use -UiSelfContained or update packaging."
-                }
-            }
-            Copy-Item -Path $publishedExe -Destination $uiBinaryOut -Force
-            return
-        }
-
         $nativeUiDir = Join-Path $RepoRoot "cpp\\ui-xp2p"
         $nativeUiCmake = Join-Path $nativeUiDir "CMakeLists.txt"
         if (-not (Test-Path $nativeUiCmake)) {

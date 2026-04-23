@@ -32,7 +32,6 @@ Two PowerShell helpers exist: `build_and_install_msi.ps1` (amd64) and `build_and
 - Visual Studio 2022 Build Tools with the VC Tools workload (MSVC) and a Windows SDK.
 - CMake (the scripts require the Visual Studio generator; Ninja is not required).
 - Go toolchain.
-- Optional: .NET SDK only when using `-UiBackend dotnet`.
 
 #### Install with Chocolatey (PowerShell as Administrator)
 
@@ -62,15 +61,13 @@ The MSI build requires the bundled `xray` binary to be present:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi.ps1 `
   -RepoRoot "$PWD" `
   -CacheDir "$PWD\\build\\msi-cache" `
-  -BuildOnly `
-  -UiBackend native
+  -BuildOnly
 
 # x86 (build only; do not install)
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_and_install_msi_x86.ps1 `
   -RepoRoot "$PWD" `
   -CacheDir "$PWD\\build\\msi-cache-x86" `
-  -BuildOnly `
-  -UiBackend native
+  -BuildOnly
 ```
 
 ### Environment validation (before build)
@@ -96,8 +93,7 @@ Test-Path \"$wixRoot\\WiX Toolset*\\bin\\heat.exe\"
 - Final MSI output: `build\msi-cache\xp2p-<version>-windows-amd64.msi` and `build\msi-cache-x86\xp2p-<version>-windows-x86.msi` (or whatever `-CacheDir`/`-MsiArchLabel` you supplied).
 
 The scripts default to `C:\xp2p` as the repo root/cache; override via `-RepoRoot`/`-CacheDir` parameters if needed. Additional parameters let you control the WiX source (`-WixSourceRelative`), the MSI name suffix (`-MsiArchLabel`), and whether the script should only build the MSI (`-BuildOnly`) instead of running `msiexec`. Use `-OutputMarker '__MSI_PATH__='` when another tool needs to parse the resulting path from `stdout`.
-The MSI build scripts embed a tray UI binary as `ui-xp2p.exe`. By default the UI is built from the native Win32 (C++) project via CMake (`-UiBackend native`). Use `-UiBackend dotnet` to roll back to the existing WPF UI build. The `-UiSelfContained` switch applies only to the dotnet UI publish (self-contained builds remove the .NET Desktop Runtime prerequisite but increase size). Ensure the matching toolchain is available on the build host (CMake + MSVC for native, .NET SDK for dotnet).
-The WPF project outputs `bin/` and `obj/` artifacts under `build/dotnet/ui-xp2p/` to keep the repo clean when `-UiBackend dotnet` is used.
+The MSI build scripts embed a tray UI binary as `ui-xp2p.exe`. The UI is built from the native Win32 (C++) project via CMake and copied into the MSI staging directory.
 
 ### Uninstall notes (development builds)
 
