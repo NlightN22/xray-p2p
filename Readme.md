@@ -65,7 +65,7 @@ On the server:
 xp2p server deploy --link "<link>"
 ```
 
-For details, see: [Install](docs/getting-started/install.md), [First tunnel](docs/guides/single-tunnel.md), and [Deploy flow](docs/flows/deploy-flow.md).
+For details, see the documentation: [nlightn22.github.io/xray-p2p/docs](https://nlightn22.github.io/xray-p2p/docs/).
 
 ## What xp2p provides
 
@@ -78,16 +78,7 @@ For details, see: [Install](docs/getting-started/install.md), [First tunnel](doc
 
 ## Documentation
 
-- Start here: [`docs/index.md`](docs/index.md)
-- Install: [`docs/getting-started/install.md`](docs/getting-started/install.md)
-- First tunnel (A-B): [`docs/guides/single-tunnel.md`](docs/guides/single-tunnel.md)
-- Deploy handshake details: [`docs/flows/deploy-flow.md`](docs/flows/deploy-flow.md)
-- Desired → Live apply mechanism: [`docs/flows/apply-flow.md`](docs/flows/apply-flow.md)
-- Config compilation: [`docs/flows/config-compilation.md`](docs/flows/config-compilation.md)
-- Policy routing & DNS helpers: [`docs/guides/redirects.md`](docs/guides/redirects.md)
-- Chains: [`docs/guides/chain.md`](docs/guides/chain.md)
-- Operations (TUN, diagnostics): [`docs/operations/tun-setup.md`](docs/operations/tun-setup.md), [`docs/operations/diagnostics.md`](docs/operations/diagnostics.md)
-- Reference (config, CLI): [`docs/reference/configuration.md`](docs/reference/configuration.md), [`docs/reference/cli-workflows.md`](docs/reference/cli-workflows.md)
+- Docs: [nlightn22.github.io/xray-p2p/docs](https://nlightn22.github.io/xray-p2p/docs/)
 
 ## Project layout and further docs
 
