@@ -17,6 +17,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
+	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
 )
 
@@ -105,6 +106,14 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	}
 
 	tunEnabled := opts.TunEnabled
+	if err := preflight.CheckTun(ctx, preflight.TunConfig{
+		Enabled: tunEnabled,
+		Name:    opts.TunName,
+		Addr:    opts.TunAddr,
+		MTU:     opts.TunMTU,
+	}); err != nil {
+		return err
+	}
 	if tunEnabled {
 		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
 			return tunSetupErrorWithHint("server run", err)

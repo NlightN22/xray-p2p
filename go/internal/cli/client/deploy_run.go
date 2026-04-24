@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,7 +12,9 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 )
 
 func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int {
@@ -25,7 +28,15 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	if opts.manifest.mode.set && opts.manifest.mode.tunEnabled {
-		if err := client.PreflightTunDevice(); err != nil {
+		wintunPath := filepath.Join(cfg.Client.InstallDir, layout.BinDirName, "wintun.dll")
+		if err := tunPreflightCheckFunc(ctx, preflight.TunConfig{
+			Enabled:       true,
+			Name:          cfg.Client.TunName,
+			Addr:          cfg.Client.TunAddr,
+			MTU:           cfg.Client.TunMTU,
+			Mode:          cfg.Client.TunMode,
+			WintunDLLPath: wintunPath,
+		}); err != nil {
 			logging.Error("xp2p client deploy: tun preflight failed", "err", err)
 			return 1
 		}
@@ -237,6 +248,19 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	if finalTunEnabled {
+		wintunPath := filepath.Join(installOpts.InstallDir, layout.BinDirName, "wintun.dll")
+		if err := tunPreflightCheckFunc(ctx, preflight.TunConfig{
+			Enabled:       true,
+			Name:          installOpts.TunName,
+			Addr:          installOpts.TunAddr,
+			MTU:           installOpts.TunMTU,
+			Mode:          installOpts.TunMode,
+			WintunDLLPath: wintunPath,
+		}); err != nil {
+			completionState = "FAIL tun-preflight"
+			logging.Error("xp2p client deploy: tun preflight failed", "err", err)
+			return 1
+		}
 		if err := applyClientDeployMode(installOpts, cfg, true, tunMode, opts.manifest.tunModeSet, fullTunnelTag); err != nil {
 			completionState = "FAIL client-mode-tun"
 			logging.Error("xp2p client deploy: tun mode setup failed", "err", err)

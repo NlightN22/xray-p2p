@@ -145,4 +145,8 @@ func stageTestXrayBinary(t *testing.T, installDir string) {
 	if err := os.WriteFile(path, []byte("test-xray"), 0o755); err != nil {
 		t.Fatalf("write xray binary: %v", err)
 	}
+	wintunPath := filepath.Join(binDir, "wintun.dll")
+	if err := os.WriteFile(wintunPath, []byte("test-wintun"), 0o755); err != nil {
+		t.Fatalf("write wintun dll: %v", err)
+	}
 }

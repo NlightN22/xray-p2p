@@ -17,6 +17,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/health"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
 
@@ -99,6 +100,18 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		opts.FullTunnelTag = meta.FullTag
 	}
 
+	wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
+	if err := preflight.CheckTun(ctx, preflight.TunConfig{
+		Enabled:       opts.TunEnabled,
+		Name:          opts.TunName,
+		Addr:          opts.TunAddr,
+		MTU:           opts.TunMTU,
+		Mode:          opts.TunMode,
+		WintunDLLPath: wintunPath,
+	}); err != nil {
+		return err
+	}
+
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
 		if err != nil {
 			return fmt.Errorf("configuration directory not found at %s: %w", liveConfigDir, err)
@@ -144,7 +157,6 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 
 	// sendThrough is compiled into xray.json during apply.
 
-	wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
 	if result, err := winnet.CleanupWintunAdapter(wintunPath, opts.TunName); err != nil {
 		logging.Warn("wintun adapter cleanup failed", "interface", opts.TunName, "result", "error", "err", err)
 	} else {

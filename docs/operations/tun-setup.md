@@ -2,6 +2,14 @@
 
 TUN interfaces default to `xp2pc` (client) and `xp2ps` (server). When you change the names, MTU values, or addresses, update the OS network configuration and re-run `xp2p {client,server} install`.
 
+## Prerequisites
+
+When TUN is enabled, `xp2p` performs a runtime preflight check and fails early (before starting Xray) if prerequisites are missing.
+
+- OpenWrt: install the kernel module with `opkg update && opkg install kmod-tun` (ensure `/dev/net/tun` exists).
+- Linux: ensure `/dev/net/tun` exists (`modprobe tun`) and run with sufficient privileges (root or `CAP_NET_ADMIN`).
+- Windows: place `wintun.dll` next to `xray.exe` (typically `<install_dir>/bin`) and use a compatible version.
+
 ## OpenWrt
 
 On OpenWrt, `xp2p` provisions the UCI network interface for you when TUN is enabled and removes it on `xp2p {client,server} remove`. Use the commands below only when you need manual overrides or recovery.

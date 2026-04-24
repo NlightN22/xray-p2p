@@ -13,6 +13,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 )
 
 func clientCfg(installDir, configDir string) config.Config {
@@ -36,6 +37,15 @@ func stubClientInstall(fn func(context.Context, client.InstallOptions) error) fu
 	}
 	clientInstallFunc = fn
 	return func() { clientInstallFunc = prev }
+}
+
+func stubTunPreflight(fn func(context.Context, preflight.TunConfig) error) func() {
+	prev := tunPreflightCheckFunc
+	if fn == nil {
+		fn = func(context.Context, preflight.TunConfig) error { return nil }
+	}
+	tunPreflightCheckFunc = fn
+	return func() { tunPreflightCheckFunc = prev }
 }
 
 func stubClientRemove(fn func(context.Context, client.RemoveOptions) error) func() {

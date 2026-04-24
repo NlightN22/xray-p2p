@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
@@ -84,6 +86,20 @@ func runServerMode(ctx context.Context, cfg config.Config, args []string) int {
 	if strings.TrimSpace(installDir) == "" {
 		logging.Error("xp2p server mode: install directory is required")
 		return 2
+	}
+
+	if tunEnabled {
+		wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
+		if err := tunPreflightCheckFunc(ctx, preflight.TunConfig{
+			Enabled:       true,
+			Name:          cfg.Server.TunName,
+			Addr:          cfg.Server.TunAddr,
+			MTU:           cfg.Server.TunMTU,
+			WintunDLLPath: wintunPath,
+		}); err != nil {
+			logging.Error("xp2p server mode: tun preflight failed", "err", err)
+			return 1
+		}
 	}
 
 	updatedPath, err := config.UpdateTunEnabled(*configPath, "server", tunEnabled)

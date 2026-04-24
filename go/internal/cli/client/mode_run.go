@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
@@ -12,6 +13,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -88,6 +90,21 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 	if err != nil {
 		logging.Error("xp2p client mode: failed to load config", "err", err)
 		return 1
+	}
+
+	if tunEnabled {
+		wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
+		if err := tunPreflightCheckFunc(ctx, preflight.TunConfig{
+			Enabled:       true,
+			Name:          loadedCfg.Client.TunName,
+			Addr:          loadedCfg.Client.TunAddr,
+			MTU:           loadedCfg.Client.TunMTU,
+			Mode:          loadedCfg.Client.TunMode,
+			WintunDLLPath: wintunPath,
+		}); err != nil {
+			logging.Error("xp2p client mode: tun preflight failed", "err", err)
+			return 1
+		}
 	}
 
 	tunMode := loadedCfg.Client.TunMode

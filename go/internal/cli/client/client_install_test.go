@@ -285,6 +285,7 @@ func execClientInstall(cfg config.Config, args []string, installErr error) (int,
 		return installErr
 	})
 	defer restore()
+	defer stubTunPreflight(nil)()
 
 	code := runClientInstall(context.Background(), cfg, args)
 	return code, calls

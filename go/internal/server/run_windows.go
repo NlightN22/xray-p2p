@@ -17,6 +17,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/health"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
 )
 
@@ -92,6 +93,17 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	opts.TunName = meta.TunName
 	opts.TunMTU = meta.TunMTU
 	opts.TunAddr = meta.TunAddr
+
+	wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
+	if err := preflight.CheckTun(ctx, preflight.TunConfig{
+		Enabled:       opts.TunEnabled,
+		Name:          opts.TunName,
+		Addr:          opts.TunAddr,
+		MTU:           opts.TunMTU,
+		WintunDLLPath: wintunPath,
+	}); err != nil {
+		return err
+	}
 
 	if stat, err := os.Stat(liveConfigDir); err != nil || !stat.IsDir() {
 		if err != nil {
