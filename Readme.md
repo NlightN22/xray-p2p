@@ -83,3 +83,16 @@ xp2p server deploy --link "<link>"
 - `go/cmd/xp2p` and `go/internal/...` contain the CLI, installers, deploy logic, and state helpers.
 - `config_templates/`, `distro/`, `installer/`, `openwrt/`, and `infra/` provide reference configs, bundled binaries, packaging manifests, and reproducible environments.
 - Development, testing, and release guidance lives in [`CONTRIBUTING.md`](CONTRIBUTING.md), [`tests/README.md`](tests/README.md), and [`tests/TESTING_GUIDELINES.md`](tests/TESTING_GUIDELINES.md). Follow those docs for smoke tests, regression suites, and CI conventions.
+
+## Acknowledgements
+
+<details>
+<summary>Open source projects</summary>
+
+- Xray-core: https://github.com/XTLS/Xray-core
+- Wintun (WireGuard): https://www.wintun.net/
+- Cobra: https://github.com/spf13/cobra
+- Koanf: https://github.com/knadh/koanf
+- MkDocs: https://www.mkdocs.org/ and mkdocs-material: https://squidfunk.github.io/mkdocs-material/
+
+</details>
