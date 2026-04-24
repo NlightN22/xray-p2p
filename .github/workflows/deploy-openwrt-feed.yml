@@ -1,4 +1,4 @@
-name: Deploy OpenWrt feed to GitHub Pages
+name: Deploy OpenWrt feed + docs to GitHub Pages
 
 on:
   push:
@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - 'openwrt/repo/**'
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'scripts/build/generate_openwrt_indexes.sh'
+      - '.github/workflows/deploy-openwrt-feed.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -55,10 +60,27 @@ jobs:
       - name: Generate index pages
         run: bash scripts/build/generate_openwrt_indexes.sh openwrt/repo
 
-      - name: Upload feed artifact
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install MkDocs Material
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install mkdocs-material
+
+      - name: Assemble Pages content
+        run: |
+          rm -rf .pages
+          mkdir -p .pages
+          cp -a openwrt/repo/. .pages/
+          mkdocs build --strict --site-dir .pages/docs
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./openwrt/repo
+          path: ./.pages
 
       - name: Deploy to GitHub Pages
         id: deployment
