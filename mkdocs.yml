@@ -1,12 +1,26 @@
 site_name: XP2P Tunnel provider
 site_url: https://sitename.exmpl
 nav:
-  - Overview: index.md
-  - Single Tunnel (A-B): 01-single-tunnel.md
-  - Redirects Within A-B: 02-redirects.md
-  - Chain (C2-B-A-C1): 03-chain.md
-  - Advanced Variants: 04-advanced.md
-  - Config Compilation: 08-config-compilation.md
+  - Getting Started:
+      - Overview: index.md
+      - Terminology: getting-started/terminology.md
+      - Install: getting-started/install.md
+      - First Tunnel (A-B): guides/single-tunnel.md
+  - Guides (Use Cases):
+      - Redirects Within A-B: guides/redirects.md
+      - Chain (C2-B-A-C1): guides/chain.md
+      - Advanced Variants: guides/advanced.md
+  - Flows (How It Works):
+      - Deploy Flow: flows/deploy-flow.md
+      - Apply Flow: flows/apply-flow.md
+      - Config Compilation: flows/config-compilation.md
+      - Tunnel Status Logic: flows/tunnel-status.md
+  - Operations:
+      - TUN Setup: operations/tun-setup.md
+      - Diagnostics & NAT helpers: operations/diagnostics.md
+  - Reference:
+      - Configuration: reference/configuration.md
+      - CLI Workflows: reference/cli-workflows.md
 theme:
   name: material
   font:

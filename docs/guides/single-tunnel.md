@@ -8,7 +8,7 @@ if you want explicit control.
 On B (client), generate the deploy link:
 
 ```sh
-xp2p client deploy --host 10.63.30.11 --port 62125 --user user@example.com --password secret --trojan-port 58601
+xp2p client deploy --host 10.63.30.11
 ```
 
 Copy the link printed in `client deploy: link generated`.
@@ -16,6 +16,13 @@ Copy the link printed in `client deploy: link generated`.
 On A (server), run deploy with the link:
 
 ```sh
+xp2p server deploy --link "<PASTE_LINK>"
+```
+
+If you need a custom deploy port, pass it on both sides:
+
+```sh
+xp2p client deploy --host 10.63.30.11 --port 62125
 xp2p server deploy --listen :62125 --link "<PASTE_LINK>"
 ```
 

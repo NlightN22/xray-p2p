@@ -6,7 +6,7 @@ configuration compilation and service startup.
 ## Scope
 
 - Applies to both client and server deploy.
-- Follows the Apply Flow in `06-apply-flow.md`.
+- Follows the Apply Flow in [apply-flow.md](apply-flow.md).
 
 ## Key Rules
 
