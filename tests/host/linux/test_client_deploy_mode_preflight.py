@@ -29,7 +29,6 @@ def test_client_deploy_mode_tun_fails_when_tun_device_missing(client_host, xp2p_
         combined = (result.stdout or "") + "\n" + (result.stderr or "")
         assert result.rc != 0, "expected deploy to fail when tun device is missing"
         assert "/dev/net/tun" in combined, f"expected error to mention {original}:\n{combined}"
-        assert "TUN device" in combined, f"expected error to mention tun device:\n{combined}"
+        assert "tun is unavailable" in combined.lower(), f"expected error to mention tun preflight:\n{combined}"
     finally:
         client_host.run(f"sudo -n sh -c 'if [ -e {backup} ]; then mv {backup} {original}; fi'")
-

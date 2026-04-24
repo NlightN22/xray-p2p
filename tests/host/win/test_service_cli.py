@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from tests.host.win import env as win_env
@@ -256,3 +258,79 @@ def test_windows_service_records_apply_error_after_invalid_config(
                 remove_config=True,
                 log_paths=None,
             )
+
+
+@pytest.mark.host
+@pytest.mark.win
+def test_windows_client_run_fails_fast_when_wintun_missing(
+    client_host,
+    xp2p_client_runner,
+):
+    runner = xp2p_client_runner
+    install_dir = svc.INSTALL_ROOT
+    wintun_path = install_dir / "bin" / "wintun.dll"
+    backup_path = install_dir / "bin" / "wintun.dll.xp2p-testbak"
+
+    win_env.ensure_wintun_dll(client_host, install_dir=install_dir)
+
+    with svc.timed("client cleanup (pre)"):
+        svc.cleanup_role(
+            client_host,
+            "client",
+            remove_config=True,
+            log_paths=[svc.CLIENT_SERVICE_LOG],
+        )
+    with svc.timed("client install"):
+        svc.install_client(runner, "10.70.0.40", "svc-preflight@example.com", "SvcPreflightSecret")
+
+    win_env.stop_xp2p_processes(client_host)
+    win_env.remove_path(client_host, apply_flow.apply_error_path())
+
+    script_move_away = f"""
+$ErrorActionPreference = 'Stop'
+$src = {win_env.ps_quote(str(wintun_path))}
+$dst = {win_env.ps_quote(str(backup_path))}
+if (-not (Test-Path $src)) {{
+    throw "wintun.dll missing before test: $src"
+}}
+if (Test-Path $dst) {{
+    Remove-Item -Force $dst -ErrorAction SilentlyContinue
+}}
+Move-Item -Force -Path $src -Destination $dst
+"""
+    script_restore = f"""
+$ErrorActionPreference = 'Stop'
+$src = {win_env.ps_quote(str(backup_path))}
+$dst = {win_env.ps_quote(str(wintun_path))}
+if (Test-Path $src) {{
+    Move-Item -Force -Path $src -Destination $dst
+}}
+"""
+    move_out = win_env.run_powershell(client_host, script_move_away, label="hide_wintun_dll")
+    if move_out.rc != 0:
+        pytest.skip(f"unable to hide wintun.dll: {move_out.stderr}")
+
+    try:
+        result = runner(
+            "client",
+            "run",
+            "--path",
+            str(install_dir),
+            "--config-dir",
+            "config-client",
+            check=False,
+        )
+        combined = ((result.stdout or "") + "\n" + (result.stderr or "")).lower()
+        assert result.rc != 0, "expected xp2p client run to fail when wintun.dll is missing"
+        assert "wintun.dll" in combined, f"expected error to mention wintun.dll:\n{result.stdout}\n{result.stderr}"
+        assert "place wintun.dll" in combined or "cannot be loaded" in combined, (
+            "expected error to include actionable wintun hint.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+        apply_error_path = apply_flow.apply_error_path()
+        if win_env.path_exists(client_host, apply_error_path):
+            apply_error_text = (win_env.read_text(client_host, apply_error_path) or "").lower()
+            assert "wintun.dll" in apply_error_text, f"apply.error missing wintun details:\n{apply_error_text}"
+    finally:
+        win_env.run_powershell(client_host, script_restore, label="restore_wintun_dll")
