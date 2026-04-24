@@ -184,7 +184,20 @@ jobs:
             fi
             cp "release/$release" "latest/$latest"
           done < artifacts.tsv
-          latest_paths=$(awk -F'\t' '{print "latest/" $3}' artifacts.tsv)
+
+          if [ -f "release/xp2p-${version}-windows-x86.msi" ]; then
+            cp "release/xp2p-${version}-windows-x86.msi" "latest/xp2p-latest-windows-x86.msi"
+          fi
+
+          shopt -s nullglob
+          for f in release/xp2p_${version}_*.deb; do
+            arch="${f##*_}"
+            arch="${arch%.deb}"
+            cp "$f" "latest/xp2p-latest-linux-${arch}.deb"
+          done
+          shopt -u nullglob
+
+          latest_paths="$(find latest -maxdepth 1 -type f -print | sort)"
           {
             echo "latest_files<<EOF"
             echo "$latest_paths"
