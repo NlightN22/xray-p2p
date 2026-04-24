@@ -36,12 +36,12 @@ jobs:
           python -m pip install mkdocs-material
 
       - name: Build docs
-        run: mkdocs build --strict --site-dir .docs-site
+        run: mkdocs build --strict --site-dir site
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v4
         with:
           name: xp2p-docs
-          path: ./.docs-site
+          path: ./site
           if-no-files-found: error
           retention-days: 30

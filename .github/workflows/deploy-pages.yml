@@ -51,9 +51,9 @@ jobs:
         run: |
           rm -rf .pages
           mkdir -p .pages
-          cp -a .artifacts/feed/. .pages/
+          cp -a .artifacts/feed/openwrt/repo/. .pages/
           mkdir -p .pages/docs
-          cp -a .artifacts/docs/. .pages/docs/
+          cp -a .artifacts/docs/site/. .pages/docs/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
