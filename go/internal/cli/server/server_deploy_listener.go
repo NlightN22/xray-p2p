@@ -224,6 +224,11 @@ func (s *deployServer) applyMode(installDir, configDir string, tunEnabled bool) 
 }
 
 func (s *deployServer) applyTunAndStartService(ctx context.Context, installDir, configDir string) {
+	if !s.Cfg.Server.TunEnabled {
+		logging.Info("xp2p server deploy: tun mode skipped; server tun is disabled")
+		logServerServiceApplyHint(ctx)
+		return
+	}
 	if err := s.applyMode(installDir, configDir, true); err != nil {
 		logging.Warn("xp2p server deploy: tun mode setup failed", "err", err)
 	}

@@ -168,7 +168,9 @@ def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_op
             "--force",
             check=True,
         )
-        run(
+        result = openwrt_env.run_xp2p_with_env(
+            openwrt_host,
+            {"XP2P_SERVER_TUN_ENABLED": "true"},
             "server",
             "install",
             "--path",
@@ -180,8 +182,12 @@ def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_op
             "--host",
             "dual-tun.openwrt.test",
             "--force",
-            check=True,
         )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p command failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
 
         client_state = helpers.read_preferred_client_config(openwrt_host)
         server_state = helpers.read_preferred_server_config(openwrt_host)

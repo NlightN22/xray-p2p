@@ -99,7 +99,9 @@ def test_server_service_brings_up_tun(server_host, xp2p_server_runner):
     failed = False
     try:
         print("[runtime] server install start")
-        xp2p_server_runner(
+        result = linux_env.run_xp2p_with_env(
+            server_host,
+            {"XP2P_SERVER_TUN_ENABLED": "true"},
             "server",
             "install",
             "--path",
@@ -111,8 +113,12 @@ def test_server_service_brings_up_tun(server_host, xp2p_server_runner):
             "--host",
             "tun-runtime-server.example.com",
             "--force",
-            check=True,
         )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p server install failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
         print("[runtime] server install done")
         _start_service("server", xp2p_server_runner, server_host)
         _assert_tun_addr(server_host, SERVER_TUN, SERVER_ADDR)

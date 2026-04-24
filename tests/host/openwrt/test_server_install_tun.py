@@ -30,7 +30,7 @@ def _prepare_host(openwrt_host, xp2p_openwrt_ipk):
     return runner
 
 
-def test_server_install_default_creates_tun_inbound(openwrt_host, xp2p_openwrt_ipk):
+def test_server_install_default_does_not_create_tun_inbound(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
         runner(
@@ -50,18 +50,18 @@ def test_server_install_default_creates_tun_inbound(openwrt_host, xp2p_openwrt_i
         helpers.ensure_service_running(openwrt_host, "server")
         helpers.wait_for_live_config(openwrt_host, "server")
         inbounds = helpers.read_live_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
-        helpers.assert_tun_inbound(inbounds, "xp2ps")
+        helpers.assert_no_tun_inbound(inbounds)
     finally:
         helpers.cleanup_server_install(openwrt_host, runner)
         helpers.remove_path(openwrt_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
 
 
-def test_server_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
+def test_server_install_respects_tun_enabled(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
         result = openwrt_env.run_xp2p_with_env(
             openwrt_host,
-            {"XP2P_SERVER_TUN_ENABLED": "false"},
+            {"XP2P_SERVER_TUN_ENABLED": "true"},
             "server",
             "install",
             "--path",
@@ -69,7 +69,7 @@ def test_server_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
             "--host",
-            "tun-server-disabled.openwrt.test",
+            "tun-server-enabled.openwrt.test",
             "--port",
             "62023",
             "--force",
@@ -82,7 +82,7 @@ def test_server_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
         helpers.ensure_service_running(openwrt_host, "server")
         helpers.wait_for_live_config(openwrt_host, "server")
         inbounds = helpers.read_live_json(openwrt_host, helpers.SERVER_CONFIG_DIR / "inbounds.json")
-        helpers.assert_no_tun_inbound(inbounds)
+        helpers.assert_tun_inbound(inbounds, "xp2ps")
     finally:
         helpers.cleanup_server_install(openwrt_host, runner)
         helpers.remove_path(openwrt_host, helpers.SERVER_HEARTBEAT_STATE_FILE)

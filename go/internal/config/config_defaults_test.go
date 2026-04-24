@@ -39,8 +39,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.Host != "" {
 		t.Fatalf("expected empty server host by default, got %s", cfg.Server.Host)
 	}
-	if !cfg.Server.TunEnabled {
-		t.Fatalf("expected server tun enabled by default")
+	if cfg.Server.TunEnabled {
+		t.Fatalf("expected server tun disabled by default")
 	}
 	if cfg.Server.TunName != "xp2ps" {
 		t.Fatalf("expected server tun name xp2ps, got %s", cfg.Server.TunName)

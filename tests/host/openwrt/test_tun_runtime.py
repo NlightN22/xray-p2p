@@ -111,7 +111,9 @@ def test_openwrt_server_service_brings_up_tun(openwrt_host, xp2p_openwrt_ipk):
     helpers.cleanup_server_install(openwrt_host, runner)
     openwrt_env._stop_xp2p_services(openwrt_host)
     try:
-        runner(
+        result = openwrt_env.run_xp2p_with_env(
+            openwrt_host,
+            {"XP2P_SERVER_TUN_ENABLED": "true"},
             "server",
             "install",
             "--path",
@@ -123,8 +125,11 @@ def test_openwrt_server_service_brings_up_tun(openwrt_host, xp2p_openwrt_ipk):
             "--host",
             "tun-runtime-server.example.com",
             "--force",
-            check=True,
         )
+        if result.rc != 0:
+            pytest.fail(
+                f"xp2p command failed (exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
         runner("server", "service", "start", check=True)
         _wait_for_service_state(openwrt_host, "server", expected_active=True)
         _wait_for_apply_request_clear(openwrt_host)

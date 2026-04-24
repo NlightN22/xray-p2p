@@ -27,6 +27,8 @@ xp2p server cert set --cert /path/to/fullchain.pem --key /path/to/privkey.pem
 xp2p server cert state
 ```
 
+Server defaults to proxy mode (`server.tun_enabled = false`). Enable TUN explicitly via config or `XP2P_SERVER_TUN_ENABLED=true` when needed.
+
 ## Client lifecycle
 
 Client commands configure OpenWrt routers, Linux hosts, or Windows workstations. Release archives already place `xray` next to `xp2p`, so keep both binaries together when copying the installation directory between hosts.

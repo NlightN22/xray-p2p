@@ -19,7 +19,7 @@ var defaultValues = map[string]any{
 	"server.certificate":         "",
 	"server.key":                 "",
 	"server.host":                "",
-	"server.tun_enabled":         true,
+	"server.tun_enabled":         false,
 	"server.tun_name":            "xp2ps",
 	"server.tun_mtu":             1500,
 	"server.tun_addr":            "198.18.0.5/30",
