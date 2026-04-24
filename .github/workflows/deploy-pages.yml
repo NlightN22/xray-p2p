@@ -27,15 +27,18 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Download OpenWrt feed artifact
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download OpenWrt feed metadata artifact
         uses: dawidd6/action-download-artifact@v7
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           workflow: build-openwrt-feed.yml
           branch: main
           workflow_conclusion: success
-          name: xp2p-feed
-          path: .artifacts/feed
+          name: xp2p-feed-meta
+          path: .artifacts/feed-meta
 
       - name: Download docs artifact
         uses: dawidd6/action-download-artifact@v7
@@ -51,9 +54,10 @@ jobs:
         run: |
           rm -rf .pages
           mkdir -p .pages
-          cp -a .artifacts/feed/openwrt/repo/. .pages/
+          cp -a openwrt/repo/. .pages/
           mkdir -p .pages/docs
           cp -a .artifacts/docs/site/. .pages/docs/
+          tar -C .pages -xf .artifacts/feed-meta/feed-meta.tar
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -53,10 +53,15 @@ jobs:
       - name: Generate index pages
         run: bash scripts/build/generate_openwrt_indexes.sh openwrt/repo
 
-      - name: Upload feed artifact
+      - name: Package feed metadata artifact
+        run: |
+          find openwrt/repo -type f \( -name Packages.sig -o -name index.html \) -print0 \
+            | tar -C openwrt/repo --null -T - -cf feed-meta.tar
+
+      - name: Upload feed metadata artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xp2p-feed
-          path: ./openwrt/repo
+          name: xp2p-feed-meta
+          path: ./feed-meta.tar
           if-no-files-found: error
           retention-days: 30
