@@ -50,7 +50,7 @@ msiexec /x xp2p-<version>-windows-amd64.msi
 - Service management (start/stop/status) is available to Builtin Users without admin elevation.
 - Tray controller `ui-xp2p` ships with the MSI and auto-starts via the current user's Run key; disable with `XP2P_UI_AUTOSTART=0`.
 
-Need to build the Windows MSI on a Windows host? Follow [`scripts/build/README.md`](../../scripts/build/README.md).
+Need to build the Windows MSI on a Windows host? Follow [`scripts/build/README.md`](https://github.com/NlightN22/xray-p2p/blob/main/scripts/build/README.md).
 
 ## Archives (release tar.gz)
 
