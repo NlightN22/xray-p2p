@@ -40,6 +40,13 @@ SERVER_DIAG_PORT = helpers.SERVER_DIAG_PORT
 CLIENT_DIAG_PORT = helpers.CLIENT_DIAG_PORT
 DEPLOY_SYNC_ROOT = linux_env.WORK_TREE / ".logs" / "deploy"
 
+XRAY_SERVICE_LOG_PHRASES = [
+    "xray_core stdout: Xray ",
+    "xray_core stderr: Xray ",
+    "core: Xray ",
+    "Penetrates Everything",
+]
+
 
 @pytest.mark.host
 @pytest.mark.linux
@@ -146,6 +153,8 @@ def _run_client_deploy_end_to_end(
         xp2p_client_runner("--log-level", "debug", "client", "service", "start", check=True)
         _wait_for_apply_request_clear(client_host, timeout_seconds=60.0)
         _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _assert_xray_service_log_has_output(client_host, role="client")
+        _assert_xray_service_log_has_output(server_host, role="server")
 
         _assert_internet_access(client_host)
 
@@ -1008,6 +1017,16 @@ def _wait_for_log_value(
         time.sleep(1)
     tail = "\n".join((last_text or "").splitlines()[-30:])
     pytest.fail(f"Timed out waiting for {description}. Recent log tail:\n{tail}")
+
+
+def _assert_xray_service_log_has_output(host: Host, *, role: str) -> None:
+    service_log = DEPLOY_LOG_ROOT / role / "service.log"
+    _wait_for_any_log_phrase(
+        host,
+        service_log,
+        phrases=XRAY_SERVICE_LOG_PHRASES,
+        timeout=LOG_WAIT_TIMEOUT,
+    )
 
 
 def _wait_for_apply_request_clear(host: Host, *, timeout_seconds: float = 30.0) -> None:
