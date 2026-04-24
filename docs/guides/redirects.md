@@ -29,7 +29,7 @@ xp2p server redirect add --path /etc/xp2p --config-dir config-server --cidr 10.0
 If you need transparent NAT redirect:
 
 ```sh
-xp2p client nat-redirect add --cidr 10.0.101.0/24 --quiet
+xp2p nat-redirect add --cidr 10.0.101.0/24 --quiet
 ```
 
 ## DNS handling

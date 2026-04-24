@@ -58,5 +58,5 @@ uci commit firewall
 From C2:
 
 ```sh
-xp2p ping 10.0.101.1 --count 1
+ping -c 1 10.0.101.1
 ```

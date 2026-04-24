@@ -40,10 +40,19 @@ On B (client), use the link from server install output:
 xp2p client install --path /etc/xp2p --config-dir config-client --link "<PASTE_LINK>" --force
 ```
 
+## Apply (start services)
+
+Both deploy and install update Desired inputs and write `apply.request`. Start (or restart) the services to apply the changes:
+
+```sh
+xp2p server service start
+xp2p client service start
+```
+
 ## Verify
 
 From B:
 
 ```sh
-xp2p ping 10.63.30.11 --count 1
+xp2p ping 10.63.30.11 --tunnel --count 1
 ```
