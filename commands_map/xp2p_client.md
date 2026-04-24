@@ -26,6 +26,7 @@ Includes: Global options
 - --allow-insecure, -I       Allow insecure TLS (skip verification)
 - --strict-tls, -S           Enforce TLS verification
 - --force, -f                Replace existing endpoint configuration
+- --mode, -M <proxy|tun|tun:split|tun:full> Target client mode (optional)
 - --tun-mode, -m <split|full> TUN routing mode (default: split)
 
 xp2p client remove [hostname|tag]
@@ -136,6 +137,7 @@ Includes: Global options
 - --user, -u <email>          Trojan user identifier (email)
 - --password, -w <password>   Trojan user password (auto-generated when omitted)
 - --trojan-port, -T <port>    Trojan service port
+- --mode, -M <proxy|tun|tun:split|tun:full> Target client mode (optional)
 - --tun-mode, -m <split|full> TUN routing mode (split or full)
 - --force, -f                 Allow changing existing tun mode
 

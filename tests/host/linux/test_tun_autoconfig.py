@@ -49,6 +49,41 @@ def test_linux_tun_autoconfig_client_no_networkd(client_host, xp2p_client_runner
 
 @pytest.mark.host
 @pytest.mark.linux
+def test_linux_tun_autoconfig_client_mode_proxy_no_networkd(client_host, xp2p_client_runner):
+    try:
+        result = xp2p_client_runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--host",
+            "10.55.0.11",
+            "--user",
+            "tun-client-proxy@example.com",
+            "--password",
+            "tun-client-proxy-pass",
+            "--mode",
+            "proxy",
+            "--force",
+            check=False,
+        )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p client install failed.\n"
+                f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+
+        assert not helpers.path_exists(client_host, _networkd_path(CLIENT_TUN)), (
+            "Networkd file should not be created for proxy-mode client install"
+        )
+    finally:
+        pass
+
+
+@pytest.mark.host
+@pytest.mark.linux
 def test_linux_tun_autoconfig_server_no_networkd(server_host, xp2p_server_runner):
     try:
         result = linux_env.run_xp2p_with_env(

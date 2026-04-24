@@ -58,6 +58,46 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 	}
 }
 
+func TestParseDeployFlagsModeProxy(t *testing.T) {
+	opts, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"--mode", "proxy",
+	})
+	if err != nil {
+		t.Fatalf("parseDeployFlags returned error: %v", err)
+	}
+	if !opts.manifest.mode.set || opts.manifest.mode.tunEnabled {
+		t.Fatalf("expected proxy mode to be set, got set=%v tun=%v", opts.manifest.mode.set, opts.manifest.mode.tunEnabled)
+	}
+}
+
+func TestParseDeployFlagsRejectsTunModeWithProxyMode(t *testing.T) {
+	_, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"--mode", "proxy",
+		"--tun-mode", "full",
+	})
+	if err == nil {
+		t.Fatalf("expected error for tun-mode with proxy mode")
+	}
+}
+
+func TestParseDeployFlagsModeTunFullShorthand(t *testing.T) {
+	opts, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"--mode", "tun:full",
+	})
+	if err != nil {
+		t.Fatalf("parseDeployFlags returned error: %v", err)
+	}
+	if !opts.manifest.mode.set || !opts.manifest.mode.tunEnabled {
+		t.Fatalf("expected tun mode to be set, got set=%v tun=%v", opts.manifest.mode.set, opts.manifest.mode.tunEnabled)
+	}
+	if !opts.manifest.tunModeSet || opts.manifest.tunMode != "full" {
+		t.Fatalf("expected tun mode full, got %q (set=%v)", opts.manifest.tunMode, opts.manifest.tunModeSet)
+	}
+}
+
 func TestParseDeployFlagsRequiresRemoteHost(t *testing.T) {
 	_, err := parseDeployFlags(config.Config{}, []string{"--user", "demo", "--password", "secret"})
 	if err == nil {

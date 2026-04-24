@@ -80,6 +80,59 @@ func TestRunClientInstall(t *testing.T) {
 			},
 		},
 		{
+			name: "mode proxy disables tun",
+			cfg:  defaultCfg,
+			args: []string{
+				"--host", "example.org",
+				"--user", "user@example.com",
+				"--password", "secret",
+				"--mode", "proxy",
+			},
+			wantCode:   0,
+			wantCalled: true,
+			check: func(t *testing.T, opts client.InstallOptions) {
+				if opts.TunEnabled {
+					t.Fatalf("expected tun to be disabled in proxy mode")
+				}
+				if !opts.TunEnabledSet {
+					t.Fatalf("expected tun enabled to be explicitly set")
+				}
+			},
+		},
+		{
+			name: "mode tun full sets tun-mode",
+			cfg:  defaultCfg,
+			args: []string{
+				"--host", "example.org",
+				"--user", "user@example.com",
+				"--password", "secret",
+				"--mode", "tun:full",
+			},
+			wantCode:   0,
+			wantCalled: true,
+			check: func(t *testing.T, opts client.InstallOptions) {
+				if !opts.TunEnabled {
+					t.Fatalf("expected tun to be enabled")
+				}
+				if opts.TunMode != "full" || !opts.TunModeSet {
+					t.Fatalf("expected tun mode full (set=%v), got %q", opts.TunModeSet, opts.TunMode)
+				}
+			},
+		},
+		{
+			name: "proxy mode rejects tun-mode flag",
+			cfg:  defaultCfg,
+			args: []string{
+				"--host", "example.org",
+				"--user", "user@example.com",
+				"--password", "secret",
+				"--mode", "proxy",
+				"--tun-mode", "full",
+			},
+			wantCode:   2,
+			wantCalled: false,
+		},
+		{
 			name: "sni does not enable allow insecure",
 			cfg:  defaultCfg,
 			args: []string{

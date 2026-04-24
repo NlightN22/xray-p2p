@@ -24,6 +24,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		return 2
 	}
 
+	if opts.manifest.mode.set && opts.manifest.mode.tunEnabled {
+		if err := client.PreflightTunDevice(); err != nil {
+			logging.Error("xp2p client deploy: tun preflight failed", "err", err)
+			return 1
+		}
+	}
+
 	// Build and print deploy link (v2 encrypted), then run handshake
 	if err := ensureDeployTargetAvailable(cfg, opts); err != nil {
 		logging.Error("xp2p client deploy: endpoint already exists", "err", err)
@@ -107,6 +114,17 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 
 	installOpts := buildInstallOptionsFromLink(cfg, tl)
+	if opts.manifest.mode.set {
+		installOpts.TunEnabled = opts.manifest.mode.tunEnabled
+		installOpts.TunEnabledSet = true
+		if installOpts.TunEnabled && opts.manifest.tunModeSet {
+			installOpts.TunMode = opts.manifest.tunMode
+			installOpts.TunModeSet = true
+		}
+		if !installOpts.TunEnabled {
+			installOpts.TunModeSet = false
+		}
+	}
 	installed, err := clishared.InstallPresent(clishared.InstallRoleClient, installOpts.InstallDir, installOpts.ConfigDir)
 	if err != nil {
 		completionState = "FAIL client-install-check"
@@ -130,33 +148,42 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Info("xp2p client deploy: local install completed", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
 	}
 
-	modeCfg, err := loadDeployClientConfig()
-	if err != nil {
-		completionState = "FAIL client-config"
-		logging.Error("xp2p client deploy: load config failed", "err", err)
-		return 1
+	finalTunEnabled := true
+	if opts.manifest.mode.set {
+		finalTunEnabled = opts.manifest.mode.tunEnabled
 	}
 
-	tunMode := strings.TrimSpace(modeCfg.Client.TunMode)
-	if opts.manifest.tunModeSet {
-		if installed && !strings.EqualFold(tunMode, opts.manifest.tunMode) && !opts.manifest.force {
-			completionState = "FAIL client-mode-conflict"
-			logging.Error("xp2p client deploy: tun mode conflict (use --force to override)", "current", tunMode, "requested", opts.manifest.tunMode)
+	tunMode := ""
+	fullTunnelTag := ""
+	if finalTunEnabled {
+		modeCfg, err := loadDeployClientConfig()
+		if err != nil {
+			completionState = "FAIL client-config"
+			logging.Error("xp2p client deploy: load config failed", "err", err)
 			return 1
 		}
-		tunMode = opts.manifest.tunMode
-		if installed && !strings.EqualFold(modeCfg.Client.TunMode, tunMode) {
-			logging.Warn("xp2p client deploy: overriding existing tun mode", "from", modeCfg.Client.TunMode, "to", tunMode)
-		}
-	}
 
-	fullTunnelTag := strings.TrimSpace(modeCfg.Client.FullTunnelTag)
-	if opts.manifest.tunModeSet && tunMode == "full" {
-		tag, tagErr := resolveDeployFullTunnelTag(installOpts.InstallDir, installOpts.ConfigDir, tl, opts.runtime)
-		if tagErr != nil {
-			logging.Warn("xp2p client deploy: full-tunnel tag resolution failed", "err", tagErr)
-		} else if strings.TrimSpace(tag) != "" {
-			fullTunnelTag = tag
+		tunMode = strings.TrimSpace(modeCfg.Client.TunMode)
+		if opts.manifest.tunModeSet {
+			if installed && !strings.EqualFold(tunMode, opts.manifest.tunMode) && !opts.manifest.force {
+				completionState = "FAIL client-mode-conflict"
+				logging.Error("xp2p client deploy: tun mode conflict (use --force to override)", "current", tunMode, "requested", opts.manifest.tunMode)
+				return 1
+			}
+			tunMode = opts.manifest.tunMode
+			if installed && !strings.EqualFold(modeCfg.Client.TunMode, tunMode) {
+				logging.Warn("xp2p client deploy: overriding existing tun mode", "from", modeCfg.Client.TunMode, "to", tunMode)
+			}
+		}
+
+		fullTunnelTag = strings.TrimSpace(modeCfg.Client.FullTunnelTag)
+		if opts.manifest.tunModeSet && tunMode == "full" {
+			tag, tagErr := resolveDeployFullTunnelTag(installOpts.InstallDir, installOpts.ConfigDir, tl, opts.runtime)
+			if tagErr != nil {
+				logging.Warn("xp2p client deploy: full-tunnel tag resolution failed", "err", tagErr)
+			} else if strings.TrimSpace(tag) != "" {
+				fullTunnelTag = tag
+			}
 		}
 	}
 
@@ -209,16 +236,18 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		logging.Warn("xp2p client deploy: socks proxy address missing; skipping ping")
 	}
 
-	if err := applyClientDeployMode(installOpts, cfg, true, tunMode, opts.manifest.tunModeSet, fullTunnelTag); err != nil {
-		completionState = "FAIL client-mode-tun"
-		logging.Error("xp2p client deploy: tun mode setup failed", "err", err)
-		return 1
-	}
-	_, err = ensureClientServiceApplied(ctx, socksAddr)
-	if err != nil {
-		completionState = "FAIL service-apply"
-		logging.Error("xp2p client deploy: service apply failed", "err", err)
-		return 1
+	if finalTunEnabled {
+		if err := applyClientDeployMode(installOpts, cfg, true, tunMode, opts.manifest.tunModeSet, fullTunnelTag); err != nil {
+			completionState = "FAIL client-mode-tun"
+			logging.Error("xp2p client deploy: tun mode setup failed", "err", err)
+			return 1
+		}
+		_, err = ensureClientServiceApplied(ctx, socksAddr)
+		if err != nil {
+			completionState = "FAIL service-apply"
+			logging.Error("xp2p client deploy: service apply failed", "err", err)
+			return 1
+		}
 	}
 
 	completionState = "OK"

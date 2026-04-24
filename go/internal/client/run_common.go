@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -14,6 +15,51 @@ import (
 type cmdConfigurator func(*exec.Cmd)
 type startHook func() error
 type readyCheck func(context.Context) error
+
+type tailBuffer struct {
+	mu  sync.Mutex
+	max int
+	buf []byte
+}
+
+func newTailBuffer(max int) *tailBuffer {
+	return &tailBuffer{max: max}
+}
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.max <= 0 {
+		return len(p), nil
+	}
+	if len(p) >= t.max {
+		t.buf = append([]byte(nil), p[len(p)-t.max:]...)
+		return len(p), nil
+	}
+	if len(t.buf)+len(p) > t.max {
+		drop := len(t.buf) + len(p) - t.max
+		t.buf = append(t.buf[drop:], p...)
+		return len(p), nil
+	}
+	t.buf = append(t.buf, p...)
+	return len(p), nil
+}
+
+func (t *tailBuffer) String() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return string(t.buf)
+}
+
+func isClosed(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}
 
 func runXrayWithConfig(
 	ctx context.Context,
@@ -50,24 +96,11 @@ func runXrayWithConfig(
 		return fmt.Errorf("start xray-core: %w", err)
 	}
 
-	logging.Info("xray-core process started", "path", xrayPath)
-	if onReady != nil {
-		if err := onReady(ctx); err != nil {
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-				_ = cmd.Wait()
-			}
-			return fmt.Errorf("xray-core health check failed: %w", err)
-		}
-	}
-	if onStart != nil {
-		if err := onStart(); err != nil {
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-				_ = cmd.Wait()
-			}
-			return err
-		}
+	stderrTail := newTailBuffer(16 * 1024)
+	if errorWriter != nil {
+		errorWriter = io.MultiWriter(errorWriter, stderrTail)
+	} else {
+		errorWriter = stderrTail
 	}
 
 	var wg sync.WaitGroup
@@ -81,7 +114,61 @@ func runXrayWithConfig(
 		streamPipe(stderr, "stderr", errorWriter)
 	}()
 
-	waitErr := cmd.Wait()
+	procExit := make(chan struct{})
+	var waitErr error
+	go func() {
+		waitErr = cmd.Wait()
+		close(procExit)
+	}()
+
+	readyCtx, cancelReady := context.WithCancel(ctx)
+	defer cancelReady()
+	go func() {
+		<-procExit
+		cancelReady()
+	}()
+
+	logging.Info("xray-core process started", "path", xrayPath)
+	if onReady != nil {
+		if err := onReady(readyCtx); err != nil {
+			if ctx.Err() != nil {
+				if cmd.Process != nil && !isClosed(procExit) {
+					_ = cmd.Process.Kill()
+				}
+				<-procExit
+				wg.Wait()
+				logging.Info("xray-core process terminated due to context cancel")
+				return nil
+			}
+			if isClosed(procExit) {
+				wg.Wait()
+				tail := strings.TrimSpace(stderrTail.String())
+				if tail != "" {
+					return fmt.Errorf("xray-core exited before ready: %w (stderr tail: %s)", waitErr, tail)
+				}
+				return fmt.Errorf("xray-core exited before ready: %w", waitErr)
+			}
+
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+			<-procExit
+			wg.Wait()
+			return fmt.Errorf("xray-core health check failed: %w", err)
+		}
+	}
+	if onStart != nil {
+		if err := onStart(); err != nil {
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+			<-procExit
+			wg.Wait()
+			return err
+		}
+	}
+
+	<-procExit
 	wg.Wait()
 
 	if ctx.Err() != nil {
@@ -89,6 +176,10 @@ func runXrayWithConfig(
 		return nil
 	}
 	if waitErr != nil {
+		tail := strings.TrimSpace(stderrTail.String())
+		if tail != "" {
+			return fmt.Errorf("xray-core exited: %w (stderr tail: %s)", waitErr, tail)
+		}
 		return fmt.Errorf("xray-core exited: %w", waitErr)
 	}
 	return nil

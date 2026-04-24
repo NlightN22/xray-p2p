@@ -149,6 +149,37 @@ def test_client_install_respects_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
 
 @pytest.mark.host
 @pytest.mark.linux
+def test_client_install_mode_proxy_sets_tun_disabled(openwrt_host, xp2p_openwrt_ipk):
+    runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
+    try:
+        runner(
+            "client",
+            "install",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--host",
+            "10.55.0.14",
+            "--user",
+            "mode-proxy@example.com",
+            "--password",
+            "mode-proxy-pass",
+            "--mode",
+            "proxy",
+            "--force",
+            check=True,
+        )
+
+        state = helpers.read_preferred_client_config(openwrt_host)
+        assert state.get("tun_enabled") is False
+    finally:
+        helpers.cleanup_client_install(openwrt_host, runner)
+        helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
+
+
+@pytest.mark.host
+@pytest.mark.linux
 def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:

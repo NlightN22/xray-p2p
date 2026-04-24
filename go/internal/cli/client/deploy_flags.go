@@ -22,6 +22,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	trojanUser := fs.String("user", "", "Trojan user identifier (email)")
 	trojanPassword := fs.String("password", "", "Trojan user password (auto-generated when omitted)")
 	trojanPort := fs.String("trojan-port", "", "Trojan service port")
+	modeFlag := fs.String("mode", "", "target client mode (proxy or tun; also supports tun:split or tun:full)")
 	tunMode := fs.String("tun-mode", "", "TUN routing mode (split or full)")
 	force := fs.Bool("force", false, "allow changing existing tun mode")
 
@@ -65,23 +66,40 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 
 	installDirSet := false
 	tunModeSet := false
+	modeSet := false
 	fs.Visit(func(flag *flag.Flag) {
 		if flag.Name == "install-dir" {
 			installDirSet = true
+		}
+		if flag.Name == "mode" {
+			modeSet = true
 		}
 		if flag.Name == "tun-mode" {
 			tunModeSet = true
 		}
 	})
 
-	tunModeValue := strings.TrimSpace(*tunMode)
-	if tunModeSet {
-		switch strings.ToLower(tunModeValue) {
-		case "split", "full":
-			tunModeValue = strings.ToLower(tunModeValue)
-		default:
-			return deployOptions{}, fmt.Errorf("--tun-mode must be split or full")
-		}
+	mode, err := parseTargetClientMode(*modeFlag)
+	if err != nil {
+		return deployOptions{}, fmt.Errorf("--mode: %w", err)
+	}
+	if modeSet && !mode.set {
+		return deployOptions{}, fmt.Errorf("--mode must be proxy or tun")
+	}
+	if mode.set && !mode.tunEnabled && tunModeSet {
+		return deployOptions{}, fmt.Errorf("--tun-mode is only valid with --mode tun")
+	}
+	if mode.tunModeSet && tunModeSet {
+		return deployOptions{}, fmt.Errorf("--tun-mode conflicts with --mode tun:...")
+	}
+
+	tunModeValue, tunModeValueSet, err := normalizeTunModeFlag("--tun-mode", *tunMode, tunModeSet)
+	if err != nil {
+		return deployOptions{}, err
+	}
+	if mode.tunModeSet {
+		tunModeValue = mode.tunMode
+		tunModeValueSet = true
 	}
 
 	return deployOptions{
@@ -92,8 +110,9 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 			trojanPort:     serverPortValue,
 			trojanUser:     strings.TrimSpace(userValue),
 			trojanPassword: strings.TrimSpace(passwordValue),
+			mode:           mode,
 			tunMode:        tunModeValue,
-			tunModeSet:     tunModeSet,
+			tunModeSet:     tunModeValueSet,
 			force:          *force,
 		},
 		runtime: runtimeOptions{

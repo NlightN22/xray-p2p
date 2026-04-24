@@ -7,6 +7,7 @@ type manifestOptions struct {
 	trojanPort     string
 	trojanUser     string
 	trojanPassword string
+	mode           targetClientMode
 	tunMode        string
 	tunModeSet     bool
 	force          bool

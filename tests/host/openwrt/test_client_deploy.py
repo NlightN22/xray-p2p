@@ -39,7 +39,20 @@ def _runner(host: Host):
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
+@pytest.mark.parametrize(
+    "client_extra_args, expected_tun_enabled",
+    [
+        (None, True),
+        (["--mode", "proxy"], False),
+    ],
+)
+def test_openwrt_client_deploy_end_to_end(
+    openwrt_server_host,
+    openwrt_client_host,
+    xp2p_openwrt_ipk,
+    client_extra_args,
+    expected_tun_enabled,
+):
     server_runner = _runner(openwrt_server_host)
     client_runner = _runner(openwrt_client_host)
 
@@ -86,6 +99,7 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             trojan_user=trojan_user,
             trojan_password=trojan_password,
             trojan_port=TROJAN_PORT,
+            extra_args=client_extra_args,
         )
         link = _wait_for_client_link(openwrt_client_host, CLIENT_DEPLOY_LOG)
         assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
@@ -137,6 +151,8 @@ def test_openwrt_client_deploy_end_to_end(openwrt_server_host, openwrt_client_ho
             deploy_log_path=CLIENT_DEPLOY_LOG,
         )
         _assert_client_state(openwrt_client_host, server_ip)
+        desired = helpers.read_preferred_client_config(openwrt_client_host)
+        assert desired.get("tun_enabled") is expected_tun_enabled
         _assert_client_routing(openwrt_client_host, server_ip)
 
         for host, runner in (
@@ -317,9 +333,9 @@ def _start_client_deploy(
     trojan_user: str,
     trojan_password: str,
     trojan_port: str,
+    extra_args: list[str] | None = None,
 ) -> int:
-    result = openwrt_env.run_guest_script(
-        host,
+    args = [
         "scripts/openwrt/start_xp2p_client_deploy.sh",
         log_path.as_posix(),
         remote_host,
@@ -327,7 +343,10 @@ def _start_client_deploy(
         trojan_user,
         trojan_password,
         trojan_port,
-    )
+    ]
+    if extra_args:
+        args.extend(extra_args)
+    result = openwrt_env.run_guest_script(host, *args)
     if result.rc != 0:
         pytest.fail(
             "Failed to start xp2p client deploy.\n"

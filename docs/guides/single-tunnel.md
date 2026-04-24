@@ -13,6 +13,18 @@ xp2p client deploy --host 10.63.30.11
 
 Copy the link printed in `client deploy: link generated`.
 
+To keep the client in proxy mode after deploy:
+
+```sh
+xp2p client deploy --host 10.63.30.11 --mode proxy
+```
+
+To deploy directly into TUN mode (split/full):
+
+```sh
+xp2p client deploy --host 10.63.30.11 --mode tun --tun-mode split
+```
+
 On A (server), run deploy with the link:
 
 ```sh

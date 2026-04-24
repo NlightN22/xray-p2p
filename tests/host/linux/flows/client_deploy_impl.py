@@ -44,6 +44,38 @@ DEPLOY_SYNC_ROOT = linux_env.WORK_TREE / ".logs" / "deploy"
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, xp2p_server_runner):
+    _run_client_deploy_end_to_end(
+        client_host,
+        server_host,
+        xp2p_client_runner,
+        xp2p_server_runner,
+        client_extra_args=None,
+        expected_tun_enabled=True,
+    )
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_client_deploy_end_to_end_proxy_mode(client_host, server_host, xp2p_client_runner, xp2p_server_runner):
+    _run_client_deploy_end_to_end(
+        client_host,
+        server_host,
+        xp2p_client_runner,
+        xp2p_server_runner,
+        client_extra_args=["--mode", "proxy"],
+        expected_tun_enabled=False,
+    )
+
+
+def _run_client_deploy_end_to_end(
+    client_host,
+    server_host,
+    xp2p_client_runner,
+    xp2p_server_runner,
+    *,
+    client_extra_args: list[str] | None,
+    expected_tun_enabled: bool,
+):
     client_ip = helpers.detect_primary_ipv4(client_host)
     server_ip = _detect_host_ipv4(server_host)
     trojan_user = "deploy-suite@example.com"
@@ -61,6 +93,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
             trojan_user=trojan_user,
             trojan_password=trojan_password,
             trojan_port=TROJAN_PORT,
+            extra_args=client_extra_args,
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
         assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
@@ -118,6 +151,7 @@ def test_client_deploy_end_to_end(client_host, server_host, xp2p_client_runner, 
 
         _assert_client_install_artifacts(client_host, server_ip, trojan_user, trojan_password)
         _assert_client_state(client_host, server_ip)
+        _assert_client_mode(client_host, tun_enabled=expected_tun_enabled)
         _assert_client_routing(client_host, server_ip)
         _wait_for_tunnel_ping(xp2p_client_runner, server_ip)
 
@@ -710,6 +744,7 @@ def _start_client_deploy(
     trojan_password: str,
     trojan_port: str,
     diag_port: str | None = None,
+    extra_args: list[str] | None = None,
 ) -> int:
     args = [
         "scripts/linux/start_xp2p_client_deploy.sh",
@@ -720,6 +755,8 @@ def _start_client_deploy(
         trojan_password,
         trojan_port,
     ]
+    if extra_args:
+        args.extend(extra_args)
     env = _deploy_env()
     if diag_port:
         _write_server_config(host, port=diag_port)
@@ -825,6 +862,19 @@ def _assert_client_state(host: Host, server_ip: str) -> None:
         raise AssertionError(
             "Unexpected endpoint entries recorded.\n"
             f"Recorded: {recorded_hosts}\n"
+            f"Config:\n{helpers.read_text(host, CLIENT_LIVE_CONFIG_FILE)}"
+        )
+
+
+def _assert_client_mode(host: Host, *, tun_enabled: bool) -> None:
+    state = helpers.read_toml(host, CLIENT_LIVE_CONFIG_FILE)
+    client_state = state.get("client") or {}
+    actual = client_state.get("tun_enabled")
+    if actual is not tun_enabled:
+        raise AssertionError(
+            "Unexpected client tun mode.\n"
+            f"Expected: {tun_enabled}\n"
+            f"Actual: {actual}\n"
             f"Config:\n{helpers.read_text(host, CLIENT_LIVE_CONFIG_FILE)}"
         )
 

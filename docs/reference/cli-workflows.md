@@ -38,6 +38,10 @@ xp2p client install --link "trojan://PASSWORD@edge.example.com:62022?security=tl
 # Or supply fields manually
 xp2p client install --host edge.example.com --port 62022 --user office@example.com --password PASSWORD --allow-insecure
 
+# Choose target mode during install
+xp2p client install --mode proxy --link "trojan://PASSWORD@edge.example.com:62022?security=tls#office@example.com"
+xp2p client install --mode tun --tun-mode full --link "trojan://PASSWORD@edge.example.com:62022?security=tls#office@example.com"
+
 xp2p client list
 xp2p client run
 

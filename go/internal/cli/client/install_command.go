@@ -18,6 +18,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
+	modeFlag := fs.String("mode", "", "target client mode (proxy or tun; also supports tun:split or tun:full)")
 	hostFlag := fs.String("host", "", "remote server host")
 	portFlag := fs.String("port", "", "remote server port")
 	userEmail := fs.String("user", "", "Trojan user email")
@@ -55,6 +56,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	userFlagProvided := false
 	hostProvided := false
 	passwordProvided := false
+	modeProvided := false
 	allowInsecureRequested := false
 	strictTLSRequested := false
 	tunModeProvided := false
@@ -66,6 +68,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 			hostProvided = true
 		case "password":
 			passwordProvided = true
+		case "mode":
+			modeProvided = true
 		case "allow-insecure":
 			allowInsecureRequested = true
 		case "strict-tls":
@@ -156,7 +160,43 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		TunMTU:                cfg.Client.TunMTU,
 		TunAddr:               cfg.Client.TunAddr,
 		TunMode:               cfg.Client.TunMode,
-		TunModeSet:            tunModeProvided,
+		TunModeSet:            false,
+	}
+
+	mode, err := parseTargetClientMode(*modeFlag)
+	if err != nil {
+		logging.Error("xp2p client install: invalid --mode", "err", err)
+		return 2
+	}
+	if modeProvided && mode.set {
+		opts.TunEnabled = mode.tunEnabled
+		opts.TunEnabledSet = true
+	}
+	if mode.set && !mode.tunEnabled && tunModeProvided {
+		logging.Error("xp2p client install: --tun-mode is only valid with --mode tun")
+		return 2
+	}
+	if mode.tunModeSet && tunModeProvided {
+		logging.Error("xp2p client install: --tun-mode conflicts with --mode tun:...")
+		return 2
+	}
+	if mode.tunModeSet {
+		opts.TunMode = mode.tunMode
+		opts.TunModeSet = true
+	}
+	if normalized, set, err := normalizeTunModeFlag("--tun-mode", *tunMode, tunModeProvided); err != nil {
+		logging.Error("xp2p client install: invalid --tun-mode", "err", err)
+		return 2
+	} else if set {
+		opts.TunMode = normalized
+		opts.TunModeSet = true
+	}
+
+	if modeProvided && mode.set && mode.tunEnabled {
+		if err := client.PreflightTunDevice(); err != nil {
+			logging.Error("xp2p client install: tun preflight failed", "err", err)
+			return 1
+		}
 	}
 	if *allowInsecure {
 		opts.AllowInsecure = true
@@ -166,17 +206,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		opts.AllowInsecure = false
 		opts.AllowInsecureOverride = true
 	}
-	if tunModeProvided {
-		modeValue := strings.ToLower(strings.TrimSpace(*tunMode))
-		if modeValue != "split" && modeValue != "full" {
-			logging.Error("xp2p client install: invalid --tun-mode (use split or full)")
-			return 2
-		}
-		opts.TunMode = modeValue
-		opts.TunModeSet = true
-	}
 
-	if tunModeProvided && !*force {
+	if opts.TunModeSet && !*force {
 		configPath := config.ConfigPath(layout.ClientConfigFileName)
 		if info, err := os.Stat(configPath); err == nil && !info.IsDir() {
 			existing, loadErr := config.Load(config.Options{

@@ -92,7 +92,11 @@ func newClientInstallCmd(cfg commandConfig) *cobra.Command {
 	flags.BoolP("allow-insecure", "I", false, "allow insecure TLS (skip verification)")
 	flags.BoolP("strict-tls", "S", false, "enforce TLS verification")
 	flags.BoolP("force", "f", false, "replace existing endpoint configuration")
+	flags.StringP("mode", "M", "", "target client mode (proxy or tun; also supports tun:split or tun:full)")
 	flags.StringP("tun-mode", "m", "", "TUN routing mode (split or full)")
+	_ = cmd.RegisterFlagCompletionFunc("mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"proxy", "tun", "tun:split", "tun:full"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	_ = cmd.RegisterFlagCompletionFunc("tun-mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"split", "full"}, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -185,8 +189,12 @@ func newClientDeployCmd(cfg commandConfig) *cobra.Command {
 	flags.StringP("user", "u", "", "Trojan user identifier (email)")
 	flags.StringP("password", "w", "", "Trojan user password (auto-generated when omitted)")
 	flags.StringP("trojan-port", "T", "", "Trojan service port")
+	flags.StringP("mode", "M", "", "target client mode (proxy or tun; also supports tun:split or tun:full)")
 	flags.StringP("tun-mode", "m", "", "TUN routing mode (split or full)")
 	flags.BoolP("force", "f", false, "allow changing existing tun mode")
+	_ = cmd.RegisterFlagCompletionFunc("mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{"proxy", "tun", "tun:split", "tun:full"}, cobra.ShellCompDirectiveNoFileComp
+	})
 	_ = cmd.RegisterFlagCompletionFunc("tun-mode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"split", "full"}, cobra.ShellCompDirectiveNoFileComp
 	})
