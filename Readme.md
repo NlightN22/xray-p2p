@@ -65,8 +65,6 @@ On the server:
 xp2p server deploy --link "<link>"
 ```
 
-For details, see the documentation: [nlightn22.github.io/xray-p2p/docs](https://nlightn22.github.io/xray-p2p/docs/).
-
 ## What xp2p provides
 
 - A single statically linked CLI (`xp2p`) with Cobra-based help, completions, doc generation, and a background diagnostics service.
