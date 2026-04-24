@@ -1,0 +1,65 @@
+name: Deploy OpenWrt feed + docs to GitHub Pages
+
+on:
+  workflow_run:
+    workflows:
+      - Build OpenWrt feed
+      - Build MkDocs docs
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Download OpenWrt feed artifact
+        uses: dawidd6/action-download-artifact@v7
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: build-openwrt-feed.yml
+          branch: main
+          workflow_conclusion: success
+          name: xp2p-feed
+          path: .artifacts/feed
+
+      - name: Download docs artifact
+        uses: dawidd6/action-download-artifact@v7
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: build-mkdocs.yml
+          branch: main
+          workflow_conclusion: success
+          name: xp2p-docs
+          path: .artifacts/docs
+
+      - name: Assemble Pages content
+        run: |
+          rm -rf .pages
+          mkdir -p .pages
+          cp -a .artifacts/feed/. .pages/
+          mkdir -p .pages/docs
+          cp -a .artifacts/docs/. .pages/docs/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./.pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
