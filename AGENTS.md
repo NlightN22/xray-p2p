@@ -11,6 +11,13 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - Write all repository artifacts in English.
 - All code and comments inside the code must be written in English.
 
+## Documentation rules
+
+- For normal installation and day-to-day usage, documentation must show commands with default parameters only.
+- Omit optional flags unless they are strictly required for the described flow.
+- Put optional flags into clearly labeled “Advanced” or “Troubleshooting” sections and explain why they are needed.
+- When documenting services/packages, do not show service invocations that rely on CLI flags; document changes via Desired inputs instead.
+
 ## Preferred technologies
 
 - Main code languages: `sh`, `go`
