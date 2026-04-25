@@ -1,6 +1,6 @@
 # Configuration
 
-This page describes configuration inputs and where xp2p looks for them. For the strict Desired → Live apply rules, see [Apply flow](../flows/apply-flow.md) and [Config compilation](../flows/config-compilation.md).
+This page describes configuration inputs and where xp2p looks for them. For the strict Desired -> Live apply rules, see [Apply flow](../flows/apply-flow.md) and [Config compilation](../flows/config-compilation.md).
 
 ## Config root
 
@@ -23,7 +23,10 @@ Settings map 1:1 to environment variables via the `XP2P_` prefix (`XP2P_SERVER_I
 
 Every command shares global flags such as `--config`, `--log-level` (`debug|info|warn|error`), `--log-json`, and `--version`.
 
-On Windows, `xp2p client|server service start --log-level <level>` persists `XP2P_LOG_LEVEL` into the service environment for worker processes.
+Advanced / troubleshooting:
+
+- Override the config file path with `--config path/to/file` for one-off runs.
+- On Windows, `xp2p client|server service start --log-level <level>` can persist `XP2P_LOG_LEVEL` into the service environment for worker processes. Packages and services still run with default parameters.
 
 ## Xray version check
 

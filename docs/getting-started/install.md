@@ -64,8 +64,8 @@ These examples use `xp2p server install` + `xp2p client install` (no deploy hand
 
 ```sh
 opkg update && opkg install xp2p
-xp2p server install --host edge.example.com --port 62022
-xp2p client install --host edge.example.com --port 62022 --user office@example.com --password PASS --allow-insecure
+xp2p server install --host edge.example.com
+xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
 service xp2p-server start
 service xp2p-client start
 xp2p server state
@@ -75,8 +75,8 @@ xp2p server state
 
 ```sh
 sudo dpkg -i xp2p_<version>_amd64.deb || sudo apt-get -f install
-xp2p server install --host edge.example.com --port 62022
-xp2p client install --host edge.example.com --port 62022 --user office@example.com --password PASS --allow-insecure
+xp2p server install --host edge.example.com
+xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
 sudo systemctl enable --now xp2p-server xp2p-client
 xp2p server state
 ```
@@ -85,9 +85,15 @@ xp2p server state
 
 ```powershell
 msiexec /i xp2p-<version>-windows-amd64.msi
-xp2p server install --host edge.example.com --port 62022
-xp2p client install --host edge.example.com --port 62022 --user office@example.com --password PASS --allow-insecure
+xp2p server install --host edge.example.com
+xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
 xp2p client service start
 xp2p server service start
 xp2p client reverse list
 ```
+
+Advanced options:
+
+- Custom Trojan port: add `--port <port>` to `xp2p server install` and use the generated link on the client.
+- Self-signed TLS: pass `--allow-insecure` to `xp2p client install`.
+- Manual client fields (no link): `xp2p client install --host <host> --user <user> --password <password>`.

@@ -13,25 +13,27 @@ xp2p client deploy --host 10.63.30.11
 
 Copy the link printed in `client deploy: link generated`.
 
-To keep the client in proxy mode after deploy:
-
-```sh
-xp2p client deploy --host 10.63.30.11 --mode proxy
-```
-
-To deploy directly into TUN mode (split/full):
-
-```sh
-xp2p client deploy --host 10.63.30.11 --mode tun --tun-mode split
-```
-
 On A (server), run deploy with the link:
 
 ```sh
 xp2p server deploy --link "<PASTE_LINK>"
 ```
 
-If you need a custom deploy port, pass it on both sides:
+### Advanced deploy options
+
+Keep the client in proxy mode after deploy:
+
+```sh
+xp2p client deploy --host 10.63.30.11 --mode proxy
+```
+
+Deploy directly into TUN mode (split/full):
+
+```sh
+xp2p client deploy --host 10.63.30.11 --mode tun --tun-mode split
+```
+
+Custom deploy port (pass it on both sides):
 
 ```sh
 xp2p client deploy --host 10.63.30.11 --port 62125
@@ -43,13 +45,13 @@ xp2p server deploy --listen :62125 --link "<PASTE_LINK>"
 On A (server):
 
 ```sh
-xp2p server install --path /etc/xp2p --config-dir config-server --host 10.63.30.11 --force
+xp2p server install --host 10.63.30.11
 ```
 
 On B (client), use the link from server install output:
 
 ```sh
-xp2p client install --path /etc/xp2p --config-dir config-client --link "<PASTE_LINK>" --force
+xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
 ```
 
 ## Apply (start services)
@@ -66,5 +68,9 @@ xp2p client service start
 From B:
 
 ```sh
-xp2p ping 10.63.30.11 --tunnel --count 1
+xp2p ping 10.63.30.11
 ```
+
+Advanced verification options:
+
+- Use `--tunnel` to force the tunnel path and `--count <n>` to limit probes.

@@ -7,8 +7,8 @@ This page is a command-oriented cheat sheet. For conceptual details, see [Deploy
 Server commands manage xray inbound listeners, TLS assets, and user state. A common flow looks like:
 
 ```bash
-xp2p server install --host edge.example.com --port 62022
-xp2p server run
+xp2p server install --host edge.example.com
+xp2p server service start
 
 # Manage users and reverse bridges
 xp2p server user add --id branch@example.com --password S3cret
@@ -37,15 +37,8 @@ Client commands configure OpenWrt routers, Linux hosts, or Windows workstations.
 # Install from trojan:// link (auto-populates user, host, password, TLS settings)
 xp2p client install --link "trojan://PASSWORD@edge.example.com:62022?security=tls#office@example.com"
 
-# Or supply fields manually
-xp2p client install --host edge.example.com --port 62022 --user office@example.com --password PASSWORD --allow-insecure
-
-# Choose target mode during install
-xp2p client install --mode proxy --link "trojan://PASSWORD@edge.example.com:62022?security=tls#office@example.com"
-xp2p client install --mode tun --tun-mode full --link "trojan://PASSWORD@edge.example.com:62022?security=tls#office@example.com"
-
 xp2p client list
-xp2p client run
+xp2p client service start
 
 # LAN policy helpers
 xp2p client redirect add --cidr 192.168.10.0/24
@@ -63,4 +56,9 @@ xp2p client dns-forward list
 xp2p client dns-forward remove --domain dev.example
 ```
 
-`xp2p client remove --all` removes the client configuration and binaries, which is useful when repackaging deployments.
+Advanced options:
+
+- Manual client fields (no link): `xp2p client install --host <host> --user <user> --password <password>`.
+- Self-signed TLS: add `--allow-insecure` to `xp2p client install`.
+- Select mode during install: `xp2p client install --mode proxy|tun` (and `--tun-mode full|split` when using TUN).
+- Full removal: `xp2p client remove --all` removes client configuration and binaries.
