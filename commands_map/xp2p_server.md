@@ -73,6 +73,7 @@ xp2p server state
 Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
+- --pending, -y          Show pending configuration
 - --watch, -w            Continuously refresh state until interrupted
 - --interval, -i <dur>   Refresh interval for --watch
 - --ttl, -T <dur>        Heartbeat TTL for alive status

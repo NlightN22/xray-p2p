@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 
 type serverStateOptions struct {
 	Path     string
+	Pending  bool
 	Watch    bool
 	Interval time.Duration
 	TTL      time.Duration
@@ -45,6 +47,7 @@ func newServerStateCmd(cfg commandConfig) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.BoolVarP(&opts.Pending, "pending", "y", false, "show pending configuration")
 	flags.BoolVarP(&opts.Watch, "watch", "w", false, "continuously refresh state until interrupted")
 	flags.DurationVarP(&opts.Interval, "interval", "i", opts.Interval, "refresh interval for --watch")
 	flags.DurationVarP(&opts.TTL, "ttl", "T", opts.TTL, "heartbeat TTL for alive status")
@@ -82,6 +85,9 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 
 	if opts.Watch {
 		err := stateview.WatchWithSnapshots(ctx, func() ([]heartbeat.Snapshot, error) {
+			if opts.Pending {
+				return snapshotServerPendingState(statePath, installDir, ttl)
+			}
 			return snapshotServerState(statePath, installDir, ttl)
 		}, interval)
 		if err != nil && !errors.Is(err, context.Canceled) {
@@ -92,12 +98,21 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 	}
 
 	if err := stateview.PrintWithSnapshots(func() ([]heartbeat.Snapshot, error) {
+		if opts.Pending {
+			return snapshotServerPendingState(statePath, installDir, ttl)
+		}
 		return snapshotServerState(statePath, installDir, ttl)
 	}); err != nil {
 		logging.Error("xp2p server state: failed to render state", "err", err)
 		return 1
 	}
 	return 0
+}
+
+type serverReverseEntry struct {
+	Tag  string
+	User string
+	Host string
 }
 
 func serverStateInstallPresent(installDir string) (bool, error) {
@@ -134,9 +149,22 @@ func pathExists(path string) (bool, error) {
 }
 
 func snapshotServerState(statePath, installDir string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
-	reversePairs, err := loadServerReversePairs(installDir)
+	reverseEntries, err := loadServerReverseEntries(installDir)
 	if err != nil {
 		return nil, err
+	}
+	if len(reverseEntries) == 0 {
+		return []heartbeat.Snapshot{}, nil
+	}
+	reversePairs := make(map[string]struct{}, len(reverseEntries))
+	for _, entry := range reverseEntries {
+		user := strings.TrimSpace(entry.User)
+		host := strings.TrimSpace(entry.Host)
+		if user == "" || host == "" {
+			continue
+		}
+		key := strings.ToLower(user) + "|" + strings.ToLower(host)
+		reversePairs[key] = struct{}{}
 	}
 	if len(reversePairs) == 0 {
 		return []heartbeat.Snapshot{}, nil
@@ -174,19 +202,19 @@ func resolveServerHeartbeatStatePath(installDir string) (string, error) {
 	return livePath, nil
 }
 
-func loadServerReversePairs(installDir string) (map[string]struct{}, error) {
+func loadServerReverseEntries(installDir string) ([]serverReverseEntry, error) {
 	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
 	if doc, found, err := loadServerConfigDoc(configPath); err != nil {
 		return nil, err
 	} else if found {
-		return extractServerReversePairs(doc), nil
+		return extractServerReverseEntries(doc), nil
 	}
 
 	legacyDoc, err := loadLegacyServerStateDoc(installDir)
 	if err != nil {
 		return nil, err
 	}
-	return extractServerReversePairs(legacyDoc), nil
+	return extractServerReverseEntries(legacyDoc), nil
 }
 
 func loadServerConfigDoc(path string) (map[string]any, bool, error) {
@@ -253,17 +281,17 @@ func loadLegacyServerStateDoc(installDir string) (map[string]any, error) {
 	return doc, nil
 }
 
-func extractServerReversePairs(doc map[string]any) map[string]struct{} {
+func extractServerReverseEntries(doc map[string]any) []serverReverseEntry {
 	if len(doc) == 0 {
-		return map[string]struct{}{}
+		return nil
 	}
 	raw := doc["reverse_channels"]
 	channels, ok := raw.(map[string]any)
 	if !ok || len(channels) == 0 {
-		return map[string]struct{}{}
+		return nil
 	}
-	pairs := make(map[string]struct{}, len(channels))
-	for _, value := range channels {
+	entries := make([]serverReverseEntry, 0, len(channels))
+	for tag, value := range channels {
 		entry, ok := value.(map[string]any)
 		if !ok {
 			continue
@@ -275,8 +303,83 @@ func extractServerReversePairs(doc map[string]any) map[string]struct{} {
 		if user == "" || host == "" {
 			continue
 		}
-		key := strings.ToLower(user) + "|" + strings.ToLower(host)
-		pairs[key] = struct{}{}
+		entries = append(entries, serverReverseEntry{
+			Tag:  strings.TrimSpace(tag),
+			User: user,
+			Host: host,
+		})
 	}
-	return pairs
+	return entries
+}
+
+func snapshotServerPendingState(statePath, installDir string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
+	expected, err := loadServerReverseEntries(installDir)
+	if err != nil {
+		return nil, err
+	}
+	if len(expected) == 0 {
+		return []heartbeat.Snapshot{}, nil
+	}
+
+	snapshots, err := stateview.Snapshot(statePath, ttl)
+	if err != nil {
+		return nil, err
+	}
+
+	byUserHost := make(map[string]heartbeat.Snapshot, len(snapshots))
+	for _, snap := range snapshots {
+		user := strings.TrimSpace(snap.Entry.User)
+		host := strings.TrimSpace(snap.Entry.Host)
+		if user == "" || host == "" {
+			continue
+		}
+		key := strings.ToLower(user) + "|" + strings.ToLower(host)
+		byUserHost[key] = snap
+	}
+
+	merged := make([]heartbeat.Snapshot, 0, len(expected))
+	for _, exp := range expected {
+		key := strings.ToLower(exp.User) + "|" + strings.ToLower(exp.Host)
+		if snap, ok := byUserHost[key]; ok {
+			if strings.TrimSpace(snap.Entry.Tag) == "" && strings.TrimSpace(exp.Tag) != "" {
+				snap.Entry.Tag = exp.Tag
+			}
+			merged = append(merged, snap)
+			continue
+		}
+		tag := strings.TrimSpace(exp.Tag)
+		if tag == "" {
+			tag = "-"
+		}
+		merged = append(merged, heartbeat.Snapshot{
+			Entry: heartbeat.Entry{
+				Tag:  tag,
+				Host: exp.Host,
+				User: exp.User,
+			},
+			AvgRTTMillis: 0,
+			Alive:        false,
+			Age:          0,
+		})
+	}
+
+	sort.Slice(merged, func(i, j int) bool {
+		leftTag := strings.ToLower(merged[i].Entry.Tag)
+		rightTag := strings.ToLower(merged[j].Entry.Tag)
+		if leftTag == rightTag {
+			leftHost := strings.ToLower(merged[i].Entry.Host)
+			rightHost := strings.ToLower(merged[j].Entry.Host)
+			if leftHost == rightHost {
+				leftUser := strings.ToLower(merged[i].Entry.User)
+				rightUser := strings.ToLower(merged[j].Entry.User)
+				if leftUser == rightUser {
+					return strings.ToLower(merged[i].Entry.ClientIP) < strings.ToLower(merged[j].Entry.ClientIP)
+				}
+				return leftUser < rightUser
+			}
+			return leftHost < rightHost
+		}
+		return leftTag < rightTag
+	})
+	return merged, nil
 }

@@ -94,6 +94,7 @@ xp2p client state
 Options:
 Includes: Global options
 - --path, -p <dir>       Client installation directory
+- --pending, -y          Show pending configuration
 - --watch, -w            Continuously refresh state until interrupted
 - --interval, -i <dur>   Refresh interval for --watch
 - --ttl, -T <dur>        Heartbeat TTL for alive status

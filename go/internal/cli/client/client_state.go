@@ -21,6 +21,7 @@ import (
 
 type clientStateOptions struct {
 	Path     string
+	Pending  bool
 	Watch    bool
 	Interval time.Duration
 	TTL      time.Duration
@@ -43,6 +44,7 @@ func newClientStateCmd(cfg commandConfig) *cobra.Command {
 	}
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.Path, "path", "p", "", "client installation directory")
+	flags.BoolVarP(&opts.Pending, "pending", "y", false, "show pending configuration")
 	flags.BoolVarP(&opts.Watch, "watch", "w", false, "continuously refresh state until interrupted")
 	flags.DurationVarP(&opts.Interval, "interval", "i", opts.Interval, "refresh interval for --watch")
 	flags.DurationVarP(&opts.TTL, "ttl", "T", opts.TTL, "heartbeat TTL for alive status")
@@ -80,7 +82,10 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 
 	configDir := strings.TrimSpace(cfg.Client.ConfigDir)
 	stateProvider := func() ([]heartbeat.Snapshot, error) {
-		return snapshotClientState(installDir, configDir, statePath, ttl)
+		if opts.Pending {
+			return snapshotClientPendingState(installDir, configDir, statePath, ttl)
+		}
+		return stateview.Snapshot(statePath, ttl)
 	}
 
 	if opts.Watch {
@@ -138,7 +143,7 @@ func pathExists(path string) (bool, error) {
 	return false, err
 }
 
-func snapshotClientState(installDir, configDir, statePath string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
+func snapshotClientPendingState(installDir, configDir, statePath string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
 	state, err := heartbeat.Load(statePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || heartbeat.IsCorrupt(err) {
@@ -154,7 +159,7 @@ func snapshotClientState(installDir, configDir, statePath string, ttl time.Durat
 	endpoints, err := client.ListEndpoints(client.ListOptions{
 		InstallDir: installDir,
 		ConfigDir:  configDir,
-		Pending:    false,
+		Pending:    true,
 	})
 	if err != nil {
 		return nil, err
