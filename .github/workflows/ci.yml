@@ -3,7 +3,21 @@ name: ci
 on:
   push:
     branches: ["**"]
+    paths:
+      - "go/**"
+      - "go.mod"
+      - "go.sum"
+      - "scripts/**"
+      - "distro/**"
+      - ".github/workflows/ci.yml"
   pull_request:
+    paths:
+      - "go/**"
+      - "go.mod"
+      - "go.sum"
+      - "scripts/**"
+      - "distro/**"
+      - ".github/workflows/ci.yml"
 
 jobs:
   linux:
