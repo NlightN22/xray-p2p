@@ -132,26 +132,9 @@ if ($pkgContent -eq $pkgUpdated) {
     Write-Utf8NoBom -Path $OpenWrtMakefile -Content $pkgUpdated
 }
 
-Write-Section "Running make build-ipk"
-if (Confirm-Step "Run make build-ipk") {
-    make build-ipk
-} else {
-    Write-Host "Skipped make build-ipk" -ForegroundColor Yellow
-}
-
-Write-Section "Staging OpenWrt repository artifacts"
-$repoRoot = Join-Path -Path (Get-Location) -ChildPath "openwrt/repo"
-if (Test-Path $repoRoot) {
-    $ipks = Get-ChildItem -Path $repoRoot -Recurse -Filter "*.ipk" -ErrorAction SilentlyContinue
-    if ($ipks) {
-        git add -- $repoRoot
-        Write-Host ("Staged {0} IPK files from {1}" -f $ipks.Count, $repoRoot)
-    } else {
-        Write-Host "No IPK files found under $repoRoot" -ForegroundColor Yellow
-    }
-} else {
-    Write-Host "OpenWrt repo directory $repoRoot not found; skipping staging" -ForegroundColor Yellow
-}
+Write-Section "OpenWrt feed packaging note"
+Write-Host "OpenWrt .ipk files are not committed to main." -ForegroundColor Yellow
+Write-Host "Build them locally and push to the dedicated artifacts branch under openwrt/staging/stable/." -ForegroundColor Yellow
 
 $pending = git status --porcelain
 $changesPresent = $pending -ne $null -and $pending.Trim().Length -gt 0

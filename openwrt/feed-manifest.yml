@@ -1,0 +1,47 @@
+version: 1
+
+channel: stable
+
+# OpenWrt patch releases that must exist in the published feed URL:
+# https://<user>.github.io/<repo>/<release>/<arch>/
+releases:
+  - "23.05.0"
+  - "23.05.2"
+  - "23.05.3"
+  - "23.05.4"
+  - "23.05.5"
+  - "24.10.0"
+  - "24.10.1"
+  - "24.10.2"
+  - "24.10.3"
+
+# opkg architectures (directory names) published under each OpenWrt release.
+arches:
+  - aarch64_generic
+  - arm_cortex-a15_neon-vfpv4
+  - i386_pentium4
+  - mips_24kc
+  - mipsel_24kc
+  - x86_64
+
+inputs:
+  - glob: openwrt/staging/stable/*.ipk
+    releases:
+      - "23.05.0"
+      - "23.05.2"
+      - "23.05.3"
+      - "23.05.4"
+      - "23.05.5"
+      - "24.10.0"
+      - "24.10.1"
+      - "24.10.2"
+      - "24.10.3"
+
+package_filename:
+  # Expected input: <name>_<version>-<pkgrel>_<arch>.ipk
+  # Example: xp2p_0.2.5-1_mips_24kc.ipk
+  regex: '^(?P<name>[A-Za-z0-9][A-Za-z0-9+.-]*)_(?P<version>[0-9]+\.[0-9]+\.[0-9]+)-(?P<pkgrel>[0-9]+)_(?P<arch>[^.]+)\.ipk$'
+
+retention:
+  keep_last: 5
+

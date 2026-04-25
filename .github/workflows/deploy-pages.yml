@@ -1,26 +1,34 @@
-name: Deploy OpenWrt feed + docs to GitHub Pages
+name: Deploy GitHub Pages (feed + docs)
 
 on:
-  workflow_run:
-    workflows:
-      - Build OpenWrt feed
-      - Build MkDocs docs
-    types:
-      - completed
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "What to update"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - docs-only
+          - feed-only
+          - both
+      feed_release_tag:
+        description: "GitHub Release tag containing .ipk assets (required for feed-only/both)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
 concurrency:
-  group: 'pages'
+  group: "pages"
   cancel-in-progress: true
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -30,17 +38,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download OpenWrt feed metadata artifact
-        uses: dawidd6/action-download-artifact@v7
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          workflow: build-openwrt-feed.yml
-          branch: main
-          workflow_conclusion: success
-          name: xp2p-feed-meta
-          path: .artifacts/feed-meta
+      - name: Resolve baseline Pages content (previous successful deploy)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+          run_id="$(gh run list --workflow deploy-pages.yml --json databaseId,conclusion -L 50 \
+            | jq -r '.[] | select(.conclusion=="success") | .databaseId' \
+            | head -n 1 || true)"
+          if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+            if [ "$MODE" != "both" ]; then
+              echo "No baseline Pages artifact found; run with mode=both first." >&2
+              exit 1
+            fi
+            rm -rf .pages
+            mkdir -p .pages
+            exit 0
+          fi
+          rm -rf .baseline .pages
+          mkdir -p .baseline .pages
+          gh run download "$run_id" -n github-pages -D .baseline
+          cp -a .baseline/. .pages/
 
-      - name: Download docs artifact
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install PyYAML
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyyaml
+
+      - name: Update docs from latest MkDocs artifact
+        if: ${{ inputs.mode == 'docs-only' || inputs.mode == 'both' }}
         uses: dawidd6/action-download-artifact@v7
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -50,14 +82,80 @@ jobs:
           name: xp2p-docs
           path: .artifacts/docs
 
-      - name: Assemble Pages content
+      - name: Apply docs update into Pages content
+        if: ${{ inputs.mode == 'docs-only' || inputs.mode == 'both' }}
         run: |
-          rm -rf .pages
-          mkdir -p .pages
-          cp -a openwrt/repo/. .pages/
+          set -euo pipefail
+          rm -rf .pages/docs
           mkdir -p .pages/docs
           cp -a .artifacts/docs/site/. .pages/docs/
-          tar -C .pages -xf .artifacts/feed-meta/feed-meta.tar
+
+      - name: Download .ipk assets from GitHub Release
+        if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.feed_release_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TAG" ]; then
+            echo "feed_release_tag is required for mode=${{ inputs.mode }}" >&2
+            exit 1
+          fi
+          rm -rf .tmp/release-ipks .tmp/inputs
+          mkdir -p .tmp/release-ipks .tmp/inputs/openwrt/staging/stable
+          gh release download "$TAG" -p "*.ipk" -D .tmp/release-ipks
+          shopt -s nullglob
+          files=(.tmp/release-ipks/*.ipk)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No .ipk assets found in release $TAG" >&2
+            exit 1
+          fi
+          mv .tmp/release-ipks/*.ipk .tmp/inputs/openwrt/staging/stable/
+          shopt -u nullglob
+
+      - name: Assemble/validate feed into Pages content
+        if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
+        run: |
+          set -euo pipefail
+          python3 scripts/publish/openwrt_feed.py assemble \
+            --manifest openwrt/feed-manifest.yml \
+            --inputs-root .tmp/inputs \
+            --pages-root .pages \
+            --state-dir .tmp/openwrt-feed
+          cp -a openwrt/repo/*.pub .pages/ || true
+
+      - name: Install usign
+        if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+          git clone https://git.openwrt.org/project/usign.git
+          cd usign
+          cmake .
+          make
+          sudo make install
+
+      - name: Restore usign secret key
+        if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
+        run: |
+          mkdir -p keys
+          echo "${XP2P_USIGN_SECRET}" | base64 -d > keys/xp2p.sec
+          chmod 600 keys/xp2p.sec
+        env:
+          XP2P_USIGN_SECRET: ${{ secrets.XP2P_USIGN_SECRET }}
+
+      - name: Build and sign Packages indexes
+        if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
+        run: |
+          set -euo pipefail
+          find .pages -mindepth 2 -maxdepth 2 -type d -print0 | sort -z | while IFS= read -r -d '' dir; do
+            bash scripts/build/make_openwrt_packages.sh --path "$dir"
+            usign -S -m "$dir/Packages" -s keys/xp2p.sec -x "$dir/Packages.sig"
+          done
+
+      - name: Generate feed index pages
+        if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
+        run: bash scripts/build/generate_openwrt_indexes.sh .pages
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -67,3 +165,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+

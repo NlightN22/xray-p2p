@@ -64,6 +64,5 @@ done
 
 if [ ! -s "$OUT_FILE" ]; then
   echo "No .ipk files found in $PKG_DIR" >&2
-else
-  gzip -9nc "$OUT_FILE" > "${OUT_FILE}.gz"
 fi
+gzip -9nc "$OUT_FILE" > "${OUT_FILE}.gz"
