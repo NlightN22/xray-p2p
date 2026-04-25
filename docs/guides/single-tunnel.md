@@ -63,6 +63,8 @@ xp2p server service start
 xp2p client service start
 ```
 
+On Linux run commands that change system state as root (use `sudo`).
+
 ## Verify
 
 From B:

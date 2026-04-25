@@ -26,7 +26,7 @@ xp2p server redirect add --cidr 10.0.102.0/24
 
 ## NAT redirect (proxy flow)
 
-If you need transparent NAT redirect:
+If you need transparent NAT redirect (Linux/OpenWrt only, proxy mode only, run as root):
 
 ```sh
 xp2p nat-redirect add --cidr 10.0.101.0/24

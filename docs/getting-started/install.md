@@ -66,8 +66,8 @@ These examples use `xp2p server install` + `xp2p client install` (no deploy hand
 opkg update && opkg install xp2p
 xp2p server install --host edge.example.com
 xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
-service xp2p-server start
-service xp2p-client start
+xp2p server service start
+xp2p client service start
 xp2p server state
 ```
 
@@ -75,8 +75,8 @@ xp2p server state
 
 ```sh
 sudo dpkg -i xp2p_<version>_amd64.deb || sudo apt-get -f install
-xp2p server install --host edge.example.com
-xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
+sudo xp2p server install --host edge.example.com
+sudo xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
 sudo systemctl enable --now xp2p-server xp2p-client
 xp2p server state
 ```

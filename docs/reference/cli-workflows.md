@@ -2,6 +2,8 @@
 
 This page is a command-oriented cheat sheet. For conceptual details, see [Deploy flow](../flows/deploy-flow.md) and [Apply flow](../flows/apply-flow.md).
 
+On Linux run commands that change system state as root (use `sudo`).
+
 ## Server lifecycle
 
 Server commands manage xray inbound listeners, TLS assets, and user state. A common flow looks like:
