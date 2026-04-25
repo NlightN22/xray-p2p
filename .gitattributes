@@ -1,5 +1,21 @@
+* text=auto
+
+# Keep critical scripts/configs in LF to avoid broken shebangs on OpenWrt.
 .gitattributes text eol=lf
-*.sh text eol=lf
-*.yml text eol=lf
-openwrt/**/Makefile text eol=lf
-openwrt/**/files/** text eol=lf
+config_templates/** text eol=lf
+openwrt/feed/** text eol=lf
+openwrt/configs/** text eol=lf
+infra/vagrant/openwrt/** text eol=lf
+
+# Init scripts without .sh extension.
+config_templates/xray-p2p.init text eol=lf
+infra/vagrant/openwrt/iperf3.init text eol=lf
+
+# Mark artifacts and binaries explicitly.
+openwrt/repo/** binary
+*.ipk binary
+*.gz binary
+*.box binary
+distro/**/xray binary
+*.exe binary
+*.dll binary
