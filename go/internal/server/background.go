@@ -28,6 +28,7 @@ const (
 )
 
 const heartbeatPayloadTimeout = 250 * time.Millisecond
+const maxPingNonceLen = 64
 
 // Options controls background server behaviour.
 type Options struct {
@@ -152,8 +153,9 @@ func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store, quiet
 	if err != nil {
 		return
 	}
-	if strings.EqualFold(strings.TrimSpace(line), pingRequest) {
-		_, _ = conn.Write([]byte(pingResponse + "\n"))
+	nonce, ok := parsePingRequest(line)
+	if ok {
+		_, _ = conn.Write([]byte(pingResponse + " " + nonce + "\n"))
 		hadHeartbeat := consumeHeartbeatPayload(ctx, reader, conn, store)
 		if !quiet {
 			if !hadHeartbeat {
@@ -182,11 +184,12 @@ func handleUDP(ctx context.Context, conn net.PacketConn, quiet bool) {
 		}
 
 		msg := strings.TrimSpace(string(buf[:n]))
-		if strings.EqualFold(msg, pingRequest) {
+		nonce, ok := parsePingRequest(msg)
+		if ok {
 			if !quiet {
 				logging.Info("udp ping received", "remote_addr", addr.String())
 			}
-			_, _ = conn.WriteTo([]byte(pingResponse+"\n"), addr)
+			_, _ = conn.WriteTo([]byte(pingResponse+" "+nonce+"\n"), addr)
 		}
 	}
 }
@@ -196,6 +199,27 @@ func deadlineFromContext(ctx context.Context) time.Time {
 		return dl
 	}
 	return time.Time{}
+}
+
+func parsePingRequest(raw string) (string, bool) {
+	fields := strings.Fields(strings.TrimSpace(raw))
+	if len(fields) != 2 {
+		return "", false
+	}
+	if !strings.EqualFold(fields[0], pingRequest) {
+		return "", false
+	}
+	nonce := strings.TrimSpace(fields[1])
+	if nonce == "" || len(nonce) > maxPingNonceLen {
+		return "", false
+	}
+	for i := 0; i < len(nonce); i++ {
+		b := nonce[i]
+		if b <= 0x20 || b >= 0x7f {
+			return "", false
+		}
+	}
+	return nonce, true
 }
 
 func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net.Conn, store *heartbeat.Store) bool {

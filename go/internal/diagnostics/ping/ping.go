@@ -2,6 +2,8 @@ package ping
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base32"
 	"errors"
 	"fmt"
 	"net"
@@ -44,7 +46,7 @@ const (
 	minCount         = 1
 	protoTCP         = "tcp"
 	protoUDP         = "udp"
-	pingRequestBody  = "PING\n"
+	pingRequest      = "PING"
 	expectedResponse = "PONG"
 )
 
@@ -187,8 +189,14 @@ func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy
 		return 0, err
 	}
 
+	nonce, err := newNonce()
+	if err != nil {
+		return 0, err
+	}
+	request := pingRequest + " " + nonce + "\n"
+
 	start := time.Now()
-	if _, err = conn.Write([]byte(pingRequestBody)); err != nil {
+	if _, err = conn.Write([]byte(request)); err != nil {
 		return 0, err
 	}
 
@@ -198,8 +206,8 @@ func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy
 		return 0, err
 	}
 
-	if !strings.EqualFold(strings.TrimSpace(string(buf[:n])), expectedResponse) {
-		return 0, fmt.Errorf("unexpected response: %q", string(buf[:n]))
+	if err := validateResponse(string(buf[:n]), nonce); err != nil {
+		return 0, err
 	}
 
 	rtt := time.Since(start)
@@ -234,8 +242,14 @@ func pingUDP(ctx context.Context, host string, port int, timeout time.Duration) 
 		return 0, err
 	}
 
+	nonce, err := newNonce()
+	if err != nil {
+		return 0, err
+	}
+	request := pingRequest + " " + nonce + "\n"
+
 	start := time.Now()
-	if _, err = conn.Write([]byte(pingRequestBody)); err != nil {
+	if _, err = conn.Write([]byte(request)); err != nil {
 		return 0, err
 	}
 
@@ -245,11 +259,32 @@ func pingUDP(ctx context.Context, host string, port int, timeout time.Duration) 
 		return 0, err
 	}
 
-	if !strings.EqualFold(strings.TrimSpace(string(buf[:n])), expectedResponse) {
-		return 0, fmt.Errorf("unexpected response: %q", string(buf[:n]))
+	if err := validateResponse(string(buf[:n]), nonce); err != nil {
+		return 0, err
 	}
 
 	return time.Since(start), nil
+}
+
+func newNonce() (string, error) {
+	raw := make([]byte, 10)
+	if _, err := rand.Read(raw); err != nil {
+		return "", fmt.Errorf("generate nonce: %w", err)
+	}
+	enc := base32.StdEncoding.WithPadding(base32.NoPadding)
+	return enc.EncodeToString(raw), nil
+}
+
+func validateResponse(raw, nonce string) error {
+	resp := strings.TrimSpace(raw)
+	fields := strings.Fields(resp)
+	if len(fields) == 0 || !strings.EqualFold(fields[0], expectedResponse) {
+		return fmt.Errorf("unexpected response: %q", raw)
+	}
+	if len(fields) != 2 || !strings.EqualFold(fields[1], nonce) {
+		return fmt.Errorf("unexpected response: %q", raw)
+	}
+	return nil
 }
 
 func printSummary(sent, received int) {

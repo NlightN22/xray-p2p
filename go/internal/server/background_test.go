@@ -51,14 +51,15 @@ func TestStartBackgroundServesAndShutsDown(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = tcpConn.Close() })
 
-	if _, err := tcpConn.Write([]byte("PING\n")); err != nil {
+	nonce := "testnonce"
+	if _, err := tcpConn.Write([]byte("PING " + nonce + "\n")); err != nil {
 		t.Fatalf("failed to write tcp request: %v", err)
 	}
 	resp, err := bufio.NewReader(tcpConn).ReadString('\n')
 	if err != nil {
 		t.Fatalf("failed to read tcp response: %v", err)
 	}
-	if got := strings.TrimSpace(resp); got != pingResponse {
+	if got := strings.TrimSpace(resp); got != pingResponse+" "+nonce {
 		t.Fatalf("unexpected tcp response: %q", got)
 	}
 
@@ -75,7 +76,7 @@ func TestStartBackgroundServesAndShutsDown(t *testing.T) {
 	if err := udpConn.SetDeadline(time.Now().Add(time.Second)); err != nil {
 		t.Fatalf("failed to set udp deadline: %v", err)
 	}
-	if _, err := udpConn.Write([]byte("PING\n")); err != nil {
+	if _, err := udpConn.Write([]byte("PING " + nonce + "\n")); err != nil {
 		t.Fatalf("failed to write udp request: %v", err)
 	}
 
@@ -84,7 +85,7 @@ func TestStartBackgroundServesAndShutsDown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read udp response: %v", err)
 	}
-	if got := strings.TrimSpace(string(udpBuf[:n])); got != pingResponse {
+	if got := strings.TrimSpace(string(udpBuf[:n])); got != pingResponse+" "+nonce {
 		t.Fatalf("unexpected udp response: %q", got)
 	}
 
@@ -101,7 +102,7 @@ func TestStartBackgroundServesAndShutsDown(t *testing.T) {
 	if err := udpConn.SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
 		t.Fatalf("failed to update udp deadline after shutdown: %v", err)
 	}
-	if _, err := udpConn.Write([]byte("PING\n")); err == nil {
+	if _, err := udpConn.Write([]byte("PING " + nonce + "\n")); err == nil {
 		buf := make([]byte, 8)
 		if _, err := udpConn.Read(buf); err == nil {
 			t.Fatalf("expected udp read to fail after shutdown")
@@ -145,12 +146,15 @@ func TestHeartbeatPayloadIsPersisted(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if _, err := conn.Write([]byte("PING\n")); err != nil {
+	nonce := "testnonce"
+	if _, err := conn.Write([]byte("PING " + nonce + "\n")); err != nil {
 		t.Fatalf("write request: %v", err)
 	}
 	reader := bufio.NewReader(conn)
-	if _, err := reader.ReadString('\n'); err != nil {
+	if line, err := reader.ReadString('\n'); err != nil {
 		t.Fatalf("read pong: %v", err)
+	} else if got := strings.TrimSpace(line); got != pingResponse+" "+nonce {
+		t.Fatalf("unexpected pong: %q", got)
 	}
 
 	payload := heartbeat.Payload{

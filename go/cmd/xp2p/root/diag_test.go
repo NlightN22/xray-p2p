@@ -75,14 +75,15 @@ func TestRunDiagCommandTCP(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if _, err := conn.Write([]byte("PING\n")); err != nil {
+	nonce := "testnonce"
+	if _, err := conn.Write([]byte("PING " + nonce + "\n")); err != nil {
 		t.Fatalf("failed to write ping: %v", err)
 	}
 	resp, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
 		t.Fatalf("failed to read pong: %v", err)
 	}
-	if strings.TrimSpace(resp) != "PONG" {
+	if strings.TrimSpace(resp) != "PONG "+nonce {
 		t.Fatalf("unexpected tcp response: %q", resp)
 	}
 
@@ -128,15 +129,16 @@ func TestRunDiagCommandUDP(t *testing.T) {
 		}
 		defer conn.Close()
 		_ = conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
-		if _, err := conn.Write([]byte("PING\n")); err != nil {
+		nonce := "testnonce"
+		if _, err := conn.Write([]byte("PING " + nonce + "\n")); err != nil {
 			return false
 		}
-		buf := make([]byte, 8)
+		buf := make([]byte, 64)
 		n, err := conn.Read(buf)
 		if err != nil {
 			return false
 		}
-		return strings.TrimSpace(string(buf[:n])) == "PONG"
+		return strings.TrimSpace(string(buf[:n])) == "PONG "+nonce
 	})
 
 	cancel()

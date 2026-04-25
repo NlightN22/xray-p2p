@@ -37,8 +37,6 @@ def assert_client_and_server_redirect_with_nat(env: dict) -> None:
     )
     redirect_added = False
     server_redirect_added = False
-    client_proxy_mode = False
-    server_proxy_mode = False
 
     def _dokodemo_ports(config: dict) -> list[int]:
         ports: list[int] = []
@@ -55,29 +53,6 @@ def assert_client_and_server_redirect_with_nat(env: dict) -> None:
         return ports
 
     try:
-        client_runner(
-            "client",
-            "mode",
-            "proxy",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            check=True,
-        )
-        client_proxy_mode = True
-        server_runner(
-            "server",
-            "mode",
-            "proxy",
-            "--path",
-            server_install_path,
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            check=True,
-        )
-        server_proxy_mode = True
-
         client_runner(
             "client",
             "redirect",
@@ -327,28 +302,6 @@ def assert_client_and_server_redirect_with_nat(env: dict) -> None:
                 "--tag",
                 reverse_tag,
                 "--quiet",
-                check=False,
-            )
-        if client_proxy_mode:
-            client_runner(
-                "client",
-                "mode",
-                "tun",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.CLIENT_CONFIG_DIR_NAME,
-                check=False,
-            )
-        if server_proxy_mode:
-            server_runner(
-                "server",
-                "mode",
-                "tun",
-                "--path",
-                server_install_path,
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
                 check=False,
             )
         fixture.assert_redirect_entries_removed(

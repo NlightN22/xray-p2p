@@ -317,6 +317,8 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
+            "--mode",
+            "proxy",
             "--link",
             credential["link"],
             "--force",
