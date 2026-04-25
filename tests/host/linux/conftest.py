@@ -188,6 +188,7 @@ def _cleanup_host(host: Host) -> None:
     cleanup_paths = [
         helpers.CONFIG_ROOT / ".apply",
         helpers.CONFIG_ROOT / ".state",
+        helpers.CONFIG_ROOT / "audit.log",
         helpers.CLIENT_CONFIG_FILE,
         helpers.SERVER_CONFIG_FILE,
         helpers.CONFIG_ROOT / "xp2p-client.toml.lkg",
@@ -215,10 +216,11 @@ def _cleanup_host(host: Host) -> None:
         helpers.SERVER_CONFIG_DIR / "inbounds.json",
         *helpers.SERVICE_LOG_FILES,
         helpers.CONFIG_ROOT / "bundle-marker.txt",
+        helpers.CONFIG_ROOT / "tls",
         bundle_artifacts,
         PurePosixPath("/tmp/xp2p-client-deploy.log"),
         PurePosixPath("/tmp/xp2p-server-deploy.log"),
     ]
     quoted_paths = " ".join(shlex.quote(path.as_posix()) for path in cleanup_paths)
     host.run(f"sudo -n /bin/sh -c 'rm -rf -- \"$@\"' -- {quoted_paths}")
-    host.run("sudo -n /bin/sh -c 'rm -rf /var/log/xp2p/*' || true")
+    host.run("sudo -n /bin/sh -c 'rm -rf /var/log/xp2p/* /var/log/xp2p/.[!.]* /var/log/xp2p/..?*' || true")
