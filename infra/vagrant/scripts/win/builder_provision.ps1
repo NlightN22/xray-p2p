@@ -248,6 +248,42 @@ function Ensure-WiX {
     Write-Info ("WiX Toolset ready: {0}" -f $latest.FullName)
 }
 
+function Ensure-DefenderExclusions {
+    Write-Info "Ensuring Microsoft Defender exclusions for xp2p test artifacts."
+
+    $addExclusion = Get-Command -Name Add-MpPreference -ErrorAction SilentlyContinue
+    if (-not $addExclusion) {
+        Write-Info "Add-MpPreference is not available; skipping Defender exclusions."
+        return
+    }
+
+    $paths = @(
+        "C:\\xp2p",
+        "C:\\ProgramData\\xp2p",
+        "C:\\Program Files\\xp2p"
+    )
+    foreach ($path in $paths) {
+        try {
+            Add-MpPreference -ExclusionPath $path | Out-Null
+            Write-Info ("Added Defender path exclusion: {0}" -f $path)
+        }
+        catch {
+            Write-Info ("Failed to add Defender path exclusion '{0}': {1}" -f $path, $_.Exception.Message)
+        }
+    }
+
+    $processes = @("xp2p.exe", "xray.exe")
+    foreach ($proc in $processes) {
+        try {
+            Add-MpPreference -ExclusionProcess $proc | Out-Null
+            Write-Info ("Added Defender process exclusion: {0}" -f $proc)
+        }
+        catch {
+            Write-Info ("Failed to add Defender process exclusion '{0}': {1}" -f $proc, $_.Exception.Message)
+        }
+    }
+}
+
 function Ensure-CMakeToolchain {
     $cmakeVersion = $env:XP2P_CMAKE_VERSION
     if (-not $cmakeVersion) {
@@ -373,6 +409,7 @@ Ensure-Go
 Ensure-CMakeToolchain
 Ensure-WiX
 Ensure-WindowsInstallerEnabled
+Ensure-DefenderExclusions
 Disable-WindowsAutoUpdate
 Disable-IdleSleepAndHibernate
 Write-Info "Network configuration handled by network_setup.ps1."
