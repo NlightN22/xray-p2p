@@ -269,8 +269,11 @@ jobs:
           # Keep OpenWrt .ipk assets in "latest" without renaming
           for ipk in release/*.ipk; do
             base="$(basename "$ipk")"
-            arch="${base##*_}"
-            arch="${arch%.ipk}"
+            arch="$(printf '%s' "$base" | sed -nE 's/^.+_[0-9]+\.[0-9]+\.[0-9]+-[0-9]+_(.+)\.ipk$/\1/p')"
+            if [ -z "$arch" ]; then
+              echo "ERROR: unable to parse arch from ipk name: $base" >&2
+              exit 1
+            fi
             cp "$ipk" "latest/xp2p-latest-openwrt-${arch}.ipk"
           done
           shopt -u nullglob
