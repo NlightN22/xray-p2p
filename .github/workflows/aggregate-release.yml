@@ -265,7 +265,21 @@ jobs:
             arch="${arch%.deb}"
             cp "$f" "latest/xp2p-latest-linux-${arch}.deb"
           done
+
+          # Keep OpenWrt .ipk assets in "latest" without renaming
+          for ipk in release/*.ipk; do
+            base="$(basename "$ipk")"
+            arch="${base##*_}"
+            arch="${arch%.ipk}"
+            cp "$ipk" "latest/xp2p-latest-openwrt-${arch}.ipk"
+          done
           shopt -u nullglob
+
+          # SHA256SUMS must match renamed "latest" assets
+          (
+            cd latest
+            find . -maxdepth 1 -type f ! -name "SHA256SUMS" -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          )
 
           latest_paths="$(find latest -maxdepth 1 -type f -print | sort)"
           {
@@ -301,4 +315,4 @@ jobs:
           gh release create latest "${args[@]}" \
             --title "Latest" \
             --notes "Automated update for version ${VERSION}" \
-            --latest
+            --prerelease
