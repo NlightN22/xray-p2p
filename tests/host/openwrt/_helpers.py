@@ -640,9 +640,12 @@ def dump_failure_state(host: Host, label: str) -> None:
                     "fi; done",
                     "for f in /etc/xp2p/*.state.json /etc/xp2p/*-state-*.json; do "
                     "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
-                    "echo '--- xp2p state ---'",
+                    "echo '--- xp2p state (runtime) ---'",
                     "/usr/bin/xp2p server state --path /etc/xp2p 2>/dev/null || true",
                     "/usr/bin/xp2p client state --path /etc/xp2p 2>/dev/null || true",
+                    "echo '--- xp2p state (pending) ---'",
+                    "/usr/bin/xp2p server state --pending --path /etc/xp2p 2>/dev/null || true",
+                    "/usr/bin/xp2p client state --pending --path /etc/xp2p 2>/dev/null || true",
                     "true",
                 )
             )

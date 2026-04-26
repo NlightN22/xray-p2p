@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import time
 import pytest
 
 from tests.host.linux import _helpers as helpers
@@ -48,6 +49,16 @@ def _runner(host):
     return _run
 
 
+def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: float = 0.5) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        check = host.run(f"sudo -n ss -lnt | grep -q ':{port} '")
+        if check.rc == 0:
+            return
+        time.sleep(interval)
+    pytest.fail(f"Port {port} did not open on {host.backend.hostname} within {timeout_seconds:.0f}s")
+
+
 @contextmanager
 def _run_sessions(server_host, client_host):
     with linux_env.xp2p_run_session(
@@ -61,6 +72,8 @@ def _run_sessions(server_host, client_host):
         helpers.INSTALL_ROOT.as_posix(),
         helpers.CLIENT_CONFIG_DIR_NAME,
     ):
+        _wait_for_port(server_host, 62022)
+        _wait_for_port(client_host, 51180)
         yield
 
 

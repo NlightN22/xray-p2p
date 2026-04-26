@@ -289,6 +289,7 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
             "state",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
+            "--pending",
             check=True,
         )
         rows = tunnel_common.parse_state_rows(result.stdout or "")
