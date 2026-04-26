@@ -314,7 +314,48 @@ run_for_target() {
     local cached_ipk_path=""
     cached_ipk_path=$(load_cached_ipk "$target" || true)
     if [ -n "$cached_ipk_path" ]; then
-      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Sources unchanged and cached ipk present at $cached_ipk_path; skipping build"
+      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Sources unchanged and cached ipk present at $cached_ipk_path; reusing cached artefact"
+
+      local arch_dir=""
+      arch_dir=$(tar -xzOf "$cached_ipk_path" ./control.tar.gz | tar -xzOf - ./control | awk -F': ' '/^Architecture:/ {print $2; exit}' || true)
+      if [ -z "$arch_dir" ]; then
+        echo "ERROR: unable to determine architecture for cached artefact $cached_ipk_path" >&2
+        exit 1
+      fi
+
+      local release_version="$RELEASE_VERSION"
+      if [ -z "$release_version" ]; then
+        release_version="$DEFAULT_OPENWRT_VERSION"
+      fi
+
+      local dest_dir=""
+      if [ -n "$OUTPUT_DIR" ]; then
+        dest_dir="${OUTPUT_DIR%/}"
+      else
+        dest_dir="$REPO_ROOT/$release_version/$arch_dir"
+      fi
+
+      mkdir -p "$dest_dir"
+      cp "$cached_ipk_path" "$dest_dir/"
+      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Updating feed index at $dest_dir"
+      "$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$dest_dir"
+
+      if [ -z "$OUTPUT_DIR" ] && [ ${#EXTRA_RELEASES[@]} -gt 0 ]; then
+        for extra_rel in "${EXTRA_RELEASES[@]}"; do
+          local extra_dest="$REPO_ROOT/$extra_rel/$arch_dir"
+          mkdir -p "$extra_dest"
+          cp "$cached_ipk_path" "$extra_dest/"
+          echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') ==> [$target] Mirroring artefact into $extra_dest"
+          "$PROJECT_ROOT/scripts/build/make_openwrt_packages.sh" --path "$extra_dest"
+        done
+      fi
+
+      if [ -n "$SOURCE_SIGNATURE" ]; then
+        record_ipk_metadata "$target" "$SOURCE_SIGNATURE" "$dest_dir/$(basename "$cached_ipk_path")"
+      fi
+
+      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') Build complete: $(basename "$cached_ipk_path")"
+      echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') Stored under: $dest_dir"
       return
     fi
   fi
