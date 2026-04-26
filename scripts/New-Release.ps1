@@ -79,6 +79,40 @@ function Test-GitRemoteBranch {
     return $LASTEXITCODE -eq 0
 }
 
+function Cleanup-OpenWrtArtifacts {
+    param(
+        [Parameter(Mandatory = $true)][string]$ArtifactsDir
+    )
+    $artifactsDirClean = $ArtifactsDir.Trim().TrimStart('\', '/')
+    if ([string]::IsNullOrWhiteSpace($artifactsDirClean)) {
+        return
+    }
+    $hostArtifactsDir = Join-Path -Path (Get-Location) -ChildPath $artifactsDirClean
+    if (-not (Test-Path $hostArtifactsDir)) {
+        return
+    }
+
+    Get-ChildItem -Path $hostArtifactsDir -File -Filter "*.ipk" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    try {
+        $entries = Get-ChildItem -Path $hostArtifactsDir -Force -ErrorAction SilentlyContinue
+        if (-not $entries -or $entries.Count -eq 0) {
+            Remove-Item -Recurse -Force $hostArtifactsDir -ErrorAction SilentlyContinue
+        }
+    } catch {
+    }
+
+    $stagingRoot = Join-Path -Path (Get-Location) -ChildPath "openwrt/staging"
+    if (Test-Path $stagingRoot) {
+        try {
+            $stagingEntries = Get-ChildItem -Path $stagingRoot -Force -ErrorAction SilentlyContinue
+            if (-not $stagingEntries -or $stagingEntries.Count -eq 0) {
+                Remove-Item -Recurse -Force $stagingRoot -ErrorAction SilentlyContinue
+            }
+        } catch {
+        }
+    }
+}
+
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     Write-Error "git is required"
     exit 1
@@ -283,6 +317,7 @@ if (-not $SkipOpenWrtArtifacts) {
 
         if (Confirm-Push "branch $ArtifactsBranch to origin") {
             git -C $worktreeRoot push -u origin $ArtifactsBranch
+            Cleanup-OpenWrtArtifacts -ArtifactsDir $ArtifactsDir
         } else {
             Write-Host "Skipping push of branch $ArtifactsBranch" -ForegroundColor Yellow
         }
