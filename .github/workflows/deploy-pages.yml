@@ -88,7 +88,11 @@ jobs:
           set -euo pipefail
           rm -rf .pages/docs
           mkdir -p .pages/docs
-          cp -a .artifacts/docs/site/. .pages/docs/
+          if [ -d ".artifacts/docs/site" ]; then
+            cp -a .artifacts/docs/site/. .pages/docs/
+          else
+            cp -a .artifacts/docs/. .pages/docs/
+          fi
 
       - name: Download .ipk assets from GitHub Release
         if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
