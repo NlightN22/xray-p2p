@@ -27,6 +27,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout OpenWrt .ipk staging branch (optional)
+        uses: actions/checkout@v4
+        with:
+          ref: artifacts
+          path: openwrt-artifacts
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -98,6 +104,14 @@ jobs:
           set -euo pipefail
           mkdir -p release
           find artifacts -type f -print0 | xargs -0 -I {} cp {} release/
+          shopt -s nullglob
+          ipks=(openwrt-artifacts/openwrt/staging/stable/*.ipk)
+          if [ ${#ipks[@]} -gt 0 ]; then
+            cp "${ipks[@]}" release/
+          else
+            echo "warning: no OpenWrt .ipk files found under openwrt-artifacts/openwrt/staging/stable" >&2
+          fi
+          shopt -u nullglob
           cd release
           find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | xargs -0 sha256sum > SHA256SUMS
 
