@@ -194,7 +194,6 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ inputs.tag }}"
-          gh release view "$tag" --json body -q .body > existing_notes.txt
           python3 - <<'PY'
           import json
           import os
@@ -207,9 +206,6 @@ jobs:
 
           payload = json.loads(pathlib.Path(event_path).read_text(encoding="utf-8"))
           inputs = payload.get("inputs", {}) or {}
-
-          existing = pathlib.Path("existing_notes.txt").read_text(encoding="utf-8")
-          existing = re.sub(r"(?im)^full changelog:.*\\n?", "", existing).strip()
 
           notes_raw = inputs.get("release_notes", "") or ""
           notes_b64 = inputs.get("release_notes_b64", "") or ""
@@ -231,13 +227,10 @@ jobs:
               full_changelog = f"Full Changelog: [{prev_tag}...{tag}]({url})"
 
           parts = []
-          if existing:
-              parts.append(existing)
-          if notes and notes not in existing:
-              parts.append(notes)
-          if feed and feed not in existing:
-              parts.append(feed)
-          if full_changelog and full_changelog not in existing:
+          if notes.strip():
+              parts.append(notes.strip())
+          parts.append(feed)
+          if full_changelog:
               parts.append(full_changelog)
 
           content = "\n\n".join(parts).strip() + "\n"

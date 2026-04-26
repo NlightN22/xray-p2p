@@ -5,7 +5,15 @@ param(
     [switch]$Quiet,
     [switch]$SkipOpenWrtArtifacts,
     [string]$ArtifactsBranch = "artifacts",
-    [string]$ArtifactsDir = "openwrt/staging/stable"
+    [string]$ArtifactsDir = "openwrt/staging/stable",
+    [string[]]$OpenWrtExpectedArches = @(
+        "aarch64_generic",
+        "arm_cortex-a15_neon-vfpv4",
+        "i386_pentium4",
+        "mips_24kc",
+        "mipsel_24kc",
+        "x86_64"
+    )
 )
 
 $ErrorActionPreference = 'Stop'
@@ -237,6 +245,29 @@ if (-not $SkipOpenWrtArtifacts) {
         $built = Get-ChildItem -Path $hostArtifactsDir -Filter "*.ipk" -File -ErrorAction SilentlyContinue
         if (-not $built -or $built.Count -eq 0) {
             Write-Error "No .ipk files found under $hostArtifactsDir after build"
+            exit 1
+        }
+
+        $found = @{}
+        foreach ($file in $built) {
+            if ($file.Name -match "_(?<arch>[^_]+)\\.ipk$") {
+                $arch = $Matches["arch"]
+                if (-not [string]::IsNullOrWhiteSpace($arch)) {
+                    $found[$arch] = $true
+                }
+            }
+        }
+        $missing = @()
+        foreach ($arch in $OpenWrtExpectedArches) {
+            if (-not $found.ContainsKey($arch)) {
+                $missing += $arch
+            }
+        }
+        if ($missing.Count -gt 0) {
+            $have = ($found.Keys | Sort-Object) -join ", "
+            $need = ($OpenWrtExpectedArches | Sort-Object) -join ", "
+            $miss = ($missing | Sort-Object) -join ", "
+            Write-Error ("OpenWrt build produced incomplete set of .ipk files. Missing arches: {0}. Have: {1}. Expected: {2}." -f $miss, $have, $need)
             exit 1
         }
         Write-Host ("Built {0} .ipk files into {1}" -f $built.Count, $hostArtifactsDir)
