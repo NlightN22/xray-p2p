@@ -18,6 +18,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+Set-Location $ProjectRoot
+
 function Write-Section {
     param([string]$Message)
     Write-Host "`n=== $Message ===" -ForegroundColor Cyan
@@ -119,6 +122,20 @@ function Cleanup-OpenWrtArtifacts {
         } catch {
         }
     }
+}
+
+function Get-OpenWrtArchFromIpkName {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    $pattern = "^.+_\\d+\\.\\d+\\.\\d+-\\d+_(?<arch>.+)\\.ipk$"
+    $m = [System.Text.RegularExpressions.Regex]::Match($Name, $pattern)
+    if (-not $m.Success) {
+        return ""
+    }
+    $group = $m.Groups["arch"]
+    if ($null -eq $group) {
+        return ""
+    }
+    return $group.Value
 }
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -250,11 +267,9 @@ if (-not $SkipOpenWrtArtifacts) {
 
         $found = @{}
         foreach ($file in $built) {
-            if ($file.Name -match "_(?<arch>[^_]+)\\.ipk$") {
-                $arch = $Matches["arch"]
-                if (-not [string]::IsNullOrWhiteSpace($arch)) {
-                    $found[$arch] = $true
-                }
+            $arch = Get-OpenWrtArchFromIpkName -Name $file.Name
+            if (-not [string]::IsNullOrWhiteSpace($arch)) {
+                $found[$arch] = $true
             }
         }
         $missing = @()
