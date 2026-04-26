@@ -2,7 +2,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
     [switch]$ReplaceTag,
-    [switch]$Quiet
+    [switch]$Quiet,
+    [switch]$SkipOpenWrtArtifacts,
+    [string]$ArtifactsBranch = "artifacts",
+    [string]$ArtifactsDir = "openwrt/staging/stable"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +41,42 @@ function Confirm-Step {
     }
     $answer = Read-Host "$Message [y/N]"
     return $answer -match '^(?i)y(es)?$'
+}
+
+function Confirm-StepDefaultYes {
+    param([string]$Message)
+    if ($Quiet) {
+        return $true
+    }
+    $answer = Read-Host "$Message [Y/n]"
+    if ($null -eq $answer) {
+        return $true
+    }
+    $trimmed = $answer.Trim()
+    if ($trimmed.Length -eq 0) {
+        return $true
+    }
+    return $trimmed -match '^(?i)y(es)?$'
+}
+
+function Assert-CleanWorkingTree {
+    $pending = git status --porcelain
+    if ($pending -ne $null -and $pending.Trim().Length -gt 0) {
+        Write-Error "Working tree is not clean. Commit or stash changes first."
+        exit 1
+    }
+}
+
+function Test-GitLocalBranch {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    git show-ref --verify --quiet "refs/heads/$Name" 2>$null
+    return $LASTEXITCODE -eq 0
+}
+
+function Test-GitRemoteBranch {
+    param([Parameter(Mandatory = $true)][string]$Name)
+    git ls-remote --exit-code origin "refs/heads/$Name" 2>$null | Out-Null
+    return $LASTEXITCODE -eq 0
 }
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -132,6 +171,46 @@ if ($pkgContent -eq $pkgUpdated) {
     Write-Utf8NoBom -Path $OpenWrtMakefile -Content $pkgUpdated
 }
 
+if (-not $SkipOpenWrtArtifacts) {
+    Write-Section "Building OpenWrt .ipk into $ArtifactsDir"
+    $doBuild = Confirm-StepDefaultYes "Build OpenWrt .ipk (Vagrant) and stage into $ArtifactsDir"
+    if ($doBuild) {
+        $vagrantDir = Join-Path -Path (Get-Location) -ChildPath "infra/vagrant/debian12/ipk-build"
+        if (-not (Test-Path $vagrantDir)) {
+            Write-Error "Vagrant directory not found at $vagrantDir"
+            exit 1
+        }
+
+        $artifactsDirClean = $ArtifactsDir.Trim().TrimStart('\', '/')
+        if ([string]::IsNullOrWhiteSpace($artifactsDirClean)) {
+            Write-Error "ArtifactsDir is empty"
+            exit 1
+        }
+
+        $hostArtifactsDir = Join-Path -Path (Get-Location) -ChildPath $artifactsDirClean
+        New-Item -ItemType Directory -Force -Path $hostArtifactsDir | Out-Null
+
+        Push-Location $vagrantDir
+        try {
+            vagrant up
+            $guestDir = "/srv/xray-p2p/$($artifactsDirClean -replace '\\', '/')"
+            $cmd = "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --all --force-build --output-dir $guestDir"
+            vagrant ssh -c $cmd
+        } finally {
+            Pop-Location
+        }
+
+        $built = Get-ChildItem -Path $hostArtifactsDir -Filter "*.ipk" -File -ErrorAction SilentlyContinue
+        if (-not $built -or $built.Count -eq 0) {
+            Write-Error "No .ipk files found under $hostArtifactsDir after build"
+            exit 1
+        }
+        Write-Host ("Built {0} .ipk files into {1}" -f $built.Count, $hostArtifactsDir)
+    } else {
+        Write-Host "Skipped OpenWrt .ipk build/stage" -ForegroundColor Yellow
+    }
+}
+
 Write-Section "OpenWrt feed packaging note"
 Write-Host "OpenWrt .ipk files are not committed to main." -ForegroundColor Yellow
 Write-Host "Build them locally and push to the dedicated artifacts branch under openwrt/staging/stable/." -ForegroundColor Yellow
@@ -160,6 +239,53 @@ if (Confirm-Push "tag $Tag to origin") {
     git push origin $Tag
 } else {
     Write-Host "Skipping push of tag $Tag" -ForegroundColor Yellow
+}
+
+if (-not $SkipOpenWrtArtifacts) {
+    Write-Section "Publishing OpenWrt .ipk to branch $ArtifactsBranch"
+    if (Confirm-StepDefaultYes "Commit and push $ArtifactsDir/*.ipk to branch $ArtifactsBranch") {
+        Assert-CleanWorkingTree
+
+        $currentBranch = (git rev-parse --abbrev-ref HEAD).Trim()
+        $artifactsDirClean = $ArtifactsDir.Trim().TrimStart('\', '/')
+        $hostArtifactsDir = Join-Path -Path (Get-Location) -ChildPath $artifactsDirClean
+
+        $ipks = Get-ChildItem -Path $hostArtifactsDir -Filter "*.ipk" -File -ErrorAction SilentlyContinue
+        if (-not $ipks -or $ipks.Count -eq 0) {
+            Write-Error "No .ipk files found under $hostArtifactsDir"
+            exit 1
+        }
+
+        $hasLocal = Test-GitLocalBranch -Name $ArtifactsBranch
+        $hasRemote = Test-GitRemoteBranch -Name $ArtifactsBranch
+        if ($hasLocal) {
+            git checkout $ArtifactsBranch
+        } elseif ($hasRemote) {
+            git fetch origin $ArtifactsBranch | Out-Null
+            git checkout -b $ArtifactsBranch "origin/$ArtifactsBranch"
+        } else {
+            git checkout -b $ArtifactsBranch
+        }
+
+        git add -- "$artifactsDirClean"
+        $message = "chore(openwrt): stage ipk for $Tag"
+        $staged = git diff --cached --name-only
+        if ($staged -ne $null -and $staged.Trim().Length -gt 0) {
+            git commit -m $message
+        } else {
+            Write-Host "No changes to commit on $ArtifactsBranch" -ForegroundColor Yellow
+        }
+
+        if (Confirm-Push "branch $ArtifactsBranch to origin") {
+            git push -u origin $ArtifactsBranch
+        } else {
+            Write-Host "Skipping push of branch $ArtifactsBranch" -ForegroundColor Yellow
+        }
+
+        git checkout $currentBranch
+    } else {
+        Write-Host "Skipped artifacts branch publish" -ForegroundColor Yellow
+    }
 }
 
 Write-Section "Release $Tag complete"

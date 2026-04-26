@@ -306,15 +306,20 @@ def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
         pytest.fail(f"xp2p.exe not detected on {win_env.DEFAULT_CLIENT} after install")
     yield
     with _timed("ensure_msi_package (teardown)"):
-        msi_path = win_env.ensure_msi_package(
+        msi_path_server = win_env.ensure_msi_package(
             server_host,
             machine=win_env.DEFAULT_SERVER,
             reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
         )
+        msi_path_client = win_env.ensure_msi_package(
+            client_host,
+            machine=win_env.DEFAULT_CLIENT,
+            reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_CLIENT),
+        )
     with _timed("uninstall_xp2p_from_msi (server)"):
-        win_env.uninstall_xp2p_from_msi(server_host, msi_path)
+        win_env.uninstall_xp2p_from_msi(server_host, msi_path_server)
     with _timed("uninstall_xp2p_from_msi (client)"):
-        win_env.uninstall_xp2p_from_msi(client_host, msi_path)
+        win_env.uninstall_xp2p_from_msi(client_host, msi_path_client)
     with _timed("cleanup_xp2p_leftovers (server)"):
         win_env.cleanup_xp2p_leftovers(server_host)
     with _timed("cleanup_xp2p_leftovers (client)"):

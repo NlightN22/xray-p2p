@@ -65,15 +65,15 @@ def _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory) 
     apply_requested = _env.path_exists(server_host, apply_flow.apply_request_path())
     if have_live and not apply_requested:
         return
-    if xp2p_server_run_factory is not None:
-        with xp2p_server_run_factory(str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME) as session:
-            assert session["pid"] > 0
-    else:
-        if not _env.service_exists(server_host, "xp2p-server"):
-            pytest.skip("xp2p-server service is not registered; MSI install required.")
+    if _env.service_exists(server_host, "xp2p-server"):
         xp2p_server_runner("server", "service", "start", check=True)
         _wait_for_apply_request_clear(server_host, timeout=90.0)
         xp2p_server_runner("server", "service", "stop", check=True)
+    elif xp2p_server_run_factory is not None:
+        with xp2p_server_run_factory(str(SERVER_INSTALL_DIR), SERVER_CONFIG_DIR_NAME) as session:
+            assert session["pid"] > 0
+    else:
+        pytest.skip("xp2p-server service is not registered; MSI install required.")
     deadline = time.time() + 30.0
     while time.time() < deadline:
         if _env.path_exists(server_host, SERVER_LIVE_XRAY_JSON):
@@ -163,7 +163,13 @@ def test_server_user_add_and_idempotent(
 
         first_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         first_clients = _trojan_clients(first_inbounds)
-        assert len(first_clients) == 1
+        if len(first_clients) != 1:
+            dump_path = _env.dump_failure_state(server_host, label="server-user-add")
+            pytest.fail(
+                "Expected live xray.json to contain a single trojan client after user add.\n"
+                f"Observed: {len(first_clients)}\n"
+                f"Failure dump: {dump_path}"
+            )
         assert first_clients[0].get("email") == "alpha"
         assert first_clients[0].get("password") == "secret-one"
 
@@ -369,7 +375,13 @@ def test_server_user_add_validates_input(
 
         current_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         clients = _trojan_clients(current_inbounds)
-        assert len(clients) == 1
+        if len(clients) != 1:
+            dump_path = _env.dump_failure_state(server_host, label="server-user-add-validate")
+            pytest.fail(
+                "Expected live xray.json to contain a single trojan client after user add.\n"
+                f"Observed: {len(clients)}\n"
+                f"Failure dump: {dump_path}"
+            )
         assert clients[0].get("email") == "charlie"
     finally:
         _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)

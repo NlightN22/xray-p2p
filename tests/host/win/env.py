@@ -929,7 +929,8 @@ Get-Process -Name xp2p,xray,ui-xp2p -ErrorAction SilentlyContinue | Stop-Process
 $productCodes = @()
 $roots = @(
     'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
-    'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
+    'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+    'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
 )
 foreach ($root in $roots) {{
     $items = Get-ItemProperty -Path $root -ErrorAction SilentlyContinue | Where-Object {{
@@ -939,14 +940,24 @@ foreach ($root in $roots) {{
         $code = $item.PSChildName
         if ($code -and $code -match '^\\{{[0-9A-Fa-f-]+\\}}$') {{
             $productCodes += $code
+            continue
+        }}
+        $uninstall = $item.UninstallString
+        if ($uninstall -and $uninstall -match '/X(\\{{[0-9A-Fa-f-]+\\}})') {{
+            $productCodes += $matches[1]
         }}
     }}
 }}
-$productCodes = $productCodes | Select-Object -Unique
+$productCodes = @($productCodes | Select-Object -Unique)
+
+$productCode = $null
+if ($productCodes.Count -gt 0) {{
+    $productCode = [string]$productCodes[0]
+}}
 
 $arguments = $null
-if ($productCodes.Count -gt 0) {{
-    $arguments = @('/x', $productCodes[0], '/qn', '/norestart')
+if ($productCode -and $productCode -match '^\\{{[0-9A-Fa-f-]+\\}}$') {{
+    $arguments = @('/x', $productCode, '/qn', '/norestart')
 }} else {{
     $arguments = @('/x', $msi, '/qn', '/norestart')
 }}
