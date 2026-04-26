@@ -6,6 +6,11 @@ on:
       tag:
         description: "Release tag (e.g. v0.2.4)"
         required: true
+      include_openwrt_ipk:
+        description: "Include OpenWrt .ipk files from artifacts branch"
+        required: true
+        default: true
+        type: boolean
       artifacts_mode:
         description: "How to locate build artifacts"
         required: true
@@ -44,6 +49,7 @@ jobs:
         with:
           ref: artifacts
           path: openwrt-artifacts
+          lfs: true
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -141,7 +147,11 @@ jobs:
           if [ ${#ipks[@]} -gt 0 ]; then
             cp "${ipks[@]}" release/
           else
-            echo "warning: no OpenWrt .ipk files found under openwrt-artifacts/openwrt/staging/stable" >&2
+            if [ "${{ inputs.include_openwrt_ipk }}" = "true" ]; then
+              echo "No OpenWrt .ipk files found under openwrt-artifacts/openwrt/staging/stable" >&2
+              exit 1
+            fi
+            echo "warning: no OpenWrt .ipk files found under openwrt-artifacts/openwrt/staging/stable; skipping" >&2
           fi
           shopt -u nullglob
           cd release
