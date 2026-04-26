@@ -86,13 +86,7 @@ jobs:
         if: ${{ inputs.mode == 'docs-only' || inputs.mode == 'both' }}
         run: |
           set -euo pipefail
-          rm -rf .pages/docs
-          mkdir -p .pages/docs
-          if [ -d ".artifacts/docs/site" ]; then
-            cp -a .artifacts/docs/site/. .pages/docs/
-          else
-            cp -a .artifacts/docs/. .pages/docs/
-          fi
+          echo "Docs are applied after feed index generation to avoid index.html cleanup side effects."
 
       - name: Download .ipk assets from GitHub Release
         if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
@@ -166,6 +160,18 @@ jobs:
       - name: Generate feed index pages
         if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
         run: bash scripts/build/generate_openwrt_indexes.sh .pages
+
+      - name: Apply docs update into Pages content
+        if: ${{ inputs.mode == 'docs-only' || inputs.mode == 'both' }}
+        run: |
+          set -euo pipefail
+          rm -rf .pages/docs
+          mkdir -p .pages/docs
+          if [ -d ".artifacts/docs/site" ]; then
+            cp -a .artifacts/docs/site/. .pages/docs/
+          else
+            cp -a .artifacts/docs/. .pages/docs/
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
