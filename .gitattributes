@@ -6,6 +6,9 @@ config_templates/** text eol=lf
 openwrt/feed/** text eol=lf
 openwrt/configs/** text eol=lf
 infra/vagrant/openwrt/** text eol=lf
+scripts/** text eol=lf
+*.sh text eol=lf
+*.go text eol=lf
 
 # Init scripts without .sh extension.
 config_templates/xray-p2p.init text eol=lf

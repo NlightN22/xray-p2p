@@ -215,7 +215,7 @@ Write-Section "OpenWrt feed packaging note"
 Write-Host "OpenWrt .ipk files are not committed to main." -ForegroundColor Yellow
 Write-Host "Build them locally and push to the dedicated artifacts branch under openwrt/staging/stable/." -ForegroundColor Yellow
 
-$pending = git status --porcelain
+$pending = git status --porcelain --untracked-files=no
 $changesPresent = $pending -ne $null -and $pending.Trim().Length -gt 0
 if ($changesPresent) {
     Write-Section "Creating release commit"
@@ -244,9 +244,6 @@ if (Confirm-Push "tag $Tag to origin") {
 if (-not $SkipOpenWrtArtifacts) {
     Write-Section "Publishing OpenWrt .ipk to branch $ArtifactsBranch"
     if (Confirm-StepDefaultYes "Commit and push $ArtifactsDir/*.ipk to branch $ArtifactsBranch") {
-        Assert-CleanWorkingTree
-
-        $currentBranch = (git rev-parse --abbrev-ref HEAD).Trim()
         $artifactsDirClean = $ArtifactsDir.Trim().TrimStart('\', '/')
         $hostArtifactsDir = Join-Path -Path (Get-Location) -ChildPath $artifactsDirClean
 
@@ -256,33 +253,41 @@ if (-not $SkipOpenWrtArtifacts) {
             exit 1
         }
 
-        $hasLocal = Test-GitLocalBranch -Name $ArtifactsBranch
         $hasRemote = Test-GitRemoteBranch -Name $ArtifactsBranch
-        if ($hasLocal) {
-            git checkout $ArtifactsBranch
-        } elseif ($hasRemote) {
+        $worktreeRoot = Join-Path -Path (Get-Location) -ChildPath ".tmp/artifacts-worktree"
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $worktreeRoot) | Out-Null
+        if (Test-Path $worktreeRoot) {
+            git worktree remove --force $worktreeRoot 2>$null | Out-Null
+            Remove-Item -Recurse -Force $worktreeRoot -ErrorAction SilentlyContinue
+        }
+        if ($hasRemote) {
             git fetch origin $ArtifactsBranch | Out-Null
-            git checkout -b $ArtifactsBranch "origin/$ArtifactsBranch"
+            git worktree add -B $ArtifactsBranch $worktreeRoot "origin/$ArtifactsBranch"
         } else {
-            git checkout -b $ArtifactsBranch
+            git worktree add -B $ArtifactsBranch $worktreeRoot
         }
 
-        git add -- "$artifactsDirClean"
+        $destArtifactsDir = Join-Path -Path $worktreeRoot -ChildPath $artifactsDirClean
+        New-Item -ItemType Directory -Force -Path $destArtifactsDir | Out-Null
+        Get-ChildItem -Path $destArtifactsDir -Filter "*.ipk" -File -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+        Copy-Item -Force -Path $ipks.FullName -Destination $destArtifactsDir
+
+        git -C $worktreeRoot add -- "$artifactsDirClean"
         $message = "chore(openwrt): stage ipk for $Tag"
-        $staged = git diff --cached --name-only
+        $staged = git -C $worktreeRoot diff --cached --name-only
         if ($staged -ne $null -and $staged.Trim().Length -gt 0) {
-            git commit -m $message
+            git -C $worktreeRoot commit -m $message
         } else {
             Write-Host "No changes to commit on $ArtifactsBranch" -ForegroundColor Yellow
         }
 
         if (Confirm-Push "branch $ArtifactsBranch to origin") {
-            git push -u origin $ArtifactsBranch
+            git -C $worktreeRoot push -u origin $ArtifactsBranch
         } else {
             Write-Host "Skipping push of branch $ArtifactsBranch" -ForegroundColor Yellow
         }
-
-        git checkout $currentBranch
+        git worktree remove --force $worktreeRoot | Out-Null
+        Remove-Item -Recurse -Force $worktreeRoot -ErrorAction SilentlyContinue
     } else {
         Write-Host "Skipped artifacts branch publish" -ForegroundColor Yellow
     }
