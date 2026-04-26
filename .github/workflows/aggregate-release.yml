@@ -6,6 +6,18 @@ on:
       tag:
         description: "Release tag (e.g. v0.2.4)"
         required: true
+      artifacts_mode:
+        description: "How to locate build artifacts"
+        required: true
+        default: "branch"
+        type: choice
+        options:
+          - branch
+          - sha
+      artifacts_ref:
+        description: "Branch name when artifacts_mode=branch"
+        required: true
+        default: "main"
       release_notes:
         description: "Release notes (raw text)"
         required: false
@@ -45,6 +57,8 @@ jobs:
         run: |
           set -euo pipefail
           tag="${{ inputs.tag }}"
+          mode="${{ inputs.artifacts_mode }}"
+          ref="${{ inputs.artifacts_ref }}"
           git fetch --tags --force
           if ! git rev-parse "refs/tags/$tag^{commit}" >/dev/null 2>&1; then
             echo "Tag not found: $tag" >&2
@@ -65,8 +79,18 @@ jobs:
           done
           echo "prev_tag=$prev" >> "$GITHUB_OUTPUT"
 
-          mode="sha"
-          value="$sha"
+          case "$mode" in
+            sha)
+              value="$sha"
+              ;;
+            branch)
+              value="$ref"
+              ;;
+            *)
+              echo "Invalid artifacts_mode: $mode (expected sha|branch)" >&2
+              exit 1
+              ;;
+          esac
           echo "artifact_mode=$mode" >> "$GITHUB_OUTPUT"
           echo "artifact_value=$value" >> "$GITHUB_OUTPUT"
 
@@ -90,11 +114,19 @@ jobs:
             fi
             if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
               if [ "$mode" = "sha" ]; then
-                echo "No successful run found for $wf at $value" >&2
-              else
-                echo "No successful run found for $wf on branch $value" >&2
+                echo "warning: no successful run found for $wf at $value; falling back to branch=${{ inputs.artifacts_ref }}" >&2
+                run_id=$(gh run list --workflow "$wf" --branch "${{ inputs.artifacts_ref }}" --json databaseId,conclusion -L 50 \
+                  | jq -r '.[] | select(.conclusion=="success") | .databaseId' \
+                  | head -n 1)
               fi
-              exit 1
+              if [ -z "$run_id" ] || [ "$run_id" = "null" ]; then
+                if [ "$mode" = "sha" ]; then
+                  echo "No successful run found for $wf at $value (or fallback branch ${{ inputs.artifacts_ref }})" >&2
+                else
+                  echo "No successful run found for $wf on branch $value" >&2
+                fi
+                exit 1
+              fi
             fi
             gh run download "$run_id" -D "artifacts/$wf"
           done
