@@ -59,7 +59,12 @@ jobs:
           rm -rf .baseline .pages
           mkdir -p .baseline .pages
           gh run download "$run_id" -n github-pages -D .baseline
-          cp -a .baseline/. .pages/
+          if [ ! -f ".baseline/artifact.tar" ]; then
+            echo "Baseline artifact.tar not found; refusing to continue." >&2
+            exit 1
+          fi
+          tar -xf .baseline/artifact.tar -C .pages
+          rm -f .pages/artifact.tar
 
       - name: Setup Python
         uses: actions/setup-python@v5
