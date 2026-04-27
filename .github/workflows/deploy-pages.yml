@@ -65,6 +65,10 @@ jobs:
           fi
           tar -xf .baseline/artifact.tar -C .pages
           rm -f .pages/artifact.tar
+          if [ "$MODE" = "docs-only" ] && [ ! -f ".pages/index.html" ]; then
+            echo "Baseline Pages content looks incomplete (missing index.html); run with mode=both to rebuild a clean baseline." >&2
+            exit 1
+          fi
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -177,6 +181,12 @@ jobs:
           else
             cp -a .artifacts/docs/. .pages/docs/
           fi
+
+      - name: Publish OpenWrt install script
+        run: |
+          set -euo pipefail
+          cp -a openwrt/repo/install-xp2p.sh .pages/install-xp2p.sh
+          chmod 755 .pages/install-xp2p.sh
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
