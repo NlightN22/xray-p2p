@@ -4,33 +4,27 @@ This chain sends traffic from C2 through B and A to reach C1.
 
 ## Assumptions
 
-- A = server, B = client.
-- C1 behind A (10.0.101.0/24), C2 behind B (10.0.102.0/24).
-- A-B tunnel is already working.
+- A = router running `xp2p server`, B = router running `xp2p client`.
+- C1 is behind A (`10.0.101.0/24`), C2 is behind B (`10.0.102.0/24`).
+- The A-B tunnel is already working and both sides run in TUN mode.
+- C1 uses A as its default gateway, and C2 uses B as its default gateway.
 
-## Routes on C1 and C2
+## Redirects (routes are installed on A and B)
 
-On C1:
-
-```sh
-ip route add 10.0.102.0/24 via 10.0.101.1
-```
-
-On C2:
+When TUN is enabled, `xp2p {client,server} redirect add --cidr ...` compiles into OS routes on the routers (A/B) during apply. You do not need to add routes manually on C1/C2.
 
 ```sh
-ip route add 10.0.101.0/24 via 10.0.102.1
+xp2p client redirect add --cidr 10.0.101.0/24
+xp2p server redirect add --cidr 10.0.102.0/24
 ```
 
-## Redirect on B
+Apply the changes by restarting the services using your service manager (for example `service xp2p-client restart` / `service xp2p-server restart` on OpenWrt, or `systemctl restart xp2p-client xp2p-server` on systemd-based systems).
 
-```sh
-xp2p client redirect add --path /etc/xp2p --config-dir config-client --cidr 10.0.101.0/24 --tag proxy-10-63-30-11
-```
+## OpenWrt firewall
 
-## OpenWrt firewall on B
+Bind the xp2p TUN interface to a firewall zone and allow LAN <-> tunnel forwarding.
 
-Bind the xp2pc interface to a firewall zone and allow LAN <-> xp2ptun forwarding:
+On B (client, `xp2pc`):
 
 ```sh
 uci -q delete firewall.xp2ptun
@@ -53,10 +47,12 @@ uci commit firewall
 /etc/init.d/firewall restart
 ```
 
+On A (server, `xp2ps`), mirror the same rules but set `firewall.xp2ptun.network='xp2ps'`.
+
 ## Verify
 
-From C2:
+On B (client router), verify that C1 is reachable through the tunnel using `xp2p ping`. Pick a port that is known to be open on C1 (for example `22/tcp` for SSH):
 
 ```sh
-ping -c 1 10.0.101.1
+xp2p ping 10.0.101.1 --tunnel --proto tcp --port 22
 ```

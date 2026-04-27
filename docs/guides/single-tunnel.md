@@ -19,6 +19,8 @@ On A (server), run deploy with the link:
 xp2p server deploy --link "<PASTE_LINK>"
 ```
 
+By default, deploy enables TUN mode with split routing on the client. Use `--mode proxy` if you want to keep the client in proxy mode.
+
 ### Advanced deploy options
 
 Keep the client in proxy mode after deploy:
@@ -27,10 +29,10 @@ Keep the client in proxy mode after deploy:
 xp2p client deploy --host 10.63.30.11 --mode proxy
 ```
 
-Deploy directly into TUN mode (split/full):
+Deploy into full-tunnel TUN mode:
 
 ```sh
-xp2p client deploy --host 10.63.30.11 --mode tun --tun-mode split
+xp2p client deploy --host 10.63.30.11 --mode tun:full
 ```
 
 Custom deploy port (pass it on both sides):

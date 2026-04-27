@@ -10,6 +10,8 @@ On B (client), send a subnet through the tunnel:
 xp2p client redirect add --cidr 10.0.101.0/24
 ```
 
+When TUN is enabled, this also installs an OS route for the CIDR (unless you use `--no-routes`).
+
 ## Client redirect (domain)
 
 ```sh
@@ -23,6 +25,8 @@ On A (server), push traffic back through the tunnel:
 ```sh
 xp2p server redirect add --cidr 10.0.102.0/24
 ```
+
+When TUN is enabled, this also installs an OS route for the CIDR (unless you use `--no-routes`).
 
 ## NAT redirect (proxy flow)
 
