@@ -56,3 +56,7 @@
   - Forward CLI coverage: `tests/host/linux/test_forward_cli.py` drives `xp2p client/server forward {add,remove,list}` end to end, checking auto-port selection (start at 53331 and skip busy ports), list/table output, removal via listen-port/tag/remark, and the warning emitted when no redirect matches the forward target.
   - Reverse tunnel validation: `tests/host/linux/test_tunnel_B_to_A.py` now provisions real `xp2p client forward`/`xp2p server forward` listeners inside the running tunnel, relies on the built-in diagnostics ping to hit the forwarded ports, and confirms traffic reaches the remote diagnostic service before cleaning up both rules.
 - Both suites rely on the shared helpers under tests/host/common.py for Vagrant orchestration.
+
+### Opt-in tests
+
+- OpenWrt install script smoke test: set `XP2P_RUN_OPENWRT_INSTALL_SCRIPT_TESTS=1` to run `tests/host/openwrt/test_install_script_from_pages.py`.
