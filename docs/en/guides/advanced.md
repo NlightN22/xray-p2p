@@ -70,7 +70,7 @@ When full-tunnel is Desired but the adapter is not ready, the runtime enters `Fu
 
 Retries use an exponential backoff capped at 30 seconds (starting at 2 seconds). The pending state and the retry schedule are persisted to `CONFIG_ROOT/xp2p-client.tun-full.json` (`phase`, `pending_reason`, `retry_count`, `next_retry_at`) so restarts follow the same contract.
 
-## DNS per-domain routing
+## DNS per-domain routing (Linux/OpenWrt only)
 
 ```sh
 xp2p client dns-forward add -d corp.test.com -t 10.0.101.142:53 --with-forward

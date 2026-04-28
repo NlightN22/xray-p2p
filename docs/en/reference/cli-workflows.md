@@ -25,6 +25,8 @@ xp2p server redirect remove --cidr 10.20.0.0/16
 xp2p server forward add --target 192.0.2.10:22
 xp2p server forward list
 xp2p server forward remove --target 192.0.2.10:22
+
+# Linux/OpenWrt only (dnsmasq integration)
 xp2p server dns-forward add --domain corp.example --target 10.10.10.53:53
 xp2p server dns-forward list
 xp2p server dns-forward remove --domain corp.example
@@ -60,6 +62,8 @@ xp2p client forward remove --target 192.0.2.10:22
 xp2p client reverse list
 
 # DNS/DHCP helpers
+
+# Linux/OpenWrt only (dnsmasq integration)
 xp2p client dns-forward add --domain dev.example --target 10.10.10.53:53
 xp2p client dns-forward list
 xp2p client dns-forward remove --domain dev.example

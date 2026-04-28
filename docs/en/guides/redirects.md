@@ -55,7 +55,7 @@ If routes already send DNS traffic through the tunnel, use dnsmasq directly:
 
 ### Proxy or selective routing
 
-Let xp2p manage a dnsmasq entry (and optionally a local forward):
+Let xp2p manage a dnsmasq entry (and optionally a local forward) (Linux/OpenWrt only):
 
 ```sh
 xp2p client dns-forward add --domain corp.test.com --target 10.0.101.142:53
