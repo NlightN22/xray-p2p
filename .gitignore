@@ -14,3 +14,4 @@ xray-p2p.sln
 /dotnet/build/
 /dotnet/xp2p-ui.tests/TestResults/
 /venv/
+/site/

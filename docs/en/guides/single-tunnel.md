@@ -67,6 +67,35 @@ xp2p client service start
 
 On Linux run commands that change system state as root (use `sudo`).
 
+## Switch modes (after install/deploy)
+
+After the tunnel is installed, you can switch modes without re-running deploy/install. The commands update Desired inputs, record an apply request, and will restart the service automatically if it is currently running.
+
+Switch the client to proxy mode (disables TUN):
+
+```sh
+xp2p client mode proxy
+```
+
+Switch the client to split-tunnel TUN mode:
+
+```sh
+xp2p client mode tun split
+```
+
+Switch the client to full-tunnel TUN mode:
+
+```sh
+xp2p client mode tun full
+```
+
+Switch the server mode:
+
+```sh
+xp2p server mode proxy
+xp2p server mode tun
+```
+
 ## Verify
 
 From B:

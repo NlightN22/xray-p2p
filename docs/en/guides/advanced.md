@@ -25,6 +25,24 @@ Full-tunnel mode is available only when the client runs in TUN mode (`client.tun
 It replaces default routes with the TUN interface, adds bypass routes to all configured endpoints,
 and switches DNS resolvers to `client.dns_servers` while full-tunnel is active.
 
+Switch via CLI:
+
+```sh
+xp2p client mode tun full
+```
+
+Switch back to split-tunnel:
+
+```sh
+xp2p client mode tun split
+```
+
+Switch back to proxy mode:
+
+```sh
+xp2p client mode proxy
+```
+
 ```toml
 [client]
 tun_enabled = true
