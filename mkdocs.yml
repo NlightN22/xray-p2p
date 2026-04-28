@@ -39,6 +39,8 @@ nav:
       - CLI Workflows: reference/cli-workflows.md
 theme:
   name: material
+  logo: https://raw.githubusercontent.com/NlightN22/xray-p2p/main/assets/xp2p_icon.png
+  favicon: https://raw.githubusercontent.com/NlightN22/xray-p2p/main/assets/xp2p.ico
   font:
     text: Merriweather Sans
     code: Roboto Mono
