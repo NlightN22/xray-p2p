@@ -1,4 +1,4 @@
-# Логика статуса туннеля в runtime
+# Логика статуса туннеля в рантайме
 
 Эта заметка описывает, как рассчитывается runtime-статус туннеля по client state файлу.
 
@@ -29,7 +29,7 @@ Runtime status читает `C:\ProgramData\xp2p\xp2p-client.state.json` и ис
   - Ready, когда и `tun_ready`, и `routes_ready` равны true
   - Pending иначе
 
-### Метка routes
+### Метка маршрутов
 
 Логика статуса использует runtime flags с учётом текущего mode:
 
@@ -48,4 +48,3 @@ Runtime status читает `C:\ProgramData\xp2p\xp2p-client.state.json` и ис
 - `Tun: Ready | Routes: Full`
 - `Tun: Pending | Routes: Split`
 - `Tun: Unknown`
-

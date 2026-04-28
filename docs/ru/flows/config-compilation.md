@@ -13,7 +13,7 @@
 
 xp2p рассматривает конфигурацию как набор слоёв входных данных.
 
-### Desired inputs (редактирует оператор)
+### Желаемые входные данные (редактирует оператор)
 
 Managed поведение настраивается через TOML и может редактироваться вручную или через CLI/UI:
 
@@ -27,7 +27,7 @@ Managed поведение настраивается через TOML и мож�
 
 xp2p читает эти JSON файлы и merge'ит их в финальную конфигурацию Xray. xp2p не должен их переписывать.
 
-### Build artifacts (runtime outputs)
+### Артефакты сборки (выходы рантайма)
 
 xp2p компилирует inputs в финальный Xray JSON файл, который используется в runtime:
 
@@ -36,7 +36,7 @@ xp2p компилирует inputs в финальный Xray JSON файл, к�
 
 Эти файлы генерируются service/apply layer и не должны редактироваться вручную.
 
-## Layout директорий
+## Структура каталогов
 
 - Desired inputs
   - `CONFIG_ROOT/xp2p-*.toml`
@@ -50,7 +50,7 @@ xp2p компилирует inputs в финальный Xray JSON файл, к�
 
 Директория `.state` хранит метаданные apply и скомпилированные runtime artifacts. Она не зеркалирует Desired inputs.
 
-## Pipeline компиляции
+## Конвейер компиляции
 
 Для каждой роли (client/server) service/apply layer выполняет:
 
@@ -62,11 +62,11 @@ xp2p компилирует inputs в финальный Xray JSON файл, к�
 6. Атомарно записать финальный config в `.state/live/config-*/xray.json`.
 7. Запустить/перезапустить Xray, используя только финальный JSON файл.
 
-## Правила merge
+## Правила объединения
 
 xp2p merge'ит JSON snippets в managed base по role-специфичным правилам. Merge явный и детерминированный.
 
-## Поддерживаемые extension файлы
+## Поддерживаемые файлы расширений
 
 JSON snippets лежат в:
 
@@ -78,7 +78,7 @@ JSON snippets лежат в:
 - `config_templates/extensions/config-client/`
 - `config_templates/extensions/config-server/`
 
-### Client
+### Клиент
 
 - `routing.rules.after-xp2p-system.json`
   - Формат: `{ "rules": [ ... ] }`
@@ -95,7 +95,7 @@ JSON snippets лежат в:
   - Формат: `{ "outbounds": [ ... ] }`
   - Добавляется в конец managed outbounds.
 
-### Server
+### Сервер
 
 - `routing.rules.after-xp2p-system.json` (то же значение, что и у client)
 - `routing.rules.after-xp2p-managed.json` (то же значение, что и у client)
@@ -114,7 +114,7 @@ xp2p резервирует идентификаторы, которыми он 
 
 User snippets не должны создавать коллизии с reserved identifiers, если только не включён явный override mode.
 
-### Порядок routing rules
+### Порядок правил маршрутизации
 
 Финальный порядок routing rules стабилен:
 
@@ -126,7 +126,7 @@ User snippets не должны создавать коллизии с reserved 
 
 Если user routing snippets присутствуют, они вставляются только в настроенные extension points.
 
-### Outbounds, inbounds и другие секции
+### Исходящие, входящие и другие секции
 
 User snippets могут добавлять дополнительные объекты, но xp2p-managed объекты остаются authoritative.
 
@@ -147,7 +147,7 @@ User snippets могут добавлять дополнительные объ�
 
 xp2p предоставляет команды инспекции, которые не меняют runtime state.
 
-### Render финального Xray JSON
+### Рендер финального Xray JSON
 
 Отрендерить ровно тот JSON, который будет использован в runtime:
 
@@ -163,7 +163,7 @@ xp2p client render xray --desired --output -
 xp2p server render xray --desired --output -
 ```
 
-### Debug bundle
+### Диагностический пакет
 
 Собрать self-contained архив для troubleshooting:
 
@@ -185,4 +185,3 @@ Bundle включает:
 - Операторы редактируют только TOML и JSON snippets.
 - Service/apply layer компилирует и валидирует configs в `xray.json`.
 - Runtime процессы всегда используют только live compiled `xray.json`.
-

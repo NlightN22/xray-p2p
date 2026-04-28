@@ -1,4 +1,4 @@
-# Apply Flow
+# Поток применения
 
 Этот документ описывает, как xp2p применяет изменения конфигурации через строгий
 механизм apply, принадлежащий сервису. Цель — сделать обновления конфигурации
@@ -20,13 +20,13 @@
 Файл `apply.request` — это триггер, который просит service layer скомпилировать
 и применить Desired inputs.
 
-## Акторы
+## Роли
 
 - CLI, UI и ручные правки: обновляют Desired inputs и создают `apply.request`.
 - Service layer (`xp2p run` или system service): читает `apply.request`,
   компилирует Desired inputs в runtime artifacts и выполняет очистку маркеров.
 
-## Flow на верхнем уровне
+## Общий процесс
 
 1. Обновить Desired inputs (`xp2p-*.toml` и опциональные JSON snippets).
 2. Записать `apply.request`.
@@ -34,7 +34,7 @@
 4. При успехе сервис удаляет `apply.request`, при ошибке пишет `apply.error`.
 5. Runtime применяет OS routes и состояние TUN (только service layer).
 
-## Desired inputs
+## Желаемые входные данные
 
 Desired inputs всегда доступны для правки пользователем и лежат по стабильным путям:
 
@@ -55,7 +55,7 @@ xp2p читает эти inputs и компилирует их в итогову
 - Проверка во время deploy может запустить временный xray-core с конфигом, скомпилированным
   из Desired inputs, но она не должна писать в live и не должна обходить apply.
 
-## Edit + rollback flow
+## Правки и откат
 
 Этот раздел описывает поток ручных правок, правок через CLI и rollback,
 используя разделение Desired, Live и LKG. Запросы apply отслеживаются marker-файлом.
@@ -72,7 +72,7 @@ xp2p читает эти inputs и компилирует их в итогову
 
 Live и LKG хранят скомпилированные runtime artifacts (например `xray.json`) вместе с метаданными apply.
 
-### Manual edit flow
+### Ручные правки
 
 1. Пользователь редактирует Desired файлы в `CONFIG_ROOT/` или `config-*/`.
 2. Watchers дебаунсят серии изменений.
@@ -80,14 +80,14 @@ Live и LKG хранят скомпилированные runtime artifacts (н�
 4. Сервис компилирует Desired inputs и атомарно пишет live runtime artifacts.
 5. При успехе предыдущий набор live artifacts сохраняется как LKG (опционально).
 
-### CLI edit flow
+### Правки через CLI
 
 1. CLI записывает изменения в Desired.
 2. Создаётся `apply.request`, чтобы триггернуть apply в сервисе.
 3. Сервис компилирует Desired inputs в live runtime artifacts.
 4. При успехе предыдущий набор live artifacts сохраняется как LKG (опционально).
 
-### Rollback flow
+### Откат
 
 1. Apply падает (ошибка сервиса/xray/health checks).
 2. Сервис восстанавливает live runtime artifacts из LKG (если доступно).
@@ -96,12 +96,12 @@ Live и LKG хранят скомпилированные runtime artifacts (н�
    пропускает повторные apply-попытки для того же request ID.
 5. Сервис перезапускается, используя восстановленные live artifacts, и логирует ошибку.
 
-## Deploy flow
+## Поток деплоя
 
 Детали deploy flow (включая apply requests, временную проверку туннеля и требования к старту сервиса)
 описаны в [Deploy flow](deploy-flow.md), чтобы избежать дублирования.
 
-## Apply request
+## Запрос на применение
 
 Trigger-файлы apply создаются по путям:
 
@@ -112,7 +112,7 @@ Trigger-файлы apply создаются по путям:
 за этим файлом и рассматривает его как единственный источник истины для apply-работы.
 При ошибке apply сервис пишет `apply.error` с тем же request ID и причиной.
 
-## Service apply
+## Применение сервисом
 
 При старте (или рестарте) сервис:
 
@@ -126,7 +126,7 @@ Trigger-файлы apply создаются по путям:
 request ID после записи `apply.error`; после исправления Desired inputs нужно создать новый
 apply request.
 
-## Routes и изменения ОС
+## Маршруты и изменения ОС
 
 Изменения ОС применяются только service layer:
 
@@ -136,7 +136,7 @@ apply request.
 
 CLI команды и UI flows обновляют Desired inputs и запрашивают apply. Они не трогают OS-level state напрямую.
 
-## Контракт runtime OS state (TUN / routes / DNS)
+## Контракт состояния ОС в рантайме (TUN / маршруты / DNS)
 
 Этот раздел определяет контракт service-owned OS state, чтобы избежать видимого "flapping" при рестартах.
 
@@ -146,7 +146,7 @@ CLI команды и UI flows обновляют Desired inputs и запраш
 - Service layer обязан поддерживать OS state в соответствии с текущим Desired runtime mode.
 - CLI/UI/ручные правки не должны напрямую менять OS state.
 
-### Переходы, driven by mode
+### Переходы, управляемые режимом
 
 Переходы OS state определяются сменой mode, а не внутренними рестартами:
 
@@ -169,7 +169,7 @@ rollback routes/DNS, если Desired остаётся в full-tunnel mode.
 - Отмена child-run (graceful restart) не является сменой mode.
 - Rollback/restore разрешён только при явном stop, явной смене mode или при hard failures, требующих выхода из mode.
 
-### Pending state и retry (Windows)
+### Состояние ожидания и повторы (Windows)
 
 На Windows готовность TUN может быть задержана или нестабильна между рестартами (адаптер отключён, IPv4 отсутствует, DAD не preferred).
 Когда Desired — full-tunnel, но адаптер не готов, runtime входит в pending state вместо rollback OS state.
@@ -193,4 +193,3 @@ rollback routes/DNS, если Desired остаётся в full-tunnel mode.
 - Невалидный Desired TOML / невалидные JSON snippets.
 - Коллизии при merge (зарезервированные теги, неверный порядок правил, конфликты).
 - Сервис не запущен или apply request не обнаружен.
-

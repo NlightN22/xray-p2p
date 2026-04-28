@@ -52,7 +52,7 @@ msiexec /x xp2p-<version>-windows-amd64.msi
 
 Нужно собрать Windows MSI на Windows-хосте? См. [`scripts/build/README.md`](https://github.com/NlightN22/xray-p2p/blob/main/scripts/build/README.md).
 
-## Архивы (release tar.gz)
+## Архивы (tar.gz релизы)
 
 Release-архивы содержат `xp2p` вместе с bundled `xray`. Держите оба бинарника рядом и добавьте `xp2p` в `PATH`.
 
@@ -97,4 +97,3 @@ Advanced options:
 - Custom Trojan port: добавьте `--port <port>` в `xp2p server install` и используйте сгенерированную ссылку на клиенте.
 - Self-signed TLS: передайте `--allow-insecure` в `xp2p client install`.
 - Manual client fields (no link): `xp2p client install --host <host> --user <user> --password <password>`.
-
