@@ -30,6 +30,10 @@ nav:
   - Operations:
       - TUN Setup: operations/tun-setup.md
       - Diagnostics & NAT helpers: operations/diagnostics.md
+      - Service Control: operations/service-control.md
+      - Backup & Migration: operations/backup-and-migration.md
+      - Shell Completion: operations/shell-completion.md
+      - CLI Docs Generation: operations/docs-generation.md
   - Reference:
       - Configuration: reference/configuration.md
       - CLI Workflows: reference/cli-workflows.md

@@ -20,9 +20,14 @@ xp2p server reverse list
 
 # Networking helpers
 xp2p server redirect add --cidr 10.20.0.0/16
+xp2p server redirect list
+xp2p server redirect remove --cidr 10.20.0.0/16
 xp2p server forward add --target 192.0.2.10:22
+xp2p server forward list
+xp2p server forward remove --target 192.0.2.10:22
 xp2p server dns-forward add --domain corp.example --target 10.10.10.53:53
 xp2p server dns-forward list
+xp2p server dns-forward remove --domain corp.example
 
 # TLS upkeep
 xp2p server cert set --cert /path/to/fullchain.pem --key /path/to/privkey.pem
@@ -46,10 +51,12 @@ xp2p client service start
 xp2p client redirect add --cidr 192.168.10.0/24
 xp2p client redirect add --domain "*.corp.example"
 xp2p client redirect remove --cidr 192.168.10.0/24
+xp2p client redirect list
 
 # Forwards and reverse tunnels
 xp2p client forward add --target 192.0.2.10:22
 xp2p client forward list
+xp2p client forward remove --target 192.0.2.10:22
 xp2p client reverse list
 
 # DNS/DHCP helpers

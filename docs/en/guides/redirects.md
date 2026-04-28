@@ -36,6 +36,13 @@ If you need transparent NAT redirect (Linux/OpenWrt only, proxy mode only, run a
 xp2p nat-redirect add --cidr 10.0.101.0/24
 ```
 
+Inspect and remove NAT redirect rules:
+
+```sh
+xp2p nat-redirect list
+xp2p nat-redirect remove --cidr 10.0.101.0/24
+```
+
 ## DNS handling
 
 ### Tun with routing in place
@@ -52,6 +59,18 @@ Let xp2p manage a dnsmasq entry (and optionally a local forward):
 
 ```sh
 xp2p client dns-forward add --domain corp.test.com --target 10.0.101.142:53
+```
+
+Inspect and remove rules:
+
+```sh
+xp2p client redirect list
+xp2p client forward remove --target 192.0.2.10:22
+xp2p server redirect list
+xp2p server redirect remove --cidr 10.0.102.0/24
+xp2p server forward list
+xp2p server forward remove --target 192.0.2.10:22
+xp2p server dns-forward remove --domain corp.test.com
 ```
 
 ## Advanced options
