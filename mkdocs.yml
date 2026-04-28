@@ -1,5 +1,17 @@
 site_name: XP2P Tunnel provider
 site_url: https://nlightn22.github.io/xray-p2p/docs/
+plugins:
+  - search
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: ru
+          name: Русский
 nav:
   - Getting Started:
       - Overview: index.md

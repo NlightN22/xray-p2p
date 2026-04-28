@@ -1,0 +1,1758 @@
+
+<!doctype html>
+<html lang="ru" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://nlightn22.github.io/xray-p2p/docs/ru/flows/apply-flow/">
+      
+      
+        <link rel="prev" href="../deploy-flow/">
+      
+      
+        <link rel="next" href="../config-compilation/">
+      
+      
+        
+          <link rel="alternate" href="../../../flows/apply-flow/" hreflang="en">
+        
+          <link rel="alternate" href="./" hreflang="ru">
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Apply Flow - XP2P Tunnel provider</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Merriweather+Sans:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Merriweather Sans";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#apply-flow" class="md-skip">
+          Перейти к содержанию
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Верхний колонтитул">
+    <a href="../../" title="XP2P Tunnel provider" class="md-header__button md-logo" aria-label="XP2P Tunnel provider" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            XP2P Tunnel provider
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Apply Flow
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="blue" data-md-color-accent="deep-purple"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="green" data-md-color-accent="deep-orange"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="Выберите язык">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="../../../flows/apply-flow/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="ru" class="md-select__link">
+              Русский
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Поиск" placeholder="Поиск" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Поиск">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Очистить" aria-label="Очистить" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Инициализация поиска
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Навигация" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../" title="XP2P Tunnel provider" class="md-nav__button md-logo" aria-label="XP2P Tunnel provider" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    XP2P Tunnel provider
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/terminology/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terminology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/single-tunnel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Tunnel (A-B)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides (Use Cases)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides (Use Cases)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/redirects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Redirects Within A-B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/chain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chain (C2-B-A-C1)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guides/advanced/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Variants
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flows (How It Works)
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Flows (How It Works)
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deploy-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploy Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apply Flow
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Apply Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Содержание">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Содержание
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-files-and-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Files and Directories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#high-level-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-Level Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#desired-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Desired Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-rules-and-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read Rules and Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edit-rollback-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edit + Rollback Flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Edit + Rollback Flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#directory-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Roles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-edit-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Edit Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cli-edit-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Edit Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deploy-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deploy Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#apply-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Apply Request
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#service-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Service Apply
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routes-and-os-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routes and OS Changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-os-state-contract-tun-routes-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime OS State Contract (TUN / routes / DNS)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Runtime OS State Contract (TUN / routes / DNS)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ownership-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ownership and Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mode-driven-transitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode-Driven Transitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restart-and-cancellation-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restart and Cancellation Semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pending-state-and-retry-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pending State and Retry (Windows)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-switching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode Switching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-failure-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Failure Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config-compilation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Config Compilation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tunnel-status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tunnel Status Logic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tun-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUN Setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diagnostics & NAT helpers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli-workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Содержание">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Содержание
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#key-files-and-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Files and Directories
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#actors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Actors
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#high-level-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High-Level Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#desired-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Desired Inputs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-rules-and-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read Rules and Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edit-rollback-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edit + Rollback Flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Edit + Rollback Flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#directory-roles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Roles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-edit-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Edit Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cli-edit-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Edit Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rollback Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deploy-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deploy Flow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#apply-request" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Apply Request
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#service-apply" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Service Apply
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#routes-and-os-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Routes and OS Changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#runtime-os-state-contract-tun-routes-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runtime OS State Contract (TUN / routes / DNS)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Runtime OS State Contract (TUN / routes / DNS)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ownership-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ownership and Scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mode-driven-transitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode-Driven Transitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#restart-and-cancellation-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Restart and Cancellation Semantics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pending-state-and-retry-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pending State and Retry (Windows)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-switching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode Switching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-failure-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Failure Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="apply-flow">Apply Flow</h1>
+<p>This document describes how xp2p applies configuration changes via a strict
+service-owned apply mechanism. The goal is to make config updates atomic,
+audited, and safe to apply from services without relying on CLI flags.</p>
+<h2 id="key-files-and-directories">Key Files and Directories</h2>
+<ul>
+<li><code>CONFIG_ROOT/.state/</code></li>
+<li><code>CONFIG_ROOT/.state/live/</code></li>
+<li><code>CONFIG_ROOT/.state/lkg/</code></li>
+<li><code>CONFIG_ROOT/.state/apply.request</code></li>
+<li><code>CONFIG_ROOT/.state/apply.error</code></li>
+<li><code>CONFIG_ROOT/xp2p-client.toml</code></li>
+<li><code>CONFIG_ROOT/xp2p-server.toml</code></li>
+<li><code>CONFIG_ROOT/config-client/</code></li>
+<li><code>CONFIG_ROOT/config-server/</code></li>
+</ul>
+<p>The <code>apply.request</code> file is the trigger that asks the service layer to compile
+and apply Desired inputs.</p>
+<h2 id="actors">Actors</h2>
+<ul>
+<li>CLI, UI, and manual edits: update Desired inputs and create <code>apply.request</code>.</li>
+<li>Service layer (<code>xp2p run</code> or system service): reads <code>apply.request</code>,
+  compiles Desired inputs into runtime artifacts, and cleans up.</li>
+</ul>
+<h2 id="high-level-flow">High-Level Flow</h2>
+<ol>
+<li>Update Desired inputs (<code>xp2p-*.toml</code> and optional JSON snippets).</li>
+<li>Write <code>apply.request</code>.</li>
+<li>Service detects request and compiles runtime configuration.</li>
+<li>Service clears <code>apply.request</code> on success, or writes <code>apply.error</code> on failure.</li>
+<li>Runtime behavior updates OS routes and TUN state (service layer only).</li>
+</ol>
+<h2 id="desired-inputs">Desired Inputs</h2>
+<p>Desired inputs are always user-editable and live at stable paths:</p>
+<ul>
+<li><code>CONFIG_ROOT/xp2p-client.toml</code></li>
+<li><code>CONFIG_ROOT/xp2p-server.toml</code></li>
+<li><code>CONFIG_ROOT/config-client/*.json</code> (optional snippets)</li>
+<li><code>CONFIG_ROOT/config-server/*.json</code> (optional snippets)</li>
+</ul>
+<p>xp2p reads these inputs and compiles them into a final Xray configuration used by the runtime.</p>
+<p>For recommended snippet filenames and routing rule insertion points, see <a href="../config-compilation/">Config compilation</a>.</p>
+<h2 id="read-rules-and-exceptions">Read Rules and Exceptions</h2>
+<ul>
+<li>Runtime behavior (service run, diagnostics, ping, OS routing) reads live runtime
+  artifacts only and never reads Desired inputs directly.</li>
+<li>If Desired inputs change, an apply must be requested via <code>apply.request</code>.</li>
+<li>Deploy validation may start a temporary xray-core using a compiled config derived
+  from Desired inputs, but it must not write to live or bypass apply.</li>
+</ul>
+<h2 id="edit-rollback-flow">Edit + Rollback Flow</h2>
+<p>This section describes the flow for manual edits, CLI edits, and rollback
+using a clear split between Desired, Live, and LKG. Apply requests are tracked
+via a marker file.</p>
+<h3 id="directory-roles">Directory Roles</h3>
+<ul>
+<li>Desired: user-editable config inputs</li>
+<li><code>CONFIG_ROOT/xp2p-*.toml</code></li>
+<li><code>config-client/*.json</code>, <code>config-server/*.json</code></li>
+<li>Live: active runtime config</li>
+<li><code>CONFIG_ROOT/.state/live/</code></li>
+<li>LKG: last known good snapshot (hidden)</li>
+<li><code>CONFIG_ROOT/.state/lkg/</code></li>
+</ul>
+<p>Live and LKG store compiled runtime artifacts (for example <code>xray.json</code>) together with apply metadata.</p>
+<h3 id="manual-edit-flow">Manual Edit Flow</h3>
+<ol>
+<li>User edits Desired files under <code>CONFIG_ROOT/</code> or <code>config-*/</code>.</li>
+<li>Watchers debounce bursts of writes.</li>
+<li><code>apply.request</code> is created after edits settle to trigger service apply.</li>
+<li>Service compiles Desired inputs and writes live runtime artifacts atomically.</li>
+<li>On success, the previous live artifact set is stored as LKG (optional).</li>
+</ol>
+<h3 id="cli-edit-flow">CLI Edit Flow</h3>
+<ol>
+<li>CLI writes updates into Desired.</li>
+<li><code>apply.request</code> is created to trigger service apply.</li>
+<li>Service compiles Desired inputs into live runtime artifacts.</li>
+<li>On success, the previous live artifact set is stored as LKG (optional).</li>
+</ol>
+<h3 id="rollback-flow">Rollback Flow</h3>
+<ol>
+<li>Apply fails (service/xray/health checks).</li>
+<li>Service restores live runtime artifacts from LKG (when available).</li>
+<li><code>apply.error</code> is written with the request ID and failure reason.</li>
+<li><code>apply.request</code> remains so operators can see the requested change, but the service
+   skips repeated apply attempts for the same request ID.</li>
+<li>Service restarts using restored live artifacts and logs the failure.</li>
+</ol>
+<h2 id="deploy-flow">Deploy Flow</h2>
+<p>Deploy flow details (including apply requests, temporary tunnel validation,
+and service start requirements) live in <a href="../deploy-flow/">Deploy flow</a> to avoid duplication.</p>
+<h2 id="apply-request">Apply Request</h2>
+<p>The apply trigger file is created at:</p>
+<ul>
+<li><code>CONFIG_ROOT/.state/apply.request</code></li>
+<li><code>CONFIG_ROOT/.state/apply.error</code></li>
+</ul>
+<p>It includes a role (<code>client</code> or <code>server</code>) and a request ID. The service
+process watches for this file and treats it as the single source of truth
+for apply work. When apply fails, the service writes <code>apply.error</code> with
+the same request ID and failure reason.</p>
+<h2 id="service-apply">Service Apply</h2>
+<p>On service start (or restart), the service:</p>
+<ol>
+<li>Reads <code>apply.request</code>.</li>
+<li>Compiles Desired inputs into live runtime artifacts.</li>
+<li>Removes <code>apply.request</code>.</li>
+<li>Writes LKG metadata on success (optional).</li>
+</ol>
+<p>If apply fails, the service logs the error and keeps <code>apply.request</code> so the
+operator can investigate or retry. The service will not retry the same
+request ID once <code>apply.error</code> is recorded; a new apply request must be
+created after fixing Desired inputs.</p>
+<h2 id="routes-and-os-changes">Routes and OS Changes</h2>
+<p>OS changes are applied only by the service layer:</p>
+<ul>
+<li>TUN creation and IP assignment.</li>
+<li>Routes and full-tunnel changes.</li>
+<li>DNS overrides (when enabled).</li>
+</ul>
+<p>CLI commands and UI flows update Desired inputs and request apply. They do not touch OS-level state directly.</p>
+<h2 id="runtime-os-state-contract-tun-routes-dns">Runtime OS State Contract (TUN / routes / DNS)</h2>
+<p>This section defines the runtime contract for service-owned OS state to avoid visible flapping during restarts.</p>
+<h3 id="ownership-and-scope">Ownership and Scope</h3>
+<ul>
+<li>The service layer owns OS state (TUN, routes, DNS).</li>
+<li>The service layer must keep OS state consistent with the current Desired runtime mode.</li>
+<li>CLI/UI/manual edits must not directly modify OS state.</li>
+</ul>
+<h3 id="mode-driven-transitions">Mode-Driven Transitions</h3>
+<p>OS state transitions are driven by mode transitions, not by internal restarts:</p>
+<ul>
+<li>Enter full-tunnel (<code>client.tun_enabled=true</code> and <code>client.tun_mode=full</code>):</li>
+<li>Replace default routes with the TUN interface.</li>
+<li>Add bypass routes to all configured endpoints.</li>
+<li>Apply DNS override to <code>client.dns_servers</code> (when configured).</li>
+<li>Keep full-tunnel active while Desired remains in full-tunnel mode.</li>
+<li>Exit full-tunnel (Desired changes away from full-tunnel):</li>
+<li>Restore baseline default routes and remove bypass routes.</li>
+<li>Restore baseline DNS.</li>
+<li>Service stop/uninstall:</li>
+<li>Restore baseline routes/DNS (best effort) before exiting.</li>
+</ul>
+<h3 id="restart-and-cancellation-semantics">Restart and Cancellation Semantics</h3>
+<p>Service restarts caused by <code>apply.request</code>, file watchers, health checks, or crash recovery must not cause
+route/DNS rollback if Desired remains in full-tunnel mode.</p>
+<ul>
+<li>A child-run cancellation (graceful restart) is not a mode change.</li>
+<li>Rollback/restore is allowed only on explicit stop, explicit mode switch, or hard failures that require leaving the mode.</li>
+</ul>
+<h3 id="pending-state-and-retry-windows">Pending State and Retry (Windows)</h3>
+<p>On Windows, TUN readiness can be delayed or unstable across restarts (adapter disconnected, IPv4 missing, DAD not preferred).
+When Desired is full-tunnel but the adapter is not ready, runtime enters a pending state instead of rolling back OS state.</p>
+<ul>
+<li>Pending state is recorded in <code>CONFIG_ROOT/xp2p-client.tun-full.json</code> as <code>phase = "full_pending"</code> with a stable <code>pending_reason</code>.</li>
+<li>While pending, routes and DNS override are not applied.</li>
+<li>The service retries through restarts using exponential backoff (2s, 4s, 8s, ... capped at 30s) until the adapter is <code>up</code>/<code>preferred</code>.</li>
+</ul>
+<h2 id="mode-switching">Mode Switching</h2>
+<p>Mode changes (split/full):</p>
+<ul>
+<li>Update <code>tun_enabled</code>, <code>tun_mode</code>, and <code>full_tunnel_tag</code> in Desired TOML.</li>
+<li>Write <code>apply.request</code>.</li>
+<li>Service compiles config and restarts runtime as needed.</li>
+<li>In full mode, repeated route re-apply does not rewrite config; it only
+  updates OS routes.</li>
+</ul>
+<h2 id="common-failure-modes">Common Failure Modes</h2>
+<ul>
+<li>Invalid Desired TOML / invalid JSON snippets.</li>
+<li>Merge collisions (reserved tags, invalid rule order, conflicts).</li>
+<li>Service not running or apply request not detected.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e \u0432 \u0431\u0443\u0444\u0435\u0440", "clipboard.copy": "\u041a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432 \u0431\u0443\u0444\u0435\u0440", "search.result.more.one": "\u0415\u0449\u0451 1 \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.more.other": "\u0415\u0449\u0451 # \u043d\u0430 \u044d\u0442\u043e\u0439 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0435", "search.result.none": "\u0421\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439 \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e", "search.result.one": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e 1 \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0435", "search.result.other": "\u041d\u0430\u0439\u0434\u0435\u043d\u043e \u0441\u043e\u0432\u043f\u0430\u0434\u0435\u043d\u0438\u0439: #", "search.result.placeholder": "\u041d\u0430\u0447\u043d\u0438\u0442\u0435 \u043f\u0435\u0447\u0430\u0442\u0430\u0442\u044c \u0434\u043b\u044f \u043f\u043e\u0438\u0441\u043a\u0430", "search.result.term.missing": "\u041e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442", "select.version": "\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0432\u0435\u0440\u0441\u0438\u044e"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
