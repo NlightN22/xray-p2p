@@ -104,6 +104,8 @@ From B:
 xp2p ping 10.63.30.11
 ```
 
+`xp2p ping` requires the diagnostics responder on the target side (xp2p service or `xp2p diag`).
+
 Advanced verification options:
 
 - Use `--tunnel` to force the tunnel path and `--count <n>` to limit probes.
