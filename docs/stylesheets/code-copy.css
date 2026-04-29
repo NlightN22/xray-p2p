@@ -1,0 +1,16 @@
+.md-typeset .md-clipboard {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+[data-md-color-scheme="default"] .md-typeset .md-clipboard:hover {
+  color: rgba(0, 0, 0, 0.75);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-clipboard {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .md-clipboard:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+

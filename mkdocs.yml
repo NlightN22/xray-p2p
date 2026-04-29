@@ -69,6 +69,8 @@ theme:
   name: material
   logo: https://raw.githubusercontent.com/NlightN22/xray-p2p/main/assets/xp2p_icon.png
   favicon: https://raw.githubusercontent.com/NlightN22/xray-p2p/main/assets/xp2p.ico
+  features:
+    - content.code.copy
   font:
     text: Merriweather Sans
     code: Roboto Mono
@@ -101,3 +103,4 @@ extra_javascript:
 extra_css:
   - stylesheets/mermaid.css
   - stylesheets/lang-active.css
+  - stylesheets/code-copy.css
