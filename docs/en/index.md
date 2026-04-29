@@ -31,5 +31,5 @@ then layer in redirects, DNS handling, and multi-node chains.
 ## Conventions
 
 - A = server node, B = client node.
-- C1, C2 = downstream Alpine guests behind B and A.
+- C1, C2 = downstream guests behind NAT on B and A.
 - Replace example IPs, users, and passwords with your actual values.
