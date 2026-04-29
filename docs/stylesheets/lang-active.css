@@ -1,0 +1,5 @@
+.md-select__link[aria-current="true"] {
+  font-weight: 700;
+  text-decoration: underline;
+}
+

@@ -13,6 +13,31 @@ plugins:
           build: true
         - locale: ru
           name: Русский
+          nav_translations:
+            Getting Started: Начало работы
+            Overview: Обзор
+            Terminology: Терминология
+            Install: Установка
+            First Tunnel (A-B): Первый туннель (A–B)
+            Guides (Use Cases): Руководства (сценарии)
+            Redirects Within A-B: Редиректы в A–B
+            Chain (C2-B-A-C1): Цепочка (C2–B–A–C1)
+            Advanced Variants: Продвинутые варианты
+            Flows (How It Works): Потоки (как работает)
+            Deploy Flow: Поток deploy
+            Apply Flow: Поток apply
+            Config Compilation: Компиляция конфигурации
+            Tunnel Status Logic: Логика статуса туннеля
+            Operations: Эксплуатация
+            TUN Setup: Настройка TUN
+            Diagnostics & NAT helpers: Диагностика и NAT-хелперы
+            Service Control: Управление сервисом
+            Backup & Migration: Резервное копирование и миграция
+            Shell Completion: Автодополнение shell
+            CLI Docs Generation: Генерация CLI-документации
+            Reference: Справочник
+            Configuration: Конфигурация
+            CLI Workflows: CLI-сценарии
 
 nav:
   - Getting Started:
@@ -71,6 +96,8 @@ markdown_extensions:
 extra_javascript:
   - https://unpkg.com/mermaid@10/dist/mermaid.min.js
   - javascripts/mermaid-init.js
+  - javascripts/lang-active.js
 
 extra_css:
   - stylesheets/mermaid.css
+  - stylesheets/lang-active.css
