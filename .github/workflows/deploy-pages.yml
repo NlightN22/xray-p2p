@@ -12,10 +12,6 @@ on:
           - docs-only
           - feed-only
           - both
-      feed_release_tag:
-        description: "GitHub Release tag containing .ipk assets (required for feed-only/both)"
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -69,8 +65,14 @@ jobs:
             exit 0
           fi
           if [ ! -f ".baseline/artifact.tar" ]; then
-            echo "Baseline artifact.tar not found; refusing to continue." >&2
-            exit 1
+            if [ "$MODE" != "both" ]; then
+              echo "Baseline artifact.tar not found; refusing to continue." >&2
+              exit 1
+            fi
+            echo "Baseline artifact.tar not found; continuing with an empty baseline because mode=both." >&2
+            rm -rf .baseline .pages
+            mkdir -p .pages
+            exit 0
           fi
           tar -xf .baseline/artifact.tar -C .pages
           rm -f .pages/artifact.tar
@@ -110,20 +112,29 @@ jobs:
         if: ${{ inputs.mode == 'feed-only' || inputs.mode == 'both' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.feed_release_tag }}
         run: |
           set -euo pipefail
-          if [ -z "$TAG" ]; then
-            echo "feed_release_tag is required for mode=${{ inputs.mode }}" >&2
-            exit 1
-          fi
           rm -rf .tmp/release-ipks .tmp/inputs
           mkdir -p .tmp/release-ipks .tmp/inputs/openwrt/staging/stable
-          gh release download "$TAG" -p "*.ipk" -D .tmp/release-ipks
+          mapfile -t tags < <(
+            gh release list -L 50 --json tagName,isDraft,isPrerelease \
+              --jq '.[] | select(.isDraft==false) | select(.isPrerelease==false) | .tagName' \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true
+          )
+          if [ ${#tags[@]} -eq 0 ]; then
+            echo "No stable releases found to download .ipk assets from." >&2
+            exit 1
+          fi
+          # Keep a rolling history for the feed (latest 5 stable releases).
+          tags=("${tags[@]:0:5}")
+          echo "Downloading .ipk assets from releases: ${tags[*]}" >&2
+          for t in "${tags[@]}"; do
+            gh release download "$t" -p "*.ipk" -D .tmp/release-ipks || true
+          done
           shopt -s nullglob
           files=(.tmp/release-ipks/*.ipk)
           if [ ${#files[@]} -eq 0 ]; then
-            echo "No .ipk assets found in release $TAG" >&2
+            echo "No .ipk assets found in the selected releases." >&2
             exit 1
           fi
           mv .tmp/release-ipks/*.ipk .tmp/inputs/openwrt/staging/stable/
