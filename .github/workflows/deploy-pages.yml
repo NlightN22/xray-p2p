@@ -58,7 +58,16 @@ jobs:
           fi
           rm -rf .baseline .pages
           mkdir -p .baseline .pages
-          gh run download "$run_id" -n github-pages -D .baseline
+          if ! gh run download "$run_id" -n github-pages -D .baseline; then
+            if [ "$MODE" != "both" ]; then
+              echo "Baseline Pages artifact could not be downloaded (expired or missing); run with mode=both to rebuild a clean baseline." >&2
+              exit 1
+            fi
+            echo "Baseline Pages artifact could not be downloaded; continuing with an empty baseline because mode=both." >&2
+            rm -rf .baseline .pages
+            mkdir -p .pages
+            exit 0
+          fi
           if [ ! -f ".baseline/artifact.tar" ]; then
             echo "Baseline artifact.tar not found; refusing to continue." >&2
             exit 1
@@ -192,6 +201,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./.pages
+          retention-days: 90
 
       - name: Deploy to GitHub Pages
         id: deployment
