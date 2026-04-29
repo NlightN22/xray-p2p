@@ -1,9 +1,9 @@
 # Управление сервисами
 
-Большинство установок управляет сервисами через менеджер сервисов ОС (`systemd`, `procd`, Windows SCM).
-Команды `xp2p ... service` — это кроссплатформенный wrapper-слой.
+Обычно сервисами управляет менеджер сервисов ОС (`systemd`, `procd`, Windows SCM).
+Команды `xp2p ... service` — кроссплатформенная обёртка для управления сервисами xp2p.
 
-## Status / stop
+## Статус / остановка
 
 ```sh
 xp2p client service status
@@ -13,17 +13,17 @@ xp2p server service status
 xp2p server service stop
 ```
 
-## Foreground run (для service managers)
+## Запуск в переднем плане (для менеджеров сервисов)
 
-`service run` предназначен для service managers, чтобы держать xp2p в foreground.
-Используй это только если ты точно понимаешь, что тебе нужен foreground process вместо установки service unit.
+`service run` предназначен для менеджеров сервисов, чтобы держать xp2p в переднем плане.
+Используй это только если осознанно запускаешь xp2p как foreground process вместо установки service unit.
 
 ```sh
 xp2p client service run
 xp2p server service run
 ```
 
-## Foreground run (вручную)
+## Запуск в переднем плане (вручную)
 
 ```sh
 xp2p client run

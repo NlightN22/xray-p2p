@@ -76,5 +76,5 @@ xp2p server dns-forward remove --domain corp.test.com
 ## Расширенные опции
 
 - Несколько tunnels/endpoints: передай `--tag <tag>`, чтобы выбрать конкретный туннель.
-- Нестандартный config root: передай `--path <dir>` и `--config-dir <dir>`, если не используешь layout по умолчанию.
+- Нестандартный корень конфигурации: передай `--path <dir>` и `--config-dir <dir>`, если не используешь layout по умолчанию.
 - DNS helper forward: добавь `--with-forward`, чтобы одновременно создать локальный forward-правило вместе с dnsmasq записью.

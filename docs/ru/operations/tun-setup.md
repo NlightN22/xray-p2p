@@ -1,20 +1,20 @@
 # Настройка TUN
 
-TUN интерфейсы по умолчанию называются `xp2pc` (client) и `xp2ps` (server). Если ты меняешь имена, MTU или адреса, обнови сетевую конфигурацию ОС и снова запусти `xp2p {client,server} install`.
+TUN-интерфейсы используются `xp2pc` (client) и `xp2ps` (server). Обычно адреса, MTU и базовые параметры TUN задаются через `xp2p {client,server} install`.
 
 ## Предварительные требования
 
-Когда TUN включён, `xp2p` выполняет runtime preflight check и завершает работу раньше (до старта Xray), если prerequisites отсутствуют.
+Когда включён TUN, `xp2p` выполняет preflight-проверку в рантайме и завершает работу раньше (до старта Xray), если необходимые зависимости отсутствуют.
 
-- OpenWrt: установи kernel module командой `opkg update && opkg install kmod-tun` (убедись, что существует `/dev/net/tun`).
-- Linux: убедись, что существует `/dev/net/tun` (`modprobe tun`) и запускай с достаточными правами (root или `CAP_NET_ADMIN`).
-- Windows: положи `wintun.dll` рядом с `xray.exe` (обычно `<install_dir>/bin`) и используй совместимую версию.
+- OpenWrt: нужен пакет `kmod-tun` (чтобы появился `/dev/net/tun`).
+- Linux: нужен `/dev/net/tun` (`modprobe tun`) и права на управление сетью (root или `CAP_NET_ADMIN`).
+- Windows: `wintun.dll` должен лежать рядом с `xp2p.exe` и `xray.exe` (в MSI-установке обычно это `<install_dir>/bin`).
 
 ## OpenWrt
 
-На OpenWrt `xp2p` сам создаёт UCI network interface при включённом TUN и удаляет его при `xp2p {client,server} remove`. Используй команды ниже только для ручных override или восстановления.
+На OpenWrt `xp2p` создаёт UCI сетевой интерфейс и управляет им при установке/удалении роли. Если нужно вручную переопределить интерфейс, можно задать его в UCI.
 
-Пример для client (manual override):
+Ручное переопределение для client:
 
 ```sh
 uci -q delete network.xp2pc
@@ -28,7 +28,7 @@ uci commit network
 ip a show dev xp2pc
 ```
 
-Пример для server (manual override):
+Ручное переопределение для server:
 
 ```sh
 uci -q delete network.xp2ps
@@ -42,11 +42,12 @@ uci commit network
 ip a show dev xp2ps
 ```
 
-## Linux (маршрутизация)
+## Linux (маршрутизация policy routing)
 
-На Linux `xp2p` настраивает TUN маршрутизацию в runtime с помощью `ip rule` и `ip route`. Default policy route table: `20090` для `xp2pc` и `20091` для `xp2ps`.
+На Linux `xp2p` настраивает маршрутизацию TUN в рантайме с помощью `ip rule` и `ip route`.
+
+Таблица маршрутизации policy routing по умолчанию: `20090` для `xp2pc` и `20091` для `xp2ps`.
 
 ## Windows
 
-Положи `wintun.dll` рядом с `xp2p.exe` и `xray.exe` (для MSI installs это директория `bin`). TUN интерфейс создаётся автоматически при старте Xray.
-
+На Windows для TUN используется Wintun. Логи xray-core вроде `Failed to find matching adapter name` и `Removed orphaned adapter` ожидаемы во время поднятия Wintun и сами по себе не являются ошибкой.

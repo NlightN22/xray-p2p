@@ -10,20 +10,20 @@
 
 ## Ключевые правила
 
-- Deploy обновляет Desired inputs и записывает `apply.request`.
+- Deploy обновляет желаемые входные данные и записывает `apply.request`.
 - Deploy не запускает сервисы.
 - Deploy может запустить временный экземпляр xray-core для проверки туннеля.
 - Сервисы запускаются оператором явно после успешного deploy.
-- При старте сервиса Desired inputs компилируются в live runtime artifacts до запуска.
+- При старте сервиса желаемые входные данные компилируются в live runtime artifacts до запуска.
 
 ## Обзор деплоя
 
 1. Client deploy генерирует deploy link и ждёт сервер.
-2. Server deploy принимает зашифрованный manifest и обновляет Desired inputs:
+2. Server deploy принимает зашифрованный manifest и обновляет желаемые входные данные:
    - `CONFIG_ROOT/xp2p-server.toml`
    - Опциональные JSON snippets в `CONFIG_ROOT/config-server/` (если они используются спецификацией deploy)
 3. Server deploy записывает `apply.request` для роли server.
-4. Client deploy получает ответ сервера и обновляет Desired inputs:
+4. Client deploy получает ответ сервера и обновляет желаемые входные данные:
    - `CONFIG_ROOT/xp2p-client.toml`
    - Опциональные JSON snippets в `CONFIG_ROOT/config-client/` (если они используются спецификацией deploy)
 5. Client deploy записывает `apply.request` для роли client.
@@ -46,8 +46,8 @@ Deploy может запустить xray-core с скомпилированно
 
 Deploy может выполняться поверх существующей установки с live config и активным сервисом:
 
-- Desired inputs остаются источником истины для изменений deploy.
-- Deploy обновляет Desired inputs и записывает `apply.request`.
+- Желаемые входные данные остаются источником истины для изменений deploy.
+- Deploy обновляет желаемые входные данные и записывает `apply.request`.
 - Работающий сервис должен продолжать работать и не должен быть перезапущен deploy.
 - Временный xray-core для deploy используется только для проверки туннеля и не должен
   перезаписывать или переиспользовать service runtime.
@@ -65,7 +65,7 @@ Deploy может выполняться поверх существующей �
 При старте сервис:
 
 1. Читает `apply.request`.
-2. Компилирует Desired inputs в live runtime artifacts.
+2. Компилирует желаемые входные данные в live runtime artifacts.
 3. Удаляет `apply.request`.
 4. Запускает runtime, используя live config.
 
@@ -80,5 +80,5 @@ Deploy может выполняться поверх существующей �
 - Коллизии при merge (зарезервированные теги, неверный порядок правил, конфликты).
 - Сервис не запущен после успешного deploy.
 
-Если в логах deploy указаны невалидные Desired inputs или коллизии merge, исправьте Desired
+Если в логах deploy указаны невалидные желаемые входные данные или коллизии merge, исправьте желаемые входные данные
 файлы и снова запросите apply.

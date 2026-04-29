@@ -38,7 +38,7 @@ xp2p компилирует inputs в финальный Xray JSON файл, к�
 
 ## Структура каталогов
 
-- Desired inputs
+- Желаемые входные данные
   - `CONFIG_ROOT/xp2p-*.toml`
   - `CONFIG_ROOT/config-*/` (JSON snippets)
 - Service state и runtime artifacts
@@ -48,7 +48,7 @@ xp2p компилирует inputs в финальный Xray JSON файл, к�
   - `CONFIG_ROOT/.state/lkg/config-*/xray.json` (опционально)
   - `CONFIG_ROOT/audit.log`
 
-Директория `.state` хранит метаданные apply и скомпилированные runtime artifacts. Она не зеркалирует Desired inputs.
+Директория `.state` хранит метаданные apply и скомпилированные runtime artifacts. Она не зеркалирует желаемые входные данные.
 
 ## Конвейер компиляции
 
@@ -56,7 +56,7 @@ xp2p компилирует inputs в финальный Xray JSON файл, к�
 
 1. Загрузить Desired TOML (`CONFIG_ROOT/xp2p-*.toml`).
 2. Загрузить Desired JSON snippets из `CONFIG_ROOT/config-*/` (если есть).
-3. Построить managed base Xray config из TOML (endpoints, routing, inbounds, logs, reverse bridges и т.д.).
+3. Построить managed base Xray config из TOML (endpoints, routing, входящие слушатели, logs, reverse bridges и т.д.).
 4. Merge'ить user snippets в managed base по детерминированным правилам.
 5. Валидировать финальный config (структура, коллизии reserved tags, обязательные секции).
 6. Атомарно записать финальный config в `.state/live/config-*/xray.json`.
@@ -156,7 +156,7 @@ xp2p client render xray --live --output -
 xp2p server render xray --live --output -
 ```
 
-Отрендерить конфигурацию, скомпилированную из Desired inputs (без применения):
+Отрендерить конфигурацию, скомпилированную из желаемых входных данных (без применения):
 
 ```bash
 xp2p client render xray --desired --output -
@@ -174,7 +174,7 @@ xp2p server debug bundle --output /tmp/xp2p-server-debug.zip
 
 Bundle включает:
 
-- Desired inputs (`xp2p-*.toml` и `config-*/` snippets)
+- Желаемые входные данные (`xp2p-*.toml` и `config-*/` snippets)
 - `apply.request` / `apply.error` (если есть)
 - финальный `xray.json`
 - `audit.log`

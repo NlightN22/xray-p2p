@@ -1,21 +1,21 @@
-# Backup и перенос
+# Резервная копия и перенос
 
-Export/import переносит целиком snapshot `CONFIG_ROOT` для выбранной роли.
+Команды export/import переносят целиком снимок `CONFIG_ROOT` для выбранной роли.
 
-Это полезно, чтобы переносить Desired inputs между машинами, хранить rollback snapshot или клонировать настройку.
+Это удобно, чтобы переносить желаемые входные данные (Desired inputs) между машинами, хранить снимок для отката или клонировать настройку.
 
-## Export
+## Экспорт
 
-Export использует `CONFIG_ROOT` по умолчанию и пишет архив в текущую директорию.
+Экспорт использует `CONFIG_ROOT` по умолчанию и пишет архив в текущую директорию:
 
 ```sh
 xp2p client export
 xp2p server export
 ```
 
-## Advanced export
+### Расширенные опции экспорта
 
-- Экспорт из нестандартного config root:
+- Экспорт из нестандартного корня конфигурации:
 
 ```sh
 xp2p client export --config-root <path>
@@ -29,34 +29,33 @@ xp2p client export --output <path>
 xp2p server export --output <path>
 ```
 
-Поддерживаемые форматы определяются расширением output-файла:
+Формат определяется расширением output-файла:
 
 - `.zip`
 - `.tar.gz` (или `.tgz`)
 
 Если `--output` не задан, xp2p выбирает формат по умолчанию (`.zip` на Windows, `.tar.gz` на не-Windows) и пишет `xp2p-<role>-backup-<timestamp>.<ext>` в текущую директорию.
 
-## Import
+## Импорт
 
 ```sh
 xp2p client import --input <archive>
 xp2p server import --input <archive>
 ```
 
-После import проверь status сервиса и при необходимости перезапусти service для роли.
+После импорта проверь статус сервиса и при необходимости перезапусти сервис соответствующей роли.
 
-## Advanced import
+### Расширенные опции импорта
 
-- Импорт в нестандартный config root:
+- Импорт в нестандартный корень конфигурации:
 
 ```sh
 xp2p client import --config-root <path> --input <archive>
 xp2p server import --config-root <path> --input <archive>
 ```
 
-Notes:
+Ограничения:
 
-- Import принимает только Desired inputs (runtime artifacts в `.state/` отклоняются).
-- Symlinks внутри bundle не поддерживаются.
-- Import пишет marker `apply.request` для импортированной роли, чтобы сервис мог пере-применить новые Desired inputs.
-
+- Импорт принимает только желаемые входные данные (артефакты рантайма под `.state/` отклоняются).
+- Символические ссылки (symlink) внутри архива не поддерживаются.
+- Импорт записывает маркер `apply.request` для импортированной роли, чтобы сервис применил новые желаемые входные данные.

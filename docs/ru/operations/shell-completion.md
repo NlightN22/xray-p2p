@@ -1,14 +1,14 @@
-# Автодополнение в shell
+# Автодополнение в командной оболочке
 
-Большинство способов установки ставит shell completions автоматически:
+В большинстве способов установки автодополнение устанавливается автоматически:
 
-- Debian/Ubuntu пакеты устанавливают completions в стандартные system locations.
-- OpenWrt пакеты устанавливают completions в `/usr/share/...` completion directories.
-- Windows MSI регистрирует PowerShell completion во время установки.
+- Пакеты Debian/Ubuntu ставят файлы автодополнения в стандартные системные директории.
+- Пакеты OpenWrt ставят файлы автодополнения в директории `/usr/share/...`.
+- Windows MSI регистрирует автодополнение для PowerShell во время установки.
 
-Используй `xp2p completion` только для archive-based installs, custom builds или troubleshooting.
+Используй `xp2p completion` только для установок из архивов, кастомных сборок или устранения неполадок.
 
-Сгенерируй completion script для своей shell:
+Сгенерируй скрипт автодополнения для своей оболочки:
 
 ```sh
 xp2p completion bash
@@ -17,5 +17,5 @@ xp2p completion fish
 xp2p completion powershell
 ```
 
-Загрузи сгенерированный скрипт стандартным для твоей shell способом (например через `~/.bashrc` / `~/.zshrc` profile).
+Подключи сгенерированный скрипт стандартным для твоей оболочки способом (например через `~/.bashrc` / `~/.zshrc`).
 

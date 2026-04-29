@@ -18,17 +18,17 @@
 - `CONFIG_ROOT/config-server/`
 
 Файл `apply.request` — это триггер, который просит service layer скомпилировать
-и применить Desired inputs.
+и применить желаемые входные данные.
 
 ## Роли
 
-- CLI, UI и ручные правки: обновляют Desired inputs и создают `apply.request`.
+- CLI, UI и ручные правки: обновляют желаемые входные данные и создают `apply.request`.
 - Service layer (`xp2p run` или system service): читает `apply.request`,
-  компилирует Desired inputs в runtime artifacts и выполняет очистку маркеров.
+  компилирует желаемые входные данные в runtime artifacts и выполняет очистку маркеров.
 
 ## Общий процесс
 
-1. Обновить Desired inputs (`xp2p-*.toml` и опциональные JSON snippets).
+1. Обновить желаемые входные данные (`xp2p-*.toml` и опциональные JSON snippets).
 2. Записать `apply.request`.
 3. Сервис обнаруживает запрос и компилирует runtime конфигурацию.
 4. При успехе сервис удаляет `apply.request`, при ошибке пишет `apply.error`.
@@ -36,7 +36,7 @@
 
 ## Желаемые входные данные
 
-Desired inputs всегда доступны для правки пользователем и лежат по стабильным путям:
+Желаемые входные данные всегда доступны для правки пользователем и лежат по стабильным путям:
 
 - `CONFIG_ROOT/xp2p-client.toml`
 - `CONFIG_ROOT/xp2p-server.toml`
@@ -50,10 +50,10 @@ xp2p читает эти inputs и компилирует их в итогову
 ## Правила чтения и исключения
 
 - Runtime behavior (service run, diagnostics, ping, OS routing) читает только live runtime
-  artifacts и никогда не читает Desired inputs напрямую.
-- При изменении Desired inputs нужно запросить apply через `apply.request`.
+  artifacts и никогда не читает желаемые входные данные напрямую.
+- При изменении желаемых входных данных нужно запросить apply через `apply.request`.
 - Проверка во время deploy может запустить временный xray-core с конфигом, скомпилированным
-  из Desired inputs, но она не должна писать в live и не должна обходить apply.
+  из желаемых входных данных, но она не должна писать в live и не должна обходить apply.
 
 ## Правки и откат
 
@@ -77,14 +77,14 @@ Live и LKG хранят скомпилированные runtime artifacts (н�
 1. Пользователь редактирует Desired файлы в `CONFIG_ROOT/` или `config-*/`.
 2. Watchers дебаунсят серии изменений.
 3. После стабилизации правок создаётся `apply.request`, чтобы триггернуть apply в сервисе.
-4. Сервис компилирует Desired inputs и атомарно пишет live runtime artifacts.
+4. Сервис компилирует желаемые входные данные и атомарно пишет live runtime artifacts.
 5. При успехе предыдущий набор live artifacts сохраняется как LKG (опционально).
 
 ### Правки через CLI
 
 1. CLI записывает изменения в Desired.
 2. Создаётся `apply.request`, чтобы триггернуть apply в сервисе.
-3. Сервис компилирует Desired inputs в live runtime artifacts.
+3. Сервис компилирует желаемые входные данные в live runtime artifacts.
 4. При успехе предыдущий набор live artifacts сохраняется как LKG (опционально).
 
 ### Откат
@@ -117,13 +117,13 @@ Trigger-файлы apply создаются по путям:
 При старте (или рестарте) сервис:
 
 1. Читает `apply.request`.
-2. Компилирует Desired inputs в live runtime artifacts.
+2. Компилирует желаемые входные данные в live runtime artifacts.
 3. Удаляет `apply.request`.
 4. Пишет метаданные LKG при успехе (опционально).
 
 Если apply падает, сервис логирует ошибку и оставляет `apply.request`, чтобы оператор
 мог расследовать проблему или повторить попытку. Сервис не будет повторять apply для того же
-request ID после записи `apply.error`; после исправления Desired inputs нужно создать новый
+request ID после записи `apply.error`; после исправления желаемых входных данных нужно создать новый
 apply request.
 
 ## Маршруты и изменения ОС
@@ -134,7 +134,7 @@ apply request.
 - Routes и full-tunnel изменения.
 - DNS overrides (если включено).
 
-CLI команды и UI flows обновляют Desired inputs и запрашивают apply. Они не трогают OS-level state напрямую.
+CLI команды и UI flows обновляют желаемые входные данные и запрашивают apply. Они не трогают OS-level state напрямую.
 
 ## Контракт состояния ОС в рантайме (TUN / маршруты / DNS)
 
