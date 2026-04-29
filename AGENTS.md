@@ -29,8 +29,10 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 
 ## Architecture and project maintenance
 
-- This is a new project, so file and folder names can be changed without backward compatibility constraints.
-- When renaming files or folders, check all dependencies between them.
+- This project is released, so breaking changes are not allowed by default.
+- Preserve backward compatibility for CLI, configs, file layouts, and service behavior unless a breaking release is explicitly planned.
+- When a breaking change is unavoidable, include a documented migration plan (and ideally an automated config migration path) and follow semantic versioning.
+- When renaming files or folders, check all dependencies between them and keep compatibility shims when feasible.
 - Try to use Python for editing and viewing when it is available.
 
 ## File size and decomposition
