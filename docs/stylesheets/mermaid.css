@@ -1,0 +1,11 @@
+.md-content .mermaid {
+  margin: 1.2rem 0 1.8rem 0;
+  display: flex;
+  justify-content: center;
+}
+
+.md-content .mermaid svg {
+  height: auto;
+  width: 100%;
+  max-width: 1100px;
+}

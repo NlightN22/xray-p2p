@@ -1,5 +1,6 @@
 site_name: XP2P Tunnel provider
 site_url: https://nlightn22.github.io/xray-p2p/docs/
+
 plugins:
   - search
   - i18n:
@@ -12,6 +13,7 @@ plugins:
           build: true
         - locale: ru
           name: Русский
+
 nav:
   - Getting Started:
       - Overview: index.md
@@ -37,6 +39,7 @@ nav:
   - Reference:
       - Configuration: reference/configuration.md
       - CLI Workflows: reference/cli-workflows.md
+
 theme:
   name: material
   logo: https://raw.githubusercontent.com/NlightN22/xray-p2p/main/assets/xp2p_icon.png
@@ -44,14 +47,13 @@ theme:
   font:
     text: Merriweather Sans
     code: Roboto Mono
-  palette: 
-    - scheme:  slate
+  palette:
+    - scheme: slate
       toggle:
         icon: material/weather-sunny
         name: Dark mode
       primary: blue
       accent: deep purple
-
     - scheme: default
       toggle:
         icon: material/weather-night
@@ -59,4 +61,16 @@ theme:
       primary: green
       accent: deep orange
 
-  
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
+
+extra_css:
+  - stylesheets/mermaid.css

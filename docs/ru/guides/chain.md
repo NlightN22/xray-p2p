@@ -1,26 +1,35 @@
-# Цепочка (C2-B-A-C1)
+# Цепочка (C2–B–A–C1)
 
-Эта цепочка отправляет трафик от C2 через B и A, чтобы достичь C1.
+Эта цепочка отправляет трафик из C2 через B и A, чтобы достичь C1.
+
+## Схема
+
+```mermaid
+flowchart TB
+  C1["C1 (гость)<br/>10.0.101.0/24 за NAT на A"] -->|"default gw"| A["A (server router)<br/>xp2ps"]
+  A <-->|"xp2p TUN поверх Xray"| B["B (client router)<br/>xp2pc"]
+  B -->|"default gw"| C2["C2 (гость)<br/>10.0.102.0/24 за NAT на B"]
+```
 
 ## Предпосылки
 
-- A = роутер, на котором запущен `xp2p server`, B = роутер, на котором запущен `xp2p client`.
+- A = роутер с `xp2p server`, B = роутер с `xp2p client`.
 - C1 находится за A (`10.0.101.0/24`), C2 находится за B (`10.0.102.0/24`).
-- A-B туннель уже работает и обе стороны запущены в TUN mode.
+- Туннель A–B уже работает, и обе стороны запущены в режиме TUN.
 - C1 использует A как default gateway, а C2 использует B как default gateway.
 
-## Редиректы (маршруты устанавливаются на A и B)
+## Редиректы (маршруты ставятся на A и B)
 
-Когда TUN включён, `xp2p {client,server} redirect add --cidr ...` компилируется в OS routes на роутерах (A/B) во время apply. На C1/C2 не нужно добавлять routes вручную.
+Когда включён TUN, `xp2p {client,server} redirect add --cidr ...` компилируется в маршруты ОС на роутерах (A/B) во время apply. Ручные маршруты на C1/C2 добавлять не нужно.
 
 ```sh
 xp2p client redirect add --cidr 10.0.101.0/24
 xp2p server redirect add --cidr 10.0.102.0/24
 ```
 
-Примените изменения, перезапустив сервисы через менеджер сервисов (например `service xp2p-client restart` / `service xp2p-server restart` на OpenWrt, или `systemctl restart xp2p-client xp2p-server` на системах с systemd).
+Примени изменения перезапуском сервисов через service manager (например `service xp2p-client restart` / `service xp2p-server restart` на OpenWrt или `systemctl restart xp2p-client xp2p-server` на системах с systemd).
 
-## Файрвол OpenWrt
+## OpenWrt firewall
 
 Привяжи TUN-интерфейс xp2p к firewall zone и разреши LAN <-> tunnel forwarding.
 
@@ -47,7 +56,7 @@ uci commit firewall
 /etc/init.d/firewall restart
 ```
 
-На A (server, `xp2ps`) сделай те же правила, но выставь `firewall.xp2ptun.network='xp2ps'`.
+На A (server, `xp2ps`) сделай то же самое, но поставь `firewall.xp2ptun.network='xp2ps'`.
 
 ## Проверка
 

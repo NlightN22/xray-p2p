@@ -2,6 +2,15 @@
 
 This chain sends traffic from C2 through B and A to reach C1.
 
+## Diagram
+
+```mermaid
+flowchart TB
+  C1["C1 (guest)<br/>10.0.101.0/24 behind NAT on A"] -->|"default gw"| A["A (server router)<br/>xp2ps"]
+  A <-->|"xp2p TUN over Xray"| B["B (client router)<br/>xp2pc"]
+  B -->|"default gw"| C2["C2 (guest)<br/>10.0.102.0/24 behind NAT on B"]
+```
+
 ## Assumptions
 
 - A = router running `xp2p server`, B = router running `xp2p client`.
