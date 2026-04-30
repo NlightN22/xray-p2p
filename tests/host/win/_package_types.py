@@ -1,0 +1,4 @@
+
+class MsiServiceUnavailable(RuntimeError):
+    pass
+
