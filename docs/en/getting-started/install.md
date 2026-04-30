@@ -6,7 +6,7 @@ This page covers installation basics per platform. For the fastest end-to-end se
 
 One-line installer (auto-detects release/arch, adds feed/signing key, installs package):
 
-```sh
+```console
 wget -qO- https://nlightn22.github.io/xray-p2p/install-xp2p.sh | sh
 ```
 
@@ -17,13 +17,13 @@ wget -qO- https://nlightn22.github.io/xray-p2p/install-xp2p.sh | sh
 
 Optional manual feed setup:
 
-```sh
+```console
 echo "src-git xp2p https://github.com/NlightN22/xray-p2p.git;main" >> /etc/opkg/customfeeds.conf && opkg update && opkg install xp2p
 ```
 
 From a local IPK:
 
-```sh
+```console
 opkg install /tmp/xp2p_<version>_<arch>.ipk
 ```
 
@@ -62,7 +62,7 @@ These examples use `xp2p server install` + `xp2p client install` (no deploy hand
 
 ### OpenWrt
 
-```sh
+```console
 opkg update && opkg install xp2p
 xp2p server install --host edge.example.com
 xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
@@ -73,7 +73,7 @@ xp2p server state
 
 ### Linux
 
-```sh
+```console
 sudo dpkg -i xp2p_<version>_amd64.deb || sudo apt-get -f install
 sudo xp2p server install --host edge.example.com
 sudo xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"

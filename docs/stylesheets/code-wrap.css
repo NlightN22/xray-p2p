@@ -1,0 +1,18 @@
+.md-typeset .language-console pre code,
+.md-typeset .language-console code,
+.md-typeset pre > code.language-console,
+.md-typeset pre code.language-console,
+.md-typeset .highlight pre code.language-console {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  line-break: anywhere !important;
+}
+
+.md-typeset .language-console pre code span,
+.md-typeset .language-console code span,
+.md-typeset pre > code.language-console span,
+.md-typeset pre code.language-console span,
+.md-typeset .highlight pre code.language-console span {
+  white-space: inherit !important;
+}

@@ -6,7 +6,7 @@ Use this after the single A-B tunnel is working.
 
 On B (client), send a subnet through the tunnel:
 
-```sh
+```console
 xp2p client redirect add --cidr 10.0.101.0/24
 ```
 
@@ -14,7 +14,7 @@ When TUN is enabled, this also installs an OS route for the CIDR (unless you use
 
 ## Client redirect (domain)
 
-```sh
+```console
 xp2p client redirect add --domain host.corp.test.com
 ```
 
@@ -22,7 +22,7 @@ xp2p client redirect add --domain host.corp.test.com
 
 On A (server), push traffic back through the tunnel:
 
-```sh
+```console
 xp2p server redirect add --cidr 10.0.102.0/24
 ```
 
@@ -32,13 +32,13 @@ When TUN is enabled, this also installs an OS route for the CIDR (unless you use
 
 If you need transparent NAT redirect (Linux/OpenWrt only, proxy mode only, run as root):
 
-```sh
+```console
 xp2p nat-redirect add --cidr 10.0.101.0/24
 ```
 
 Inspect and remove NAT redirect rules:
 
-```sh
+```console
 xp2p nat-redirect list
 xp2p nat-redirect remove --cidr 10.0.101.0/24
 ```
@@ -57,13 +57,13 @@ If routes already send DNS traffic through the tunnel, use dnsmasq directly:
 
 Let xp2p manage a dnsmasq entry (and optionally a local forward) (Linux/OpenWrt only):
 
-```sh
+```console
 xp2p client dns-forward add --domain corp.test.com --target 10.0.101.142:53
 ```
 
 Inspect and remove rules:
 
-```sh
+```console
 xp2p client redirect list
 xp2p client forward remove --target 192.0.2.10:22
 xp2p server redirect list

@@ -1,41 +1,41 @@
-# Цепочка (C2–B–A–C1)
+# Р¦РµРїРѕС‡РєР° (C2вЂ“BвЂ“AвЂ“C1)
 
-Эта цепочка отправляет трафик из C2 через B и A, чтобы достичь C1.
+Р­С‚Р° С†РµРїРѕС‡РєР° РѕС‚РїСЂР°РІР»СЏРµС‚ С‚СЂР°С„РёРє РёР· C2 С‡РµСЂРµР· B Рё A, С‡С‚РѕР±С‹ РґРѕСЃС‚РёС‡СЊ C1.
 
-## Схема
+## РЎС…РµРјР°
 
 ```mermaid
 flowchart TB
-  C1["C1 (гость)<br/>10.0.101.0/24 за NAT на A"] -->|"default gw"| A["A (server router)<br/>xp2ps"]
-  A <-->|"xp2p TUN поверх Xray"| B["B (client router)<br/>xp2pc"]
-  B -->|"default gw"| C2["C2 (гость)<br/>10.0.102.0/24 за NAT на B"]
+  C1["C1 (РіРѕСЃС‚СЊ)<br/>10.0.101.0/24 Р·Р° NAT РЅР° A"] -->|"default gw"| A["A (server router)<br/>xp2ps"]
+  A <-->|"xp2p TUN РїРѕРІРµСЂС… Xray"| B["B (client router)<br/>xp2pc"]
+  B -->|"default gw"| C2["C2 (РіРѕСЃС‚СЊ)<br/>10.0.102.0/24 Р·Р° NAT РЅР° B"]
 ```
 
-## Предпосылки
+## РџСЂРµРґРїРѕСЃС‹Р»РєРё
 
-- A = роутер с `xp2p server`, B = роутер с `xp2p client`.
-- C1 находится за A (`10.0.101.0/24`), C2 находится за B (`10.0.102.0/24`).
-- Туннель A–B уже работает, и обе стороны запущены в режиме TUN.
-- C1 использует A как default gateway, а C2 использует B как default gateway.
+- A = СЂРѕСѓС‚РµСЂ СЃ `xp2p server`, B = СЂРѕСѓС‚РµСЂ СЃ `xp2p client`.
+- C1 РЅР°С…РѕРґРёС‚СЃСЏ Р·Р° A (`10.0.101.0/24`), C2 РЅР°С…РѕРґРёС‚СЃСЏ Р·Р° B (`10.0.102.0/24`).
+- РўСѓРЅРЅРµР»СЊ AвЂ“B СѓР¶Рµ СЂР°Р±РѕС‚Р°РµС‚, Рё РѕР±Рµ СЃС‚РѕСЂРѕРЅС‹ Р·Р°РїСѓС‰РµРЅС‹ РІ СЂРµР¶РёРјРµ TUN.
+- C1 РёСЃРїРѕР»СЊР·СѓРµС‚ A РєР°Рє default gateway, Р° C2 РёСЃРїРѕР»СЊР·СѓРµС‚ B РєР°Рє default gateway.
 
-## Редиректы (маршруты ставятся на A и B)
+## Р РµРґРёСЂРµРєС‚С‹ (РјР°СЂС€СЂСѓС‚С‹ СЃС‚Р°РІСЏС‚СЃСЏ РЅР° A Рё B)
 
-Когда включён TUN, `xp2p {client,server} redirect add --cidr ...` компилируется в маршруты ОС на роутерах (A/B) во время apply. Ручные маршруты на C1/C2 добавлять не нужно.
+РљРѕРіРґР° РІРєР»СЋС‡С‘РЅ TUN, `xp2p {client,server} redirect add --cidr ...` РєРѕРјРїРёР»РёСЂСѓРµС‚СЃСЏ РІ РјР°СЂС€СЂСѓС‚С‹ РћРЎ РЅР° СЂРѕСѓС‚РµСЂР°С… (A/B) РІРѕ РІСЂРµРјСЏ apply. Р СѓС‡РЅС‹Рµ РјР°СЂС€СЂСѓС‚С‹ РЅР° C1/C2 РґРѕР±Р°РІР»СЏС‚СЊ РЅРµ РЅСѓР¶РЅРѕ.
 
-```sh
+```console
 xp2p client redirect add --cidr 10.0.101.0/24
 xp2p server redirect add --cidr 10.0.102.0/24
 ```
 
-Примени изменения перезапуском сервисов через service manager (например `service xp2p-client restart` / `service xp2p-server restart` на OpenWrt или `systemctl restart xp2p-client xp2p-server` на системах с systemd).
+РџСЂРёРјРµРЅРё РёР·РјРµРЅРµРЅРёСЏ РїРµСЂРµР·Р°РїСѓСЃРєРѕРј СЃРµСЂРІРёСЃРѕРІ С‡РµСЂРµР· service manager (РЅР°РїСЂРёРјРµСЂ `service xp2p-client restart` / `service xp2p-server restart` РЅР° OpenWrt РёР»Рё `systemctl restart xp2p-client xp2p-server` РЅР° СЃРёСЃС‚РµРјР°С… СЃ systemd).
 
 ## OpenWrt firewall
 
-Привяжи TUN-интерфейс xp2p к firewall zone и разреши LAN <-> tunnel forwarding.
+РџСЂРёРІСЏР¶Рё TUN-РёРЅС‚РµСЂС„РµР№СЃ xp2p Рє firewall zone Рё СЂР°Р·СЂРµС€Рё LAN <-> tunnel forwarding.
 
-На B (client, `xp2pc`):
+РќР° B (client, `xp2pc`):
 
-```sh
+```console
 uci -q delete firewall.xp2ptun
 uci set firewall.xp2ptun='zone'
 uci set firewall.xp2ptun.name='xp2ptun'
@@ -56,12 +56,12 @@ uci commit firewall
 /etc/init.d/firewall restart
 ```
 
-На A (server, `xp2ps`) сделай то же самое, но поставь `firewall.xp2ptun.network='xp2ps'`.
+РќР° A (server, `xp2ps`) СЃРґРµР»Р°Р№ С‚Рѕ Р¶Рµ СЃР°РјРѕРµ, РЅРѕ РїРѕСЃС‚Р°РІСЊ `firewall.xp2ptun.network='xp2ps'`.
 
-## Проверка
+## РџСЂРѕРІРµСЂРєР°
 
-На B (client router) проверь, что C1 доступен через туннель с помощью `xp2p ping`. Выбери порт, который точно открыт на C1 (например `22/tcp` для SSH):
+РќР° B (client router) РїСЂРѕРІРµСЂСЊ, С‡С‚Рѕ C1 РґРѕСЃС‚СѓРїРµРЅ С‡РµСЂРµР· С‚СѓРЅРЅРµР»СЊ СЃ РїРѕРјРѕС‰СЊСЋ `xp2p ping`. Р’С‹Р±РµСЂРё РїРѕСЂС‚, РєРѕС‚РѕСЂС‹Р№ С‚РѕС‡РЅРѕ РѕС‚РєСЂС‹С‚ РЅР° C1 (РЅР°РїСЂРёРјРµСЂ `22/tcp` РґР»СЏ SSH):
 
-```sh
+```console
 xp2p ping 10.0.101.1 --tunnel --proto tcp --port 22
 ```

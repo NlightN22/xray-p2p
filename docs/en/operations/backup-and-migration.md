@@ -8,7 +8,7 @@ It is intended for moving Desired inputs between machines, keeping a rollback sn
 
 Export uses the default `CONFIG_ROOT` and writes an archive to the current directory.
 
-```sh
+```console
 xp2p client export
 xp2p server export
 ```
@@ -17,14 +17,14 @@ xp2p server export
 
 - Export a non-default config root:
 
-```sh
+```console
 xp2p client export --config-root <path>
 xp2p server export --config-root <path>
 ```
 
 - Choose output path and format:
 
-```sh
+```console
 xp2p client export --output <path>
 xp2p server export --output <path>
 ```
@@ -38,7 +38,7 @@ When `--output` is omitted, xp2p picks the default format (`.zip` on Windows, `.
 
 ## Import
 
-```sh
+```console
 xp2p client import --input <archive>
 xp2p server import --input <archive>
 ```
@@ -49,7 +49,7 @@ After import, verify the service status and restart the role service if needed.
 
 - Import into a non-default config root:
 
-```sh
+```console
 xp2p client import --config-root <path> --input <archive>
 xp2p server import --config-root <path> --input <archive>
 ```

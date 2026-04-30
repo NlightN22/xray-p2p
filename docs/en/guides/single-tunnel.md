@@ -7,7 +7,7 @@ if you want explicit control.
 
 On B (client), generate the deploy link:
 
-```sh
+```text
 xp2p client deploy --host 10.63.30.11
 ```
 
@@ -15,7 +15,7 @@ Copy the link printed in `client deploy: link generated`.
 
 On A (server), run deploy with the link:
 
-```sh
+```console
 xp2p server deploy --link "<PASTE_LINK>"
 ```
 
@@ -25,19 +25,19 @@ By default, deploy enables TUN mode with split routing on the client. Use `--mod
 
 Keep the client in proxy mode after deploy:
 
-```sh
+```console
 xp2p client deploy --host 10.63.30.11 --mode proxy
 ```
 
 Deploy into full-tunnel TUN mode:
 
-```sh
+```console
 xp2p client deploy --host 10.63.30.11 --mode tun:full
 ```
 
 Custom deploy port (pass it on both sides):
 
-```sh
+```console
 xp2p client deploy --host 10.63.30.11 --port 62125
 xp2p server deploy --listen :62125 --link "<PASTE_LINK>"
 ```
@@ -46,13 +46,13 @@ xp2p server deploy --listen :62125 --link "<PASTE_LINK>"
 
 On A (server):
 
-```sh
+```console
 xp2p server install --host 10.63.30.11
 ```
 
 On B (client), use the link from server install output:
 
-```sh
+```console
 xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
 ```
 
@@ -60,7 +60,7 @@ xp2p client install --link "<LINK_FROM_SERVER_INSTALL>"
 
 Both deploy and install update Desired inputs and write `apply.request`. Start (or restart) the services to apply the changes:
 
-```sh
+```console
 xp2p server service start
 xp2p client service start
 ```
@@ -73,25 +73,25 @@ After the tunnel is installed, you can switch modes without re-running deploy/in
 
 Switch the client to proxy mode (disables TUN):
 
-```sh
+```console
 xp2p client mode proxy
 ```
 
 Switch the client to split-tunnel TUN mode:
 
-```sh
+```console
 xp2p client mode tun split
 ```
 
 Switch the client to full-tunnel TUN mode:
 
-```sh
+```console
 xp2p client mode tun full
 ```
 
 Switch the server mode:
 
-```sh
+```console
 xp2p server mode proxy
 xp2p server mode tun
 ```
@@ -100,7 +100,7 @@ xp2p server mode tun
 
 From B:
 
-```sh
+```console
 xp2p ping 10.63.30.11
 ```
 

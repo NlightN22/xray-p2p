@@ -22,7 +22,7 @@ flowchart TB
 
 When TUN is enabled, `xp2p {client,server} redirect add --cidr ...` compiles into OS routes on the routers (A/B) during apply. You do not need to add routes manually on C1/C2.
 
-```sh
+```console
 xp2p client redirect add --cidr 10.0.101.0/24
 xp2p server redirect add --cidr 10.0.102.0/24
 ```
@@ -35,7 +35,7 @@ Bind the xp2p TUN interface to a firewall zone and allow LAN <-> tunnel forwardi
 
 On B (client, `xp2pc`):
 
-```sh
+```console
 uci -q delete firewall.xp2ptun
 uci set firewall.xp2ptun='zone'
 uci set firewall.xp2ptun.name='xp2ptun'
@@ -62,6 +62,6 @@ On A (server, `xp2ps`), mirror the same rules but set `firewall.xp2ptun.network=
 
 On B (client router), verify that C1 is reachable through the tunnel using `xp2p ping`. Pick a port that is known to be open on C1 (for example `22/tcp` for SSH):
 
-```sh
+```console
 xp2p ping 10.0.101.1 --tunnel --proto tcp --port 22
 ```

@@ -2,7 +2,7 @@
 
 Generate a Markdown command reference from the current `xp2p` build:
 
-```sh
+```console
 xp2p docs --dir <path>
 ```
 

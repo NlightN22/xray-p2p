@@ -18,37 +18,37 @@ If you do not use this project end-to-end, `xp2p ping` can still work as long as
 
 Direct ping (no tunnel, defaults to TCP/62022):
 
-```sh
+```console
 xp2p ping <host>
 ```
 
 Example (probe a node by its hostname):
 
-```sh
+```console
 xp2p ping edge.example.com
 ```
 
 Reverse/tunnel ping (through the xp2p SOCKS tunnel):
 
-```sh
+```console
 xp2p ping <host> --tunnel
 ```
 
 Example (probe through the client tunnel by hostname):
 
-```sh
+```console
 xp2p ping edge.example.com --tunnel
 ```
 
 Example (probe through a reverse channel using the reverse tag as the host argument):
 
-```sh
+```console
 xp2p ping reverse-alpha.rev --tunnel
 ```
 
 You can also select a reverse channel by user id (when it matches a single reverse portal):
 
-```sh
+```console
 xp2p ping deploy-1777353786@local --tunnel
 ```
 
@@ -61,7 +61,7 @@ Where to find host/tag values:
 
 When multiple client endpoints share the same host, use a selector:
 
-```sh
+```console
 xp2p ping edge.example.com --tunnel --endpoint proxy-edge
 xp2p ping edge.example.com --tunnel --index 2
 ```

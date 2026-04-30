@@ -10,7 +10,7 @@ Use `xp2p completion` only for archive-based installs, custom builds, or trouble
 
 Generate a completion script for your shell:
 
-```sh
+```console
 xp2p completion bash
 xp2p completion zsh
 xp2p completion fish

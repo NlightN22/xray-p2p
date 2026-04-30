@@ -89,6 +89,8 @@ theme:
       accent: deep orange
 
 markdown_extensions:
+  - pymdownx.highlight:
+      pygments_lang_class: true
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -104,3 +106,4 @@ extra_css:
   - stylesheets/mermaid.css
   - stylesheets/lang-active.css
   - stylesheets/code-copy.css
+  - stylesheets/code-wrap.css

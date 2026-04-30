@@ -16,7 +16,7 @@ On OpenWrt, `xp2p` provisions the UCI network interface for you when TUN is enab
 
 Client example (manual override):
 
-```sh
+```console
 uci -q delete network.xp2pc
 uci set network.xp2pc='interface'
 uci set network.xp2pc.device='xp2pc'
@@ -30,7 +30,7 @@ ip a show dev xp2pc
 
 Server example (manual override):
 
-```sh
+```console
 uci -q delete network.xp2ps
 uci set network.xp2ps='interface'
 uci set network.xp2ps.device='xp2ps'
