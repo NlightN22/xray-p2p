@@ -78,6 +78,9 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - Always run pytest with `-vv -s` and tee output into `.logs/tests/` using a timestamped filename.
 - Example (Linux): `pytest tests\\host\\linux -vv -s 2>&1 | Tee-Object -FilePath (".\\.logs\\tests\\pytest-linux-all-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))`
 - Example (Windows): `pytest tests\\host\\win -vv -s 2>&1 | Tee-Object -FilePath (".\\.logs\\tests\\pytest-win-all-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))`
+- Windows Vagrant + SSH is flaky: a single SSH command may hang indefinitely even when a timeout is configured (Win10/Win11 host + Paramiko/Testinfra).
+  - Mitigation: treat long-running SSH commands as hung; reconnect and retry once, and if still stuck, `vagrant reload --provision <machine>`.
+  - If SSH becomes unstable mid-run, run two independent SSH probes in parallel (server + client) to "unstick" the VM/network, then retry.
 - Do not create new aggregator modules like `tests/host/_env.py` (or grow `tests/host/**/env.py` into a dumping ground).
 - `tests/host/**/env.py` is allowed only as a thin compatibility facade: constants + minimal module-level state (only if required for existing behavior) + re-export of public API from focused `tests/host/**/_*.py` modules.
 - Hard limit: 200 lines per module; if exceeded, split by responsibility into `tests/host/**/_*.py`.

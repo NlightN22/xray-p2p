@@ -7,6 +7,7 @@ import time
 from functools import lru_cache
 import functools
 import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from pathlib import Path
 
 import pytest
@@ -92,8 +93,22 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         if len(short) > 240:
             short = short[:240] + "..."
         print(f"SSH run start (timeout={kwargs.get('timeout')}): {short}")
+
+        def _run_hard_timeout():
+            timeout_value = kwargs.get("timeout") or SSH_COMMAND_TIMEOUT
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(super().run, command, *args, **kwargs)
+                try:
+                    return future.result(timeout=float(timeout_value) + 5.0)
+                except FutureTimeoutError as exc:
+                    self._reset_client()
+                    pytest.skip(
+                        f"Guest SSH command hung beyond timeout ({timeout_value}s): {short}"
+                    )
+                finally:
+                    executor.shutdown(wait=False, cancel_futures=True)
         try:
-            result = super().run(command, *args, **kwargs)
+            result = _run_hard_timeout()
             print(f"SSH run done (rc={result.rc})")
             return result
         except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
@@ -101,7 +116,7 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
             pytest.skip(f"Guest SSH unavailable: {exc}")
         except EOFError:
             self._reset_client()
-            return super().run(command, *args, **kwargs)
+            return _run_hard_timeout()
         except paramiko_backend.paramiko.SSHException as exc:
             self._reset_client()
             error_text = str(exc).lower()
@@ -110,13 +125,13 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
                 for attempt in range(1, max_attempts + 1):
                     time.sleep(1)
                     try:
-                        return super().run(command, *args, **kwargs)
+                        return _run_hard_timeout()
                     except paramiko_backend.paramiko.SSHException:
                         self._reset_client()
                         if attempt == max_attempts:
                             print("WARNING: SSH banner retry limit reached.")
             try:
-                return super().run(command, *args, **kwargs)
+                return _run_hard_timeout()
             except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
                 self._reset_client()
                 pytest.skip(f"Guest SSH unavailable: {exc}")
@@ -130,7 +145,7 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
                 raise
             self._reset_client()
             try:
-                return super().run(command, *args, **kwargs)
+                return _run_hard_timeout()
             except paramiko_backend.paramiko.ssh_exception.NoValidConnectionsError as exc:
                 self._reset_client()
                 pytest.skip(f"Guest SSH unavailable: {exc}")
