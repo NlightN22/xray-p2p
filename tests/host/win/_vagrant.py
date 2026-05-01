@@ -1,5 +1,7 @@
 import time
+import subprocess
 
+import pytest
 from testinfra.host import Host
 
 from tests.host import common
@@ -63,6 +65,22 @@ def get_ssh_host(machine: str) -> Host:
             setattr(host, "_xp2p_machine", machine)
             _probe(host)
             return host
+        except pytest.skip.Exception as exc:
+            last_exc = exc
+            if attempt > 0:
+                break
+            print(
+                f"WARNING: Failed to probe guest {machine} over SSH: {exc}. "
+                "Reloading the VM and retrying once."
+            )
+            try:
+                common.vagrant_reload_force(_env.VAGRANT_DIR, machine)
+            except subprocess.CalledProcessError as reload_exc:
+                pytest.skip(f"Vagrant reload failed for {machine}: {reload_exc}")
+            finally:
+                common.invalidate_ssh_config_cache()
+            time.sleep(5)
+            continue
         except BaseException as exc:
             last_exc = exc
             if attempt > 0:
@@ -73,6 +91,8 @@ def get_ssh_host(machine: str) -> Host:
             )
             try:
                 common.vagrant_reload_force(_env.VAGRANT_DIR, machine)
+            except subprocess.CalledProcessError as reload_exc:
+                pytest.skip(f"Vagrant reload failed for {machine}: {reload_exc}")
             finally:
                 common.invalidate_ssh_config_cache()
             time.sleep(5)
@@ -80,4 +100,3 @@ def get_ssh_host(machine: str) -> Host:
     if last_exc is None:
         raise RuntimeError(f"Failed to connect to guest {machine} via SSH.")
     raise last_exc
-

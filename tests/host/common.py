@@ -93,18 +93,19 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         if len(short) > 240:
             short = short[:240] + "..."
         print(f"SSH run start (timeout={kwargs.get('timeout')}): {short}")
+        parent_run = super(PatchedParamikoBackend, self).run
 
         def _run_hard_timeout():
             timeout_value = kwargs.get("timeout") or SSH_COMMAND_TIMEOUT
             with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(super().run, command, *args, **kwargs)
+                future = executor.submit(parent_run, command, *args, **kwargs)
                 try:
                     return future.result(timeout=float(timeout_value) + 5.0)
                 except FutureTimeoutError as exc:
                     self._reset_client()
-                    pytest.skip(
+                    raise paramiko_backend.paramiko.SSHException(
                         f"Guest SSH command hung beyond timeout ({timeout_value}s): {short}"
-                    )
+                    ) from exc
                 finally:
                     executor.shutdown(wait=False, cancel_futures=True)
         try:
