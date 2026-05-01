@@ -74,6 +74,11 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - Tests must read Desired inputs only when asserting staged configuration changes.
 - Tests must read live config when asserting runtime behavior or service state.
 - Failure dumps should include the full `.state` tree structure (live/lkg/apply.request/apply.error) when available.
+- Do not create new aggregator modules like `tests/host/_env.py` (or grow `tests/host/**/env.py` into a dumping ground).
+- `tests/host/**/env.py` is allowed only as a thin compatibility facade: constants + minimal module-level state (only if required for existing behavior) + re-export of public API from focused `tests/host/**/_*.py` modules.
+- Hard limit: 200 lines per module; if exceeded, split by responsibility into `tests/host/**/_*.py`.
+- Do not change test imports, public names, or function signatures; keep API stable via re-export.
+- Helper modules may import `from . import env as _env` only to access facade-held state; otherwise avoid env-based dependency chains.
 
 ## CLI standards
 
