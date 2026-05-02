@@ -33,35 +33,40 @@ Apply the changes by restarting the services using your service manager (for exa
 
 Bind the xp2p TUN interface to a firewall zone and allow LAN <-> tunnel forwarding.
 
-On B (client, `xp2pc`):
+If you can reach the remote subnet from the router itself (for example A can reach `10.0.102.1`), but hosts behind the router cannot, this almost always means the firewall does not allow forwarding between `lan` and the tunnel zone. You must explicitly allow `lan -> xp2ptun` (and usually `xp2ptun -> lan`) forwarding.
+
+On B (client, `xp2pc`), create a zone and allow `lan -> xp2pc` forwarding:
 
 ```console
-uci -q delete firewall.xp2ptun
-uci set firewall.xp2ptun='zone'
-uci set firewall.xp2ptun.name='xp2ptun'
-uci set firewall.xp2ptun.network='xp2pc'
-uci set firewall.xp2ptun.input='ACCEPT'
-uci set firewall.xp2ptun.output='ACCEPT'
-uci set firewall.xp2ptun.forward='ACCEPT'
+uci delete firewall.xp2c 2>/dev/null || true
+uci set firewall.xp2c='zone'
+uci set firewall.xp2c.name='xp2c'
+uci set firewall.xp2c.network='xp2pc'
+uci set firewall.xp2c.input='REJECT'
+uci set firewall.xp2c.output='ACCEPT'
+uci set firewall.xp2c.forward='ACCEPT'
 
 uci add firewall forwarding
 uci set firewall.@forwarding[-1].src='lan'
-uci set firewall.@forwarding[-1].dest='xp2ptun'
-
-uci add firewall forwarding
-uci set firewall.@forwarding[-1].src='xp2ptun'
-uci set firewall.@forwarding[-1].dest='lan'
+uci set firewall.@forwarding[-1].dest='xp2c'
 
 uci commit firewall
 /etc/init.d/firewall restart
 ```
 
-On A (server, `xp2ps`), mirror the same rules but set `firewall.xp2ptun.network='xp2ps'`.
+### Advanced
+
+- Return traffic: if you need traffic from the tunnel back into LAN, also add an `xp2c -> lan` forwarding.
+- Server side: on A (server, `xp2ps`), create the same zone but set `firewall.xp2c.network='xp2ps'`.
 
 ## Verify
 
-On B (client router), verify that C1 is reachable through the tunnel using `xp2p ping`. Pick a port that is known to be open on C1 (for example `22/tcp` for SSH):
+On B (client router), verify that C1 is reachable through the tunnel using `xp2p ping`:
 
 ```console
-xp2p ping 10.0.101.1 --tunnel --proto tcp --port 22
+xp2p ping 10.0.101.1
 ```
+
+### Advanced
+
+If you need to verify a specific TCP port (for example SSH on `22/tcp`), pass `--proto` and `--port`.
