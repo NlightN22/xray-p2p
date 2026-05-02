@@ -181,6 +181,27 @@ def test_openwrt_client_deploy_end_to_end(
         helpers.wait_for_apply_request_clear(openwrt_server_host, timeout_seconds=LOG_WAIT_TIMEOUT)
 
         try:
+            expected_tag = helpers.expected_proxy_tag(server_ip)
+
+            deadline = time.time() + 30.0
+            last_state = None
+            while time.time() < deadline:
+                last_state = helpers.wait_for_heartbeat_state(
+                    openwrt_client_host,
+                    timeout_seconds=2.0,
+                    poll_interval=0.5,
+                )
+                try:
+                    helpers.assert_heartbeat_entry(last_state, expected_tag, host=server_ip)
+                    break
+                except AssertionError:
+                    time.sleep(1.0)
+            else:
+                raise AssertionError(
+                    f"Heartbeat entry for {expected_tag}@{server_ip} did not appear within 30s.\n"
+                    f"Last heartbeat state: {last_state}"
+                )
+
             state_output = client_runner(
                 "client",
                 "state",
@@ -191,7 +212,7 @@ def test_openwrt_client_deploy_end_to_end(
             rows = tunnel_common.parse_state_rows(state_output)
             tags = {row.get("TAG") for row in rows}
             hosts = {row.get("HOST") for row in rows}
-            assert helpers.expected_proxy_tag(server_ip) in tags
+            assert expected_tag in tags
             assert server_ip in hosts
         except AssertionError:
             helpers.dump_logs(openwrt_client_host, "client deploy client")

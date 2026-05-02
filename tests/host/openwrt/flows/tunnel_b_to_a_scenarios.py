@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
 from tests.host.openwrt.flows import tunnel_b_to_a_actions as actions
@@ -201,12 +203,13 @@ def run_client_redirect_through_server(env: dict) -> None:
                 client_processes = client_host.run("ps w | grep -E 'xp2p|xray' | grep -v grep")
                 actions.dump_apply_state(client_host, "client", "before socks ping")
                 actions.dump_apply_state(server_host, "server", "before socks ping")
+                waits.wait_for_socks_ready(client_host, timeout_seconds=10.0)
                 waits.wait_for_ping_ready(
                     client_runner,
                     target_ip,
                     proto="tcp",
                     tunnel=True,
-                    timeout_seconds=30.0,
+                    timeout_seconds=10.0,
                 )
                 socks_ping = client_runner(
                     "ping",

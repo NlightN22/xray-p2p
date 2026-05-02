@@ -23,7 +23,7 @@ def build_ipk(host: Host, target: str) -> None:
         f"--output-dir {shlex.quote(output_dir)} "
         f"--force-build"
     )
-    result = host.run(f"bash -lc {shlex.quote(command)}")
+    result = host.run(f"bash -lc {shlex.quote(command)}", timeout=600)
     if result.rc != 0:
         raise RuntimeError(
             "OpenWrt build script failed "
@@ -148,4 +148,3 @@ def _assert_default_configs_present(host: Host) -> None:
             missing.append(path)
     if missing:
         raise RuntimeError(f"xp2p default configs are missing on {host.backend.hostname}: {', '.join(missing)}")
-

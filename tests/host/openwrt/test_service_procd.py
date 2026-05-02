@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import time
+from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 import pytest
@@ -51,7 +53,8 @@ def _wait_for_service_state(host, role: str, expected_active: bool) -> None:
 
 def _clear_logs(host, *paths: PurePosixPath) -> None:
     for path in paths:
-        helpers.remove_path(host, path)
+        parent = PurePosixPath(path).parent
+        host.run(f"sh -c 'mkdir -p {parent} && : > {path}'")
 
 
 def _wait_for_log_entry(host, path: PurePosixPath, phrase: str, timeout: float = 60.0) -> None:
@@ -68,6 +71,42 @@ def _wait_for_log_entry(host, path: PurePosixPath, phrase: str, timeout: float =
     raise AssertionError(f"{path} missing phrase {phrase!r}. Last content:\n{last}")
 
 
+def _dump_failure_diagnostics(host, role: str, *, label: str) -> None:
+    service_log = CLIENT_SERVICE_LOG if role == "client" else SERVER_SERVICE_LOG
+    run_log = helpers.CLIENT_LOG_FILE if role == "client" else helpers.SERVER_LOG_FILE
+    header = f"==== FAILURE DIAGNOSTICS ({label}) on {host.backend.hostname} role={role} ===="
+    print(header)
+    commands: list[tuple[str, str]] = [
+        ("service running", f"/etc/init.d/xp2p-{role} running; echo rc=$?"),
+        ("ps xp2p/xray", "ps w | grep -E 'xp2p|xray' | grep -v grep || true"),
+        ("netstat listeners", "netstat -lpn 2>/dev/null | egrep '62022|62023|51080|51180' || true"),
+        ("xray bin dir", "ls -la /etc/xp2p/bin 2>/dev/null || true"),
+        ("xray version", "(/etc/xp2p/bin/xray -version 2>&1 || xray -version 2>&1 || true) | tail -n 50"),
+        ("apply.request", "ls -la /etc/xp2p/.state/apply.request 2>/dev/null || true; cat /etc/xp2p/.state/apply.request 2>/dev/null || true"),
+        ("apply.error", "ls -la /etc/xp2p/.state/apply.error 2>/dev/null || true; cat /etc/xp2p/.state/apply.error 2>/dev/null || true"),
+        ("meminfo", "free -m 2>/dev/null || cat /proc/meminfo | head -n 60 || true"),
+        ("dmesg oom/killed", "dmesg | tail -n 400 | egrep -i 'oom|out of memory|killed process|signal: killed|xray' || true"),
+        ("logread oom/killed", "logread | tail -n 400 | egrep -i 'oom|out of memory|killed process|signal: killed|xray|xp2p' || true"),
+    ]
+    for title, cmd in commands:
+        print(f"-- {title} --")
+        result = host.run(f"sh -c {cmd!r}")
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(stderr)
+    for path in (service_log, run_log):
+        print(f"-- {path} (tail 250 lines) --")
+        if helpers.path_exists(host, path):
+            content = helpers.read_text(host, path)
+            print("\n".join((content or "").splitlines()[-250:]))
+        else:
+            print("missing")
+    print("=" * len(header))
+
+
 def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -75,6 +114,44 @@ def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
             return
         time.sleep(POLL_INTERVAL)
     raise AssertionError(f"apply.request did not clear after {timeout} seconds.")
+
+
+def _parse_rfc3339(value: str) -> datetime:
+    target = value.strip()
+    if target.endswith("Z"):
+        target = target[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(target)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _wait_for_apply_error_after_timestamp(host, after_timestamp: str, timeout_seconds: float) -> str:
+    deadline = time.time() + timeout_seconds
+    last_content = ""
+    after_dt = _parse_rfc3339(after_timestamp)
+    while time.time() < deadline:
+        if not helpers.path_exists_exact(host, helpers.APPLY_ERROR):
+            time.sleep(0.25)
+            continue
+        content = helpers.read_text(host, helpers.APPLY_ERROR)
+        last_content = content
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            time.sleep(0.25)
+            continue
+        ts = data.get("timestamp")
+        if isinstance(ts, str):
+            try:
+                if _parse_rfc3339(ts) >= after_dt:
+                    return content
+            except ValueError:
+                pass
+        time.sleep(0.25)
+    raise AssertionError(
+        f"apply.error did not update within {timeout_seconds} seconds.\nlast apply.error:\n{last_content}"
+    )
 
 
 def _current_mode(host, role: str) -> str:
@@ -328,6 +405,7 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
             "--force",
             check=True,
         )
+        _prime_service_state(openwrt_host, role, runner)
     else:
         helpers.cleanup_server_install(openwrt_host, runner)
         service_log = SERVER_SERVICE_LOG
@@ -353,18 +431,27 @@ def test_openwrt_service_stops_after_invalid_config(openwrt_host, xp2p_openwrt_i
         _clear_logs(openwrt_host, service_log)
         runner(role, "service", "start")
         _wait_for_service_state(openwrt_host, role, expected_active=True)
+        _wait_for_apply_request_clear(openwrt_host)
+        helpers.wait_for_live_config(openwrt_host, role)
+        after_timestamp = openwrt_host.run("date -u +%Y-%m-%dT%H:%M:%SZ").stdout.strip()
         helpers.write_text(openwrt_host, config_path, "BROKEN-CONFIG")
+        helpers.remove_path(openwrt_host, helpers.APPLY_ERROR)
         helpers.write_apply_request(openwrt_host, role)
 
-        _wait_for_log_entry(openwrt_host, service_log, "service configuration change detected")
-        _wait_for_log_entry(openwrt_host, service_log, "apply compilation failed")
-        helpers.wait_for_apply_error(openwrt_host, timeout_seconds=60.0)
-        _wait_for_service_state(openwrt_host, role, expected_active=True)
-        log_content = helpers.read_text(openwrt_host, service_log)
-        assert "parse" in log_content.lower() or "config" in log_content.lower(), (
-            f"{role} service log missing config error details.\n"
-            f"Service log:\n{log_content}"
-        )
+        try:
+            error_content = _wait_for_apply_error_after_timestamp(openwrt_host, after_timestamp, timeout_seconds=30.0)
+            lowered = error_content.lower()
+            assert "apply compilation failed" in lowered or "parse error" in lowered, (
+                f"{role} apply.error missing compilation failure details.\n"
+                f"apply.error:\n{error_content}"
+            )
+            assert "parse" in lowered or "config" in lowered, (
+                f"{role} apply.error missing config error details.\n"
+                f"apply.error:\n{error_content}"
+            )
+        except BaseException:
+            _dump_failure_diagnostics(openwrt_host, role, label="invalid config apply")
+            raise
     finally:
         runner(role, "service", "stop")
         if role == "client":

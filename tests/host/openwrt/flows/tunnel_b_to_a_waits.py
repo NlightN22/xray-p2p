@@ -155,7 +155,7 @@ def ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 
 def apply_pending_config(host, role: str, install_path: str, config_dir: str) -> None:
-    helpers.state_pending_config(host, role)
+    helpers.apply_pending_config(host, role)
 
 
 def apply_pending_config_wait(host, role: str, install_path: str, config_dir: str) -> None:
@@ -170,6 +170,27 @@ def wait_for_listen_port(host, port: int, *, timeout_seconds: float = 20.0, inte
             return
         time.sleep(interval)
     pytest.fail(f"Port {port} did not start listening on {host.backend.hostname} within {timeout_seconds}s")
+
+
+def wait_for_socks_ready(
+    host,
+    *,
+    port: int = CLIENT_SOCKS_PORT,
+    timeout_seconds: float = 10.0,
+    interval: float = 0.5,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    consecutive = 0
+    while time.time() < deadline:
+        listener = host.run(f"netstat -lpn 2>/dev/null | grep ':{port} '")
+        if listener.rc == 0 and is_xp2p_run_active(host, "client"):
+            consecutive += 1
+            if consecutive >= 3:
+                return
+        else:
+            consecutive = 0
+        time.sleep(interval)
+    pytest.fail(f"SOCKS listener :{port} did not become stable within {timeout_seconds}s on {host.backend.hostname}")
 
 
 def wait_for_ping_ready(
@@ -199,5 +220,41 @@ def wait_for_ping_ready(
     pytest.fail(
         f"xp2p ping did not become ready for {target} within {timeout_seconds}s.\n"
         f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
+
+
+def wait_for_consecutive_ping_success(
+    runner,
+    target: str,
+    *,
+    successes: int = 3,
+    port: int | None = None,
+    tunnel: bool = False,
+    proto: str = "tcp",
+    timeout_seconds: float = 10.0,
+    interval: float = 1.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    consecutive = 0
+    last = None
+    args = ["ping", target, "--count", "1", "--proto", proto]
+    if port is not None:
+        args.extend(["--port", str(port)])
+    if tunnel:
+        args.append("--tunnel")
+    while time.time() < deadline:
+        last = runner(*args, check=False)
+        if last.rc == 0:
+            consecutive += 1
+            if consecutive >= successes:
+                return
+        else:
+            consecutive = 0
+        time.sleep(interval)
+    stdout = getattr(last, "stdout", "") or ""
+    stderr = getattr(last, "stderr", "") or ""
+    pytest.fail(
+        f"xp2p ping did not reach {successes} consecutive successful replies for {target} "
+        f"within {timeout_seconds}s.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
     )
 

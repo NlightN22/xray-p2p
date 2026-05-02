@@ -427,6 +427,7 @@ def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk)
             "state",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
+            "--pending",
             check=True,
         )
         rows = tunnel_common.parse_state_rows(result.stdout or "")

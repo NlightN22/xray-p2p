@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 import shlex
+import subprocess
 from pathlib import PurePosixPath
 
 import pytest
@@ -62,6 +63,7 @@ def openwrt_ipk_target() -> str:
 
 @pytest.fixture(scope="session")
 def xp2p_openwrt_ipk(openwrt_ipk_target):
+    _ensure_host_linux_amd64_xp2p()
     openwrt_env.IPK_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     skip_build = os.environ.get("XP2P_OPENWRT_SKIP_IPK_BUILD", "").strip().lower() in {"1", "true", "yes"}
     if skip_build:
@@ -88,6 +90,37 @@ def xp2p_openwrt_ipk(openwrt_ipk_target):
     else:
         print("TIMING: openwrt build output sync skipped (env XP2P_OPENWRT_SKIP_IPK_SYNC)")
     return artifact
+
+
+def _ensure_host_linux_amd64_xp2p() -> None:
+    binary = openwrt_env.REPO_ROOT / "build" / "linux-amd64" / "xp2p"
+    skip = os.environ.get("XP2P_OPENWRT_SKIP_HOST_XP2P_BUILD", "").strip().lower() in {"1", "true", "yes"}
+    if skip and binary.exists() and binary.stat().st_size > 0:
+        print("TIMING: host linux-amd64 xp2p build skipped (env XP2P_OPENWRT_SKIP_HOST_XP2P_BUILD)")
+        return
+    build_start = time.perf_counter()
+    cmd = [
+        "go",
+        "run",
+        "./go/tools/targets",
+        "build",
+        "--target",
+        "linux-amd64",
+        "--base",
+        "build",
+        "--binary",
+        "xp2p",
+        "--pkg",
+        "./go/cmd/xp2p",
+    ]
+    try:
+        subprocess.run(cmd, cwd=openwrt_env.REPO_ROOT, check=True, text=True, capture_output=True)
+    except subprocess.CalledProcessError as exc:
+        pytest.fail(f"Failed to build host linux-amd64 xp2p.\nSTDOUT:\n{exc.stdout}\nSTDERR:\n{exc.stderr}")
+    elapsed = time.perf_counter() - build_start
+    if not binary.exists() or binary.stat().st_size == 0:
+        pytest.fail(f"Expected linux-amd64 xp2p at {binary} after build.")
+    print(f"TIMING: host linux-amd64 xp2p build: {elapsed:.2f}s ({binary})")
 
 
 def _xp2p_runner(host: Host):
