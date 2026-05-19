@@ -22,18 +22,16 @@ func (m *Manager) ensureForward(addr netip.Addr, port int, state state) (forward
 		return forward.Rule{}, false, err
 	}
 
-	for _, rule := range forwards {
-		if rule.TargetHost == addr.String() && rule.TargetPort == port && rule.Protocol.RequiresUDP() {
-			return rule, false, nil
-		}
-	}
-
+	matching := matchingForwards(forwards, addr, port)
 	if existing, ok := stateEntryForTarget(state, addr, port); ok {
-		for _, rule := range forwards {
-			if rule.ListenPort == existing.ForwardListenPort && rule.TargetHost == addr.String() && rule.Protocol.RequiresUDP() {
+		for _, rule := range matching {
+			if rule.ListenPort == existing.ForwardListenPort {
 				return rule, false, nil
 			}
 		}
+	}
+	if len(matching) > 0 {
+		return matching[0], false, nil
 	}
 
 	result, err := m.addForward(addr, port)
@@ -41,6 +39,16 @@ func (m *Manager) ensureForward(addr netip.Addr, port int, state state) (forward
 		return forward.Rule{}, false, err
 	}
 	return result, true, nil
+}
+
+func matchingForwards(forwards []forward.Rule, addr netip.Addr, port int) []forward.Rule {
+	var matching []forward.Rule
+	for _, rule := range forwards {
+		if rule.TargetHost == addr.String() && rule.TargetPort == port && rule.Protocol.RequiresUDP() {
+			matching = append(matching, rule)
+		}
+	}
+	return matching
 }
 
 func stateEntryForTarget(state state, addr netip.Addr, port int) (stateEntry, bool) {

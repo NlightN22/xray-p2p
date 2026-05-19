@@ -20,10 +20,11 @@ VAGRANT_OWRT_DIR := infra/vagrant/openwrt
 
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
+WSL_CD = drive=$$(printf '%s' '$(CURDIR)' | cut -c1 | tr '[:upper:]' '[:lower:]'); path=$$(printf '%s' '$(CURDIR)' | cut -c3-); repo_dir=/mnt/$$drive$$path; cd \"$$repo_dir\"
 .PHONY: run build build-% fmt lint test vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi \
-	ui-native-build ui-native-test ui-native-cover
+	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl
 
 build: $(TARGETS:%=build-%)
 
@@ -40,7 +41,7 @@ test:
 	powershell -NoProfile -Command "go clean -testcache ; go test ./... -cover"
 
 ui-native-test-cover-wsl:
-	wsl bash -lc "set -euo pipefail; cd /mnt/d/Programming/Go/xray-p2p; rm -rf build/cpp/ui-xp2p-cover-wsl; cmake -S cpp/ui-xp2p -B build/cpp/ui-xp2p-cover-wsl -G Ninja -DXP2P_UI_BUILD_TESTS=ON -DXP2P_UI_ENABLE_COVERAGE=ON; cmake --build build/cpp/ui-xp2p-cover-wsl; ctest --test-dir build/cpp/ui-xp2p-cover-wsl --output-on-failure; mkdir -p build/cpp/ui-xp2p-cover-wsl/coverage; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp' --html-details --output build/cpp/ui-xp2p-cover-wsl/coverage/index.html; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp' --xml-pretty --output build/cpp/ui-xp2p-cover-wsl/coverage/coverage.xml; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp'"
+	wsl bash -lc "set -euo pipefail; $(WSL_CD); rm -rf build/cpp/ui-xp2p-cover-wsl; cmake -S cpp/ui-xp2p -B build/cpp/ui-xp2p-cover-wsl -G Ninja -DXP2P_UI_BUILD_TESTS=ON -DXP2P_UI_ENABLE_COVERAGE=ON; cmake --build build/cpp/ui-xp2p-cover-wsl; ctest --test-dir build/cpp/ui-xp2p-cover-wsl --output-on-failure; mkdir -p build/cpp/ui-xp2p-cover-wsl/coverage; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp' --html-details --output build/cpp/ui-xp2p-cover-wsl/coverage/index.html; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp' --xml-pretty --output build/cpp/ui-xp2p-cover-wsl/coverage/coverage.xml; gcovr -r . --object-directory build/cpp/ui-xp2p-cover-wsl --filter 'cpp/ui-xp2p/src' --exclude 'cpp/ui-xp2p/src/(tray_app|service_manager|path_utils|logging)\\.cpp'"
 
 ui-native-build:
 	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_ui_native.ps1 -Task build -Config Release
@@ -52,7 +53,7 @@ ui-native-cover:
 	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build/build_ui_native.ps1 -Task cover -Config Debug
 
 test-wsl:
-	wsl bash -lc "cd /mnt/d/Programming/Go/xray-p2p && go clean -testcache && go test ./... -cover"
+	wsl bash -lc "$(WSL_CD) && go clean -testcache && go test ./... -cover"
 
 up-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant up

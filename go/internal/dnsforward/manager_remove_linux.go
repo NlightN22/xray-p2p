@@ -33,6 +33,7 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 	}
 
 	removedCount := 0
+	removedForwards := make(map[int]struct{})
 	dnsSection, err := m.dnsmasqSection()
 	if err != nil {
 		return nil, err
@@ -57,8 +58,11 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 			}
 		}
 
-		if opts.WithForward && hasState && entry.ForwardListenPort > 0 && entry.AutoForward {
-			m.removeForward(entry.ForwardListenPort)
+		if shouldRemoveForwardOnDelete(entry, hasState, state, domains) {
+			if _, removed := removedForwards[entry.ForwardListenPort]; !removed {
+				m.removeForward(entry.ForwardListenPort)
+				removedForwards[entry.ForwardListenPort] = struct{}{}
+			}
 		}
 		if hasState {
 			state.remove(domain)
@@ -95,4 +99,34 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 
 	sort.Strings(domains)
 	return domains, nil
+}
+
+func forwardInUse(state state, listenPort int, removing []string) bool {
+	if listenPort <= 0 {
+		return false
+	}
+	for domain, entry := range state.Entries {
+		if contains(removing, domain) {
+			continue
+		}
+		if entry.ForwardListenPort == listenPort {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldRemoveForwardOnDelete(entry stateEntry, hasState bool, state state, removing []string) bool {
+	return hasState &&
+		entry.ForwardListenPort > 0 &&
+		entry.AutoForward &&
+		!forwardInUse(state, entry.ForwardListenPort, removing)
+}
+
+func shouldRemoveReplacedForward(previous stateEntry, hadPrevious bool, newListenPort int, state state) bool {
+	return hadPrevious &&
+		previous.ForwardListenPort > 0 &&
+		previous.ForwardListenPort != newListenPort &&
+		previous.AutoForward &&
+		!forwardInUse(state, previous.ForwardListenPort, nil)
 }

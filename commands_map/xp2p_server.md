@@ -248,7 +248,7 @@ Options:
 Includes: Global options
 - --domain, -d <name> (required) Domain name to match
 - --target, -t <ip:port> (required) Upstream DNS server
-- --with-forward, -W      Create or reuse a port forward for the target
+- --with-forward, -W      Deprecated; dns-forward always ensures a target forward
 - --intercept, -I         Install DNS intercept redirect (53/tcp,udp)
 - --quiet, -q             Suppress interactive prompts
 - --debug, -g             Emit diagnostics output on error
@@ -257,7 +257,7 @@ xp2p server dns-forward remove
 Options:
 Includes: Global options
 - --domain, -d <name>     Domain name to remove
-- --with-forward, -W      Remove an auto-created port forward
+- --with-forward, -W      Deprecated; auto-created target forwards are removed when unused
 - --intercept, -I         Remove DNS intercept redirect
 - --all, -a               Remove all managed DNS forward entries
 - --quiet, -q             Suppress interactive prompts

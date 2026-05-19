@@ -142,7 +142,7 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         _reset_dnsforward_state(openwrt_client_host)
 
         add = openwrt_client_host.run(
-            f"/usr/bin/xp2p client dns-forward add --domain {DOMAIN} --target {server_ip}:53 --with-forward --intercept --quiet"
+            f"/usr/bin/xp2p client dns-forward add --domain {DOMAIN} --target {server_ip}:53 --intercept --quiet"
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
 
@@ -199,7 +199,7 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         _reset_dnsforward_state(openwrt_server_host)
 
         add = openwrt_server_host.run(
-            f"/usr/bin/xp2p server dns-forward add --domain {SERVER_DOMAIN} --target {client_ip}:53 --with-forward --intercept --quiet"
+            f"/usr/bin/xp2p server dns-forward add --domain {SERVER_DOMAIN} --target {client_ip}:53 --intercept --quiet"
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
 
@@ -298,7 +298,7 @@ def test_dns_forward_openwrt_b_with_c1_c2(
 
         _reset_dnsforward_state(openwrt_client_host)
         add = openwrt_client_host.run(
-            f"/usr/bin/xp2p client dns-forward add --domain {CORP_DOMAIN} --target {c1_dns_ip}:53 --intercept --with-forward --quiet"
+            f"/usr/bin/xp2p client dns-forward add --domain {CORP_DOMAIN} --target {c1_dns_ip}:53 --intercept --quiet"
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
         dns_forward_added = True

@@ -22,57 +22,28 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 	}
 
 	state, _ := loadState(m.statePath)
-	serverIP := targetAddr.String()
-	serverPort := targetPort
 	labels := []string{"xp2p"}
-	stateChanged := false
+	previous, hadPrevious := state.Entries[domain]
 
-	if opts.WithForward {
-		rule, created, err := m.ensureForward(targetAddr, targetPort, state)
-		if err != nil {
-			return ListEntry{}, err
-		}
-		serverIP = rule.ListenAddress
-		serverPort = rule.ListenPort
-		if created {
-			labels = append(labels, "forward:auto")
-		} else {
-			labels = append(labels, "forward:existing")
-		}
-		state.record(domain, stateEntry{
-			Target:            fmt.Sprintf("%s:%d", targetAddr.String(), targetPort),
-			Server:            fmt.Sprintf("%s#%d", serverIP, serverPort),
-			ForwardListenPort: rule.ListenPort,
-			ForwardTag:        rule.Tag,
-			AutoForward:       created,
-			RebindDomain:      rebind,
-		})
-		stateChanged = true
-	} else {
-		forwards, err := m.listForwards()
-		if err != nil {
-			return ListEntry{}, err
-		}
-		rule, found, err := selectForward(forwards, opts.Quiet)
-		if err != nil {
-			return ListEntry{}, err
-		}
-		if !found {
-			return ListEntry{}, fmt.Errorf("no forwards configured; add one or use --with-forward")
-		}
-		serverIP = rule.ListenAddress
-		serverPort = rule.ListenPort
-		labels = append(labels, "forward:existing")
-		state.record(domain, stateEntry{
-			Target:            fmt.Sprintf("%s:%d", targetAddr.String(), targetPort),
-			Server:            fmt.Sprintf("%s#%d", serverIP, serverPort),
-			ForwardListenPort: rule.ListenPort,
-			ForwardTag:        rule.Tag,
-			AutoForward:       false,
-			RebindDomain:      rebind,
-		})
-		stateChanged = true
+	rule, created, err := m.ensureForward(targetAddr, targetPort, state)
+	if err != nil {
+		return ListEntry{}, err
 	}
+	serverIP := rule.ListenAddress
+	serverPort := rule.ListenPort
+	if created {
+		labels = append(labels, "forward:auto")
+	} else {
+		labels = append(labels, "forward:existing")
+	}
+	state.record(domain, stateEntry{
+		Target:            fmt.Sprintf("%s:%d", targetAddr.String(), targetPort),
+		Server:            fmt.Sprintf("%s#%d", serverIP, serverPort),
+		ForwardListenPort: rule.ListenPort,
+		ForwardTag:        rule.Tag,
+		AutoForward:       created,
+		RebindDomain:      rebind,
+	})
 
 	serverValue := fmt.Sprintf("%s#%d", serverIP, serverPort)
 	if err := m.upsertDNSMasq(domain, serverValue); err != nil {
@@ -104,10 +75,11 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 		}
 	}
 
-	if stateChanged {
-		if err := state.save(m.statePath); err != nil {
-			return ListEntry{}, err
-		}
+	if err := state.save(m.statePath); err != nil {
+		return ListEntry{}, err
+	}
+	if shouldRemoveReplacedForward(previous, hadPrevious, rule.ListenPort, state) {
+		m.removeForward(previous.ForwardListenPort)
 	}
 
 	entry := ListEntry{

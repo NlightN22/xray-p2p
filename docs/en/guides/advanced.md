@@ -73,14 +73,14 @@ Retries use an exponential backoff capped at 30 seconds (starting at 2 seconds).
 ## DNS per-domain routing (Linux/OpenWrt only)
 
 ```console
-xp2p client dns-forward add -d corp.test.com -t 10.0.101.142:53 --with-forward
-xp2p client dns-forward add -d lab.test.com -t 10.0.102.142:53 --with-forward
+xp2p client dns-forward add -d corp.test.com -t 10.0.101.142:53
+xp2p client dns-forward add -d lab.test.com -t 10.0.102.142:53
 ```
 
 ## Cleanup
 
 ```console
 xp2p client redirect remove --path /etc/xp2p --config-dir config-client --cidr 10.0.101.0/24 --tag proxy-10-63-30-11
-xp2p client dns-forward remove -d corp.test.com --with-forward
+xp2p client dns-forward remove -d corp.test.com
 xp2p client remove --path /etc/xp2p --config-dir config-client --all --ignore-missing --quiet
 ```

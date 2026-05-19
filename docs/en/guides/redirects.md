@@ -77,4 +77,4 @@ xp2p server dns-forward remove --domain corp.test.com
 
 - Multiple tunnels/endpoints: pass `--tag <tag>` to target a specific tunnel.
 - Non-default config root: pass `--path <dir>` and `--config-dir <dir>` when you do not use the default layout.
-- DNS helper forward: add `--with-forward` to also create the local forward rule alongside the dnsmasq entry.
+- DNS forwarding: `dns-forward add` automatically reuses or creates a local forward for the specified target DNS server.
