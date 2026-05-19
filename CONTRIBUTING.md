@@ -29,6 +29,31 @@ Thanks for helping improve XRAY-p2p! This document focuses on developer tasks fo
 - Deployment packages: `go test ./go/internal/deploy` checks the embedded templates and archive layout.
 - When adding or modifying tests, use the shared failure dump helpers (for example `tests/host/openwrt/_helpers.dump_failure_state` or `tests/host/win/env.dump_failure_state`) instead of ad-hoc diagnostic dumps.
 
+## Persisted data compatibility
+
+Use the normalization pipeline for xp2p-owned persisted data that can evolve over time, including TOML configuration, JSON state files, and future xp2p-owned metadata. Do not use it for Xray JSON because that is an external runtime format.
+
+The standard flow is:
+
+```text
+Raw decode -> Defaults -> Compatibility rules -> Validation -> Canonical model -> Optional canonical write
+```
+
+Keep domain logic in the domain package. The shared `go/internal/normalize` package must contain only generic primitives (`Report`, `Rule`, `Pipeline`) and must not know concrete fields from config or state files.
+
+When adding or changing a persisted field:
+
+- Add raw and canonical models in the domain package when the current file shape has legacy syntax.
+- Keep old fields in raw models only.
+- Add one explicit compatibility rule per legacy syntax.
+- Set `Name`, `Description`, `DeprecatedSince`, `RemovedSince`, and `RemovalNote` on every rule.
+- Reject the legacy syntax when `version.Current()` is greater than or equal to `RemovedSince`.
+- Do not add `schema_version` fields or version-by-version migration chains for user TOML, JSON state, or metadata files.
+- Do not rewrite files on normal reads.
+- Write canonical format on the next normal save path for that file.
+
+Each domain pipeline must have tests for canonical input, legacy input, mixed input with the same meaning, conflicting legacy/canonical fields, defaults, invalid values, and canonical writes that omit deprecated fields.
+
 ## Versioning and releases
 
 - Check the CLI version with `xp2p --version`. On startup the binary logs the embedded version, and deployment commands include it in their output.

@@ -36,6 +36,8 @@ xp2p server cert set --cert /path/to/fullchain.pem --key /path/to/privkey.pem
 xp2p server cert state
 ```
 
+`dns-forward remove` removes the managed dnsmasq domain entry. It removes an xray forward only when that forward was created and is still owned by dns-forward, and no other dns-forward domain uses the same listen port.
+
 Server defaults to proxy mode (`server.tun_enabled = false`). Enable TUN explicitly via config or `XP2P_SERVER_TUN_ENABLED=true` when needed.
 
 ## Client lifecycle
@@ -68,6 +70,8 @@ xp2p client dns-forward add --domain dev.example --target 10.10.10.53:53
 xp2p client dns-forward list
 xp2p client dns-forward remove --domain dev.example
 ```
+
+`dns-forward remove` follows the same ownership rule for client and server roles: pre-existing forwards are preserved, and shared dns-forward-owned forwards remain until the last domain using that listen port is removed.
 
 Advanced options:
 

@@ -248,6 +248,11 @@ Includes: Global options
 - --quiet, -q             Suppress interactive prompts
 - --debug, -g             Emit diagnostics output on error
 
+Behavior:
+- Removes the managed dnsmasq domain entry.
+- Removes the xray forward only when it is owned by dns-forward and no remaining dns-forward entry uses the same listen port.
+- Leaves pre-existing or externally owned forwards in place.
+
 xp2p client dns-forward list
 Options:
 Includes: Global options

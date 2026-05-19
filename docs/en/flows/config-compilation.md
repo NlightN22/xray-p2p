@@ -3,6 +3,8 @@
 This document describes how xp2p turns operator-facing configuration (TOML + optional JSON snippets)
 into the final `xray-core` runtime configuration.
 
+For project-owned persisted data evolution before compilation, see [Normalization Pipeline](normalization-pipeline.md).
+
 The goal is to:
 
 - Keep human-editable inputs small and stable.
