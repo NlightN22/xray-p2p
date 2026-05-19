@@ -9,19 +9,6 @@ import (
 	"path/filepath"
 )
 
-type state struct {
-	Entries map[string]stateEntry `json:"entries,omitempty"`
-}
-
-type stateEntry struct {
-	Target            string `json:"target"`
-	Server            string `json:"server"`
-	ForwardListenPort int    `json:"forward_listen_port,omitempty"`
-	ForwardTag        string `json:"forward_tag,omitempty"`
-	AutoForward       bool   `json:"auto_forward,omitempty"`
-	RebindDomain      string `json:"rebind_domain,omitempty"`
-}
-
 func loadState(path string) (state, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -34,9 +21,13 @@ func loadState(path string) (state, error) {
 		return state{}, nil
 	}
 
-	var s state
-	if err := json.Unmarshal(data, &s); err != nil {
+	var raw rawState
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return state{}, fmt.Errorf("parse dns-forward state %s: %w", path, err)
+	}
+	s, _, err := normalizeState(raw)
+	if err != nil {
+		return state{}, fmt.Errorf("normalize dns-forward state %s: %w", path, err)
 	}
 	if s.Entries == nil {
 		s.Entries = make(map[string]stateEntry)

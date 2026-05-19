@@ -10,7 +10,10 @@ func (m *Manager) List() ([]ListEntry, bool, error) {
 	if err := ensureOpenWrt(); err != nil {
 		return nil, false, err
 	}
-	state, _ := loadState(m.statePath)
+	state, err := loadState(m.statePath)
+	if err != nil {
+		return nil, false, err
+	}
 
 	intercept := m.interceptPresent()
 	var entries []ListEntry
@@ -22,7 +25,7 @@ func (m *Manager) List() ([]ListEntry, bool, error) {
 			Labels: []string{"xp2p"},
 		}
 		if s.ForwardListenPort > 0 {
-			if s.AutoForward {
+			if s.forwardOwnedByDNSForward() {
 				entry.Labels = append(entry.Labels, "forward:auto")
 			} else {
 				entry.Labels = append(entry.Labels, "forward:recorded")

@@ -59,22 +59,58 @@ func TestForwardInUseIgnoresRemovingDomains(t *testing.T) {
 }
 
 func TestShouldRemoveReplacedForwardOnlyForUnusedAutoForward(t *testing.T) {
-	previous := stateEntry{ForwardListenPort: 53331, AutoForward: true}
+	previous := stateEntry{ForwardListenPort: 53331, ForwardOwner: forwardOwnerDNSForward}
 	state := state{Entries: map[string]stateEntry{
-		"current.test": {ForwardListenPort: 53332, AutoForward: true},
+		"current.test": {ForwardListenPort: 53332, ForwardOwner: forwardOwnerDNSForward},
 	}}
 
 	if !shouldRemoveReplacedForward(previous, true, 53332, state) {
 		t.Fatal("expected replaced auto-created forward to be removed")
 	}
 
-	state.Entries["other.test"] = stateEntry{ForwardListenPort: 53331, AutoForward: true}
+	state.Entries["other.test"] = stateEntry{ForwardListenPort: 53331, ForwardOwner: forwardOwnerDNSForward}
 	if shouldRemoveReplacedForward(previous, true, 53332, state) {
 		t.Fatal("expected shared forward to remain")
 	}
 
-	previous.AutoForward = false
+	previous.ForwardOwner = ""
 	if shouldRemoveReplacedForward(previous, true, 53332, state) {
 		t.Fatal("expected pre-existing forward to remain")
+	}
+}
+
+func TestShouldRemoveForwardOnDeleteRequiresDNSForwardOwnership(t *testing.T) {
+	state := state{Entries: map[string]stateEntry{
+		"example.test": {
+			ForwardListenPort: 53331,
+			ForwardOwner:      forwardOwnerDNSForward,
+		},
+	}}
+
+	if !shouldRemoveForwardOnDelete(state.Entries["example.test"], true, state, []string{"example.test"}) {
+		t.Fatal("expected dns-forward-owned forward to be removed when last domain is removed")
+	}
+
+	entry := state.Entries["example.test"]
+	entry.ForwardOwner = ""
+	if shouldRemoveForwardOnDelete(entry, true, state, []string{"example.test"}) {
+		t.Fatal("expected existing forward without ownership to remain")
+	}
+}
+
+func TestShouldRemoveForwardOnDeleteKeepsSharedForward(t *testing.T) {
+	state := state{Entries: map[string]stateEntry{
+		"one.test": {
+			ForwardListenPort: 53331,
+			ForwardOwner:      forwardOwnerDNSForward,
+		},
+		"two.test": {
+			ForwardListenPort: 53331,
+			ForwardOwner:      forwardOwnerDNSForward,
+		},
+	}}
+
+	if shouldRemoveForwardOnDelete(state.Entries["one.test"], true, state, []string{"one.test"}) {
+		t.Fatal("expected shared forward to remain while another dns-forward entry uses it")
 	}
 }

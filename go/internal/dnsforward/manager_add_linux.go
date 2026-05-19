@@ -21,7 +21,10 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 		return ListEntry{}, err
 	}
 
-	state, _ := loadState(m.statePath)
+	state, err := loadState(m.statePath)
+	if err != nil {
+		return ListEntry{}, err
+	}
 	labels := []string{"xp2p"}
 	previous, hadPrevious := state.Entries[domain]
 
@@ -41,7 +44,7 @@ func (m *Manager) Add(ctx context.Context, opts AddOptions) (ListEntry, error) {
 		Server:            fmt.Sprintf("%s#%d", serverIP, serverPort),
 		ForwardListenPort: rule.ListenPort,
 		ForwardTag:        rule.Tag,
-		AutoForward:       created,
+		ForwardOwner:      forwardOwnerForCreatedForward(created),
 		RebindDomain:      rebind,
 	})
 

@@ -12,7 +12,10 @@ func (m *Manager) Remove(opts RemoveOptions) ([]string, error) {
 	if err := ensureOpenWrt(); err != nil {
 		return nil, err
 	}
-	state, _ := loadState(m.statePath)
+	state, err := loadState(m.statePath)
+	if err != nil {
+		return nil, err
+	}
 	stateChanged := false
 
 	var domains []string
@@ -119,7 +122,7 @@ func forwardInUse(state state, listenPort int, removing []string) bool {
 func shouldRemoveForwardOnDelete(entry stateEntry, hasState bool, state state, removing []string) bool {
 	return hasState &&
 		entry.ForwardListenPort > 0 &&
-		entry.AutoForward &&
+		entry.forwardOwnedByDNSForward() &&
 		!forwardInUse(state, entry.ForwardListenPort, removing)
 }
 
@@ -127,6 +130,13 @@ func shouldRemoveReplacedForward(previous stateEntry, hadPrevious bool, newListe
 	return hadPrevious &&
 		previous.ForwardListenPort > 0 &&
 		previous.ForwardListenPort != newListenPort &&
-		previous.AutoForward &&
+		previous.forwardOwnedByDNSForward() &&
 		!forwardInUse(state, previous.ForwardListenPort, nil)
+}
+
+func forwardOwnerForCreatedForward(created bool) string {
+	if created {
+		return forwardOwnerDNSForward
+	}
+	return ""
 }
