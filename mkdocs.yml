@@ -27,7 +27,7 @@ plugins:
             Deploy Flow: Поток deploy
             Apply Flow: Поток apply
             Config Compilation: Компиляция конфигурации
-            Normalization Pipeline: Normalization Pipeline
+            Normalization Pipeline: Пайплайн нормализации
             Tunnel Status Logic: Логика статуса туннеля
             Operations: Эксплуатация
             TUN Setup: Настройка TUN
