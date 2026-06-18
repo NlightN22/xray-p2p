@@ -78,6 +78,29 @@ func TestClassifyXrayConfigDiffRejectsTaggedRuleMutation(t *testing.T) {
 	}
 }
 
+func TestClassifyXrayConfigDiffDetectsFullTunnelTargetReplacement(t *testing.T) {
+	current := []byte(`{"routing":{"rules":[
+		{"type":"field","ruleTag":"xp2p-full-old","ip":["0.0.0.0/0","::/0"],"outboundTag":"proxy-old"}
+	]}}`)
+	candidate := []byte(`{"routing":{"rules":[
+		{"type":"field","ruleTag":"xp2p-full-new","ip":["0.0.0.0/0","::/0"],"outboundTag":"proxy-new"}
+	]}}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffRoutingOnly {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffRoutingOnly, diff)
+	}
+	if len(diff.RemovedRules) != 1 || diff.RemovedRules[0].RuleTag != "xp2p-full-old" {
+		t.Fatalf("unexpected removed rules: %+v", diff.RemovedRules)
+	}
+	if len(diff.AddedRules) != 1 || diff.AddedRules[0].RuleTag != "xp2p-full-new" {
+		t.Fatalf("unexpected added rules: %+v", diff.AddedRules)
+	}
+}
+
 func TestClassifyXrayConfigDiffDetectsInboundOnlyAddRemove(t *testing.T) {
 	current := []byte(`{
 		"log": {"loglevel": "warning"},

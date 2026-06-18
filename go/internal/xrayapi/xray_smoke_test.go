@@ -84,6 +84,19 @@ func TestBundledXrayAPI(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("add rule: %v", err)
 	}
+	route, err := client.TestRoute(context.Background(), RouteTest{
+		InboundTag:     "socks-smoke",
+		Network:        "tcp",
+		TargetDomain:   "example.com",
+		TargetPort:     443,
+		FieldSelectors: []string{"outbound"},
+	})
+	if err != nil {
+		t.Fatalf("test route: %v", err)
+	}
+	if route.OutboundTag != "direct" {
+		t.Fatalf("route outbound = %q, want direct", route.OutboundTag)
+	}
 	if err := client.RemoveRule(context.Background(), "smoke-rule"); err != nil {
 		t.Fatalf("remove rule: %v", err)
 	}
