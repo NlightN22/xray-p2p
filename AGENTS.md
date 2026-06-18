@@ -61,8 +61,11 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 
 - System services (`systemd`, `procd`, `Windows SCM`) must not rely on CLI flags.
 - Packages must run `xp2p` binaries with default parameters only.
-- When a change can be applied safely through the pinned Xray gRPC API, prefer runtime apply over restarting xray-core.
+- Runtime changes must be designed as on-flow changes first: check whether the pinned Xray gRPC API can apply and verify the change without restarting `xray-core`.
+- When a change can be applied safely through the pinned Xray gRPC API, use runtime apply instead of restarting `xray-core`.
+- Do not add a restart-based path for Xray resources until the API capability has been checked and the limitation is documented.
 - For runtime-capable changes, CLI commands should build and validate a candidate config, apply it to running Xray through gRPC, verify the runtime result, and only then persist the corresponding Desired inputs under `CONFIG_ROOT` and publish matching Live artifacts.
+- Runtime apply is not complete until the successful running Xray state is persisted into Desired inputs and matching Live artifacts.
 - If runtime apply succeeds but Desired/Live persistence fails, roll back the runtime change or write an explicit `apply.error`; never leave a silent drift between running Xray, Desired inputs, and Live artifacts.
 - If runtime apply is unavailable, unsupported, or fails verification, leave/apply marker files under `.state/` so the service/run apply flow can use the restart fallback.
 - OS-level changes such as TUN setup, routes, DNS, firewall, and `nftables` must still be applied only by `xp2p run` or the service layer.
