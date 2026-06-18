@@ -17,9 +17,11 @@ var (
 	clientAddEndpointFunc    = client.AddEndpoint
 	clientListFunc           = client.ListEndpoints
 	clientReverseListFunc    = client.ListReverse
+	clientReverseToggleFunc  = client.SetReverseEnabled
 	clientRedirectAddFunc    = client.AddRedirect
 	clientRedirectRemoveFunc = client.RemoveRedirect
 	clientRedirectListFunc   = client.ListRedirects
+	clientRedirectToggleFunc = client.SetRedirectEnabled
 )
 
 // Execute runs the xp2p client command tree with the provided arguments.

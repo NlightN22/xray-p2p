@@ -40,6 +40,15 @@ type RedirectRemoveOptions struct {
 	TunName    string
 }
 
+type RedirectSetEnabledOptions struct {
+	CIDR     string
+	Domain   string
+	Tag      string
+	Hostname string
+	All      bool
+	Enabled  bool
+}
+
 // RedirectListOptions configures listing.
 type RedirectListOptions struct {
 	InstallDir string
@@ -55,6 +64,7 @@ type RedirectRecord struct {
 	Domain   string
 	Tag      string
 	Hostname string
+	Disabled bool
 }
 
 // AddRedirect registers a custom CIDR redirect.
@@ -163,6 +173,51 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 }
 
+func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
+	configFile := config.ConfigPath(layout.ClientConfigFileName)
+	state, err := loadClientInstallState(configFile)
+	if err != nil {
+		return err
+	}
+	if len(state.Redirects) == 0 {
+		return errors.New("no redirect rules configured")
+	}
+
+	target := redirect.Target{}
+	if !opts.All {
+		target, err = redirect.ResolveRule(opts.CIDR, opts.Domain)
+		if err != nil {
+			return err
+		}
+	}
+	tagFilter := strings.TrimSpace(opts.Tag)
+	if strings.TrimSpace(opts.Hostname) != "" {
+		var resolved string
+		resolved, _, err = resolveRedirectTarget(tagFilter, opts.Hostname, state.Endpoints)
+		if err != nil {
+			return err
+		}
+		tagFilter = resolved
+	}
+
+	updated, changed := redirect.SetRulesEnabled(state.Redirects, target, tagFilter, opts.All, opts.Enabled)
+	if !changed {
+		if opts.All {
+			return nil
+		}
+		return fmt.Errorf("redirect %s not found", target.Describe())
+	}
+	state.Redirects = updated
+	if err := state.save(configFile); err != nil {
+		return err
+	}
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+}
+
 // ListRedirects returns configured redirect entries.
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
@@ -209,6 +264,7 @@ func buildRedirectRecords(state clientInstallState) []RedirectRecord {
 			Domain:   rule.Domain,
 			Tag:      rule.OutboundTag,
 			Hostname: host,
+			Disabled: rule.Disabled,
 		})
 	}
 	return records

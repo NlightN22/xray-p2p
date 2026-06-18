@@ -36,6 +36,11 @@ type serverUserListOptions struct {
 	Pending   bool
 }
 
+type serverUserToggleOptions struct {
+	UserID string
+	All    bool
+}
+
 func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAddOptions) int {
 	passwordValue := strings.TrimSpace(opts.Password)
 	keyValue := strings.TrimSpace(opts.Key)
@@ -165,7 +170,35 @@ func runServerUserList(ctx context.Context, cfg config.Config, opts serverUserLi
 		if label == "" {
 			label = "(unnamed)"
 		}
+		if user.Disabled {
+			label += " [disabled]"
+		}
 		fmt.Printf("%s: %s\n", label, user.Link)
+	}
+	return 0
+}
+
+func runServerUserToggle(ctx context.Context, _ config.Config, opts serverUserToggleOptions, enabled bool) int {
+	if err := server.SetUserEnabled(ctx, server.SetUserEnabledOptions{
+		UserID:  opts.UserID,
+		All:     opts.All,
+		Enabled: enabled,
+	}); err != nil {
+		action := "disable"
+		if enabled {
+			action = "enable"
+		}
+		logging.Error("xp2p server user "+action+" failed", "err", err)
+		return 1
+	}
+	action := "disabled"
+	if enabled {
+		action = "enabled"
+	}
+	if opts.All {
+		logging.Info("xp2p server users " + action)
+	} else {
+		logging.Info("xp2p server user "+action, "user_id", strings.TrimSpace(opts.UserID))
 	}
 	return 0
 }

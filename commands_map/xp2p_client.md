@@ -10,7 +10,7 @@
 ## Command tree
 
 xp2p client
-  Subcommands: install, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
+  Subcommands: install, disable, enable, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
 
 xp2p client install
 Options:
@@ -38,6 +38,16 @@ Includes: Global options
 - --ignore-missing, -m    Do not fail if installation is absent (only with --all)
 - --all, -a               Remove all endpoints and configuration
 - --quiet, -q             Do not prompt for removal
+
+xp2p client disable [hostname|tag]
+Options:
+Includes: Global options
+- --all, -a               Disable all endpoints
+
+xp2p client enable [hostname|tag]
+Options:
+Includes: Global options
+- --all, -a               Enable all endpoints
 
 xp2p client list
 Options:
@@ -175,6 +185,24 @@ Includes: Global options
 - --host, -H <host>      Client endpoint hostname filter
 - --quiet, -q            Do not prompt for outbound tags
 
+xp2p client redirect disable
+Options:
+Includes: Global options
+- --cidr, -C <cidr>      CIDR mapping to disable (mutually exclusive with --domain)
+- --domain, -d <name>    Domain mapping to disable (mutually exclusive with --cidr)
+- --tag, -g <tag>        Outbound tag filter
+- --host, -H <host>      Client endpoint hostname filter
+- --all, -a              Disable all redirect rules
+
+xp2p client redirect enable
+Options:
+Includes: Global options
+- --cidr, -C <cidr>      CIDR mapping to enable (mutually exclusive with --domain)
+- --domain, -d <name>    Domain mapping to enable (mutually exclusive with --cidr)
+- --tag, -g <tag>        Outbound tag filter
+- --host, -H <host>      Client endpoint hostname filter
+- --all, -a              Enable all redirect rules
+
 xp2p client redirect list
 Options:
 Includes: Global options
@@ -224,6 +252,16 @@ Includes: Global options
 - --path, -p <dir>       Client installation directory
 - --config-dir, -D <dir> Client configuration directory name
 - --pending, -y          List pending configuration
+
+xp2p client reverse disable [tag|user|host]
+Options:
+Includes: Global options
+- --all, -a              Disable all reverse tunnels
+
+xp2p client reverse enable [tag|user|host]
+Options:
+Includes: Global options
+- --all, -a              Enable all reverse tunnels
 
 xp2p client mode [tun|proxy] [split|full]
 Options:

@@ -31,6 +31,15 @@ type RedirectRemoveOptions struct {
 	TunName    string
 }
 
+type RedirectSetEnabledOptions struct {
+	CIDR     string
+	Domain   string
+	Tag      string
+	Hostname string
+	All      bool
+	Enabled  bool
+}
+
 type RedirectListOptions struct {
 	InstallDir string
 	ConfigDir  string
@@ -44,6 +53,7 @@ type RedirectRecord struct {
 	Domain   string
 	Tag      string
 	Hostname string
+	Disabled bool
 }
 
 type serverRedirectStore struct {

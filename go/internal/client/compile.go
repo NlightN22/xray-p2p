@@ -40,6 +40,7 @@ type runtimeEndpoint struct {
 	Tag      string `json:"tag,omitempty"`
 	Port     int    `json:"port,omitempty"`
 	User     string `json:"user,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
 }
 
 type compiledArtifacts struct {
@@ -66,7 +67,8 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 	}
 
 	fullEnabled := cfg.Client.TunEnabled && strings.EqualFold(strings.TrimSpace(cfg.Client.TunMode), "full")
-	endpointIPs, err := resolveEndpointIPMapWithCache(context.Background(), desired.Endpoints)
+	activeEndpoints := activeClientEndpoints(desired.Endpoints)
+	endpointIPs, err := resolveEndpointIPMapWithCache(context.Background(), activeEndpoints)
 	if err != nil {
 		return compiledArtifacts{}, err
 	}
@@ -119,6 +121,7 @@ func sanitizeRuntimeEndpoints(endpoints []clientEndpointRecord) []runtimeEndpoin
 			Tag:      strings.TrimSpace(ep.Tag),
 			Port:     ep.Port,
 			User:     strings.TrimSpace(ep.User),
+			Disabled: ep.Disabled,
 		})
 	}
 	return out
@@ -168,8 +171,9 @@ func buildClientXrayDoc(xrayCfg xrayconfig.ClientXrayConfig, desired clientInsta
 
 func buildClientOutbounds(direct xrayconfig.DirectOutboundConfig, desired clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, fullTunnelEnabled bool) ([]any, error) {
 	requireEndpointIPs := fullTunnelEnabled
-	outbounds := make([]any, 0, len(desired.Endpoints)+1)
-	for _, ep := range desired.Endpoints {
+	endpoints := activeClientEndpoints(desired.Endpoints)
+	outbounds := make([]any, 0, len(endpoints)+1)
+	for _, ep := range endpoints {
 		outbound, err := trojanOutbound(ep, endpointIPs, requireEndpointIPs)
 		if err != nil {
 			return nil, err
@@ -187,15 +191,19 @@ func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState
 		"domainStrategy": strings.TrimSpace(cfg.DomainStrategy),
 	}
 
+	activeEndpoints := activeClientEndpoints(desired.Endpoints)
+	activeRedirects := activeClientRedirects(desired.Redirects, desired.Endpoints)
+	activeReverseRules := activeClientReverseForRules(desired.Reverse, desired.Endpoints)
+
 	ensureIPs := fullTunnelEnabled
-	bypassRules, err := endpointBypassRules(desired.Endpoints, endpointIPs, ensureIPs)
+	bypassRules, err := endpointBypassRules(activeEndpoints, endpointIPs, ensureIPs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	systemRules := make([]any, 0, len(desired.Endpoints)+len(desired.Reverse)*2)
-	systemRules = append(systemRules, buildClientReverseRules(desired.Reverse)...)
-	for idx, ep := range desired.Endpoints {
+	systemRules := make([]any, 0, len(activeEndpoints)+len(activeReverseRules)*2)
+	systemRules = append(systemRules, buildClientReverseRules(activeReverseRules)...)
+	for idx, ep := range activeEndpoints {
 		markerIP, err := markerIPForIndex(idx)
 		if err != nil {
 			return nil, nil, fmt.Errorf("allocate diagnostics marker for %s: %w", ep.Tag, err)
@@ -210,11 +218,11 @@ func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState
 		})
 	}
 
-	managedRules := make([]any, 0, len(cfg.Rules)+len(desired.Redirects))
+	managedRules := make([]any, 0, len(cfg.Rules)+len(activeRedirects))
 	for _, rule := range cfg.Rules {
 		managedRules = append(managedRules, rule)
 	}
-	for _, rule := range desired.Redirects {
+	for _, rule := range activeRedirects {
 		entry := map[string]any{
 			"type":        "field",
 			"ruleTag":     xrayrule.Redirect("client", rule.OutboundTag, rule.Kind().String(), rule.Value()),

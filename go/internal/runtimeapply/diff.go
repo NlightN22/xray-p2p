@@ -19,6 +19,7 @@ const (
 	DiffInboundOnly  DiffKind = "inbound_only"
 	DiffOutboundOnly DiffKind = "outbound_only"
 	DiffInboundUsers DiffKind = "inbound_users"
+	DiffMixed        DiffKind = "mixed"
 )
 
 type RoutingRuleChange struct {
@@ -73,6 +74,10 @@ func ClassifyXrayConfigDiff(current, candidate []byte) (Diff, error) {
 		return diff, err
 	}
 	diff, done, err = classifyOutboundDiff(current, candidate)
+	if err != nil || done {
+		return diff, err
+	}
+	diff, done, err = classifyMixedResourceDiff(current, candidate)
 	if err != nil || done {
 		return diff, err
 	}

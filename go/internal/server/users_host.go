@@ -152,12 +152,14 @@ func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {
 			result = append(result, UserLink{
 				UserID:   user.Email,
 				Password: user.Password,
+				Disabled: user.Disabled,
 			})
 			continue
 		}
 		if link.Password == "" {
 			link.Password = user.Password
 		}
+		link.Disabled = user.Disabled
 		result = append(result, link)
 	}
 	return result, nil
@@ -206,5 +208,6 @@ func GetUserLink(ctx context.Context, opts UserLinkOptions) (UserLink, error) {
 		UserID:   client.Email,
 		Password: client.Password,
 		Link:     link,
+		Disabled: client.Disabled,
 	}, nil
 }

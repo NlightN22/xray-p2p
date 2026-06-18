@@ -117,7 +117,7 @@ func buildServerXrayDoc(xrayCfg xrayconfig.ServerXrayConfig, desired desiredServ
 		doc[k] = v
 	}
 
-	inboundsDoc := buildServerInbounds(xrayCfg, cfg.Server.TunEnabled, cfg.Server.TunName, cfg.Server.TunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, desired.Forwards, desired.Users)
+	inboundsDoc := buildServerInbounds(xrayCfg, cfg.Server.TunEnabled, cfg.Server.TunName, cfg.Server.TunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, desired.Forwards, activeServerUsers(desired.Users))
 	inbounds, _ := inboundsDoc["inbounds"].([]any)
 
 	outbounds := buildServerOutbounds(xrayCfg.DirectOutbound)
@@ -186,6 +186,9 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 			"domain": channel.Domain,
 			"tag":    channel.Tag,
 		})
+		if channel.Disabled {
+			continue
+		}
 		rule := map[string]any{
 			"type":        "field",
 			"ruleTag":     xrayrule.ServerReverse("server", channel.Tag, channel.Domain, channel.UserID),
@@ -197,9 +200,10 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 		}
 		reverseRules = append(reverseRules, rule)
 	}
-	tags := sortedReverseTags(desired.Reverse)
+	activeReverse := activeServerReverseRules(desired.Reverse)
+	tags := sortedReverseTags(activeReverse)
 	for idx, tag := range tags {
-		channel := desired.Reverse[tag]
+		channel := activeReverse[tag]
 		markerIP, err := markerIPForIndex(idx)
 		if err != nil {
 			continue
@@ -215,11 +219,12 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 		})
 	}
 
-	managedRules := make([]any, 0, len(cfg.Routing.Rules)+len(desired.Redirects))
+	activeRedirects := activeServerRedirects(desired.Redirects)
+	managedRules := make([]any, 0, len(cfg.Routing.Rules)+len(activeRedirects))
 	for _, rule := range cfg.Routing.Rules {
 		managedRules = append(managedRules, rule)
 	}
-	for _, rule := range desired.Redirects {
+	for _, rule := range activeRedirects {
 		entry := map[string]any{
 			"type":        "field",
 			"ruleTag":     xrayrule.Redirect("server", rule.OutboundTag, rule.Kind().String(), rule.Value()),

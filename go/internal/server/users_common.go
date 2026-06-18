@@ -21,6 +21,7 @@ const serverTrojanUsersKey = "trojan_users"
 type trojanClient struct {
 	Email    string `json:"email" toml:"email"`
 	Password string `json:"password" toml:"password"`
+	Disabled bool   `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 
 func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
@@ -58,6 +59,9 @@ func saveServerTrojanUsers(configPath string, users []trojanClient) error {
 func clientsToInterfaces(clients []trojanClient) []any {
 	result := make([]any, 0, len(clients))
 	for _, client := range clients {
+		if client.Disabled {
+			continue
+		}
 		entry := map[string]any{
 			"password": strings.TrimSpace(client.Password),
 		}

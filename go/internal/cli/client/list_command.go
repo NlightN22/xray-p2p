@@ -48,10 +48,14 @@ func runClientList(_ context.Context, cfg config.Config, args []string) int {
 	}
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "HOSTNAME\tTAG\tADDRESS\tPORT\tUSER\tTLS MODE\tSERVER NAME")
+	fmt.Fprintln(writer, "HOSTNAME\tTAG\tADDRESS\tPORT\tUSER\tTLS MODE\tSERVER NAME\tSTATE")
 	for _, rec := range records {
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%d\t%s\t%s\t%s\n",
-			rec.Hostname, rec.Tag, rec.Address, rec.Port, rec.User, rec.TLSMode, rec.ServerName)
+		state := "enabled"
+		if rec.Disabled {
+			state = "disabled"
+		}
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\n",
+			rec.Hostname, rec.Tag, rec.Address, rec.Port, rec.User, rec.TLSMode, rec.ServerName, state)
 	}
 	_ = writer.Flush()
 	return 0

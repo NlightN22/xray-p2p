@@ -26,6 +26,7 @@ type clientEndpointRecord struct {
 	AllowInsecure        bool     `json:"allow_insecure" toml:"allow_insecure"`
 	PinnedPeerCertSHA256 string   `json:"pinned_peer_cert_sha256" toml:"pinned_peer_cert_sha256"`
 	VerifyPeerCertByName string   `json:"verify_peer_cert_by_name" toml:"verify_peer_cert_by_name"`
+	Disabled             bool     `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 
 type clientReverseChannel struct {
@@ -34,6 +35,7 @@ type clientReverseChannel struct {
 	Tag         string `json:"tag" toml:"tag"`
 	Domain      string `json:"domain" toml:"domain"`
 	EndpointTag string `json:"endpoint_tag" toml:"endpoint_tag"`
+	Disabled    bool   `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 
 var ErrClientConfigParse = errors.New("client config parse error")

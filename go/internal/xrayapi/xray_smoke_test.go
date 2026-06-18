@@ -62,8 +62,18 @@ func TestBundledXrayAPI(t *testing.T) {
 	})); err != nil {
 		t.Fatalf("add outbound: %v", err)
 	}
+	if tags, err := client.ListOutboundTags(context.Background()); err != nil {
+		t.Fatalf("list outbounds after add: %v", err)
+	} else {
+		requireContains(t, tags, "direct-smoke")
+	}
 	if err := client.RemoveOutbound(context.Background(), "direct-smoke"); err != nil {
 		t.Fatalf("remove outbound: %v", err)
+	}
+	if tags, err := client.ListOutboundTags(context.Background()); err != nil {
+		t.Fatalf("list outbounds after remove: %v", err)
+	} else {
+		requireNotContains(t, tags, "direct-smoke")
 	}
 	if err := client.AddInboundUser(context.Background(), "trojan-smoke", "smoke@example.com", "secret"); err != nil {
 		t.Fatalf("add inbound user: %v", err)
@@ -76,6 +86,11 @@ func TestBundledXrayAPI(t *testing.T) {
 	if err := client.RemoveInboundUser(context.Background(), "trojan-smoke", "smoke@example.com"); err != nil {
 		t.Fatalf("remove inbound user: %v", err)
 	}
+	if users, err := client.ListInboundUserEmails(context.Background(), "trojan-smoke"); err != nil {
+		t.Fatalf("list inbound users after remove: %v", err)
+	} else {
+		requireNotContains(t, users, "smoke@example.com")
+	}
 	if err := client.AddRule(context.Background(), map[string]any{
 		"type":        "field",
 		"ruleTag":     "smoke-rule",
@@ -83,6 +98,11 @@ func TestBundledXrayAPI(t *testing.T) {
 		"outboundTag": "direct",
 	}); err != nil {
 		t.Fatalf("add rule: %v", err)
+	}
+	if tags, err := client.ListRuleTags(context.Background()); err != nil {
+		t.Fatalf("list rules after add: %v", err)
+	} else {
+		requireContains(t, tags, "smoke-rule")
 	}
 	route, err := client.TestRoute(context.Background(), RouteTest{
 		InboundTag:     "socks-smoke",
@@ -99,6 +119,11 @@ func TestBundledXrayAPI(t *testing.T) {
 	}
 	if err := client.RemoveRule(context.Background(), "smoke-rule"); err != nil {
 		t.Fatalf("remove rule: %v", err)
+	}
+	if tags, err := client.ListRuleTags(context.Background()); err != nil {
+		t.Fatalf("list rules after remove: %v", err)
+	} else {
+		requireNotContains(t, tags, "smoke-rule")
 	}
 	if _, err := client.GetOutboundStatuses(context.Background()); err != nil {
 		t.Fatalf("get outbound statuses: %v", err)
@@ -311,4 +336,18 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func requireContains(t *testing.T, values []string, want string) {
+	t.Helper()
+	if !contains(values, want) {
+		t.Fatalf("values = %v, want %q", values, want)
+	}
+}
+
+func requireNotContains(t *testing.T, values []string, want string) {
+	t.Helper()
+	if contains(values, want) {
+		t.Fatalf("values = %v, did not want %q", values, want)
+	}
 }

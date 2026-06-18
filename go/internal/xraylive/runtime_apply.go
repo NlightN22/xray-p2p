@@ -96,7 +96,7 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 	case runtimeapply.DiffUnsupported:
 		logging.Info("runtime apply fallback required", "role", role, "request_id", req.ID, "reason", diff.Reason)
 		return RuntimeApplyRestartRequired, nil
-	case runtimeapply.DiffRoutingOnly, runtimeapply.DiffInboundOnly, runtimeapply.DiffOutboundOnly, runtimeapply.DiffInboundUsers:
+	case runtimeapply.DiffRoutingOnly, runtimeapply.DiffInboundOnly, runtimeapply.DiffOutboundOnly, runtimeapply.DiffInboundUsers, runtimeapply.DiffMixed:
 	default:
 		return RuntimeApplyRestartRequired, nil
 	}
@@ -114,6 +114,8 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 		return applyOutboundRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
 	case runtimeapply.DiffInboundUsers:
 		return applyInboundUserRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
+	case runtimeapply.DiffMixed:
+		return applyMixedRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
 	default:
 		return RuntimeApplyRestartRequired, nil
 	}

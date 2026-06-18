@@ -24,6 +24,7 @@ type EndpointRecord struct {
 	ServerName    string
 	AllowInsecure bool
 	TLSMode       string
+	Disabled      bool
 }
 
 // ListEndpoints returns all configured endpoints.
@@ -47,6 +48,7 @@ func toEndpointRecords(state clientInstallState) []EndpointRecord {
 			ServerName:    ep.ServerName,
 			AllowInsecure: ep.AllowInsecure,
 			TLSMode:       endpointTLSMode(ep),
+			Disabled:      ep.Disabled,
 		})
 	}
 	return records

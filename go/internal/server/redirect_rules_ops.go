@@ -99,6 +99,44 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	return writeServerApplyRequest()
 }
 
+func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
+	store, err := openServerRedirectStorePending()
+	if err != nil {
+		return err
+	}
+	if len(store.redirects) == 0 {
+		return errors.New("no server redirect rules configured")
+	}
+
+	target := redirect.Target{}
+	if !opts.All {
+		target, err = redirect.ResolveRule(opts.CIDR, opts.Domain)
+		if err != nil {
+			return err
+		}
+	}
+	tagFilter := strings.TrimSpace(opts.Tag)
+	if strings.TrimSpace(opts.Hostname) != "" {
+		binding, bindErr := resolveServerRedirectBinding(tagFilter, opts.Hostname, store.bindings())
+		if bindErr != nil {
+			return bindErr
+		}
+		tagFilter = binding.Tag
+	}
+	updated, changed := redirect.SetRulesEnabled(store.redirects, target, tagFilter, opts.All, opts.Enabled)
+	if !changed {
+		if opts.All {
+			return nil
+		}
+		return fmt.Errorf("redirect %s not found", target.Describe())
+	}
+	store.redirects = updated
+	if err := store.saveRedirects(); err != nil {
+		return err
+	}
+	return writeServerApplyRequest()
+}
+
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 	installDir, err := resolveInstallDir(opts.InstallDir)
 	if err != nil {
@@ -135,6 +173,7 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 			Domain:   rule.Domain,
 			Tag:      rule.OutboundTag,
 			Hostname: host,
+			Disabled: rule.Disabled,
 		})
 	}
 	return records, nil

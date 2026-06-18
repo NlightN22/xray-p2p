@@ -31,7 +31,9 @@ var (
 	serverRedirectAddFunc    = server.AddRedirect
 	serverRedirectRemoveFunc = server.RemoveRedirect
 	serverRedirectListFunc   = server.ListRedirects
+	serverRedirectToggleFunc = server.SetRedirectEnabled
 	serverReverseListFunc    = server.ListReverse
+	serverReverseToggleFunc  = server.SetReverseEnabled
 )
 
 var promptYesNoFunc = clishared.PromptYesNo

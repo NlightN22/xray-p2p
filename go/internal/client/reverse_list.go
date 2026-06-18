@@ -25,6 +25,7 @@ type ReverseRecord struct {
 	EndpointTag string
 	Bridge      bool
 	DirectRule  bool
+	Disabled    bool
 }
 
 // ListReverse enumerates client reverse tunnels from Desired inputs.
@@ -52,6 +53,7 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 			EndpointTag: channel.EndpointTag,
 			Bridge:      true,
 			DirectRule:  true,
+			Disabled:    channel.Disabled,
 		})
 	}
 	_ = opts

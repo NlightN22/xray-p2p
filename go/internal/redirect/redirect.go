@@ -28,6 +28,7 @@ type Rule struct {
 	Domain      string `json:"domain,omitempty" toml:"domain"`
 	OutboundTag string `json:"outbound_tag" toml:"outbound_tag"`
 	NoRoutes    bool   `json:"no_routes,omitempty" toml:"no_routes"`
+	Disabled    bool   `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 
 // Target identifies the normalized redirect selector.
@@ -228,4 +229,26 @@ func RemoveRule(rules []Rule, target Target, tagFilter string) ([]Rule, bool) {
 		filtered = append(filtered, rule)
 	}
 	return filtered, removed
+}
+
+func SetRulesEnabled(rules []Rule, target Target, tagFilter string, all bool, enabled bool) ([]Rule, bool) {
+	if len(rules) == 0 {
+		return rules, false
+	}
+	changed := false
+	trimmedTag := strings.TrimSpace(tagFilter)
+	for idx := range rules {
+		match := all || target.Matches(rules[idx])
+		matchTag := trimmedTag == "" || strings.EqualFold(rules[idx].OutboundTag, trimmedTag)
+		if !match || !matchTag {
+			continue
+		}
+		disabled := !enabled
+		if rules[idx].Disabled == disabled {
+			continue
+		}
+		rules[idx].Disabled = disabled
+		changed = true
+	}
+	return rules, changed
 }

@@ -49,6 +49,8 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 
 	cmd.AddCommand(
 		newClientInstallCmd(cfg),
+		newClientDisableCmd(cfg),
+		newClientEnableCmd(cfg),
 		newClientRemoveCmd(cfg),
 		newClientListCmd(cfg),
 		newClientRunCmd(cfg),

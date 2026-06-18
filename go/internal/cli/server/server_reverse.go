@@ -25,7 +25,11 @@ func newServerReverseCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	bindServerReverseFlags(cmd)
-	cmd.AddCommand(newServerReverseListCmd(cfg))
+	cmd.AddCommand(
+		newServerReverseDisableCmd(cfg),
+		newServerReverseEnableCmd(cfg),
+		newServerReverseListCmd(cfg),
+	)
 	return cmd
 }
 
@@ -86,15 +90,20 @@ func runServerReverseList(_ context.Context, cfg config.Config, args []string) i
 	}
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "DOMAIN\tHOST\tUSER\tOUTBOUND TAG\tPORTAL\tROUTING RULE")
+	fmt.Fprintln(writer, "DOMAIN\tHOST\tUSER\tOUTBOUND TAG\tPORTAL\tROUTING RULE\tSTATE")
 	for _, rec := range records {
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		state := "enabled"
+		if rec.Disabled {
+			state = "disabled"
+		}
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			rec.Domain,
 			rec.Host,
 			rec.User,
 			rec.Tag,
 			serverReverseStatus(rec.Portal),
 			serverReverseStatus(rec.RoutingRule),
+			state,
 		)
 	}
 	_ = writer.Flush()

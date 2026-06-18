@@ -1,6 +1,10 @@
 package servercmd
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
 
 func newServerUserCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
@@ -10,9 +14,54 @@ func newServerUserCmd(cfg commandConfig) *cobra.Command {
 
 	cmd.AddCommand(
 		newServerUserAddCmd(cfg),
+		newServerUserDisableCmd(cfg),
+		newServerUserEnableCmd(cfg),
 		newServerUserRemoveCmd(cfg),
 		newServerUserListCmd(cfg),
 	)
+	return cmd
+}
+
+func newServerUserDisableCmd(cfg commandConfig) *cobra.Command {
+	return newServerUserToggleCmd(cfg, false)
+}
+
+func newServerUserEnableCmd(cfg commandConfig) *cobra.Command {
+	return newServerUserToggleCmd(cfg, true)
+}
+
+func newServerUserToggleCmd(cfg commandConfig, enabled bool) *cobra.Command {
+	var opts serverUserToggleOptions
+	name := "disable"
+	short := "Disable a Trojan user"
+	if enabled {
+		name = "enable"
+		short = "Enable a Trojan user"
+	}
+	cmd := &cobra.Command{
+		Use:   name + " <id>",
+		Short: short,
+		Args: func(_ *cobra.Command, args []string) error {
+			if opts.All {
+				if len(args) > 0 {
+					return fmt.Errorf("--all does not accept positional arguments")
+				}
+				return nil
+			}
+			if len(args) != 1 {
+				return fmt.Errorf("expected exactly one user id")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				opts.UserID = args[0]
+			}
+			code := runServerUserToggle(commandContext(cmd), cfg(), opts, enabled)
+			return errorForCode(code)
+		},
+	}
+	cmd.Flags().BoolVarP(&opts.All, "all", "a", false, "enable or disable all users")
 	return cmd
 }
 

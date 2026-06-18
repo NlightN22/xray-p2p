@@ -54,6 +54,8 @@ func newServerRedirectCmd(cfg commandConfig) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newServerRedirectAddCmd(cfg),
+		newServerRedirectDisableCmd(cfg),
+		newServerRedirectEnableCmd(cfg),
 		newServerRedirectRemoveCmd(cfg),
 		newServerRedirectListCmd(cfg),
 	)
@@ -266,9 +268,13 @@ func runServerRedirectList(_ context.Context, cfg config.Config, opts serverRedi
 	}
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "TYPE\tVALUE\tOUTBOUND TAG\tHOST")
+	fmt.Fprintln(writer, "TYPE\tVALUE\tOUTBOUND TAG\tHOST\tSTATE")
 	for _, rec := range records {
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\n", rec.Type, rec.Value, rec.Tag, rec.Hostname)
+		state := "enabled"
+		if rec.Disabled {
+			state = "disabled"
+		}
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\n", rec.Type, rec.Value, rec.Tag, rec.Hostname, state)
 	}
 	_ = writer.Flush()
 	return 0

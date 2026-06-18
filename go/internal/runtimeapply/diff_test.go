@@ -218,7 +218,7 @@ func TestClassifyXrayConfigDiffRejectsInboundUserPasswordMutation(t *testing.T) 
 	}
 }
 
-func TestClassifyXrayConfigDiffRejectsInboundUserMixedRoutingChange(t *testing.T) {
+func TestClassifyXrayConfigDiffDetectsInboundUserMixedRoutingChange(t *testing.T) {
 	current := []byte(`{
 		"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[]}}],
 		"routing":{"rules":[{"ruleTag":"old","outboundTag":"direct"}]}
@@ -232,8 +232,60 @@ func TestClassifyXrayConfigDiffRejectsInboundUserMixedRoutingChange(t *testing.T
 	if err != nil {
 		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
 	}
-	if diff.Kind != DiffUnsupported {
-		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	if diff.Kind != DiffMixed {
+		t.Fatalf("kind = %s, want mixed", diff.Kind)
+	}
+	if len(diff.AddedInboundUsers) != 1 || diff.AddedInboundUsers[0].Email != "a@example.com" {
+		t.Fatalf("unexpected added users: %+v", diff.AddedInboundUsers)
+	}
+	if len(diff.AddedRules) != 1 || diff.AddedRules[0].RuleTag != "new" {
+		t.Fatalf("unexpected added rules: %+v", diff.AddedRules)
+	}
+	if len(diff.RemovedRules) != 1 || diff.RemovedRules[0].RuleTag != "old" {
+		t.Fatalf("unexpected removed rules: %+v", diff.RemovedRules)
+	}
+}
+
+func TestClassifyXrayConfigDiffDetectsRoutingOutboundMixedChange(t *testing.T) {
+	current := []byte(`{
+		"outbounds": [
+			{"tag": "direct", "protocol": "freedom"},
+			{"tag": "proxy-old", "protocol": "trojan"}
+		],
+		"routing": {"rules": [
+			{"ruleTag": "keep", "outboundTag": "direct"},
+			{"ruleTag": "old-route", "outboundTag": "proxy-old"}
+		]}
+	}`)
+	candidate := []byte(`{
+		"outbounds": [
+			{"tag": "direct", "protocol": "freedom"},
+			{"tag": "proxy-new", "protocol": "trojan"}
+		],
+		"routing": {"rules": [
+			{"ruleTag": "keep", "outboundTag": "direct"},
+			{"ruleTag": "new-route", "outboundTag": "proxy-new"}
+		]}
+	}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffMixed {
+		t.Fatalf("kind = %s, want mixed: %+v", diff.Kind, diff)
+	}
+	if len(diff.RemovedOutbounds) != 1 || diff.RemovedOutbounds[0].Tag != "proxy-old" {
+		t.Fatalf("unexpected removed outbounds: %+v", diff.RemovedOutbounds)
+	}
+	if len(diff.AddedOutbounds) != 1 || diff.AddedOutbounds[0].Tag != "proxy-new" {
+		t.Fatalf("unexpected added outbounds: %+v", diff.AddedOutbounds)
+	}
+	if len(diff.RemovedRules) != 1 || diff.RemovedRules[0].RuleTag != "old-route" {
+		t.Fatalf("unexpected removed rules: %+v", diff.RemovedRules)
+	}
+	if len(diff.AddedRules) != 1 || diff.AddedRules[0].RuleTag != "new-route" {
+		t.Fatalf("unexpected added rules: %+v", diff.AddedRules)
 	}
 }
 

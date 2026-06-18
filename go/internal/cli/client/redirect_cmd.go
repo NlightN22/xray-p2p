@@ -13,6 +13,8 @@ func newClientRedirectCmd(cfg commandConfig) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newClientRedirectAddCmd(cfg),
+		newClientRedirectDisableCmd(cfg),
+		newClientRedirectEnableCmd(cfg),
 		newClientRedirectRemoveCmd(cfg),
 		newClientRedirectListCmd(cfg),
 	)

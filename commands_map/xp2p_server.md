@@ -124,6 +124,16 @@ Includes: Global options
 - --no-reverse, -n       Skip creating reverse portal/routing entries
 - --force, -f            Overwrite existing user entry
 
+xp2p server user disable <id>
+Options:
+Includes: Global options
+- --all, -a              Disable all Trojan users
+
+xp2p server user enable <id>
+Options:
+Includes: Global options
+- --all, -a              Enable all Trojan users
+
 xp2p server user remove
 Options:
 Includes: Global options
@@ -162,6 +172,24 @@ Includes: Global options
 - --tag, -g <tag>        Reverse outbound tag filter (prompts when omitted)
 - --host, -H <host>      Reverse portal host filter
 - --quiet, -q            Do not prompt for outbound tags
+
+xp2p server redirect disable
+Options:
+Includes: Global options
+- --cidr, -C <cidr>      CIDR mapping to disable (mutually exclusive with --domain)
+- --domain, -d <name>    Domain mapping to disable (mutually exclusive with --cidr)
+- --tag, -g <tag>        Reverse outbound tag filter
+- --host, -H <host>      Reverse portal host filter
+- --all, -a              Disable all redirect rules
+
+xp2p server redirect enable
+Options:
+Includes: Global options
+- --cidr, -C <cidr>      CIDR mapping to enable (mutually exclusive with --domain)
+- --domain, -d <name>    Domain mapping to enable (mutually exclusive with --cidr)
+- --tag, -g <tag>        Reverse outbound tag filter
+- --host, -H <host>      Reverse portal host filter
+- --all, -a              Enable all redirect rules
 
 xp2p server redirect list
 Options:
@@ -211,6 +239,16 @@ Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
 - --pending, -y          List pending configuration
+
+xp2p server reverse disable [tag|user|host]
+Options:
+Includes: Global options
+- --all, -a              Disable all reverse tunnels
+
+xp2p server reverse enable [tag|user|host]
+Options:
+Includes: Global options
+- --all, -a              Enable all reverse tunnels
 
 xp2p server cert set
 Options:

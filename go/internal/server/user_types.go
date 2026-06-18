@@ -41,4 +41,5 @@ type UserLink struct {
 	UserID   string
 	Password string
 	Link     string
+	Disabled bool
 }

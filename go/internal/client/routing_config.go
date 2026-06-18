@@ -16,11 +16,14 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	document := make(map[string]any)
 	routing := ensureObject(document, "routing")
 	routing["domainStrategy"] = strings.TrimSpace(cfg.DomainStrategy)
+	activeEndpoints := activeClientEndpoints(endpoints)
+	activeRedirects := activeClientRedirects(redirects, endpoints)
+	activeReverseRules := activeClientReverseForRules(reverse, endpoints)
 	existing := []any{}
 	for _, rule := range cfg.Rules {
 		existing = append(existing, rule)
 	}
-	managed := managedOutboundTags(endpoints, redirects)
+	managed := managedOutboundTags(activeEndpoints, activeRedirects)
 	for _, rule := range existing {
 		ruleMap, ok := rule.(map[string]any)
 		if !ok {
@@ -34,8 +37,8 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	}
 
 	filtered := filterManagedRules(existing, managed)
-	filtered = filterReverseRules(filtered, reverse)
-	filtered, err := filterEndpointBypassRules(filtered, endpoints, endpointIPs, fullTunnelEnabled && requireEndpointIPs)
+	filtered = filterReverseRules(filtered, activeReverseRules)
+	filtered, err := filterEndpointBypassRules(filtered, activeEndpoints, endpointIPs, fullTunnelEnabled && requireEndpointIPs)
 	if err != nil {
 		return err
 	}
@@ -48,13 +51,13 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	}
 
 	ensureIPs := fullTunnelEnabled && requireEndpointIPs
-	bypassRules, err := endpointBypassRules(endpoints, endpointIPs, ensureIPs)
+	bypassRules, err := endpointBypassRules(activeEndpoints, endpointIPs, ensureIPs)
 	if err != nil {
 		return err
 	}
 	ruleBuckets[routingRuleEndpointBypass] = append(ruleBuckets[routingRuleEndpointBypass], bypassRules...)
-	ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], buildClientReverseRules(reverse)...)
-	for idx, ep := range endpoints {
+	ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], buildClientReverseRules(activeReverseRules)...)
+	for idx, ep := range activeEndpoints {
 		markerIP, err := markerIPForIndex(idx)
 		if err != nil {
 			return fmt.Errorf("allocate diagnostics marker for %s: %w", ep.Tag, err)
@@ -68,7 +71,7 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 			"outboundTag": ep.Tag,
 		})
 	}
-	for _, rule := range redirects {
+	for _, rule := range activeRedirects {
 		entry := map[string]any{
 			"type":        "field",
 			"ruleTag":     xrayrule.Redirect("client", rule.OutboundTag, rule.Kind().String(), rule.Value()),

@@ -25,7 +25,11 @@ func newClientReverseCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 	bindClientReverseFlags(cmd)
-	cmd.AddCommand(newClientReverseListCmd(cfg))
+	cmd.AddCommand(
+		newClientReverseDisableCmd(cfg),
+		newClientReverseEnableCmd(cfg),
+		newClientReverseListCmd(cfg),
+	)
 	return cmd
 }
 
@@ -86,15 +90,20 @@ func runClientReverseList(_ context.Context, cfg config.Config, args []string) i
 	}
 
 	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "TAG\tHOST\tUSER\tENDPOINT TAG\tROUTING-BRIDGE\tDIRECT RULE")
+	fmt.Fprintln(writer, "TAG\tHOST\tUSER\tENDPOINT TAG\tROUTING-BRIDGE\tDIRECT RULE\tSTATE")
 	for _, rec := range records {
-		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		state := "enabled"
+		if rec.Disabled {
+			state = "disabled"
+		}
+		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			rec.Tag,
 			rec.Host,
 			rec.User,
 			rec.EndpointTag,
 			reversePresenceLabel(rec.Bridge),
 			reversePresenceLabel(rec.DirectRule),
+			state,
 		)
 	}
 	_ = writer.Flush()

@@ -219,6 +219,72 @@ func TestTryApplyRoutingPendingAppliesOutboundDiff(t *testing.T) {
 	}
 }
 
+func TestTryApplyRoutingPendingAppliesMixedRoutingOutboundDiff(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	current := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"outbounds": [
+			{"tag": "direct", "protocol": "freedom", "settings": {}},
+			{"tag": "proxy-old", "protocol": "freedom", "settings": {}}
+		],
+		"routing": {"rules": [
+			{"type": "field", "ruleTag": "keep", "outboundTag": "direct"},
+			{"type": "field", "ruleTag": "old-route", "outboundTag": "proxy-old"}
+		]}
+	}`)
+	candidate := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"outbounds": [
+			{"tag": "direct", "protocol": "freedom", "settings": {}},
+			{"tag": "proxy-new", "protocol": "freedom", "settings": {}}
+		],
+		"routing": {"rules": [
+			{"type": "field", "ruleTag": "keep", "outboundTag": "direct"},
+			{"type": "field", "ruleTag": "new-route", "outboundTag": "proxy-new"}
+		]}
+	}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"version":1}`))
+	routingApplier := newTestRoutingApplier("keep", "old-route")
+	outboundApplier := newTestOutboundApplier("direct", "proxy-old")
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{XrayJSON: candidate, MetaJSON: []byte(`{"version":2}`)}, nil
+	}
+	opts.NewApplier = func(_ context.Context, address string) (runtimeapply.RoutingApplier, func() error, error) {
+		if address != "127.0.0.1:10085" {
+			t.Fatalf("routing address = %q", address)
+		}
+		return routingApplier, func() error { return nil }, nil
+	}
+	opts.NewOutbound = func(_ context.Context, address string) (runtimeapply.OutboundApplier, func() error, error) {
+		if address != "127.0.0.1:10085" {
+			t.Fatalf("outbound address = %q", address)
+		}
+		return outboundApplier, func() error { return nil }, nil
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyApplied {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyApplied)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatalf("read live xray: %v", err)
+	}
+	if string(got) != string(candidate) {
+		t.Fatalf("live xray mismatch: %s", string(got))
+	}
+	if want := []string{"remove:old-route", "add:new-route"}; !reflect.DeepEqual(routingApplier.calls, want) {
+		t.Fatalf("routing calls = %v, want %v", routingApplier.calls, want)
+	}
+	if want := []string{"remove:proxy-old", "add:proxy-new"}; !reflect.DeepEqual(outboundApplier.calls, want) {
+		t.Fatalf("outbound calls = %v, want %v", outboundApplier.calls, want)
+	}
+}
+
 func TestTryApplyRoutingPendingAppliesInboundUserDiff(t *testing.T) {
 	root := t.TempDir()
 	opts := testOptions(t, root, apply.RoleServer)

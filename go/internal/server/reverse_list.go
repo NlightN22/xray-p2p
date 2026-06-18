@@ -21,6 +21,7 @@ type ReverseRecord struct {
 	Tag         string
 	Portal      bool
 	RoutingRule bool
+	Disabled    bool
 }
 
 // ListReverse enumerates server reverse tunnels from Desired inputs.
@@ -51,6 +52,7 @@ func ListReverse(opts ReverseListOptions) ([]ReverseRecord, error) {
 			Tag:         channel.Tag,
 			Portal:      true,
 			RoutingRule: true,
+			Disabled:    channel.Disabled,
 		})
 	}
 	_ = opts
