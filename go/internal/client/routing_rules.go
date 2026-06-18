@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 type routingRuleClass string
@@ -19,6 +21,7 @@ const (
 func endpointBypassRule(ep clientEndpointRecord) map[string]any {
 	rule := map[string]any{
 		"type":        "field",
+		"ruleTag":     xrayrule.EndpointBypass("client", ep.Tag, ep.Address),
 		"outboundTag": directRandomTag(),
 	}
 	if net.ParseIP(ep.Address) != nil {
@@ -50,6 +53,7 @@ func endpointBypassRules(endpoints []clientEndpointRecord, endpointIPs map[strin
 		}
 		rules = append(rules, map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.EndpointBypass("client", endpoint.Tag, strings.Join(ips, ",")),
 			"ip":          ips,
 			"outboundTag": directRandomTag(),
 		})
@@ -75,6 +79,7 @@ func fullTunnelRule(tag string) map[string]any {
 	}
 	return map[string]any{
 		"type":        "field",
+		"ruleTag":     xrayrule.FullTunnel("client", trimmed),
 		"ip":          []string{"0.0.0.0/0", "::/0"},
 		"outboundTag": trimmed,
 	}

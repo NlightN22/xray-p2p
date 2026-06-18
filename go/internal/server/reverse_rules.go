@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 func ensureReverseRule(doc map[string]any, channel serverReverseChannel) bool {
@@ -104,6 +106,7 @@ func reverseRuleMatches(rule map[string]any, channel serverReverseChannel, trimm
 func desiredReverseRule(channel serverReverseChannel, trimmedUser string) map[string]any {
 	rule := map[string]any{
 		"type":        "field",
+		"ruleTag":     xrayrule.ServerReverse("server", channel.Tag, channel.Domain, trimmedUser),
 		"domain":      []string{"full:" + channel.Domain},
 		"outboundTag": channel.Tag,
 	}

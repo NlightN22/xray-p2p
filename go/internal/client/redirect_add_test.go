@@ -61,6 +61,9 @@ func TestAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	if !hasRuleWithIP(rules, "10.70.0.0/16", "proxy-server-example") {
 		t.Fatalf("missing redirect rule %+v", rules)
 	}
+	if rule := findRuleWithIPAndTag(rules, "10.70.0.0/16", "proxy-server-example"); rule["ruleTag"] == "" {
+		t.Fatalf("missing redirect ruleTag %+v", rule)
+	}
 	if !hasRuleWithIP(rules, "203.0.113.10", "direct") {
 		t.Fatalf("missing endpoint bypass rule %+v", rules)
 	}
@@ -135,6 +138,9 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 	rules := extractRoutingRules(t, doc)
 	if !hasRuleWithDomains(rules, "app.service.example", "proxy-server-example") {
 		t.Fatalf("missing domain redirect rule %+v", rules)
+	}
+	if rule := findRuleWithDomainAndTag(rules, "app.service.example", "proxy-server-example"); rule["ruleTag"] == "" {
+		t.Fatalf("missing domain redirect ruleTag %+v", rule)
 	}
 	if !hasMarkerRule(rules) {
 		t.Fatalf("missing marker rule %+v", rules)

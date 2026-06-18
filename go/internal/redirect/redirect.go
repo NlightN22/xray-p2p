@@ -15,6 +15,13 @@ const (
 	KindDomain
 )
 
+func (k Kind) String() string {
+	if k == KindDomain {
+		return "domain"
+	}
+	return "cidr"
+}
+
 // Rule captures a redirect rule persisted in state files.
 type Rule struct {
 	CIDR        string `json:"cidr,omitempty" toml:"cidr"`

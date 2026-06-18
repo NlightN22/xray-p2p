@@ -60,9 +60,15 @@ func TestUpdateRoutingConfigUsesDomainRuleForHostname(t *testing.T) {
 	if got := fmt.Sprintf("%v", markerIPRule["port"]); got != fmt.Sprintf("%d", DiagnosticsMarkerPort) {
 		t.Fatalf("expected marker port %d, got %v", DiagnosticsMarkerPort, got)
 	}
+	if got, _ := markerIPRule["ruleTag"].(string); got == "" {
+		t.Fatalf("expected marker ruleTag, got %+v", markerIPRule)
+	}
 	rule := findRuleWithDomain(rules, "full:alpha.example")
 	if rule == nil {
 		t.Fatalf("expected domain rule for alpha.example, got %+v", rules)
+	}
+	if got, _ := rule["ruleTag"].(string); got == "" {
+		t.Fatalf("expected endpoint bypass ruleTag, got %+v", rule)
 	}
 	if got := asStrings(rule["domain"]); len(got) != 1 || got[0] != "full:alpha.example" {
 		t.Fatalf("expected domain rule for alpha.example, got %v", got)
@@ -166,6 +172,9 @@ func TestUpdateRoutingConfigAppendsFullTunnelRuleLast(t *testing.T) {
 	last := rules[len(rules)-1]
 	if last["outboundTag"] != "proxy-alpha" {
 		t.Fatalf("expected full-tunnel rule to use proxy-alpha, got %+v", last)
+	}
+	if got, _ := last["ruleTag"].(string); got == "" {
+		t.Fatalf("expected full-tunnel ruleTag, got %+v", last)
 	}
 	ipValues := asStrings(last["ip"])
 	if len(ipValues) != 2 || ipValues[0] != "0.0.0.0/0" || ipValues[1] != "::/0" {

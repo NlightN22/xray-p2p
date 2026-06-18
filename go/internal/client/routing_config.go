@@ -9,6 +9,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel, fullTunnelEnabled bool, fullTunnelTag string, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) error {
@@ -61,6 +62,7 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		markerCIDR := markerIP + "/32"
 		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.DiagnosticsMarker("client", ep.Tag),
 			"ip":          []string{markerCIDR},
 			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
 			"outboundTag": ep.Tag,
@@ -69,6 +71,7 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	for _, rule := range redirects {
 		entry := map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.Redirect("client", rule.OutboundTag, rule.Kind().String(), rule.Value()),
 			"outboundTag": rule.OutboundTag,
 		}
 		switch rule.Kind() {

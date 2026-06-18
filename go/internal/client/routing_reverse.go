@@ -3,6 +3,8 @@ package client
 import (
 	"sort"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 func buildClientReverseRules(reverse map[string]clientReverseChannel) []any {
@@ -15,12 +17,14 @@ func buildClientReverseRules(reverse map[string]clientReverseChannel) []any {
 		inbound := []string{channel.Tag}
 		result = append(result, map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.ReverseDomain("client", channel.Tag, channel.EndpointTag, channel.Domain),
 			"domain":      []string{"full:" + channel.Domain},
 			"inboundTag":  inbound,
 			"outboundTag": channel.EndpointTag,
 		})
 		result = append(result, map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.ReverseDirect("client", channel.Tag),
 			"inboundTag":  inbound,
 			"outboundTag": directRandomTag(),
 		})

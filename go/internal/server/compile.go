@@ -13,6 +13,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 type runtimeMeta struct {
@@ -187,6 +188,7 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 		})
 		rule := map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.ServerReverse("server", channel.Tag, channel.Domain, channel.UserID),
 			"domain":      []string{"full:" + channel.Domain},
 			"outboundTag": channel.Tag,
 		}
@@ -205,6 +207,7 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 		markerCIDR := markerIP + "/32"
 		markerRules = append(markerRules, map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.DiagnosticsMarker("server", channel.Tag),
 			"ip":          []string{markerCIDR},
 			"inboundTag":  []string{cfg.Inbounds.Socks.Tag},
 			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
@@ -219,6 +222,7 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 	for _, rule := range desired.Redirects {
 		entry := map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.Redirect("server", rule.OutboundTag, rule.Kind().String(), rule.Value()),
 			"outboundTag": rule.OutboundTag,
 		}
 		if rule.Kind() == redirect.KindDomain {

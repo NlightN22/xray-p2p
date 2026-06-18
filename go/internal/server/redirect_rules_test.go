@@ -54,6 +54,9 @@ func TestServerAddRedirectUpdatesStateAndRouting(t *testing.T) {
 	if !hasRedirectRule(rules, "alphaedge-example.rev", "svc.example.net", "") {
 		t.Fatalf("expected redirect rule for svc.example.net, got %v", rules)
 	}
+	if rule := findRedirectRule(rules, "alphaedge-example.rev", "svc.example.net", ""); rule["ruleTag"] == "" {
+		t.Fatalf("expected redirect ruleTag, got %+v", rule)
+	}
 
 	records, err := ListRedirects(RedirectListOptions{
 		InstallDir: dir,
@@ -166,6 +169,10 @@ func readServerStateDoc(t *testing.T, path string) map[string]any {
 }
 
 func hasRedirectRule(rules []any, outboundTag string, domain string, cidr string) bool {
+	return findRedirectRule(rules, outboundTag, domain, cidr) != nil
+}
+
+func findRedirectRule(rules []any, outboundTag string, domain string, cidr string) map[string]any {
 	wantTag := strings.TrimSpace(outboundTag)
 	wantDomain := strings.TrimSpace(domain)
 	wantCIDR := strings.TrimSpace(cidr)
@@ -183,7 +190,7 @@ func hasRedirectRule(rules []any, outboundTag string, domain string, cidr string
 			domains := extractStringSlice(ruleMap["domains"])
 			for _, value := range domains {
 				if strings.EqualFold(value, wantDomain) {
-					return true
+					return ruleMap
 				}
 			}
 			continue
@@ -191,10 +198,10 @@ func hasRedirectRule(rules []any, outboundTag string, domain string, cidr string
 		if wantCIDR != "" {
 			for _, value := range extractStringSlice(ruleMap["ip"]) {
 				if strings.EqualFold(value, wantCIDR) {
-					return true
+					return ruleMap
 				}
 			}
 		}
 	}
-	return false
+	return nil
 }

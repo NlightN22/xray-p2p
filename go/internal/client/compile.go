@@ -12,6 +12,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 type runtimeMeta struct {
@@ -202,6 +203,7 @@ func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState
 		markerCIDR := markerIP + "/32"
 		systemRules = append(systemRules, map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.DiagnosticsMarker("client", ep.Tag),
 			"ip":          []string{markerCIDR},
 			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
 			"outboundTag": ep.Tag,
@@ -215,6 +217,7 @@ func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState
 	for _, rule := range desired.Redirects {
 		entry := map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.Redirect("client", rule.OutboundTag, rule.Kind().String(), rule.Value()),
 			"outboundTag": rule.OutboundTag,
 		}
 		switch rule.Kind() {

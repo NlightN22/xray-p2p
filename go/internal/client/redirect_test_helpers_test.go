@@ -33,6 +33,10 @@ func extractRoutingRules(t *testing.T, doc map[string]any) []any {
 }
 
 func hasRuleWithIP(rules []any, ip, tag string) bool {
+	return findRuleWithIPAndTag(rules, ip, tag) != nil
+}
+
+func findRuleWithIPAndTag(rules []any, ip, tag string) map[string]any {
 	for _, raw := range rules {
 		rule, ok := raw.(map[string]any)
 		if !ok {
@@ -44,14 +48,18 @@ func hasRuleWithIP(rules []any, ip, tag string) bool {
 		}
 		for _, value := range extractStringSlice(rule["ip"]) {
 			if value == ip {
-				return true
+				return rule
 			}
 		}
 	}
-	return false
+	return nil
 }
 
 func hasRuleWithDomains(rules []any, domain, tag string) bool {
+	return findRuleWithDomainAndTag(rules, domain, tag) != nil
+}
+
+func findRuleWithDomainAndTag(rules []any, domain, tag string) map[string]any {
 	for _, raw := range rules {
 		rule, ok := raw.(map[string]any)
 		if !ok {
@@ -63,11 +71,11 @@ func hasRuleWithDomains(rules []any, domain, tag string) bool {
 		}
 		for _, value := range extractStringSlice(rule["domains"]) {
 			if value == domain {
-				return true
+				return rule
 			}
 		}
 	}
-	return false
+	return nil
 }
 
 func hasMarkerRule(rules []any) bool {
