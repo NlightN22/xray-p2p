@@ -4,6 +4,7 @@
 
 - Added direct Xray gRPC clients and generated protocol bindings for routing, handler, inbound, outbound, observatory, and stats APIs.
 - Added runtime diff classification for routing, inbound, inbound user, outbound, and mixed configuration changes.
+- Runtime diff classification now supports replacing an existing outbound with the same tag and replacing an existing Trojan inbound user with the same email, allowing credential updates to be applied as remove/add operations through Xray gRPC.
 - Client and server apply flows can now apply supported Xray changes through the running Xray API and verify the runtime result before persisting Desired/Live state.
 - Server user changes now use live Xray API application where supported instead of forcing a full Xray restart.
 - Added smoke coverage for the bundled Xray API integration.
@@ -26,6 +27,13 @@
 - Added runtime enable/disable flows for client endpoints, client reverse tunnels, server users, server reverse tunnels, and redirect rules.
 - Added active-state helpers so disabled entries stay in Desired configuration but are excluded from generated active runtime configuration.
 - Added CLI command coverage for client/server reverse enable/disable and redirect enable/disable.
+
+## Credential update commands
+
+- Added `xp2p client update <hostname|tag>` to change only the selected client endpoint `user` and/or `password` while preserving the endpoint host, outbound tag, redirects, and reverse tunnel bindings.
+- Added `xp2p server user update <id>` to change only the selected server Trojan user id and/or password while preserving existing reverse portal tags and redirect bindings.
+- Credential updates write Desired inputs first, attempt runtime apply through Xray gRPC immediately, publish matching Live artifacts on success, and leave the apply request in place only when restart fallback is required.
+- Added validation so server user updates reject duplicate target user ids and invalid passwords without changing Desired state.
 
 ## Redirect command behavior
 
@@ -75,6 +83,9 @@
 - Added Go unit coverage for positive and negative redirect binding selection scenarios on client and server commands.
 - Added Go unit coverage for server redirect cleanup when removing users and for tag-only cleanup of orphaned duplicate-CIDR redirects.
 - Added Go unit coverage for the shared binding resolver.
+- Added Go unit coverage for credentials-only client endpoint updates and server user updates that preserve redirects and reverse bindings.
+- Added runtime-apply unit coverage for same-tag outbound replacement and same-email Trojan inbound user replacement.
+- Added Linux host coverage for a successful client endpoint credential update that preserves redirect routing, and for a rejected server user update when the new user id already exists.
 
 ## Upgrade notes
 
@@ -84,3 +95,4 @@
 - For `xp2p server redirect add`, use `--user <user>` when selecting a reverse portal by server user id. `--tag <tag>` is still reserved for the reverse outbound tag.
 - If a previous version left an orphaned server redirect after user removal, clean it with `xp2p server redirect remove --tag <tag>`.
 - Re-running `xp2p client install` with an already configured endpoint now fails without touching Desired state or scheduling apply work. Remove the endpoint first, or pass `--force` to replace it intentionally.
+- Use `xp2p client update <hostname|tag>` or `xp2p server user update <id>` when only credentials need to change; these commands intentionally preserve existing tags, redirects, and reverse bindings.
