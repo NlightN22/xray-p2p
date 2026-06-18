@@ -35,6 +35,7 @@ type CompileFunc func(configPath, extensionsDir string) (Artifacts, error)
 
 type RoutingApplierFactory func(ctx context.Context, address string) (runtimeapply.RoutingApplier, func() error, error)
 type InboundApplierFactory func(ctx context.Context, address string) (runtimeapply.InboundApplier, func() error, error)
+type OutboundApplierFactory func(ctx context.Context, address string) (runtimeapply.OutboundApplier, func() error, error)
 
 type Options struct {
 	Role          string
@@ -48,6 +49,7 @@ type Options struct {
 	Compile       CompileFunc
 	NewApplier    RoutingApplierFactory
 	NewInbound    InboundApplierFactory
+	NewOutbound   OutboundApplierFactory
 }
 
 func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResult, error) {
@@ -92,7 +94,7 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 	case runtimeapply.DiffUnsupported:
 		logging.Info("runtime apply fallback required", "role", role, "request_id", req.ID, "reason", diff.Reason)
 		return RuntimeApplyRestartRequired, nil
-	case runtimeapply.DiffRoutingOnly, runtimeapply.DiffInboundOnly:
+	case runtimeapply.DiffRoutingOnly, runtimeapply.DiffInboundOnly, runtimeapply.DiffOutboundOnly:
 	default:
 		return RuntimeApplyRestartRequired, nil
 	}
@@ -106,6 +108,8 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 		return applyRoutingRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
 	case runtimeapply.DiffInboundOnly:
 		return applyInboundRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
+	case runtimeapply.DiffOutboundOnly:
+		return applyOutboundRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
 	default:
 		return RuntimeApplyRestartRequired, nil
 	}
