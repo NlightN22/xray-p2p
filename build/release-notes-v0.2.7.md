@@ -33,6 +33,7 @@
 - Updated Linux, OpenWrt, and Windows host tests to use the shorter `xp2p client redirect` form where redirects are listed.
 - `xp2p server user remove` now removes server redirect rules tied to the removed user's reverse outbound tag, preventing orphaned redirects after Desired/apply-based changes.
 - `xp2p server redirect remove --tag <tag>` can now be used as a recovery cleanup path for orphaned server redirects when the CIDR/domain selector is unavailable or ambiguous.
+- `xp2p server redirect add` now supports `--user <user>` to select the reverse portal by server user id while keeping `--tag` limited to real reverse outbound tags.
 - Redirect add/remove/enable/disable now resolve `tag`/`host` consistently:
   - one matching binding is selected automatically without prompting;
   - multiple matching bindings prompt the user;
@@ -80,5 +81,6 @@
 - Automation that used `xp2p client redirect list` may keep using it; `xp2p client redirect` is now equivalent for listing.
 - Redirect enable/disable without `--tag` or `--host` no longer treats an omitted binding as an implicit target-wide operation. Use `--all` for an explicit mass operation, or provide/allow selection of a specific matching binding.
 - For non-interactive redirect add/remove/enable/disable flows, pass `--tag`, `--host`, or `--quiet`; `--quiet` now fails if the matching binding is ambiguous.
+- For `xp2p server redirect add`, use `--user <user>` when selecting a reverse portal by server user id. `--tag <tag>` is still reserved for the reverse outbound tag.
 - If a previous version left an orphaned server redirect after user removal, clean it with `xp2p server redirect remove --tag <tag>`.
 - Re-running `xp2p client install` with an already configured endpoint now fails without touching Desired state or scheduling apply work. Remove the endpoint first, or pass `--force` to replace it intentionally.
