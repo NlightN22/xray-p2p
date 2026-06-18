@@ -22,9 +22,10 @@ import (
 
 const (
 	// DefaultPort is the well known port used by xp2p helper services.
-	DefaultPort  = "62022"
-	pingRequest  = "PING"
-	pingResponse = "PONG"
+	DefaultPort         = "62022"
+	pingRequest         = "PING"
+	pingKeepOpenRequest = "PING_KEEP_OPEN"
+	pingResponse        = "PONG"
 )
 
 const heartbeatPayloadTimeout = 250 * time.Millisecond
@@ -146,23 +147,42 @@ func StartBackground(ctx context.Context, opts Options) error {
 
 func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store, quiet bool) {
 	defer conn.Close()
-	_ = conn.SetDeadline(deadlineFromContext(ctx))
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.Close()
+		case <-done:
+		}
+	}()
 
 	reader := bufio.NewReader(conn)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return
-	}
-	nonce, ok := parsePingRequest(line)
-	if ok {
+	for {
+		_ = conn.SetDeadline(deadlineFromContext(ctx))
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		nonce, keepOpen, ok := parsePingRequest(line)
+		if !ok {
+			return
+		}
+
 		_, _ = conn.Write([]byte(pingResponse + " " + nonce + "\n"))
-		hadHeartbeat := consumeHeartbeatPayload(ctx, reader, conn, store)
+		hadHeartbeat := false
+		if !keepOpen {
+			hadHeartbeat = consumeHeartbeatPayload(ctx, reader, conn, store)
+		}
 		if !quiet {
 			if !hadHeartbeat {
 				logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
 			} else {
 				logging.Debug("tcp heartbeat received", "remote_addr", conn.RemoteAddr().String())
 			}
+		}
+		if !keepOpen {
+			return
 		}
 	}
 }
@@ -184,8 +204,8 @@ func handleUDP(ctx context.Context, conn net.PacketConn, quiet bool) {
 		}
 
 		msg := strings.TrimSpace(string(buf[:n]))
-		nonce, ok := parsePingRequest(msg)
-		if ok {
+		nonce, keepOpen, ok := parsePingRequest(msg)
+		if ok && !keepOpen {
 			if !quiet {
 				logging.Info("udp ping received", "remote_addr", addr.String())
 			}
@@ -201,25 +221,30 @@ func deadlineFromContext(ctx context.Context) time.Time {
 	return time.Time{}
 }
 
-func parsePingRequest(raw string) (string, bool) {
+func parsePingRequest(raw string) (string, bool, bool) {
 	fields := strings.Fields(strings.TrimSpace(raw))
 	if len(fields) != 2 {
-		return "", false
+		return "", false, false
 	}
-	if !strings.EqualFold(fields[0], pingRequest) {
-		return "", false
+	keepOpen := false
+	switch {
+	case strings.EqualFold(fields[0], pingRequest):
+	case strings.EqualFold(fields[0], pingKeepOpenRequest):
+		keepOpen = true
+	default:
+		return "", false, false
 	}
 	nonce := strings.TrimSpace(fields[1])
 	if nonce == "" || len(nonce) > maxPingNonceLen {
-		return "", false
+		return "", false, false
 	}
 	for i := 0; i < len(nonce); i++ {
 		b := nonce[i]
 		if b <= 0x20 || b >= 0x7f {
-			return "", false
+			return "", false, false
 		}
 	}
-	return nonce, true
+	return nonce, keepOpen, true
 }
 
 func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net.Conn, store *heartbeat.Store) bool {

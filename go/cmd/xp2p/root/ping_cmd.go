@@ -24,6 +24,8 @@ type pingCommandOptions struct {
 	TimeoutSec     int
 	Proto          string
 	Port           int
+	Continuous     bool
+	KeepOpen       bool
 	TunnelEndpoint string
 	EndpointTag    string
 	EndpointIndex  int
@@ -55,6 +57,8 @@ func newPingCommand(cfg func() config.Config) *cobra.Command {
 	flags.IntVarP(&opts.TimeoutSec, "timeout", "t", opts.TimeoutSec, "per-request timeout in seconds (optional)")
 	flags.StringVarP(&opts.Proto, "proto", "o", opts.Proto, "protocol to use (tcp or udp)")
 	flags.IntVarP(&opts.Port, "port", "P", opts.Port, "target port (default 62022)")
+	flags.BoolVarP(&opts.Continuous, "continuous", "C", false, "send ping requests until interrupted")
+	flags.BoolVarP(&opts.KeepOpen, "keep-open", "k", false, "keep one TCP connection open and fail when it breaks")
 	flags.StringVarP(&opts.TunnelEndpoint, "tunnel", "T", "", "route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config")
 	flags.StringVarP(&opts.EndpointTag, "endpoint", "e", "", "endpoint tag to use when multiple endpoints share the same host")
 	flags.IntVarP(&opts.EndpointIndex, "index", "i", 0, "endpoint index (1-based) to use when multiple endpoints share the same host")
@@ -74,10 +78,12 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 	var serverSocksAddr string
 
 	pingOpts := ping.Options{
-		Count:   opts.Count,
-		Timeout: time.Duration(opts.TimeoutSec) * time.Second,
-		Proto:   strings.TrimSpace(opts.Proto),
-		Port:    opts.Port,
+		Count:      opts.Count,
+		Timeout:    time.Duration(opts.TimeoutSec) * time.Second,
+		Proto:      strings.TrimSpace(opts.Proto),
+		Port:       opts.Port,
+		Continuous: opts.Continuous,
+		KeepOpen:   opts.KeepOpen,
 	}
 
 	var socksAddr string

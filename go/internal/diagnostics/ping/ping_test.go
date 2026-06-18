@@ -55,6 +55,48 @@ func TestRunHandlesUDPReplies(t *testing.T) {
 	}
 }
 
+func TestRunKeepOpenHandlesMultipleTCPReplies(t *testing.T) {
+	setupLogging(t)
+
+	cancel, port := startBackgroundServer(t)
+	defer cancel()
+
+	runCtx, runCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer runCancel()
+
+	if err := Run(runCtx, "127.0.0.1", Options{
+		Count:    2,
+		Timeout:  time.Second,
+		Proto:    "tcp",
+		Port:     port,
+		KeepOpen: true,
+		Silent:   true,
+	}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+}
+
+func TestRunContinuousStopsOnContext(t *testing.T) {
+	setupLogging(t)
+
+	cancel, port := startBackgroundServer(t)
+	defer cancel()
+
+	runCtx, runCancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
+	defer runCancel()
+
+	err := Run(runCtx, "127.0.0.1", Options{
+		Timeout:    time.Second,
+		Proto:      "tcp",
+		Port:       port,
+		Continuous: true,
+		Silent:     true,
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context deadline, got %v", err)
+	}
+}
+
 func TestRunFailsWhenServerUnavailable(t *testing.T) {
 	setupLogging(t)
 

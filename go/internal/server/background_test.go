@@ -194,3 +194,48 @@ func TestHeartbeatPayloadIsPersisted(t *testing.T) {
 		t.Fatalf("unexpected host %q", got)
 	}
 }
+
+func TestKeepOpenPingRequestKeepsTCPConnectionOpen(t *testing.T) {
+	logging.Configure(logging.Options{Output: io.Discard})
+	t.Cleanup(func() {
+		logging.Configure(logging.Options{Output: os.Stderr})
+	})
+
+	portStr, _ := testutil.FreePort(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := StartBackground(ctx, Options{Port: portStr}); err != nil {
+		t.Fatalf("StartBackground returned error: %v", err)
+	}
+
+	addr := net.JoinHostPort("127.0.0.1", portStr)
+	testutil.WaitForCondition(t, time.Second, func() bool {
+		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	})
+
+	conn, err := net.DialTimeout("tcp", addr, time.Second)
+	if err != nil {
+		t.Fatalf("failed to dial tcp server: %v", err)
+	}
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+
+	for _, nonce := range []string{"first", "second"} {
+		if _, err := conn.Write([]byte(pingKeepOpenRequest + " " + nonce + "\n")); err != nil {
+			t.Fatalf("failed to write keep-open request: %v", err)
+		}
+		resp, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("failed to read keep-open response: %v", err)
+		}
+		if got := strings.TrimSpace(resp); got != pingResponse+" "+nonce {
+			t.Fatalf("unexpected keep-open response: %q", got)
+		}
+	}
+}

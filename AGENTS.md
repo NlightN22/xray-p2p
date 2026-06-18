@@ -57,7 +57,7 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 
 - Use a common logger for all output.
 - When changing Go code on a Windows workstation, run native Go tests and WSL Go tests unless the user asks for a narrower check.
-- For broad Go verification, use `go test ./...` on Windows and `make test-wsl` for the Linux build view.
+- For broad Go verification, use `make test` on Windows and `make test-wsl` for the Linux build view.
 - Run xray smoke tests only when the change touches xray API/runtime behavior or when explicitly requested; they require the `xray_smoke` build tag and a runnable xray binary.
 
 ## Services and runtime behavior
@@ -104,7 +104,8 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - Verify flag consistency when adding new commands.
 - Long flags must always have short aliases.
 - Short aliases must be unique for each parameter across the project.
-- See `commands_map` when checking or introducing flag aliases.
+- See `commands_map` when checking flag aliases.
+- When changing CLI commands, flags, help, or command metadata, update `commands_map` with `make command-map`; do not edit generated command maps by hand.
 - When adding flags, include them in `ValidArgs` or `ValidArgsFunction`.
 
 ## Logging rules

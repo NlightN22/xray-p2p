@@ -13,7 +13,6 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
-	"golang.org/x/net/proxy"
 )
 
 // Options describes how Ping should behave.
@@ -23,6 +22,8 @@ type Options struct {
 	Proto      string
 	Port       int
 	SocksProxy string
+	Continuous bool
+	KeepOpen   bool
 	Reporter   Reporter
 	Silent     bool
 }
@@ -47,6 +48,7 @@ const (
 	protoTCP         = "tcp"
 	protoUDP         = "udp"
 	pingRequest      = "PING"
+	keepOpenRequest  = "PING_KEEP_OPEN"
 	expectedResponse = "PONG"
 )
 
@@ -73,6 +75,9 @@ func Run(ctx context.Context, target string, opts Options) error {
 	if proto != protoTCP && proto != protoUDP {
 		return fmt.Errorf("unsupported protocol %q", proto)
 	}
+	if opts.KeepOpen && proto != protoTCP {
+		return errors.New("keep-open mode supports only tcp protocol")
+	}
 
 	port := opts.Port
 	if port == 0 {
@@ -92,8 +97,11 @@ func Run(ctx context.Context, target string, opts Options) error {
 	}
 	logger := logging.With(fields...)
 	logger.Debug("ping session started", "count", count, "timeout", timeout)
+	if opts.KeepOpen {
+		return runKeepOpen(ctx, targetAddr, timeout, opts)
+	}
 
-	for seq := 1; seq <= count; seq++ {
+	for seq := 1; opts.Continuous || seq <= count; seq++ {
 		select {
 		case <-ctx.Done():
 			if !opts.Silent {
@@ -145,8 +153,7 @@ func Run(ctx context.Context, target string, opts Options) error {
 			logger.Debug("ping reply received", "seq", seq, "rtt", rtt)
 		}
 
-		// Simple pacing between requests.
-		if seq < count {
+		if opts.Continuous || seq < count {
 			select {
 			case <-time.After(1 * time.Second):
 			case <-ctx.Done():
@@ -167,103 +174,6 @@ func Run(ctx context.Context, target string, opts Options) error {
 		return errors.New("no replies received")
 	}
 	return nil
-}
-
-func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy string, seq int, reporter Reporter) (time.Duration, error) {
-	var (
-		conn net.Conn
-		err  error
-	)
-	if socksProxy == "" {
-		dialer := &net.Dialer{Timeout: timeout}
-		conn, err = dialer.DialContext(ctx, "tcp", addr)
-	} else {
-		conn, err = dialViaSocks(ctx, addr, socksProxy, timeout)
-	}
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-
-	if err := setDeadline(conn, timeout); err != nil {
-		return 0, err
-	}
-
-	nonce, err := newNonce()
-	if err != nil {
-		return 0, err
-	}
-	request := pingRequest + " " + nonce + "\n"
-
-	start := time.Now()
-	if _, err = conn.Write([]byte(request)); err != nil {
-		return 0, err
-	}
-
-	buf := make([]byte, 64)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-
-	if err := validateResponse(string(buf[:n]), nonce); err != nil {
-		return 0, err
-	}
-
-	rtt := time.Since(start)
-	if reporter != nil {
-		result := Result{
-			Seq:    seq,
-			Target: addr,
-			Proto:  protoTCP,
-			RTT:    rtt,
-		}
-		if err := reporter.Report(ctx, conn, result); err != nil {
-			return rtt, err
-		}
-	}
-
-	return rtt, nil
-}
-
-func pingUDP(ctx context.Context, host string, port int, timeout time.Duration) (time.Duration, error) {
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		return 0, err
-	}
-
-	conn, err := net.DialUDP("udp", nil, addr)
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-
-	if err := setDeadline(conn, timeout); err != nil {
-		return 0, err
-	}
-
-	nonce, err := newNonce()
-	if err != nil {
-		return 0, err
-	}
-	request := pingRequest + " " + nonce + "\n"
-
-	start := time.Now()
-	if _, err = conn.Write([]byte(request)); err != nil {
-		return 0, err
-	}
-
-	buf := make([]byte, 64)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-
-	if err := validateResponse(string(buf[:n]), nonce); err != nil {
-		return 0, err
-	}
-
-	return time.Since(start), nil
 }
 
 func newNonce() (string, error) {
@@ -295,31 +205,4 @@ func printSummary(sent, received int) {
 	}
 	fmt.Printf("\nPackets: sent = %d, received = %d, lost = %d (%.0f%% loss)\n",
 		sent, received, lost, lossPercent)
-}
-
-func dialViaSocks(ctx context.Context, addr, proxyAddr string, timeout time.Duration) (net.Conn, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	base := &net.Dialer{Timeout: timeout}
-	if deadline, ok := ctx.Deadline(); ok {
-		base.Deadline = deadline
-	}
-
-	dialer, err := proxy.SOCKS5("tcp", proxyAddr, nil, base)
-	if err != nil {
-		return nil, fmt.Errorf("prepare SOCKS5 dialer %s: %w", proxyAddr, err)
-	}
-
-	conn, err := dialer.Dial("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect through SOCKS5 proxy %s: %w", proxyAddr, err)
-	}
-
-	return conn, nil
-}
-
-func setDeadline(conn net.Conn, timeout time.Duration) error {
-	return conn.SetDeadline(time.Now().Add(timeout))
 }
