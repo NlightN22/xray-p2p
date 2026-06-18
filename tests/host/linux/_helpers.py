@@ -442,12 +442,12 @@ def extract_trojan_credential(output: str) -> dict[str, str]:
             link = line.split(":", 1)[1].strip()
     if not user or not password:
         raise RuntimeError(
-            "xp2p server install did not emit trojan credential lines.\n"
+            "xp2p server install did not emit credential lines.\n"
             f"STDOUT:\n{output}"
         )
     if not link:
         raise RuntimeError(
-            "xp2p server install did not emit trojan link.\n"
+            "xp2p server install did not emit connection link.\n"
             f"STDOUT:\n{output}"
         )
     return {"user": user, "password": password, "link": link}

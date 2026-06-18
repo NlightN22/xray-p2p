@@ -113,14 +113,14 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 	if strings.TrimSpace(res.Link) == "" {
 		completionState = "FAIL server-link"
-		logging.Error("xp2p client deploy: missing trojan link from server")
+		logging.Error("xp2p client deploy: missing connection link from server")
 		return 1
 	}
 
-	logging.Info("xp2p client deploy: installing local client from trojan link")
+	logging.Info("xp2p client deploy: installing local client from connection link")
 	tl, err := parseTrojanLink(res.Link)
 	if err != nil {
-		logging.Error("xp2p client deploy: invalid trojan link", "err", err)
+		logging.Error("xp2p client deploy: invalid connection link", "err", err)
 		return 1
 	}
 

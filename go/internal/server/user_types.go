@@ -1,6 +1,6 @@
 package server
 
-// AddUserOptions describes parameters for adding a Trojan client to the server configuration.
+// AddUserOptions describes parameters for adding a client to the server configuration.
 type AddUserOptions struct {
 	InstallDir string
 	ConfigDir  string
@@ -11,7 +11,7 @@ type AddUserOptions struct {
 	Force      bool
 }
 
-// RemoveUserOptions describes parameters for removing a Trojan client from the server configuration.
+// RemoveUserOptions describes parameters for removing a client from the server configuration.
 type RemoveUserOptions struct {
 	InstallDir string
 	ConfigDir  string
@@ -19,7 +19,7 @@ type RemoveUserOptions struct {
 	Host       string
 }
 
-// ListUsersOptions describes parameters for enumerating Trojan users and generating connection links.
+// ListUsersOptions describes parameters for enumerating users and generating connection links.
 type ListUsersOptions struct {
 	InstallDir string
 	ConfigDir  string
@@ -27,7 +27,7 @@ type ListUsersOptions struct {
 	Pending    bool
 }
 
-// UserLinkOptions describes parameters for generating a connection link for a specific Trojan user.
+// UserLinkOptions describes parameters for generating a connection link for a specific user.
 type UserLinkOptions struct {
 	InstallDir string
 	ConfigDir  string
@@ -36,7 +36,7 @@ type UserLinkOptions struct {
 	Pending    bool
 }
 
-// UserLink contains the essential details for a Trojan user, including a ready-to-use connection link.
+// UserLink contains the essential user details, including a ready-to-use connection link.
 type UserLink struct {
 	UserID   string
 	Password string

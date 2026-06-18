@@ -31,11 +31,11 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 	}
 	buf, err := json.Marshal(raw)
 	if err != nil {
-		return nil, fmt.Errorf("encode server trojan users: %w", err)
+		return nil, fmt.Errorf("encode server users: %w", err)
 	}
 	var users []trojanClient
 	if err := json.Unmarshal(buf, &users); err != nil {
-		return nil, fmt.Errorf("decode server trojan users: %w", err)
+		return nil, fmt.Errorf("decode server users: %w", err)
 	}
 	if users == nil {
 		users = []trojanClient{}
@@ -76,11 +76,11 @@ func clientsToInterfaces(clients []trojanClient) []any {
 func buildTrojanLink(host string, port int, password, label string, tlsEnabled bool, pinnedPeerCertSHA256, verifyPeerCertByName string) (string, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
-		return "", errors.New("host is required to build trojan link")
+		return "", errors.New("host is required to build connection link")
 	}
 	password = strings.TrimSpace(password)
 	if password == "" {
-		return "", errors.New("password is required to build trojan link")
+		return "", errors.New("password is required to build connection link")
 	}
 
 	u := &url.URL{

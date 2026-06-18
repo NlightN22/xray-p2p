@@ -142,7 +142,7 @@ func TestRunServerInstallGeneratesCredentialWhenMissing(t *testing.T) {
 	})
 
 	if len(added) != 1 {
-		t.Fatalf("trojan user add calls: got %d want 1", len(added))
+		t.Fatalf("user add calls: got %d want 1", len(added))
 	}
 	if strings.TrimSpace(added[0].UserID) == "" {
 		t.Fatalf("generated user id is empty")
@@ -150,7 +150,7 @@ func TestRunServerInstallGeneratesCredentialWhenMissing(t *testing.T) {
 	if strings.TrimSpace(added[0].Password) == "" {
 		t.Fatalf("generated password is empty")
 	}
-	if !strings.Contains(output, "Generated trojan credential") {
+	if !strings.Contains(output, "Generated server credential") {
 		t.Fatalf("output missing generated credential banner: %q", output)
 	}
 	if !strings.Contains(output, added[0].UserID) {

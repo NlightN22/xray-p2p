@@ -102,7 +102,7 @@ def test_openwrt_client_deploy_end_to_end(
             extra_args=client_extra_args,
         )
         link = _wait_for_client_link(openwrt_client_host, CLIENT_DEPLOY_LOG)
-        assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
+        assert link.startswith("trojan://"), "xp2p client deploy did not emit connection link"
 
         server_pid = _start_server_deploy(
             openwrt_server_host,
@@ -124,7 +124,7 @@ def test_openwrt_client_deploy_end_to_end(
             openwrt_client_host,
             CLIENT_DEPLOY_LOG,
             [
-                "client deploy: trojan link received",
+                "client deploy: connection link received",
                 "client deploy: local install completed",
                 "client deploy: completed",
             ],
@@ -436,7 +436,7 @@ def _pinned_peer_cert_sha256_from_link(link: str) -> str | None:
 def _received_trojan_link_from_deploy_log(host: Host, log_path: PurePosixPath) -> str | None:
     text = _read_text(host, log_path)
     for line in text.splitlines():
-        if "client deploy: trojan link received" not in line:
+        if "client deploy: connection link received" not in line:
             continue
         if "link:" not in line:
             continue
@@ -577,9 +577,9 @@ def _assert_link_matches(
     assert parsed.scheme == "trojan", f"unexpected scheme in link: {parsed.scheme}"
     assert parsed.hostname == host, f"unexpected host in link (got {parsed.hostname}, want {host})"
     assert parsed.port == int(trojan_port), f"unexpected port in link (got {parsed.port}, want {trojan_port})"
-    assert parsed.username == trojan_password, "trojan password is not in link userinfo"
+    assert parsed.username == trojan_password, "password is not in link userinfo"
     fragment = parse.unquote(parsed.fragment or "")
-    assert fragment == trojan_user, f"trojan user fragment mismatch (got {fragment}, want {trojan_user})"
+    assert fragment == trojan_user, f"user fragment mismatch (got {fragment}, want {trojan_user})"
     query = parse.parse_qs(parsed.query)
     assert query.get("deploy_version") == ["2"], f"deploy_version missing/mismatch: {query}"
     install_dir = query.get("install_dir")

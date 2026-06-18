@@ -103,7 +103,7 @@ def _run_client_deploy_end_to_end(
             extra_args=client_extra_args,
         )
         link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
-        assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
+        assert link.startswith("trojan://"), "xp2p client deploy did not emit connection link"
 
         server_pid = _start_server_deploy(
             server_host,
@@ -127,7 +127,7 @@ def _run_client_deploy_end_to_end(
         _wait_for_log_phrase(
             client_host,
             CLIENT_DEPLOY_LOG,
-            "client deploy: trojan link received",
+            "client deploy: connection link received",
             timeout=LOG_WAIT_TIMEOUT,
         )
         _wait_for_log_phrase(

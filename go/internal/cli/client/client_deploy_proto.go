@@ -146,7 +146,7 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 			}
 		case strings.HasPrefix(l, "LINK "):
 			link = strings.TrimSpace(strings.TrimPrefix(l, "LINK "))
-			logging.Info("xp2p client deploy: trojan link received", "link", link)
+			logging.Info("xp2p client deploy: connection link received", "link", link)
 		case l == "DONE":
 			result := deployResult{ExitCode: exitCode, Link: link, OutLog: outBuf.String(), ErrLog: errBuf.String()}
 			var completeOnce sync.Once

@@ -78,11 +78,11 @@ def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
             link = line.split(":", 1)[1].strip()
     if user is None or password is None:
         pytest.fail(
-            "xp2p server install did not emit trojan credential (missing user/password lines).\n"
+            "xp2p server install did not emit credential (missing user/password lines).\n"
             f"STDOUT:\n{stdout}"
         )
     if not link:
-        pytest.fail("xp2p server install did not emit trojan link.")
+        pytest.fail("xp2p server install did not emit connection link.")
     return {"user": user, "password": password, "link": link}
 
 

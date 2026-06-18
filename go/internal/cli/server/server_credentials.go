@@ -21,7 +21,7 @@ func provisionCredential(ctx context.Context, installOpts server.InstallOptions,
 	user := strings.TrimSpace(userID)
 	pass := strings.TrimSpace(password)
 	if user == "" || pass == "" {
-		return credentialResult{}, errors.New("trojan credential requires user and password")
+		return credentialResult{}, errors.New("credential requires user and password")
 	}
 
 	addOpts := server.AddUserOptions{
@@ -85,7 +85,7 @@ func generateDefaultServerCredential(ctx context.Context, installOpts server.Ins
 		return err
 	}
 
-	announceCredential("Generated trojan credential", result)
+	announceCredential("Generated server credential", result)
 	return nil
 }
 

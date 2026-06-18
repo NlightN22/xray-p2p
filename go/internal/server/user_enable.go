@@ -43,7 +43,7 @@ func SetUserEnabled(ctx context.Context, opts SetUserEnabledOptions) error {
 
 func setTrojanUsersEnabled(users []trojanClient, userID string, all bool, enabled bool) (bool, error) {
 	if len(users) == 0 {
-		return false, errors.New("no Trojan users configured")
+		return false, errors.New("no users configured")
 	}
 	changed := false
 	trimmed := strings.TrimSpace(userID)

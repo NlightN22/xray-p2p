@@ -84,7 +84,7 @@ def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
             link = line.split(":", 1)[1].strip()
     if user is None or password is None:
         pytest.fail(
-            "xp2p server install did not emit trojan credential (missing user/password lines).\n"
+            "xp2p server install did not emit credential (missing user/password lines).\n"
             f"STDOUT:\n{stdout}"
         )
     return {"user": user, "password": password, "link": link}
@@ -449,7 +449,7 @@ def test_windows_client_redirect_routes_os(
             check=True,
             )
         credential = _extract_generated_credential(server_install.stdout or "")
-        assert credential["link"], "Expected trojan link in server install output"
+        assert credential["link"], "Expected connection link in server install output"
 
         xp2p_client_runner(
             "client",
@@ -559,7 +559,7 @@ def test_windows_server_redirect_routes_os(
             check=True,
             )
         credential = _extract_generated_credential(server_install.stdout or "")
-        assert credential["link"], "Expected trojan link in server install output"
+        assert credential["link"], "Expected connection link in server install output"
         xp2p_server_runner(
             "server",
             "mode",
@@ -705,7 +705,7 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
             check=True,
             )
         credential = _extract_generated_credential(server_install.stdout or "")
-        assert credential["link"], "Expected trojan link in server install output"
+        assert credential["link"], "Expected connection link in server install output"
 
         xp2p_client_runner(
             "client",

@@ -64,7 +64,7 @@ def start_deploy_tunnel(
     )
     link = deploy.wait_for_client_link(client_host, client_proc)
     if not link.startswith("trojan://"):
-        raise AssertionError("xp2p client deploy did not emit trojan link")
+        raise AssertionError("xp2p client deploy did not emit connection link")
 
     ensure_deploy_firewall_rules(server_host, trojan_port=trojan_port, ensure="Present")
     server_proc = deploy.start_server_deploy(

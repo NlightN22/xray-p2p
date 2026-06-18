@@ -17,7 +17,7 @@ def _trojan_inbound(data: dict) -> dict:
     for entry in data.get("inbounds", []):
         if entry.get("protocol") == "trojan":
             return entry
-    pytest.fail("Trojan inbound not found in configuration")
+    pytest.fail("Proxy inbound not found in configuration")
 
 
 def _combined_output(result) -> str:

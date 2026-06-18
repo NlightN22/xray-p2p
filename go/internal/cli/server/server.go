@@ -92,7 +92,7 @@ func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstall
 
 	if strings.TrimSpace(cfg.Client.User) == "" && strings.TrimSpace(cfg.Client.Password) == "" {
 		if err := generateDefaultServerCredential(ctx, installOpts, installOpts.Host); err != nil {
-			logging.Warn("xp2p server install: failed to generate trojan credential", "err", err)
+			logging.Warn("xp2p server install: failed to generate server credential", "err", err)
 		}
 	}
 	return 0

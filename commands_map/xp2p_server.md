@@ -117,8 +117,8 @@ Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
-- --id, -i <id>          Trojan client identifier (derives the <id><host>.rev reverse tag)
-- --password, -w <password> Trojan client password or pre-shared key (auto-generated when omitted)
+- --id, -i <id>          Client identifier (derives the <id><host>.rev reverse tag)
+- --password, -w <password> Client password or pre-shared key (auto-generated when omitted)
 - --key, -k <password>   Alias for --password
 - --host, -H <host>      Public host name or IP for generated connection link
 - --no-reverse, -n       Skip creating reverse portal/routing entries
@@ -127,19 +127,19 @@ Includes: Global options
 xp2p server user disable <id>
 Options:
 Includes: Global options
-- --all, -a              Disable all Trojan users
+- --all, -a              Disable all users
 
 xp2p server user enable <id>
 Options:
 Includes: Global options
-- --all, -a              Enable all Trojan users
+- --all, -a              Enable all users
 
 xp2p server user remove
 Options:
 Includes: Global options
 - --path, -p <dir>       Server installation directory
 - --config-dir, -D <dir> Server configuration directory name or absolute path
-- --id, -i <id> (required) Trojan client identifier
+- --id, -i <id> (required) Client identifier
 - --host, -H <host>      Public host name or IP (defaults to server host)
 
 xp2p server user list

@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	// Scheme defines the link prefix presented to users (canonical trojan link).
+	// Scheme defines the link prefix presented to users.
 	Scheme    = "trojan"
 	aad       = "XP2PDEPLOY|v=2"
 	nonceSize = 12
 	keySize   = 32
 )
 
-// EncryptedLink keeps the canonical trojan link together with the encrypted manifest.
+// EncryptedLink keeps the canonical connection link together with the encrypted manifest.
 type EncryptedLink struct {
 	Link       string
 	Host       string
@@ -31,7 +31,7 @@ type EncryptedLink struct {
 	Manifest   spec.Manifest
 }
 
-// Build constructs a trojan link from the manifest, derives an encryption key from it,
+// Build constructs a connection link from the manifest, derives an encryption key from it,
 // and returns the ciphertext together with the canonical link string.
 func Build(remoteHost, deployPort string, manifest spec.Manifest, ttl time.Duration) (string, EncryptedLink, error) {
 	remoteHost = strings.TrimSpace(remoteHost)
@@ -81,7 +81,7 @@ func Build(remoteHost, deployPort string, manifest spec.Manifest, ttl time.Durat
 	return linkURL, enc, nil
 }
 
-// Parse validates a trojan deploy link and normalizes it for consistent key derivation.
+// Parse validates a deploy link and normalizes it for consistent key derivation.
 func Parse(raw string) (EncryptedLink, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -101,7 +101,7 @@ func Parse(raw string) (EncryptedLink, error) {
 	}, nil
 }
 
-// CanonicalLink renders the manifest as a deterministic trojan link string.
+// CanonicalLink renders the manifest as a deterministic connection link string.
 func CanonicalLink(manifest spec.Manifest) (string, error) {
 	host := strings.TrimSpace(manifest.Host)
 	if host == "" {
@@ -109,15 +109,15 @@ func CanonicalLink(manifest spec.Manifest) (string, error) {
 	}
 	port := strings.TrimSpace(manifest.TrojanPort)
 	if port == "" {
-		return "", fmt.Errorf("deploy manifest missing trojan port")
+		return "", fmt.Errorf("deploy manifest missing service port")
 	}
 	password := strings.TrimSpace(manifest.TrojanPassword)
 	if password == "" {
-		return "", fmt.Errorf("deploy manifest missing trojan password")
+		return "", fmt.Errorf("deploy manifest missing password")
 	}
 	user := strings.TrimSpace(manifest.TrojanUser)
 	if user == "" {
-		return "", fmt.Errorf("deploy manifest missing trojan user")
+		return "", fmt.Errorf("deploy manifest missing user")
 	}
 
 	params := url.Values{}
@@ -136,7 +136,7 @@ func CanonicalLink(manifest spec.Manifest) (string, error) {
 	return renderTrojanURL(host, port, password, user, params), nil
 }
 
-// Decrypt decrypts an encrypted manifest using the canonical trojan link as key material.
+// Decrypt decrypts an encrypted manifest using the canonical connection link as key material.
 func Decrypt(link string, ciphertext []byte) (spec.Manifest, error) {
 	if strings.TrimSpace(link) == "" {
 		return spec.Manifest{}, fmt.Errorf("link is empty")
@@ -164,23 +164,23 @@ func normalizeTrojanLink(raw string) (string, string, string, int64, error) {
 
 	host := strings.TrimSpace(u.Hostname())
 	if host == "" {
-		return "", "", "", 0, fmt.Errorf("trojan link missing host")
+		return "", "", "", 0, fmt.Errorf("connection link missing host")
 	}
 
 	port := strings.TrimSpace(u.Port())
 	if port == "" {
-		return "", "", "", 0, fmt.Errorf("trojan link missing port")
+		return "", "", "", 0, fmt.Errorf("connection link missing port")
 	}
 
 	if u.User == nil {
-		return "", "", "", 0, fmt.Errorf("trojan link missing password")
+		return "", "", "", 0, fmt.Errorf("connection link missing password")
 	}
 	password := strings.TrimSpace(u.User.String())
 	if pwd, hasPwd := u.User.Password(); hasPwd {
 		password = strings.TrimSpace(pwd)
 	}
 	if password == "" {
-		return "", "", "", 0, fmt.Errorf("trojan link missing password")
+		return "", "", "", 0, fmt.Errorf("connection link missing password")
 	}
 
 	userFragment := strings.TrimSpace(u.Fragment)

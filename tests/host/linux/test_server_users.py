@@ -13,7 +13,7 @@ def _trojan_clients(server_host, xp2p_server_runner) -> list[dict]:
         if entry.get("protocol") == "trojan":
             settings = entry.get("settings", {})
             return settings.get("clients", [])
-    pytest.fail("Trojan inbound not found in configuration")
+    pytest.fail("Proxy inbound not found in configuration")
 
 
 def _remove_default_user(server_host, xp2p_server_runner, host: str):

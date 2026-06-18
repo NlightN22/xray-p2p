@@ -119,7 +119,7 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 			Pending:    true,
 		}
 		if link, err := serverUserLinkFunc(ctx, linkOpts); err != nil {
-			logging.Warn("xp2p server user add: unable to build trojan link", "err", err)
+			logging.Warn("xp2p server user add: unable to build connection link", "err", err)
 		} else {
 			fmt.Println(link.Link)
 		}
@@ -161,7 +161,7 @@ func runServerUserList(ctx context.Context, cfg config.Config, opts serverUserLi
 	}
 
 	if len(users) == 0 {
-		fmt.Println("No Trojan users configured.")
+		fmt.Println("No users configured.")
 		return 0
 	}
 

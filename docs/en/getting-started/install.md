@@ -94,6 +94,6 @@ xp2p client reverse list
 
 Advanced options:
 
-- Custom Trojan port: add `--port <port>` to `xp2p server install` and use the generated link on the client.
+- Custom service port: add `--port <port>` to `xp2p server install` and use the generated link on the client.
 - Self-signed TLS: pass `--allow-insecure` to `xp2p client install`.
 - Manual client fields (no link): `xp2p client install --host <host> --user <user> --password <password>`.

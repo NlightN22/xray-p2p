@@ -24,32 +24,32 @@ type TrojanLink struct {
 func ParseTrojanLink(raw string) (TrojanLink, error) {
 	value := strings.TrimSpace(raw)
 	if value == "" {
-		return TrojanLink{}, fmt.Errorf("trojan link is empty")
+		return TrojanLink{}, fmt.Errorf("connection link is empty")
 	}
 
 	parsed, err := url.Parse(value)
 	if err != nil {
-		return TrojanLink{}, fmt.Errorf("parse trojan link: %w", err)
+		return TrojanLink{}, fmt.Errorf("parse connection link: %w", err)
 	}
 	if !strings.EqualFold(parsed.Scheme, "trojan") {
-		return TrojanLink{}, fmt.Errorf("unsupported scheme %q (expected trojan)", parsed.Scheme)
+		return TrojanLink{}, fmt.Errorf("unsupported scheme %q (expected connection link)", parsed.Scheme)
 	}
 
 	address := parsed.Hostname()
 	if address == "" {
-		return TrojanLink{}, fmt.Errorf("missing host in trojan link")
+		return TrojanLink{}, fmt.Errorf("missing host in connection link")
 	}
 
 	portValue := parsed.Port()
 	if portValue == "" {
-		return TrojanLink{}, fmt.Errorf("missing port in trojan link")
+		return TrojanLink{}, fmt.Errorf("missing port in connection link")
 	}
 	if _, err := strconv.Atoi(portValue); err != nil {
-		return TrojanLink{}, fmt.Errorf("invalid port %q in trojan link", portValue)
+		return TrojanLink{}, fmt.Errorf("invalid port %q in connection link", portValue)
 	}
 
 	if parsed.User == nil {
-		return TrojanLink{}, fmt.Errorf("missing password in trojan link")
+		return TrojanLink{}, fmt.Errorf("missing password in connection link")
 	}
 	password := ""
 	if pwd, ok := parsed.User.Password(); ok {
@@ -58,7 +58,7 @@ func ParseTrojanLink(raw string) (TrojanLink, error) {
 		password = strings.TrimSpace(parsed.User.Username())
 	}
 	if password == "" {
-		return TrojanLink{}, fmt.Errorf("empty password in trojan link")
+		return TrojanLink{}, fmt.Errorf("empty password in connection link")
 	}
 
 	user, err := decodeTrojanUser(parsed)
@@ -165,7 +165,7 @@ func decodeTrojanUser(u *url.URL) (string, error) {
 	if fragment != "" {
 		decoded, err := url.PathUnescape(fragment)
 		if err != nil {
-			return "", fmt.Errorf("decode trojan link user: %w", err)
+			return "", fmt.Errorf("decode connection link user: %w", err)
 		}
 		decoded = strings.TrimSpace(decoded)
 		if decoded != "" {
@@ -190,7 +190,7 @@ func decodeTrojanUser(u *url.URL) (string, error) {
 	}
 
 	if strings.Contains(u.RawQuery, "&") && !strings.Contains(u.RawPath, "#") && !strings.Contains(u.Fragment, "#") {
-		return "", fmt.Errorf("trojan link missing user/email (wrap the URL in quotes or escape '&' on Windows)")
+		return "", fmt.Errorf("connection link missing user/email (wrap the URL in quotes or escape '&' on Windows)")
 	}
-	return "", fmt.Errorf("trojan link missing user/email (expected #email or email query parameter)")
+	return "", fmt.Errorf("connection link missing user/email (expected #email or email query parameter)")
 }

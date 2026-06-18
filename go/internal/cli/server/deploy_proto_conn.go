@@ -92,7 +92,7 @@ func (s *deployServer) handleConn(ctx context.Context, conn net.Conn, results ch
 		notifyFailure(results)
 		return
 	}
-	logging.Info("xp2p server deploy: manifest decrypted", "host", manifest.Host, "install_dir", manifest.InstallDir, "trojan_port", manifest.TrojanPort, "user", manifest.TrojanUser, "expires_at", manifest.ExpiresAt)
+	logging.Info("xp2p server deploy: manifest decrypted", "host", manifest.Host, "install_dir", manifest.InstallDir, "service_port", manifest.TrojanPort, "user", manifest.TrojanUser, "expires_at", manifest.ExpiresAt)
 
 	s.proceedInstall(ctx, conn, rw, results, manifest)
 }

@@ -98,7 +98,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             check=True,
         )
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
-        assert SERVER_DOMAIN in credential["link"], "Expected domain in trojan link"
+        assert SERVER_DOMAIN in credential["link"], "Expected domain in connection link"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_DOMAIN)
 
         _apply_pending_config(server_host, "server", server_install_path, helpers.SERVER_CONFIG_DIR_NAME)

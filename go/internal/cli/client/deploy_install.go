@@ -8,7 +8,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
-// buildInstallOptionsFromLink converts a parsed trojan link into client install options,
+// buildInstallOptionsFromLink converts a parsed connection link into client install options,
 // applying config defaults for install paths.
 func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.InstallOptions {
 	allowInsecure := link.AllowInsecure

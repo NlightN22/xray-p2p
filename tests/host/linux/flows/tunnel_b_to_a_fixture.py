@@ -299,7 +299,7 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
             check=True,
         )
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
-        assert credential["link"], "Expected trojan link in server install output"
+        assert credential["link"], "Expected connection link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
 
         server_state = helpers.read_pending_server_config(server_host)

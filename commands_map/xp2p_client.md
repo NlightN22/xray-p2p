@@ -19,10 +19,10 @@ Includes: Global options
 - --config-dir, -D <dir>     Client configuration directory name
 - --host, -H <host>          Remote server host
 - --port, -P <port>          Remote server port
-- --user, -u <email>         Trojan user email
-- --password, -w <password>  Trojan password
+- --user, -u <email>         User email
+- --password, -w <password>  User password
 - --sni, -s <name>           TLS server name (SNI)
-- --link, -L <trojan://...>  Trojan client link
+- --link, -L <link>          Client connection link
 - --allow-insecure, -I       Allow insecure TLS (skip verification)
 - --strict-tls, -S           Enforce TLS verification
 - --force, -f                Replace existing endpoint configuration
@@ -155,9 +155,9 @@ Includes: Global options
 - --host, -H <host> (required) Remote host (IP or DNS) to deploy
 - --port, -P <port>           Deploy port (default 62025)
 - --install-dir, -I <dir>     Server install directory override
-- --user, -u <email>          Trojan user identifier (email)
-- --password, -w <password>   Trojan user password (auto-generated when omitted)
-- --trojan-port, -T <port>    Trojan service port
+- --user, -u <email>          User identifier (email)
+- --password, -w <password>   User password (auto-generated when omitted)
+- --trojan-port, -T <port>    Service port
 - --mode, -M <proxy|tun|tun:split|tun:full> Target client mode (optional)
 - --tun-mode, -m <split|full> TUN routing mode (split or full)
 - --force, -f                 Allow changing existing tun mode

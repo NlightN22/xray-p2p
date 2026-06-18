@@ -306,7 +306,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
             check=True,
         )
         credential = helpers.extract_trojan_credential(server_install.stdout or "")
-        assert credential["link"], "Expected trojan link in server install output"
+        assert credential["link"], "Expected connection link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
         helpers.assert_reverse_cli_output(
             server_runner,

@@ -78,7 +78,7 @@ def test_windows_client_deploy_end_to_end(
             )
         with deploy_flow.timed("wait client deploy link"):
             link = deploy_flow.wait_for_client_link(client_host, client_proc)
-        assert link.startswith("trojan://"), "xp2p client deploy did not emit trojan link"
+        assert link.startswith("trojan://"), "xp2p client deploy did not emit connection link"
 
         deploy_flow.set_firewall_rule(
             server_host,
@@ -130,7 +130,7 @@ def test_windows_client_deploy_end_to_end(
             deploy_flow.wait_for_log_phrase(
                 client_host,
                 client_proc,
-                "client deploy: trojan link received",
+                "client deploy: connection link received",
                 timeout=deploy_flow.LOG_WAIT_TIMEOUT,
             )
             deploy_flow.wait_for_log_phrase(

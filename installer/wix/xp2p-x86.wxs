@@ -23,7 +23,7 @@
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/NlightN22/xray-p2p" />
     <Property Id="ARPHELPLINK" Value="https://github.com/NlightN22/xray-p2p/issues" />
     <Property Id="ARPURLUPDATEINFO" Value="https://github.com/NlightN22/xray-p2p/releases" />
-    <Property Id="ARPCOMMENTS" Value="Minimal Trojan tunnel based on xray-core." />
+    <Property Id="ARPCOMMENTS" Value="Minimal tunnel based on xray-core." />
     <Property Id="XP2P_CLIENT_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SERVER_ARGS" Hidden="yes" Secure="yes" />
     <Property Id="XP2P_SKIP_SERVICE_START" Hidden="yes" Secure="yes" Value="1" />

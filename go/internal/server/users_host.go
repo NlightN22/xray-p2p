@@ -14,7 +14,7 @@ var (
 	errPasswordRequired = errors.New("password is required")
 )
 
-// AddUser ensures a Trojan client exists in Desired inputs.
+// AddUser ensures a client exists in Desired inputs.
 func AddUser(ctx context.Context, opts AddUserOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -85,7 +85,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 	return writeServerApplyRequest()
 }
 
-// RemoveUser deletes the Trojan client from Desired inputs. The operation is idempotent.
+// RemoveUser deletes the client from Desired inputs. The operation is idempotent.
 func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 	if err := ctx.Err(); err != nil {
 		return err

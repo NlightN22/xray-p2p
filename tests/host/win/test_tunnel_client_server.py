@@ -171,7 +171,7 @@ def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
             link = line.split(":", 1)[1].strip()
     if user is None or password is None:
         pytest.fail(
-            "xp2p server install did not emit trojan credential (missing user/password lines).\n"
+            "xp2p server install did not emit credential (missing user/password lines).\n"
             f"STDOUT:\n{stdout}"
         )
     return {"user": user, "password": password, "link": link}
@@ -245,7 +245,7 @@ def test_install_server_and_client_default(
             check=True,
             )
         credential = _extract_generated_credential(server_install.stdout or "")
-        assert credential["link"], "Trojan link was not emitted for default install"
+        assert credential["link"], "Connection link was not emitted for default install"
         assert credential["link"].startswith("trojan://")
         xp2p_server_runner(
             "server",

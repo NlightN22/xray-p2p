@@ -35,7 +35,7 @@ def _extract_link(output: str) -> str:
         stripped = raw.strip()
         if stripped.startswith("trojan://"):
             return stripped
-    pytest.fail(f"xp2p server user add did not emit trojan link.\nSTDOUT:\n{output}")
+    pytest.fail(f"xp2p server user add did not emit connection link.\nSTDOUT:\n{output}")
 
 
 def _install_client(host, runner, link: str):

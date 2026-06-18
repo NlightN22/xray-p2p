@@ -129,7 +129,7 @@ def test_cross_deploy_linux_client_windows_server(linux_hosts, windows_hosts):
             helpers.wait_for_log_phrase_linux(
                 client_host,
                 LINUX_CLIENT_LOG,
-                "client deploy: trojan link received",
+                "client deploy: connection link received",
                 timeout=LOG_WAIT_TIMEOUT,
             )
             helpers.wait_for_log_phrase_linux(
@@ -237,7 +237,7 @@ def test_cross_deploy_windows_client_linux_server(linux_hosts, windows_hosts):
             helpers.wait_for_log_phrase_windows(
                 client_host,
                 client_proc,
-                "client deploy: trojan link received",
+                "client deploy: connection link received",
                 timeout=LOG_WAIT_TIMEOUT,
             )
             helpers.wait_for_log_phrase_windows(

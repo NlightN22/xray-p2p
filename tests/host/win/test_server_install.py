@@ -123,7 +123,7 @@ def _trojan_inbound(data: dict) -> dict:
     for entry in data.get("inbounds", []):
         if entry.get("protocol") == "trojan":
             return entry
-    pytest.fail("Trojan inbound not found in configuration data")
+    pytest.fail("Proxy inbound not found in configuration data")
 
 
 def _ensure_live_xray(server_host, runner) -> None:
