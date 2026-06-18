@@ -16,6 +16,7 @@ const (
 	DiffUnsupported DiffKind = "unsupported"
 	DiffNoop        DiffKind = "noop"
 	DiffRoutingOnly DiffKind = "routing_only"
+	DiffInboundOnly DiffKind = "inbound_only"
 )
 
 type RoutingRuleChange struct {
@@ -23,50 +24,103 @@ type RoutingRuleChange struct {
 	Rule    map[string]any
 }
 
+type InboundChange struct {
+	Tag     string
+	Inbound map[string]any
+}
+
 type Diff struct {
-	Kind           DiffKind
-	AddedRules     []RoutingRuleChange
-	RemovedRuleTag []string
-	RemovedRules   []RoutingRuleChange
-	Reason         string
+	Kind               DiffKind
+	AddedRules         []RoutingRuleChange
+	RemovedRuleTag     []string
+	RemovedRules       []RoutingRuleChange
+	AddedInbounds      []InboundChange
+	RemovedInboundTags []string
+	RemovedInbounds    []InboundChange
+	Reason             string
 }
 
 func ClassifyXrayConfigDiff(current, candidate []byte) (Diff, error) {
+	diff, done, err := classifyRoutingDiff(current, candidate)
+	if err != nil || done {
+		return diff, err
+	}
+	diff, done, err = classifyInboundDiff(current, candidate)
+	if err != nil || done {
+		return diff, err
+	}
+	return unsupported("unsupported config diff"), nil
+}
+
+func classifyRoutingDiff(current, candidate []byte) (Diff, bool, error) {
 	currentDoc, err := parseJSONDocument(current)
 	if err != nil {
-		return Diff{}, fmt.Errorf("parse current xray config: %w", err)
+		return Diff{}, false, fmt.Errorf("parse current xray config: %w", err)
 	}
 	candidateDoc, err := parseJSONDocument(candidate)
 	if err != nil {
-		return Diff{}, fmt.Errorf("parse candidate xray config: %w", err)
+		return Diff{}, false, fmt.Errorf("parse candidate xray config: %w", err)
 	}
 	if reflect.DeepEqual(currentDoc, candidateDoc) {
-		return Diff{Kind: DiffNoop}, nil
+		return Diff{Kind: DiffNoop}, true, nil
 	}
 
 	currentRules, ok, err := detachRoutingRules(currentDoc)
 	if err != nil {
-		return Diff{}, err
+		return Diff{}, false, err
 	}
 	if !ok {
-		return unsupported("current routing.rules is missing or invalid"), nil
+		return Diff{}, false, nil
 	}
 	candidateRules, ok, err := detachRoutingRules(candidateDoc)
 	if err != nil {
-		return Diff{}, err
+		return Diff{}, false, err
 	}
 	if !ok {
-		return unsupported("candidate routing.rules is missing or invalid"), nil
+		return Diff{}, false, nil
 	}
 	if !reflect.DeepEqual(currentDoc, candidateDoc) {
-		return unsupported("non-routing config changed"), nil
+		return Diff{}, false, nil
 	}
 
 	diff, err := classifyRoutingRules(currentRules, candidateRules)
 	if err != nil {
-		return Diff{}, err
+		return Diff{}, false, err
 	}
-	return diff, nil
+	return diff, true, nil
+}
+
+func classifyInboundDiff(current, candidate []byte) (Diff, bool, error) {
+	currentDoc, err := parseJSONDocument(current)
+	if err != nil {
+		return Diff{}, false, fmt.Errorf("parse current xray config: %w", err)
+	}
+	candidateDoc, err := parseJSONDocument(candidate)
+	if err != nil {
+		return Diff{}, false, fmt.Errorf("parse candidate xray config: %w", err)
+	}
+	currentInbounds, ok, err := detachTopLevelObjectArray(currentDoc, "inbounds")
+	if err != nil {
+		return Diff{}, false, err
+	}
+	if !ok {
+		return Diff{}, false, nil
+	}
+	candidateInbounds, ok, err := detachTopLevelObjectArray(candidateDoc, "inbounds")
+	if err != nil {
+		return Diff{}, false, err
+	}
+	if !ok {
+		return Diff{}, false, nil
+	}
+	if !reflect.DeepEqual(currentDoc, candidateDoc) {
+		return Diff{}, false, nil
+	}
+	diff, err := classifyInbounds(currentInbounds, candidateInbounds)
+	if err != nil {
+		return Diff{}, false, err
+	}
+	return diff, true, nil
 }
 
 func classifyRoutingRules(currentRules, candidateRules []map[string]any) (Diff, error) {
@@ -116,6 +170,52 @@ func classifyRoutingRules(currentRules, candidateRules []map[string]any) (Diff, 
 	return diff, nil
 }
 
+func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff, error) {
+	currentByTag, err := objectsByTag(currentInbounds, "tag", "inbound")
+	if err != nil {
+		return unsupported(err.Error()), nil
+	}
+	candidateByTag, err := objectsByTag(candidateInbounds, "tag", "inbound")
+	if err != nil {
+		return unsupported(err.Error()), nil
+	}
+	diff := Diff{Kind: DiffInboundOnly}
+	for tag, current := range currentByTag {
+		candidate, exists := candidateByTag[tag]
+		if !exists {
+			diff.RemovedInboundTags = append(diff.RemovedInboundTags, tag)
+			diff.RemovedInbounds = append(diff.RemovedInbounds, InboundChange{
+				Tag:     tag,
+				Inbound: current,
+			})
+			continue
+		}
+		if !reflect.DeepEqual(current, candidate) {
+			return unsupported("tagged inbound changed in place"), nil
+		}
+	}
+	for tag, candidate := range candidateByTag {
+		if _, exists := currentByTag[tag]; exists {
+			continue
+		}
+		diff.AddedInbounds = append(diff.AddedInbounds, InboundChange{
+			Tag:     tag,
+			Inbound: candidate,
+		})
+	}
+	sort.Strings(diff.RemovedInboundTags)
+	sort.Slice(diff.RemovedInbounds, func(i, j int) bool {
+		return diff.RemovedInbounds[i].Tag < diff.RemovedInbounds[j].Tag
+	})
+	sort.Slice(diff.AddedInbounds, func(i, j int) bool {
+		return diff.AddedInbounds[i].Tag < diff.AddedInbounds[j].Tag
+	})
+	if len(diff.AddedInbounds) == 0 && len(diff.RemovedInboundTags) == 0 {
+		diff.Kind = DiffNoop
+	}
+	return diff, nil
+}
+
 func parseJSONDocument(data []byte) (map[string]any, error) {
 	if len(bytes.TrimSpace(data)) == 0 {
 		return nil, errors.New("empty JSON document")
@@ -125,6 +225,23 @@ func parseJSONDocument(data []byte) (map[string]any, error) {
 		return nil, err
 	}
 	return doc, nil
+}
+
+func detachTopLevelObjectArray(doc map[string]any, key string) ([]map[string]any, bool, error) {
+	rawItems, ok := doc[key].([]any)
+	if !ok {
+		return nil, false, nil
+	}
+	items := make([]map[string]any, 0, len(rawItems))
+	for _, raw := range rawItems {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			return nil, false, fmt.Errorf("%s item is not an object", key)
+		}
+		items = append(items, item)
+	}
+	doc[key] = []any{}
+	return items, true, nil
 }
 
 func detachRoutingRules(doc map[string]any) ([]map[string]any, bool, error) {
@@ -149,17 +266,21 @@ func detachRoutingRules(doc map[string]any) ([]map[string]any, bool, error) {
 }
 
 func rulesByTag(rules []map[string]any) (map[string]map[string]any, error) {
-	result := make(map[string]map[string]any, len(rules))
-	for _, rule := range rules {
-		tag, _ := rule["ruleTag"].(string)
+	return objectsByTag(rules, "ruleTag", "routing rule")
+}
+
+func objectsByTag(items []map[string]any, field string, label string) (map[string]map[string]any, error) {
+	result := make(map[string]map[string]any, len(items))
+	for _, item := range items {
+		tag, _ := item[field].(string)
 		tag = strings.TrimSpace(tag)
 		if tag == "" {
-			return nil, errors.New("routing rule without ruleTag")
+			return nil, fmt.Errorf("%s without %s", label, field)
 		}
 		if _, exists := result[tag]; exists {
-			return nil, fmt.Errorf("duplicate routing ruleTag %q", tag)
+			return nil, fmt.Errorf("duplicate %s %q", field, tag)
 		}
-		result[tag] = rule
+		result[tag] = item
 	}
 	return result, nil
 }

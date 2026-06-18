@@ -78,6 +78,65 @@ func TestClassifyXrayConfigDiffRejectsTaggedRuleMutation(t *testing.T) {
 	}
 }
 
+func TestClassifyXrayConfigDiffDetectsInboundOnlyAddRemove(t *testing.T) {
+	current := []byte(`{
+		"log": {"loglevel": "warning"},
+		"inbounds": [
+			{"tag": "keep", "protocol": "socks"},
+			{"tag": "old", "protocol": "dokodemo-door"}
+		],
+		"routing": {"rules": [{"ruleTag": "route-a"}]}
+	}`)
+	candidate := []byte(`{
+		"log": {"loglevel": "warning"},
+		"inbounds": [
+			{"tag": "keep", "protocol": "socks"},
+			{"tag": "new", "protocol": "dokodemo-door"}
+		],
+		"routing": {"rules": [{"ruleTag": "route-a"}]}
+	}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffInboundOnly {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffInboundOnly, diff)
+	}
+	if len(diff.AddedInbounds) != 1 || diff.AddedInbounds[0].Tag != "new" {
+		t.Fatalf("unexpected added inbounds: %+v", diff.AddedInbounds)
+	}
+	if len(diff.RemovedInboundTags) != 1 || diff.RemovedInboundTags[0] != "old" {
+		t.Fatalf("unexpected removed inbounds: %+v", diff.RemovedInboundTags)
+	}
+}
+
+func TestClassifyXrayConfigDiffRejectsInboundGlobalChange(t *testing.T) {
+	current := []byte(`{"log":{"loglevel":"warning"},"inbounds":[{"tag":"a"}]}`)
+	candidate := []byte(`{"log":{"loglevel":"debug"},"inbounds":[{"tag":"a"},{"tag":"b"}]}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
+func TestClassifyXrayConfigDiffRejectsTaggedInboundMutation(t *testing.T) {
+	current := []byte(`{"inbounds":[{"tag":"a","protocol":"socks"}]}`)
+	candidate := []byte(`{"inbounds":[{"tag":"a","protocol":"dokodemo-door"}]}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
 func TestClassifyXrayConfigDiffNoop(t *testing.T) {
 	current := []byte(`{"routing":{"rules":[{"ruleTag":"a","outboundTag":"direct"}]}}`)
 
