@@ -8,7 +8,7 @@ import (
 )
 
 func TestApplyRoutingDiffSequencesRemoveBeforeAdd(t *testing.T) {
-	applier := &recordingRoutingApplier{}
+	applier := newRecordingRoutingApplier("old")
 	diff := Diff{
 		Kind: DiffRoutingOnly,
 		RemovedRules: []RoutingRuleChange{
@@ -29,7 +29,8 @@ func TestApplyRoutingDiffSequencesRemoveBeforeAdd(t *testing.T) {
 }
 
 func TestApplyRoutingDiffRollsBackAddedRules(t *testing.T) {
-	applier := &recordingRoutingApplier{failAddTag: "bad"}
+	applier := newRecordingRoutingApplier()
+	applier.failAddTag = "bad"
 	diff := Diff{
 		Kind: DiffRoutingOnly,
 		AddedRules: []RoutingRuleChange{
@@ -49,7 +50,8 @@ func TestApplyRoutingDiffRollsBackAddedRules(t *testing.T) {
 }
 
 func TestApplyRoutingDiffRestoresRemovedRules(t *testing.T) {
-	applier := &recordingRoutingApplier{failRemoveTag: "bad"}
+	applier := newRecordingRoutingApplier("good", "bad")
+	applier.failRemoveTag = "bad"
 	diff := Diff{
 		Kind: DiffRoutingOnly,
 		RemovedRules: []RoutingRuleChange{
@@ -70,8 +72,17 @@ func TestApplyRoutingDiffRestoresRemovedRules(t *testing.T) {
 
 type recordingRoutingApplier struct {
 	calls         []string
+	tags          map[string]struct{}
 	failAddTag    string
 	failRemoveTag string
+}
+
+func newRecordingRoutingApplier(tags ...string) *recordingRoutingApplier {
+	applier := &recordingRoutingApplier{tags: make(map[string]struct{}, len(tags))}
+	for _, tag := range tags {
+		applier.tags[tag] = struct{}{}
+	}
+	return applier
 }
 
 func (a *recordingRoutingApplier) AddRule(_ context.Context, rule map[string]any) error {
@@ -80,6 +91,7 @@ func (a *recordingRoutingApplier) AddRule(_ context.Context, rule map[string]any
 	if tag == a.failAddTag {
 		return errors.New("add failed")
 	}
+	a.tags[tag] = struct{}{}
 	return nil
 }
 
@@ -88,5 +100,14 @@ func (a *recordingRoutingApplier) RemoveRule(_ context.Context, tag string) erro
 	if tag == a.failRemoveTag {
 		return errors.New("remove failed")
 	}
+	delete(a.tags, tag)
 	return nil
+}
+
+func (a *recordingRoutingApplier) ListRuleTags(context.Context) ([]string, error) {
+	result := make([]string, 0, len(a.tags))
+	for tag := range a.tags {
+		result = append(result, tag)
+	}
+	return result, nil
 }

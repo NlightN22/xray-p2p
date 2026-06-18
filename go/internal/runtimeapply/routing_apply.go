@@ -9,6 +9,7 @@ import (
 type RoutingApplier interface {
 	AddRule(context.Context, map[string]any) error
 	RemoveRule(context.Context, string) error
+	ListRuleTags(context.Context) ([]string, error)
 }
 
 func ApplyRoutingDiff(ctx context.Context, applier RoutingApplier, diff Diff) error {
@@ -41,6 +42,35 @@ func ApplyRoutingDiff(ctx context.Context, applier RoutingApplier, diff Diff) er
 			return fmt.Errorf("add routing rule %s: %w", change.RuleTag, err)
 		}
 		added = append(added, change.Rule)
+	}
+	if err := verifyRoutingDiff(ctx, applier, diff); err != nil {
+		rollbackErr := errors.Join(rollbackAdded(ctx, applier, added), rollbackRemoved(ctx, applier, removed))
+		if rollbackErr != nil {
+			return fmt.Errorf("verify routing runtime apply: %w; rollback: %v", err, rollbackErr)
+		}
+		return fmt.Errorf("verify routing runtime apply: %w", err)
+	}
+	return nil
+}
+
+func verifyRoutingDiff(ctx context.Context, applier RoutingApplier, diff Diff) error {
+	tags, err := applier.ListRuleTags(ctx)
+	if err != nil {
+		return fmt.Errorf("list routing rules: %w", err)
+	}
+	present := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		present[tag] = struct{}{}
+	}
+	for _, change := range diff.AddedRules {
+		if _, ok := present[change.RuleTag]; !ok {
+			return fmt.Errorf("added routing rule %s not found", change.RuleTag)
+		}
+	}
+	for _, change := range diff.RemovedRules {
+		if _, ok := present[change.RuleTag]; ok {
+			return fmt.Errorf("removed routing rule %s still present", change.RuleTag)
+		}
 	}
 	return nil
 }

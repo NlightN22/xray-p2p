@@ -94,6 +94,20 @@ func (c *Client) ListRules(ctx context.Context) ([]RoutingRuleInfo, error) {
 	return result, nil
 }
 
+func (c *Client) ListRuleTags(ctx context.Context) ([]string, error) {
+	rules, err := c.ListRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tags := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		if rule.RuleTag != "" {
+			tags = append(tags, rule.RuleTag)
+		}
+	}
+	return tags, nil
+}
+
 func typedMessage(msg *routerconfig.RoutingRule) (*commonserial.TypedMessage, error) {
 	data, err := proto.Marshal(msg)
 	if err != nil {
