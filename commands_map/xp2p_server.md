@@ -351,6 +351,7 @@ Includes: inherited options
 - --host, -H <host> public host name or IP for certificate generation
 - --key, -k <password> TLS private key file to deploy
 - --path, -p <path> server installation directory
+- --quiet, -q suppress interactive prompts
 
 xp2p server deploy
   Summary: Listen for xp2p client deploy requests

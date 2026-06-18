@@ -67,6 +67,17 @@ func TestRunServerCertSet(t *testing.T) {
 				{InstallDir: `C:\xp2p`, ConfigDir: server.DefaultServerConfigDir, Host: "configured.example.test", Force: true},
 			},
 		},
+		{
+			name:     "quiet replaces existing certificate without prompt",
+			cfg:      serverCfg(`C:\xp2p`, server.DefaultServerConfigDir, "configured.example.test"),
+			opts:     serverCertSetOptions{Path: `C:\xp2p`, Quiet: true},
+			certErrs: []error{server.ErrCertificateConfigured, nil},
+			wantCode: 0,
+			wantCalls: []server.CertificateOptions{
+				{InstallDir: `C:\xp2p`, ConfigDir: server.DefaultServerConfigDir, Host: "configured.example.test"},
+				{InstallDir: `C:\xp2p`, ConfigDir: server.DefaultServerConfigDir, Host: "configured.example.test", Force: true},
+			},
+		},
 	}
 
 	for _, tt := range tests {

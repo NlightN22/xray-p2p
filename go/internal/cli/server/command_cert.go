@@ -34,6 +34,7 @@ func newServerCertSetCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.Key, "key", "k", "", "TLS private key file to deploy")
 	flags.StringVarP(&opts.Host, "host", "H", "", "public host name or IP for certificate generation")
 	flags.BoolVarP(&opts.Force, "force", "f", false, "overwrite existing TLS configuration without prompting")
+	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "suppress interactive prompts")
 	return cmd
 }
 

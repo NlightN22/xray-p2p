@@ -36,6 +36,8 @@ xp2p server cert set --cert /path/to/fullchain.pem --key /path/to/privkey.pem
 xp2p server cert state
 ```
 
+For certificate lifecycle details, including replacement, removal scope, copy behavior, and renewal hooks, see [Server Certificates](../operations/server-certificates.md).
+
 `dns-forward remove` removes the managed dnsmasq domain entry. It removes an xray forward only when that forward was created and is still owned by dns-forward, and no other dns-forward domain uses the same listen port.
 
 Server defaults to proxy mode (`server.tun_enabled = false`). Enable TUN explicitly via config or `XP2P_SERVER_TUN_ENABLED=true` when needed.

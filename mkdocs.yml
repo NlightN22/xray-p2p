@@ -58,6 +58,7 @@ nav:
       - Tunnel Status Logic: flows/tunnel-status.md
   - Operations:
       - TUN Setup: operations/tun-setup.md
+      - Server Certificates: operations/server-certificates.md
       - Diagnostics & NAT helpers: operations/diagnostics.md
       - Service Control: operations/service-control.md
       - Backup & Migration: operations/backup-and-migration.md

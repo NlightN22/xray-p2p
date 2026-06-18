@@ -18,6 +18,7 @@ type serverCertSetOptions struct {
 	Key       string
 	Host      string
 	Force     bool
+	Quiet     bool
 }
 
 func runServerCertSet(ctx context.Context, cfg config.Config, opts serverCertSetOptions) int {
@@ -54,10 +55,10 @@ func runServerCertSet(ctx context.Context, cfg config.Config, opts serverCertSet
 		Force:            opts.Force,
 	}
 
-	return applyServerCertificate(ctx, certOpts)
+	return applyServerCertificate(ctx, certOpts, opts.Quiet)
 }
 
-func applyServerCertificate(ctx context.Context, opts server.CertificateOptions) int {
+func applyServerCertificate(ctx context.Context, opts server.CertificateOptions, quiet bool) int {
 	err := serverSetCertFunc(ctx, opts)
 	if err == nil {
 		logging.Info("xp2p server cert set completed",
@@ -68,6 +69,19 @@ func applyServerCertificate(ctx context.Context, opts server.CertificateOptions)
 	}
 
 	if errors.Is(err, server.ErrCertificateConfigured) && !opts.Force {
+		if quiet {
+			opts.Force = true
+			if err = serverSetCertFunc(ctx, opts); err == nil {
+				logging.Info("xp2p server cert set completed",
+					"install_dir", opts.InstallDir,
+					"config_dir", opts.ConfigDir,
+				)
+				return 0
+			}
+			logging.Error("xp2p server cert set failed", "err", err)
+			return 1
+		}
+
 		ok, promptErr := promptYesNoFunc("TLS already configured. Replace existing certificate?")
 		if promptErr != nil {
 			logging.Error("xp2p server cert set: prompt failed", "err", promptErr)

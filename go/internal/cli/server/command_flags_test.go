@@ -30,3 +30,14 @@ func TestServerBundleFlags(t *testing.T) {
 		t.Fatalf("expected import --input shorthand -i")
 	}
 }
+
+func TestServerCertSetQuietFlag(t *testing.T) {
+	cmd := NewCommand(func() config.Config { return config.Config{} })
+	certSetCmd, _, err := cmd.Find([]string{"cert", "set"})
+	if err != nil {
+		t.Fatalf("find cert set command: %v", err)
+	}
+	if flag := certSetCmd.Flags().Lookup("quiet"); flag == nil || flag.Shorthand != "q" {
+		t.Fatalf("expected cert set --quiet shorthand -q")
+	}
+}
