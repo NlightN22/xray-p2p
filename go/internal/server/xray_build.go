@@ -91,6 +91,7 @@ func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPat
 		cfg.Inbounds.Trojan.AllowInsecure = true
 	}
 	return map[string]any{
+		"tag":      cfg.Inbounds.Trojan.Tag,
 		"port":     trojanPort,
 		"listen":   cfg.Inbounds.Trojan.Listen,
 		"protocol": cfg.Inbounds.Trojan.Protocol,

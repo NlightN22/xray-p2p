@@ -18,6 +18,7 @@ const (
 	DiffRoutingOnly  DiffKind = "routing_only"
 	DiffInboundOnly  DiffKind = "inbound_only"
 	DiffOutboundOnly DiffKind = "outbound_only"
+	DiffInboundUsers DiffKind = "inbound_users"
 )
 
 type RoutingRuleChange struct {
@@ -35,6 +36,13 @@ type OutboundChange struct {
 	Outbound map[string]any
 }
 
+type InboundUserChange struct {
+	InboundTag string
+	Email      string
+	Password   string
+	User       map[string]any
+}
+
 type Diff struct {
 	Kind                DiffKind
 	AddedRules          []RoutingRuleChange
@@ -46,11 +54,17 @@ type Diff struct {
 	AddedOutbounds      []OutboundChange
 	RemovedOutboundTags []string
 	RemovedOutbounds    []OutboundChange
+	AddedInboundUsers   []InboundUserChange
+	RemovedInboundUsers []InboundUserChange
 	Reason              string
 }
 
 func ClassifyXrayConfigDiff(current, candidate []byte) (Diff, error) {
 	diff, done, err := classifyRoutingDiff(current, candidate)
+	if err != nil || done {
+		return diff, err
+	}
+	diff, done, err = classifyInboundUsersDiff(current, candidate)
 	if err != nil || done {
 		return diff, err
 	}

@@ -67,6 +67,7 @@ func DefaultServerConfig() ServerXrayConfig {
 				Port:     0,
 			},
 			Trojan: TrojanInboundConfig{
+				Tag:           "trojan-in",
 				Listen:        "0.0.0.0",
 				Protocol:      "trojan",
 				Network:       "tcp",

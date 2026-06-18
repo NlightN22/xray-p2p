@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	commonprotocol "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonprotocol"
 	coreconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/coreconfig"
 	handlercommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/handlercommand"
+	trojanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/trojanconfig"
 )
 
 type HandlerOptions struct {
@@ -40,6 +42,33 @@ func ListInboundTags(ctx context.Context, opts HandlerOptions) ([]string, error)
 	}
 	defer client.Close()
 	return client.ListInboundTags(ctx)
+}
+
+func AddInboundUser(ctx context.Context, opts HandlerOptions, tag, email, password string) error {
+	client, err := DialWith(ctx, opts.Address, opts.Timeout, opts.Dialer)
+	if err != nil {
+		return fmt.Errorf("connect xray API: %w", err)
+	}
+	defer client.Close()
+	return client.AddInboundUser(ctx, tag, email, password)
+}
+
+func RemoveInboundUser(ctx context.Context, opts HandlerOptions, tag, email string) error {
+	client, err := DialWith(ctx, opts.Address, opts.Timeout, opts.Dialer)
+	if err != nil {
+		return fmt.Errorf("connect xray API: %w", err)
+	}
+	defer client.Close()
+	return client.RemoveInboundUser(ctx, tag, email)
+}
+
+func ListInboundUserEmails(ctx context.Context, opts HandlerOptions, tag string) ([]string, error) {
+	client, err := DialWith(ctx, opts.Address, opts.Timeout, opts.Dialer)
+	if err != nil {
+		return nil, fmt.Errorf("connect xray API: %w", err)
+	}
+	defer client.Close()
+	return client.ListInboundUserEmails(ctx, tag)
 }
 
 func AddOutbound(ctx context.Context, opts HandlerOptions, outbound *coreconfig.OutboundHandlerConfig) error {
@@ -91,6 +120,53 @@ func (c *Client) ListInboundTags(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("list inbounds: %w", err)
 	}
 	return inboundTags(response.GetInbounds()), nil
+}
+
+func (c *Client) AddInboundUser(ctx context.Context, tag, email, password string) error {
+	account, err := typedMessage(&trojanconfig.Account{Password: password})
+	if err != nil {
+		return err
+	}
+	op, err := typedMessage(&handlercommand.AddUserOperation{
+		User: &commonprotocol.User{
+			Email:   email,
+			Account: account,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = c.handler.AlterInbound(ctx, &handlercommand.AlterInboundRequest{Tag: tag, Operation: op})
+	if err != nil {
+		return fmt.Errorf("add inbound user: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) RemoveInboundUser(ctx context.Context, tag, email string) error {
+	op, err := typedMessage(&handlercommand.RemoveUserOperation{Email: email})
+	if err != nil {
+		return err
+	}
+	_, err = c.handler.AlterInbound(ctx, &handlercommand.AlterInboundRequest{Tag: tag, Operation: op})
+	if err != nil {
+		return fmt.Errorf("remove inbound user: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) ListInboundUserEmails(ctx context.Context, tag string) ([]string, error) {
+	response, err := c.handler.GetInboundUsers(ctx, &handlercommand.GetInboundUserRequest{Tag: tag})
+	if err != nil {
+		return nil, fmt.Errorf("list inbound users: %w", err)
+	}
+	emails := make([]string, 0, len(response.GetUsers()))
+	for _, user := range response.GetUsers() {
+		if user != nil && user.GetEmail() != "" {
+			emails = append(emails, user.GetEmail())
+		}
+	}
+	return emails, nil
 }
 
 func (c *Client) AddOutbound(ctx context.Context, outbound *coreconfig.OutboundHandlerConfig) error {

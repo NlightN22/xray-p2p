@@ -65,6 +65,17 @@ func TestBundledXrayAPI(t *testing.T) {
 	if err := client.RemoveOutbound(context.Background(), "direct-smoke"); err != nil {
 		t.Fatalf("remove outbound: %v", err)
 	}
+	if err := client.AddInboundUser(context.Background(), "trojan-smoke", "smoke@example.com", "secret"); err != nil {
+		t.Fatalf("add inbound user: %v", err)
+	}
+	if users, err := client.ListInboundUserEmails(context.Background(), "trojan-smoke"); err != nil {
+		t.Fatalf("list inbound users: %v", err)
+	} else if !contains(users, "smoke@example.com") {
+		t.Fatalf("inbound users = %v, want smoke@example.com", users)
+	}
+	if err := client.RemoveInboundUser(context.Background(), "trojan-smoke", "smoke@example.com"); err != nil {
+		t.Fatalf("remove inbound user: %v", err)
+	}
 	if err := client.AddRule(context.Background(), map[string]any{
 		"type":        "field",
 		"ruleTag":     "smoke-rule",
@@ -210,6 +221,20 @@ func writeSmokeXrayConfig(t *testing.T, path, workDir, apiAddress string) {
 				"port":     freeTCPPort(t),
 				"protocol": "socks",
 				"settings": map[string]any{"auth": "noauth", "udp": true},
+			},
+			map[string]any{
+				"tag":      "trojan-smoke",
+				"listen":   "127.0.0.1",
+				"port":     freeTCPPort(t),
+				"protocol": "trojan",
+				"settings": map[string]any{"clients": []any{}},
+				"streamSettings": map[string]any{
+					"network":  "tcp",
+					"security": "none",
+					"tcpSettings": map[string]any{
+						"header": map[string]any{"type": "none"},
+					},
+				},
 			},
 		},
 		"outbounds": []any{

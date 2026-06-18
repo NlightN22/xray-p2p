@@ -137,6 +137,83 @@ func TestClassifyXrayConfigDiffRejectsTaggedInboundMutation(t *testing.T) {
 	}
 }
 
+func TestClassifyXrayConfigDiffDetectsInboundUserAddRemove(t *testing.T) {
+	current := []byte(`{
+		"inbounds": [
+			{
+				"tag": "trojan-in",
+				"protocol": "trojan",
+				"settings": {"clients": [
+					{"email": "keep@example.com", "password": "keep"},
+					{"email": "old@example.com", "password": "old"}
+				]},
+				"streamSettings": {"network": "tcp"}
+			}
+		],
+		"routing": {"rules": [{"ruleTag": "route-a"}]}
+	}`)
+	candidate := []byte(`{
+		"inbounds": [
+			{
+				"tag": "trojan-in",
+				"protocol": "trojan",
+				"settings": {"clients": [
+					{"email": "keep@example.com", "password": "keep"},
+					{"email": "new@example.com", "password": "new"}
+				]},
+				"streamSettings": {"network": "tcp"}
+			}
+		],
+		"routing": {"rules": [{"ruleTag": "route-a"}]}
+	}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffInboundUsers {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffInboundUsers, diff)
+	}
+	if len(diff.AddedInboundUsers) != 1 || diff.AddedInboundUsers[0].Email != "new@example.com" || diff.AddedInboundUsers[0].Password != "new" {
+		t.Fatalf("unexpected added users: %+v", diff.AddedInboundUsers)
+	}
+	if len(diff.RemovedInboundUsers) != 1 || diff.RemovedInboundUsers[0].Email != "old@example.com" {
+		t.Fatalf("unexpected removed users: %+v", diff.RemovedInboundUsers)
+	}
+}
+
+func TestClassifyXrayConfigDiffRejectsInboundUserPasswordMutation(t *testing.T) {
+	current := []byte(`{"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[{"email":"a@example.com","password":"old"}]}}]}`)
+	candidate := []byte(`{"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[{"email":"a@example.com","password":"new"}]}}]}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
+func TestClassifyXrayConfigDiffRejectsInboundUserMixedRoutingChange(t *testing.T) {
+	current := []byte(`{
+		"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[]}}],
+		"routing":{"rules":[{"ruleTag":"old","outboundTag":"direct"}]}
+	}`)
+	candidate := []byte(`{
+		"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[{"email":"a@example.com","password":"new"}]}}],
+		"routing":{"rules":[{"ruleTag":"new","outboundTag":"direct"}]}
+	}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
 func TestClassifyXrayConfigDiffDetectsOutboundOnlyAddRemove(t *testing.T) {
 	current := []byte(`{
 		"log": {"loglevel": "warning"},

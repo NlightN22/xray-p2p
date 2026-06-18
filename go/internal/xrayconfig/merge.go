@@ -102,6 +102,9 @@ func mergeTun(current, defaults TunInboundConfig) TunInboundConfig {
 
 func mergeTrojan(current, defaults TrojanInboundConfig) TrojanInboundConfig {
 	merged := current
+	if strings.TrimSpace(merged.Tag) == "" {
+		merged.Tag = defaults.Tag
+	}
 	if strings.TrimSpace(merged.Listen) == "" {
 		merged.Listen = defaults.Listen
 	}

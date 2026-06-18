@@ -7,10 +7,13 @@ import (
 	"testing"
 	"time"
 
+	commonprotocol "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonprotocol"
 	coreconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/coreconfig"
 	handlercommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/handlercommand"
+	trojanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/trojanconfig"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestHandlerClientAddRemoveListInboundOutbound(t *testing.T) {
@@ -29,6 +32,19 @@ func TestHandlerClientAddRemoveListInboundOutbound(t *testing.T) {
 	}
 	if err := client.AddOutbound(context.Background(), &coreconfig.OutboundHandlerConfig{Tag: "out-a"}); err != nil {
 		t.Fatalf("AddOutbound: %v", err)
+	}
+	if err := client.AddInboundUser(context.Background(), "in-a", "alpha@example.com", "secret"); err != nil {
+		t.Fatalf("AddInboundUser: %v", err)
+	}
+	users, err := client.ListInboundUserEmails(context.Background(), "in-a")
+	if err != nil {
+		t.Fatalf("ListInboundUserEmails: %v", err)
+	}
+	if !reflect.DeepEqual(users, []string{"alpha@example.com"}) {
+		t.Fatalf("users = %v", users)
+	}
+	if err := client.RemoveInboundUser(context.Background(), "in-a", "alpha@example.com"); err != nil {
+		t.Fatalf("RemoveInboundUser: %v", err)
 	}
 	inTags, err := client.ListInboundTags(context.Background())
 	if err != nil {
@@ -92,12 +108,14 @@ type testHandlerServer struct {
 	handlercommand.UnimplementedHandlerServiceServer
 	inbounds  map[string]*coreconfig.InboundHandlerConfig
 	outbounds map[string]*coreconfig.OutboundHandlerConfig
+	users     map[string]map[string]*commonprotocol.User
 }
 
 func newTestHandlerServer() *testHandlerServer {
 	return &testHandlerServer{
 		inbounds:  make(map[string]*coreconfig.InboundHandlerConfig),
 		outbounds: make(map[string]*coreconfig.OutboundHandlerConfig),
+		users:     make(map[string]map[string]*commonprotocol.User),
 	}
 }
 
@@ -108,7 +126,38 @@ func (s *testHandlerServer) AddInbound(_ context.Context, req *handlercommand.Ad
 
 func (s *testHandlerServer) RemoveInbound(_ context.Context, req *handlercommand.RemoveInboundRequest) (*handlercommand.RemoveInboundResponse, error) {
 	delete(s.inbounds, req.GetTag())
+	delete(s.users, req.GetTag())
 	return &handlercommand.RemoveInboundResponse{}, nil
+}
+
+func (s *testHandlerServer) AlterInbound(_ context.Context, req *handlercommand.AlterInboundRequest) (*handlercommand.AlterInboundResponse, error) {
+	switch req.GetOperation().GetType() {
+	case "xray.app.proxyman.command.AddUserOperation":
+		op := &handlercommand.AddUserOperation{}
+		if err := proto.Unmarshal(req.GetOperation().GetValue(), op); err != nil {
+			return nil, err
+		}
+		account := &trojanconfig.Account{}
+		if err := proto.Unmarshal(op.GetUser().GetAccount().GetValue(), account); err != nil {
+			return nil, err
+		}
+		if account.GetPassword() == "" {
+			return nil, errUnexpectedTypedMessage
+		}
+		if s.users[req.GetTag()] == nil {
+			s.users[req.GetTag()] = make(map[string]*commonprotocol.User)
+		}
+		s.users[req.GetTag()][op.GetUser().GetEmail()] = op.GetUser()
+	case "xray.app.proxyman.command.RemoveUserOperation":
+		op := &handlercommand.RemoveUserOperation{}
+		if err := proto.Unmarshal(req.GetOperation().GetValue(), op); err != nil {
+			return nil, err
+		}
+		delete(s.users[req.GetTag()], op.GetEmail())
+	default:
+		return nil, errUnexpectedTypedMessage
+	}
+	return &handlercommand.AlterInboundResponse{}, nil
 }
 
 func (s *testHandlerServer) ListInbounds(context.Context, *handlercommand.ListInboundsRequest) (*handlercommand.ListInboundsResponse, error) {
@@ -117,6 +166,17 @@ func (s *testHandlerServer) ListInbounds(context.Context, *handlercommand.ListIn
 		items = append(items, item)
 	}
 	return &handlercommand.ListInboundsResponse{Inbounds: items}, nil
+}
+
+func (s *testHandlerServer) GetInboundUsers(_ context.Context, req *handlercommand.GetInboundUserRequest) (*handlercommand.GetInboundUserResponse, error) {
+	users := s.users[req.GetTag()]
+	items := make([]*commonprotocol.User, 0, len(users))
+	for _, item := range users {
+		if req.GetEmail() == "" || item.GetEmail() == req.GetEmail() {
+			items = append(items, item)
+		}
+	}
+	return &handlercommand.GetInboundUserResponse{Users: items}, nil
 }
 
 func (s *testHandlerServer) AddOutbound(_ context.Context, req *handlercommand.AddOutboundRequest) (*handlercommand.AddOutboundResponse, error) {

@@ -219,6 +219,66 @@ func TestTryApplyRoutingPendingAppliesOutboundDiff(t *testing.T) {
 	}
 }
 
+func TestTryApplyRoutingPendingAppliesInboundUserDiff(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleServer)
+	current := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{
+				"tag": "trojan-in",
+				"protocol": "trojan",
+				"settings": {"clients": [
+					{"email": "old@example.com", "password": "old"}
+				]}
+			}
+		]
+	}`)
+	candidate := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{
+				"tag": "trojan-in",
+				"protocol": "trojan",
+				"settings": {"clients": [
+					{"email": "new@example.com", "password": "new"}
+				]}
+			}
+		]
+	}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"version":1}`))
+	applier := newTestInboundUserApplier()
+	applier.users["trojan-in"] = map[string]string{"old@example.com": "old"}
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{XrayJSON: candidate, MetaJSON: []byte(`{"version":2}`)}, nil
+	}
+	opts.NewInboundUser = func(_ context.Context, address string) (runtimeapply.InboundUserApplier, func() error, error) {
+		if address != "127.0.0.1:10085" {
+			t.Fatalf("address = %q", address)
+		}
+		return applier, func() error { return nil }, nil
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyApplied {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyApplied)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatalf("read live xray: %v", err)
+	}
+	if string(got) != string(candidate) {
+		t.Fatalf("live xray mismatch: %s", string(got))
+	}
+	wantCalls := []string{"remove:trojan-in:old@example.com", "add:trojan-in:new@example.com"}
+	if !reflect.DeepEqual(applier.calls, wantCalls) {
+		t.Fatalf("calls = %v, want %v", applier.calls, wantCalls)
+	}
+}
+
 func testOptions(t *testing.T, root, role string) Options {
 	t.Helper()
 	t.Setenv("XP2P_CONFIG_ROOT", root)
@@ -277,6 +337,39 @@ type testInboundApplier struct {
 type testOutboundApplier struct {
 	calls []string
 	tags  map[string]struct{}
+}
+
+type testInboundUserApplier struct {
+	calls []string
+	users map[string]map[string]string
+}
+
+func newTestInboundUserApplier() *testInboundUserApplier {
+	return &testInboundUserApplier{users: make(map[string]map[string]string)}
+}
+
+func (a *testInboundUserApplier) AddInboundUser(_ context.Context, inboundTag, email, password string) error {
+	a.calls = append(a.calls, "add:"+inboundTag+":"+email)
+	if a.users[inboundTag] == nil {
+		a.users[inboundTag] = make(map[string]string)
+	}
+	a.users[inboundTag][email] = password
+	return nil
+}
+
+func (a *testInboundUserApplier) RemoveInboundUser(_ context.Context, inboundTag, email string) error {
+	a.calls = append(a.calls, "remove:"+inboundTag+":"+email)
+	delete(a.users[inboundTag], email)
+	return nil
+}
+
+func (a *testInboundUserApplier) ListInboundUserEmails(_ context.Context, inboundTag string) ([]string, error) {
+	users := a.users[inboundTag]
+	result := make([]string, 0, len(users))
+	for email := range users {
+		result = append(result, email)
+	}
+	return result, nil
 }
 
 func newTestOutboundApplier(tags ...string) *testOutboundApplier {

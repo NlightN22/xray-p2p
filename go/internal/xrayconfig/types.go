@@ -58,6 +58,7 @@ type TunInboundConfig struct {
 }
 
 type TrojanInboundConfig struct {
+	Tag           string    `json:"tag" toml:"tag"`
 	Listen        string    `json:"listen" toml:"listen"`
 	Protocol      string    `json:"protocol" toml:"protocol"`
 	Network       string    `json:"network" toml:"network"`

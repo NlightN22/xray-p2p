@@ -96,6 +96,9 @@ func validateTun(cfg TunInboundConfig, scope string) error {
 }
 
 func validateTrojan(cfg TrojanInboundConfig) error {
+	if strings.TrimSpace(cfg.Tag) == "" {
+		return errors.New("xrayconfig: trojan tag is required")
+	}
 	if strings.TrimSpace(cfg.Protocol) == "" {
 		return errors.New("xrayconfig: trojan protocol is required")
 	}
