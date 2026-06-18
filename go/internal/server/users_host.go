@@ -118,23 +118,27 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		}
 	}
 
-	if err := purgeUserReverseAndRedirects(opts, userID); err != nil {
+	purged, err := purgeUserReverseAndRedirects(opts, userID)
+	if err != nil {
 		return err
+	}
+	if !removed && !purged {
+		return nil
 	}
 	return writeServerApplyRequest()
 }
 
-func purgeUserReverseAndRedirects(opts RemoveUserOptions, userID string) error {
+func purgeUserReverseAndRedirects(opts RemoveUserOptions, userID string) (bool, error) {
 	channels := make([]serverReverseChannel, 0)
 	store, err := openReverseStore(opts.InstallDir)
 	if err != nil {
-		return err
+		return false, err
 	}
 	removed := store.deleteByUser(userID)
 	if len(removed) > 0 {
 		channels = append(channels, removed...)
 		if err := store.save(); err != nil {
-			return err
+			return false, err
 		}
 	}
 
@@ -147,12 +151,12 @@ func purgeUserReverseAndRedirects(opts RemoveUserOptions, userID string) error {
 		}
 	}
 	if len(channels) == 0 {
-		return nil
+		return false, nil
 	}
 
 	redirectStore, err := openServerRedirectStorePending()
 	if err != nil {
-		return err
+		return false, err
 	}
 	changed := false
 	for _, channel := range channels {
@@ -161,9 +165,9 @@ func purgeUserReverseAndRedirects(opts RemoveUserOptions, userID string) error {
 		}
 	}
 	if !changed {
-		return nil
+		return len(removed) > 0, nil
 	}
-	return redirectStore.saveRedirects()
+	return true, redirectStore.saveRedirects()
 }
 
 func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {

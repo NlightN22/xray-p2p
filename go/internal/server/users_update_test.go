@@ -78,3 +78,24 @@ func TestUpdateUserOnlyChangesTrojanUserFields(t *testing.T) {
 		t.Fatalf("apply request was not written: %v", err)
 	}
 }
+
+func TestRemoveMissingUserDoesNotWriteApplyRequest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+
+	if err := RemoveUser(context.Background(), RemoveUserOptions{
+		InstallDir: dir,
+		ConfigDir:  filepath.Join(dir, layout.ServerConfigDir),
+		UserID:     "missing@example.com",
+		Host:       "edge.example",
+	}); err != nil {
+		t.Fatalf("RemoveUser: %v", err)
+	}
+
+	if _, err := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(err) {
+		t.Fatalf("apply request should not be written for no-op remove: %v", err)
+	}
+}

@@ -152,3 +152,28 @@ func TestRemoveEndpointRemovesAllWhenNoEndpointsRemain(t *testing.T) {
 		t.Fatalf("expected no endpoints remaining, got %d", len(updated.Endpoints))
 	}
 }
+
+func TestRemoveMissingEndpointDoesNotWriteApplyRequest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if err := (clientInstallState{
+		Endpoints: []clientEndpointRecord{
+			{Hostname: "server.example", Tag: "proxy-server-example"},
+		},
+	}).save(statePath); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	err := RemoveEndpoint(context.Background(), RemoveEndpointOptions{
+		InstallDir: dir,
+		ConfigDir:  layout.ClientConfigDir,
+		Target:     "missing.example",
+	})
+	if err == nil {
+		t.Fatalf("expected missing endpoint error")
+	}
+	if _, statErr := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(statErr) {
+		t.Fatalf("apply request should not be written for missing endpoint: %v", statErr)
+	}
+}

@@ -159,6 +159,33 @@ func TestRemoveForwardCleanupIgnoresMissingInbound(t *testing.T) {
 	}
 }
 
+func TestRemoveMissingForwardDoesNotWriteApplyRequest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	if err := (clientInstallState{
+		Forwards: []forward.Rule{
+			{ListenAddress: "127.0.0.1", ListenPort: 10001, Tag: "forward-10001"},
+		},
+	}).save(statePath); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	_, err := RemoveForward(ForwardRemoveOptions{
+		InstallDir: dir,
+		ConfigDir:  DefaultClientConfigDir,
+		Selector: forward.Selector{
+			ListenPort: 10002,
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected missing forward error")
+	}
+	if _, statErr := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(statErr) {
+		t.Fatalf("apply request should not be written for missing forward: %v", statErr)
+	}
+}
+
 func findAvailablePort(t *testing.T, reserved map[int]struct{}) int {
 	t.Helper()
 	_, port := testutil.FreePort(t)

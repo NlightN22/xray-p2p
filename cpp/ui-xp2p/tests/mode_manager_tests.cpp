@@ -178,6 +178,22 @@ void TestApplyClientModeProxyWritesDesired() {
     ExpectContains(content, "tun_enabled = false", "proxy tun disabled");
 }
 
+void TestApplyClientModeNoOpDoesNotWriteRequest() {
+    TempConfigRoot env;
+    xp2p::ui::ModeManager manager;
+
+    auto configPath = env.root / "xp2p-client.toml";
+    WriteText(configPath, "[client]\n"
+                         "tun_enabled = true\n"
+                         "tun_mode = \"split\"\n");
+
+    auto result = manager.ApplyClientMode(xp2p::ui::ClientMode::TunSplit);
+    Expect(result.success, "ApplyClientMode split no-op success");
+
+    auto requestPath = env.root / ".state" / "apply.request";
+    Expect(!std::filesystem::exists(requestPath), "client no-op does not write apply.request");
+}
+
 void TestApplyServerModeTunWritesDesiredAndRequest() {
     TempConfigRoot env;
     xp2p::ui::ModeManager manager;
@@ -195,6 +211,21 @@ void TestApplyServerModeTunWritesDesiredAndRequest() {
     Expect(std::filesystem::exists(requestPath), "server apply.request exists");
 }
 
+void TestApplyServerModeNoOpDoesNotWriteRequest() {
+    TempConfigRoot env;
+    xp2p::ui::ModeManager manager;
+
+    auto configPath = env.root / "xp2p-server.toml";
+    WriteText(configPath, "[server]\n"
+                         "tun_enabled = true\n");
+
+    auto result = manager.ApplyServerMode(xp2p::ui::ServerMode::Tun);
+    Expect(result.success, "ApplyServerMode tun no-op success");
+
+    auto requestPath = env.root / ".state" / "apply.request";
+    Expect(!std::filesystem::exists(requestPath), "server no-op does not write apply.request");
+}
+
 } // namespace
 
 void RunModeManagerTests() {
@@ -204,5 +235,7 @@ void RunModeManagerTests() {
     TestApplyClientModeFullOverrideTagWritesDesired();
     TestApplyClientModeSplitWritesDesiredAndRequest();
     TestApplyClientModeProxyWritesDesired();
+    TestApplyClientModeNoOpDoesNotWriteRequest();
     TestApplyServerModeTunWritesDesiredAndRequest();
+    TestApplyServerModeNoOpDoesNotWriteRequest();
 }

@@ -43,7 +43,7 @@ private:
     std::string GetApplyRequestPath() const;
 
     void WriteApplyRequest(const std::string& role);
-    void WriteFileWithAudit(const std::string& path, const std::string& content, bool ignoreAuditErrors);
+    bool WriteFileWithAudit(const std::string& path, const std::string& content, bool ignoreAuditErrors);
 
     std::function<void(const std::string&)> log_;
 };

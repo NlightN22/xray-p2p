@@ -123,3 +123,34 @@ func TestRemoveDomainRedirect(t *testing.T) {
 		t.Fatalf("found domain rule after removal: %+v", rules)
 	}
 }
+
+func TestRemoveMissingRedirectDoesNotWriteApplyRequest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	state := clientInstallState{
+		Endpoints: []clientEndpointRecord{
+			{Hostname: "server.example", Tag: "proxy-server-example"},
+		},
+		Redirects: []redirect.Rule{
+			{CIDR: "10.70.0.0/16", OutboundTag: "proxy-server-example"},
+		},
+	}
+	if err := state.save(statePath); err != nil {
+		t.Fatalf("save state: %v", err)
+	}
+
+	err := RemoveRedirect(RedirectRemoveOptions{
+		InstallDir: dir,
+		ConfigDir:  layout.ClientConfigDir,
+		CIDR:       "10.80.0.0/16",
+		Tag:        "proxy-server-example",
+	})
+	if err == nil {
+		t.Fatalf("expected missing redirect error")
+	}
+	if _, statErr := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(statErr) {
+		t.Fatalf("apply request should not be written for missing redirect: %v", statErr)
+	}
+}

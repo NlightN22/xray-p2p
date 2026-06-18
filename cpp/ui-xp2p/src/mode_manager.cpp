@@ -174,7 +174,7 @@ void ModeManager::WriteApplyRequest(const std::string& role) {
     }
 }
 
-void ModeManager::WriteFileWithAudit(const std::string& path, const std::string& content, bool ignoreAuditErrors) {
+bool ModeManager::WriteFileWithAudit(const std::string& path, const std::string& content, bool ignoreAuditErrors) {
     const std::string normalized = NormalizeLineEndings(content);
     const std::vector<unsigned char> data(normalized.begin(), normalized.end());
     const auto old = ReadFileBytesOrEmpty(path);
@@ -182,7 +182,7 @@ void ModeManager::WriteFileWithAudit(const std::string& path, const std::string&
         if (log_) {
             log_("mode manager: skip write (no changes) path=" + path);
         }
-        return;
+        return false;
     }
     if (!WriteFileAtomic(path, data)) {
         throw std::runtime_error("write failed");
@@ -190,7 +190,7 @@ void ModeManager::WriteFileWithAudit(const std::string& path, const std::string&
 
     const std::string auditPath = GetAuditLogPath();
     if (auditPath.empty()) {
-        return;
+        return true;
     }
     try {
         std::ostringstream ss;
@@ -213,6 +213,7 @@ void ModeManager::WriteFileWithAudit(const std::string& path, const std::string&
             log_("mode manager: audit write skipped path=" + auditPath);
         }
     }
+    return true;
 }
 
 OperationResult ModeManager::ApplyClientMode(ClientMode mode, const std::optional<std::string>& fullTunnelTagOverride) {
@@ -264,11 +265,13 @@ OperationResult ModeManager::ApplyClientMode(ClientMode mode, const std::optiona
     }
 
     try {
-        WriteFileWithAudit(configPath, content, false);
+        const bool changed = WriteFileWithAudit(configPath, content, false);
         if (log_) {
             log_("mode manager: client desired config written " + configPath);
         }
-        WriteApplyRequest("client");
+        if (changed) {
+            WriteApplyRequest("client");
+        }
         return OperationResult::Ok("Client mode requested: " + FormatClientMode(mode) + ".");
     } catch (const std::exception& ex) {
         if (log_) {
@@ -293,11 +296,13 @@ OperationResult ModeManager::ApplyServerMode(ServerMode mode) {
     content = UpdateTomlValue(content, "server", "tun_enabled", desiredTunEnabled ? "true" : "false");
 
     try {
-        WriteFileWithAudit(configPath, content, false);
+        const bool changed = WriteFileWithAudit(configPath, content, false);
         if (log_) {
             log_("mode manager: server desired config written " + configPath);
         }
-        WriteApplyRequest("server");
+        if (changed) {
+            WriteApplyRequest("server");
+        }
         return OperationResult::Ok("Server mode requested: " + FormatServerMode(mode) + ".");
     } catch (const std::exception& ex) {
         if (log_) {

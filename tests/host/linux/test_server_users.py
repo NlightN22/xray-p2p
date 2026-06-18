@@ -16,10 +16,7 @@ def _trojan_clients(server_host, xp2p_server_runner) -> list[dict]:
     pytest.fail("Proxy inbound not found in configuration")
 
 
-def _remove_default_user(server_host, xp2p_server_runner, host: str):
-    clients = _trojan_clients(server_host, xp2p_server_runner)
-    assert clients, "Expected default client from server install"
-    default_client = clients[0]
+def _remove_user(xp2p_server_runner, user_id: str, host: str):
     xp2p_server_runner(
         "server",
         "user",
@@ -29,11 +26,18 @@ def _remove_default_user(server_host, xp2p_server_runner, host: str):
         "--config-dir",
         helpers.SERVER_CONFIG_DIR_NAME,
         "--id",
-        default_client["email"],
+        user_id,
         "--host",
         host,
         check=True,
     )
+
+
+def _remove_default_user(server_host, xp2p_server_runner, host: str):
+    clients = _trojan_clients(server_host, xp2p_server_runner)
+    assert clients, "Expected default client from server install"
+    default_client = clients[0]
+    _remove_user(xp2p_server_runner, default_client["email"], host)
     assert _trojan_clients(server_host, xp2p_server_runner) == []
     return default_client
 
@@ -191,6 +195,7 @@ def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_serv
 def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
     try:
         host = "srv-remove.xp2p.test"
+        apply_request = helpers.STATE_ROOT / "apply.request"
         _install_server(server_host, xp2p_server_runner, "62042", host)
         _remove_default_user(server_host, xp2p_server_runner, host)
 
@@ -211,35 +216,13 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
             check=True,
         )
 
-        xp2p_server_runner(
-            "server",
-            "user",
-            "remove",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--id",
-            "bravo",
-            "--host",
-            host,
-            check=True,
-        )
+        helpers.remove_path(server_host, apply_request)
+        _remove_user(xp2p_server_runner, "bravo", host)
+        assert helpers.path_exists(server_host, apply_request), "real user removal should request apply"
 
-        xp2p_server_runner(
-            "server",
-            "user",
-            "remove",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--id",
-            "bravo",
-            "--host",
-            host,
-            check=True,
-        )
+        helpers.remove_path(server_host, apply_request)
+        _remove_user(xp2p_server_runner, "bravo", host)
+        assert not helpers.path_exists(server_host, apply_request), "no-op user removal should not request apply"
 
         assert _trojan_clients(server_host, xp2p_server_runner) == []
     finally:

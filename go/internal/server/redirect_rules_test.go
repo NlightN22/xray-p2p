@@ -121,6 +121,45 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 	}
 }
 
+func TestServerRemoveMissingRedirectDoesNotWriteApplyRequest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	configDir := filepath.Join(dir, layout.ServerConfigDir)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+
+	writeServerStateFile(t, dir, map[string]serverReverseChannel{
+		"alphaedge-example.rev": {
+			UserID: "alpha",
+			Host:   "edge.example",
+			Tag:    "alphaedge-example.rev",
+			Domain: "alphaedge-example.rev",
+		},
+	}, []map[string]any{
+		{
+			"cidr":         "10.50.0.0/16",
+			"outbound_tag": "alphaedge-example.rev",
+		},
+	})
+
+	err := RemoveRedirect(RedirectRemoveOptions{
+		InstallDir: dir,
+		ConfigDir:  configDir,
+		CIDR:       "10.60.0.0/16",
+		Hostname:   "edge.example",
+	})
+	if err == nil {
+		t.Fatalf("expected missing redirect error")
+	}
+	if _, statErr := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(statErr) {
+		t.Fatalf("apply request should not be written for missing redirect: %v", statErr)
+	}
+}
+
 func TestServerAddRedirectFailsWithoutReverse(t *testing.T) {
 
 	dir := t.TempDir()

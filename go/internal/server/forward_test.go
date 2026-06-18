@@ -107,6 +107,36 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 	}
 }
 
+func TestServerRemoveMissingForwardDoesNotWriteApplyRequest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	doc := map[string]any{
+		serverForwardRulesKey: []forward.Rule{
+			{ListenAddress: "127.0.0.1", ListenPort: 53001, Tag: "forward-53001"},
+		},
+	}
+	if err := writeServerStateDoc(pendingConfigPath(), doc); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+
+	_, err := RemoveForward(ForwardRemoveOptions{
+		InstallDir: dir,
+		ConfigDir:  DefaultServerConfigDir,
+		Selector: forward.Selector{
+			ListenPort: 53002,
+		},
+	})
+	if err == nil {
+		t.Fatalf("expected missing forward error")
+	}
+	if _, statErr := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(statErr) {
+		t.Fatalf("apply request should not be written for missing forward: %v", statErr)
+	}
+}
+
 func hasInboundTag(items []any, tag string) bool {
 	for _, raw := range items {
 		entry, ok := raw.(map[string]any)
