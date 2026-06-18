@@ -121,6 +121,13 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
 			return tunSetupErrorWithHint("server run", err)
 		}
+	} else {
+		if err := openwrt.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
+			return err
+		}
+		if err := linuxnet.RemoveTunInterfaceIfManaged(opts.TunName); err != nil {
+			return err
+		}
 	}
 
 	if !appliedState.matches(desired.Reverse, desired.Redirects, desired.Forwards, tunEnabled, opts.TunName, opts.TunMTU, opts.TunAddr) {

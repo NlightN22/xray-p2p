@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from tests.host.linux import _helpers as helpers
@@ -59,6 +61,32 @@ def _assert_tun_addr(host, name: str, addr: str) -> None:
     )
 
 
+def _assert_tun_removed_after_proxy(host, runner, role: str, name: str) -> None:
+    config_dir = helpers.CLIENT_CONFIG_DIR_NAME if role == "client" else helpers.SERVER_CONFIG_DIR_NAME
+    runner(
+        role,
+        "mode",
+        "proxy",
+        "--path",
+        helpers.INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        config_dir,
+        check=True,
+    )
+    deadline = time.time() + 45.0
+    last_result = None
+    while time.time() < deadline:
+        last_result = host.run(f"sudo -n ip link show dev {name}")
+        if last_result.rc != 0:
+            return
+        time.sleep(1.5)
+    assert last_result is not None
+    raise AssertionError(
+        f"TUN interface {name} still exists after switching {role} to proxy.\n"
+        f"STDOUT:\n{last_result.stdout}\nSTDERR:\n{last_result.stderr}"
+    )
+
+
 @pytest.mark.host
 @pytest.mark.linux
 def test_client_service_brings_up_tun(client_host, xp2p_client_runner):
@@ -84,6 +112,7 @@ def test_client_service_brings_up_tun(client_host, xp2p_client_runner):
         print("[runtime] client install done")
         _start_service("client", xp2p_client_runner, client_host)
         _assert_tun_addr(client_host, CLIENT_TUN, CLIENT_ADDR)
+        _assert_tun_removed_after_proxy(client_host, xp2p_client_runner, "client", CLIENT_TUN)
     except Exception:
         failed = True
         raise
@@ -122,6 +151,7 @@ def test_server_service_brings_up_tun(server_host, xp2p_server_runner):
         print("[runtime] server install done")
         _start_service("server", xp2p_server_runner, server_host)
         _assert_tun_addr(server_host, SERVER_TUN, SERVER_ADDR)
+        _assert_tun_removed_after_proxy(server_host, xp2p_server_runner, "server", SERVER_TUN)
     except Exception:
         failed = True
         raise

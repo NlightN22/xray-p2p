@@ -75,6 +75,7 @@
 
 - Added apply request support for client and server flows that need service/run apply processing.
 - Added runtime service runner plumbing used by apply-driven workflows.
+- Linux and OpenWrt client/server service runs now remove the managed `xp2pc`/`xp2ps` TUN interface when the applied Live mode is proxy, preventing stale TUN interfaces after `xp2p client mode proxy` or `xp2p server mode proxy`.
 - `xp2p client install` now rejects duplicate client endpoints by `hostname:port` before rewriting Desired configuration or creating a new apply request. Use `--force` when an existing endpoint must be replaced.
 - The UI mode manager now skips apply requests when applying the already-current client/server mode does not change Desired configuration.
 - Updated client and server log templates.
@@ -110,6 +111,7 @@
 - Added Go unit coverage for rendering client endpoints as Trojan links and for adding server users from Trojan links.
 - Added runtime-apply unit coverage for same-tag outbound replacement and same-email Trojan inbound user replacement.
 - Added Linux host coverage for a successful client endpoint credential update that preserves redirect routing, and for a rejected server user update when the new user id already exists.
+- Extended Linux TUN runtime host coverage to verify that switching client/server services back to proxy removes `xp2pc`/`xp2ps`.
 
 ## Upgrade notes
 
