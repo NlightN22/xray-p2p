@@ -31,6 +31,8 @@
 
 - `xp2p client redirect` now lists configured redirects by default, matching `xp2p client redirect list`.
 - Updated Linux, OpenWrt, and Windows host tests to use the shorter `xp2p client redirect` form where redirects are listed.
+- `xp2p server user remove` now removes server redirect rules tied to the removed user's reverse outbound tag, preventing orphaned redirects after Desired/apply-based changes.
+- `xp2p server redirect remove --tag <tag>` can now be used as a recovery cleanup path for orphaned server redirects when the CIDR/domain selector is unavailable or ambiguous.
 - Redirect add/remove/enable/disable now resolve `tag`/`host` consistently:
   - one matching binding is selected automatically without prompting;
   - multiple matching bindings prompt the user;
@@ -68,7 +70,9 @@
 - Added OpenWrt install-from-pages test coverage.
 - Added Linux/OpenWrt host coverage that verifies duplicate client endpoint installs leave Desired configuration unchanged and do not create a new apply request.
 - Updated Linux/OpenWrt host redirect tests to cover removing a redirect by CIDR without an explicit tag/host when exactly one matching redirect exists.
+- Added Linux host coverage for server redirect cleanup when removing a user with duplicate-CIDR redirects across different reverse tags.
 - Added Go unit coverage for positive and negative redirect binding selection scenarios on client and server commands.
+- Added Go unit coverage for server redirect cleanup when removing users and for tag-only cleanup of orphaned duplicate-CIDR redirects.
 - Added Go unit coverage for the shared binding resolver.
 
 ## Upgrade notes
@@ -76,4 +80,5 @@
 - Automation that used `xp2p client redirect list` may keep using it; `xp2p client redirect` is now equivalent for listing.
 - Redirect enable/disable without `--tag` or `--host` no longer treats an omitted binding as an implicit target-wide operation. Use `--all` for an explicit mass operation, or provide/allow selection of a specific matching binding.
 - For non-interactive redirect add/remove/enable/disable flows, pass `--tag`, `--host`, or `--quiet`; `--quiet` now fails if the matching binding is ambiguous.
+- If a previous version left an orphaned server redirect after user removal, clean it with `xp2p server redirect remove --tag <tag>`.
 - Re-running `xp2p client install` with an already configured endpoint now fails without touching Desired state or scheduling apply work. Remove the endpoint first, or pass `--force` to replace it intentionally.

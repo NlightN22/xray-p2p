@@ -19,3 +19,7 @@ def test_client_and_server_redirect_with_nat(tunnel_environment):
 def test_reverse_redirect_via_server_portal(tunnel_environment):
     flow.assert_reverse_redirect_via_server_portal(tunnel_environment)
 
+
+def test_server_redirect_cleanup_on_user_remove(tunnel_environment):
+    flow.assert_server_redirect_cleanup_on_user_remove(tunnel_environment)
+
