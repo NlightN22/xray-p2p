@@ -142,6 +142,33 @@ func stubServerRedirectAdd(fn func(server.RedirectAddOptions) error) func() {
 	return func() { serverRedirectAddFunc = prev }
 }
 
+func stubServerRedirectRemove(fn func(server.RedirectRemoveOptions) error) func() {
+	prev := serverRedirectRemoveFunc
+	if fn == nil {
+		fn = func(server.RedirectRemoveOptions) error { return nil }
+	}
+	serverRedirectRemoveFunc = fn
+	return func() { serverRedirectRemoveFunc = prev }
+}
+
+func stubServerRedirectList(fn func(server.RedirectListOptions) ([]server.RedirectRecord, error)) func() {
+	prev := serverRedirectListFunc
+	if fn == nil {
+		fn = func(server.RedirectListOptions) ([]server.RedirectRecord, error) { return nil, nil }
+	}
+	serverRedirectListFunc = fn
+	return func() { serverRedirectListFunc = prev }
+}
+
+func stubServerRedirectToggle(fn func(server.RedirectSetEnabledOptions) error) func() {
+	prev := serverRedirectToggleFunc
+	if fn == nil {
+		fn = func(server.RedirectSetEnabledOptions) error { return nil }
+	}
+	serverRedirectToggleFunc = fn
+	return func() { serverRedirectToggleFunc = prev }
+}
+
 func stubServerForwardAdd(fn func(server.ForwardAddOptions) (server.ForwardAddResult, error)) func() {
 	prev := serverAddForwardFunc
 	if fn == nil {

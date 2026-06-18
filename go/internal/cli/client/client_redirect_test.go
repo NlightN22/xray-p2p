@@ -75,6 +75,107 @@ func TestRunClientRedirectAdd_NoEndpoints(t *testing.T) {
 	}
 }
 
+func TestRunClientRedirectAdd_SingleEndpointSkipsPrompt(t *testing.T) {
+	t.Cleanup(stubClientRedirectAdd(func(opts client.RedirectAddOptions) error {
+		if opts.Tag != "proxy-a" || opts.Hostname != "edge-a" {
+			t.Fatalf("binding mismatch: got %s/%s want proxy-a/edge-a", opts.Tag, opts.Hostname)
+		}
+		return nil
+	}))
+	t.Cleanup(stubClientList(func(client.ListOptions) ([]client.EndpointRecord, error) {
+		return []client.EndpointRecord{{Tag: "proxy-a", Hostname: "edge-a"}}, nil
+	}))
+	t.Cleanup(stubClientRedirectPromptReader(strings.NewReader("")))
+
+	code := runClientRedirectAdd(context.Background(), clientCfg("C:\\xp2p", "cfg"), []string{"--cidr", "10.0.0.0/24"})
+	if code != 0 {
+		t.Fatalf("runClientRedirectAdd exit = %d, want 0", code)
+	}
+}
+
+func TestRunClientRedirectRemove_SingleMatchingRedirectSkipsPrompt(t *testing.T) {
+	t.Cleanup(stubClientRedirectRemove(func(opts client.RedirectRemoveOptions) error {
+		if opts.Tag != "proxy-a" || opts.Hostname != "edge-a" {
+			t.Fatalf("binding mismatch: got %s/%s want proxy-a/edge-a", opts.Tag, opts.Hostname)
+		}
+		return nil
+	}))
+	t.Cleanup(stubClientRedirectList(func(client.RedirectListOptions) ([]client.RedirectRecord, error) {
+		return []client.RedirectRecord{
+			{Type: "CIDR", Value: "10.0.0.0/24", CIDR: "10.0.0.0/24", Tag: "proxy-a", Hostname: "edge-a"},
+			{Type: "CIDR", Value: "10.1.0.0/24", CIDR: "10.1.0.0/24", Tag: "proxy-b", Hostname: "edge-b"},
+		}, nil
+	}))
+	t.Cleanup(stubClientRedirectPromptReader(strings.NewReader("")))
+
+	code := runClientRedirectRemove(context.Background(), clientCfg("C:\\xp2p", "cfg"), []string{"--cidr", "10.0.0.0/24"})
+	if code != 0 {
+		t.Fatalf("runClientRedirectRemove exit = %d, want 0", code)
+	}
+}
+
+func TestRunClientRedirectRemove_MultipleMatchingRedirectsPrompts(t *testing.T) {
+	t.Cleanup(stubClientRedirectRemove(func(opts client.RedirectRemoveOptions) error {
+		if opts.Tag != "proxy-b" || opts.Hostname != "edge-b" {
+			t.Fatalf("binding mismatch: got %s/%s want proxy-b/edge-b", opts.Tag, opts.Hostname)
+		}
+		return nil
+	}))
+	t.Cleanup(stubClientRedirectList(func(client.RedirectListOptions) ([]client.RedirectRecord, error) {
+		return []client.RedirectRecord{
+			{Type: "CIDR", Value: "10.0.0.0/24", CIDR: "10.0.0.0/24", Tag: "proxy-a", Hostname: "edge-a"},
+			{Type: "CIDR", Value: "10.0.0.0/24", CIDR: "10.0.0.0/24", Tag: "proxy-b", Hostname: "edge-b"},
+		}, nil
+	}))
+	t.Cleanup(stubClientRedirectPromptReader(strings.NewReader("2\n")))
+
+	code := runClientRedirectRemove(context.Background(), clientCfg("C:\\xp2p", "cfg"), []string{"--cidr", "10.0.0.0/24"})
+	if code != 0 {
+		t.Fatalf("runClientRedirectRemove exit = %d, want 0", code)
+	}
+}
+
+func TestRunClientRedirectToggle_SingleMatchingRedirectSkipsPrompt(t *testing.T) {
+	t.Cleanup(stubClientRedirectToggle(func(opts client.RedirectSetEnabledOptions) error {
+		if opts.Tag != "proxy-a" || opts.Hostname != "edge-a" || !opts.Enabled {
+			t.Fatalf("toggle options mismatch: %+v", opts)
+		}
+		return nil
+	}))
+	t.Cleanup(stubClientRedirectList(func(client.RedirectListOptions) ([]client.RedirectRecord, error) {
+		return []client.RedirectRecord{
+			{Type: "CIDR", Value: "10.0.0.0/24", CIDR: "10.0.0.0/24", Tag: "proxy-a", Hostname: "edge-a"},
+		}, nil
+	}))
+	t.Cleanup(stubClientRedirectPromptReader(strings.NewReader("")))
+
+	code := runClientRedirectToggle(context.Background(), clientCfg("C:\\xp2p", "cfg"), []string{"--cidr", "10.0.0.0/24"}, true)
+	if code != 0 {
+		t.Fatalf("runClientRedirectToggle exit = %d, want 0", code)
+	}
+}
+
+func TestRunClientRedirectToggle_MultipleMatchingRedirectsPrompts(t *testing.T) {
+	t.Cleanup(stubClientRedirectToggle(func(opts client.RedirectSetEnabledOptions) error {
+		if opts.Tag != "proxy-b" || opts.Hostname != "edge-b" || opts.Enabled {
+			t.Fatalf("toggle options mismatch: %+v", opts)
+		}
+		return nil
+	}))
+	t.Cleanup(stubClientRedirectList(func(client.RedirectListOptions) ([]client.RedirectRecord, error) {
+		return []client.RedirectRecord{
+			{Type: "CIDR", Value: "10.0.0.0/24", CIDR: "10.0.0.0/24", Tag: "proxy-a", Hostname: "edge-a"},
+			{Type: "CIDR", Value: "10.0.0.0/24", CIDR: "10.0.0.0/24", Tag: "proxy-b", Hostname: "edge-b"},
+		}, nil
+	}))
+	t.Cleanup(stubClientRedirectPromptReader(strings.NewReader("2\n")))
+
+	code := runClientRedirectToggle(context.Background(), clientCfg("C:\\xp2p", "cfg"), []string{"--cidr", "10.0.0.0/24"}, false)
+	if code != 0 {
+		t.Fatalf("runClientRedirectToggle exit = %d, want 0", code)
+	}
+}
+
 func TestClientRedirectCommandListsRedirects(t *testing.T) {
 	called := 0
 	t.Cleanup(stubClientRedirectList(func(opts client.RedirectListOptions) ([]client.RedirectRecord, error) {

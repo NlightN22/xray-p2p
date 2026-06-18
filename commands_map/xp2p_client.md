@@ -185,6 +185,13 @@ Includes: Global options
 - --host, -H <host>      Client endpoint hostname filter
 - --quiet, -q            Do not prompt for outbound tags
 
+xp2p client redirect
+Options:
+Includes: Global options
+- --path, -p <dir>       Client installation directory
+- --config-dir, -D <dir> Client configuration directory name
+- --pending, -y          List pending configuration
+
 xp2p client redirect disable
 Options:
 Includes: Global options
@@ -193,6 +200,7 @@ Includes: Global options
 - --tag, -g <tag>        Outbound tag filter
 - --host, -H <host>      Client endpoint hostname filter
 - --all, -a              Disable all redirect rules
+- --quiet, -q            Do not prompt for outbound tags
 
 xp2p client redirect enable
 Options:
@@ -202,6 +210,7 @@ Includes: Global options
 - --tag, -g <tag>        Outbound tag filter
 - --host, -H <host>      Client endpoint hostname filter
 - --all, -a              Enable all redirect rules
+- --quiet, -q            Do not prompt for outbound tags
 
 xp2p client redirect list
 Options:

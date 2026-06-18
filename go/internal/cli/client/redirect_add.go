@@ -2,14 +2,12 @@ package clientcmd
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -83,13 +81,17 @@ func runClientRedirectAdd(_ context.Context, cfg config.Config, args []string) i
 	tagValue := strings.TrimSpace(*tag)
 	hostValue := strings.TrimSpace(*host)
 	if tagValue == "" && hostValue == "" {
-		if *quiet {
-			logging.Error("xp2p client redirect add: --tag or --host is required")
-			return 2
-		}
-		selection, err := promptClientRedirectBinding(installDir, configDirName)
+		selection, err := resolveClientBinding(clientBindingRequest{
+			InstallDir: installDir,
+			ConfigDir:  configDirName,
+			Tag:        tagValue,
+			Host:       hostValue,
+			Header:     "Available client endpoints:",
+			Reader:     clientRedirectPromptReader(),
+			Quiet:      *quiet,
+		})
 		if err != nil {
-			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+			if clientBindingRequiredError(err) {
 				logging.Error("xp2p client redirect add: --tag or --host is required")
 				return 2
 			}

@@ -520,6 +520,44 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
         ).stdout or ""
         assert redirect_cidr in redirect_list
 
+        runner(
+            "client",
+            "redirect",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            redirect_cidr,
+            check=True,
+        )
+        redirect_list_after_remove = runner(
+            "client",
+            "redirect",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            check=True,
+        ).stdout or ""
+        assert redirect_cidr not in redirect_list_after_remove
+
+        runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            redirect_cidr,
+            "--tag",
+            host_tag,
+            check=True,
+        )
+
         runner("client", "service", "stop")
         openwrt_host.run("/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true")
         openwrt_host.run("/etc/init.d/xp2p-client stop >/dev/null 2>&1 || true")

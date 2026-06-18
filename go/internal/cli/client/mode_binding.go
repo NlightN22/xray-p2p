@@ -4,8 +4,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
-	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
@@ -19,9 +17,15 @@ func resolveFullTunnelBinding(installDir, configDir, tag, host, existingTag stri
 		if quiet {
 			return "", "", errors.New("--tag or --host is required for full-tunnel")
 		}
-		selection, err := promptClientRedirectBinding(installDir, configDir)
+		selection, err := resolveClientBinding(clientBindingRequest{
+			InstallDir: installDir,
+			ConfigDir:  configDir,
+			Header:     "Available client endpoints:",
+			Reader:     clientRedirectPromptReader(),
+			Quiet:      quiet,
+		})
 		if err != nil {
-			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+			if clientBindingRequiredError(err) {
 				return "", "", errors.New("--tag or --host is required for full-tunnel")
 			}
 			return "", "", err
@@ -50,23 +54,5 @@ func resolveFullTunnelBinding(installDir, configDir, tag, host, existingTag stri
 }
 
 func listClientBindings(installDir, configDir string) ([]redirect.Binding, error) {
-	records, err := clientListFunc(client.ListOptions{
-		InstallDir: installDir,
-		ConfigDir:  configDir,
-		Pending:    true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	bindings := make([]redirect.Binding, 0, len(records))
-	for _, rec := range records {
-		if strings.TrimSpace(rec.Tag) == "" {
-			continue
-		}
-		bindings = append(bindings, redirect.Binding{
-			Tag:  rec.Tag,
-			Host: rec.Hostname,
-		})
-	}
-	return bindings, nil
+	return listClientEndpointBindings(installDir, configDir)
 }

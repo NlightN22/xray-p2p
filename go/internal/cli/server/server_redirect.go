@@ -2,7 +2,6 @@ package servercmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/NlightN22/xray-p2p/go/internal/cli/tagprompt"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -149,13 +147,17 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 	tagValue := strings.TrimSpace(opts.Tag)
 	hostValue := strings.TrimSpace(opts.Host)
 	if tagValue == "" && hostValue == "" {
-		if opts.Quiet {
-			logging.Error("xp2p server redirect add: --tag or --host is required")
-			return 2
-		}
-		selection, err := promptServerRedirectBinding(installDir, configDir)
+		selection, err := resolveServerBinding(serverBindingRequest{
+			InstallDir: installDir,
+			ConfigDir:  configDir,
+			Tag:        tagValue,
+			Host:       hostValue,
+			Header:     "Available reverse portals:",
+			Reader:     serverRedirectPromptReader(),
+			Quiet:      opts.Quiet,
+		})
 		if err != nil {
-			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+			if serverBindingRequiredError(err) {
 				logging.Error("xp2p server redirect add: --tag or --host is required")
 				return 2
 			}
@@ -209,13 +211,20 @@ func runServerRedirectRemove(_ context.Context, cfg config.Config, opts serverRe
 	tagValue := strings.TrimSpace(opts.Tag)
 	hostValue := strings.TrimSpace(opts.Host)
 	if tagValue == "" && hostValue == "" {
-		if opts.Quiet {
-			logging.Error("xp2p server redirect remove: --tag or --host is required")
-			return 2
-		}
-		selection, err := promptServerRedirectBinding(installDir, configDir)
+		selection, err := resolveServerBinding(serverBindingRequest{
+			InstallDir: installDir,
+			ConfigDir:  configDir,
+			CIDR:       opts.CIDR,
+			Domain:     opts.Domain,
+			Tag:        tagValue,
+			Host:       hostValue,
+			Header:     "Available matching server redirects:",
+			Reader:     serverRedirectPromptReader(),
+			Quiet:      opts.Quiet,
+			Matching:   true,
+		})
 		if err != nil {
-			if errors.Is(err, tagprompt.ErrEmpty) || errors.Is(err, tagprompt.ErrAborted) {
+			if serverBindingRequiredError(err) {
 				logging.Error("xp2p server redirect remove: --tag or --host is required")
 				return 2
 			}

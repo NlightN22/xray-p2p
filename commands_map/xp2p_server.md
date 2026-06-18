@@ -181,6 +181,7 @@ Includes: Global options
 - --tag, -g <tag>        Reverse outbound tag filter
 - --host, -H <host>      Reverse portal host filter
 - --all, -a              Disable all redirect rules
+- --quiet, -q            Do not prompt for outbound tags
 
 xp2p server redirect enable
 Options:
@@ -190,6 +191,7 @@ Includes: Global options
 - --tag, -g <tag>        Reverse outbound tag filter
 - --host, -H <host>      Reverse portal host filter
 - --all, -a              Enable all redirect rules
+- --quiet, -q            Do not prompt for outbound tags
 
 xp2p server redirect list
 Options:

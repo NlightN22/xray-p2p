@@ -42,10 +42,11 @@ func newClientRedirectToggleCmd(cfg commandConfig, enabled bool) *cobra.Command 
 	flags.StringP("tag", "g", "", "outbound tag filter")
 	flags.StringP("host", "H", "", "client endpoint hostname filter")
 	flags.BoolP("all", "a", false, "toggle all redirect rules")
+	flags.BoolP("quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
 }
 
-func runClientRedirectToggle(_ context.Context, _ config.Config, args []string, enabled bool) int {
+func runClientRedirectToggle(_ context.Context, cfg config.Config, args []string, enabled bool) int {
 	fs := flag.NewFlagSet("xp2p client redirect toggle", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 	cidr := fs.String("cidr", "", "CIDR mapping to toggle")
@@ -53,6 +54,7 @@ func runClientRedirectToggle(_ context.Context, _ config.Config, args []string, 
 	tag := fs.String("tag", "", "outbound tag filter")
 	host := fs.String("host", "", "client endpoint hostname filter")
 	all := fs.Bool("all", false, "toggle all redirect rules")
+	quiet := fs.Bool("quiet", false, "do not prompt for outbound tags")
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return 0
@@ -72,11 +74,39 @@ func runClientRedirectToggle(_ context.Context, _ config.Config, args []string, 
 		logging.Error("xp2p client redirect toggle: --all cannot be combined with --cidr or --domain")
 		return 2
 	}
+	tagValue := strings.TrimSpace(*tag)
+	hostValue := strings.TrimSpace(*host)
+	if !*all && tagValue == "" && hostValue == "" {
+		installDir := cfg.Client.InstallDir
+		configDirName := cfg.Client.ConfigDir
+		selection, err := resolveClientBinding(clientBindingRequest{
+			InstallDir: installDir,
+			ConfigDir:  configDirName,
+			CIDR:       *cidr,
+			Domain:     *domain,
+			Tag:        tagValue,
+			Host:       hostValue,
+			Header:     "Available matching client redirects:",
+			Reader:     clientRedirectPromptReader(),
+			Quiet:      *quiet,
+			Matching:   true,
+		})
+		if err != nil {
+			if clientBindingRequiredError(err) {
+				logging.Error("xp2p client redirect toggle: --tag or --host is required")
+				return 2
+			}
+			logging.Error("xp2p client redirect toggle: failed to enumerate redirects", "err", err)
+			return 1
+		}
+		tagValue = selection.Tag
+		hostValue = selection.Host
+	}
 	if err := clientRedirectToggleFunc(client.RedirectSetEnabledOptions{
 		CIDR:     *cidr,
 		Domain:   *domain,
-		Tag:      *tag,
-		Hostname: *host,
+		Tag:      tagValue,
+		Hostname: hostValue,
 		All:      *all,
 		Enabled:  enabled,
 	}); err != nil {

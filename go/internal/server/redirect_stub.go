@@ -30,6 +30,7 @@ type RedirectRemoveOptions struct {
 type RedirectListOptions struct {
 	InstallDir string
 	ConfigDir  string
+	Pending    bool
 }
 
 type ReverseListOptions struct {
@@ -54,6 +55,7 @@ type RedirectRecord struct {
 	Domain   string
 	Tag      string
 	Hostname string
+	Disabled bool
 }
 
 // AddRedirect is not supported on this platform.

@@ -151,3 +151,114 @@ func TestRunServerRedirectAdd_NoReverseChannels(t *testing.T) {
 		t.Fatalf("serverRedirectAddFunc called when no reverse channels are available")
 	}
 }
+
+func TestRunServerRedirectAdd_SinglePortalSkipsPrompt(t *testing.T) {
+	t.Cleanup(stubServerRedirectAdd(func(opts server.RedirectAddOptions) error {
+		if opts.Tag != "alpha.rev" || opts.Hostname != "edge-a" {
+			t.Fatalf("binding mismatch: got %s/%s want alpha.rev/edge-a", opts.Tag, opts.Hostname)
+		}
+		return nil
+	}))
+	t.Cleanup(stubServerReverseList(func(server.ReverseListOptions) ([]server.ReverseRecord, error) {
+		return []server.ReverseRecord{{Tag: "alpha.rev", Host: "edge-a"}}, nil
+	}))
+	t.Cleanup(stubServerRedirectPromptReader(strings.NewReader("")))
+
+	code := runServerRedirectAdd(context.Background(), serverCfg("C:\\srv", "cfg", ""), serverRedirectAddOptions{
+		CIDR: "10.10.0.0/16",
+	})
+	if code != 0 {
+		t.Fatalf("runServerRedirectAdd exit = %d, want 0", code)
+	}
+}
+
+func TestRunServerRedirectRemove_SingleMatchingRedirectSkipsPrompt(t *testing.T) {
+	t.Cleanup(stubServerRedirectRemove(func(opts server.RedirectRemoveOptions) error {
+		if opts.Tag != "alpha.rev" || opts.Hostname != "edge-a" {
+			t.Fatalf("binding mismatch: got %s/%s want alpha.rev/edge-a", opts.Tag, opts.Hostname)
+		}
+		return nil
+	}))
+	t.Cleanup(stubServerRedirectList(func(server.RedirectListOptions) ([]server.RedirectRecord, error) {
+		return []server.RedirectRecord{
+			{Type: "CIDR", Value: "10.10.0.0/16", CIDR: "10.10.0.0/16", Tag: "alpha.rev", Hostname: "edge-a"},
+			{Type: "CIDR", Value: "10.20.0.0/16", CIDR: "10.20.0.0/16", Tag: "beta.rev", Hostname: "edge-b"},
+		}, nil
+	}))
+	t.Cleanup(stubServerRedirectPromptReader(strings.NewReader("")))
+
+	code := runServerRedirectRemove(context.Background(), serverCfg("C:\\srv", "cfg", ""), serverRedirectRemoveOptions{
+		CIDR: "10.10.0.0/16",
+	})
+	if code != 0 {
+		t.Fatalf("runServerRedirectRemove exit = %d, want 0", code)
+	}
+}
+
+func TestRunServerRedirectRemove_MultipleMatchingRedirectsPrompts(t *testing.T) {
+	t.Cleanup(stubServerRedirectRemove(func(opts server.RedirectRemoveOptions) error {
+		if opts.Tag != "beta.rev" || opts.Hostname != "edge-b" {
+			t.Fatalf("binding mismatch: got %s/%s want beta.rev/edge-b", opts.Tag, opts.Hostname)
+		}
+		return nil
+	}))
+	t.Cleanup(stubServerRedirectList(func(server.RedirectListOptions) ([]server.RedirectRecord, error) {
+		return []server.RedirectRecord{
+			{Type: "CIDR", Value: "10.10.0.0/16", CIDR: "10.10.0.0/16", Tag: "alpha.rev", Hostname: "edge-a"},
+			{Type: "CIDR", Value: "10.10.0.0/16", CIDR: "10.10.0.0/16", Tag: "beta.rev", Hostname: "edge-b"},
+		}, nil
+	}))
+	t.Cleanup(stubServerRedirectPromptReader(strings.NewReader("2\n")))
+
+	code := runServerRedirectRemove(context.Background(), serverCfg("C:\\srv", "cfg", ""), serverRedirectRemoveOptions{
+		CIDR: "10.10.0.0/16",
+	})
+	if code != 0 {
+		t.Fatalf("runServerRedirectRemove exit = %d, want 0", code)
+	}
+}
+
+func TestRunServerRedirectToggle_SingleMatchingRedirectSkipsPrompt(t *testing.T) {
+	t.Cleanup(stubServerRedirectToggle(func(opts server.RedirectSetEnabledOptions) error {
+		if opts.Tag != "alpha.rev" || opts.Hostname != "edge-a" || !opts.Enabled {
+			t.Fatalf("toggle options mismatch: %+v", opts)
+		}
+		return nil
+	}))
+	t.Cleanup(stubServerRedirectList(func(server.RedirectListOptions) ([]server.RedirectRecord, error) {
+		return []server.RedirectRecord{
+			{Type: "CIDR", Value: "10.10.0.0/16", CIDR: "10.10.0.0/16", Tag: "alpha.rev", Hostname: "edge-a"},
+		}, nil
+	}))
+	t.Cleanup(stubServerRedirectPromptReader(strings.NewReader("")))
+
+	code := runServerRedirectToggle(context.Background(), serverCfg("C:\\srv", "cfg", ""), serverRedirectToggleOptions{
+		CIDR: "10.10.0.0/16",
+	}, true)
+	if code != 0 {
+		t.Fatalf("runServerRedirectToggle exit = %d, want 0", code)
+	}
+}
+
+func TestRunServerRedirectToggle_MultipleMatchingRedirectsPrompts(t *testing.T) {
+	t.Cleanup(stubServerRedirectToggle(func(opts server.RedirectSetEnabledOptions) error {
+		if opts.Tag != "beta.rev" || opts.Hostname != "edge-b" || opts.Enabled {
+			t.Fatalf("toggle options mismatch: %+v", opts)
+		}
+		return nil
+	}))
+	t.Cleanup(stubServerRedirectList(func(server.RedirectListOptions) ([]server.RedirectRecord, error) {
+		return []server.RedirectRecord{
+			{Type: "CIDR", Value: "10.10.0.0/16", CIDR: "10.10.0.0/16", Tag: "alpha.rev", Hostname: "edge-a"},
+			{Type: "CIDR", Value: "10.10.0.0/16", CIDR: "10.10.0.0/16", Tag: "beta.rev", Hostname: "edge-b"},
+		}, nil
+	}))
+	t.Cleanup(stubServerRedirectPromptReader(strings.NewReader("2\n")))
+
+	code := runServerRedirectToggle(context.Background(), serverCfg("C:\\srv", "cfg", ""), serverRedirectToggleOptions{
+		CIDR: "10.10.0.0/16",
+	}, false)
+	if code != 0 {
+		t.Fatalf("runServerRedirectToggle exit = %d, want 0", code)
+	}
+}

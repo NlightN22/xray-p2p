@@ -400,6 +400,45 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
 
         xp2p_client_runner(
             "client",
+            "redirect",
+            "remove",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            redirect_cidr,
+            check=True,
+        )
+        redirect_list_after_remove = xp2p_client_runner(
+            "client",
+            "redirect",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--pending",
+            check=True,
+        ).stdout or ""
+        assert redirect_cidr not in redirect_list_after_remove
+
+        xp2p_client_runner(
+            "client",
+            "redirect",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--cidr",
+            redirect_cidr,
+            "--tag",
+            host_tag,
+            check=True,
+        )
+
+        xp2p_client_runner(
+            "client",
             "remove",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
