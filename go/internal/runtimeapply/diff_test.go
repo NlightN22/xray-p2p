@@ -137,6 +137,52 @@ func TestClassifyXrayConfigDiffRejectsTaggedInboundMutation(t *testing.T) {
 	}
 }
 
+func TestClassifyXrayConfigDiffDetectsOutboundOnlyAddRemove(t *testing.T) {
+	current := []byte(`{
+		"log": {"loglevel": "warning"},
+		"outbounds": [
+			{"tag": "keep", "protocol": "freedom"},
+			{"tag": "old", "protocol": "trojan"}
+		],
+		"routing": {"rules": [{"ruleTag": "route-a"}]}
+	}`)
+	candidate := []byte(`{
+		"log": {"loglevel": "warning"},
+		"outbounds": [
+			{"tag": "keep", "protocol": "freedom"},
+			{"tag": "new", "protocol": "trojan"}
+		],
+		"routing": {"rules": [{"ruleTag": "route-a"}]}
+	}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffOutboundOnly {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffOutboundOnly, diff)
+	}
+	if len(diff.AddedOutbounds) != 1 || diff.AddedOutbounds[0].Tag != "new" {
+		t.Fatalf("unexpected added outbounds: %+v", diff.AddedOutbounds)
+	}
+	if len(diff.RemovedOutboundTags) != 1 || diff.RemovedOutboundTags[0] != "old" {
+		t.Fatalf("unexpected removed outbounds: %+v", diff.RemovedOutboundTags)
+	}
+}
+
+func TestClassifyXrayConfigDiffRejectsTaggedOutboundMutation(t *testing.T) {
+	current := []byte(`{"outbounds":[{"tag":"a","protocol":"freedom"}]}`)
+	candidate := []byte(`{"outbounds":[{"tag":"a","protocol":"trojan"}]}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
 func TestClassifyXrayConfigDiffNoop(t *testing.T) {
 	current := []byte(`{"routing":{"rules":[{"ruleTag":"a","outboundTag":"direct"}]}}`)
 

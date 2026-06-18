@@ -13,10 +13,11 @@ import (
 type DiffKind string
 
 const (
-	DiffUnsupported DiffKind = "unsupported"
-	DiffNoop        DiffKind = "noop"
-	DiffRoutingOnly DiffKind = "routing_only"
-	DiffInboundOnly DiffKind = "inbound_only"
+	DiffUnsupported  DiffKind = "unsupported"
+	DiffNoop         DiffKind = "noop"
+	DiffRoutingOnly  DiffKind = "routing_only"
+	DiffInboundOnly  DiffKind = "inbound_only"
+	DiffOutboundOnly DiffKind = "outbound_only"
 )
 
 type RoutingRuleChange struct {
@@ -29,15 +30,23 @@ type InboundChange struct {
 	Inbound map[string]any
 }
 
+type OutboundChange struct {
+	Tag      string
+	Outbound map[string]any
+}
+
 type Diff struct {
-	Kind               DiffKind
-	AddedRules         []RoutingRuleChange
-	RemovedRuleTag     []string
-	RemovedRules       []RoutingRuleChange
-	AddedInbounds      []InboundChange
-	RemovedInboundTags []string
-	RemovedInbounds    []InboundChange
-	Reason             string
+	Kind                DiffKind
+	AddedRules          []RoutingRuleChange
+	RemovedRuleTag      []string
+	RemovedRules        []RoutingRuleChange
+	AddedInbounds       []InboundChange
+	RemovedInboundTags  []string
+	RemovedInbounds     []InboundChange
+	AddedOutbounds      []OutboundChange
+	RemovedOutboundTags []string
+	RemovedOutbounds    []OutboundChange
+	Reason              string
 }
 
 func ClassifyXrayConfigDiff(current, candidate []byte) (Diff, error) {
@@ -46,6 +55,10 @@ func ClassifyXrayConfigDiff(current, candidate []byte) (Diff, error) {
 		return diff, err
 	}
 	diff, done, err = classifyInboundDiff(current, candidate)
+	if err != nil || done {
+		return diff, err
+	}
+	diff, done, err = classifyOutboundDiff(current, candidate)
 	if err != nil || done {
 		return diff, err
 	}
@@ -117,6 +130,39 @@ func classifyInboundDiff(current, candidate []byte) (Diff, bool, error) {
 		return Diff{}, false, nil
 	}
 	diff, err := classifyInbounds(currentInbounds, candidateInbounds)
+	if err != nil {
+		return Diff{}, false, err
+	}
+	return diff, true, nil
+}
+
+func classifyOutboundDiff(current, candidate []byte) (Diff, bool, error) {
+	currentDoc, err := parseJSONDocument(current)
+	if err != nil {
+		return Diff{}, false, fmt.Errorf("parse current xray config: %w", err)
+	}
+	candidateDoc, err := parseJSONDocument(candidate)
+	if err != nil {
+		return Diff{}, false, fmt.Errorf("parse candidate xray config: %w", err)
+	}
+	currentOutbounds, ok, err := detachTopLevelObjectArray(currentDoc, "outbounds")
+	if err != nil {
+		return Diff{}, false, err
+	}
+	if !ok {
+		return Diff{}, false, nil
+	}
+	candidateOutbounds, ok, err := detachTopLevelObjectArray(candidateDoc, "outbounds")
+	if err != nil {
+		return Diff{}, false, err
+	}
+	if !ok {
+		return Diff{}, false, nil
+	}
+	if !reflect.DeepEqual(currentDoc, candidateDoc) {
+		return Diff{}, false, nil
+	}
+	diff, err := classifyOutbounds(currentOutbounds, candidateOutbounds)
 	if err != nil {
 		return Diff{}, false, err
 	}
@@ -211,6 +257,52 @@ func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff
 		return diff.AddedInbounds[i].Tag < diff.AddedInbounds[j].Tag
 	})
 	if len(diff.AddedInbounds) == 0 && len(diff.RemovedInboundTags) == 0 {
+		diff.Kind = DiffNoop
+	}
+	return diff, nil
+}
+
+func classifyOutbounds(currentOutbounds, candidateOutbounds []map[string]any) (Diff, error) {
+	currentByTag, err := objectsByTag(currentOutbounds, "tag", "outbound")
+	if err != nil {
+		return unsupported(err.Error()), nil
+	}
+	candidateByTag, err := objectsByTag(candidateOutbounds, "tag", "outbound")
+	if err != nil {
+		return unsupported(err.Error()), nil
+	}
+	diff := Diff{Kind: DiffOutboundOnly}
+	for tag, current := range currentByTag {
+		candidate, exists := candidateByTag[tag]
+		if !exists {
+			diff.RemovedOutboundTags = append(diff.RemovedOutboundTags, tag)
+			diff.RemovedOutbounds = append(diff.RemovedOutbounds, OutboundChange{
+				Tag:      tag,
+				Outbound: current,
+			})
+			continue
+		}
+		if !reflect.DeepEqual(current, candidate) {
+			return unsupported("tagged outbound changed in place"), nil
+		}
+	}
+	for tag, candidate := range candidateByTag {
+		if _, exists := currentByTag[tag]; exists {
+			continue
+		}
+		diff.AddedOutbounds = append(diff.AddedOutbounds, OutboundChange{
+			Tag:      tag,
+			Outbound: candidate,
+		})
+	}
+	sort.Strings(diff.RemovedOutboundTags)
+	sort.Slice(diff.RemovedOutbounds, func(i, j int) bool {
+		return diff.RemovedOutbounds[i].Tag < diff.RemovedOutbounds[j].Tag
+	})
+	sort.Slice(diff.AddedOutbounds, func(i, j int) bool {
+		return diff.AddedOutbounds[i].Tag < diff.AddedOutbounds[j].Tag
+	})
+	if len(diff.AddedOutbounds) == 0 && len(diff.RemovedOutboundTags) == 0 {
 		diff.Kind = DiffNoop
 	}
 	return diff, nil
