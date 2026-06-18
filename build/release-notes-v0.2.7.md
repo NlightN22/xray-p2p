@@ -43,6 +43,13 @@
 - Credential updates write Desired inputs first, attempt runtime apply through Xray gRPC immediately, publish matching Live artifacts on success, and leave the apply request in place only when restart fallback is required.
 - Added validation so server user updates reject duplicate target user ids and invalid passwords without changing Desired state.
 
+## Connection link workflows
+
+- Added `xp2p client list --link` to print configured client endpoints as ready-to-use `trojan://...` connection links.
+- Added `xp2p server user add --link <trojan://...>` to add a server Trojan user from an existing connection link, reusing the link user and password.
+- Server user import from a link rejects conflicting explicit `--id`, `--password`, or `--key` values so the link remains the single credential source.
+- Regenerated command maps to document the new `--link` flags for client listing and server user creation.
+
 ## Redirect command behavior
 
 - `xp2p client redirect` now lists configured redirects by default, matching `xp2p client redirect list`.
@@ -100,6 +107,7 @@
 - Added Go unit coverage to ensure missing user/endpoint/forward/redirect removal paths do not create apply requests when Desired state is unchanged.
 - Added Go unit coverage for the shared binding resolver.
 - Added Go unit coverage for credentials-only client endpoint updates and server user updates that preserve redirects and reverse bindings.
+- Added Go unit coverage for rendering client endpoints as Trojan links and for adding server users from Trojan links.
 - Added runtime-apply unit coverage for same-tag outbound replacement and same-email Trojan inbound user replacement.
 - Added Linux host coverage for a successful client endpoint credential update that preserves redirect routing, and for a rejected server user update when the new user id already exists.
 
@@ -113,3 +121,4 @@
 - If a previous version left an orphaned server redirect after user removal, clean it with `xp2p server redirect remove --tag <tag>`.
 - Re-running `xp2p client install` with an already configured endpoint now fails without touching Desired state or scheduling apply work. Remove the endpoint first, or pass `--force` to replace it intentionally.
 - Use `xp2p client update <hostname|tag>` or `xp2p server user update <id>` when only credentials need to change; these commands intentionally preserve existing tags, redirects, and reverse bindings.
+- Use `xp2p client list --link` to recover a configured client connection link, and `xp2p server user add --link <link>` to recreate the matching server user from that link.
