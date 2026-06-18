@@ -17,6 +17,13 @@
 - Added `xp2p client obs` for inspecting Xray observatory output from the client side.
 - Added command-map documentation for `xp2p client obs`.
 
+## Diagnostics ping modes
+
+- Added `xp2p ping --continuous` for manual diagnostics that keep sending ping requests until interrupted.
+- Added `xp2p ping --keep-open` for TCP diagnostics that keep one connection open and fail when that persistent connection breaks.
+- Added an explicit keep-open diagnostics request so the responder switches only requested TCP sessions into persistent mode while normal `PING <nonce>` sessions remain one-request connections.
+- Added Go coverage for continuous ping cancellation, keep-open client exchanges, and responder-side keep-open TCP sessions.
+
 ## Xray loop protection
 
 - Added Xray guard components that inspect running Xray instances and detect potentially conflicting local Xray processes.
@@ -39,6 +46,7 @@
 ## Redirect command behavior
 
 - `xp2p client redirect` now lists configured redirects by default, matching `xp2p client redirect list`.
+- `xp2p server redirect` now lists configured redirects by default, matching `xp2p server redirect list`, and accepts the same list flags (`--path`, `--config-dir`, `--pending`).
 - Updated Linux, OpenWrt, and Windows host tests to use the shorter `xp2p client redirect` form where redirects are listed.
 - `xp2p server user remove` now removes server redirect rules tied to the removed user's reverse outbound tag, preventing orphaned redirects after Desired/apply-based changes.
 - `xp2p server redirect remove --tag <tag>` can now be used as a recovery cleanup path for orphaned server redirects when the CIDR/domain selector is unavailable or ambiguous.
@@ -69,6 +77,10 @@
 
 - Added the release automation script used for new release preparation.
 - Updated release, aggregate release, Pages deploy, and MkDocs build workflows.
+- Added `xp2p docs command-map --dir <path>` to generate compact command maps directly from the Cobra command tree.
+- Added `make command-map` to regenerate `commands_map` through WSL so Linux-only commands such as `nat-redirect` and `dns-forward` are included from the Linux build view.
+- Regenerated `commands_map` from the CLI source of truth and added explicit default-behavior notes for commands that list entries when called without a subcommand.
+- Repository contributor instructions now require `make command-map` after CLI command, flag, help, or command metadata changes.
 - Added OpenWrt install-from-Pages guest helper coverage for validating published install scripts.
 - Added multilingual documentation layout with English and Russian documentation trees.
 - Added Russian documentation for getting started, guides, operations, references, and flow documents.
@@ -94,6 +106,7 @@
 ## Upgrade notes
 
 - Automation that used `xp2p client redirect list` may keep using it; `xp2p client redirect` is now equivalent for listing.
+- Automation that used `xp2p server redirect list` may keep using it; `xp2p server redirect` is now equivalent for listing.
 - Redirect enable/disable without `--tag` or `--host` no longer treats an omitted binding as an implicit target-wide operation. Use `--all` for an explicit mass operation, or provide/allow selection of a specific matching binding.
 - For non-interactive redirect add/remove/enable/disable flows, pass `--tag`, `--host`, or `--quiet`; `--quiet` now fails if the matching binding is ambiguous.
 - For `xp2p server redirect add`, use `--user <user>` when selecting a reverse portal by server user id. `--tag <tag>` is still reserved for the reverse outbound tag.
