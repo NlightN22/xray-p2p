@@ -73,6 +73,14 @@ func (s *serverRedirectStore) saveRedirects() error {
 	return writeServerStateDoc(s.path, s.doc)
 }
 
+func (s *serverRedirectStore) removeRedirectsByTag(tag string) bool {
+	updated, removed := redirect.RemoveRulesByTag(s.redirects, tag)
+	if removed {
+		s.redirects = updated
+	}
+	return removed
+}
+
 func (s serverRedirectStore) bindings() []redirect.Binding {
 	if len(s.reverse) == 0 {
 		return nil

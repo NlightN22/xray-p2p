@@ -73,12 +73,11 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return errors.New("no server redirect rules configured")
 	}
 
-	target, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
-	if err != nil {
-		return err
-	}
-
 	tagFilter := strings.TrimSpace(opts.Tag)
+	hasTarget := strings.TrimSpace(opts.CIDR) != "" || strings.TrimSpace(opts.Domain) != ""
+	if !hasTarget && tagFilter == "" {
+		return errors.New("--cidr, --domain, or --tag is required")
+	}
 	if strings.TrimSpace(opts.Hostname) != "" {
 		binding, bindErr := resolveServerRedirectBinding(tagFilter, opts.Hostname, store.bindings())
 		if bindErr != nil {
@@ -87,9 +86,24 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		tagFilter = binding.Tag
 	}
 
-	updated, removed := redirect.RemoveRule(store.redirects, target, tagFilter)
-	if !removed {
-		return fmt.Errorf("redirect %s not found", target.Describe())
+	var (
+		updated []redirect.Rule
+		removed bool
+	)
+	if hasTarget {
+		target, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
+		if err != nil {
+			return err
+		}
+		updated, removed = redirect.RemoveRule(store.redirects, target, tagFilter)
+		if !removed {
+			return fmt.Errorf("redirect %s not found", target.Describe())
+		}
+	} else {
+		updated, removed = redirect.RemoveRulesByTag(store.redirects, tagFilter)
+		if !removed {
+			return fmt.Errorf("redirect tag %s not found", tagFilter)
+		}
 	}
 	store.redirects = updated
 	if err := store.saveRedirects(); err != nil {

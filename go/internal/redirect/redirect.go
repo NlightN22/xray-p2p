@@ -231,6 +231,26 @@ func RemoveRule(rules []Rule, target Target, tagFilter string) ([]Rule, bool) {
 	return filtered, removed
 }
 
+func RemoveRulesByTag(rules []Rule, tag string) ([]Rule, bool) {
+	if len(rules) == 0 {
+		return rules, false
+	}
+	trimmedTag := strings.TrimSpace(tag)
+	if trimmedTag == "" {
+		return rules, false
+	}
+	filtered := make([]Rule, 0, len(rules))
+	removed := false
+	for _, rule := range rules {
+		if strings.EqualFold(rule.OutboundTag, trimmedTag) {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, rule)
+	}
+	return filtered, removed
+}
+
 func SetRulesEnabled(rules []Rule, target Target, tagFilter string, all bool, enabled bool) ([]Rule, bool) {
 	if len(rules) == 0 {
 		return rules, false

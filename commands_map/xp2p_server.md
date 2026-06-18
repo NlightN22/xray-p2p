@@ -169,7 +169,7 @@ Includes: Global options
 - --config-dir, -D <dir> Server configuration directory name or absolute path
 - --cidr, -C <cidr>      CIDR mapping to remove (mutually exclusive with --domain)
 - --domain, -d <name>    Domain mapping to remove (mutually exclusive with --cidr)
-- --tag, -g <tag>        Reverse outbound tag filter (prompts when omitted)
+- --tag, -g <tag>        Reverse outbound tag filter or tag-only cleanup selector
 - --host, -H <host>      Reverse portal host filter
 - --quiet, -q            Do not prompt for outbound tags
 

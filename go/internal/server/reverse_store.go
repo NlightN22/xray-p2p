@@ -55,6 +55,25 @@ func (s *reverseStore) delete(tag string) {
 	delete(s.state, tag)
 }
 
+func (s *reverseStore) deleteByUser(userID string) []serverReverseChannel {
+	if s.state == nil {
+		return nil
+	}
+	trimmedUser := strings.TrimSpace(userID)
+	if trimmedUser == "" {
+		return nil
+	}
+	removed := make([]serverReverseChannel, 0)
+	for tag, channel := range s.state {
+		if !strings.EqualFold(strings.TrimSpace(channel.UserID), trimmedUser) {
+			continue
+		}
+		removed = append(removed, channel)
+		delete(s.state, tag)
+	}
+	return removed
+}
+
 func (s *reverseStore) save() error {
 	if len(s.state) == 0 {
 		s.doc[serverReverseStateKey] = nil

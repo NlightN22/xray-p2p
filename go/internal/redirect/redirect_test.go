@@ -146,3 +146,21 @@ func TestRemoveRule(t *testing.T) {
 		t.Fatalf("RemoveRule on nil slice should be a no-op")
 	}
 }
+
+func TestRemoveRulesByTag(t *testing.T) {
+	rules := []Rule{
+		{CIDR: "10.0.0.0/24", OutboundTag: "alpha"},
+		{CIDR: "10.0.0.0/24", OutboundTag: "beta"},
+	}
+	updated, removed := RemoveRulesByTag(rules, "ALPHA")
+	if !removed {
+		t.Fatalf("RemoveRulesByTag should remove matching tag")
+	}
+	if len(updated) != 1 || updated[0].OutboundTag != "beta" {
+		t.Fatalf("unexpected rules after remove: %+v", updated)
+	}
+	updated, removed = RemoveRulesByTag(rules, "")
+	if removed || len(updated) != len(rules) {
+		t.Fatalf("empty tag should not remove rules")
+	}
+}

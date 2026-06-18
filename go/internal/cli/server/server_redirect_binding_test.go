@@ -57,6 +57,27 @@ func TestRunServerRedirectRemove_QuietAmbiguousBinding(t *testing.T) {
 	}
 }
 
+func TestRunServerRedirectRemove_TagOnlyDoesNotRequireCIDR(t *testing.T) {
+	var captured server.RedirectRemoveOptions
+	t.Cleanup(stubServerRedirectRemove(func(opts server.RedirectRemoveOptions) error {
+		captured = opts
+		return nil
+	}))
+
+	code := runServerRedirectRemove(context.Background(), serverCfg("C:\\srv", "cfg", ""), serverRedirectRemoveOptions{
+		Tag: "orphaned-host-example.rev",
+	})
+	if code != 0 {
+		t.Fatalf("runServerRedirectRemove exit = %d, want 0", code)
+	}
+	if captured.Tag != "orphaned-host-example.rev" {
+		t.Fatalf("unexpected tag: %+v", captured)
+	}
+	if captured.CIDR != "" || captured.Domain != "" {
+		t.Fatalf("tag-only remove should not require target: %+v", captured)
+	}
+}
+
 func TestRunServerRedirectToggle_QuietAmbiguousBinding(t *testing.T) {
 	called := false
 	t.Cleanup(stubServerRedirectToggle(func(server.RedirectSetEnabledOptions) error {

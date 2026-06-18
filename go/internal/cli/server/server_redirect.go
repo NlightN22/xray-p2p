@@ -89,7 +89,7 @@ func newServerRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove",
 		Short: "Remove a server redirect rule",
-		Long:  "Remove a server redirect rule. When --tag/--host is omitted the CLI lists reverse portals and prompts for an outbound tag.",
+		Long:  "Remove a server redirect rule. When --tag/--host is omitted for a CIDR or domain, the CLI lists reverse portals and prompts for an outbound tag.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerRedirectRemove(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
@@ -101,7 +101,7 @@ func newServerRedirectRemoveCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
 	flags.StringVarP(&opts.CIDR, "cidr", "C", "", "CIDR mapping to remove")
 	flags.StringVarP(&opts.Domain, "domain", "d", "", "domain mapping to remove")
-	flags.StringVarP(&opts.Tag, "tag", "g", "", "reverse outbound tag filter (prompts when omitted)")
+	flags.StringVarP(&opts.Tag, "tag", "g", "", "reverse outbound tag filter or tag-only cleanup selector")
 	flags.StringVarP(&opts.Host, "host", "H", "", "reverse portal host filter")
 	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "do not prompt for outbound tags")
 	return cmd
@@ -197,8 +197,9 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 func runServerRedirectRemove(_ context.Context, cfg config.Config, opts serverRedirectRemoveOptions) int {
 	hasCIDR := strings.TrimSpace(opts.CIDR) != ""
 	hasDomain := strings.TrimSpace(opts.Domain) != ""
-	if !hasCIDR && !hasDomain {
-		logging.Error("xp2p server redirect remove: --cidr or --domain is required")
+	hasTag := strings.TrimSpace(opts.Tag) != ""
+	if !hasCIDR && !hasDomain && !hasTag {
+		logging.Error("xp2p server redirect remove: --cidr, --domain, or --tag is required")
 		return 2
 	}
 	if hasCIDR && hasDomain {
@@ -210,7 +211,7 @@ func runServerRedirectRemove(_ context.Context, cfg config.Config, opts serverRe
 	configDir := firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir)
 	tagValue := strings.TrimSpace(opts.Tag)
 	hostValue := strings.TrimSpace(opts.Host)
-	if tagValue == "" && hostValue == "" {
+	if (hasCIDR || hasDomain) && tagValue == "" && hostValue == "" {
 		selection, err := resolveServerBinding(serverBindingRequest{
 			InstallDir: installDir,
 			ConfigDir:  configDir,
@@ -253,7 +254,7 @@ func runServerRedirectRemove(_ context.Context, cfg config.Config, opts serverRe
 	fields := []any{"tag", strings.TrimSpace(tagValue), "host", strings.TrimSpace(hostValue)}
 	if hasCIDR {
 		fields = append(fields, "cidr", strings.TrimSpace(opts.CIDR))
-	} else {
+	} else if hasDomain {
 		fields = append(fields, "domain", strings.TrimSpace(opts.Domain))
 	}
 	logging.Info("xp2p server redirect removed", fields...)

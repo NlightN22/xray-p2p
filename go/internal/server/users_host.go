@@ -118,15 +118,52 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		}
 	}
 
-	params, err := resolveTrojanLinkParams(configPath, "", strings.TrimSpace(opts.Host))
-	if err == nil {
-		if channel, channelErr := buildServerReverseChannel(userID, params.host); channelErr == nil {
-			if store, storeErr := openReverseStore(opts.InstallDir); storeErr == nil {
-				_ = purgeServerReverseChannel(&store, opts.InstallDir, opts.ConfigDir, channel)
+	if err := purgeUserReverseAndRedirects(opts, userID); err != nil {
+		return err
+	}
+	return writeServerApplyRequest()
+}
+
+func purgeUserReverseAndRedirects(opts RemoveUserOptions, userID string) error {
+	channels := make([]serverReverseChannel, 0)
+	store, err := openReverseStore(opts.InstallDir)
+	if err != nil {
+		return err
+	}
+	removed := store.deleteByUser(userID)
+	if len(removed) > 0 {
+		channels = append(channels, removed...)
+		if err := store.save(); err != nil {
+			return err
+		}
+	}
+
+	if len(channels) == 0 {
+		params, err := resolveTrojanLinkParams(pendingConfigPath(), "", strings.TrimSpace(opts.Host))
+		if err == nil {
+			if channel, channelErr := buildServerReverseChannel(userID, params.host); channelErr == nil {
+				channels = append(channels, channel)
 			}
 		}
 	}
-	return writeServerApplyRequest()
+	if len(channels) == 0 {
+		return nil
+	}
+
+	redirectStore, err := openServerRedirectStorePending()
+	if err != nil {
+		return err
+	}
+	changed := false
+	for _, channel := range channels {
+		if redirectStore.removeRedirectsByTag(channel.Tag) {
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	return redirectStore.saveRedirects()
 }
 
 func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {
