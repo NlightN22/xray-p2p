@@ -12,6 +12,8 @@ Included proto files:
 - `app/stats/command/command.proto`
 - `app/router/command/command.proto`
 - `app/router/config.proto`
+- `app/observatory/command/command.proto`
+- `app/observatory/config.proto`
 - `app/proxyman/command/command.proto`
 - `app/proxyman/config.proto`
 - `core/config.proto`
@@ -30,7 +32,7 @@ Included proto files:
 Generation command used upstream:
 
 ```sh
-protoc --go_out=. --go-grpc_out=. app/stats/command/command.proto app/router/command/command.proto app/router/config.proto app/proxyman/command/command.proto app/proxyman/config.proto core/config.proto common/protocol/user.proto common/protocol/server_spec.proto common/net/address.proto common/net/network.proto common/net/port.proto common/serial/typed_message.proto proxy/dokodemo/config.proto proxy/freedom/config.proto proxy/trojan/config.proto transport/internet/config.proto transport/internet/tls/config.proto
+protoc --go_out=. --go-grpc_out=. app/stats/command/command.proto app/router/command/command.proto app/router/config.proto app/observatory/command/command.proto app/observatory/config.proto app/proxyman/command/command.proto app/proxyman/config.proto core/config.proto common/protocol/user.proto common/protocol/server_spec.proto common/net/address.proto common/net/network.proto common/net/port.proto common/serial/typed_message.proto proxy/dokodemo/config.proto proxy/freedom/config.proto proxy/trojan/config.proto transport/internet/config.proto transport/internet/tls/config.proto
 ```
 
 Update this snapshot only together with an intentional Xray pin bump in `go/internal/xray/pinned.json`.

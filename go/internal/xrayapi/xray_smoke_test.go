@@ -100,6 +100,9 @@ func TestBundledXrayAPI(t *testing.T) {
 	if err := client.RemoveRule(context.Background(), "smoke-rule"); err != nil {
 		t.Fatalf("remove rule: %v", err)
 	}
+	if _, err := client.GetOutboundStatuses(context.Background()); err != nil {
+		t.Fatalf("get outbound statuses: %v", err)
+	}
 	if _, err := QueryStats(context.Background(), StatsQueryOptions{Address: apiAddress, Pattern: "", Timeout: 3 * time.Second}); err != nil {
 		t.Fatalf("query stats: %v", err)
 	}
@@ -202,7 +205,12 @@ func writeSmokeXrayConfig(t *testing.T, path, workDir, apiAddress string) {
 		},
 		"api": map[string]any{
 			"tag":      "api",
-			"services": []string{"HandlerService", "RoutingService", "StatsService", "LoggerService"},
+			"services": []string{"HandlerService", "RoutingService", "StatsService", "LoggerService", "ObservatoryService"},
+		},
+		"observatory": map[string]any{
+			"subjectSelector": []string{"direct"},
+			"probeURL":        "http://127.0.0.1:9",
+			"probeInterval":   "10m",
 		},
 		"stats": map[string]any{},
 		"policy": map[string]any{

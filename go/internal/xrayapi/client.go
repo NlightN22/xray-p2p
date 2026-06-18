@@ -7,6 +7,7 @@ import (
 	"time"
 
 	handlercommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/handlercommand"
+	observatorycommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/observatorycommand"
 	routingcommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/routingcommand"
 	statscommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/statscommand"
 	"google.golang.org/grpc"
@@ -22,6 +23,7 @@ type Client struct {
 	stats   statscommand.StatsServiceClient
 	routing routingcommand.RoutingServiceClient
 	handler handlercommand.HandlerServiceClient
+	obs     observatorycommand.ObservatoryServiceClient
 }
 
 func Dial(ctx context.Context, address string, timeout time.Duration) (*Client, error) {
@@ -48,6 +50,7 @@ func DialWith(ctx context.Context, address string, timeout time.Duration, dialer
 		stats:   statscommand.NewStatsServiceClient(conn),
 		routing: routingcommand.NewRoutingServiceClient(conn),
 		handler: handlercommand.NewHandlerServiceClient(conn),
+		obs:     observatorycommand.NewObservatoryServiceClient(conn),
 	}, nil
 }
 
