@@ -12,6 +12,9 @@ Included proto files:
 - `app/stats/command/command.proto`
 - `app/router/command/command.proto`
 - `app/router/config.proto`
+- `app/proxyman/command/command.proto`
+- `core/config.proto`
+- `common/protocol/user.proto`
 - `common/net/network.proto`
 - `common/net/port.proto`
 - `common/serial/typed_message.proto`
@@ -19,7 +22,7 @@ Included proto files:
 Generation command used upstream:
 
 ```sh
-protoc --go_out=. --go-grpc_out=. app/stats/command/command.proto app/router/command/command.proto app/router/config.proto common/net/network.proto common/net/port.proto common/serial/typed_message.proto
+protoc --go_out=. --go-grpc_out=. app/stats/command/command.proto app/router/command/command.proto app/router/config.proto app/proxyman/command/command.proto core/config.proto common/protocol/user.proto common/net/network.proto common/net/port.proto common/serial/typed_message.proto
 ```
 
 Update this snapshot only together with an intentional Xray pin bump in `go/internal/xray/pinned.json`.
