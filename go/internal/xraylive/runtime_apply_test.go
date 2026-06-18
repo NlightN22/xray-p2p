@@ -121,6 +121,55 @@ func TestTryApplyRoutingPendingPublishesNoopWithoutAPI(t *testing.T) {
 	}
 }
 
+func TestTryApplyRoutingPendingAppliesInboundDiff(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	current := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{"tag": "keep", "protocol": "socks"},
+			{"tag": "old", "protocol": "dokodemo-door"}
+		]
+	}`)
+	candidate := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{"tag": "keep", "protocol": "socks"},
+			{"tag": "new", "protocol": "dokodemo-door"}
+		]
+	}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"version":1}`))
+	applier := newTestInboundApplier("keep", "old")
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{XrayJSON: candidate, MetaJSON: []byte(`{"version":2}`)}, nil
+	}
+	opts.NewInbound = func(_ context.Context, address string) (runtimeapply.InboundApplier, func() error, error) {
+		if address != "127.0.0.1:10085" {
+			t.Fatalf("address = %q", address)
+		}
+		return applier, func() error { return nil }, nil
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyApplied {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyApplied)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatalf("read live xray: %v", err)
+	}
+	if string(got) != string(candidate) {
+		t.Fatalf("live xray mismatch: %s", string(got))
+	}
+	wantCalls := []string{"remove:old", "add:new"}
+	if !reflect.DeepEqual(applier.calls, wantCalls) {
+		t.Fatalf("calls = %v, want %v", applier.calls, wantCalls)
+	}
+}
+
 func testOptions(t *testing.T, root, role string) Options {
 	t.Helper()
 	t.Setenv("XP2P_CONFIG_ROOT", root)
@@ -169,6 +218,40 @@ func writeLive(t *testing.T, liveDir string, xrayJSON, metaJSON []byte) {
 type testRoutingApplier struct {
 	calls []string
 	tags  map[string]struct{}
+}
+
+type testInboundApplier struct {
+	calls []string
+	tags  map[string]struct{}
+}
+
+func newTestInboundApplier(tags ...string) *testInboundApplier {
+	applier := &testInboundApplier{tags: make(map[string]struct{}, len(tags))}
+	for _, tag := range tags {
+		applier.tags[tag] = struct{}{}
+	}
+	return applier
+}
+
+func (a *testInboundApplier) AddInbound(_ context.Context, inbound map[string]any) error {
+	tag, _ := inbound["tag"].(string)
+	a.calls = append(a.calls, "add:"+tag)
+	a.tags[tag] = struct{}{}
+	return nil
+}
+
+func (a *testInboundApplier) RemoveInbound(_ context.Context, tag string) error {
+	a.calls = append(a.calls, "remove:"+tag)
+	delete(a.tags, tag)
+	return nil
+}
+
+func (a *testInboundApplier) ListInboundTags(context.Context) ([]string, error) {
+	result := make([]string, 0, len(a.tags))
+	for tag := range a.tags {
+		result = append(result, tag)
+	}
+	return result, nil
 }
 
 func newTestRoutingApplier(tags ...string) *testRoutingApplier {

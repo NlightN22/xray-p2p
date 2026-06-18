@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	commonserial "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonserial"
-	routerconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/routerconfig"
 	routingcommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/routingcommand"
-	"google.golang.org/protobuf/proto"
 )
 
 type RoutingRuleInfo struct {
@@ -106,15 +103,4 @@ func (c *Client) ListRuleTags(ctx context.Context) ([]string, error) {
 		}
 	}
 	return tags, nil
-}
-
-func typedMessage(msg *routerconfig.RoutingRule) (*commonserial.TypedMessage, error) {
-	data, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, fmt.Errorf("marshal routing rule: %w", err)
-	}
-	return &commonserial.TypedMessage{
-		Type:  string(msg.ProtoReflect().Descriptor().FullName()),
-		Value: data,
-	}, nil
 }

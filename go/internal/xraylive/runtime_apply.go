@@ -34,6 +34,7 @@ type Artifacts struct {
 type CompileFunc func(configPath, extensionsDir string) (Artifacts, error)
 
 type RoutingApplierFactory func(ctx context.Context, address string) (runtimeapply.RoutingApplier, func() error, error)
+type InboundApplierFactory func(ctx context.Context, address string) (runtimeapply.InboundApplier, func() error, error)
 
 type Options struct {
 	Role          string
@@ -46,6 +47,7 @@ type Options struct {
 	LkgDir        string
 	Compile       CompileFunc
 	NewApplier    RoutingApplierFactory
+	NewInbound    InboundApplierFactory
 }
 
 func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResult, error) {
@@ -90,7 +92,7 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 	case runtimeapply.DiffUnsupported:
 		logging.Info("runtime apply fallback required", "role", role, "request_id", req.ID, "reason", diff.Reason)
 		return RuntimeApplyRestartRequired, nil
-	case runtimeapply.DiffRoutingOnly:
+	case runtimeapply.DiffRoutingOnly, runtimeapply.DiffInboundOnly:
 	default:
 		return RuntimeApplyRestartRequired, nil
 	}
@@ -99,6 +101,17 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 	if err != nil || strings.TrimSpace(address) == "" {
 		return RuntimeApplyRestartRequired, nil
 	}
+	switch diff.Kind {
+	case runtimeapply.DiffRoutingOnly:
+		return applyRoutingRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
+	case runtimeapply.DiffInboundOnly:
+		return applyInboundRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
+	default:
+		return RuntimeApplyRestartRequired, nil
+	}
+}
+
+func applyRoutingRuntimeDiff(ctx context.Context, opts Options, req apply.Request, role, address string, artifacts Artifacts, diff runtimeapply.Diff) (RuntimeApplyResult, error) {
 	factory := opts.NewApplier
 	if factory == nil {
 		factory = DefaultRoutingApplierFactory
@@ -131,12 +144,73 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 	return RuntimeApplyApplied, nil
 }
 
+func applyInboundRuntimeDiff(ctx context.Context, opts Options, req apply.Request, role, address string, artifacts Artifacts, diff runtimeapply.Diff) (RuntimeApplyResult, error) {
+	factory := opts.NewInbound
+	if factory == nil {
+		factory = DefaultInboundApplierFactory
+	}
+	applier, closeApplier, err := factory(ctx, address)
+	if err != nil {
+		return RuntimeApplyRestartRequired, nil
+	}
+	defer func() {
+		if closeApplier != nil {
+			_ = closeApplier()
+		}
+	}()
+	if err := runtimeapply.ApplyInboundDiff(ctx, applier, diff); err != nil {
+		logging.Warn("runtime inbound apply failed; restart fallback required", "role", role, "request_id", req.ID, "err", err)
+		return RuntimeApplyRestartRequired, nil
+	}
+	if err := publishLiveArtifacts(opts, artifacts); err != nil {
+		rollbackErr := runtimeapply.ApplyInboundDiff(ctx, applier, reverseInboundDiff(diff))
+		reason := err
+		if rollbackErr != nil {
+			reason = fmt.Errorf("%w; runtime rollback failed: %v", err, rollbackErr)
+		}
+		writeRuntimeApplyError(opts, req, reason)
+		return RuntimeApplyFailed, nil
+	}
+
+	cleanupRuntimeApplyMarkers(opts, role)
+	logging.Info("runtime inbound apply completed", "role", role, "request_id", req.ID)
+	return RuntimeApplyApplied, nil
+}
+
 func DefaultRoutingApplierFactory(ctx context.Context, address string) (runtimeapply.RoutingApplier, func() error, error) {
 	client, err := xrayapi.Dial(ctx, address, xrayapi.DefaultTimeout)
 	if err != nil {
 		return nil, nil, err
 	}
 	return client, client.Close, nil
+}
+
+func DefaultInboundApplierFactory(ctx context.Context, address string) (runtimeapply.InboundApplier, func() error, error) {
+	client, err := xrayapi.Dial(ctx, address, xrayapi.DefaultTimeout)
+	if err != nil {
+		return nil, nil, err
+	}
+	return xrayInboundApplier{client: client}, client.Close, nil
+}
+
+type xrayInboundApplier struct {
+	client *xrayapi.Client
+}
+
+func (a xrayInboundApplier) AddInbound(ctx context.Context, inbound map[string]any) error {
+	cfg, err := xrayapi.InboundFromMap(inbound)
+	if err != nil {
+		return err
+	}
+	return a.client.AddInbound(ctx, cfg)
+}
+
+func (a xrayInboundApplier) RemoveInbound(ctx context.Context, tag string) error {
+	return a.client.RemoveInbound(ctx, tag)
+}
+
+func (a xrayInboundApplier) ListInboundTags(ctx context.Context) ([]string, error) {
+	return a.client.ListInboundTags(ctx)
 }
 
 func readMatchingRequest(requestPath, errorPath, role string) (apply.Request, bool, error) {
@@ -190,6 +264,18 @@ func reverseRoutingDiff(diff runtimeapply.Diff) runtimeapply.Diff {
 	}
 	for _, change := range diff.RemovedRules {
 		reversed.AddedRules = append(reversed.AddedRules, change)
+	}
+	return reversed
+}
+
+func reverseInboundDiff(diff runtimeapply.Diff) runtimeapply.Diff {
+	reversed := runtimeapply.Diff{Kind: runtimeapply.DiffInboundOnly}
+	for _, change := range diff.AddedInbounds {
+		reversed.RemovedInboundTags = append(reversed.RemovedInboundTags, change.Tag)
+		reversed.RemovedInbounds = append(reversed.RemovedInbounds, change)
+	}
+	for _, change := range diff.RemovedInbounds {
+		reversed.AddedInbounds = append(reversed.AddedInbounds, change)
 	}
 	return reversed
 }
