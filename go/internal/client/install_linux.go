@@ -66,6 +66,15 @@ func Install(ctx context.Context, opts InstallOptions) error {
 	if err := os.Chmod(state.logsDir, 0o777); err != nil {
 		logging.Warn("chmod log directory failed", "path", state.logsDir, "err", err)
 	}
+	if !state.Force {
+		exists, err := clientEndpointConfigured(state.configFile, state.serverHost, state.serverPort)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return fmt.Errorf("endpoint %s:%d already exists (use --force to update)", state.serverHost, state.serverPort)
+		}
+	}
 	if err := ensureClientTunConfig(state.Force, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr, state.TunMode, state.TunModeSet); err != nil {
 		return err
 	}

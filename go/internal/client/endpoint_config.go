@@ -90,6 +90,14 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 	return state, nil
 }
 
+func clientEndpointConfigured(configFile, host string, port int) (bool, error) {
+	state, err := loadClientInstallState(configFile)
+	if err != nil {
+		return false, err
+	}
+	return state.hasEndpoint(host, port), nil
+}
+
 func buildProxyTag(host string) string {
 	sanitized := naming.SanitizeLabel(host)
 	if sanitized == "" {

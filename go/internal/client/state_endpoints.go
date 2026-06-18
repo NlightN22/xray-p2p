@@ -24,6 +24,19 @@ func (s *clientInstallState) removeEndpoint(target string) (clientEndpointRecord
 	return clientEndpointRecord{}, false
 }
 
+func (s *clientInstallState) hasEndpoint(host string, port int) bool {
+	trimmed := strings.TrimSpace(host)
+	if trimmed == "" {
+		return false
+	}
+	for _, ep := range s.Endpoints {
+		if strings.EqualFold(ep.Hostname, trimmed) && ep.Port == port {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) error {
 	for idx, existing := range s.Endpoints {
 		sameHost := strings.EqualFold(existing.Hostname, record.Hostname)

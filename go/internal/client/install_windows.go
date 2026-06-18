@@ -60,6 +60,15 @@ func Install(ctx context.Context, opts InstallOptions) error {
 		return fmt.Errorf("create config directory: %w", err)
 	}
 
+	if !state.Force {
+		exists, err := clientEndpointConfigured(state.configFile, state.serverRemote, state.serverPort)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return fmt.Errorf("endpoint %s:%d already exists (use --force to update)", state.serverRemote, state.serverPort)
+		}
+	}
 	if err := ensureClientTunConfig(state.Force, state.TunEnabled, state.TunName, state.TunMTU, state.TunAddr, state.TunMode, state.TunModeSet); err != nil {
 		return err
 	}

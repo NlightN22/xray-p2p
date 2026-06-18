@@ -157,3 +157,20 @@ func TestClientInstallStateRejectsDuplicateHostPort(t *testing.T) {
 		t.Fatalf("expected duplicate host:port to be rejected")
 	}
 }
+
+func TestClientInstallStateHasEndpoint(t *testing.T) {
+	state := clientInstallState{
+		Endpoints: []clientEndpointRecord{
+			{
+				Hostname: "edge.example",
+				Port:     8443,
+			},
+		},
+	}
+	if !state.hasEndpoint("EDGE.example", 8443) {
+		t.Fatalf("expected endpoint to match by hostname and port")
+	}
+	if state.hasEndpoint("edge.example", 9443) {
+		t.Fatalf("expected different port not to match")
+	}
+}

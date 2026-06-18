@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -21,6 +22,15 @@ func AddEndpoint(ctx context.Context, opts InstallOptions) error {
 	base, err := buildClientInstallBase(installDir, "", opts)
 	if err != nil {
 		return err
+	}
+	if !base.installOpts.Force {
+		exists, err := clientEndpointConfigured(base.configFile, base.address, base.portVal)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return fmt.Errorf("endpoint %s:%d already exists (use --force to update)", base.address, base.portVal)
+		}
 	}
 	resolved, err := resolveEndpointPrimaryAddress(ctx, base.address)
 	if err != nil {

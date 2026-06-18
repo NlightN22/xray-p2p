@@ -86,6 +86,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
         assert recorded_hosts == {"10.55.0.10", "10.55.0.11"}
 
+        before_duplicate_sha = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE)
         duplicate = xp2p_client_runner(
             "client",
             "install",
@@ -105,6 +106,7 @@ def test_client_install_and_force_overwrites(client_host, xp2p_client_runner):
         combined = (duplicate.stderr or "") + (duplicate.stdout or "")
         combined = combined.lower()
         assert "endpoint 10.55.0.10" in combined and "already exists" in combined
+        assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE) == before_duplicate_sha
 
         xp2p_client_runner(
             "client",
@@ -554,7 +556,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_client_runner):
+def test_client_install_rejects_same_endpoint_without_desired_update(client_host, xp2p_client_runner):
     try:
         xp2p_client_runner(
             "client",
@@ -572,6 +574,10 @@ def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_
             check=True,
         )
 
+        apply_request = helpers.CONFIG_ROOT / helpers.APPLY_DIR_NAME / "apply.request"
+        helpers.remove_path(client_host, apply_request)
+        assert not helpers.path_exists(client_host, apply_request)
+        before_duplicate_sha = helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE)
         result = xp2p_client_runner(
             "client",
             "install",
@@ -590,23 +596,14 @@ def test_client_install_requires_force_for_duplicate_endpoint(client_host, xp2p_
         assert result.rc != 0, "Expected duplicate endpoint install to fail without --force"
         combined = f"{result.stdout}\n{result.stderr}".lower()
         assert "endpoint 10.55.0.20" in combined and "already exists" in combined
+        assert helpers.file_sha256(client_host, helpers.CLIENT_CONFIG_FILE) == before_duplicate_sha
+        assert not helpers.path_exists(client_host, apply_request)
 
-        xp2p_client_runner(
-            "client",
-            "install",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            "--host",
-            "10.55.0.20",
-            "--user",
-            "state2@example.com",
-            "--password",
-            "state-pass-2",
-            "--force",
-            check=True,
-        )
+        state = helpers.read_pending_client_config(client_host)
+        endpoints = [entry for entry in state.get("endpoints", []) if entry.get("hostname") == "10.55.0.20"]
+        assert len(endpoints) == 1
+        assert endpoints[0]["user"] == "state@example.com"
+        assert endpoints[0]["password"] == "state-pass"
     finally:
         pass
 

@@ -246,6 +246,7 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
         recorded_hosts = {entry["hostname"] for entry in state.get("endpoints", [])}
         assert recorded_hosts == {"10.55.0.10", "10.55.0.11"}
 
+        before_duplicate_sha = helpers.file_sha256(openwrt_host, helpers.CLIENT_CONFIG_FILE)
         duplicate = runner(
             "client",
             "install",
@@ -265,6 +266,7 @@ def test_client_install_and_force_overwrites(openwrt_host, xp2p_openwrt_ipk):
         combined = (duplicate.stderr or "") + (duplicate.stdout or "")
         combined = combined.lower()
         assert "endpoint 10.55.0.10" in combined and "already exists" in combined
+        assert helpers.file_sha256(openwrt_host, helpers.CLIENT_CONFIG_FILE) == before_duplicate_sha
 
         runner(
             "client",
@@ -635,7 +637,7 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
 
 @pytest.mark.host
 @pytest.mark.linux
-def test_client_install_requires_force_for_duplicate_endpoint(openwrt_host, xp2p_openwrt_ipk):
+def test_client_install_rejects_same_endpoint_without_desired_update(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
         runner(
@@ -654,6 +656,9 @@ def test_client_install_requires_force_for_duplicate_endpoint(openwrt_host, xp2p
             check=True,
         )
 
+        helpers.remove_path(openwrt_host, helpers.APPLY_REQUEST)
+        assert not helpers.path_exists_exact(openwrt_host, helpers.APPLY_REQUEST)
+        before_duplicate_sha = helpers.file_sha256(openwrt_host, helpers.CLIENT_CONFIG_FILE)
         result = runner(
             "client",
             "install",
@@ -672,23 +677,14 @@ def test_client_install_requires_force_for_duplicate_endpoint(openwrt_host, xp2p
         assert result.rc != 0, "Expected duplicate endpoint install to fail without --force"
         combined = f"{result.stdout}\n{result.stderr}".lower()
         assert "endpoint 10.55.0.20" in combined and "already exists" in combined
+        assert helpers.file_sha256(openwrt_host, helpers.CLIENT_CONFIG_FILE) == before_duplicate_sha
+        assert not helpers.path_exists_exact(openwrt_host, helpers.APPLY_REQUEST)
 
-        runner(
-            "client",
-            "install",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            "--host",
-            "10.55.0.20",
-            "--user",
-            "state2@example.com",
-            "--password",
-            "state-pass-2",
-            "--force",
-            check=True,
-        )
+        state = helpers.read_preferred_client_config(openwrt_host)
+        endpoints = [entry for entry in state.get("endpoints", []) if entry.get("hostname") == "10.55.0.20"]
+        assert len(endpoints) == 1
+        assert endpoints[0]["user"] == "state@example.com"
+        assert endpoints[0]["password"] == "state-pass"
     finally:
         helpers.cleanup_client_install(openwrt_host, runner)
         helpers.remove_path(openwrt_host, helpers.HEARTBEAT_STATE_FILE)
