@@ -123,6 +123,43 @@ def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_serv
         second = _trojan_clients(server_host, xp2p_server_runner)
         assert len(second) == 1 and second[0]["password"] == "secret-one"
 
+        xp2p_server_runner(
+            "server",
+            "user",
+            "add",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--id",
+            "bravo",
+            "--password",
+            "secret-bravo",
+            "--host",
+            host,
+            check=True,
+        )
+        duplicate_update = xp2p_server_runner(
+            "server",
+            "user",
+            "update",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--new-id",
+            "bravo",
+            "alpha",
+            check=False,
+        )
+        assert duplicate_update.rc != 0, "Expected user update to reject duplicate target id"
+        assert "already exists" in ((duplicate_update.stdout or "") + (duplicate_update.stderr or "")).lower()
+        after_duplicate_update = sorted(_trojan_clients(server_host, xp2p_server_runner), key=lambda item: item["email"])
+        assert after_duplicate_update == [
+            {"email": "alpha", "password": "secret-one"},
+            {"email": "bravo", "password": "secret-bravo"},
+        ]
+
         result = xp2p_server_runner(
             "server",
             "user",
@@ -140,8 +177,11 @@ def test_server_user_add_requires_force_for_existing_user(server_host, xp2p_serv
             host,
             check=True,
         )
-        final = _trojan_clients(server_host, xp2p_server_runner)
-        assert len(final) == 1 and final[0]["password"] == "secret-two"
+        final = sorted(_trojan_clients(server_host, xp2p_server_runner), key=lambda item: item["email"])
+        assert final == [
+            {"email": "alpha", "password": "secret-two"},
+            {"email": "bravo", "password": "secret-bravo"},
+        ]
     finally:
         pass
 

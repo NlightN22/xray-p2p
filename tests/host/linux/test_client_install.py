@@ -438,6 +438,29 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             host_tag,
             check=True,
         )
+        xp2p_client_runner(
+            "client",
+            "update",
+            "--path",
+            helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.CLIENT_CONFIG_DIR_NAME,
+            "--user",
+            "delta-updated@example.com",
+            "--password",
+            "delta-updated-pass",
+            "10.66.0.10",
+            check=True,
+        )
+        updated = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
+        helpers.assert_outbound(
+            updated,
+            "10.66.0.10",
+            "delta-updated-pass",
+            "delta-updated@example.com",
+            "10.66.0.10",
+        )
+        helpers.assert_redirect_rule(updated, redirect_cidr, host_tag)
 
         xp2p_client_runner(
             "client",

@@ -141,7 +141,18 @@ func classifyTrojanUsers(tag string, currentUsers, candidateUsers []map[string]a
 			continue
 		}
 		if !reflect.DeepEqual(current, candidate) {
-			return Diff{}, fmt.Errorf("trojan user %s changed in place", email)
+			diff.RemovedInboundUsers = append(diff.RemovedInboundUsers, InboundUserChange{
+				InboundTag: tag,
+				Email:      email,
+				Password:   stringField(current, "password"),
+				User:       current,
+			})
+			diff.AddedInboundUsers = append(diff.AddedInboundUsers, InboundUserChange{
+				InboundTag: tag,
+				Email:      email,
+				Password:   stringField(candidate, "password"),
+				User:       candidate,
+			})
 		}
 	}
 	for email, candidate := range candidateByEmail {

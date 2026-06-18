@@ -29,6 +29,28 @@ func TestApplyInboundUserDiffSequencesRemoveBeforeAdd(t *testing.T) {
 	}
 }
 
+func TestApplyInboundUserDiffReplacesSameEmail(t *testing.T) {
+	applier := newRecordingInboundUserApplier()
+	applier.users["trojan-in"] = map[string]string{"same@example.com": "old"}
+	diff := Diff{
+		Kind: DiffInboundUsers,
+		RemovedInboundUsers: []InboundUserChange{
+			{InboundTag: "trojan-in", Email: "same@example.com", Password: "old"},
+		},
+		AddedInboundUsers: []InboundUserChange{
+			{InboundTag: "trojan-in", Email: "same@example.com", Password: "new"},
+		},
+	}
+
+	if err := ApplyInboundUserDiff(context.Background(), applier, diff); err != nil {
+		t.Fatalf("ApplyInboundUserDiff: %v", err)
+	}
+	want := []string{"remove:trojan-in:same@example.com", "add:trojan-in:same@example.com"}
+	if !reflect.DeepEqual(applier.calls, want) {
+		t.Fatalf("calls = %v, want %v", applier.calls, want)
+	}
+}
+
 func TestApplyInboundUserDiffRollsBackAddedUsers(t *testing.T) {
 	applier := newRecordingInboundUserApplier()
 	applier.failAddEmail = "bad@example.com"

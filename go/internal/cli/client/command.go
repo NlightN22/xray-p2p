@@ -51,6 +51,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newClientInstallCmd(cfg),
 		newClientDisableCmd(cfg),
 		newClientEnableCmd(cfg),
+		newClientUpdateCmd(cfg),
 		newClientRemoveCmd(cfg),
 		newClientListCmd(cfg),
 		newClientRunCmd(cfg),
@@ -68,6 +69,34 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newClientModeCmd(cfg),
 	)
 	dnsForwardMaybeAdd(cmd, cfg)
+	return cmd
+}
+
+func newClientUpdateCmd(cfg commandConfig) *cobra.Command {
+	var opts clientEndpointUpdateOptions
+	cmd := &cobra.Command{
+		Use:   "update <hostname|tag>",
+		Short: "Update endpoint credentials",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("expected exactly one endpoint hostname or tag")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.Target = args[0]
+			opts.UserSet = cmd.Flags().Changed("user")
+			opts.PasswordSet = cmd.Flags().Changed("password")
+			code := runClientEndpointUpdate(commandContext(cmd), cfg(), opts)
+			return errorForCode(code)
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVarP(&opts.Path, "path", "p", "", "client installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "client configuration directory name")
+	flags.StringVarP(&opts.User, "user", "u", "", "user email")
+	flags.StringVarP(&opts.Password, "password", "w", "", "user password")
 	return cmd
 }
 

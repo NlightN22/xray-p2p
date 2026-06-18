@@ -32,6 +32,11 @@ func RemoveUser(_ context.Context, _ RemoveUserOptions) error {
 	return ErrUnsupported
 }
 
+// UpdateUser is not supported on this platform.
+func UpdateUser(_ context.Context, _ UpdateUserOptions) error {
+	return ErrUnsupported
+}
+
 // SetCertificate is not supported on this platform.
 func SetCertificate(_ context.Context, _ CertificateOptions) error {
 	return ErrUnsupported

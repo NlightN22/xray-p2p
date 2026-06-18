@@ -124,6 +124,14 @@ Includes: Global options
 - --no-reverse, -n       Skip creating reverse portal/routing entries
 - --force, -f            Overwrite existing user entry
 
+xp2p server user update <id>
+Options:
+Includes: Global options
+- --path, -p <dir>       Server installation directory
+- --config-dir, -D <dir> Server configuration directory name or absolute path
+- --new-id, -I <id>      New client identifier
+- --password, -w <password> Client password or pre-shared key
+
 xp2p server user disable <id>
 Options:
 Includes: Global options

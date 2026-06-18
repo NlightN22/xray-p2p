@@ -28,6 +28,27 @@ func TestApplyOutboundDiffSequencesRemoveBeforeAdd(t *testing.T) {
 	}
 }
 
+func TestApplyOutboundDiffReplacesSameTag(t *testing.T) {
+	applier := newRecordingOutboundApplier("proxy-edge")
+	diff := Diff{
+		Kind: DiffOutboundOnly,
+		RemovedOutbounds: []OutboundChange{
+			{Tag: "proxy-edge", Outbound: map[string]any{"tag": "proxy-edge", "password": "old"}},
+		},
+		AddedOutbounds: []OutboundChange{
+			{Tag: "proxy-edge", Outbound: map[string]any{"tag": "proxy-edge", "password": "new"}},
+		},
+	}
+
+	if err := ApplyOutboundDiff(context.Background(), applier, diff); err != nil {
+		t.Fatalf("ApplyOutboundDiff: %v", err)
+	}
+	want := []string{"remove:proxy-edge", "add:proxy-edge"}
+	if !reflect.DeepEqual(applier.calls, want) {
+		t.Fatalf("calls = %v, want %v", applier.calls, want)
+	}
+}
+
 func TestApplyOutboundDiffRollsBackAddedOutbounds(t *testing.T) {
 	applier := newRecordingOutboundApplier()
 	applier.failAddTag = "bad"

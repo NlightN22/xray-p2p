@@ -46,6 +46,15 @@ type (
 		ConfigDir  string
 		Target     string
 	}
+	UpdateEndpointOptions struct {
+		InstallDir  string
+		ConfigDir   string
+		Target      string
+		User        string
+		Password    string
+		UserSet     bool
+		PasswordSet bool
+	}
 	ForwardAddOptions struct {
 		InstallDir    string
 		ConfigDir     string
@@ -131,6 +140,10 @@ func ListReverse(_ ReverseListOptions) ([]ReverseRecord, error) {
 }
 
 func RemoveEndpoint(_ context.Context, _ RemoveEndpointOptions) error {
+	return ErrUnsupported
+}
+
+func UpdateEndpointCredentials(_ context.Context, _ UpdateEndpointOptions) error {
 	return ErrUnsupported
 }
 

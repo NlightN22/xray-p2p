@@ -205,7 +205,7 @@ func TestClassifyXrayConfigDiffDetectsInboundUserAddRemove(t *testing.T) {
 	}
 }
 
-func TestClassifyXrayConfigDiffRejectsInboundUserPasswordMutation(t *testing.T) {
+func TestClassifyXrayConfigDiffDetectsInboundUserPasswordReplacement(t *testing.T) {
 	current := []byte(`{"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[{"email":"a@example.com","password":"old"}]}}]}`)
 	candidate := []byte(`{"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[{"email":"a@example.com","password":"new"}]}}]}`)
 
@@ -213,8 +213,14 @@ func TestClassifyXrayConfigDiffRejectsInboundUserPasswordMutation(t *testing.T) 
 	if err != nil {
 		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
 	}
-	if diff.Kind != DiffUnsupported {
-		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	if diff.Kind != DiffInboundUsers {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffInboundUsers, diff)
+	}
+	if len(diff.RemovedInboundUsers) != 1 || diff.RemovedInboundUsers[0].Email != "a@example.com" || diff.RemovedInboundUsers[0].Password != "old" {
+		t.Fatalf("unexpected removed users: %+v", diff.RemovedInboundUsers)
+	}
+	if len(diff.AddedInboundUsers) != 1 || diff.AddedInboundUsers[0].Email != "a@example.com" || diff.AddedInboundUsers[0].Password != "new" {
+		t.Fatalf("unexpected added users: %+v", diff.AddedInboundUsers)
 	}
 }
 
@@ -322,7 +328,7 @@ func TestClassifyXrayConfigDiffDetectsOutboundOnlyAddRemove(t *testing.T) {
 	}
 }
 
-func TestClassifyXrayConfigDiffRejectsTaggedOutboundMutation(t *testing.T) {
+func TestClassifyXrayConfigDiffDetectsTaggedOutboundReplacement(t *testing.T) {
 	current := []byte(`{"outbounds":[{"tag":"a","protocol":"freedom"}]}`)
 	candidate := []byte(`{"outbounds":[{"tag":"a","protocol":"trojan"}]}`)
 
@@ -330,8 +336,14 @@ func TestClassifyXrayConfigDiffRejectsTaggedOutboundMutation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
 	}
-	if diff.Kind != DiffUnsupported {
-		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	if diff.Kind != DiffOutboundOnly {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffOutboundOnly, diff)
+	}
+	if len(diff.RemovedOutbounds) != 1 || diff.RemovedOutbounds[0].Tag != "a" {
+		t.Fatalf("unexpected removed outbounds: %+v", diff.RemovedOutbounds)
+	}
+	if len(diff.AddedOutbounds) != 1 || diff.AddedOutbounds[0].Tag != "a" {
+		t.Fatalf("unexpected added outbounds: %+v", diff.AddedOutbounds)
 	}
 }
 

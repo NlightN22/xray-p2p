@@ -37,6 +37,30 @@ func (s *clientInstallState) hasEndpoint(host string, port int) bool {
 	return false
 }
 
+func (s *clientInstallState) updateEndpointCredentials(target, user, password string, userSet, passwordSet bool) (clientEndpointRecord, bool) {
+	if len(s.Endpoints) == 0 {
+		return clientEndpointRecord{}, false
+	}
+	trimmed := strings.TrimSpace(target)
+	if trimmed == "" {
+		return clientEndpointRecord{}, false
+	}
+	lower := strings.ToLower(trimmed)
+	for idx := range s.Endpoints {
+		if !strings.EqualFold(s.Endpoints[idx].Hostname, trimmed) && strings.ToLower(s.Endpoints[idx].Tag) != lower {
+			continue
+		}
+		if userSet {
+			s.Endpoints[idx].User = strings.TrimSpace(user)
+		}
+		if passwordSet {
+			s.Endpoints[idx].Password = strings.TrimSpace(password)
+		}
+		return s.Endpoints[idx], true
+	}
+	return clientEndpointRecord{}, false
+}
+
 func (s *clientInstallState) upsert(record clientEndpointRecord, force bool) error {
 	for idx, existing := range s.Endpoints {
 		sameHost := strings.EqualFold(existing.Hostname, record.Hostname)

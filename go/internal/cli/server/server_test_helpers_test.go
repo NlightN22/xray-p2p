@@ -104,6 +104,15 @@ func stubServerUserAdd(fn func(context.Context, server.AddUserOptions) error) fu
 	return func() { serverUserAddFunc = prev }
 }
 
+func stubServerUserUpdate(fn func(context.Context, server.UpdateUserOptions) error) func() {
+	prev := serverUserUpdateFunc
+	if fn == nil {
+		fn = func(context.Context, server.UpdateUserOptions) error { return nil }
+	}
+	serverUserUpdateFunc = fn
+	return func() { serverUserUpdateFunc = prev }
+}
+
 func stubServerUserLink(fn func(context.Context, server.UserLinkOptions) (server.UserLink, error)) func() {
 	prev := serverUserLinkFunc
 	if fn == nil {

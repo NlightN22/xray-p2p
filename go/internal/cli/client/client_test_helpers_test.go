@@ -66,6 +66,15 @@ func stubClientRemoveEndpoint(fn func(context.Context, client.RemoveEndpointOpti
 	return func() { clientRemoveEndpointFunc = prev }
 }
 
+func stubClientUpdateEndpoint(fn func(context.Context, client.UpdateEndpointOptions) error) func() {
+	prev := clientUpdateEndpointFunc
+	if fn == nil {
+		fn = func(context.Context, client.UpdateEndpointOptions) error { return nil }
+	}
+	clientUpdateEndpointFunc = fn
+	return func() { clientUpdateEndpointFunc = prev }
+}
+
 func stubClientRun(fn func(context.Context, client.RunOptions) error) func() {
 	prev := clientRunFunc
 	if fn == nil {

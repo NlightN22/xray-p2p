@@ -14,11 +14,40 @@ func newServerUserCmd(cfg commandConfig) *cobra.Command {
 
 	cmd.AddCommand(
 		newServerUserAddCmd(cfg),
+		newServerUserUpdateCmd(cfg),
 		newServerUserDisableCmd(cfg),
 		newServerUserEnableCmd(cfg),
 		newServerUserRemoveCmd(cfg),
 		newServerUserListCmd(cfg),
 	)
+	return cmd
+}
+
+func newServerUserUpdateCmd(cfg commandConfig) *cobra.Command {
+	var opts serverUserUpdateOptions
+	cmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update user credentials",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("expected exactly one user id")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.UserID = args[0]
+			opts.NewUserSet = cmd.Flags().Changed("new-id")
+			opts.PasswordSet = cmd.Flags().Changed("password")
+			code := runServerUserUpdate(commandContext(cmd), cfg(), opts)
+			return errorForCode(code)
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
+	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
+	flags.StringVarP(&opts.NewUserID, "new-id", "I", "", "new client identifier")
+	flags.StringVarP(&opts.Password, "password", "w", "", "client password or pre-shared key")
 	return cmd
 }
 

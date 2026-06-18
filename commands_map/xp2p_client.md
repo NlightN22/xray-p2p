@@ -10,7 +10,7 @@
 ## Command tree
 
 xp2p client
-  Subcommands: install, disable, enable, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
+  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
 
 xp2p client install
 Options:
@@ -48,6 +48,14 @@ xp2p client enable [hostname|tag]
 Options:
 Includes: Global options
 - --all, -a               Enable all endpoints
+
+xp2p client update <hostname|tag>
+Options:
+Includes: Global options
+- --path, -p <dir>        Client installation directory
+- --config-dir, -D <dir>  Client configuration directory name
+- --user, -u <email>      User email
+- --password, -w <password> User password
 
 xp2p client list
 Options:

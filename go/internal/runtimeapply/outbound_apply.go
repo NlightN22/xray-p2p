@@ -62,12 +62,17 @@ func verifyOutboundDiff(ctx context.Context, applier OutboundApplier, diff Diff)
 	for _, tag := range tags {
 		present[tag] = struct{}{}
 	}
+	replaced := make(map[string]struct{}, len(diff.AddedOutbounds))
 	for _, change := range diff.AddedOutbounds {
+		replaced[change.Tag] = struct{}{}
 		if _, ok := present[change.Tag]; !ok {
 			return fmt.Errorf("added outbound %s not found", change.Tag)
 		}
 	}
 	for _, change := range diff.RemovedOutbounds {
+		if _, ok := replaced[change.Tag]; ok {
+			continue
+		}
 		if _, ok := present[change.Tag]; ok {
 			return fmt.Errorf("removed outbound %s still present", change.Tag)
 		}

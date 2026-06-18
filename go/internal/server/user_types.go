@@ -19,6 +19,17 @@ type RemoveUserOptions struct {
 	Host       string
 }
 
+// UpdateUserOptions describes a credentials-only server user update.
+type UpdateUserOptions struct {
+	InstallDir  string
+	ConfigDir   string
+	UserID      string
+	NewUserID   string
+	Password    string
+	NewUserSet  bool
+	PasswordSet bool
+}
+
 // ListUsersOptions describes parameters for enumerating users and generating connection links.
 type ListUsersOptions struct {
 	InstallDir string

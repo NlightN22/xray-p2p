@@ -29,6 +29,16 @@ type serverUserRemoveOptions struct {
 	Host      string
 }
 
+type serverUserUpdateOptions struct {
+	Path        string
+	ConfigDir   string
+	UserID      string
+	NewUserID   string
+	Password    string
+	NewUserSet  bool
+	PasswordSet bool
+}
+
 type serverUserListOptions struct {
 	Path      string
 	ConfigDir string
@@ -143,6 +153,43 @@ func runServerUserRemove(ctx context.Context, cfg config.Config, opts serverUser
 	}
 
 	logging.Info("xp2p server user remove completed", "user_id", strings.TrimSpace(opts.UserID))
+	return 0
+}
+
+func runServerUserUpdate(ctx context.Context, cfg config.Config, opts serverUserUpdateOptions) int {
+	if !opts.NewUserSet && !opts.PasswordSet {
+		logging.Error("xp2p server user update: at least one of --new-id or --password is required")
+		return 2
+	}
+	if opts.NewUserSet && strings.TrimSpace(opts.NewUserID) == "" {
+		logging.Error("xp2p server user update: --new-id must not be empty")
+		return 2
+	}
+	if opts.PasswordSet {
+		if strings.TrimSpace(opts.Password) == "" {
+			logging.Error("xp2p server user update: --password must not be empty")
+			return 2
+		}
+		if err := clishared.ValidateRFC3986Unreserved(strings.TrimSpace(opts.Password)); err != nil {
+			logging.Error("xp2p server user update: invalid password", "err", err)
+			return 2
+		}
+	}
+
+	updateOpts := server.UpdateUserOptions{
+		InstallDir:  firstNonEmpty(opts.Path, cfg.Server.InstallDir),
+		ConfigDir:   firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
+		UserID:      opts.UserID,
+		NewUserID:   opts.NewUserID,
+		Password:    opts.Password,
+		NewUserSet:  opts.NewUserSet,
+		PasswordSet: opts.PasswordSet,
+	}
+	if err := serverUserUpdateFunc(ctx, updateOpts); err != nil {
+		logging.Error("xp2p server user update failed", "err", err)
+		return 1
+	}
+	logging.Info("xp2p server user update completed", "user_id", strings.TrimSpace(opts.UserID))
 	return 0
 }
 

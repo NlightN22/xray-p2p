@@ -68,8 +68,10 @@ func verifyInboundUserDiff(ctx context.Context, applier InboundUserApplier, diff
 			return fmt.Errorf("list inbound users %s: %w", tag, err)
 		}
 		present := emailSet(emails)
+		replaced := make(map[string]struct{}, len(diff.AddedInboundUsers))
 		for _, change := range diff.AddedInboundUsers {
 			if change.InboundTag == tag {
+				replaced[strings.ToLower(change.Email)] = struct{}{}
 				if _, ok := present[strings.ToLower(change.Email)]; !ok {
 					return fmt.Errorf("added inbound user %s/%s not found", tag, change.Email)
 				}
@@ -77,6 +79,9 @@ func verifyInboundUserDiff(ctx context.Context, applier InboundUserApplier, diff
 		}
 		for _, change := range diff.RemovedInboundUsers {
 			if change.InboundTag == tag {
+				if _, ok := replaced[strings.ToLower(change.Email)]; ok {
+					continue
+				}
 				if _, ok := present[strings.ToLower(change.Email)]; ok {
 					return fmt.Errorf("removed inbound user %s/%s still present", tag, change.Email)
 				}
