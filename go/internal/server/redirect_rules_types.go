@@ -14,6 +14,7 @@ type RedirectAddOptions struct {
 	CIDR       string
 	Domain     string
 	Tag        string
+	User       string
 	Hostname   string
 	NoRoutes   bool
 	TunEnabled bool

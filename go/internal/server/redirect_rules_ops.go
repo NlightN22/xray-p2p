@@ -24,7 +24,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return errors.New("no reverse portals configured (add xp2p server users first)")
 	}
 
-	binding, err := resolveServerRedirectBinding(opts.Tag, opts.Hostname, store.bindings())
+	binding, err := resolveServerRedirectChannel(opts.Tag, opts.User, opts.Hostname, store.reverse)
 	if err != nil {
 		return err
 	}

@@ -82,17 +82,7 @@ func (s *serverRedirectStore) removeRedirectsByTag(tag string) bool {
 }
 
 func (s serverRedirectStore) bindings() []redirect.Binding {
-	if len(s.reverse) == 0 {
-		return nil
-	}
-	result := make([]redirect.Binding, 0, len(s.reverse))
-	for _, channel := range s.reverse {
-		result = append(result, redirect.Binding{
-			Tag:  channel.Tag,
-			Host: channel.Host,
-		})
-	}
-	return result
+	return serverRedirectBindings(s.reverse)
 }
 
 func resolveServerRedirectBinding(tag, host string, bindings []redirect.Binding) (redirect.Binding, error) {
@@ -141,4 +131,75 @@ func resolveServerRedirectBinding(tag, host string, bindings []redirect.Binding)
 		}
 	}
 	return binding, nil
+}
+
+func resolveServerRedirectChannel(tag, user, host string, reverse serverReverseState) (redirect.Binding, error) {
+	trimmedTag := strings.TrimSpace(tag)
+	trimmedUser := strings.TrimSpace(user)
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedTag != "" && trimmedUser != "" {
+		return redirect.Binding{}, errors.New("specify only one of --tag or --user")
+	}
+	if trimmedUser == "" {
+		return resolveServerRedirectBinding(trimmedTag, trimmedHost, serverRedirectBindings(reverse))
+	}
+
+	channel, err := selectServerReverseChannelByUser(reverse, trimmedUser)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrServerReverseAmbiguous):
+			return redirect.Binding{}, fmt.Errorf("reverse user %q matches multiple portals", trimmedUser)
+		case errors.Is(err, ErrServerReverseNotFound):
+			return redirect.Binding{}, fmt.Errorf("reverse user %q is not registered", trimmedUser)
+		case errors.Is(err, ErrServerReverseNotSpecified):
+			return redirect.Binding{}, errors.New("--tag, --user, or --host is required")
+		default:
+			return redirect.Binding{}, err
+		}
+	}
+	if trimmedHost != "" && !strings.EqualFold(channel.Host, trimmedHost) {
+		return redirect.Binding{}, fmt.Errorf("reverse user %q does not match reverse host %q", trimmedUser, channel.Host)
+	}
+	return redirect.Binding{
+		Tag:  channel.Tag,
+		Host: channel.Host,
+	}, nil
+}
+
+func selectServerReverseChannelByUser(state serverReverseState, user string) (serverReverseChannel, error) {
+	if len(state) == 0 {
+		return serverReverseChannel{}, ErrServerReverseMissing
+	}
+	trimmedUser := strings.TrimSpace(user)
+	if trimmedUser == "" {
+		return serverReverseChannel{}, ErrServerReverseNotSpecified
+	}
+	matches := make([]serverReverseChannel, 0, 1)
+	for _, tag := range sortedReverseTags(state) {
+		channel := state[tag]
+		if strings.EqualFold(channel.UserID, trimmedUser) {
+			matches = append(matches, channel)
+		}
+	}
+	if len(matches) == 0 {
+		return serverReverseChannel{}, ErrServerReverseNotFound
+	}
+	if len(matches) > 1 {
+		return serverReverseChannel{}, ErrServerReverseAmbiguous
+	}
+	return matches[0], nil
+}
+
+func serverRedirectBindings(reverse serverReverseState) []redirect.Binding {
+	if len(reverse) == 0 {
+		return nil
+	}
+	result := make([]redirect.Binding, 0, len(reverse))
+	for _, channel := range reverse {
+		result = append(result, redirect.Binding{
+			Tag:  channel.Tag,
+			Host: channel.Host,
+		})
+	}
+	return result
 }

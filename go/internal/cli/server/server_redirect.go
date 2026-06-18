@@ -20,6 +20,7 @@ type serverRedirectAddOptions struct {
 	CIDR      string
 	Domain    string
 	Tag       string
+	User      string
 	Host      string
 	NoRoutes  bool
 	Quiet     bool
@@ -65,7 +66,7 @@ func newServerRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add",
 		Short: "Add a server redirect rule",
-		Long:  "Add a server redirect rule. When --tag/--host is omitted the CLI lists reverse portals and prompts for an outbound tag.",
+		Long:  "Add a server redirect rule. When --tag/--user/--host is omitted the CLI lists reverse portals and prompts for an outbound tag.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			code := runServerRedirectAdd(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
@@ -78,6 +79,7 @@ func newServerRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.CIDR, "cidr", "C", "", "CIDR to redirect")
 	flags.StringVarP(&opts.Domain, "domain", "d", "", "domain to redirect")
 	flags.StringVarP(&opts.Tag, "tag", "g", "", "reverse outbound tag to route through (prompts when omitted)")
+	flags.StringVarP(&opts.User, "user", "u", "", "reverse user to route through")
 	flags.StringVarP(&opts.Host, "host", "H", "", "reverse portal host to route through")
 	flags.BoolVarP(&opts.NoRoutes, "no-routes", "N", false, "do not add OS routes for CIDR redirects")
 	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "do not prompt for outbound tags")
@@ -145,8 +147,13 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 	configDir := firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir)
 
 	tagValue := strings.TrimSpace(opts.Tag)
+	userValue := strings.TrimSpace(opts.User)
 	hostValue := strings.TrimSpace(opts.Host)
-	if tagValue == "" && hostValue == "" {
+	if tagValue != "" && userValue != "" {
+		logging.Error("xp2p server redirect add: specify only one of --tag or --user")
+		return 2
+	}
+	if tagValue == "" && userValue == "" && hostValue == "" {
 		selection, err := resolveServerBinding(serverBindingRequest{
 			InstallDir: installDir,
 			ConfigDir:  configDir,
@@ -158,7 +165,7 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 		})
 		if err != nil {
 			if serverBindingRequiredError(err) {
-				logging.Error("xp2p server redirect add: --tag or --host is required")
+				logging.Error("xp2p server redirect add: --tag, --user, or --host is required")
 				return 2
 			}
 			logging.Error("xp2p server redirect add: failed to enumerate reverse portals", "err", err)
@@ -174,6 +181,7 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 		CIDR:       opts.CIDR,
 		Domain:     opts.Domain,
 		Tag:        tagValue,
+		User:       userValue,
 		Hostname:   hostValue,
 		NoRoutes:   opts.NoRoutes,
 		TunEnabled: cfg.Server.TunEnabled,
@@ -184,7 +192,7 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 		return 1
 	}
 
-	fields := []any{"tag", strings.TrimSpace(tagValue), "host", strings.TrimSpace(hostValue)}
+	fields := []any{"tag", strings.TrimSpace(tagValue), "user", strings.TrimSpace(userValue), "host", strings.TrimSpace(hostValue)}
 	if hasCIDR {
 		fields = append(fields, "cidr", strings.TrimSpace(opts.CIDR))
 	} else {

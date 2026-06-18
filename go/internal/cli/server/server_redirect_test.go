@@ -46,6 +46,41 @@ func TestRunServerRedirectAddValidatesInputs(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("expected validation error, got %d", code)
 	}
+
+	code = runServerRedirectAdd(context.Background(), cfg, serverRedirectAddOptions{
+		CIDR: "10.70.0.0/16",
+		Tag:  "alphaedge-example.rev",
+		User: "alpha",
+	})
+	if code != 2 {
+		t.Fatalf("expected tag/user validation error, got %d", code)
+	}
+}
+
+func TestRunServerRedirectAddPassesUserSelector(t *testing.T) {
+	t.Cleanup(func() {
+		serverRedirectAddFunc = server.AddRedirect
+	})
+
+	var captured server.RedirectAddOptions
+	serverRedirectAddFunc = func(opts server.RedirectAddOptions) error {
+		captured = opts
+		return nil
+	}
+
+	cfg := config.Config{}
+	cfg.Server.InstallDir = "C:\\srv"
+	cfg.Server.ConfigDir = "config-server"
+	code := runServerRedirectAdd(context.Background(), cfg, serverRedirectAddOptions{
+		CIDR: "10.70.0.0/16",
+		User: "AB-Pushkina",
+	})
+	if code != 0 {
+		t.Fatalf("runServerRedirectAdd returned %d", code)
+	}
+	if captured.User != "AB-Pushkina" || captured.Tag != "" {
+		t.Fatalf("captured add options %+v", captured)
+	}
 }
 
 func TestRunServerRedirectRemoveHandlesErrors(t *testing.T) {

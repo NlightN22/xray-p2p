@@ -10,6 +10,7 @@ def assert_reverse_redirect_via_server_portal(env: dict) -> None:
     server_runner = env["server_runner"]
     server_install_path = env["server_install_path"]
     reverse_tag = env["reverse_tag"]
+    reverse_user = env["client_user"]
     client_host = env["client_host"]
     server_host = env["server_host"]
     reverse_channels = helpers.read_pending_server_config(server_host).get("reverse_channels") or {}
@@ -34,7 +35,7 @@ def assert_reverse_redirect_via_server_portal(env: dict) -> None:
 
     alias_cidr = f"{fixture.CLIENT_REVERSE_TEST_IP}/32"
     with fixture.ip_alias(client_host, alias_cidr):
-        server_runner(
+        negative = server_runner(
             "server",
             "redirect",
             "add",
@@ -45,7 +46,31 @@ def assert_reverse_redirect_via_server_portal(env: dict) -> None:
             "--cidr",
             alias_cidr,
             "--tag",
-            reverse_tag,
+            reverse_user,
+            check=False,
+        )
+        assert negative.rc != 0, (
+            "server redirect add accepted a user id through --tag.\n"
+            f"STDOUT:\n{negative.stdout}\nSTDERR:\n{negative.stderr}"
+        )
+        negative_output = f"{negative.stdout}\n{negative.stderr}".lower()
+        assert "outbound tag" in negative_output, (
+            "server redirect add with --tag <user> failed with an unexpected error.\n"
+            f"STDOUT:\n{negative.stdout}\nSTDERR:\n{negative.stderr}"
+        )
+
+        server_runner(
+            "server",
+            "redirect",
+            "add",
+            "--path",
+            server_install_path,
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--cidr",
+            alias_cidr,
+            "--user",
+            reverse_user,
             check=True,
         )
         forward_added = False
