@@ -19,6 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayguard"
 )
 
 // Run launches xray-core using the installed client configuration directory and blocks until the process exits.
@@ -188,7 +189,20 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			}
 			return nil
 		},
+		func(event xrayguard.Event) {
+			if err := updateClientRuntimeQuarantine(paths.stateFile, event, opts.FullTunnelTag); err != nil {
+				logging.Warn("client runtime quarantine state update failed", "err", err)
+			}
+		},
 	)
+	if event, ok := loopProtectionEvent(runErr); ok {
+		logging.Warn("client loop protection quarantine delay",
+			"reason", event.Reason,
+			"fd_delta", event.FDDelta,
+			"delay", loopProtectionQuarantineDelay.String(),
+		)
+		sleepWithContext(ctx, loopProtectionQuarantineDelay)
+	}
 	return runErr
 }
 

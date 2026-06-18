@@ -3,6 +3,7 @@ package clientcmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -101,7 +102,49 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 		logging.Error("xp2p client state: failed to render state", "err", err)
 		return 1
 	}
+	if !opts.Pending {
+		if err := printClientRuntimeStatus(config.ConfigPath(layout.ClientAppliedStateFileName)); err != nil {
+			logging.Warn("client runtime state read failed", "err", err)
+		}
+	}
 	return 0
+}
+
+func printClientRuntimeStatus(path string) error {
+	status, err := client.LoadRuntimeStatus(path)
+	if err != nil {
+		return err
+	}
+	if status.Status == "" && !status.LoopProtectionSeen {
+		return nil
+	}
+
+	fmt.Println()
+	fmt.Println("RUNTIME_STATUS")
+	if status.Status != "" {
+		fmt.Printf("STATUS=%s\n", status.Status)
+	}
+	if status.Reason != "" {
+		fmt.Printf("REASON=%s\n", status.Reason)
+	}
+	if status.RelatedOutbound != "" {
+		fmt.Printf("RELATED_OUTBOUND=%s\n", status.RelatedOutbound)
+	}
+	if status.LoopProtectionSeen {
+		fmt.Printf("FD_BEFORE=%d\n", status.FDBefore)
+		fmt.Printf("FD_AFTER=%d\n", status.FDAfter)
+		fmt.Printf("FD_DELTA=%d\n", status.FDDelta)
+		if status.Window != "" {
+			fmt.Printf("WINDOW=%s\n", status.Window)
+		}
+		if status.Action != "" {
+			fmt.Printf("ACTION=%s\n", status.Action)
+		}
+		if !status.DetectedAt.IsZero() {
+			fmt.Printf("DETECTED_AT=%s\n", status.DetectedAt.UTC().Format(time.RFC3339))
+		}
+	}
+	return nil
 }
 
 func clientStateInstallPresent(installDir string) (bool, error) {

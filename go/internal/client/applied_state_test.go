@@ -3,9 +3,11 @@ package client
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayguard"
 )
 
 func TestClientAppliedStateSaveAndLoad(t *testing.T) {
@@ -54,5 +56,59 @@ func TestClientAppliedStateSaveAndLoad(t *testing.T) {
 	}
 	if len(loaded.Config.Endpoints) != 1 || loaded.Config.Endpoints[0].Hostname != "edge.example" {
 		t.Fatalf("unexpected config endpoints: %+v", loaded.Config.Endpoints)
+	}
+}
+
+func TestUpdateClientRuntimeQuarantine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "client.state.json")
+	cfg := clientInstallState{
+		Endpoints: []clientEndpointRecord{
+			{Hostname: "edge.example", Tag: "proxy-edge"},
+		},
+	}
+	if err := saveClientAppliedState(path, cfg, true, "xp2pc", 1500, "198.18.0.1/30"); err != nil {
+		t.Fatalf("saveClientAppliedState failed: %v", err)
+	}
+
+	start := time.Date(2026, 6, 17, 10, 0, 0, 0, time.UTC)
+	event := xrayguard.Event{
+		Reason: xrayguard.ReasonFDSpike,
+		PID:    77,
+		Before: xrayguard.Sample{
+			Timestamp:           start,
+			FDCount:             22,
+			SocketFDCount:       16,
+			EstablishedTCPCount: 50,
+		},
+		After: xrayguard.Sample{
+			Timestamp:           start.Add(2 * time.Second),
+			FDCount:             4095,
+			SocketFDCount:       4088,
+			EstablishedTCPCount: 60,
+		},
+		Window:              2 * time.Second,
+		FDDelta:             4073,
+		SocketRatioPercent:  99,
+		EstablishedTCPCount: 60,
+		Action:              "kill_xray",
+	}
+
+	if err := updateClientRuntimeQuarantine(path, event, "proxy-edge"); err != nil {
+		t.Fatalf("updateClientRuntimeQuarantine failed: %v", err)
+	}
+
+	loaded, err := loadClientAppliedState(path)
+	if err != nil {
+		t.Fatalf("loadClientAppliedState failed: %v", err)
+	}
+	if loaded.Runtime.Status != "quarantined" || loaded.Runtime.Reason != xrayguard.ReasonFDSpike {
+		t.Fatalf("unexpected runtime status: %+v", loaded.Runtime)
+	}
+	loop := loaded.Runtime.LoopProtection
+	if loop == nil {
+		t.Fatal("expected loop protection state")
+	}
+	if loop.FDBefore != 22 || loop.FDAfter != 4095 || loop.RelatedOutbound != "proxy-edge" {
+		t.Fatalf("unexpected loop protection state: %+v", loop)
 	}
 }

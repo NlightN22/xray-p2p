@@ -19,6 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/preflight"
 	"github.com/NlightN22/xray-p2p/go/internal/winnet"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayguard"
 )
 
 // Run launches xray-core using the installed client configuration directory and blocks until the process exits.
@@ -227,8 +228,22 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		configureCmd,
 		onStart,
 		onReady,
+		func(event xrayguard.Event) {
+			if err := updateClientRuntimeQuarantine(paths.stateFile, event, opts.FullTunnelTag); err != nil {
+				logging.Warn("client runtime quarantine state update failed", "err", err)
+			}
+		},
 	)
 	if runErr != nil {
+		if event, ok := loopProtectionEvent(runErr); ok {
+			logging.Warn("client loop protection quarantine delay",
+				"reason", event.Reason,
+				"fd_delta", event.FDDelta,
+				"delay", loopProtectionQuarantineDelay.String(),
+			)
+			sleepWithContext(ctx, loopProtectionQuarantineDelay)
+			return runErr
+		}
 		var pendingRetry *PendingRetryError
 		if errors.As(runErr, &pendingRetry) {
 			logging.Warn("tun ready failed; mode change remains pending", "err", runErr)

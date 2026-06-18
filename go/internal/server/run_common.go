@@ -10,11 +10,13 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayguard"
 )
 
 type cmdConfigurator func(*exec.Cmd)
 type startHook func() error
 type readyCheck func(context.Context) error
+type guardHook func(xrayguard.Event)
 
 type tailBuffer struct {
 	mu  sync.Mutex
@@ -69,6 +71,7 @@ func runXrayWithConfig(
 	configureCmd cmdConfigurator,
 	onStart startHook,
 	onReady readyCheck,
+	guardHooks ...guardHook,
 ) error {
 	var errorWriter io.Writer
 
@@ -95,6 +98,7 @@ func runXrayWithConfig(
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start xray-core: %w", err)
 	}
+	pid := cmd.Process.Pid
 
 	stderrTail := newTailBuffer(16 * 1024)
 	if errorWriter != nil {
@@ -121,6 +125,41 @@ func runXrayWithConfig(
 		close(procExit)
 	}()
 
+	guardCtx, cancelGuard := context.WithCancel(ctx)
+	defer cancelGuard()
+	var guardMu sync.Mutex
+	var guardEvent *xrayguard.Event
+	go func() {
+		eventCh := xrayguard.Monitor(guardCtx, pid, xrayguard.DefaultOptions())
+		for event := range eventCh {
+			guardMu.Lock()
+			copied := event
+			guardEvent = &copied
+			guardMu.Unlock()
+
+			logging.Error("xray-core loop protection triggered",
+				"reason", event.Reason,
+				"pid", event.PID,
+				"fd_before", event.Before.FDCount,
+				"fd_after", event.After.FDCount,
+				"fd_delta", event.FDDelta,
+				"window", event.Window.String(),
+				"socket_ratio_percent", event.SocketRatioPercent,
+				"established_tcp", event.EstablishedTCPCount,
+				"action", event.Action,
+			)
+			for _, hook := range guardHooks {
+				if hook != nil {
+					hook(event)
+				}
+			}
+			if cmd.Process != nil && !isClosed(procExit) {
+				_ = cmd.Process.Kill()
+			}
+			return
+		}
+	}()
+
 	readyCtx, cancelReady := context.WithCancel(ctx)
 	defer cancelReady()
 	go func() {
@@ -142,6 +181,12 @@ func runXrayWithConfig(
 			}
 			if isClosed(procExit) {
 				wg.Wait()
+				guardMu.Lock()
+				event := guardEvent
+				guardMu.Unlock()
+				if event != nil {
+					return *event
+				}
 				tail := strings.TrimSpace(stderrTail.String())
 				if tail != "" {
 					return fmt.Errorf("xray-core exited before ready: %w (stderr tail: %s)", waitErr, tail)
@@ -169,6 +214,7 @@ func runXrayWithConfig(
 	}
 
 	<-procExit
+	cancelGuard()
 	wg.Wait()
 
 	if ctx.Err() != nil {
@@ -176,6 +222,12 @@ func runXrayWithConfig(
 		return nil
 	}
 	if waitErr != nil {
+		guardMu.Lock()
+		event := guardEvent
+		guardMu.Unlock()
+		if event != nil {
+			return *event
+		}
 		tail := strings.TrimSpace(stderrTail.String())
 		if tail != "" {
 			return fmt.Errorf("xray-core exited: %w (stderr tail: %s)", waitErr, tail)
