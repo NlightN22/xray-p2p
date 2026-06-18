@@ -16,6 +16,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/NlightN22/xray-p2p/go/internal/service"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
@@ -84,6 +85,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	runnerOpts := service.Options{
 		Name:               "client",
 		WatchFiles:         []string{config.ApplyRequestPath()},
+		OnWatchFileChange:  handleClientApplyRequestChange,
 		WatchDebounce:      400 * time.Millisecond,
 		IgnorePaths:        ignorePaths,
 		MaxRestarts:        opts.MaxRestarts,
@@ -153,6 +155,22 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	}
 	restoreFullTunnelOnStop(installDir, configDirName)
 	return nil
+}
+
+func handleClientApplyRequestChange(ctx context.Context, path string) (service.WatchFileAction, error) {
+	if filepath.Clean(path) != filepath.Clean(config.ApplyRequestPath()) {
+		return service.WatchFileRestart, nil
+	}
+	result, err := tryRuntimeApplyPending(ctx, apply.RoleClient)
+	if err != nil {
+		return service.WatchFileRestart, err
+	}
+	switch result {
+	case xraylive.RuntimeApplyApplied, xraylive.RuntimeApplyNoop, xraylive.RuntimeApplyFailed, xraylive.RuntimeApplySkipped:
+		return service.WatchFileHandled, nil
+	default:
+		return service.WatchFileRestart, nil
+	}
 }
 
 func hasClientConfig(liveConfigDir string) (bool, error) {

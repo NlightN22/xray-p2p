@@ -3,12 +3,14 @@
 package client
 
 import (
+	"context"
 	"os"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request, error) {
@@ -86,6 +88,45 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 	}
 	logging.Info("desired config compiled into live artifacts", "role", role, "request_id", req.ID, "live_dir", liveDir)
 	return apply.NewRollback(liveDir, lkgDir), true, req, nil
+}
+
+func tryRuntimeApplyPending(ctx context.Context, role string) (xraylive.RuntimeApplyResult, error) {
+	desiredConfig, err := config.DesiredConfigPathForRole(role)
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	extensionsDir, err := config.DesiredExtensionsDirForRole(role)
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	liveDir, err := config.LiveRoleDir(role)
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	lkgDir, err := config.LkgRoleDir(role)
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	return xraylive.TryApplyRoutingPending(ctx, xraylive.Options{
+		Role:          role,
+		RequestPath:   config.ApplyRequestPath(),
+		ErrorPath:     config.ApplyErrorPath(),
+		AuditPath:     config.AuditLogPath(),
+		DesiredConfig: desiredConfig,
+		ExtensionsDir: extensionsDir,
+		LiveDir:       liveDir,
+		LkgDir:        lkgDir,
+		Compile: func(configPath, extensionsDir string) (xraylive.Artifacts, error) {
+			artifacts, err := compileDesired(configPath, extensionsDir)
+			if err != nil {
+				return xraylive.Artifacts{}, err
+			}
+			return xraylive.Artifacts{
+				XrayJSON: artifacts.XrayJSON,
+				MetaJSON: artifacts.MetaJSON,
+			}, nil
+		},
+	})
 }
 
 func fileExists(path string) bool {

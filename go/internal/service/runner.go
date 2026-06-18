@@ -11,6 +11,15 @@ import (
 // MaxRestartAttempts defines the default limit of restart retries after failures.
 const MaxRestartAttempts = 10
 
+type WatchFileAction string
+
+const (
+	WatchFileRestart WatchFileAction = "restart"
+	WatchFileHandled WatchFileAction = "handled"
+)
+
+type WatchFileChangeFunc func(context.Context, string) (WatchFileAction, error)
+
 // Options controls service runner behaviour.
 type Options struct {
 	// Name is used for log messages.
@@ -19,6 +28,8 @@ type Options struct {
 	WatchPaths []string
 	// WatchFiles lists specific files to monitor for changes.
 	WatchFiles []string
+	// OnWatchFileChange may handle a watched file change without restarting the child.
+	OnWatchFileChange WatchFileChangeFunc
 	// WatchDebounce delays file change handling to collapse rapid updates.
 	WatchDebounce time.Duration
 	// IgnorePaths lists exact paths that should not trigger restarts when changed.
@@ -188,6 +199,17 @@ func Run(ctx context.Context, opts Options, run func(context.Context) error) err
 				}
 				if shouldIgnoreEvent(path, ignored) {
 					continue
+				}
+				action := WatchFileRestart
+				if opts.OnWatchFileChange != nil {
+					action, err = opts.OnWatchFileChange(ctx, path)
+					if err != nil {
+						logging.Warn("service watched file handler failed", "service", name, "path", path, "err", err)
+						action = WatchFileRestart
+					}
+					if action == WatchFileHandled {
+						continue
+					}
 				}
 				allowed, nextAllowed := watchRestartAllowed(opts, &watchRestarts)
 				if !allowed {

@@ -1,0 +1,195 @@
+package xraylive
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/runtimeapply"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayapi"
+)
+
+type RuntimeApplyResult string
+
+const (
+	RuntimeApplySkipped         RuntimeApplyResult = "skipped"
+	RuntimeApplyNoop            RuntimeApplyResult = "noop"
+	RuntimeApplyApplied         RuntimeApplyResult = "applied"
+	RuntimeApplyRestartRequired RuntimeApplyResult = "restart_required"
+	RuntimeApplyFailed          RuntimeApplyResult = "failed"
+)
+
+type Artifacts struct {
+	XrayJSON []byte
+	MetaJSON []byte
+	Extra    map[string][]byte
+}
+
+type CompileFunc func(configPath, extensionsDir string) (Artifacts, error)
+
+type RoutingApplierFactory func(ctx context.Context, address string) (runtimeapply.RoutingApplier, func() error, error)
+
+type Options struct {
+	Role          string
+	RequestPath   string
+	ErrorPath     string
+	AuditPath     string
+	DesiredConfig string
+	ExtensionsDir string
+	LiveDir       string
+	LkgDir        string
+	Compile       CompileFunc
+	NewApplier    RoutingApplierFactory
+}
+
+func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResult, error) {
+	role := strings.TrimSpace(strings.ToLower(opts.Role))
+	if role == "" {
+		return RuntimeApplySkipped, errors.New("runtime apply role is required")
+	}
+	req, ok, err := readMatchingRequest(opts.RequestPath, opts.ErrorPath, role)
+	if err != nil || !ok {
+		return RuntimeApplySkipped, err
+	}
+	if opts.Compile == nil {
+		return RuntimeApplySkipped, errors.New("runtime apply compile callback is required")
+	}
+
+	artifacts, err := opts.Compile(opts.DesiredConfig, opts.ExtensionsDir)
+	if err != nil {
+		writeRuntimeApplyError(opts, req, err)
+		logging.Warn("runtime apply compilation failed", "role", role, "request_id", req.ID, "err", err)
+		return RuntimeApplyFailed, nil
+	}
+
+	current, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return RuntimeApplyRestartRequired, nil
+		}
+		return RuntimeApplySkipped, fmt.Errorf("read live xray config: %w", err)
+	}
+	diff, err := runtimeapply.ClassifyXrayConfigDiff(current, artifacts.XrayJSON)
+	if err != nil {
+		return RuntimeApplyRestartRequired, nil
+	}
+	switch diff.Kind {
+	case runtimeapply.DiffNoop:
+		if err := publishLiveArtifacts(opts, artifacts); err != nil {
+			writeRuntimeApplyError(opts, req, err)
+			return RuntimeApplyFailed, nil
+		}
+		cleanupRuntimeApplyMarkers(opts, role)
+		return RuntimeApplyNoop, nil
+	case runtimeapply.DiffUnsupported:
+		logging.Info("runtime apply fallback required", "role", role, "request_id", req.ID, "reason", diff.Reason)
+		return RuntimeApplyRestartRequired, nil
+	case runtimeapply.DiffRoutingOnly:
+	default:
+		return RuntimeApplyRestartRequired, nil
+	}
+
+	address, err := xrayapi.APIListenFromConfig(current)
+	if err != nil || strings.TrimSpace(address) == "" {
+		return RuntimeApplyRestartRequired, nil
+	}
+	factory := opts.NewApplier
+	if factory == nil {
+		factory = DefaultRoutingApplierFactory
+	}
+	applier, closeApplier, err := factory(ctx, address)
+	if err != nil {
+		return RuntimeApplyRestartRequired, nil
+	}
+	defer func() {
+		if closeApplier != nil {
+			_ = closeApplier()
+		}
+	}()
+	if err := runtimeapply.ApplyRoutingDiff(ctx, applier, diff); err != nil {
+		logging.Warn("runtime apply failed; restart fallback required", "role", role, "request_id", req.ID, "err", err)
+		return RuntimeApplyRestartRequired, nil
+	}
+	if err := publishLiveArtifacts(opts, artifacts); err != nil {
+		rollbackErr := runtimeapply.ApplyRoutingDiff(ctx, applier, reverseRoutingDiff(diff))
+		reason := err
+		if rollbackErr != nil {
+			reason = fmt.Errorf("%w; runtime rollback failed: %v", err, rollbackErr)
+		}
+		writeRuntimeApplyError(opts, req, reason)
+		return RuntimeApplyFailed, nil
+	}
+
+	cleanupRuntimeApplyMarkers(opts, role)
+	logging.Info("runtime routing apply completed", "role", role, "request_id", req.ID)
+	return RuntimeApplyApplied, nil
+}
+
+func DefaultRoutingApplierFactory(ctx context.Context, address string) (runtimeapply.RoutingApplier, func() error, error) {
+	client, err := xrayapi.Dial(ctx, address, xrayapi.DefaultTimeout)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, client.Close, nil
+}
+
+func readMatchingRequest(requestPath, errorPath, role string) (apply.Request, bool, error) {
+	req, exists, err := apply.ReadRequest(requestPath)
+	if err != nil || !exists || !req.MatchesRole(role) {
+		return req, false, err
+	}
+	if marker, markerExists, err := apply.ReadError(errorPath); err != nil {
+		return req, false, err
+	} else if markerExists && marker.RequestID != "" && marker.RequestID == req.ID {
+		logging.Warn("runtime apply skipped (previous failure)", "role", role, "request_id", req.ID, "reason", marker.Reason)
+		return req, false, nil
+	}
+	return req, true, nil
+}
+
+func publishLiveArtifacts(opts Options, artifacts Artifacts) error {
+	files := map[string][]byte{
+		layout.XrayConfigFileName:  artifacts.XrayJSON,
+		layout.RuntimeMetaFileName: artifacts.MetaJSON,
+	}
+	for name, data := range artifacts.Extra {
+		files[name] = data
+	}
+	return apply.ReplaceRoleLiveDir(opts.LiveDir, opts.LkgDir, files)
+}
+
+func cleanupRuntimeApplyMarkers(opts Options, role string) {
+	if err := apply.RemoveRoleMarkers(opts.RequestPath, opts.ErrorPath, role); err != nil {
+		logging.Warn("runtime apply marker cleanup failed", "role", role, "err", err)
+	}
+}
+
+func writeRuntimeApplyError(opts Options, req apply.Request, err error) {
+	if err == nil {
+		return
+	}
+	_ = apply.WriteError(opts.ErrorPath, apply.ErrorMarker{
+		RequestID: req.ID,
+		Role:      opts.Role,
+		Reason:    err.Error(),
+	}, opts.AuditPath)
+	logging.Warn("runtime apply failed", "role", opts.Role, "request_id", req.ID, "err", err)
+}
+
+func reverseRoutingDiff(diff runtimeapply.Diff) runtimeapply.Diff {
+	reversed := runtimeapply.Diff{Kind: runtimeapply.DiffRoutingOnly}
+	for _, change := range diff.AddedRules {
+		reversed.RemovedRuleTag = append(reversed.RemovedRuleTag, change.RuleTag)
+		reversed.RemovedRules = append(reversed.RemovedRules, change)
+	}
+	for _, change := range diff.RemovedRules {
+		reversed.AddedRules = append(reversed.AddedRules, change)
+	}
+	return reversed
+}

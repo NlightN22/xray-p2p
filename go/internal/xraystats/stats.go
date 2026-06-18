@@ -69,15 +69,11 @@ func APIListenFromXrayConfig(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var doc struct {
-		API struct {
-			Listen string `json:"listen"`
-		} `json:"api"`
+	address, err := xrayapi.APIListenFromConfig(data)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", path, err)
 	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return "", fmt.Errorf("parse xray config %s: %w", path, err)
-	}
-	return strings.TrimSpace(doc.API.Listen), nil
+	return address, nil
 }
 
 // ParseUserStats parses Xray StatsService.QueryStats JSON output.

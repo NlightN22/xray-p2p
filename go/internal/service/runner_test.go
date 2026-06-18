@@ -117,6 +117,62 @@ func TestRunRestartsOnWatchFile(t *testing.T) {
 	}
 }
 
+func TestRunHandlesWatchFileWithoutRestart(t *testing.T) {
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	configPath := filepath.Join(dir, "apply.request")
+	if err := os.WriteFile(configPath, []byte("init\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	startCh := make(chan struct{}, 4)
+	handledCh := make(chan struct{}, 1)
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- Run(ctx, Options{
+			Name:          "file-handler",
+			WatchFiles:    []string{configPath},
+			WatchDebounce: 10 * time.Millisecond,
+			RestartDelay:  10 * time.Millisecond,
+			OnWatchFileChange: func(context.Context, string) (WatchFileAction, error) {
+				handledCh <- struct{}{}
+				return WatchFileHandled, nil
+			},
+		}, func(runCtx context.Context) error {
+			startCh <- struct{}{}
+			<-runCtx.Done()
+			return runCtx.Err()
+		})
+	}()
+
+	waitForStart(t, startCh)
+
+	if err := os.WriteFile(configPath, []byte(fmt.Sprintf("ts=%d\n", time.Now().UnixNano())), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	select {
+	case <-handledCh:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for watched file handler")
+	}
+	waitForNoStart(t, startCh, 300*time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("service returned error: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for service shutdown")
+	}
+}
+
 func TestRunWatchLimiterSkipsAfterThreshold(t *testing.T) {
 	dir := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
