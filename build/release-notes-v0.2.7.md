@@ -7,6 +7,7 @@
 - Runtime diff classification now supports replacing an existing outbound with the same tag and replacing an existing Trojan inbound user with the same email, allowing credential updates to be applied as remove/add operations through Xray gRPC.
 - Client and server apply flows can now apply supported Xray changes through the running Xray API and verify the runtime result before persisting Desired/Live state.
 - Server user changes now use live Xray API application where supported instead of forcing a full Xray restart.
+- `xp2p server user remove` no longer writes an apply request when the requested user and related reverse/redirect state are already absent, avoiding unnecessary service apply/restart work for no-op removals.
 - Added smoke coverage for the bundled Xray API integration.
 
 ## Runtime state, stats, and observability
@@ -60,6 +61,7 @@
 - Added apply request support for client and server flows that need service/run apply processing.
 - Added runtime service runner plumbing used by apply-driven workflows.
 - `xp2p client install` now rejects duplicate client endpoints by `hostname:port` before rewriting Desired configuration or creating a new apply request. Use `--force` when an existing endpoint must be replaced.
+- The UI mode manager now skips apply requests when applying the already-current client/server mode does not change Desired configuration.
 - Updated client and server log templates.
 - Added version parsing and version metadata tests.
 
@@ -78,10 +80,12 @@
 - Split large host test helper modules into focused Linux, OpenWrt, and Windows helper modules.
 - Added OpenWrt install-from-pages test coverage.
 - Added Linux/OpenWrt host coverage that verifies duplicate client endpoint installs leave Desired configuration unchanged and do not create a new apply request.
+- Added Linux host coverage that verifies real server user removal creates an apply request, while repeating the same removal as a no-op does not.
 - Updated Linux/OpenWrt host redirect tests to cover removing a redirect by CIDR without an explicit tag/host when exactly one matching redirect exists.
 - Added Linux host coverage for server redirect cleanup when removing a user with duplicate-CIDR redirects across different reverse tags.
 - Added Go unit coverage for positive and negative redirect binding selection scenarios on client and server commands.
 - Added Go unit coverage for server redirect cleanup when removing users and for tag-only cleanup of orphaned duplicate-CIDR redirects.
+- Added Go unit coverage to ensure missing user/endpoint/forward/redirect removal paths do not create apply requests when Desired state is unchanged.
 - Added Go unit coverage for the shared binding resolver.
 - Added Go unit coverage for credentials-only client endpoint updates and server user updates that preserve redirects and reverse bindings.
 - Added runtime-apply unit coverage for same-tag outbound replacement and same-email Trojan inbound user replacement.
