@@ -32,7 +32,6 @@ def runner(host):
         pending_targets = {
             ("client", "list"),
             ("client", "forward", "list"),
-            ("client", "redirect", "list"),
             ("client", "reverse"),
             ("client", "reverse", "list"),
             ("server", "forward", "list"),
@@ -43,10 +42,13 @@ def runner(host):
             ("server", "cert", "state"),
         }
         if "--pending" not in cmd and "-y" not in cmd:
-            for target in pending_targets:
-                if tuple(cmd[: len(target)]) == target:
-                    cmd.append("--pending")
-                    break
+            if cmd[:2] == ["client", "redirect"] and (len(cmd) == 2 or cmd[2].startswith("-")):
+                cmd.append("--pending")
+            else:
+                for target in pending_targets:
+                    if tuple(cmd[: len(target)]) == target:
+                        cmd.append("--pending")
+                        break
         result = linux_env.run_xp2p(host, *cmd)
         if check and result.rc != 0:
             helpers.dump_failure_state(host, f"tunnel-B-to-A-runner-{host.backend.hostname}")
@@ -560,7 +562,6 @@ def assert_redirect_entries_removed(
     client_redirect_list = client_runner(
         "client",
         "redirect",
-        "list",
         "--path",
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",
@@ -586,6 +587,6 @@ def assert_redirect_entries_removed(
         )
     if parsers.has_redirect_entry(client_entries, cidr=client_cidr, tag=client_tag):
         raise AssertionError(
-            f"Client redirect list still contains {client_cidr} for {client_tag}:\n{client_redirect_list}"
+            f"Client redirect output still contains {client_cidr} for {client_tag}:\n{client_redirect_list}"
         )
 

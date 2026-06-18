@@ -6,11 +6,16 @@ func newClientRedirectCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redirect",
 		Short: "Manage custom client redirects",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			_ = cmd.Help()
-			return exitError{code: 1}
+		RunE: func(cmd *cobra.Command, args []string) error {
+			forwarded := forwardFlags(cmd, args)
+			code := runClientRedirectList(commandContext(cmd), cfg(), forwarded)
+			return errorForCode(code)
 		},
 	}
+	flags := cmd.Flags()
+	flags.StringP("path", "p", "", "client installation directory")
+	flags.StringP("config-dir", "D", "", "client configuration directory name")
+	flags.BoolP("pending", "y", false, "list pending configuration")
 	cmd.AddCommand(
 		newClientRedirectAddCmd(cfg),
 		newClientRedirectDisableCmd(cfg),

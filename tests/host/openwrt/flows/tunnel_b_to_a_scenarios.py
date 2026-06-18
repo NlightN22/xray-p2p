@@ -68,13 +68,12 @@ def run_client_redirect_through_server(env: dict) -> None:
         client_host,
         "client",
         "redirect",
-        "list",
         "--path",
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",
         helpers.CLIENT_CONFIG_DIR_NAME,
     )
-    print("client redirect list --live (pre-add):")
+    print("client redirect --live (pre-add):")
     print((live_list.stdout or "").strip())
     print((live_list.stderr or "").strip())
 
@@ -351,7 +350,6 @@ def run_client_redirect_through_server(env: dict) -> None:
             client_host,
             "client",
             "redirect",
-            "list",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",

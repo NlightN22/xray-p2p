@@ -512,7 +512,6 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
         redirect_list = runner(
             "client",
             "redirect",
-            "list",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -549,7 +548,6 @@ def test_client_remove_endpoint_and_list(openwrt_host, xp2p_openwrt_ipk):
         redirect_list_after = runner(
             "client",
             "redirect",
-            "list",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",

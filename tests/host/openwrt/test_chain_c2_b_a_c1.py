@@ -320,7 +320,6 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             client_redirects = client_runner(
                 "client",
                 "redirect",
-                "list",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",

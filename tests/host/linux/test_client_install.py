@@ -389,7 +389,6 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
         redirect_list = xp2p_client_runner(
             "client",
             "redirect",
-            "list",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -431,7 +430,6 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             redirect_list_after = xp2p_client_runner(
                 "client",
                 "redirect",
-                "list",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
@@ -474,7 +472,6 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             redirect_debug = xp2p_client_runner(
                 "client",
                 "redirect",
-                "list",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
@@ -484,7 +481,7 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             )
             debug.append(f"xp2p client list rc={list_debug.rc}\n{list_debug.stdout or ''}\n{list_debug.stderr or ''}")
             debug.append(
-                f"xp2p client redirect list rc={redirect_debug.rc}\n{redirect_debug.stdout or ''}\n{redirect_debug.stderr or ''}"
+                f"xp2p client redirect rc={redirect_debug.rc}\n{redirect_debug.stdout or ''}\n{redirect_debug.stderr or ''}"
             )
             raise AssertionError(
                 f"{exc}\n\nDebug details:\n" + "\n\n".join(debug)

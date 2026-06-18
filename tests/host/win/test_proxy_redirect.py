@@ -400,7 +400,6 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
-                    "list",
                     check=True,
                 ).stdout or ""
                 assert DIAG_CIDR in redirect_list
@@ -425,7 +424,6 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
-                    "list",
                     check=True,
                 ).stdout or ""
                 assert DIAG_DOMAIN in redirect_list
@@ -444,7 +442,6 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
-                    "list",
                     check=True,
                 ).stdout or ""
                 assert DIAG_DOMAIN not in redirect_list
@@ -475,7 +472,6 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
-                    "list",
                     check=True,
                 ).stdout or ""
                 assert DIAG_CIDR not in redirect_list
@@ -503,7 +499,6 @@ def test_client_redirect_proxy_win(
                 final_list = xp2p_client_runner(
                     "client",
                     "redirect",
-                    "list",
                     check=True,
                 ).stdout or ""
                 assert "no redirect rules configured" in final_list.lower()

@@ -502,8 +502,8 @@ def _dump_dns_forward_debug(
     c1_dns_ip: str,
 ) -> str:
     parts: list[str] = []
-    parts.append("--- openwrt-b xp2p redirect list ---")
-    parts.append((openwrt_env.run_xp2p_live(openwrt_client_host, "client", "redirect", "list").stdout or "").strip())
+    parts.append("--- openwrt-b xp2p redirect ---")
+    parts.append((openwrt_env.run_xp2p_live(openwrt_client_host, "client", "redirect").stdout or "").strip())
     parts.append("--- openwrt-b nat-redirect list ---")
     parts.append((openwrt_client_host.run("/usr/bin/xp2p nat-redirect list || true").stdout or "").strip())
     parts.append("--- openwrt-b xp2p forward list ---")

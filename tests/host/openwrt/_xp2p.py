@@ -29,7 +29,6 @@ def run_xp2p(host: Host, *args: str):
     pending_targets = {
         ("client", "list"),
         ("client", "forward", "list"),
-        ("client", "redirect", "list"),
         ("client", "reverse"),
         ("client", "reverse", "list"),
         ("server", "forward", "list"),
@@ -40,10 +39,13 @@ def run_xp2p(host: Host, *args: str):
         ("server", "cert", "state"),
     }
     if "--pending" not in cmd and "-y" not in cmd:
-        for target in pending_targets:
-            if tuple(cmd[: len(target)]) == target:
-                cmd.append("--pending")
-                break
+        if cmd[:2] == ["client", "redirect"] and (len(cmd) == 2 or cmd[2].startswith("-")):
+            cmd.append("--pending")
+        else:
+            for target in pending_targets:
+                if tuple(cmd[: len(target)]) == target:
+                    cmd.append("--pending")
+                    break
     return run_xp2p_live(host, *cmd)
 
 

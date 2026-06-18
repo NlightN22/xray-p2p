@@ -102,6 +102,15 @@ func stubClientRedirectAdd(fn func(client.RedirectAddOptions) error) func() {
 	return func() { clientRedirectAddFunc = prev }
 }
 
+func stubClientRedirectList(fn func(client.RedirectListOptions) ([]client.RedirectRecord, error)) func() {
+	prev := clientRedirectListFunc
+	if fn == nil {
+		fn = func(client.RedirectListOptions) ([]client.RedirectRecord, error) { return nil, nil }
+	}
+	clientRedirectListFunc = fn
+	return func() { clientRedirectListFunc = prev }
+}
+
 func stubClientRedirectPromptReader(reader io.Reader) func() {
 	prev := clientRedirectPromptReader
 	clientRedirectPromptReader = func() io.Reader {

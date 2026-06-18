@@ -517,7 +517,6 @@ def xp2p_client_runner(
         pending_targets = {
             ("client", "list"),
             ("client", "forward", "list"),
-            ("client", "redirect", "list"),
             ("client", "reverse"),
             ("client", "reverse", "list"),
             ("server", "forward", "list"),
@@ -529,10 +528,13 @@ def xp2p_client_runner(
             ("server", "state"),
         }
         if "--pending" not in cmd and "-y" not in cmd:
-            for target in pending_targets:
-                if tuple(cmd[: len(target)]) == target:
-                    cmd.append("--pending")
-                    break
+            if cmd[:2] == ["client", "redirect"] and (len(cmd) == 2 or cmd[2].startswith("-")):
+                cmd.append("--pending")
+            else:
+                for target in pending_targets:
+                    if tuple(cmd[: len(target)]) == target:
+                        cmd.append("--pending")
+                        break
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
@@ -589,7 +591,6 @@ def xp2p_server_runner(
         pending_targets = {
             ("client", "list"),
             ("client", "forward", "list"),
-            ("client", "redirect", "list"),
             ("client", "reverse"),
             ("client", "reverse", "list"),
             ("server", "forward", "list"),
@@ -601,10 +602,13 @@ def xp2p_server_runner(
             ("server", "state"),
         }
         if "--pending" not in cmd and "-y" not in cmd:
-            for target in pending_targets:
-                if tuple(cmd[: len(target)]) == target:
-                    cmd.append("--pending")
-                    break
+            if cmd[:2] == ["client", "redirect"] and (len(cmd) == 2 or cmd[2].startswith("-")):
+                cmd.append("--pending")
+            else:
+                for target in pending_targets:
+                    if tuple(cmd[: len(target)]) == target:
+                        cmd.append("--pending")
+                        break
         if len(cmd) >= 2 and cmd[0] in {"client", "server"} and cmd[1] == "remove":
             if "--quiet" not in cmd:
                 cmd.append("--quiet")
