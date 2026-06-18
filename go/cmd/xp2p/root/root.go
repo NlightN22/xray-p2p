@@ -39,6 +39,9 @@ func NewCommand() *cobra.Command {
 			fmt.Println(version.Current())
 			return exitError{code: 0}
 		}
+		if shouldSkipRuntime(cmd) {
+			return nil
+		}
 		return opts.ensureRuntime(cmd)
 	}
 
@@ -132,6 +135,18 @@ func shouldIgnoreInvalidConfig(cmd *cobra.Command) bool {
 	switch cmd.CommandPath() {
 	case "xp2p client install", "xp2p server install":
 		return hasForceArg()
+	default:
+		return false
+	}
+}
+
+func shouldSkipRuntime(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	switch cmd.Name() {
+	case "completion", "docs", "command-map", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+		return true
 	default:
 		return false
 	}
