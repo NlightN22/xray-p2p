@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	routingcommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/routingcommand"
 	statscommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/statscommand"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -16,8 +17,9 @@ const DefaultTimeout = 3 * time.Second
 type Dialer func(context.Context, string, time.Duration) (*grpc.ClientConn, error)
 
 type Client struct {
-	conn  *grpc.ClientConn
-	stats statscommand.StatsServiceClient
+	conn    *grpc.ClientConn
+	stats   statscommand.StatsServiceClient
+	routing routingcommand.RoutingServiceClient
 }
 
 func Dial(ctx context.Context, address string, timeout time.Duration) (*Client, error) {
@@ -40,8 +42,9 @@ func DialWith(ctx context.Context, address string, timeout time.Duration, dialer
 		return nil, err
 	}
 	return &Client{
-		conn:  conn,
-		stats: statscommand.NewStatsServiceClient(conn),
+		conn:    conn,
+		stats:   statscommand.NewStatsServiceClient(conn),
+		routing: routingcommand.NewRoutingServiceClient(conn),
 	}, nil
 }
 
