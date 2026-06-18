@@ -12,21 +12,23 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayassets"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 type runtimeMeta struct {
-	Role       string         `json:"role"`
-	Version    string         `json:"version"`
-	CompiledAt time.Time      `json:"compiled_at"`
-	TunEnabled bool           `json:"tun_enabled"`
-	TunName    string         `json:"tun_name"`
-	TunMTU     int            `json:"tun_mtu"`
-	TunAddr    string         `json:"tun_addr"`
-	Desired    runtimeDesired `json:"desired"`
-	CertPath   string         `json:"cert_path,omitempty"`
-	KeyPath    string         `json:"key_path,omitempty"`
+	Role       string                  `json:"role"`
+	Version    string                  `json:"version"`
+	CompiledAt time.Time               `json:"compiled_at"`
+	TunEnabled bool                    `json:"tun_enabled"`
+	TunName    string                  `json:"tun_name"`
+	TunMTU     int                     `json:"tun_mtu"`
+	TunAddr    string                  `json:"tun_addr"`
+	XrayAssets config.XrayAssetsConfig `json:"xray_assets,omitempty"`
+	Desired    runtimeDesired          `json:"desired"`
+	CertPath   string                  `json:"cert_path,omitempty"`
+	KeyPath    string                  `json:"key_path,omitempty"`
 }
 
 type runtimeDesired struct {
@@ -56,6 +58,9 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 	}
 	snips, err := extensions.Load(extensionsDir)
 	if err != nil {
+		return compiledArtifacts{}, err
+	}
+	if _, err := xrayassets.FromConfig(cfg.XrayAssets); err != nil {
 		return compiledArtifacts{}, err
 	}
 
@@ -88,6 +93,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		TunName:    strings.TrimSpace(cfg.Server.TunName),
 		TunMTU:     cfg.Server.TunMTU,
 		TunAddr:    strings.TrimSpace(cfg.Server.TunAddr),
+		XrayAssets: cfg.XrayAssets,
 		Desired: runtimeDesired{
 			Reverse:   desired.Reverse,
 			Redirects: desired.Redirects,

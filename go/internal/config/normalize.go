@@ -133,6 +133,7 @@ func normalize(cfg *Config) {
 	cfg.Client.FullTunnelTag = strings.TrimSpace(cfg.Client.FullTunnelTag)
 
 	// AllowInsecure is a boolean and defaults through the map loader.
+	normalizeXrayAssets(&cfg.XrayAssets)
 }
 
 func normalizeTunMode(value string) string {
@@ -168,4 +169,36 @@ func normalizeDNSServers(values []string) []string {
 		return []string{}
 	}
 	return trimmed
+}
+
+func normalizeXrayAssets(cfg *XrayAssetsConfig) {
+	cfg.StaleAfter = strings.TrimSpace(cfg.StaleAfter)
+	if len(cfg.Files) == 0 {
+		cfg.Files = nil
+		return
+	}
+	files := make([]XrayAssetConfig, 0, len(cfg.Files))
+	seen := make(map[string]struct{}, len(cfg.Files))
+	for _, file := range cfg.Files {
+		file.Name = strings.TrimSpace(file.Name)
+		file.URL = strings.TrimSpace(file.URL)
+		file.StaleAfter = strings.TrimSpace(file.StaleAfter)
+		if file.Name == "" {
+			files = append(files, file)
+			continue
+		}
+		key := strings.ToLower(file.Name)
+		if _, ok := seen[key]; ok {
+			for i := range files {
+				if strings.EqualFold(files[i].Name, file.Name) {
+					files[i] = file
+					break
+				}
+			}
+			continue
+		}
+		seen[key] = struct{}{}
+		files = append(files, file)
+	}
+	cfg.Files = files
 }

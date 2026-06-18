@@ -26,6 +26,9 @@ APPLY_REQUEST = helpers.CONFIG_ROOT / ".state" / "apply.request"
 APPLY_ERROR = helpers.CONFIG_ROOT / ".state" / "apply.error"
 CLIENT_DIAG_PORT = "62023"
 SERVER_DIAG_PORT = "62022"
+GEOSITE_ASSET = helpers.INSTALL_ROOT / "bin" / "geosite.dat"
+GEOSITE_BACKUP = helpers.INSTALL_ROOT / "bin" / "geosite.dat.host-test-bak"
+SERVER_ROUTING_EXTENSION = helpers.SERVER_CONFIG_DIR / "routing.rules.after-xp2p-managed.json"
 
 SERVICE_TIMEOUT = 45.0
 POLL_INTERVAL = 1.5
@@ -138,6 +141,27 @@ def _wait_for_log_entry(host, path, substring: str, timeout: float = 60.0) -> No
     raise AssertionError(f"Log {path} did not contain {substring!r}. Last content:\n{last_content}")
 
 
+def _backup_asset(host, path: PurePosixPath, backup: PurePosixPath) -> None:
+    host.run(f"sudo -n /bin/sh -c 'rm -f {backup} && if [ -e {path} ]; then mv {path} {backup}; fi'")
+
+
+def _restore_asset(host, path: PurePosixPath, backup: PurePosixPath) -> None:
+    host.run(f"sudo -n /bin/sh -c 'rm -f {path} && if [ -e {backup} ]; then mv {backup} {path}; fi'")
+
+
+def _write_geosite_routing_extension(host) -> None:
+    payload = {
+        "rules": [
+            {
+                "type": "field",
+                "domain": ["geosite:private"],
+                "outboundTag": "direct",
+            }
+        ]
+    }
+    helpers.write_text(host, SERVER_ROUTING_EXTENSION, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
 def _wait_for_apply_request_clear(host, timeout: float = 60.0) -> None:
     deadline = time.time() + timeout
     request_path = helpers.CONFIG_ROOT / ".state" / "apply.request"
@@ -237,6 +261,34 @@ def test_server_service_cli_controls_systemd(server_host, xp2p_server_runner):
         assert helpers.path_exists(server_host, SERVER_SERVICE_LOG), "server service log missing after stop"
     finally:
         _stop_service("server", xp2p_server_runner)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_server_service_fails_before_xray_when_required_asset_missing(server_host, xp2p_server_runner):
+    try:
+        _install_server_instance(
+            xp2p_server_runner,
+            server_host,
+            host_name="svc-asset-server.example.com",
+            port="62122",
+        )
+        _backup_asset(server_host, GEOSITE_ASSET, GEOSITE_BACKUP)
+        linux_env.remove_path(server_host, SERVER_SERVICE_LOG)
+        _write_geosite_routing_extension(server_host)
+
+        result = xp2p_server_runner("server", "service", "start", check=False)
+        if result.rc != 0:
+            print(f"server service start returned {result.rc}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
+
+        _wait_for_log_entry(server_host, SERVER_SERVICE_LOG, "xray asset preflight failed", timeout=90.0)
+        log_content = helpers.read_text(server_host, SERVER_SERVICE_LOG)
+        assert "required asset geosite.dat is missing" in log_content
+        assert "configure xray_assets.files url or place the file manually" in log_content
+    finally:
+        _stop_service("server", xp2p_server_runner)
+        linux_env.remove_path(server_host, SERVER_ROUTING_EXTENSION)
+        _restore_asset(server_host, GEOSITE_ASSET, GEOSITE_BACKUP)
 
 
 @pytest.mark.host

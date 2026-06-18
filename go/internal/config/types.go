@@ -45,9 +45,10 @@ var defaultValues = map[string]any{
 
 // Config represents the top-level application configuration.
 type Config struct {
-	Logging LoggingConfig `koanf:"logging"`
-	Server  ServerConfig  `koanf:"server"`
-	Client  ClientConfig  `koanf:"client"`
+	Logging    LoggingConfig    `koanf:"logging"`
+	Server     ServerConfig     `koanf:"server"`
+	Client     ClientConfig     `koanf:"client"`
+	XrayAssets XrayAssetsConfig `koanf:"xray_assets"`
 }
 
 // LoggingConfig holds logging related settings.
@@ -93,6 +94,19 @@ type ClientConfig struct {
 	DNSServers        []string `koanf:"dns_servers"`
 	FullTunnelVerbose bool     `koanf:"full_tunnel_verbose"`
 	FullTunnelTag     string   `koanf:"full_tunnel_tag"`
+}
+
+// XrayAssetsConfig holds managed xray-core .dat asset settings.
+type XrayAssetsConfig struct {
+	StaleAfter string            `koanf:"stale_after" json:"stale_after,omitempty"`
+	Files      []XrayAssetConfig `koanf:"files" json:"files,omitempty"`
+}
+
+// XrayAssetConfig describes one managed xray-core .dat asset.
+type XrayAssetConfig struct {
+	Name       string `koanf:"name" json:"name"`
+	URL        string `koanf:"url,omitempty" json:"url,omitempty"`
+	StaleAfter string `koanf:"stale_after,omitempty" json:"stale_after,omitempty"`
 }
 
 // Options control configuration loading behaviour.

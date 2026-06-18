@@ -129,6 +129,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 	configDir := paths.configDir
+	if err := syncXrayAssets(ctx, meta, xrayPath, configDir); err != nil {
+		return err
+	}
 	appliedState, err := loadClientAppliedState(paths.stateFile)
 	if err != nil {
 		return err

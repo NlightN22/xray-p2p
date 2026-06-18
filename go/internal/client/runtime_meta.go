@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -33,5 +34,15 @@ func loadLiveRuntimeMeta(liveConfigDir string) (runtimeMeta, error) {
 	meta.TunAddr = strings.TrimSpace(meta.TunAddr)
 	meta.TunMode = strings.TrimSpace(meta.TunMode)
 	meta.FullTag = strings.TrimSpace(meta.FullTag)
+	normalizeRuntimeXrayAssets(&meta.XrayAssets)
 	return meta, nil
+}
+
+func normalizeRuntimeXrayAssets(cfg *config.XrayAssetsConfig) {
+	cfg.StaleAfter = strings.TrimSpace(cfg.StaleAfter)
+	for i := range cfg.Files {
+		cfg.Files[i].Name = strings.TrimSpace(cfg.Files[i].Name)
+		cfg.Files[i].URL = strings.TrimSpace(cfg.Files[i].URL)
+		cfg.Files[i].StaleAfter = strings.TrimSpace(cfg.Files[i].StaleAfter)
+	}
 }

@@ -34,3 +34,26 @@ Runtime checks validate the pinned xray version before launch. Override with:
 
 - `XP2P_XRAY_SKIP_VERSION_CHECK=1` (skip the check)
 - `XP2P_XRAY_ALLOW_MISMATCH=1` (warn and continue on mismatches)
+
+## Xray asset files
+
+Use `xray_assets` when routing rules reference xray-core `.dat` assets such as `geoip.dat`, `geosite.dat`, or `ext:<file>:...` files.
+
+```toml
+[[xray_assets.files]]
+name = "geoip.dat"
+url = "https://example.com/geoip.dat"
+
+[[xray_assets.files]]
+name = "geosite.dat"
+url = "https://example.com/geosite.dat"
+```
+
+During service/run startup, xp2p checks the Live `xray.json` and the configured asset list before starting xray-core. Missing configured files are downloaded into the xray asset directory. Missing files found in routing rules but not configured fail startup with a clear preflight error.
+
+Advanced:
+
+- `xray_assets.stale_after` sets a shared refresh interval for all configured files.
+- `xray_assets.files[].stale_after` overrides the shared refresh interval for one file.
+- Empty or `0` `stale_after` disables periodic refresh while still requiring the file to exist.
+- xp2p uses `XRAY_LOCATION_ASSET` when it is set; otherwise it uses the directory that contains the resolved `xray` binary.

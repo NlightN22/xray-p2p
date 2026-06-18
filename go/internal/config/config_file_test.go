@@ -26,6 +26,13 @@ tun_mode = "full"
 dns_servers = ["1.1.1.1", "8.8.8.8"]
 full_tunnel_verbose = true
 full_tunnel_tag = "proxy-1"
+
+[xray_assets]
+stale_after = "72h"
+
+[[xray_assets.files]]
+name = "geoip.dat"
+url = "https://example.test/geoip.dat"
 `)
 	writeFile(t, filepath.Join(dir, "xp2p-server.toml"), `
 [logging]
@@ -140,5 +147,11 @@ tun_addr = "198.18.0.9/30"
 	}
 	if cfg.Client.FullTunnelTag != "proxy-1" {
 		t.Fatalf("expected full tunnel tag proxy-1, got %s", cfg.Client.FullTunnelTag)
+	}
+	if cfg.XrayAssets.StaleAfter != "72h" {
+		t.Fatalf("expected xray assets stale_after 72h, got %s", cfg.XrayAssets.StaleAfter)
+	}
+	if len(cfg.XrayAssets.Files) != 1 || cfg.XrayAssets.Files[0].Name != "geoip.dat" || cfg.XrayAssets.Files[0].URL == "" {
+		t.Fatalf("unexpected xray assets files: %+v", cfg.XrayAssets.Files)
 	}
 }

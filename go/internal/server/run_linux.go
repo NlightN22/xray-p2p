@@ -100,6 +100,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	}
 
 	configDir := liveConfigDir
+	if err := syncXrayAssets(ctx, meta, xrayPath, configDir); err != nil {
+		return err
+	}
 	appliedState, err := loadServerAppliedState(appliedStatePath)
 	if err != nil {
 		return err

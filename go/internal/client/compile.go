@@ -11,22 +11,24 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayassets"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 type runtimeMeta struct {
-	Role       string         `json:"role"`
-	Version    string         `json:"version"`
-	CompiledAt time.Time      `json:"compiled_at"`
-	TunEnabled bool           `json:"tun_enabled"`
-	TunName    string         `json:"tun_name"`
-	TunMTU     int            `json:"tun_mtu"`
-	TunAddr    string         `json:"tun_addr"`
-	TunMode    string         `json:"tun_mode"`
-	DNSServers []string       `json:"dns_servers,omitempty"`
-	FullTag    string         `json:"full_tunnel_tag,omitempty"`
-	Desired    runtimeDesired `json:"desired"`
+	Role       string                  `json:"role"`
+	Version    string                  `json:"version"`
+	CompiledAt time.Time               `json:"compiled_at"`
+	TunEnabled bool                    `json:"tun_enabled"`
+	TunName    string                  `json:"tun_name"`
+	TunMTU     int                     `json:"tun_mtu"`
+	TunAddr    string                  `json:"tun_addr"`
+	TunMode    string                  `json:"tun_mode"`
+	DNSServers []string                `json:"dns_servers,omitempty"`
+	FullTag    string                  `json:"full_tunnel_tag,omitempty"`
+	XrayAssets config.XrayAssetsConfig `json:"xray_assets,omitempty"`
+	Desired    runtimeDesired          `json:"desired"`
 }
 
 type runtimeDesired struct {
@@ -65,6 +67,9 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 	if err != nil {
 		return compiledArtifacts{}, err
 	}
+	if _, err := xrayassets.FromConfig(cfg.XrayAssets); err != nil {
+		return compiledArtifacts{}, err
+	}
 
 	fullEnabled := cfg.Client.TunEnabled && strings.EqualFold(strings.TrimSpace(cfg.Client.TunMode), "full")
 	activeEndpoints := activeClientEndpoints(desired.Endpoints)
@@ -95,6 +100,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		TunMode:    strings.TrimSpace(cfg.Client.TunMode),
 		DNSServers: cfg.Client.DNSServers,
 		FullTag:    strings.TrimSpace(cfg.Client.FullTunnelTag),
+		XrayAssets: cfg.XrayAssets,
 		Desired: runtimeDesired{
 			Endpoints: sanitizeRuntimeEndpoints(desired.Endpoints),
 			Redirects: desired.Redirects,
