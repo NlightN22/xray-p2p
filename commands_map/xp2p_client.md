@@ -10,7 +10,7 @@
 ## Command tree
 
 xp2p client
-  Subcommands: install, remove, list, run, service, state, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
+  Subcommands: install, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
 
 xp2p client install
 Options:
@@ -102,6 +102,12 @@ Includes: Global options
 - --xray-api, -A <addr>  Xray API address for stats
 - --xray-bin, -B <path>  Xray binary path for statsquery
 - --xray-stats-format, -F <human|bytes> Xray stats format
+
+xp2p client obs
+Options:
+Includes: Global options
+- --path, -p <dir>       Client installation directory
+- --xray-api, -A <addr>  Xray API address
 
 xp2p client render
   Subcommands: xray
