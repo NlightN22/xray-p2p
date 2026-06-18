@@ -28,13 +28,15 @@ func TestListEndpoints(t *testing.T) {
 	initial := clientInstallState{
 		Endpoints: []clientEndpointRecord{
 			{
-				Hostname:      "server-a.example",
-				Tag:           "proxy-server-a",
-				Address:       "198.51.100.10",
-				Port:          8443,
-				User:          "alice@example.com",
-				ServerName:    "server-a.example",
-				AllowInsecure: false,
+				Hostname:             "server-a.example",
+				Tag:                  "proxy-server-a",
+				Address:              "198.51.100.10",
+				Port:                 8443,
+				User:                 "alice@example.com",
+				ServerName:           "server-a.example",
+				AllowInsecure:        false,
+				PinnedPeerCertSHA256: "abc123",
+				VerifyPeerCertByName: "server-a.example",
 			},
 			{
 				Hostname:      "server-b.example",
@@ -64,5 +66,11 @@ func TestListEndpoints(t *testing.T) {
 	}
 	if records[0].Hostname != "server-a.example" || records[1].Tag != "proxy-server-b" {
 		t.Fatalf("unexpected records: %+v", records)
+	}
+	if records[0].TLSMode != TLSModePinnedName {
+		t.Fatalf("unexpected TLS mode for first endpoint: %s", records[0].TLSMode)
+	}
+	if records[1].TLSMode != TLSModeInsecure {
+		t.Fatalf("unexpected TLS mode for second endpoint: %s", records[1].TLSMode)
 	}
 }

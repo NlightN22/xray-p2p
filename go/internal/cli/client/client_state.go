@@ -83,10 +83,7 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 
 	configDir := strings.TrimSpace(cfg.Client.ConfigDir)
 	stateProvider := func() ([]heartbeat.Snapshot, error) {
-		if opts.Pending {
-			return snapshotClientPendingState(installDir, configDir, statePath, ttl)
-		}
-		return stateview.Snapshot(statePath, ttl)
+		return snapshotClientConfiguredState(installDir, configDir, opts.Pending, statePath, ttl)
 	}
 
 	if opts.Watch {
@@ -186,7 +183,7 @@ func pathExists(path string) (bool, error) {
 	return false, err
 }
 
-func snapshotClientPendingState(installDir, configDir, statePath string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
+func snapshotClientConfiguredState(installDir, configDir string, pending bool, statePath string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
 	state, err := heartbeat.Load(statePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) || heartbeat.IsCorrupt(err) {
@@ -202,7 +199,7 @@ func snapshotClientPendingState(installDir, configDir, statePath string, ttl tim
 	endpoints, err := client.ListEndpoints(client.ListOptions{
 		InstallDir: installDir,
 		ConfigDir:  configDir,
-		Pending:    true,
+		Pending:    pending,
 	})
 	if err != nil {
 		return nil, err

@@ -149,43 +149,7 @@ func pathExists(path string) (bool, error) {
 }
 
 func snapshotServerState(statePath, installDir string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
-	reverseEntries, err := loadServerReverseEntries(installDir)
-	if err != nil {
-		return nil, err
-	}
-	if len(reverseEntries) == 0 {
-		return []heartbeat.Snapshot{}, nil
-	}
-	reversePairs := make(map[string]struct{}, len(reverseEntries))
-	for _, entry := range reverseEntries {
-		user := strings.TrimSpace(entry.User)
-		host := strings.TrimSpace(entry.Host)
-		if user == "" || host == "" {
-			continue
-		}
-		key := strings.ToLower(user) + "|" + strings.ToLower(host)
-		reversePairs[key] = struct{}{}
-	}
-	if len(reversePairs) == 0 {
-		return []heartbeat.Snapshot{}, nil
-	}
-	snapshots, err := stateview.Snapshot(statePath, ttl)
-	if err != nil {
-		return nil, err
-	}
-	filtered := make([]heartbeat.Snapshot, 0, len(snapshots))
-	for _, snap := range snapshots {
-		user := strings.TrimSpace(snap.Entry.User)
-		host := strings.TrimSpace(snap.Entry.Host)
-		if user == "" || host == "" {
-			continue
-		}
-		key := strings.ToLower(user) + "|" + strings.ToLower(host)
-		if _, ok := reversePairs[key]; ok {
-			filtered = append(filtered, snap)
-		}
-	}
-	return filtered, nil
+	return snapshotServerConfiguredState(statePath, installDir, ttl)
 }
 
 func resolveServerHeartbeatStatePath(installDir string) (string, error) {
@@ -309,11 +273,18 @@ func extractServerReverseEntries(doc map[string]any) []serverReverseEntry {
 			Host: host,
 		})
 	}
+	sort.Slice(entries, func(i, j int) bool {
+		return strings.ToLower(entries[i].Tag) < strings.ToLower(entries[j].Tag)
+	})
 	return entries
 }
 
 func snapshotServerPendingState(statePath, installDir string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
-	expected, err := loadServerReverseEntries(installDir)
+	return snapshotServerConfiguredState(statePath, installDir, ttl)
+}
+
+func snapshotServerConfiguredState(statePath, installDir string, ttl time.Duration) ([]heartbeat.Snapshot, error) {
+	expected, err := loadServerExpectedEntries(installDir)
 	if err != nil {
 		return nil, err
 	}
@@ -327,20 +298,31 @@ func snapshotServerPendingState(statePath, installDir string, ttl time.Duration)
 	}
 
 	byUserHost := make(map[string]heartbeat.Snapshot, len(snapshots))
+	byUser := make(map[string]heartbeat.Snapshot, len(snapshots))
 	for _, snap := range snapshots {
 		user := strings.TrimSpace(snap.Entry.User)
 		host := strings.TrimSpace(snap.Entry.Host)
-		if user == "" || host == "" {
+		if user == "" {
 			continue
 		}
-		key := strings.ToLower(user) + "|" + strings.ToLower(host)
-		byUserHost[key] = snap
+		userKey := strings.ToLower(user)
+		if _, exists := byUser[userKey]; !exists {
+			byUser[userKey] = snap
+		}
+		if host != "" {
+			key := userKey + "|" + strings.ToLower(host)
+			byUserHost[key] = snap
+		}
 	}
 
 	merged := make([]heartbeat.Snapshot, 0, len(expected))
 	for _, exp := range expected {
 		key := strings.ToLower(exp.User) + "|" + strings.ToLower(exp.Host)
-		if snap, ok := byUserHost[key]; ok {
+		snap, ok := byUserHost[key]
+		if !ok && strings.TrimSpace(exp.Host) == "-" {
+			snap, ok = byUser[strings.ToLower(exp.User)]
+		}
+		if ok {
 			if strings.TrimSpace(snap.Entry.Tag) == "" && strings.TrimSpace(exp.Tag) != "" {
 				snap.Entry.Tag = exp.Tag
 			}
@@ -382,4 +364,73 @@ func snapshotServerPendingState(statePath, installDir string, ttl time.Duration)
 		return leftTag < rightTag
 	})
 	return merged, nil
+}
+
+func loadServerExpectedEntries(installDir string) ([]serverReverseEntry, error) {
+	configPath := filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))
+	if doc, found, err := loadServerConfigDoc(configPath); err != nil {
+		return nil, err
+	} else if found {
+		return extractServerExpectedEntries(doc), nil
+	}
+
+	legacyDoc, err := loadLegacyServerStateDoc(installDir)
+	if err != nil {
+		return nil, err
+	}
+	return extractServerExpectedEntries(legacyDoc), nil
+}
+
+func extractServerExpectedEntries(doc map[string]any) []serverReverseEntry {
+	users := extractServerUserIDs(doc)
+	reverseEntries := extractServerReverseEntries(doc)
+	if len(users) == 0 {
+		return reverseEntries
+	}
+
+	entries := make([]serverReverseEntry, 0, len(users))
+	byUser := make(map[string]int, len(users))
+	for _, user := range users {
+		key := strings.ToLower(user)
+		if _, exists := byUser[key]; exists {
+			continue
+		}
+		byUser[key] = len(entries)
+		entries = append(entries, serverReverseEntry{Tag: "-", User: user, Host: "-"})
+	}
+	for _, reverse := range reverseEntries {
+		key := strings.ToLower(strings.TrimSpace(reverse.User))
+		idx, exists := byUser[key]
+		if !exists {
+			continue
+		}
+		if strings.TrimSpace(entries[idx].Tag) == "-" && strings.TrimSpace(reverse.Tag) != "" {
+			entries[idx].Tag = reverse.Tag
+		}
+		if strings.TrimSpace(entries[idx].Host) == "-" && strings.TrimSpace(reverse.Host) != "" {
+			entries[idx].Host = reverse.Host
+		}
+	}
+	return entries
+}
+
+func extractServerUserIDs(doc map[string]any) []string {
+	raw, ok := doc["trojan_users"].([]any)
+	if !ok || len(raw) == 0 {
+		return nil
+	}
+	users := make([]string, 0, len(raw))
+	for _, value := range raw {
+		entry, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		user, _ := entry["email"].(string)
+		user = strings.TrimSpace(user)
+		if user == "" {
+			continue
+		}
+		users = append(users, user)
+	}
+	return users
 }

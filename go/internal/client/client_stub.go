@@ -24,6 +24,7 @@ type (
 		User                 string
 		ServerName           string
 		AllowInsecure        bool
+		TLSMode              string
 		PinnedPeerCertSHA256 string
 		VerifyPeerCertByName string
 	}
