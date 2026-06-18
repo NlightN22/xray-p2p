@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	routerconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/routerconfig"
 	routingcommand "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/routingcommand"
 )
 
@@ -51,7 +52,7 @@ func (c *Client) AddRule(ctx context.Context, rule map[string]any) error {
 	if err != nil {
 		return err
 	}
-	msg, err := typedMessage(protoRule)
+	msg, err := typedMessage(&routerconfig.Config{Rule: []*routerconfig.RoutingRule{protoRule}})
 	if err != nil {
 		return err
 	}

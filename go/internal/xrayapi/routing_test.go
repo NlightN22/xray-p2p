@@ -85,14 +85,17 @@ type routingServer struct {
 }
 
 func (s *routingServer) AddRule(_ context.Context, request *routingcommand.AddRuleRequest) (*routingcommand.AddRuleResponse, error) {
-	if request.GetConfig().GetType() != "xray.app.router.RoutingRule" {
+	if request.GetConfig().GetType() != "xray.app.router.Config" {
 		return nil, errUnexpectedTypedMessage
 	}
-	var rule routerconfig.RoutingRule
-	if err := proto.Unmarshal(request.GetConfig().GetValue(), &rule); err != nil {
+	var config routerconfig.Config
+	if err := proto.Unmarshal(request.GetConfig().GetValue(), &config); err != nil {
 		return nil, err
 	}
-	s.added = &rule
+	if len(config.GetRule()) != 1 {
+		return nil, errUnexpectedTypedMessage
+	}
+	s.added = config.GetRule()[0]
 	return &routingcommand.AddRuleResponse{}, nil
 }
 
