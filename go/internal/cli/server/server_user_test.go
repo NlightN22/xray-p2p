@@ -74,6 +74,40 @@ func TestRunServerUserCommands(t *testing.T) {
 		}
 	})
 
+	t.Run("user add accepts link", func(t *testing.T) {
+		cfg := serverCfg(`C:\xp2p`, "config-server", "")
+		var captured server.AddUserOptions
+		restoreAdd := stubServerUserAdd(func(_ context.Context, opts server.AddUserOptions) error {
+			captured = opts
+			return nil
+		})
+		defer restoreAdd()
+		restoreLink := stubServerUserLink(func(context.Context, server.UserLinkOptions) (server.UserLink, error) {
+			return server.UserLink{
+				UserID: "alpha@example.com",
+				Link:   "trojan://secret@example.test:58443?security=tls&sni=example.test#alpha%40example.com",
+			}, nil
+		})
+		defer restoreLink()
+
+		output := captureStdout(t, func() {
+			code := runServerUserAdd(context.Background(), cfg, serverUserAddOptions{
+				Path:      `C:\xp2p`,
+				ConfigDir: "config-server",
+				Link:      "trojan://secret@example.test:58443?security=tls&sni=example.test#alpha%40example.com",
+			})
+			if code != 0 {
+				t.Fatalf("exit code: %d", code)
+			}
+		})
+		if captured.UserID != "alpha@example.com" || captured.Password != "secret" || captured.Host != "example.test" {
+			t.Fatalf("unexpected add options: %+v", captured)
+		}
+		if !strings.Contains(output, "trojan://secret@example.test:58443") {
+			t.Fatalf("expected link in output, got %q", output)
+		}
+	})
+
 	t.Run("user add rejects invalid password", func(t *testing.T) {
 		cfg := serverCfg(`C:\xp2p`, "config-server", "example.test")
 		called := false

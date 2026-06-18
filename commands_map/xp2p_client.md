@@ -63,6 +63,7 @@ xp2p client list
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
+- --link, -L print client connection links
 - --path, -p <path> client installation directory
 - --pending, -y list pending configuration
 

@@ -149,6 +149,7 @@ Includes: inherited options
 - --host, -H <host> public host name or IP for generated connection link
 - --id, -i <id> client identifier (derives the <id><host>.rev reverse tag)
 - --key, -k <password> alias for --password
+- --link, -L <link> client connection link
 - --no-reverse, -n skip creating reverse portal/routing entries
 - --password, -w <password> client password or pre-shared key (auto-generated when omitted)
 - --path, -p <path> server installation directory

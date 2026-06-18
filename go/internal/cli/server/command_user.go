@@ -112,6 +112,7 @@ func newServerUserAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.UserID, "id", "i", "", "client identifier (derives the <id><host>.rev reverse tag)")
 	flags.StringVarP(&opts.Password, "password", "w", "", "client password or pre-shared key (auto-generated when omitted)")
 	flags.StringVarP(&opts.Key, "key", "k", "", "alias for --password")
+	flags.StringVarP(&opts.Link, "link", "L", "", "client connection link")
 	flags.StringVarP(&opts.LinkHost, "host", "H", "", "public host name or IP for generated connection link")
 	flags.BoolVarP(&opts.NoReverse, "no-reverse", "n", false, "skip creating reverse portal/routing entries")
 	flags.BoolVarP(&opts.Force, "force", "f", false, "overwrite existing user entry")

@@ -19,6 +19,7 @@ func runClientList(_ context.Context, cfg config.Config, args []string) int {
 	path := fs.String("path", "", "client installation directory")
 	configDir := fs.String("config-dir", "", "client configuration directory name")
 	pending := fs.Bool("pending", false, "list pending configuration")
+	links := fs.Bool("link", false, "print client connection links")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -44,6 +45,16 @@ func runClientList(_ context.Context, cfg config.Config, args []string) int {
 	}
 	if len(records) == 0 {
 		fmt.Println("No client endpoints configured.")
+		return 0
+	}
+
+	if *links {
+		for _, rec := range records {
+			if rec.Link == "" {
+				continue
+			}
+			fmt.Println(rec.Link)
+		}
 		return 0
 	}
 

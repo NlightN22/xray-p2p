@@ -7,6 +7,7 @@ import (
 
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/link"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
@@ -18,6 +19,7 @@ type serverUserAddOptions struct {
 	Password  string
 	Key       string
 	LinkHost  string
+	Link      string
 	NoReverse bool
 	Force     bool
 }
@@ -52,6 +54,24 @@ type serverUserToggleOptions struct {
 }
 
 func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAddOptions) int {
+	linkValue := strings.TrimSpace(opts.Link)
+	if linkValue != "" {
+		if strings.TrimSpace(opts.UserID) != "" || strings.TrimSpace(opts.Password) != "" || strings.TrimSpace(opts.Key) != "" {
+			logging.Error("xp2p server user add: --link cannot be combined with --id, --password, or --key")
+			return 2
+		}
+		parsed, err := link.ParseTrojanLink(linkValue)
+		if err != nil {
+			logging.Error("xp2p server user add: invalid --link", "err", err)
+			return 2
+		}
+		opts.UserID = parsed.User
+		opts.Password = parsed.Password
+		if strings.TrimSpace(opts.LinkHost) == "" {
+			opts.LinkHost = parsed.ServerAddress
+		}
+	}
+
 	passwordValue := strings.TrimSpace(opts.Password)
 	keyValue := strings.TrimSpace(opts.Key)
 	if passwordValue != "" && keyValue != "" && passwordValue != keyValue {

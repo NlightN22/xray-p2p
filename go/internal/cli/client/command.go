@@ -171,6 +171,7 @@ func newClientListCmd(cfg commandConfig) *cobra.Command {
 	flags.StringP("path", "p", "", "client installation directory")
 	flags.StringP("config-dir", "D", "", "client configuration directory name")
 	flags.BoolP("pending", "y", false, "list pending configuration")
+	flags.BoolP("link", "L", false, "print client connection links")
 	return cmd
 }
 

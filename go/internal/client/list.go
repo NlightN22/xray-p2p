@@ -3,6 +3,11 @@
 package client
 
 import (
+	"net"
+	"net/url"
+	"strconv"
+	"strings"
+
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -25,6 +30,7 @@ type EndpointRecord struct {
 	AllowInsecure bool
 	TLSMode       string
 	Disabled      bool
+	Link          string
 }
 
 // ListEndpoints returns all configured endpoints.
@@ -49,7 +55,48 @@ func toEndpointRecords(state clientInstallState) []EndpointRecord {
 			AllowInsecure: ep.AllowInsecure,
 			TLSMode:       endpointTLSMode(ep),
 			Disabled:      ep.Disabled,
+			Link:          buildEndpointTrojanLink(ep),
 		})
 	}
 	return records
+}
+
+func buildEndpointTrojanLink(ep clientEndpointRecord) string {
+	address := strings.TrimSpace(ep.Address)
+	password := strings.TrimSpace(ep.Password)
+	if address == "" || ep.Port <= 0 || password == "" {
+		return ""
+	}
+
+	u := &url.URL{
+		Scheme: "trojan",
+		Host:   net.JoinHostPort(address, strconv.Itoa(ep.Port)),
+		User:   url.User(password),
+	}
+
+	query := url.Values{}
+	if strings.TrimSpace(ep.ServerName) == "" {
+		query.Set("security", "none")
+	} else {
+		query.Set("security", "tls")
+		query.Set("sni", strings.TrimSpace(ep.ServerName))
+	}
+	if ep.AllowInsecure {
+		query.Set("allowInsecure", "1")
+	}
+	if strings.TrimSpace(ep.PinnedPeerCertSHA256) != "" {
+		query.Set("pinnedPeerCertSha256", strings.TrimSpace(ep.PinnedPeerCertSHA256))
+	}
+	if strings.TrimSpace(ep.VerifyPeerCertByName) != "" {
+		query.Set("verifyPeerCertByName", strings.TrimSpace(ep.VerifyPeerCertByName))
+	}
+	if len(ep.ALPN) > 0 {
+		query.Set("alpn", strings.Join(ep.ALPN, ","))
+	}
+	u.RawQuery = query.Encode()
+
+	if user := strings.TrimSpace(ep.User); user != "" {
+		u.Fragment = url.QueryEscape(user)
+	}
+	return u.String()
 }

@@ -52,3 +52,26 @@ func TestRunClientListError(t *testing.T) {
 		t.Fatalf("runClientList exit code = %d, want 1", code)
 	}
 }
+
+func TestRunClientListLinks(t *testing.T) {
+	restore := stubClientList(func(opts client.ListOptions) ([]client.EndpointRecord, error) {
+		if !opts.Pending {
+			t.Fatalf("expected pending list options: %+v", opts)
+		}
+		return []client.EndpointRecord{
+			{Hostname: "alpha", Link: "trojan://secret@example.test:443?security=tls&sni=example.test#alpha"},
+			{Hostname: "beta"},
+		}, nil
+	})
+	t.Cleanup(restore)
+
+	output := captureStdout(t, func() {
+		code := runClientList(context.Background(), config.Config{}, []string{"--pending", "--link"})
+		if code != 0 {
+			t.Fatalf("runClientList exit code = %d, want 0", code)
+		}
+	})
+	if strings.TrimSpace(output) != "trojan://secret@example.test:443?security=tls&sni=example.test#alpha" {
+		t.Fatalf("unexpected link output: %q", output)
+	}
+}
