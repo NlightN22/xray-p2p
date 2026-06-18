@@ -194,9 +194,13 @@ Includes: inherited options
 
 xp2p server redirect
   Summary: Manage server redirect rules
+  Default behavior: list server redirect rules
   Subcommands: add, disable, enable, remove, list
 Options:
 Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
 
 xp2p server redirect add
   Summary: Add a server redirect rule
@@ -293,6 +297,7 @@ Includes: inherited options
 
 xp2p server reverse
   Summary: Inspect server reverse tunnels
+  Default behavior: list server reverse tunnels
   Subcommands: disable, enable, list
 Options:
 Includes: inherited options

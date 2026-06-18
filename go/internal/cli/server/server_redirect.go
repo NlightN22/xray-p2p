@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -43,14 +44,19 @@ type serverRedirectListOptions struct {
 }
 
 func newServerRedirectCmd(cfg commandConfig) *cobra.Command {
+	var opts serverRedirectListOptions
 	cmd := &cobra.Command{
 		Use:   "redirect",
 		Short: "Manage server redirect rules",
+		Annotations: map[string]string{
+			commandmeta.DefaultBehavior: "list server redirect rules",
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_ = cmd.Help()
-			return exitError{code: 1}
+			code := runServerRedirectList(commandContext(cmd), cfg(), opts)
+			return errorForCode(code)
 		},
 	}
+	bindServerRedirectListFlags(cmd, &opts)
 	cmd.AddCommand(
 		newServerRedirectAddCmd(cfg),
 		newServerRedirectDisableCmd(cfg),
@@ -120,11 +126,15 @@ func newServerRedirectListCmd(cfg commandConfig) *cobra.Command {
 		},
 	}
 
+	bindServerRedirectListFlags(cmd, &opts)
+	return cmd
+}
+
+func bindServerRedirectListFlags(cmd *cobra.Command, opts *serverRedirectListOptions) {
 	flags := cmd.Flags()
 	flags.StringVarP(&opts.Path, "path", "p", "", "server installation directory")
 	flags.StringVarP(&opts.ConfigDir, "config-dir", "D", "", "server configuration directory name or absolute path")
 	flags.BoolVarP(&opts.Pending, "pending", "y", false, "list pending configuration")
-	return cmd
 }
 
 func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedirectAddOptions) int {

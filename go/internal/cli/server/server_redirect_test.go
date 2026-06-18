@@ -114,6 +114,34 @@ func TestRunServerRedirectListPrintsEmpty(t *testing.T) {
 	}
 }
 
+func TestServerRedirectDefaultsToList(t *testing.T) {
+	cfg := serverCfg("C:\\srv", "config-server", "")
+	called := 0
+	t.Cleanup(stubServerRedirectList(func(opts server.RedirectListOptions) ([]server.RedirectRecord, error) {
+		called++
+		if opts.InstallDir != "D:\\srv" {
+			t.Fatalf("InstallDir = %s, want D:\\srv", opts.InstallDir)
+		}
+		if opts.ConfigDir != "cfg" {
+			t.Fatalf("ConfigDir = %s, want cfg", opts.ConfigDir)
+		}
+		if !opts.Pending {
+			t.Fatalf("Pending = false, want true")
+		}
+		return nil, nil
+	}))
+
+	cmd := NewCommand(func() config.Config { return cfg })
+	root := newServerTestRoot(cmd)
+	root.SetArgs([]string{"server", "redirect", "--path", "D:\\srv", "--config-dir", "cfg", "--pending"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("server redirect default execution failed: %v", err)
+	}
+	if called != 1 {
+		t.Fatalf("serverRedirectListFunc called %d times, want 1", called)
+	}
+}
+
 func TestRunServerRedirectAdd_PromptSelection(t *testing.T) {
 	t.Cleanup(stubServerRedirectAdd(func(opts server.RedirectAddOptions) error {
 		if opts.Tag != "alpha.rev" {

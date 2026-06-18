@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
 )
 
 // Generate writes compact command map files derived from a Cobra tree.
@@ -80,6 +82,9 @@ func renderCommand(out *bytes.Buffer, root, cmd *cobra.Command, remainingDepth i
 	if len(cmd.ValidArgs) > 0 {
 		fmt.Fprintf(out, "  Valid args: %s\n", strings.Join(cmd.ValidArgs, ", "))
 	}
+	if behavior := defaultBehavior(cmd); behavior != "" {
+		fmt.Fprintf(out, "  Default behavior: %s\n", behavior)
+	}
 
 	children := visibleCommands(cmd)
 	if len(children) > 0 {
@@ -103,6 +108,13 @@ func renderCommand(out *bytes.Buffer, root, cmd *cobra.Command, remainingDepth i
 	for _, child := range children {
 		renderCommand(out, root, child, nextDepth)
 	}
+}
+
+func defaultBehavior(cmd *cobra.Command) string {
+	if cmd == nil {
+		return ""
+	}
+	return strings.TrimSpace(cmd.Annotations[commandmeta.DefaultBehavior])
 }
 
 func renderOptions(out *bytes.Buffer, root, cmd *cobra.Command) {

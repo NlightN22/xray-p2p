@@ -1,11 +1,18 @@
 package clientcmd
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
+)
 
 func newClientRedirectCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "redirect",
 		Short: "Manage custom client redirects",
+		Annotations: map[string]string{
+			commandmeta.DefaultBehavior: "list configured redirect rules",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runClientRedirectList(commandContext(cmd), cfg(), forwarded)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -18,6 +19,9 @@ func newServerReverseCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reverse",
 		Short: "Inspect server reverse tunnels",
+		Annotations: map[string]string{
+			commandmeta.DefaultBehavior: "list server reverse tunnels",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			forwarded := forwardFlags(cmd, args)
 			code := runServerReverseList(commandContext(cmd), cfg(), forwarded)

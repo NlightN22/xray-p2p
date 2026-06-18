@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
 )
 
 func TestGenerateWritesCompactCommandMap(t *testing.T) {
@@ -19,6 +21,9 @@ func TestGenerateWritesCompactCommandMap(t *testing.T) {
 	serverCmd := &cobra.Command{
 		Use:   "server",
 		Short: "Manage server",
+		Annotations: map[string]string{
+			commandmeta.DefaultBehavior: "list users",
+		},
 	}
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -40,6 +45,9 @@ func TestGenerateWritesCompactCommandMap(t *testing.T) {
 	}
 	if !strings.Contains(rootDoc, "Subcommands: list") {
 		t.Fatalf("root doc missing top-level child subcommands:\n%s", rootDoc)
+	}
+	if !strings.Contains(rootDoc, "Default behavior: list users") {
+		t.Fatalf("root doc missing default behavior:\n%s", rootDoc)
 	}
 	if strings.Contains(rootDoc, "xp2p server list") {
 		t.Fatalf("root doc should not expand nested commands:\n%s", rootDoc)

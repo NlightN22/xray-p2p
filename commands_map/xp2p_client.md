@@ -195,6 +195,7 @@ Includes: inherited options
 
 xp2p client redirect
   Summary: Manage custom client redirects
+  Default behavior: list configured redirect rules
   Subcommands: add, disable, enable, remove, list
 Options:
 Includes: inherited options
@@ -297,6 +298,7 @@ Includes: inherited options
 
 xp2p client reverse
   Summary: Inspect client reverse tunnels
+  Default behavior: list client reverse tunnels
   Subcommands: disable, enable, list
 Options:
 Includes: inherited options
