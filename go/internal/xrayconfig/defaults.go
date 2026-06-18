@@ -99,7 +99,7 @@ func defaultLogsConfig(apiListen string) LogsConfig {
 		API: APIConfig{
 			Tag:      "api",
 			Listen:   apiListen,
-			Services: []string{"HandlerService", "LoggerService", "StatsService"},
+			Services: []string{"HandlerService", "RoutingService", "StatsService", "LoggerService", "ReflectionService", "ObservatoryService"},
 		},
 		StatsEnabled: &statsEnabled,
 		Policy: PolicyConfig{

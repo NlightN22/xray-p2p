@@ -14,7 +14,9 @@ import (
 	"github.com/pelletier/go-toml"
 	"github.com/spf13/cobra"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/stateview"
+	"github.com/NlightN22/xray-p2p/go/internal/cli/xraystate"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -22,11 +24,15 @@ import (
 )
 
 type serverStateOptions struct {
-	Path     string
-	Pending  bool
-	Watch    bool
-	Interval time.Duration
-	TTL      time.Duration
+	Path        string
+	Pending     bool
+	Watch       bool
+	Interval    time.Duration
+	TTL         time.Duration
+	XrayStats   bool
+	XrayAPI     string
+	XrayBin     string
+	StatsFormat string
 }
 
 const defaultHeartbeatTTL = 10 * time.Second
@@ -51,6 +57,10 @@ func newServerStateCmd(cfg commandConfig) *cobra.Command {
 	flags.BoolVarP(&opts.Watch, "watch", "w", false, "continuously refresh state until interrupted")
 	flags.DurationVarP(&opts.Interval, "interval", "i", opts.Interval, "refresh interval for --watch")
 	flags.DurationVarP(&opts.TTL, "ttl", "T", opts.TTL, "heartbeat TTL for alive status")
+	flags.BoolVarP(&opts.XrayStats, "xray-stats", "X", false, "show Xray user traffic counters")
+	flags.StringVarP(&opts.XrayAPI, "xray-api", "A", "", "Xray API address for stats")
+	flags.StringVarP(&opts.XrayBin, "xray-bin", "B", "", "Xray binary path for statsquery")
+	flags.StringVarP(&opts.StatsFormat, "xray-stats-format", "F", "human", "Xray stats format (human|bytes)")
 	return cmd
 }
 
@@ -82,14 +92,27 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
+	stateProvider := func() ([]heartbeat.Snapshot, error) {
+		if opts.Pending {
+			return snapshotServerPendingState(statePath, installDir, ttl)
+		}
+		return snapshotServerState(statePath, installDir, ttl)
+	}
+	viewProvider, err := xraystate.BuildViewProvider(ctx, stateProvider, xraystate.Options{
+		Enabled:    opts.XrayStats,
+		Role:       apply.RoleServer,
+		InstallDir: installDir,
+		APIAddress: opts.XrayAPI,
+		XrayBin:    opts.XrayBin,
+		Format:     opts.StatsFormat,
+	})
+	if err != nil {
+		logging.Error("xp2p server state: invalid Xray stats options", "err", err)
+		return 2
+	}
 
 	if opts.Watch {
-		err := stateview.WatchWithSnapshots(ctx, func() ([]heartbeat.Snapshot, error) {
-			if opts.Pending {
-				return snapshotServerPendingState(statePath, installDir, ttl)
-			}
-			return snapshotServerState(statePath, installDir, ttl)
-		}, interval)
+		err := stateview.WatchWithView(ctx, viewProvider, interval)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logging.Error("xp2p server state: watch failed", "err", err)
 			return 1
@@ -97,12 +120,7 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 		return 0
 	}
 
-	if err := stateview.PrintWithSnapshots(func() ([]heartbeat.Snapshot, error) {
-		if opts.Pending {
-			return snapshotServerPendingState(statePath, installDir, ttl)
-		}
-		return snapshotServerState(statePath, installDir, ttl)
-	}); err != nil {
+	if err := stateview.PrintWithView(viewProvider); err != nil {
 		logging.Error("xp2p server state: failed to render state", "err", err)
 		return 1
 	}

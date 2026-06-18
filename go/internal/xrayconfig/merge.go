@@ -173,8 +173,30 @@ func mergeAPI(current, defaults APIConfig) APIConfig {
 	}
 	if len(merged.Services) == 0 {
 		merged.Services = defaults.Services
+	} else {
+		merged.Services = mergeServices(merged.Services, defaults.Services)
 	}
 	return merged
+}
+
+func mergeServices(current, defaults []string) []string {
+	result := append([]string(nil), current...)
+	seen := make(map[string]struct{}, len(result))
+	for _, service := range result {
+		seen[strings.ToLower(strings.TrimSpace(service))] = struct{}{}
+	}
+	for _, service := range defaults {
+		key := strings.ToLower(strings.TrimSpace(service))
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		result = append(result, service)
+		seen[key] = struct{}{}
+	}
+	return result
 }
 
 func mergePolicy(current, defaults PolicyConfig) PolicyConfig {

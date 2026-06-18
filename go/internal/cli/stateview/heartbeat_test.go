@@ -86,6 +86,45 @@ func TestRenderTableOutputsRows(t *testing.T) {
 	}
 }
 
+func TestRenderTableWithStatsOutputsTrafficColumns(t *testing.T) {
+	buf := new(bytes.Buffer)
+	snapshots := []heartbeat.Snapshot{
+		{
+			Entry: heartbeat.Entry{
+				Tag:  "alpha",
+				Host: "edge-a",
+				User: "Alice",
+			},
+		},
+		{
+			Entry: heartbeat.Entry{
+				Tag:  "beta",
+				Host: "edge-b",
+				User: "Bob",
+			},
+		},
+	}
+	RenderTableWithStats(buf, snapshots, map[string]TrafficStats{
+		"alice": {Upload: "1.0 MiB", Download: "2.0 MiB", Total: "3.0 MiB"},
+		"bob":   {Upload: "-", Download: "-", Total: "-"},
+	})
+	out := buf.String()
+	for _, want := range []string{"UPLOAD", "DOWNLOAD", "TOTAL", "1.0 MiB", "3.0 MiB"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected %q in output: %q", want, out)
+		}
+	}
+}
+
+func TestRenderViewShowsStatsColumnsWhenRequestedWithoutRows(t *testing.T) {
+	buf := new(bytes.Buffer)
+	RenderView(buf, SnapshotView{ShowStats: true})
+	out := buf.String()
+	if !strings.Contains(out, "UPLOAD") || !strings.Contains(out, "DOWNLOAD") || !strings.Contains(out, "TOTAL") {
+		t.Fatalf("expected stats header and placeholder row, got %q", out)
+	}
+}
+
 func TestSafeClientUser(t *testing.T) {
 	if safeClientUser("  ") != "-" {
 		t.Fatalf("safeClientUser should return '-' for blanks")

@@ -8,8 +8,11 @@
         "listen": "127.0.0.1:52180",
         "services": [
             "HandlerService",
+            "RoutingService",
+            "StatsService",
             "LoggerService",
-            "StatsService"
+            "ReflectionService",
+            "ObservatoryService"
         ]
     },
     "stats": {},

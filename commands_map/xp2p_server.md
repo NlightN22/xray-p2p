@@ -77,6 +77,10 @@ Includes: Global options
 - --watch, -w            Continuously refresh state until interrupted
 - --interval, -i <dur>   Refresh interval for --watch
 - --ttl, -T <dur>        Heartbeat TTL for alive status
+- --xray-stats, -X       Show Xray user traffic counters
+- --xray-api, -A <addr>  Xray API address for stats
+- --xray-bin, -B <path>  Xray binary path for statsquery
+- --xray-stats-format, -F <human|bytes> Xray stats format
 
 xp2p server render
   Subcommands: xray
