@@ -8,14 +8,11 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayapi"
 )
 
 const (
@@ -23,7 +20,7 @@ const (
 	FormatBytes = "bytes"
 )
 
-var execCommand = exec.CommandContext
+var queryStats = xrayapi.QueryStats
 
 // TrafficStats stores accumulated Xray user traffic counters.
 type TrafficStats struct {
@@ -42,8 +39,6 @@ func (s TrafficStats) TotalBytes() uint64 {
 // QueryOptions controls Xray stats retrieval.
 type QueryOptions struct {
 	APIAddress string
-	XrayBin    string
-	InstallDir string
 	Timeout    time.Duration
 }
 
@@ -53,57 +48,19 @@ func QueryUserStats(ctx context.Context, opts QueryOptions) (map[string]TrafficS
 	if apiAddress == "" {
 		return nil, errors.New("xray API address is empty")
 	}
-	xrayBin, err := ResolveBinary(opts.InstallDir, opts.XrayBin)
-	if err != nil {
-		return nil, err
-	}
 	timeout := opts.Timeout
 	if timeout <= 0 {
-		timeout = 3 * time.Second
+		timeout = xrayapi.DefaultTimeout
 	}
-	queryCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	cmd := execCommand(queryCtx, xrayBin, "api", "statsquery", "--server="+apiAddress)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("xray statsquery failed: %w: %s", err, strings.TrimSpace(string(output)))
-	}
-	stats, err := ParseUserStats(output)
+	stats, err := queryStats(ctx, xrayapi.StatsQueryOptions{
+		Address: apiAddress,
+		Pattern: "user>>>",
+		Timeout: timeout,
+	})
 	if err != nil {
 		return nil, err
 	}
-	return stats, nil
-}
-
-// ResolveBinary resolves the xray binary path.
-func ResolveBinary(installDir, override string) (string, error) {
-	if path := strings.TrimSpace(override); path != "" {
-		return path, nil
-	}
-	if path := strings.TrimSpace(os.Getenv("XP2P_XRAY_BIN")); path != "" {
-		return path, nil
-	}
-	name := "xray"
-	if runtime.GOOS == "windows" {
-		name = "xray.exe"
-	}
-	if dir := strings.TrimSpace(installDir); dir != "" {
-		path := filepath.Join(dir, layout.BinDirName, name)
-		if stat, err := os.Stat(path); err == nil {
-			if stat.IsDir() {
-				return "", fmt.Errorf("%s is a directory, expected xray binary", path)
-			}
-			return path, nil
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return "", fmt.Errorf("inspect xray binary at %s: %w", path, err)
-		}
-	}
-	path, err := exec.LookPath(name)
-	if err != nil {
-		return "", fmt.Errorf("xray binary not found (set --xray-bin or XP2P_XRAY_BIN): %w", err)
-	}
-	return path, nil
+	return UserStatsFromXrayStats(stats)
 }
 
 // APIListenFromXrayConfig reads api.listen from a compiled Xray config.
@@ -151,6 +108,30 @@ func ParseUserStats(data []byte) (map[string]TrafficStats, error) {
 			stats.UploadBytes = value
 		case "downlink":
 			stats.DownloadBytes = value
+		}
+		result[key] = stats
+	}
+	return result, nil
+}
+
+// UserStatsFromXrayStats converts Xray StatsService counters to user traffic stats.
+func UserStatsFromXrayStats(items []xrayapi.Stat) (map[string]TrafficStats, error) {
+	result := make(map[string]TrafficStats)
+	for _, item := range items {
+		user, direction, ok := parseStatName(item.Name)
+		if !ok {
+			continue
+		}
+		if item.Value < 0 {
+			return nil, fmt.Errorf("parse stat %q value: negative value", item.Name)
+		}
+		key := NormalizeUser(user)
+		stats := result[key]
+		switch direction {
+		case "uplink":
+			stats.UploadBytes = uint64(item.Value)
+		case "downlink":
+			stats.DownloadBytes = uint64(item.Value)
 		}
 		result[key] = stats
 	}

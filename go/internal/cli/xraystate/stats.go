@@ -50,8 +50,6 @@ func BuildViewProvider(ctx context.Context, snapshots stateview.SnapshotProvider
 		}
 		stats, err := xraystats.QueryUserStats(ctx, xraystats.QueryOptions{
 			APIAddress: apiAddress,
-			XrayBin:    opts.XrayBin,
-			InstallDir: opts.InstallDir,
 			Timeout:    3 * time.Second,
 		})
 		if err != nil {

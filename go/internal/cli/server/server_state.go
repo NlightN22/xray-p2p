@@ -59,7 +59,7 @@ func newServerStateCmd(cfg commandConfig) *cobra.Command {
 	flags.DurationVarP(&opts.TTL, "ttl", "T", opts.TTL, "heartbeat TTL for alive status")
 	flags.BoolVarP(&opts.XrayStats, "xray-stats", "X", false, "show Xray user traffic counters")
 	flags.StringVarP(&opts.XrayAPI, "xray-api", "A", "", "Xray API address for stats")
-	flags.StringVarP(&opts.XrayBin, "xray-bin", "B", "", "Xray binary path for statsquery")
+	flags.StringVarP(&opts.XrayBin, "xray-bin", "B", "", "deprecated; stats use direct Xray gRPC")
 	flags.StringVarP(&opts.StatsFormat, "xray-stats-format", "F", "human", "Xray stats format (human|bytes)")
 	return cmd
 }
