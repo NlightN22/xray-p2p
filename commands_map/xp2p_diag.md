@@ -1,9 +1,12 @@
 # xp2p diag
 
-xp2p diag
+## Command tree
 
+xp2p diag
+  Summary: Run diagnostics responder in the foreground
 Options:
-- --listen, -n <host:port> Listen address (host:port)
-- --proto, -o <tcp|udp>    Protocol to listen on
-- --quiet, -q              Reduce log output
-- Global options
+Includes: inherited options
+- --listen, -n <host:port> listen address (host:port)
+- --proto, -o <proto> protocol to listen on (tcp or udp)
+- --quiet, -q reduce log output
+

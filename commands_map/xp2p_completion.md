@@ -1,6 +1,9 @@
 # xp2p completion
 
-xp2p completion [bash|zsh|fish|powershell]
+## Command tree
 
+xp2p completion [bash|zsh|fish|powershell]
+  Summary: Generate shell completion scripts
 Options:
-- Global options
+Includes: inherited options
+

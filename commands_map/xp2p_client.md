@@ -1,324 +1,371 @@
 # xp2p client
 
-## Global options (apply to all commands)
-- --help, -h                     Show help for command
-- --config, -c <path>             Path to configuration file
-- --log-level, -l <level>         Override logging level (debug|info|warn|error)
-- --log-json, -j                  Emit logs in JSON format
-- --version, -v                   Print xp2p version and exit (root only)
-
 ## Command tree
 
 xp2p client
-  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward (Linux only)
+  Summary: Manage xp2p client installation
+  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward
+Options:
+Includes: inherited options
 
 xp2p client install
+  Summary: Install xp2p client assets and reverse bridges
 Options:
-Includes: Global options
-- --path, -p <dir>           Client installation directory
-- --config-dir, -D <dir>     Client configuration directory name
-- --host, -H <host>          Remote server host
-- --port, -P <port>          Remote server port
-- --user, -u <email>         User email
-- --password, -w <password>  User password
-- --sni, -s <name>           TLS server name (SNI)
-- --link, -L <link>          Client connection link
-- --allow-insecure, -I       Allow insecure TLS (skip verification)
-- --strict-tls, -S           Enforce TLS verification
-- --force, -f                Replace existing endpoint configuration
-- --mode, -M <proxy|tun|tun:split|tun:full> Target client mode (optional)
-- --tun-mode, -m <split|full> TUN routing mode (default: split)
-
-xp2p client remove [hostname|tag]
-Options:
-Includes: Global options
-- --path, -p <dir>        Client installation directory
-- --config-dir, -D <dir>  Client configuration directory name
-- --keep-files, -K        Keep installation files (only with --all)
-- --ignore-missing, -m    Do not fail if installation is absent (only with --all)
-- --all, -a               Remove all endpoints and configuration
-- --quiet, -q             Do not prompt for removal
+Includes: inherited options
+- --allow-insecure, -I allow insecure TLS (skip verification)
+- --config-dir, -D <dir> client configuration directory name
+- --force, -f replace existing endpoint configuration
+- --host, -H <host> remote server host
+- --link, -L <link> client connection link
+- --mode, -M <mode> target client mode (proxy or tun; also supports tun:split or tun:full)
+- --password, -w <password> user password
+- --path, -p <path> client installation directory
+- --port, -P <port> remote server port
+- --sni, -s <host> TLS server name (SNI)
+- --strict-tls, -S enforce TLS verification
+- --tun-mode, -m <mode> TUN routing mode (split or full)
+- --user, -u <id> user email (used to derive the <user><host>.rev reverse bridge)
 
 xp2p client disable [hostname|tag]
+  Summary: Disable a client endpoint
 Options:
-Includes: Global options
-- --all, -a               Disable all endpoints
+Includes: inherited options
+- --all, -a enable or disable all endpoints
 
 xp2p client enable [hostname|tag]
+  Summary: Enable a client endpoint
 Options:
-Includes: Global options
-- --all, -a               Enable all endpoints
+Includes: inherited options
+- --all, -a enable or disable all endpoints
 
 xp2p client update <hostname|tag>
+  Summary: Update endpoint credentials
 Options:
-Includes: Global options
-- --path, -p <dir>        Client installation directory
-- --config-dir, -D <dir>  Client configuration directory name
-- --user, -u <email>      User email
-- --password, -w <password> User password
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --password, -w <password> user password
+- --path, -p <path> client installation directory
+- --user, -u <id> user email
+
+xp2p client remove [hostname|tag]
+  Summary: Remove xp2p client endpoints or entire installation
+Options:
+Includes: inherited options
+- --all, -a remove all endpoints and configuration
+- --config-dir, -D <dir> client configuration directory name
+- --ignore-missing, -m do not fail if installation is absent
+- --keep-files, -K keep installation files
+- --path, -p <path> client installation directory
+- --quiet, -q do not prompt for removal
 
 xp2p client list
+  Summary: List configured xp2p client endpoints
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
 
 xp2p client run
+  Summary: Run xp2p client in foreground
 Options:
-Includes: Global options
-- --path, -p <dir>                Client installation directory
-- --config-dir, -D <dir>          Client configuration directory name
-- --quiet, -q                     Do not prompt for installation
-- --auto-install, -A              Install automatically if missing
-- --verbose, -V                   Emit full-tunnel change details
-- --heartbeat, -b                 Enable background heartbeat probes
-- --heartbeat-interval, -I <dur>  Frequency of heartbeat probes
-- --heartbeat-timeout, -T <dur>   Timeout per heartbeat probe
-- --heartbeat-port, -P <port>     Diagnostics service port to probe
-- --heartbeat-socks, -S <host:port> SOCKS5 proxy for heartbeat (optional)
+Includes: inherited options
+- --auto-install, -A install automatically if missing
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --quiet, -q do not prompt for installation
+- --verbose, -V emit full-tunnel change details
+
+xp2p client service
+  Summary: Manage the xp2p client service
+  Subcommands: start, stop, restart, status, run
+Options:
+Includes: inherited options
 
 xp2p client service start
+  Summary: Start the xp2p client service
 Options:
-Includes: Global options
-- On Windows, --log-level updates the service environment (XP2P_LOG_LEVEL)
+Includes: inherited options
 
 xp2p client service stop
+  Summary: Stop the xp2p client service
 Options:
-Includes: Global options
-- (no local options)
+Includes: inherited options
+
+xp2p client service restart
+  Summary: Restart the xp2p client service
+Options:
+Includes: inherited options
 
 xp2p client service status
+  Summary: Show xp2p client service status
 Options:
-Includes: Global options
-- (no local options)
+Includes: inherited options
 
 xp2p client service run
+  Summary: Run the xp2p client service in the foreground
 Options:
-Includes: Global options
-- --path, -p <dir>                Client installation directory
-- --config-dir, -D <dir>          Client configuration directory name
-- --log-file, -F <path>           xp2p service log file
-- --max-restarts, -R <n>          Maximum restart attempts after failures
-- --restart-delay, -r <dur>       Delay between restart attempts
-- --heartbeat, -b                 Enable heartbeat probes
-- --verbose, -V                   Emit full-tunnel change details
-- --heartbeat-interval, -I <dur>  Heartbeat interval
-- --heartbeat-timeout, -T <dur>   Heartbeat timeout
-- --heartbeat-port, -P <port>     Diagnostics service port to probe
-- --heartbeat-socks, -S <host:port> SOCKS5 proxy for heartbeat (optional)
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --heartbeat, -b enable heartbeat probes
+- --heartbeat-interval, -I <duration> heartbeat interval
+- --heartbeat-port, -P <string> diagnostics service port to probe
+- --heartbeat-socks, -S <string> SOCKS5 proxy for heartbeat (optional)
+- --heartbeat-timeout, -T <duration> heartbeat timeout
+- --log-file, -F <path> xp2p service log file (default: platform-specific path)
+- --max-restarts, -R <n> maximum restart attempts after failures
+- --path, -p <path> client installation directory
+- --restart-delay, -r <duration> delay between restart attempts
+- --verbose, -V emit full-tunnel change details
 
 xp2p client state
+  Summary: Show local heartbeat cache status
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --pending, -y          Show pending configuration
-- --watch, -w            Continuously refresh state until interrupted
-- --interval, -i <dur>   Refresh interval for --watch
-- --ttl, -T <dur>        Heartbeat TTL for alive status
-- --xray-stats, -X       Show Xray user traffic counters
-- --xray-api, -A <addr>  Xray API address for stats
-- --xray-bin, -B <path>  Xray binary path for statsquery
-- --xray-stats-format, -F <human|bytes> Xray stats format
+Includes: inherited options
+- --interval, -i <duration> refresh interval for --watch
+- --path, -p <path> client installation directory
+- --pending, -y show pending configuration
+- --ttl, -T <duration> heartbeat TTL for alive status
+- --watch, -w continuously refresh state until interrupted
+- --xray-api, -A <host:port> Xray API address for stats
+- --xray-bin, -B <path> deprecated; stats use direct Xray gRPC
+- --xray-stats, -X show Xray user traffic counters
+- --xray-stats-format, -F <mode> Xray stats format (human|bytes)
 
 xp2p client obs
+  Summary: Show Xray outbound observations
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --xray-api, -A <addr>  Xray API address
+Includes: inherited options
+- --path, -p <path> client installation directory
+- --xray-api, -A <host:port> Xray API address
 
 xp2p client render
+  Summary: Render compiled runtime artifacts
   Subcommands: xray
+Options:
+Includes: inherited options
 
 xp2p client render xray
+  Summary: Render xray.json
 Options:
-Includes: Global options
-- --live, -L             Render live runtime artifacts
-- --desired, -d          Compile Desired inputs without applying
-- --output, -o <path>    Output path ('-' for stdout)
+Includes: inherited options
+- --desired, -d compile Desired inputs without applying
+- --live, -L render live runtime artifacts
+- --output, -o <path> output path ('-' for stdout)
 
 xp2p client debug
+  Summary: Debug helpers
   Subcommands: bundle
+Options:
+Includes: inherited options
 
 xp2p client debug bundle
+  Summary: Create a debug bundle archive
 Options:
-Includes: Global options
-- --output, -o <path>    Archive output path
+Includes: inherited options
+- --output, -o <path> archive output path
 
 xp2p client export
+  Summary: Export client configuration bundle
 Options:
-Includes: Global options
-- --config-root, -C <dir> Configuration root to export
-- --output, -o <path>     Archive output path
+Includes: inherited options
+- --config-root, -C <dir> configuration root to export
+- --output, -o <path> archive output path
 
 xp2p client import
+  Summary: Import client configuration bundle
 Options:
-Includes: Global options
-- --config-root, -C <dir> Configuration root to import into
-- --input, -i <path> (required) Archive input path
+Includes: inherited options
+- --config-root, -C <dir> configuration root to import into
+- --input, -i <path> (required) archive input path
 
 xp2p client deploy
+  Summary: Deploy xp2p client via remote helper
 Options:
-Includes: Global options
-- --host, -H <host> (required) Remote host (IP or DNS) to deploy
-- --port, -P <port>           Deploy port (default 62025)
-- --install-dir, -I <dir>     Server install directory override
-- --user, -u <email>          User identifier (email)
-- --password, -w <password>   User password (auto-generated when omitted)
-- --trojan-port, -T <port>    Service port
-- --mode, -M <proxy|tun|tun:split|tun:full> Target client mode (optional)
-- --tun-mode, -m <split|full> TUN routing mode (split or full)
-- --force, -f                 Allow changing existing tun mode
-
-xp2p client redirect add
-Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --cidr, -C <cidr>      CIDR to redirect (mutually exclusive with --domain)
-- --domain, -d <name>    Domain to redirect (mutually exclusive with --cidr)
-- --tag, -g <tag>        Outbound tag to route through (prompts when omitted)
-- --host, -H <host>      Client endpoint hostname to route through
-- --no-routes, -N        Do not add OS routes for CIDR redirects
-- --quiet, -q            Do not prompt for outbound tags
-
-xp2p client redirect remove
-Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --cidr, -C <cidr>      CIDR mapping to remove (mutually exclusive with --domain)
-- --domain, -d <name>    Domain mapping to remove (mutually exclusive with --cidr)
-- --tag, -g <tag>        Outbound tag filter (prompts when omitted)
-- --host, -H <host>      Client endpoint hostname filter
-- --quiet, -q            Do not prompt for outbound tags
+Includes: inherited options
+- --force, -f allow changing existing tun mode
+- --host, -H <host> (required) remote host (IP or DNS) to deploy
+- --install-dir, -I <dir> server install directory override
+- --mode, -M <mode> target client mode (proxy or tun; also supports tun:split or tun:full)
+- --password, -w <password> user password (auto-generated when omitted)
+- --port, -P <port> deploy port
+- --trojan-port, -T <port> service port
+- --tun-mode, -m <mode> TUN routing mode (split or full)
+- --user, -u <id> user identifier (email)
 
 xp2p client redirect
+  Summary: Manage custom client redirects
+  Subcommands: add, disable, enable, remove, list
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
+
+xp2p client redirect add
+  Summary: Add a custom redirect rule
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR to redirect
+- --config-dir, -D <dir> client configuration directory name
+- --domain, -d <host> domain to redirect
+- --host, -H <host> client endpoint hostname to route through
+- --no-routes, -N do not add OS routes for CIDR redirects
+- --path, -p <path> client installation directory
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> outbound tag to route through (prompts when omitted)
 
 xp2p client redirect disable
+  Summary: Disable a redirect rule
 Options:
-Includes: Global options
-- --cidr, -C <cidr>      CIDR mapping to disable (mutually exclusive with --domain)
-- --domain, -d <name>    Domain mapping to disable (mutually exclusive with --cidr)
-- --tag, -g <tag>        Outbound tag filter
-- --host, -H <host>      Client endpoint hostname filter
-- --all, -a              Disable all redirect rules
-- --quiet, -q            Do not prompt for outbound tags
+Includes: inherited options
+- --all, -a toggle all redirect rules
+- --cidr, -C <cidr> CIDR mapping to toggle
+- --domain, -d <host> domain mapping to toggle
+- --host, -H <host> client endpoint hostname filter
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> outbound tag filter
 
 xp2p client redirect enable
+  Summary: Enable a redirect rule
 Options:
-Includes: Global options
-- --cidr, -C <cidr>      CIDR mapping to enable (mutually exclusive with --domain)
-- --domain, -d <name>    Domain mapping to enable (mutually exclusive with --cidr)
-- --tag, -g <tag>        Outbound tag filter
-- --host, -H <host>      Client endpoint hostname filter
-- --all, -a              Enable all redirect rules
-- --quiet, -q            Do not prompt for outbound tags
+Includes: inherited options
+- --all, -a toggle all redirect rules
+- --cidr, -C <cidr> CIDR mapping to toggle
+- --domain, -d <host> domain mapping to toggle
+- --host, -H <host> client endpoint hostname filter
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> outbound tag filter
+
+xp2p client redirect remove
+  Summary: Remove a redirect rule
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR mapping to remove
+- --config-dir, -D <dir> client configuration directory name
+- --domain, -d <host> domain mapping to remove
+- --host, -H <host> client endpoint hostname filter
+- --path, -p <path> client installation directory
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> outbound tag filter (prompts when omitted)
 
 xp2p client redirect list
+  Summary: List configured redirect rules
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
+
+xp2p client forward
+  Summary: Manage client dokodemo-door forwards
+  Subcommands: add, remove, list
+Options:
+Includes: inherited options
 
 xp2p client forward add
+  Summary: Add a client dokodemo-door forward
 Options:
-Includes: Global options
-- --path, -p <dir>           Client installation directory
-- --config-dir, -D <dir>     Client configuration directory name
-- --target, -t <host:port> (required) Target host:port to forward traffic to
-- --listen, -n <host>        Local listen address (default 127.0.0.1)
-- --listen-port, -P <n>      Local listen port (auto-select when omitted)
-- --proto, -o <tcp|udp|both> Protocol to forward
-- --base-port, -B <n>        First port to probe when auto-selecting
+Includes: inherited options
+- --base-port, -B <port> first port to probe when auto-selecting
+- --config-dir, -D <dir> client configuration directory name
+- --listen, -n <host:port> local listen address (default 127.0.0.1)
+- --listen-port, -P <port> local listen port (auto-select when omitted)
+- --path, -p <path> client installation directory
+- --proto, -o <proto> protocol to forward (tcp, udp, both)
+- --target, -t <host:port> (required) target host:port to forward traffic to
 
 xp2p client forward remove
+  Summary: Remove a client dokodemo-door forward
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --listen-port, -P <n>  Forward listen port
-- --tag, -g <tag>        Forward tag filter
-- --remark, -r <text>    Forward remark filter
-- --ignore-missing, -m   Do not fail when the forward rule does not exist
-- --cleanup, -C          Remove state entry even when config is missing
+Includes: inherited options
+- --cleanup, -C remove state entry even when config is missing
+- --config-dir, -D <dir> client configuration directory name
+- --ignore-missing, -m do not fail when the forward rule does not exist
+- --listen-port, -P <port> forward listen port
+- --path, -p <path> client installation directory
+- --remark, -r <id> forward remark
+- --tag, -g <id> forward tag
 
 xp2p client forward list
+  Summary: List client forwards
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
 
 xp2p client reverse
+  Summary: Inspect client reverse tunnels
+  Subcommands: disable, enable, list
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --pending, -y          List pending configuration
-
-xp2p client reverse list
-Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
 
 xp2p client reverse disable [tag|user|host]
+  Summary: Disable a client reverse tunnel
 Options:
-Includes: Global options
-- --all, -a              Disable all reverse tunnels
+Includes: inherited options
+- --all, -a enable or disable all reverse tunnels
 
 xp2p client reverse enable [tag|user|host]
+  Summary: Enable a client reverse tunnel
 Options:
-Includes: Global options
-- --all, -a              Enable all reverse tunnels
+Includes: inherited options
+- --all, -a enable or disable all reverse tunnels
+
+xp2p client reverse list
+  Summary: List client reverse tunnels
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
 
 xp2p client mode [tun|proxy] [split|full]
+  Summary: Switch client mode between TUN and proxy (optional tun mode)
 Options:
-Includes: Global options
-- --path, -p <dir>       Client installation directory
-- --config-dir, -D <dir> Client configuration directory name
-- --tag, -g <tag>        Outbound tag for full-tunnel routing (prompts when omitted)
-- --host, -H <host>      Client endpoint hostname for full-tunnel routing
-- --quiet, -q            Do not prompt for outbound tags
-- --verbose, -V          Emit full-tunnel change details
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --host, -H <host> client endpoint hostname for full-tunnel routing
+- --path, -p <path> client installation directory
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> outbound tag for full-tunnel routing (prompts when omitted)
+- --verbose, -V emit full-tunnel change details
 
-xp2p client dns-forward (Linux only)
+xp2p client dns-forward
+  Summary: Manage dnsmasq forward entries on OpenWrt
   Subcommands: add, remove, list
+Options:
+Includes: inherited options
 
 xp2p client dns-forward add
+  Summary: Create or update a DNS forward entry
 Options:
-Includes: Global options
-- --domain, -d <name> (required) Domain name to match
-- --target, -t <ip:port> (required) Upstream DNS server
-- --with-forward, -W      Deprecated; dns-forward always ensures a target forward
-- --intercept, -I         Install DNS intercept redirect (53/tcp,udp)
-- --quiet, -q             Suppress interactive prompts
-- --debug, -g             Emit diagnostics output on error
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> (required) domain name to match
+- --intercept, -I install DNS intercept redirect (53/tcp,udp)
+- --quiet, -q suppress interactive prompts
+- --target, -t <host:port> (required) upstream DNS server (IP:port)
+- --with-forward, -W deprecated; dns-forward always ensures a target forward
 
 xp2p client dns-forward remove
+  Summary: Remove a DNS forward entry
 Options:
-Includes: Global options
-- --domain, -d <name>     Domain name to remove
-- --with-forward, -W      Deprecated; auto-created target forwards are removed when unused
-- --intercept, -I         Remove DNS intercept redirect
-- --all, -a               Remove all managed DNS forward entries
-- --quiet, -q             Suppress interactive prompts
-- --debug, -g             Emit diagnostics output on error
-
-Behavior:
-- Removes the managed dnsmasq domain entry.
-- Removes the xray forward only when it is owned by dns-forward and no remaining dns-forward entry uses the same listen port.
-- Leaves pre-existing or externally owned forwards in place.
+Includes: inherited options
+- --all, -a remove all managed DNS forward entries
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> domain name to remove
+- --intercept, -I remove DNS intercept redirect
+- --quiet, -q suppress interactive prompts
+- --with-forward, -W deprecated; auto-created target forwards are removed when unused
 
 xp2p client dns-forward list
+  Summary: List managed DNS forwards
 Options:
-Includes: Global options
-- --debug, -g             Emit diagnostics output on error
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+

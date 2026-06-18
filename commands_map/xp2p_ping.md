@@ -1,13 +1,16 @@
 # xp2p ping
 
-xp2p ping <host>
+## Command tree
 
+xp2p ping <host>
+  Summary: Send diagnostic ping requests to xp2p agents
 Options:
-- --count, -N <n>          Number of echo requests to send
-- --timeout, -t <sec>      Per-request timeout in seconds
-- --proto, -o <tcp|udp>    Protocol to use
-- --port, -P <n>           Target port (default 62022)
-- --tunnel, -T [host:port] Route ping through xp2p tunnel (SOCKS5). If value omitted, auto-detect from config
-- --endpoint, -e <tag>     Endpoint tag to use when multiple endpoints share the same host
-- --index, -i <n>          Endpoint index (1-based) to use when multiple endpoints share the same host
-- Global options
+Includes: inherited options
+- --count, -N <n> number of echo requests to send
+- --endpoint, -e <id> endpoint tag to use when multiple endpoints share the same host
+- --index, -i <n> endpoint index (1-based) to use when multiple endpoints share the same host
+- --port, -P <port> target port (default 62022)
+- --proto, -o <proto> protocol to use (tcp or udp)
+- --timeout, -t <duration> per-request timeout in seconds (optional)
+- --tunnel, -T <string> route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config
+

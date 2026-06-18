@@ -24,7 +24,7 @@ WSL_CD = drive=$$(printf '%s' '$(CURDIR)' | cut -c1 | tr '[:upper:]' '[:lower:]'
 .PHONY: run build build-% fmt lint test vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi \
-	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl
+	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl command-map
 
 build: $(TARGETS:%=build-%)
 
@@ -54,6 +54,9 @@ ui-native-cover:
 
 test-wsl:
 	wsl bash -lc "$(WSL_CD) && go clean -testcache && go test ./... -cover"
+
+command-map:
+	wsl bash -lc "set -euo pipefail; $(WSL_CD); rm -rf commands_map; go run ./go/cmd/xp2p docs command-map --dir commands_map"
 
 up-win10:
 	cd $(VAGRANT_WIN10_DIR) && vagrant up

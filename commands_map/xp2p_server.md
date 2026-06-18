@@ -1,327 +1,398 @@
 # xp2p server
 
-## Global options (apply to all commands)
-- --help, -h                     Show help for command
-- --config, -c <path>             Path to configuration file
-- --log-level, -l <level>         Override logging level (debug|info|warn|error)
-- --log-json, -j                  Emit logs in JSON format
-- --version, -v                   Print xp2p version and exit (root only)
-
 ## Command tree
 
 xp2p server
-  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, dns-forward (Linux only)
+  Summary: Manage xp2p server components
+  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, dns-forward
+Options:
+Includes: inherited options
 
 xp2p server install
+  Summary: Install xp2p server assets
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name
-- --port, -P <port>      Server listener port
+Includes: inherited options
+- --cert, -E <path> TLS certificate file to deploy
 - --cert-store, -S <ref> TLS certificate store reference (win-store)
-- --cert, -E <path>      TLS certificate file to deploy
-- --key, -k <path>       TLS private key file to deploy
-- --host, -H <host>      Public host name or IP for generated configuration
-- --force, -f            Overwrite existing installation
+- --config-dir, -D <dir> server configuration directory name
+- --force, -f overwrite existing installation
+- --host, -H <host> public host name or IP for generated configuration
+- --key, -k <password> TLS private key file to deploy
+- --path, -p <path> server installation directory
+- --port, -P <port> server listener port
 
 xp2p server remove
+  Summary: Remove xp2p server installation
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name
-- --keep-files, -K       Keep installation files
-- --ignore-missing, -m   Do not fail if service or files are absent
-- --quiet, -q            Do not prompt for removal
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name
+- --ignore-missing, -m do not fail if service or files are absent
+- --keep-files, -K keep installation files
+- --path, -p <path> server installation directory
+- --quiet, -q do not prompt for removal
 
 xp2p server run
+  Summary: Run xp2p server in foreground
 Options:
-Includes: Global options
-- --path, -p <dir>          Server installation directory
-- --config-dir, -D <dir>    Server configuration directory name
-- --diag-service-port, -P <port> Diagnostics service port
-- --diag-service-mode, -M <auto|manual> Diagnostics service startup mode
-- --auto-install, -A        Install server assets when missing without prompting
-- --quiet, -q               Suppress interactive prompts
+Includes: inherited options
+- --auto-install, -A install server assets when missing without prompting
+- --config-dir, -D <dir> server configuration directory name
+- --diag-service-mode, -M <mode> diagnostics service startup mode (auto|manual)
+- --diag-service-port, -P <port> diagnostics service port
+- --path, -p <path> server installation directory
+- --quiet, -q suppress interactive prompts
+
+xp2p server service
+  Summary: Manage the xp2p server service
+  Subcommands: start, stop, restart, status, run
+Options:
+Includes: inherited options
 
 xp2p server service start
+  Summary: Start the xp2p server service
 Options:
-Includes: Global options
-- On Windows, --log-level updates the service environment (XP2P_LOG_LEVEL)
+Includes: inherited options
 
 xp2p server service stop
+  Summary: Stop the xp2p server service
 Options:
-Includes: Global options
-- (no local options)
+Includes: inherited options
+
+xp2p server service restart
+  Summary: Restart the xp2p server service
+Options:
+Includes: inherited options
 
 xp2p server service status
+  Summary: Show xp2p server service status
 Options:
-Includes: Global options
-- (no local options)
+Includes: inherited options
 
 xp2p server service run
+  Summary: Run the xp2p server service in the foreground
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name
-- --diag-service-port, -P <port> Diagnostics service port
-- --diag-service-mode, -M <auto|manual> Diagnostics service startup mode
-- --log-file, -F <path>  xp2p service log file
-- --max-restarts, -R <n> Maximum restart attempts after failures
-- --restart-delay, -r <dur> Delay between restart attempts
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name
+- --diag-service-mode, -M <mode> diagnostics service startup mode (auto|manual)
+- --diag-service-port, -P <port> diagnostics service port
+- --log-file, -F <path> xp2p service log file
+- --max-restarts, -R <n> maximum restart attempts after failures
+- --path, -p <path> server installation directory
+- --restart-delay, -r <duration> delay between restart attempts
 
 xp2p server state
+  Summary: Show heartbeat status for xp2p tunnels
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --pending, -y          Show pending configuration
-- --watch, -w            Continuously refresh state until interrupted
-- --interval, -i <dur>   Refresh interval for --watch
-- --ttl, -T <dur>        Heartbeat TTL for alive status
-- --xray-stats, -X       Show Xray user traffic counters
-- --xray-api, -A <addr>  Xray API address for stats
-- --xray-bin, -B <path>  Xray binary path for statsquery
-- --xray-stats-format, -F <human|bytes> Xray stats format
+Includes: inherited options
+- --interval, -i <duration> refresh interval for --watch
+- --path, -p <path> server installation directory
+- --pending, -y show pending configuration
+- --ttl, -T <duration> heartbeat TTL for alive status
+- --watch, -w continuously refresh state until interrupted
+- --xray-api, -A <host:port> Xray API address for stats
+- --xray-bin, -B <path> deprecated; stats use direct Xray gRPC
+- --xray-stats, -X show Xray user traffic counters
+- --xray-stats-format, -F <mode> Xray stats format (human|bytes)
 
 xp2p server render
+  Summary: Render compiled runtime artifacts
   Subcommands: xray
+Options:
+Includes: inherited options
 
 xp2p server render xray
+  Summary: Render xray.json
 Options:
-Includes: Global options
-- --live, -L             Render live runtime artifacts
-- --desired, -d          Compile Desired inputs without applying
-- --output, -o <path>    Output path ('-' for stdout)
+Includes: inherited options
+- --desired, -d compile Desired inputs without applying
+- --live, -L render live runtime artifacts
+- --output, -o <path> output path ('-' for stdout)
 
 xp2p server debug
+  Summary: Debug helpers
   Subcommands: bundle
+Options:
+Includes: inherited options
 
 xp2p server debug bundle
+  Summary: Create a debug bundle archive
 Options:
-Includes: Global options
-- --output, -o <path>    Archive output path
+Includes: inherited options
+- --output, -o <path> archive output path
 
 xp2p server export
+  Summary: Export server configuration bundle
 Options:
-Includes: Global options
-- --config-root, -C <dir> Configuration root to export
-- --output, -o <path>     Archive output path
+Includes: inherited options
+- --config-root, -C <dir> configuration root to export
+- --output, -o <path> archive output path
 
 xp2p server import
+  Summary: Import server configuration bundle
 Options:
-Includes: Global options
-- --config-root, -C <dir> Configuration root to import into
-- --input, -i <path> (required) Archive input path
+Includes: inherited options
+- --config-root, -C <dir> configuration root to import into
+- --input, -i <path> (required) archive input path
+
+xp2p server user
+  Summary: Manage users on the server
+  Subcommands: add, update, disable, enable, remove, list
+Options:
+Includes: inherited options
 
 xp2p server user add
+  Summary: Add a user and reverse portal
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --id, -i <id>          Client identifier (derives the <id><host>.rev reverse tag)
-- --password, -w <password> Client password or pre-shared key (auto-generated when omitted)
-- --key, -k <password>   Alias for --password
-- --host, -H <host>      Public host name or IP for generated connection link
-- --no-reverse, -n       Skip creating reverse portal/routing entries
-- --force, -f            Overwrite existing user entry
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --force, -f overwrite existing user entry
+- --host, -H <host> public host name or IP for generated connection link
+- --id, -i <id> client identifier (derives the <id><host>.rev reverse tag)
+- --key, -k <password> alias for --password
+- --no-reverse, -n skip creating reverse portal/routing entries
+- --password, -w <password> client password or pre-shared key (auto-generated when omitted)
+- --path, -p <path> server installation directory
 
 xp2p server user update <id>
+  Summary: Update user credentials
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --new-id, -I <id>      New client identifier
-- --password, -w <password> Client password or pre-shared key
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --new-id, -I <id> new client identifier
+- --password, -w <password> client password or pre-shared key
+- --path, -p <path> server installation directory
 
 xp2p server user disable <id>
+  Summary: Disable a user
 Options:
-Includes: Global options
-- --all, -a              Disable all users
+Includes: inherited options
+- --all, -a enable or disable all users
 
 xp2p server user enable <id>
+  Summary: Enable a user
 Options:
-Includes: Global options
-- --all, -a              Enable all users
+Includes: inherited options
+- --all, -a enable or disable all users
 
 xp2p server user remove
+  Summary: Remove a user
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --id, -i <id> (required) Client identifier
-- --host, -H <host>      Public host name or IP (defaults to server host)
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --host, -H <host> public host name or IP (defaults to server host)
+- --id, -i <id> (required) client identifier
+- --path, -p <path> server installation directory
 
 xp2p server user list
+  Summary: List configured users
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --host, -H <host>      Public host name or IP for generated connection links
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --host, -H <host> public host name or IP for generated connection links
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
+
+xp2p server redirect
+  Summary: Manage server redirect rules
+  Subcommands: add, disable, enable, remove, list
+Options:
+Includes: inherited options
 
 xp2p server redirect add
+  Summary: Add a server redirect rule
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --cidr, -C <cidr>      CIDR to redirect (mutually exclusive with --domain)
-- --domain, -d <name>    Domain to redirect (mutually exclusive with --cidr)
-- --tag, -g <tag>        Reverse outbound tag to route through (prompts when omitted)
-- --user, -u <user>      Reverse user to route through
-- --host, -H <host>      Reverse portal host to route through
-- --no-routes, -N        Do not add OS routes for CIDR redirects
-- --quiet, -q            Do not prompt for outbound tags
-
-xp2p server redirect remove
-Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --cidr, -C <cidr>      CIDR mapping to remove (mutually exclusive with --domain)
-- --domain, -d <name>    Domain mapping to remove (mutually exclusive with --cidr)
-- --tag, -g <tag>        Reverse outbound tag filter or tag-only cleanup selector
-- --host, -H <host>      Reverse portal host filter
-- --quiet, -q            Do not prompt for outbound tags
+Includes: inherited options
+- --cidr, -C <cidr> CIDR to redirect
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --domain, -d <host> domain to redirect
+- --host, -H <host> reverse portal host to route through
+- --no-routes, -N do not add OS routes for CIDR redirects
+- --path, -p <path> server installation directory
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> reverse outbound tag to route through (prompts when omitted)
+- --user, -u <id> reverse user to route through
 
 xp2p server redirect disable
+  Summary: Disable a server redirect rule
 Options:
-Includes: Global options
-- --cidr, -C <cidr>      CIDR mapping to disable (mutually exclusive with --domain)
-- --domain, -d <name>    Domain mapping to disable (mutually exclusive with --cidr)
-- --tag, -g <tag>        Reverse outbound tag filter
-- --host, -H <host>      Reverse portal host filter
-- --all, -a              Disable all redirect rules
-- --quiet, -q            Do not prompt for outbound tags
+Includes: inherited options
+- --all, -a toggle all redirect rules
+- --cidr, -C <cidr> CIDR mapping to toggle
+- --domain, -d <host> domain mapping to toggle
+- --host, -H <host> reverse portal host filter
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> reverse outbound tag filter
 
 xp2p server redirect enable
+  Summary: Enable a server redirect rule
 Options:
-Includes: Global options
-- --cidr, -C <cidr>      CIDR mapping to enable (mutually exclusive with --domain)
-- --domain, -d <name>    Domain mapping to enable (mutually exclusive with --cidr)
-- --tag, -g <tag>        Reverse outbound tag filter
-- --host, -H <host>      Reverse portal host filter
-- --all, -a              Enable all redirect rules
-- --quiet, -q            Do not prompt for outbound tags
+Includes: inherited options
+- --all, -a toggle all redirect rules
+- --cidr, -C <cidr> CIDR mapping to toggle
+- --domain, -d <host> domain mapping to toggle
+- --host, -H <host> reverse portal host filter
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> reverse outbound tag filter
+
+xp2p server redirect remove
+  Summary: Remove a server redirect rule
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR mapping to remove
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --domain, -d <host> domain mapping to remove
+- --host, -H <host> reverse portal host filter
+- --path, -p <path> server installation directory
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> reverse outbound tag filter or tag-only cleanup selector
 
 xp2p server redirect list
+  Summary: List server redirect rules
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
+
+xp2p server forward
+  Summary: Manage server dokodemo-door forwards
+  Subcommands: add, remove, list
+Options:
+Includes: inherited options
 
 xp2p server forward add
+  Summary: Add a server dokodemo-door forward
 Options:
-Includes: Global options
-- --path, -p <dir>           Server installation directory
-- --config-dir, -D <dir>     Server configuration directory name or absolute path
-- --target, -t <host:port> (required) Target host:port to forward traffic to
-- --listen, -n <host>        Local listen address (default 127.0.0.1)
-- --listen-port, -P <n>      Local listen port (auto-select when omitted)
-- --proto, -o <tcp|udp|both> Protocol to forward
-- --base-port, -B <n>        First port to probe when auto-selecting
+Includes: inherited options
+- --base-port, -B <port> first port to probe when auto-selecting
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --listen, -n <host:port> local listen address (default 127.0.0.1)
+- --listen-port, -P <port> local listen port (auto-select when omitted)
+- --path, -p <path> server installation directory
+- --proto, -o <proto> protocol to forward (tcp, udp, both)
+- --target, -t <host:port> (required) target host:port to forward traffic to
 
 xp2p server forward remove
+  Summary: Remove a server forward
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --listen-port, -P <n>  Forward listen port
-- --tag, -g <tag>        Forward tag filter
-- --remark, -r <text>    Forward remark filter
-- --ignore-missing, -m   Do not fail when the forward rule does not exist
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --ignore-missing, -m do not fail when the forward rule does not exist
+- --listen-port, -P <port> forward listen port
+- --path, -p <path> server installation directory
+- --remark, -r <id> forward remark
+- --tag, -g <id> forward tag
 
 xp2p server forward list
+  Summary: List server forwards
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
 
 xp2p server reverse
+  Summary: Inspect server reverse tunnels
+  Subcommands: disable, enable, list
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --pending, -y          List pending configuration
-
-xp2p server reverse list
-Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --pending, -y          List pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
 
 xp2p server reverse disable [tag|user|host]
+  Summary: Disable a server reverse tunnel
 Options:
-Includes: Global options
-- --all, -a              Disable all reverse tunnels
+Includes: inherited options
+- --all, -a enable or disable all reverse tunnels
 
 xp2p server reverse enable [tag|user|host]
+  Summary: Enable a server reverse tunnel
 Options:
-Includes: Global options
-- --all, -a              Enable all reverse tunnels
+Includes: inherited options
+- --all, -a enable or disable all reverse tunnels
 
-xp2p server cert set
+xp2p server reverse list
+  Summary: List server reverse tunnels
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --cert-store, -S <ref> TLS certificate store reference (win-store)
-- --cert, -E <path>      TLS certificate file to deploy
-- --key, -k <path>       TLS private key file to deploy
-- --host, -H <host>      Public host name or IP for certificate generation
-- --force, -f            Overwrite existing TLS configuration without prompting
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
+
+xp2p server cert
+  Summary: Manage TLS certificates
+  Subcommands: state, set
+Options:
+Includes: inherited options
 
 xp2p server cert state
+  Summary: Show TLS certificate status
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name or absolute path
-- --pending, -y          Show pending configuration
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y show pending configuration
+
+xp2p server cert set
+  Summary: Set or replace TLS certificates
+Options:
+Includes: inherited options
+- --cert, -E <path> TLS certificate file to deploy
+- --cert-store, -S <ref> TLS certificate store reference (win-store)
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --force, -f overwrite existing TLS configuration without prompting
+- --host, -H <host> public host name or IP for certificate generation
+- --key, -k <password> TLS private key file to deploy
+- --path, -p <path> server installation directory
 
 xp2p server deploy
+  Summary: Listen for xp2p client deploy requests
 Options:
-Includes: Global options
-- --listen, -n <host:port> Deploy listen address (default :62025)
-- --link, -L <trojan://...> (required) Deploy link
-- --diag-service-port, -P <port> Diagnostics service port
-- --timeout, -t <dur> Idle shutdown timeout
+Includes: inherited options
+- --diag-service-port, -P <port> diagnostics service port
+- --link, -L <link> (required) deploy link (trojan://...)
+- --listen, -n <host:port> deploy listen address
+- --timeout, -t <duration> idle shutdown timeout
 
 xp2p server mode [tun|proxy]
+  Summary: Switch server mode between TUN and proxy
 Options:
-Includes: Global options
-- --path, -p <dir>       Server installation directory
-- --config-dir, -D <dir> Server configuration directory name
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name
+- --path, -p <path> server installation directory
 
-xp2p server dns-forward (Linux only)
+xp2p server dns-forward
+  Summary: Manage dnsmasq forward entries on OpenWrt
   Subcommands: add, remove, list
+Options:
+Includes: inherited options
 
 xp2p server dns-forward add
+  Summary: Create or update a DNS forward entry
 Options:
-Includes: Global options
-- --domain, -d <name> (required) Domain name to match
-- --target, -t <ip:port> (required) Upstream DNS server
-- --with-forward, -W      Deprecated; dns-forward always ensures a target forward
-- --intercept, -I         Install DNS intercept redirect (53/tcp,udp)
-- --quiet, -q             Suppress interactive prompts
-- --debug, -g             Emit diagnostics output on error
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> (required) domain name to match
+- --intercept, -I install DNS intercept redirect (53/tcp,udp)
+- --quiet, -q suppress interactive prompts
+- --target, -t <host:port> (required) upstream DNS server (IP:port)
+- --with-forward, -W deprecated; dns-forward always ensures a target forward
 
 xp2p server dns-forward remove
+  Summary: Remove a DNS forward entry
 Options:
-Includes: Global options
-- --domain, -d <name>     Domain name to remove
-- --with-forward, -W      Deprecated; auto-created target forwards are removed when unused
-- --intercept, -I         Remove DNS intercept redirect
-- --all, -a               Remove all managed DNS forward entries
-- --quiet, -q             Suppress interactive prompts
-- --debug, -g             Emit diagnostics output on error
-
-Behavior:
-- Removes the managed dnsmasq domain entry.
-- Removes the xray forward only when it is owned by dns-forward and no remaining dns-forward entry uses the same listen port.
-- Leaves pre-existing or externally owned forwards in place.
+Includes: inherited options
+- --all, -a remove all managed DNS forward entries
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> domain name to remove
+- --intercept, -I remove DNS intercept redirect
+- --quiet, -q suppress interactive prompts
+- --with-forward, -W deprecated; auto-created target forwards are removed when unused
 
 xp2p server dns-forward list
+  Summary: List managed DNS forwards
 Options:
-Includes: Global options
-- --debug, -g             Emit diagnostics output on error
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+

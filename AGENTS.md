@@ -56,6 +56,9 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 ## Go rules
 
 - Use a common logger for all output.
+- When changing Go code on a Windows workstation, run native Go tests and WSL Go tests unless the user asks for a narrower check.
+- For broad Go verification, use `go test ./...` on Windows and `make test-wsl` for the Linux build view.
+- Run xray smoke tests only when the change touches xray API/runtime behavior or when explicitly requested; they require the `xray_smoke` build tag and a runnable xray binary.
 
 ## Services and runtime behavior
 
