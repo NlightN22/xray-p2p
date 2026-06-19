@@ -1,8 +1,15 @@
 # Apply Flow
 
-This document describes how xp2p applies configuration changes via a strict
-service-owned apply mechanism. The goal is to make config updates atomic,
-audited, and safe to apply from services without relying on CLI flags.
+This document describes how xp2p applies configuration changes through two
+coordinated paths:
+
+- service-owned apply for manual edits, deploy/import, service-layer changes,
+  and changes that cannot be updated through the pinned Xray gRPC API;
+- runtime-capable CLI apply for Xray resources that can be changed and verified
+  through the pinned Xray gRPC API.
+
+The goal is to make config updates atomic, audited, and safe to apply from
+services without relying on CLI flags.
 
 ## Key Files and Directories
 
@@ -17,21 +24,42 @@ audited, and safe to apply from services without relying on CLI flags.
 - `CONFIG_ROOT/config-server/`
 
 The `apply.request` file is the trigger that asks the service layer to compile
-and apply Desired inputs.
+and apply Desired inputs. Runtime-capable CLI commands do not create
+`apply.request` when they successfully apply through the Xray API or when they
+only stage Desired inputs while the service is stopped.
 
 ## Actors
 
-- CLI, UI, and manual edits: update Desired inputs and create `apply.request`.
+- Runtime-capable CLI commands: build a candidate config before changing
+  Desired inputs, apply and verify it through the Xray API when the service is
+  running, then publish Live artifacts and persist Desired inputs.
+- Manual edits, deploy/import, UI flows, and service-layer changes: update
+  Desired inputs and create `apply.request`.
 - Service layer (`xp2p run` or system service): reads `apply.request`,
   compiles Desired inputs into runtime artifacts, and cleans up.
 
 ## High-Level Flow
+
+### Service Apply Path
 
 1. Update Desired inputs (`xp2p-*.toml` and optional JSON snippets).
 2. Write `apply.request`.
 3. Service detects request and compiles runtime configuration.
 4. Service clears `apply.request` on success, or writes `apply.error` on failure.
 5. Runtime behavior updates OS routes and TUN state (service layer only).
+
+### Runtime-Capable CLI Path
+
+1. Load current Desired inputs and build a candidate config in memory.
+2. Validate and compile the candidate without writing Desired or Live.
+3. If running Xray is available, apply the candidate through the Xray gRPC API.
+4. Verify the running Xray state.
+5. On success, publish matching Live artifacts and persist the corresponding
+   Desired inputs.
+6. If the service is stopped or no running Live runtime is available, persist
+   Desired inputs only. The next service start compiles and runs them.
+7. If the service appears to be running but API apply or verification fails,
+   return an error and leave Desired and Live unchanged.
 
 ## Desired Inputs
 
@@ -50,15 +78,18 @@ For recommended snippet filenames and routing rule insertion points, see [Config
 
 - Runtime behavior (service run, diagnostics, ping, OS routing) reads live runtime
   artifacts only and never reads Desired inputs directly.
-- If Desired inputs change, an apply must be requested via `apply.request`.
+- Manual edits and service-layer changes request apply via `apply.request`.
+- Runtime-capable CLI commands may stage Desired inputs while the service is
+  stopped, or update Live after a verified API apply while the service is
+  running, without creating `apply.request`.
 - Deploy validation may start a temporary xray-core using a compiled config derived
   from Desired inputs, but it must not write to live or bypass apply.
 
 ## Edit + Rollback Flow
 
-This section describes the flow for manual edits, CLI edits, and rollback
-using a clear split between Desired, Live, and LKG. Apply requests are tracked
-via a marker file.
+This section describes the flow for manual edits, runtime-capable CLI edits,
+service-owned apply, and rollback using a clear split between Desired, Live,
+and LKG. Service apply requests are tracked via a marker file.
 
 ### Directory Roles
 
@@ -80,9 +111,21 @@ Live and LKG store compiled runtime artifacts (for example `xray.json`) together
 4. Service compiles Desired inputs and writes live runtime artifacts atomically.
 5. On success, the previous live artifact set is stored as LKG (optional).
 
-### CLI Edit Flow
+### Runtime-Capable CLI Edit Flow
 
-1. CLI writes updates into Desired.
+1. CLI builds and validates a candidate config from current Desired inputs.
+2. If the service is running, CLI applies the candidate through the Xray API and
+   verifies the runtime result.
+3. On success, CLI writes Live artifacts that match the running Xray state and
+   persists the corresponding Desired inputs.
+4. If the service is stopped, CLI persists Desired inputs only and leaves Live
+   untouched.
+5. If runtime apply or verification fails, CLI returns an error and leaves
+   Desired and Live unchanged.
+
+### Service-Owned CLI And UI Flow
+
+1. CLI or UI writes updates into Desired for changes that are not runtime-capable.
 2. `apply.request` is created to trigger service apply.
 3. Service compiles Desired inputs into live runtime artifacts.
 4. On success, the previous live artifact set is stored as LKG (optional).
@@ -135,7 +178,10 @@ OS changes are applied only by the service layer:
 - Routes and full-tunnel changes.
 - DNS overrides (when enabled).
 
-CLI commands and UI flows update Desired inputs and request apply. They do not touch OS-level state directly.
+CLI commands and UI flows do not touch OS-level state directly. Changes that
+affect OS state update Desired inputs and request service apply.
+Runtime-capable CLI commands may update Xray runtime resources through the API,
+but TUN, routes, DNS, firewall, and nftables remain service-owned.
 
 ## Runtime OS State Contract (TUN / routes / DNS)
 
@@ -194,3 +240,4 @@ Mode changes (split/full):
 - Invalid Desired TOML / invalid JSON snippets.
 - Merge collisions (reserved tags, invalid rule order, conflicts).
 - Service not running or apply request not detected.
+- Runtime API apply or verification failure for a runtime-capable CLI command.
