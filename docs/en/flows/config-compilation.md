@@ -84,9 +84,17 @@ compilation before writing persistent state:
 7. If API apply or verification fails, leave Desired and Live unchanged.
 
 This path keeps successful running Xray state, Live artifacts, and Desired
-inputs aligned without creating `apply.request`. OS-level changes such as TUN,
-routes, DNS, firewall, and nftables remain service-owned and are not part of
-runtime-capable candidate apply.
+inputs aligned without creating `apply.request`.
+
+Most OS-level changes such as TUN, DNS, firewall, and nftables remain
+service-owned. A runtime-capable CLI operation that has immediate OS route side
+effects must still complete those route changes on-flow after the Xray API
+apply succeeds and matching Desired/Live artifacts are persisted. Redirect CIDR
+changes are the main case: after the routing rule is applied and verified
+through the Xray API, the command reconciles the corresponding split route
+directly. It must not create `apply.request` or restart xray-core only to update
+that route. If route reconciliation fails, the command returns an explicit
+error instead of hiding stale OS state behind a deferred restart.
 
 When Desired inputs are staged while the runtime is unavailable, the next
 service/run start detects Desired inputs newer than Live artifacts and compiles

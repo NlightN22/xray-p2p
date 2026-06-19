@@ -62,6 +62,13 @@ only stage Desired inputs while the service is stopped.
 7. If the service appears to be running but API apply or verification fails,
    return an error and leave Desired and Live unchanged.
 
+If a runtime-capable redirect change also has an immediate OS route side effect,
+the command applies that route change on-flow after the Xray API apply succeeds
+and the matching Desired/Live artifacts are persisted. The command must not
+create `apply.request` or restart xray-core only to update split routes. If no
+running Live runtime is available, no route is changed immediately; the staged
+Desired inputs are compiled and applied by the next service/run start.
+
 The service manager state is not the same as runtime availability. A manual
 `xp2p run` process can provide a running Live Xray runtime while the OS service
 manager reports the service as stopped. Runtime-capable CLI commands must try
@@ -181,16 +188,23 @@ created after fixing Desired inputs.
 
 ## Routes and OS Changes
 
-OS changes are applied only by the service layer:
+OS changes are normally applied by the service layer:
 
 - TUN creation and IP assignment.
 - Routes and full-tunnel changes.
 - DNS overrides (when enabled).
 
-CLI commands and UI flows do not touch OS-level state directly. Changes that
-affect OS state update Desired inputs and request service apply.
-Runtime-capable CLI commands may update Xray runtime resources through the API,
-but TUN, routes, DNS, firewall, and nftables remain service-owned.
+CLI commands and UI flows do not touch OS-level state directly for
+service-owned changes. Changes that affect service-owned OS state update
+Desired inputs and request service apply. Runtime-capable CLI commands may
+update Xray runtime resources through the API.
+
+Redirect CIDR changes are the exception for immediate route side effects. When
+the running Live Xray runtime is available and the routing rule is applied and
+verified through the API, the same command reconciles the matching OS split
+route on-flow. This keeps Xray routing, Live artifacts, Desired inputs, and OS
+routes aligned without an `apply.request` restart. TUN lifecycle, DNS, firewall,
+and nftables remain service-owned.
 
 ## Runtime OS State Contract (TUN / routes / DNS)
 
@@ -198,9 +212,11 @@ This section defines the runtime contract for service-owned OS state to avoid vi
 
 ### Ownership and Scope
 
-- The service layer owns OS state (TUN, routes, DNS).
+- The service layer owns OS state (TUN, routes, DNS), except for immediate
+  split-route reconciliation performed by a successful runtime-capable redirect
+  command.
 - The service layer must keep OS state consistent with the current Desired runtime mode.
-- CLI/UI/manual edits must not directly modify OS state.
+- CLI/UI/manual edits must not directly modify service-owned OS state.
 
 ### Mode-Driven Transitions
 

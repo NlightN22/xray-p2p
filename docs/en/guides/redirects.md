@@ -12,6 +12,13 @@ xp2p client redirect add --cidr 10.0.101.0/24
 
 When TUN is enabled, this also installs an OS route for the CIDR (unless you use `--no-routes`).
 
+If the service is running and a Live Xray runtime is available, the command
+applies the Xray routing rule through the runtime API and reconciles the OS
+route in the same flow. It does not restart xray-core and does not create
+`apply.request` only for the route change. If the service is stopped, the
+change is staged in Desired inputs and the route is applied on the next
+service/run start.
+
 ## Client redirect (domain)
 
 ```console
@@ -27,6 +34,13 @@ xp2p server redirect add --cidr 10.0.102.0/24
 ```
 
 When TUN is enabled, this also installs an OS route for the CIDR (unless you use `--no-routes`).
+
+If the service is running and a Live Xray runtime is available, the command
+applies the Xray routing rule through the runtime API and reconciles the OS
+route in the same flow. It does not restart xray-core and does not create
+`apply.request` only for the route change. If the service is stopped, the
+change is staged in Desired inputs and the route is applied on the next
+service/run start.
 
 ## NAT redirect (proxy flow)
 
