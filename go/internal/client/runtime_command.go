@@ -25,7 +25,7 @@ func applyClientRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
 	}
-	result, err := xraylive.ApplyCandidate(ctx, xraylive.Options{
+	result, err := applyRuntimeCandidate(ctx, xraylive.Options{
 		Role:    apply.RoleClient,
 		LiveDir: liveDir,
 		LkgDir:  lkgDir,
@@ -55,7 +55,7 @@ func commitClientRuntimeState(ctx context.Context, state clientInstallState) err
 }
 
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {
-	status, err := servicecontrol.Default().Status(ctx, role)
+	status, err := serviceStatus(ctx, role)
 	if err != nil {
 		if errors.Is(err, servicecontrol.ErrUnsupported) {
 			return false, nil
@@ -64,3 +64,9 @@ func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error)
 	}
 	return !status.Active, nil
 }
+
+var serviceStatus = func(ctx context.Context, role servicecontrol.Role) (servicecontrol.Status, error) {
+	return servicecontrol.Default().Status(ctx, role)
+}
+
+var applyRuntimeCandidate = xraylive.ApplyCandidate
