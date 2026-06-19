@@ -66,15 +66,19 @@ func TestUpdateEndpointCredentialsStagesOnlyDesiredWhenServiceIsStopped(t *testi
 	statePath := writeEndpointUpdateState(t)
 	liveDir := writeClientLive(t, "old-live")
 	beforeLive := readFile(t, filepath.Join(liveDir, layout.XrayConfigFileName))
+	var applied bool
 	stubRuntimeFlow(t, false, func(context.Context, xraylive.Options, xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
-		t.Fatal("runtime API apply should not be called for stopped service")
-		return xraylive.RuntimeApplySkipped, nil
+		applied = true
+		return xraylive.RuntimeApplyFailed, errors.New("dial xray API: connection refused")
 	})
 
 	if err := updateEndpointForTest(); err != nil {
 		t.Fatalf("UpdateEndpointCredentials failed: %v", err)
 	}
 
+	if !applied {
+		t.Fatal("runtime API apply was not attempted before staging")
+	}
 	assertEndpointCredentials(t, statePath, "new-user", "new-password")
 	afterLive := readFile(t, filepath.Join(liveDir, layout.XrayConfigFileName))
 	if string(afterLive) != string(beforeLive) {

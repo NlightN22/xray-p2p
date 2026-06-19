@@ -41,6 +41,9 @@ func (windowsController) Status(ctx context.Context, role Role) (Status, error) 
 
 	output, err := scctl.RunOutput(ctx, "query", name, nil)
 	if err != nil {
+		if scctl.IsServiceMissing(err) {
+			return Status{Active: false, State: "NOT_INSTALLED"}, nil
+		}
 		return Status{}, err
 	}
 

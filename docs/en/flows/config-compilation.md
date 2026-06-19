@@ -74,18 +74,23 @@ compilation before writing persistent state:
 1. Load current Desired TOML and JSON snippets.
 2. Apply the requested change to an in-memory candidate.
 3. Compile and validate the candidate using the same rules as service apply.
-4. If running Xray is available, apply the candidate through the Xray API and
-   verify the runtime result.
+4. If a running Live Xray runtime is available, apply the candidate through the
+   Xray API and verify the runtime result. Runtime availability must be checked
+   through the Live/API path, not only through the OS service manager state.
 5. On success, write matching Live artifacts and persist the corresponding
    Desired inputs.
-6. If the service is stopped or no running Live runtime is available, persist
-   Desired inputs only and leave Live unchanged.
+6. If no running Live runtime is available and the service manager reports the
+   service stopped, persist Desired inputs only and leave Live unchanged.
 7. If API apply or verification fails, leave Desired and Live unchanged.
 
 This path keeps successful running Xray state, Live artifacts, and Desired
 inputs aligned without creating `apply.request`. OS-level changes such as TUN,
 routes, DNS, firewall, and nftables remain service-owned and are not part of
 runtime-capable candidate apply.
+
+When Desired inputs are staged while the runtime is unavailable, the next
+service/run start detects Desired inputs newer than Live artifacts and compiles
+them into Live before starting Xray.
 
 ## Merge Rules
 

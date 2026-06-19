@@ -4,7 +4,6 @@ package client
 
 import (
 	"context"
-	"errors"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -14,9 +13,6 @@ import (
 )
 
 func applyClientRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
-	if stopped, err := serviceStopped(ctx, servicecontrol.RoleClient); err == nil && stopped {
-		return xraylive.RuntimeApplyStaged, nil
-	}
 	liveDir, err := config.LiveRoleDir(apply.RoleClient)
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
@@ -30,11 +26,14 @@ func applyClientRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 		LiveDir: liveDir,
 		LkgDir:  lkgDir,
 	}, artifacts)
+	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported ||
+		result == xraylive.RuntimeApplyFailed || result == xraylive.RuntimeApplySkipped {
+		if stopped, statusErr := serviceStopped(ctx, servicecontrol.RoleClient); statusErr == nil && stopped {
+			return xraylive.RuntimeApplyStaged, nil
+		}
+	}
 	if err != nil {
 		return result, err
-	}
-	if result == xraylive.RuntimeApplyServiceLayerRequired {
-		return xraylive.RuntimeApplyStaged, nil
 	}
 	return result, xraylive.ResultError(result)
 }
@@ -57,10 +56,7 @@ func commitClientRuntimeState(ctx context.Context, state clientInstallState) err
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {
 	status, err := serviceStatus(ctx, role)
 	if err != nil {
-		if errors.Is(err, servicecontrol.ErrUnsupported) {
-			return false, nil
-		}
-		return false, err
+		return true, nil
 	}
 	return !status.Active, nil
 }

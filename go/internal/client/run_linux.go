@@ -37,6 +37,10 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	if err != nil {
 		return err
 	}
+	desiredExtensionsDir, err := config.DesiredExtensionsDirForRole(apply.RoleClient)
+	if err != nil {
+		return err
+	}
 
 	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
 	hasAppliedState := false
@@ -49,6 +53,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return fmt.Errorf("inspect client applied state %s: %w", appliedStatePath, err)
 	}
 
+	if err := seedApplyRequestOnServiceStart(apply.RoleClient, liveConfigDir, desiredExtensionsDir); err != nil {
+		return err
+	}
 	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleClient)
 	if err != nil {
 		return err

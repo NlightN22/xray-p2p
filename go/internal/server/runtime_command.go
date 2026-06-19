@@ -4,7 +4,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 
@@ -15,9 +14,6 @@ import (
 )
 
 func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
-	if stopped, err := serviceStopped(ctx, servicecontrol.RoleServer); err == nil && stopped {
-		return xraylive.RuntimeApplyStaged, nil
-	}
 	liveDir, err := config.LiveRoleDir(apply.RoleServer)
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
@@ -31,11 +27,14 @@ func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 		LiveDir: liveDir,
 		LkgDir:  lkgDir,
 	}, artifacts)
+	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported ||
+		result == xraylive.RuntimeApplyFailed || result == xraylive.RuntimeApplySkipped {
+		if stopped, statusErr := serviceStopped(ctx, servicecontrol.RoleServer); statusErr == nil && stopped {
+			return xraylive.RuntimeApplyStaged, nil
+		}
+	}
 	if err != nil {
 		return result, err
-	}
-	if result == xraylive.RuntimeApplyServiceLayerRequired {
-		return xraylive.RuntimeApplyStaged, nil
 	}
 	return result, xraylive.ResultError(result)
 }
@@ -95,10 +94,7 @@ func compileServerRuntimeCandidateDoc(doc map[string]any) (xraylive.Artifacts, e
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {
 	status, err := servicecontrol.Default().Status(ctx, role)
 	if err != nil {
-		if errors.Is(err, servicecontrol.ErrUnsupported) {
-			return false, nil
-		}
-		return false, err
+		return true, nil
 	}
 	return !status.Active, nil
 }

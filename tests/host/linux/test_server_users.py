@@ -218,7 +218,7 @@ def test_server_user_remove_is_idempotent(server_host, xp2p_server_runner):
 
         helpers.remove_path(server_host, apply_request)
         _remove_user(xp2p_server_runner, "bravo", host)
-        assert helpers.path_exists(server_host, apply_request), "real user removal should request apply"
+        assert not helpers.path_exists(server_host, apply_request), "stopped-service user removal should not request apply"
 
         helpers.remove_path(server_host, apply_request)
         _remove_user(xp2p_server_runner, "bravo", host)

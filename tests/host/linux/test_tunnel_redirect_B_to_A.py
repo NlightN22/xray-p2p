@@ -408,7 +408,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
         ).stdout or ""
         assert DIAG_CIDR in redirect_list
 
-        routing = helpers.render_xray(client_host, client_runner, "client", desired=False)
+        routing = helpers.render_xray(client_host, client_runner, "client", desired=True)
         helpers.assert_redirect_rule(routing, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
 
         client_runner(

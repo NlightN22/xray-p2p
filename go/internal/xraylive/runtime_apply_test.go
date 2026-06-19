@@ -12,6 +12,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/runtimeapply"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayapi"
 )
 
 func TestTryApplyRoutingPendingAppliesAndPublishesLive(t *testing.T) {
@@ -211,6 +212,53 @@ func TestTryApplyRoutingPendingAppliesInboundDiff(t *testing.T) {
 	}
 }
 
+func TestTryApplyRoutingPendingRequiresServiceLayerForTunModeChange(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	current := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{"tag": "tun-in", "protocol": "tun"},
+			{"tag": "socks-in", "protocol": "socks"}
+		]
+	}`)
+	candidate := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{"tag": "socks-in", "protocol": "socks"}
+		]
+	}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"role":"client","tun_enabled":true,"tun_name":"xp2pc"}`))
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{
+			XrayJSON: candidate,
+			MetaJSON: []byte(`{"role":"client","tun_enabled":false,"tun_name":"xp2pc"}`),
+		}, nil
+	}
+	opts.NewInbound = func(context.Context, string) (runtimeapply.InboundApplier, func() error, error) {
+		t.Fatal("unexpected runtime inbound apply for tun mode change")
+		return nil, nil, nil
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyServiceLayerRequired {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyServiceLayerRequired)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatalf("read live xray: %v", err)
+	}
+	if string(got) != string(current) {
+		t.Fatalf("live xray changed after service-layer decision: %s", string(got))
+	}
+	if _, err := os.Stat(opts.RequestPath); err != nil {
+		t.Fatalf("expected request to remain for service restart: %v", err)
+	}
+}
+
 func TestTryApplyRoutingPendingAppliesOutboundDiff(t *testing.T) {
 	root := t.TempDir()
 	opts := testOptions(t, root, apply.RoleClient)
@@ -381,6 +429,68 @@ func TestTryApplyRoutingPendingAppliesInboundUserDiff(t *testing.T) {
 		t.Fatalf("live xray mismatch: %s", string(got))
 	}
 	wantCalls := []string{"remove:trojan-in:old@example.com", "add:trojan-in:new@example.com"}
+	if !reflect.DeepEqual(applier.calls, wantCalls) {
+		t.Fatalf("calls = %v, want %v", applier.calls, wantCalls)
+	}
+}
+
+func TestTryApplyRoutingPendingPreservesCurrentAPIListen(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleServer)
+	current := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{
+				"tag": "trojan-in",
+				"protocol": "trojan",
+				"settings": {"clients": [
+					{"email": "old@example.com", "password": "old"}
+				]}
+			}
+		]
+	}`)
+	candidate := []byte(`{
+		"api": {"listen": "127.0.0.1:20085"},
+		"inbounds": [
+			{
+				"tag": "trojan-in",
+				"protocol": "trojan",
+				"settings": {"clients": []}
+			}
+		]
+	}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"version":1}`))
+	applier := newTestInboundUserApplier()
+	applier.users["trojan-in"] = map[string]string{"old@example.com": "old"}
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{XrayJSON: candidate, MetaJSON: []byte(`{"version":2}`)}, nil
+	}
+	opts.NewInboundUser = func(_ context.Context, address string) (runtimeapply.InboundUserApplier, func() error, error) {
+		if address != "127.0.0.1:10085" {
+			t.Fatalf("address = %q", address)
+		}
+		return applier, func() error { return nil }, nil
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyApplied {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyApplied)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatalf("read live xray: %v", err)
+	}
+	listen, err := xrayapi.APIListenFromConfig(got)
+	if err != nil {
+		t.Fatalf("read api listen: %v", err)
+	}
+	if listen != "127.0.0.1:10085" {
+		t.Fatalf("api listen = %q, want current listen", listen)
+	}
+	wantCalls := []string{"remove:trojan-in:old@example.com"}
 	if !reflect.DeepEqual(applier.calls, wantCalls) {
 		t.Fatalf("calls = %v, want %v", applier.calls, wantCalls)
 	}

@@ -36,6 +36,10 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	if err != nil {
 		return err
 	}
+	desiredExtensionsDir, err := config.DesiredExtensionsDirForRole(apply.RoleServer)
+	if err != nil {
+		return err
+	}
 
 	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName))
 	hasAppliedState := false
@@ -53,6 +57,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return fmt.Errorf("xray binary not found at %s: %w", xrayPath, err)
 	}
 
+	if err := seedApplyRequestOnServiceStart(apply.RoleServer, liveConfigDir, desiredExtensionsDir); err != nil {
+		return err
+	}
 	rollback, pendingApplied, request, err := applyPendingIfRequested(apply.RoleServer)
 	if err != nil {
 		return err

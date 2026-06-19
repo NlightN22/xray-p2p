@@ -31,12 +31,13 @@ only stage Desired inputs while the service is stopped.
 ## Actors
 
 - Runtime-capable CLI commands: build a candidate config before changing
-  Desired inputs, apply and verify it through the Xray API when the service is
-  running, then publish Live artifacts and persist Desired inputs.
+  Desired inputs, apply and verify it through the Xray API when a running Live
+  runtime is available, then publish Live artifacts and persist Desired inputs.
 - Manual edits, deploy/import, UI flows, and service-layer changes: update
   Desired inputs and create `apply.request`.
-- Service layer (`xp2p run` or system service): reads `apply.request`,
-  compiles Desired inputs into runtime artifacts, and cleans up.
+- Service layer (`xp2p run` or system service): reads `apply.request`, detects
+  staged Desired inputs on startup, compiles Desired inputs into runtime
+  artifacts, and cleans up.
 
 ## High-Level Flow
 
@@ -57,9 +58,16 @@ only stage Desired inputs while the service is stopped.
 5. On success, publish matching Live artifacts and persist the corresponding
    Desired inputs.
 6. If the service is stopped or no running Live runtime is available, persist
-   Desired inputs only. The next service start compiles and runs them.
+   Desired inputs only. The next service/run start compiles and runs them.
 7. If the service appears to be running but API apply or verification fails,
    return an error and leave Desired and Live unchanged.
+
+The service manager state is not the same as runtime availability. A manual
+`xp2p run` process can provide a running Live Xray runtime while the OS service
+manager reports the service as stopped. Runtime-capable CLI commands must try
+the Live runtime/API path first and use the service manager state only to decide
+whether an unavailable API is a staged-while-stopped case or a failed running
+service case.
 
 ## Desired Inputs
 
@@ -79,9 +87,9 @@ For recommended snippet filenames and routing rule insertion points, see [Config
 - Runtime behavior (service run, diagnostics, ping, OS routing) reads live runtime
   artifacts only and never reads Desired inputs directly.
 - Manual edits and service-layer changes request apply via `apply.request`.
-- Runtime-capable CLI commands may stage Desired inputs while the service is
-  stopped, or update Live after a verified API apply while the service is
-  running, without creating `apply.request`.
+- Runtime-capable CLI commands may stage Desired inputs while no running Live
+  runtime is available, or update Live after a verified API apply while a
+  running Live runtime is available, without creating `apply.request`.
 - Deploy validation may start a temporary xray-core using a compiled config derived
   from Desired inputs, but it must not write to live or bypass apply.
 
@@ -114,12 +122,12 @@ Live and LKG store compiled runtime artifacts (for example `xray.json`) together
 ### Runtime-Capable CLI Edit Flow
 
 1. CLI builds and validates a candidate config from current Desired inputs.
-2. If the service is running, CLI applies the candidate through the Xray API and
-   verifies the runtime result.
+2. If a running Live runtime is available, CLI applies the candidate through the
+   Xray API and verifies the runtime result.
 3. On success, CLI writes Live artifacts that match the running Xray state and
    persists the corresponding Desired inputs.
-4. If the service is stopped, CLI persists Desired inputs only and leaves Live
-   untouched.
+4. If no running Live runtime is available and the service manager reports the
+   service stopped, CLI persists Desired inputs only and leaves Live untouched.
 5. If runtime apply or verification fails, CLI returns an error and leaves
    Desired and Live unchanged.
 
@@ -158,9 +166,10 @@ the same request ID and failure reason.
 
 ## Service Apply
 
-On service start (or restart), the service:
+On service/run start (or restart), the service layer:
 
-1. Reads `apply.request`.
+1. Reads `apply.request`, or creates one internally when Desired inputs are
+   newer than Live artifacts.
 2. Compiles Desired inputs into live runtime artifacts.
 3. Removes `apply.request`.
 4. Writes LKG metadata on success (optional).

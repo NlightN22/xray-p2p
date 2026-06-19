@@ -187,7 +187,9 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 	reversePortals := make([]any, 0, len(desired.Reverse))
 	reverseRules := make([]any, 0, len(desired.Reverse))
 	markerRules := make([]any, 0, len(desired.Reverse)*2)
-	for _, channel := range desired.Reverse {
+	reverseTags := sortedReverseTags(desired.Reverse)
+	for _, tag := range reverseTags {
+		channel := desired.Reverse[tag]
 		reversePortals = append(reversePortals, map[string]any{
 			"domain": channel.Domain,
 			"tag":    channel.Tag,

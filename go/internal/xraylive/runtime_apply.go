@@ -2,10 +2,12 @@ package xraylive
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
@@ -87,12 +89,37 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 }
 
 func applyRuntimeArtifacts(ctx context.Context, opts Options, req apply.Request, role string, artifacts Artifacts) (RuntimeApplyResult, error) {
+	currentMeta, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.RuntimeMetaFileName))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return RuntimeApplyServiceLayerRequired, nil
+		}
+		return RuntimeApplySkipped, fmt.Errorf("read live runtime metadata: %w", err)
+	}
+	serviceLayerRequired, err := runtimeMetaRequiresServiceLayer(currentMeta, artifacts.MetaJSON)
+	if err != nil {
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
+	}
+	if serviceLayerRequired {
+		logging.Info("runtime apply requires service layer", "role", role, "request_id", req.ID)
+		return RuntimeApplyServiceLayerRequired, nil
+	}
+
 	current, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return RuntimeApplyServiceLayerRequired, nil
 		}
 		return RuntimeApplySkipped, fmt.Errorf("read live xray config: %w", err)
+	}
+	normalized, err := preserveCurrentAPIListen(current, artifacts.XrayJSON)
+	if err != nil {
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
+	}
+	if normalized != nil {
+		artifacts.XrayJSON = normalized
 	}
 	diff, err := runtimeapply.ClassifyXrayConfigDiff(current, artifacts.XrayJSON)
 	if err != nil {
@@ -291,6 +318,76 @@ func writeRuntimeApplyError(opts Options, req apply.Request, err error) {
 		Reason:    err.Error(),
 	}, opts.AuditPath)
 	logging.Warn("runtime apply failed", "role", opts.Role, "request_id", req.ID, "err", err)
+}
+
+func preserveCurrentAPIListen(current, candidate []byte) ([]byte, error) {
+	currentListen, err := xrayapi.APIListenFromConfig(current)
+	if err != nil || strings.TrimSpace(currentListen) == "" {
+		return nil, err
+	}
+	candidateListen, err := xrayapi.APIListenFromConfig(candidate)
+	if err != nil || strings.TrimSpace(candidateListen) == "" {
+		return nil, err
+	}
+	if strings.TrimSpace(candidateListen) == strings.TrimSpace(currentListen) {
+		return nil, nil
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(candidate, &doc); err != nil {
+		return nil, fmt.Errorf("parse candidate xray config: %w", err)
+	}
+	apiDoc, ok := doc["api"].(map[string]any)
+	if !ok {
+		return nil, errors.New("candidate xray config api section is missing")
+	}
+	apiDoc["listen"] = strings.TrimSpace(currentListen)
+	data, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode candidate xray config: %w", err)
+	}
+	return append(data, '\n'), nil
+}
+
+func runtimeMetaRequiresServiceLayer(current, candidate []byte) (bool, error) {
+	currentDoc, err := parseRuntimeMeta(current, "current")
+	if err != nil {
+		return false, err
+	}
+	candidateDoc, err := parseRuntimeMeta(candidate, "candidate")
+	if err != nil {
+		return false, err
+	}
+	for _, key := range serviceLayerRuntimeMetaKeys() {
+		currentValue, currentSet := currentDoc[key]
+		candidateValue, candidateSet := candidateDoc[key]
+		if !currentSet && !candidateSet {
+			continue
+		}
+		if !currentSet || !candidateSet || !reflect.DeepEqual(currentValue, candidateValue) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func parseRuntimeMeta(data []byte, label string) (map[string]any, error) {
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("parse %s runtime metadata: %w", label, err)
+	}
+	return doc, nil
+}
+
+func serviceLayerRuntimeMetaKeys() []string {
+	return []string{
+		"tun_enabled",
+		"tun_name",
+		"tun_mtu",
+		"tun_addr",
+		"tun_mode",
+		"dns_servers",
+		"full_tunnel_tag",
+	}
 }
 
 func reverseRoutingDiff(diff runtimeapply.Diff) runtimeapply.Diff {

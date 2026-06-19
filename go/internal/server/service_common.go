@@ -222,7 +222,7 @@ func seedApplyRequestOnServiceStart(role string, liveConfigDir string, desiredEx
 	}
 
 	if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
-		logging.Warn("xp2p server service bootstrap: apply error cleanup failed", "err", err)
+		logging.Warn("xp2p server bootstrap: apply error cleanup failed", "err", err)
 	}
 	req, err := apply.NewRequest(role)
 	if err != nil {
@@ -231,6 +231,6 @@ func seedApplyRequestOnServiceStart(role string, liveConfigDir string, desiredEx
 	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
 		return err
 	}
-	logging.Info("xp2p server service bootstrap: apply request recorded")
+	logging.Info("xp2p server bootstrap: apply request recorded")
 	return nil
 }

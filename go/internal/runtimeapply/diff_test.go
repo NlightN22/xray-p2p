@@ -252,6 +252,55 @@ func TestClassifyXrayConfigDiffDetectsInboundUserMixedRoutingChange(t *testing.T
 	}
 }
 
+func TestClassifyXrayConfigDiffDetectsServerUserDisableShape(t *testing.T) {
+	current := []byte(`{
+		"api":{"listen":"127.0.0.1:52180","services":["HandlerService","RoutingService","StatsService","LoggerService"],"tag":"api"},
+		"inbounds":[
+			{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[
+				{"email":"alpha@example.com","password":"alpha-pass"},
+				{"email":"bravo@example.com","password":"bravo-pass"}
+			]}},
+			{"tag":"socks-in","protocol":"socks","settings":{"udp":true}}
+		],
+		"outbounds":[{"tag":"direct","protocol":"freedom"}],
+		"reverse":{"portals":[{"tag":"alpha-rev","domain":"alpha.rev"},{"tag":"bravo-rev","domain":"bravo.rev"}]},
+		"routing":{"domainStrategy":"IPOnDemand","rules":[
+			{"type":"field","ruleTag":"alpha-route","domain":["full:alpha.rev"],"outboundTag":"alpha-rev","user":["alpha@example.com"]},
+			{"type":"field","ruleTag":"bravo-route","domain":["full:bravo.rev"],"outboundTag":"bravo-rev","user":["bravo@example.com"]}
+		]},
+		"stats":{},
+		"policy":{"levels":{"0":{"statsUserUplink":true,"statsUserDownlink":true,"statsUserOnline":true}}}
+	}`)
+	candidate := []byte(`{
+		"api":{"listen":"127.0.0.1:52180","services":["HandlerService","RoutingService","StatsService","LoggerService"],"tag":"api"},
+		"inbounds":[
+			{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[
+				{"email":"bravo@example.com","password":"bravo-pass"}
+			]}},
+			{"tag":"socks-in","protocol":"socks","settings":{"udp":true}}
+		],
+		"outbounds":[{"tag":"direct","protocol":"freedom"}],
+		"reverse":{"portals":[{"tag":"alpha-rev","domain":"alpha.rev"},{"tag":"bravo-rev","domain":"bravo.rev"}]},
+		"routing":{"domainStrategy":"IPOnDemand","rules":[
+			{"type":"field","ruleTag":"alpha-route","domain":["full:alpha.rev"],"outboundTag":"alpha-rev","user":["alpha@example.com"]},
+			{"type":"field","ruleTag":"bravo-route","domain":["full:bravo.rev"],"outboundTag":"bravo-rev","user":["bravo@example.com"]}
+		]},
+		"stats":{},
+		"policy":{"levels":{"0":{"statsUserUplink":true,"statsUserDownlink":true,"statsUserOnline":true}}}
+	}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffInboundUsers {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffInboundUsers, diff)
+	}
+	if len(diff.RemovedInboundUsers) != 1 || diff.RemovedInboundUsers[0].Email != "alpha@example.com" {
+		t.Fatalf("unexpected removed users: %+v", diff.RemovedInboundUsers)
+	}
+}
+
 func TestClassifyXrayConfigDiffDetectsRoutingOutboundMixedChange(t *testing.T) {
 	current := []byte(`{
 		"outbounds": [

@@ -81,7 +81,11 @@ func ClassifyXrayConfigDiff(current, candidate []byte) (Diff, error) {
 	if err != nil || done {
 		return diff, err
 	}
-	return unsupported("unsupported config diff"), nil
+	reason, err := unsupportedDiffReason(current, candidate)
+	if err != nil {
+		return Diff{}, err
+	}
+	return unsupported(reason), nil
 }
 
 func classifyRoutingDiff(current, candidate []byte) (Diff, bool, error) {
@@ -406,4 +410,33 @@ func objectsByTag(items []map[string]any, field string, label string) (map[strin
 
 func unsupported(reason string) Diff {
 	return Diff{Kind: DiffUnsupported, Reason: reason}
+}
+
+func unsupportedDiffReason(current, candidate []byte) (string, error) {
+	currentDoc, err := parseJSONDocument(current)
+	if err != nil {
+		return "", fmt.Errorf("parse current xray config: %w", err)
+	}
+	candidateDoc, err := parseJSONDocument(candidate)
+	if err != nil {
+		return "", fmt.Errorf("parse candidate xray config: %w", err)
+	}
+	keys := make(map[string]struct{})
+	for key := range currentDoc {
+		keys[key] = struct{}{}
+	}
+	for key := range candidateDoc {
+		keys[key] = struct{}{}
+	}
+	changed := make([]string, 0, len(keys))
+	for key := range keys {
+		if !reflect.DeepEqual(currentDoc[key], candidateDoc[key]) {
+			changed = append(changed, key)
+		}
+	}
+	sort.Strings(changed)
+	if len(changed) == 0 {
+		return "unsupported config diff", nil
+	}
+	return "unsupported config diff: changed top-level keys: " + strings.Join(changed, ", "), nil
 }
