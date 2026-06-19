@@ -3,13 +3,13 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"path/filepath"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -107,14 +107,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if errors.Is(addErr, redirect.ErrRuleExists) {
 		return nil
 	}
-	if err := state.save(configFile); err != nil {
-		return err
-	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return err
-	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	return commitClientRuntimeState(context.Background(), state)
 }
 
 func isDefaultRoute(value string) bool {
@@ -163,14 +156,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		return fmt.Errorf("redirect %s not found", ruleTarget.Describe())
 	}
 	state.Redirects = updated
-	if err := state.save(configFile); err != nil {
-		return err
-	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return err
-	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	return commitClientRuntimeState(context.Background(), state)
 }
 
 func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
@@ -208,14 +194,7 @@ func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
 		return fmt.Errorf("redirect %s not found", target.Describe())
 	}
 	state.Redirects = updated
-	if err := state.save(configFile); err != nil {
-		return err
-	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return err
-	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	return commitClientRuntimeState(context.Background(), state)
 }
 
 // ListRedirects returns configured redirect entries.

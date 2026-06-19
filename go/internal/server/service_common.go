@@ -160,6 +160,8 @@ func handleServerApplyRequestChange(ctx context.Context, path string) (service.W
 	switch result {
 	case xraylive.RuntimeApplyApplied, xraylive.RuntimeApplyNoop, xraylive.RuntimeApplyFailed, xraylive.RuntimeApplySkipped:
 		return service.WatchFileHandled, nil
+	case xraylive.RuntimeApplyUnsupported, xraylive.RuntimeApplyServiceLayerRequired:
+		return service.WatchFileRestart, nil
 	default:
 		return service.WatchFileRestart, nil
 	}

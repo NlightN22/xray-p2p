@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,10 +30,12 @@ func SetReverseEnabled(opts ReverseSetEnabledOptions) error {
 	if !changed {
 		return nil
 	}
-	if err := store.save(); err != nil {
-		return err
+	if len(store.state) == 0 {
+		store.doc[serverReverseStateKey] = nil
+	} else {
+		store.doc[serverReverseStateKey] = store.state
 	}
-	return writeServerApplyRequest()
+	return commitServerRuntimeDoc(context.Background(), store.doc)
 }
 
 func (s *reverseStore) setReverseEnabled(target string, all bool, enabled bool) (bool, error) {

@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -103,16 +104,14 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err := store.add(rule); err != nil {
 		return ForwardAddResult{}, err
 	}
-	if err := store.saveForwards(); err != nil {
-		return ForwardAddResult{}, err
-	}
+	store.doc[serverForwardRulesKey] = store.forwards
 
 	var targetAddr netip.Addr
 	if parsed, err := netip.ParseAddr(strings.TrimSpace(targetHost)); err == nil {
 		targetAddr = parsed
 	}
 
-	if err := writeServerApplyRequest(); err != nil {
+	if err := commitServerRuntimeDoc(context.Background(), store.doc); err != nil {
 		return ForwardAddResult{}, err
 	}
 	_ = installDir
@@ -143,11 +142,8 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, fmt.Errorf("forward rule not found")
 	}
 
-	if err := store.saveForwards(); err != nil {
-		store.insertAt(rule, idx)
-		return forward.Rule{}, err
-	}
-	if err := writeServerApplyRequest(); err != nil {
+	store.doc[serverForwardRulesKey] = store.forwards
+	if err := commitServerRuntimeDoc(context.Background(), store.doc); err != nil {
 		store.insertAt(rule, idx)
 		return forward.Rule{}, err
 	}

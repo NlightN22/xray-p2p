@@ -3,11 +3,11 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -34,14 +34,7 @@ func SetReverseEnabled(opts ReverseSetEnabledOptions) error {
 	if !changed {
 		return nil
 	}
-	if err := state.save(configFile); err != nil {
-		return err
-	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return err
-	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	return commitClientRuntimeState(context.Background(), state)
 }
 
 func (s *clientInstallState) setReverseEnabled(target string, all bool, enabled bool) (bool, error) {

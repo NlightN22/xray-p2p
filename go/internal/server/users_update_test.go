@@ -12,7 +12,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
-func TestUpdateUserOnlyChangesTrojanUserFields(t *testing.T) {
+func TestUpdateUserStagesWhenRuntimeIsNotRunning(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
@@ -39,6 +39,7 @@ func TestUpdateUserOnlyChangesTrojanUserFields(t *testing.T) {
 	if len(beforeStore.state) != 1 {
 		t.Fatalf("expected one reverse channel, got %+v", beforeStore.state)
 	}
+	_ = os.Remove(config.ApplyRequestPath())
 
 	if err := UpdateUser(context.Background(), UpdateUserOptions{
 		UserID:      "old-user",
@@ -58,7 +59,7 @@ func TestUpdateUserOnlyChangesTrojanUserFields(t *testing.T) {
 		t.Fatalf("expected one user, got %+v", desired.Users)
 	}
 	if desired.Users[0].Email != "new-user" || desired.Users[0].Password != "new-password" {
-		t.Fatalf("user fields were not updated: %+v", desired.Users[0])
+		t.Fatalf("user fields were not staged: %+v", desired.Users[0])
 	}
 
 	afterStore, err := openReverseStore(dir)
@@ -74,8 +75,8 @@ func TestUpdateUserOnlyChangesTrojanUserFields(t *testing.T) {
 			t.Fatalf("reverse channel changed: got %+v want %+v", got, channel)
 		}
 	}
-	if _, err := os.Stat(config.ApplyRequestPath()); err != nil {
-		t.Fatalf("apply request was not written: %v", err)
+	if _, err := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(err) {
+		t.Fatalf("apply request should not be written for runtime command: %v", err)
 	}
 }
 

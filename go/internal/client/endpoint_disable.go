@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -39,14 +38,7 @@ func SetEndpointEnabled(ctx context.Context, opts EndpointSetEnabledOptions) err
 	if !changed {
 		return nil
 	}
-	if err := state.save(configFile); err != nil {
-		return err
-	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return err
-	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	return commitClientRuntimeState(ctx, state)
 }
 
 func (s *clientInstallState) setEndpointsEnabled(target string, all bool, enabled bool) (bool, error) {

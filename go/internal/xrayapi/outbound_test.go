@@ -88,7 +88,7 @@ func TestOutboundFromMapConvertsTrojanTLS(t *testing.T) {
 		t.Fatalf("unmarshal sender: %v", err)
 	}
 	stream := sender.GetStreamSettings()
-	if stream.GetProtocolName() != "tcp" || stream.GetSecurityType() != "tls" {
+	if stream.GetProtocolName() != "tcp" || stream.GetSecurityType() != "xray.transport.internet.tls.Config" {
 		t.Fatalf("stream = %s/%s", stream.GetProtocolName(), stream.GetSecurityType())
 	}
 	if len(stream.GetSecuritySettings()) != 1 {

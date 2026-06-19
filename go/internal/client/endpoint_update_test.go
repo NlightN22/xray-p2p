@@ -13,7 +13,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
-func TestUpdateEndpointCredentialsOnlyChangesSelectedFields(t *testing.T) {
+func TestUpdateEndpointCredentialsStagesWhenRuntimeIsNotRunning(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 
@@ -66,7 +66,7 @@ func TestUpdateEndpointCredentialsOnlyChangesSelectedFields(t *testing.T) {
 	}
 	ep := updated.Endpoints[0]
 	if ep.User != "new-user" || ep.Password != "new-password" {
-		t.Fatalf("credentials were not updated: %+v", ep)
+		t.Fatalf("credentials were not staged: %+v", ep)
 	}
 	if ep.Tag != "proxy-edge" || ep.Hostname != "edge.example" || ep.Address != "198.51.100.10" {
 		t.Fatalf("immutable endpoint fields changed: %+v", ep)
@@ -78,7 +78,7 @@ func TestUpdateEndpointCredentialsOnlyChangesSelectedFields(t *testing.T) {
 	if channel.UserID != "old-user" || channel.EndpointTag != "proxy-edge" {
 		t.Fatalf("reverse channel changed: %+v", channel)
 	}
-	if _, err := os.Stat(config.ApplyRequestPath()); err != nil {
-		t.Fatalf("apply request was not written: %v", err)
+	if _, err := os.Stat(config.ApplyRequestPath()); !os.IsNotExist(err) {
+		t.Fatalf("apply request should not be written for runtime command: %v", err)
 	}
 }

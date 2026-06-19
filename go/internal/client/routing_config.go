@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"runtime"
 	"strings"
 
@@ -57,20 +56,11 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 	}
 	ruleBuckets[routingRuleEndpointBypass] = append(ruleBuckets[routingRuleEndpointBypass], bypassRules...)
 	ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], buildClientReverseRules(activeReverseRules)...)
-	for idx, ep := range activeEndpoints {
-		markerIP, err := markerIPForIndex(idx)
-		if err != nil {
-			return fmt.Errorf("allocate diagnostics marker for %s: %w", ep.Tag, err)
-		}
-		markerCIDR := markerIP + "/32"
-		ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], map[string]any{
-			"type":        "field",
-			"ruleTag":     xrayrule.DiagnosticsMarker("client", ep.Tag),
-			"ip":          []string{markerCIDR},
-			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
-			"outboundTag": ep.Tag,
-		})
+	markerRules, err := diagnosticsMarkerRules(endpoints)
+	if err != nil {
+		return err
 	}
+	ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], markerRules...)
 	for _, rule := range activeRedirects {
 		entry := map[string]any{
 			"type":        "field",

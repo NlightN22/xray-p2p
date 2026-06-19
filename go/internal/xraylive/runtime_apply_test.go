@@ -66,7 +66,7 @@ func TestTryApplyRoutingPendingAppliesAndPublishesLive(t *testing.T) {
 	}
 }
 
-func TestTryApplyRoutingPendingFallsBackForUnsupportedDiff(t *testing.T) {
+func TestTryApplyRoutingPendingReportsUnsupportedDiff(t *testing.T) {
 	root := t.TempDir()
 	opts := testOptions(t, root, apply.RoleClient)
 	writeLive(t, opts.LiveDir,
@@ -84,11 +84,52 @@ func TestTryApplyRoutingPendingFallsBackForUnsupportedDiff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TryApplyRoutingPending: %v", err)
 	}
-	if result != RuntimeApplyRestartRequired {
-		t.Fatalf("result = %s, want %s", result, RuntimeApplyRestartRequired)
+	if result != RuntimeApplyUnsupported {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyUnsupported)
 	}
 	if _, err := os.Stat(opts.RequestPath); err != nil {
-		t.Fatalf("expected request to remain for restart fallback: %v", err)
+		t.Fatalf("expected request to remain for service apply: %v", err)
+	}
+}
+
+func TestTryApplyRoutingPendingAPIFailureDoesNotPublishLive(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	current := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"routing": {"rules": [{"type": "field", "ruleTag": "old", "outboundTag": "proxy-a"}]}
+	}`)
+	candidate := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"routing": {"rules": [{"type": "field", "ruleTag": "new", "outboundTag": "proxy-b"}]}
+	}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"version":1}`))
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{XrayJSON: candidate, MetaJSON: []byte(`{"version":2}`)}, nil
+	}
+	opts.NewApplier = func(context.Context, string) (runtimeapply.RoutingApplier, func() error, error) {
+		return nil, nil, errors.New("dial failed")
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyFailed {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyFailed)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatalf("read live xray: %v", err)
+	}
+	if string(got) != string(current) {
+		t.Fatalf("live xray changed after API failure: %s", string(got))
+	}
+	if _, err := os.Stat(opts.RequestPath); err != nil {
+		t.Fatalf("expected request to remain after API failure: %v", err)
+	}
+	if _, err := os.Stat(opts.ErrorPath); err != nil {
+		t.Fatalf("expected apply error after API failure: %v", err)
 	}
 }
 

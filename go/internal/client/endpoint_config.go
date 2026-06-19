@@ -23,6 +23,17 @@ type endpointConfig struct {
 }
 
 func applyClientEndpointConfig(configDir, configFile string, endpoint endpointConfig, force bool) (clientInstallState, error) {
+	state, err := buildClientEndpointState(configDir, configFile, endpoint, force)
+	if err != nil {
+		return clientInstallState{}, err
+	}
+	if err := state.save(configFile); err != nil {
+		return clientInstallState{}, err
+	}
+	return state, nil
+}
+
+func buildClientEndpointState(configDir, configFile string, endpoint endpointConfig, force bool) (clientInstallState, error) {
 	_ = configDir
 	host := strings.TrimSpace(endpoint.Hostname)
 	if host == "" {
@@ -82,10 +93,6 @@ func applyClientEndpointConfig(configDir, configFile string, endpoint endpointCo
 
 	if endpoint.AllowInsecureOverride {
 		state.applyAllowInsecure(record.AllowInsecure)
-	}
-
-	if err := state.save(configFile); err != nil {
-		return clientInstallState{}, err
 	}
 	return state, nil
 }

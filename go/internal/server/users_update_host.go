@@ -6,22 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
-
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
-
-func writeServerApplyRequestAndTryRuntime(ctx context.Context) error {
-	req, err := apply.NewRequest(apply.RoleServer)
-	if err != nil {
-		return err
-	}
-	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
-		return err
-	}
-	_, err = tryRuntimeApplyPending(ctx, apply.RoleServer)
-	return err
-}
 
 // UpdateUser updates only the selected Trojan user email/password fields.
 func UpdateUser(ctx context.Context, opts UpdateUserOptions) error {
@@ -46,6 +31,10 @@ func UpdateUser(ctx context.Context, opts UpdateUserOptions) error {
 	}
 
 	configPath := pendingConfigPath()
+	doc, err := loadServerStateDoc(configPath)
+	if err != nil {
+		return err
+	}
 	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return err
@@ -71,8 +60,6 @@ func UpdateUser(ctx context.Context, opts UpdateUserOptions) error {
 	if opts.PasswordSet {
 		desired.Users[found].Password = password
 	}
-	if err := saveServerTrojanUsers(configPath, desired.Users); err != nil {
-		return err
-	}
-	return writeServerApplyRequestAndTryRuntime(ctx)
+	doc[serverTrojanUsersKey] = desired.Users
+	return commitServerRuntimeDoc(ctx, doc)
 }

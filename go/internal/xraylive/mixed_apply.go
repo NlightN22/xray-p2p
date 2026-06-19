@@ -13,7 +13,8 @@ import (
 func applyMixedRuntimeDiff(ctx context.Context, opts Options, req apply.Request, role, address string, artifacts Artifacts, diff runtimeapply.Diff) (RuntimeApplyResult, error) {
 	appliers, closeAll, err := openMixedAppliers(ctx, opts, address, diff)
 	if err != nil {
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	defer closeAll()
 
@@ -27,8 +28,8 @@ func applyMixedRuntimeDiff(ctx context.Context, opts Options, req apply.Request,
 			if rollbackErr != nil {
 				logging.Warn("runtime mixed apply rollback failed", "role", role, "request_id", req.ID, "err", rollbackErr)
 			}
-			logging.Warn("runtime mixed apply failed; restart fallback required", "role", role, "request_id", req.ID, "err", err)
-			return RuntimeApplyRestartRequired, nil
+			writeRuntimeApplyError(opts, req, err)
+			return RuntimeApplyFailed, nil
 		}
 		applied = append(applied, phase)
 	}

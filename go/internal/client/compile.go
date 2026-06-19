@@ -209,20 +209,11 @@ func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState
 
 	systemRules := make([]any, 0, len(activeEndpoints)+len(activeReverseRules)*2)
 	systemRules = append(systemRules, buildClientReverseRules(activeReverseRules)...)
-	for idx, ep := range activeEndpoints {
-		markerIP, err := markerIPForIndex(idx)
-		if err != nil {
-			return nil, nil, fmt.Errorf("allocate diagnostics marker for %s: %w", ep.Tag, err)
-		}
-		markerCIDR := markerIP + "/32"
-		systemRules = append(systemRules, map[string]any{
-			"type":        "field",
-			"ruleTag":     xrayrule.DiagnosticsMarker("client", ep.Tag),
-			"ip":          []string{markerCIDR},
-			"port":        fmt.Sprintf("%d", DiagnosticsMarkerPort),
-			"outboundTag": ep.Tag,
-		})
+	markerRules, err := diagnosticsMarkerRules(desired.Endpoints)
+	if err != nil {
+		return nil, nil, err
 	}
+	systemRules = append(systemRules, markerRules...)
 
 	managedRules := make([]any, 0, len(cfg.Rules)+len(activeRedirects))
 	for _, rule := range cfg.Rules {

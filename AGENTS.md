@@ -64,18 +64,25 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 
 - System services (`systemd`, `procd`, `Windows SCM`) must not rely on CLI flags.
 - Packages must run `xp2p` binaries with default parameters only.
+- Xray runtime API access must use top-level `api.listen` with separate client and server loopback ports. Do not add a dedicated API `dokodemo-door` inbound or API routing rule unless an explicit migration plan changes this architecture.
 - Runtime changes must be designed as on-flow changes first: check whether the pinned Xray gRPC API can apply and verify the change without restarting `xray-core`.
 - When a change can be applied safely through the pinned Xray gRPC API, use runtime apply instead of restarting `xray-core`.
 - Do not add a restart-based path for Xray resources until the API capability has been checked and the limitation is documented.
-- For runtime-capable changes, CLI commands should build and validate a candidate config, apply it to running Xray through gRPC, verify the runtime result, and only then persist the corresponding Desired inputs under `CONFIG_ROOT` and publish matching Live artifacts.
+- Runtime-capable CLI commands should build and validate a candidate config before touching Desired inputs.
+- If the target service is running, runtime-capable CLI commands must apply the candidate to running Xray through gRPC, verify the runtime result, publish matching Live artifacts, and only then persist the corresponding Desired inputs under `CONFIG_ROOT`.
+- If the target service is stopped or no running Live runtime is available, runtime-capable CLI commands should persist the Desired inputs only. They must not publish Live artifacts or create `apply.request` as a fake successful runtime apply; the next run/service start is responsible for compiling Desired into Live.
+- If the target service appears to be running but API apply or verification fails, the command must return an error and must not change Desired or Live.
+- Runtime-capable CLI commands must not use a hidden restart fallback. Their result must be explicit: applied to running Xray, staged for next start, or failed.
 - Runtime apply is not complete until the successful running Xray state is persisted into Desired inputs and matching Live artifacts.
 - If runtime apply succeeds but Desired/Live persistence fails, roll back the runtime change or write an explicit `apply.error`; never leave a silent drift between running Xray, Desired inputs, and Live artifacts.
-- If runtime apply is unavailable, unsupported, or fails verification, leave/apply marker files under `.state/` so the service/run apply flow can use the restart fallback.
+- Restart/service apply is allowed only for unsupported, API-unavailable, service-layer-required, or staged-while-stopped operations. API-capable operations that fail API apply or verification while the service is running must be reported as failed runtime apply, not masked as successful deferred restart work.
+- Manual Desired edits remain a separate watcher/service apply flow. They do not provide immediate CLI runtime feedback and may be diagnosed through `.state` markers, status commands, and logs.
 - OS-level changes such as TUN setup, routes, DNS, firewall, and `nftables` must still be applied only by `xp2p run` or the service layer.
 - Do not restart xray-core for changes that can be applied and verified through gRPC.
 - Desired inputs are user-owned and must not be rewritten by the runtime/service layer.
 - Apply flow is strict: after commit, Desired inputs are the source of truth. Runtime-capable operations may work from an uncommitted candidate first, but a successful runtime apply must be committed to Desired and Live atomically.
 - Successful runtime apply must update Live runtime artifacts to match the compiled Desired result, so service restarts and host reboots preserve runtime-applied changes.
+- New runtime operations must document the Xray API capability they rely on and the verification path used to prove the running state before Desired and Live are committed.
 - Runtime behavior (service run, diagnostics, ping, OS routing) reads Live runtime artifacts only and never reads Desired inputs directly.
 - Allowed exceptions to the live-only runtime rule:
   - Deploy validation may start temporary xray-core using a compiled config derived from Desired inputs without touching Live.

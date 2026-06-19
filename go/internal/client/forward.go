@@ -3,12 +3,12 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -106,19 +106,11 @@ func AddForward(opts ForwardAddOptions) (ForwardAddResult, error) {
 	if err := state.addForward(rule); err != nil {
 		return ForwardAddResult{}, err
 	}
-	if err := state.save(configFile); err != nil {
-		return ForwardAddResult{}, err
-	}
-
 	var targetAddr netip.Addr
 	if parsed, err := netip.ParseAddr(strings.TrimSpace(targetHost)); err == nil {
 		targetAddr = parsed
 	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return ForwardAddResult{}, err
-	}
-	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+	if err := commitClientRuntimeState(context.Background(), state); err != nil {
 		return ForwardAddResult{}, err
 	}
 	return ForwardAddResult{
@@ -145,16 +137,7 @@ func RemoveForward(opts ForwardRemoveOptions) (forward.Rule, error) {
 		return forward.Rule{}, fmt.Errorf("forward rule not found")
 	}
 
-	if err := state.save(configFile); err != nil {
-		state.insertForwardAt(rule, idx)
-		return forward.Rule{}, err
-	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		state.insertForwardAt(rule, idx)
-		return forward.Rule{}, err
-	}
-	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+	if err := commitClientRuntimeState(context.Background(), state); err != nil {
 		state.insertForwardAt(rule, idx)
 		return forward.Rule{}, err
 	}

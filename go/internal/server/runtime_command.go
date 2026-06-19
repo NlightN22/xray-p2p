@@ -1,0 +1,104 @@
+//go:build windows || linux
+
+package server
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
+)
+
+func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
+	if stopped, err := serviceStopped(ctx, servicecontrol.RoleServer); err == nil && stopped {
+		return xraylive.RuntimeApplyStaged, nil
+	}
+	liveDir, err := config.LiveRoleDir(apply.RoleServer)
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	lkgDir, err := config.LkgRoleDir(apply.RoleServer)
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	result, err := xraylive.ApplyCandidate(ctx, xraylive.Options{
+		Role:    apply.RoleServer,
+		LiveDir: liveDir,
+		LkgDir:  lkgDir,
+	}, artifacts)
+	if err != nil {
+		return result, err
+	}
+	if result == xraylive.RuntimeApplyServiceLayerRequired {
+		return xraylive.RuntimeApplyStaged, nil
+	}
+	return result, xraylive.ResultError(result)
+}
+
+func commitServerRuntimeDoc(ctx context.Context, doc map[string]any) error {
+	artifacts, err := compileServerRuntimeCandidateDoc(doc)
+	if err != nil {
+		return err
+	}
+	result, err := applyServerRuntimeCandidate(ctx, artifacts)
+	if err != nil {
+		return err
+	}
+	if result != xraylive.RuntimeApplyApplied && result != xraylive.RuntimeApplyNoop && result != xraylive.RuntimeApplyStaged {
+		return xraylive.ResultError(result)
+	}
+	return writeServerStateDoc(pendingConfigPath(), doc)
+}
+
+func compileServerRuntimeCandidateDoc(doc map[string]any) (xraylive.Artifacts, error) {
+	sourcePath := pendingConfigPath()
+	file, err := os.CreateTemp("", "xp2p-server-candidate-*.toml")
+	if err != nil {
+		return xraylive.Artifacts{}, err
+	}
+	candidatePath := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(candidatePath)
+		return xraylive.Artifacts{}, err
+	}
+	defer os.Remove(candidatePath)
+	if data, err := os.ReadFile(sourcePath); err == nil {
+		if err := os.WriteFile(candidatePath, data, 0o644); err != nil {
+			return xraylive.Artifacts{}, err
+		}
+	} else if !os.IsNotExist(err) {
+		return xraylive.Artifacts{}, err
+	}
+	if err := writeServerStateDoc(candidatePath, doc); err != nil {
+		return xraylive.Artifacts{}, err
+	}
+	extensionsDir, err := config.DesiredExtensionsDirForRole(apply.RoleServer)
+	if err != nil {
+		return xraylive.Artifacts{}, err
+	}
+	artifacts, err := compileDesired(candidatePath, extensionsDir)
+	if err != nil {
+		return xraylive.Artifacts{}, err
+	}
+	extra := make(map[string][]byte, len(artifacts.Extra))
+	for name, data := range artifacts.Extra {
+		extra[filepath.Clean(name)] = data
+	}
+	return xraylive.Artifacts{XrayJSON: artifacts.XrayJSON, MetaJSON: artifacts.MetaJSON, Extra: extra}, nil
+}
+
+func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {
+	status, err := servicecontrol.Default().Status(ctx, role)
+	if err != nil {
+		if errors.Is(err, servicecontrol.ErrUnsupported) {
+			return false, nil
+		}
+		return false, err
+	}
+	return !status.Active, nil
+}

@@ -5,9 +5,6 @@ package client
 import (
 	"context"
 	"fmt"
-
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
-	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 // AddEndpoint updates the existing client installation with a new endpoint.
@@ -36,7 +33,7 @@ func AddEndpoint(ctx context.Context, opts InstallOptions) error {
 	if err != nil {
 		return err
 	}
-	_, err = applyClientEndpointConfig("", base.configFile, endpointConfig{
+	state, err := buildClientEndpointState("", base.configFile, endpointConfig{
 		Hostname:              base.address,
 		Address:               resolved,
 		Port:                  base.portVal,
@@ -52,9 +49,5 @@ func AddEndpoint(ctx context.Context, opts InstallOptions) error {
 	if err != nil {
 		return err
 	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return err
-	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	return commitClientRuntimeState(ctx, state)
 }

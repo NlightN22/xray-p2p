@@ -17,7 +17,8 @@ func applyInboundUserRuntimeDiff(ctx context.Context, opts Options, req apply.Re
 	}
 	applier, closeApplier, err := factory(ctx, address)
 	if err != nil {
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	defer func() {
 		if closeApplier != nil {
@@ -25,8 +26,8 @@ func applyInboundUserRuntimeDiff(ctx context.Context, opts Options, req apply.Re
 		}
 	}()
 	if err := runtimeapply.ApplyInboundUserDiff(ctx, applier, diff); err != nil {
-		logging.Warn("runtime inbound user apply failed; restart fallback required", "role", role, "request_id", req.ID, "err", err)
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := runtimeapply.ApplyInboundUserDiff(ctx, applier, reverseInboundUserDiff(diff))

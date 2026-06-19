@@ -24,6 +24,10 @@ func SetUserEnabled(ctx context.Context, opts SetUserEnabledOptions) error {
 	}
 
 	configPath := pendingConfigPath()
+	doc, err := loadServerStateDoc(configPath)
+	if err != nil {
+		return err
+	}
 	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return err
@@ -35,10 +39,8 @@ func SetUserEnabled(ctx context.Context, opts SetUserEnabledOptions) error {
 	if !changed {
 		return nil
 	}
-	if err := saveServerTrojanUsers(configPath, desired.Users); err != nil {
-		return err
-	}
-	return writeServerApplyRequest()
+	doc[serverTrojanUsersKey] = desired.Users
+	return commitServerRuntimeDoc(ctx, doc)
 }
 
 func setTrojanUsersEnabled(users []trojanClient, userID string, all bool, enabled bool) (bool, error) {

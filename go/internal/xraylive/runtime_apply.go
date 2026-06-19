@@ -18,11 +18,13 @@ import (
 type RuntimeApplyResult string
 
 const (
-	RuntimeApplySkipped         RuntimeApplyResult = "skipped"
-	RuntimeApplyNoop            RuntimeApplyResult = "noop"
-	RuntimeApplyApplied         RuntimeApplyResult = "applied"
-	RuntimeApplyRestartRequired RuntimeApplyResult = "restart_required"
-	RuntimeApplyFailed          RuntimeApplyResult = "failed"
+	RuntimeApplySkipped              RuntimeApplyResult = "skipped"
+	RuntimeApplyNoop                 RuntimeApplyResult = "noop"
+	RuntimeApplyApplied              RuntimeApplyResult = "applied"
+	RuntimeApplyStaged               RuntimeApplyResult = "staged"
+	RuntimeApplyFailed               RuntimeApplyResult = "failed"
+	RuntimeApplyUnsupported          RuntimeApplyResult = "unsupported"
+	RuntimeApplyServiceLayerRequired RuntimeApplyResult = "service_layer_required"
 )
 
 type Artifacts struct {
@@ -54,6 +56,14 @@ type Options struct {
 	NewInboundUser InboundUserApplierFactory
 }
 
+func ApplyCandidate(ctx context.Context, opts Options, artifacts Artifacts) (RuntimeApplyResult, error) {
+	role := strings.TrimSpace(strings.ToLower(opts.Role))
+	if role == "" {
+		return RuntimeApplySkipped, errors.New("runtime apply role is required")
+	}
+	return applyRuntimeArtifacts(ctx, opts, apply.Request{Role: role}, role, artifacts)
+}
+
 func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResult, error) {
 	role := strings.TrimSpace(strings.ToLower(opts.Role))
 	if role == "" {
@@ -73,17 +83,21 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 		logging.Warn("runtime apply compilation failed", "role", role, "request_id", req.ID, "err", err)
 		return RuntimeApplyFailed, nil
 	}
+	return applyRuntimeArtifacts(ctx, opts, req, role, artifacts)
+}
 
+func applyRuntimeArtifacts(ctx context.Context, opts Options, req apply.Request, role string, artifacts Artifacts) (RuntimeApplyResult, error) {
 	current, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return RuntimeApplyRestartRequired, nil
+			return RuntimeApplyServiceLayerRequired, nil
 		}
 		return RuntimeApplySkipped, fmt.Errorf("read live xray config: %w", err)
 	}
 	diff, err := runtimeapply.ClassifyXrayConfigDiff(current, artifacts.XrayJSON)
 	if err != nil {
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	switch diff.Kind {
 	case runtimeapply.DiffNoop:
@@ -94,16 +108,20 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 		cleanupRuntimeApplyMarkers(opts, role)
 		return RuntimeApplyNoop, nil
 	case runtimeapply.DiffUnsupported:
-		logging.Info("runtime apply fallback required", "role", role, "request_id", req.ID, "reason", diff.Reason)
-		return RuntimeApplyRestartRequired, nil
+		logging.Info("runtime apply unsupported", "role", role, "request_id", req.ID, "reason", diff.Reason)
+		return RuntimeApplyUnsupported, nil
 	case runtimeapply.DiffRoutingOnly, runtimeapply.DiffInboundOnly, runtimeapply.DiffOutboundOnly, runtimeapply.DiffInboundUsers, runtimeapply.DiffMixed:
 	default:
-		return RuntimeApplyRestartRequired, nil
+		return RuntimeApplyUnsupported, nil
 	}
 
 	address, err := xrayapi.APIListenFromConfig(current)
 	if err != nil || strings.TrimSpace(address) == "" {
-		return RuntimeApplyRestartRequired, nil
+		if err == nil {
+			err = errors.New("xray API listen address is empty")
+		}
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	switch diff.Kind {
 	case runtimeapply.DiffRoutingOnly:
@@ -117,7 +135,7 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 	case runtimeapply.DiffMixed:
 		return applyMixedRuntimeDiff(ctx, opts, req, role, address, artifacts, diff)
 	default:
-		return RuntimeApplyRestartRequired, nil
+		return RuntimeApplyUnsupported, nil
 	}
 }
 
@@ -128,7 +146,8 @@ func applyRoutingRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 	}
 	applier, closeApplier, err := factory(ctx, address)
 	if err != nil {
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	defer func() {
 		if closeApplier != nil {
@@ -136,8 +155,8 @@ func applyRoutingRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 		}
 	}()
 	if err := runtimeapply.ApplyRoutingDiff(ctx, applier, diff); err != nil {
-		logging.Warn("runtime apply failed; restart fallback required", "role", role, "request_id", req.ID, "err", err)
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := runtimeapply.ApplyRoutingDiff(ctx, applier, reverseRoutingDiff(diff))
@@ -161,7 +180,8 @@ func applyInboundRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 	}
 	applier, closeApplier, err := factory(ctx, address)
 	if err != nil {
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	defer func() {
 		if closeApplier != nil {
@@ -169,8 +189,8 @@ func applyInboundRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 		}
 	}()
 	if err := runtimeapply.ApplyInboundDiff(ctx, applier, diff); err != nil {
-		logging.Warn("runtime inbound apply failed; restart fallback required", "role", role, "request_id", req.ID, "err", err)
-		return RuntimeApplyRestartRequired, nil
+		writeRuntimeApplyError(opts, req, err)
+		return RuntimeApplyFailed, nil
 	}
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := runtimeapply.ApplyInboundDiff(ctx, applier, reverseInboundDiff(diff))
@@ -249,6 +269,9 @@ func publishLiveArtifacts(opts Options, artifacts Artifacts) error {
 }
 
 func cleanupRuntimeApplyMarkers(opts Options, role string) {
+	if strings.TrimSpace(opts.RequestPath) == "" {
+		return
+	}
 	if err := apply.RemoveRoleMarkers(opts.RequestPath, opts.ErrorPath, role); err != nil {
 		logging.Warn("runtime apply marker cleanup failed", "role", role, "err", err)
 	}
@@ -256,6 +279,10 @@ func cleanupRuntimeApplyMarkers(opts Options, role string) {
 
 func writeRuntimeApplyError(opts Options, req apply.Request, err error) {
 	if err == nil {
+		return
+	}
+	if strings.TrimSpace(opts.ErrorPath) == "" || strings.TrimSpace(req.ID) == "" {
+		logging.Warn("runtime apply failed", "role", opts.Role, "err", err)
 		return
 	}
 	_ = apply.WriteError(opts.ErrorPath, apply.ErrorMarker{

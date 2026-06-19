@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 var (
@@ -30,6 +32,10 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 	}
 
 	configPath := pendingConfigPath()
+	doc, err := loadServerStateDoc(configPath)
+	if err != nil {
+		return err
+	}
 	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return err
@@ -57,9 +63,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		updated = true
 	}
 	if updated {
-		if err := saveServerTrojanUsers(configPath, users); err != nil {
-			return err
-		}
+		doc[serverTrojanUsersKey] = users
 	}
 
 	if !opts.NoReverse {
@@ -71,18 +75,18 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		if err != nil {
 			return err
 		}
-		store, err := openReverseStore(opts.InstallDir)
+		reverseState, err := decodeServerReverseState(doc)
 		if err != nil {
 			return err
 		}
-		if err := store.ensureAvailable(channel); err != nil {
-			return err
+		if existing, ok := reverseState[channel.Tag]; ok && !strings.EqualFold(existing.UserID, channel.UserID) {
+			return fmt.Errorf("reverse tag %s already assigned to %s", channel.Tag, existing.UserID)
 		}
-		if err := applyServerReverseChannel(&store, opts.InstallDir, opts.ConfigDir, channel); err != nil {
-			return err
-		}
+		reverseState.ensure()
+		reverseState[channel.Tag] = channel
+		doc[serverReverseStateKey] = reverseState
 	}
-	return writeServerApplyRequest()
+	return commitServerRuntimeDoc(ctx, doc)
 }
 
 // RemoveUser deletes the client from Desired inputs. The operation is idempotent.
@@ -97,6 +101,10 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 	}
 
 	configPath := pendingConfigPath()
+	doc, err := loadServerStateDoc(configPath)
+	if err != nil {
+		return err
+	}
 	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return err
@@ -113,33 +121,37 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		filtered = append(filtered, user)
 	}
 	if removed {
-		if err := saveServerTrojanUsers(configPath, filtered); err != nil {
-			return err
-		}
+		doc[serverTrojanUsersKey] = filtered
 	}
 
-	purged, err := purgeUserReverseAndRedirects(opts, userID)
+	purged, err := purgeUserReverseAndRedirectsDoc(doc, opts, userID)
 	if err != nil {
 		return err
 	}
 	if !removed && !purged {
 		return nil
 	}
-	return writeServerApplyRequest()
+	return commitServerRuntimeDoc(ctx, doc)
 }
 
-func purgeUserReverseAndRedirects(opts RemoveUserOptions, userID string) (bool, error) {
+func purgeUserReverseAndRedirectsDoc(doc map[string]any, opts RemoveUserOptions, userID string) (bool, error) {
 	channels := make([]serverReverseChannel, 0)
-	store, err := openReverseStore(opts.InstallDir)
+	reverseState, err := decodeServerReverseState(doc)
 	if err != nil {
 		return false, err
 	}
-	removed := store.deleteByUser(userID)
+	removed := make([]serverReverseChannel, 0)
+	trimmedUser := strings.TrimSpace(userID)
+	for tag, channel := range reverseState {
+		if !strings.EqualFold(strings.TrimSpace(channel.UserID), trimmedUser) {
+			continue
+		}
+		removed = append(removed, channel)
+		delete(reverseState, tag)
+	}
 	if len(removed) > 0 {
 		channels = append(channels, removed...)
-		if err := store.save(); err != nil {
-			return false, err
-		}
+		doc[serverReverseStateKey] = reverseState
 	}
 
 	if len(channels) == 0 {
@@ -154,20 +166,23 @@ func purgeUserReverseAndRedirects(opts RemoveUserOptions, userID string) (bool, 
 		return false, nil
 	}
 
-	redirectStore, err := openServerRedirectStorePending()
+	redirects, err := decodeServerRedirectRules(doc)
 	if err != nil {
 		return false, err
 	}
 	changed := false
 	for _, channel := range channels {
-		if redirectStore.removeRedirectsByTag(channel.Tag) {
+		updated, removed := redirect.RemoveRulesByTag(redirects, channel.Tag)
+		if removed {
+			redirects = updated
 			changed = true
 		}
 	}
 	if !changed {
 		return len(removed) > 0, nil
 	}
-	return true, redirectStore.saveRedirects()
+	doc[serverRedirectRulesKey] = redirects
+	return true, nil
 }
 
 func ListUsers(ctx context.Context, opts ListUsersOptions) ([]UserLink, error) {

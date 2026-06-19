@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -52,11 +53,9 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return nil
 	}
 	store.redirects = updated
-	if err := store.saveRedirects(); err != nil {
-		return err
-	}
+	store.doc[serverRedirectRulesKey] = store.redirects
 	_ = installDir
-	return writeServerApplyRequest()
+	return commitServerRuntimeDoc(context.Background(), store.doc)
 }
 
 func RemoveRedirect(opts RedirectRemoveOptions) error {
@@ -106,11 +105,9 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 		}
 	}
 	store.redirects = updated
-	if err := store.saveRedirects(); err != nil {
-		return err
-	}
+	store.doc[serverRedirectRulesKey] = store.redirects
 	_ = installDir
-	return writeServerApplyRequest()
+	return commitServerRuntimeDoc(context.Background(), store.doc)
 }
 
 func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
@@ -145,10 +142,8 @@ func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
 		return fmt.Errorf("redirect %s not found", target.Describe())
 	}
 	store.redirects = updated
-	if err := store.saveRedirects(); err != nil {
-		return err
-	}
-	return writeServerApplyRequest()
+	store.doc[serverRedirectRulesKey] = store.redirects
+	return commitServerRuntimeDoc(context.Background(), store.doc)
 }
 
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {

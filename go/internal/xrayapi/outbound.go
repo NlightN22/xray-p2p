@@ -224,7 +224,7 @@ func trojanStreamSettings(outbound map[string]any) (*internetconfig.StreamConfig
 	}
 	return &internetconfig.StreamConfig{
 		ProtocolName:     "tcp",
-		SecurityType:     "tls",
+		SecurityType:     tlsMsg.Type,
 		SecuritySettings: []*commonserial.TypedMessage{tlsMsg},
 	}, nil
 }

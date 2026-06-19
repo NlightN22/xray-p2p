@@ -13,7 +13,7 @@ const (
 )
 
 func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, forceAllowInsecure bool, forwards []forward.Rule, clients []trojanClient) map[string]any {
-	inbounds := make([]any, 0, 4+len(forwards))
+	inbounds := make([]any, 0, 3+len(forwards))
 	if tunEnabled {
 		inbounds = append(inbounds, map[string]any{
 			"tag":      cfg.Inbounds.Tun.Tag,
@@ -111,7 +111,7 @@ func buildLogs(cfg xrayconfig.LogsConfig) map[string]any {
 		"api": map[string]any{
 			"tag":      cfg.API.Tag,
 			"listen":   cfg.API.Listen,
-			"services": cfg.API.Services,
+			"services": xrayconfig.SupportedAPIServices(cfg.API.Services),
 		},
 	}
 	statsEnabled := boolValue(cfg.StatsEnabled, true)

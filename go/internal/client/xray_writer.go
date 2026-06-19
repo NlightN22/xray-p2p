@@ -10,7 +10,7 @@ import (
 )
 
 func buildClientInbounds(cfg xrayconfig.ClientXrayConfig, tunEnabled bool, tunName string, tunMTU int) map[string]any {
-	inbounds := make([]any, 0, 3)
+	inbounds := make([]any, 0, 2)
 	if tunEnabled {
 		inbounds = append(inbounds, map[string]any{
 			"tag":      cfg.Inbounds.Tun.Tag,
@@ -77,7 +77,7 @@ func buildLogs(cfg xrayconfig.LogsConfig) map[string]any {
 		"api": map[string]any{
 			"tag":      cfg.API.Tag,
 			"listen":   cfg.API.Listen,
-			"services": cfg.API.Services,
+			"services": xrayconfig.SupportedAPIServices(cfg.API.Services),
 		},
 	}
 	statsEnabled := boolValue(cfg.StatsEnabled, true)

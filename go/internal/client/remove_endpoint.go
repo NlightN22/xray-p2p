@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
@@ -48,12 +47,5 @@ func RemoveEndpoint(ctx context.Context, opts RemoveEndpointOptions) error {
 	state.removeRedirectsByTag(record.Tag)
 	state.removeReverseChannelsByTag(record.Tag)
 
-	if err := state.save(configFile); err != nil {
-		return err
-	}
-	req, err := apply.NewRequest(apply.RoleClient)
-	if err != nil {
-		return err
-	}
-	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+	return commitClientRuntimeState(ctx, state)
 }

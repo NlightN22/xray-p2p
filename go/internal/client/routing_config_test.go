@@ -146,6 +146,27 @@ func TestUpdateRoutingConfigUsesIPRuleForAddress(t *testing.T) {
 	}
 }
 
+func TestUpdateRoutingConfigKeepsMarkerIPStableWhenEndpointDisabled(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "routing.json")
+	endpoints := []clientEndpointRecord{
+		{Hostname: "192.0.2.10", Tag: "proxy-alpha", Address: "192.0.2.10", Disabled: true},
+		{Hostname: "192.0.2.11", Tag: "proxy-beta", Address: "192.0.2.11"},
+	}
+
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, nil, nil, false, "", nil, false); err != nil {
+		t.Fatalf("updateRoutingConfig failed: %v", err)
+	}
+
+	doc := loadRouting(t, path)
+	rules := getRules(t, doc)
+	if findRuleWithIP(rules, "127.255.0.1/32") != nil {
+		t.Fatalf("did not expect disabled endpoint marker rule, got %+v", rules)
+	}
+	if findRuleWithIP(rules, "127.255.0.2/32") == nil {
+		t.Fatalf("expected active endpoint to keep original marker IP, got %+v", rules)
+	}
+}
+
 func TestUpdateRoutingConfigAppendsFullTunnelRuleLast(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "routing.json")
 	endpoints := []clientEndpointRecord{

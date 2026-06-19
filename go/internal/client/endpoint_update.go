@@ -6,11 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
-	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 // UpdateEndpointOptions controls a credentials-only endpoint update.
@@ -51,20 +52,38 @@ func UpdateEndpointCredentials(ctx context.Context, opts UpdateEndpointOptions) 
 	if _, ok := state.updateEndpointCredentials(target, opts.User, opts.Password, opts.UserSet, opts.PasswordSet); !ok {
 		return fmt.Errorf("client endpoint %q not found", target)
 	}
-	if err := state.save(configFile); err != nil {
-		return err
-	}
-	return writeClientApplyRequestAndTryRuntime(ctx)
+	return commitClientRuntimeState(ctx, state)
 }
 
-func writeClientApplyRequestAndTryRuntime(ctx context.Context) error {
-	req, err := apply.NewRequest(apply.RoleClient)
+func compileClientRuntimeCandidate(state clientInstallState) (xraylive.Artifacts, error) {
+	sourcePath := config.ConfigPath(layout.ClientConfigFileName)
+	file, err := os.CreateTemp("", "xp2p-client-candidate-*.toml")
 	if err != nil {
-		return err
+		return xraylive.Artifacts{}, err
 	}
-	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
-		return err
+	candidatePath := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(candidatePath)
+		return xraylive.Artifacts{}, err
 	}
-	_, err = tryRuntimeApplyPending(ctx, apply.RoleClient)
-	return err
+	defer os.Remove(candidatePath)
+	if data, err := os.ReadFile(sourcePath); err == nil {
+		if err := os.WriteFile(candidatePath, data, 0o644); err != nil {
+			return xraylive.Artifacts{}, err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return xraylive.Artifacts{}, err
+	}
+	if err := state.save(candidatePath); err != nil {
+		return xraylive.Artifacts{}, err
+	}
+	extensionsDir, err := config.DesiredExtensionsDirForRole("client")
+	if err != nil {
+		return xraylive.Artifacts{}, err
+	}
+	artifacts, err := compileDesired(candidatePath, extensionsDir)
+	if err != nil {
+		return xraylive.Artifacts{}, err
+	}
+	return xraylive.Artifacts{XrayJSON: artifacts.XrayJSON, MetaJSON: artifacts.MetaJSON}, nil
 }
