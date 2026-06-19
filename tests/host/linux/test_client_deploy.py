@@ -15,6 +15,10 @@ def test_client_deploy_end_to_end_proxy_mode(client_host, server_host, xp2p_clie
     impl.test_client_deploy_end_to_end_proxy_mode(client_host, server_host, xp2p_client_runner, xp2p_server_runner)
 
 
+def test_client_link_readds_removed_server_user(client_host, server_host, xp2p_client_runner, xp2p_server_runner):
+    impl.test_client_link_readds_removed_server_user(client_host, server_host, xp2p_client_runner, xp2p_server_runner)
+
+
 def test_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     client_host, server_host, xp2p_client_runner, xp2p_server_runner
 ):

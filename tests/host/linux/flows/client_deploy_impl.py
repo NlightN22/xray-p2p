@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from pathlib import PurePosixPath
 import shlex
+from urllib.parse import unquote, urlparse
 
 import pytest
 from testinfra.host import Host
@@ -193,6 +194,138 @@ def _run_client_deploy_end_to_end(
     except Exception:
         _persist_deploy_artifacts(client_host, run_id, role="client")
         _persist_deploy_artifacts(server_host, run_id, role="server")
+        raise
+    finally:
+        if client_pid:
+            linux_env.stop_process(client_host, str(client_pid))
+        if server_pid:
+            linux_env.stop_process(server_host, str(server_pid))
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_client_link_readds_removed_server_user(client_host, server_host, xp2p_client_runner, xp2p_server_runner):
+    client_ip = helpers.detect_primary_ipv4(client_host)
+    server_ip = _detect_host_ipv4(server_host)
+    trojan_user = "deploy-link-readd@example.com"
+    trojan_password = "deploy-link-readd-pass"
+
+    run_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    client_pid = None
+    server_pid = None
+    try:
+        client_pid = _start_client_deploy(
+            client_host,
+            log_path=CLIENT_DEPLOY_LOG,
+            remote_host=server_ip,
+            deploy_port=DEPLOY_PORT,
+            trojan_user=trojan_user,
+            trojan_password=trojan_password,
+            trojan_port=TROJAN_PORT,
+        )
+        deploy_link = _wait_for_client_link(client_host, CLIENT_DEPLOY_LOG)
+        server_pid = _start_server_deploy(
+            server_host,
+            log_path=SERVER_DEPLOY_LOG,
+            listen_addr=f":{DEPLOY_PORT}",
+            deploy_link=deploy_link,
+        )
+
+        _wait_for_log_phrase(
+            client_host,
+            CLIENT_DEPLOY_LOG,
+            "client deploy: local install completed",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        _wait_for_log_phrase(
+            server_host,
+            SERVER_DEPLOY_LOG,
+            "server deploy: starting xray-core",
+            timeout=LOG_WAIT_TIMEOUT,
+        )
+        if client_pid:
+            linux_env.stop_process(client_host, str(client_pid))
+            client_pid = None
+        if server_pid:
+            linux_env.stop_process(server_host, str(server_pid))
+            server_pid = None
+
+        _replace_server_user_without_reverse(
+            xp2p_server_runner,
+            user=trojan_user,
+            password=trojan_password,
+            host=server_ip,
+        )
+        xp2p_server_runner("--log-level", "debug", "server", "service", "start", check=True)
+        xp2p_client_runner("--log-level", "debug", "client", "service", "start", check=True)
+        _wait_for_apply_request_clear(client_host, timeout_seconds=60.0)
+        _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _wait_for_tunnel_ping(xp2p_client_runner, server_ip)
+        helpers.assert_heartbeat_entry(
+            helpers.wait_for_heartbeat_state(
+                client_host,
+                path=CLIENT_HEARTBEAT_STATE_FILE,
+                timeout_seconds=60.0,
+            ),
+            helpers.expected_proxy_tag(server_ip),
+            host=server_ip,
+            user=trojan_user,
+            client_ip=client_ip,
+        )
+
+        link = _client_connection_link(client_host)
+        parts = _parse_trojan_link(link)
+        assert parts["user"] == trojan_user
+        assert parts["password"] == trojan_password
+        assert parts["host"] == server_ip
+        assert parts["port"] == TROJAN_PORT
+        _assert_server_user_present(server_host, xp2p_server_runner, trojan_user)
+
+        xp2p_server_runner(
+            "server",
+            "user",
+            "remove",
+            "--path",
+            DEPLOY_INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--id",
+            trojan_user,
+            check=True,
+        )
+        _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _wait_for_server_user_absent(server_host, xp2p_server_runner, trojan_user)
+        _wait_for_tunnel_ping_failure(xp2p_client_runner, server_ip)
+
+        xp2p_server_runner(
+            "server",
+            "user",
+            "add",
+            "--path",
+            DEPLOY_INSTALL_ROOT.as_posix(),
+            "--config-dir",
+            helpers.SERVER_CONFIG_DIR_NAME,
+            "--link",
+            link,
+            "--no-reverse",
+            check=True,
+        )
+        _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _wait_for_server_user_present(server_host, xp2p_server_runner, trojan_user)
+        _wait_for_tunnel_ping(xp2p_client_runner, server_ip)
+
+        xp2p_server_runner("server", "service", "restart", check=True)
+        _wait_for_apply_request_clear(server_host, timeout_seconds=60.0)
+        _wait_for_server_user_present(server_host, xp2p_server_runner, trojan_user)
+        _wait_for_tunnel_ping(xp2p_client_runner, server_ip)
+    except Exception:
+        _persist_deploy_artifacts(client_host, run_id, role="client")
+        _persist_deploy_artifacts(server_host, run_id, role="server")
+        try:
+            helpers.dump_failure_state(client_host, "client-link-readd-client")
+            helpers.dump_failure_state(server_host, "client-link-readd-server")
+        except Exception as dump_exc:
+            print(f"dump_failure_state failed: {dump_exc}", flush=True)
         raise
     finally:
         if client_pid:
@@ -926,11 +1059,150 @@ def _wait_for_tunnel_ping(runner, target: str, *, timeout_seconds: float = 60.0)
     )
 
 
+def _wait_for_tunnel_ping_failure(runner, target: str, *, timeout_seconds: float = 45.0) -> None:
+    deadline = time.time() + timeout_seconds
+    last_result = None
+    while time.time() < deadline:
+        last_result = runner(
+            "ping",
+            target,
+            "-T",
+            "--count",
+            "3",
+            check=False,
+        )
+        stdout = (last_result.stdout or "").lower()
+        if last_result.rc != 0 or "0% loss" not in stdout:
+            return
+        time.sleep(2.0)
+    stdout = last_result.stdout if last_result else ""
+    stderr = last_result.stderr if last_result else ""
+    pytest.fail(
+        "xp2p ping -T still reported zero loss after server user removal.\n"
+        f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+    )
+
+
+def _client_connection_link(host: Host) -> str:
+    result = linux_env.run_xp2p(
+        host,
+        "client",
+        "list",
+        "--path",
+        DEPLOY_INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.CLIENT_CONFIG_DIR_NAME,
+        "--link",
+    )
+    if result.rc != 0:
+        pytest.fail(
+            "xp2p client list --link failed.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+    links = [line.strip() for line in (result.stdout or "").splitlines() if line.strip().startswith("trojan://")]
+    assert links, f"xp2p client list --link did not return a trojan link.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+    return links[0]
+
+
+def _replace_server_user_without_reverse(runner, *, user: str, password: str, host: str) -> None:
+    runner(
+        "server",
+        "user",
+        "remove",
+        "--path",
+        DEPLOY_INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.SERVER_CONFIG_DIR_NAME,
+        "--id",
+        user,
+        check=True,
+    )
+    runner(
+        "server",
+        "user",
+        "add",
+        "--path",
+        DEPLOY_INSTALL_ROOT.as_posix(),
+        "--config-dir",
+        helpers.SERVER_CONFIG_DIR_NAME,
+        "--id",
+        user,
+        "--password",
+        password,
+        "--host",
+        host,
+        "--no-reverse",
+        check=True,
+    )
+
+
+def _parse_trojan_link(raw: str) -> dict[str, str]:
+    parsed = urlparse(raw)
+    assert parsed.scheme == "trojan", f"Unexpected link scheme in {raw}"
+    assert parsed.username, f"Connection link password is missing: {raw}"
+    assert parsed.hostname, f"Connection link host is missing: {raw}"
+    assert parsed.port, f"Connection link port is missing: {raw}"
+    user = unquote(unquote(parsed.fragment or ""))
+    assert user, f"Connection link user is missing: {raw}"
+    return {
+        "user": user,
+        "password": unquote(parsed.username),
+        "host": parsed.hostname,
+        "port": str(parsed.port),
+    }
+
+
 def _find_trojan_inbound(data: dict) -> dict:
     for inbound in data.get("inbounds", []):
         if inbound.get("protocol") == "trojan":
             return inbound
     raise AssertionError("Expected trojan inbound in server configuration")
+
+
+def _server_user_ids(server_host: Host, runner, *, desired: bool) -> set[str]:
+    xray = helpers.render_xray(server_host, runner, "server", desired=desired)
+    trojan = _find_trojan_inbound(xray)
+    clients = trojan.get("settings", {}).get("clients", [])
+    return {client.get("email") for client in clients if client.get("email")}
+
+
+def _assert_server_user_present(server_host: Host, runner, user: str) -> None:
+    users = _server_user_ids(server_host, runner, desired=False)
+    assert user in users, f"Expected server user {user} in live xray config; users={sorted(users)}"
+
+
+def _wait_for_server_user_present(
+    server_host: Host,
+    runner,
+    user: str,
+    *,
+    timeout_seconds: float = 30.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last_users: set[str] = set()
+    while time.time() < deadline:
+        last_users = _server_user_ids(server_host, runner, desired=False)
+        if user in last_users:
+            return
+        time.sleep(1.0)
+    pytest.fail(f"Server user {user} did not appear in live xray config; users={sorted(last_users)}")
+
+
+def _wait_for_server_user_absent(
+    server_host: Host,
+    runner,
+    user: str,
+    *,
+    timeout_seconds: float = 30.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last_users: set[str] = set()
+    while time.time() < deadline:
+        last_users = _server_user_ids(server_host, runner, desired=False)
+        if user not in last_users:
+            return
+        time.sleep(1.0)
+    pytest.fail(f"Server user {user} was not removed from live xray config; users={sorted(last_users)}")
 
 
 def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
