@@ -34,6 +34,10 @@ func FullTunnel(role, outboundTag string) string {
 	return tag(role, "full-tunnel", outboundTag)
 }
 
+func WindowsDirect(role, outboundTag, network string) string {
+	return tag(role, "windows-direct", outboundTag, network)
+}
+
 func tag(parts ...string) string {
 	normalized := make([]string, 0, len(parts))
 	for _, part := range parts {

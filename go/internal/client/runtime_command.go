@@ -39,18 +39,23 @@ func applyClientRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 }
 
 func commitClientRuntimeState(ctx context.Context, state clientInstallState) error {
+	_, err := commitClientRuntimeStateResult(ctx, state)
+	return err
+}
+
+func commitClientRuntimeStateResult(ctx context.Context, state clientInstallState) (xraylive.RuntimeApplyResult, error) {
 	artifacts, err := compileClientRuntimeCandidate(state)
 	if err != nil {
-		return err
+		return xraylive.RuntimeApplySkipped, err
 	}
 	result, err := applyClientRuntimeCandidate(ctx, artifacts)
 	if err != nil {
-		return err
+		return result, err
 	}
 	if result != xraylive.RuntimeApplyApplied && result != xraylive.RuntimeApplyNoop && result != xraylive.RuntimeApplyStaged {
-		return xraylive.ResultError(result)
+		return result, xraylive.ResultError(result)
 	}
-	return state.save(config.ConfigPath(layout.ClientConfigFileName))
+	return result, state.save(config.ConfigPath(layout.ClientConfigFileName))
 }
 
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {

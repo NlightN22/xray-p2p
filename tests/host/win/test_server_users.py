@@ -61,10 +61,6 @@ def _wait_for_apply_request_clear(host, *, timeout: float = 60.0) -> None:
 
 
 def _ensure_live_xray(server_host, xp2p_server_runner, xp2p_server_run_factory) -> None:
-    have_live = _env.path_exists(server_host, SERVER_LIVE_XRAY_JSON)
-    apply_requested = _env.path_exists(server_host, apply_flow.apply_request_path())
-    if have_live and not apply_requested:
-        return
     if _env.service_exists(server_host, "xp2p-server"):
         xp2p_server_runner("server", "service", "start", check=True)
         _wait_for_apply_request_clear(server_host, timeout=90.0)

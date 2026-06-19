@@ -140,7 +140,9 @@ def test_openwrt_tun_autoconfig_client_network(openwrt_host, xp2p_openwrt_ipk):
 def test_openwrt_tun_autoconfig_server_network(openwrt_host, xp2p_openwrt_ipk):
     runner = _prepare_host(openwrt_host, xp2p_openwrt_ipk)
     try:
-        runner(
+        result = openwrt_env.run_xp2p_with_env(
+            openwrt_host,
+            {"XP2P_SERVER_TUN_ENABLED": "true"},
             "server",
             "install",
             "--path",
@@ -152,8 +154,12 @@ def test_openwrt_tun_autoconfig_server_network(openwrt_host, xp2p_openwrt_ipk):
             "--host",
             "openwrt-server.example",
             "--force",
-            check=True,
         )
+        if result.rc != 0:
+            pytest.fail(
+                "xp2p command failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
         runner("server", "service", "start", check=True)
         _wait_for_apply_request_clear(openwrt_host)
 

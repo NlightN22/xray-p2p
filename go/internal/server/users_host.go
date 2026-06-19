@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
@@ -18,6 +20,18 @@ var (
 
 // AddUser ensures a client exists in Desired inputs.
 func AddUser(ctx context.Context, opts AddUserOptions) error {
+	return addUser(ctx, opts, commitServerRuntimeDoc)
+}
+
+// StageUser updates Desired only. Deploy flows apply staged changes through
+// the service layer after the deployment handshake completes.
+func StageUser(ctx context.Context, opts AddUserOptions) error {
+	return addUser(ctx, opts, func(_ context.Context, doc map[string]any) error {
+		return writeServerStateDoc(config.ConfigPath(layout.ServerConfigFileName), doc)
+	})
+}
+
+func addUser(ctx context.Context, opts AddUserOptions, commit func(context.Context, map[string]any) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -86,7 +100,7 @@ func AddUser(ctx context.Context, opts AddUserOptions) error {
 		reverseState[channel.Tag] = channel
 		doc[serverReverseStateKey] = reverseState
 	}
-	return commitServerRuntimeDoc(ctx, doc)
+	return commit(ctx, doc)
 }
 
 // RemoveUser deletes the client from Desired inputs. The operation is idempotent.

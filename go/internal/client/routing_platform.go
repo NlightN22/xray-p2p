@@ -1,6 +1,10 @@
 package client
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
+)
 
 const (
 	directRandomTagWindows = "direct-random"
@@ -31,11 +35,13 @@ func windowsDirectRules() []any {
 	return []any{
 		map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.WindowsDirect("client", directUDPTagWindows, "udp"),
 			"network":     "udp",
 			"outboundTag": directUDPTagWindows,
 		},
 		map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.WindowsDirect("client", directRandomTagWindows, "tcp,udp"),
 			"network":     "tcp,udp",
 			"outboundTag": directRandomTagWindows,
 		},

@@ -144,7 +144,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	}
 	if installed {
 		logging.Info("xp2p client deploy: installation detected, appending endpoint", "install_dir", installOpts.InstallDir, "config_dir", installOpts.ConfigDir)
-		if err := clientAddEndpointFunc(ctx, installOpts); err != nil {
+		if err := clientStageEndpointFunc(ctx, installOpts); err != nil {
 			completionState = "FAIL client-append"
 			logging.Error("xp2p client deploy: append endpoint failed", "err", err)
 			return 1

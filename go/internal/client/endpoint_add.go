@@ -5,10 +5,25 @@ package client
 import (
 	"context"
 	"fmt"
+
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
 // AddEndpoint updates the existing client installation with a new endpoint.
 func AddEndpoint(ctx context.Context, opts InstallOptions) error {
+	return addEndpoint(ctx, opts, commitClientRuntimeState)
+}
+
+// StageEndpoint updates Desired only. It is used by deploy flows that apply
+// changes through the service layer after the deployment handshake completes.
+func StageEndpoint(ctx context.Context, opts InstallOptions) error {
+	return addEndpoint(ctx, opts, func(_ context.Context, state clientInstallState) error {
+		return state.save(config.ConfigPath(layout.ClientConfigFileName))
+	})
+}
+
+func addEndpoint(ctx context.Context, opts InstallOptions, commit func(context.Context, clientInstallState) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -49,5 +64,5 @@ func AddEndpoint(ctx context.Context, opts InstallOptions) error {
 	if err != nil {
 		return err
 	}
-	return commitClientRuntimeState(ctx, state)
+	return commit(ctx, state)
 }

@@ -12,7 +12,9 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 // RedirectAddOptions controls redirect creation.
@@ -100,6 +102,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		rule.CIDR = ruleTarget.Value
 		rule.NoRoutes = opts.NoRoutes
 	}
+	previous := state
 	addErr := state.addRedirect(rule)
 	if addErr != nil && !errors.Is(addErr, redirect.ErrRuleExists) {
 		return addErr
@@ -107,7 +110,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if errors.Is(addErr, redirect.ErrRuleExists) {
 		return nil
 	}
-	return commitClientRuntimeState(context.Background(), state)
+	return commitClientRedirectRuntimeState(context.Background(), previous, state)
 }
 
 func isDefaultRoute(value string) bool {
@@ -155,8 +158,9 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	if !removed {
 		return fmt.Errorf("redirect %s not found", ruleTarget.Describe())
 	}
+	previous := state
 	state.Redirects = updated
-	return commitClientRuntimeState(context.Background(), state)
+	return commitClientRedirectRuntimeState(context.Background(), previous, state)
 }
 
 func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
@@ -193,8 +197,42 @@ func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
 		}
 		return fmt.Errorf("redirect %s not found", target.Describe())
 	}
+	previous := state
 	state.Redirects = updated
-	return commitClientRuntimeState(context.Background(), state)
+	return commitClientRedirectRuntimeState(context.Background(), previous, state)
+}
+
+func commitClientRedirectRuntimeState(ctx context.Context, previous clientInstallState, state clientInstallState) error {
+	result, err := commitClientRuntimeStateResult(ctx, state)
+	if err != nil {
+		return err
+	}
+	if result == xraylive.RuntimeApplyStaged {
+		return nil
+	}
+	return syncClientRedirectRoutesAfterRuntimeApply(previous, state)
+}
+
+func syncClientRedirectRoutesAfterRuntimeApply(previous clientInstallState, state clientInstallState) error {
+	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ClientConfigFileName)})
+	if err != nil {
+		return err
+	}
+	if !cfg.Client.TunEnabled {
+		return nil
+	}
+	if err := removeRedirectRoutes(cfg.Client.TunName, cfg.Client.TunAddr, previous.Redirects); err != nil {
+		return err
+	}
+	if err := applyRedirectRoutes(cfg.Client.TunName, cfg.Client.TunAddr, state.Redirects); err != nil {
+		return err
+	}
+	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ClientAppliedStateFileName))
+	if err := saveClientAppliedState(appliedStatePath, state, cfg.Client.TunEnabled, cfg.Client.TunName, cfg.Client.TunMTU, cfg.Client.TunAddr); err != nil {
+		return err
+	}
+	logging.Info("client redirect routes reconciled", "count", len(state.Redirects))
+	return nil
 }
 
 // ListRedirects returns configured redirect entries.

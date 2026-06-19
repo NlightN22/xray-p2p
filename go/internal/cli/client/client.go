@@ -16,6 +16,7 @@ var (
 	clientRemoveEndpointFunc = client.RemoveEndpoint
 	clientUpdateEndpointFunc = client.UpdateEndpointCredentials
 	clientAddEndpointFunc    = client.AddEndpoint
+	clientStageEndpointFunc  = client.StageEndpoint
 	clientListFunc           = client.ListEndpoints
 	clientReverseListFunc    = client.ListReverse
 	clientReverseToggleFunc  = client.SetReverseEnabled

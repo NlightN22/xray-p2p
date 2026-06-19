@@ -128,17 +128,23 @@ def _assert_diag_listener(host, port: str) -> None:
 
 
 def _wait_for_log_entry(host, path, substring: str, timeout: float = 60.0) -> None:
+    _wait_for_any_log_entry(host, path, [substring], timeout=timeout)
+
+
+def _wait_for_any_log_entry(host, path, substrings: list[str], timeout: float = 60.0) -> str:
     deadline = time.time() + timeout
-    lowered = substring.lower()
+    lowered = [substring.lower() for substring in substrings]
     last_content = ""
     while time.time() < deadline:
         if helpers.path_exists(host, path):
             content = helpers.read_text(host, path)
             last_content = content
-            if lowered in content.lower():
-                return
+            content_lower = content.lower()
+            for idx, needle in enumerate(lowered):
+                if needle in content_lower:
+                    return substrings[idx]
         time.sleep(POLL_INTERVAL)
-    raise AssertionError(f"Log {path} did not contain {substring!r}. Last content:\n{last_content}")
+    raise AssertionError(f"Log {path} did not contain any of {substrings!r}. Last content:\n{last_content}")
 
 
 def _backup_asset(host, path: PurePosixPath, backup: PurePosixPath) -> None:
@@ -406,7 +412,11 @@ def test_service_stops_after_invalid_config(
 
         helpers.write_text(host, config_path, invalid_config)
         _write_apply_request(host, role)
-        _wait_for_log_entry(host, service_log, "service configuration change detected")
+        _wait_for_any_log_entry(
+            host,
+            service_log,
+            ["service configuration change observed", "service configuration change detected"],
+        )
         _wait_for_log_entry(host, service_log, "apply compilation failed")
         _wait_for_path(host, APPLY_ERROR, exists=True, timeout=60.0)
         error = helpers.read_json(host, APPLY_ERROR)
@@ -600,7 +610,12 @@ def test_package_remove_keeps_config_files(server_host, xp2p_server_runner):
 
         _assert_paths_exist(desired_paths + client_paths + server_paths)
     finally:
-        reinstall = linux_env.run_guest_script(server_host, "scripts/linux/install_xp2p.sh")
+        reinstall = linux_env.run_guest_script_with_env(
+            server_host,
+            "scripts/linux/install_xp2p.sh",
+            {"XP2P_SKIP_BUILD": "1"},
+            timeout=300,
+        )
         if reinstall.rc != 0:
             pytest.fail(
                 "Failed to reinstall xp2p package "

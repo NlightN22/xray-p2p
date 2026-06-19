@@ -6,9 +6,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 func AddRedirect(opts RedirectAddOptions) error {
@@ -52,10 +57,11 @@ func AddRedirect(opts RedirectAddOptions) error {
 	if errors.Is(addErr, redirect.ErrRuleExists) {
 		return nil
 	}
+	previous := append([]redirect.Rule(nil), store.redirects...)
 	store.redirects = updated
 	store.doc[serverRedirectRulesKey] = store.redirects
 	_ = installDir
-	return commitServerRuntimeDoc(context.Background(), store.doc)
+	return commitServerRedirectRuntimeDoc(context.Background(), store.doc, previous, store.redirects)
 }
 
 func RemoveRedirect(opts RedirectRemoveOptions) error {
@@ -104,10 +110,11 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 			return fmt.Errorf("redirect tag %s not found", tagFilter)
 		}
 	}
+	previous := append([]redirect.Rule(nil), store.redirects...)
 	store.redirects = updated
 	store.doc[serverRedirectRulesKey] = store.redirects
 	_ = installDir
-	return commitServerRuntimeDoc(context.Background(), store.doc)
+	return commitServerRedirectRuntimeDoc(context.Background(), store.doc, previous, store.redirects)
 }
 
 func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
@@ -141,9 +148,47 @@ func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
 		}
 		return fmt.Errorf("redirect %s not found", target.Describe())
 	}
+	previous := append([]redirect.Rule(nil), store.redirects...)
 	store.redirects = updated
 	store.doc[serverRedirectRulesKey] = store.redirects
-	return commitServerRuntimeDoc(context.Background(), store.doc)
+	return commitServerRedirectRuntimeDoc(context.Background(), store.doc, previous, store.redirects)
+}
+
+func commitServerRedirectRuntimeDoc(ctx context.Context, doc map[string]any, previous []redirect.Rule, current []redirect.Rule) error {
+	result, err := commitServerRuntimeDocResult(ctx, doc)
+	if err != nil {
+		return err
+	}
+	if result == xraylive.RuntimeApplyStaged {
+		return nil
+	}
+	return syncServerRedirectRoutesAfterRuntimeApply(previous, current)
+}
+
+func syncServerRedirectRoutesAfterRuntimeApply(previous []redirect.Rule, current []redirect.Rule) error {
+	cfg, err := loadServerConfigWithFallback()
+	if err != nil {
+		return err
+	}
+	if !cfg.Server.TunEnabled {
+		return nil
+	}
+	if err := removeRedirectRoutes(cfg.Server.TunName, cfg.Server.TunAddr, previous); err != nil {
+		return err
+	}
+	if err := applyRedirectRoutes(cfg.Server.TunName, cfg.Server.TunAddr, current); err != nil {
+		return err
+	}
+	desired, err := loadServerDesiredConfigFromPath(pendingConfigPath())
+	if err != nil {
+		return err
+	}
+	appliedStatePath := filepath.Clean(config.ConfigPath(layout.ServerAppliedStateFileName))
+	if err := saveServerAppliedState(appliedStatePath, desired.Reverse, desired.Redirects, desired.Forwards, cfg.Server.TunEnabled, cfg.Server.TunName, cfg.Server.TunMTU, cfg.Server.TunAddr); err != nil {
+		return err
+	}
+	logging.Info("server redirect routes reconciled", "count", len(current))
+	return nil
 }
 
 func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {

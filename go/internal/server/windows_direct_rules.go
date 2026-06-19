@@ -1,6 +1,10 @@
 package server
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
+)
 
 func applyWindowsDirectRules(rules []any) []any {
 	filtered := make([]any, 0, len(rules)+2)
@@ -22,11 +26,13 @@ func windowsDirectRules() []any {
 	return []any{
 		map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.WindowsDirect("server", directUDPTagWindows, "udp"),
 			"network":     "udp",
 			"outboundTag": directUDPTagWindows,
 		},
 		map[string]any{
 			"type":        "field",
+			"ruleTag":     xrayrule.WindowsDirect("server", directRandomTagWindows, "tcp,udp"),
 			"network":     "tcp,udp",
 			"outboundTag": directRandomTagWindows,
 		},

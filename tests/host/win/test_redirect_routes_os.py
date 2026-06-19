@@ -646,7 +646,7 @@ def test_windows_server_redirect_routes_os(
             _wait_for_tun_ipv4(server_host, server_tun, expected_cidr=DEFAULT_SERVER_TUN_ADDR)
         _wait_for_route_present(server_host, SERVER_REDIRECT_CIDR, tun_index)
 
-        xp2p_server_runner(
+        remove_result = xp2p_server_runner(
             "server",
             "redirect",
             "remove",
@@ -656,12 +656,14 @@ def test_windows_server_redirect_routes_os(
             reverse_tag,
             check=True,
             )
-        apply_flow.wait_for_apply_request_set(
-            server_host,
-            timeout=10.0,
-            dump_label="server-redirect-remove",
-        )
-        apply_flow.wait_for_apply_request_clear(server_host, timeout=90.0, dump_label="server-redirect-remove-apply")
+        remove_output = "\n".join([remove_result.stdout or "", remove_result.stderr or ""]).lower()
+        if "runtime routing apply completed" not in remove_output:
+            apply_flow.wait_for_apply_request_set(
+                server_host,
+                timeout=10.0,
+                dump_label="server-redirect-remove",
+            )
+            apply_flow.wait_for_apply_request_clear(server_host, timeout=90.0, dump_label="server-redirect-remove-apply")
         _wait_for_route_absent(server_host, SERVER_REDIRECT_CIDR)
     finally:
         if reverse_tag:

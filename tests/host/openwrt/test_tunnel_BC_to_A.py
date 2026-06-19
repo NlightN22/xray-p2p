@@ -283,10 +283,6 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         helpers.dump_apply_dirs(server_host, "tunnel BC to A after server install")
         default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
         reverse_default = helpers.expected_reverse_tag(default_cred["user"], SERVER_IP)
-        if _pending_config_present(server_host, "server"):
-            _apply_pending_config_wait(server_host, "server")
-        helpers.wait_for_live_config(server_host, "server")
-        _wait_for_live_xray_configs(server_host, helpers.SERVER_CONFIG_DIR)
 
         user_add = server_runner(
             "server",
@@ -334,7 +330,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
         for reverse_tag, user in (
             (reverse_default, default_cred["user"]),
             (reverse_second, "client-two@example.com"),
-    ):
+        ):
             helpers.assert_server_reverse_state(
                 server_state,
                 reverse_tag,

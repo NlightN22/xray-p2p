@@ -21,6 +21,7 @@ var (
 	serverRunFunc            = server.Run
 	serverServiceRunFunc     = server.RunService
 	serverUserAddFunc        = server.AddUser
+	serverUserStageFunc      = server.StageUser
 	serverUserRemoveFunc     = server.RemoveUser
 	serverUserUpdateFunc     = server.UpdateUser
 	detectPublicHostFunc     = netutil.DetectPublicHost

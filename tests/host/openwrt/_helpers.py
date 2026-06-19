@@ -906,6 +906,8 @@ def apply_pending_config(
     else:
         raise ValueError(f"Unsupported role: {role}")
     if not path_exists_exact(host, pending_path) and not path_exists_exact(host, APPLY_REQUEST):
+        ensure_service_running(host, role)
+        wait_for_live_config(host, role, timeout_seconds=timeout_seconds, poll_interval=poll_interval)
         return
     if is_xp2p_run_active(host, role):
         host.run(f"/etc/init.d/xp2p-{role} stop >/dev/null 2>&1 || true")

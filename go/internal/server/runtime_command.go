@@ -40,18 +40,23 @@ func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 }
 
 func commitServerRuntimeDoc(ctx context.Context, doc map[string]any) error {
+	_, err := commitServerRuntimeDocResult(ctx, doc)
+	return err
+}
+
+func commitServerRuntimeDocResult(ctx context.Context, doc map[string]any) (xraylive.RuntimeApplyResult, error) {
 	artifacts, err := compileServerRuntimeCandidateDoc(doc)
 	if err != nil {
-		return err
+		return xraylive.RuntimeApplySkipped, err
 	}
 	result, err := applyServerRuntimeCandidate(ctx, artifacts)
 	if err != nil {
-		return err
+		return result, err
 	}
 	if result != xraylive.RuntimeApplyApplied && result != xraylive.RuntimeApplyNoop && result != xraylive.RuntimeApplyStaged {
-		return xraylive.ResultError(result)
+		return result, xraylive.ResultError(result)
 	}
-	return writeServerStateDoc(pendingConfigPath(), doc)
+	return result, writeServerStateDoc(pendingConfigPath(), doc)
 }
 
 func compileServerRuntimeCandidateDoc(doc map[string]any) (xraylive.Artifacts, error) {

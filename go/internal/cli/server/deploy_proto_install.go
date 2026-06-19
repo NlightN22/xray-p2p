@@ -181,7 +181,7 @@ installDone:
 		return
 	}
 
-	if err := server.AddUser(ctx, server.AddUserOptions{InstallDir: installDir, ConfigDir: configDir, UserID: userID, Password: password, Host: host, Force: true}); err != nil {
+	if err := serverUserStageFunc(ctx, server.AddUserOptions{InstallDir: installDir, ConfigDir: configDir, UserID: userID, Password: password, Host: host, Force: true}); err != nil {
 		_ = writeLine(rw, "EXIT 1")
 		_ = writeSegment(rw, "ERR-BEGIN", "ERR-END", []string{err.Error()})
 		_ = writeSegment(rw, "OUT-BEGIN", "OUT-END", logs)
