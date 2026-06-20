@@ -60,6 +60,6 @@ func UpdateUser(ctx context.Context, opts UpdateUserOptions) error {
 	if opts.PasswordSet {
 		desired.Users[found].Password = password
 	}
-	doc[serverTrojanUsersKey] = desired.Users
+	setServerUsers(doc, desired.Users)
 	return commitServerRuntimeDoc(ctx, doc)
 }

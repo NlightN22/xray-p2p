@@ -39,7 +39,7 @@ func SetUserEnabled(ctx context.Context, opts SetUserEnabledOptions) error {
 	if !changed {
 		return nil
 	}
-	doc[serverTrojanUsersKey] = desired.Users
+	setServerUsers(doc, desired.Users)
 	return commitServerRuntimeDoc(ctx, doc)
 }
 

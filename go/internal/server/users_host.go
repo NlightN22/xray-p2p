@@ -77,7 +77,7 @@ func addUser(ctx context.Context, opts AddUserOptions, commit func(context.Conte
 		updated = true
 	}
 	if updated {
-		doc[serverTrojanUsersKey] = users
+		setServerUsers(doc, users)
 	}
 
 	if !opts.NoReverse {
@@ -135,7 +135,7 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 		filtered = append(filtered, user)
 	}
 	if removed {
-		doc[serverTrojanUsersKey] = filtered
+		setServerUsers(doc, filtered)
 	}
 
 	purged, err := purgeUserReverseAndRedirectsDoc(doc, opts, userID)

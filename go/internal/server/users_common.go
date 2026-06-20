@@ -14,9 +14,13 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
-const serverTrojanUsersKey = "trojan_users"
+const (
+	serverTrojanUsersKey = "trojan_users"
+	serverUsersKey       = "users"
+)
 
 type trojanClient struct {
 	Email    string `json:"email" toml:"email"`
@@ -25,6 +29,24 @@ type trojanClient struct {
 }
 
 func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
+	if raw := doc[serverUsersKey]; raw != nil {
+		buf, err := json.Marshal(raw)
+		if err != nil {
+			return nil, fmt.Errorf("encode server users: %w", err)
+		}
+		var users []tunnel.User
+		if err := json.Unmarshal(buf, &users); err != nil {
+			return nil, fmt.Errorf("decode server users: %w", err)
+		}
+		result := make([]trojanClient, 0, len(users))
+		for _, user := range users {
+			if strings.TrimSpace(user.Credential) == "" {
+				return nil, fmt.Errorf("server user %q has an empty credential", user.UserLabel)
+			}
+			result = append(result, trojanClient{Email: user.UserLabel, Password: user.Credential, Disabled: user.Disabled})
+		}
+		return result, nil
+	}
 	raw := doc[serverTrojanUsersKey]
 	if raw == nil {
 		return []trojanClient{}, nil
@@ -40,7 +62,28 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 	if users == nil {
 		users = []trojanClient{}
 	}
+	for idx := range users {
+		user := users[idx]
+		record, _, err := tunnel.NormalizeRecord(tunnel.LegacyRecord{
+			UserLabel: user.Email,
+			Password:  user.Password,
+			Disabled:  user.Disabled,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("normalize legacy server user %q: %w", user.Email, err)
+		}
+		users[idx] = trojanClient{Email: record.User.UserLabel, Password: record.User.Credential, Disabled: record.User.Disabled}
+	}
 	return users, nil
+}
+
+func setServerUsers(doc map[string]any, users []trojanClient) {
+	stored := make([]tunnel.User, 0, len(users))
+	for _, user := range users {
+		stored = append(stored, tunnel.User{UserLabel: user.Email, Credential: user.Password, Disabled: user.Disabled})
+	}
+	doc[serverUsersKey] = stored
+	doc[serverTrojanUsersKey] = nil
 }
 
 func saveServerTrojanUsers(configPath string, users []trojanClient) error {
@@ -48,11 +91,7 @@ func saveServerTrojanUsers(configPath string, users []trojanClient) error {
 	if err != nil {
 		return err
 	}
-	if len(users) == 0 {
-		doc[serverTrojanUsersKey] = nil
-	} else {
-		doc[serverTrojanUsersKey] = users
-	}
+	setServerUsers(doc, users)
 	return writeServerStateDoc(configPath, doc)
 }
 
