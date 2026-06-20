@@ -29,6 +29,16 @@ func TestLinkRoundTripPreservesUnknownParameters(t *testing.T) {
 	}
 }
 
+func TestParseLinkDecodesEscapedUserLabel(t *testing.T) {
+	link, err := ParseLink("trojan://secret@edge.example:443?security=tls#alice%2540example.com")
+	if err != nil {
+		t.Fatalf("parse link: %v", err)
+	}
+	if link.User.UserLabel != "alice@example.com" {
+		t.Fatalf("user label = %q", link.User.UserLabel)
+	}
+}
+
 func TestVLESSLinkMapping(t *testing.T) {
 	link, err := ParseLink("vless://550e8400-e29b-41d4-a716-446655440000@edge.example:443?security=tls&type=tcp&flow=xtls-rprx-vision#alice")
 	if err != nil {

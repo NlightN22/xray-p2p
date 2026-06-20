@@ -253,7 +253,7 @@ def test_subscription_control_plane_publishes_vless_tls_vision_profile(server_ho
         runtime.stop_service(runner, "server")
 
 
-def test_client_switches_to_vless_profile_from_subscription(client_host, server_host):
+def test_client_switches_profiles_bidirectionally_from_subscription(client_host, server_host):
     server_runner = runtime.xp2p_runner(server_host)
     client_runner = runtime.xp2p_runner(client_host)
     server_ip = _detect_host_ipv4(server_host)
@@ -317,6 +317,15 @@ def test_client_switches_to_vless_profile_from_subscription(client_host, server_
         endpoint = _client_endpoint_any(client_host, SERVER_HOST, server_ip)
         live = runtime.wait_for_live_xray(client_host, "client")
         assert _client_outbound_protocol_by_tag(live, endpoint["tag"]) == "vless"
+        _assert_tunnel_ping(client_host, server_host, client_runner, SERVER_HOST)
+
+        server_runner("server", "profile", "trojan-tls", check=True)
+        server_live = runtime.wait_for_live_xray(server_host, "server")
+        assert PROFILE_SWITCH_USER in _trojan_credentials(server_live)
+        _wait_for_client_profile(client_host, SERVER_HOST, server_ip, "trojan-tls", "trojan", "")
+        endpoint = _client_endpoint_any(client_host, SERVER_HOST, server_ip)
+        live = runtime.wait_for_live_xray(client_host, "client")
+        assert _client_outbound_protocol_by_tag(live, endpoint["tag"]) == "trojan"
         _assert_tunnel_ping(client_host, server_host, client_runner, SERVER_HOST)
     finally:
         runtime.stop_service(client_runner, "client")

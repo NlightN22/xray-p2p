@@ -154,7 +154,13 @@ func writeTLS(values url.Values, tls TLSMetadata) {
 		values.Set("xp2p_verify_name", tls.VerifyPeerCertByName)
 	}
 }
-func labelFromURL(u *url.URL) string { return strings.TrimSpace(u.Fragment) }
+func labelFromURL(u *url.URL) string {
+	label, err := url.PathUnescape(u.Fragment)
+	if err != nil {
+		return strings.TrimSpace(u.Fragment)
+	}
+	return strings.TrimSpace(label)
+}
 func first(value, fallback string) string {
 	if strings.TrimSpace(value) != "" {
 		return strings.TrimSpace(value)
