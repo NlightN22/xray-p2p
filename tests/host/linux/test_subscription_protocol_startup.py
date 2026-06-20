@@ -49,8 +49,26 @@ def test_02_client_connects_to_trojan_profile_from_startup(client_host, server_h
     )
 
 
+def test_03_client_connects_to_runtime_applied_vless_profile(client_host, server_host):
+    _assert_client_connects_from_startup(
+        client_host,
+        server_host,
+        "vless-tls-vision",
+        VLESS_USER,
+        VLESS_PASSWORD,
+        "vless",
+        runtime_apply_server_profile=True,
+    )
+
+
 def _assert_client_connects_from_startup(
-    client_host, server_host, profile: str, user: str, password: str, protocol: str
+    client_host,
+    server_host,
+    profile: str,
+    user: str,
+    password: str,
+    protocol: str,
+    runtime_apply_server_profile: bool = False,
 ) -> None:
     server_runner = runtime.xp2p_runner(server_host)
     client_runner = runtime.xp2p_runner(client_host)
@@ -71,7 +89,8 @@ def _assert_client_connects_from_startup(
             "--force",
             check=True,
         )
-        if profile == "vless-tls-vision":
+        _enable_xray_debug(server_host, "xp2p-server.toml")
+        if profile == "vless-tls-vision" and not runtime_apply_server_profile:
             server_runner("server", "profile", profile, check=True)
         user_add = server_runner(
             "server",
@@ -90,6 +109,11 @@ def _assert_client_connects_from_startup(
             check=True,
         )
         link = _extract_link(user_add.stdout or "")
+        if runtime_apply_server_profile:
+            runtime.start_service(server_host, server_runner, "server", log_level="debug")
+            server_runner("--log-level", "debug", "server", "profile", profile, check=True)
+            user_list = server_runner("server", "user", "list", "--host", SERVER_HOST, check=True)
+            link = _extract_link(user_list.stdout or "")
         assert link.startswith(f"{protocol}://")
         client_runner(
             "client",
@@ -104,8 +128,10 @@ def _assert_client_connects_from_startup(
             "proxy",
             check=True,
         )
-        runtime.start_service(server_host, server_runner, "server")
-        runtime.start_service(client_host, client_runner, "client")
+        _enable_xray_debug(client_host, "xp2p-client.toml")
+        if not runtime_apply_server_profile:
+            runtime.start_service(server_host, server_runner, "server", log_level="debug")
+        runtime.start_service(client_host, client_runner, "client", log_level="debug")
         server_live = runtime.wait_for_live_xray(server_host, "server")
         if protocol == "vless":
             assert user in _vless_users(server_live)
@@ -126,4 +152,11 @@ def _add_hosts_entry(host, ip_address: str, name: str) -> None:
         f"'tmp=$(mktemp); grep -v \"[[:space:]]{escaped_name}$\" /etc/hosts > \"$tmp\"; "
         f"printf \"%s %s\\n\" \"{escaped_ip}\" \"{escaped_name}\" >> \"$tmp\"; "
         "cat \"$tmp\" > /etc/hosts; rm -f \"$tmp\"'"
+    )
+
+
+def _enable_xray_debug(host, config_name: str) -> None:
+    host.run(
+        "sudo -n /bin/sh -c "
+        f"'sed -i \"s/level = \\\"warning\\\"/level = \\\"debug\\\"/\" /etc/xp2p/{config_name}'"
     )

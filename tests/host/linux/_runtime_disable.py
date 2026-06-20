@@ -28,11 +28,14 @@ def xp2p_runner(host):
     return _run
 
 
-def start_service(host, runner, role: str) -> None:
+def start_service(host, runner, role: str, *, log_level: str = "") -> None:
     host.run("sudo -n systemctl daemon-reload >/dev/null 2>&1 || true")
     runner(role, "service", "stop")
     host.run("sudo -n pkill -f '/etc/xp2p/bin/[x]ray' >/dev/null 2>&1 || true")
-    runner(role, "service", "start", check=True)
+    args = [role, "service", "start"]
+    if log_level:
+        args.extend(["--log-level", log_level])
+    runner(*args, check=True)
     wait_for_service(host, role, active=True)
     wait_for_live_xray(host, role)
     assert_apply_clean(host)

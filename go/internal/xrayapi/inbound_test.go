@@ -1,6 +1,8 @@
 package xrayapi
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	commonserial "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonserial"
@@ -93,6 +95,7 @@ func TestInboundFromMapRejectsFollowRedirect(t *testing.T) {
 }
 
 func TestInboundFromMapConvertsTrojanTLSInbound(t *testing.T) {
+	certPath, keyPath := testTLSPaths(t)
 	inbound, err := InboundFromMap(map[string]any{
 		"tag":      "trojan-in",
 		"listen":   "0.0.0.0",
@@ -104,7 +107,7 @@ func TestInboundFromMapConvertsTrojanTLSInbound(t *testing.T) {
 		"streamSettings": map[string]any{
 			"network": "tcp", "security": "tls",
 			"tcpSettings": map[string]any{"acceptProxyProtocol": false, "header": map[string]any{"type": "none"}},
-			"tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": "cert.pem", "keyFile": "key.pem"}}},
+			"tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": certPath, "keyFile": keyPath}}},
 		},
 	})
 	if err != nil {
@@ -127,6 +130,7 @@ func TestInboundFromMapConvertsTrojanTLSInbound(t *testing.T) {
 }
 
 func TestInboundFromMapConvertsVLESSTLSInbound(t *testing.T) {
+	certPath, keyPath := testTLSPaths(t)
 	inbound, err := InboundFromMap(map[string]any{
 		"tag":      "trojan-in",
 		"listen":   "0.0.0.0",
@@ -137,7 +141,7 @@ func TestInboundFromMapConvertsVLESSTLSInbound(t *testing.T) {
 		}}},
 		"streamSettings": map[string]any{
 			"network": "tcp", "security": "tls",
-			"tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": "cert.pem", "keyFile": "key.pem"}}},
+			"tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": certPath, "keyFile": keyPath}}},
 		},
 	})
 	if err != nil {
@@ -150,6 +154,20 @@ func TestInboundFromMapConvertsVLESSTLSInbound(t *testing.T) {
 	if receiver.GetStreamSettings().GetSecurityType() != "xray.transport.internet.tls.Config" {
 		t.Fatalf("security type = %q", receiver.GetStreamSettings().GetSecurityType())
 	}
+}
+
+func testTLSPaths(t *testing.T) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "cert.pem")
+	keyPath := filepath.Join(dir, "key.pem")
+	if err := os.WriteFile(certPath, []byte("certificate"), 0o600); err != nil {
+		t.Fatalf("write certificate: %v", err)
+	}
+	if err := os.WriteFile(keyPath, []byte("key"), 0o600); err != nil {
+		t.Fatalf("write certificate key: %v", err)
+	}
+	return certPath, keyPath
 }
 
 func decodeReceiver(t *testing.T, msg *commonserial.TypedMessage) *proxymanconfig.ReceiverConfig {

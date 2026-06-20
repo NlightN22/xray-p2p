@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	commonnet "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonnet"
 	commonprotocol "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonprotocol"
 	commonserial "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonserial"
@@ -66,16 +68,22 @@ func InboundFromMap(inbound map[string]any) (*coreconfig.InboundHandlerConfig, e
 	if err != nil {
 		return nil, err
 	}
+	var result *coreconfig.InboundHandlerConfig
 	switch protocol {
 	case "dokodemo-door":
-		return dokodemoInboundFromMap(inbound, tag, listenAddr, listenPort)
+		result, err = dokodemoInboundFromMap(inbound, tag, listenAddr, listenPort)
 	case "trojan":
-		return trojanInboundFromMap(inbound, tag, listenAddr, listenPort)
+		result, err = trojanInboundFromMap(inbound, tag, listenAddr, listenPort)
 	case "vless":
-		return vlessInboundFromMap(inbound, tag, listenAddr, listenPort)
+		result, err = vlessInboundFromMap(inbound, tag, listenAddr, listenPort)
 	default:
-		return nil, fmt.Errorf("unsupported inbound protocol %q", protocol)
+		err = fmt.Errorf("unsupported inbound protocol %q", protocol)
 	}
+	if err != nil {
+		return nil, err
+	}
+	logging.Debug("xray runtime inbound encoded", "tag", tag, "protocol", protocol, "proxy_type", result.ProxySettings.Type, "proxy_bytes", len(result.ProxySettings.Value), "receiver_type", result.ReceiverSettings.Type, "receiver_bytes", len(result.ReceiverSettings.Value))
+	return result, nil
 }
 
 func dokodemoInboundFromMap(inbound map[string]any, tag string, listenAddr *commonnet.IPOrDomain, listenPort uint32) (*coreconfig.InboundHandlerConfig, error) {
@@ -284,7 +292,21 @@ func tlsServerSettings(raw any) (*tlsconfig.Config, error) {
 	if certPath == "" || keyPath == "" {
 		return nil, errors.New("inbound certificateFile and keyFile are required")
 	}
-	return &tlsconfig.Config{Certificate: []*tlsconfig.Certificate{{CertificatePath: certPath, KeyPath: keyPath}}}, nil
+	certificate, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil, fmt.Errorf("read inbound certificate %s: %w", certPath, err)
+	}
+	key, err := os.ReadFile(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("read inbound certificate key %s: %w", keyPath, err)
+	}
+	return &tlsconfig.Config{Certificate: []*tlsconfig.Certificate{{
+		Certificate:     certificate,
+		Key:             key,
+		Usage:           tlsconfig.Certificate_ENCIPHERMENT,
+		CertificatePath: certPath,
+		KeyPath:         keyPath,
+	}}}, nil
 }
 
 func rejectUnknownKeys(values map[string]any, allowed map[string]struct{}, label string) error {

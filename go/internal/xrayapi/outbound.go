@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	commonprotocol "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonprotocol"
 	commonserial "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonserial"
 	coreconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/coreconfig"
@@ -100,11 +101,13 @@ func OutboundFromMap(outbound map[string]any) (*coreconfig.OutboundHandlerConfig
 	if err != nil {
 		return nil, err
 	}
-	return &coreconfig.OutboundHandlerConfig{
+	result := &coreconfig.OutboundHandlerConfig{
 		Tag:            tag,
 		SenderSettings: senderMsg,
 		ProxySettings:  proxyMsg,
-	}, nil
+	}
+	logging.Debug("xray runtime outbound encoded", "tag", tag, "protocol", protocol, "proxy_type", proxyMsg.Type, "proxy_bytes", len(proxyMsg.Value), "sender_type", senderMsg.Type, "sender_bytes", len(senderMsg.Value))
+	return result, nil
 }
 
 func vlessProxySettings(outbound map[string]any) (*commonserial.TypedMessage, error) {

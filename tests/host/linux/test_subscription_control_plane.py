@@ -346,8 +346,10 @@ def _trojan_credentials(xray: dict) -> dict[str, str]:
 def _extract_link(output: str) -> str:
     for raw in (output or "").splitlines():
         stripped = raw.strip()
-        if stripped.startswith(("trojan://", "vless://")):
-            return stripped
+        for scheme in ("trojan://", "vless://"):
+            index = stripped.find(scheme)
+            if index >= 0:
+                return stripped[index:]
     pytest.fail(f"xp2p server user add did not emit a connection link.\nSTDOUT:\n{output}")
 
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type InboundApplier interface {
@@ -30,6 +31,9 @@ func ApplyInboundDiff(ctx context.Context, applier InboundApplier, diff Diff) er
 			return fmt.Errorf("remove inbound %s: %w", change.Tag, err)
 		}
 		removed = append(removed, change.Inbound)
+		if err := waitForInboundRemoval(ctx, applier, change.Tag); err != nil {
+			return fmt.Errorf("wait for inbound %s removal: %w", change.Tag, err)
+		}
 	}
 
 	added := make([]map[string]any, 0, len(diff.AddedInbounds))
@@ -51,6 +55,38 @@ func ApplyInboundDiff(ctx context.Context, applier InboundApplier, diff Diff) er
 		return fmt.Errorf("verify inbound runtime apply: %w", err)
 	}
 	return nil
+}
+
+func waitForInboundRemoval(ctx context.Context, applier InboundApplier, tag string) error {
+	deadline := time.NewTimer(time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		tags, err := applier.ListInboundTags(ctx)
+		if err != nil {
+			return err
+		}
+		if !containsTag(tags, tag) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return errors.New("inbound tag is still present")
+		case <-ticker.C:
+		}
+	}
+}
+
+func containsTag(tags []string, want string) bool {
+	for _, tag := range tags {
+		if tag == want {
+			return true
+		}
+	}
+	return false
 }
 
 func verifyInboundDiff(ctx context.Context, applier InboundApplier, diff Diff) error {
