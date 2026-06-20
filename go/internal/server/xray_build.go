@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
@@ -12,7 +13,7 @@ const (
 	directUDPTagWindows    = "direct-udp"
 )
 
-func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, forceAllowInsecure bool, forwards []forward.Rule, clients []trojanClient) map[string]any {
+func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, profile tunnel.Profile, tunEnabled bool, tunName string, tunMTU int, trojanPort int, certPath string, keyPath string, forceAllowInsecure bool, forwards []forward.Rule, clients []trojanClient) map[string]any {
 	inbounds := make([]any, 0, 3+len(forwards))
 	if tunEnabled {
 		inbounds = append(inbounds, map[string]any{
@@ -47,12 +48,36 @@ func buildServerInbounds(cfg xrayconfig.ServerXrayConfig, tunEnabled bool, tunNa
 			},
 		},
 	)
-	inbounds = append(inbounds, buildTrojanInbound(cfg, trojanPort, certPath, keyPath, forceAllowInsecure, clients))
+	inbounds = append(inbounds, buildTunnelInbound(cfg, profile, trojanPort, certPath, keyPath, forceAllowInsecure, clients))
 	for _, rule := range forwards {
 		inbounds = append(inbounds, rule.InboundMap())
 	}
 	return map[string]any{
 		"inbounds": inbounds,
+	}
+}
+
+func buildTunnelInbound(cfg xrayconfig.ServerXrayConfig, profile tunnel.Profile, port int, certPath, keyPath string, forceAllowInsecure bool, clients []trojanClient) map[string]any {
+	if profile != tunnel.ProfileVLESSTLSVision {
+		return buildTrojanInbound(cfg, port, certPath, keyPath, forceAllowInsecure, clients)
+	}
+	users := make([]any, 0, len(clients))
+	for _, client := range clients {
+		if client.Disabled {
+			continue
+		}
+		users = append(users, map[string]any{"id": strings.TrimSpace(client.Password), "email": strings.TrimSpace(client.Email), "flow": "xtls-rprx-vision"})
+	}
+	return map[string]any{
+		"tag":      cfg.Inbounds.Trojan.Tag,
+		"port":     port,
+		"listen":   cfg.Inbounds.Trojan.Listen,
+		"protocol": "vless",
+		"settings": map[string]any{"clients": users, "decryption": "none"},
+		"streamSettings": map[string]any{
+			"network": "tcp", "security": "tls",
+			"tlsSettings": map[string]any{"certificates": []map[string]any{{"certificateFile": certPath, "keyFile": keyPath}}},
+		},
 	}
 }
 

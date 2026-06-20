@@ -45,10 +45,10 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	linkValue := strings.TrimSpace(*link)
-	var linkData trojanLink
+	var linkData installLink
 	if linkValue != "" {
 		var err error
-		linkData, err = parseTrojanLink(linkValue)
+		linkData, err = parseInstallLink(linkValue)
 		if err != nil {
 			logging.Error("xp2p client install: invalid --link", "err", err)
 			return 2
@@ -154,6 +154,11 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		AllowInsecure:         allowInsecureValue,
 		PinnedPeerCertSHA256:  pinnedPeerCertSHA256,
 		VerifyPeerCertByName:  verifyPeerCertByName,
+		Profile:               linkData.Profile,
+		Protocol:              linkData.Protocol,
+		Transport:             linkData.Transport,
+		Security:              linkData.Security,
+		Flow:                  linkData.Flow,
 		AllowInsecureOverride: allowOverride,
 		Force:                 *force,
 		TunEnabled:            cfg.Client.TunEnabled,

@@ -59,11 +59,16 @@ def wait_ready(host, port):
 
 
 def main():
-    if len(sys.argv) != 7:
+    if len(sys.argv) not in (7, 10):
         raise SystemExit(
-            "usage: check_subscription_control_plane.py <host> <port> <user> <secret> <subscription-host> <trojan-port>"
+            "usage: check_subscription_control_plane.py <host> <port> <user> <secret> <subscription-host> <tunnel-port> [<profile> <protocol> <flow>]"
         )
-    host, port_raw, user, secret, subscription_host, trojan_port_raw = sys.argv[1:]
+    host, port_raw, user, secret, subscription_host, trojan_port_raw = sys.argv[1:7]
+    expected_profile = "trojan-tls"
+    expected_protocol = "trojan"
+    expected_flow = ""
+    if len(sys.argv) == 10:
+        expected_profile, expected_protocol, expected_flow = sys.argv[7:]
     port = int(port_raw)
     trojan_port = int(trojan_port_raw)
 
@@ -82,7 +87,8 @@ def main():
     if not subscription.get("generation"):
         raise AssertionError(f"subscription generation is missing: {subscription}")
     expected = {
-        "protocol": "trojan",
+        "profile": expected_profile,
+        "protocol": expected_protocol,
         "transport": "tcp",
         "security": "tls",
         "host": subscription_host,
@@ -94,6 +100,9 @@ def main():
     tls = subscription.get("tls") or {}
     if tls.get("server_name") != subscription_host or not tls.get("pinned_peer_cert_sha256"):
         raise AssertionError(f"subscription TLS metadata is incomplete: {tls}")
+    parameters = subscription.get("parameters") or {}
+    if expected_flow and parameters.get("flow") != expected_flow:
+        raise AssertionError(f"subscription flow={parameters.get('flow')!r}, expected {expected_flow!r}")
 
     status, payload, _ = request(host, port, "POST", "/control/v1/ping", {"nonce": "unsigned"})
     expect_status(status, 401, "unsigned ping", payload)
@@ -109,7 +118,7 @@ def main():
     if payload.get("ok") is not True:
         raise AssertionError(f"unexpected heartbeat response: {payload}")
 
-    print(json.dumps({"generation": subscription["generation"], "heartbeat_tag": heartbeat["tag"]}))
+    print(json.dumps({"generation": subscription["generation"], "heartbeat_tag": heartbeat["tag"], "profile": subscription.get("profile")}))
 
 
 if __name__ == "__main__":

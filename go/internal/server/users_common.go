@@ -156,6 +156,24 @@ func buildTrojanLink(host string, port int, password, label string, tlsEnabled b
 	return u.String(), nil
 }
 
+func buildVLESSLink(host string, port int, credential, label string, tls tunnel.TLSMetadata) (string, error) {
+	if err := tunnel.ValidateVLESSCredential(credential); err != nil {
+		return "", err
+	}
+	endpoint, err := tunnel.DefaultProfile(tunnel.ProfileVLESSTLSVision)
+	if err != nil {
+		return "", err
+	}
+	endpoint.Host = host
+	endpoint.Port = port
+	endpoint.ServerName = host
+	endpoint.TLS = tls
+	return tunnel.RenderLink(tunnel.Link{
+		Endpoint: endpoint,
+		User:     tunnel.User{UserLabel: label, Credential: credential},
+	})
+}
+
 func resolveLinkHostFromCertificate(certPath string) ([]string, error) {
 	data, err := os.ReadFile(certPath)
 	if err != nil {
@@ -228,6 +246,7 @@ func ResolveLinkHostCandidates(_ string, certPathOverride string) ([]string, err
 type trojanLinkParams struct {
 	host               string
 	port               int
+	profile            tunnel.Profile
 	tlsEnabled         bool
 	pinnedPeerSHA256   string
 	verifyPeerCertName string
@@ -242,6 +261,10 @@ func resolveTrojanLinkParams(configPath string, configDir string, hostOverride s
 		return trojanLinkParams{}, err
 	}
 	port := parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort)
+	profile, err := serverProfile(cfg.Server.Profile)
+	if err != nil {
+		return trojanLinkParams{}, err
+	}
 
 	certPath := strings.TrimSpace(cfg.Server.CertificateFile)
 	if certPath == "" && defaultTLSConfigured() {
@@ -280,6 +303,7 @@ func resolveTrojanLinkParams(configPath string, configDir string, hostOverride s
 	return trojanLinkParams{
 		host:               host,
 		port:               port,
+		profile:            profile,
 		tlsEnabled:         tlsEnabled,
 		pinnedPeerSHA256:   pinnedSHA,
 		verifyPeerCertName: verifyName,

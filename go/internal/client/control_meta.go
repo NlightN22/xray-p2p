@@ -61,6 +61,18 @@ func clientAppliedSubscription(endpoints []clientEndpointRecord) (controlplane.S
 			continue
 		}
 		security := "tls"
+		profile := strings.TrimSpace(ep.Profile)
+		protocol := strings.TrimSpace(ep.Protocol)
+		transport := strings.TrimSpace(ep.Transport)
+		if profile == "" {
+			profile = "trojan-tls"
+		}
+		if protocol == "" {
+			protocol = "trojan"
+		}
+		if transport == "" {
+			transport = "tcp"
+		}
 		tlsMeta := controlplane.TLSMetadata{
 			ServerName:             strings.TrimSpace(ep.ServerName),
 			PinnedPeerCertSHA256:   strings.TrimSpace(ep.PinnedPeerCertSHA256),
@@ -68,17 +80,15 @@ func clientAppliedSubscription(endpoints []clientEndpointRecord) (controlplane.S
 			ClientMayAllowInsecure: ep.AllowInsecure,
 		}
 		sub, err := controlplane.BuildSubscription(controlplane.Subscription{
-			Profile:    "trojan-tls",
-			Protocol:   "trojan",
-			Transport:  "tcp",
+			Profile:    profile,
+			Protocol:   protocol,
+			Transport:  transport,
 			Security:   security,
 			Host:       host,
 			Port:       ep.Port,
 			ServerName: strings.TrimSpace(ep.ServerName),
 			TLS:        tlsMeta,
-			Parameters: map[string]string{
-				"tunnel_port": strconv.Itoa(ep.Port),
-			},
+			Parameters: subscriptionParameters(ep),
 		}, time.Now().UTC(), time.Hour)
 		if err != nil {
 			return controlplane.Subscription{}, false
@@ -86,4 +96,12 @@ func clientAppliedSubscription(endpoints []clientEndpointRecord) (controlplane.S
 		return sub, true
 	}
 	return controlplane.Subscription{}, false
+}
+
+func subscriptionParameters(ep clientEndpointRecord) map[string]string {
+	parameters := map[string]string{"tunnel_port": strconv.Itoa(ep.Port)}
+	if strings.TrimSpace(ep.Flow) != "" {
+		parameters["flow"] = strings.TrimSpace(ep.Flow)
+	}
+	return parameters
 }

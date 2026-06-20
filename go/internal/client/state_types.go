@@ -15,6 +15,11 @@ type clientInstallState struct {
 }
 
 type clientEndpointRecord struct {
+	Profile              string   `json:"profile,omitempty" toml:"profile,omitempty"`
+	Protocol             string   `json:"protocol,omitempty" toml:"protocol,omitempty"`
+	Transport            string   `json:"transport,omitempty" toml:"transport,omitempty"`
+	Security             string   `json:"security,omitempty" toml:"security,omitempty"`
+	Flow                 string   `json:"flow,omitempty" toml:"flow,omitempty"`
 	Hostname             string   `json:"hostname" toml:"hostname"`
 	Tag                  string   `json:"tag" toml:"tag"`
 	Address              string   `json:"address" toml:"address"`

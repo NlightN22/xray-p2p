@@ -58,6 +58,10 @@ func commitClientRuntimeStateResult(ctx context.Context, state clientInstallStat
 	return result, state.save(config.ConfigPath(layout.ClientConfigFileName))
 }
 
+func commitClientSubscriptionState(ctx context.Context, state clientInstallState) (xraylive.RuntimeApplyResult, error) {
+	return commitClientRuntimeStateResult(ctx, state)
+}
+
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {
 	status, err := serviceStatus(ctx, role)
 	if err != nil {

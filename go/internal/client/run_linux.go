@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
@@ -176,6 +177,14 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	}
 	orchestrator := NewOSStateOrchestrator(paths, newLinuxOSStateDriver(paths, opts))
 
+	if strings.TrimSpace(opts.Heartbeat.SocksAddress) == "" {
+		addr, err := resolveClientSocksAddress(filepath.Join(configDir, layout.XrayConfigFileName))
+		if err != nil {
+			logging.Warn("client heartbeat disabled: SOCKS address cannot be resolved", "err", err)
+		} else {
+			opts.Heartbeat.SocksAddress = addr
+		}
+	}
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 	stopSubscriptionSync := startSubscriptionSyncLoop(ctx, installDir, configDir, opts.Heartbeat)

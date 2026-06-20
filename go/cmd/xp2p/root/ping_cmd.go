@@ -134,6 +134,18 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 			return 2
 		}
 		if useMarker {
+			if !usedServerMarker {
+				tlsSettings, nameErr := client.ResolveMarkerTLS(cfg.Client.InstallDir, opts.Host, opts.EndpointTag, opts.EndpointIndex)
+				if nameErr != nil {
+					fmt.Fprintf(os.Stderr, "xp2p ping: %v\n", nameErr)
+					return 2
+				}
+				pingOpts.ServerName = tlsSettings.ServerName
+				pingOpts.AllowInsecure = tlsSettings.AllowInsecure
+				pingOpts.PinnedPeerCertSHA256 = tlsSettings.PinnedPeerCertSHA256
+				pingOpts.User = tlsSettings.User
+				pingOpts.Credential = tlsSettings.Credential
+			}
 			host = markerTarget
 			pingOpts.Port = markerPort
 		}

@@ -20,6 +20,10 @@ func normalize(cfg *Config) {
 	if cfg.Server.TrojanPort == "" {
 		cfg.Server.TrojanPort = defaultValues["server.trojan_port"].(string)
 	}
+	cfg.Server.Profile = strings.TrimSpace(cfg.Server.Profile)
+	if cfg.Server.Profile == "" {
+		cfg.Server.Profile = defaultValues["server.profile"].(string)
+	}
 
 	cfg.Server.InstallDir = strings.TrimSpace(cfg.Server.InstallDir)
 	if cfg.Server.InstallDir == "" {

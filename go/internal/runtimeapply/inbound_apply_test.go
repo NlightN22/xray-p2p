@@ -28,6 +28,27 @@ func TestApplyInboundDiffSequencesRemoveBeforeAdd(t *testing.T) {
 	}
 }
 
+func TestApplyInboundDiffReplacesSameTag(t *testing.T) {
+	applier := newRecordingInboundApplier("tunnel-in")
+	diff := Diff{
+		Kind: DiffInboundOnly,
+		RemovedInbounds: []InboundChange{
+			{Tag: "tunnel-in", Inbound: map[string]any{"tag": "tunnel-in", "protocol": "trojan"}},
+		},
+		AddedInbounds: []InboundChange{
+			{Tag: "tunnel-in", Inbound: map[string]any{"tag": "tunnel-in", "protocol": "vless"}},
+		},
+	}
+
+	if err := ApplyInboundDiff(context.Background(), applier, diff); err != nil {
+		t.Fatalf("ApplyInboundDiff: %v", err)
+	}
+	want := []string{"remove:tunnel-in", "add:tunnel-in"}
+	if !reflect.DeepEqual(applier.calls, want) {
+		t.Fatalf("calls = %v, want %v", applier.calls, want)
+	}
+}
+
 func TestApplyInboundDiffRollsBackAddedInbounds(t *testing.T) {
 	applier := newRecordingInboundApplier()
 	applier.failAddTag = "bad"

@@ -21,7 +21,7 @@ Includes: inherited options
 
 xp2p server
   Summary: Manage xp2p server components
-  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, dns-forward
+  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, profile, dns-forward
 Options:
 Includes: inherited options
 

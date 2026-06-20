@@ -115,8 +115,12 @@ def wait_for_stable_xray_pid(host) -> str:
 
 
 def assert_apply_clean(host) -> None:
-    assert not linux_env.path_exists(host, APPLY_REQUEST), "apply.request should be removed"
-    assert not linux_env.path_exists(host, APPLY_ERROR), "apply.error should not exist"
+    if linux_env.path_exists(host, APPLY_REQUEST):
+        helpers.dump_failure_state(host, f"apply-request-left-{host.backend.hostname}")
+        raise AssertionError("apply.request should be removed")
+    if linux_env.path_exists(host, APPLY_ERROR):
+        helpers.dump_failure_state(host, f"apply-error-left-{host.backend.hostname}")
+        raise AssertionError("apply.error should not exist")
 
 
 def assert_same_xray_pid(host, expected: str, label: str) -> None:

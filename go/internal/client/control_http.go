@@ -18,9 +18,14 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
+
+	"golang.org/x/net/proxy"
 )
 
-func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEndpointRecord, secret string, payload heartbeat.Payload, timeout time.Duration) error {
+func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEndpointRecord, secret string, payload heartbeat.Payload, timeout time.Duration, socksAddress string) error {
+	if strings.TrimSpace(socksAddress) == "" {
+		return errors.New("SOCKS tunnel is required for client heartbeat")
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -36,7 +41,7 @@ func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEn
 			return err
 		}
 	}
-	resp, err := controlHTTPClient(endpoint, timeout).Do(req)
+	resp, err := controlHTTPClientThroughSocks(endpoint, timeout, socksAddress).Do(req)
 	if err != nil {
 		return err
 	}
@@ -45,6 +50,37 @@ func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEn
 		return fmt.Errorf("control heartbeat failed: %s", resp.Status)
 	}
 	return nil
+}
+
+func controlHTTPClientThroughSocks(endpoint clientEndpointRecord, timeout time.Duration, socksAddress string) *http.Client {
+	client := controlHTTPClient(endpoint, timeout)
+	transport, _ := client.Transport.(*http.Transport)
+	if transport == nil {
+		return client
+	}
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return dialControlViaSocks(ctx, addr, strings.TrimSpace(socksAddress), timeout)
+	}
+	return client
+}
+
+func dialControlViaSocks(ctx context.Context, addr, socksAddress string, timeout time.Duration) (net.Conn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	base := &net.Dialer{Timeout: timeout}
+	if deadline, ok := ctx.Deadline(); ok {
+		base.Deadline = deadline
+	}
+	dialer, err := proxy.SOCKS5("tcp", socksAddress, nil, base)
+	if err != nil {
+		return nil, fmt.Errorf("prepare SOCKS5 dialer %s: %w", socksAddress, err)
+	}
+	conn, err := dialer.Dial("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect through SOCKS5 proxy %s: %w", socksAddress, err)
+	}
+	return conn, nil
 }
 
 func controlAuthMap(users []controlplane.AuthUser) map[string]string {

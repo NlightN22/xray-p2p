@@ -8,18 +8,26 @@ import (
 	"strings"
 
 	commonnet "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonnet"
+	commonprotocol "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonprotocol"
+	commonserial "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonserial"
 	coreconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/coreconfig"
 	dokodemoconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/dokodemoconfig"
+	internetconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/internetconfig"
 	proxymanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/proxymanconfig"
+	tlsconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/tlsconfig"
+	trojanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/trojanconfig"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
 var allowedForwardInboundFields = map[string]struct{}{
-	"remark":   {},
-	"tag":      {},
-	"listen":   {},
-	"port":     {},
-	"protocol": {},
-	"settings": {},
+	"remark":         {},
+	"tag":            {},
+	"listen":         {},
+	"port":           {},
+	"protocol":       {},
+	"settings":       {},
+	"streamSettings": {},
 }
 
 var allowedDokodemoSettingsFields = map[string]struct{}{
@@ -29,14 +37,21 @@ var allowedDokodemoSettingsFields = map[string]struct{}{
 	"followRedirect": {},
 }
 
+var allowedInboundTLSSettingsFields = map[string]struct{}{
+	"certificates": {},
+}
+
+var allowedInboundCertificateFields = map[string]struct{}{
+	"certificateFile": {},
+	"keyFile":         {},
+}
+
 func InboundFromMap(inbound map[string]any) (*coreconfig.InboundHandlerConfig, error) {
 	if err := rejectUnknownKeys(inbound, allowedForwardInboundFields, "inbound"); err != nil {
 		return nil, err
 	}
 	protocol, _ := inbound["protocol"].(string)
-	if protocol != "dokodemo-door" {
-		return nil, fmt.Errorf("unsupported inbound protocol %q", protocol)
-	}
+	protocol = strings.TrimSpace(protocol)
 	tag, _ := inbound["tag"].(string)
 	tag = strings.TrimSpace(tag)
 	if tag == "" {
@@ -51,6 +66,19 @@ func InboundFromMap(inbound map[string]any) (*coreconfig.InboundHandlerConfig, e
 	if err != nil {
 		return nil, err
 	}
+	switch protocol {
+	case "dokodemo-door":
+		return dokodemoInboundFromMap(inbound, tag, listenAddr, listenPort)
+	case "trojan":
+		return trojanInboundFromMap(inbound, tag, listenAddr, listenPort)
+	case "vless":
+		return vlessInboundFromMap(inbound, tag, listenAddr, listenPort)
+	default:
+		return nil, fmt.Errorf("unsupported inbound protocol %q", protocol)
+	}
+}
+
+func dokodemoInboundFromMap(inbound map[string]any, tag string, listenAddr *commonnet.IPOrDomain, listenPort uint32) (*coreconfig.InboundHandlerConfig, error) {
 	settings, ok := inbound["settings"].(map[string]any)
 	if !ok {
 		return nil, errors.New("dokodemo settings are required")
@@ -100,6 +128,163 @@ func InboundFromMap(inbound map[string]any) (*coreconfig.InboundHandlerConfig, e
 		ReceiverSettings: receiver,
 		ProxySettings:    proxy,
 	}, nil
+}
+
+func trojanInboundFromMap(inbound map[string]any, tag string, listenAddr *commonnet.IPOrDomain, listenPort uint32) (*coreconfig.InboundHandlerConfig, error) {
+	users, err := inboundUsers(inbound, trojanInboundAccount)
+	if err != nil {
+		return nil, err
+	}
+	receiver, err := inboundReceiver(listenAddr, listenPort, inbound)
+	if err != nil {
+		return nil, err
+	}
+	proxy, err := typedMessage(&trojanconfig.ServerConfig{Users: users})
+	if err != nil {
+		return nil, err
+	}
+	return &coreconfig.InboundHandlerConfig{Tag: tag, ReceiverSettings: receiver, ProxySettings: proxy}, nil
+}
+
+func vlessInboundFromMap(inbound map[string]any, tag string, listenAddr *commonnet.IPOrDomain, listenPort uint32) (*coreconfig.InboundHandlerConfig, error) {
+	users, err := inboundUsers(inbound, vlessInboundAccount)
+	if err != nil {
+		return nil, err
+	}
+	receiver, err := inboundReceiver(listenAddr, listenPort, inbound)
+	if err != nil {
+		return nil, err
+	}
+	data := []byte{}
+	for _, user := range users {
+		encoded, err := proto.Marshal(user)
+		if err != nil {
+			return nil, fmt.Errorf("marshal vless inbound user: %w", err)
+		}
+		data = protowire.AppendBytes(protowire.AppendTag(data, 1, protowire.BytesType), encoded)
+	}
+	data = protowire.AppendString(protowire.AppendTag(data, 3, protowire.BytesType), "none")
+	return &coreconfig.InboundHandlerConfig{
+		Tag:              tag,
+		ReceiverSettings: receiver,
+		ProxySettings:    &commonserial.TypedMessage{Type: "xray.proxy.vless.inbound.Config", Value: data},
+	}, nil
+}
+
+type inboundAccountFunc func(map[string]any) (*commonserial.TypedMessage, error)
+
+func inboundUsers(inbound map[string]any, account inboundAccountFunc) ([]*commonprotocol.User, error) {
+	settings, ok := inbound["settings"].(map[string]any)
+	if !ok {
+		return nil, errors.New("inbound settings are required")
+	}
+	rawClients, ok := settings["clients"].([]any)
+	if !ok {
+		return nil, errors.New("inbound clients are required")
+	}
+	users := make([]*commonprotocol.User, 0, len(rawClients))
+	for _, raw := range rawClients {
+		client, ok := raw.(map[string]any)
+		if !ok {
+			return nil, errors.New("inbound client is not an object")
+		}
+		accountMsg, err := account(client)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, &commonprotocol.User{Email: stringFromAny(client["email"]), Account: accountMsg})
+	}
+	return users, nil
+}
+
+func trojanInboundAccount(client map[string]any) (*commonserial.TypedMessage, error) {
+	password := stringFromAny(client["password"])
+	if password == "" {
+		return nil, errors.New("trojan inbound password is required")
+	}
+	return typedMessage(&trojanconfig.Account{Password: password})
+}
+
+func vlessInboundAccount(client map[string]any) (*commonserial.TypedMessage, error) {
+	id := stringFromAny(client["id"])
+	if id == "" {
+		return nil, errors.New("vless inbound id is required")
+	}
+	return &commonserial.TypedMessage{Type: "xray.proxy.vless.Account", Value: vlessAccount(id, stringFromAny(client["flow"]), "none")}, nil
+}
+
+func inboundReceiver(listenAddr *commonnet.IPOrDomain, listenPort uint32, inbound map[string]any) (*commonserial.TypedMessage, error) {
+	stream, err := inboundStreamSettings(inbound)
+	if err != nil {
+		return nil, err
+	}
+	return typedMessage(&proxymanconfig.ReceiverConfig{
+		PortList: &commonnet.PortList{Range: []*commonnet.PortRange{{
+			From: listenPort,
+			To:   listenPort,
+		}}},
+		Listen:         listenAddr,
+		StreamSettings: stream,
+	})
+}
+
+func inboundStreamSettings(inbound map[string]any) (*internetconfig.StreamConfig, error) {
+	stream, ok := inbound["streamSettings"].(map[string]any)
+	if !ok {
+		return nil, errors.New("inbound streamSettings are required")
+	}
+	if err := rejectUnknownKeys(stream, allowedStreamSettingsFields, "streamSettings"); err != nil {
+		return nil, err
+	}
+	if network, _ := stream["network"].(string); strings.TrimSpace(network) != "tcp" {
+		return nil, fmt.Errorf("unsupported inbound stream network %q", network)
+	}
+	if security, _ := stream["security"].(string); strings.TrimSpace(security) != "tls" {
+		return nil, fmt.Errorf("unsupported inbound stream security %q", security)
+	}
+	if err := validateTCPSettings(stream["tcpSettings"]); err != nil {
+		return nil, err
+	}
+	tlsSettings, err := tlsServerSettings(stream["tlsSettings"])
+	if err != nil {
+		return nil, err
+	}
+	tlsMsg, err := typedMessage(tlsSettings)
+	if err != nil {
+		return nil, err
+	}
+	return &internetconfig.StreamConfig{
+		ProtocolName:     "tcp",
+		SecurityType:     tlsMsg.Type,
+		SecuritySettings: []*commonserial.TypedMessage{tlsMsg},
+	}, nil
+}
+
+func tlsServerSettings(raw any) (*tlsconfig.Config, error) {
+	settings, ok := raw.(map[string]any)
+	if !ok {
+		return nil, errors.New("inbound tlsSettings are required")
+	}
+	if err := rejectUnknownKeys(settings, allowedInboundTLSSettingsFields, "inbound tlsSettings"); err != nil {
+		return nil, err
+	}
+	rawCertificates, ok := settings["certificates"].([]any)
+	if !ok || len(rawCertificates) != 1 {
+		return nil, errors.New("inbound tlsSettings require exactly one certificate")
+	}
+	cert, ok := rawCertificates[0].(map[string]any)
+	if !ok {
+		return nil, errors.New("inbound certificate is not an object")
+	}
+	if err := rejectUnknownKeys(cert, allowedInboundCertificateFields, "inbound certificate"); err != nil {
+		return nil, err
+	}
+	certPath := stringFromAny(cert["certificateFile"])
+	keyPath := stringFromAny(cert["keyFile"])
+	if certPath == "" || keyPath == "" {
+		return nil, errors.New("inbound certificateFile and keyFile are required")
+	}
+	return &tlsconfig.Config{Certificate: []*tlsconfig.Certificate{{CertificatePath: certPath, KeyPath: keyPath}}}, nil
 }
 
 func rejectUnknownKeys(values map[string]any, allowed map[string]struct{}, label string) error {

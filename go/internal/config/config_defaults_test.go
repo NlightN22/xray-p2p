@@ -21,6 +21,9 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.TrojanPort != "58443" {
 		t.Fatalf("unexpected server trojan port: %s", cfg.Server.TrojanPort)
 	}
+	if cfg.Server.Profile != "trojan-tls" {
+		t.Fatalf("unexpected server profile: %s", cfg.Server.Profile)
+	}
 	if cfg.Server.InstallDir == "" {
 		t.Fatalf("expected non-empty install dir")
 	}

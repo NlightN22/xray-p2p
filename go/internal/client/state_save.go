@@ -6,6 +6,21 @@ import (
 )
 
 func (s *clientInstallState) normalize() {
+	for index := range s.Endpoints {
+		endpoint := &s.Endpoints[index]
+		if endpoint.Profile == "" {
+			endpoint.Profile = "trojan-tls"
+		}
+		if endpoint.Protocol == "" {
+			endpoint.Protocol = "trojan"
+		}
+		if endpoint.Transport == "" {
+			endpoint.Transport = "tcp"
+		}
+		if endpoint.Security == "" {
+			endpoint.Security = "tls"
+		}
+	}
 	if s.Endpoints == nil {
 		s.Endpoints = []clientEndpointRecord{}
 	}

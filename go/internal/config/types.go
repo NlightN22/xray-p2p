@@ -12,6 +12,7 @@ var defaultValues = map[string]any{
 	"logging.format":             "text",
 	"server.port":                "62022",
 	"server.trojan_port":         "58443",
+	"server.profile":             "trojan-tls",
 	"server.install_dir":         "",
 	"server.config_dir":          "config-server",
 	"server.mode":                "auto",
@@ -61,6 +62,7 @@ type LoggingConfig struct {
 type ServerConfig struct {
 	Port             string `koanf:"port"`
 	TrojanPort       string `koanf:"trojan_port"`
+	Profile          string `koanf:"profile"`
 	InstallDir       string `koanf:"install_dir"`
 	ConfigDir        string `koanf:"config_dir"`
 	Mode             string `koanf:"mode"`

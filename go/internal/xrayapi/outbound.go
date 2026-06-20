@@ -1,6 +1,7 @@
 package xrayapi
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	proxymanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/proxymanconfig"
 	tlsconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/tlsconfig"
 	trojanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/trojanconfig"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -69,6 +71,7 @@ func OutboundFromMap(outbound map[string]any) (*coreconfig.OutboundHandlerConfig
 	protocol = strings.TrimSpace(protocol)
 
 	var proxy proto.Message
+	var proxyMsg *commonserial.TypedMessage
 	var sender *proxymanconfig.SenderConfig
 	var err error
 	switch protocol {
@@ -78,15 +81,20 @@ func OutboundFromMap(outbound map[string]any) (*coreconfig.OutboundHandlerConfig
 	case "trojan":
 		proxy, err = trojanProxySettings(outbound)
 		sender, err = senderSettings(outbound, trojanStreamSettings, err)
+	case "vless":
+		proxyMsg, err = vlessProxySettings(outbound)
+		sender, err = senderSettings(outbound, trojanStreamSettings, err)
 	default:
 		err = fmt.Errorf("unsupported outbound protocol %q", protocol)
 	}
 	if err != nil {
 		return nil, err
 	}
-	proxyMsg, err := typedMessage(proxy)
-	if err != nil {
-		return nil, err
+	if proxyMsg == nil {
+		proxyMsg, err = typedMessage(proxy)
+		if err != nil {
+			return nil, err
+		}
 	}
 	senderMsg, err := typedMessage(sender)
 	if err != nil {
@@ -97,6 +105,65 @@ func OutboundFromMap(outbound map[string]any) (*coreconfig.OutboundHandlerConfig
 		SenderSettings: senderMsg,
 		ProxySettings:  proxyMsg,
 	}, nil
+}
+
+func vlessProxySettings(outbound map[string]any) (*commonserial.TypedMessage, error) {
+	settings, ok := outbound["settings"].(map[string]any)
+	if !ok {
+		return nil, errors.New("vless settings are required")
+	}
+	vnext, ok := settings["vnext"].([]any)
+	if !ok || len(vnext) != 1 {
+		return nil, errors.New("vless settings must contain exactly one server")
+	}
+	server, ok := vnext[0].(map[string]any)
+	if !ok {
+		return nil, errors.New("vless server is not an object")
+	}
+	address, _ := server["address"].(string)
+	addr, err := ipOrDomain(strings.TrimSpace(address))
+	if err != nil {
+		return nil, fmt.Errorf("parse vless server address: %w", err)
+	}
+	port, err := uint32Port(server["port"], "vless server port")
+	if err != nil {
+		return nil, err
+	}
+	users, ok := server["users"].([]any)
+	if !ok || len(users) != 1 {
+		return nil, errors.New("vless server must contain exactly one user")
+	}
+	user, ok := users[0].(map[string]any)
+	if !ok {
+		return nil, errors.New("vless user is not an object")
+	}
+	id := stringFromAny(user["id"])
+	if id == "" {
+		return nil, errors.New("vless user id is required")
+	}
+	account := vlessAccount(id, stringFromAny(user["flow"]), firstString(user["encryption"], "none"))
+	endpoint, err := proto.Marshal(&commonprotocol.ServerEndpoint{Address: addr, Port: port, User: &commonprotocol.User{
+		Email: stringFromAny(user["email"]), Account: &commonserial.TypedMessage{Type: "xray.proxy.vless.Account", Value: account},
+	}})
+	if err != nil {
+		return nil, fmt.Errorf("marshal vless endpoint: %w", err)
+	}
+	return &commonserial.TypedMessage{Type: "xray.proxy.vless.outbound.Config", Value: protowire.AppendBytes(protowire.AppendTag(nil, 1, protowire.BytesType), endpoint)}, nil
+}
+
+func vlessAccount(id, flow, encryption string) []byte {
+	data := protowire.AppendString(protowire.AppendTag(nil, 1, protowire.BytesType), id)
+	if flow != "" {
+		data = protowire.AppendString(protowire.AppendTag(data, 2, protowire.BytesType), flow)
+	}
+	return protowire.AppendString(protowire.AppendTag(data, 3, protowire.BytesType), encryption)
+}
+
+func firstString(value any, fallback string) string {
+	if result := stringFromAny(value); result != "" {
+		return result
+	}
+	return fallback
 }
 
 func freedomProxySettings(outbound map[string]any) (*freedomconfig.Config, error) {
@@ -237,19 +304,33 @@ func tlsClientSettings(raw any) (*tlsconfig.Config, error) {
 	if err := rejectUnknownKeys(settings, allowedTLSSettingsFields, "tlsSettings"); err != nil {
 		return nil, err
 	}
-	if value, _ := settings["pinnedPeerCertSha256"].(string); strings.TrimSpace(value) != "" {
-		return nil, errors.New("pinnedPeerCertSha256 is not supported for runtime outbound apply")
-	}
 	verifyName, _ := settings["verifyPeerCertByName"].(string)
+	pin, err := pinnedPeerCertSHA256(settings["pinnedPeerCertSha256"])
+	if err != nil {
+		return nil, err
+	}
 	cfg := &tlsconfig.Config{
-		AllowInsecure: boolFromAny(settings["allowInsecure"]),
-		ServerName:    stringFromAny(settings["serverName"]),
-		NextProtocol:  stringsFromAny(settings["alpn"]),
+		AllowInsecure:        boolFromAny(settings["allowInsecure"]),
+		ServerName:           stringFromAny(settings["serverName"]),
+		NextProtocol:         stringsFromAny(settings["alpn"]),
+		PinnedPeerCertSha256: pin,
 	}
 	if strings.TrimSpace(verifyName) != "" {
 		cfg.VerifyPeerCertByName = []string{strings.TrimSpace(verifyName)}
 	}
 	return cfg, nil
+}
+
+func pinnedPeerCertSHA256(raw any) ([][]byte, error) {
+	value := strings.ToLower(strings.ReplaceAll(stringFromAny(raw), ":", ""))
+	if value == "" {
+		return nil, nil
+	}
+	decoded, err := hex.DecodeString(value)
+	if err != nil || len(decoded) != 32 {
+		return nil, errors.New("pinnedPeerCertSha256 must be a SHA-256 hex digest")
+	}
+	return [][]byte{decoded}, nil
 }
 
 func validateTCPSettings(raw any) error {
@@ -261,8 +342,19 @@ func validateTCPSettings(raw any) error {
 		return errors.New("tcpSettings must be an object")
 	}
 	header, ok := settings["header"].(map[string]any)
-	if !ok || len(settings) != 1 {
+	if !ok {
 		return errors.New("unsupported tcpSettings")
+	}
+	for key, value := range settings {
+		switch key {
+		case "header":
+		case "acceptProxyProtocol":
+			if enabled, _ := value.(bool); enabled {
+				return errors.New("unsupported tcpSettings acceptProxyProtocol")
+			}
+		default:
+			return errors.New("unsupported tcpSettings")
+		}
 	}
 	if headerType, _ := header["type"].(string); strings.TrimSpace(headerType) != "none" || len(header) != 1 {
 		return errors.New("unsupported tcpSettings header")

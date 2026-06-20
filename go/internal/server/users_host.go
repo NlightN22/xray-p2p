@@ -11,6 +11,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 var (
@@ -269,7 +270,15 @@ func GetUserLink(ctx context.Context, opts UserLinkOptions) (UserLink, error) {
 		return UserLink{}, err
 	}
 
-	link, err := buildTrojanLink(params.host, params.port, client.Password, client.Email, params.tlsEnabled, params.pinnedPeerSHA256, params.verifyPeerCertName)
+	var link string
+	if params.profile == tunnel.ProfileVLESSTLSVision {
+		link, err = buildVLESSLink(params.host, params.port, client.Password, client.Email, tunnel.TLSMetadata{
+			PinnedPeerCertSHA256: params.pinnedPeerSHA256,
+			VerifyPeerCertByName: params.verifyPeerCertName,
+		})
+	} else {
+		link, err = buildTrojanLink(params.host, params.port, client.Password, client.Email, params.tlsEnabled, params.pinnedPeerSHA256, params.verifyPeerCertName)
+	}
 	if err != nil {
 		return UserLink{}, err
 	}

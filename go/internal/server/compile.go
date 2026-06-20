@@ -12,6 +12,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayassets"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
@@ -130,7 +131,14 @@ func buildServerXrayDoc(xrayCfg xrayconfig.ServerXrayConfig, desired desiredServ
 		doc[k] = v
 	}
 
-	inboundsDoc := buildServerInbounds(xrayCfg, cfg.Server.TunEnabled, cfg.Server.TunName, cfg.Server.TunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, desired.Forwards, activeServerUsers(desired.Users))
+	profile, err := serverProfile(cfg.Server.Profile)
+	if err != nil {
+		return nil, err
+	}
+	if profile == tunnel.ProfileVLESSTLSVision && (certPath == "" || keyPath == "") {
+		return nil, fmt.Errorf("VLESS TLS Vision requires a server certificate and key")
+	}
+	inboundsDoc := buildServerInbounds(xrayCfg, profile, cfg.Server.TunEnabled, cfg.Server.TunName, cfg.Server.TunMTU, parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort), certPath, keyPath, xrayCfg.Inbounds.Trojan.AllowInsecure, desired.Forwards, activeServerUsers(desired.Users))
 	inbounds, _ := inboundsDoc["inbounds"].([]any)
 
 	outbounds := buildServerOutbounds(xrayCfg.DirectOutbound)
@@ -156,6 +164,14 @@ func buildServerXrayDoc(xrayCfg xrayconfig.ServerXrayConfig, desired desiredServ
 	}
 
 	return doc, nil
+}
+
+func serverProfile(raw string) (tunnel.Profile, error) {
+	endpoint, err := tunnel.DefaultProfile(tunnel.Profile(strings.TrimSpace(raw)))
+	if err != nil {
+		return "", err
+	}
+	return endpoint.Profile, nil
 }
 
 func buildServerOutbounds(cfg xrayconfig.DirectOutboundConfig) []any {

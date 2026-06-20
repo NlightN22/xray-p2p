@@ -754,7 +754,7 @@ def dump_failure_state(host: Host, label: str) -> None:
             "for f in /etc/xp2p/.state/lkg/xp2p-client.toml /etc/xp2p/.state/lkg/xp2p-server.toml; do "
             "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
             "echo '--- xp2p state ---'",
-            "for f in /etc/xp2p/*.state.json /etc/xp2p/*-state-*.json; do "
+            "for f in /etc/xp2p/*.state.json /etc/xp2p/*-state-*.json /etc/xp2p/state-heartbeat-*.json; do "
             "[ -f \"$f\" ] && echo \"--- $f ---\" && cat \"$f\"; done",
             "echo '--- xp2p config dirs ---'",
             "for d in /etc/xp2p/config-client /etc/xp2p/config-server; do "

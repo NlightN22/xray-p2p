@@ -104,6 +104,15 @@ func Normalize(endpoint Endpoint) (Endpoint, error) {
 	if !strings.EqualFold(endpoint.Protocol, defaults.Protocol) {
 		return Endpoint{}, fmt.Errorf("profile %q requires protocol %q", endpoint.Profile, defaults.Protocol)
 	}
+	if !strings.EqualFold(endpoint.Transport, defaults.Transport) {
+		return Endpoint{}, fmt.Errorf("profile %q requires transport %q", endpoint.Profile, defaults.Transport)
+	}
+	if !strings.EqualFold(endpoint.Security, defaults.Security) {
+		return Endpoint{}, fmt.Errorf("profile %q requires security %q", endpoint.Profile, defaults.Security)
+	}
+	if endpoint.Profile == ProfileVLESSTLSVision && endpoint.Metadata["flow"] != "xtls-rprx-vision" {
+		return Endpoint{}, fmt.Errorf("profile %q requires flow xtls-rprx-vision", endpoint.Profile)
+	}
 	return endpoint, nil
 }
 

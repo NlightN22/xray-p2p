@@ -260,7 +260,15 @@ func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff
 			continue
 		}
 		if !reflect.DeepEqual(current, candidate) {
-			return unsupported("tagged inbound changed in place"), nil
+			diff.RemovedInboundTags = append(diff.RemovedInboundTags, tag)
+			diff.RemovedInbounds = append(diff.RemovedInbounds, InboundChange{
+				Tag:     tag,
+				Inbound: current,
+			})
+			diff.AddedInbounds = append(diff.AddedInbounds, InboundChange{
+				Tag:     tag,
+				Inbound: candidate,
+			})
 		}
 	}
 	for tag, candidate := range candidateByTag {

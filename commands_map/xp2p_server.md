@@ -4,7 +4,7 @@
 
 xp2p server
   Summary: Manage xp2p server components
-  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, dns-forward
+  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, profile, dns-forward
 Options:
 Includes: inherited options
 
@@ -374,6 +374,11 @@ Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name
 - --path, -p <path> server installation directory
+
+xp2p server profile [trojan-tls|vless-tls-vision]
+  Summary: Show or switch the server tunnel profile
+Options:
+Includes: inherited options
 
 xp2p server dns-forward
   Summary: Manage dnsmasq forward entries on OpenWrt

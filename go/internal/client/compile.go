@@ -10,6 +10,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/extensions"
+	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayassets"
@@ -34,16 +35,24 @@ type runtimeMeta struct {
 }
 
 type runtimeDesired struct {
-	Endpoints []runtimeEndpoint `json:"endpoints,omitempty"`
-	Redirects []redirect.Rule   `json:"redirects,omitempty"`
+	Endpoints []runtimeEndpoint               `json:"endpoints,omitempty"`
+	Redirects []redirect.Rule                 `json:"redirects,omitempty"`
+	Reverse   map[string]clientReverseChannel `json:"reverse,omitempty"`
+	Forwards  []forward.Rule                  `json:"forwards,omitempty"`
 }
 
 type runtimeEndpoint struct {
+	Profile              string `json:"profile,omitempty"`
+	Protocol             string `json:"protocol,omitempty"`
+	Transport            string `json:"transport,omitempty"`
+	Security             string `json:"security,omitempty"`
+	Flow                 string `json:"flow,omitempty"`
 	Hostname             string `json:"hostname,omitempty"`
 	Address              string `json:"address,omitempty"`
 	Tag                  string `json:"tag,omitempty"`
 	Port                 int    `json:"port,omitempty"`
 	User                 string `json:"user,omitempty"`
+	Credential           string `json:"credential,omitempty"`
 	Disabled             bool   `json:"disabled,omitempty"`
 	ServerName           string `json:"server_name,omitempty"`
 	AllowInsecure        bool   `json:"allow_insecure,omitempty"`
@@ -110,6 +119,8 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		Desired: runtimeDesired{
 			Endpoints: sanitizeRuntimeEndpoints(desired.Endpoints),
 			Redirects: desired.Redirects,
+			Reverse:   desired.Reverse,
+			Forwards:  desired.Forwards,
 		},
 		Control: buildClientControlRuntime(cfg, desired.Endpoints),
 	}
@@ -129,11 +140,17 @@ func sanitizeRuntimeEndpoints(endpoints []clientEndpointRecord) []runtimeEndpoin
 	out := make([]runtimeEndpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
 		out = append(out, runtimeEndpoint{
+			Profile:              strings.TrimSpace(ep.Profile),
+			Protocol:             strings.TrimSpace(ep.Protocol),
+			Transport:            strings.TrimSpace(ep.Transport),
+			Security:             strings.TrimSpace(ep.Security),
+			Flow:                 strings.TrimSpace(ep.Flow),
 			Hostname:             strings.TrimSpace(ep.Hostname),
 			Address:              strings.TrimSpace(ep.Address),
 			Tag:                  strings.TrimSpace(ep.Tag),
 			Port:                 ep.Port,
 			User:                 strings.TrimSpace(ep.User),
+			Credential:           strings.TrimSpace(ep.Password),
 			Disabled:             ep.Disabled,
 			ServerName:           strings.TrimSpace(ep.ServerName),
 			AllowInsecure:        ep.AllowInsecure,
@@ -191,7 +208,7 @@ func buildClientOutbounds(direct xrayconfig.DirectOutboundConfig, desired client
 	endpoints := activeClientEndpoints(desired.Endpoints)
 	outbounds := make([]any, 0, len(endpoints)+1)
 	for _, ep := range endpoints {
-		outbound, err := trojanOutbound(ep, endpointIPs, requireEndpointIPs)
+		outbound, err := tunnelOutbound(ep, endpointIPs, requireEndpointIPs)
 		if err != nil {
 			return nil, err
 		}

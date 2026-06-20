@@ -210,6 +210,11 @@ func deployDesiredConfiguration(ctx context.Context, state installState) error {
 		return err
 	}
 	_, err = applyClientEndpointConfig("", state.configFile, endpointConfig{
+		Profile:               state.Profile,
+		Protocol:              state.Protocol,
+		Transport:             state.Transport,
+		Security:              state.Security,
+		Flow:                  state.Flow,
 		Hostname:              state.serverRemote,
 		Address:               resolved,
 		Port:                  state.serverPort,

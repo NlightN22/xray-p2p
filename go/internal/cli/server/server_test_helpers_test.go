@@ -113,6 +113,17 @@ func stubServerUserUpdate(fn func(context.Context, server.UpdateUserOptions) err
 	return func() { serverUserUpdateFunc = prev }
 }
 
+func stubServerSetProfile(fn func(context.Context, server.SetProfileOptions) (server.SetProfileResult, error)) func() {
+	prev := serverSetProfileFunc
+	if fn == nil {
+		fn = func(context.Context, server.SetProfileOptions) (server.SetProfileResult, error) {
+			return server.SetProfileResult{}, nil
+		}
+	}
+	serverSetProfileFunc = fn
+	return func() { serverSetProfileFunc = prev }
+}
+
 func stubServerUserLink(fn func(context.Context, server.UserLinkOptions) (server.UserLink, error)) func() {
 	prev := serverUserLinkFunc
 	if fn == nil {

@@ -3,8 +3,10 @@ package xrayapi
 import (
 	"testing"
 
+	commonserial "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/commonserial"
 	dokodemoconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/dokodemoconfig"
 	proxymanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/proxymanconfig"
+	trojanconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/trojanconfig"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -88,4 +90,73 @@ func TestInboundFromMapRejectsFollowRedirect(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected followRedirect error")
 	}
+}
+
+func TestInboundFromMapConvertsTrojanTLSInbound(t *testing.T) {
+	inbound, err := InboundFromMap(map[string]any{
+		"tag":      "trojan-in",
+		"listen":   "0.0.0.0",
+		"port":     float64(443),
+		"protocol": "trojan",
+		"settings": map[string]any{"clients": []any{map[string]any{
+			"email": "alice@example.com", "password": "secret",
+		}}},
+		"streamSettings": map[string]any{
+			"network": "tcp", "security": "tls",
+			"tcpSettings": map[string]any{"acceptProxyProtocol": false, "header": map[string]any{"type": "none"}},
+			"tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": "cert.pem", "keyFile": "key.pem"}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("InboundFromMap: %v", err)
+	}
+	if inbound.GetProxySettings().GetType() != "xray.proxy.trojan.ServerConfig" {
+		t.Fatalf("proxy type = %q", inbound.GetProxySettings().GetType())
+	}
+	proxy := &trojanconfig.ServerConfig{}
+	if err := proto.Unmarshal(inbound.GetProxySettings().GetValue(), proxy); err != nil {
+		t.Fatalf("unmarshal proxy: %v", err)
+	}
+	if len(proxy.GetUsers()) != 1 || proxy.GetUsers()[0].GetEmail() != "alice@example.com" {
+		t.Fatalf("unexpected users: %+v", proxy.GetUsers())
+	}
+	receiver := decodeReceiver(t, inbound.GetReceiverSettings())
+	if receiver.GetStreamSettings().GetSecurityType() != "xray.transport.internet.tls.Config" {
+		t.Fatalf("security type = %q", receiver.GetStreamSettings().GetSecurityType())
+	}
+}
+
+func TestInboundFromMapConvertsVLESSTLSInbound(t *testing.T) {
+	inbound, err := InboundFromMap(map[string]any{
+		"tag":      "trojan-in",
+		"listen":   "0.0.0.0",
+		"port":     float64(443),
+		"protocol": "vless",
+		"settings": map[string]any{"decryption": "none", "clients": []any{map[string]any{
+			"email": "alice@example.com", "id": "550e8400-e29b-41d4-a716-446655440000", "flow": "xtls-rprx-vision",
+		}}},
+		"streamSettings": map[string]any{
+			"network": "tcp", "security": "tls",
+			"tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": "cert.pem", "keyFile": "key.pem"}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("InboundFromMap: %v", err)
+	}
+	if inbound.GetProxySettings().GetType() != "xray.proxy.vless.inbound.Config" {
+		t.Fatalf("proxy type = %q", inbound.GetProxySettings().GetType())
+	}
+	receiver := decodeReceiver(t, inbound.GetReceiverSettings())
+	if receiver.GetStreamSettings().GetSecurityType() != "xray.transport.internet.tls.Config" {
+		t.Fatalf("security type = %q", receiver.GetStreamSettings().GetSecurityType())
+	}
+}
+
+func decodeReceiver(t *testing.T, msg *commonserial.TypedMessage) *proxymanconfig.ReceiverConfig {
+	t.Helper()
+	receiver := &proxymanconfig.ReceiverConfig{}
+	if err := proto.Unmarshal(msg.GetValue(), receiver); err != nil {
+		t.Fatalf("unmarshal receiver: %v", err)
+	}
+	return receiver
 }

@@ -3,6 +3,7 @@ logging:
   level: info
 
 server:
+  profile: trojan-tls
   port: 62022
   trojan_port: 58443
   tun_enabled: true

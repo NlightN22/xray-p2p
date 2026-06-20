@@ -54,3 +54,25 @@ func TestSubscriptionCandidateRejectsMissingCredential(t *testing.T) {
 		t.Fatalf("expected missing credential error")
 	}
 }
+
+func TestSubscriptionCandidateSwitchesToVLESSProfile(t *testing.T) {
+	current := clientInstallState{Endpoints: []clientEndpointRecord{{
+		Profile: "trojan-tls", Protocol: "trojan", Transport: "tcp", Security: "tls",
+		Hostname: "edge.example", Address: "192.0.2.10", Tag: "proxy-edge", Port: 443, User: "alice",
+	}}}
+	sub := controlplane.Subscription{
+		Generation: "vless-generation", Profile: "vless-tls-vision", Protocol: "vless", Transport: "tcp", Security: "tls",
+		Host: "edge.example", Port: 443, ServerName: "edge.example", Parameters: map[string]string{"flow": "xtls-rprx-vision"},
+	}
+	candidate, err := subscriptionCandidate(current, current.Endpoints[0], sub, "550e8400-e29b-41d4-a716-446655440000")
+	if err != nil {
+		t.Fatalf("subscriptionCandidate: %v", err)
+	}
+	got := candidate.Endpoints[0]
+	if got.Profile != "vless-tls-vision" || got.Protocol != "vless" || got.Flow != "xtls-rprx-vision" {
+		t.Fatalf("profile was not applied: %+v", got)
+	}
+	if got.Address != "192.0.2.10" {
+		t.Fatalf("resolved endpoint address was not preserved: %+v", got)
+	}
+}

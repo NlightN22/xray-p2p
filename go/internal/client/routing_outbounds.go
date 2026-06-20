@@ -119,7 +119,7 @@ func filterUnmanagedOutbounds(existing []any, managed map[string]struct{}) []any
 	return result
 }
 
-func trojanOutbound(ep clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) (any, error) {
+func tunnelOutbound(ep clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) (any, error) {
 	address := ep.Address
 	serverName := ep.ServerName
 	if requireEndpointIPs {
@@ -134,41 +134,48 @@ func trojanOutbound(ep clientEndpointRecord, endpointIPs map[string]fullTunnelEn
 		}
 		address = ips[0]
 	}
+	stream := streamSettings{
+		Network:  "tcp",
+		Security: ep.Security,
+		TLSSettings: tlsSettings{
+			ServerName:           serverName,
+			ALPN:                 ep.ALPN,
+			PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
+			VerifyPeerCertByName: ep.VerifyPeerCertByName,
+		},
+		TCPSettings: tcpSettings{
+			Header: tcpHeader{
+				Type: "none",
+			},
+		},
+	}
+	if ep.Protocol == "vless" {
+		return map[string]any{
+			"protocol": "vless",
+			"tag":      ep.Tag,
+			"settings": map[string]any{"vnext": []any{map[string]any{
+				"address": address, "port": ep.Port, "users": []any{map[string]any{
+					"id": ep.Password, "email": ep.User, "flow": ep.Flow, "encryption": "none",
+				}},
+			}}},
+			"streamSettings": stream,
+		}, nil
+	}
 	return struct {
 		Protocol       string         `json:"protocol"`
 		Settings       trojanSettings `json:"settings"`
 		StreamSettings streamSettings `json:"streamSettings"`
 		Tag            string         `json:"tag"`
 	}{
-		Protocol: "trojan",
-		Settings: trojanSettings{
-			Servers: []trojanServer{
-				{
-					Address:  address,
-					Port:     ep.Port,
-					Password: ep.Password,
-					Email:    ep.User,
-				},
-			},
-		},
-		StreamSettings: streamSettings{
-			Network:  "tcp",
-			Security: "tls",
-			TLSSettings: tlsSettings{
-				AllowInsecure:        ep.AllowInsecure,
-				ServerName:           serverName,
-				ALPN:                 ep.ALPN,
-				PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
-				VerifyPeerCertByName: ep.VerifyPeerCertByName,
-			},
-			TCPSettings: tcpSettings{
-				Header: tcpHeader{
-					Type: "none",
-				},
-			},
-		},
-		Tag: ep.Tag,
+		Protocol:       "trojan",
+		Settings:       trojanSettings{Servers: []trojanServer{{Address: address, Port: ep.Port, Password: ep.Password, Email: ep.User}}},
+		StreamSettings: stream,
+		Tag:            ep.Tag,
 	}, nil
+}
+
+func trojanOutbound(ep clientEndpointRecord, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) (any, error) {
+	return tunnelOutbound(ep, endpointIPs, requireEndpointIPs)
 }
 
 type trojanSettings struct {
@@ -190,7 +197,6 @@ type streamSettings struct {
 }
 
 type tlsSettings struct {
-	AllowInsecure        bool     `json:"allowInsecure,omitempty"`
 	ServerName           string   `json:"serverName,omitempty"`
 	ALPN                 []string `json:"alpn,omitempty"`
 	PinnedPeerCertSHA256 string   `json:"pinnedPeerCertSha256,omitempty"`

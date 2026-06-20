@@ -61,6 +61,7 @@ func TestOutboundFromMapConvertsTrojanTLS(t *testing.T) {
 			"tlsSettings": map[string]any{
 				"serverName":           "example.com",
 				"alpn":                 []any{"h2", "http/1.1"},
+				"pinnedPeerCertSha256": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
 				"verifyPeerCertByName": "example.com",
 			},
 		},
@@ -107,6 +108,9 @@ func TestOutboundFromMapConvertsTrojanTLS(t *testing.T) {
 	if !reflect.DeepEqual(tls.GetVerifyPeerCertByName(), []string{"example.com"}) {
 		t.Fatalf("verify names = %v", tls.GetVerifyPeerCertByName())
 	}
+	if got := tls.GetPinnedPeerCertSha256(); len(got) != 1 || len(got[0]) != 32 {
+		t.Fatalf("pinned cert digest = %x", got)
+	}
 }
 
 func TestOutboundFromMapRejectsUnsupportedRuntimeFields(t *testing.T) {
@@ -114,12 +118,6 @@ func TestOutboundFromMapRejectsUnsupportedRuntimeFields(t *testing.T) {
 		name     string
 		outbound map[string]any
 	}{
-		{
-			name: "pinned certificate",
-			outbound: trojanOutboundWithStream(map[string]any{
-				"pinnedPeerCertSha256": "abc",
-			}, map[string]any{"header": map[string]any{"type": "none"}}),
-		},
 		{
 			name: "tcp header",
 			outbound: trojanOutboundWithStream(map[string]any{}, map[string]any{
@@ -163,5 +161,23 @@ func trojanOutboundWithStream(tlsSettings, tcpSettings map[string]any) map[strin
 			"tcpSettings": tcpSettings,
 			"tlsSettings": tlsSettings,
 		},
+	}
+}
+
+func TestOutboundFromMapBuildsVLESS(t *testing.T) {
+	outbound, err := OutboundFromMap(map[string]any{
+		"tag": "proxy-vless", "protocol": "vless",
+		"settings": map[string]any{"vnext": []any{map[string]any{
+			"address": "edge.example", "port": 443, "users": []any{map[string]any{
+				"id": "550e8400-e29b-41d4-a716-446655440000", "email": "alice", "flow": "xtls-rprx-vision", "encryption": "none",
+			}},
+		}}},
+		"streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"serverName": "edge.example"}},
+	})
+	if err != nil {
+		t.Fatalf("OutboundFromMap: %v", err)
+	}
+	if outbound.GetProxySettings().GetType() != "xray.proxy.vless.outbound.Config" {
+		t.Fatalf("proxy type = %q", outbound.GetProxySettings().GetType())
 	}
 }

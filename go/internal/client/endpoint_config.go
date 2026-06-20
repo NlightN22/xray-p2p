@@ -9,6 +9,11 @@ import (
 )
 
 type endpointConfig struct {
+	Profile               string
+	Protocol              string
+	Transport             string
+	Security              string
+	Flow                  string
 	Hostname              string
 	Address               string
 	Port                  int
@@ -70,6 +75,11 @@ func buildClientEndpointState(configDir, configFile string, endpoint endpointCon
 	}
 
 	record := clientEndpointRecord{
+		Profile:              strings.TrimSpace(endpoint.Profile),
+		Protocol:             strings.TrimSpace(endpoint.Protocol),
+		Transport:            strings.TrimSpace(endpoint.Transport),
+		Security:             strings.TrimSpace(endpoint.Security),
+		Flow:                 strings.TrimSpace(endpoint.Flow),
 		Hostname:             host,
 		Tag:                  tag,
 		Address:              address,

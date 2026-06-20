@@ -174,6 +174,14 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		logging.Info("wintun adapter cleanup", "interface", opts.TunName, "result", result)
 	}
 
+	if strings.TrimSpace(opts.Heartbeat.SocksAddress) == "" {
+		addr, err := resolveClientSocksAddress(filepath.Join(configDir, layout.XrayConfigFileName))
+		if err != nil {
+			logging.Warn("client heartbeat disabled: SOCKS address cannot be resolved", "err", err)
+		} else {
+			opts.Heartbeat.SocksAddress = addr
+		}
+	}
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
 	stopSubscriptionSync := startSubscriptionSyncLoop(ctx, installDir, configDir, opts.Heartbeat)

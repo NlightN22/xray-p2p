@@ -62,7 +62,14 @@ func XrayInboundUser(protocol string, user User) (map[string]any, error) {
 func streamSettings(endpoint Endpoint) map[string]any {
 	stream := map[string]any{"network": endpoint.Transport, "security": endpoint.Security}
 	if endpoint.Security == "tls" {
-		stream["tlsSettings"] = map[string]any{"serverName": endpoint.ServerName, "allowInsecure": endpoint.TLS.AllowInsecure, "alpn": endpoint.TLS.ALPN}
+		tlsSettings := map[string]any{"serverName": endpoint.ServerName, "alpn": endpoint.TLS.ALPN}
+		if endpoint.TLS.PinnedPeerCertSHA256 != "" {
+			tlsSettings["pinnedPeerCertSha256"] = endpoint.TLS.PinnedPeerCertSHA256
+		}
+		if endpoint.TLS.VerifyPeerCertByName != "" {
+			tlsSettings["verifyPeerCertByName"] = endpoint.TLS.VerifyPeerCertByName
+		}
+		stream["tlsSettings"] = tlsSettings
 	}
 	return stream
 }

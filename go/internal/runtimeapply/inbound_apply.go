@@ -67,7 +67,14 @@ func verifyInboundDiff(ctx context.Context, applier InboundApplier, diff Diff) e
 			return fmt.Errorf("added inbound %s not found", change.Tag)
 		}
 	}
+	replaced := make(map[string]struct{}, len(diff.AddedInbounds))
+	for _, change := range diff.AddedInbounds {
+		replaced[change.Tag] = struct{}{}
+	}
 	for _, change := range diff.RemovedInbounds {
+		if _, ok := replaced[change.Tag]; ok {
+			continue
+		}
 		if _, ok := present[change.Tag]; ok {
 			return fmt.Errorf("removed inbound %s still present", change.Tag)
 		}

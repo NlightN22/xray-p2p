@@ -25,6 +25,7 @@ var (
 	serverUserRemoveFunc     = server.RemoveUser
 	serverUserUpdateFunc     = server.UpdateUser
 	serverUserRotateFunc     = server.RotateUser
+	serverSetProfileFunc     = server.SetProfile
 	detectPublicHostFunc     = netutil.DetectPublicHost
 	serverSetCertFunc        = server.SetCertificate
 	serverCertStateFunc      = server.CertificateStateFromConfig

@@ -7,6 +7,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPath, keyPath string) (controlplane.Runtime, error) {
@@ -14,18 +15,28 @@ func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPat
 	trojanPort := parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort)
 	host := controlHost(cfg, certPath)
 	tlsMeta := controlTLSMetadata(host, certPath, keyPath)
+	profile, err := serverProfile(cfg.Server.Profile)
+	if err != nil {
+		return controlplane.Runtime{}, err
+	}
+	endpoint, err := tunnel.DefaultProfile(profile)
+	if err != nil {
+		return controlplane.Runtime{}, err
+	}
+	parameters := map[string]string{"tunnel_port": strconv.Itoa(trojanPort)}
+	if flow := endpoint.Metadata["flow"]; flow != "" {
+		parameters["flow"] = flow
+	}
 	sub, err := controlplane.BuildSubscription(controlplane.Subscription{
-		Profile:    "trojan-tls",
-		Protocol:   "trojan",
+		Profile:    string(endpoint.Profile),
+		Protocol:   endpoint.Protocol,
 		Transport:  "tcp",
-		Security:   subscriptionSecurity(certPath, keyPath),
+		Security:   endpoint.Security,
 		Host:       host,
 		Port:       trojanPort,
 		ServerName: tlsMeta.ServerName,
 		TLS:        tlsMeta,
-		Parameters: map[string]string{
-			"tunnel_port": strconv.Itoa(trojanPort),
-		},
+		Parameters: parameters,
 	}, time.Now().UTC(), time.Hour)
 	if err != nil {
 		return controlplane.Runtime{}, err

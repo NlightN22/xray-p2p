@@ -81,6 +81,10 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 	if len(state.Endpoints) == 0 {
 		return nil, fmt.Errorf("no client endpoints configured")
 	}
+	socks := strings.TrimSpace(opts.SocksAddress)
+	if socks == "" {
+		return nil, fmt.Errorf("SOCKS tunnel is required for client heartbeat")
+	}
 
 	storeRoot := installDir
 	if runtime.GOOS == "windows" {
@@ -100,7 +104,7 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		interval:  interval,
 		timeout:   timeout,
 		port:      port,
-		socks:     strings.TrimSpace(opts.SocksAddress),
+		socks:     socks,
 	}, nil
 }
 
@@ -133,36 +137,17 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 	ctx, cancel := context.WithTimeout(parent, r.timeout)
 	defer cancel()
 
-	targetHost := endpoint.Hostname
-	port := r.port
-
-	if r.socks != "" {
-		markerIP, err := markerIPForIndex(index)
-		if err != nil {
-			logging.Warn("client heartbeat marker allocation failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
-			return
-		}
-		targetHost = markerIP
-		port = DiagnosticsMarkerPort
-		if err := ping.Run(ctx, targetHost, ping.Options{
-			Count:                1,
-			Timeout:              r.timeout,
-			Port:                 port,
-			SocksProxy:           r.socks,
-			User:                 endpoint.User,
-			Credential:           r.auth[strings.TrimSpace(endpoint.User)],
-			ServerName:           endpoint.ServerName,
-			AllowInsecure:        endpoint.AllowInsecure,
-			PinnedPeerCertSHA256: endpoint.PinnedPeerCertSHA256,
-			Silent:               true,
-		}); err != nil {
-			logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
-			return
-		}
-	} else if err := ping.Run(ctx, targetHost, ping.Options{
+	targetHost, err := markerIPForIndex(index)
+	if err != nil {
+		logging.Warn("client heartbeat marker allocation failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+		return
+	}
+	port := DiagnosticsMarkerPort
+	if err := ping.Run(ctx, targetHost, ping.Options{
 		Count:                1,
 		Timeout:              r.timeout,
 		Port:                 port,
+		SocksProxy:           r.socks,
 		User:                 endpoint.User,
 		Credential:           r.auth[strings.TrimSpace(endpoint.User)],
 		ServerName:           endpoint.ServerName,
@@ -171,6 +156,7 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		Silent:               true,
 	}); err != nil {
 		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+		r.updateLocalHeartbeat(endpoint, false)
 		return
 	}
 	payload := heartbeat.Payload{
@@ -181,15 +167,30 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		Timestamp: time.Now().UTC(),
 		RTTMillis: 0,
 	}
-	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.timeout); err != nil {
+	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.timeout, r.socks); err != nil {
 		logging.Debug("client heartbeat report failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+		r.updateLocalHeartbeat(endpoint, false)
 		return
 	}
+	r.updateLocalHeartbeat(endpoint, true)
+}
+
+func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, alive bool) {
 	if r.store != nil {
-		payloadLocal := payload
-		payloadLocal.Timestamp = time.Time{}
+		timestamp := time.Now().UTC()
+		if !alive {
+			timestamp = time.Now().UTC().Add(-time.Hour)
+		}
+		payloadLocal := heartbeat.Payload{
+			Tag:       endpoint.Tag,
+			Host:      endpoint.Hostname,
+			User:      strings.TrimSpace(endpoint.User),
+			ClientIP:  detectLocalIP(endpoint.Hostname),
+			Timestamp: timestamp,
+			RTTMillis: 0,
+		}
 		if _, err := r.store.Update(payloadLocal); err != nil {
-			logging.Warn("client heartbeat: failed to update local store", "tag", payload.Tag, "err", err)
+			logging.Warn("client heartbeat: failed to update local store", "tag", endpoint.Tag, "err", err)
 		}
 	}
 }

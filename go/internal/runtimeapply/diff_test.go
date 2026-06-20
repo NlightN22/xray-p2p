@@ -147,7 +147,7 @@ func TestClassifyXrayConfigDiffRejectsInboundGlobalChange(t *testing.T) {
 	}
 }
 
-func TestClassifyXrayConfigDiffRejectsTaggedInboundMutation(t *testing.T) {
+func TestClassifyXrayConfigDiffDetectsTaggedInboundReplacement(t *testing.T) {
 	current := []byte(`{"inbounds":[{"tag":"a","protocol":"socks"}]}`)
 	candidate := []byte(`{"inbounds":[{"tag":"a","protocol":"dokodemo-door"}]}`)
 
@@ -155,8 +155,14 @@ func TestClassifyXrayConfigDiffRejectsTaggedInboundMutation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
 	}
-	if diff.Kind != DiffUnsupported {
-		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	if diff.Kind != DiffInboundOnly {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffInboundOnly, diff)
+	}
+	if len(diff.RemovedInboundTags) != 1 || diff.RemovedInboundTags[0] != "a" {
+		t.Fatalf("unexpected removed inbound tags: %+v", diff.RemovedInboundTags)
+	}
+	if len(diff.AddedInbounds) != 1 || diff.AddedInbounds[0].Tag != "a" {
+		t.Fatalf("unexpected added inbounds: %+v", diff.AddedInbounds)
 	}
 }
 

@@ -136,7 +136,9 @@ func newURL(scheme string, endpoint Endpoint, user User, values url.Values) *url
 }
 
 func tlsFromQuery(values url.Values) TLSMetadata {
-	return TLSMetadata{ALPN: splitALPN(values["alpn"]), AllowInsecure: boolValue(values.Get("allowInsecure")), PinnedPeerCertSHA256: strings.TrimSpace(values.Get("pinnedPeerCertSha256")), VerifyPeerCertByName: strings.TrimSpace(values.Get("verifyPeerCertByName"))}
+	pin := first(values.Get("xp2p_pin_sha256"), values.Get("pinnedPeerCertSha256"))
+	verify := first(values.Get("xp2p_verify_name"), values.Get("verifyPeerCertByName"))
+	return TLSMetadata{ALPN: splitALPN(values["alpn"]), AllowInsecure: boolValue(values.Get("allowInsecure")), PinnedPeerCertSHA256: strings.TrimSpace(pin), VerifyPeerCertByName: strings.TrimSpace(verify)}
 }
 func writeTLS(values url.Values, tls TLSMetadata) {
 	if len(tls.ALPN) > 0 {
@@ -146,10 +148,10 @@ func writeTLS(values url.Values, tls TLSMetadata) {
 		values.Set("allowInsecure", "1")
 	}
 	if tls.PinnedPeerCertSHA256 != "" {
-		values.Set("pinnedPeerCertSha256", tls.PinnedPeerCertSHA256)
+		values.Set("xp2p_pin_sha256", tls.PinnedPeerCertSHA256)
 	}
 	if tls.VerifyPeerCertByName != "" {
-		values.Set("verifyPeerCertByName", tls.VerifyPeerCertByName)
+		values.Set("xp2p_verify_name", tls.VerifyPeerCertByName)
 	}
 }
 func labelFromURL(u *url.URL) string { return strings.TrimSpace(u.Fragment) }
@@ -192,7 +194,7 @@ func unknown(values url.Values, known map[string]struct{}) url.Values {
 }
 
 var trojanKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName")
-var vlessKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "flow", "encryption")
+var vlessKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "xp2p_pin_sha256", "xp2p_verify_name", "flow", "encryption")
 
 func known(keys ...string) map[string]struct{} {
 	values := make(map[string]struct{}, len(keys))
