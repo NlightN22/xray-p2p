@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
@@ -29,6 +30,7 @@ type runtimeMeta struct {
 	Desired    runtimeDesired          `json:"desired"`
 	CertPath   string                  `json:"cert_path,omitempty"`
 	KeyPath    string                  `json:"key_path,omitempty"`
+	Control    controlplane.Runtime    `json:"control,omitempty"`
 }
 
 type runtimeDesired struct {
@@ -102,6 +104,11 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		CertPath: certPath,
 		KeyPath:  keyPath,
 	}
+	control, err := buildControlRuntime(cfg, desired, certPath, keyPath)
+	if err != nil {
+		return compiledArtifacts{}, err
+	}
+	meta.Control = control
 	metaBytes, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
 		return compiledArtifacts{}, fmt.Errorf("encode runtime metadata: %w", err)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
@@ -29,6 +30,7 @@ type runtimeMeta struct {
 	FullTag    string                  `json:"full_tunnel_tag,omitempty"`
 	XrayAssets config.XrayAssetsConfig `json:"xray_assets,omitempty"`
 	Desired    runtimeDesired          `json:"desired"`
+	Control    controlplane.Runtime    `json:"control,omitempty"`
 }
 
 type runtimeDesired struct {
@@ -37,12 +39,16 @@ type runtimeDesired struct {
 }
 
 type runtimeEndpoint struct {
-	Hostname string `json:"hostname,omitempty"`
-	Address  string `json:"address,omitempty"`
-	Tag      string `json:"tag,omitempty"`
-	Port     int    `json:"port,omitempty"`
-	User     string `json:"user,omitempty"`
-	Disabled bool   `json:"disabled,omitempty"`
+	Hostname             string `json:"hostname,omitempty"`
+	Address              string `json:"address,omitempty"`
+	Tag                  string `json:"tag,omitempty"`
+	Port                 int    `json:"port,omitempty"`
+	User                 string `json:"user,omitempty"`
+	Disabled             bool   `json:"disabled,omitempty"`
+	ServerName           string `json:"server_name,omitempty"`
+	AllowInsecure        bool   `json:"allow_insecure,omitempty"`
+	PinnedPeerCertSHA256 string `json:"pinned_peer_cert_sha256,omitempty"`
+	VerifyPeerCertByName string `json:"verify_peer_cert_by_name,omitempty"`
 }
 
 type compiledArtifacts struct {
@@ -105,6 +111,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 			Endpoints: sanitizeRuntimeEndpoints(desired.Endpoints),
 			Redirects: desired.Redirects,
 		},
+		Control: buildClientControlRuntime(cfg, desired.Endpoints),
 	}
 	metaBytes, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
@@ -122,12 +129,16 @@ func sanitizeRuntimeEndpoints(endpoints []clientEndpointRecord) []runtimeEndpoin
 	out := make([]runtimeEndpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
 		out = append(out, runtimeEndpoint{
-			Hostname: strings.TrimSpace(ep.Hostname),
-			Address:  strings.TrimSpace(ep.Address),
-			Tag:      strings.TrimSpace(ep.Tag),
-			Port:     ep.Port,
-			User:     strings.TrimSpace(ep.User),
-			Disabled: ep.Disabled,
+			Hostname:             strings.TrimSpace(ep.Hostname),
+			Address:              strings.TrimSpace(ep.Address),
+			Tag:                  strings.TrimSpace(ep.Tag),
+			Port:                 ep.Port,
+			User:                 strings.TrimSpace(ep.User),
+			Disabled:             ep.Disabled,
+			ServerName:           strings.TrimSpace(ep.ServerName),
+			AllowInsecure:        ep.AllowInsecure,
+			PinnedPeerCertSHA256: strings.TrimSpace(ep.PinnedPeerCertSHA256),
+			VerifyPeerCertByName: strings.TrimSpace(ep.VerifyPeerCertByName),
 		})
 	}
 	return out

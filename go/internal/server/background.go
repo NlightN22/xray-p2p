@@ -1,20 +1,20 @@
 package server
 
 import (
-	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
+	"net/http"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -22,35 +22,27 @@ import (
 
 const (
 	// DefaultPort is the well known port used by xp2p helper services.
-	DefaultPort         = "62022"
-	pingRequest         = "PING"
-	pingKeepOpenRequest = "PING_KEEP_OPEN"
-	pingResponse        = "PONG"
+	DefaultPort = "62022"
 )
-
-const heartbeatPayloadTimeout = 250 * time.Millisecond
-const maxPingNonceLen = 64
 
 // Options controls background server behaviour.
 type Options struct {
 	Port       string
 	InstallDir string
+	CertPath   string
+	KeyPath    string
+	LiveDir    string
 	ListenAddr string
-	Proto      string
 	Quiet      bool
 }
 
-// StartBackground launches lightweight TCP and UDP responders that can be used
-// by diagnostics routines. Listeners are shut down automatically when the
-// supplied context is cancelled.
+// StartBackground launches the HTTPS control endpoint. It is shut down
+// automatically when the supplied context is cancelled.
 func StartBackground(ctx context.Context, opts Options) error {
 	var (
-		once     sync.Once
-		tcpLn    net.Listener
-		udpConn  net.PacketConn
-		started  bool
-		hbStore  *heartbeat.Store
-		storeErr error
+		once    sync.Once
+		ln      net.Listener
+		hbStore *heartbeat.Store
 	)
 
 	port := strings.TrimSpace(opts.Port)
@@ -62,15 +54,6 @@ func StartBackground(ctx context.Context, opts Options) error {
 		listenAddr = ":" + port
 	}
 
-	proto := strings.ToLower(strings.TrimSpace(opts.Proto))
-	switch proto {
-	case "":
-		proto = "both"
-	case "tcp", "udp", "both":
-	default:
-		return fmt.Errorf("unsupported diagnostics protocol %q", opts.Proto)
-	}
-
 	storePath := ""
 	storeRoot := strings.TrimSpace(opts.InstallDir)
 	if runtime.GOOS == "windows" {
@@ -79,7 +62,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 	if storeRoot != "" {
 		storePath = filepath.Join(storeRoot, layout.ServerHeartbeatStateFileName)
 	}
-	hbStore, storeErr = heartbeat.NewStore(storePath)
+	hbStore, storeErr := heartbeat.NewStore(storePath)
 	if storeErr != nil {
 		logging.Warn("heartbeat store disabled", "err", storeErr)
 		hbStore, _ = heartbeat.NewStore("")
@@ -87,204 +70,73 @@ func StartBackground(ctx context.Context, opts Options) error {
 
 	shutdown := func() {
 		once.Do(func() {
-			if tcpLn != nil {
-				_ = tcpLn.Close()
-			}
-			if udpConn != nil {
-				_ = udpConn.Close()
+			if ln != nil {
+				_ = ln.Close()
 			}
 		})
 	}
 
-	if proto != "udp" {
-		if ln, err := net.Listen("tcp", listenAddr); err != nil {
-			logging.Warn("unable to start TCP listener", "addr", listenAddr, "err", err)
-		} else {
-			tcpLn = ln
-			started = true
-			go func() {
-				defer tcpLn.Close()
-				for {
-					conn, err := ln.Accept()
-					if err != nil {
-						select {
-						case <-ctx.Done():
-							return
-						default:
-							logging.Warn("tcp accept error", "err", err)
-							continue
-						}
-					}
-					go handleTCP(ctx, conn, hbStore, opts.Quiet)
-				}
-			}()
+	certPath, keyPath, err := resolveControlTLS(opts)
+	if err != nil {
+		return err
+	}
+	liveDir, err := resolveControlLiveDir(opts)
+	if err != nil {
+		return err
+	}
+	ln, err = net.Listen("tcp", listenAddr)
+	if err != nil {
+		return fmt.Errorf("start HTTPS control listener %s: %w", listenAddr, err)
+	}
+	srv := &http.Server{
+		Handler: controlplane.NewHandler(controlplane.HandlerOptions{
+			LoadRuntime: func() (controlplane.Runtime, error) {
+				return controlplane.LoadRuntimeFile(filepath.Join(liveDir, layout.RuntimeMetaFileName))
+			},
+			Heartbeat: hbStore,
+		}),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		err := srv.ServeTLS(ln, certPath, keyPath)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
+			logging.Warn("HTTPS control server stopped", "err", err)
 		}
-	} else {
-		tcpLn = nil
-	}
-
-	if proto != "tcp" {
-		if pc, err := net.ListenPacket("udp", listenAddr); err != nil {
-			logging.Warn("unable to start UDP listener", "addr", listenAddr, "err", err)
-		} else {
-			udpConn = pc
-			started = true
-			go handleUDP(ctx, udpConn, opts.Quiet)
-		}
-	}
-
-	if !started {
-		return errors.New("unable to bind diagnostics listeners")
-	}
-
+	}()
 	go func() {
 		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
 		shutdown()
 	}()
 
 	return nil
 }
 
-func handleTCP(ctx context.Context, conn net.Conn, store *heartbeat.Store, quiet bool) {
-	defer conn.Close()
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = conn.Close()
-		case <-done:
-		}
-	}()
-
-	reader := bufio.NewReader(conn)
-	for {
-		_ = conn.SetDeadline(deadlineFromContext(ctx))
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return
-		}
-		nonce, keepOpen, ok := parsePingRequest(line)
-		if !ok {
-			return
-		}
-
-		_, _ = conn.Write([]byte(pingResponse + " " + nonce + "\n"))
-		hadHeartbeat := false
-		if !keepOpen {
-			hadHeartbeat = consumeHeartbeatPayload(ctx, reader, conn, store)
-		}
-		if !quiet {
-			if !hadHeartbeat {
-				logging.Info("tcp ping received", "remote_addr", conn.RemoteAddr().String())
-			} else {
-				logging.Debug("tcp heartbeat received", "remote_addr", conn.RemoteAddr().String())
+func resolveControlTLS(opts Options) (string, string, error) {
+	certPath := strings.TrimSpace(opts.CertPath)
+	keyPath := strings.TrimSpace(opts.KeyPath)
+	if certPath == "" && keyPath == "" {
+		if liveDir, err := resolveControlLiveDir(opts); err == nil {
+			if meta, metaErr := loadLiveRuntimeMeta(liveDir); metaErr == nil {
+				certPath = strings.TrimSpace(meta.CertPath)
+				keyPath = strings.TrimSpace(meta.KeyPath)
 			}
 		}
-		if !keepOpen {
-			return
-		}
 	}
+	if certPath == "" && keyPath == "" && defaultTLSConfigured() {
+		certPath = defaultCertPath()
+		keyPath = defaultKeyPath()
+	}
+	if certPath == "" || keyPath == "" {
+		return "", "", errors.New("control HTTPS TLS certificate and key are required")
+	}
+	return certPath, keyPath, nil
 }
 
-func handleUDP(ctx context.Context, conn net.PacketConn, quiet bool) {
-	defer conn.Close()
-	buf := make([]byte, 1024)
-	for {
-		_ = conn.SetReadDeadline(deadlineFromContext(ctx))
-		n, addr, err := conn.ReadFrom(buf)
-		if err != nil {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				logging.Warn("udp read error", "err", err)
-				continue
-			}
-		}
-
-		msg := strings.TrimSpace(string(buf[:n]))
-		nonce, keepOpen, ok := parsePingRequest(msg)
-		if ok && !keepOpen {
-			if !quiet {
-				logging.Info("udp ping received", "remote_addr", addr.String())
-			}
-			_, _ = conn.WriteTo([]byte(pingResponse+" "+nonce+"\n"), addr)
-		}
+func resolveControlLiveDir(opts Options) (string, error) {
+	liveDir := strings.TrimSpace(opts.LiveDir)
+	if liveDir != "" {
+		return liveDir, nil
 	}
-}
-
-func deadlineFromContext(ctx context.Context) time.Time {
-	if dl, ok := ctx.Deadline(); ok {
-		return dl
-	}
-	return time.Time{}
-}
-
-func parsePingRequest(raw string) (string, bool, bool) {
-	fields := strings.Fields(strings.TrimSpace(raw))
-	if len(fields) != 2 {
-		return "", false, false
-	}
-	keepOpen := false
-	switch {
-	case strings.EqualFold(fields[0], pingRequest):
-	case strings.EqualFold(fields[0], pingKeepOpenRequest):
-		keepOpen = true
-	default:
-		return "", false, false
-	}
-	nonce := strings.TrimSpace(fields[1])
-	if nonce == "" || len(nonce) > maxPingNonceLen {
-		return "", false, false
-	}
-	for i := 0; i < len(nonce); i++ {
-		b := nonce[i]
-		if b <= 0x20 || b >= 0x7f {
-			return "", false, false
-		}
-	}
-	return nonce, keepOpen, true
-}
-
-func consumeHeartbeatPayload(ctx context.Context, reader *bufio.Reader, conn net.Conn, store *heartbeat.Store) bool {
-	if store == nil {
-		return false
-	}
-	deadline := time.Now().Add(heartbeatPayloadTimeout)
-	if dl, ok := ctx.Deadline(); ok && dl.Before(deadline) {
-		deadline = dl
-	}
-	_ = conn.SetReadDeadline(deadline)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		var netErr net.Error
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			return false
-		}
-		if err == io.EOF && len(line) == 0 {
-			return false
-		}
-		if len(line) == 0 {
-			return false
-		}
-	}
-
-	payloadRaw := strings.TrimSpace(line)
-	if payloadRaw == "" {
-		return false
-	}
-
-	var payload heartbeat.Payload
-	if err := json.Unmarshal([]byte(payloadRaw), &payload); err != nil {
-		logging.Warn("invalid heartbeat payload", "remote_addr", conn.RemoteAddr().String(), "err", err)
-		return true
-	}
-	payload.Timestamp = time.Time{}
-	if _, err := store.Update(payload); err != nil {
-		logging.Warn("unable to persist heartbeat", "tag", payload.Tag, "err", err)
-		return true
-	}
-	logging.Debug("heartbeat recorded", "tag", payload.Tag, "host", payload.Host, "client_ip", payload.ClientIP)
-	return true
+	return config.LiveRoleDir(apply.RoleServer)
 }

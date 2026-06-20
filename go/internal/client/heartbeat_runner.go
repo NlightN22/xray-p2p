@@ -2,9 +2,7 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -24,6 +22,7 @@ const DefaultDiagnosticsPort = "62022"
 type heartbeatRunner struct {
 	store     *heartbeat.Store
 	endpoints []clientEndpointRecord
+	auth      map[string]string
 	interval  time.Duration
 	timeout   time.Duration
 	port      int
@@ -97,6 +96,7 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 	return &heartbeatRunner{
 		store:     store,
 		endpoints: endpoints,
+		auth:      controlAuthMap(meta.Control.AuthUsers),
 		interval:  interval,
 		timeout:   timeout,
 		port:      port,
@@ -133,17 +133,8 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 	ctx, cancel := context.WithTimeout(parent, r.timeout)
 	defer cancel()
 
-	reporter := newHeartbeatReporter(endpoint, r.store)
 	targetHost := endpoint.Hostname
 	port := r.port
-	opts := ping.Options{
-		Count:    1,
-		Timeout:  r.timeout,
-		Proto:    "tcp",
-		Port:     port,
-		Reporter: reporter,
-		Silent:   true,
-	}
 
 	if r.socks != "" {
 		markerIP, err := markerIPForIndex(index)
@@ -153,46 +144,46 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		}
 		targetHost = markerIP
 		port = DiagnosticsMarkerPort
-		opts.Port = port
-		opts.SocksProxy = r.socks
-		if err := ping.Run(ctx, targetHost, opts); err != nil {
+		if err := ping.Run(ctx, targetHost, ping.Options{
+			Count:                1,
+			Timeout:              r.timeout,
+			Port:                 port,
+			SocksProxy:           r.socks,
+			User:                 endpoint.User,
+			Credential:           r.auth[strings.TrimSpace(endpoint.User)],
+			ServerName:           endpoint.ServerName,
+			AllowInsecure:        endpoint.AllowInsecure,
+			PinnedPeerCertSHA256: endpoint.PinnedPeerCertSHA256,
+			Silent:               true,
+		}); err != nil {
 			logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+			return
 		}
+	} else if err := ping.Run(ctx, targetHost, ping.Options{
+		Count:                1,
+		Timeout:              r.timeout,
+		Port:                 port,
+		User:                 endpoint.User,
+		Credential:           r.auth[strings.TrimSpace(endpoint.User)],
+		ServerName:           endpoint.ServerName,
+		AllowInsecure:        endpoint.AllowInsecure,
+		PinnedPeerCertSHA256: endpoint.PinnedPeerCertSHA256,
+		Silent:               true,
+	}); err != nil {
+		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 		return
 	}
-
-	if err := ping.Run(ctx, targetHost, opts); err != nil {
-		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
-	}
-}
-
-type heartbeatReporter struct {
-	endpoint clientEndpointRecord
-	store    *heartbeat.Store
-}
-
-func newHeartbeatReporter(endpoint clientEndpointRecord, store *heartbeat.Store) heartbeatReporter {
-	return heartbeatReporter{
-		endpoint: endpoint,
-		store:    store,
-	}
-}
-
-func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result ping.Result) error {
 	payload := heartbeat.Payload{
-		Tag:       r.endpoint.Tag,
-		Host:      r.endpoint.Hostname,
-		User:      strings.TrimSpace(r.endpoint.User),
-		ClientIP:  detectLocalIP(r.endpoint.Hostname),
+		Tag:       endpoint.Tag,
+		Host:      endpoint.Hostname,
+		User:      strings.TrimSpace(endpoint.User),
+		ClientIP:  detectLocalIP(endpoint.Hostname),
 		Timestamp: time.Now().UTC(),
-		RTTMillis: result.RTT.Milliseconds(),
+		RTTMillis: 0,
 	}
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	if _, err := conn.Write(append(data, '\n')); err != nil {
-		return err
+	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.timeout); err != nil {
+		logging.Debug("client heartbeat report failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+		return
 	}
 	if r.store != nil {
 		payloadLocal := payload
@@ -201,5 +192,4 @@ func (r heartbeatReporter) Report(ctx context.Context, conn net.Conn, result pin
 			logging.Warn("client heartbeat: failed to update local store", "tag", payload.Tag, "err", err)
 		}
 	}
-	return nil
 }

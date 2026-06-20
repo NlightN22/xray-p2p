@@ -6,9 +6,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -17,21 +15,23 @@ import (
 
 // Options describes how Ping should behave.
 type Options struct {
-	Count      int
-	Timeout    time.Duration
-	Proto      string
-	Port       int
-	SocksProxy string
-	Continuous bool
-	KeepOpen   bool
-	Reporter   Reporter
-	Silent     bool
+	Count                int
+	Timeout              time.Duration
+	Port                 int
+	SocksProxy           string
+	User                 string
+	Credential           string
+	ServerName           string
+	AllowInsecure        bool
+	PinnedPeerCertSHA256 string
+	Continuous           bool
+	Reporter             Reporter
+	Silent               bool
 }
 
-// Reporter is invoked when a TCP ping succeeds allowing callers to emit
-// auxiliary payloads before the connection is closed.
+// Reporter is invoked when an HTTPS ping succeeds.
 type Reporter interface {
-	Report(ctx context.Context, conn net.Conn, result Result) error
+	Report(ctx context.Context, result Result) error
 }
 
 // Result captures statistics associated with a single ping request.
@@ -43,13 +43,9 @@ type Result struct {
 }
 
 const (
-	defaultTimeout   = 3 * time.Second
-	minCount         = 1
-	protoTCP         = "tcp"
-	protoUDP         = "udp"
-	pingRequest      = "PING"
-	keepOpenRequest  = "PING_KEEP_OPEN"
-	expectedResponse = "PONG"
+	defaultTimeout = 3 * time.Second
+	minCount       = 1
+	protocolHTTPS  = "https"
 )
 
 // Run performs application-level ping against the xp2p service.
@@ -68,17 +64,6 @@ func Run(ctx context.Context, target string, opts Options) error {
 		timeout = defaultTimeout
 	}
 
-	proto := strings.ToLower(opts.Proto)
-	if proto == "" {
-		proto = protoTCP
-	}
-	if proto != protoTCP && proto != protoUDP {
-		return fmt.Errorf("unsupported protocol %q", proto)
-	}
-	if opts.KeepOpen && proto != protoTCP {
-		return errors.New("keep-open mode supports only tcp protocol")
-	}
-
 	port := opts.Port
 	if port == 0 {
 		p, err := strconv.Atoi(server.DefaultPort)
@@ -91,16 +76,12 @@ func Run(ctx context.Context, target string, opts Options) error {
 	targetAddr := fmt.Sprintf("%s:%d", target, port)
 
 	var sent, received int
-	fields := []any{"target", targetAddr, "proto", proto}
+	fields := []any{"target", targetAddr, "protocol", protocolHTTPS}
 	if opts.SocksProxy != "" {
 		fields = append(fields, "socks_proxy", opts.SocksProxy)
 	}
 	logger := logging.With(fields...)
 	logger.Debug("ping session started", "count", count, "timeout", timeout)
-	if opts.KeepOpen {
-		return runKeepOpen(ctx, targetAddr, timeout, opts)
-	}
-
 	for seq := 1; opts.Continuous || seq <= count; seq++ {
 		select {
 		case <-ctx.Done():
@@ -116,22 +97,8 @@ func Run(ctx context.Context, target string, opts Options) error {
 		default:
 		}
 
-		var err error
-		var rtt time.Duration
-		switch proto {
-		case protoTCP:
-			logger.Debug("sending tcp ping", "seq", seq)
-			rtt, err = pingTCP(ctx, targetAddr, timeout, opts.SocksProxy, seq, opts.Reporter)
-		case protoUDP:
-			if opts.SocksProxy != "" {
-				logger.Warn("udp ping via socks proxy is not supported", "seq", seq)
-				err = errors.New("UDP ping via SOCKS5 proxy is not supported yet (TODO: implement RFC 1928 UDP ASSOCIATE)")
-				break
-			}
-			// TODO: support dokodemo or other proxy transports once available in diagnostics ping.
-			logger.Debug("sending udp ping", "seq", seq)
-			rtt, err = pingUDP(ctx, target, port, timeout)
-		}
+		logger.Debug("sending HTTPS control ping", "seq", seq)
+		rtt, err := pingHTTPS(ctx, targetAddr, timeout, seq, opts)
 
 		sent++
 		if err != nil {
@@ -148,7 +115,7 @@ func Run(ctx context.Context, target string, opts Options) error {
 			formatted := rtt.Round(time.Millisecond)
 			if !opts.Silent {
 				fmt.Printf("Reply from %s: seq=%d time=%s proto=%s\n",
-					targetAddr, seq, formatted, proto)
+					targetAddr, seq, formatted, protocolHTTPS)
 			}
 			logger.Debug("ping reply received", "seq", seq, "rtt", rtt)
 		}
@@ -183,18 +150,6 @@ func newNonce() (string, error) {
 	}
 	enc := base32.StdEncoding.WithPadding(base32.NoPadding)
 	return enc.EncodeToString(raw), nil
-}
-
-func validateResponse(raw, nonce string) error {
-	resp := strings.TrimSpace(raw)
-	fields := strings.Fields(resp)
-	if len(fields) == 0 || !strings.EqualFold(fields[0], expectedResponse) {
-		return fmt.Errorf("unexpected response: %q", raw)
-	}
-	if len(fields) != 2 || !strings.EqualFold(fields[1], nonce) {
-		return fmt.Errorf("unexpected response: %q", raw)
-	}
-	return nil
 }
 
 func printSummary(sent, received int) {

@@ -1,161 +1,63 @@
 package server
 
 import (
-	"bufio"
+	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"io"
-	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
 
-func TestStartBackgroundServesAndShutsDown(t *testing.T) {
-	logging.Configure(logging.Options{Output: io.Discard})
-	t.Cleanup(func() {
-		logging.Configure(logging.Options{Output: os.Stderr})
-	})
-
-	portStr, _ := testutil.FreePort(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
+func TestStartBackgroundServesHTTPSControlPing(t *testing.T) {
+	setupBackgroundTestLogging(t)
+	cancel, baseURL := startTestControlServer(t, t.TempDir())
 	defer cancel()
 
-	if err := StartBackground(ctx, Options{Port: portStr}); err != nil {
-		t.Fatalf("StartBackground returned error: %v", err)
-	}
-
-	addr := net.JoinHostPort("127.0.0.1", portStr)
-	testutil.WaitForCondition(t, time.Second, func() bool {
-		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
-		if err != nil {
-			return false
-		}
-		_ = conn.Close()
-		return true
-	})
-
-	tcpConn, err := net.DialTimeout("tcp", addr, time.Second)
+	client := testControlHTTPClient()
+	resp, err := client.Get(baseURL + controlplane.PathReady)
 	if err != nil {
-		t.Fatalf("failed to dial tcp server: %v", err)
+		t.Fatalf("GET ready: %v", err)
 	}
-	t.Cleanup(func() { _ = tcpConn.Close() })
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("ready status = %s", resp.Status)
+	}
 
-	nonce := "testnonce"
-	if _, err := tcpConn.Write([]byte("PING " + nonce + "\n")); err != nil {
-		t.Fatalf("failed to write tcp request: %v", err)
-	}
-	resp, err := bufio.NewReader(tcpConn).ReadString('\n')
+	body := []byte(`{"nonce":"testnonce"}`)
+	resp, err = client.Post(baseURL+controlplane.PathPing, "application/json", bytes.NewReader(body))
 	if err != nil {
-		t.Fatalf("failed to read tcp response: %v", err)
+		t.Fatalf("POST ping: %v", err)
 	}
-	if got := strings.TrimSpace(resp); got != pingResponse+" "+nonce {
-		t.Fatalf("unexpected tcp response: %q", got)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("ping status = %s", resp.Status)
 	}
-
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		t.Fatalf("failed to resolve udp address: %v", err)
+	var pong controlplane.PingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pong); err != nil {
+		t.Fatalf("decode ping response: %v", err)
 	}
-	udpConn, err := net.DialUDP("udp", nil, udpAddr)
-	if err != nil {
-		t.Fatalf("failed to dial udp server: %v", err)
-	}
-	t.Cleanup(func() { _ = udpConn.Close() })
-
-	if err := udpConn.SetDeadline(time.Now().Add(time.Second)); err != nil {
-		t.Fatalf("failed to set udp deadline: %v", err)
-	}
-	if _, err := udpConn.Write([]byte("PING " + nonce + "\n")); err != nil {
-		t.Fatalf("failed to write udp request: %v", err)
-	}
-
-	udpBuf := make([]byte, 32)
-	n, err := udpConn.Read(udpBuf)
-	if err != nil {
-		t.Fatalf("failed to read udp response: %v", err)
-	}
-	if got := strings.TrimSpace(string(udpBuf[:n])); got != pingResponse+" "+nonce {
-		t.Fatalf("unexpected udp response: %q", got)
-	}
-
-	cancel()
-	testutil.WaitForCondition(t, time.Second, func() bool {
-		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
-		if err != nil {
-			return true
-		}
-		_ = conn.Close()
-		return false
-	})
-
-	if err := udpConn.SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
-		t.Fatalf("failed to update udp deadline after shutdown: %v", err)
-	}
-	if _, err := udpConn.Write([]byte("PING " + nonce + "\n")); err == nil {
-		buf := make([]byte, 8)
-		if _, err := udpConn.Read(buf); err == nil {
-			t.Fatalf("expected udp read to fail after shutdown")
-		}
+	if pong.Nonce != "testnonce" {
+		t.Fatalf("nonce = %q", pong.Nonce)
 	}
 }
 
-func TestHeartbeatPayloadIsPersisted(t *testing.T) {
-	logging.Configure(logging.Options{Output: io.Discard})
-	t.Cleanup(func() {
-		logging.Configure(logging.Options{Output: os.Stderr})
-	})
-
+func TestHTTPSHeartbeatPayloadIsPersisted(t *testing.T) {
+	setupBackgroundTestLogging(t)
 	dir := t.TempDir()
-	if runtime.GOOS == "windows" {
-		t.Setenv("XP2P_CONFIG_ROOT", dir)
-		t.Setenv("XP2P_LOG_ROOT", filepath.Join(dir, "logs"))
-	}
-	portStr, _ := testutil.FreePort(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
+	cancel, baseURL := startTestControlServer(t, dir)
 	defer cancel()
-
-	if err := StartBackground(ctx, Options{Port: portStr, InstallDir: dir}); err != nil {
-		t.Fatalf("StartBackground: %v", err)
-	}
-
-	addr := net.JoinHostPort("127.0.0.1", portStr)
-	testutil.WaitForCondition(t, time.Second, func() bool {
-		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
-		if err != nil {
-			return false
-		}
-		_ = conn.Close()
-		return true
-	})
-
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("dial server: %v", err)
-	}
-	defer conn.Close()
-
-	nonce := "testnonce"
-	if _, err := conn.Write([]byte("PING " + nonce + "\n")); err != nil {
-		t.Fatalf("write request: %v", err)
-	}
-	reader := bufio.NewReader(conn)
-	if line, err := reader.ReadString('\n'); err != nil {
-		t.Fatalf("read pong: %v", err)
-	} else if got := strings.TrimSpace(line); got != pingResponse+" "+nonce {
-		t.Fatalf("unexpected pong: %q", got)
-	}
 
 	payload := heartbeat.Payload{
 		Tag:       "proxy-test",
@@ -168,20 +70,21 @@ func TestHeartbeatPayloadIsPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	if _, err := conn.Write(append(data, '\n')); err != nil {
-		t.Fatalf("write payload: %v", err)
+	resp, err := testControlHTTPClient().Post(baseURL+controlplane.PathHeartbeat, "application/json", bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("POST heartbeat: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("heartbeat status = %s", resp.Status)
 	}
 
 	stateRoot := dir
 	if runtime.GOOS == "windows" {
-		stateRoot = config.ConfigRoot()
+		stateRoot = os.Getenv("XP2P_CONFIG_ROOT")
 	}
 	statePath := filepath.Join(stateRoot, layout.ServerHeartbeatStateFileName)
-	testutil.WaitForCondition(t, time.Second, func() bool {
-		_, err := os.Stat(statePath)
-		return err == nil
-	})
-
 	state, err := heartbeat.Load(statePath)
 	if err != nil {
 		t.Fatalf("Load heartbeat state: %v", err)
@@ -195,47 +98,50 @@ func TestHeartbeatPayloadIsPersisted(t *testing.T) {
 	}
 }
 
-func TestKeepOpenPingRequestKeepsTCPConnectionOpen(t *testing.T) {
+func startTestControlServer(t *testing.T, stateDir string) (context.CancelFunc, string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Setenv("XP2P_CONFIG_ROOT", stateDir)
+		t.Setenv("XP2P_LOG_ROOT", filepath.Join(stateDir, "logs"))
+	}
+	certPath, keyPath := createTestCertificateFiles(t, stateDir, "127.0.0.1")
+	liveDir := filepath.Join(stateDir, "live")
+	if err := os.MkdirAll(liveDir, 0o755); err != nil {
+		t.Fatalf("mkdir live: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(liveDir, layout.RuntimeMetaFileName), []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
+		t.Fatalf("write runtime metadata: %v", err)
+	}
+
+	portStr, _ := testutil.FreePort(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := StartBackground(ctx, Options{Port: portStr, InstallDir: stateDir, CertPath: certPath, KeyPath: keyPath, LiveDir: liveDir}); err != nil {
+		cancel()
+		t.Fatalf("StartBackground returned error: %v", err)
+	}
+	baseURL := "https://127.0.0.1:" + portStr
+	testutil.WaitForCondition(t, time.Second, func() bool {
+		resp, err := testControlHTTPClient().Get(baseURL + controlplane.PathReady)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	})
+	return cancel, baseURL
+}
+
+func testControlHTTPClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Timeout:   time.Second,
+	}
+}
+
+func setupBackgroundTestLogging(t *testing.T) {
+	t.Helper()
 	logging.Configure(logging.Options{Output: io.Discard})
 	t.Cleanup(func() {
 		logging.Configure(logging.Options{Output: os.Stderr})
 	})
-
-	portStr, _ := testutil.FreePort(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	if err := StartBackground(ctx, Options{Port: portStr}); err != nil {
-		t.Fatalf("StartBackground returned error: %v", err)
-	}
-
-	addr := net.JoinHostPort("127.0.0.1", portStr)
-	testutil.WaitForCondition(t, time.Second, func() bool {
-		conn, err := net.DialTimeout("tcp", addr, 50*time.Millisecond)
-		if err != nil {
-			return false
-		}
-		_ = conn.Close()
-		return true
-	})
-
-	conn, err := net.DialTimeout("tcp", addr, time.Second)
-	if err != nil {
-		t.Fatalf("failed to dial tcp server: %v", err)
-	}
-	defer conn.Close()
-	reader := bufio.NewReader(conn)
-
-	for _, nonce := range []string{"first", "second"} {
-		if _, err := conn.Write([]byte(pingKeepOpenRequest + " " + nonce + "\n")); err != nil {
-			t.Fatalf("failed to write keep-open request: %v", err)
-		}
-		resp, err := reader.ReadString('\n')
-		if err != nil {
-			t.Fatalf("failed to read keep-open response: %v", err)
-		}
-		if got := strings.TrimSpace(resp); got != pingResponse+" "+nonce {
-			t.Fatalf("unexpected keep-open response: %q", got)
-		}
-	}
 }

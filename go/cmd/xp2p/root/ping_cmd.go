@@ -22,10 +22,8 @@ type pingCommandOptions struct {
 	Host           string
 	Count          int
 	TimeoutSec     int
-	Proto          string
 	Port           int
 	Continuous     bool
-	KeepOpen       bool
 	TunnelEndpoint string
 	EndpointTag    string
 	EndpointIndex  int
@@ -34,7 +32,6 @@ type pingCommandOptions struct {
 func newPingCommand(cfg func() config.Config) *cobra.Command {
 	opts := pingCommandOptions{
 		Count:      4,
-		Proto:      "tcp",
 		TimeoutSec: 0,
 	}
 
@@ -55,10 +52,8 @@ func newPingCommand(cfg func() config.Config) *cobra.Command {
 	flags := cmd.Flags()
 	flags.IntVarP(&opts.Count, "count", "N", opts.Count, "number of echo requests to send")
 	flags.IntVarP(&opts.TimeoutSec, "timeout", "t", opts.TimeoutSec, "per-request timeout in seconds (optional)")
-	flags.StringVarP(&opts.Proto, "proto", "o", opts.Proto, "protocol to use (tcp or udp)")
 	flags.IntVarP(&opts.Port, "port", "P", opts.Port, "target port (default 62022)")
 	flags.BoolVarP(&opts.Continuous, "continuous", "C", false, "send ping requests until interrupted")
-	flags.BoolVarP(&opts.KeepOpen, "keep-open", "k", false, "keep one TCP connection open and fail when it breaks")
 	flags.StringVarP(&opts.TunnelEndpoint, "tunnel", "T", "", "route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config")
 	flags.StringVarP(&opts.EndpointTag, "endpoint", "e", "", "endpoint tag to use when multiple endpoints share the same host")
 	flags.IntVarP(&opts.EndpointIndex, "index", "i", 0, "endpoint index (1-based) to use when multiple endpoints share the same host")
@@ -78,12 +73,14 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 	var serverSocksAddr string
 
 	pingOpts := ping.Options{
-		Count:      opts.Count,
-		Timeout:    time.Duration(opts.TimeoutSec) * time.Second,
-		Proto:      strings.TrimSpace(opts.Proto),
-		Port:       opts.Port,
-		Continuous: opts.Continuous,
-		KeepOpen:   opts.KeepOpen,
+		Count:         opts.Count,
+		Timeout:       time.Duration(opts.TimeoutSec) * time.Second,
+		Port:          opts.Port,
+		User:          cfg.Client.User,
+		Credential:    cfg.Client.Password,
+		ServerName:    cfg.Client.ServerName,
+		AllowInsecure: cfg.Client.AllowInsecure,
+		Continuous:    opts.Continuous,
 	}
 
 	var socksAddr string
@@ -113,10 +110,6 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		return 2
 	}
 	if socksAddr != "" {
-		if !strings.EqualFold(strings.TrimSpace(pingOpts.Proto), "tcp") {
-			fmt.Fprintln(os.Stderr, "xp2p ping: --tunnel supports only tcp protocol")
-			return 2
-		}
 		markerTarget, markerPort, markerErr := client.ResolveMarkerTarget(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex)
 		useMarker := markerErr == nil
 		usedServerMarker := false
@@ -142,7 +135,6 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 		}
 		if useMarker {
 			host = markerTarget
-			pingOpts.Proto = "tcp"
 			pingOpts.Port = markerPort
 		}
 		if autoTunnel && usedServerMarker {

@@ -4,7 +4,6 @@ package windows
 
 import (
 	"context"
-	"net"
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
@@ -51,7 +50,7 @@ func (p *PingClient) Ping(ctx context.Context, target string) (ports.PingResult,
 
 type pingReporter func(result ping.Result)
 
-func (p pingReporter) Report(_ context.Context, _ net.Conn, result ping.Result) error {
+func (p pingReporter) Report(_ context.Context, result ping.Result) error {
 	p(result)
 	return nil
 }

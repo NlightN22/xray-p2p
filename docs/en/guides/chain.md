@@ -69,4 +69,4 @@ xp2p ping 10.0.101.1
 
 ### Advanced
 
-If you need to verify a specific TCP port (for example SSH on `22/tcp`), pass `--proto` and `--port`.
+The command sends an HTTPS control ping through the selected tunnel endpoint.

@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -17,7 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
 
-func TestRunHandlesTCPReplies(t *testing.T) {
+func TestRunHandlesHTTPSReplies(t *testing.T) {
 	setupLogging(t)
 
 	cancel, port := startBackgroundServer(t)
@@ -27,50 +29,10 @@ func TestRunHandlesTCPReplies(t *testing.T) {
 	defer runCancel()
 
 	if err := Run(runCtx, "127.0.0.1", Options{
-		Count:   1,
-		Timeout: time.Second,
-		Proto:   "tcp",
-		Port:    port,
-	}); err != nil {
-		t.Fatalf("Run returned error: %v", err)
-	}
-}
-
-func TestRunHandlesUDPReplies(t *testing.T) {
-	setupLogging(t)
-
-	cancel, port := startBackgroundServer(t)
-	defer cancel()
-
-	runCtx, runCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer runCancel()
-
-	if err := Run(runCtx, "127.0.0.1", Options{
-		Count:   1,
-		Timeout: time.Second,
-		Proto:   "udp",
-		Port:    port,
-	}); err != nil {
-		t.Fatalf("Run returned error: %v", err)
-	}
-}
-
-func TestRunKeepOpenHandlesMultipleTCPReplies(t *testing.T) {
-	setupLogging(t)
-
-	cancel, port := startBackgroundServer(t)
-	defer cancel()
-
-	runCtx, runCancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer runCancel()
-
-	if err := Run(runCtx, "127.0.0.1", Options{
-		Count:    2,
-		Timeout:  time.Second,
-		Proto:    "tcp",
-		Port:     port,
-		KeepOpen: true,
-		Silent:   true,
+		Count:         1,
+		Timeout:       time.Second,
+		Port:          port,
+		AllowInsecure: true,
 	}); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -86,11 +48,11 @@ func TestRunContinuousStopsOnContext(t *testing.T) {
 	defer runCancel()
 
 	err := Run(runCtx, "127.0.0.1", Options{
-		Timeout:    time.Second,
-		Proto:      "tcp",
-		Port:       port,
-		Continuous: true,
-		Silent:     true,
+		Timeout:       time.Second,
+		Port:          port,
+		AllowInsecure: true,
+		Continuous:    true,
+		Silent:        true,
 	})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected context deadline, got %v", err)
@@ -107,10 +69,10 @@ func TestRunFailsWhenServerUnavailable(t *testing.T) {
 
 	start := time.Now()
 	err := Run(runCtx, "127.0.0.1", Options{
-		Count:   1,
-		Timeout: 100 * time.Millisecond,
-		Proto:   "tcp",
-		Port:    port,
+		Count:         1,
+		Timeout:       100 * time.Millisecond,
+		Port:          port,
+		AllowInsecure: true,
 	})
 
 	if err == nil {
@@ -127,11 +89,8 @@ func TestReporterInvokedOnSuccess(t *testing.T) {
 	defer cancel()
 
 	var called atomic.Bool
-	reporter := reporterFunc(func(ctx context.Context, conn net.Conn, result Result) error {
+	reporter := reporterFunc(func(ctx context.Context, result Result) error {
 		called.Store(true)
-		if conn == nil {
-			t.Fatalf("expected live connection")
-		}
 		return nil
 	})
 
@@ -139,12 +98,12 @@ func TestReporterInvokedOnSuccess(t *testing.T) {
 	defer runCancel()
 
 	if err := Run(runCtx, "127.0.0.1", Options{
-		Count:    1,
-		Timeout:  time.Second,
-		Proto:    "tcp",
-		Port:     port,
-		Reporter: reporter,
-		Silent:   true,
+		Count:         1,
+		Timeout:       time.Second,
+		Port:          port,
+		Reporter:      reporter,
+		AllowInsecure: true,
+		Silent:        true,
 	}); err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -153,13 +112,10 @@ func TestReporterInvokedOnSuccess(t *testing.T) {
 	}
 }
 
-func TestRunValidatesTargetAndProtocol(t *testing.T) {
+func TestRunValidatesTarget(t *testing.T) {
 	setupLogging(t)
 	if err := Run(context.Background(), "", Options{}); err == nil {
 		t.Fatalf("expected error for missing target")
-	}
-	if err := Run(context.Background(), "127.0.0.1", Options{Proto: "icmp"}); err == nil {
-		t.Fatalf("expected error for unsupported protocol")
 	}
 }
 
@@ -167,11 +123,11 @@ func TestReporterErrorPropagates(t *testing.T) {
 	setupLogging(t)
 	cancel, port := startBackgroundServer(t)
 	defer cancel()
-	reporter := reporterFunc(func(context.Context, net.Conn, Result) error {
+	reporter := reporterFunc(func(context.Context, Result) error {
 		return errors.New("report failure")
 	})
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	_, err := pingTCP(context.Background(), addr, time.Second, "", 1, reporter)
+	_, err := pingHTTPS(context.Background(), addr, time.Second, 1, Options{Reporter: reporter, AllowInsecure: true})
 	if err == nil || !strings.Contains(err.Error(), "report failure") {
 		t.Fatalf("expected reporter error, got %v", err)
 	}
@@ -194,10 +150,10 @@ func TestDialViaSocksRespectsContext(t *testing.T) {
 	}
 }
 
-type reporterFunc func(context.Context, net.Conn, Result) error
+type reporterFunc func(context.Context, Result) error
 
-func (fn reporterFunc) Report(ctx context.Context, conn net.Conn, result Result) error {
-	return fn(ctx, conn, result)
+func (fn reporterFunc) Report(ctx context.Context, result Result) error {
+	return fn(ctx, result)
 }
 
 func setupLogging(t *testing.T) {
@@ -214,7 +170,13 @@ func startBackgroundServer(t *testing.T) (context.CancelFunc, int) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	portStr, port := testutil.FreePort(t)
-	if err := server.StartBackground(ctx, server.Options{Port: portStr}); err != nil {
+	certPath, keyPath := testTLSFiles(t)
+	liveDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(liveDir, "runtime.json"), []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
+		cancel()
+		t.Fatalf("write runtime metadata: %v", err)
+	}
+	if err := server.StartBackground(ctx, server.Options{Port: portStr, CertPath: certPath, KeyPath: keyPath, LiveDir: liveDir}); err != nil {
 		cancel()
 		t.Fatalf("failed to start background server: %v", err)
 	}
@@ -230,4 +192,15 @@ func startBackgroundServer(t *testing.T) (context.CancelFunc, int) {
 	})
 
 	return cancel, port
+}
+
+func testTLSFiles(t *testing.T) (string, string) {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("runtime caller unavailable")
+	}
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
+	return filepath.Join(root, "tests", "fixtures", "tls", "integration-cert.pem"),
+		filepath.Join(root, "tests", "fixtures", "tls", "integration-key.pem")
 }

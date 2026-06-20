@@ -72,7 +72,7 @@ When tunnel mode is used, xp2p may route the probe through an internal marker ta
 
 - Watch mode: add `--watch` to `xp2p client|server state` to stream tables with TTL filtering.
 - Watch pending: combine `--watch --pending` to see staged tunnels while waiting for apply/service start.
-- Custom diagnostics port/proto: `xp2p diag --listen 0.0.0.0:62025 --proto udp`.
+- Custom diagnostics listener: `xp2p diag --listen 0.0.0.0:62025`.
 - Custom ping port: `xp2p ping <host> --port 62025`.
 - Tunnel cascade overrides: `xp2p ping <host> -T <target>`; use `-e <tag>` or `-i <index>` (with `-T`) when multiple endpoints share the same host.
 - Access control: diagnostics port is intentionally unauthenticated; restrict it via firewall/ACL (for example allow only LAN and/or the tunnel interface).

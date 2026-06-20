@@ -176,6 +176,8 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 
 	stopHeartbeat := startHeartbeatLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopHeartbeat()
+	stopSubscriptionSync := startSubscriptionSyncLoop(ctx, installDir, configDir, opts.Heartbeat)
+	defer stopSubscriptionSync()
 
 	configureCmd := func(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{

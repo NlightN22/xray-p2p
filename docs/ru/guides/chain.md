@@ -60,8 +60,8 @@ uci commit firewall
 
 ## Проверка
 
-На B (client router) проверь, что C1 доступен через туннель с помощью `xp2p ping`. Выбери порт, который точно открыт на C1 (например `22/tcp` для SSH):
+На B (client router) проверь доступность HTTPS control endpoint C1 через туннель с помощью `xp2p ping`:
 
 ```console
-xp2p ping 10.0.101.1 --tunnel --proto tcp --port 22
+xp2p ping 10.0.101.1 --tunnel
 ```

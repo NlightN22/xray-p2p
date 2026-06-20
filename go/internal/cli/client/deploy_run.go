@@ -233,7 +233,6 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 		pingOpts := ping.Options{
 			Count:      1,
 			Timeout:    3 * time.Second,
-			Proto:      "tcp",
 			Port:       markerPort,
 			SocksProxy: socksAddr,
 		}

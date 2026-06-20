@@ -7,6 +7,5 @@ xp2p diag
 Options:
 Includes: inherited options
 - --listen, -n <host:port> listen address (host:port)
-- --proto, -o <proto> protocol to listen on (tcp or udp)
 - --quiet, -q reduce log output
 

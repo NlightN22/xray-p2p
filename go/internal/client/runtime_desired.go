@@ -8,11 +8,15 @@ func runtimeDesiredToClientInstallState(desired runtimeDesired) clientInstallSta
 		state.Endpoints = make([]clientEndpointRecord, 0, len(desired.Endpoints))
 		for _, ep := range desired.Endpoints {
 			state.Endpoints = append(state.Endpoints, clientEndpointRecord{
-				Hostname: ep.Hostname,
-				Address:  ep.Address,
-				Tag:      ep.Tag,
-				Port:     ep.Port,
-				User:     ep.User,
+				Hostname:             ep.Hostname,
+				Address:              ep.Address,
+				Tag:                  ep.Tag,
+				Port:                 ep.Port,
+				User:                 ep.User,
+				ServerName:           ep.ServerName,
+				AllowInsecure:        ep.AllowInsecure,
+				PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
+				VerifyPeerCertByName: ep.VerifyPeerCertByName,
 			})
 		}
 	}

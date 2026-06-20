@@ -1,116 +1,94 @@
 package ping
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 
 	"golang.org/x/net/proxy"
 )
 
-func pingTCP(ctx context.Context, addr string, timeout time.Duration, socksProxy string, seq int, reporter Reporter) (time.Duration, error) {
-	conn, err := dialTCP(ctx, addr, socksProxy, timeout)
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-
-	return exchangeTCP(ctx, conn, addr, timeout, seq, reporter)
-}
-
-func pingUDP(_ context.Context, host string, port int, timeout time.Duration) (time.Duration, error) {
-	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		return 0, err
-	}
-
-	conn, err := net.DialUDP("udp", nil, addr)
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-
-	if err := setDeadline(conn, timeout); err != nil {
-		return 0, err
-	}
-
+func pingHTTPS(ctx context.Context, addr string, timeout time.Duration, seq int, opts Options) (time.Duration, error) {
 	nonce, err := newNonce()
 	if err != nil {
 		return 0, err
 	}
-	request := pingRequest + " " + nonce + "\n"
-
-	start := time.Now()
-	if _, err = conn.Write([]byte(request)); err != nil {
-		return 0, err
-	}
-
-	buf := make([]byte, 64)
-	n, err := conn.Read(buf)
+	reqPayload := controlplane.PingRequest{Nonce: nonce}
+	body, err := json.Marshal(reqPayload)
 	if err != nil {
 		return 0, err
 	}
-
-	if err := validateResponse(string(buf[:n]), nonce); err != nil {
-		return 0, err
-	}
-
-	return time.Since(start), nil
-}
-
-func exchangeTCP(ctx context.Context, conn net.Conn, addr string, timeout time.Duration, seq int, reporter Reporter) (time.Duration, error) {
-	return exchangeTCPRequest(ctx, conn, addr, pingRequest, timeout, seq, reporter)
-}
-
-func exchangeTCPRequest(ctx context.Context, conn net.Conn, addr string, requestName string, timeout time.Duration, seq int, reporter Reporter) (time.Duration, error) {
-	if err := setDeadline(conn, timeout); err != nil {
-		return 0, err
-	}
-
-	nonce, err := newNonce()
+	url := "https://" + addr + controlplane.PathPing
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return 0, err
 	}
-	request := requestName + " " + nonce + "\n"
-
-	start := time.Now()
-	if _, err = conn.Write([]byte(request)); err != nil {
-		return 0, err
-	}
-
-	buf := make([]byte, 64)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return 0, err
-	}
-
-	if err := validateResponse(string(buf[:n]), nonce); err != nil {
-		return 0, err
-	}
-
-	rtt := time.Since(start)
-	if reporter != nil {
-		result := Result{
-			Seq:    seq,
-			Target: addr,
-			Proto:  protoTCP,
-			RTT:    rtt,
+	req.Header.Set("Content-Type", "application/json")
+	if opts.User != "" || opts.Credential != "" {
+		if err := controlplane.ApplyHeaders(req, opts.User, opts.Credential, nonce, body, time.Now().UTC()); err != nil {
+			return 0, err
 		}
-		if err := reporter.Report(ctx, conn, result); err != nil {
+	}
+	client := &http.Client{Transport: httpTransport(opts, timeout), Timeout: timeout}
+	start := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return 0, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("control ping failed: %s", resp.Status)
+	}
+	var pong controlplane.PingResponse
+	if err := json.Unmarshal(respBody, &pong); err != nil {
+		return 0, fmt.Errorf("decode control ping response: %w", err)
+	}
+	if pong.Nonce != nonce {
+		return 0, fmt.Errorf("unexpected response nonce: %q", pong.Nonce)
+	}
+	rtt := time.Since(start)
+	if opts.Reporter != nil {
+		result := Result{Seq: seq, Target: addr, Proto: protocolHTTPS, RTT: rtt}
+		if err := opts.Reporter.Report(ctx, result); err != nil {
 			return rtt, err
 		}
 	}
-
 	return rtt, nil
 }
 
-func dialTCP(ctx context.Context, addr, socksProxy string, timeout time.Duration) (net.Conn, error) {
-	if socksProxy == "" {
-		dialer := &net.Dialer{Timeout: timeout}
-		return dialer.DialContext(ctx, "tcp", addr)
+func httpTransport(opts Options, timeout time.Duration) http.RoundTripper {
+	tlsConfig := &tls.Config{
+		ServerName:         opts.ServerName,
+		InsecureSkipVerify: opts.AllowInsecure || opts.PinnedPeerCertSHA256 != "",
 	}
-	return dialViaSocks(ctx, addr, socksProxy, timeout)
+	if opts.PinnedPeerCertSHA256 != "" {
+		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			return verifyPinnedPeerCertificate(rawCerts, opts.PinnedPeerCertSHA256)
+		}
+	}
+	dial := (&net.Dialer{Timeout: timeout}).DialContext
+	if opts.SocksProxy != "" {
+		dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return dialViaSocks(ctx, addr, opts.SocksProxy, timeout)
+		}
+	}
+	return &http.Transport{
+		TLSClientConfig: tlsConfig,
+		DialContext:     dial,
+	}
 }
 
 func dialViaSocks(ctx context.Context, addr, proxyAddr string, timeout time.Duration) (net.Conn, error) {
@@ -134,8 +112,4 @@ func dialViaSocks(ctx context.Context, addr, proxyAddr string, timeout time.Dura
 	}
 
 	return conn, nil
-}
-
-func setDeadline(conn net.Conn, timeout time.Duration) error {
-	return conn.SetDeadline(time.Now().Add(timeout))
 }
