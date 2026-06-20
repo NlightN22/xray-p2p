@@ -5,7 +5,13 @@ package xrayapi
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -15,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	coreconfig "github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/coreconfig"
+	"github.com/NlightN22/xray-p2p/go/internal/xrayapi/proto/gen/coreconfig"
 )
 
 func TestBundledXrayAPI(t *testing.T) {
@@ -115,6 +121,32 @@ func TestBundledXrayAPI(t *testing.T) {
 	} else {
 		requireNotContains(t, users, "smoke@example.com")
 	}
+	certPath, keyPath := writeSmokeCertificate(t, workDir)
+	inboundTag := "protocol-switch-inbound-smoke"
+	inboundPort := freeTCPPort(t)
+	if err := client.AddInbound(context.Background(), mustInbound(t, smokeTrojanInbound(inboundTag, inboundPort, certPath, keyPath))); err != nil {
+		t.Fatalf("add Trojan inbound: %v", err)
+	}
+	if err := client.RemoveInbound(context.Background(), inboundTag); err != nil {
+		t.Fatalf("remove Trojan inbound: %v", err)
+	}
+	if err := client.AddInbound(context.Background(), mustInbound(t, smokeVLESSInbound(inboundTag, inboundPort, certPath, keyPath))); err != nil {
+		t.Fatalf("add VLESS inbound after Trojan: %v", err)
+	}
+	if tags, err := client.ListInboundTags(context.Background()); err != nil {
+		t.Fatalf("list inbounds after VLESS replacement: %v", err)
+	} else {
+		requireContains(t, tags, inboundTag)
+	}
+	if err := client.RemoveInbound(context.Background(), inboundTag); err != nil {
+		t.Fatalf("remove VLESS inbound: %v", err)
+	}
+	if err := client.AddInbound(context.Background(), mustInbound(t, smokeTrojanInbound(inboundTag, inboundPort, certPath, keyPath))); err != nil {
+		t.Fatalf("restore Trojan inbound after VLESS: %v", err)
+	}
+	if err := client.RemoveInbound(context.Background(), inboundTag); err != nil {
+		t.Fatalf("remove restored Trojan inbound: %v", err)
+	}
 	if err := client.AddRule(context.Background(), map[string]any{
 		"type":        "field",
 		"ruleTag":     "smoke-rule",
@@ -173,6 +205,26 @@ func smokeVLESSOutbound(tag string) map[string]any {
 		"settings":       map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": 443, "users": []any{map[string]any{"id": "550e8400-e29b-41d4-a716-446655440000", "email": "smoke@example.com", "encryption": "none", "flow": "xtls-rprx-vision"}}}}},
 		"streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"serverName": "smoke.example.com"}, "tcpSettings": map[string]any{"header": map[string]any{"type": "none"}}},
 	}
+}
+
+func smokeTrojanInbound(tag string, port int, certPath, keyPath string) map[string]any {
+	return map[string]any{
+		"tag": tag, "listen": "127.0.0.1", "port": port, "protocol": "trojan",
+		"settings":       map[string]any{"clients": []any{map[string]any{"email": "smoke@example.com", "password": "smoke-password"}}},
+		"streamSettings": smokeInboundStream(certPath, keyPath),
+	}
+}
+
+func smokeVLESSInbound(tag string, port int, certPath, keyPath string) map[string]any {
+	return map[string]any{
+		"tag": tag, "listen": "127.0.0.1", "port": port, "protocol": "vless",
+		"settings":       map[string]any{"decryption": "none", "clients": []any{map[string]any{"email": "smoke@example.com", "id": "550e8400-e29b-41d4-a716-446655440000", "flow": "xtls-rprx-vision"}}},
+		"streamSettings": smokeInboundStream(certPath, keyPath),
+	}
+}
+
+func smokeInboundStream(certPath, keyPath string) map[string]any {
+	return map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"certificates": []any{map[string]any{"certificateFile": certPath, "keyFile": keyPath}}}, "tcpSettings": map[string]any{"header": map[string]any{"type": "none"}}}
 }
 
 func bundledXrayPath(t *testing.T) string {
@@ -369,6 +421,42 @@ func mustOutbound(t *testing.T, outbound map[string]any) *coreconfig.OutboundHan
 		t.Fatalf("convert outbound: %v", err)
 	}
 	return cfg
+}
+
+func mustInbound(t *testing.T, inbound map[string]any) *coreconfig.InboundHandlerConfig {
+	t.Helper()
+	cfg, err := InboundFromMap(inbound)
+	if err != nil {
+		t.Fatalf("convert inbound: %v", err)
+	}
+	return cfg
+}
+
+func writeSmokeCertificate(t *testing.T, workDir string) (string, string) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate certificate key: %v", err)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		t.Fatalf("generate certificate serial: %v", err)
+	}
+	template := &x509.Certificate{SerialNumber: serial, Subject: pkix.Name{CommonName: "smoke.example.com"}, DNSNames: []string{"smoke.example.com"}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment}
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("create certificate: %v", err)
+	}
+	certPath := filepath.Join(workDir, "smoke-cert.pem")
+	keyPath := filepath.Join(workDir, "smoke-key.pem")
+	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), 0o644); err != nil {
+		t.Fatalf("write certificate: %v", err)
+	}
+	keyDER := x509.MarshalPKCS1PrivateKey(key)
+	if err := os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER}), 0o600); err != nil {
+		t.Fatalf("write certificate key: %v", err)
+	}
+	return certPath, keyPath
 }
 
 func contains(values []string, want string) bool {
