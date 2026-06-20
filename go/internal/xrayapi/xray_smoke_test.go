@@ -75,6 +75,30 @@ func TestBundledXrayAPI(t *testing.T) {
 	} else {
 		requireNotContains(t, tags, "direct-smoke")
 	}
+	protocolTag := "protocol-switch-smoke"
+	if err := client.AddOutbound(context.Background(), mustOutbound(t, smokeTrojanOutbound(protocolTag))); err != nil {
+		t.Fatalf("add Trojan outbound: %v", err)
+	}
+	if err := client.RemoveOutbound(context.Background(), protocolTag); err != nil {
+		t.Fatalf("remove Trojan outbound: %v", err)
+	}
+	if err := client.AddOutbound(context.Background(), mustOutbound(t, smokeVLESSOutbound(protocolTag))); err != nil {
+		t.Fatalf("add VLESS outbound after Trojan: %v", err)
+	}
+	if tags, err := client.ListOutboundTags(context.Background()); err != nil {
+		t.Fatalf("list outbounds after VLESS replacement: %v", err)
+	} else {
+		requireContains(t, tags, protocolTag)
+	}
+	if err := client.RemoveOutbound(context.Background(), protocolTag); err != nil {
+		t.Fatalf("remove VLESS outbound: %v", err)
+	}
+	if err := client.AddOutbound(context.Background(), mustOutbound(t, smokeTrojanOutbound(protocolTag))); err != nil {
+		t.Fatalf("restore Trojan outbound after VLESS: %v", err)
+	}
+	if err := client.RemoveOutbound(context.Background(), protocolTag); err != nil {
+		t.Fatalf("remove restored Trojan outbound: %v", err)
+	}
 	if err := client.AddInboundUser(context.Background(), "trojan-smoke", "smoke@example.com", "secret"); err != nil {
 		t.Fatalf("add inbound user: %v", err)
 	}
@@ -130,6 +154,24 @@ func TestBundledXrayAPI(t *testing.T) {
 	}
 	if _, err := QueryStats(context.Background(), StatsQueryOptions{Address: apiAddress, Pattern: "", Timeout: 3 * time.Second}); err != nil {
 		t.Fatalf("query stats: %v", err)
+	}
+}
+
+func smokeTrojanOutbound(tag string) map[string]any {
+	return map[string]any{
+		"tag":            tag,
+		"protocol":       "trojan",
+		"settings":       map[string]any{"servers": []any{map[string]any{"address": "127.0.0.1", "port": 443, "password": "smoke-password", "email": "smoke@example.com"}}},
+		"streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"serverName": "smoke.example.com"}, "tcpSettings": map[string]any{"header": map[string]any{"type": "none"}}},
+	}
+}
+
+func smokeVLESSOutbound(tag string) map[string]any {
+	return map[string]any{
+		"tag":            tag,
+		"protocol":       "vless",
+		"settings":       map[string]any{"vnext": []any{map[string]any{"address": "127.0.0.1", "port": 443, "users": []any{map[string]any{"id": "550e8400-e29b-41d4-a716-446655440000", "email": "smoke@example.com", "encryption": "none", "flow": "xtls-rprx-vision"}}}}},
+		"streamSettings": map[string]any{"network": "tcp", "security": "tls", "tlsSettings": map[string]any{"serverName": "smoke.example.com"}, "tcpSettings": map[string]any{"header": map[string]any{"type": "none"}}},
 	}
 }
 
