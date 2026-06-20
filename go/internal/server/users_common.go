@@ -45,9 +45,6 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 		result := make([]trojanClient, 0, len(users))
 		for _, user := range users {
 			active := strings.TrimSpace(tunnel.ActiveCredential(user))
-			if active == "" {
-				return nil, fmt.Errorf("server user %q has an empty credential", user.UserLabel)
-			}
 			result = append(result, trojanClient{Email: user.UserLabel, Password: active, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: user.CredentialGeneration, Disabled: user.Disabled})
 		}
 		return result, nil

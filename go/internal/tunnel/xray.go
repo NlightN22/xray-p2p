@@ -19,6 +19,11 @@ func XrayOutbound(link Link, tag string) (map[string]any, error) {
 	if credential == "" {
 		return nil, fmt.Errorf("connection credential is required")
 	}
+	if endpoint.Protocol == "vless" {
+		if err := ValidateVLESSCredential(credential); err != nil {
+			return nil, err
+		}
+	}
 	user := map[string]any{"email": link.User.UserLabel}
 	if endpoint.Protocol == "trojan" {
 		user["password"] = credential
@@ -45,6 +50,9 @@ func XrayInboundUser(protocol string, user User) (map[string]any, error) {
 	case "trojan":
 		return map[string]any{"email": user.UserLabel, "password": credential}, nil
 	case "vless":
+		if err := ValidateVLESSCredential(credential); err != nil {
+			return nil, err
+		}
 		return map[string]any{"email": user.UserLabel, "id": credential}, nil
 	default:
 		return nil, fmt.Errorf("unsupported tunnel protocol %q", protocol)

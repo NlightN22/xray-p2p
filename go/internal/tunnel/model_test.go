@@ -53,6 +53,29 @@ func TestNewCredentialReturnsUUID(t *testing.T) {
 	}
 }
 
+func TestUUIDCredentialValidation(t *testing.T) {
+	if !IsUUIDCredential("550e8400-e29b-41d4-a716-446655440000") {
+		t.Fatal("expected UUID credential to be accepted")
+	}
+	if !IsUUIDCredential("550E8400-E29B-41D4-A716-446655440000") {
+		t.Fatal("expected uppercase UUID credential to be accepted")
+	}
+	if IsUUIDCredential("legacy-password") || IsUUIDCredential("") {
+		t.Fatal("expected legacy credentials to be rejected")
+	}
+	if err := ValidateVLESSCredential("legacy-password"); err == nil {
+		t.Fatal("expected VLESS credential validation failure")
+	}
+	endpoint, err := DefaultProfile(ProfileVLESSTLSVision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint.Host, endpoint.Port = "edge.example", 443
+	if _, err := XrayOutbound(Link{Endpoint: endpoint, User: User{Credential: "legacy-password"}}, "proxy"); err == nil {
+		t.Fatal("expected VLESS codec validation failure")
+	}
+}
+
 func TestNormalizeRecordMapsLegacyTrojanFields(t *testing.T) {
 	record, report, err := NormalizeRecord(LegacyRecord{Host: "edge.example", Port: 443, UserLabel: "alice", Password: "secret"})
 	if err != nil {

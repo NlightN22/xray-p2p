@@ -9,6 +9,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
@@ -27,6 +28,9 @@ func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 		LiveDir: liveDir,
 		LkgDir:  lkgDir,
 	}, artifacts)
+	if result == xraylive.RuntimeApplyServiceLayerRequired && !serverLiveRuntimeAvailable(liveDir) {
+		return xraylive.RuntimeApplyStaged, nil
+	}
 	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported ||
 		result == xraylive.RuntimeApplyFailed || result == xraylive.RuntimeApplySkipped {
 		if stopped, statusErr := serviceStopped(ctx, servicecontrol.RoleServer); statusErr == nil && stopped {
@@ -37,6 +41,16 @@ func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 		return result, err
 	}
 	return result, xraylive.ResultError(result)
+}
+
+func serverLiveRuntimeAvailable(liveDir string) bool {
+	for _, name := range []string{layout.XrayConfigFileName, layout.RuntimeMetaFileName} {
+		info, err := os.Stat(filepath.Join(liveDir, name))
+		if err != nil || info.IsDir() {
+			return false
+		}
+	}
+	return true
 }
 
 func commitServerRuntimeDoc(ctx context.Context, doc map[string]any) error {

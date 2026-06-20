@@ -70,6 +70,9 @@ func parseVLESS(u *url.URL) (Link, error) {
 	if err != nil {
 		return Link{}, err
 	}
+	if err := ValidateVLESSCredential(credential); err != nil {
+		return Link{}, err
+	}
 	query := u.Query()
 	endpoint, _ := DefaultProfile(ProfileVLESSTLSVision)
 	endpoint.Host, endpoint.Port = host, port

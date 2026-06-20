@@ -3,6 +3,8 @@ package tunnel
 
 import (
 	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -24,6 +26,29 @@ type User struct {
 	Credential                    string            `json:"credential,omitempty" toml:"credential,omitempty"`
 	Disabled                      bool              `json:"disabled,omitempty" toml:"disabled,omitempty"`
 	Metadata                      map[string]string `json:"metadata,omitempty" toml:"metadata,omitempty"`
+}
+
+// IsUUIDCredential reports whether a credential can be used as a VLESS id.
+func IsUUIDCredential(credential string) bool {
+	value := strings.TrimSpace(credential)
+	if len(value) != 36 {
+		return false
+	}
+	for _, index := range []int{8, 13, 18, 23} {
+		if value[index] != '-' {
+			return false
+		}
+	}
+	_, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
+	return err == nil
+}
+
+// ValidateVLESSCredential is shared by VLESS links and Xray profile codecs.
+func ValidateVLESSCredential(credential string) error {
+	if !IsUUIDCredential(credential) {
+		return errors.New("VLESS credential must be a UUID")
+	}
+	return nil
 }
 
 type TLSMetadata struct {
