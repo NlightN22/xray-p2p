@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -23,9 +24,12 @@ const (
 )
 
 type trojanClient struct {
-	Email    string `json:"email" toml:"email"`
-	Password string `json:"password" toml:"password"`
-	Disabled bool   `json:"disabled,omitempty" toml:"disabled,omitempty"`
+	Email                         string    `json:"email" toml:"email"`
+	Password                      string    `json:"password" toml:"password"`
+	PreviousCredentialForRotation string    `json:"-"`
+	RotationExpiresAt             time.Time `json:"-"`
+	CredentialGeneration          int       `json:"-"`
+	Disabled                      bool      `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 
 func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
@@ -40,10 +44,11 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 		}
 		result := make([]trojanClient, 0, len(users))
 		for _, user := range users {
-			if strings.TrimSpace(user.Credential) == "" {
+			active := strings.TrimSpace(tunnel.ActiveCredential(user))
+			if active == "" {
 				return nil, fmt.Errorf("server user %q has an empty credential", user.UserLabel)
 			}
-			result = append(result, trojanClient{Email: user.UserLabel, Password: user.Credential, Disabled: user.Disabled})
+			result = append(result, trojanClient{Email: user.UserLabel, Password: active, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: user.CredentialGeneration, Disabled: user.Disabled})
 		}
 		return result, nil
 	}
@@ -72,7 +77,7 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 		if err != nil {
 			return nil, fmt.Errorf("normalize legacy server user %q: %w", user.Email, err)
 		}
-		users[idx] = trojanClient{Email: record.User.UserLabel, Password: record.User.Credential, Disabled: record.User.Disabled}
+		users[idx] = trojanClient{Email: record.User.UserLabel, Password: tunnel.ActiveCredential(record.User), CredentialGeneration: 1, Disabled: record.User.Disabled}
 	}
 	return users, nil
 }
@@ -80,7 +85,11 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 func setServerUsers(doc map[string]any, users []trojanClient) {
 	stored := make([]tunnel.User, 0, len(users))
 	for _, user := range users {
-		stored = append(stored, tunnel.User{UserLabel: user.Email, Credential: user.Password, Disabled: user.Disabled})
+		generation := user.CredentialGeneration
+		if generation == 0 {
+			generation = 1
+		}
+		stored = append(stored, tunnel.User{UserLabel: user.Email, ActiveCredential: user.Password, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: generation, Disabled: user.Disabled})
 	}
 	doc[serverUsersKey] = stored
 	doc[serverTrojanUsersKey] = nil

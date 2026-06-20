@@ -26,6 +26,14 @@ func Sign(secret, method, path, rawQuery string, body []byte, timestamp time.Tim
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+// RotationProof deliberately signs only a server-issued nonce. Rotation is independent
+// from the general request-header authentication protocol.
+func RotationProof(secret, nonce string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write([]byte(nonce))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 func VerifyRequest(r *http.Request, body []byte, users []AuthUser, now time.Time, window time.Duration) error {
 	if len(users) == 0 {
 		return nil

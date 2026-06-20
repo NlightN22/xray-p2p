@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Profile string
@@ -15,10 +16,14 @@ const (
 )
 
 type User struct {
-	UserLabel  string            `json:"user_label" toml:"user_label"`
-	Credential string            `json:"credential" toml:"credential"`
-	Disabled   bool              `json:"disabled,omitempty" toml:"disabled,omitempty"`
-	Metadata   map[string]string `json:"metadata,omitempty" toml:"metadata,omitempty"`
+	UserLabel                     string            `json:"user_label" toml:"user_label"`
+	ActiveCredential              string            `json:"active_credential" toml:"active_credential"`
+	PreviousCredentialForRotation string            `json:"previous_credential_for_rotation,omitempty" toml:"previous_credential_for_rotation,omitempty"`
+	RotationExpiresAt             time.Time         `json:"rotation_expires_at,omitempty" toml:"rotation_expires_at,omitempty"`
+	CredentialGeneration          int               `json:"credential_generation" toml:"credential_generation"`
+	Credential                    string            `json:"credential,omitempty" toml:"credential,omitempty"`
+	Disabled                      bool              `json:"disabled,omitempty" toml:"disabled,omitempty"`
+	Metadata                      map[string]string `json:"metadata,omitempty" toml:"metadata,omitempty"`
 }
 
 type TLSMetadata struct {

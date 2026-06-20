@@ -123,6 +123,37 @@ func TestHandlersServePingHeartbeatAndSubscription(t *testing.T) {
 	}
 }
 
+func TestRotationChallengeAndProofDoNotExposeCredential(t *testing.T) {
+	now := time.Unix(1000, 0).UTC()
+	runtime := Runtime{Subscription: Subscription{Generation: "sub-1"}, RotationUsers: []RotationUser{{UserLabel: "alice", ActiveCredential: "new", PreviousCredentialForRotation: "old", RotationExpiresAt: now.Add(time.Hour), CredentialGeneration: 2}}}
+	h := NewHandler(HandlerOptions{LoadRuntime: func() (Runtime, error) { return runtime, nil }, Now: func() time.Time { return now }})
+	challengeBody := []byte(`{"user_label":"alice","action":"challenge"}`)
+	challengeReq := httptest.NewRequest(http.MethodPost, PathCredentialsRotate, bytes.NewReader(challengeBody))
+	challengeResp := httptest.NewRecorder()
+	h.ServeHTTP(challengeResp, challengeReq)
+	if challengeResp.Code != http.StatusOK {
+		t.Fatalf("challenge status=%d", challengeResp.Code)
+	}
+	var challenge RotationChallenge
+	_ = json.NewDecoder(challengeResp.Body).Decode(&challenge)
+	body, _ := json.Marshal(RotationRequest{UserLabel: "alice", Nonce: challenge.Nonce, Proof: RotationProof("old", challenge.Nonce)})
+	resp := httptest.NewRecorder()
+	h.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, PathCredentialsRotate, bytes.NewReader(body)))
+	if resp.Code != http.StatusOK {
+		t.Fatalf("rotation status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	var result RotationResponse
+	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if !result.RotationPending || result.ActiveCredential != "new" || result.CredentialGeneration != 2 {
+		t.Fatalf("unexpected rotation response: %#v", result)
+	}
+	bad := httptest.NewRecorder()
+	h.ServeHTTP(bad, httptest.NewRequest(http.MethodPost, PathCredentialsRotate, bytes.NewReader(body)))
+	if bad.Code != http.StatusUnauthorized {
+		t.Fatalf("replayed proof status=%d", bad.Code)
+	}
+}
+
 func signedRequest(t *testing.T, method, path string, body []byte, now time.Time) *http.Request {
 	t.Helper()
 	req := httptest.NewRequest(method, path, bytes.NewReader(body))

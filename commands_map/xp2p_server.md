@@ -136,7 +136,7 @@ Includes: inherited options
 
 xp2p server user
   Summary: Manage users on the server
-  Subcommands: add, update, disable, enable, remove, list
+  Subcommands: add, update, rotate, disable, enable, remove, list
 Options:
 Includes: inherited options
 
@@ -162,6 +162,12 @@ Includes: inherited options
 - --new-id, -I <id> new client identifier
 - --password, -w <password> client password or pre-shared key
 - --path, -p <path> server installation directory
+
+xp2p server user rotate <id>
+  Summary: Rotate a user credential
+Options:
+Includes: inherited options
+- --ttl, -T <duration> previous credential rotation window
 
 xp2p server user disable <id>
   Summary: Disable a user

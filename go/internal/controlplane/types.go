@@ -3,10 +3,12 @@ package controlplane
 import "time"
 
 const (
-	PathReady        = "/control/v1/ready"
-	PathPing         = "/control/v1/ping"
-	PathHeartbeat    = "/control/v1/heartbeat"
-	PathSubscription = "/control/v1/subscription"
+	PathReady             = "/control/v1/ready"
+	PathPing              = "/control/v1/ping"
+	PathHeartbeat         = "/control/v1/heartbeat"
+	PathSubscription      = "/control/v1/subscription"
+	PathCredentialsRotate = "/control/v1/credentials/rotate"
+	PathCredentialsAck    = "/control/v1/credentials/ack"
 )
 
 const (
@@ -17,10 +19,39 @@ const (
 )
 
 type Runtime struct {
-	Endpoint     Endpoint     `json:"endpoint"`
-	Subscription Subscription `json:"subscription"`
-	AuthUsers    []AuthUser   `json:"auth_users,omitempty"`
-	TLS          TLSMetadata  `json:"tls,omitempty"`
+	Endpoint      Endpoint       `json:"endpoint"`
+	Subscription  Subscription   `json:"subscription"`
+	AuthUsers     []AuthUser     `json:"auth_users,omitempty"`
+	RotationUsers []RotationUser `json:"rotation_users,omitempty"`
+	TLS           TLSMetadata    `json:"tls,omitempty"`
+}
+
+// RotationUser is control-plane-only state. It never contributes a tunnel credential.
+type RotationUser struct {
+	UserLabel                     string    `json:"user_label"`
+	ActiveCredential              string    `json:"active_credential"`
+	PreviousCredentialForRotation string    `json:"previous_credential_for_rotation,omitempty"`
+	RotationExpiresAt             time.Time `json:"rotation_expires_at,omitempty"`
+	CredentialGeneration          int       `json:"credential_generation"`
+}
+
+type RotationRequest struct {
+	UserLabel string `json:"user_label"`
+	Action    string `json:"action,omitempty"`
+	Nonce     string `json:"nonce,omitempty"`
+	Proof     string `json:"proof,omitempty"`
+}
+
+type RotationChallenge struct {
+	Nonce     string    `json:"nonce"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type RotationResponse struct {
+	RotationPending        bool   `json:"rotation_pending"`
+	ActiveCredential       string `json:"active_credential,omitempty"`
+	CredentialGeneration   int    `json:"credential_generation,omitempty"`
+	SubscriptionGeneration string `json:"subscription_generation,omitempty"`
 }
 
 type Endpoint struct {

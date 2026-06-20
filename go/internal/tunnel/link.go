@@ -34,7 +34,7 @@ func RenderLink(link Link) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(link.User.Credential) == "" {
+	if strings.TrimSpace(ActiveCredential(link.User)) == "" {
 		return "", fmt.Errorf("connection credential is required")
 	}
 	if strings.TrimSpace(endpoint.Host) == "" || endpoint.Port < 1 || endpoint.Port > 65535 {
@@ -125,7 +125,7 @@ func newURL(scheme string, endpoint Endpoint, user User, values url.Values) *url
 		values.Set("sni", endpoint.ServerName)
 	}
 	writeTLS(values, endpoint.TLS)
-	u := &url.URL{Scheme: scheme, Host: net.JoinHostPort(endpoint.Host, strconv.Itoa(endpoint.Port)), User: url.User(user.Credential), RawQuery: values.Encode()}
+	u := &url.URL{Scheme: scheme, Host: net.JoinHostPort(endpoint.Host, strconv.Itoa(endpoint.Port)), User: url.User(ActiveCredential(user)), RawQuery: values.Encode()}
 	if strings.TrimSpace(user.UserLabel) != "" {
 		u.Fragment = user.UserLabel
 	}

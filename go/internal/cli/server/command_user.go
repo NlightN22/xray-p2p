@@ -2,7 +2,9 @@ package servercmd
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/spf13/cobra"
 )
 
@@ -15,11 +17,24 @@ func newServerUserCmd(cfg commandConfig) *cobra.Command {
 	cmd.AddCommand(
 		newServerUserAddCmd(cfg),
 		newServerUserUpdateCmd(cfg),
+		newServerUserRotateCmd(cfg),
 		newServerUserDisableCmd(cfg),
 		newServerUserEnableCmd(cfg),
 		newServerUserRemoveCmd(cfg),
 		newServerUserListCmd(cfg),
 	)
+	return cmd
+}
+
+func newServerUserRotateCmd(cfg commandConfig) *cobra.Command {
+	var ttl time.Duration
+	cmd := &cobra.Command{Use: "rotate <id>", Short: "Rotate a user credential", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if err := serverUserRotateFunc(commandContext(cmd), server.RotateUserOptions{UserID: args[0], TTL: ttl}); err != nil {
+			return err
+		}
+		return nil
+	}}
+	cmd.Flags().DurationVarP(&ttl, "ttl", "T", 0, "previous credential rotation window")
 	return cmd
 }
 

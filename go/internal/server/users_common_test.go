@@ -41,7 +41,7 @@ func TestSetServerUsersWritesNeutralRecords(t *testing.T) {
 		t.Fatalf("legacy users remained: %#v", doc)
 	}
 	users, ok := doc[serverUsersKey].([]tunnel.User)
-	if !ok || len(users) != 1 || users[0].UserLabel != "alice" || users[0].Credential != "secret" {
+	if !ok || len(users) != 1 || users[0].UserLabel != "alice" || users[0].ActiveCredential != "secret" || users[0].CredentialGeneration != 1 {
 		t.Fatalf("unexpected neutral users: %#v", doc[serverUsersKey])
 	}
 }

@@ -2,12 +2,16 @@ package controlplane
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,14 +25,16 @@ type HandlerOptions struct {
 	Heartbeat   *heartbeat.Store
 	Now         func() time.Time
 	AuthWindow  time.Duration
+	Acknowledge func(userLabel string, credentialGeneration int) error
 }
 
 func NewHandler(opts HandlerOptions) http.Handler {
 	h := &handler{
-		load:       opts.LoadRuntime,
-		heartbeat:  opts.Heartbeat,
-		now:        opts.Now,
-		authWindow: opts.AuthWindow,
+		load:        opts.LoadRuntime,
+		heartbeat:   opts.Heartbeat,
+		now:         opts.Now,
+		authWindow:  opts.AuthWindow,
+		acknowledge: opts.Acknowledge,
 	}
 	if h.now == nil {
 		h.now = time.Now
@@ -38,15 +44,24 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	mux.HandleFunc(PathPing, h.ping)
 	mux.HandleFunc(PathHeartbeat, h.heartbeatPost)
 	mux.HandleFunc(PathSubscription, h.subscription)
+	mux.HandleFunc(PathCredentialsRotate, h.rotate)
+	mux.HandleFunc(PathCredentialsAck, h.ack)
 	return mux
 }
 
 type handler struct {
-	load       RuntimeLoader
-	heartbeat  *heartbeat.Store
-	now        func() time.Time
-	authWindow time.Duration
-	mu         sync.Mutex
+	load        RuntimeLoader
+	heartbeat   *heartbeat.Store
+	now         func() time.Time
+	authWindow  time.Duration
+	acknowledge func(string, int) error
+	mu          sync.Mutex
+	challenges  map[string]rotationChallenge
+}
+
+type rotationChallenge struct {
+	nonce     string
+	expiresAt time.Time
 }
 
 func (h *handler) ready(w http.ResponseWriter, r *http.Request) {
@@ -55,6 +70,136 @@ func (h *handler) ready(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ready": true})
+}
+
+func (h *handler) rotate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req RotationRequest
+	rt, _, ok := h.loadRotationRequest(w, r, &req)
+	if !ok {
+		return
+	}
+	if req.Action == "challenge" {
+		if rotationUser(rt.RotationUsers, req.UserLabel) == nil {
+			h.rotationAuthFailure(w)
+			return
+		}
+		nonce, err := h.newChallenge(req.UserLabel)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "challenge unavailable")
+			return
+		}
+		writeJSON(w, http.StatusOK, nonce)
+		return
+	}
+	user := h.verifyRotation(rt, req)
+	if user == nil {
+		h.rotationAuthFailure(w)
+		return
+	}
+	if h.now().After(user.RotationExpiresAt) {
+		user.PreviousCredentialForRotation = ""
+	}
+	if user.PreviousCredentialForRotation == "" || !sameProof(req.Proof, user.PreviousCredentialForRotation, req.Nonce) {
+		writeJSON(w, http.StatusOK, RotationResponse{RotationPending: false, CredentialGeneration: user.CredentialGeneration, SubscriptionGeneration: rt.Subscription.Generation})
+		return
+	}
+	writeJSON(w, http.StatusOK, RotationResponse{RotationPending: true, ActiveCredential: user.ActiveCredential, CredentialGeneration: user.CredentialGeneration, SubscriptionGeneration: rt.Subscription.Generation})
+}
+
+func (h *handler) ack(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req RotationRequest
+	rt, _, ok := h.loadRotationRequest(w, r, &req)
+	if !ok {
+		return
+	}
+	user := h.verifyRotation(rt, req)
+	if user == nil || !sameProof(req.Proof, user.ActiveCredential, req.Nonce) || user.PreviousCredentialForRotation == "" {
+		h.rotationAuthFailure(w)
+		return
+	}
+	if h.acknowledge == nil || h.acknowledge(user.UserLabel, user.CredentialGeneration) != nil {
+		writeError(w, http.StatusServiceUnavailable, "rotation acknowledgement unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *handler) loadRotationRequest(w http.ResponseWriter, r *http.Request, req *RotationRequest) (Runtime, []byte, bool) {
+	rt, err := h.runtime()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "control unavailable")
+		return Runtime{}, nil, false
+	}
+	body, err := readBody(r, req)
+	if err != nil {
+		h.rotationAuthFailure(w)
+		return Runtime{}, nil, false
+	}
+	return rt, body, true
+}
+
+func (h *handler) newChallenge(label string) (RotationChallenge, error) {
+	raw := make([]byte, 24)
+	if _, err := rand.Read(raw); err != nil {
+		return RotationChallenge{}, err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.challenges == nil {
+		h.challenges = make(map[string]rotationChallenge)
+	}
+	now := h.now().UTC()
+	c := rotationChallenge{nonce: hex.EncodeToString(raw), expiresAt: now.Add(2 * time.Minute)}
+	h.challenges[label] = c
+	return RotationChallenge{Nonce: c.nonce, ExpiresAt: c.expiresAt}, nil
+}
+
+func (h *handler) verifyRotation(rt Runtime, req RotationRequest) *RotationUser {
+	user := rotationUser(rt.RotationUsers, req.UserLabel)
+	if user == nil || req.Nonce == "" || req.Proof == "" {
+		return nil
+	}
+	h.mu.Lock()
+	c, ok := h.challenges[req.UserLabel]
+	if ok && (c.nonce != req.Nonce || h.now().After(c.expiresAt)) {
+		ok = false
+	}
+	if ok {
+		delete(h.challenges, req.UserLabel)
+	}
+	h.mu.Unlock()
+	if !ok || (!sameProof(req.Proof, user.ActiveCredential, req.Nonce) && (user.PreviousCredentialForRotation == "" || h.now().After(user.RotationExpiresAt) || !sameProof(req.Proof, user.PreviousCredentialForRotation, req.Nonce))) {
+		return nil
+	}
+	return user
+}
+
+func rotationUser(users []RotationUser, label string) *RotationUser {
+	for i := range users {
+		if strings.EqualFold(users[i].UserLabel, label) {
+			return &users[i]
+		}
+	}
+	return nil
+}
+func sameProof(proof, credential, nonce string) bool {
+	got, err := hex.DecodeString(proof)
+	if err != nil {
+		return false
+	}
+	want, _ := hex.DecodeString(RotationProof(credential, nonce))
+	return hmac.Equal(got, want)
+}
+func (h *handler) rotationAuthFailure(w http.ResponseWriter) {
+	writeError(w, http.StatusUnauthorized, "authentication failed")
 }
 
 func (h *handler) ping(w http.ResponseWriter, r *http.Request) {

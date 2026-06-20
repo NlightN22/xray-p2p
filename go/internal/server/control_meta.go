@@ -36,10 +36,22 @@ func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPat
 			Host:   host,
 			Port:   controlPort,
 		},
-		Subscription: sub,
-		AuthUsers:    controlAuthUsers(activeServerUsers(desired.Users)),
-		TLS:          tlsMeta,
+		Subscription:  sub,
+		AuthUsers:     controlAuthUsers(activeServerUsers(desired.Users)),
+		RotationUsers: controlRotationUsers(desired.Users),
+		TLS:           tlsMeta,
 	}, nil
+}
+
+func controlRotationUsers(users []trojanClient) []controlplane.RotationUser {
+	out := make([]controlplane.RotationUser, 0, len(users))
+	for _, user := range users {
+		if user.Disabled || strings.TrimSpace(user.Email) == "" || strings.TrimSpace(user.Password) == "" {
+			continue
+		}
+		out = append(out, controlplane.RotationUser{UserLabel: user.Email, ActiveCredential: user.Password, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: user.CredentialGeneration})
+	}
+	return out
 }
 
 func controlHost(cfg config.Config, certPath string) string {

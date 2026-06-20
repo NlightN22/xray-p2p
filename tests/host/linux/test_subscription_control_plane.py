@@ -80,5 +80,25 @@ def test_subscription_control_plane_uses_tls_and_hmac(server_host):
         state = helpers.read_json(server_host, helpers.SERVER_HEARTBEAT_STATE_FILE)
         entries = state.get("entries") or {}
         assert any(entry.get("tag") == "subscription-control" for entry in entries.values())
+
+        runner("server", "user", "rotate", USER, check=True)
+        result = linux_env.run_guest_script(
+            server_host,
+            "scripts/linux/check_credential_rotation.sh",
+            "127.0.0.1",
+            CONTROL_PORT,
+            USER,
+            PASSWORD,
+            timeout=60,
+        )
+        if result.rc != 0:
+            helpers.dump_failure_state(server_host, "credential-rotation")
+            pytest.fail(
+                "credential rotation probe failed "
+                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+            )
+        rotation = json.loads(result.stdout)
+        assert rotation.get("credential_generation") == 2
+        assert rotation.get("subscription_generation")
     finally:
         runtime.stop_service(runner, "server")

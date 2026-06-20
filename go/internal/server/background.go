@@ -94,6 +94,9 @@ func StartBackground(ctx context.Context, opts Options) error {
 				return controlplane.LoadRuntimeFile(filepath.Join(liveDir, layout.RuntimeMetaFileName))
 			},
 			Heartbeat: hbStore,
+			Acknowledge: func(userLabel string, generation int) error {
+				return AcknowledgeCredential(context.Background(), userLabel, generation)
+			},
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
