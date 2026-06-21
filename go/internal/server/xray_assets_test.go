@@ -74,6 +74,12 @@ password = "secret"
 	if meta.Control.Subscription.Protocol != "trojan" || meta.Control.Subscription.Port != 58443 {
 		t.Fatalf("unexpected subscription: %+v", meta.Control.Subscription)
 	}
+	if meta.Control.Subscription.TLS.CertificatePath != "" || meta.Control.Subscription.TLS.SelfSigned {
+		t.Fatalf("subscription leaked server-only TLS metadata: %+v", meta.Control.Subscription.TLS)
+	}
+	if meta.Control.TLS.CertificatePath == "" || !meta.Control.TLS.SelfSigned {
+		t.Fatalf("runtime TLS metadata must keep server-only fields: %+v", meta.Control.TLS)
+	}
 	if len(meta.Control.AuthUsers) != 1 || meta.Control.AuthUsers[0].Label != "alice" {
 		t.Fatalf("unexpected auth users: %+v", meta.Control.AuthUsers)
 	}

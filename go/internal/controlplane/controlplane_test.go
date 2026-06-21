@@ -42,6 +42,43 @@ func TestGenerationIgnoresVolatileTimes(t *testing.T) {
 	}
 }
 
+func TestBuildSubscriptionUsesClientVisibleTLSMetadata(t *testing.T) {
+	base := Subscription{
+		Profile:    "trojan-tls",
+		Protocol:   "trojan",
+		Transport:  "tcp",
+		Security:   "tls",
+		Host:       "edge.example",
+		Port:       58443,
+		ServerName: "edge.example",
+		TLS: TLSMetadata{
+			ServerName:             "edge.example",
+			PinnedPeerCertSHA256:   "pin",
+			VerifyPeerCertByName:   "edge.example",
+			ClientMayAllowInsecure: false,
+		},
+		Parameters: map[string]string{"tunnel_port": "58443"},
+	}
+	serverOnly := base
+	serverOnly.TLS.CertificatePath = "/etc/xp2p/cert.pem"
+	serverOnly.TLS.SelfSigned = true
+
+	first, err := BuildSubscription(base, time.Unix(100, 0), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := BuildSubscription(serverOnly, time.Unix(100, 0), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.TLS.CertificatePath != "" || second.TLS.SelfSigned {
+		t.Fatalf("server-only TLS metadata leaked into subscription: %+v", second.TLS)
+	}
+	if first.Generation != second.Generation {
+		t.Fatalf("server-only TLS metadata changed subscription generation: %s != %s", first.Generation, second.Generation)
+	}
+}
+
 func TestVerifyRequestHMAC(t *testing.T) {
 	now := time.Unix(1000, 0).UTC()
 	body := []byte(`{"nonce":"n1"}`)

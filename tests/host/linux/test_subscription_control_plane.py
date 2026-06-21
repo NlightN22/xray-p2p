@@ -309,8 +309,8 @@ def test_client_switches_profiles_bidirectionally_from_subscription(client_host,
         assert _client_outbound_protocol(runtime.wait_for_live_xray(client_host, "client"), SERVER_HOST) == "trojan"
         _assert_client_profile(client_host, SERVER_HOST, "trojan-tls", "trojan", "")
         _assert_tunnel_ping(client_host, server_host, client_runner, SERVER_HOST)
-        client_apply_count = _wait_for_client_subscription_apply_count(client_host, 1)
-        _assert_client_subscription_apply_count_stable(client_host, client_apply_count)
+        client_apply_count = _wait_for_client_subscription_apply_count(client_host, 0)
+        _assert_client_subscription_apply_count_stable(client_host, client_apply_count, duration=35.0)
 
         server_runner("server", "profile", "vless-tls-vision", check=True)
         server_live = runtime.wait_for_live_xray(server_host, "server")

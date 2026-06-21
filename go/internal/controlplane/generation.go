@@ -10,6 +10,7 @@ import (
 )
 
 func BuildSubscription(sub Subscription, now time.Time, ttl time.Duration) (Subscription, error) {
+	sub.TLS = ClientVisibleTLSMetadata(sub.TLS)
 	sub.IssuedAt = now.UTC()
 	if ttl <= 0 {
 		ttl = time.Hour
@@ -24,6 +25,7 @@ func BuildSubscription(sub Subscription, now time.Time, ttl time.Duration) (Subs
 }
 
 func Generation(sub Subscription) (string, error) {
+	sub.TLS = ClientVisibleTLSMetadata(sub.TLS)
 	canonical := struct {
 		Profile    string            `json:"profile"`
 		Protocol   string            `json:"protocol"`
@@ -51,4 +53,13 @@ func Generation(sub Subscription) (string, error) {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+func ClientVisibleTLSMetadata(meta TLSMetadata) TLSMetadata {
+	return TLSMetadata{
+		ServerName:             strings.TrimSpace(meta.ServerName),
+		PinnedPeerCertSHA256:   strings.TrimSpace(meta.PinnedPeerCertSHA256),
+		VerifyPeerCertByName:   strings.TrimSpace(meta.VerifyPeerCertByName),
+		ClientMayAllowInsecure: meta.ClientMayAllowInsecure,
+	}
 }
