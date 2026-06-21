@@ -119,11 +119,7 @@ func previousTrojanEmail(client trojanClient) string {
 	if email == "" {
 		return ""
 	}
-	generation := client.CredentialGeneration
-	if generation <= 0 {
-		generation = 1
-	}
-	return fmt.Sprintf("%s.previous-%d", email, generation)
+	return fmt.Sprintf("%s.previous", email)
 }
 
 func trojanClientInterface(client trojanClient, password string, includeEmail bool) map[string]any {

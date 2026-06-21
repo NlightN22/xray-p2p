@@ -85,6 +85,35 @@ func TestCompileOrdersReverseChannelsByTag(t *testing.T) {
 	}
 }
 
+func TestCompileReverseChannelIncludesPreviousCredentialIdentity(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	doc := map[string]any{
+		serverReverseStateKey: map[string]serverReverseChannel{
+			"alpha.rev": {UserID: "alpha", Host: "edge.example", Tag: "alpha.rev", Domain: "alpha.rev"},
+		},
+	}
+	if err := writeServerStateDoc(pendingConfigPath(), doc); err != nil {
+		t.Fatalf("write reverse state: %v", err)
+	}
+
+	compiled := compileDesiredDoc(t, pendingConfigPath(), filepath.Join(dir, layout.ServerConfigDir))
+	for _, raw := range extractRoutingRules(t, compiled) {
+		rule, ok := raw.(map[string]any)
+		if !ok || rule["outboundTag"] != "alpha.rev" {
+			continue
+		}
+		if users := extractStringSlice(rule["user"]); len(users) == 2 && users[0] == "alpha" && users[1] == "alpha.previous" {
+			return
+		}
+	}
+	t.Fatalf("expected reverse rule identities, got %v", extractRoutingRules(t, compiled))
+}
+
 func hasRuleWithDomainAndOutbound(rules []any, domain string, outboundTag string) bool {
 	for _, raw := range rules {
 		rule, ok := raw.(map[string]any)

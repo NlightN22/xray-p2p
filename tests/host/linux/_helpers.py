@@ -635,7 +635,7 @@ def assert_server_reverse_routing(routing: dict, reverse_tag: str, *, user: str 
         if outbound == reverse_tag and expected_domain in domains:
             if user:
                 trimmed_user = user.strip().lower()
-                if trimmed_user and (len(users) != 1 or users[0] != trimmed_user):
+                if trimmed_user and trimmed_user not in users:
                     continue
             return
     raise AssertionError(f"Reverse routing rule for {reverse_tag} not found in server routing config")

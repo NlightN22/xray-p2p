@@ -542,18 +542,25 @@ def test_deploy_tun_with_multiple_reverse_redirects(
         stderr = last_result.stderr if last_result else ""
         debug = ""
         for host in debug_hosts or []:
+            role = "client" if host is client_host else "server"
+            live_dir = CLIENT_LIVE_DIR if role == "client" else SERVER_LIVE_DIR
             routes = host.run("ip route").stdout or ""
             addrs = host.run("ip addr").stdout or ""
             sockets = host.run("sudo -n ss -lntp").stdout or ""
             client_log = host.run("sudo -n cat /var/log/xp2p/client/service.log 2>/dev/null || true").stdout or ""
             server_log = host.run("sudo -n cat /var/log/xp2p/server/service.log 2>/dev/null || true").stdout or ""
+            xray = helpers.read_text(host, live_dir / "xray.json") if helpers.path_exists(host, live_dir / "xray.json") else ""
+            runtime = helpers.read_text(host, live_dir / "runtime.json") if helpers.path_exists(host, live_dir / "runtime.json") else ""
             debug += (
                 f"\nhost={host.backend.hostname}\n"
+                f"role={role}\n"
                 f"routes:\n{routes}\n"
                 f"addr:\n{addrs}\n"
                 f"sockets:\n{sockets}\n"
                 f"client service log:\n{client_log}\n"
                 f"server service log:\n{server_log}\n"
+                f"live xray.json:\n{xray}\n"
+                f"live runtime.json:\n{runtime}\n"
             )
         raise AssertionError(
             f"xp2p ping {label} did not report zero loss.\n"

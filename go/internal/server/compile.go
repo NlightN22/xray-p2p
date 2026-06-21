@@ -226,8 +226,8 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 			"domain":      []string{"full:" + channel.Domain},
 			"outboundTag": channel.Tag,
 		}
-		if strings.TrimSpace(channel.UserID) != "" {
-			rule["user"] = []string{channel.UserID}
+		if users := reverseUserIdentities(channel.UserID); len(users) > 0 {
+			rule["user"] = users
 		}
 		reverseRules = append(reverseRules, rule)
 	}
@@ -288,6 +288,14 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 			"rules":          rules,
 		},
 	}
+}
+
+func reverseUserIdentities(label string) []string {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return nil
+	}
+	return []string{label, previousTrojanEmail(trojanClient{Email: label})}
 }
 
 func collectTags(items []any) map[string]struct{} {
