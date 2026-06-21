@@ -136,6 +136,10 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 		if sub.Generation == "" || sub.Generation == meta.Control.Subscription.Generation {
 			continue
 		}
+		currentMeta, currentErr := loadLiveRuntimeMeta(r.configDir)
+		if currentErr == nil && sub.Generation == currentMeta.Control.Subscription.Generation {
+			continue
+		}
 		candidate, err := subscriptionCandidate(state, endpoint, sub, credential)
 		if err != nil {
 			logging.Warn("subscription candidate rejected", "tag", endpoint.Tag, "err", err)

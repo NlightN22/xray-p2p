@@ -309,11 +309,15 @@ def test_client_switches_profiles_bidirectionally_from_subscription(client_host,
         assert _client_outbound_protocol(runtime.wait_for_live_xray(client_host, "client"), SERVER_HOST) == "trojan"
         _assert_client_profile(client_host, SERVER_HOST, "trojan-tls", "trojan", "")
         _assert_tunnel_ping(client_host, server_host, client_runner, SERVER_HOST)
+        client_apply_count = _wait_for_client_subscription_apply_count(client_host, 1)
+        _assert_client_subscription_apply_count_stable(client_host, client_apply_count)
 
         server_runner("server", "profile", "vless-tls-vision", check=True)
         server_live = runtime.wait_for_live_xray(server_host, "server")
         assert PROFILE_SWITCH_USER in _vless_users(server_live)
         _wait_for_client_profile(client_host, SERVER_HOST, server_ip, "vless-tls-vision", "vless", "xtls-rprx-vision")
+        client_apply_count = _wait_for_client_subscription_apply_count(client_host, client_apply_count + 1)
+        _assert_client_subscription_apply_count_stable(client_host, client_apply_count)
         endpoint = _client_endpoint_any(client_host, SERVER_HOST, server_ip)
         live = runtime.wait_for_live_xray(client_host, "client")
         assert _client_outbound_protocol_by_tag(live, endpoint["tag"]) == "vless"
@@ -323,6 +327,8 @@ def test_client_switches_profiles_bidirectionally_from_subscription(client_host,
         server_live = runtime.wait_for_live_xray(server_host, "server")
         assert PROFILE_SWITCH_USER in _trojan_credentials(server_live)
         _wait_for_client_profile(client_host, SERVER_HOST, server_ip, "trojan-tls", "trojan", "")
+        client_apply_count = _wait_for_client_subscription_apply_count(client_host, client_apply_count + 1)
+        _assert_client_subscription_apply_count_stable(client_host, client_apply_count)
         endpoint = _client_endpoint_any(client_host, SERVER_HOST, server_ip)
         live = runtime.wait_for_live_xray(client_host, "client")
         assert _client_outbound_protocol_by_tag(live, endpoint["tag"]) == "trojan"
@@ -433,6 +439,55 @@ def _assert_tunnel_ping(client_host, server_host, runner, host: str) -> None:
     helpers.dump_failure_state(client_host, "client-profile-switch-tunnel-ping")
     helpers.dump_failure_state(server_host, "server-profile-switch-tunnel-ping")
     raise AssertionError(f"Tunnel ping failed after profile switch.\nSTDOUT:\n{last.stdout}\nSTDERR:\n{last.stderr}")
+
+
+def _wait_for_client_subscription_apply_count(host, expected: int, *, timeout: float = 45.0) -> int:
+    deadline = time.time() + timeout
+    last_counts = (0, 0)
+    while time.time() < deadline:
+        last_counts = _client_subscription_apply_counts(host)
+        if last_counts[0] == expected and last_counts[1] <= expected:
+            return expected
+        if last_counts[0] > expected or last_counts[1] > expected:
+            _fail_unexpected_subscription_apply_count(host, expected, last_counts)
+        time.sleep(1.0)
+    _fail_unexpected_subscription_apply_count(host, expected, last_counts)
+    return expected
+
+
+def _assert_client_subscription_apply_count_stable(host, expected: int, *, duration: float = 8.0) -> None:
+    deadline = time.time() + duration
+    while time.time() < deadline:
+        counts = _client_subscription_apply_counts(host)
+        if counts[0] != expected or counts[1] > expected:
+            _fail_unexpected_subscription_apply_count(host, expected, counts)
+        time.sleep(1.0)
+
+
+def _client_subscription_apply_counts(host) -> tuple[int, int]:
+    log = _read_client_service_log(host)
+    return (
+        log.count("subscription applied."),
+        log.count("runtime outbound apply completed. role: client"),
+    )
+
+
+def _read_client_service_log(host) -> str:
+    path = helpers.LOG_ROOT / "client" / "service.log"
+    if not helpers.path_exists(host, path):
+        return ""
+    return helpers.read_text(host, path)
+
+
+def _fail_unexpected_subscription_apply_count(host, expected: int, counts: tuple[int, int]) -> None:
+    helpers.dump_failure_state(host, "client-subscription-apply-count")
+    log_tail = "\n".join(_read_client_service_log(host).splitlines()[-80:])
+    raise AssertionError(
+        "Client subscription apply count changed without a matching server-side subscription update.\n"
+        f"Expected subscription count: {expected}; runtime apply count must not exceed it.\n"
+        f"Actual subscription/runtime counts: {counts[0]}/{counts[1]}\n"
+        f"Client service log tail:\n{log_tail}"
+    )
 
 
 def _add_hosts_entry(host, ip_address: str, name: str) -> None:

@@ -164,6 +164,7 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		return
 	}
 	port := DiagnosticsMarkerPort
+	reporter := heartbeatPingReporter{}
 	if err := ping.Run(ctx, targetHost, ping.Options{
 		Count:                1,
 		Timeout:              r.timeout,
@@ -174,33 +175,36 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		ServerName:           endpoint.ServerName,
 		AllowInsecure:        endpoint.AllowInsecure,
 		PinnedPeerCertSHA256: endpoint.PinnedPeerCertSHA256,
+		Reporter:             &reporter,
 		Silent:               true,
 	}); err != nil {
 		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
-		r.updateLocalHeartbeat(endpoint, false)
+		r.updateLocalHeartbeat(endpoint, false, 0)
 		return
 	}
+	rttMillis := reporter.rttMillis()
 	payload := heartbeat.Payload{
 		Tag:       endpoint.Tag,
 		Host:      endpoint.Hostname,
 		User:      strings.TrimSpace(endpoint.User),
 		ClientIP:  detectLocalIP(endpoint.Hostname),
 		Timestamp: time.Now().UTC(),
-		RTTMillis: 0,
+		RTTMillis: rttMillis,
 	}
 	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.timeout, r.socks); err != nil {
 		logging.Debug("client heartbeat report failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
-		r.updateLocalHeartbeat(endpoint, false)
+		r.updateLocalHeartbeat(endpoint, false, 0)
 		return
 	}
-	r.updateLocalHeartbeat(endpoint, true)
+	r.updateLocalHeartbeat(endpoint, true, rttMillis)
 }
 
-func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, alive bool) {
+func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, alive bool, rttMillis int64) {
 	if r.store != nil {
 		timestamp := time.Now().UTC()
 		if !alive {
 			timestamp = time.Now().UTC().Add(-time.Hour)
+			rttMillis = 0
 		}
 		payloadLocal := heartbeat.Payload{
 			Tag:       endpoint.Tag,
@@ -208,10 +212,27 @@ func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, al
 			User:      strings.TrimSpace(endpoint.User),
 			ClientIP:  detectLocalIP(endpoint.Hostname),
 			Timestamp: timestamp,
-			RTTMillis: 0,
+			RTTMillis: rttMillis,
 		}
 		if _, err := r.store.Update(payloadLocal); err != nil {
 			logging.Warn("client heartbeat: failed to update local store", "tag", endpoint.Tag, "err", err)
 		}
 	}
+}
+
+type heartbeatPingReporter struct {
+	rtt time.Duration
+}
+
+func (r *heartbeatPingReporter) Report(_ context.Context, result ping.Result) error {
+	r.rtt = result.RTT
+	return nil
+}
+
+func (r heartbeatPingReporter) rttMillis() int64 {
+	millis := r.rtt.Milliseconds()
+	if millis <= 0 && r.rtt > 0 {
+		return 1
+	}
+	return millis
 }

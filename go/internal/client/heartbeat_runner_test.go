@@ -55,7 +55,7 @@ func TestHeartbeatRunnerMarksFailedTunnelHeartbeatDead(t *testing.T) {
 		User:     "alice",
 	}
 
-	runner.updateLocalHeartbeat(endpoint, false)
+	runner.updateLocalHeartbeat(endpoint, false, 0)
 
 	snapshots := store.Snapshot(time.Now().UTC(), time.Second)
 	if len(snapshots) != 1 {
@@ -81,7 +81,7 @@ func TestHeartbeatRunnerMarksSuccessfulTunnelHeartbeatAlive(t *testing.T) {
 		User:     "alice",
 	}
 
-	runner.updateLocalHeartbeat(endpoint, true)
+	runner.updateLocalHeartbeat(endpoint, true, 17)
 
 	snapshots := store.Snapshot(time.Now().UTC(), time.Second)
 	if len(snapshots) != 1 {
@@ -89,6 +89,9 @@ func TestHeartbeatRunnerMarksSuccessfulTunnelHeartbeatAlive(t *testing.T) {
 	}
 	if !snapshots[0].Alive {
 		t.Fatal("successful tunnel heartbeat must mark the endpoint alive")
+	}
+	if snapshots[0].Entry.LastRTTMillis != 17 {
+		t.Fatalf("expected RTT to be recorded, got %d", snapshots[0].Entry.LastRTTMillis)
 	}
 }
 
