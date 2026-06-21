@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
+	"github.com/NlightN22/xray-p2p/go/internal/identity"
 )
 
 type Request struct {
@@ -18,9 +19,9 @@ type Request struct {
 }
 
 func NewRequest(role string) (Request, error) {
-	id, err := newUUID()
+	id, err := identity.NewRequestID()
 	if err != nil {
-		return Request{}, err
+		return Request{}, fmt.Errorf("apply: generate id: %w", err)
 	}
 	return Request{
 		ID:        id,

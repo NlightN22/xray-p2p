@@ -7,6 +7,7 @@ import (
 
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/identity"
 	"github.com/NlightN22/xray-p2p/go/internal/link"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -81,7 +82,7 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 	secret := firstNonEmpty(passwordValue, keyValue)
 	generated := false
 	if strings.TrimSpace(secret) == "" {
-		secretValue, err := generateRandomSecret(18)
+		secretValue, err := identity.NewTunnelCredential()
 		if err != nil {
 			logging.Error("xp2p server user add: generate password failed", "err", err)
 			return 1

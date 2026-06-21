@@ -8,6 +8,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 func TestRunServerInstall(t *testing.T) {
@@ -149,6 +150,9 @@ func TestRunServerInstallGeneratesCredentialWhenMissing(t *testing.T) {
 	}
 	if strings.TrimSpace(added[0].Password) == "" {
 		t.Fatalf("generated password is empty")
+	}
+	if !tunnel.IsUUIDCredential(added[0].Password) {
+		t.Fatalf("generated password is not Trojan/VLESS-compatible: %q", added[0].Password)
 	}
 	if !strings.Contains(output, "Generated server credential") {
 		t.Fatalf("output missing generated credential banner: %q", output)

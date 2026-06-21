@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 func TestRunServerUserCommands(t *testing.T) {
@@ -68,6 +69,9 @@ func TestRunServerUserCommands(t *testing.T) {
 		})
 		if strings.TrimSpace(captured.Password) == "" {
 			t.Fatalf("expected generated password to be set")
+		}
+		if !tunnel.IsUUIDCredential(captured.Password) {
+			t.Fatalf("generated password is not Trojan/VLESS-compatible: %q", captured.Password)
 		}
 		if !strings.Contains(output, captured.Password) {
 			t.Fatalf("expected generated password in output, got %q", output)

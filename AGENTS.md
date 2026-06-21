@@ -34,6 +34,9 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - When a breaking change is unavoidable, include a documented migration plan (and ideally an automated config migration path) and follow semantic versioning.
 - When renaming files or folders, check all dependencies between them and keep compatibility shims when feasible.
 - Try to use Python for editing and viewing when it is available.
+- Generate credentials, passwords, tokens, and stable user/client identifiers through `go/internal/identity`.
+- New direct random or UUID generation in production code is allowed only for explicitly ephemeral values or certificate/key material.
+- When adding a new generated value type, add a domain-named function to `go/internal/identity` first.
 
 ## File size and decomposition
 

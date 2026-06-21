@@ -2,13 +2,11 @@ package servercmd
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base32"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/identity"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -71,11 +69,11 @@ func announceCredential(prefix string, result credentialResult) {
 }
 
 func generateDefaultServerCredential(ctx context.Context, installOpts server.InstallOptions, host string) error {
-	userID, err := generateDefaultUserID()
+	userID, err := identity.NewUserID()
 	if err != nil {
 		return err
 	}
-	password, err := generateRandomSecret(18)
+	password, err := identity.NewTunnelCredential()
 	if err != nil {
 		return err
 	}
@@ -87,28 +85,4 @@ func generateDefaultServerCredential(ctx context.Context, installOpts server.Ins
 
 	announceCredential("Generated server credential", result)
 	return nil
-}
-
-func generateRandomSecret(size int) (string, error) {
-	buf := make([]byte, size)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
-}
-
-func generateDefaultUserID() (string, error) {
-	token, err := randomToken(5)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("client-%s@xp2p.local", token), nil
-}
-
-func randomToken(size int) (string, error) {
-	buf := make([]byte, size)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(buf)), nil
 }
