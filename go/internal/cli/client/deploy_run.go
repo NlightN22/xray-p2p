@@ -214,7 +214,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	if !serviceActive {
 		logging.Info("xp2p client deploy: service inactive; skipping SOCKS ping")
 	} else if socksAddr != "" {
-		targetHost := strings.TrimSpace(tl.ServerAddress)
+		targetHost := strings.TrimSpace(tl.Endpoint.Host)
 		if targetHost == "" {
 			targetHost = strings.TrimSpace(opts.runtime.serverHost)
 		}

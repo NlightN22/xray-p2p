@@ -1,32 +1,35 @@
 package clientcmd
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 // buildInstallOptionsFromLink converts a parsed connection link into client install options,
 // applying config defaults for install paths.
 func buildInstallOptionsFromLink(cfg config.Config, link trojanLink) client.InstallOptions {
-	allowInsecure := link.AllowInsecure
-	if link.PinnedPeerSHA256 != "" {
+	endpoint := link.Endpoint
+	allowInsecure := endpoint.TLS.AllowInsecure
+	if endpoint.TLS.PinnedPeerCertSHA256 != "" {
 		allowInsecure = false
 	}
 	return client.InstallOptions{
 		InstallDir:           cfg.Client.InstallDir,
 		ConfigDir:            cfg.Client.ConfigDir,
-		ServerAddress:        link.ServerAddress,
-		ServerPort:           link.ServerPort,
-		User:                 link.User,
-		Password:             link.Password,
-		ServerName:           link.ServerName,
-		ALPN:                 link.ALPN,
+		ServerAddress:        endpoint.Host,
+		ServerPort:           strconv.Itoa(endpoint.Port),
+		User:                 link.User.UserLabel,
+		Password:             tunnel.ActiveCredential(link.User),
+		ServerName:           endpoint.ServerName,
+		ALPN:                 endpoint.TLS.ALPN,
 		AllowInsecure:        allowInsecure,
-		PinnedPeerCertSHA256: link.PinnedPeerSHA256,
-		VerifyPeerCertByName: link.VerifyPeerName,
+		PinnedPeerCertSHA256: endpoint.TLS.PinnedPeerCertSHA256,
+		VerifyPeerCertByName: endpoint.TLS.VerifyPeerCertByName,
 		Force:                true,
 		TunEnabled:           cfg.Client.TunEnabled,
 		TunEnabledSet:        true,

@@ -39,6 +39,23 @@ func TestParseLinkDecodesEscapedUserLabel(t *testing.T) {
 	}
 }
 
+func TestParseLinkUsesExternalLabelQueryFallback(t *testing.T) {
+	link, err := ParseLink("trojan://secret@edge.example:443?security=tls&remarks=alice%40example.com")
+	if err != nil {
+		t.Fatalf("parse link: %v", err)
+	}
+	if link.User.UserLabel != "alice@example.com" {
+		t.Fatalf("user label = %q", link.User.UserLabel)
+	}
+	rendered, err := RenderLink(link)
+	if err != nil {
+		t.Fatalf("render link: %v", err)
+	}
+	if !strings.Contains(rendered, "#alice@example.com") || strings.Contains(rendered, "remarks=") {
+		t.Fatalf("expected canonical fragment label, got %q", rendered)
+	}
+}
+
 func TestVLESSLinkMapping(t *testing.T) {
 	link, err := ParseLink("vless://550e8400-e29b-41d4-a716-446655440000@edge.example:443?security=tls&type=tcp&flow=xtls-rprx-vision#alice")
 	if err != nil {

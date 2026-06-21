@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
@@ -163,14 +164,17 @@ func TestBuildInstallOptionsFromLinkUsesConfigDefaults(t *testing.T) {
 	}
 
 	opts := buildInstallOptionsFromLink(cfg, trojanLink{
-		ServerAddress:    "edge.example.com",
-		ServerPort:       "58443",
-		User:             "user@example.com",
-		Password:         "secret",
-		ServerName:       "edge.example.com",
-		AllowInsecure:    true,
-		PinnedPeerSHA256: "deadbeef",
-		VerifyPeerName:   "edge.example.com",
+		Endpoint: tunnel.Endpoint{
+			Host:       "edge.example.com",
+			Port:       58443,
+			ServerName: "edge.example.com",
+			TLS: tunnel.TLSMetadata{
+				AllowInsecure:        true,
+				PinnedPeerCertSHA256: "deadbeef",
+				VerifyPeerCertByName: "edge.example.com",
+			},
+		},
+		User: tunnel.User{UserLabel: "user@example.com", Credential: "secret"},
 	})
 
 	if opts.InstallDir != `C:\xp2p` || opts.ConfigDir != "cfg-client" {

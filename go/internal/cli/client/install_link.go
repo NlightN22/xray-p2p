@@ -2,7 +2,6 @@ package clientcmd
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
@@ -32,17 +31,10 @@ func parseInstallLink(raw string) (installLink, error) {
 		return installLink{}, err
 	}
 	endpoint := parsed.Endpoint
-	user := parsed.User.UserLabel
-	if strings.EqualFold(endpoint.Protocol, "trojan") && user == "" {
-		legacy, legacyErr := parseTrojanLink(raw)
-		if legacyErr == nil {
-			user = legacy.User
-		}
-	}
 	return installLink{
 		ServerAddress:    endpoint.Host,
 		ServerPort:       strconv.Itoa(endpoint.Port),
-		User:             user,
+		User:             parsed.User.UserLabel,
 		Password:         tunnel.ActiveCredential(parsed.User),
 		ServerName:       endpoint.ServerName,
 		ServerNameSet:    endpoint.ServerName != "",

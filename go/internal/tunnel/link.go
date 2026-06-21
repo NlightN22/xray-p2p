@@ -174,10 +174,18 @@ func writeTLS(values url.Values, tls TLSMetadata) {
 }
 func labelFromURL(u *url.URL) string {
 	label, err := url.PathUnescape(u.Fragment)
-	if err != nil {
+	if err == nil && strings.TrimSpace(label) != "" {
+		return strings.TrimSpace(label)
+	}
+	if err != nil && strings.TrimSpace(u.Fragment) != "" {
 		return strings.TrimSpace(u.Fragment)
 	}
-	return strings.TrimSpace(label)
+	for _, key := range linkLabelKeys {
+		if label := strings.TrimSpace(u.Query().Get(key)); label != "" {
+			return label
+		}
+	}
+	return ""
 }
 func first(value, fallback string) string {
 	if strings.TrimSpace(value) != "" {
@@ -217,8 +225,10 @@ func unknown(values url.Values, known map[string]struct{}) url.Values {
 	return out
 }
 
-var trojanKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "xp2p_pin_sha256", "xp2p_verify_name")
-var vlessKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "xp2p_pin_sha256", "xp2p_verify_name", "flow", "encryption")
+var linkLabelKeys = []string{"email", "user", "username", "name", "remark", "remarks", "peer"}
+
+var trojanKnown = known(append([]string{"security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "xp2p_pin_sha256", "xp2p_verify_name"}, linkLabelKeys...)...)
+var vlessKnown = known(append([]string{"security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "xp2p_pin_sha256", "xp2p_verify_name", "flow", "encryption"}, linkLabelKeys...)...)
 
 func known(keys ...string) map[string]struct{} {
 	values := make(map[string]struct{}, len(keys))

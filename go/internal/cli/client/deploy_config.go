@@ -29,7 +29,7 @@ func loadDeployClientConfig() (config.Config, error) {
 }
 
 func resolveDeployFullTunnelTag(installDir, configDir string, link trojanLink, runtime runtimeOptions) (string, error) {
-	host := strings.TrimSpace(link.ServerAddress)
+	host := strings.TrimSpace(link.Endpoint.Host)
 	if host == "" {
 		host = strings.TrimSpace(runtime.serverHost)
 	}

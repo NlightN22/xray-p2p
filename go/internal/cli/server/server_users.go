@@ -8,9 +8,9 @@ import (
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/identity"
-	"github.com/NlightN22/xray-p2p/go/internal/link"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 type serverUserAddOptions struct {
@@ -61,15 +61,19 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 			logging.Error("xp2p server user add: --link cannot be combined with --id, --password, or --key")
 			return 2
 		}
-		parsed, err := link.ParseTrojanLink(linkValue)
+		parsed, err := tunnel.ParseLink(linkValue)
 		if err != nil {
 			logging.Error("xp2p server user add: invalid --link", "err", err)
 			return 2
 		}
-		opts.UserID = parsed.User
-		opts.Password = parsed.Password
+		if !strings.EqualFold(parsed.Endpoint.Protocol, "trojan") {
+			logging.Error("xp2p server user add: invalid --link", "err", "connection link protocol is not trojan")
+			return 2
+		}
+		opts.UserID = parsed.User.UserLabel
+		opts.Password = tunnel.ActiveCredential(parsed.User)
 		if strings.TrimSpace(opts.LinkHost) == "" {
-			opts.LinkHost = parsed.ServerAddress
+			opts.LinkHost = parsed.Endpoint.Host
 		}
 	}
 
