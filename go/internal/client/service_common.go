@@ -45,7 +45,7 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	var diagCancel context.CancelFunc
 	if port := strings.TrimSpace(opts.DiagPort); port != "" {
 		bgCtx, cancel := context.WithCancel(ctx)
-		if err := server.StartBackground(bgCtx, server.Options{Port: port, InstallDir: installDir}); err != nil {
+		if err := server.StartBackground(bgCtx, server.Options{Port: port, InstallDir: installDir, LiveDir: liveConfigDir}); err != nil {
 			cancel()
 			logging.Warn("xp2p client diagnostics: failed to start responders", "port", port, "err", err)
 		} else {

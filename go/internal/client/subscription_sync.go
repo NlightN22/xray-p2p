@@ -33,8 +33,34 @@ type subscriptionSyncRunner struct {
 }
 
 func startSubscriptionSyncLoop(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) func() {
-	if !opts.Enabled {
+	runner, ok := newSubscriptionSyncRunner(installDir, configDir, opts)
+	if !ok {
 		return func() {}
+	}
+	syncCtx, cancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		runner.loop(syncCtx)
+	}()
+	return func() {
+		cancel()
+		wg.Wait()
+	}
+}
+
+func runSubscriptionSyncOnce(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) {
+	runner, ok := newSubscriptionSyncRunner(installDir, configDir, opts)
+	if !ok {
+		return
+	}
+	runner.runOnce(ctx)
+}
+
+func newSubscriptionSyncRunner(installDir, configDir string, opts HeartbeatOptions) (subscriptionSyncRunner, bool) {
+	if !opts.Enabled {
+		return subscriptionSyncRunner{}, false
 	}
 	stateRoot := installDir
 	if runtime.GOOS == "windows" {
@@ -50,17 +76,7 @@ func startSubscriptionSyncLoop(ctx context.Context, installDir, configDir string
 	if runner.timeout <= 0 {
 		runner.timeout = 2 * time.Second
 	}
-	syncCtx, cancel := context.WithCancel(ctx)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		runner.loop(syncCtx)
-	}()
-	return func() {
-		cancel()
-		wg.Wait()
-	}
+	return runner, true
 }
 
 func (r subscriptionSyncRunner) loop(ctx context.Context) {
@@ -84,21 +100,17 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 	}
 	state := runtimeDesiredToClientInstallState(meta.Desired)
 	auth := controlAuthMap(meta.Control.AuthUsers)
-	hb, err := heartbeat.Load(r.statePath)
-	if err != nil {
-		return
-	}
-	snapshots := hb.Snapshot(time.Now(), r.interval)
-	dead := make(map[string]bool, len(snapshots))
-	for _, snapshot := range snapshots {
-		if !snapshot.Alive {
-			dead[snapshot.Entry.Tag] = true
+	dead := map[string]bool{}
+	if hb, err := heartbeat.Load(r.statePath); err == nil {
+		snapshots := hb.Snapshot(time.Now(), r.interval)
+		dead = make(map[string]bool, len(snapshots))
+		for _, snapshot := range snapshots {
+			if !snapshot.Alive {
+				dead[snapshot.Entry.Tag] = true
+			}
 		}
 	}
 	for index, endpoint := range state.Endpoints {
-		if !dead[endpoint.Tag] {
-			continue
-		}
 		secret := auth[strings.TrimSpace(endpoint.User)]
 		if strings.TrimSpace(secret) == "" {
 			continue
@@ -113,6 +125,9 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			credential = rotation.ActiveCredential
 			rotationPending = true
 		}
+		if !rotationPending && !dead[endpoint.Tag] {
+			continue
+		}
 		sub, err := fetchSubscription(ctx, endpoint, controlPort, credential, r.timeout)
 		if err != nil {
 			logging.Debug("subscription fetch failed", "tag", endpoint.Tag, "err", err)
@@ -126,6 +141,10 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			logging.Warn("subscription candidate rejected", "tag", endpoint.Tag, "err", err)
 			continue
 		}
+		if _, err := commitClientSubscriptionState(ctx, candidate); err != nil {
+			logging.Warn("subscription apply failed", "tag", endpoint.Tag, "generation", sub.Generation, "err", err)
+			continue
+		}
 		if rotationPending {
 			if err := r.verifyRotationTunnel(ctx, candidate.Endpoints[index], index, credential); err != nil {
 				logging.Debug("credential rotation tunnel verification failed", "tag", endpoint.Tag, "err", err)
@@ -134,10 +153,6 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			if err := acknowledgeRotation(ctx, endpoint, controlPort, credential, r.timeout); err != nil {
 				logging.Debug("credential rotation acknowledgement deferred", "tag", endpoint.Tag, "err", err)
 			}
-		}
-		if _, err := commitClientSubscriptionState(ctx, candidate); err != nil {
-			logging.Warn("subscription apply failed", "tag", endpoint.Tag, "generation", sub.Generation, "err", err)
-			continue
 		}
 		logging.Info("subscription applied", "tag", endpoint.Tag, "generation", sub.Generation)
 	}

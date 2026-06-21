@@ -32,6 +32,9 @@ func applyClientRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 			return xraylive.RuntimeApplyStaged, nil
 		}
 	}
+	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported {
+		return result, nil
+	}
 	if err != nil {
 		return result, err
 	}
@@ -51,6 +54,15 @@ func commitClientRuntimeStateResult(ctx context.Context, state clientInstallStat
 	result, err := applyClientRuntimeCandidate(ctx, artifacts)
 	if err != nil {
 		return result, err
+	}
+	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported {
+		if err := state.save(config.ConfigPath(layout.ClientConfigFileName)); err != nil {
+			return result, err
+		}
+		if err := writeClientRuntimeApplyRequest(); err != nil {
+			return result, err
+		}
+		return xraylive.RuntimeApplyStaged, nil
 	}
 	if result != xraylive.RuntimeApplyApplied && result != xraylive.RuntimeApplyNoop && result != xraylive.RuntimeApplyStaged {
 		return result, xraylive.ResultError(result)
@@ -75,3 +87,14 @@ var serviceStatus = func(ctx context.Context, role servicecontrol.Role) (service
 }
 
 var applyRuntimeCandidate = xraylive.ApplyCandidate
+
+func writeClientRuntimeApplyRequest() error {
+	if err := apply.RemoveRoleMarkers(config.ApplyRequestPath(), config.ApplyErrorPath(), apply.RoleClient); err != nil {
+		return err
+	}
+	req, err := apply.NewRequest(apply.RoleClient)
+	if err != nil {
+		return err
+	}
+	return apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
+}

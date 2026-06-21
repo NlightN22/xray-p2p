@@ -23,6 +23,7 @@ type pingCommandOptions struct {
 	Count          int
 	TimeoutSec     int
 	Port           int
+	Protocol       string
 	Continuous     bool
 	TunnelEndpoint string
 	EndpointTag    string
@@ -53,6 +54,7 @@ func newPingCommand(cfg func() config.Config) *cobra.Command {
 	flags.IntVarP(&opts.Count, "count", "N", opts.Count, "number of echo requests to send")
 	flags.IntVarP(&opts.TimeoutSec, "timeout", "t", opts.TimeoutSec, "per-request timeout in seconds (optional)")
 	flags.IntVarP(&opts.Port, "port", "P", opts.Port, "target port (default 62022)")
+	flags.StringVarP(&opts.Protocol, "proto", "o", "", "transport protocol for compatibility (tcp or https)")
 	flags.BoolVarP(&opts.Continuous, "continuous", "C", false, "send ping requests until interrupted")
 	flags.StringVarP(&opts.TunnelEndpoint, "tunnel", "T", "", "route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config")
 	flags.StringVarP(&opts.EndpointTag, "endpoint", "e", "", "endpoint tag to use when multiple endpoints share the same host")
@@ -65,6 +67,12 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 	host := strings.TrimSpace(opts.Host)
 	if host == "" {
 		fmt.Fprintln(os.Stderr, "xp2p ping: host is required")
+		return 2
+	}
+	switch strings.ToLower(strings.TrimSpace(opts.Protocol)) {
+	case "", "tcp", "https":
+	default:
+		fmt.Fprintf(os.Stderr, "xp2p ping: invalid --proto value %q (expected tcp or https)\n", opts.Protocol)
 		return 2
 	}
 
@@ -157,8 +165,43 @@ func runPingCommand(ctx context.Context, cfg config.Config, opts pingCommandOpti
 			}
 		}
 		pingOpts.SocksProxy = socksAddr
+		if pingOpts.PinnedPeerCertSHA256 == "" && !pingOpts.AllowInsecure {
+			pingOpts.AllowInsecure = true
+		}
+		if strings.TrimSpace(pingOpts.User) == "" || strings.TrimSpace(pingOpts.Credential) == "" {
+			if tlsSettings, tlsErr := client.ResolveMarkerTLS(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex); tlsErr == nil {
+				pingOpts.User = tlsSettings.User
+				pingOpts.Credential = tlsSettings.Credential
+			} else if tlsSettings, tlsErr := client.ResolveDefaultMarkerTLS(cfg.Client.InstallDir); tlsErr == nil {
+				pingOpts.User = tlsSettings.User
+				pingOpts.Credential = tlsSettings.Credential
+			}
+		}
 	} else {
 		pingOpts.SocksProxy = ""
+	}
+	if pingOpts.PinnedPeerCertSHA256 == "" && !pingOpts.AllowInsecure {
+		if tlsSettings, tlsErr := client.ResolveMarkerTLS(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex); tlsErr == nil {
+			pingOpts.ServerName = tlsSettings.ServerName
+			pingOpts.AllowInsecure = tlsSettings.AllowInsecure
+			pingOpts.PinnedPeerCertSHA256 = tlsSettings.PinnedPeerCertSHA256
+			pingOpts.User = tlsSettings.User
+			pingOpts.Credential = tlsSettings.Credential
+		} else {
+			pingOpts.AllowInsecure = true
+		}
+	}
+	if strings.TrimSpace(pingOpts.User) == "" || strings.TrimSpace(pingOpts.Credential) == "" {
+		if tlsSettings, tlsErr := client.ResolveMarkerTLS(cfg.Client.InstallDir, host, opts.EndpointTag, opts.EndpointIndex); tlsErr == nil {
+			pingOpts.User = tlsSettings.User
+			pingOpts.Credential = tlsSettings.Credential
+		} else if tlsSettings, tlsErr := client.ResolveDefaultMarkerTLS(cfg.Client.InstallDir); tlsErr == nil {
+			pingOpts.User = tlsSettings.User
+			pingOpts.Credential = tlsSettings.Credential
+		} else if user, credential, authErr := server.ResolveDefaultClientControlAuth(); authErr == nil {
+			pingOpts.User = user
+			pingOpts.Credential = credential
+		}
 	}
 
 	if err := ping.Run(ctx, host, pingOpts); err != nil {

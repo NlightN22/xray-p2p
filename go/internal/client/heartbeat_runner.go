@@ -21,6 +21,7 @@ const DefaultDiagnosticsPort = "62022"
 
 type heartbeatRunner struct {
 	store     *heartbeat.Store
+	configDir string
 	endpoints []clientEndpointRecord
 	auth      map[string]string
 	interval  time.Duration
@@ -52,6 +53,18 @@ func startHeartbeatLoop(ctx context.Context, installDir, configDir string, opts 
 		cancel()
 		wg.Wait()
 	}
+}
+
+func runHeartbeatOnce(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) {
+	if !opts.Enabled {
+		return
+	}
+	runner, err := newHeartbeatRunner(installDir, configDir, opts)
+	if err != nil {
+		logging.Debug("client heartbeat once skipped", "err", err)
+		return
+	}
+	runner.runOnce(ctx)
 }
 
 func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*heartbeatRunner, error) {
@@ -99,6 +112,7 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 
 	return &heartbeatRunner{
 		store:     store,
+		configDir: configDir,
 		endpoints: endpoints,
 		auth:      controlAuthMap(meta.Control.AuthUsers),
 		interval:  interval,
@@ -123,6 +137,13 @@ func (r *heartbeatRunner) loop(ctx context.Context) {
 }
 
 func (r *heartbeatRunner) runOnce(ctx context.Context) {
+	if meta, err := loadLiveRuntimeMeta(r.configDir); err == nil {
+		state := runtimeDesiredToClientInstallState(meta.Desired)
+		r.endpoints = append(r.endpoints[:0], state.Endpoints...)
+		r.auth = controlAuthMap(meta.Control.AuthUsers)
+	} else {
+		logging.Debug("client heartbeat metadata refresh failed", "err", err)
+	}
 	for idx, endpoint := range r.endpoints {
 		select {
 		case <-ctx.Done():

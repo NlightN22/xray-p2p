@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/modemgr"
@@ -19,6 +20,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/openwrt"
 	"github.com/NlightN22/xray-p2p/go/internal/preflight"
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayguard"
 )
@@ -189,6 +191,8 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	defer stopHeartbeat()
 	stopSubscriptionSync := startSubscriptionSyncLoop(ctx, installDir, configDir, opts.Heartbeat)
 	defer stopSubscriptionSync()
+	stopTunRouteRefresh := startTunRouteRefreshLoop(ctx, configDir, opts)
+	defer stopTunRouteRefresh()
 
 	reconcileReason := ReconcileReasonServiceRestart
 	if pendingApplied && request.ID != "" {
@@ -212,9 +216,17 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			if err != nil {
 				logging.Warn("client socks health check using defaults", "err", err)
 			}
+			if opts.TunEnabled {
+				refreshClientTunRoutes(readyCtx, opts.TunName, opts.TunAddr, opts.TunMTU, desired.Redirects)
+			}
 			if err := health.WaitForSocksProxy(readyCtx, addr, socksHealthTimeout, socksHealthInterval); err != nil {
 				return err
 			}
+			runSubscriptionSyncOnce(readyCtx, installDir, configDir, opts.Heartbeat)
+			if opts.TunEnabled {
+				refreshClientLiveTunRoutes(readyCtx, configDir, opts.TunName, opts.TunAddr, opts.TunMTU)
+			}
+			runHeartbeatOnce(readyCtx, installDir, configDir, opts.Heartbeat)
 			return nil
 		},
 		func(event xrayguard.Event) {
@@ -236,4 +248,66 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 
 func tunSetupErrorWithHint(action string, err error) error {
 	return fmt.Errorf("tun setup failed during %s: %w (set XP2P_CLIENT_TUN_ENABLED=false or run \"xp2p client mode proxy\")", action, err)
+}
+
+func refreshClientLiveTunRoutes(ctx context.Context, configDir, tunName, tunAddr string, tunMTU int) {
+	meta, err := loadLiveRuntimeMeta(configDir)
+	if err != nil {
+		logging.Warn("client live route metadata refresh failed", "err", err)
+		return
+	}
+	refreshClientTunRoutes(ctx, tunName, tunAddr, tunMTU, runtimeDesiredToClientInstallState(meta.Desired).Redirects)
+}
+
+func startTunRouteRefreshLoop(ctx context.Context, configDir string, opts RunOptions) func() {
+	if !opts.TunEnabled {
+		return func() {}
+	}
+	routeCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			refreshClientLiveTunRoutes(routeCtx, configDir, opts.TunName, opts.TunAddr, opts.TunMTU)
+			select {
+			case <-routeCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
+}
+
+func refreshClientTunRoutes(ctx context.Context, tunName, tunAddr string, tunMTU int, redirects []redirect.Rule) {
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		addrErr := linuxnet.EnsureTunAddress(tunName, tunAddr, tunMTU)
+		var routeErr error
+		if addrErr == nil {
+			routeErr = applyRedirectRoutes(tunName, tunAddr, redirects)
+		}
+		if addrErr == nil && routeErr == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			if addrErr != nil {
+				logging.Warn("client tun address refresh failed after xray start", "err", addrErr)
+			}
+			if routeErr != nil {
+				logging.Warn("client redirect routes refresh failed after xray start", "err", routeErr)
+			}
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }

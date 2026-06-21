@@ -4,6 +4,10 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 var (
@@ -38,6 +42,35 @@ func ResolveServerMarkerTarget(installDir, userOrTag string, index int) (string,
 		return "", 0, err
 	}
 	return target, DiagnosticsMarkerPort, nil
+}
+
+func ResolveDefaultClientControlAuth() (string, string, error) {
+	liveDir, err := config.LiveRoleDir(apply.RoleServer)
+	if err != nil {
+		return "", "", err
+	}
+	meta, err := loadLiveRuntimeMeta(liveDir)
+	if err != nil {
+		return "", "", err
+	}
+	now := time.Now().UTC()
+	for i := len(meta.Control.AuthUsers) - 1; i >= 0; i-- {
+		user := meta.Control.AuthUsers[i]
+		label := strings.TrimSpace(user.Label)
+		credential := strings.TrimSpace(user.Credential)
+		if label != "" && credential != "" {
+			return label, credential, nil
+		}
+	}
+	for i := len(meta.Control.RotationUsers) - 1; i >= 0; i-- {
+		user := meta.Control.RotationUsers[i]
+		label := strings.TrimSpace(user.UserLabel)
+		previous := strings.TrimSpace(user.PreviousCredentialForRotation)
+		if label != "" && previous != "" && !user.RotationExpiresAt.IsZero() && now.Before(user.RotationExpiresAt) {
+			return label, previous, nil
+		}
+	}
+	return "", "", ErrServerReverseMissing
 }
 
 func selectReverseChannel(state serverReverseState, userOrTag string) (serverReverseChannel, int, error) {

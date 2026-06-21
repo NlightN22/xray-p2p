@@ -48,7 +48,7 @@ func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPat
 			Port:   controlPort,
 		},
 		Subscription:  sub,
-		AuthUsers:     controlAuthUsers(activeServerUsers(desired.Users)),
+		AuthUsers:     controlAuthUsers(activeServerUsers(desired.Users), time.Now().UTC()),
 		RotationUsers: controlRotationUsers(desired.Users),
 		TLS:           tlsMeta,
 	}, nil
@@ -103,7 +103,7 @@ func subscriptionSecurity(certPath, keyPath string) string {
 	return "none"
 }
 
-func controlAuthUsers(users []trojanClient) []controlplane.AuthUser {
+func controlAuthUsers(users []trojanClient, now time.Time) []controlplane.AuthUser {
 	out := make([]controlplane.AuthUser, 0, len(users))
 	for _, user := range users {
 		label := strings.TrimSpace(user.Email)
@@ -112,6 +112,10 @@ func controlAuthUsers(users []trojanClient) []controlplane.AuthUser {
 			continue
 		}
 		out = append(out, controlplane.AuthUser{Label: label, Credential: secret})
+		previous := strings.TrimSpace(user.PreviousCredentialForRotation)
+		if previous != "" && !user.RotationExpiresAt.IsZero() && now.Before(user.RotationExpiresAt) {
+			out = append(out, controlplane.AuthUser{Label: label, Credential: previous})
+		}
 	}
 	return out
 }

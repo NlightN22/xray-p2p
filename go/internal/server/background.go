@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -130,10 +131,60 @@ func resolveControlTLS(opts Options) (string, string, error) {
 		certPath = defaultCertPath()
 		keyPath = defaultKeyPath()
 	}
+	if certPath == "" && keyPath == "" {
+		certPath, keyPath, err := ensureControlTLS(opts)
+		if err != nil {
+			return "", "", err
+		}
+		return certPath, keyPath, nil
+	}
 	if certPath == "" || keyPath == "" {
 		return "", "", errors.New("control HTTPS TLS certificate and key are required")
 	}
 	return certPath, keyPath, nil
+}
+
+func ensureControlTLS(opts Options) (string, string, error) {
+	port := strings.TrimSpace(opts.Port)
+	if port == "" {
+		port = DefaultPort
+	}
+	dir := filepath.Join(config.ConfigRoot(), "tls", "control")
+	certPath := filepath.Join(dir, "control-"+port+".crt")
+	keyPath := filepath.Join(dir, "control-"+port+".key")
+	if controlTLSFileExists(certPath) && controlTLSFileExists(keyPath) {
+		return certPath, keyPath, nil
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", fmt.Errorf("create control tls dir: %w", err)
+	}
+	if err := generateSelfSignedCertificate(controlTLSHost(opts), certPath, keyPath); err != nil {
+		return "", "", fmt.Errorf("generate control TLS certificate: %w", err)
+	}
+	return certPath, keyPath, nil
+}
+
+func controlTLSHost(opts Options) string {
+	host := strings.TrimSpace(opts.ListenAddr)
+	if host == "" {
+		return "127.0.0.1"
+	}
+	if strings.HasPrefix(host, ":") {
+		return "127.0.0.1"
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return "127.0.0.1"
+	}
+	return host
+}
+
+func controlTLSFileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func resolveControlLiveDir(opts Options) (string, error) {

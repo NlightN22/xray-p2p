@@ -79,6 +79,36 @@ func ResolveMarkerTLS(installDir, host, tag string, index int) (MarkerTLS, error
 	}, nil
 }
 
+// ResolveDefaultMarkerTLS returns TLS/auth settings for the first active endpoint.
+func ResolveDefaultMarkerTLS(installDir string) (MarkerTLS, error) {
+	_ = installDir
+	liveDir, err := config.LiveRoleDir("client")
+	if err != nil {
+		return MarkerTLS{}, err
+	}
+	meta, err := loadLiveRuntimeMeta(liveDir)
+	if err != nil {
+		if strings.Contains(err.Error(), "runtime metadata missing at ") {
+			return MarkerTLS{}, endpointsMissingError{}
+		}
+		return MarkerTLS{}, err
+	}
+	state := runtimeDesiredToClientInstallState(meta.Desired)
+	for _, selected := range state.Endpoints {
+		if selected.Disabled {
+			continue
+		}
+		return MarkerTLS{
+			ServerName:           strings.TrimSpace(selected.ServerName),
+			AllowInsecure:        selected.AllowInsecure,
+			PinnedPeerCertSHA256: strings.TrimSpace(selected.PinnedPeerCertSHA256),
+			User:                 strings.TrimSpace(selected.User),
+			Credential:           strings.TrimSpace(selected.Password),
+		}, nil
+	}
+	return MarkerTLS{}, endpointsMissingError{}
+}
+
 func selectEndpointByHost(endpoints []clientEndpointRecord, host, tag string, index int) (clientEndpointRecord, int, error) {
 	trimmedHost := strings.TrimSpace(host)
 	if trimmedHost == "" {

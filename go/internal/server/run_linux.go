@@ -125,6 +125,9 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 	if tunEnabled {
+		if err := linuxnet.RemoveTunInterfacesExcept(opts.TunName, "xp2pc", "xp2ps"); err != nil {
+			return err
+		}
 		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
 			return tunSetupErrorWithHint("server run", err)
 		}

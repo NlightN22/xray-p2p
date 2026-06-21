@@ -121,6 +121,121 @@ func TestServerRemoveRedirectCleansState(t *testing.T) {
 	}
 }
 
+func TestServerAddRedirectKeepsExistingTargetBindings(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	configDir := filepath.Join(dir, layout.ServerConfigDir)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+
+	writeServerStateFile(t, dir, map[string]serverReverseChannel{
+		"alphaedge-example.rev": {
+			UserID: "alpha",
+			Host:   "edge.example",
+			Tag:    "alphaedge-example.rev",
+			Domain: "alphaedge-example.rev",
+		},
+		"betaedge-example.rev": {
+			UserID: "beta",
+			Host:   "edge.example",
+			Tag:    "betaedge-example.rev",
+			Domain: "betaedge-example.rev",
+		},
+	}, []map[string]any{
+		{
+			"cidr":         "10.50.0.0/16",
+			"outbound_tag": "alphaedge-example.rev",
+		},
+	})
+
+	if err := AddRedirect(RedirectAddOptions{
+		InstallDir: dir,
+		ConfigDir:  configDir,
+		CIDR:       "10.50.0.0/16",
+		Tag:        "betaedge-example.rev",
+	}); err != nil {
+		t.Fatalf("AddRedirect failed: %v", err)
+	}
+
+	stateDoc := readServerStateDoc(t, pendingConfigPath())
+	rawRules, ok := stateDoc[serverRedirectRulesKey].([]any)
+	if !ok || len(rawRules) != 2 {
+		t.Fatalf("expected two redirect entries, got %+v", stateDoc[serverRedirectRulesKey])
+	}
+	var sawAlpha, sawBeta bool
+	for _, raw := range rawRules {
+		rule, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("unexpected redirect entry: %+v", raw)
+		}
+		switch rule["outbound_tag"] {
+		case "alphaedge-example.rev":
+			sawAlpha = true
+		case "betaedge-example.rev":
+			sawBeta = true
+		}
+	}
+	if !sawAlpha || !sawBeta {
+		t.Fatalf("expected redirects via alpha and beta, got %+v", rawRules)
+	}
+}
+
+func TestServerAddRedirectByHostReplacesExistingTargetBinding(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	configDir := filepath.Join(dir, layout.ServerConfigDir)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+
+	writeServerStateFile(t, dir, map[string]serverReverseChannel{
+		"alphaedge-example.rev": {
+			UserID: "alpha",
+			Host:   "edge.example",
+			Tag:    "alphaedge-example.rev",
+			Domain: "alphaedge-example.rev",
+		},
+		"betaedge-example.rev": {
+			UserID: "beta",
+			Host:   "edge.example",
+			Tag:    "betaedge-example.rev",
+			Domain: "betaedge-example.rev",
+		},
+	}, []map[string]any{
+		{
+			"cidr":         "10.50.0.0/16",
+			"outbound_tag": "alphaedge-example.rev",
+		},
+	})
+
+	if err := AddRedirect(RedirectAddOptions{
+		InstallDir: dir,
+		ConfigDir:  configDir,
+		CIDR:       "10.50.0.0/16",
+		Tag:        "betaedge-example.rev",
+		Hostname:   "edge.example",
+	}); err != nil {
+		t.Fatalf("AddRedirect failed: %v", err)
+	}
+
+	stateDoc := readServerStateDoc(t, pendingConfigPath())
+	rawRules, ok := stateDoc[serverRedirectRulesKey].([]any)
+	if !ok || len(rawRules) != 1 {
+		t.Fatalf("expected one redirect entry, got %+v", stateDoc[serverRedirectRulesKey])
+	}
+	rule, ok := rawRules[0].(map[string]any)
+	if !ok || rule["outbound_tag"] != "betaedge-example.rev" {
+		t.Fatalf("expected redirect via beta, got %+v", rawRules[0])
+	}
+}
+
 func TestServerRemoveMissingRedirectDoesNotWriteApplyRequest(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)

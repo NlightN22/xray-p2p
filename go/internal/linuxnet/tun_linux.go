@@ -49,6 +49,20 @@ func RemoveTunInterfaceIfManaged(name string) error {
 	return runCommand("ip", "link", "del", name)
 }
 
+func RemoveTunInterfacesExcept(activeName string, names ...string) error {
+	activeName = strings.TrimSpace(activeName)
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || strings.EqualFold(name, activeName) {
+			continue
+		}
+		if err := RemoveTunInterfaceIfManaged(name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func EnsureTunAddress(name, addr string, mtu int) error {
 	name = strings.TrimSpace(name)
 	addr = strings.TrimSpace(addr)

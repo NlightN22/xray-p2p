@@ -60,26 +60,29 @@ func VerifyRequest(r *http.Request, body []byte, users []AuthUser, now time.Time
 	if delta < -window || delta > window {
 		return ErrAuthInvalid
 	}
-	secret := ""
+	var secrets []string
 	for _, candidate := range users {
 		if strings.EqualFold(strings.TrimSpace(candidate.Label), user) {
-			secret = strings.TrimSpace(candidate.Credential)
-			break
+			if secret := strings.TrimSpace(candidate.Credential); secret != "" {
+				secrets = append(secrets, secret)
+			}
 		}
 	}
-	if secret == "" {
+	if len(secrets) == 0 {
 		return ErrAuthInvalid
 	}
-	expected := Sign(secret, r.Method, r.URL.Path, r.URL.RawQuery, body, requestAt, nonce)
 	got, err := hex.DecodeString(sig)
 	if err != nil {
 		return ErrAuthInvalid
 	}
-	want, _ := hex.DecodeString(expected)
-	if !hmac.Equal(got, want) {
-		return ErrAuthInvalid
+	for _, secret := range secrets {
+		expected := Sign(secret, r.Method, r.URL.Path, r.URL.RawQuery, body, requestAt, nonce)
+		want, _ := hex.DecodeString(expected)
+		if hmac.Equal(got, want) {
+			return nil
+		}
 	}
-	return nil
+	return ErrAuthInvalid
 }
 
 func ApplyHeaders(req *http.Request, user, secret, nonce string, body []byte, now time.Time) error {

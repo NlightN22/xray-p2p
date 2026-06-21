@@ -41,6 +41,7 @@ Includes: inherited options
 - --endpoint, -e <id> endpoint tag to use when multiple endpoints share the same host
 - --index, -i <n> endpoint index (1-based) to use when multiple endpoints share the same host
 - --port, -P <port> target port (default 62022)
+- --proto, -o <proto> transport protocol for compatibility (tcp or https)
 - --timeout, -t <duration> per-request timeout in seconds (optional)
 - --tunnel, -T <string> route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config
 

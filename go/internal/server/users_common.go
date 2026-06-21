@@ -103,19 +103,40 @@ func saveServerTrojanUsers(configPath string, users []trojanClient) error {
 
 func clientsToInterfaces(clients []trojanClient) []any {
 	result := make([]any, 0, len(clients))
+	now := time.Now().UTC()
 	for _, client := range clients {
 		if client.Disabled {
 			continue
 		}
-		entry := map[string]any{
-			"password": strings.TrimSpace(client.Password),
+		result = append(result, trojanClientInterface(client, strings.TrimSpace(client.Password), true))
+		previous := strings.TrimSpace(client.PreviousCredentialForRotation)
+		if previous != "" && !client.RotationExpiresAt.IsZero() && now.Before(client.RotationExpiresAt) {
+			result = append(result, trojanClientInterface(trojanClient{Email: previousTrojanEmail(client)}, previous, true))
 		}
-		if strings.TrimSpace(client.Email) != "" {
-			entry["email"] = strings.TrimSpace(client.Email)
-		}
-		result = append(result, entry)
 	}
 	return result
+}
+
+func previousTrojanEmail(client trojanClient) string {
+	email := strings.TrimSpace(client.Email)
+	if email == "" {
+		return ""
+	}
+	generation := client.CredentialGeneration
+	if generation <= 0 {
+		generation = 1
+	}
+	return fmt.Sprintf("%s.previous-%d", email, generation)
+}
+
+func trojanClientInterface(client trojanClient, password string, includeEmail bool) map[string]any {
+	entry := map[string]any{
+		"password": password,
+	}
+	if includeEmail && strings.TrimSpace(client.Email) != "" {
+		entry["email"] = strings.TrimSpace(client.Email)
+	}
+	return entry
 }
 
 func buildTrojanLink(host string, port int, password, label string, tlsEnabled bool, pinnedPeerCertSHA256, verifyPeerCertByName string) (string, error) {

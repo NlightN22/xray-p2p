@@ -246,8 +246,16 @@ func (h *handler) subscription(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	rt, _, ok := h.loadAndAuth(w, r, nil)
+	rt, body, ok := h.loadRequest(w, r, nil)
 	if !ok {
+		return
+	}
+	if err := VerifyRequest(r, body, subscriptionAuthUsers(rt), h.now(), h.authWindow); err != nil {
+		status := http.StatusUnauthorized
+		if errors.Is(err, ErrAuthInvalid) {
+			status = http.StatusForbidden
+		}
+		writeError(w, status, err.Error())
 		return
 	}
 	sub := rt.Subscription
@@ -263,14 +271,8 @@ func (h *handler) subscription(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) loadAndAuth(w http.ResponseWriter, r *http.Request, dst any) (Runtime, []byte, bool) {
-	rt, err := h.runtime()
-	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
-		return Runtime{}, nil, false
-	}
-	body, err := readBody(r, dst)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	rt, body, ok := h.loadRequest(w, r, dst)
+	if !ok {
 		return Runtime{}, nil, false
 	}
 	if err := VerifyRequest(r, body, rt.AuthUsers, h.now(), h.authWindow); err != nil {
@@ -282,6 +284,49 @@ func (h *handler) loadAndAuth(w http.ResponseWriter, r *http.Request, dst any) (
 		return Runtime{}, nil, false
 	}
 	return rt, body, true
+}
+
+func (h *handler) loadRequest(w http.ResponseWriter, r *http.Request, dst any) (Runtime, []byte, bool) {
+	rt, err := h.runtime()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return Runtime{}, nil, false
+	}
+	body, err := readBody(r, dst)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return Runtime{}, nil, false
+	}
+	return rt, body, true
+}
+
+func subscriptionAuthUsers(rt Runtime) []AuthUser {
+	active := make(map[string]string, len(rt.RotationUsers))
+	for _, user := range rt.RotationUsers {
+		label := strings.TrimSpace(user.UserLabel)
+		credential := strings.TrimSpace(user.ActiveCredential)
+		if label != "" && credential != "" {
+			active[strings.ToLower(label)] = credential
+		}
+	}
+	if len(active) == 0 {
+		return rt.AuthUsers
+	}
+	out := make([]AuthUser, 0, len(rt.AuthUsers))
+	for _, user := range rt.AuthUsers {
+		label := strings.TrimSpace(user.Label)
+		if label == "" {
+			continue
+		}
+		if credential, ok := active[strings.ToLower(label)]; ok {
+			if strings.TrimSpace(user.Credential) == credential {
+				out = append(out, user)
+			}
+			continue
+		}
+		out = append(out, user)
+	}
+	return out
 }
 
 func (h *handler) runtime() (Runtime, error) {

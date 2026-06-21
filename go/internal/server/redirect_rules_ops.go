@@ -50,7 +50,11 @@ func AddRedirect(opts RedirectAddOptions) error {
 		rule.NoRoutes = opts.NoRoutes
 	}
 
-	updated, addErr := redirect.AddRule(store.redirects, rule)
+	current := store.redirects
+	if strings.TrimSpace(opts.Hostname) != "" {
+		current, _ = redirect.RemoveRule(current, target, "")
+	}
+	updated, addErr := redirect.AddRule(current, rule)
 	if addErr != nil && !errors.Is(addErr, redirect.ErrRuleExists) {
 		return addErr
 	}

@@ -60,4 +60,10 @@ def test_server_user_update_normalizes_legacy_trojan_state(server_host):
     desired = helpers.read_toml(server_host, helpers.SERVER_CONFIG_FILE).get("server") or {}
     assert "trojan_users" not in desired
     users = desired.get("users") or []
-    assert users == [{"user_label": USER_LABEL, "credential": UPDATED_CREDENTIAL}]
+    assert users == [
+        {
+            "user_label": USER_LABEL,
+            "active_credential": UPDATED_CREDENTIAL,
+            "credential_generation": 1,
+        }
+    ]
