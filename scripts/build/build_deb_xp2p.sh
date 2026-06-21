@@ -171,6 +171,7 @@ fpm -s dir -t deb \
   --url "$HOMEPAGE" \
   --maintainer "$MAINTAINER" \
   --license "$LICENSE" \
+  --deb-no-default-config-files \
   "$@" \
   --package "$PACKAGE_PATH" \
   --after-install "$AFTER_INSTALL_SCRIPT" \
