@@ -58,10 +58,11 @@ func TestListUsersBuildsLinksFromCertificate(t *testing.T) {
 		t.Fatalf("fingerprint cert: %v", err)
 	}
 	query := url.Values{}
-	query.Set("pinnedPeerCertSha256", pin)
 	query.Set("security", "tls")
 	query.Set("sni", "links.example.test")
-	query.Set("verifyPeerCertByName", "links.example.test")
+	query.Set("type", "tcp")
+	query.Set("xp2p_pin_sha256", pin)
+	query.Set("xp2p_verify_name", "links.example.test")
 	want := "trojan://secret@links.example.test:58443?" + query.Encode() + "#alpha"
 	if users[0].Link != want {
 		t.Fatalf("unexpected link: %s", users[0].Link)
@@ -106,7 +107,7 @@ func TestUserLinkRequiresHostWhenTLSDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UserLink: %v", err)
 	}
-	if link.Link != "trojan://secret@example.internal:58443?security=none#beta" {
+	if link.Link != "trojan://secret@example.internal:58443?security=none&type=tcp#beta" {
 		t.Fatalf("unexpected link: %s", link.Link)
 	}
 }
@@ -149,10 +150,11 @@ func TestListUsersSelfSignedAddsPinnedPeerCert(t *testing.T) {
 		t.Fatalf("fingerprint cert: %v", err)
 	}
 	query := url.Values{}
-	query.Set("pinnedPeerCertSha256", pin)
 	query.Set("security", "tls")
 	query.Set("sni", "self.example.test")
-	query.Set("verifyPeerCertByName", "self.example.test")
+	query.Set("type", "tcp")
+	query.Set("xp2p_pin_sha256", pin)
+	query.Set("xp2p_verify_name", "self.example.test")
 	want := "trojan://secret@self.example.test:58443?" + query.Encode() + "#alpha"
 	if users[0].Link != want {
 		t.Fatalf("unexpected link: %s", users[0].Link)

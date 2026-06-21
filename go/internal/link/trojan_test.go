@@ -56,6 +56,16 @@ func TestParseTrojanLinkALPN(t *testing.T) {
 	}
 }
 
+func TestParseTrojanLinkAcceptsNamespacedTLSParameters(t *testing.T) {
+	link, err := ParseTrojanLink("trojan://secret@edge.example.com:443?security=tls&sni=edge.example.com&xp2p_pin_sha256=pin&xp2p_verify_name=edge.example.com#user@example.com")
+	if err != nil {
+		t.Fatalf("ParseTrojanLink returned error: %v", err)
+	}
+	if link.PinnedPeerSHA256 != "pin" || link.VerifyPeerName != "edge.example.com" {
+		t.Fatalf("unexpected TLS metadata: %+v", link)
+	}
+}
+
 func TestParseTrojanLinkRejectsInvalid(t *testing.T) {
 	if _, err := ParseTrojanLink(""); err == nil {
 		t.Fatal("expected error for empty link")

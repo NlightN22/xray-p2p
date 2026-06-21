@@ -76,10 +76,10 @@ func TestListEndpoints(t *testing.T) {
 	if records[1].TLSMode != TLSModeInsecure {
 		t.Fatalf("unexpected TLS mode for second endpoint: %s", records[1].TLSMode)
 	}
-	if records[0].Link != "trojan://alice-secret@198.51.100.10:8443?alpn=h2%2Chttp%2F1.1&pinnedPeerCertSha256=abc123&security=tls&sni=server-a.example&verifyPeerCertByName=server-a.example#alice%2540example.com" {
+	if records[0].Link != "trojan://alice-secret@198.51.100.10:8443?alpn=h2%2Chttp%2F1.1&security=tls&sni=server-a.example&type=tcp&xp2p_pin_sha256=abc123&xp2p_verify_name=server-a.example#alice@example.com" {
 		t.Fatalf("unexpected first link: %s", records[0].Link)
 	}
-	if records[1].Link != "trojan://bob-secret@203.0.113.20:9443?allowInsecure=1&security=tls&sni=server-b.example#bob%2540example.com" {
+	if records[1].Link != "trojan://bob-secret@203.0.113.20:9443?allowInsecure=1&security=tls&sni=server-b.example&type=tcp#bob@example.com" {
 		t.Fatalf("unexpected second link: %s", records[1].Link)
 	}
 }

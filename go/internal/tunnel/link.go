@@ -30,7 +30,7 @@ func ParseLink(raw string) (Link, error) {
 }
 
 func RenderLink(link Link) (string, error) {
-	endpoint, err := Normalize(link.Endpoint)
+	endpoint, err := normalizeLinkEndpoint(link.Endpoint)
 	if err != nil {
 		return "", err
 	}
@@ -46,6 +46,24 @@ func RenderLink(link Link) (string, error) {
 	return renderVLESS(endpoint, link.User, link.Unknown), nil
 }
 
+func normalizeLinkEndpoint(endpoint Endpoint) (Endpoint, error) {
+	if strings.EqualFold(strings.TrimSpace(endpoint.Protocol), "trojan") && strings.EqualFold(strings.TrimSpace(endpoint.Security), "none") {
+		defaults, err := DefaultProfile(ProfileTrojanTLS)
+		if err != nil {
+			return Endpoint{}, err
+		}
+		if strings.TrimSpace(endpoint.Transport) == "" {
+			endpoint.Transport = defaults.Transport
+		}
+		endpoint.Profile = defaults.Profile
+		if !strings.EqualFold(strings.TrimSpace(endpoint.Transport), defaults.Transport) {
+			return Endpoint{}, fmt.Errorf("profile %q requires transport %q", endpoint.Profile, defaults.Transport)
+		}
+		return endpoint, nil
+	}
+	return Normalize(endpoint)
+}
+
 func parseTrojan(u *url.URL) (Link, error) {
 	credential, host, port, err := parseAuthority(u)
 	if err != nil {
@@ -58,7 +76,7 @@ func parseTrojan(u *url.URL) (Link, error) {
 	endpoint.Security = first(query.Get("security"), endpoint.Security)
 	endpoint.ServerName = first(query.Get("sni"), host)
 	endpoint.TLS = tlsFromQuery(query)
-	endpoint, err = Normalize(endpoint)
+	endpoint, err = normalizeLinkEndpoint(endpoint)
 	if err != nil {
 		return Link{}, err
 	}
@@ -83,7 +101,7 @@ func parseVLESS(u *url.URL) (Link, error) {
 	if flow := strings.TrimSpace(query.Get("flow")); flow != "" {
 		endpoint.Metadata["flow"] = flow
 	}
-	endpoint, err = Normalize(endpoint)
+	endpoint, err = normalizeLinkEndpoint(endpoint)
 	if err != nil {
 		return Link{}, err
 	}
@@ -199,7 +217,7 @@ func unknown(values url.Values, known map[string]struct{}) url.Values {
 	return out
 }
 
-var trojanKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName")
+var trojanKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "xp2p_pin_sha256", "xp2p_verify_name")
 var vlessKnown = known("security", "type", "sni", "alpn", "allowInsecure", "pinnedPeerCertSha256", "verifyPeerCertByName", "xp2p_pin_sha256", "xp2p_verify_name", "flow", "encryption")
 
 func known(keys ...string) map[string]struct{} {

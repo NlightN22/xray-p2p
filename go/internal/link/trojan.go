@@ -78,8 +78,8 @@ func ParseTrojanLink(raw string) (TrojanLink, error) {
 		allowInsecure = val
 	}
 
-	pinnedPeerSHA256 := strings.TrimSpace(query.Get("pinnedPeerCertSha256"))
-	verifyPeerName := strings.TrimSpace(query.Get("verifyPeerCertByName"))
+	pinnedPeerSHA256 := firstQuery(query, "xp2p_pin_sha256", "pinnedPeerCertSha256")
+	verifyPeerName := firstQuery(query, "xp2p_verify_name", "verifyPeerCertByName")
 	alpn := parseALPN(query)
 
 	security := strings.ToLower(strings.TrimSpace(query.Get("security")))
@@ -120,6 +120,15 @@ func ParseTrojanLink(raw string) (TrojanLink, error) {
 		PinnedPeerSHA256: pinnedPeerSHA256,
 		VerifyPeerName:   verifyPeerName,
 	}, nil
+}
+
+func firstQuery(values url.Values, keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(values.Get(key)); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func parseALPN(values url.Values) []string {

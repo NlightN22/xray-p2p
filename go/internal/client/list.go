@@ -3,13 +3,11 @@
 package client
 
 import (
-	"net"
-	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 // ListOptions controls endpoint listing.
@@ -67,36 +65,29 @@ func buildEndpointTrojanLink(ep clientEndpointRecord) string {
 	if address == "" || ep.Port <= 0 || password == "" {
 		return ""
 	}
-
-	u := &url.URL{
-		Scheme: "trojan",
-		Host:   net.JoinHostPort(address, strconv.Itoa(ep.Port)),
-		User:   url.User(password),
+	endpoint, err := tunnel.DefaultProfile(tunnel.ProfileTrojanTLS)
+	if err != nil {
+		return ""
 	}
-
-	query := url.Values{}
+	endpoint.Host = address
+	endpoint.Port = ep.Port
 	if strings.TrimSpace(ep.ServerName) == "" {
-		query.Set("security", "none")
+		endpoint.Security = "none"
 	} else {
-		query.Set("security", "tls")
-		query.Set("sni", strings.TrimSpace(ep.ServerName))
+		endpoint.ServerName = strings.TrimSpace(ep.ServerName)
 	}
-	if ep.AllowInsecure {
-		query.Set("allowInsecure", "1")
+	endpoint.TLS = tunnel.TLSMetadata{
+		ALPN:                 normalizeALPN(ep.ALPN),
+		AllowInsecure:        ep.AllowInsecure,
+		PinnedPeerCertSHA256: strings.TrimSpace(ep.PinnedPeerCertSHA256),
+		VerifyPeerCertByName: strings.TrimSpace(ep.VerifyPeerCertByName),
 	}
-	if strings.TrimSpace(ep.PinnedPeerCertSHA256) != "" {
-		query.Set("pinnedPeerCertSha256", strings.TrimSpace(ep.PinnedPeerCertSHA256))
+	link, err := tunnel.RenderLink(tunnel.Link{
+		Endpoint: endpoint,
+		User:     tunnel.User{UserLabel: ep.User, Credential: password},
+	})
+	if err != nil {
+		return ""
 	}
-	if strings.TrimSpace(ep.VerifyPeerCertByName) != "" {
-		query.Set("verifyPeerCertByName", strings.TrimSpace(ep.VerifyPeerCertByName))
-	}
-	if len(ep.ALPN) > 0 {
-		query.Set("alpn", strings.Join(ep.ALPN, ","))
-	}
-	u.RawQuery = query.Encode()
-
-	if user := strings.TrimSpace(ep.User); user != "" {
-		u.Fragment = url.QueryEscape(user)
-	}
-	return u.String()
+	return link
 }

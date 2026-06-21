@@ -6,10 +6,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"net"
-	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -148,33 +145,25 @@ func buildTrojanLink(host string, port int, password, label string, tlsEnabled b
 	if password == "" {
 		return "", errors.New("password is required to build connection link")
 	}
-
-	u := &url.URL{
-		Scheme: "trojan",
-		Host:   net.JoinHostPort(host, strconv.Itoa(port)),
-		User:   url.User(password),
+	endpoint, err := tunnel.DefaultProfile(tunnel.ProfileTrojanTLS)
+	if err != nil {
+		return "", err
 	}
-
-	query := url.Values{}
+	endpoint.Host = host
+	endpoint.Port = port
 	if tlsEnabled {
-		query.Set("security", "tls")
-		query.Set("sni", host)
-		if strings.TrimSpace(pinnedPeerCertSHA256) != "" {
-			query.Set("pinnedPeerCertSha256", strings.TrimSpace(pinnedPeerCertSHA256))
-		}
-		if strings.TrimSpace(verifyPeerCertByName) != "" {
-			query.Set("verifyPeerCertByName", strings.TrimSpace(verifyPeerCertByName))
+		endpoint.ServerName = host
+		endpoint.TLS = tunnel.TLSMetadata{
+			PinnedPeerCertSHA256: strings.TrimSpace(pinnedPeerCertSHA256),
+			VerifyPeerCertByName: strings.TrimSpace(verifyPeerCertByName),
 		}
 	} else {
-		query.Set("security", "none")
+		endpoint.Security = "none"
 	}
-	u.RawQuery = query.Encode()
-
-	if trimmed := strings.TrimSpace(label); trimmed != "" {
-		u.Fragment = url.QueryEscape(trimmed)
-	}
-
-	return u.String(), nil
+	return tunnel.RenderLink(tunnel.Link{
+		Endpoint: endpoint,
+		User:     tunnel.User{UserLabel: label, Credential: password},
+	})
 }
 
 func buildVLESSLink(host string, port int, credential, label string, tls tunnel.TLSMetadata) (string, error) {
