@@ -29,6 +29,7 @@ type Rule struct {
 	OutboundTag string `json:"outbound_tag" toml:"outbound_tag"`
 	NoRoutes    bool   `json:"no_routes,omitempty" toml:"no_routes"`
 	Disabled    bool   `json:"disabled,omitempty" toml:"disabled,omitempty"`
+	AccessPolicy
 }
 
 // Target identifies the normalized redirect selector.

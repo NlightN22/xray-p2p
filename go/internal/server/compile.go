@@ -35,9 +35,17 @@ type runtimeMeta struct {
 }
 
 type runtimeDesired struct {
-	Reverse   serverReverseState `json:"reverse,omitempty"`
-	Redirects []redirect.Rule    `json:"redirects,omitempty"`
-	Forwards  []forward.Rule     `json:"forwards,omitempty"`
+	Reverse          serverReverseState `json:"reverse,omitempty"`
+	Redirects        []redirect.Rule    `json:"redirects,omitempty"`
+	RedirectStatuses []redirectStatus   `json:"redirect_statuses,omitempty"`
+	Forwards         []forward.Rule     `json:"forwards,omitempty"`
+}
+
+type redirectStatus struct {
+	CIDR             string `json:"cidr,omitempty"`
+	Domain           string `json:"domain,omitempty"`
+	OutboundTag      string `json:"outbound_tag"`
+	DisabledByPolicy bool   `json:"disabled_by_policy,omitempty"`
 }
 
 type compiledArtifacts struct {
@@ -98,9 +106,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		TunAddr:    strings.TrimSpace(cfg.Server.TunAddr),
 		XrayAssets: cfg.XrayAssets,
 		Desired: runtimeDesired{
-			Reverse:   desired.Reverse,
-			Redirects: desired.Redirects,
-			Forwards:  desired.Forwards,
+			Reverse: desired.Reverse, Redirects: desired.Redirects, RedirectStatuses: redirectStatuses(desired.Redirects), Forwards: desired.Forwards,
 		},
 		CertPath: certPath,
 		KeyPath:  keyPath,
@@ -121,6 +127,18 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		MetaJSON: metaBytes,
 		Extra:    map[string][]byte{},
 	}, nil
+}
+
+func redirectStatuses(rules []redirect.Rule) []redirectStatus {
+	statuses := make([]redirectStatus, 0, len(rules))
+	for _, rule := range rules {
+		policy, err := rule.AccessPolicy.Normalized()
+		if err != nil || policy.Access != "restricted" || len(policy.Users) != 0 {
+			continue
+		}
+		statuses = append(statuses, redirectStatus{CIDR: rule.CIDR, Domain: rule.Domain, OutboundTag: rule.OutboundTag, DisabledByPolicy: true})
+	}
+	return statuses
 }
 
 func buildServerXrayDoc(xrayCfg xrayconfig.ServerXrayConfig, desired desiredServerConfig, cfg config.Config, certPath, keyPath string, snips extensions.Snippets) (map[string]any, error) {

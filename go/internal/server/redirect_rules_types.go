@@ -9,16 +9,24 @@ import (
 const serverRedirectRulesKey = "server_redirects"
 
 type RedirectAddOptions struct {
-	InstallDir string
-	ConfigDir  string
-	CIDR       string
-	Domain     string
-	Tag        string
-	User       string
-	Hostname   string
-	NoRoutes   bool
-	TunEnabled bool
-	TunName    string
+	InstallDir  string
+	ConfigDir   string
+	CIDR        string
+	Domain      string
+	Tag         string
+	User        string
+	Hostname    string
+	NoRoutes    bool
+	TunEnabled  bool
+	TunName     string
+	Access      string
+	AllowUsers  []string
+	AllowGroups []string
+}
+
+type RedirectAccessOptions struct {
+	CIDR, Domain, Tag, Hostname, Access string
+	AllowUsers, AllowGroups             []string
 }
 
 type RedirectRemoveOptions struct {
@@ -48,13 +56,14 @@ type RedirectListOptions struct {
 }
 
 type RedirectRecord struct {
-	Type     string
-	Value    string
-	CIDR     string
-	Domain   string
-	Tag      string
-	Hostname string
-	Disabled bool
+	Type             string
+	Value            string
+	CIDR             string
+	Domain           string
+	Tag              string
+	Hostname         string
+	Disabled         bool
+	DisabledByPolicy bool
 }
 
 type serverRedirectStore struct {

@@ -49,10 +49,21 @@ func BuildXrayRules(role string, rules []Rule) []any {
 	sorted := SortedRules(rules)
 	out := make([]any, 0, len(sorted))
 	for _, rule := range sorted {
+		policy, err := rule.AccessPolicy.Normalized()
+		if err != nil {
+			continue
+		}
+		if policy.Access == "restricted" && len(policy.Users) == 0 {
+			continue
+		}
+		fingerprint := policy.Access + "\x00" + strings.Join(policy.Users, "\x00") + "\x00" + strings.Join(policy.Groups, "\x00")
 		entry := map[string]any{
 			"type":        "field",
-			"ruleTag":     xrayrule.Redirect(role, rule.OutboundTag, rule.Kind().String(), rule.Value()),
+			"ruleTag":     xrayrule.Redirect(role, rule.OutboundTag, rule.Kind().String(), rule.Value(), fingerprint),
 			"outboundTag": rule.OutboundTag,
+		}
+		if policy.Access == "restricted" {
+			entry["user"] = policy.Users
 		}
 		switch rule.Kind() {
 		case KindDomain:

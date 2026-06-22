@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/NlightN22/xray-p2p/go/internal/identity"
 	"strings"
 )
 
@@ -24,6 +25,9 @@ func UpdateUser(ctx context.Context, opts UpdateUserOptions) error {
 	newUserID := strings.TrimSpace(opts.NewUserID)
 	if opts.NewUserSet && newUserID == "" {
 		return errUserIDRequired
+	}
+	if opts.NewUserSet && identity.IsManagedUserLabel(newUserID) {
+		return fmt.Errorf("user identifier with reserved idp- prefix is not allowed")
 	}
 	password := strings.TrimSpace(opts.Password)
 	if opts.PasswordSet && password == "" {

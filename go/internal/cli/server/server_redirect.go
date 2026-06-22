@@ -16,15 +16,18 @@ import (
 )
 
 type serverRedirectAddOptions struct {
-	Path      string
-	ConfigDir string
-	CIDR      string
-	Domain    string
-	Tag       string
-	User      string
-	Host      string
-	NoRoutes  bool
-	Quiet     bool
+	Path        string
+	ConfigDir   string
+	CIDR        string
+	Domain      string
+	Tag         string
+	User        string
+	Host        string
+	NoRoutes    bool
+	Access      string
+	AllowUsers  []string
+	AllowGroups []string
+	Quiet       bool
 }
 
 type serverRedirectRemoveOptions struct {
@@ -63,6 +66,7 @@ func newServerRedirectCmd(cfg commandConfig) *cobra.Command {
 		newServerRedirectEnableCmd(cfg),
 		newServerRedirectRemoveCmd(cfg),
 		newServerRedirectListCmd(cfg),
+		newServerRedirectAccessCmd(cfg),
 	)
 	return cmd
 }
@@ -89,6 +93,9 @@ func newServerRedirectAddCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.Host, "host", "H", "", "reverse portal host to route through")
 	flags.BoolVarP(&opts.NoRoutes, "no-routes", "N", false, "do not add OS routes for CIDR redirects")
 	flags.BoolVarP(&opts.Quiet, "quiet", "q", false, "do not prompt for outbound tags")
+	flags.StringVarP(&opts.Access, "access", "V", "", "access policy: all or restricted")
+	flags.StringSliceVarP(&opts.AllowUsers, "allow-user", "U", nil, "allowed user label (repeatable)")
+	flags.StringSliceVarP(&opts.AllowGroups, "allow-group", "G", nil, "allowed provider group ID (repeatable)")
 	return cmd
 }
 
@@ -196,6 +203,7 @@ func runServerRedirectAdd(_ context.Context, cfg config.Config, opts serverRedir
 		NoRoutes:   opts.NoRoutes,
 		TunEnabled: cfg.Server.TunEnabled,
 		TunName:    cfg.Server.TunName,
+		Access:     opts.Access, AllowUsers: opts.AllowUsers, AllowGroups: opts.AllowGroups,
 	}
 	if err := serverRedirectAddFunc(addOpts); err != nil {
 		logging.Error("xp2p server redirect add failed", "err", err)
@@ -301,6 +309,8 @@ func runServerRedirectList(_ context.Context, cfg config.Config, opts serverRedi
 		state := "enabled"
 		if rec.Disabled {
 			state = "disabled"
+		} else if rec.DisabledByPolicy {
+			state = "disabled_by_policy"
 		}
 		fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\n", rec.Type, rec.Value, rec.Tag, rec.Hostname, state)
 	}

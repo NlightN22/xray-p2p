@@ -173,6 +173,25 @@ func TestBundledXrayAPI(t *testing.T) {
 	if route.OutboundTag != "direct" {
 		t.Fatalf("route outbound = %q, want direct", route.OutboundTag)
 	}
+	if err := client.AddRule(context.Background(), map[string]any{
+		"type": "field", "ruleTag": "acl-user-smoke", "inboundTag": []any{"trojan-smoke"}, "domains": []any{"full:acl-smoke.test"}, "user": []any{"allowed@xp2p.local"}, "outboundTag": "direct",
+	}); err != nil {
+		t.Fatalf("add ACL rule: %v", err)
+	}
+	allowed, err := client.TestRoute(context.Background(), RouteTest{InboundTag: "trojan-smoke", Network: "tcp", TargetDomain: "acl-smoke.test", TargetPort: 443, User: "allowed@xp2p.local", FieldSelectors: []string{"outbound"}})
+	if err != nil {
+		t.Fatalf("test allowed ACL route: %v", err)
+	}
+	if allowed.OutboundTag != "direct" {
+		t.Fatalf("allowed ACL route outbound = %q, want direct", allowed.OutboundTag)
+	}
+	disallowed, err := client.TestRoute(context.Background(), RouteTest{InboundTag: "trojan-smoke", Network: "tcp", TargetDomain: "acl-smoke.test", TargetPort: 443, User: "denied@xp2p.local", FieldSelectors: []string{"outbound"}})
+	if err == nil && disallowed.OutboundTag == "direct" {
+		t.Fatalf("disallowed ACL route unexpectedly matched direct")
+	}
+	if err := client.RemoveRule(context.Background(), "acl-user-smoke"); err != nil {
+		t.Fatalf("remove ACL rule: %v", err)
+	}
 	if err := client.RemoveRule(context.Background(), "smoke-rule"); err != nil {
 		t.Fatalf("remove rule: %v", err)
 	}
@@ -306,6 +325,25 @@ func freeTCPPort(t *testing.T) int {
 	return port
 }
 
+func freeTCPUDPPort(t *testing.T) int {
+	t.Helper()
+	for attempt := 0; attempt < 32; attempt++ {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("listen TCP: %v", err)
+		}
+		port := listener.Addr().(*net.TCPAddr).Port
+		packet, udpErr := net.ListenPacket("udp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		_ = listener.Close()
+		if udpErr == nil {
+			_ = packet.Close()
+			return port
+		}
+	}
+	t.Fatal("allocate TCP/UDP port")
+	return 0
+}
+
 func writeSmokeXrayConfig(t *testing.T, path, workDir, apiAddress string) {
 	t.Helper()
 	host, portRaw, err := net.SplitHostPort(apiAddress)
@@ -358,7 +396,7 @@ func writeSmokeXrayConfig(t *testing.T, path, workDir, apiAddress string) {
 			map[string]any{
 				"tag":      "socks-smoke",
 				"listen":   "127.0.0.1",
-				"port":     freeTCPPort(t),
+				"port":     freeTCPUDPPort(t),
 				"protocol": "socks",
 				"settings": map[string]any{"auth": "noauth", "udp": true},
 			},

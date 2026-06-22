@@ -58,6 +58,13 @@ func decodeServerRedirectRules(doc map[string]any) ([]redirect.Rule, error) {
 	if err := json.Unmarshal(buf, &rules); err != nil {
 		return nil, fmt.Errorf("parse server redirect state: %w", err)
 	}
+	for i := range rules {
+		policy, err := rules[i].AccessPolicy.Normalized()
+		if err != nil {
+			return nil, fmt.Errorf("validate redirect access: %w", err)
+		}
+		rules[i].AccessPolicy = policy
+	}
 	return rules, nil
 }
 

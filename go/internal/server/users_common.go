@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/identity"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
@@ -41,6 +42,9 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 		}
 		result := make([]trojanClient, 0, len(users))
 		for _, user := range users {
+			if identity.IsManagedUserLabel(user.UserLabel) {
+				return nil, fmt.Errorf("manual user label with reserved idp- prefix is not allowed")
+			}
 			active := strings.TrimSpace(tunnel.ActiveCredential(user))
 			result = append(result, trojanClient{Email: user.UserLabel, Password: active, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: user.CredentialGeneration, Disabled: user.Disabled})
 		}
@@ -72,6 +76,9 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 			return nil, fmt.Errorf("normalize legacy server user %q: %w", user.Email, err)
 		}
 		users[idx] = trojanClient{Email: record.User.UserLabel, Password: tunnel.ActiveCredential(record.User), CredentialGeneration: 1, Disabled: record.User.Disabled}
+		if identity.IsManagedUserLabel(users[idx].Email) {
+			return nil, fmt.Errorf("manual user label with reserved idp- prefix is not allowed")
+		}
 	}
 	return users, nil
 }

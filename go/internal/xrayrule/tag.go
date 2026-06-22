@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-func Redirect(role, outboundTag, kind, value string) string {
-	return tag(role, "redirect", outboundTag, kind, value)
+func Redirect(role, outboundTag, kind, value string, access ...string) string {
+	return tag(append([]string{role, "redirect", outboundTag, kind, value}, access...)...)
 }
 
 func EndpointBypass(role, endpointTag, target string) string {

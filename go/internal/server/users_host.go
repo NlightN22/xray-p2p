@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/identity"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
@@ -40,6 +41,9 @@ func addUser(ctx context.Context, opts AddUserOptions, commit func(context.Conte
 	userID := strings.TrimSpace(opts.UserID)
 	if userID == "" {
 		return errUserIDRequired
+	}
+	if identity.IsManagedUserLabel(userID) {
+		return errors.New("user identifier with reserved idp- prefix is not allowed")
 	}
 	password := strings.TrimSpace(opts.Password)
 	if password == "" {

@@ -26,6 +26,19 @@ func NewUserID() (string, error) {
 	return fmt.Sprintf("client-%s@xp2p.local", token), nil
 }
 
+// NewManagedUserLabel allocates a label reserved for identity-managed users.
+func NewManagedUserLabel() (string, error) {
+	token, err := newBase32Token(8)
+	if err != nil {
+		return "", fmt.Errorf("generate managed user label: %w", err)
+	}
+	return fmt.Sprintf("idp-%s@xp2p.local", token), nil
+}
+
+func IsManagedUserLabel(label string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(label)), "idp-")
+}
+
 func NewSecret(size int) (string, error) {
 	if size <= 0 {
 		return "", fmt.Errorf("secret size must be positive")

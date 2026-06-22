@@ -202,7 +202,7 @@ Includes: inherited options
 xp2p server redirect
   Summary: Manage server redirect rules
   Default behavior: list server redirect rules
-  Subcommands: add, disable, enable, remove, list
+  Subcommands: add, disable, enable, remove, list, access
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -213,6 +213,9 @@ xp2p server redirect add
   Summary: Add a server redirect rule
 Options:
 Includes: inherited options
+- --access, -V <string> access policy: all or restricted
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
 - --cidr, -C <cidr> CIDR to redirect
 - --config-dir, -D <dir> server configuration directory name or absolute path
 - --domain, -d <host> domain to redirect
@@ -264,6 +267,73 @@ Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
 - --path, -p <path> server installation directory
 - --pending, -y list pending configuration
+
+xp2p server redirect access
+  Summary: Manage redirect access policies
+  Subcommands: set, add-user, remove-user, add-group, remove-group, clear
+Options:
+Includes: inherited options
+
+xp2p server redirect access set
+  Summary: Replace a redirect access policy
+Options:
+Includes: inherited options
+- --access, -V <string> access policy: all or restricted
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access add-user
+  Summary: Add allowed users
+Options:
+Includes: inherited options
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access remove-user
+  Summary: Remove allowed users
+Options:
+Includes: inherited options
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access add-group
+  Summary: Add allowed groups
+Options:
+Includes: inherited options
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access remove-group
+  Summary: Remove allowed groups
+Options:
+Includes: inherited options
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access clear
+  Summary: Clear redirect access selectors
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
 
 xp2p server forward
   Summary: Manage server dokodemo-door forwards

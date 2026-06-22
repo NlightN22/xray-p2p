@@ -41,7 +41,11 @@ func AddRedirect(opts RedirectAddOptions) error {
 	}
 
 	rule := redirect.Rule{
-		OutboundTag: binding.Tag,
+		OutboundTag:  binding.Tag,
+		AccessPolicy: redirect.AccessPolicy{Access: opts.Access, Users: opts.AllowUsers, Groups: opts.AllowGroups},
+	}
+	if rule.AccessPolicy, err = rule.AccessPolicy.Normalized(); err != nil {
+		return err
 	}
 	if target.Kind == redirect.KindDomain {
 		rule.Domain = target.Value
@@ -66,6 +70,109 @@ func AddRedirect(opts RedirectAddOptions) error {
 	store.doc[serverRedirectRulesKey] = store.redirects
 	_ = installDir
 	return commitServerRedirectRuntimeDoc(context.Background(), store.doc, previous, store.redirects)
+}
+
+func SetRedirectAccess(opts RedirectAccessOptions) error {
+	store, err := openServerRedirectStorePending()
+	if err != nil {
+		return err
+	}
+	target, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(opts.Tag) == "" {
+		return errors.New("--tag is required")
+	}
+	if strings.TrimSpace(opts.Hostname) != "" {
+		binding, e := resolveServerRedirectBinding(opts.Tag, opts.Hostname, store.bindings())
+		if e != nil {
+			return e
+		}
+		opts.Tag = binding.Tag
+	}
+	policy, err := (redirect.AccessPolicy{Access: opts.Access, Users: opts.AllowUsers, Groups: opts.AllowGroups}).Normalized()
+	if err != nil {
+		return err
+	}
+	found := false
+	for i := range store.redirects {
+		if target.Matches(store.redirects[i]) && strings.EqualFold(store.redirects[i].OutboundTag, opts.Tag) {
+			store.redirects[i].AccessPolicy = policy
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("redirect %s via %s not found", target.Describe(), opts.Tag)
+	}
+	previous := append([]redirect.Rule(nil), store.redirects...)
+	store.doc[serverRedirectRulesKey] = store.redirects
+	return commitServerRedirectRuntimeDoc(context.Background(), store.doc, previous, store.redirects)
+}
+
+// UpdateRedirectAccess applies one selector mutation while preserving the rest of the policy.
+func UpdateRedirectAccess(opts RedirectAccessOptions, action string) error {
+	store, err := openServerRedirectStorePending()
+	if err != nil {
+		return err
+	}
+	target, err := redirect.ResolveRule(opts.CIDR, opts.Domain)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(opts.Tag) == "" {
+		return errors.New("--tag is required")
+	}
+	found := -1
+	for i := range store.redirects {
+		if target.Matches(store.redirects[i]) && strings.EqualFold(store.redirects[i].OutboundTag, opts.Tag) {
+			found = i
+			break
+		}
+	}
+	if found < 0 {
+		return fmt.Errorf("redirect %s via %s not found", target.Describe(), opts.Tag)
+	}
+	p := store.redirects[found].AccessPolicy
+	switch action {
+	case "clear":
+		p = redirect.AccessPolicy{Access: "all"}
+	case "add-user":
+		p.Users = append(p.Users, opts.AllowUsers...)
+	case "remove-user":
+		p.Users = removeAccessValues(p.Users, opts.AllowUsers)
+	case "add-group":
+		p.Groups = append(p.Groups, opts.AllowGroups...)
+	case "remove-group":
+		p.Groups = removeAccessValues(p.Groups, opts.AllowGroups)
+	default:
+		return fmt.Errorf("unknown redirect access action %q", action)
+	}
+	if action != "clear" && p.Access == "" {
+		p.Access = "restricted"
+	}
+	p, err = p.Normalized()
+	if err != nil {
+		return err
+	}
+	previous := append([]redirect.Rule(nil), store.redirects...)
+	store.redirects[found].AccessPolicy = p
+	store.doc[serverRedirectRulesKey] = store.redirects
+	return commitServerRedirectRuntimeDoc(context.Background(), store.doc, previous, store.redirects)
+}
+
+func removeAccessValues(values, remove []string) []string {
+	removed := make(map[string]struct{}, len(remove))
+	for _, value := range remove {
+		removed[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := removed[strings.ToLower(strings.TrimSpace(value))]; !ok {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func RemoveRedirect(opts RedirectRemoveOptions) error {
@@ -225,14 +332,20 @@ func ListRedirects(opts RedirectListOptions) ([]RedirectRecord, error) {
 		}
 		host := tagToHost[strings.ToLower(rule.OutboundTag)]
 		records = append(records, RedirectRecord{
-			Type:     recType,
-			Value:    val,
-			CIDR:     rule.CIDR,
-			Domain:   rule.Domain,
-			Tag:      rule.OutboundTag,
-			Hostname: host,
-			Disabled: rule.Disabled,
+			Type:             recType,
+			Value:            val,
+			CIDR:             rule.CIDR,
+			Domain:           rule.Domain,
+			Tag:              rule.OutboundTag,
+			Hostname:         host,
+			Disabled:         rule.Disabled,
+			DisabledByPolicy: redirectDisabledByPolicy(rule),
 		})
 	}
 	return records, nil
+}
+
+func redirectDisabledByPolicy(rule redirect.Rule) bool {
+	policy, err := rule.AccessPolicy.Normalized()
+	return err == nil && policy.Access == "restricted" && len(policy.Users) == 0
 }

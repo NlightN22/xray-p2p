@@ -543,7 +543,7 @@ func writeLive(t *testing.T, liveDir string, xrayJSON, metaJSON []byte) {
 
 type testRoutingApplier struct {
 	calls []string
-	tags  map[string]struct{}
+	tags  []string
 }
 
 type testInboundApplier struct {
@@ -648,30 +648,27 @@ func (a *testInboundApplier) ListInboundTags(context.Context) ([]string, error) 
 }
 
 func newTestRoutingApplier(tags ...string) *testRoutingApplier {
-	applier := &testRoutingApplier{tags: make(map[string]struct{}, len(tags))}
-	for _, tag := range tags {
-		applier.tags[tag] = struct{}{}
-	}
-	return applier
+	return &testRoutingApplier{tags: append([]string(nil), tags...)}
 }
 
 func (a *testRoutingApplier) AddRule(_ context.Context, rule map[string]any) error {
 	tag, _ := rule["ruleTag"].(string)
 	a.calls = append(a.calls, "add:"+tag)
-	a.tags[tag] = struct{}{}
+	a.tags = append(a.tags, tag)
 	return nil
 }
 
 func (a *testRoutingApplier) RemoveRule(_ context.Context, tag string) error {
 	a.calls = append(a.calls, "remove:"+tag)
-	delete(a.tags, tag)
+	for index, current := range a.tags {
+		if current == tag {
+			a.tags = append(a.tags[:index], a.tags[index+1:]...)
+			break
+		}
+	}
 	return nil
 }
 
 func (a *testRoutingApplier) ListRuleTags(context.Context) ([]string, error) {
-	result := make([]string, 0, len(a.tags))
-	for tag := range a.tags {
-		result = append(result, tag)
-	}
-	return result, nil
+	return append([]string(nil), a.tags...), nil
 }
