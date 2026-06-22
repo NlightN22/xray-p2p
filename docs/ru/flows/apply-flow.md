@@ -194,6 +194,21 @@ Live и LKG хранят скомпилированные артефакты в�
 записи `apply.error`; после исправления желаемых входных данных нужно создать
 новый запрос применения.
 
+### Изменения, staged только на старте
+
+Некоторые миграции при старте сервиса обновляют Desired до запуска xray-core.
+Например, server startup переводит legacy non-UUID credentials в
+protocol-neutral model.
+
+Такие миграции должны сохранять обновлённые Desired и записывать
+`apply.request`. Они не должны использовать runtime-capable CLI path до того,
+как появился процесс xray-core.
+
+Обычный service apply затем компилирует Desired в Live, очищает `apply.request`
+и запускает xray-core из свежего Live. Это предотвращает ложную ошибку
+runtime-apply во время bootstrap и сохраняет согласованность Desired, Live и
+running state.
+
 ## Маршруты и изменения ОС
 
 Изменения ОС обычно применяются сервисным слоем:

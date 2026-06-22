@@ -36,6 +36,13 @@ xp2p server cert set --cert /path/to/fullchain.pem --key /path/to/privkey.pem
 xp2p server cert state
 ```
 
+Подробнее о жизненном цикле сертификатов, включая замену, область удаления,
+копирование и renewal hooks, см. [Server Certificates](../operations/server-certificates.md).
+
+`dns-forward remove` удаляет управляемую dnsmasq-запись домена. Xray forward
+удаляется только когда он был создан и всё ещё принадлежит dns-forward, и когда
+ни один другой dns-forward domain не использует тот же listen port.
+
 По умолчанию сервер работает в proxy mode (`server.tun_enabled = false`). Включай TUN явно через config или `XP2P_SERVER_TUN_ENABLED=true`, когда это нужно.
 
 ## Жизненный цикл клиента
@@ -61,11 +68,17 @@ xp2p client forward list
 xp2p client forward remove --target 192.0.2.10:22
 xp2p client reverse list
 
+# DNS/DHCP helpers
+
 # Только Linux/OpenWrt (интеграция с dnsmasq)
 xp2p client dns-forward add --domain dev.example --target 10.10.10.53:53
 xp2p client dns-forward list
 xp2p client dns-forward remove --domain dev.example
 ```
+
+`dns-forward remove` следует одному правилу владения для client и server roles:
+существовавшие ранее forwards сохраняются, а общие dns-forward-owned forwards
+остаются до удаления последнего домена, использующего тот же listen port.
 
 Расширенные опции:
 
