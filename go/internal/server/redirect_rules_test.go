@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
@@ -296,6 +297,70 @@ func TestServerAddRedirectFailsWithoutReverse(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "no reverse portals") {
 		t.Fatalf("expected reverse portal error, got %v", err)
+	}
+}
+
+func TestServerCompileRedirectAccessResolvesIdentityGroups(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), []byte("[server]\n"), 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+	configDir := filepath.Join(dir, layout.ServerConfigDir)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := identitysync.DefaultStore().Save(identitysync.State{
+		Current: &identitysync.Generation{
+			ID:                 "gen-1",
+			ProviderInstanceID: "provider-1",
+			Subjects: map[string]identitysync.Subject{
+				"alice": {ExternalSubject: "alice", UserLabel: "idp-alice@xp2p.local", Active: true, Provisioned: true},
+				"bob":   {ExternalSubject: "bob", UserLabel: "idp-bob@xp2p.local", Active: true},
+			},
+			Groups: map[string]identitysync.Group{
+				"root": {ID: "root", DirectGroups: []string{"child"}},
+				"child": {ID: "child", DirectMembers: []string{
+					"alice",
+					"bob",
+				}},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("write identity state: %v", err)
+	}
+
+	writeServerStateFile(t, dir, map[string]serverReverseChannel{
+		"alphaedge-example.rev": {
+			UserID: "alpha",
+			Host:   "edge.example",
+			Tag:    "alphaedge-example.rev",
+			Domain: "alphaedge-example.rev",
+		},
+	}, []map[string]any{
+		{
+			"domain":       "svc.example.net",
+			"outbound_tag": "alphaedge-example.rev",
+			"access":       "restricted",
+			"groups":       []string{"root"},
+			"users":        []string{"future@xp2p.local"},
+		},
+	})
+
+	compiled := compileDesiredDoc(t, pendingConfigPath(), configDir)
+	rule := findRedirectRule(extractRoutingRules(t, compiled), "alphaedge-example.rev", "svc.example.net", "")
+	if rule == nil {
+		t.Fatalf("expected redirect rule")
+	}
+	users := extractStringSlice(rule["user"])
+	want := []string{"future@xp2p.local", "idp-alice@xp2p.local"}
+	if len(users) != len(want) {
+		t.Fatalf("users = %#v, want %#v", users, want)
+	}
+	for i := range want {
+		if users[i] != want[i] {
+			t.Fatalf("users = %#v, want %#v", users, want)
+		}
 	}
 }
 

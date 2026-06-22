@@ -57,6 +57,9 @@ func UpdateUser(ctx context.Context, opts UpdateUserOptions) error {
 	if found < 0 {
 		return fmt.Errorf("user %s not found", userID)
 	}
+	if opts.NewUserSet && desired.Users[found].ManagedByIdentity {
+		return fmt.Errorf("managed identity user label cannot be renamed")
+	}
 
 	if opts.NewUserSet {
 		desired.Users[found].Email = newUserID

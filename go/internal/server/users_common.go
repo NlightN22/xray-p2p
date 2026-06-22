@@ -28,6 +28,7 @@ type trojanClient struct {
 	RotationExpiresAt             time.Time `json:"-"`
 	CredentialGeneration          int       `json:"-"`
 	Disabled                      bool      `json:"disabled,omitempty" toml:"disabled,omitempty"`
+	ManagedByIdentity             bool      `json:"-"`
 }
 
 func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
@@ -42,11 +43,12 @@ func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 		}
 		result := make([]trojanClient, 0, len(users))
 		for _, user := range users {
-			if identity.IsManagedUserLabel(user.UserLabel) {
+			managed := user.Metadata["managed_by"] == "identity"
+			if identity.IsManagedUserLabel(user.UserLabel) && !managed {
 				return nil, fmt.Errorf("manual user label with reserved idp- prefix is not allowed")
 			}
 			active := strings.TrimSpace(tunnel.ActiveCredential(user))
-			result = append(result, trojanClient{Email: user.UserLabel, Password: active, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: user.CredentialGeneration, Disabled: user.Disabled})
+			result = append(result, trojanClient{Email: user.UserLabel, Password: active, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: user.CredentialGeneration, Disabled: user.Disabled, ManagedByIdentity: managed})
 		}
 		return result, nil
 	}
@@ -90,7 +92,11 @@ func setServerUsers(doc map[string]any, users []trojanClient) {
 		if generation == 0 {
 			generation = 1
 		}
-		stored = append(stored, tunnel.User{UserLabel: user.Email, ActiveCredential: user.Password, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: generation, Disabled: user.Disabled})
+		metadata := map[string]string(nil)
+		if user.ManagedByIdentity {
+			metadata = map[string]string{"managed_by": "identity"}
+		}
+		stored = append(stored, tunnel.User{UserLabel: user.Email, ActiveCredential: user.Password, PreviousCredentialForRotation: user.PreviousCredentialForRotation, RotationExpiresAt: user.RotationExpiresAt, CredentialGeneration: generation, Disabled: user.Disabled, Metadata: metadata})
 	}
 	doc[serverUsersKey] = stored
 	doc[serverTrojanUsersKey] = nil

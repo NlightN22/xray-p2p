@@ -54,3 +54,10 @@ type UserLink struct {
 	Link     string
 	Disabled bool
 }
+
+type ProvisionIdentityOptions struct {
+	InstallDir string
+	ConfigDir  string
+	Host       string
+	UserLabel  string
+}

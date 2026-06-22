@@ -11,6 +11,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
@@ -86,7 +87,21 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		keyPath = ""
 	}
 
-	doc, err := buildServerXrayDoc(xrayCfg, desired, cfg, certPath, keyPath, snips)
+	identityState, err := identitysync.DefaultStore().Load()
+	if err != nil {
+		return compiledArtifacts{}, err
+	}
+	if err := enforceIdentityCacheAge(cfg, identityState); err != nil {
+		return compiledArtifacts{}, err
+	}
+	effectiveRedirects, err := resolveServerRedirectAccess(desired.Redirects, identityState.Current)
+	if err != nil {
+		return compiledArtifacts{}, err
+	}
+	routingDesired := desired
+	routingDesired.Redirects = effectiveRedirects
+
+	doc, err := buildServerXrayDoc(xrayCfg, routingDesired, cfg, certPath, keyPath, snips)
 	if err != nil {
 		return compiledArtifacts{}, err
 	}
@@ -106,7 +121,7 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		TunAddr:    strings.TrimSpace(cfg.Server.TunAddr),
 		XrayAssets: cfg.XrayAssets,
 		Desired: runtimeDesired{
-			Reverse: desired.Reverse, Redirects: desired.Redirects, RedirectStatuses: redirectStatuses(desired.Redirects), Forwards: desired.Forwards,
+			Reverse: desired.Reverse, Redirects: desired.Redirects, RedirectStatuses: redirectStatuses(effectiveRedirects), Forwards: desired.Forwards,
 		},
 		CertPath: certPath,
 		KeyPath:  keyPath,
@@ -139,6 +154,71 @@ func redirectStatuses(rules []redirect.Rule) []redirectStatus {
 		statuses = append(statuses, redirectStatus{CIDR: rule.CIDR, Domain: rule.Domain, OutboundTag: rule.OutboundTag, DisabledByPolicy: true})
 	}
 	return statuses
+}
+
+func resolveServerRedirectAccess(rules []redirect.Rule, generation *identitysync.Generation) ([]redirect.Rule, error) {
+	resolver := identitysync.ACLResolver{Generation: generation}
+	resolved := make([]redirect.Rule, 0, len(rules))
+	totalLabels := 0
+	totalRuleBytes := 0
+	for _, rule := range rules {
+		policy, err := rule.AccessPolicy.Normalized()
+		if err != nil {
+			return nil, err
+		}
+		if policy.Access == "restricted" {
+			users, err := resolver.Resolve(policy.Users, policy.Groups)
+			if err != nil {
+				return nil, err
+			}
+			totalLabels += len(users)
+			if totalLabels > identitysync.MaxACLLabelsPerServer {
+				return nil, fmt.Errorf("server redirect access resolves %d labels, limit is %d", totalLabels, identitysync.MaxACLLabelsPerServer)
+			}
+			policy.Users = users
+			encoded, err := json.Marshal(policy.Users)
+			if err != nil {
+				return nil, err
+			}
+			totalRuleBytes += len(encoded)
+			if totalRuleBytes > identitysync.MaxSerializedRoutingRuleBytes {
+				return nil, fmt.Errorf("server redirect access routing data is %d bytes, limit is %d", totalRuleBytes, identitysync.MaxSerializedRoutingRuleBytes)
+			}
+		}
+		rule.AccessPolicy = policy
+		resolved = append(resolved, rule)
+	}
+	return resolved, nil
+}
+
+func enforceIdentityCacheAge(cfg config.Config, state identitysync.State) error {
+	providerKind := strings.TrimSpace(cfg.Server.IdentityProvider.Kind)
+	providerID := strings.TrimSpace(cfg.Server.IdentityProvider.InstanceID)
+	if providerKind == "" && providerID == "" {
+		return nil
+	}
+	if state.Current == nil || state.Current.Detached || strings.TrimSpace(state.Status.LastSuccess) == "" {
+		return fmt.Errorf("identity cache is not available")
+	}
+	maxAgeRaw := strings.TrimSpace(cfg.Server.IdentityProvider.MaxCacheAge)
+	if maxAgeRaw == "" {
+		return nil
+	}
+	maxAge, err := time.ParseDuration(maxAgeRaw)
+	if err != nil {
+		return fmt.Errorf("invalid identity max_cache_age %q: %w", maxAgeRaw, err)
+	}
+	if maxAge <= 0 {
+		return nil
+	}
+	lastSuccess, err := time.Parse(time.RFC3339, state.Status.LastSuccess)
+	if err != nil {
+		return fmt.Errorf("invalid identity last_success %q: %w", state.Status.LastSuccess, err)
+	}
+	if time.Since(lastSuccess) > maxAge {
+		return fmt.Errorf("identity cache is stale")
+	}
+	return nil
 }
 
 func buildServerXrayDoc(xrayCfg xrayconfig.ServerXrayConfig, desired desiredServerConfig, cfg config.Config, certPath, keyPath string, snips extensions.Snippets) (map[string]any, error) {

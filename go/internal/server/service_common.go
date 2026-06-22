@@ -43,6 +43,12 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err := StageLegacyCredentialRotation(ctx); err != nil {
 		return fmt.Errorf("force rotate legacy credentials: %w", err)
 	}
+	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName), AllowInvalid: true})
+	if err != nil {
+		return err
+	}
+	stopIdentitySync := startIdentitySyncScheduler(ctx, cfg)
+	defer stopIdentitySync()
 
 	var diagCancel context.CancelFunc
 	if port := strings.TrimSpace(opts.DiagPort); port != "" {

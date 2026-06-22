@@ -2,6 +2,7 @@ package identitysync
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -106,7 +107,8 @@ func normalizeSnapshot(current *Generation, snapshot Snapshot, now time.Time, al
 		Subjects:           map[string]Subject{},
 		Groups:             map[string]Group{},
 	}
-	for id, group := range resolvedGroups {
+	for _, id := range sortedMapKeys(resolvedGroups) {
+		group := resolvedGroups[id]
 		if !reachableGroups[id] {
 			continue
 		}
@@ -114,7 +116,8 @@ func normalizeSnapshot(current *Generation, snapshot Snapshot, now time.Time, al
 		group.DirectGroups = filterReachable(group.DirectGroups, reachableGroups)
 		next.Groups[id] = group
 	}
-	for id, raw := range subjectsByID {
+	for _, id := range sortedMapKeys(subjectsByID) {
+		raw := subjectsByID[id]
 		if !reachableSubjects[id] {
 			continue
 		}
@@ -133,6 +136,15 @@ func normalizeSnapshot(current *Generation, snapshot Snapshot, now time.Time, al
 		}
 	}
 	return next, nil
+}
+
+func sortedMapKeys[T any](values map[string]T) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func resolveGroupMembers(group SnapshotGroup, subjects map[string]SnapshotSubject, groups map[string]SnapshotGroup, subjectDNs, groupDNs map[string]string) (Group, error) {

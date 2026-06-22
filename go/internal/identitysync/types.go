@@ -32,7 +32,14 @@ type State struct {
 	Provider      *ProviderRef `json:"provider,omitempty"`
 	Current       *Generation  `json:"current,omitempty"`
 	Pending       *Generation  `json:"pending,omitempty"`
+	Transaction   *Transaction `json:"transaction,omitempty"`
 	Status        Status       `json:"status"`
+}
+
+type Transaction struct {
+	PreviousGenerationID  string `json:"previous_generation_id,omitempty"`
+	CandidateGenerationID string `json:"candidate_generation_id"`
+	StartedAt             string `json:"started_at"`
 }
 
 type Status struct {

@@ -150,7 +150,10 @@ func RemoveUser(ctx context.Context, opts RemoveUserOptions) error {
 	if !removed && !purged {
 		return nil
 	}
-	return commitServerRuntimeDoc(ctx, doc)
+	if err := commitServerRuntimeDoc(ctx, doc); err != nil {
+		return err
+	}
+	return clearManagedIdentityProvisioned(userID)
 }
 
 func purgeUserReverseAndRedirectsDoc(doc map[string]any, opts RemoveUserOptions, userID string) (bool, error) {

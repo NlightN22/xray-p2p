@@ -45,3 +45,31 @@ func TestSetServerUsersWritesNeutralRecords(t *testing.T) {
 		t.Fatalf("unexpected neutral users: %#v", doc[serverUsersKey])
 	}
 }
+
+func TestDecodeServerUsersAllowsIdentityManagedMetadata(t *testing.T) {
+	users, err := decodeServerTrojanUsers(map[string]any{
+		serverUsersKey: []any{map[string]any{
+			"user_label":        "idp-alice@xp2p.local",
+			"active_credential": "secret",
+			"metadata":          map[string]any{"managed_by": "identity"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("decode managed user: %v", err)
+	}
+	if len(users) != 1 || !users[0].ManagedByIdentity {
+		t.Fatalf("managed metadata not preserved: %+v", users)
+	}
+}
+
+func TestDecodeServerUsersRejectsManualManagedLabel(t *testing.T) {
+	_, err := decodeServerTrojanUsers(map[string]any{
+		serverUsersKey: []any{map[string]any{
+			"user_label":        "idp-alice@xp2p.local",
+			"active_credential": "secret",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected reserved label error")
+	}
+}
