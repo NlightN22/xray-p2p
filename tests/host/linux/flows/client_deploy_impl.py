@@ -164,6 +164,7 @@ def _run_client_deploy_end_to_end(
         _assert_client_state(client_host, server_ip)
         _assert_client_mode(client_host, tun_enabled=expected_tun_enabled)
         _assert_client_routing(client_host, server_ip)
+        _assert_client_xray_logs_follow_desired_config(client_host)
         helpers.assert_diag_ping(
             xp2p_client_runner,
             server_ip,
@@ -1069,6 +1070,84 @@ def _assert_client_mode(host: Host, *, tun_enabled: bool) -> None:
 def _assert_client_routing(host: Host, server_ip: str) -> None:
     xray_doc = helpers.read_json(host, CLIENT_LIVE_DIR / "xray.json")
     helpers.assert_routing_rule(xray_doc, server_ip)
+
+
+def _assert_client_xray_logs_follow_desired_config(host: Host) -> None:
+    before = helpers.read_json(host, CLIENT_LIVE_DIR / "xray.json")
+    if before.get("log", {}).get("loglevel") != "warning":
+        raise AssertionError(f"Unexpected initial client xray loglevel: {before.get('log')}")
+    if "stats" not in before:
+        raise AssertionError("Initial client xray config is missing stats section")
+
+    _update_client_xray_logs(host, level="debug", access="/var/log/xp2p/client/access.log", stats_enabled=False)
+    _wait_for_apply_request_clear(host, timeout_seconds=60.0)
+    _wait_for_client_xray_logs(host, level="debug", access="/var/log/xp2p/client/access.log", stats_enabled=False)
+
+
+def _update_client_xray_logs(host: Host, *, level: str, access: str, stats_enabled: bool) -> None:
+    script = f"""
+from pathlib import Path
+
+path = Path({CLIENT_DESIRED_CONFIG_FILE.as_posix()!r})
+lines = path.read_text().splitlines()
+in_logs = False
+updated = {{
+    "level": False,
+    "access": False,
+    "stats_enabled": False,
+}}
+for index, line in enumerate(lines):
+    stripped = line.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        in_logs = stripped == "[client.xray.logs]"
+        continue
+    if not in_logs:
+        continue
+    if stripped.startswith("level ="):
+        lines[index] = 'level = "{level}"'
+        updated["level"] = True
+    elif stripped.startswith("access ="):
+        lines[index] = 'access = "{access}"'
+        updated["access"] = True
+    elif stripped.startswith("stats_enabled ="):
+        lines[index] = "stats_enabled = {str(stats_enabled).lower()}"
+        updated["stats_enabled"] = True
+missing = [key for key, value in updated.items() if not value]
+if missing:
+    raise SystemExit(f"missing client xray logs entries: {{', '.join(missing)}}")
+path.write_text("\\n".join(lines) + "\\n")
+"""
+    result = host.run(f"sudo -n python3 - <<'PY'\n{script}PY")
+    if result.rc != 0:
+        pytest.fail(
+            "Failed to update client xray logs in desired config.\n"
+            f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        )
+
+
+def _wait_for_client_xray_logs(
+    host: Host,
+    *,
+    level: str,
+    access: str,
+    stats_enabled: bool,
+    timeout_seconds: float = 30.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    last_doc: dict | None = None
+    while time.time() < deadline:
+        last_doc = helpers.read_json(host, CLIENT_LIVE_DIR / "xray.json")
+        log = last_doc.get("log") or {}
+        has_stats = "stats" in last_doc
+        if log.get("loglevel") == level and log.get("access") == access and has_stats is stats_enabled:
+            return
+        time.sleep(1.0)
+    raise AssertionError(
+        "Client xray logs did not follow desired TOML config.\n"
+        f"Expected level={level!r} access={access!r} stats_enabled={stats_enabled!r}\n"
+        f"Last xray.json log={last_doc.get('log') if last_doc else None} "
+        f"stats_present={('stats' in last_doc) if last_doc else None}"
+    )
 
 
 def _assert_internet_access(host: Host) -> None:
