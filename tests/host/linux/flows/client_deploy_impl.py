@@ -164,6 +164,12 @@ def _run_client_deploy_end_to_end(
         _assert_client_state(client_host, server_ip)
         _assert_client_mode(client_host, tun_enabled=expected_tun_enabled)
         _assert_client_routing(client_host, server_ip)
+        helpers.assert_diag_ping(
+            xp2p_client_runner,
+            server_ip,
+            port=SERVER_DIAG_PORT,
+            label="deploy direct diagnostics",
+        )
         _wait_for_tunnel_ping(xp2p_client_runner, server_ip)
 
         try:

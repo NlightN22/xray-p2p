@@ -236,6 +236,13 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			Port:       markerPort,
 			SocksProxy: socksAddr,
 		}
+		if tlsSettings, err := client.ResolveMarkerTLS(installOpts.InstallDir, targetHost, "", 0); err == nil {
+			pingOpts.ServerName = tlsSettings.ServerName
+			pingOpts.AllowInsecure = tlsSettings.AllowInsecure
+			pingOpts.PinnedPeerCertSHA256 = tlsSettings.PinnedPeerCertSHA256
+			pingOpts.User = tlsSettings.User
+			pingOpts.Credential = tlsSettings.Credential
+		}
 		if err := waitForPing(ctx, markerTarget, pingOpts, socksPingTimeout); err != nil {
 			completionState = "FAIL ping"
 			logging.Error("xp2p client deploy: ping failed", "err", err)
