@@ -33,9 +33,18 @@ configuration compilation and service startup.
 Deploy may start xray-core with a compiled config to validate connectivity:
 
 - This is a temporary runtime used only during deploy.
-- It does not write live runtime artifacts.
+- It writes temporary runtime artifacts next to the temporary `xray.json` when
+  the validation runtime needs them.
+- It does not publish or overwrite persistent Live artifacts under
+  `CONFIG_ROOT/.state/live/`.
 - It does not start the system service.
 - It is shut down when deploy finishes.
+
+The temporary diagnostics/control responder must read the same temporary
+runtime metadata as the temporary xray-core instance. This keeps deploy
+validation on the normal TLS/auth control path: marker pings use the endpoint
+TLS metadata and credentials from the compiled runtime metadata instead of
+falling back to an insecure or unauthenticated ping path.
 
 If service is already running, deploy must not stop or restart it. Deploy must
 still validate the tunnel and must not rely on the service runtime for that
@@ -51,7 +60,9 @@ service:
 - Deploy updates Desired inputs and writes `apply.request`.
 - The running service must keep working and must not be restarted by deploy.
 - The temporary deploy xray-core is used only for tunnel validation and must
-  not overwrite or reuse the service runtime.
+  not overwrite the service runtime. Its control responder reads the temporary
+  runtime metadata for validation, while the service continues to read
+  persistent Live artifacts.
 - After a successful deploy:
   - If the service is running, restart it to apply the requested changes.
   - If the service is not running, start it to apply the requested changes.
