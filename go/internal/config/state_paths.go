@@ -19,6 +19,14 @@ func LkgConfigDir(configDir string) (string, error) {
 	return stateDirForConfigDir(configDir, LkgRoot())
 }
 
+func IdentityStateDir() string {
+	return filepath.Join(StateRoot(), "identity")
+}
+
+func IdentityStatePath() string {
+	return filepath.Join(IdentityStateDir(), "state.json")
+}
+
 func stateDirForConfigDir(configDir, stateRoot string) (string, error) {
 	root := filepath.Clean(ConfigRoot())
 	dir := filepath.Clean(configDir)
