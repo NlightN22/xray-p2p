@@ -8,7 +8,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/configio"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
-	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []clientEndpointRecord, redirects []redirect.Rule, reverse map[string]clientReverseChannel, fullTunnelEnabled bool, fullTunnelTag string, endpointIPs map[string]fullTunnelEndpointIPs, requireEndpointIPs bool) error {
@@ -61,20 +60,7 @@ func updateRoutingConfig(path string, cfg xrayconfig.RoutingConfig, endpoints []
 		return err
 	}
 	ruleBuckets[routingRuleSystem] = append(ruleBuckets[routingRuleSystem], markerRules...)
-	for _, rule := range activeRedirects {
-		entry := map[string]any{
-			"type":        "field",
-			"ruleTag":     xrayrule.Redirect("client", rule.OutboundTag, rule.Kind().String(), rule.Value()),
-			"outboundTag": rule.OutboundTag,
-		}
-		switch rule.Kind() {
-		case redirect.KindDomain:
-			entry["domains"] = []string{rule.Value()}
-		default:
-			entry["ip"] = []string{rule.Value()}
-		}
-		ruleBuckets[routingRuleRedirect] = append(ruleBuckets[routingRuleRedirect], entry)
-	}
+	ruleBuckets[routingRuleRedirect] = append(ruleBuckets[routingRuleRedirect], redirect.BuildXrayRules("client", activeRedirects)...)
 	if runtime.GOOS == "windows" {
 		ruleBuckets[routingRuleUser] = filterWindowsDirectRules(ruleBuckets[routingRuleUser])
 	}

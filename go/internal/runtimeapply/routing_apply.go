@@ -72,6 +72,9 @@ func verifyRoutingDiff(ctx context.Context, applier RoutingApplier, diff Diff) e
 			return fmt.Errorf("removed routing rule %s still present", change.RuleTag)
 		}
 	}
+	if len(diff.CandidateRuleTags) > 0 && !stringSlicesEqual(tags, diff.CandidateRuleTags) {
+		return fmt.Errorf("routing rule order mismatch")
+	}
 	return nil
 }
 

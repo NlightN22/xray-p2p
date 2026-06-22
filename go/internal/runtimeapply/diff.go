@@ -49,6 +49,7 @@ type Diff struct {
 	AddedRules          []RoutingRuleChange
 	RemovedRuleTag      []string
 	RemovedRules        []RoutingRuleChange
+	CandidateRuleTags   []string
 	AddedInbounds       []InboundChange
 	RemovedInboundTags  []string
 	RemovedInbounds     []InboundChange
@@ -202,8 +203,11 @@ func classifyRoutingRules(currentRules, candidateRules []map[string]any) (Diff, 
 		return unsupported(err.Error()), nil
 	}
 
-	diff := Diff{Kind: DiffRoutingOnly}
-	for tag, current := range currentByTag {
+	currentTags := ruleTags(currentRules)
+	candidateTags := ruleTags(candidateRules)
+	diff := Diff{Kind: DiffRoutingOnly, CandidateRuleTags: candidateTags}
+	for _, tag := range currentTags {
+		current := currentByTag[tag]
 		candidate, exists := candidateByTag[tag]
 		if !exists {
 			diff.RemovedRuleTag = append(diff.RemovedRuleTag, tag)
@@ -217,7 +221,8 @@ func classifyRoutingRules(currentRules, candidateRules []map[string]any) (Diff, 
 			return unsupported("tagged routing rule changed in place"), nil
 		}
 	}
-	for tag, candidate := range candidateByTag {
+	for _, tag := range candidateTags {
+		candidate := candidateByTag[tag]
 		if _, exists := currentByTag[tag]; exists {
 			continue
 		}
@@ -226,15 +231,14 @@ func classifyRoutingRules(currentRules, candidateRules []map[string]any) (Diff, 
 			Rule:    candidate,
 		})
 	}
-	sort.Strings(diff.RemovedRuleTag)
-	sort.Slice(diff.RemovedRules, func(i, j int) bool {
-		return diff.RemovedRules[i].RuleTag < diff.RemovedRules[j].RuleTag
-	})
-	sort.Slice(diff.AddedRules, func(i, j int) bool {
-		return diff.AddedRules[i].RuleTag < diff.AddedRules[j].RuleTag
-	})
 	if len(diff.AddedRules) == 0 && len(diff.RemovedRuleTag) == 0 {
+		if !stringSlicesEqual(currentTags, candidateTags) {
+			return unsupported("routing rule order change requires service-layer apply"), nil
+		}
 		diff.Kind = DiffNoop
+	}
+	if diff.Kind == DiffRoutingOnly && !canAppendRoutingDiffReachOrder(currentTags, diff.RemovedRuleTag, diff.AddedRules, candidateTags) {
+		return unsupported("routing rule order change requires service-layer apply"), nil
 	}
 	return diff, nil
 }
@@ -398,6 +402,44 @@ func detachRoutingRules(doc map[string]any) ([]map[string]any, bool, error) {
 
 func rulesByTag(rules []map[string]any) (map[string]map[string]any, error) {
 	return objectsByTag(rules, "ruleTag", "routing rule")
+}
+
+func ruleTags(rules []map[string]any) []string {
+	tags := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		tag, _ := rule["ruleTag"].(string)
+		tags = append(tags, strings.TrimSpace(tag))
+	}
+	return tags
+}
+
+func canAppendRoutingDiffReachOrder(currentTags []string, removedTags []string, added []RoutingRuleChange, candidateTags []string) bool {
+	removed := make(map[string]struct{}, len(removedTags))
+	for _, tag := range removedTags {
+		removed[tag] = struct{}{}
+	}
+	got := make([]string, 0, len(candidateTags))
+	for _, tag := range currentTags {
+		if _, ok := removed[tag]; !ok {
+			got = append(got, tag)
+		}
+	}
+	for _, change := range added {
+		got = append(got, change.RuleTag)
+	}
+	return stringSlicesEqual(got, candidateTags)
+}
+
+func stringSlicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func objectsByTag(items []map[string]any, field string, label string) (map[string]map[string]any, error) {

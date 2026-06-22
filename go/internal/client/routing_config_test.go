@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
 )
 
@@ -203,6 +204,31 @@ func TestUpdateRoutingConfigAppendsFullTunnelRuleLast(t *testing.T) {
 	}
 }
 
+func TestUpdateRoutingConfigSortsManagedRedirectsBeforeFullTunnel(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "routing.json")
+	endpoints := []clientEndpointRecord{
+		{Hostname: "alpha.example", Tag: "proxy-alpha", Address: "alpha.example"},
+	}
+	redirects := []redirect.Rule{
+		{CIDR: "10.0.0.0/8", OutboundTag: "proxy-alpha"},
+		{Domain: "example.com", OutboundTag: "proxy-alpha"},
+		{CIDR: "10.20.30.0/24", OutboundTag: "proxy-alpha"},
+	}
+
+	if err := updateRoutingConfig(path, xrayconfig.DefaultClientConfig().Routing, endpoints, redirects, nil, true, "proxy-alpha", nil, false); err != nil {
+		t.Fatalf("updateRoutingConfig failed: %v", err)
+	}
+
+	rules := getRules(t, loadRouting(t, path))
+	domainIndex := indexRuleWithDomain(rules, "domain:example.com")
+	narrowIndex := indexRuleWithIP(rules, "10.20.30.0/24")
+	wideIndex := indexRuleWithIP(rules, "10.0.0.0/8")
+	fullIndex := indexRuleWithIP(rules, "0.0.0.0/0")
+	if !(domainIndex >= 0 && domainIndex < narrowIndex && narrowIndex < wideIndex && wideIndex < fullIndex) {
+		t.Fatalf("unexpected managed redirect order: domain=%d narrow=%d wide=%d full=%d rules=%+v", domainIndex, narrowIndex, wideIndex, fullIndex, rules)
+	}
+}
+
 func loadRouting(t *testing.T, path string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -264,6 +290,33 @@ func findRuleWithIP(rules []map[string]any, ip string) map[string]any {
 		}
 	}
 	return nil
+}
+
+func indexRuleWithDomain(rules []map[string]any, domain string) int {
+	for idx, rule := range rules {
+		for _, value := range asStrings(rule["domains"]) {
+			if value == domain {
+				return idx
+			}
+		}
+		for _, value := range asStrings(rule["domain"]) {
+			if value == domain {
+				return idx
+			}
+		}
+	}
+	return -1
+}
+
+func indexRuleWithIP(rules []map[string]any, ip string) int {
+	for idx, rule := range rules {
+		for _, value := range asStrings(rule["ip"]) {
+			if value == ip {
+				return idx
+			}
+		}
+	}
+	return -1
 }
 
 func verifyRoutingDocument(t *testing.T, path string, wantRules int, wantBridges int) {

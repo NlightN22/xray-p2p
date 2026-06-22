@@ -70,7 +70,7 @@ func findRuleWithDomainAndTag(rules []any, domain, tag string) map[string]any {
 			continue
 		}
 		for _, value := range extractStringSlice(rule["domains"]) {
-			if value == domain {
+			if value == domain || value == "domain:"+domain {
 				return rule
 			}
 		}

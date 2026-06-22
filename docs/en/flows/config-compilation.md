@@ -158,11 +158,13 @@ The final routing rule order is stable:
 
 1. Managed endpoint bypass rules (used for safe tunnel reachability).
 2. Managed system rules (reverse/marker glue, internal responders).
-3. Managed redirect/forward rules.
-4. User rules (optional) inserted at extension points (see Supported Extension Files above).
-5. Managed full-tunnel rule (when enabled).
+3. User rules from `routing.rules.after-xp2p-system.json`.
+4. Managed redirect/forward rules.
+5. User rules from `routing.rules.after-xp2p-managed.json`.
+6. Managed full-tunnel rule (when enabled).
 
 If user routing snippets are present, they are inserted at the configured extension points only.
+Managed redirects are sorted deterministically before compilation: domain redirects first, then CIDR redirects from the most specific prefix to the broadest prefix. Domain redirects compile as `domain:<value>`; internal reverse-domain rules keep exact `full:<value>` matching.
 
 ### Outbounds, Inbounds, and Other Sections
 

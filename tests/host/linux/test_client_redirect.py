@@ -11,6 +11,8 @@ CONFIG_DIR = helpers.CLIENT_CONFIG_DIR_NAME
 PRIMARY_HOST = "10.240.0.10"
 SECONDARY_HOST = "10.240.0.11"
 REDIRECT_CIDR = "10.230.0.0/16"
+REDIRECT_WIDE_CIDR = "10.0.0.0/8"
+REDIRECT_NARROW_CIDR = "10.20.30.0/24"
 REDIRECT_DOMAIN = "svc.internal.example"
 INVALID_CIDR = "10.999.0.0/33"
 
@@ -58,6 +60,21 @@ def _list_redirects(runner):
 
 def _combined_output(result) -> str:
     return f"{result.stdout}\n{result.stderr}".lower()
+
+
+def _routing_rules(xray: dict) -> list[dict]:
+    rules = xray.get("routing", {}).get("rules") or []
+    return [rule for rule in rules if isinstance(rule, dict)]
+
+
+def _rule_index(rules: list[dict], *, outbound_tag: str, field: str, value: str) -> int:
+    for idx, rule in enumerate(rules):
+        if rule.get("outboundTag") != outbound_tag:
+            continue
+        values = rule.get(field) or []
+        if isinstance(values, list) and value in values:
+            return idx
+    raise AssertionError(f"Routing rule {field}={value} via {outbound_tag} not found in {rules}")
 
 
 @pytest.mark.host
@@ -265,3 +282,66 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         assert records == []
     finally:
         pass
+
+
+@pytest.mark.host
+@pytest.mark.linux
+def test_client_redirect_routes_are_prioritized_in_rendered_xray(client_host, xp2p_client_runner):
+    _install_endpoint(xp2p_client_runner, PRIMARY_HOST, "primary@example.com", "primary-pass")
+    primary_tag = helpers.expected_proxy_tag(PRIMARY_HOST)
+
+    _redirect_cmd(
+        xp2p_client_runner,
+        "add",
+        "--cidr",
+        REDIRECT_WIDE_CIDR,
+        "--tag",
+        primary_tag,
+        check=True,
+    )
+    _redirect_cmd(
+        xp2p_client_runner,
+        "add",
+        "--cidr",
+        REDIRECT_NARROW_CIDR,
+        "--tag",
+        primary_tag,
+        check=True,
+    )
+    _redirect_cmd(
+        xp2p_client_runner,
+        "add",
+        "--domain",
+        REDIRECT_DOMAIN,
+        "--tag",
+        primary_tag,
+        check=True,
+    )
+
+    desired = helpers.read_pending_client_config(client_host)
+    persisted_values = [
+        entry.get("cidr") or entry.get("domain")
+        for entry in desired.get("redirects") or []
+        if entry.get("outbound_tag") == primary_tag
+    ]
+    assert persisted_values == [REDIRECT_WIDE_CIDR, REDIRECT_NARROW_CIDR, REDIRECT_DOMAIN]
+
+    xray = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)
+    helpers.assert_domain_redirect_rule(xray, REDIRECT_DOMAIN, primary_tag)
+    helpers.assert_redirect_rule(xray, REDIRECT_WIDE_CIDR, primary_tag)
+    helpers.assert_redirect_rule(xray, REDIRECT_NARROW_CIDR, primary_tag)
+
+    rules = _routing_rules(xray)
+    domain_idx = _rule_index(
+        rules,
+        outbound_tag=primary_tag,
+        field="domains",
+        value=f"domain:{REDIRECT_DOMAIN}",
+    )
+    narrow_idx = _rule_index(rules, outbound_tag=primary_tag, field="ip", value=REDIRECT_NARROW_CIDR)
+    wide_idx = _rule_index(rules, outbound_tag=primary_tag, field="ip", value=REDIRECT_WIDE_CIDR)
+
+    assert domain_idx < narrow_idx < wide_idx, (
+        "Managed redirect rules should be ordered as domain, narrow CIDR, broad CIDR. "
+        f"Got indexes: domain={domain_idx}, narrow={narrow_idx}, wide={wide_idx}. Rules: {rules}"
+    )

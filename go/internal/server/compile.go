@@ -255,19 +255,7 @@ func buildServerRoutingWithSnips(cfg xrayconfig.ServerXrayConfig, desired desire
 	for _, rule := range cfg.Routing.Rules {
 		managedRules = append(managedRules, rule)
 	}
-	for _, rule := range activeRedirects {
-		entry := map[string]any{
-			"type":        "field",
-			"ruleTag":     xrayrule.Redirect("server", rule.OutboundTag, rule.Kind().String(), rule.Value()),
-			"outboundTag": rule.OutboundTag,
-		}
-		if rule.Kind() == redirect.KindDomain {
-			entry["domains"] = []string{rule.Value()}
-		} else {
-			entry["ip"] = []string{rule.Value()}
-		}
-		managedRules = append(managedRules, entry)
-	}
+	managedRules = append(managedRules, redirect.BuildXrayRules("server", activeRedirects)...)
 
 	rules := make([]any, 0, len(markerRules)+len(reverseRules)+len(snips.RoutingAfterSystem)+len(managedRules)+len(snips.RoutingAfterManaged))
 	rules = append(rules, markerRules...)

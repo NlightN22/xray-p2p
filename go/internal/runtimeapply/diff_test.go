@@ -78,6 +78,32 @@ func TestClassifyXrayConfigDiffRejectsTaggedRuleMutation(t *testing.T) {
 	}
 }
 
+func TestClassifyXrayConfigDiffRejectsOrderOnlyRoutingChange(t *testing.T) {
+	current := []byte(`{"routing":{"rules":[{"ruleTag":"wide"},{"ruleTag":"narrow"}]}}`)
+	candidate := []byte(`{"routing":{"rules":[{"ruleTag":"narrow"},{"ruleTag":"wide"}]}}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
+func TestClassifyXrayConfigDiffRejectsInsertedRoutingRuleOrder(t *testing.T) {
+	current := []byte(`{"routing":{"rules":[{"ruleTag":"wide"}]}}`)
+	candidate := []byte(`{"routing":{"rules":[{"ruleTag":"narrow"},{"ruleTag":"wide"}]}}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
 func TestClassifyXrayConfigDiffDetectsFullTunnelTargetReplacement(t *testing.T) {
 	current := []byte(`{"routing":{"rules":[
 		{"type":"field","ruleTag":"xp2p-full-old","ip":["0.0.0.0/0","::/0"],"outboundTag":"proxy-old"}

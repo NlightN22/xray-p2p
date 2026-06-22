@@ -343,7 +343,7 @@ func findRedirectRule(rules []any, outboundTag string, domain string, cidr strin
 		if wantDomain != "" {
 			domains := extractStringSlice(ruleMap["domains"])
 			for _, value := range domains {
-				if strings.EqualFold(value, wantDomain) {
+				if strings.EqualFold(value, wantDomain) || strings.EqualFold(value, "domain:"+wantDomain) {
 					return ruleMap
 				}
 			}

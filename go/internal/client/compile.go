@@ -15,7 +15,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayassets"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayconfig"
-	"github.com/NlightN22/xray-p2p/go/internal/xrayrule"
 )
 
 type runtimeMeta struct {
@@ -247,20 +246,7 @@ func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState
 	for _, rule := range cfg.Rules {
 		managedRules = append(managedRules, rule)
 	}
-	for _, rule := range activeRedirects {
-		entry := map[string]any{
-			"type":        "field",
-			"ruleTag":     xrayrule.Redirect("client", rule.OutboundTag, rule.Kind().String(), rule.Value()),
-			"outboundTag": rule.OutboundTag,
-		}
-		switch rule.Kind() {
-		case redirect.KindDomain:
-			entry["domains"] = []string{rule.Value()}
-		default:
-			entry["ip"] = []string{rule.Value()}
-		}
-		managedRules = append(managedRules, entry)
-	}
+	managedRules = append(managedRules, redirect.BuildXrayRules("client", activeRedirects)...)
 
 	rules := make([]any, 0, len(bypassRules)+len(systemRules)+len(snips.RoutingAfterSystem)+len(managedRules)+len(snips.RoutingAfterManaged)+1)
 	rules = append(rules, bypassRules...)

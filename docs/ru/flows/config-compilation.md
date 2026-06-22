@@ -162,11 +162,13 @@ User snippets не должны создавать коллизии с reserved 
 
 1. Managed endpoint bypass rules (для безопасной доступности туннеля).
 2. Managed system rules (reverse/marker glue, internal responders).
-3. Managed redirect/forward rules.
-4. User rules (опционально), вставляемые в extension points (см. Supported Extension Files выше).
-5. Managed full-tunnel rule (если включено).
+3. User rules из `routing.rules.after-xp2p-system.json`.
+4. Managed redirect/forward rules.
+5. User rules из `routing.rules.after-xp2p-managed.json`.
+6. Managed full-tunnel rule (если включено).
 
 Если user routing snippets присутствуют, они вставляются только в настроенные extension points.
+Managed redirects сортируются детерминированно перед компиляцией: сначала domain redirects, затем CIDR redirects от самого специфичного prefix к самому широкому. Domain redirects компилируются как `domain:<value>`; internal reverse-domain rules сохраняют точное `full:<value>` matching.
 
 ### Исходящие, входящие и другие секции
 

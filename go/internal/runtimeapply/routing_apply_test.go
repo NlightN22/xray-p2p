@@ -10,7 +10,8 @@ import (
 func TestApplyRoutingDiffSequencesRemoveBeforeAdd(t *testing.T) {
 	applier := newRecordingRoutingApplier("old")
 	diff := Diff{
-		Kind: DiffRoutingOnly,
+		Kind:              DiffRoutingOnly,
+		CandidateRuleTags: []string{"new"},
 		RemovedRules: []RoutingRuleChange{
 			{RuleTag: "old", Rule: map[string]any{"ruleTag": "old"}},
 		},
@@ -32,7 +33,8 @@ func TestApplyRoutingDiffRollsBackAddedRules(t *testing.T) {
 	applier := newRecordingRoutingApplier()
 	applier.failAddTag = "bad"
 	diff := Diff{
-		Kind: DiffRoutingOnly,
+		Kind:              DiffRoutingOnly,
+		CandidateRuleTags: []string{"good", "bad"},
 		AddedRules: []RoutingRuleChange{
 			{RuleTag: "good", Rule: map[string]any{"ruleTag": "good"}},
 			{RuleTag: "bad", Rule: map[string]any{"ruleTag": "bad"}},
@@ -53,7 +55,8 @@ func TestApplyRoutingDiffRestoresRemovedRules(t *testing.T) {
 	applier := newRecordingRoutingApplier("good", "bad")
 	applier.failRemoveTag = "bad"
 	diff := Diff{
-		Kind: DiffRoutingOnly,
+		Kind:              DiffRoutingOnly,
+		CandidateRuleTags: []string{},
 		RemovedRules: []RoutingRuleChange{
 			{RuleTag: "good", Rule: map[string]any{"ruleTag": "good"}},
 			{RuleTag: "bad", Rule: map[string]any{"ruleTag": "bad"}},
