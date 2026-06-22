@@ -10,6 +10,8 @@ import pytest
 from testinfra.host import Host
 
 from . import _helpers as helpers
+from . import _identity_ldap
+from . import _identity_keycloak
 from . import env as linux_env
 
 
@@ -68,6 +70,18 @@ def server_host(linux_host_factory) -> Host:
 @pytest.fixture(scope="session")
 def aux_host(linux_host_factory) -> Host:
     return linux_host_factory(linux_env.DEFAULT_AUX)
+
+
+@pytest.fixture
+def ldap_directory(aux_host: Host):
+    with _identity_ldap.ldap_directory(aux_host):
+        yield
+
+
+@pytest.fixture
+def keycloak_directory(aux_host: Host):
+    with _identity_keycloak.keycloak_directory(aux_host):
+        yield
 
 
 

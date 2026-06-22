@@ -1,0 +1,91 @@
+dn: ou=service,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: organizationalUnit
+ou: service
+
+dn: cn=ldap-reader,ou=service,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: simpleSecurityObject
+objectClass: organizationalRole
+cn: ldap-reader
+description: Read-only test directory service account
+userPassword: integration-reader-password
+
+dn: ou=people,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: organizationalUnit
+ou: people
+
+dn: employeeNumber=usr-10001,ou=people,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: inetOrgPerson
+cn: Alice Example
+sn: Example
+uid: alice
+employeeNumber: usr-10001
+mail: alice@example.test
+displayName: Alice Example
+
+dn: employeeNumber=usr-10002,ou=people,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: inetOrgPerson
+cn: Bob Example
+sn: Example
+uid: bob
+employeeNumber: usr-10002
+mail: bob@example.test
+displayName: Bob Example
+
+dn: employeeNumber=usr-10003,ou=people,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: inetOrgPerson
+cn: Carol Example
+sn: Example
+uid: carol
+employeeNumber: usr-10003
+mail: carol@example.test
+displayName: Carol Example
+
+dn: employeeNumber=usr-10004,ou=people,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: inetOrgPerson
+cn: Dave Example
+sn: Example
+uid: dave
+employeeNumber: usr-10004
+mail: dave@example.test
+displayName: Dave Example
+
+dn: ou=groups,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: organizationalUnit
+ou: groups
+
+dn: gidNumber=20001,ou=groups,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: posixGroup
+cn: engineering
+gidNumber: 20001
+memberUid: usr-10001
+memberUid: usr-10003
+
+dn: gidNumber=20002,ou=groups,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: posixGroup
+cn: admins
+gidNumber: 20002
+memberUid: usr-10001
+
+dn: gidNumber=20003,ou=groups,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: posixGroup
+cn: sales
+gidNumber: 20003
+memberUid: usr-10002
+memberUid: usr-10003
+
+dn: gidNumber=20004,ou=groups,dc=identity,dc=xp2p,dc=test
+objectClass: top
+objectClass: posixGroup
+cn: empty
+gidNumber: 20004

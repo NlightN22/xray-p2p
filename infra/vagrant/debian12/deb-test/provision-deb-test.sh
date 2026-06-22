@@ -11,6 +11,7 @@ APT_PACKAGES="
   git
   iptables
   lintian
+  ldap-utils
   nftables
   pkg-config
   qemu-user-static
@@ -21,10 +22,34 @@ APT_PACKAGES="
   unzip
 "
 
+if [ "$(hostname -s)" = "deb-test-c" ]; then
+  APT_PACKAGES="$APT_PACKAGES
+  docker-compose
+  docker.io
+  jq
+  slapd
+  "
+
+  debconf-set-selections <<'EOF'
+slapd slapd/no_configuration boolean false
+slapd slapd/domain string identity.xp2p.test
+slapd shared/organization string XP2P Integration Tests
+slapd slapd/password1 password integration-admin-password
+slapd slapd/password2 password integration-admin-password
+slapd slapd/move_old_database boolean true
+slapd slapd/purge_database boolean false
+slapd slapd/allow_ldap_v2 boolean false
+EOF
+fi
+
 apt-get update -y
 apt-get install -y --no-install-recommends $APT_PACKAGES
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+
+if [ "$(hostname -s)" = "deb-test-c" ]; then
+  systemctl enable --now docker
+fi
 
 # Ensure binfmt handlers for cross-built debs (arm64/armhf/386)
 if command -v update-binfmts >/dev/null 2>&1; then
