@@ -146,6 +146,13 @@ def server_desired(host) -> dict:
     return helpers.read_toml(host, helpers.SERVER_CONFIG_FILE).get("server") or {}
 
 
+def server_users_by_label(state: dict) -> dict:
+    users = state.get("users")
+    if users is None:
+        users = state.get("trojan_users") or []
+    return {entry.get("user_label") or entry.get("email"): entry for entry in users}
+
+
 def endpoint_by_tag(state: dict, tag: str) -> dict:
     for endpoint in state.get("endpoints") or []:
         if endpoint.get("tag") == tag:

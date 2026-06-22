@@ -40,7 +40,7 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err := os.MkdirAll(desiredConfigDir, 0o755); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
-	if err := ForceRotateLegacyCredentials(ctx); err != nil {
+	if err := StageLegacyCredentialRotation(ctx); err != nil {
 		return fmt.Errorf("force rotate legacy credentials: %w", err)
 	}
 

@@ -22,13 +22,37 @@ type RotateUserOptions struct {
 // ForceRotateLegacyCredentials replaces every non-UUID active credential by
 // the standard rotation path. It is safe to call on every service start.
 func ForceRotateLegacyCredentials(ctx context.Context) error {
+	doc, changed, err := rotateLegacyCredentialsDoc()
+	if err != nil || !changed {
+		return err
+	}
+	return commitServerRuntimeDoc(ctx, doc)
+}
+
+// StageLegacyCredentialRotation rotates legacy credentials before service
+// startup. The pending apply is handled by the normal service bootstrap path.
+func StageLegacyCredentialRotation(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	doc, changed, err := rotateLegacyCredentialsDoc()
+	if err != nil || !changed {
+		return err
+	}
+	if err := writeServerStateDoc(pendingConfigPath(), doc); err != nil {
+		return err
+	}
+	return writeServerRuntimeApplyRequest()
+}
+
+func rotateLegacyCredentialsDoc() (map[string]any, bool, error) {
 	doc, err := loadServerStateDoc(pendingConfigPath())
 	if err != nil {
-		return err
+		return nil, false, err
 	}
 	desired, err := loadServerDesiredConfigFromPath(pendingConfigPath())
 	if err != nil {
-		return err
+		return nil, false, err
 	}
 	changed := false
 	for index := range desired.Users {
@@ -36,16 +60,16 @@ func ForceRotateLegacyCredentials(ctx context.Context) error {
 			continue
 		}
 		if err := rotateUserCredential(&desired.Users[index], defaultRotationTTL); err != nil {
-			return err
+			return nil, false, err
 		}
 		changed = true
 		logging.Info("forced credential rotation staged", "user_label", desired.Users[index].Email)
 	}
 	if !changed {
-		return nil
+		return nil, false, nil
 	}
 	setServerUsers(doc, desired.Users)
-	return commitServerRuntimeDoc(ctx, doc)
+	return doc, true, nil
 }
 
 // RotateUser replaces only the active protocol-neutral credential. The runtime

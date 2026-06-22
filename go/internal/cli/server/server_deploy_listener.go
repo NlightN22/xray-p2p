@@ -130,6 +130,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 				if err := server.StartBackground(diagCtx, server.Options{
 					Port:       s.Cfg.Server.Port,
 					InstallDir: s.Cfg.Server.InstallDir,
+					LiveDir:    sig.runConfigDir,
 				}); err != nil {
 					logging.Warn("xp2p server deploy: diagnostics start failed", "err", err)
 					diagStop()

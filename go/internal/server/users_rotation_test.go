@@ -48,3 +48,19 @@ func TestForceRotateLegacyCredentialsIsIdempotent(t *testing.T) {
 		t.Fatalf("staged rotation must not publish an apply request: %v", err)
 	}
 }
+
+func TestStageLegacyCredentialRotationWritesApplyRequest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	doc := map[string]any{}
+	setServerUsers(doc, []trojanClient{{Email: "legacy", Password: "legacy-password"}})
+	if err := writeServerStateDoc(config.ConfigPath(layout.ServerConfigFileName), doc); err != nil {
+		t.Fatalf("write desired state: %v", err)
+	}
+	if err := StageLegacyCredentialRotation(context.Background()); err != nil {
+		t.Fatalf("stage rotate: %v", err)
+	}
+	if _, err := os.Stat(config.ApplyRequestPath()); err != nil {
+		t.Fatalf("expected apply request: %v", err)
+	}
+}

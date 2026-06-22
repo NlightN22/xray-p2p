@@ -33,7 +33,7 @@ def test_runtime_server_user_disable_enable_preserves_pid_and_persistence(server
         rt.wait_for_apply_clear(server_host)
         rt.assert_same_xray_pid(server_host, before_pid, "server-user-disable-pid-changed")
         desired = setup.server_desired(server_host)
-        users = {entry.get("id") or entry.get("email"): entry for entry in desired.get("trojan_users") or []}
+        users = setup.server_users_by_label(desired)
         assert users[user_alpha].get("disabled") is True
         assert not users[user_bravo].get("disabled", False)
         live = rt.wait_for_live_xray(server_host, "server")
@@ -51,7 +51,7 @@ def test_runtime_server_user_disable_enable_preserves_pid_and_persistence(server
         rt.wait_for_apply_clear(server_host)
         rt.assert_same_xray_pid(server_host, before_pid, "server-user-enable-pid-changed")
         desired = setup.server_desired(server_host)
-        users = {entry.get("id") or entry.get("email"): entry for entry in desired.get("trojan_users") or []}
+        users = setup.server_users_by_label(desired)
         assert not users[user_alpha].get("disabled", False)
         live = rt.wait_for_live_xray(server_host, "server")
         assert {user_alpha, user_bravo} <= rt.trojan_user_ids(live)
