@@ -11,7 +11,48 @@ func TestSubscriptionTopologyCreatesConfirmedGroupMembers(t *testing.T) {
 	state := clientInstallState{Endpoints: []clientEndpointRecord{{Tag: "primary", User: "alice", Profile: "trojan-tls"}}}
 	sub := controlplane.Subscription{Topology: &controlplane.Topology{Generation: 3, Group: ha.Group{ID: "g", Tag: "logical", Selector: ha.Selector{Mode: "automatic"}, Members: []ha.Member{{ID: "one", Tag: "primary", Host: "one.example", Port: 443, Profile: "trojan-tls", Confirmed: true}, {ID: "old", Tag: "old", Tombstone: true, Confirmed: true}}}}}
 	updated, err := applySubscriptionTopology(state, state.Endpoints[0], sub, "secret")
-	if err != nil { t.Fatal(err) }
-	if len(updated.Endpoints) != 1 || updated.Endpoints[0].Hostname != "one.example" { t.Fatalf("endpoints = %+v", updated.Endpoints) }
-	if len(updated.EndpointGroups) != 1 || updated.EndpointGroups[0].Tag != "logical" { t.Fatalf("groups = %+v", updated.EndpointGroups) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Endpoints) != 1 || updated.Endpoints[0].Hostname != "one.example" {
+		t.Fatalf("endpoints = %+v", updated.Endpoints)
+	}
+	if len(updated.EndpointGroups) != 1 || updated.EndpointGroups[0].Tag != "logical" {
+		t.Fatalf("groups = %+v", updated.EndpointGroups)
+	}
+}
+
+func TestSubscriptionTopologyPreservesUnrelatedEndpointsAndGroups(t *testing.T) {
+	state := clientInstallState{
+		Endpoints: []clientEndpointRecord{
+			{Tag: "primary", User: "alice", Profile: "trojan-tls"},
+			{Tag: "single", Hostname: "single.example", Address: "single.example", Port: 443, User: "bob"},
+		},
+		EndpointGroups: []endpointGroup{{GroupID: "manual", Tag: "manual", Members: []string{"single"}, Mode: endpointGroupMode("manual")}},
+	}
+	sub := controlplane.Subscription{Topology: &controlplane.Topology{
+		Generation: 4,
+		Group: ha.Group{
+			ID:       "ha",
+			Tag:      "ha",
+			Selector: ha.Selector{Mode: "automatic"},
+			Members:  []ha.Member{{ID: "one", Tag: "primary", Host: "one.example", Port: 443, Profile: "trojan-tls", Confirmed: true}},
+		},
+	}}
+	updated, err := applySubscriptionTopology(state, state.Endpoints[0], sub, "secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Endpoints) != 2 {
+		t.Fatalf("endpoints = %+v", updated.Endpoints)
+	}
+	if updated.Endpoints[0].Tag != "single" || updated.Endpoints[0].Hostname != "single.example" {
+		t.Fatalf("unrelated endpoint was not preserved: %+v", updated.Endpoints)
+	}
+	if len(updated.EndpointGroups) != 2 {
+		t.Fatalf("groups = %+v", updated.EndpointGroups)
+	}
+	if updated.EndpointGroups[0].Tag != "manual" || updated.EndpointGroups[1].Tag != "ha" {
+		t.Fatalf("groups = %+v", updated.EndpointGroups)
+	}
 }

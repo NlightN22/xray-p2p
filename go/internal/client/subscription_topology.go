@@ -21,7 +21,18 @@ func applySubscriptionTopology(current clientInstallState, endpoint clientEndpoi
 	for _, record := range current.Endpoints {
 		byTag[strings.ToLower(record.Tag)] = record
 	}
-	endpoints := make([]clientEndpointRecord, 0, len(topology.Group.Members))
+	haTags := make(map[string]struct{}, len(topology.Group.Members))
+	endpoints := make([]clientEndpointRecord, 0, len(current.Endpoints)+len(topology.Group.Members))
+	for _, member := range topology.Group.Members {
+		if strings.TrimSpace(member.Tag) != "" {
+			haTags[strings.ToLower(member.Tag)] = struct{}{}
+		}
+	}
+	for _, record := range current.Endpoints {
+		if _, ok := haTags[strings.ToLower(record.Tag)]; !ok {
+			endpoints = append(endpoints, record)
+		}
+	}
 	members := make([]string, 0, len(topology.Group.Members))
 	for _, member := range confirmedTopologyMembers(topology.Group.Members) {
 		record, ok := byTag[strings.ToLower(member.Tag)]
@@ -48,7 +59,22 @@ func applySubscriptionTopology(current clientInstallState, endpoint clientEndpoi
 	}
 	updated.Endpoints = endpoints
 	group := endpointGroup{GroupID: topology.Group.ID, Tag: topology.Group.Tag, Members: members, Mode: endpointGroupMode(topology.Group.Selector.Mode), FailureThreshold: topology.Group.Selector.FailureThreshold, SuccessThreshold: topology.Group.Selector.SuccessThreshold, CooldownSeconds: topology.Group.Selector.CooldownSeconds, MinimumHoldSeconds: topology.Group.Selector.MinimumHoldSeconds, AutomaticFailback: topology.Group.Selector.AutomaticFailback}
-	updated.EndpointGroups = []endpointGroup{group}
+	groups := make([]endpointGroup, 0, len(current.EndpointGroups)+1)
+	replaced := false
+	for _, existing := range current.EndpointGroups {
+		if strings.EqualFold(existing.GroupID, group.GroupID) || strings.EqualFold(existing.Tag, group.Tag) {
+			if !replaced {
+				groups = append(groups, group)
+				replaced = true
+			}
+			continue
+		}
+		groups = append(groups, existing)
+	}
+	if !replaced {
+		groups = append(groups, group)
+	}
+	updated.EndpointGroups = groups
 	updated.normalize()
 	if err := updated.validateEndpointGroups(); err != nil {
 		return clientInstallState{}, err

@@ -7,13 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 )
 
 type Peer struct {
-	ID       string `json:"id" toml:"id"`
-	Endpoint string `json:"endpoint,omitempty" toml:"endpoint,omitempty"`
-	Secret   string `json:"-" toml:"secret"`
+	ID            string `json:"id" toml:"id"`
+	Endpoint      string `json:"endpoint,omitempty" toml:"endpoint,omitempty"`
+	AllowInsecure bool   `json:"allow_insecure,omitempty" toml:"allow_insecure,omitempty"`
+	Secret        string `json:"-" toml:"secret"`
 }
 
 type PrepareRequest struct {
@@ -38,6 +41,7 @@ type Acknowledgement struct {
 // Store keeps immutable candidates separate from the last committed generation.
 type Store struct {
 	mu        sync.Mutex
+	localID   string
 	peers     map[string]Peer
 	committed Generation
 	pending   *Generation
@@ -51,13 +55,45 @@ func (s *Store) SetCommitter(commit func(Generation) error) {
 	s.onCommit = commit
 }
 
+// Refresh updates the committed generation and peer membership from durable
+// state when no two-phase commit is in progress.
+func (s *Store) Refresh(peers []Peer, committed Generation) error {
+	if committed.Number != 0 {
+		if err := committed.Validate(); err != nil {
+			return err
+		}
+	}
+	nextPeers := make(map[string]Peer, len(peers))
+	for _, peer := range peers {
+		if peer.ID == "" || peer.Secret == "" {
+			return errors.New("HA peer ID and secret are required")
+		}
+		nextPeers[peer.ID] = peer
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pending != nil {
+		return nil
+	}
+	s.peers = nextPeers
+	if committed.Number >= s.committed.Number {
+		s.committed = committed
+	}
+	s.acks = make(map[string]Acknowledgement)
+	return nil
+}
+
 func NewStore(peers []Peer, committed Generation) (*Store, error) {
+	return NewStoreWithLocalID("", peers, committed)
+}
+
+func NewStoreWithLocalID(localID string, peers []Peer, committed Generation) (*Store, error) {
 	if committed.Number != 0 {
 		if err := committed.Validate(); err != nil {
 			return nil, err
 		}
 	}
-	s := &Store{peers: make(map[string]Peer, len(peers)), committed: committed, acks: make(map[string]Acknowledgement)}
+	s := &Store{localID: strings.TrimSpace(localID), peers: make(map[string]Peer, len(peers)), committed: committed, acks: make(map[string]Acknowledgement)}
 	for _, peer := range peers {
 		if peer.ID == "" || peer.Secret == "" {
 			return nil, errors.New("HA peer ID and secret are required")
@@ -67,12 +103,28 @@ func NewStore(peers []Peer, committed Generation) (*Store, error) {
 	return s, nil
 }
 
+func (s *Store) LocalPeerID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.localID
+}
+
+func (s *Store) SetLocalPeerID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.localID = strings.TrimSpace(id)
+}
+
 func Sign(peer Peer, generation Generation) (string, error) {
+	return SignAs(peer.ID, peer.Secret, generation)
+}
+
+func SignAs(peerID, secret string, generation Generation) (string, error) {
 	payload, err := json.Marshal(generation)
 	if err != nil {
 		return "", err
 	}
-	mac := hmac.New(sha256.New, []byte(peer.Secret))
+	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil)), nil
 }
@@ -81,7 +133,11 @@ func (s *Store) Prepare(req PrepareRequest) Acknowledgement {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	peer, ok := s.peers[req.PeerID]
-	ack := Acknowledgement{PeerID: req.PeerID, Generation: req.Generation.Number}
+	ackPeerID := s.localID
+	if ackPeerID == "" {
+		ackPeerID = req.PeerID
+	}
+	ack := Acknowledgement{PeerID: ackPeerID, Generation: req.Generation.Number}
 	if !ok {
 		ack.Error = "HA peer is not authorized"
 		return ack
@@ -104,6 +160,45 @@ func (s *Store) Prepare(req PrepareRequest) Acknowledgement {
 	s.acks = map[string]Acknowledgement{req.PeerID: {PeerID: req.PeerID, Generation: candidate.Number, Ready: true}}
 	ack.Ready = true
 	return ack
+}
+
+// Stage is used by the temporary coordinator to create its local immutable
+// candidate before it collects acknowledgements from configured peers.
+func (s *Store) Stage(generation Generation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if generation.Number <= s.committed.Number {
+		return ErrGenerationOutOfOrder
+	}
+	if err := generation.Validate(); err != nil {
+		return err
+	}
+	candidate := generation
+	s.pending = &candidate
+	s.acks = make(map[string]Acknowledgement)
+	return nil
+}
+
+func (s *Store) Peers() []Peer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	peers := make([]Peer, 0, len(s.peers))
+	for _, peer := range s.peers {
+		peers = append(peers, peer)
+	}
+	sort.Slice(peers, func(i, j int) bool { return strings.ToLower(peers[i].ID) < strings.ToLower(peers[j].ID) })
+	return peers
+}
+
+// Abort discards a locally prepared candidate after a failed synchronization.
+// It never changes the committed generation.
+func (s *Store) Abort(generation uint64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pending != nil && s.pending.Number == generation {
+		s.pending = nil
+		s.acks = make(map[string]Acknowledgement)
+	}
 }
 
 func (s *Store) Acknowledge(ack Acknowledgement) error {

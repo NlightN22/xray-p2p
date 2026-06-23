@@ -11,25 +11,39 @@ import (
 
 // SyncClient sends the coordinator's immutable candidate over HTTPS. The
 // caller supplies the HTTP client so certificate policy remains explicit.
-type SyncClient struct{ HTTPClient *http.Client }
+type SyncClient struct {
+	HTTPClient        *http.Client
+	HTTPClientForPeer func(Peer) *http.Client
+	LocalPeerID       string
+}
+
+func (c SyncClient) httpClient(peer Peer) *http.Client {
+	if c.HTTPClientForPeer != nil {
+		if client := c.HTTPClientForPeer(peer); client != nil {
+			return client
+		}
+	}
+	if c.HTTPClient != nil {
+		return c.HTTPClient
+	}
+	return http.DefaultClient
+}
 
 func (c SyncClient) Prepare(ctx context.Context, peer Peer, generation Generation) (Acknowledgement, error) {
 	if strings.TrimSpace(peer.Endpoint) == "" {
 		return Acknowledgement{}, fmt.Errorf("HA peer %q endpoint is required", peer.ID)
 	}
-	signature, err := Sign(peer, generation)
+	senderID := c.senderID(peer)
+	signature, err := SignAs(senderID, peer.Secret, generation)
 	if err != nil {
 		return Acknowledgement{}, err
 	}
-	request := PrepareRequest{PeerID: peer.ID, Generation: generation, Signature: signature}
+	request := PrepareRequest{PeerID: senderID, Generation: generation, Signature: signature}
 	data, err := json.Marshal(request)
 	if err != nil {
 		return Acknowledgement{}, err
 	}
-	httpClient := c.HTTPClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+	httpClient := c.httpClient(peer)
 	url := strings.TrimRight(peer.Endpoint, "/") + PathPrepare
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
@@ -52,18 +66,16 @@ func (c SyncClient) Prepare(ctx context.Context, peer Peer, generation Generatio
 }
 
 func (c SyncClient) Commit(ctx context.Context, peer Peer, generation Generation) (Generation, error) {
-	signature, err := Sign(peer, generation)
+	senderID := c.senderID(peer)
+	signature, err := SignAs(senderID, peer.Secret, generation)
 	if err != nil {
 		return Generation{}, err
 	}
-	data, err := json.Marshal(CommitRequest{PeerID: peer.ID, Generation: generation.Number, Signature: signature})
+	data, err := json.Marshal(CommitRequest{PeerID: senderID, Generation: generation.Number, Signature: signature})
 	if err != nil {
 		return Generation{}, err
 	}
-	httpClient := c.HTTPClient
-	if httpClient == nil {
-		httpClient = http.DefaultClient
-	}
+	httpClient := c.httpClient(peer)
 	url := strings.TrimRight(peer.Endpoint, "/") + PathCommit
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
@@ -86,4 +98,11 @@ func (c SyncClient) Commit(ctx context.Context, peer Peer, generation Generation
 		return Generation{}, fmt.Errorf("HA peer %q committed unexpected generation %d", peer.ID, committed.Number)
 	}
 	return committed, nil
+}
+
+func (c SyncClient) senderID(peer Peer) string {
+	if id := strings.TrimSpace(c.LocalPeerID); id != "" {
+		return id
+	}
+	return peer.ID
 }

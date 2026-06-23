@@ -11,6 +11,7 @@ var (
 	ErrGenerationOutOfOrder = errors.New("HA generation is not newer than the committed generation")
 	ErrMemberNotConfirmed   = errors.New("HA member is not confirmed")
 	ErrChannelReferenced    = errors.New("HA channel is still referenced")
+	ErrChannelNotFound      = errors.New("HA channel is not registered")
 )
 
 type Member struct {
@@ -70,7 +71,11 @@ func (g Generation) Validate() error {
 	if strings.TrimSpace(g.Group.ID) == "" || strings.TrimSpace(g.Group.Tag) == "" {
 		return errors.New("HA group ID and tag are required")
 	}
+	if err := g.Group.Selector.Validate(); err != nil {
+		return err
+	}
 	seen := make(map[string]struct{}, len(g.Group.Members))
+	memberTags := make(map[string]struct{}, len(g.Group.Members))
 	for _, member := range g.Group.Members {
 		key := strings.ToLower(strings.TrimSpace(member.ID))
 		if key == "" || strings.TrimSpace(member.Tag) == "" {
@@ -80,6 +85,13 @@ func (g Generation) Validate() error {
 			return fmt.Errorf("duplicate HA member %q", member.ID)
 		}
 		seen[key] = struct{}{}
+		memberTags[strings.ToLower(strings.TrimSpace(member.Tag))] = struct{}{}
+		if member.Tombstone && member.Confirmed {
+			return fmt.Errorf("tombstoned HA member %q cannot be confirmed", member.ID)
+		}
+		if member.Confirmed && (strings.TrimSpace(member.Host) == "" || member.Port < 1 || member.Port > 65535 || strings.TrimSpace(member.Profile) == "") {
+			return fmt.Errorf("confirmed HA member %q is incomplete", member.ID)
+		}
 	}
 	channels := make(map[string]struct{}, len(g.Channels))
 	for _, channel := range g.Channels {
@@ -90,13 +102,37 @@ func (g Generation) Validate() error {
 			return fmt.Errorf("duplicate HA channel %q", channel.ID)
 		}
 		channels[strings.ToLower(channel.ID)] = struct{}{}
-		bound := strings.TrimSpace(channel.Binding.GroupTag) != "" || strings.TrimSpace(channel.Binding.EndpointTag) != ""
+		groupTag := strings.TrimSpace(channel.Binding.GroupTag)
+		endpointTag := strings.TrimSpace(channel.Binding.EndpointTag)
+		bound := groupTag != "" || endpointTag != ""
 		if !channel.Binding.Disabled && !bound {
 			return fmt.Errorf("HA channel %q is not bound or disabled", channel.ID)
 		}
-		if strings.TrimSpace(channel.Binding.GroupTag) != "" && !strings.EqualFold(channel.Binding.GroupTag, g.Group.Tag) {
+		if channel.Binding.Disabled && bound {
+			return fmt.Errorf("disabled HA channel %q must not have a binding", channel.ID)
+		}
+		if groupTag != "" && endpointTag != "" {
+			return fmt.Errorf("HA channel %q has multiple bindings", channel.ID)
+		}
+		if groupTag != "" && !strings.EqualFold(groupTag, g.Group.Tag) {
 			return fmt.Errorf("HA channel %q belongs to another group", channel.ID)
 		}
+		if endpointTag != "" {
+			if _, ok := memberTags[strings.ToLower(endpointTag)]; !ok {
+				return fmt.Errorf("HA channel %q references unknown endpoint %q", channel.ID, endpointTag)
+			}
+		}
+	}
+	return nil
+}
+
+func (s Selector) Validate() error {
+	mode := strings.ToLower(strings.TrimSpace(s.Mode))
+	if mode != "" && mode != "automatic" && mode != "manual" && mode != "disabled" {
+		return fmt.Errorf("invalid HA selector mode %q", s.Mode)
+	}
+	if s.FailureThreshold < 0 || s.SuccessThreshold < 0 || s.CooldownSeconds < 0 || s.MinimumHoldSeconds < 0 {
+		return errors.New("HA selector values cannot be negative")
 	}
 	return nil
 }
@@ -113,10 +149,17 @@ func (g Generation) ConfirmedMembers() []Member {
 }
 
 func (g Generation) CanFinalizeChannel(id string) error {
+	found := false
 	for _, channel := range g.Channels {
-		if strings.EqualFold(channel.ID, id) && !channel.Binding.Disabled {
-			return ErrChannelReferenced
+		if strings.EqualFold(channel.ID, id) {
+			found = true
+			if !channel.Binding.Disabled {
+				return ErrChannelReferenced
+			}
 		}
+	}
+	if !found {
+		return ErrChannelNotFound
 	}
 	return nil
 }

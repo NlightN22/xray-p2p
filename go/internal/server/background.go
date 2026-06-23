@@ -16,6 +16,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
+	"github.com/NlightN22/xray-p2p/go/internal/ha"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -100,6 +101,13 @@ func StartBackground(ctx context.Context, opts Options) error {
 			},
 			Heartbeat: hbStore,
 			HAStore:   haStore,
+			ReloadHA: func(store *ha.Store) error {
+				fresh, err := LoadHAReplication(config.ConfigPath(layout.ServerConfigFileName))
+				if err != nil {
+					return err
+				}
+				return store.Refresh(fresh.Peers(), fresh.Committed())
+			},
 			Acknowledge: func(userLabel string, generation int) error {
 				return AcknowledgeCredential(context.Background(), userLabel, generation)
 			},

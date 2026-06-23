@@ -4,7 +4,7 @@
 
 xp2p server
   Summary: Manage xp2p server components
-  Subcommands: install, remove, run, service, state, render, debug, export, import, user, identity, redirect, forward, reverse, cert, deploy, mode, profile, dns-forward
+  Subcommands: install, remove, run, service, state, render, debug, export, import, user, identity, redirect, forward, reverse, cert, deploy, mode, profile, ha, dns-forward
 Options:
 Includes: inherited options
 
@@ -481,6 +481,142 @@ Includes: inherited options
 
 xp2p server profile [trojan-tls|vless-tls-vision]
   Summary: Show or switch the server tunnel profile
+Options:
+Includes: inherited options
+
+xp2p server ha
+  Summary: Manage server HA topology
+  Subcommands: status, group, sync, peer, channel, member
+Options:
+Includes: inherited options
+
+xp2p server ha status
+  Summary: Show committed HA generation
+Options:
+Includes: inherited options
+
+xp2p server ha group
+  Summary: Manage the HA group
+  Subcommands: create, remove, inspect, update
+Options:
+Includes: inherited options
+
+xp2p server ha group create <id> <tag>
+  Summary: Create an HA group
+Options:
+Includes: inherited options
+
+xp2p server ha group remove
+  Summary: Remove an HA group after channel rebind or disable
+Options:
+Includes: inherited options
+
+xp2p server ha group inspect
+  Summary: Inspect HA group topology
+Options:
+Includes: inherited options
+
+xp2p server ha group update <automatic|manual|disabled>
+  Summary: Set HA group selector mode
+Options:
+Includes: inherited options
+
+xp2p server ha sync
+  Summary: Synchronize the next HA generation with peers
+Options:
+Includes: inherited options
+
+xp2p server ha peer
+  Summary: Manage trusted HA peers
+  Subcommands: self, add, remove, list
+Options:
+Includes: inherited options
+
+xp2p server ha peer self <id>
+  Summary: Set the local HA peer identity
+Options:
+Includes: inherited options
+
+xp2p server ha peer add <id> <endpoint> <secret>
+  Summary: Add or update an HA peer
+Options:
+Includes: inherited options
+- --allow-insecure, -k allow an untrusted peer certificate
+
+xp2p server ha peer remove <id>
+  Summary: Remove an HA peer
+Options:
+Includes: inherited options
+
+xp2p server ha peer list
+  Summary: List HA peers
+Options:
+Includes: inherited options
+
+xp2p server ha channel
+  Summary: Manage stable HA reverse channels
+  Subcommands: create, disable, inspect, rebind, rebind-endpoint, finalize, list
+Options:
+Includes: inherited options
+
+xp2p server ha channel create <id> <tag> <domain>
+  Summary: Create a group-bound HA channel
+Options:
+Includes: inherited options
+
+xp2p server ha channel disable <id>
+  Summary: Disable an HA channel
+Options:
+Includes: inherited options
+
+xp2p server ha channel inspect <id>
+  Summary: Inspect an HA channel
+Options:
+Includes: inherited options
+
+xp2p server ha channel rebind <id> <group-tag|endpoint-tag>
+  Summary: Rebind an HA channel
+Options:
+Includes: inherited options
+
+xp2p server ha channel rebind-endpoint <id> <endpoint-tag>
+  Summary: Bind an HA channel to a physical endpoint
+Options:
+Includes: inherited options
+
+xp2p server ha channel finalize <id>
+  Summary: Finalize a disabled HA channel
+Options:
+Includes: inherited options
+
+xp2p server ha channel list
+  Summary: List HA channels
+Options:
+Includes: inherited options
+
+xp2p server ha member
+  Summary: Manage HA group members
+  Subcommands: remove, add, reprioritize, list
+Options:
+Includes: inherited options
+
+xp2p server ha member remove <id>
+  Summary: Tombstone an HA member
+Options:
+Includes: inherited options
+
+xp2p server ha member add <id> <tag> <host> <port> <profile>
+  Summary: Add a confirmed HA member
+Options:
+Includes: inherited options
+
+xp2p server ha member reprioritize <id> <priority>
+  Summary: Change HA member priority
+Options:
+Includes: inherited options
+
+xp2p server ha member list
+  Summary: List HA group members
 Options:
 Includes: inherited options
 

@@ -1,17 +1,22 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/ha"
-	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 const (
-	serverHAGenerationKey = "ha_generation"
-	serverHAPeersKey      = "ha_peers"
+	serverHAGenerationKey   = "ha_generation"
+	serverHALocalPeerIDKey  = "ha_local_peer_id"
+	serverHAPeersKey        = "ha_peers"
+	serverHAIdentityACLKey  = "ha_identity_acl"
+	serverHAProvisionedKey  = "ha_provisioned_resources"
+	serverHARedirectKeysKey = "ha_redirect_keys"
 )
 
 func LoadHAReplication(configPath string) (*ha.Store, error) {
@@ -33,7 +38,8 @@ func LoadHAReplication(configPath string) (*ha.Store, error) {
 			return nil, fmt.Errorf("parse HA peers: %w", err)
 		}
 	}
-	store, err := ha.NewStore(peers, generation)
+	localPeerID, _ := doc[serverHALocalPeerIDKey].(string)
+	store, err := ha.NewStoreWithLocalID(localPeerID, peers, generation)
 	if err != nil {
 		return nil, err
 	}
@@ -89,21 +95,39 @@ func CommitHAGeneration(configPath string, generation ha.Generation) error {
 		delete(reverse, tag)
 	}
 	for _, channel := range generation.Channels {
-		if channel.Binding.Disabled || !strings.EqualFold(channel.Binding.GroupTag, generation.Group.Tag) {
+		if channel.Binding.Disabled {
 			continue
 		}
 		reverse[channel.Tag] = serverReverseChannel{UserID: channel.UserID, Tag: channel.Tag, Domain: channel.Domain, Host: channel.Domain}
 	}
 	doc[serverReverseStateKey] = reverse
-	if len(generation.Redirects) > 0 {
-		var redirects []redirect.Rule
-		if err := json.Unmarshal(generation.Redirects, &redirects); err != nil {
-			return fmt.Errorf("parse HA redirects: %w", err)
-		}
-		doc[serverRedirectRulesKey] = redirects
+	redirects, err := mergeHAOwnedRedirects(doc, generation.Redirects)
+	if err != nil {
+		return err
 	}
+	doc[serverRedirectRulesKey] = redirects
+	doc[serverHARedirectKeysKey] = redirectKeysFromPayload(generation.Redirects)
 	doc[serverHAGenerationKey] = generation
-	return writeServerStateDoc(configPath, doc)
+	if len(generation.IdentityACL) == 0 {
+		doc[serverHAIdentityACLKey] = nil
+	} else {
+		doc[serverHAIdentityACLKey] = string(generation.IdentityACL)
+	}
+	if len(generation.Provisioned) == 0 {
+		doc[serverHAProvisionedKey] = nil
+	} else {
+		doc[serverHAProvisionedKey] = string(generation.Provisioned)
+	}
+	if filepath.Clean(configPath) == filepath.Clean(pendingConfigPath()) {
+		if err := commitServerRuntimeDoc(context.Background(), doc); err != nil {
+			return err
+		}
+		return applyHAIdentityState(generation.IdentityACL, generation.Provisioned)
+	}
+	if err := writeServerStateDoc(configPath, doc); err != nil {
+		return err
+	}
+	return applyHAIdentityState(generation.IdentityACL, generation.Provisioned)
 }
 
 func LoadHAGeneration(configPath string) (ha.Generation, error) {
@@ -125,6 +149,45 @@ func SaveHAPeers(configPath string, peers []ha.Peer) error {
 		doc[serverHAPeersKey] = peers
 	}
 	return writeServerStateDoc(configPath, doc)
+}
+
+func SaveHALocalPeerID(configPath, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("HA local peer ID is required")
+	}
+	doc, err := loadServerStateDoc(configPath)
+	if err != nil {
+		return err
+	}
+	doc[serverHALocalPeerIDKey] = strings.TrimSpace(id)
+	return writeServerStateDoc(configPath, doc)
+}
+
+func LoadHALocalPeerID(configPath string) (string, error) {
+	doc, err := loadServerStateDoc(configPath)
+	if err != nil {
+		return "", err
+	}
+	value, _ := doc[serverHALocalPeerIDKey].(string)
+	return strings.TrimSpace(value), nil
+}
+
+func ListHAPeers(configPath string) ([]ha.Peer, error) {
+	doc, err := loadServerStateDoc(configPath)
+	if err != nil {
+		return nil, err
+	}
+	var peers []ha.Peer
+	if raw := doc[serverHAPeersKey]; raw != nil {
+		data, err := json.Marshal(raw)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &peers); err != nil {
+			return nil, fmt.Errorf("parse HA peers: %w", err)
+		}
+	}
+	return peers, nil
 }
 
 func UpsertHAPeer(configPath string, peer ha.Peer) error {

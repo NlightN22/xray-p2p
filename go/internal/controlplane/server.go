@@ -28,6 +28,7 @@ type HandlerOptions struct {
 	AuthWindow  time.Duration
 	Acknowledge func(userLabel string, credentialGeneration int) error
 	HAStore     *ha.Store
+	ReloadHA    func(*ha.Store) error
 }
 
 func NewHandler(opts HandlerOptions) http.Handler {
@@ -49,9 +50,23 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	mux.HandleFunc(PathCredentialsRotate, h.rotate)
 	mux.HandleFunc(PathCredentialsAck, h.ack)
 	if opts.HAStore != nil {
-		mux.Handle("/control/v1/ha/", ha.NewHTTPHandler(opts.HAStore))
+		var haHandler http.Handler = ha.NewHTTPHandler(opts.HAStore)
+		if opts.ReloadHA != nil {
+			haHandler = reloadHAHandler(opts.HAStore, opts.ReloadHA, haHandler)
+		}
+		mux.Handle("/control/v1/ha/", haHandler)
 	}
 	return mux
+}
+
+func reloadHAHandler(store *ha.Store, reload func(*ha.Store) error, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := reload(store); err != nil {
+			writeError(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 type handler struct {
