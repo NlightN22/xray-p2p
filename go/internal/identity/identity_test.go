@@ -35,6 +35,43 @@ func TestNewUserIDUsesManagedLocalLabel(t *testing.T) {
 	}
 }
 
+func TestManagedUserLabelIsDeterministic(t *testing.T) {
+	first, err := ManagedUserLabel("corp", "user-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := ManagedUserLabel("corp", "user-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherProvider, err := ManagedUserLabel("other", "user-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherSubject, err := ManagedUserLabel("corp", "user-456")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("label is not stable: %q != %q", first, second)
+	}
+	if !IsManagedUserLabel(first) || !strings.HasSuffix(first, "@xp2p.local") {
+		t.Fatalf("unexpected managed label: %q", first)
+	}
+	if first == otherProvider || first == otherSubject {
+		t.Fatalf("label did not include provider and subject: %q", first)
+	}
+}
+
+func TestManagedUserLabelRequiresStableInputs(t *testing.T) {
+	if _, err := ManagedUserLabel("", "user"); err == nil {
+		t.Fatal("expected provider instance id error")
+	}
+	if _, err := ManagedUserLabel("corp", ""); err == nil {
+		t.Fatal("expected external subject error")
+	}
+}
+
 func TestNewSecretReturnsURLSafeValue(t *testing.T) {
 	secret, err := NewSecret(18)
 	if err != nil {

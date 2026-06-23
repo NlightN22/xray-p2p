@@ -26,6 +26,7 @@ def test_identity_ldap_sync_provisioning_acl_and_detach(server_host, xp2p_server
     current = state["current"]
     engineering_labels = _labels_for_group(current, "engineering")
     assert len(engineering_labels) == 2
+    assert current["subjects"]["usr-10001"]["user_label"] == "idp-s4jyyvcybikicve55n2yaculim@xp2p.local"
 
     alice_label = current["subjects"]["usr-10001"]["user_label"]
     carol_label = current["subjects"]["usr-10003"]["user_label"]
@@ -121,6 +122,10 @@ def test_identity_keycloak_scim_sync_and_membership_change(server_host, aux_host
     first = _identity_state(server_host)
     first_engineering = _labels_for_group(first["current"], "engineering")
     assert len(first_engineering) == 2
+    assert (
+        first["current"]["subjects"]["11111111-1111-4111-8111-111111111111"]["user_label"]
+        == "idp-7puc4dzzjx5ludkzrknccvaxlg@xp2p.local"
+    )
 
     _identity_keycloak.run_keycloak(aux_host, "set-membership", "dave", "engineering", "present")
     xp2p_server_runner("server", "identity", "sync", check=True)

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
-	"github.com/NlightN22/xray-p2p/go/internal/identity"
 	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
@@ -26,9 +25,8 @@ func startIdentitySyncScheduler(ctx context.Context, cfg config.Config) func() {
 		interval = 15 * time.Minute
 	}
 	service := identitysync.Service{
-		Store:    identitysync.DefaultStore(),
-		Fetcher:  IdentitySnapshotFetcher,
-		Allocate: identity.NewManagedUserLabel,
+		Store:   identitysync.DefaultStore(),
+		Fetcher: IdentitySnapshotFetcher,
 	}
 	go func() {
 		runIdentitySyncOnce(schedulerCtx, service, provider)

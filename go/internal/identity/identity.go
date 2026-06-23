@@ -2,6 +2,7 @@ package identity
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
@@ -33,6 +34,20 @@ func NewManagedUserLabel() (string, error) {
 		return "", fmt.Errorf("generate managed user label: %w", err)
 	}
 	return fmt.Sprintf("idp-%s@xp2p.local", token), nil
+}
+
+func ManagedUserLabel(providerInstanceID, externalSubject string) (string, error) {
+	providerInstanceID = strings.TrimSpace(providerInstanceID)
+	externalSubject = strings.TrimSpace(externalSubject)
+	if providerInstanceID == "" {
+		return "", fmt.Errorf("provider instance id is required")
+	}
+	if externalSubject == "" {
+		return "", fmt.Errorf("external subject is required")
+	}
+	sum := sha256.Sum256([]byte("xp2p:idp:v1:" + providerInstanceID + "\x00" + externalSubject))
+	token := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:]))
+	return fmt.Sprintf("idp-%s@xp2p.local", token[:26]), nil
 }
 
 func IsManagedUserLabel(label string) bool {

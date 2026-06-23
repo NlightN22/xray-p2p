@@ -91,6 +91,35 @@ func TestApplySnapshotResolvesNestedGroupsAndDNMembers(t *testing.T) {
 	}
 }
 
+func TestApplySnapshotDefaultLabelsAreDeterministic(t *testing.T) {
+	now := time.Date(2026, 6, 23, 1, 2, 3, 0, time.UTC)
+	snapshot := Snapshot{
+		Provider: provider(),
+		Complete: true,
+		Subjects: []SnapshotSubject{{ExternalSubject: "stable-user"}},
+	}
+	first, _, err := ApplySnapshot(nil, snapshot, now, nil)
+	if err != nil {
+		t.Fatalf("apply first snapshot: %v", err)
+	}
+	second, _, err := ApplySnapshot(nil, snapshot, now, nil)
+	if err != nil {
+		t.Fatalf("apply second snapshot: %v", err)
+	}
+	if first.Subjects["stable-user"].UserLabel != second.Subjects["stable-user"].UserLabel {
+		t.Fatalf("deterministic labels differ: %q != %q", first.Subjects["stable-user"].UserLabel, second.Subjects["stable-user"].UserLabel)
+	}
+	otherProvider := snapshot
+	otherProvider.Provider.InstanceID = "other"
+	other, _, err := ApplySnapshot(nil, otherProvider, now, nil)
+	if err != nil {
+		t.Fatalf("apply other provider snapshot: %v", err)
+	}
+	if first.Subjects["stable-user"].UserLabel == other.Subjects["stable-user"].UserLabel {
+		t.Fatalf("provider instance id did not affect label: %q", first.Subjects["stable-user"].UserLabel)
+	}
+}
+
 func TestApplySnapshotRejectsCycles(t *testing.T) {
 	_, _, err := ApplySnapshot(nil, Snapshot{
 		Provider: provider(),
@@ -248,7 +277,7 @@ func provider() ProviderRef {
 
 func labelSequence(labels ...string) LabelAllocator {
 	index := 0
-	return func() (string, error) {
+	return func(ProviderRef, string) (string, error) {
 		if index >= len(labels) {
 			return "idp-extra@xp2p.local", nil
 		}

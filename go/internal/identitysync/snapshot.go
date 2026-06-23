@@ -9,7 +9,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/identity"
 )
 
-type LabelAllocator func() (string, error)
+type LabelAllocator func(ProviderRef, string) (string, error)
 
 func ApplySnapshot(current *Generation, snapshot Snapshot, now time.Time, allocate LabelAllocator) (*Generation, Status, error) {
 	if !snapshot.Complete {
@@ -19,7 +19,7 @@ func ApplySnapshot(current *Generation, snapshot Snapshot, now time.Time, alloca
 		return current, Status{State: SyncStatusError, Error: err.Error()}, err
 	}
 	if allocate == nil {
-		allocate = identity.NewManagedUserLabel
+		allocate = deterministicManagedLabel
 	}
 	normalized, err := normalizeSnapshot(compatibleCurrent(current, snapshot.Provider), snapshot, now, allocate)
 	if err != nil {
@@ -29,6 +29,10 @@ func ApplySnapshot(current *Generation, snapshot Snapshot, now time.Time, alloca
 		State:       SyncStatusSuccess,
 		LastSuccess: nowUTCString(now),
 	}, nil
+}
+
+func deterministicManagedLabel(provider ProviderRef, externalSubject string) (string, error) {
+	return identity.ManagedUserLabel(provider.InstanceID, externalSubject)
 }
 
 func normalizeSnapshot(current *Generation, snapshot Snapshot, now time.Time, allocate LabelAllocator) (*Generation, error) {
@@ -121,7 +125,7 @@ func normalizeSnapshot(current *Generation, snapshot Snapshot, now time.Time, al
 		if !reachableSubjects[id] {
 			continue
 		}
-		label, provisioned, err := labelForSubject(current, id, allocate)
+		label, provisioned, err := labelForSubject(current, snapshot.Provider, id, allocate)
 		if err != nil {
 			return nil, err
 		}

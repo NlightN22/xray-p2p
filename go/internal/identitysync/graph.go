@@ -70,13 +70,13 @@ func scopeReachability(scope []string, groups map[string]Group) (map[string]bool
 	return reachableGroups, reachableSubjects
 }
 
-func labelForSubject(current *Generation, id string, allocate LabelAllocator) (string, bool, error) {
+func labelForSubject(current *Generation, provider ProviderRef, id string, allocate LabelAllocator) (string, bool, error) {
 	if current != nil {
 		if existing, ok := current.Subjects[id]; ok && existing.UserLabel != "" {
 			return existing.UserLabel, existing.Provisioned, nil
 		}
 	}
-	label, err := allocate()
+	label, err := allocate(provider, id)
 	if err != nil {
 		return "", false, fmt.Errorf("allocate managed label: %w", err)
 	}
