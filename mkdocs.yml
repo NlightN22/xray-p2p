@@ -66,6 +66,7 @@ nav:
       - CLI Docs Generation: operations/docs-generation.md
   - Reference:
       - Configuration: reference/configuration.md
+      - Identity Provider: reference/identity-provider.md
       - Tunnel Links: reference/tunnel-links.md
       - CLI Workflows: reference/cli-workflows.md
 
