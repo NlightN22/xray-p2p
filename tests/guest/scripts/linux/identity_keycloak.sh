@@ -12,7 +12,7 @@ WORK_COMPOSE_FILE="$WORK_DIR/compose.yaml"
 REALM_FILE='/srv/xray-p2p/tests/guest/fixtures/identity/keycloak-realm.json'
 LOCAL_URL='http://127.0.0.1:8080'
 
-usage() { echo "usage: $0 {prepare|reset|cleanup|list-users|list-groups|list-group-members|set-membership|add-user|remove-user|add-group|remove-group} [args...]" >&2; exit 2; }
+usage() { echo "usage: $0 {prepare|reset|cleanup|token|list-users|list-groups|list-group-members|set-membership|add-user|remove-user|add-group|remove-group} [args...]" >&2; exit 2; }
 compose() {
   if docker compose version >/dev/null 2>&1; then
     docker compose --project-name xp2p-identity --project-directory "$WORK_DIR" -f "$WORK_COMPOSE_FILE" "$@"
@@ -54,6 +54,7 @@ case "${1:-}" in
   prepare) prepare ;;
   reset) reset ;;
   cleanup) cleanup ;;
+  token) directory_token ;;
   list-users) directory_api "$(directory_token)" '/users?briefRepresentation=true' ;;
   list-groups) directory_api "$(directory_token)" '/groups?briefRepresentation=true' ;;
   list-group-members) [ "$#" = 2 ] || usage; token=$(directory_token); group=$(directory_group_id "$token" "$2"); directory_api "$token" "/groups/$group/members" ;;

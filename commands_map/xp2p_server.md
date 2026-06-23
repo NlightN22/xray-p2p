@@ -4,7 +4,7 @@
 
 xp2p server
   Summary: Manage xp2p server components
-  Subcommands: install, remove, run, service, state, render, debug, export, import, user, redirect, forward, reverse, cert, deploy, mode, profile, dns-forward
+  Subcommands: install, remove, run, service, state, render, debug, export, import, user, identity, redirect, forward, reverse, cert, deploy, mode, profile, dns-forward
 Options:
 Includes: inherited options
 
@@ -198,6 +198,40 @@ Includes: inherited options
 - --host, -H <host> public host name or IP for generated connection links
 - --path, -p <path> server installation directory
 - --pending, -y list pending configuration
+
+xp2p server identity
+  Summary: Manage identity cache operations
+  Subcommands: sync, status, provision, detach, select
+Options:
+Includes: inherited options
+
+xp2p server identity sync
+  Summary: Synchronize identity cache
+Options:
+Includes: inherited options
+
+xp2p server identity status
+  Summary: Show identity cache status
+Options:
+Includes: inherited options
+
+xp2p server identity provision <label>
+  Summary: Provision a cached identity as a server user
+Options:
+Includes: inherited options
+- --host, -H <host> public host name or IP for generated connection link
+
+xp2p server identity detach
+  Summary: Detach the selected identity provider
+Options:
+Includes: inherited options
+
+xp2p server identity select <instance-id>
+  Summary: Select or reattach an identity provider
+Options:
+Includes: inherited options
+- --group, -G <stringSlice> provider group scope
+- --kind, -K <string> (required) provider kind: ldap or scim
 
 xp2p server redirect
   Summary: Manage server redirect rules
