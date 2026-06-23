@@ -51,12 +51,16 @@ func runIdentitySyncOnce(ctx context.Context, service identitysync.Service, prov
 		logging.Warn("identity sync skipped: provider fetcher is not configured")
 		return
 	}
-	status, err := service.Sync(ctx, provider)
+	status, result, err := service.SyncAndApply(ctx, provider, func(ctx context.Context) (string, error) {
+		applyResult, applyErr := ApplyIdentityRuntime(ctx)
+		return string(applyResult), applyErr
+	})
 	if err != nil {
 		logging.Warn("identity sync failed", "provider", provider.InstanceID, "err", err)
 		return
 	}
 	logging.Info("identity sync completed", "provider", provider.InstanceID, "status", string(status.State))
+	logging.Info("identity runtime apply completed", "provider", provider.InstanceID, "result", result)
 }
 
 func identityProviderRef(cfg config.Config) (identitysync.ProviderRef, bool) {

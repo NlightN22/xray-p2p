@@ -1,6 +1,7 @@
 package servercmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -33,11 +34,15 @@ func newServerIdentitySyncCmd(cfg commandConfig) *cobra.Command {
 			Fetcher:  identitysync.ConfigFetcher{Config: cfg().Server.IdentityProvider},
 			Allocate: nil,
 		}
-		status, err := service.Sync(commandContext(cmd), provider)
+		status, applyResult, err := service.SyncAndApply(commandContext(cmd), provider, func(ctx context.Context) (string, error) {
+			result, err := server.ApplyIdentityRuntime(ctx)
+			return string(result), err
+		})
 		if err != nil {
 			return err
 		}
 		fmt.Printf("identity sync: %s\n", status.State)
+		fmt.Printf("identity apply: %s\n", applyResult)
 		return nil
 	}}
 }

@@ -2,6 +2,7 @@ package identitysync
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -159,6 +160,76 @@ func TestServiceSyncAndProviderDetach(t *testing.T) {
 	}
 	if state.Provider == nil || state.Provider.InstanceID != "other" || !state.Current.Detached {
 		t.Fatalf("provider replacement did not detach old cache: %+v", state)
+	}
+}
+
+func TestServiceSyncAndApplyKeepsCurrentWhenRuntimeApplyFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store := StoreAt(path)
+	current := &Generation{
+		ID:                 "current",
+		ProviderInstanceID: "corp",
+		CreatedAt:          time.Now().UTC().Format(time.RFC3339),
+		Subjects: map[string]Subject{
+			"u1": {ExternalSubject: "u1", UserLabel: "idp-one@xp2p.local", Active: true},
+		},
+		Groups: map[string]Group{},
+	}
+	if err := store.Save(State{Current: current, Status: Status{State: SyncStatusSuccess, LastSuccess: time.Now().UTC().Format(time.RFC3339)}}); err != nil {
+		t.Fatalf("save current: %v", err)
+	}
+	service := Service{
+		Store: store,
+		Fetcher: staticFetcher{snapshot: Snapshot{
+			Complete: true,
+			Subjects: []SnapshotSubject{{ExternalSubject: "u2"}},
+		}},
+		Allocate: labelSequence("idp-two@xp2p.local"),
+	}
+	_, _, err := service.SyncAndApply(context.Background(), provider(), func(context.Context) (string, error) {
+		return "", errors.New("runtime apply failed")
+	})
+	if err == nil {
+		t.Fatalf("expected runtime apply error")
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if state.Current == nil || state.Current.ID != "current" {
+		t.Fatalf("current generation changed: %+v", state.Current)
+	}
+	if state.Pending != nil || state.Transaction != nil {
+		t.Fatalf("pending transaction was not cleared: %+v", state)
+	}
+}
+
+func TestServiceSyncAndApplyPromotesStagedCandidateForNextStart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store := StoreAt(path)
+	service := Service{
+		Store: store,
+		Fetcher: staticFetcher{snapshot: Snapshot{
+			Complete: true,
+			Subjects: []SnapshotSubject{{ExternalSubject: "u1"}},
+		}},
+		Allocate: labelSequence("idp-one@xp2p.local"),
+	}
+	_, result, err := service.SyncAndApply(context.Background(), provider(), func(context.Context) (string, error) {
+		return "staged", nil
+	})
+	if err != nil {
+		t.Fatalf("sync and stage: %v", err)
+	}
+	if result != "staged" {
+		t.Fatalf("unexpected apply result: %s", result)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if state.Current == nil || state.Pending != nil || state.Transaction != nil {
+		t.Fatalf("staged candidate was not promoted for next start: %+v", state)
 	}
 }
 

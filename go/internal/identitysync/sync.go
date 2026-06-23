@@ -20,13 +20,39 @@ func (s Service) Sync(ctx context.Context, provider ProviderRef) (Status, error)
 	var status Status
 	err := DefaultOperationLock().With(ctx, func() error {
 		var syncErr error
-		status, syncErr = s.syncLocked(ctx, provider)
-		return syncErr
+		status, syncErr = s.prepareLocked(ctx, provider)
+		if syncErr != nil || status.State != SyncStatusSuccess {
+			return syncErr
+		}
+		return s.promoteLocked()
 	})
 	return status, err
 }
 
-func (s Service) syncLocked(ctx context.Context, provider ProviderRef) (Status, error) {
+func (s Service) SyncAndApply(ctx context.Context, provider ProviderRef, apply func(context.Context) (string, error)) (Status, string, error) {
+	var status Status
+	result := ""
+	err := DefaultOperationLock().With(ctx, func() error {
+		var syncErr error
+		status, syncErr = s.prepareLocked(ctx, provider)
+		if syncErr != nil || status.State != SyncStatusSuccess {
+			return syncErr
+		}
+		if apply == nil {
+			return s.promoteLocked()
+		}
+		var applyErr error
+		result, applyErr = apply(ctx)
+		if applyErr != nil {
+			_ = s.abortPendingLocked(applyErr.Error())
+			return applyErr
+		}
+		return s.promoteLocked()
+	})
+	return status, result, err
+}
+
+func (s Service) prepareLocked(ctx context.Context, provider ProviderRef) (Status, error) {
 	if err := provider.Validate(); err != nil {
 		return Status{State: SyncStatusError, Error: err.Error()}, err
 	}
@@ -34,10 +60,7 @@ func (s Service) syncLocked(ctx context.Context, provider ProviderRef) (Status, 
 		err := fmt.Errorf("identity snapshot fetcher is not configured")
 		return Status{State: SyncStatusError, Error: err.Error()}, err
 	}
-	store := s.Store
-	if store.path == "" {
-		store = DefaultStore()
-	}
+	store := s.store()
 	state, err := store.Load()
 	if err != nil {
 		return Status{State: SyncStatusError, Error: err.Error()}, err
@@ -75,11 +98,45 @@ func (s Service) syncLocked(ctx context.Context, provider ProviderRef) (Status, 
 	if err := store.Save(state); err != nil {
 		return Status{State: SyncStatusError, Error: err.Error()}, err
 	}
-	state.Current = next
+	return status, nil
+}
+
+func (s Service) promoteLocked() error {
+	store := s.store()
+	state, err := store.Load()
+	if err != nil {
+		return err
+	}
+	if state.Pending == nil || state.Transaction == nil {
+		return fmt.Errorf("identity pending generation is not available")
+	}
+	if state.Transaction.CandidateGenerationID != state.Pending.ID {
+		return fmt.Errorf("identity pending generation does not match transaction")
+	}
+	state.Current = state.Pending
 	state.Pending = nil
 	state.Transaction = nil
-	if err := store.Save(state); err != nil {
-		return Status{State: SyncStatusError, Error: err.Error()}, err
+	state.Status.State = SyncStatusSuccess
+	state.Status.Error = ""
+	return store.Save(state)
+}
+
+func (s Service) abortPendingLocked(reason string) error {
+	store := s.store()
+	state, err := store.Load()
+	if err != nil {
+		return err
 	}
-	return status, nil
+	state.Pending = nil
+	state.Transaction = nil
+	state.Status.State = SyncStatusError
+	state.Status.Error = reason
+	return store.Save(state)
+}
+
+func (s Service) store() Store {
+	if s.Store.path == "" {
+		return DefaultStore()
+	}
+	return s.Store
 }

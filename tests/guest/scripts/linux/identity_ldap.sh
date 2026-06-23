@@ -18,6 +18,10 @@ ldap_admin() {
   ldapmodify -x -H ldap://127.0.0.1:389 -D "$ADMIN_DN" -w "$ADMIN_PASSWORD" "$@"
 }
 
+ldap_admin_add() {
+  ldapadd -x -H ldap://127.0.0.1:389 -D "$ADMIN_DN" -w "$ADMIN_PASSWORD" "$@"
+}
+
 user_id() {
   ldapsearch -LLL -x -H ldap://127.0.0.1:389 -D "$ADMIN_DN" -w "$ADMIN_PASSWORD" \
     -b "ou=people,$BASE_DN" "(uid=$1)" employeeNumber | awk '/^employeeNumber: / {print $2; exit}'
@@ -65,7 +69,7 @@ case "${1:-}" in
   reset) reset_directory ;;
   add-user)
     [ "$#" = 5 ] || usage
-    cat <<EOF | ldap_admin >/dev/null
+    cat <<EOF | ldap_admin_add >/dev/null
 dn: employeeNumber=$2,ou=people,$BASE_DN
 objectClass: top
 objectClass: inetOrgPerson
@@ -88,7 +92,7 @@ EOF
     ;;
   add-group)
     [ "$#" = 3 ] || usage
-    cat <<EOF | ldap_admin >/dev/null
+    cat <<EOF | ldap_admin_add >/dev/null
 dn: gidNumber=$2,ou=groups,$BASE_DN
 objectClass: top
 objectClass: posixGroup

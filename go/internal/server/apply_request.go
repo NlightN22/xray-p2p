@@ -8,6 +8,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
@@ -89,6 +90,11 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 
 	if err := apply.RemoveRoleMarkers(reqPath, errorPath, role); err != nil {
 		logging.Warn("apply marker cleanup failed", "role", role, "err", err)
+	}
+	if role == apply.RoleServer {
+		if err := identitysync.DefaultStore().Recover(); err != nil {
+			return nil, false, req, err
+		}
 	}
 	logging.Info("desired config compiled into live artifacts", "role", role, "request_id", req.ID, "live_dir", liveDir)
 	return apply.NewRollback(liveDir, lkgDir), true, req, nil

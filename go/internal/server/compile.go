@@ -56,6 +56,14 @@ type compiledArtifacts struct {
 }
 
 func compileDesired(configPath string, extensionsDir string) (compiledArtifacts, error) {
+	identityState, err := identitysync.DefaultStore().Load()
+	if err != nil {
+		return compiledArtifacts{}, err
+	}
+	return compileDesiredWithIdentityState(configPath, extensionsDir, identityState)
+}
+
+func compileDesiredWithIdentityState(configPath string, extensionsDir string, identityState identitysync.State) (compiledArtifacts, error) {
 	cfg, err := config.Load(config.Options{Path: configPath})
 	if err != nil {
 		return compiledArtifacts{}, err
@@ -87,14 +95,10 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		keyPath = ""
 	}
 
-	identityState, err := identitysync.DefaultStore().Load()
-	if err != nil {
-		return compiledArtifacts{}, err
-	}
 	if err := enforceIdentityCacheAge(cfg, identityState); err != nil {
 		return compiledArtifacts{}, err
 	}
-	effectiveRedirects, err := resolveServerRedirectAccess(desired.Redirects, identityState.Current)
+	effectiveRedirects, err := resolveServerRedirectAccess(desired.Redirects, effectiveIdentityGeneration(identityState))
 	if err != nil {
 		return compiledArtifacts{}, err
 	}
@@ -142,6 +146,13 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		MetaJSON: metaBytes,
 		Extra:    map[string][]byte{},
 	}, nil
+}
+
+func effectiveIdentityGeneration(state identitysync.State) *identitysync.Generation {
+	if state.Pending != nil && state.Transaction != nil && state.Transaction.CandidateGenerationID == state.Pending.ID {
+		return state.Pending
+	}
+	return state.Current
 }
 
 func redirectStatuses(rules []redirect.Rule) []redirectStatus {
@@ -197,7 +208,8 @@ func enforceIdentityCacheAge(cfg config.Config, state identitysync.State) error 
 	if providerKind == "" && providerID == "" {
 		return nil
 	}
-	if state.Current == nil || state.Current.Detached || strings.TrimSpace(state.Status.LastSuccess) == "" {
+	generation := effectiveIdentityGeneration(state)
+	if generation == nil || generation.Detached || strings.TrimSpace(state.Status.LastSuccess) == "" {
 		return fmt.Errorf("identity cache is not available")
 	}
 	maxAgeRaw := strings.TrimSpace(cfg.Server.IdentityProvider.MaxCacheAge)
