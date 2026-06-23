@@ -15,7 +15,7 @@ xp2p
 
 xp2p client
   Summary: Manage xp2p client installation
-  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward
+  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, group, dns-forward
 Options:
 Includes: inherited options
 

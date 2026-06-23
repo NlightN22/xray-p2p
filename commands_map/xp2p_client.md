@@ -4,7 +4,7 @@
 
 xp2p client
   Summary: Manage xp2p client installation
-  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, dns-forward
+  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, group, dns-forward
 Options:
 Includes: inherited options
 
@@ -337,6 +337,18 @@ Includes: inherited options
 - --quiet, -q do not prompt for outbound tags
 - --tag, -g <id> outbound tag for full-tunnel routing (prompts when omitted)
 - --verbose, -V emit full-tunnel change details
+
+xp2p client group
+  Summary: Inspect HA endpoint groups
+  Subcommands: list
+Options:
+Includes: inherited options
+
+xp2p client group list
+  Summary: List HA endpoint groups
+  Aliases: status, inspect
+Options:
+Includes: inherited options
 
 xp2p client dns-forward
   Summary: Manage dnsmasq forward entries on OpenWrt

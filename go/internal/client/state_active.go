@@ -17,12 +17,19 @@ func activeClientEndpoints(endpoints []clientEndpointRecord) []clientEndpointRec
 }
 
 func activeClientRedirects(redirects []redirect.Rule, endpoints []clientEndpointRecord) []redirect.Rule {
+	return activeClientRedirectsWithGroups(redirects, endpoints, nil)
+}
+
+func activeClientRedirectsWithGroups(redirects []redirect.Rule, endpoints []clientEndpointRecord, groups []endpointGroup) []redirect.Rule {
 	activeTags := make(map[string]struct{}, len(endpoints))
 	for _, ep := range endpoints {
 		if ep.Disabled {
 			continue
 		}
 		activeTags[strings.ToLower(strings.TrimSpace(ep.Tag))] = struct{}{}
+	}
+	for tag := range endpointGroupTags(groups) {
+		activeTags[tag] = struct{}{}
 	}
 	active := make([]redirect.Rule, 0, len(redirects))
 	for _, rule := range redirects {

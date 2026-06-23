@@ -24,6 +24,9 @@ func (s *clientInstallState) normalize() {
 	if s.Endpoints == nil {
 		s.Endpoints = []clientEndpointRecord{}
 	}
+	if s.EndpointGroups == nil {
+		s.EndpointGroups = []endpointGroup{}
+	}
 	if s.Redirects == nil {
 		s.Redirects = []redirect.Rule{}
 	}
@@ -46,6 +49,11 @@ func (s clientInstallState) save(path string) error {
 		tree.DeletePath([]string{"client", "endpoints"})
 	} else {
 		tree.SetPath([]string{"client", "endpoints"}, s.Endpoints)
+	}
+	if len(s.EndpointGroups) == 0 {
+		tree.DeletePath([]string{"client", "endpoint_groups"})
+	} else {
+		tree.SetPath([]string{"client", "endpoint_groups"}, s.EndpointGroups)
 	}
 	if len(s.Redirects) == 0 {
 		tree.DeletePath([]string{"client", "redirects"})

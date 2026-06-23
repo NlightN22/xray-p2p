@@ -8,11 +8,33 @@ import (
 )
 
 type clientInstallState struct {
-	Endpoints []clientEndpointRecord          `json:"endpoints" toml:"endpoints"`
-	Redirects []redirect.Rule                 `json:"redirects,omitempty" toml:"redirects"`
-	Reverse   map[string]clientReverseChannel `json:"reverse,omitempty" toml:"reverse"`
-	Forwards  []forward.Rule                  `json:"forwards,omitempty" toml:"forwards"`
+	Endpoints      []clientEndpointRecord          `json:"endpoints" toml:"endpoints"`
+	EndpointGroups []endpointGroup                 `json:"endpoint_groups,omitempty" toml:"endpoint_groups"`
+	Redirects      []redirect.Rule                 `json:"redirects,omitempty" toml:"redirects"`
+	Reverse        map[string]clientReverseChannel `json:"reverse,omitempty" toml:"reverse"`
+	Forwards       []forward.Rule                  `json:"forwards,omitempty" toml:"forwards"`
 }
+
+type endpointGroup struct {
+	GroupID            string            `json:"group_id" toml:"group_id"`
+	Tag                string            `json:"tag" toml:"tag"`
+	Members            []string          `json:"members" toml:"members"`
+	Mode               endpointGroupMode `json:"mode,omitempty" toml:"mode"`
+	FailureThreshold   int               `json:"failure_threshold,omitempty" toml:"failure_threshold"`
+	SuccessThreshold   int               `json:"success_threshold,omitempty" toml:"success_threshold"`
+	CooldownSeconds    int               `json:"cooldown_seconds,omitempty" toml:"cooldown_seconds"`
+	MinimumHoldSeconds int               `json:"minimum_hold_seconds,omitempty" toml:"minimum_hold_seconds"`
+	AutomaticFailback  bool              `json:"automatic_failback,omitempty" toml:"automatic_failback"`
+	ManualActiveTag    string            `json:"manual_active_tag,omitempty" toml:"manual_active_tag"`
+}
+
+type endpointGroupMode string
+
+const (
+	endpointGroupModeAutomatic endpointGroupMode = "automatic"
+	endpointGroupModeManual    endpointGroupMode = "manual"
+	endpointGroupModeDisabled  endpointGroupMode = "disabled"
+)
 
 type clientEndpointRecord struct {
 	Profile              string   `json:"profile,omitempty" toml:"profile,omitempty"`
@@ -35,11 +57,13 @@ type clientEndpointRecord struct {
 }
 
 type clientReverseChannel struct {
+	ChannelID   string `json:"channel_id,omitempty" toml:"channel_id,omitempty"`
 	UserID      string `json:"user_id" toml:"user_id"`
 	Host        string `json:"host" toml:"host"`
 	Tag         string `json:"tag" toml:"tag"`
 	Domain      string `json:"domain" toml:"domain"`
 	EndpointTag string `json:"endpoint_tag" toml:"endpoint_tag"`
+	GroupTag    string `json:"group_tag,omitempty" toml:"group_tag,omitempty"`
 	Disabled    bool   `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 

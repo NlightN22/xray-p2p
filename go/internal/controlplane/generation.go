@@ -36,6 +36,7 @@ func Generation(sub Subscription) (string, error) {
 		ServerName string            `json:"server_name,omitempty"`
 		TLS        TLSMetadata       `json:"tls,omitempty"`
 		Parameters map[string]string `json:"parameters,omitempty"`
+		Topology   *Topology         `json:"topology,omitempty"`
 	}{
 		Profile:    strings.TrimSpace(sub.Profile),
 		Protocol:   strings.TrimSpace(sub.Protocol),
@@ -46,6 +47,7 @@ func Generation(sub Subscription) (string, error) {
 		ServerName: strings.TrimSpace(sub.ServerName),
 		TLS:        sub.TLS,
 		Parameters: sub.Parameters,
+		Topology:   sub.Topology,
 	}
 	data, err := json.Marshal(canonical)
 	if err != nil {

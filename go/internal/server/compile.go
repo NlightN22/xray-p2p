@@ -130,7 +130,7 @@ func compileDesiredWithIdentityState(configPath string, extensionsDir string, id
 		CertPath: certPath,
 		KeyPath:  keyPath,
 	}
-	control, err := buildControlRuntime(cfg, desired, certPath, keyPath)
+	control, err := buildControlRuntime(cfg, desired, certPath, keyPath, configPath)
 	if err != nil {
 		return compiledArtifacts{}, err
 	}

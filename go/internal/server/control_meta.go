@@ -10,7 +10,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
-func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPath, keyPath string) (controlplane.Runtime, error) {
+func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPath, keyPath, statePath string) (controlplane.Runtime, error) {
 	controlPort := parsePortOrDefault(cfg.Server.Port, parsePortOrDefault(DefaultPort, 62022))
 	trojanPort := parsePortOrDefault(cfg.Server.TrojanPort, DefaultTrojanPort)
 	host := controlHost(cfg, certPath)
@@ -41,7 +41,7 @@ func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPat
 	if err != nil {
 		return controlplane.Runtime{}, err
 	}
-	return controlplane.Runtime{
+	runtime := controlplane.Runtime{
 		Endpoint: controlplane.Endpoint{
 			Scheme: "https",
 			Host:   host,
@@ -51,7 +51,19 @@ func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPat
 		AuthUsers:     controlAuthUsers(activeServerUsers(desired.Users), time.Now().UTC()),
 		RotationUsers: controlRotationUsers(desired.Users),
 		TLS:           tlsMeta,
-	}, nil
+	}
+	generation, err := LoadHAGeneration(statePath)
+	if err != nil {
+		return controlplane.Runtime{}, err
+	}
+	if generation.Number != 0 {
+		runtime.Subscription.Topology = &controlplane.Topology{Generation: generation.Number, Group: generation.Group, Channels: generation.Channels}
+		runtime.Subscription, err = controlplane.BuildSubscription(runtime.Subscription, time.Now().UTC(), time.Hour)
+		if err != nil {
+			return controlplane.Runtime{}, err
+		}
+	}
+	return runtime, nil
 }
 
 func controlRotationUsers(users []trojanClient) []controlplane.RotationUser {

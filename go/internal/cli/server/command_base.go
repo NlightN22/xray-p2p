@@ -65,6 +65,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newServerDeployCmd(cfg),
 		newServerModeCmd(cfg),
 		newServerProfileCmd(cfg),
+		newServerHACmd(cfg),
 	)
 	dnsForwardMaybeAdd(cmd, cfg)
 

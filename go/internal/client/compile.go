@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/extensions"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 	"github.com/NlightN22/xray-p2p/go/internal/xrayassets"
@@ -34,10 +36,11 @@ type runtimeMeta struct {
 }
 
 type runtimeDesired struct {
-	Endpoints []runtimeEndpoint               `json:"endpoints,omitempty"`
-	Redirects []redirect.Rule                 `json:"redirects,omitempty"`
-	Reverse   map[string]clientReverseChannel `json:"reverse,omitempty"`
-	Forwards  []forward.Rule                  `json:"forwards,omitempty"`
+	Endpoints      []runtimeEndpoint               `json:"endpoints,omitempty"`
+	EndpointGroups []endpointGroup                 `json:"endpoint_groups,omitempty"`
+	Redirects      []redirect.Rule                 `json:"redirects,omitempty"`
+	Reverse        map[string]clientReverseChannel `json:"reverse,omitempty"`
+	Forwards       []forward.Rule                  `json:"forwards,omitempty"`
 }
 
 type runtimeEndpoint struct {
@@ -65,12 +68,19 @@ type compiledArtifacts struct {
 }
 
 func compileDesired(configPath string, extensionsDir string) (compiledArtifacts, error) {
+	return compileDesiredWithSelector(configPath, extensionsDir, nil)
+}
+
+func compileDesiredWithSelector(configPath string, extensionsDir string, selectorOverride *endpointSelectorState) (compiledArtifacts, error) {
 	cfg, err := config.Load(config.Options{Path: configPath})
 	if err != nil {
 		return compiledArtifacts{}, err
 	}
 	desired, err := loadClientInstallState(configPath)
 	if err != nil {
+		return compiledArtifacts{}, err
+	}
+	if err := desired.validateEndpointGroups(); err != nil {
 		return compiledArtifacts{}, err
 	}
 	xrayCfg, err := xrayconfig.LoadClientConfigWithDefaults(configPath)
@@ -92,7 +102,20 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		return compiledArtifacts{}, err
 	}
 
-	base, err := buildClientXrayDoc(xrayCfg, desired, endpointIPs, cfg, snips, fullEnabled)
+	selector := endpointSelectorState{}
+	if selectorOverride != nil {
+		selector = *selectorOverride
+	} else {
+		selectorPath := filepath.Join(configDirFromPath(configPath), layout.ClientEndpointSelectorStateFileName)
+		if liveDir, liveErr := config.LiveRoleDir("client"); liveErr == nil {
+			selectorPath = filepath.Join(liveDir, layout.ClientEndpointSelectorStateFileName)
+		}
+		selector, err = loadEndpointSelectorState(selectorPath)
+		if err != nil {
+			return compiledArtifacts{}, err
+		}
+	}
+	base, err := buildClientXrayDocWithSelector(xrayCfg, desired, endpointIPs, cfg, snips, fullEnabled, selector)
 	if err != nil {
 		return compiledArtifacts{}, err
 	}
@@ -116,10 +139,11 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 		FullTag:    strings.TrimSpace(cfg.Client.FullTunnelTag),
 		XrayAssets: cfg.XrayAssets,
 		Desired: runtimeDesired{
-			Endpoints: sanitizeRuntimeEndpoints(desired.Endpoints),
-			Redirects: desired.Redirects,
-			Reverse:   desired.Reverse,
-			Forwards:  desired.Forwards,
+			Endpoints:      sanitizeRuntimeEndpoints(desired.Endpoints),
+			EndpointGroups: desired.EndpointGroups,
+			Redirects:      desired.Redirects,
+			Reverse:        desired.Reverse,
+			Forwards:       desired.Forwards,
 		},
 		Control: buildClientControlRuntime(cfg, desired.Endpoints),
 	}
@@ -131,6 +155,8 @@ func compileDesired(configPath string, extensionsDir string) (compiledArtifacts,
 
 	return compiledArtifacts{XrayJSON: xrayBytes, MetaJSON: metaBytes}, nil
 }
+
+func configDirFromPath(path string) string { return filepath.Dir(path) }
 
 func sanitizeRuntimeEndpoints(endpoints []clientEndpointRecord) []runtimeEndpoint {
 	if len(endpoints) == 0 {
@@ -161,6 +187,10 @@ func sanitizeRuntimeEndpoints(endpoints []clientEndpointRecord) []runtimeEndpoin
 }
 
 func buildClientXrayDoc(xrayCfg xrayconfig.ClientXrayConfig, desired clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, cfg config.Config, snips extensions.Snippets, fullTunnelEnabled bool) (map[string]any, error) {
+	return buildClientXrayDocWithSelector(xrayCfg, desired, endpointIPs, cfg, snips, fullTunnelEnabled, endpointSelectorState{})
+}
+
+func buildClientXrayDocWithSelector(xrayCfg xrayconfig.ClientXrayConfig, desired clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, cfg config.Config, snips extensions.Snippets, fullTunnelEnabled bool, selector endpointSelectorState) (map[string]any, error) {
 	doc := make(map[string]any)
 
 	logs := buildLogs(xrayCfg.Logs)
@@ -170,7 +200,7 @@ func buildClientXrayDoc(xrayCfg xrayconfig.ClientXrayConfig, desired clientInsta
 
 	inboundsDoc := buildClientInboundsWithForwards(xrayCfg, cfg.Client.TunEnabled, cfg.Client.TunName, cfg.Client.TunMTU, desired.Forwards)
 	inbounds, _ := inboundsDoc["inbounds"].([]any)
-	outbounds, err := buildClientOutbounds(xrayCfg.DirectOutbound, desired, endpointIPs, fullTunnelEnabled)
+	outbounds, err := buildClientOutboundsWithSelector(xrayCfg.DirectOutbound, desired, endpointIPs, fullTunnelEnabled, selector)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +217,7 @@ func buildClientXrayDoc(xrayCfg xrayconfig.ClientXrayConfig, desired clientInsta
 	inbounds = append(inbounds, snips.InboundsAppend...)
 	outbounds = append(outbounds, snips.OutboundsAppend...)
 
-	routing, reverse, err := buildClientRouting(xrayCfg.Routing, desired, endpointIPs, fullTunnelEnabled, cfg.Client.FullTunnelTag, snips)
+	routing, reverse, err := buildClientRoutingWithSelector(xrayCfg.Routing, desired, endpointIPs, fullTunnelEnabled, cfg.Client.FullTunnelTag, snips, selector)
 	if err != nil {
 		return nil, err
 	}
@@ -203,11 +233,39 @@ func buildClientXrayDoc(xrayCfg xrayconfig.ClientXrayConfig, desired clientInsta
 }
 
 func buildClientOutbounds(direct xrayconfig.DirectOutboundConfig, desired clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, fullTunnelEnabled bool) ([]any, error) {
+	return buildClientOutboundsWithSelector(direct, desired, endpointIPs, fullTunnelEnabled, endpointSelectorState{})
+}
+
+func buildClientOutboundsWithSelector(direct xrayconfig.DirectOutboundConfig, desired clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, fullTunnelEnabled bool, selector endpointSelectorState) ([]any, error) {
 	requireEndpointIPs := fullTunnelEnabled
 	endpoints := activeClientEndpoints(desired.Endpoints)
-	outbounds := make([]any, 0, len(endpoints)+1)
+	outbounds := make([]any, 0, len(endpoints)+len(desired.EndpointGroups)+1)
 	for _, ep := range endpoints {
 		outbound, err := tunnelOutbound(ep, endpointIPs, requireEndpointIPs)
+		if err != nil {
+			return nil, err
+		}
+		outbounds = append(outbounds, outbound)
+	}
+	for _, rawGroup := range desired.EndpointGroups {
+		group, err := rawGroup.normalized()
+		if err != nil {
+			return nil, err
+		}
+		selected, ok := selectEndpointGroup(group, desired.Endpoints, selector.Groups[strings.ToLower(group.GroupID)], time.Now().UTC())
+		if !ok {
+			outbounds = append(outbounds, map[string]any{"protocol": "blackhole", "tag": group.Tag, "settings": map[string]any{}})
+			continue
+		}
+		var target clientEndpointRecord
+		for _, endpoint := range desired.Endpoints {
+			if strings.EqualFold(endpoint.Tag, selected) {
+				target = endpoint
+				break
+			}
+		}
+		target.Tag = group.Tag
+		outbound, err := tunnelOutbound(target, endpointIPs, requireEndpointIPs)
 		if err != nil {
 			return nil, err
 		}
@@ -220,12 +278,16 @@ func buildClientOutbounds(direct xrayconfig.DirectOutboundConfig, desired client
 }
 
 func buildClientRouting(cfg xrayconfig.RoutingConfig, desired clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, fullTunnelEnabled bool, fullTunnelTag string, snips extensions.Snippets) (map[string]any, map[string]any, error) {
+	return buildClientRoutingWithSelector(cfg, desired, endpointIPs, fullTunnelEnabled, fullTunnelTag, snips, endpointSelectorState{})
+}
+
+func buildClientRoutingWithSelector(cfg xrayconfig.RoutingConfig, desired clientInstallState, endpointIPs map[string]fullTunnelEndpointIPs, fullTunnelEnabled bool, fullTunnelTag string, snips extensions.Snippets, selector endpointSelectorState) (map[string]any, map[string]any, error) {
 	routing := map[string]any{
 		"domainStrategy": strings.TrimSpace(cfg.DomainStrategy),
 	}
 
 	activeEndpoints := activeClientEndpoints(desired.Endpoints)
-	activeRedirects := activeClientRedirects(desired.Redirects, desired.Endpoints)
+	activeRedirects := activeClientRedirectsWithGroups(desired.Redirects, desired.Endpoints, desired.EndpointGroups)
 	activeReverseRules := activeClientReverseForRules(desired.Reverse, desired.Endpoints)
 
 	ensureIPs := fullTunnelEnabled

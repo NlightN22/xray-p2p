@@ -2,9 +2,10 @@ package client
 
 func runtimeDesiredToClientInstallState(desired runtimeDesired) clientInstallState {
 	state := clientInstallState{
-		Redirects: desired.Redirects,
-		Reverse:   desired.Reverse,
-		Forwards:  desired.Forwards,
+		EndpointGroups: desired.EndpointGroups,
+		Redirects:      desired.Redirects,
+		Reverse:        desired.Reverse,
+		Forwards:       desired.Forwards,
 	}
 	if len(desired.Endpoints) > 0 {
 		state.Endpoints = make([]clientEndpointRecord, 0, len(desired.Endpoints))

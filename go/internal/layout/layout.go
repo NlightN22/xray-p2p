@@ -48,6 +48,10 @@ const (
 	HeartbeatStateFileName = "state-heartbeat.json"
 	// ClientHeartbeatStateFileName stores client-side heartbeat snapshots.
 	ClientHeartbeatStateFileName = "state-heartbeat-client.json"
+	// ClientEndpointSelectorStateFileName stores transient HA endpoint selection state.
+	ClientEndpointSelectorStateFileName = "endpoint-selector.json"
+	// ClientEndpointSelectorJournalFileName stores the last committed selector revision.
+	ClientEndpointSelectorJournalFileName = "endpoint-selector.journal.json"
 	// ServerHeartbeatStateFileName stores server-side heartbeat snapshots.
 	ServerHeartbeatStateFileName = "state-heartbeat-server.json"
 	// UnixConfigRoot is the default configuration root on Linux/OpenWrt.

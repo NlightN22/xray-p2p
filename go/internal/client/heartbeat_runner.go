@@ -180,6 +180,7 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 	}); err != nil {
 		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 		r.updateLocalHeartbeat(endpoint, false, 0)
+		r.recordEndpointHealth(endpoint, false)
 		return
 	}
 	rttMillis := reporter.rttMillis()
@@ -194,9 +195,21 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.timeout, r.socks); err != nil {
 		logging.Debug("client heartbeat report failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 		r.updateLocalHeartbeat(endpoint, false, 0)
+		r.recordEndpointHealth(endpoint, false)
 		return
 	}
 	r.updateLocalHeartbeat(endpoint, true, rttMillis)
+	r.recordEndpointHealth(endpoint, true)
+}
+
+func (r *heartbeatRunner) recordEndpointHealth(endpoint clientEndpointRecord, alive bool) {
+	meta, err := loadLiveRuntimeMeta(r.configDir)
+	if err != nil {
+		return
+	}
+	if err := recordEndpointHealth(context.Background(), runtimeDesiredToClientInstallState(meta.Desired), endpoint.Tag, alive, time.Now().UTC()); err != nil {
+		logging.Debug("endpoint group health update failed", "tag", endpoint.Tag, "err", err)
+	}
 }
 
 func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, alive bool, rttMillis int64) {

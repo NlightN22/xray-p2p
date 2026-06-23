@@ -56,6 +56,10 @@ func UpdateEndpointCredentials(ctx context.Context, opts UpdateEndpointOptions) 
 }
 
 func compileClientRuntimeCandidate(state clientInstallState) (xraylive.Artifacts, error) {
+	return compileClientRuntimeCandidateWithSelector(state, nil)
+}
+
+func compileClientRuntimeCandidateWithSelector(state clientInstallState, selector *endpointSelectorState) (xraylive.Artifacts, error) {
 	sourcePath := config.ConfigPath(layout.ClientConfigFileName)
 	file, err := os.CreateTemp("", "xp2p-client-candidate-*.toml")
 	if err != nil {
@@ -81,7 +85,7 @@ func compileClientRuntimeCandidate(state clientInstallState) (xraylive.Artifacts
 	if err != nil {
 		return xraylive.Artifacts{}, err
 	}
-	artifacts, err := compileDesired(candidatePath, extensionsDir)
+	artifacts, err := compileDesiredWithSelector(candidatePath, extensionsDir, selector)
 	if err != nil {
 		return xraylive.Artifacts{}, err
 	}

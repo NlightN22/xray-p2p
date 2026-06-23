@@ -1,6 +1,10 @@
 package controlplane
 
-import "time"
+import (
+	"time"
+
+	"github.com/NlightN22/xray-p2p/go/internal/ha"
+)
 
 const (
 	PathReady             = "/control/v1/ready"
@@ -12,10 +16,11 @@ const (
 )
 
 const (
-	HeaderUser      = "X-XP2P-User"
-	HeaderTimestamp = "X-XP2P-Timestamp"
-	HeaderNonce     = "X-XP2P-Nonce"
-	HeaderSignature = "X-XP2P-Signature"
+	HeaderUser            = "X-XP2P-User"
+	HeaderTimestamp       = "X-XP2P-Timestamp"
+	HeaderNonce           = "X-XP2P-Nonce"
+	HeaderSignature       = "X-XP2P-Signature"
+	HeaderKnownGeneration = "X-XP2P-Known-Generation"
 )
 
 type Runtime struct {
@@ -87,6 +92,15 @@ type Subscription struct {
 	Parameters map[string]string `json:"parameters,omitempty"`
 	IssuedAt   time.Time         `json:"issued_at"`
 	ValidUntil time.Time         `json:"valid_until"`
+	Topology   *Topology         `json:"topology,omitempty"`
+}
+
+// Topology is the complete client-visible, committed HA state. It deliberately
+// excludes peer credentials and node-local server configuration.
+type Topology struct {
+	Generation uint64       `json:"generation"`
+	Group      ha.Group     `json:"group"`
+	Channels   []ha.Channel `json:"channels,omitempty"`
 }
 
 type PingRequest struct {

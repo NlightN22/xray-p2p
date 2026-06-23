@@ -68,6 +68,10 @@ func StartBackground(ctx context.Context, opts Options) error {
 		logging.Warn("heartbeat store disabled", "err", storeErr)
 		hbStore, _ = heartbeat.NewStore("")
 	}
+	haStore, err := LoadHAReplication(config.ConfigPath(layout.ServerConfigFileName))
+	if err != nil {
+		return fmt.Errorf("load HA replication state: %w", err)
+	}
 
 	shutdown := func() {
 		once.Do(func() {
@@ -95,6 +99,7 @@ func StartBackground(ctx context.Context, opts Options) error {
 				return controlplane.LoadRuntimeFile(filepath.Join(liveDir, layout.RuntimeMetaFileName))
 			},
 			Heartbeat: hbStore,
+			HAStore:   haStore,
 			Acknowledge: func(userLabel string, generation int) error {
 				return AcknowledgeCredential(context.Background(), userLabel, generation)
 			},

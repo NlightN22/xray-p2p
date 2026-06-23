@@ -16,7 +16,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
-	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
@@ -100,16 +99,6 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 	}
 	state := runtimeDesiredToClientInstallState(meta.Desired)
 	auth := controlAuthMap(meta.Control.AuthUsers)
-	dead := map[string]bool{}
-	if hb, err := heartbeat.Load(r.statePath); err == nil {
-		snapshots := hb.Snapshot(time.Now(), r.interval)
-		dead = make(map[string]bool, len(snapshots))
-		for _, snapshot := range snapshots {
-			if !snapshot.Alive {
-				dead[snapshot.Entry.Tag] = true
-			}
-		}
-	}
 	for index, endpoint := range state.Endpoints {
 		secret := auth[strings.TrimSpace(endpoint.User)]
 		if strings.TrimSpace(secret) == "" {
@@ -125,10 +114,7 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			credential = rotation.ActiveCredential
 			rotationPending = true
 		}
-		if !rotationPending && !dead[endpoint.Tag] {
-			continue
-		}
-		sub, err := fetchSubscription(ctx, endpoint, controlPort, credential, r.timeout)
+		sub, err := fetchSubscriptionConditional(ctx, endpoint, controlPort, credential, r.timeout, meta.Control.Subscription.Generation)
 		if err != nil {
 			logging.Debug("subscription fetch failed", "tag", endpoint.Tag, "err", err)
 			continue
@@ -143,6 +129,11 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 		candidate, err := subscriptionCandidate(state, endpoint, sub, credential)
 		if err != nil {
 			logging.Warn("subscription candidate rejected", "tag", endpoint.Tag, "err", err)
+			continue
+		}
+		candidate, err = applySubscriptionTopology(candidate, endpoint, sub, credential)
+		if err != nil {
+			logging.Warn("subscription topology rejected", "tag", endpoint.Tag, "err", err)
 			continue
 		}
 		if _, err := commitClientSubscriptionState(ctx, candidate); err != nil {
@@ -264,6 +255,10 @@ func subscriptionAddress(endpoint clientEndpointRecord, host string) string {
 }
 
 func fetchSubscription(ctx context.Context, endpoint clientEndpointRecord, port int, secret string, timeout time.Duration) (controlplane.Subscription, error) {
+	return fetchSubscriptionConditional(ctx, endpoint, port, secret, timeout, "")
+}
+
+func fetchSubscriptionConditional(ctx context.Context, endpoint clientEndpointRecord, port int, secret string, timeout time.Duration, knownGeneration string) (controlplane.Subscription, error) {
 	if port <= 0 {
 		port = 62022
 	}
@@ -285,11 +280,17 @@ func fetchSubscription(ctx context.Context, endpoint clientEndpointRecord, port 
 			return controlplane.Subscription{}, err
 		}
 	}
+	if strings.TrimSpace(knownGeneration) != "" {
+		req.Header.Set(controlplane.HeaderKnownGeneration, strings.TrimSpace(knownGeneration))
+	}
 	resp, err := controlHTTPClient(endpoint, timeout).Do(req)
 	if err != nil {
 		return controlplane.Subscription{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNoContent {
+		return controlplane.Subscription{}, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return controlplane.Subscription{}, fmt.Errorf("subscription request failed: %s", resp.Status)
 	}

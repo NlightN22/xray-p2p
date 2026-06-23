@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/ha"
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 )
 
@@ -26,6 +27,7 @@ type HandlerOptions struct {
 	Now         func() time.Time
 	AuthWindow  time.Duration
 	Acknowledge func(userLabel string, credentialGeneration int) error
+	HAStore     *ha.Store
 }
 
 func NewHandler(opts HandlerOptions) http.Handler {
@@ -46,6 +48,9 @@ func NewHandler(opts HandlerOptions) http.Handler {
 	mux.HandleFunc(PathSubscription, h.subscription)
 	mux.HandleFunc(PathCredentialsRotate, h.rotate)
 	mux.HandleFunc(PathCredentialsAck, h.ack)
+	if opts.HAStore != nil {
+		mux.Handle("/control/v1/ha/", ha.NewHTTPHandler(opts.HAStore))
+	}
 	return mux
 }
 
@@ -266,6 +271,10 @@ func (h *handler) subscription(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		sub = rebuilt
+	}
+	if known := strings.TrimSpace(r.Header.Get(HeaderKnownGeneration)); known != "" && known == sub.Generation {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 	writeJSON(w, http.StatusOK, sub)
 }

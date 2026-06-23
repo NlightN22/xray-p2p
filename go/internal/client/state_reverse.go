@@ -52,3 +52,35 @@ func (s *clientInstallState) removeReverseChannelsByTag(tag string) {
 		}
 	}
 }
+
+// rebindReverseChannel preserves the portal identity. Final deletion is only
+// permitted once every Desired redirect and group reference has been removed.
+func (s *clientInstallState) rebindReverseChannel(tag, groupTag, endpointTag string, disabled bool) error {
+	channel, ok := s.Reverse[tag]
+	if !ok {
+		return fmt.Errorf("reverse channel %s is not registered", tag)
+	}
+	if !disabled && strings.TrimSpace(groupTag) == "" && strings.TrimSpace(endpointTag) == "" {
+		return fmt.Errorf("reverse channel %s requires a binding or disable", tag)
+	}
+	channel.GroupTag, channel.EndpointTag, channel.Disabled = strings.TrimSpace(groupTag), strings.TrimSpace(endpointTag), disabled
+	s.Reverse[tag] = channel
+	return nil
+}
+
+func (s *clientInstallState) finalizeReverseChannel(tag string) error {
+	channel, ok := s.Reverse[tag]
+	if !ok {
+		return fmt.Errorf("reverse channel %s is not registered", tag)
+	}
+	for _, rule := range s.Redirects {
+		if strings.EqualFold(strings.TrimSpace(rule.OutboundTag), channel.Tag) {
+			return fmt.Errorf("reverse channel %s is referenced by a redirect", tag)
+		}
+	}
+	if !channel.Disabled {
+		return fmt.Errorf("reverse channel %s must be disabled before finalization", tag)
+	}
+	delete(s.Reverse, tag)
+	return nil
+}
