@@ -47,6 +47,7 @@ func applySubscriptionTopology(current clientInstallState, endpoint clientEndpoi
 		record.Profile, record.Password = member.Profile, secret
 		if member.TLSName != "" {
 			record.ServerName = member.TLSName
+			record.VerifyPeerCertByName = member.TLSName
 		}
 		if member.TLSPin != "" {
 			record.PinnedPeerCertSHA256, record.AllowInsecure = member.TLSPin, false

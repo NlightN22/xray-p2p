@@ -40,6 +40,28 @@ func TestLogLevelFromFlags(t *testing.T) {
 	}
 }
 
+func TestLogLevelFromInheritedFlags(t *testing.T) {
+	root := &cobra.Command{Use: "root"}
+	root.PersistentFlags().String("log-level", "", "")
+	child := &cobra.Command{Use: "child"}
+	root.AddCommand(child)
+	root.SetArgs([]string{"--log-level", "debug", "child"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute command: %v", err)
+	}
+
+	got, ok, err := LogLevelFromFlags(child)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatalf("expected inherited flag to be set")
+	}
+	if got != "debug" {
+		t.Fatalf("expected debug, got %q", got)
+	}
+}
+
 func TestApplyProcessLogLevel(t *testing.T) {
 	t.Setenv(logging.EnvLogLevel, "info")
 	logging.SetLevel("info")

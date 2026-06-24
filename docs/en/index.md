@@ -17,6 +17,7 @@ then layer in redirects, DNS handling, and multi-node chains.
 - Desired → Live apply mechanism: [Apply flow](flows/apply-flow.md)
 - How Desired inputs become `xray.json`: [Config compilation](flows/config-compilation.md)
 - How runtime status is derived: [Tunnel status logic](flows/tunnel-status.md)
+- HA control plane and client failover: [High Availability](flows/high-availability.md)
 
 ## Concepts
 

@@ -14,6 +14,14 @@ func LogLevelFromFlags(cmd *cobra.Command) (string, bool, error) {
 		return "", false, nil
 	}
 	flags := cmd.Flags()
+	if flags != nil && flags.Changed("log-level") {
+		value, err := flags.GetString("log-level")
+		if err != nil {
+			return "", false, err
+		}
+		return value, true, nil
+	}
+	flags = cmd.InheritedFlags()
 	if flags == nil || !flags.Changed("log-level") {
 		return "", false, nil
 	}

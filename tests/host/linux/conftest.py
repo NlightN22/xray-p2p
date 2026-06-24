@@ -205,6 +205,7 @@ def _cleanup_host(host: Host) -> None:
         helpers.CONFIG_ROOT / ".apply",
         helpers.CONFIG_ROOT / ".state",
         helpers.CONFIG_ROOT / "audit.log",
+        helpers.CONFIG_ROOT / "server.toml",
         helpers.CLIENT_CONFIG_FILE,
         helpers.SERVER_CONFIG_FILE,
         helpers.CONFIG_ROOT / "xp2p-client.toml.lkg",

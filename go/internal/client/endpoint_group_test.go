@@ -61,3 +61,15 @@ func TestSelectEndpointGroupFailsClosed(t *testing.T) {
 		t.Fatal("disabled-only group must fail closed")
 	}
 }
+
+func TestSelectorActiveMismatchDetectsStaleStoredActive(t *testing.T) {
+	if !selectorActiveMismatch("primary", "backup", true) {
+		t.Fatal("stale stored active must require a selector switch")
+	}
+	if selectorActiveMismatch("backup", "backup", true) {
+		t.Fatal("matching stored active must not require a selector switch")
+	}
+	if !selectorActiveMismatch("primary", "", false) {
+		t.Fatal("missing selected endpoint must clear stale stored active")
+	}
+}

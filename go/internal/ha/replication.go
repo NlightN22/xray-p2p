@@ -16,7 +16,9 @@ type Peer struct {
 	ID            string `json:"id" toml:"id"`
 	Endpoint      string `json:"endpoint,omitempty" toml:"endpoint,omitempty"`
 	AllowInsecure bool   `json:"allow_insecure,omitempty" toml:"allow_insecure,omitempty"`
-	Secret        string `json:"-" toml:"secret"`
+	Witness       bool   `json:"witness,omitempty" toml:"witness,omitempty"`
+	NonVoting     bool   `json:"non_voting,omitempty" toml:"non_voting,omitempty"`
+	Secret        string `json:"secret,omitempty" toml:"secret"`
 }
 
 type PrepareRequest struct {
@@ -176,6 +178,9 @@ func (s *Store) Stage(generation Generation) error {
 	candidate := generation
 	s.pending = &candidate
 	s.acks = make(map[string]Acknowledgement)
+	if s.localID != "" {
+		s.acks[s.localID] = Acknowledgement{PeerID: s.localID, Generation: candidate.Number, Ready: true}
+	}
 	return nil
 }
 
@@ -220,11 +225,8 @@ func (s *Store) Commit() (Generation, error) {
 	if s.pending == nil {
 		return Generation{}, errors.New("HA generation is not prepared")
 	}
-	for id := range s.peers {
-		ack, ok := s.acks[id]
-		if !ok || !ack.Ready {
-			return Generation{}, fmt.Errorf("HA peer %q has not acknowledged generation %d", id, s.pending.Number)
-		}
+	if !s.hasQuorumLocked() {
+		return Generation{}, fmt.Errorf("%w for generation %d", ErrQuorumUnavailable, s.pending.Number)
 	}
 	if s.onCommit != nil {
 		if err := s.onCommit(*s.pending); err != nil {
@@ -249,6 +251,13 @@ func (s *Store) CommitAuthorized(request CommitRequest) (Generation, error) {
 	signature, err := Sign(peer, *s.pending)
 	if err != nil || !hmac.Equal([]byte(signature), []byte(request.Signature)) {
 		return Generation{}, errors.New("HA request authentication failed")
+	}
+	s.acks[request.PeerID] = Acknowledgement{PeerID: request.PeerID, Generation: request.Generation, Ready: true}
+	if s.localID != "" {
+		s.acks[s.localID] = Acknowledgement{PeerID: s.localID, Generation: request.Generation, Ready: true}
+	}
+	if !s.hasQuorumLocked() {
+		return Generation{}, fmt.Errorf("%w for generation %d", ErrQuorumUnavailable, s.pending.Number)
 	}
 	if s.onCommit != nil {
 		if err := s.onCommit(*s.pending); err != nil {

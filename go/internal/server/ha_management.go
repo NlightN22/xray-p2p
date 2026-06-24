@@ -30,6 +30,29 @@ func MutateHAGeneration(configPath string, mutate func(*ha.Generation) error) (h
 	return LoadHAGeneration(configPath)
 }
 
+func ForceMutateHAGeneration(configPath, reason string, mutate func(*ha.Generation) error) (ha.Generation, error) {
+	current, err := LoadHAGeneration(configPath)
+	if err != nil {
+		return ha.Generation{}, err
+	}
+	if current.Number == 0 {
+		return ha.Generation{}, errors.New("HA generation is not initialized")
+	}
+	candidate := current
+	candidate.Number++
+	if err := mutate(&candidate); err != nil {
+		return ha.Generation{}, err
+	}
+	store, err := LoadHAReplication(configPath)
+	if err != nil {
+		return ha.Generation{}, err
+	}
+	if _, err := store.ForceReconfigure(candidate, ha.ForceReconfiguration{Authorization: "force", Reason: reason}); err != nil {
+		return ha.Generation{}, err
+	}
+	return LoadHAGeneration(configPath)
+}
+
 func InitializeHAGroup(configPath string, group ha.Group) (ha.Generation, error) {
 	current, err := LoadHAGeneration(configPath)
 	if err != nil {
@@ -46,6 +69,13 @@ func InitializeHAGroup(configPath string, group ha.Group) (ha.Generation, error)
 
 func AddHAMember(configPath string, member ha.Member) (ha.Generation, error) {
 	return MutateHAGeneration(configPath, func(generation *ha.Generation) error {
+		generation.Group.Members = append(generation.Group.Members, member)
+		return nil
+	})
+}
+
+func ForceAddHAMember(configPath string, member ha.Member, reason string) (ha.Generation, error) {
+	return ForceMutateHAGeneration(configPath, reason, func(generation *ha.Generation) error {
 		generation.Group.Members = append(generation.Group.Members, member)
 		return nil
 	})
@@ -100,6 +130,20 @@ func FinalizeHAChannel(configPath, id string) (ha.Generation, error) {
 
 func TombstoneHAMember(configPath, id string) (ha.Generation, error) {
 	return MutateHAGeneration(configPath, func(generation *ha.Generation) error {
+		for i := range generation.Group.Members {
+			if strings.EqualFold(generation.Group.Members[i].ID, id) {
+				generation.Group.Members[i].Tombstone = true
+				generation.Group.Members[i].Confirmed = false
+				generation.Tombstones = append(generation.Tombstones, id)
+				return nil
+			}
+		}
+		return fmt.Errorf("HA member %q is not registered", id)
+	})
+}
+
+func ForceTombstoneHAMember(configPath, id, reason string) (ha.Generation, error) {
+	return ForceMutateHAGeneration(configPath, reason, func(generation *ha.Generation) error {
 		for i := range generation.Group.Members {
 			if strings.EqualFold(generation.Group.Members[i].ID, id) {
 				generation.Group.Members[i].Tombstone = true

@@ -161,3 +161,31 @@ func TestAddDomainRedirectUpdatesStateAndRouting(t *testing.T) {
 		t.Fatalf("unexpected domain entry %+v", list[0])
 	}
 }
+
+func TestAddRedirectAcceptsLogicalEndpointGroupTag(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	configDirName := layout.ClientConfigDir
+	statePath := filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))
+	initial := clientInstallState{
+		Endpoints: []clientEndpointRecord{{Tag: "primary", Hostname: "primary.example", Address: "203.0.113.10"}},
+		EndpointGroups: []endpointGroup{{
+			GroupID: "ha-group",
+			Tag:     "ha-group",
+			Members: []string{"primary"},
+		}},
+	}
+	if err := initial.save(statePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddRedirect(RedirectAddOptions{InstallDir: dir, ConfigDir: configDirName, CIDR: "10.70.0.0/16", Tag: "ha-group"}); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := loadClientInstallState(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Redirects) != 1 || updated.Redirects[0].OutboundTag != "ha-group" {
+		t.Fatalf("redirects = %+v", updated.Redirects)
+	}
+}

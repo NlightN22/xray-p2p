@@ -119,6 +119,7 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			logging.Debug("subscription fetch failed", "tag", endpoint.Tag, "err", err)
 			continue
 		}
+		logging.Debug("subscription fetch completed", "tag", endpoint.Tag, "known_generation", meta.Control.Subscription.Generation, "fetched_generation", sub.Generation, "has_topology", sub.Topology != nil)
 		if sub.Generation == "" || sub.Generation == meta.Control.Subscription.Generation {
 			continue
 		}

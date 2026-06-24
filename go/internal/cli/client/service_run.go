@@ -58,7 +58,7 @@ func runClientServiceRun(ctx context.Context, cfg config.Config, args []string) 
 	}
 	defer logWriter.Close()
 
-	logging.Configure(logging.Options{Output: logWriter})
+	logging.Configure(logging.Options{Output: logWriter, Level: os.Getenv(logging.EnvLogLevel)})
 
 	diagPort := strings.TrimSpace(cfg.Client.DiagPort)
 	if diagPort == "" {

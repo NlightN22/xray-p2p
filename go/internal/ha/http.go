@@ -76,7 +76,8 @@ func NewHTTPHandler(store *Store) http.Handler {
 			Committed        Generation        `json:"committed"`
 			Pending          *Generation       `json:"pending,omitempty"`
 			Acknowledgements []Acknowledgement `json:"acknowledgements"`
-		}{committed, pending, acks})
+			Recovery         RecoveryState     `json:"recovery"`
+		}{committed, pending, acks, store.RecoveryState()})
 	})
 	return mux
 }

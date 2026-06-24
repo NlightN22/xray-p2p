@@ -65,7 +65,8 @@ func recordEndpointHealth(ctx context.Context, desired clientInstallState, endpo
 		}
 		before, beforeOK := selectEndpointGroup(group, desired.Endpoints, state.Groups[key], now)
 		after, afterOK := selectEndpointGroup(group, desired.Endpoints, current, now)
-		if !beforeOK || before != after || !afterOK {
+		activeChanged := selectorActiveMismatch(current.ActiveTag, after, afterOK)
+		if !beforeOK || before != after || activeChanged {
 			if afterOK {
 				current.ActiveTag, current.ActiveSince = after, now
 				if before != after {
@@ -80,7 +81,7 @@ func recordEndpointHealth(ctx context.Context, desired clientInstallState, endpo
 		}
 		next.Groups[key] = current
 		changed = true
-		switchNeeded = switchNeeded || before != after || beforeOK != afterOK
+		switchNeeded = switchNeeded || before != after || beforeOK != afterOK || activeChanged
 	}
 	if !changed {
 		return nil
@@ -100,4 +101,11 @@ func recordEndpointHealth(ctx context.Context, desired clientInstallState, endpo
 		return xraylive.ResultError(result)
 	}
 	return commitEndpointSelectorState(path, next)
+}
+
+func selectorActiveMismatch(storedActive, selected string, selectedOK bool) bool {
+	if !selectedOK {
+		return strings.TrimSpace(storedActive) != ""
+	}
+	return !strings.EqualFold(strings.TrimSpace(storedActive), strings.TrimSpace(selected))
 }

@@ -29,6 +29,7 @@ plugins:
             Config Compilation: Компиляция конфигурации
             Normalization Pipeline: Пайплайн нормализации
             Tunnel Status Logic: Логика статуса туннеля
+            High Availability: High Availability
             Operations: Эксплуатация
             TUN Setup: Настройка TUN
             Diagnostics & NAT helpers: Диагностика и NAT-хелперы
@@ -56,6 +57,7 @@ nav:
       - Config Compilation: flows/config-compilation.md
       - Normalization Pipeline: flows/normalization-pipeline.md
       - Tunnel Status Logic: flows/tunnel-status.md
+      - High Availability: flows/high-availability.md
   - Operations:
       - TUN Setup: operations/tun-setup.md
       - Server Certificates: operations/server-certificates.md

@@ -56,3 +56,45 @@ func TestSubscriptionTopologyPreservesUnrelatedEndpointsAndGroups(t *testing.T) 
 		t.Fatalf("groups = %+v", updated.EndpointGroups)
 	}
 }
+
+func TestSubscriptionTopologyAppliesMemberTLSMetadata(t *testing.T) {
+	state := clientInstallState{Endpoints: []clientEndpointRecord{{
+		Tag:                  "primary",
+		User:                 "u",
+		ServerName:           "primary.example",
+		VerifyPeerCertByName: "primary.example",
+		PinnedPeerCertSHA256: "primary-pin",
+	}}}
+	sub := controlplane.Subscription{Topology: &controlplane.Topology{
+		Generation: 1,
+		Group: ha.Group{
+			ID:       "g",
+			Tag:      "ha",
+			Selector: ha.Selector{Mode: "automatic"},
+			Members: []ha.Member{{
+				ID:        "backup",
+				Tag:       "backup",
+				Host:      "backup.example",
+				Port:      443,
+				Profile:   "trojan-tls",
+				TLSName:   "backup.example",
+				TLSPin:    "backup-pin",
+				Confirmed: true,
+			}},
+		},
+	}}
+	updated, err := applySubscriptionTopology(state, state.Endpoints[0], sub, "secret")
+	if err != nil {
+		t.Fatalf("applySubscriptionTopology: %v", err)
+	}
+	endpoint := clientEndpointRecord{}
+	for _, item := range updated.Endpoints {
+		if item.Tag == "backup" {
+			endpoint = item
+			break
+		}
+	}
+	if endpoint.ServerName != "backup.example" || endpoint.VerifyPeerCertByName != "backup.example" || endpoint.PinnedPeerCertSHA256 != "backup-pin" {
+		t.Fatalf("backup TLS metadata = %+v", endpoint)
+	}
+}

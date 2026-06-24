@@ -7,6 +7,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
+	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
@@ -62,6 +63,9 @@ func buildControlRuntime(cfg config.Config, desired desiredServerConfig, certPat
 		if err != nil {
 			return controlplane.Runtime{}, err
 		}
+		logging.Debug("server control subscription includes HA topology", "generation", generation.Number, "group", generation.Group.Tag, "members", len(generation.Group.Members), "channels", len(generation.Channels))
+	} else {
+		logging.Debug("server control subscription has no HA topology")
 	}
 	return runtime, nil
 }

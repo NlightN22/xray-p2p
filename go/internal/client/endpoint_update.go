@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -89,5 +90,16 @@ func compileClientRuntimeCandidateWithSelector(state clientInstallState, selecto
 	if err != nil {
 		return xraylive.Artifacts{}, err
 	}
-	return xraylive.Artifacts{XrayJSON: artifacts.XrayJSON, MetaJSON: artifacts.MetaJSON}, nil
+	result := xraylive.Artifacts{XrayJSON: artifacts.XrayJSON, MetaJSON: artifacts.MetaJSON}
+	if selector != nil {
+		data, err := json.MarshalIndent(selector, "", "  ")
+		if err != nil {
+			return xraylive.Artifacts{}, err
+		}
+		result.Extra = map[string][]byte{
+			layout.ClientEndpointSelectorStateFileName:   append(data, '\n'),
+			layout.ClientEndpointSelectorJournalFileName: append(data, '\n'),
+		}
+	}
+	return result, nil
 }

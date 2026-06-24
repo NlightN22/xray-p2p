@@ -80,7 +80,7 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return errors.New("no client endpoints found (run xp2p client install first)")
 	}
 
-	tag, _, err := resolveRedirectTarget(opts.Tag, opts.Hostname, state.Endpoints)
+	tag, _, err := resolveRedirectTarget(opts.Tag, opts.Hostname, state)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func RemoveRedirect(opts RedirectRemoveOptions) error {
 	tagFilter := strings.TrimSpace(opts.Tag)
 	if strings.TrimSpace(opts.Hostname) != "" {
 		var resolved string
-		resolved, _, err = resolveRedirectTarget(tagFilter, opts.Hostname, state.Endpoints)
+		resolved, _, err = resolveRedirectTarget(tagFilter, opts.Hostname, state)
 		if err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func SetRedirectEnabled(opts RedirectSetEnabledOptions) error {
 	tagFilter := strings.TrimSpace(opts.Tag)
 	if strings.TrimSpace(opts.Hostname) != "" {
 		var resolved string
-		resolved, _, err = resolveRedirectTarget(tagFilter, opts.Hostname, state.Endpoints)
+		resolved, _, err = resolveRedirectTarget(tagFilter, opts.Hostname, state)
 		if err != nil {
 			return err
 		}
@@ -287,13 +287,16 @@ func buildRedirectRecords(state clientInstallState) []RedirectRecord {
 	return records
 }
 
-func resolveRedirectTarget(tag, host string, endpoints []clientEndpointRecord) (string, string, error) {
-	bindings := make([]redirect.Binding, 0, len(endpoints))
-	for _, ep := range endpoints {
+func resolveRedirectTarget(tag, host string, state clientInstallState) (string, string, error) {
+	bindings := make([]redirect.Binding, 0, len(state.Endpoints)+len(state.EndpointGroups))
+	for _, ep := range state.Endpoints {
 		bindings = append(bindings, redirect.Binding{
 			Tag:  ep.Tag,
 			Host: ep.Hostname,
 		})
+	}
+	for _, group := range state.EndpointGroups {
+		bindings = append(bindings, redirect.Binding{Tag: group.Tag})
 	}
 	binding, err := redirect.ResolveBinding(tag, host, bindings)
 	if err != nil {

@@ -5,6 +5,7 @@ package client
 import (
 	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -70,10 +71,14 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 		logging.Warn("apply compilation failed", "role", role, "request_id", req.ID, "err", err)
 		return nil, false, req, nil
 	}
-	if err := apply.ReplaceRoleLiveDir(liveDir, lkgDir, map[string][]byte{
+	files := map[string][]byte{
 		layout.XrayConfigFileName:  artifacts.XrayJSON,
 		layout.RuntimeMetaFileName: artifacts.MetaJSON,
-	}); err != nil {
+	}
+	for name, data := range liveSelectorExtras(liveDir) {
+		files[name] = data
+	}
+	if err := apply.ReplaceRoleLiveDir(liveDir, lkgDir, files); err != nil {
 		_ = apply.WriteError(errorPath, apply.ErrorMarker{
 			RequestID: req.ID,
 			Role:      role,
@@ -124,6 +129,7 @@ func tryRuntimeApplyPending(ctx context.Context, role string) (xraylive.RuntimeA
 			return xraylive.Artifacts{
 				XrayJSON: artifacts.XrayJSON,
 				MetaJSON: artifacts.MetaJSON,
+				Extra:    liveSelectorExtras(liveDir),
 			}, nil
 		},
 	})
@@ -142,4 +148,21 @@ func dirExists(path string) bool {
 		return false
 	}
 	return info.IsDir()
+}
+
+func liveSelectorExtras(liveDir string) map[string][]byte {
+	extra := map[string][]byte{}
+	for _, name := range []string{
+		layout.ClientEndpointSelectorStateFileName,
+		layout.ClientEndpointSelectorJournalFileName,
+	} {
+		data, err := os.ReadFile(filepath.Join(liveDir, name))
+		if err == nil {
+			extra[name] = data
+		}
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	return extra
 }

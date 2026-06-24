@@ -486,7 +486,7 @@ Includes: inherited options
 
 xp2p server ha
   Summary: Manage server HA topology
-  Subcommands: status, group, sync, peer, channel, member
+  Subcommands: status, group, sync, peer, channel, redirect, member
 Options:
 Includes: inherited options
 
@@ -542,6 +542,8 @@ xp2p server ha peer add <id> <endpoint> <secret>
 Options:
 Includes: inherited options
 - --allow-insecure, -k allow an untrusted peer certificate
+- --non-voting, -n exclude peer from quorum voting
+- --witness, -w mark peer as a control-plane witness
 
 xp2p server ha peer remove <id>
   Summary: Remove an HA peer
@@ -594,6 +596,31 @@ xp2p server ha channel list
 Options:
 Includes: inherited options
 
+xp2p server ha redirect
+  Summary: Manage group-owned HA redirect policy
+  Subcommands: add, remove, list
+Options:
+Includes: inherited options
+
+xp2p server ha redirect add <channel-id>
+  Summary: Add a redirect through a group-bound HA channel
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR to redirect
+- --domain, -d <host> domain to redirect
+
+xp2p server ha redirect remove <channel-id>
+  Summary: Remove a redirect through a group-bound HA channel
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR mapping to remove
+- --domain, -d <host> domain mapping to remove
+
+xp2p server ha redirect list
+  Summary: List group-owned HA redirect policy
+Options:
+Includes: inherited options
+
 xp2p server ha member
   Summary: Manage HA group members
   Subcommands: remove, add, reprioritize, list
@@ -604,11 +631,17 @@ xp2p server ha member remove <id>
   Summary: Tombstone an HA member
 Options:
 Includes: inherited options
+- --force, -f force an emergency two-voter reconfiguration
+- --reason, -r <string> audit reason for emergency force-reconfiguration
 
 xp2p server ha member add <id> <tag> <host> <port> <profile>
   Summary: Add a confirmed HA member
 Options:
 Includes: inherited options
+- --force, -f force an emergency two-voter reconfiguration
+- --reason, -r <string> audit reason for emergency force-reconfiguration
+- --tls-pin, -P <string> pinned peer certificate SHA256 advertised for this HA member
+- --tls-server-name, -S <string> TLS server name advertised for this HA member
 
 xp2p server ha member reprioritize <id> <priority>
   Summary: Change HA member priority

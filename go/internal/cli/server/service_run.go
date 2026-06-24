@@ -57,7 +57,7 @@ func runServerServiceRun(ctx context.Context, cfg config.Config, args []string) 
 		return 1
 	}
 	defer logWriter.Close()
-	logging.Configure(logging.Options{Output: logWriter})
+	logging.Configure(logging.Options{Output: logWriter, Level: os.Getenv(logging.EnvLogLevel)})
 
 	opts := server.ServiceOptions{
 		InstallDir:   installDir,
