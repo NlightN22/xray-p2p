@@ -238,7 +238,11 @@ func classifyRoutingRules(currentRules, candidateRules []map[string]any) (Diff, 
 		diff.Kind = DiffNoop
 	}
 	if diff.Kind == DiffRoutingOnly && !canAppendRoutingDiffReachOrder(currentTags, diff.RemovedRuleTag, diff.AddedRules, candidateTags) {
-		return unsupported("routing rule order change requires service-layer apply"), nil
+		rewrite, ok := routingSuffixRewriteDiff(currentTags, candidateTags, currentByTag, candidateByTag)
+		if !ok {
+			return unsupported("routing rule order change requires service-layer apply"), nil
+		}
+		return rewrite, nil
 	}
 	return diff, nil
 }
@@ -428,6 +432,50 @@ func canAppendRoutingDiffReachOrder(currentTags []string, removedTags []string, 
 		got = append(got, change.RuleTag)
 	}
 	return stringSlicesEqual(got, candidateTags)
+}
+
+func routingSuffixRewriteDiff(currentTags, candidateTags []string, currentByTag, candidateByTag map[string]map[string]any) (Diff, bool) {
+	if tagSetsEqual(currentTags, candidateTags) {
+		return Diff{}, false
+	}
+	prefix := 0
+	for prefix < len(currentTags) && prefix < len(candidateTags) && currentTags[prefix] == candidateTags[prefix] {
+		prefix++
+	}
+	diff := Diff{Kind: DiffRoutingOnly, CandidateRuleTags: candidateTags}
+	for _, tag := range currentTags[prefix:] {
+		current, exists := currentByTag[tag]
+		if !exists {
+			return Diff{}, false
+		}
+		diff.RemovedRuleTag = append(diff.RemovedRuleTag, tag)
+		diff.RemovedRules = append(diff.RemovedRules, RoutingRuleChange{RuleTag: tag, Rule: current})
+	}
+	for _, tag := range candidateTags[prefix:] {
+		candidate, exists := candidateByTag[tag]
+		if !exists {
+			return Diff{}, false
+		}
+		diff.AddedRules = append(diff.AddedRules, RoutingRuleChange{RuleTag: tag, Rule: candidate})
+	}
+	return diff, len(diff.AddedRules)+len(diff.RemovedRuleTag) > 0
+}
+
+func tagSetsEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	seen := make(map[string]int, len(left))
+	for _, tag := range left {
+		seen[tag]++
+	}
+	for _, tag := range right {
+		seen[tag]--
+		if seen[tag] < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func stringSlicesEqual(left, right []string) bool {

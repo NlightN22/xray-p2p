@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/pelletier/go-toml"
 )
 
 func LoadClientConfig(path string) (ClientXrayConfig, error) {
@@ -109,6 +111,9 @@ func decodeClientConfig(raw any) (ClientXrayConfig, bool, error) {
 	if raw == nil {
 		return ClientXrayConfig{}, false, nil
 	}
+	if tree, ok := raw.(*toml.Tree); ok {
+		raw = tree.ToMap()
+	}
 	buf, err := json.Marshal(raw)
 	if err != nil {
 		return ClientXrayConfig{}, false, fmt.Errorf("xrayconfig: encode client xray config: %w", err)
@@ -123,6 +128,9 @@ func decodeClientConfig(raw any) (ClientXrayConfig, bool, error) {
 func decodeServerConfig(raw any) (ServerXrayConfig, bool, error) {
 	if raw == nil {
 		return ServerXrayConfig{}, false, nil
+	}
+	if tree, ok := raw.(*toml.Tree); ok {
+		raw = tree.ToMap()
 	}
 	buf, err := json.Marshal(raw)
 	if err != nil {

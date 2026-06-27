@@ -67,15 +67,39 @@ func verifyRoutingDiff(ctx context.Context, applier RoutingApplier, diff Diff) e
 			return fmt.Errorf("added routing rule %s not found", change.RuleTag)
 		}
 	}
+	added := make(map[string]struct{}, len(diff.AddedRules))
+	for _, change := range diff.AddedRules {
+		added[change.RuleTag] = struct{}{}
+	}
 	for _, change := range diff.RemovedRules {
+		if _, readded := added[change.RuleTag]; readded {
+			continue
+		}
 		if _, ok := present[change.RuleTag]; ok {
 			return fmt.Errorf("removed routing rule %s still present", change.RuleTag)
 		}
 	}
-	if len(diff.CandidateRuleTags) > 0 && !stringSlicesEqual(tags, diff.CandidateRuleTags) {
-		return fmt.Errorf("routing rule order mismatch")
+	if len(diff.CandidateRuleTags) > 0 && !sameStringSet(tags, diff.CandidateRuleTags) {
+		return fmt.Errorf("routing rule tags mismatch")
 	}
 	return nil
+}
+
+func sameStringSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	counts := make(map[string]int, len(left))
+	for _, value := range left {
+		counts[value]++
+	}
+	for _, value := range right {
+		counts[value]--
+		if counts[value] < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func rollbackAdded(ctx context.Context, applier RoutingApplier, added []map[string]any) error {

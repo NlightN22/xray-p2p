@@ -73,15 +73,45 @@ func TestApplyRoutingDiffRestoresRemovedRules(t *testing.T) {
 	}
 }
 
+func TestApplyRoutingDiffAllowsSuffixRewriteReadd(t *testing.T) {
+	applier := newRecordingRoutingApplier("keep", "wide")
+	diff := Diff{
+		Kind:              DiffRoutingOnly,
+		CandidateRuleTags: []string{"keep", "narrow", "wide"},
+		RemovedRules: []RoutingRuleChange{
+			{RuleTag: "wide", Rule: map[string]any{"ruleTag": "wide"}},
+		},
+		AddedRules: []RoutingRuleChange{
+			{RuleTag: "narrow", Rule: map[string]any{"ruleTag": "narrow"}},
+			{RuleTag: "wide", Rule: map[string]any{"ruleTag": "wide"}},
+		},
+	}
+
+	if err := ApplyRoutingDiff(context.Background(), applier, diff); err != nil {
+		t.Fatalf("ApplyRoutingDiff: %v", err)
+	}
+	want := []string{"remove:wide", "add:narrow", "add:wide"}
+	if !reflect.DeepEqual(applier.calls, want) {
+		t.Fatalf("calls = %v, want %v", applier.calls, want)
+	}
+	if !reflect.DeepEqual(applier.order, diff.CandidateRuleTags) {
+		t.Fatalf("order = %v, want %v", applier.order, diff.CandidateRuleTags)
+	}
+}
+
 type recordingRoutingApplier struct {
 	calls         []string
 	tags          map[string]struct{}
+	order         []string
 	failAddTag    string
 	failRemoveTag string
 }
 
 func newRecordingRoutingApplier(tags ...string) *recordingRoutingApplier {
-	applier := &recordingRoutingApplier{tags: make(map[string]struct{}, len(tags))}
+	applier := &recordingRoutingApplier{
+		tags:  make(map[string]struct{}, len(tags)),
+		order: append([]string(nil), tags...),
+	}
 	for _, tag := range tags {
 		applier.tags[tag] = struct{}{}
 	}
@@ -95,6 +125,7 @@ func (a *recordingRoutingApplier) AddRule(_ context.Context, rule map[string]any
 		return errors.New("add failed")
 	}
 	a.tags[tag] = struct{}{}
+	a.order = append(a.order, tag)
 	return nil
 }
 
@@ -104,13 +135,26 @@ func (a *recordingRoutingApplier) RemoveRule(_ context.Context, tag string) erro
 		return errors.New("remove failed")
 	}
 	delete(a.tags, tag)
+	a.order = removeString(a.order, tag)
 	return nil
 }
 
 func (a *recordingRoutingApplier) ListRuleTags(context.Context) ([]string, error) {
-	result := make([]string, 0, len(a.tags))
-	for tag := range a.tags {
-		result = append(result, tag)
+	result := make([]string, 0, len(a.order))
+	for _, tag := range a.order {
+		if _, ok := a.tags[tag]; ok {
+			result = append(result, tag)
+		}
 	}
 	return result, nil
+}
+
+func removeString(items []string, value string) []string {
+	result := items[:0]
+	for _, item := range items {
+		if item != value {
+			result = append(result, item)
+		}
+	}
+	return result
 }

@@ -99,8 +99,14 @@ func TestClassifyXrayConfigDiffRejectsInsertedRoutingRuleOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
 	}
-	if diff.Kind != DiffUnsupported {
-		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	if diff.Kind != DiffRoutingOnly {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffRoutingOnly, diff)
+	}
+	if len(diff.RemovedRuleTag) != 1 || diff.RemovedRuleTag[0] != "wide" {
+		t.Fatalf("unexpected removed rules: %+v", diff.RemovedRuleTag)
+	}
+	if got := ruleChangeTags(diff.AddedRules); !stringSlicesEqual(got, []string{"narrow", "wide"}) {
+		t.Fatalf("added rules = %v, want [narrow wide]", got)
 	}
 }
 
@@ -125,6 +131,27 @@ func TestClassifyXrayConfigDiffDetectsFullTunnelTargetReplacement(t *testing.T) 
 	if len(diff.AddedRules) != 1 || diff.AddedRules[0].RuleTag != "xp2p-full-new" {
 		t.Fatalf("unexpected added rules: %+v", diff.AddedRules)
 	}
+}
+
+func TestClassifyXrayConfigDiffRejectsPureRoutingReorder(t *testing.T) {
+	current := []byte(`{"routing":{"rules":[{"ruleTag":"wide"},{"ruleTag":"narrow"},{"ruleTag":"last"}]}}`)
+	candidate := []byte(`{"routing":{"rules":[{"ruleTag":"narrow"},{"ruleTag":"wide"},{"ruleTag":"last"}]}}`)
+
+	diff, err := ClassifyXrayConfigDiff(current, candidate)
+	if err != nil {
+		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
+	}
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want unsupported", diff.Kind)
+	}
+}
+
+func ruleChangeTags(changes []RoutingRuleChange) []string {
+	tags := make([]string, 0, len(changes))
+	for _, change := range changes {
+		tags = append(tags, change.RuleTag)
+	}
+	return tags
 }
 
 func TestClassifyXrayConfigDiffDetectsInboundOnlyAddRemove(t *testing.T) {
