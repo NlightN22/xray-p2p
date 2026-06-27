@@ -142,7 +142,10 @@ def xp2p_full_cleanup(request, linux_host_factory):
         needed.add(linux_env.DEFAULT_AUX)
     if "linux_host_factory" in request.fixturenames:
         needed.update({linux_env.DEFAULT_CLIENT, linux_env.DEFAULT_SERVER})
-        if module_name == "test_tunnel_BC_to_A.py":
+        if module_name in {
+            "test_ha_control_plane.py",
+            "test_tunnel_BC_to_A.py",
+        }:
             needed.add(linux_env.DEFAULT_AUX)
 
     hosts = [linux_host_factory(machine) for machine in sorted(needed)]
