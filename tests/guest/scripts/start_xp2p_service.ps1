@@ -31,6 +31,13 @@ if ($existing) {
     }
 }
 
+$runtimeDir = Join-Path $env:ProgramData 'xp2p\.state\live\config-server'
+$runtimePath = Join-Path $runtimeDir 'runtime.json'
+New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
+if (-not (Test-Path $runtimePath)) {
+    '{"control":{"subscription":{"generation":"test"}}}' | Set-Content -Path $runtimePath -Encoding ASCII
+}
+
 $escapedPath = $Xp2pPath.Replace("'", "''")
 $commandLine = "powershell -NoProfile -Command `"& { & '$escapedPath' diag --listen '0.0.0.0:$Port' }`""
 $workingDir = Split-Path $Xp2pPath

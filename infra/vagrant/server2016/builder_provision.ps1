@@ -253,9 +253,8 @@ function Ensure-CMakeToolchain {
 
     $hasCl = Test-Path "C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64\cl.exe"
     if (-not $hasCl) {
-        Write-Info "MSVC C++ tools not detected; installing VC Tools workload via visualstudio2022buildtools parameters."
-        $params = "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --includeOptional --passive --norestart"
-        $installArgs = @("install", "visualstudio2022buildtools", "--yes", "--no-progress", "--force", "--package-parameters", $params)
+        Write-Info "MSVC C++ tools not detected; installing VC Tools workload package."
+        $installArgs = @("install", "visualstudio2022-workload-vctools", "--yes", "--no-progress")
         choco @installArgs | Write-Host
         if ($LASTEXITCODE -ne 0) {
             throw "Chocolatey failed to install Visual Studio VC Tools workload (exit code $LASTEXITCODE)."

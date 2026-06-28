@@ -98,24 +98,26 @@ def _assert_no_redirect_rule(data: dict, cidr: str) -> None:
 
 def _assert_domain_redirect_rule(data: dict, domain: str, tag: str) -> None:
     normalized = domain.strip().lower()
+    accepted = {normalized, f"domain:{normalized}"}
     rules = data.get("routing", {}).get("rules", [])
     for rule in rules:
         if rule.get("outboundTag") != tag:
             continue
         domains = rule.get("domains", [])
         lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
-        if normalized in lowered:
+        if any(entry in accepted for entry in lowered):
             return
     raise AssertionError(f"Domain redirect rule for {normalized} via {tag} not found")
 
 
 def _assert_no_domain_redirect_rule(data: dict, domain: str) -> None:
     normalized = domain.strip().lower()
+    accepted = {normalized, f"domain:{normalized}"}
     rules = data.get("routing", {}).get("rules", [])
     for rule in rules:
         domains = rule.get("domains", [])
         lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
-        if normalized in lowered:
+        if any(entry in accepted for entry in lowered):
             raise AssertionError(f"Unexpected domain redirect rule for {domain}")
 
 

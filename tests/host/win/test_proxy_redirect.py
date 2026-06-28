@@ -201,25 +201,27 @@ def _assert_no_redirect_rule(data: dict, cidr: str) -> None:
 
 def _assert_domain_redirect_rule(data: dict, domain: str, tag: str) -> None:
     normalized = domain.strip().lower()
+    accepted = {normalized, f"domain:{normalized}"}
     rules = data.get("routing", {}).get("rules", [])
     for rule in rules:
         if rule.get("outboundTag") != tag:
             continue
         domains = rule.get("domains") or []
         lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
-        if normalized in lowered:
+        if any(entry in accepted for entry in lowered):
             return
     pytest.fail(f"Domain redirect rule for {domain} via {tag} not found")
 
 
 def _assert_no_domain_redirect_rule(data: dict, domain: str) -> None:
     normalized = domain.strip().lower()
+    accepted = {normalized, f"domain:{normalized}"}
     rules = data.get("routing", {}).get("rules", [])
     for rule in rules:
         domains = rule.get("domains") or []
         lowered = [entry.strip().lower() for entry in domains if isinstance(entry, str)]
-    if normalized in lowered:
-        pytest.fail(f"Unexpected domain redirect rule for {domain}")
+        if any(entry in accepted for entry in lowered):
+            pytest.fail(f"Unexpected domain redirect rule for {domain}")
 
 
 def _set_firewall_block(host, name: str, addresses: list[str], present: bool = True) -> None:
