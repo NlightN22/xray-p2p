@@ -47,12 +47,11 @@ def _state_files_for(install_dir: Path) -> list[Path]:
 def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> None:
     _stop_xray_processes(server_host)
     _stop_xray_processes(client_host)
+    _restore_xray(server_host, client_host)
     xp2p_server_runner("server", "remove", "--ignore-missing", "--quiet")
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing", "--quiet")
     server_install_dir = _install_dir(server_host)
     client_install_dir = _install_dir(client_host)
-    _remove_xray_backup(server_host)
-    _remove_xray_backup(client_host)
     win_env.cleanup_xp2p_install(
         server_host,
         config_dirs=[win_env.CONFIG_ROOT / SERVER_CONFIG_NAME],
