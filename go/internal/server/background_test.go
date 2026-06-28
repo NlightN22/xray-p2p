@@ -22,7 +22,7 @@ import (
 
 func TestStartBackgroundServesHTTPSControlPing(t *testing.T) {
 	setupBackgroundTestLogging(t)
-	cancel, baseURL := startTestControlServer(t, t.TempDir())
+	cancel, baseURL := startTestControlServer(t, t.TempDir(), true)
 	defer cancel()
 
 	client := testControlHTTPClient()
@@ -53,10 +53,33 @@ func TestStartBackgroundServesHTTPSControlPing(t *testing.T) {
 	}
 }
 
+func TestStartBackgroundServesHTTPSControlPingWithoutRuntimeMetadata(t *testing.T) {
+	setupBackgroundTestLogging(t)
+	cancel, baseURL := startTestControlServer(t, t.TempDir(), false)
+	defer cancel()
+
+	body := []byte(`{"nonce":"standalone"}`)
+	resp, err := testControlHTTPClient().Post(baseURL+controlplane.PathPing, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST ping: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("ping status = %s", resp.Status)
+	}
+	var pong controlplane.PingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pong); err != nil {
+		t.Fatalf("decode ping response: %v", err)
+	}
+	if pong.Nonce != "standalone" {
+		t.Fatalf("nonce = %q", pong.Nonce)
+	}
+}
+
 func TestHTTPSHeartbeatPayloadIsPersisted(t *testing.T) {
 	setupBackgroundTestLogging(t)
 	dir := t.TempDir()
-	cancel, baseURL := startTestControlServer(t, dir)
+	cancel, baseURL := startTestControlServer(t, dir, true)
 	defer cancel()
 
 	payload := heartbeat.Payload{
@@ -98,7 +121,7 @@ func TestHTTPSHeartbeatPayloadIsPersisted(t *testing.T) {
 	}
 }
 
-func startTestControlServer(t *testing.T, stateDir string) (context.CancelFunc, string) {
+func startTestControlServer(t *testing.T, stateDir string, writeRuntime bool) (context.CancelFunc, string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Setenv("XP2P_CONFIG_ROOT", stateDir)
@@ -109,8 +132,10 @@ func startTestControlServer(t *testing.T, stateDir string) (context.CancelFunc, 
 	if err := os.MkdirAll(liveDir, 0o755); err != nil {
 		t.Fatalf("mkdir live: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(liveDir, layout.RuntimeMetaFileName), []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
-		t.Fatalf("write runtime metadata: %v", err)
+	if writeRuntime {
+		if err := os.WriteFile(filepath.Join(liveDir, layout.RuntimeMetaFileName), []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
+			t.Fatalf("write runtime metadata: %v", err)
+		}
 	}
 
 	portStr, _ := testutil.FreePort(t)

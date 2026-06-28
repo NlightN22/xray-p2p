@@ -228,17 +228,29 @@ func (h *handler) ping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req PingRequest
-	rt, body, ok := h.loadAndAuth(w, r, &req)
-	if !ok {
+	body, err := readBody(r, &req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	_ = rt
+	if rt, err := h.runtime(); err == nil {
+		if err := VerifyRequest(r, body, rt.AuthUsers, h.now(), h.authWindow); err != nil {
+			status := http.StatusUnauthorized
+			if errors.Is(err, ErrAuthInvalid) {
+				status = http.StatusForbidden
+			}
+			writeError(w, status, err.Error())
+			return
+		}
+	} else if !runtimeMissing(err) {
+		writeError(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
 	if req.Nonce == "" {
 		writeError(w, http.StatusBadRequest, "nonce is required")
 		return
 	}
 	writeJSON(w, http.StatusOK, PingResponse{Nonce: req.Nonce, ServerAt: h.now().UTC()})
-	_ = body
 }
 
 func (h *handler) heartbeatPost(w http.ResponseWriter, r *http.Request) {
@@ -360,6 +372,10 @@ func (h *handler) runtime() (Runtime, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.load()
+}
+
+func runtimeMissing(err error) bool {
+	return errors.Is(err, os.ErrNotExist)
 }
 
 func readBody(r *http.Request, dst any) ([]byte, error) {
