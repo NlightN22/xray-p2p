@@ -279,7 +279,6 @@ def test_windows_client_tun_mode_full_routes(
             allow_restart=True,
             log_path=SYNCED_SERVICE_LOG,
         )
-        net.ensure_internet_or_skip(client_host, "client post-split")
         ok, debug = tun.poll_for_routes_restored(
             client_host,
             tun_name,
@@ -298,6 +297,7 @@ def test_windows_client_tun_mode_full_routes(
                 state_file=_env.CONFIG_ROOT / "xp2p-client.tun-full.json",
                 service_log=SYNCED_SERVICE_LOG,
             )
+        net.assert_internet_access(client_host, label="post-split")
 
         result = cfg.client_mode(
             xp2p_client_runner,
