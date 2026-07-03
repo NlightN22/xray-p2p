@@ -1,6 +1,9 @@
 package runtimeapply
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestClassifyXrayConfigDiffDetectsRoutingOnlyAddRemove(t *testing.T) {
 	current := []byte(`{
@@ -200,7 +203,7 @@ func TestClassifyXrayConfigDiffRejectsInboundGlobalChange(t *testing.T) {
 	}
 }
 
-func TestClassifyXrayConfigDiffDetectsTaggedInboundReplacement(t *testing.T) {
+func TestClassifyXrayConfigDiffRejectsUnsupportedInboundReplacement(t *testing.T) {
 	current := []byte(`{"inbounds":[{"tag":"a","protocol":"socks"}]}`)
 	candidate := []byte(`{"inbounds":[{"tag":"a","protocol":"dokodemo-door"}]}`)
 
@@ -208,14 +211,11 @@ func TestClassifyXrayConfigDiffDetectsTaggedInboundReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClassifyXrayConfigDiff: %v", err)
 	}
-	if diff.Kind != DiffInboundOnly {
-		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffInboundOnly, diff)
+	if diff.Kind != DiffUnsupported {
+		t.Fatalf("kind = %s, want %s: %+v", diff.Kind, DiffUnsupported, diff)
 	}
-	if len(diff.RemovedInboundTags) != 1 || diff.RemovedInboundTags[0] != "a" {
-		t.Fatalf("unexpected removed inbound tags: %+v", diff.RemovedInboundTags)
-	}
-	if len(diff.AddedInbounds) != 1 || diff.AddedInbounds[0].Tag != "a" {
-		t.Fatalf("unexpected added inbounds: %+v", diff.AddedInbounds)
+	if !strings.Contains(diff.Reason, "service-layer apply") {
+		t.Fatalf("reason = %q, want service-layer apply", diff.Reason)
 	}
 }
 

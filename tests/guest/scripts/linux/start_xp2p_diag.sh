@@ -18,7 +18,7 @@ if [ "$proto" = "udp" ]; then
   netstat_cmd="netstat -lun"
 fi
 
-nohup "$xp2p_bin" diag --listen "$listen" --proto "$proto" --quiet >"$log_file" 2>&1 &
+nohup "$xp2p_bin" diag --listen "$listen" --quiet >"$log_file" 2>&1 &
 pid=$!
 echo "$pid" >"$pid_file"
 

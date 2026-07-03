@@ -260,6 +260,9 @@ func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff
 	for tag, current := range currentByTag {
 		candidate, exists := candidateByTag[tag]
 		if !exists {
+			if !runtimeInboundProtocolSupported(current) {
+				return unsupported(fmt.Sprintf("inbound %q protocol requires service-layer apply", tag)), nil
+			}
 			diff.RemovedInboundTags = append(diff.RemovedInboundTags, tag)
 			diff.RemovedInbounds = append(diff.RemovedInbounds, InboundChange{
 				Tag:     tag,
@@ -268,6 +271,9 @@ func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff
 			continue
 		}
 		if !reflect.DeepEqual(current, candidate) {
+			if !runtimeInboundProtocolSupported(current) || !runtimeInboundProtocolSupported(candidate) {
+				return unsupported(fmt.Sprintf("inbound %q protocol requires service-layer apply", tag)), nil
+			}
 			diff.RemovedInboundTags = append(diff.RemovedInboundTags, tag)
 			diff.RemovedInbounds = append(diff.RemovedInbounds, InboundChange{
 				Tag:     tag,
@@ -282,6 +288,9 @@ func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff
 	for tag, candidate := range candidateByTag {
 		if _, exists := currentByTag[tag]; exists {
 			continue
+		}
+		if !runtimeInboundProtocolSupported(candidate) {
+			return unsupported(fmt.Sprintf("inbound %q protocol requires service-layer apply", tag)), nil
 		}
 		diff.AddedInbounds = append(diff.AddedInbounds, InboundChange{
 			Tag:     tag,
@@ -299,6 +308,16 @@ func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff
 		diff.Kind = DiffNoop
 	}
 	return diff, nil
+}
+
+func runtimeInboundProtocolSupported(inbound map[string]any) bool {
+	protocol, _ := inbound["protocol"].(string)
+	switch strings.TrimSpace(protocol) {
+	case "dokodemo-door", "trojan", "vless":
+		return true
+	default:
+		return false
+	}
 }
 
 func classifyOutbounds(currentOutbounds, candidateOutbounds []map[string]any) (Diff, error) {

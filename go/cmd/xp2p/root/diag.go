@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 
@@ -67,11 +68,22 @@ func runDiagCommand(ctx context.Context, cfg config.Config, opts diagCommandOpti
 	}
 
 	listenAddr := net.JoinHostPort(host, port)
+	tlsDir := ""
+	if strings.TrimSpace(cfg.Server.CertificateFile) == "" && strings.TrimSpace(cfg.Server.KeyFile) == "" {
+		dir, err := os.MkdirTemp("", "xp2p-diag-tls-*")
+		if err != nil {
+			logging.Error("xp2p diag: failed to create temporary TLS directory", "err", err)
+			return 1
+		}
+		defer os.RemoveAll(dir)
+		tlsDir = dir
+	}
 	if err := server.StartBackground(ctx, server.Options{
 		ListenAddr: listenAddr,
 		InstallDir: cfg.Server.InstallDir,
 		CertPath:   cfg.Server.CertificateFile,
 		KeyPath:    cfg.Server.KeyFile,
+		TLSDir:     tlsDir,
 		Quiet:      opts.Quiet,
 	}); err != nil {
 		logging.Error("xp2p diag: failed to start diagnostics listener", "err", err)

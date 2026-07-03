@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
@@ -62,6 +63,56 @@ func TestHasServerConfig(t *testing.T) {
 				t.Fatalf("hasServerConfig=%v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestWriteApplyErrorForExistingRequest(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+	req := apply.Request{ID: "req-1", Role: apply.RoleServer}
+	if err := apply.WriteRequest(config.ApplyRequestPath(), req, ""); err != nil {
+		t.Fatalf("WriteRequest: %v", err)
+	}
+
+	writeApplyErrorForExistingRequest(apply.RoleServer, os.ErrInvalid)
+
+	marker, exists, err := apply.ReadError(config.ApplyErrorPath())
+	if err != nil {
+		t.Fatalf("ReadError: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected apply.error to be written")
+	}
+	if marker.RequestID != req.ID || marker.Role != apply.RoleServer {
+		t.Fatalf("unexpected marker: %+v", marker)
+	}
+	if marker.Reason == "" {
+		t.Fatal("expected marker reason")
+	}
+}
+
+func TestWriteApplyErrorForEarlyFailureCreatesRequest(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+
+	writeApplyErrorForExistingRequest(apply.RoleServer, os.ErrInvalid)
+
+	req, exists, err := apply.ReadRequest(config.ApplyRequestPath())
+	if err != nil {
+		t.Fatalf("ReadRequest: %v", err)
+	}
+	if !exists || !req.MatchesRole(apply.RoleServer) || req.ID == "" {
+		t.Fatalf("unexpected request: exists=%v request=%+v", exists, req)
+	}
+	marker, exists, err := apply.ReadError(config.ApplyErrorPath())
+	if err != nil {
+		t.Fatalf("ReadError: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected apply.error to be written")
+	}
+	if marker.RequestID != req.ID || marker.Role != apply.RoleServer {
+		t.Fatalf("unexpected marker: %+v", marker)
 	}
 }
 

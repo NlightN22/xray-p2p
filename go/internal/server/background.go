@@ -34,6 +34,7 @@ type Options struct {
 	CertPath   string
 	KeyPath    string
 	LiveDir    string
+	TLSDir     string
 	ListenAddr string
 	Quiet      bool
 }
@@ -162,7 +163,10 @@ func ensureControlTLS(opts Options) (string, string, error) {
 	if port == "" {
 		port = DefaultPort
 	}
-	dir := filepath.Join(config.ConfigRoot(), "tls", "control")
+	dir := strings.TrimSpace(opts.TLSDir)
+	if dir == "" {
+		dir = filepath.Join(config.ConfigRoot(), "tls", "control")
+	}
 	certPath := filepath.Join(dir, "control-"+port+".crt")
 	keyPath := filepath.Join(dir, "control-"+port+".key")
 	if controlTLSFileExists(certPath) && controlTLSFileExists(keyPath) {

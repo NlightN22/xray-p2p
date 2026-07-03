@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 import pytest
 
 from tests.host.openwrt import _helpers as helpers
@@ -54,8 +56,10 @@ def _extract_link(output: str) -> str:
 
 
 def _ensure_pinned_peer(link: str) -> str:
-    if "pinnedPeerCertSha256=" not in link:
-        pytest.fail(f"Expected pinnedPeerCertSha256 in link: {link}")
+    query = parse_qs(urlparse(link).query)
+    values = query.get("xp2p_pin_sha256") or query.get("pinnedPeerCertSha256") or []
+    if not any(value.strip() for value in values):
+        pytest.fail(f"Expected pinned certificate hash in link: {link}")
     return link
 
 

@@ -101,6 +101,65 @@ func TestRunDiagCommandHTTPS(t *testing.T) {
 	}
 }
 
+func TestRunDiagCommandStandaloneHTTPSWithoutConfiguredTLS(t *testing.T) {
+	setupDiagTest(t)
+	portStr, _ := testutil.FreePort(t)
+	addr := net.JoinHostPort("127.0.0.1", portStr)
+	cfg := config.Config{
+		Server: config.ServerConfig{
+			Port:       portStr,
+			InstallDir: filepath.Join(t.TempDir(), "missing-install-root"),
+		},
+	}
+	opts := diagCommandOptions{Listen: addr}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resultCh := make(chan int, 1)
+	go func() {
+		resultCh <- runDiagCommand(ctx, cfg, opts)
+	}()
+
+	baseURL := "https://" + addr
+	client := diagHTTPClient()
+	testutil.WaitForCondition(t, time.Second, func() bool {
+		resp, err := client.Get(baseURL + controlplane.PathReady)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	})
+
+	body := []byte(`{"nonce":"standalone"}`)
+	resp, err := client.Post(baseURL+controlplane.PathPing, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST ping: %v", err)
+	}
+	defer resp.Body.Close()
+	var pong controlplane.PingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&pong); err != nil {
+		t.Fatalf("decode pong: %v", err)
+	}
+	if pong.Nonce != "standalone" {
+		t.Fatalf("unexpected nonce: %q", pong.Nonce)
+	}
+	if _, err := os.Stat(cfg.Server.InstallDir); !os.IsNotExist(err) {
+		t.Fatalf("standalone diag touched install root: %v", err)
+	}
+
+	cancel()
+	select {
+	case code := <-resultCh:
+		if code != 0 {
+			t.Fatalf("runDiagCommand returned %d", code)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("runDiagCommand did not exit after context cancel")
+	}
+}
+
 func setupDiagTest(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()

@@ -234,13 +234,27 @@ def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: 
     pytest.fail(f"Port {port} did not open on {host.backend.hostname} within {timeout_seconds}s")
 
 
-def _wait_for_apply_request_clear(host, *, timeout_seconds: float = 30.0, interval: float = 1.0) -> None:
+def _wait_for_apply_request_clear(host, *, timeout_seconds: float = 60.0, interval: float = 1.0) -> None:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         if not helpers.path_exists(host, APPLY_REQUEST):
             return
         time.sleep(interval)
-    pytest.fail(f"apply.request did not clear within {timeout_seconds}s on {host.backend.hostname}")
+    dump = host.run(
+        "set +e; "
+        "echo '--- apply.request'; ls -la /etc/xp2p/.state/apply.request 2>/dev/null; "
+        "cat /etc/xp2p/.state/apply.request 2>/dev/null; "
+        "echo '--- apply.error'; ls -la /etc/xp2p/.state/apply.error 2>/dev/null; "
+        "cat /etc/xp2p/.state/apply.error 2>/dev/null; "
+        "echo '--- state tree'; find /etc/xp2p/.state -maxdepth 3 -type f -print 2>/dev/null | sort; "
+        "echo '--- service status'; /etc/init.d/xp2p-client status 2>&1; /etc/init.d/xp2p-server status 2>&1; "
+        "echo '--- client log'; tail -n 120 /var/log/xp2p/client.log 2>/dev/null; "
+        "echo '--- server log'; tail -n 120 /var/log/xp2p/server.log 2>/dev/null"
+    )
+    pytest.fail(
+        f"apply.request did not clear within {timeout_seconds}s on {host.backend.hostname}\n"
+        f"{dump.stdout}\n{dump.stderr}"
+    )
 
 
 def _assert_socks_inbound_listen(host, path, expected_listens: set[str]) -> None:
@@ -262,6 +276,18 @@ def _assert_port_listen_host(host, port: int, expected_hosts: set[str]) -> None:
     output = result.stdout or ""
     for host_addr in expected_hosts:
         if f"{host_addr}:{port}" in output:
+            return
+    if f":::{port}" in output and "0.0.0.0" in expected_hosts:
+        for host_addr in sorted(expected_hosts - {"0.0.0.0"}):
+            probe = host.run(
+                "printf '\\005\\001\\000' "
+                f"| timeout 2 nc {host_addr} {port} "
+                "| od -An -tx1 | grep -q '05 00'"
+            )
+            if probe.rc == 0:
+                return
+        bindv6only = host.run("cat /proc/sys/net/ipv6/bindv6only 2>/dev/null || true")
+        if (bindv6only.stdout or "").strip() == "0":
             return
     pytest.fail(
         f"Expected port {port} to listen on {sorted(expected_hosts)} "

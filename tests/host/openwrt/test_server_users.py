@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from uuid import UUID
 
 import pytest
 from testinfra.host import Host
@@ -49,6 +50,14 @@ def _read_trojan_users(host: Host) -> dict[str, str]:
 
 def _is_unreserved(value: str) -> bool:
     return re.fullmatch(r"[A-Za-z0-9._~-]+", value or "") is not None
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 @pytest.mark.host
@@ -131,7 +140,8 @@ def test_openwrt_server_user_add_requires_force_for_duplicate(openwrt_host, xp2p
         )
 
         users = _read_trojan_users(openwrt_host)
-        assert users.get("alpha@example.com") == "alpha-pass-2"
+        assert _is_uuid(users.get("alpha@example.com", ""))
+        assert users.get("alpha@example.com.previous") == "alpha-pass-2"
     finally:
         helpers.cleanup_server_install(openwrt_host, runner)
 

@@ -22,7 +22,7 @@ if [ "$proto" = "udp" ]; then
   netstat_cmd="netstat -lun"
 fi
 
-xp2p diag --listen "$listen" --proto "$proto" --quiet >"$diag_log" 2>&1 &
+xp2p diag --listen "$listen" --quiet >"$diag_log" 2>&1 &
 pid=$!
 
 cleanup() {

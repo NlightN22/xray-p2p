@@ -41,6 +41,9 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		return fmt.Errorf("create config directory: %w", err)
 	}
 	if err := StageLegacyCredentialRotation(ctx); err != nil {
+		if markerErr := writeApplyErrorForExistingRequest(apply.RoleServer, err); markerErr != nil {
+			logging.Warn("xp2p server bootstrap: apply error write failed", "err", markerErr)
+		}
 		return fmt.Errorf("force rotate legacy credentials: %w", err)
 	}
 	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName), AllowInvalid: true})
@@ -154,6 +157,35 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		return Run(runCtx, runOpts)
 	}); err != nil {
 		return fmt.Errorf("xp2p server service: %w", err)
+	}
+	return nil
+}
+
+func writeApplyErrorForExistingRequest(role string, reason error) error {
+	if reason == nil {
+		return nil
+	}
+	req, exists, err := apply.ReadRequest(config.ApplyRequestPath())
+	if err != nil {
+		return err
+	}
+	if !exists {
+		req, err = apply.NewRequest(role)
+		if err != nil {
+			return err
+		}
+		if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+			return err
+		}
+	} else if !req.MatchesRole(role) {
+		return nil
+	}
+	if err := apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
+		RequestID: req.ID,
+		Role:      role,
+		Reason:    reason.Error(),
+	}, config.AuditLogPath()); err != nil {
+		return err
 	}
 	return nil
 }
