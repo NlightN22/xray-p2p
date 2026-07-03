@@ -34,10 +34,16 @@ def test_windows_client_deploy_end_to_end(
         deploy_flow.stop_listening_ports(server_host, [51080, 51180])
     with deploy_flow.timed("xp2p client remove"):
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+    with deploy_flow.timed("xp2p server remove"):
+        xp2p_server_runner("server", "remove", "--ignore-missing")
     with deploy_flow.timed("remove client config/state"):
         deploy_flow.remove_paths(client_host, [deploy_assert.CLIENT_CONFIG_DIR, *deploy_assert.CLIENT_STATE_FILES])
-    with deploy_flow.timed("remove server config/state"):
-        deploy_flow.remove_paths(server_host, [deploy_assert.SERVER_CONFIG_DIR, *deploy_assert.SERVER_STATE_FILES])
+    with deploy_flow.timed("cleanup server config/state"):
+        win_env.cleanup_xp2p_install(
+            server_host,
+            config_dirs=[deploy_assert.SERVER_CONFIG_DIR],
+            state_files=deploy_assert.SERVER_STATE_FILES,
+        )
 
     with deploy_flow.timed("remove heartbeat state"):
         for host in (client_host, server_host):
@@ -219,6 +225,7 @@ def test_windows_client_deploy_end_to_end(
         deploy_flow.stop_xp2p_processes(client_host)
         deploy_flow.stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+        xp2p_server_runner("server", "remove", "--ignore-missing")
         deploy_flow.set_firewall_rule(
             server_host,
             ensure="Absent",

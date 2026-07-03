@@ -28,7 +28,7 @@ def run_xp2p(
 ) -> CommandResult:
     from . import env as _env
 
-    effective_timeout = _env.DEFAULT_XP2P_COMMAND_TIMEOUT if timeout is None else timeout
+    effective_timeout = _xp2p_command_timeout(args, timeout)
 
     def _run(attempt_host: Host) -> CommandResult:
         timeout_marker, guest_timeout_marker = _xp2p_timeout_marker()
@@ -157,6 +157,16 @@ def _xp2p_requires_admin(args: Iterable[str]) -> bool:
     if parts[idx] in {"client", "server"} and idx + 1 < len(parts):
         return parts[idx + 1] in _env.ADMIN_XP2P_SUBCOMMANDS
     return False
+
+def _xp2p_command_timeout(args: Iterable[str], timeout: int | float | None) -> int | float:
+    from . import env as _env
+
+    if timeout is not None:
+        return timeout
+    parts = [str(arg).strip().lower() for arg in args if str(arg).strip()]
+    if len(parts) >= 2 and parts[0] in {"client", "server"} and parts[1] == "install":
+        return 240
+    return _env.DEFAULT_XP2P_COMMAND_TIMEOUT
 
 def _xp2p_timeout_marker() -> tuple[Path, Path]:
     from . import env as _env
