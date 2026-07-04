@@ -10,6 +10,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
 
 func TestServerAddForwardUpdatesState(t *testing.T) {
@@ -19,13 +20,14 @@ func TestServerAddForwardUpdatesState(t *testing.T) {
 		t.Fatalf("write server config: %v", err)
 	}
 	extensionsDir := filepath.Join(dir, layout.ServerConfigDir)
+	_, basePort := testutil.FreePort(t)
 
 	result, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultServerConfigDir,
 		Target:        "198.51.100.5:7000",
 		ListenAddress: "127.0.0.1",
-		BasePort:      52000,
+		BasePort:      basePort,
 		Protocol:      forward.ProtocolUDP,
 	})
 	if err != nil {
@@ -65,13 +67,14 @@ func TestServerRemoveForwardClearsState(t *testing.T) {
 		t.Fatalf("write server config: %v", err)
 	}
 	extensionsDir := filepath.Join(dir, layout.ServerConfigDir)
+	_, basePort := testutil.FreePort(t)
 
 	addRes, err := AddForward(ForwardAddOptions{
 		InstallDir:    dir,
 		ConfigDir:     DefaultServerConfigDir,
 		Target:        "198.51.100.6:9000",
 		ListenAddress: "127.0.0.1",
-		BasePort:      53000,
+		BasePort:      basePort,
 		Protocol:      forward.ProtocolBoth,
 	})
 	if err != nil {

@@ -212,6 +212,56 @@ func TestTryApplyRoutingPendingAppliesInboundDiff(t *testing.T) {
 	}
 }
 
+func TestTryApplyRoutingPendingAppliesSocksInboundReplacement(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	current := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{"tag": "socks-in", "listen": "127.0.0.1", "port": 51180, "protocol": "socks", "settings": {"udp": true}}
+		]
+	}`)
+	candidate := []byte(`{
+		"api": {"listen": "127.0.0.1:10085"},
+		"inbounds": [
+			{"tag": "socks-in", "listen": "0.0.0.0", "port": 51180, "protocol": "socks", "settings": {"udp": true}}
+		]
+	}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"role":"client","tun_enabled":false}`))
+	applier := newTestInboundApplier("socks-in")
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{XrayJSON: candidate, MetaJSON: []byte(`{"role":"client","tun_enabled":false}`)}, nil
+	}
+	opts.NewInbound = func(_ context.Context, address string) (runtimeapply.InboundApplier, func() error, error) {
+		if address != "127.0.0.1:10085" {
+			t.Fatalf("address = %q", address)
+		}
+		return applier, func() error { return nil }, nil
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyApplied {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyApplied)
+	}
+	if _, err := os.Stat(opts.RequestPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected request removed, stat err=%v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatalf("read live xray: %v", err)
+	}
+	if string(got) != string(candidate) {
+		t.Fatalf("live xray mismatch: %s", string(got))
+	}
+	wantCalls := []string{"remove:socks-in", "add:socks-in"}
+	if !reflect.DeepEqual(applier.calls, wantCalls) {
+		t.Fatalf("calls = %v, want %v", applier.calls, wantCalls)
+	}
+}
+
 func TestTryApplyRoutingPendingRequiresServiceLayerForTunModeChange(t *testing.T) {
 	root := t.TempDir()
 	opts := testOptions(t, root, apply.RoleClient)

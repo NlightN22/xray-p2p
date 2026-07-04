@@ -39,6 +39,10 @@ var allowedDokodemoSettingsFields = map[string]struct{}{
 	"followRedirect": {},
 }
 
+var allowedSocksSettingsFields = map[string]struct{}{
+	"udp": {},
+}
+
 var allowedInboundTLSSettingsFields = map[string]struct{}{
 	"certificates": {},
 }
@@ -72,6 +76,8 @@ func InboundFromMap(inbound map[string]any) (*coreconfig.InboundHandlerConfig, e
 	switch protocol {
 	case "dokodemo-door":
 		result, err = dokodemoInboundFromMap(inbound, tag, listenAddr, listenPort)
+	case "socks":
+		result, err = socksInboundFromMap(inbound, tag, listenAddr, listenPort)
 	case "trojan":
 		result, err = trojanInboundFromMap(inbound, tag, listenAddr, listenPort)
 	case "vless":
@@ -135,6 +141,33 @@ func dokodemoInboundFromMap(inbound map[string]any, tag string, listenAddr *comm
 		Tag:              tag,
 		ReceiverSettings: receiver,
 		ProxySettings:    proxy,
+	}, nil
+}
+
+func socksInboundFromMap(inbound map[string]any, tag string, listenAddr *commonnet.IPOrDomain, listenPort uint32) (*coreconfig.InboundHandlerConfig, error) {
+	settings, ok := inbound["settings"].(map[string]any)
+	if !ok {
+		return nil, errors.New("socks settings are required")
+	}
+	if err := rejectUnknownKeys(settings, allowedSocksSettingsFields, "socks settings"); err != nil {
+		return nil, err
+	}
+	udpEnabled, _ := settings["udp"].(bool)
+	receiver, err := typedMessage(&proxymanconfig.ReceiverConfig{
+		PortList: &commonnet.PortList{Range: []*commonnet.PortRange{{
+			From: listenPort,
+			To:   listenPort,
+		}}},
+		Listen: listenAddr,
+	})
+	if err != nil {
+		return nil, err
+	}
+	proxy := protowire.AppendVarint(protowire.AppendTag(nil, 4, protowire.VarintType), boolWire(udpEnabled))
+	return &coreconfig.InboundHandlerConfig{
+		Tag:              tag,
+		ReceiverSettings: receiver,
+		ProxySettings:    &commonserial.TypedMessage{Type: "xray.proxy.socks.ServerConfig", Value: proxy},
 	}, nil
 }
 
@@ -219,6 +252,13 @@ func vlessInboundAccount(client map[string]any) (*commonserial.TypedMessage, err
 		return nil, errors.New("vless inbound id is required")
 	}
 	return &commonserial.TypedMessage{Type: "xray.proxy.vless.Account", Value: vlessAccount(id, stringFromAny(client["flow"]), "none")}, nil
+}
+
+func boolWire(value bool) uint64 {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func inboundReceiver(listenAddr *commonnet.IPOrDomain, listenPort uint32, inbound map[string]any) (*commonserial.TypedMessage, error) {

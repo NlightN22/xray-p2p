@@ -94,6 +94,34 @@ func TestInboundFromMapRejectsFollowRedirect(t *testing.T) {
 	}
 }
 
+func TestInboundFromMapConvertsSocksInbound(t *testing.T) {
+	inbound, err := InboundFromMap(map[string]any{
+		"tag":      "socks-in",
+		"listen":   "127.0.0.1",
+		"port":     float64(51180),
+		"protocol": "socks",
+		"settings": map[string]any{
+			"udp": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("InboundFromMap: %v", err)
+	}
+	if inbound.GetTag() != "socks-in" {
+		t.Fatalf("tag = %q", inbound.GetTag())
+	}
+	receiver := decodeReceiver(t, inbound.GetReceiverSettings())
+	if got := receiver.GetPortList().GetRange()[0].GetFrom(); got != 51180 {
+		t.Fatalf("listen port = %d", got)
+	}
+	if inbound.GetProxySettings().GetType() != "xray.proxy.socks.ServerConfig" {
+		t.Fatalf("proxy type = %q", inbound.GetProxySettings().GetType())
+	}
+	if len(inbound.GetProxySettings().GetValue()) == 0 {
+		t.Fatal("proxy settings are empty")
+	}
+}
+
 func TestInboundFromMapConvertsTrojanTLSInbound(t *testing.T) {
 	certPath, keyPath := testTLSPaths(t)
 	inbound, err := InboundFromMap(map[string]any{

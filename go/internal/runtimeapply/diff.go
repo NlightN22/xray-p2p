@@ -313,7 +313,7 @@ func classifyInbounds(currentInbounds, candidateInbounds []map[string]any) (Diff
 func runtimeInboundProtocolSupported(inbound map[string]any) bool {
 	protocol, _ := inbound["protocol"].(string)
 	switch strings.TrimSpace(protocol) {
-	case "dokodemo-door", "trojan", "vless":
+	case "dokodemo-door", "socks", "trojan", "vless":
 		return true
 	default:
 		return false
