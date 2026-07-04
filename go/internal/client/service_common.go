@@ -150,10 +150,42 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		}
 		return Run(runCtx, baseRunOpts)
 	}); err != nil {
+		if markerErr := writeApplyErrorForExistingRequest(apply.RoleClient, err); markerErr != nil {
+			logging.Warn("xp2p client service: apply error write failed", "err", markerErr)
+		}
 		restoreFullTunnelOnStop(installDir, configDirName)
 		return fmt.Errorf("xp2p client service: %w", err)
 	}
 	restoreFullTunnelOnStop(installDir, configDirName)
+	return nil
+}
+
+func writeApplyErrorForExistingRequest(role string, reason error) error {
+	if reason == nil {
+		return nil
+	}
+	req, exists, err := apply.ReadRequest(config.ApplyRequestPath())
+	if err != nil {
+		return err
+	}
+	if !exists {
+		req, err = apply.NewRequest(role)
+		if err != nil {
+			return err
+		}
+		if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
+			return err
+		}
+	} else if !req.MatchesRole(role) {
+		return nil
+	}
+	if err := apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
+		RequestID: req.ID,
+		Role:      role,
+		Reason:    reason.Error(),
+	}, config.AuditLogPath()); err != nil {
+		return err
+	}
 	return nil
 }
 
