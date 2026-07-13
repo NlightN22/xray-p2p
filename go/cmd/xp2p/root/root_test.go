@@ -116,6 +116,27 @@ key = "C:\\certs\\server.key"
 	}
 }
 
+func TestServiceRunIgnoresInvalidConfig(t *testing.T) {
+	cases := []struct {
+		name string
+		path []string
+		want bool
+	}{
+		{name: "client service run", path: []string{"client", "service", "run"}, want: true},
+		{name: "server service run", path: []string{"server", "service", "run"}, want: true},
+		{name: "server run", path: []string{"server", "run"}, want: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := commandPath(tc.path...)
+			if got := shouldIgnoreInvalidConfig(cmd); got != tc.want {
+				t.Fatalf("shouldIgnoreInvalidConfig(%q)=%v, want %v", cmd.CommandPath(), got, tc.want)
+			}
+		})
+	}
+}
+
 func chdirTemp(t *testing.T) {
 	t.Helper()
 	oldWD, err := os.Getwd()
@@ -141,4 +162,15 @@ func writeFile(t *testing.T, path, content string) {
 
 func newRootCmd() *cobra.Command {
 	return &cobra.Command{Use: "xp2p"}
+}
+
+func commandPath(names ...string) *cobra.Command {
+	root := newRootCmd()
+	parent := root
+	for _, name := range names {
+		child := &cobra.Command{Use: name}
+		parent.AddCommand(child)
+		parent = child
+	}
+	return parent
 }

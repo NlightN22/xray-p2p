@@ -116,6 +116,24 @@ func TestWriteApplyErrorForEarlyFailureCreatesRequest(t *testing.T) {
 	}
 }
 
+func TestRecordServerBootstrapApplyErrorWritesMarker(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+
+	recordServerBootstrapApplyError(os.ErrInvalid)
+
+	marker, exists, err := apply.ReadError(config.ApplyErrorPath())
+	if err != nil {
+		t.Fatalf("ReadError: %v", err)
+	}
+	if !exists {
+		t.Fatal("expected apply.error to be written")
+	}
+	if marker.Role != apply.RoleServer || marker.RequestID == "" || marker.Reason == "" {
+		t.Fatalf("unexpected marker: %+v", marker)
+	}
+}
+
 func writeConfigFiles(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err

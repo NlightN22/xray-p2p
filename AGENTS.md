@@ -95,6 +95,7 @@ This repository delivers a minimal Trojan tunnel based on **xray-core**.
 - Tests must read Desired inputs only when asserting staged configuration changes.
 - Tests must read live config when asserting runtime behavior or service state.
 - Failure dumps should include the full `.state` tree structure (live/lkg/apply.request/apply.error) when available.
+- For Vagrant test environments, use the Makefile start/stop/provision targets first (`up-*`, `halt-*`, `provision-*`, or the closest existing target). Run direct `vagrant` commands only after the Makefile path fails, is missing for the needed action, or needs diagnosis.
 - When asked to "run tests" without a specific file/test, run the full suite for the requested platform directory as a single pytest run (`tests/host/win`, `tests/host/linux`, or `tests/host/openwrt`), not one-by-one files.
 - Always run pytest with `-vv -s` and tee output into `.logs/tests/` using a timestamped filename.
 - Example (Linux): `pytest tests\\host\\linux -vv -s 2>&1 | Tee-Object -FilePath (".\\.logs\\tests\\pytest-linux-all-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))`

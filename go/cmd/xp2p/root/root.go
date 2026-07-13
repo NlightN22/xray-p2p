@@ -135,6 +135,8 @@ func shouldIgnoreInvalidConfig(cmd *cobra.Command) bool {
 	switch cmd.CommandPath() {
 	case "xp2p client install", "xp2p server install":
 		return hasForceArg()
+	case "xp2p client service run", "xp2p server service run":
+		return true
 	default:
 		return false
 	}

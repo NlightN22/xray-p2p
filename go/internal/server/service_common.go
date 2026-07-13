@@ -40,12 +40,7 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err := os.MkdirAll(desiredConfigDir, 0o755); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
-	if err := StageLegacyCredentialRotation(ctx); err != nil {
-		if markerErr := writeApplyErrorForExistingRequest(apply.RoleServer, err); markerErr != nil {
-			logging.Warn("xp2p server bootstrap: apply error write failed", "err", markerErr)
-		}
-		return fmt.Errorf("force rotate legacy credentials: %w", err)
-	}
+	recordServerBootstrapApplyError(StageLegacyCredentialRotation(ctx))
 	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName), AllowInvalid: true})
 	if err != nil {
 		return err
@@ -156,6 +151,9 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		}
 		return Run(runCtx, runOpts)
 	}); err != nil {
+		if markerErr := writeApplyErrorForExistingRequest(apply.RoleServer, err); markerErr != nil {
+			logging.Warn("xp2p server service: apply error write failed", "err", markerErr)
+		}
 		return fmt.Errorf("xp2p server service: %w", err)
 	}
 	return nil
@@ -188,6 +186,17 @@ func writeApplyErrorForExistingRequest(role string, reason error) error {
 		return err
 	}
 	return nil
+}
+
+func recordServerBootstrapApplyError(err error) {
+	if err == nil {
+		return
+	}
+	if markerErr := writeApplyErrorForExistingRequest(apply.RoleServer, err); markerErr != nil {
+		logging.Warn("xp2p server bootstrap: apply error write failed", "err", markerErr)
+		return
+	}
+	logging.Warn("xp2p server bootstrap: legacy credential rotation skipped", "err", err)
 }
 
 func handleServerApplyRequestChange(ctx context.Context, path string) (service.WatchFileAction, error) {
