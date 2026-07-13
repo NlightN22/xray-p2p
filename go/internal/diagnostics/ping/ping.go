@@ -6,6 +6,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -27,6 +28,7 @@ type Options struct {
 	Continuous           bool
 	Reporter             Reporter
 	Silent               bool
+	HTTPClient           *http.Client
 }
 
 // Reporter is invoked when an HTTPS ping succeeds.

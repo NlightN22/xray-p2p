@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -22,9 +23,12 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEndpointRecord, secret string, payload heartbeat.Payload, timeout time.Duration, socksAddress string) error {
+func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEndpointRecord, secret string, payload heartbeat.Payload, socksAddress string, client *http.Client) error {
 	if strings.TrimSpace(socksAddress) == "" {
 		return errors.New("SOCKS tunnel is required for client heartbeat")
+	}
+	if client == nil {
+		return errors.New("control HTTP client is required")
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -41,11 +45,14 @@ func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEn
 			return err
 		}
 	}
-	resp, err := controlHTTPClientThroughSocks(endpoint, timeout, socksAddress).Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20)); err != nil {
+		return err
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("control heartbeat failed: %s", resp.Status)
 	}

@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -28,6 +29,8 @@ type heartbeatRunner struct {
 	timeout   time.Duration
 	port      int
 	socks     string
+	backoff   map[string]heartbeatBackoff
+	clients   map[string]*http.Client
 }
 
 func startHeartbeatLoop(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) func() {
@@ -46,6 +49,7 @@ func startHeartbeatLoop(ctx context.Context, installDir, configDir string, opts 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer runner.closeIdleHeartbeatClients()
 		runner.loop(hbCtx)
 	}()
 
@@ -64,6 +68,7 @@ func runHeartbeatOnce(ctx context.Context, installDir, configDir string, opts He
 		logging.Debug("client heartbeat once skipped", "err", err)
 		return
 	}
+	defer runner.closeIdleHeartbeatClients()
 	runner.runOnce(ctx)
 }
 
@@ -119,6 +124,8 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		timeout:   timeout,
 		port:      port,
 		socks:     socks,
+		backoff:   map[string]heartbeatBackoff{},
+		clients:   map[string]*http.Client{},
 	}, nil
 }
 
@@ -141,6 +148,7 @@ func (r *heartbeatRunner) runOnce(ctx context.Context) {
 		state := runtimeDesiredToClientInstallState(meta.Desired)
 		r.endpoints = append(r.endpoints[:0], state.Endpoints...)
 		r.auth = controlAuthMap(meta.Control.AuthUsers)
+		r.pruneHeartbeatControlClients(r.endpoints)
 	} else {
 		logging.Debug("client heartbeat metadata refresh failed", "err", err)
 	}
@@ -149,6 +157,9 @@ func (r *heartbeatRunner) runOnce(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		default:
+		}
+		if r.endpointInBackoff(endpoint, time.Now()) {
+			continue
 		}
 		r.pingEndpoint(ctx, endpoint, idx)
 	}
@@ -165,6 +176,7 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 	}
 	port := DiagnosticsMarkerPort
 	reporter := heartbeatPingReporter{}
+	client := r.heartbeatControlClient(endpoint)
 	if err := ping.Run(ctx, targetHost, ping.Options{
 		Count:                1,
 		Timeout:              r.timeout,
@@ -177,8 +189,10 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		PinnedPeerCertSHA256: endpoint.PinnedPeerCertSHA256,
 		Reporter:             &reporter,
 		Silent:               true,
+		HTTPClient:           client,
 	}); err != nil {
 		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+		r.recordHeartbeatFailure(endpoint)
 		r.updateLocalHeartbeat(endpoint, false, 0)
 		r.recordEndpointHealth(endpoint, false)
 		return
@@ -192,12 +206,14 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		Timestamp: time.Now().UTC(),
 		RTTMillis: rttMillis,
 	}
-	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.timeout, r.socks); err != nil {
+	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.socks, client); err != nil {
 		logging.Debug("client heartbeat report failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+		r.recordHeartbeatFailure(endpoint)
 		r.updateLocalHeartbeat(endpoint, false, 0)
 		r.recordEndpointHealth(endpoint, false)
 		return
 	}
+	r.recordHeartbeatSuccess(endpoint)
 	r.updateLocalHeartbeat(endpoint, true, rttMillis)
 	r.recordEndpointHealth(endpoint, true)
 }

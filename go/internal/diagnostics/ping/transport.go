@@ -38,7 +38,10 @@ func pingHTTPS(ctx context.Context, addr string, timeout time.Duration, seq int,
 			return 0, err
 		}
 	}
-	client := &http.Client{Transport: httpTransport(opts, timeout), Timeout: timeout}
+	client := opts.HTTPClient
+	if client == nil {
+		client = &http.Client{Transport: httpTransport(opts, timeout), Timeout: timeout}
+	}
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {

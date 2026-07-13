@@ -95,6 +95,112 @@ func TestHeartbeatRunnerMarksSuccessfulTunnelHeartbeatAlive(t *testing.T) {
 	}
 }
 
+func TestHeartbeatRunnerBackoffSkipsFailedEndpoint(t *testing.T) {
+	runner := &heartbeatRunner{
+		interval: time.Second,
+		timeout:  1500 * time.Millisecond,
+	}
+	endpoint := clientEndpointRecord{
+		Hostname: "edge.example",
+		Tag:      "proxy-edge",
+		User:     "alice",
+	}
+
+	runner.recordHeartbeatFailure(endpoint)
+
+	if !runner.endpointInBackoff(endpoint, time.Now()) {
+		t.Fatal("expected endpoint to be skipped while backoff is active")
+	}
+	if runner.heartbeatBackoffDelay(1) != 1500*time.Millisecond {
+		t.Fatalf("expected timeout-sized first backoff, got %s", runner.heartbeatBackoffDelay(1))
+	}
+}
+
+func TestHeartbeatRunnerBackoffClearsAfterSuccess(t *testing.T) {
+	runner := &heartbeatRunner{interval: time.Second}
+	endpoint := clientEndpointRecord{Tag: "proxy-edge", User: "alice"}
+
+	runner.recordHeartbeatFailure(endpoint)
+	runner.recordHeartbeatSuccess(endpoint)
+
+	if runner.endpointInBackoff(endpoint, time.Now()) {
+		t.Fatal("expected success to clear endpoint backoff")
+	}
+}
+
+func TestHeartbeatRunnerBackoffDelayIsCapped(t *testing.T) {
+	runner := &heartbeatRunner{
+		interval: 5 * time.Second,
+		timeout:  5 * time.Second,
+	}
+
+	if got := runner.heartbeatBackoffDelay(8); got != 30*time.Second {
+		t.Fatalf("expected capped backoff of 30s, got %s", got)
+	}
+}
+
+func TestHeartbeatRunnerReusesControlClient(t *testing.T) {
+	runner := &heartbeatRunner{
+		timeout: time.Second,
+		socks:   "127.0.0.1:1080",
+	}
+	endpoint := clientEndpointRecord{
+		Tag:                  "proxy-edge",
+		User:                 "alice",
+		ServerName:           "edge.example",
+		AllowInsecure:        true,
+		PinnedPeerCertSHA256: "abc",
+	}
+
+	first := runner.heartbeatControlClient(endpoint)
+	second := runner.heartbeatControlClient(endpoint)
+	if first == nil || first != second {
+		t.Fatal("expected heartbeat control client to be reused")
+	}
+	if len(runner.clients) != 1 {
+		t.Fatalf("expected one cached client, got %d", len(runner.clients))
+	}
+}
+
+func TestHeartbeatRunnerSeparatesControlClientsByTLSSettings(t *testing.T) {
+	runner := &heartbeatRunner{
+		timeout: time.Second,
+		socks:   "127.0.0.1:1080",
+	}
+	endpoint := clientEndpointRecord{Tag: "proxy-edge", User: "alice", ServerName: "edge.example"}
+
+	first := runner.heartbeatControlClient(endpoint)
+	endpoint.PinnedPeerCertSHA256 = "def"
+	second := runner.heartbeatControlClient(endpoint)
+
+	if first == second {
+		t.Fatal("expected distinct clients for distinct TLS settings")
+	}
+	if len(runner.clients) != 2 {
+		t.Fatalf("expected two cached clients, got %d", len(runner.clients))
+	}
+}
+
+func TestHeartbeatRunnerPrunesStaleControlClients(t *testing.T) {
+	runner := &heartbeatRunner{
+		timeout: time.Second,
+		socks:   "127.0.0.1:1080",
+	}
+	active := clientEndpointRecord{Tag: "active", User: "alice"}
+	stale := clientEndpointRecord{Tag: "stale", User: "alice"}
+
+	runner.heartbeatControlClient(active)
+	runner.heartbeatControlClient(stale)
+	runner.pruneHeartbeatControlClients([]clientEndpointRecord{active})
+
+	if len(runner.clients) != 1 {
+		t.Fatalf("expected one cached client after prune, got %d", len(runner.clients))
+	}
+	if runner.clients[heartbeatControlClientKey(active, runner.socks, runner.timeout)] == nil {
+		t.Fatal("expected active client to remain cached")
+	}
+}
+
 func writeHeartbeatRuntimeMeta(t *testing.T, dir string) {
 	t.Helper()
 	meta := runtimeMeta{

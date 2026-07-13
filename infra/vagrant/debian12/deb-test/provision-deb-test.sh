@@ -9,11 +9,16 @@ APT_PACKAGES="
   curl
   debhelper
   git
+  iperf3
   iptables
+  iproute2
+  iputils-ping
   lintian
   ldap-utils
   nftables
   pkg-config
+  procps
+  psmisc
   qemu-user-static
   rpm
   rsync
