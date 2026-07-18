@@ -7,7 +7,12 @@ on:
       - "go/**"
       - "go.mod"
       - "go.sum"
+      - "package.json"
+      - "package-lock.json"
+      - "schemas/**"
       - "scripts/**"
+      - "taplo.toml"
+      - "tests/schema/**"
       - "distro/**"
       - ".github/workflows/ci.yml"
   pull_request:
@@ -15,7 +20,12 @@ on:
       - "go/**"
       - "go.mod"
       - "go.sum"
+      - "package.json"
+      - "package-lock.json"
+      - "schemas/**"
       - "scripts/**"
+      - "taplo.toml"
+      - "tests/schema/**"
       - "distro/**"
       - ".github/workflows/ci.yml"
 
@@ -44,6 +54,18 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: npm ci
+        run: npm ci
+
+      - name: Taplo schema lint
+        run: npm run lint:config-schema
 
       - name: go test
         run: |

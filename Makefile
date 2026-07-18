@@ -36,6 +36,7 @@ fmt:
 
 lint:
 	go vet ./...
+	npm run lint:config-schema
 
 test:
 	powershell -NoProfile -Command "go clean -testcache ; go test ./... -cover"
