@@ -19,6 +19,15 @@ By default, it loads `xp2p-client.toml` and `xp2p-server.toml` from the config r
 
 Settings map 1:1 to environment variables via the `XP2P_` prefix (`XP2P_SERVER_INSTALL_DIR`, `XP2P_CLIENT_SERVER_ADDRESS`, etc.). A sample file lives at `config_templates/xp2p.example.yaml`.
 
+## Editor schema
+
+The repository includes Taplo-compatible JSON schemas for TOML Desired inputs:
+
+- `schemas/xp2p-client.schema.json`
+- `schemas/xp2p-server.schema.json`
+
+VS Code with the Taplo extension reads `taplo.toml` from the repository root and applies these schemas to `xp2p-client.toml` and `xp2p-server.toml`. The schemas cover xp2p TOML inputs only; they do not validate generated Xray JSON artifacts.
+
 ## Global flags
 
 Every command shares global flags such as `--config`, `--log-level` (`debug|info|warn|error`), `--log-json`, and `--version`.

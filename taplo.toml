@@ -1,0 +1,16 @@
+[formatting]
+align_entries = false
+array_auto_expand = true
+array_auto_collapse = false
+compact_arrays = false
+compact_inline_tables = false
+indent_string = "  "
+reorder_keys = false
+
+[[rule]]
+include = ["**/xp2p-client.toml"]
+schema.path = "schemas/xp2p-client.schema.json"
+
+[[rule]]
+include = ["**/xp2p-server.toml"]
+schema.path = "schemas/xp2p-server.schema.json"

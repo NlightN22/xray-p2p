@@ -19,6 +19,15 @@
 
 Настройки сопоставляются 1:1 с переменными окружения через префикс `XP2P_` (`XP2P_SERVER_INSTALL_DIR`, `XP2P_CLIENT_SERVER_ADDRESS` и т.д.). Пример файла лежит в `config_templates/xp2p.example.yaml`.
 
+## Editor schema
+
+В репозитории есть Taplo-compatible JSON schemas для TOML Desired inputs:
+
+- `schemas/xp2p-client.schema.json`
+- `schemas/xp2p-server.schema.json`
+
+VS Code с Taplo extension читает `taplo.toml` из корня репозитория и применяет эти схемы к `xp2p-client.toml` и `xp2p-server.toml`. Схемы описывают только xp2p TOML inputs; они не валидируют generated Xray JSON artifacts.
+
 ## Глобальные флаги
 
 У всех команд есть общие глобальные флаги: `--config`, `--log-level` (`debug|info|warn|error`), `--log-json`, `--version`.
