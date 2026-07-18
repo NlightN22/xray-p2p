@@ -5,6 +5,7 @@ package identitysync
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -60,13 +61,24 @@ func (f ConfigFetcher) fetchLDAP(ctx context.Context, provider ProviderRef) (Sna
 }
 
 func (f ConfigFetcher) ldapSearch(ctx context.Context, ldap config.LDAPProviderConfig, filter string, attrs ...string) ([]ldifEntry, error) {
+	if timeout, err := time.ParseDuration(strings.TrimSpace(ldap.Timeout)); err == nil && timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 	args := []string{"-LLL", "-x", "-H", ldap.URL}
 	if strings.TrimSpace(ldap.BindDN) != "" {
 		args = append(args, "-D", ldap.BindDN, "-w", f.Config.Secret)
 	}
+	if ldap.PageSize > 0 {
+		args = append(args, "-E", fmt.Sprintf("pr=%d/noprompt", ldap.PageSize))
+	}
 	args = append(args, "-b", ldap.BaseDN, filter)
 	args = append(args, attrs...)
 	cmd := exec.CommandContext(ctx, "ldapsearch", args...)
+	if ldap.InsecureTLS {
+		cmd.Env = append(cmd.Environ(), "LDAPTLS_REQCERT=never")
+	}
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
@@ -76,6 +88,9 @@ func (f ConfigFetcher) ldapSearch(ctx context.Context, ldap config.LDAPProviderC
 			detail = err.Error()
 		}
 		return nil, fmt.Errorf("ldap search failed: %s", detail)
+	}
+	if partialLDAPOutput(stderr.String()) || partialLDAPOutput(out.String()) {
+		return nil, errors.New("ldap search returned a partial snapshot")
 	}
 	return parseLDIF(out.String()), nil
 }
@@ -94,13 +109,19 @@ func (f ConfigFetcher) fetchSCIM(ctx context.Context, provider ProviderRef) (Sna
 	if err != nil {
 		return Snapshot{}, err
 	}
-	var users []scimUser
-	if err := json.Unmarshal(usersBody, &users); err != nil {
+	users, complete, err := parseSCIMUsers(usersBody)
+	if err != nil {
 		return Snapshot{}, fmt.Errorf("parse scim users: %w", err)
 	}
-	var groups []scimGroup
-	if err := json.Unmarshal(groupsBody, &groups); err != nil {
+	if !complete {
+		return Snapshot{Provider: provider, Complete: false}, nil
+	}
+	groups, complete, err := parseSCIMGroups(groupsBody)
+	if err != nil {
 		return Snapshot{}, fmt.Errorf("parse scim groups: %w", err)
+	}
+	if !complete {
+		return Snapshot{Provider: provider, Complete: false}, nil
 	}
 	snapshot := Snapshot{Provider: provider, Complete: true}
 	for _, user := range users {
@@ -121,9 +142,12 @@ func (f ConfigFetcher) fetchSCIM(ctx context.Context, provider ProviderRef) (Sna
 		if err != nil {
 			return Snapshot{}, err
 		}
-		var members []scimUser
-		if err := json.Unmarshal(membersBody, &members); err != nil {
+		members, complete, err := parseSCIMUsers(membersBody)
+		if err != nil {
 			return Snapshot{}, fmt.Errorf("parse scim group members: %w", err)
+		}
+		if !complete {
+			return Snapshot{Provider: provider, Complete: false}, nil
 		}
 		item := SnapshotGroup{ID: group.Name, DisplayName: group.Name}
 		for _, member := range members {
@@ -149,7 +173,11 @@ func (f ConfigFetcher) scimGet(ctx context.Context, url string) ([]byte, error) 
 	if token := firstIdentityValue(f.Config.SCIM.Token, f.Config.Secret); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	client := http.Client{Timeout: timeout}
+	transport := http.DefaultTransport
+	if f.Config.SCIM.InsecureTLS {
+		transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} //nolint:gosec
+	}
+	client := http.Client{Timeout: timeout, Transport: transport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -160,6 +188,16 @@ func (f ConfigFetcher) scimGet(ctx context.Context, url string) ([]byte, error) 
 		return nil, fmt.Errorf("scim request failed: %s", resp.Status)
 	}
 	return body, nil
+}
+
+func partialLDAPOutput(raw string) bool {
+	text := strings.ToLower(raw)
+	for _, marker := range []string{"size limit exceeded", "time limit exceeded", "administrative limit exceeded"} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 type ldifEntry map[string][]string
@@ -258,4 +296,50 @@ type scimUser struct {
 type scimGroup struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+}
+
+type scimList[T any] struct {
+	Resources    []T `json:"Resources"`
+	TotalResults int `json:"totalResults"`
+	StartIndex   int `json:"startIndex"`
+	ItemsPerPage int `json:"itemsPerPage"`
+}
+
+func parseSCIMUsers(body []byte) ([]scimUser, bool, error) {
+	var direct []scimUser
+	if err := json.Unmarshal(body, &direct); err == nil {
+		return direct, true, nil
+	}
+	var wrapped scimList[scimUser]
+	if err := json.Unmarshal(body, &wrapped); err != nil {
+		return nil, false, err
+	}
+	return wrapped.Resources, scimListComplete(wrapped), nil
+}
+
+func parseSCIMGroups(body []byte) ([]scimGroup, bool, error) {
+	var direct []scimGroup
+	if err := json.Unmarshal(body, &direct); err == nil {
+		return direct, true, nil
+	}
+	var wrapped scimList[scimGroup]
+	if err := json.Unmarshal(body, &wrapped); err != nil {
+		return nil, false, err
+	}
+	return wrapped.Resources, scimListComplete(wrapped), nil
+}
+
+func scimListComplete[T any](list scimList[T]) bool {
+	if list.TotalResults == 0 {
+		return true
+	}
+	start := list.StartIndex
+	if start <= 0 {
+		start = 1
+	}
+	page := list.ItemsPerPage
+	if page <= 0 {
+		page = len(list.Resources)
+	}
+	return start-1+page >= list.TotalResults && len(list.Resources) >= list.TotalResults-(start-1)
 }

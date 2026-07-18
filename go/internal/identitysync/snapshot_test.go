@@ -236,7 +236,7 @@ func TestServiceSyncAndApplyKeepsCurrentWhenRuntimeApplyFails(t *testing.T) {
 	}
 }
 
-func TestServiceSyncAndApplyPromotesStagedCandidateForNextStart(t *testing.T) {
+func TestServiceSyncAndApplyPublishesStagedCandidateAndKeepsTransactionForNextStart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	store := StoreAt(path)
 	service := Service{
@@ -260,8 +260,46 @@ func TestServiceSyncAndApplyPromotesStagedCandidateForNextStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if state.Current == nil || state.Pending != nil || state.Transaction != nil {
-		t.Fatalf("staged candidate was not promoted for next start: %+v", state)
+	if state.Current == nil || state.Pending == nil || state.Transaction == nil {
+		t.Fatalf("staged candidate was not visible and pending for next start: %+v", state)
+	}
+	if state.Current.ID != state.Pending.ID {
+		t.Fatalf("staged current does not match pending candidate: current=%+v pending=%+v", state.Current, state.Pending)
+	}
+	if state.Transaction.RuntimeResult != "" {
+		t.Fatalf("staged transaction should be confirmed by service apply, got %+v", state.Transaction)
+	}
+}
+
+func TestParseSCIMListReportsPartialPages(t *testing.T) {
+	_, complete, err := parseSCIMUsers([]byte(`{"totalResults":3,"startIndex":1,"itemsPerPage":2,"Resources":[{"id":"u1"},{"id":"u2"}]}`))
+	if err != nil {
+		t.Fatalf("parse scim users: %v", err)
+	}
+	if complete {
+		t.Fatalf("partial SCIM page was treated as complete")
+	}
+	groups, complete, err := parseSCIMGroups([]byte(`{"totalResults":1,"startIndex":1,"itemsPerPage":1,"Resources":[{"id":"g1","name":"engineering"}]}`))
+	if err != nil {
+		t.Fatalf("parse scim groups: %v", err)
+	}
+	if !complete || len(groups) != 1 || groups[0].Name != "engineering" {
+		t.Fatalf("complete SCIM page was not parsed: groups=%+v complete=%v", groups, complete)
+	}
+}
+
+func TestPartialLDAPOutputDetectsIncompleteSnapshots(t *testing.T) {
+	for _, raw := range []string{
+		"Size limit exceeded (4)",
+		"Time limit exceeded",
+		"Administrative limit exceeded",
+	} {
+		if !partialLDAPOutput(raw) {
+			t.Fatalf("partial LDAP output was not detected: %q", raw)
+		}
+	}
+	if partialLDAPOutput("result: 0 Success") {
+		t.Fatalf("successful LDAP output was treated as partial")
 	}
 }
 

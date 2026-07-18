@@ -92,7 +92,7 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 		logging.Warn("apply marker cleanup failed", "role", role, "err", err)
 	}
 	if role == apply.RoleServer {
-		if err := identitysync.DefaultStore().Recover(); err != nil {
+		if err := identitysync.DefaultStore().RecoverCommitted(hashServerStateDocIfExists(desiredConfig), hashLiveArtifactsIfExists()); err != nil {
 			return nil, false, req, err
 		}
 	}

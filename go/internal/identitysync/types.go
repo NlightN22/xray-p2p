@@ -40,6 +40,13 @@ type Transaction struct {
 	PreviousGenerationID  string `json:"previous_generation_id,omitempty"`
 	CandidateGenerationID string `json:"candidate_generation_id"`
 	StartedAt             string `json:"started_at"`
+	PreviousStateHash     string `json:"previous_state_hash,omitempty"`
+	CandidateStateHash    string `json:"candidate_state_hash,omitempty"`
+	PreviousDesiredHash   string `json:"previous_desired_hash,omitempty"`
+	CandidateDesiredHash  string `json:"candidate_desired_hash,omitempty"`
+	PreviousLiveHash      string `json:"previous_live_hash,omitempty"`
+	CandidateLiveHash     string `json:"candidate_live_hash,omitempty"`
+	RuntimeResult         string `json:"runtime_result,omitempty"`
 }
 
 type Status struct {

@@ -47,6 +47,9 @@ func (s Service) SyncAndApply(ctx context.Context, provider ProviderRef, apply f
 			_ = s.abortPendingLocked(applyErr.Error())
 			return applyErr
 		}
+		if result == "staged" {
+			return s.stageLocked()
+		}
 		return s.promoteLocked()
 	})
 	return status, result, err
@@ -87,12 +90,22 @@ func (s Service) prepareLocked(ctx context.Context, provider ProviderRef) (Statu
 	if state.Current != nil {
 		previousID = state.Current.ID
 	}
+	previousHash, err := HashJSON(state.Current)
+	if err != nil {
+		return Status{State: SyncStatusError, Error: err.Error()}, err
+	}
+	candidateHash, err := HashJSON(next)
+	if err != nil {
+		return Status{State: SyncStatusError, Error: err.Error()}, err
+	}
 	state.Provider = &provider
 	state.Pending = next
 	state.Transaction = &Transaction{
 		PreviousGenerationID:  previousID,
 		CandidateGenerationID: next.ID,
 		StartedAt:             nowUTCString(nowUTC()),
+		PreviousStateHash:     previousHash,
+		CandidateStateHash:    candidateHash,
 	}
 	state.Status = status
 	if err := store.Save(state); err != nil {
@@ -116,6 +129,24 @@ func (s Service) promoteLocked() error {
 	state.Current = state.Pending
 	state.Pending = nil
 	state.Transaction = nil
+	state.Status.State = SyncStatusSuccess
+	state.Status.Error = ""
+	return store.Save(state)
+}
+
+func (s Service) stageLocked() error {
+	store := s.store()
+	state, err := store.Load()
+	if err != nil {
+		return err
+	}
+	if state.Pending == nil || state.Transaction == nil {
+		return fmt.Errorf("identity pending generation is not available")
+	}
+	if state.Transaction.CandidateGenerationID != state.Pending.ID {
+		return fmt.Errorf("identity pending generation does not match transaction")
+	}
+	state.Current = state.Pending
 	state.Status.State = SyncStatusSuccess
 	state.Status.Error = ""
 	return store.Save(state)

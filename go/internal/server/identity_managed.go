@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -59,6 +60,10 @@ func provisionIdentityLocked(ctx context.Context, opts ProvisionIdentityOptions)
 	if err != nil {
 		return UserLink{}, err
 	}
+	previousDoc, err := cloneServerStateDoc(doc)
+	if err != nil {
+		return UserLink{}, err
+	}
 	desired, err := loadServerDesiredConfigFromPath(configPath)
 	if err != nil {
 		return UserLink{}, err
@@ -108,6 +113,9 @@ func provisionIdentityLocked(ctx context.Context, opts ProvisionIdentityOptions)
 		return UserLink{}, err
 	}
 	if err := store.SetProvisionedByLabel(label, true); err != nil {
+		if rollbackErr := commitServerRuntimeDoc(ctx, previousDoc); rollbackErr != nil {
+			return UserLink{}, fmt.Errorf("mark identity provisioned: %w; rollback failed: %v", err, rollbackErr)
+		}
 		return UserLink{}, err
 	}
 	return GetUserLink(ctx, UserLinkOptions{
@@ -117,6 +125,18 @@ func provisionIdentityLocked(ctx context.Context, opts ProvisionIdentityOptions)
 		UserID:     label,
 		Pending:    true,
 	})
+}
+
+func cloneServerStateDoc(doc map[string]any) (map[string]any, error) {
+	data, err := json.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	var clone map[string]any
+	if err := json.Unmarshal(data, &clone); err != nil {
+		return nil, err
+	}
+	return clone, nil
 }
 
 func clearManagedIdentityProvisioned(label string) error {

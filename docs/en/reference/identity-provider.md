@@ -270,20 +270,24 @@ changes:
 
 1. Build a candidate state in memory.
 2. Compile and validate the server candidate.
-3. Apply supported Xray changes through gRPC when the service is running.
-4. Verify the exact candidate routing rules, including `user` fields and order.
-5. Publish matching Live artifacts.
-6. Persist Desired inputs.
-7. Promote the identity generation.
+3. Record a transaction with previous and candidate identity, Desired, and Live
+   hashes.
+4. Apply supported Xray changes through gRPC when the service is running.
+5. Verify the exact candidate routing rules, including `user` fields and order.
+6. Publish matching Live artifacts.
+7. Persist Desired inputs.
+8. Promote the identity generation.
 
-If any step fails, the previous current generation, Desired inputs, and Live
-artifacts remain in place or an explicit recoverable `apply.error` is written.
-Desired must not advance before matching runtime and Live state has been
-verified.
+If any running-service step fails, the previous current generation, Desired
+inputs, and Live artifacts remain in place or an explicit recoverable
+`apply.error` is written. Desired must not advance before matching runtime and
+Live state has been verified.
 
 If the service is stopped, runtime-capable operations stage Desired inputs only
-and publish no fake Live success. The next service start compiles Desired into
-Live.
+and publish no fake Live success. The candidate generation is exposed as the
+current Desired identity read model, while its transaction remains pending until
+the next service start compiles Desired into Live and recovery confirms that the
+recorded candidate hashes match the actual Desired and Live artifacts.
 
 ## Limits
 

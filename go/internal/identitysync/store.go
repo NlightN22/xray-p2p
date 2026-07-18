@@ -24,6 +24,10 @@ func StoreAt(path string) Store {
 	return Store{path: filepath.Clean(path)}
 }
 
+func (s Store) IsZero() bool {
+	return strings.TrimSpace(s.path) == ""
+}
+
 func (s Store) Load() (State, error) {
 	if strings.TrimSpace(s.path) == "" {
 		return State{}, errors.New("identity state path is empty")
@@ -49,6 +53,14 @@ func (s Store) Load() (State, error) {
 }
 
 func (s Store) Recover() error {
+	return s.recoverWithHashes("", "")
+}
+
+func (s Store) RecoverCommitted(desiredHash, liveHash string) error {
+	return s.recoverWithHashes(desiredHash, liveHash)
+}
+
+func (s Store) recoverWithHashes(desiredHash, liveHash string) error {
 	state, err := s.Load()
 	if err != nil {
 		return err
@@ -56,7 +68,7 @@ func (s Store) Recover() error {
 	if state.Transaction == nil || state.Pending == nil {
 		return nil
 	}
-	if state.Transaction.CandidateGenerationID == state.Pending.ID {
+	if transactionPromotable(state.Transaction, state.Pending, desiredHash, liveHash) {
 		state.Current = state.Pending
 		state.Pending = nil
 		state.Transaction = nil
@@ -67,8 +79,31 @@ func (s Store) Recover() error {
 	state.Pending = nil
 	state.Transaction = nil
 	state.Status.State = SyncStatusError
-	state.Status.Error = "identity transaction recovery discarded mismatched pending generation"
+	state.Status.Error = "identity transaction recovery discarded unconfirmed pending generation"
 	return s.Save(state)
+}
+
+func transactionPromotable(tx *Transaction, pending *Generation, desiredHash, liveHash string) bool {
+	if tx == nil || pending == nil || tx.CandidateGenerationID != pending.ID {
+		return false
+	}
+	candidateHash, err := HashJSON(pending)
+	if err != nil || tx.CandidateStateHash != candidateHash {
+		return false
+	}
+	if tx.RuntimeResult != "applied" && tx.RuntimeResult != "noop" && tx.RuntimeResult != "staged" {
+		return false
+	}
+	if tx.CandidateDesiredHash == "" || tx.CandidateLiveHash == "" {
+		return false
+	}
+	if desiredHash == "" || liveHash == "" {
+		return false
+	}
+	if tx.CandidateDesiredHash != desiredHash || tx.CandidateLiveHash != liveHash {
+		return false
+	}
+	return true
 }
 
 func (s Store) Save(state State) error {
@@ -90,6 +125,20 @@ func (s Store) Save(state State) error {
 		return err
 	}
 	return nil
+}
+
+func (s Store) UpdateTransaction(update func(*Transaction) error) error {
+	state, err := s.Load()
+	if err != nil {
+		return err
+	}
+	if state.Transaction == nil {
+		return errors.New("identity transaction is not available")
+	}
+	if err := update(state.Transaction); err != nil {
+		return err
+	}
+	return s.Save(state)
 }
 
 func (s Store) DetachProvider() error {
@@ -141,6 +190,14 @@ func (s Store) UpdateCurrent(update func(*Generation) error) error {
 	}
 	if err := update(state.Current); err != nil {
 		return err
+	}
+	if state.Pending != nil && state.Transaction != nil && state.Pending.ID == state.Current.ID && state.Transaction.CandidateGenerationID == state.Current.ID {
+		state.Pending = state.Current
+		candidateHash, err := HashJSON(state.Current)
+		if err != nil {
+			return err
+		}
+		state.Transaction.CandidateStateHash = candidateHash
 	}
 	return s.Save(state)
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"github.com/NlightN22/xray-p2p/go/internal/usecase"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +16,7 @@ func newServerIdentityCmd(cfg commandConfig) *cobra.Command {
 	cmd := &cobra.Command{Use: "identity", Short: "Manage identity cache operations"}
 	cmd.AddCommand(
 		newServerIdentitySyncCmd(cfg),
-		newServerIdentityStatusCmd(),
+		newServerIdentityStatusCmd(cfg),
 		newServerIdentityProvisionCmd(cfg),
 		newServerIdentityDetachCmd(),
 		newServerIdentitySelectCmd(),
@@ -47,15 +48,51 @@ func newServerIdentitySyncCmd(cfg commandConfig) *cobra.Command {
 	}}
 }
 
-func newServerIdentityStatusCmd() *cobra.Command {
-	return &cobra.Command{Use: "status", Short: "Show identity cache status", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
-		state, err := identitysync.DefaultStore().Load()
+func newServerIdentityStatusCmd(cfg commandConfig) *cobra.Command {
+	return &cobra.Command{Use: "status", Short: "Show identity cache status", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		view, err := usecase.NewIdentityStatus(identitysync.DefaultStore()).
+			WithRedirects(serverIdentityRedirectLister{cfg: cfg()}).
+			View(commandContext(cmd))
 		if err != nil {
 			return err
 		}
-		printIdentityState(state)
+		printIdentityState(view)
 		return nil
 	}}
+}
+
+type serverIdentityRedirectLister struct {
+	cfg config.Config
+}
+
+func (l serverIdentityRedirectLister) ListIdentityRedirects(ctx context.Context) ([]usecase.IdentityRedirectView, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	records, err := server.ListRedirects(server.RedirectListOptions{
+		InstallDir: l.cfg.Server.InstallDir,
+		ConfigDir:  l.cfg.Server.ConfigDir,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]usecase.IdentityRedirectView, 0, len(records))
+	for _, record := range records {
+		state := "enabled"
+		if record.Disabled {
+			state = "disabled"
+		} else if record.DisabledByPolicy {
+			state = "disabled_by_policy"
+		}
+		out = append(out, usecase.IdentityRedirectView{
+			Type:        record.Type,
+			Value:       record.Value,
+			OutboundTag: record.Tag,
+			Host:        record.Hostname,
+			State:       state,
+		})
+	}
+	return out, nil
 }
 
 func newServerIdentityProvisionCmd(cfg commandConfig) *cobra.Command {
@@ -114,27 +151,27 @@ func providerFromConfig(cfgv config.Config) (identitysync.ProviderRef, error) {
 	return provider, provider.Validate()
 }
 
-func printIdentityState(state identitysync.State) {
-	fmt.Printf("status: %s\n", state.Status.State)
-	if state.Status.LastSuccess != "" {
-		fmt.Printf("last_success: %s\n", state.Status.LastSuccess)
+func printIdentityState(view usecase.IdentityStatusView) {
+	fmt.Printf("status: %s\n", view.Status)
+	if view.LastSuccess != "" {
+		fmt.Printf("last_success: %s\n", view.LastSuccess)
 	}
-	if state.Status.Error != "" {
-		fmt.Printf("error: %s\n", state.Status.Error)
+	if view.Error != "" {
+		fmt.Printf("error: %s\n", view.Error)
 	}
-	if state.Provider != nil {
-		fmt.Printf("provider: %s (%s)\n", state.Provider.InstanceID, state.Provider.Kind)
+	if view.ProviderID != "" {
+		fmt.Printf("provider: %s (%s)\n", view.ProviderID, view.ProviderKind)
 	}
-	if state.Current == nil {
+	if view.Generation == "" {
 		fmt.Println("current: none")
 		return
 	}
 	detached := ""
-	if state.Current.Detached {
+	if view.Detached {
 		detached = " detached"
 	}
-	fmt.Printf("generation: %s%s\n", state.Current.ID, detached)
-	for _, subject := range state.Current.Subjects {
+	fmt.Printf("generation: %s%s\n", view.Generation, detached)
+	for _, subject := range view.Subjects {
 		flags := []string{}
 		if subject.Provisioned {
 			flags = append(flags, "provisioned")
@@ -146,9 +183,12 @@ func printIdentityState(state identitysync.State) {
 		if len(flags) > 0 {
 			suffix = " [" + strings.Join(flags, ",") + "]"
 		}
-		fmt.Printf("user %s %s groups=%s%s\n", subject.UserLabel, subject.ExternalSubject, strings.Join(subject.DirectGroups, ","), suffix)
+		fmt.Printf("user %s %s groups=%s%s\n", subject.Label, subject.ExternalID, strings.Join(subject.DirectGroups, ","), suffix)
 	}
-	for _, group := range state.Current.Groups {
-		fmt.Printf("group %s members=%s groups=%s\n", group.ID, strings.Join(group.DirectMembers, ","), strings.Join(group.DirectGroups, ","))
+	for _, group := range view.Groups {
+		fmt.Printf("group %s members=%s groups=%s transitive_members=%s\n", group.ID, strings.Join(group.DirectMembers, ","), strings.Join(group.DirectGroups, ","), strings.Join(group.TransitiveMembers, ","))
+	}
+	for _, redirect := range view.Redirects {
+		fmt.Printf("redirect %s %s tag=%s host=%s state=%s\n", redirect.Type, redirect.Value, redirect.OutboundTag, redirect.Host, redirect.State)
 	}
 }
