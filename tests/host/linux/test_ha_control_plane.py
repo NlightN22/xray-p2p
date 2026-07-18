@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import time
+
 import pytest
 
 from tests.host.linux import _helpers as helpers
@@ -10,6 +13,8 @@ from tests.host.linux import _ha_control_plane_helpers as ha_helpers
 
 HA_REDIRECT_IP = "10.77.0.10"
 HA_REDIRECT_CIDR = f"{HA_REDIRECT_IP}/32"
+HA_SERVER_REDIRECT_CIDR = "10.77.20.0/24"
+HA_REVERSE_TAG = "ha-client-portal.rev"
 
 @pytest.mark.host
 @pytest.mark.linux
@@ -219,9 +224,13 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
     )
     ha_helpers.assert_generation_member(primary_host, "primary")
     ha_helpers.assert_generation_member(primary_host, "backup")
+    ha_helpers.ha(primary, "channel", "create", "client-portal", HA_REVERSE_TAG, HA_REVERSE_TAG)
+    ha_helpers.ha(primary, "redirect", "add", "client-portal", "--cidr", HA_SERVER_REDIRECT_CIDR)
 
     primary_isolated = False
     backup_isolated = False
+    client_api_rewritten = False
+    client_live_xray_before_api_rewrite = ""
     try:
         _add_redirect_target(primary_host, primary_interface)
         _add_redirect_target(backup_host, backup_interface)
@@ -238,12 +247,14 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
         runtime.wait_for_apply_clear(backup_host)
         try:
             ha_helpers.assert_server_live_subscription_topology(backup_host, ha_helpers.CLIENT_GROUP_TAG)
+            _assert_ha_server_resources(backup_host, backup, HA_REVERSE_TAG, HA_SERVER_REDIRECT_CIDR)
         except AssertionError as exc:
             pytest.fail(f"{exc}\n\n{ha_helpers.server_subscription_debug(backup_host)}")
 
         _start_service_debug(primary_host, primary, "server")
         try:
             ha_helpers.assert_server_live_subscription_topology(primary_host, ha_helpers.CLIENT_GROUP_TAG)
+            _assert_ha_server_resources(primary_host, primary, HA_REVERSE_TAG, HA_SERVER_REDIRECT_CIDR)
         except AssertionError as exc:
             pytest.fail(f"{exc}\n\n{ha_helpers.server_subscription_debug(primary_host)}")
         _start_client_service_for_subscription(client_host, client)
@@ -259,6 +270,26 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
             )
         runtime.wait_for_apply_clear(client_host)
         ha_helpers.assert_tunnel_ping(client, primary_ip, primary_tag)
+        _assert_selector_committed(client_host, primary_tag)
+
+        subscription_apply_count = _client_subscription_apply_count(client_host)
+        ha_helpers.ha(primary, "member", "reprioritize", "backup", "5")
+        runtime.wait_for_apply_clear(primary_host)
+        ha_helpers.ha(primary, "sync")
+        runtime.wait_for_apply_clear(backup_host)
+        _wait_for_client_subscription_apply_count(client_host, subscription_apply_count)
+        ha_helpers.wait_for_group_active(client, primary_tag, timeout_seconds=20.0)
+        ha_helpers.assert_tunnel_ping(client, primary_ip, primary_tag)
+        _assert_selector_committed(client_host, primary_tag)
+
+        _isolate_server(primary_host, "62191")
+        primary_isolated = True
+        time.sleep(1.0)
+        _clear_isolation(primary_host, "62191")
+        primary_isolated = False
+        ha_helpers.wait_for_group_active(client, primary_tag, timeout_seconds=20.0)
+        ha_helpers.assert_tunnel_ping(client, primary_ip, primary_tag)
+
         client(
             "client", "redirect", "add", "--path", helpers.INSTALL_ROOT.as_posix(), "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME, "--cidr", HA_REDIRECT_CIDR, "--tag", ha_helpers.CLIENT_GROUP_TAG, check=True,
@@ -266,6 +297,21 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
         routing_with_redirect = helpers.render_xray(client_host, client, "client", desired=False)
         helpers.assert_redirect_rule(routing_with_redirect, HA_REDIRECT_CIDR, ha_helpers.CLIENT_GROUP_TAG)
         _assert_redirected_tunnel_ping(client)
+
+        client_live_xray_before_api_rewrite = helpers.read_text(client_host, helpers.CLIENT_LIVE_DIR / "xray.json")
+        _rewrite_client_live_api_listen(client_host, "127.0.0.1:1")
+        client_api_rewritten = True
+        _isolate_server(primary_host, "62191")
+        primary_isolated = True
+        time.sleep(8.0)
+        _wait_for_client_runtime_switch_apply_failure(client_host)
+        _assert_selector_committed(client_host, primary_tag)
+        _restore_client_live_xray(client_host, client_live_xray_before_api_rewrite)
+        client_api_rewritten = False
+        _clear_isolation(primary_host, "62191")
+        primary_isolated = False
+        ha_helpers.wait_for_group_active(client, primary_tag, timeout_seconds=20.0)
+        ha_helpers.assert_tunnel_ping(client, primary_ip, primary_tag)
 
         runtime.stop_service(primary, "server")
         runtime.wait_for_service(primary_host, "server", active=False)
@@ -279,6 +325,7 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
         except AssertionError as exc:
             pytest.fail(f"{exc}\n\n{ha_helpers.client_endpoint_group_debug(client_host)}")
         ha_helpers.assert_tunnel_ping(client, backup_ip, backup_tag)
+        _assert_selector_committed(client_host, backup_tag)
         _assert_redirected_tunnel_ping(client)
 
         _clear_isolation(primary_host, "62191")
@@ -297,6 +344,7 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
         except AssertionError as exc:
             pytest.fail(f"{exc}\n\n{ha_helpers.client_endpoint_group_debug(client_host)}")
         ha_helpers.assert_tunnel_ping(client, primary_ip, primary_tag)
+        _assert_selector_committed(client_host, primary_tag)
         _assert_redirected_tunnel_ping(client)
 
         client(
@@ -306,6 +354,8 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
         routing_after_remove = helpers.render_xray(client_host, client, "client", desired=False)
         helpers.assert_no_redirect_rule(routing_after_remove, HA_REDIRECT_CIDR, ha_helpers.CLIENT_GROUP_TAG)
     finally:
+        if client_api_rewritten and client_live_xray_before_api_rewrite:
+            _restore_client_live_xray(client_host, client_live_xray_before_api_rewrite)
         if primary_isolated:
             _clear_isolation(primary_host, "62191")
         if backup_isolated:
@@ -320,6 +370,71 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
 
 def _start_client_service_for_subscription(host, run) -> None:
     _start_service_debug(host, run, "client")
+
+
+def _assert_ha_server_resources(host, run, reverse_tag: str, redirect_cidr: str) -> None:
+    state = helpers.read_pending_server_config(host)
+    helpers.assert_server_reverse_state(state, reverse_tag)
+    helpers.assert_server_redirect_state(state, redirect_cidr, reverse_tag)
+    live = helpers.render_xray(host, run, "server", desired=False)
+    helpers.assert_server_reverse_routing(live, reverse_tag)
+    helpers.assert_server_redirect_rule(live, redirect_cidr, reverse_tag)
+
+
+def _assert_selector_committed(host, expected_tag: str) -> None:
+    state = helpers.read_json(host, helpers.CLIENT_LIVE_DIR / "endpoint-selector.json")
+    journal = helpers.read_json(host, helpers.CLIENT_LIVE_DIR / "endpoint-selector.journal.json")
+    group_id = ha_helpers.CLIENT_GROUP_ID.lower()
+    selected = ((state.get("groups") or {}).get(group_id) or {}).get("active_tag")
+    journal_selected = ((journal.get("groups") or {}).get(group_id) or {}).get("active_tag")
+    if selected != expected_tag or journal_selected != expected_tag:
+        raise AssertionError(f"selector active tag mismatch: state={state}, journal={journal}, expected={expected_tag}")
+    if state.get("revision") != journal.get("revision"):
+        raise AssertionError(f"selector journal revision mismatch: state={state}, journal={journal}")
+
+
+def _client_subscription_apply_count(host) -> int:
+    log_path = helpers.LOG_ROOT / "client" / "service.log"
+    if not helpers.path_exists(host, log_path):
+        return 0
+    return helpers.read_text(host, log_path).count("subscription applied")
+
+
+def _wait_for_client_subscription_apply_count(host, previous_count: int) -> int:
+    deadline = time.time() + 75.0
+    last_count = previous_count
+    while time.time() < deadline:
+        last_count = _client_subscription_apply_count(host)
+        if last_count > previous_count:
+            return last_count
+        time.sleep(2.0)
+    raise AssertionError(f"client did not apply refreshed HA subscription; before={previous_count}, last={last_count}")
+
+
+def _rewrite_client_live_api_listen(host, listen: str) -> None:
+    path = helpers.CLIENT_LIVE_DIR / "xray.json"
+    data = helpers.read_json(host, path)
+    data.setdefault("api", {})["listen"] = listen
+    helpers.write_text(host, path, json.dumps(data, indent=2) + "\n")
+
+
+def _restore_client_live_xray(host, content: str) -> None:
+    helpers.write_text(host, helpers.CLIENT_LIVE_DIR / "xray.json", content)
+
+
+def _wait_for_client_runtime_switch_apply_failure(host) -> None:
+    deadline = time.time() + 35.0
+    log_path = helpers.LOG_ROOT / "client" / "service.log"
+    last_log = ""
+    while time.time() < deadline:
+        if helpers.path_exists(host, log_path):
+            last_log = helpers.read_text(host, log_path)
+            if "endpoint group health update failed" in last_log and (
+                "runtime apply" in last_log or "connect" in last_log or "connection refused" in last_log
+            ):
+                return
+        time.sleep(1.5)
+    raise AssertionError(f"client runtime switch apply failure was not logged.\n{last_log[-4000:]}")
 
 
 def _start_service_debug(host, run, role: str) -> None:

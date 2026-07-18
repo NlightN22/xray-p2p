@@ -23,7 +23,8 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 		"--host", "deploy.example.com",
 		"--port", "62030",
 		"--user", "branch@example.com",
-		"--password", "secret",
+		"--password", "550e8400-e29b-41d4-a716-446655440000",
+		"--profile", "vless-tls-vision",
 		"--trojan-port", "65010",
 		"--tun-mode", "full",
 		"--force",
@@ -48,14 +49,51 @@ func TestParseDeployFlagsPopulatesOptions(t *testing.T) {
 	if opts.manifest.trojanUser != "branch@example.com" {
 		t.Fatalf("manifest user = %s", opts.manifest.trojanUser)
 	}
-	if opts.manifest.trojanPassword != "secret" {
+	if opts.manifest.trojanPassword != "550e8400-e29b-41d4-a716-446655440000" {
 		t.Fatalf("manifest password = %s", opts.manifest.trojanPassword)
+	}
+	if opts.manifest.profile != "vless-tls-vision" {
+		t.Fatalf("manifest profile = %s", opts.manifest.profile)
 	}
 	if !opts.manifest.tunModeSet || opts.manifest.tunMode != "full" {
 		t.Fatalf("expected tun mode full, got %q (set=%v)", opts.manifest.tunMode, opts.manifest.tunModeSet)
 	}
 	if !opts.manifest.force {
 		t.Fatalf("expected force to be set")
+	}
+}
+
+func TestParseDeployFlagsRejectsUnknownProfile(t *testing.T) {
+	_, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"--profile", "unknown",
+	})
+	if err == nil {
+		t.Fatalf("expected error for unknown profile")
+	}
+}
+
+func TestParseDeployFlagsVLESSGeneratesUUIDPassword(t *testing.T) {
+	opts, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"-r", "vless-tls-vision",
+	})
+	if err != nil {
+		t.Fatalf("parseDeployFlags returned error: %v", err)
+	}
+	if !tunnel.IsUUIDCredential(opts.manifest.trojanPassword) {
+		t.Fatalf("expected VLESS UUID credential, got %q", opts.manifest.trojanPassword)
+	}
+}
+
+func TestParseDeployFlagsRejectsVLESSPasswordWithoutUUID(t *testing.T) {
+	_, err := parseDeployFlags(config.Config{}, []string{
+		"--host", "deploy.example.com",
+		"--profile", "vless-tls-vision",
+		"--password", "not-a-uuid",
+	})
+	if err == nil {
+		t.Fatalf("expected error for non-UUID VLESS password")
 	}
 }
 

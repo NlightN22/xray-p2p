@@ -10,6 +10,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 type clientInstallBase struct {
@@ -73,6 +74,10 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 		tunAddr = "198.18.0.1/30"
 	}
 	tunMode := normalizeTunModeValue(opts.TunMode)
+	profile, err := normalizeInstallProfile(opts)
+	if err != nil {
+		return clientInstallBase{}, err
+	}
 
 	return clientInstallBase{
 		installDir:       installDir,
@@ -97,11 +102,11 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			AllowInsecure:         opts.AllowInsecure,
 			PinnedPeerCertSHA256:  strings.TrimSpace(opts.PinnedPeerCertSHA256),
 			VerifyPeerCertByName:  strings.TrimSpace(opts.VerifyPeerCertByName),
-			Profile:               strings.TrimSpace(opts.Profile),
-			Protocol:              strings.TrimSpace(opts.Protocol),
-			Transport:             strings.TrimSpace(opts.Transport),
-			Security:              strings.TrimSpace(opts.Security),
-			Flow:                  strings.TrimSpace(opts.Flow),
+			Profile:               profile.Profile,
+			Protocol:              profile.Protocol,
+			Transport:             profile.Transport,
+			Security:              profile.Security,
+			Flow:                  profile.Flow,
 			AllowInsecureOverride: opts.AllowInsecureOverride,
 			Force:                 opts.Force,
 			TunEnabled:            tunEnabled,
@@ -113,6 +118,64 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			TunModeSet:            opts.TunModeSet,
 		},
 	}, nil
+}
+
+func normalizeInstallProfile(opts InstallOptions) (installProfile, error) {
+	endpoint, err := tunnel.DefaultProfile(tunnel.Profile(strings.TrimSpace(opts.Profile)))
+	if err != nil {
+		return installProfile{}, fmt.Errorf("invalid client profile: %w", err)
+	}
+	profile := installProfile{
+		Profile:   string(endpoint.Profile),
+		Protocol:  endpoint.Protocol,
+		Transport: endpoint.Transport,
+		Security:  endpoint.Security,
+	}
+	if endpoint.Metadata != nil {
+		profile.Flow = strings.TrimSpace(endpoint.Metadata["flow"])
+	}
+	if value := strings.TrimSpace(opts.Protocol); value != "" {
+		profile.Protocol = value
+	}
+	if value := strings.TrimSpace(opts.Transport); value != "" {
+		profile.Transport = value
+	}
+	if value := strings.TrimSpace(opts.Security); value != "" {
+		profile.Security = value
+	}
+	if value := strings.TrimSpace(opts.Flow); value != "" {
+		profile.Flow = value
+	}
+	normalized, err := tunnel.Normalize(tunnel.Endpoint{
+		Profile:   tunnel.Profile(profile.Profile),
+		Protocol:  profile.Protocol,
+		Transport: profile.Transport,
+		Security:  profile.Security,
+		Metadata:  map[string]string{"flow": profile.Flow},
+	})
+	if err != nil {
+		return installProfile{}, fmt.Errorf("invalid client profile: %w", err)
+	}
+	if normalized.Profile == tunnel.ProfileVLESSTLSVision {
+		if err := tunnel.ValidateVLESSCredential(opts.Password); err != nil {
+			return installProfile{}, err
+		}
+	}
+	return installProfile{
+		Profile:   string(normalized.Profile),
+		Protocol:  normalized.Protocol,
+		Transport: normalized.Transport,
+		Security:  normalized.Security,
+		Flow:      strings.TrimSpace(normalized.Metadata["flow"]),
+	}, nil
+}
+
+type installProfile struct {
+	Profile   string
+	Protocol  string
+	Transport string
+	Security  string
+	Flow      string
 }
 
 func normalizeTunModeValue(value string) string {

@@ -120,11 +120,14 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			continue
 		}
 		logging.Debug("subscription fetch completed", "tag", endpoint.Tag, "known_generation", meta.Control.Subscription.Generation, "fetched_generation", sub.Generation, "has_topology", sub.Topology != nil)
-		if sub.Generation == "" || sub.Generation == meta.Control.Subscription.Generation {
+		if rotationPending && (sub.Generation == "" || sub.Generation == meta.Control.Subscription.Generation) {
+			sub = meta.Control.Subscription
+		}
+		if sub.Generation == "" || (sub.Generation == meta.Control.Subscription.Generation && !rotationPending) {
 			continue
 		}
 		currentMeta, currentErr := loadLiveRuntimeMeta(r.configDir)
-		if currentErr == nil && sub.Generation == currentMeta.Control.Subscription.Generation {
+		if !rotationPending && currentErr == nil && sub.Generation == currentMeta.Control.Subscription.Generation {
 			continue
 		}
 		candidate, err := subscriptionCandidate(state, endpoint, sub, credential)

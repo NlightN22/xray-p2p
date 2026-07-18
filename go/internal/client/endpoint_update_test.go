@@ -23,6 +23,13 @@ func TestUpdateEndpointCredentialsAppliesRuntimeWhenServiceIsRunning(t *testing.
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
 	statePath := writeEndpointUpdateState(t)
 	liveDir := writeClientLive(t, "old-live")
+	selectorContent := []byte(`{"revision":7,"groups":{"ha":{"active_tag":"proxy-edge"}}}` + "\n")
+	if err := os.WriteFile(filepath.Join(liveDir, layout.ClientEndpointSelectorStateFileName), selectorContent, 0o644); err != nil {
+		t.Fatalf("write selector state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(liveDir, layout.ClientEndpointSelectorJournalFileName), selectorContent, 0o644); err != nil {
+		t.Fatalf("write selector journal: %v", err)
+	}
 	var applied bool
 	stubRuntimeFlow(t, true, func(_ context.Context, opts xraylive.Options, artifacts xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
 		applied = true
@@ -33,10 +40,14 @@ func TestUpdateEndpointCredentialsAppliesRuntimeWhenServiceIsRunning(t *testing.
 		if err != nil {
 			t.Fatalf("LkgRoleDir: %v", err)
 		}
-		if err := apply.ReplaceRoleLiveDir(liveDir, lkgDir, map[string][]byte{
+		files := map[string][]byte{
 			layout.XrayConfigFileName:  artifacts.XrayJSON,
 			layout.RuntimeMetaFileName: artifacts.MetaJSON,
-		}); err != nil {
+		}
+		for name, data := range artifacts.Extra {
+			files[name] = data
+		}
+		if err := apply.ReplaceRoleLiveDir(liveDir, lkgDir, files); err != nil {
 			t.Fatalf("publish live: %v", err)
 		}
 		return xraylive.RuntimeApplyApplied, nil
@@ -56,6 +67,12 @@ func TestUpdateEndpointCredentialsAppliesRuntimeWhenServiceIsRunning(t *testing.
 	}
 	if !strings.Contains(string(live), "new-user") {
 		t.Fatalf("live xray was not updated by runtime apply: %s", string(live))
+	}
+	if got := readFile(t, filepath.Join(liveDir, layout.ClientEndpointSelectorStateFileName)); string(got) != string(selectorContent) {
+		t.Fatalf("selector state was not preserved: %s", string(got))
+	}
+	if got := readFile(t, filepath.Join(liveDir, layout.ClientEndpointSelectorJournalFileName)); string(got) != string(selectorContent) {
+		t.Fatalf("selector journal was not preserved: %s", string(got))
 	}
 	assertNoApplyRequest(t)
 }

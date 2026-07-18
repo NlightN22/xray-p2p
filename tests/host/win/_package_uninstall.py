@@ -2,6 +2,8 @@ from pathlib import Path
 
 from testinfra.host import Host
 
+MSI_UNINSTALL_TIMEOUT = 250
+
 
 def uninstall_xp2p_from_msi(host: Host, msi_path: str | Path, *, purge_files: bool = True) -> None:
     from . import env as _env
@@ -59,7 +61,12 @@ $attempt = 0
 do {{
     $attempt++
     $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
-    if (-not $process.WaitForExit($waitSeconds * 1000)) {{
+    $deadline = (Get-Date).AddSeconds($waitSeconds)
+    while (-not $process.HasExited -and (Get-Date) -lt $deadline) {{
+        Start-Sleep -Milliseconds 500
+        $process.Refresh()
+    }}
+    if (-not $process.HasExited) {{
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         Write-Output "MSI ExitCode=124"
         exit 124
@@ -95,7 +102,7 @@ if (Test-Path {install_dir}) {{
     script += """
 exit 0
 """
-    result = _env.run_powershell(host, script, timeout=360, label="msi_uninstall")
+    result = _env.run_powershell(host, script, timeout=MSI_UNINSTALL_TIMEOUT, label="msi_uninstall")
     if result.rc != 0:
         stdout = result.stdout or ""
         if "MSI ExitCode=1601" in stdout:
@@ -124,4 +131,3 @@ exit 0
     _env.remove_services(host, ["xp2p-client", "xp2p-server"])
     if purge_files:
         _env.purge_xp2p_install(host, purge=True, label="msi_uninstall_purge")
-

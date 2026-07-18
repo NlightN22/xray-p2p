@@ -4,6 +4,7 @@ type manifestOptions struct {
 	remoteHost     string
 	installDir     string
 	installDirSet  bool
+	profile        string
 	trojanPort     string
 	trojanUser     string
 	trojanPassword string

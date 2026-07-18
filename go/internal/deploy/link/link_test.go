@@ -12,6 +12,7 @@ func TestBuildAndDecryptRoundTrip(t *testing.T) {
 		Host:           "10.0.10.10",
 		Version:        2,
 		InstallDir:     "/opt/xp2p",
+		Profile:        "vless-tls-vision",
 		TrojanPort:     "58443",
 		TrojanUser:     "user@example.invalid",
 		TrojanPassword: "secret",
@@ -41,7 +42,7 @@ func TestBuildAndDecryptRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decrypt error: %v", err)
 	}
-	if got.Host != manifest.Host || got.TrojanUser != manifest.TrojanUser || got.TrojanPassword != manifest.TrojanPassword {
+	if got.Host != manifest.Host || got.Profile != manifest.Profile || got.TrojanUser != manifest.TrojanUser || got.TrojanPassword != manifest.TrojanPassword {
 		t.Fatalf("decrypted manifest mismatch: %#v", got)
 	}
 }

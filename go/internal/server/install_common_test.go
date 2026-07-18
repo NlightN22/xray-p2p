@@ -41,6 +41,9 @@ func TestBuildServerInstallBaseDefaults(t *testing.T) {
 	if base.installOpts.ConfigDir != "config-server" {
 		t.Fatalf("installOpts configDir = %s", base.installOpts.ConfigDir)
 	}
+	if base.installOpts.Profile != "trojan-tls" {
+		t.Fatalf("installOpts profile = %s", base.installOpts.Profile)
+	}
 	if !base.installOpts.TunEnabled {
 		t.Fatalf("expected tun enabled by default")
 	}
@@ -52,6 +55,24 @@ func TestBuildServerInstallBaseDefaults(t *testing.T) {
 	}
 	if base.installOpts.TunAddr != "198.18.0.5/30" {
 		t.Fatalf("expected tun addr 198.18.0.5/30, got %s", base.installOpts.TunAddr)
+	}
+}
+
+func TestBuildServerInstallBaseAppliesExplicitProfile(t *testing.T) {
+	installDir := t.TempDir()
+	configDir := filepath.Join(installDir, "config-server")
+
+	base, err := buildServerInstallBase(installDir, configDir, InstallOptions{
+		InstallDir: installDir,
+		ConfigDir:  "config-server",
+		Host:       "10.0.0.1",
+		Profile:    "vless-tls-vision",
+	})
+	if err != nil {
+		t.Fatalf("buildServerInstallBase error: %v", err)
+	}
+	if base.installOpts.Profile != "vless-tls-vision" {
+		t.Fatalf("installOpts profile = %s", base.installOpts.Profile)
 	}
 }
 

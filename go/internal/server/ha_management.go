@@ -24,6 +24,9 @@ func MutateHAGeneration(configPath string, mutate func(*ha.Generation) error) (h
 	if err := mutate(&candidate); err != nil {
 		return ha.Generation{}, err
 	}
+	if err := attachHAIdentitySnapshot(&candidate); err != nil {
+		return ha.Generation{}, err
+	}
 	if err := commitHACandidate(context.Background(), configPath, candidate); err != nil {
 		return ha.Generation{}, err
 	}
@@ -41,6 +44,9 @@ func ForceMutateHAGeneration(configPath, reason string, mutate func(*ha.Generati
 	candidate := current
 	candidate.Number++
 	if err := mutate(&candidate); err != nil {
+		return ha.Generation{}, err
+	}
+	if err := attachHAIdentitySnapshot(&candidate); err != nil {
 		return ha.Generation{}, err
 	}
 	store, err := LoadHAReplication(configPath)
@@ -185,6 +191,9 @@ func SyncHAGeneration(ctx context.Context, configPath string) (ha.Generation, er
 		return ha.Generation{}, errors.New("HA generation is not initialized")
 	}
 	candidate.Number++
+	if err := attachHAIdentitySnapshot(&candidate); err != nil {
+		return ha.Generation{}, err
+	}
 	if err := commitHACandidate(ctx, configPath, candidate); err != nil {
 		return ha.Generation{}, err
 	}

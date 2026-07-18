@@ -121,6 +121,8 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
         except paramiko_backend.paramiko.SSHException as exc:
             self._reset_client()
             error_text = str(exc).lower()
+            if "hung beyond timeout" in error_text:
+                raise
             if "no existing session" in error_text or "error reading ssh protocol banner" in error_text:
                 max_attempts = 2 if self.timeout <= 30 else 4
                 for attempt in range(1, max_attempts + 1):
@@ -289,7 +291,7 @@ def invalidate_ssh_config_cache() -> None:
 
 def vagrant_reload_force(vagrant_dir: Path, machine: str, *, timeout: int = VAGRANT_RELOAD_TIMEOUT) -> None:
     _run_vagrant_command(
-        ["vagrant", "reload", "--force", machine],
+        ["vagrant", "reload", machine, "--force"],
         cwd=vagrant_dir,
         timeout=timeout,
     )

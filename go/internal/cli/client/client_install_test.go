@@ -80,6 +80,45 @@ func TestRunClientInstall(t *testing.T) {
 			},
 		},
 		{
+			name: "explicit profile",
+			cfg:  defaultCfg,
+			args: []string{
+				"--host", "example.org",
+				"--user", "user@example.com",
+				"--password", "550e8400-e29b-41d4-a716-446655440000",
+				"--profile", "vless-tls-vision",
+			},
+			wantCode:   0,
+			wantCalled: true,
+			check: func(t *testing.T, opts client.InstallOptions) {
+				if opts.Profile != "vless-tls-vision" {
+					t.Fatalf("profile = %q", opts.Profile)
+				}
+			},
+		},
+		{
+			name: "unknown profile rejected",
+			cfg:  defaultCfg,
+			args: []string{
+				"--host", "example.org",
+				"--user", "user@example.com",
+				"--password", "secret",
+				"-r", "unknown",
+			},
+			wantCode:   2,
+			wantCalled: false,
+		},
+		{
+			name: "link profile conflict rejected",
+			cfg:  defaultCfg,
+			args: []string{
+				"--link", "vless://550e8400-e29b-41d4-a716-446655440000@links.example.test:58443?flow=xtls-rprx-vision&security=tls&sni=links.example.test#alpha@example.com",
+				"--profile", "trojan-tls",
+			},
+			wantCode:   2,
+			wantCalled: false,
+		},
+		{
 			name: "mode proxy disables tun",
 			cfg:  defaultCfg,
 			args: []string{

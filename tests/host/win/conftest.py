@@ -25,6 +25,25 @@ def _timed(label: str):
         print(f"TIMING: {label}: {elapsed:.2f}s")
 
 
+def _is_ssh_hard_timeout(exc: BaseException) -> bool:
+    return "Guest SSH command hung beyond timeout" in str(exc)
+
+
+def _stop_xp2p_processes_with_recovery(host: Host, machine: str) -> None:
+    try:
+        win_env.stop_xp2p_processes(host)
+        return
+    except Exception as exc:
+        if not _is_ssh_hard_timeout(exc):
+            raise
+        print(
+            f"WARNING: stop_xp2p_processes hung on {machine}; "
+            "refreshing SSH connection and retrying once."
+        )
+    refreshed = win_env.get_ssh_host(machine)
+    win_env.stop_xp2p_processes(refreshed)
+
+
 def pytest_addoption(parser: pytest.Parser) -> None:
     group = parser.getgroup("xp2p", "xp2p guest orchestration options")
     group.addoption(
@@ -118,9 +137,9 @@ def _pre_test_kill_leftovers(server_host: Host, client_host: Host) -> None:
         yield
     finally:
         with _timed("post-test cleanup xp2p processes (server)"):
-            win_env.stop_xp2p_processes(server_host)
+            _stop_xp2p_processes_with_recovery(server_host, win_env.DEFAULT_SERVER)
         with _timed("post-test cleanup xp2p processes (client)"):
-            win_env.stop_xp2p_processes(client_host)
+            _stop_xp2p_processes_with_recovery(client_host, win_env.DEFAULT_CLIENT)
 
 
 @pytest.fixture(scope="session")
@@ -305,21 +324,10 @@ def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
     if detected_client is None:
         pytest.fail(f"xp2p.exe not detected on {win_env.DEFAULT_CLIENT} after install")
     yield
-    with _timed("ensure_msi_package (teardown)"):
-        msi_path_server = win_env.ensure_msi_package(
-            server_host,
-            machine=win_env.DEFAULT_SERVER,
-            reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_SERVER),
-        )
-        msi_path_client = win_env.ensure_msi_package(
-            client_host,
-            machine=win_env.DEFAULT_CLIENT,
-            reconnect=lambda: win_env.get_ssh_host(win_env.DEFAULT_CLIENT),
-        )
-    with _timed("uninstall_xp2p_from_msi (server)"):
-        win_env.uninstall_xp2p_from_msi(server_host, msi_path_server)
-    with _timed("uninstall_xp2p_from_msi (client)"):
-        win_env.uninstall_xp2p_from_msi(client_host, msi_path_client)
+    with _timed("purge_xp2p_install (server)"):
+        win_env._cleanup_orphaned_xp2p_msi(server_host)
+    with _timed("purge_xp2p_install (client)"):
+        win_env._cleanup_orphaned_xp2p_msi(client_host)
     with _timed("cleanup_xp2p_leftovers (server)"):
         win_env.cleanup_xp2p_leftovers(server_host)
     with _timed("cleanup_xp2p_leftovers (client)"):

@@ -20,6 +20,7 @@ Includes: inherited options
 - --key, -k <password> TLS private key file to deploy
 - --path, -p <path> server installation directory
 - --port, -P <port> server listener port
+- --profile, -r <string> server tunnel profile
 
 xp2p server remove
   Summary: Remove xp2p server installation
@@ -606,6 +607,9 @@ xp2p server ha redirect add <channel-id>
   Summary: Add a redirect through a group-bound HA channel
 Options:
 Includes: inherited options
+- --access, -V <string> access policy: all or restricted
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
 - --cidr, -C <cidr> CIDR to redirect
 - --domain, -d <host> domain to redirect
 

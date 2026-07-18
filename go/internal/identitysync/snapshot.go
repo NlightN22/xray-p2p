@@ -108,6 +108,7 @@ func normalizeSnapshot(current *Generation, snapshot Snapshot, now time.Time, al
 		ID:                 generationID(snapshot, now),
 		ProviderInstanceID: snapshot.Provider.InstanceID,
 		CreatedAt:          nowUTCString(now),
+		ProviderSubjects:   sortedMapKeys(subjectsByID),
 		Subjects:           map[string]Subject{},
 		Groups:             map[string]Group{},
 	}

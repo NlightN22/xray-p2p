@@ -8,10 +8,27 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 func ApplyIdentityRuntime(ctx context.Context) (xraylive.RuntimeApplyResult, error) {
+	state, err := identitysync.DefaultStore().Load()
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	doc, err := loadServerStateDoc(pendingConfigPath())
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	changed, err := reconcileAuthoritativeIdentityRemovals(doc, state)
+	if err != nil {
+		return xraylive.RuntimeApplySkipped, err
+	}
+	if changed {
+		return commitServerRuntimeDocResult(ctx, doc)
+	}
+
 	extensionsDir, err := config.DesiredExtensionsDirForRole(apply.RoleServer)
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err

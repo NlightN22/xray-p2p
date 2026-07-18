@@ -10,6 +10,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/ha"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
@@ -144,12 +145,18 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 	redirectCmd := &cobra.Command{Use: "redirect", Short: "Manage group-owned HA redirect policy"}
 	redirectCIDR := ""
 	redirectDomain := ""
+	redirectAccess := ""
+	redirectAllowUsers := []string{}
+	redirectAllowGroups := []string{}
 	redirectAdd := &cobra.Command{Use: "add <channel-id>", Short: "Add a redirect through a group-bound HA channel", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error {
-		_, err := server.AddHARedirect(haServerConfigPath(), args[0], redirectCIDR, redirectDomain)
+		_, err := server.AddHARedirect(haServerConfigPath(), args[0], redirectCIDR, redirectDomain, redirect.AccessPolicy{Access: redirectAccess, Users: redirectAllowUsers, Groups: redirectAllowGroups})
 		return err
 	}}
 	redirectAdd.Flags().StringVarP(&redirectCIDR, "cidr", "C", "", "CIDR to redirect")
 	redirectAdd.Flags().StringVarP(&redirectDomain, "domain", "d", "", "domain to redirect")
+	redirectAdd.Flags().StringVarP(&redirectAccess, "access", "V", "", "access policy: all or restricted")
+	redirectAdd.Flags().StringSliceVarP(&redirectAllowUsers, "allow-user", "U", nil, "allowed user label (repeatable)")
+	redirectAdd.Flags().StringSliceVarP(&redirectAllowGroups, "allow-group", "G", nil, "allowed provider group ID (repeatable)")
 	redirectRemove := &cobra.Command{Use: "remove <channel-id>", Short: "Remove a redirect through a group-bound HA channel", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error {
 		_, err := server.RemoveHARedirect(haServerConfigPath(), args[0], redirectCIDR, redirectDomain)
 		return err

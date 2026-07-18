@@ -4,6 +4,20 @@ from collections.abc import Callable
 from testinfra.host import Host
 
 
+def _cleanup_stale_msi_processes(host: Host) -> None:
+    from . import env as _env
+
+    script = """
+$ErrorActionPreference = 'SilentlyContinue'
+Get-Process -Name msiexec -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+exit 0
+"""
+    try:
+        _env.run_powershell(host, script, timeout=30, label="msi_install_stale_cleanup")
+    except Exception as exc:
+        print(f"WARNING: Failed to clean stale msiexec processes: {exc}")
+
+
 def ensure_program_files_install(
     host: Host,
     *,
@@ -35,6 +49,10 @@ def ensure_program_files_install(
     start = time.perf_counter()
     msi_path = _env.ensure_msi_package(host, machine=machine, reconnect=reconnect)
     print(f"TIMING: ensure_msi_package: {time.perf_counter() - start:.2f}s")
+    if force_reinstall:
+        start = time.perf_counter()
+        _env._cleanup_orphaned_xp2p_msi(host)
+        print(f"TIMING: purge_xp2p_before_reinstall: {time.perf_counter() - start:.2f}s")
     start = time.perf_counter()
     try:
         _env.install_xp2p_from_msi(host, msi_path)
@@ -51,13 +69,16 @@ def ensure_program_files_install(
             _ensure_xray_present()
             return host
         raise
-    except RuntimeError as exc:
+    except Exception as exc:
         detected = _env._detect_xp2p_exe(host)
         if detected is not None:
             print(f"WARNING: MSI install reported failure, but xp2p.exe exists at {detected}. {exc}")
+            _cleanup_stale_msi_processes(host)
             _env._set_install_paths_from_exe(detected)
             _ensure_xray_present()
             return host
+        if force_reinstall:
+            _env._cleanup_orphaned_xp2p_msi(host)
         try:
             _env._manual_install_from_msi_bin(host)
         except Exception:

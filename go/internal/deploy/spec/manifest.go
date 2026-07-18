@@ -20,6 +20,7 @@ type Manifest struct {
 	Host           string `json:"host"`
 	Version        int    `json:"version"`
 	InstallDir     string `json:"install_dir,omitempty"`
+	Profile        string `json:"profile,omitempty"`
 	TrojanPort     string `json:"trojan_port,omitempty"`
 	TrojanUser     string `json:"user,omitempty"`
 	TrojanPassword string `json:"password,omitempty"`
@@ -49,6 +50,7 @@ func Normalize(m Manifest) Manifest {
 	}
 	m.Host = strings.TrimSpace(m.Host)
 	m.InstallDir = strings.TrimSpace(m.InstallDir)
+	m.Profile = strings.TrimSpace(m.Profile)
 	m.TrojanPort = strings.TrimSpace(m.TrojanPort)
 	m.TrojanUser = strings.TrimSpace(m.TrojanUser)
 	m.TrojanPassword = strings.TrimSpace(m.TrojanPassword)

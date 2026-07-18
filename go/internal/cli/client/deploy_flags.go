@@ -19,6 +19,8 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 	hostFlag := fs.String("host", "", "deploy host name or address")
 	deployPort := fs.String("port", "62025", "deploy port")
 	installDir := fs.String("install-dir", "", "server install directory override")
+	profile := fs.String("profile", "", "server tunnel profile")
+	profileShort := fs.String("r", "", "server tunnel profile")
 	trojanUser := fs.String("user", "", "user identifier (email)")
 	trojanPassword := fs.String("password", "", "user password (auto-generated when omitted)")
 	trojanPort := fs.String("trojan-port", "", "service port")
@@ -49,27 +51,20 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 		userValue = fmt.Sprintf("deploy-%d@local", time.Now().Unix())
 	}
 
-	passwordValue := strings.TrimSpace(*trojanPassword)
-	if passwordValue == "" {
-		passwordValue = strings.TrimSpace(cfg.Client.Password)
-	}
-	if passwordValue == "" && userValue != "" {
-		gen, err := generateSecret(18)
-		if err != nil {
-			return deployOptions{}, fmt.Errorf("generate password: %w", err)
-		}
-		passwordValue = gen
-	}
-	if err := clishared.ValidateRFC3986Unreserved(passwordValue); err != nil {
-		return deployOptions{}, fmt.Errorf("invalid password: %w", err)
-	}
-
 	installDirSet := false
+	profileSet := false
+	profileShortSet := false
 	tunModeSet := false
 	modeSet := false
 	fs.Visit(func(flag *flag.Flag) {
 		if flag.Name == "install-dir" {
 			installDirSet = true
+		}
+		if flag.Name == "profile" {
+			profileSet = true
+		}
+		if flag.Name == "r" {
+			profileShortSet = true
 		}
 		if flag.Name == "mode" {
 			modeSet = true
@@ -78,6 +73,37 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 			tunModeSet = true
 		}
 	})
+
+	profileValue := strings.TrimSpace(*profile)
+	profileShortValue := strings.TrimSpace(*profileShort)
+	if profileSet && profileShortSet && !strings.EqualFold(profileValue, profileShortValue) {
+		return deployOptions{}, fmt.Errorf("--profile conflicts with -r")
+	}
+	if profileShortSet {
+		profileValue = profileShortValue
+	}
+	profileDefaults, err := normalizeProfileSelection(profileValue)
+	if err != nil {
+		return deployOptions{}, err
+	}
+
+	passwordValue := strings.TrimSpace(*trojanPassword)
+	if passwordValue == "" {
+		passwordValue = strings.TrimSpace(cfg.Client.Password)
+	}
+	if passwordValue == "" && userValue != "" {
+		gen, err := generateDeployPassword(profileDefaults.Profile)
+		if err != nil {
+			return deployOptions{}, fmt.Errorf("generate password: %w", err)
+		}
+		passwordValue = gen
+	}
+	if err := clishared.ValidateRFC3986Unreserved(passwordValue); err != nil {
+		return deployOptions{}, fmt.Errorf("invalid password: %w", err)
+	}
+	if err := validateProfileCredential(profileDefaults.Profile, passwordValue); err != nil {
+		return deployOptions{}, fmt.Errorf("invalid password for profile %q: %w", profileDefaults.Profile, err)
+	}
 
 	mode, err := parseTargetClientMode(*modeFlag)
 	if err != nil {
@@ -107,6 +133,7 @@ func parseDeployFlags(cfg config.Config, args []string) (deployOptions, error) {
 			remoteHost:     host,
 			installDir:     strings.TrimSpace(*installDir),
 			installDirSet:  installDirSet,
+			profile:        profileDefaults.Profile,
 			trojanPort:     serverPortValue,
 			trojanUser:     strings.TrimSpace(userValue),
 			trojanPassword: strings.TrimSpace(passwordValue),

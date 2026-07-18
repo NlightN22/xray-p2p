@@ -33,6 +33,7 @@ func TestRunServerInstall(t *testing.T) {
 				Cert:      `C:\certs\server.pem`,
 				Key:       `C:\certs\server.key`,
 				Host:      "custom.example.test",
+				Profile:   "vless-tls-vision",
 				Force:     true,
 			},
 			wantCode: 0,
@@ -45,6 +46,7 @@ func TestRunServerInstall(t *testing.T) {
 					CertificateFile: `C:\certs\server.pem`,
 					KeyFile:         `C:\certs\server.key`,
 					Host:            "custom.example.test",
+					Profile:         "vless-tls-vision",
 					Force:           true,
 					TunEnabled:      true,
 					TunEnabledSet:   true,
@@ -53,6 +55,13 @@ func TestRunServerInstall(t *testing.T) {
 					TunAddr:         "198.18.0.5/30",
 				}, "install options")
 			},
+		},
+		{
+			name:     "unknown profile rejected",
+			cfg:      serverCfg(`C:\xp2p`, "config-server", ""),
+			opts:     serverInstallCommandOptions{Host: "198.51.100.10", Profile: "unknown"},
+			wantCode: 1,
+			wantCall: false,
 		},
 		{
 			name:       "install error surfaces",

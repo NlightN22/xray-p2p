@@ -16,6 +16,7 @@ func buildDeployLink(opts *deployOptions) (string, error) {
 		Host:           strings.TrimSpace(opts.runtime.serverHost),
 		Version:        2,
 		InstallDir:     installDir,
+		Profile:        strings.TrimSpace(opts.manifest.profile),
 		TrojanPort:     strings.TrimSpace(opts.manifest.trojanPort),
 		TrojanUser:     strings.TrimSpace(opts.manifest.trojanUser),
 		TrojanPassword: strings.TrimSpace(opts.manifest.trojanPassword),

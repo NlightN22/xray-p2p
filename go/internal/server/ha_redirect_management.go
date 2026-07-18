@@ -10,8 +10,12 @@ import (
 )
 
 // AddHARedirect adds a group-owned redirect bound to an enabled stable channel.
-func AddHARedirect(configPath, channelID, cidr, domain string) (ha.Generation, error) {
+func AddHARedirect(configPath, channelID, cidr, domain string, access redirect.AccessPolicy) (ha.Generation, error) {
 	target, err := redirect.ResolveRule(cidr, domain)
+	if err != nil {
+		return ha.Generation{}, err
+	}
+	policy, err := access.Normalized()
 	if err != nil {
 		return ha.Generation{}, err
 	}
@@ -30,6 +34,7 @@ func AddHARedirect(configPath, channelID, cidr, domain string) (ha.Generation, e
 		} else {
 			rule.CIDR = target.Value
 		}
+		rule.AccessPolicy = policy
 		updated, err := redirect.AddRule(rules, rule)
 		if err != nil {
 			return err

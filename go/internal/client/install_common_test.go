@@ -65,3 +65,39 @@ func TestBuildClientInstallBaseRequiresInputs(t *testing.T) {
 		t.Fatalf("expected error for missing server address")
 	}
 }
+
+func TestBuildClientInstallBaseAppliesExplicitProfile(t *testing.T) {
+	installDir := t.TempDir()
+	configDir := filepath.Join(installDir, "config-client")
+
+	base, err := buildClientInstallBase(installDir, configDir, InstallOptions{
+		InstallDir:    installDir,
+		ConfigDir:     "config-client",
+		ServerAddress: "edge.example.com",
+		User:          "user@example.com",
+		Password:      "550e8400-e29b-41d4-a716-446655440000",
+		Profile:       "vless-tls-vision",
+	})
+	if err != nil {
+		t.Fatalf("buildClientInstallBase error: %v", err)
+	}
+	if base.installOpts.Profile != "vless-tls-vision" || base.installOpts.Protocol != "vless" || base.installOpts.Flow != "xtls-rprx-vision" {
+		t.Fatalf("profile defaults were not applied: %+v", base.installOpts)
+	}
+}
+
+func TestBuildClientInstallBaseRejectsInvalidProfile(t *testing.T) {
+	installDir := t.TempDir()
+	configDir := filepath.Join(installDir, "config-client")
+
+	if _, err := buildClientInstallBase(installDir, configDir, InstallOptions{
+		InstallDir:    installDir,
+		ConfigDir:     "config-client",
+		ServerAddress: "edge.example.com",
+		User:          "user@example.com",
+		Password:      "secret",
+		Profile:       "unknown",
+	}); err == nil {
+		t.Fatalf("expected error for unknown profile")
+	}
+}

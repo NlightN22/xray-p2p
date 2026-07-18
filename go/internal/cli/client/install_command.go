@@ -27,6 +27,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	password := fs.String("password", "", "user password")
 	serverName := fs.String("sni", "", "TLS server name (SNI)")
 	link := fs.String("link", "", "client connection link")
+	profile := fs.String("profile", "", "client tunnel profile")
+	profileShort := fs.String("r", "", "client tunnel profile")
 	allowInsecure := fs.Bool("allow-insecure", false, "allow insecure TLS (skip verification)")
 	strictTLS := fs.Bool("strict-tls", false, "enforce TLS verification")
 	force := fs.Bool("force", false, "replace existing endpoint configuration")
@@ -62,6 +64,8 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	allowInsecureRequested := false
 	strictTLSRequested := false
 	tunModeProvided := false
+	profileProvided := false
+	profileShortProvided := false
 	fs.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "user":
@@ -78,8 +82,26 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 			strictTLSRequested = true
 		case "tun-mode":
 			tunModeProvided = true
+		case "profile":
+			profileProvided = true
+		case "r":
+			profileShortProvided = true
 		}
 	})
+
+	profileValue := strings.TrimSpace(*profile)
+	profileShortValue := strings.TrimSpace(*profileShort)
+	if profileProvided && profileShortProvided && !strings.EqualFold(profileValue, profileShortValue) {
+		logging.Error("xp2p client install: --profile conflicts with -r")
+		return 2
+	}
+	if profileShortProvided {
+		profileValue = profileShortValue
+	}
+	if linkValue != "" && (profileProvided || profileShortProvided) && strings.TrimSpace(linkData.Profile) != "" && !strings.EqualFold(profileValue, linkData.Profile) {
+		logging.Error("xp2p client install: --profile conflicts with profile from --link")
+		return 2
+	}
 
 	if linkValue == "" {
 		var missing []string
@@ -154,7 +176,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		AllowInsecure:         allowInsecureValue,
 		PinnedPeerCertSHA256:  pinnedPeerCertSHA256,
 		VerifyPeerCertByName:  verifyPeerCertByName,
-		Profile:               linkData.Profile,
+		Profile:               firstNonEmpty(profileValue, linkData.Profile),
 		Protocol:              linkData.Protocol,
 		Transport:             linkData.Transport,
 		Security:              linkData.Security,
@@ -168,6 +190,10 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		TunAddr:               cfg.Client.TunAddr,
 		TunMode:               cfg.Client.TunMode,
 		TunModeSet:            false,
+	}
+	if _, err := normalizeProfileSelection(opts.Profile); err != nil {
+		logging.Error("xp2p client install: invalid --profile", "err", err)
+		return 2
 	}
 
 	mode, err := parseTargetClientMode(*modeFlag)

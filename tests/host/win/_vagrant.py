@@ -76,7 +76,7 @@ def get_ssh_host(machine: str) -> Host:
             try:
                 common.vagrant_reload_force(_env.VAGRANT_DIR, machine)
             except subprocess.CalledProcessError as reload_exc:
-                pytest.skip(f"Vagrant reload failed for {machine}: {reload_exc}")
+                raise RuntimeError(f"Vagrant reload failed for {machine}: {reload_exc}") from reload_exc
             finally:
                 common.invalidate_ssh_config_cache()
             time.sleep(5)
@@ -92,7 +92,7 @@ def get_ssh_host(machine: str) -> Host:
             try:
                 common.vagrant_reload_force(_env.VAGRANT_DIR, machine)
             except subprocess.CalledProcessError as reload_exc:
-                pytest.skip(f"Vagrant reload failed for {machine}: {reload_exc}")
+                raise RuntimeError(f"Vagrant reload failed for {machine}: {reload_exc}") from reload_exc
             finally:
                 common.invalidate_ssh_config_cache()
             time.sleep(5)

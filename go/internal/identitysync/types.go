@@ -53,6 +53,7 @@ type Generation struct {
 	ID                 string             `json:"id"`
 	ProviderInstanceID string             `json:"provider_instance_id"`
 	CreatedAt          string             `json:"created_at"`
+	ProviderSubjects   []string           `json:"provider_subjects,omitempty"`
 	Subjects           map[string]Subject `json:"subjects"`
 	Groups             map[string]Group   `json:"groups"`
 	Detached           bool               `json:"detached,omitempty"`

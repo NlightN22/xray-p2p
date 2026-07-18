@@ -57,11 +57,40 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 	if port == "" {
 		port = strconv.Itoa(server.DefaultTrojanPort)
 	}
+	profile := strings.TrimSpace(man.Profile)
+	if profile == "" {
+		profile = strings.TrimSpace(s.Cfg.Server.Profile)
+	}
+	userID := strings.TrimSpace(man.TrojanUser)
+	if userID == "" {
+		userID = fmt.Sprintf("xp2p-%d@local", time.Now().Unix())
+	}
+	password := strings.TrimSpace(man.TrojanPassword)
+	if password == "" {
+		secret, err := generateDeployPassword(profile)
+		if err != nil {
+			_ = writeLine(rw, "ERR generate password failed")
+			notifyFailure(results)
+			return
+		}
+		password = secret
+	}
+	if err := clishared.ValidateRFC3986Unreserved(password); err != nil {
+		_ = writeLine(rw, "ERR invalid password")
+		notifyFailure(results)
+		return
+	}
+	if err := validateDeployProfileCredential(profile, password); err != nil {
+		_ = writeLine(rw, "ERR invalid password")
+		notifyFailure(results)
+		return
+	}
 
 	logs := []string{
 		fmt.Sprintf("install_dir=%s", installDir),
 		fmt.Sprintf("config_dir=%s", configDir),
 		fmt.Sprintf("trojan_port=%s", port),
+		fmt.Sprintf("profile=%s", profile),
 		fmt.Sprintf("host=%s", host),
 	}
 
@@ -105,6 +134,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		InstallDir:            installDir,
 		ConfigDir:             configDir,
 		Port:                  port,
+		Profile:               profile,
 		CertificateStore:      strings.TrimSpace(s.Cfg.Server.CertificateStore),
 		CertificateFile:       strings.TrimSpace(s.Cfg.Server.CertificateFile),
 		KeyFile:               strings.TrimSpace(s.Cfg.Server.KeyFile),
@@ -159,26 +189,6 @@ installDone:
 		} else if req, reqErr := apply.NewRequest(apply.RoleServer); reqErr == nil {
 			_ = apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 		}
-	}
-
-	userID := strings.TrimSpace(man.TrojanUser)
-	if userID == "" {
-		userID = fmt.Sprintf("xp2p-%d@local", time.Now().Unix())
-	}
-	password := strings.TrimSpace(man.TrojanPassword)
-	if password == "" {
-		secret, err := generateSecret(18)
-		if err != nil {
-			_ = writeLine(rw, "ERR generate password failed")
-			notifyFailure(results)
-			return
-		}
-		password = secret
-	}
-	if err := clishared.ValidateRFC3986Unreserved(password); err != nil {
-		_ = writeLine(rw, "ERR invalid password")
-		notifyFailure(results)
-		return
 	}
 
 	if err := serverUserStageFunc(ctx, server.AddUserOptions{InstallDir: installDir, ConfigDir: configDir, UserID: userID, Password: password, Host: host, Force: true}); err != nil {

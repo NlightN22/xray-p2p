@@ -32,7 +32,6 @@ func saveEndpointSelectorState(path string, state endpointSelectorState) error {
 	if state.Groups == nil {
 		state.Groups = map[string]endpointGroupSelector{}
 	}
-	state.Revision++
 	return configio.WriteJSON(path, state, configio.WriteOptions{})
 }
 
@@ -41,6 +40,7 @@ func selectorJournalPath(statePath string) string {
 }
 
 func commitEndpointSelectorState(statePath string, state endpointSelectorState) error {
+	state.Revision++
 	if err := saveEndpointSelectorState(statePath, state); err != nil {
 		return err
 	}

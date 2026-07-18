@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 type serverInstallBase struct {
@@ -37,6 +39,10 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 	portVal, err := strconv.Atoi(portStr)
 	if err != nil || portVal <= 0 || portVal > 65535 {
 		return serverInstallBase{}, fmt.Errorf("invalid port %q", portStr)
+	}
+	profile, err := normalizeInstallProfile(opts.Profile)
+	if err != nil {
+		return serverInstallBase{}, err
 	}
 
 	inputs, err := resolveCertificateInputs(opts.CertificateStore, opts.CertificateFile, opts.KeyFile, opts.RelaxedPathValidation)
@@ -80,6 +86,7 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 			CertificateFile:       inputs.certPath,
 			KeyFile:               inputs.keyPath,
 			Host:                  host,
+			Profile:               profile,
 			Force:                 opts.Force,
 			RelaxedPathValidation: opts.RelaxedPathValidation,
 			TunEnabled:            tunEnabled,
@@ -89,4 +96,12 @@ func buildServerInstallBase(installDir, configDir string, opts InstallOptions) (
 			TunAddr:               tunAddr,
 		},
 	}, nil
+}
+
+func normalizeInstallProfile(value string) (string, error) {
+	endpoint, err := tunnel.DefaultProfile(tunnel.Profile(strings.TrimSpace(value)))
+	if err != nil {
+		return "", fmt.Errorf("invalid server profile: %w", err)
+	}
+	return string(endpoint.Profile), nil
 }

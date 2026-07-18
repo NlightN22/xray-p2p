@@ -5,15 +5,16 @@ def _cleanup_orphaned_xp2p_msi(host: Host) -> None:
     from . import env as _env
 
     script = r"""
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'SilentlyContinue'
 $services = @('xp2p-client', 'xp2p-server')
 foreach ($svc in $services) {
     $service = Get-Service -Name $svc -ErrorAction SilentlyContinue
-    if ($service -and $service.Status -ne 'Stopped') {
+    if ($service) {
         Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+        sc.exe delete $svc | Out-Null
     }
 }
-Get-Process -Name xp2p,xray,ui-xp2p -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name xp2p,xray,ui-xp2p,msiexec -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 foreach ($sid in (Get-ChildItem Registry::HKEY_USERS -ErrorAction SilentlyContinue | Select-Object -ExpandProperty PSChildName)) {
     $runKey = "Registry::HKEY_USERS\$sid\Software\Microsoft\Windows\CurrentVersion\Run"
@@ -46,47 +47,31 @@ foreach ($root in $profileRoots) {
 
 $productNamePattern = '^xp2p'
 $roots = @(
-    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*',
-    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall',
+    'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall',
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
 )
-$items = Get-ItemProperty -Path $roots -ErrorAction SilentlyContinue | Where-Object {
-    $_.DisplayName -and $_.DisplayName -match $productNamePattern
-}
-
-foreach ($item in $items) {
-    $code = $item.PSChildName
-    if ($code -and $code -match '^\{[0-9A-Fa-f-]+\}$') {
-        $args = @('/x', $code, '/qn', '/norestart')
-        $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -PassThru
-        $proc.WaitForExit(120000) | Out-Null
-        if (-not $proc.HasExited) {
-            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+$productKeys = New-Object System.Collections.Generic.List[string]
+foreach ($root in $roots) {
+    if (-not (Test-Path $root)) { continue }
+    Get-ChildItem -Path $root -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue
+        $name = $props.DisplayName
+        if (-not $name) { $name = $props.ProductName }
+        if ($name -and $name -match $productNamePattern) {
+            Remove-Item -Path $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
         }
-        continue
-    }
-    $cmd = $null
-    if ($item.QuietUninstallString) {
-        $cmd = $item.QuietUninstallString
-    } elseif ($item.UninstallString) {
-        $cmd = $item.UninstallString
-    }
-    if ($cmd) {
-        $cmd = $cmd -replace '/I', '/X'
-        Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $cmd) -Wait -ErrorAction SilentlyContinue | Out-Null
     }
 }
 
-$deadline = (Get-Date).AddSeconds(120)
 $installerRoots = @(
     'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products',
     'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products'
 )
-$productKeys = New-Object System.Collections.Generic.List[string]
 foreach ($root in $installerRoots) {
-    if ((Get-Date) -gt $deadline) { break }
+    if (-not (Test-Path $root)) { continue }
     $children = Get-ChildItem -Path $root -ErrorAction SilentlyContinue
     foreach ($child in $children) {
-        if ((Get-Date) -gt $deadline) { break }
         $propsPath = Join-Path $child.PSPath 'InstallProperties'
         $props = Get-ItemProperty -Path $propsPath -ErrorAction SilentlyContinue
         if (-not $props) { continue }
@@ -103,10 +88,13 @@ $classRoots = @(
     'HKLM:\SOFTWARE\WOW6432Node\Classes\Installer\Products'
 )
 foreach ($root in $classRoots) {
-    foreach ($key in $productKeys) {
-        $target = Join-Path $root $key
-        if (Test-Path $target) {
-            Remove-Item -Path $target -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path $root)) { continue }
+    Get-ChildItem -Path $root -ErrorAction SilentlyContinue | ForEach-Object {
+        $props = Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue
+        $name = $props.ProductName
+        if (-not $name) { $name = $props.DisplayName }
+        if (($name -and $name -match $productNamePattern) -or ($productKeys -contains $_.PSChildName)) {
+            Remove-Item -Path $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }
@@ -121,6 +109,7 @@ foreach ($dir in $dirs) {
         Remove-Item -Path $dir -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+exit 0
 """
     _env.run_powershell(host, script, timeout=300, label="msi_cleanup_orphans")
     purge_xp2p_install(host, purge=True, label="msi_cleanup_orphans_purge")
@@ -140,4 +129,3 @@ if (Test-Path $path) {{
 exit 0
 """
     _env.run_powershell(host, script, timeout=240, label=label)
-

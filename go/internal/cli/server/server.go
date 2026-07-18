@@ -13,6 +13,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
+	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
 
 var (
@@ -51,6 +52,7 @@ type serverInstallCommandOptions struct {
 	Cert      string
 	Key       string
 	Host      string
+	Profile   string
 	Force     bool
 }
 
@@ -172,6 +174,10 @@ func buildInstallOptions(ctx context.Context, cfg config.Config, opts serverInst
 	if autoDetected {
 		logging.Info("xp2p server install: detected public host", "host", hostValue)
 	}
+	profileValue, err := normalizeServerInstallProfile(clishared.FirstNonEmpty(opts.Profile, cfg.Server.Profile))
+	if err != nil {
+		return server.InstallOptions{}, err
+	}
 
 	return server.InstallOptions{
 		InstallDir:       clishared.FirstNonEmpty(opts.Path, cfg.Server.InstallDir),
@@ -181,6 +187,7 @@ func buildInstallOptions(ctx context.Context, cfg config.Config, opts serverInst
 		CertificateFile:  clishared.FirstNonEmpty(opts.Cert, cfg.Server.CertificateFile),
 		KeyFile:          clishared.FirstNonEmpty(opts.Key, cfg.Server.KeyFile),
 		Host:             hostValue,
+		Profile:          profileValue,
 		Force:            opts.Force,
 		TunEnabled:       cfg.Server.TunEnabled,
 		TunEnabledSet:    true,
@@ -188,6 +195,14 @@ func buildInstallOptions(ctx context.Context, cfg config.Config, opts serverInst
 		TunMTU:           cfg.Server.TunMTU,
 		TunAddr:          cfg.Server.TunAddr,
 	}, nil
+}
+
+func normalizeServerInstallProfile(value string) (string, error) {
+	endpoint, err := tunnel.DefaultProfile(tunnel.Profile(strings.TrimSpace(value)))
+	if err != nil {
+		return "", fmt.Errorf("invalid server profile: %w", err)
+	}
+	return string(endpoint.Profile), nil
 }
 
 func prepareRunOptions(ctx context.Context, cfg config.Config, opts serverRunCommandOptions) (server.RunOptions, error) {

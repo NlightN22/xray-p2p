@@ -80,6 +80,9 @@ func TestApplySnapshotResolvesNestedGroupsAndDNMembers(t *testing.T) {
 	if _, ok := next.Groups["ignored"]; ok {
 		t.Fatalf("out-of-scope group was retained")
 	}
+	if got := next.ProviderSubjects; len(got) != 2 || got[0] != "u1" || got[1] != "u2" {
+		t.Fatalf("provider subjects do not preserve full snapshot subjects: %+v", got)
+	}
 	if _, ok := next.Subjects["u1"]; !ok {
 		t.Fatalf("direct nested subject missing")
 	}

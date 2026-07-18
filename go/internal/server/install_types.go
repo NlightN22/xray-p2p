@@ -28,6 +28,7 @@ type InstallOptions struct {
 	CertificateFile       string
 	KeyFile               string
 	Host                  string
+	Profile               string
 	Force                 bool
 	RelaxedPathValidation bool
 	TunEnabled            bool

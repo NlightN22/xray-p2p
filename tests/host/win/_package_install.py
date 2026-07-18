@@ -2,6 +2,8 @@ from pathlib import Path
 
 from testinfra.host import Host
 
+MSI_INSTALL_TIMEOUT = 330
+
 
 def install_xp2p_from_msi(host: Host, msi_path: str | Path) -> None:
     from . import env as _env
@@ -28,9 +30,6 @@ if ($svc) {{
     if ($svc.StartType -eq 'Disabled') {{
         Set-Service -Name 'msiserver' -StartupType Manual -ErrorAction SilentlyContinue
     }}
-    if ($svc.Status -ne 'Running') {{
-        Start-Service -Name 'msiserver' -ErrorAction SilentlyContinue
-    }}
 }}
 $logPath = {log_path}
 $logDir = Split-Path -Parent $logPath
@@ -42,7 +41,12 @@ if (Test-Path $logPath) {{
 }}
 $arguments = @('/i', $msi, '/qn', '/norestart', '/l*v', $logPath, 'XP2P_SKIP_SERVICE_START=1')
 $process = Start-Process -FilePath 'msiexec.exe' -ArgumentList $arguments -PassThru
-if (-not $process.WaitForExit(300000)) {{
+$deadline = (Get-Date).AddSeconds(300)
+while (-not $process.HasExited -and (Get-Date) -lt $deadline) {{
+    Start-Sleep -Milliseconds 500
+    $process.Refresh()
+}}
+if (-not $process.HasExited) {{
     Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     exit 124
 }}
@@ -52,7 +56,7 @@ if ($process.ExitCode -ne 0) {{
 }}
 exit 0
 """
-    result = _env.run_powershell(host, script, timeout=420, label="msi_install")
+    result = _env.run_powershell(host, script, timeout=MSI_INSTALL_TIMEOUT, label="msi_install")
     if result.rc != 0:
         log_path_obj = Path(r"C:\xp2p\build\logs\win\msi-install.log")
         log_tail = _read_msi_log_tail(host, log_path_obj)
@@ -72,13 +76,12 @@ foreach ($policyRoot in @(
     }
 }
 sc.exe config msiserver start= demand | Out-Null
-Start-Service -Name 'msiserver' -ErrorAction SilentlyContinue | Out-Null
 Start-Process -FilePath 'msiexec.exe' -ArgumentList '/unregister' -Wait -ErrorAction SilentlyContinue | Out-Null
 Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAction SilentlyContinue | Out-Null
 """,
                 timeout=120,
             )
-            result = _env.run_powershell(host, script, timeout=420, label="msi_install_retry")
+            result = _env.run_powershell(host, script, timeout=MSI_INSTALL_TIMEOUT, label="msi_install_retry")
             if result.rc == 0:
                 return
             raise _env.MsiServiceUnavailable(
@@ -86,7 +89,7 @@ Start-Process -FilePath 'msiexec.exe' -ArgumentList '/regserver' -Wait -ErrorAct
             )
         if "MSI ExitCode=1603" in stdout:
             _env._cleanup_orphaned_xp2p_msi(host)
-            result = _env.run_powershell(host, script, timeout=420, label="msi_install_retry")
+            result = _env.run_powershell(host, script, timeout=MSI_INSTALL_TIMEOUT, label="msi_install_retry")
             if result.rc == 0:
                 return
         raise RuntimeError(
@@ -151,4 +154,3 @@ exit 0
     if not context:
         return ""
     return "\nMSI failure context:\n" + context + "\n"
-

@@ -46,6 +46,9 @@ func deployDesiredConfiguration(state installState) error {
 	if _, err := ensureServerXrayConfigForce(pendingConfigPath(), state.Force); err != nil {
 		return err
 	}
+	if _, err := config.UpdateServerProfile("", state.Profile); err != nil {
+		return err
+	}
 	if err := extensions.EnsureTemplates(state.configDir); err != nil {
 		return err
 	}

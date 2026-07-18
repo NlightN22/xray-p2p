@@ -58,6 +58,38 @@ func updateServerTrojanPort(path string, port string, opts configio.WriteOptions
 	return configPath, nil
 }
 
+// UpdateServerProfile updates server.profile in the specified config file and returns the path used.
+func UpdateServerProfile(path string, profile string) (string, error) {
+	profile = strings.TrimSpace(profile)
+	if profile == "" {
+		return "", fmt.Errorf("config: server profile is required")
+	}
+	configPath, err := resolveConfigPath(path, "server")
+	if err != nil {
+		return "", err
+	}
+	if strings.ToLower(filepath.Ext(configPath)) != ".toml" {
+		return "", fmt.Errorf("config: only toml files are supported for server profile updates")
+	}
+
+	tree, err := loadOrCreateToml(configPath)
+	if err != nil {
+		return "", err
+	}
+	tree.SetPath([]string{"server", "profile"}, profile)
+
+	data, err := encodeToml(tree)
+	if err != nil {
+		return "", err
+	}
+	if err := configio.WriteBytes(configPath, data, configio.WriteOptions{
+		AuditPath: AuditLogPath(),
+	}); err != nil {
+		return "", err
+	}
+	return configPath, nil
+}
+
 // ClearServerCertificateOverrides resets server certificate fields in the specified config file.
 func ClearServerCertificateOverrides(path string) (string, error) {
 	configPath, err := resolveConfigPath(path, "server")

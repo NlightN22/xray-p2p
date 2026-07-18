@@ -100,6 +100,8 @@ func compileClientRuntimeCandidateWithSelector(state clientInstallState, selecto
 			layout.ClientEndpointSelectorStateFileName:   append(data, '\n'),
 			layout.ClientEndpointSelectorJournalFileName: append(data, '\n'),
 		}
+	} else if liveDir, err := config.LiveRoleDir("client"); err == nil {
+		result.Extra = liveSelectorExtras(liveDir)
 	}
 	return result, nil
 }

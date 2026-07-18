@@ -13,6 +13,7 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 		manifest: manifestOptions{
 			installDir:     "/srv/xp2p",
 			installDirSet:  true,
+			profile:        "vless-tls-vision",
 			trojanPort:     "65001",
 			trojanUser:     "user@example.invalid",
 			trojanPassword: "passw0rd",
@@ -41,6 +42,7 @@ func TestBuildDeployLinkPersistsManifest(t *testing.T) {
 		Host:           "edge.internal",
 		Version:        2,
 		InstallDir:     "/srv/xp2p",
+		Profile:        "vless-tls-vision",
 		TrojanPort:     "65001",
 		TrojanUser:     "user@example.invalid",
 		TrojanPassword: "passw0rd",

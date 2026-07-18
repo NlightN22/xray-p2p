@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/ha"
+	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
+	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
 func TestHAGroupRedirectLifecycle(t *testing.T) {
@@ -22,7 +24,7 @@ func TestHAGroupRedirectLifecycle(t *testing.T) {
 	if err := writeServerStateDoc(path, map[string]any{serverHAGenerationKey: generation}); err != nil {
 		t.Fatal(err)
 	}
-	added, err := AddHARedirect(path, "portal", "10.70.0.0/16", "")
+	added, err := AddHARedirect(path, "portal", "10.70.0.0/16", "", redirect.AccessPolicy{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +50,53 @@ func TestHAGroupRedirectLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(rules) != 0 {
+		t.Fatalf("rules = %+v", rules)
+	}
+}
+
+func TestHAGroupRedirectPreservesAccessPolicy(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+	path := filepath.Join(root, "server.toml")
+	if err := identitysync.DefaultStore().Save(identitysync.State{
+		Current: &identitysync.Generation{
+			ID:                 "id-gen-1",
+			ProviderInstanceID: "ldap-e2e",
+			Subjects: map[string]identitysync.Subject{
+				"alice": {ExternalSubject: "alice", UserLabel: "idp-alice@xp2p.local", Active: true, Provisioned: true},
+				"bob":   {ExternalSubject: "bob", UserLabel: "idp-bob@xp2p.local", Active: true},
+			},
+			Groups: map[string]identitysync.Group{"engineering": {ID: "engineering", DirectMembers: []string{"alice"}}},
+		},
+		Status: identitysync.Status{State: identitysync.SyncStatusSuccess},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	generation := ha.Generation{
+		Number: 1,
+		Group: ha.Group{
+			ID:       "group-1",
+			Tag:      "ha-group",
+			Selector: ha.Selector{Mode: "automatic"},
+			Members:  []ha.Member{{ID: "member-1", Tag: "endpoint-1", Host: "server.example", Port: 443, Profile: "trojan-tls", Confirmed: true}},
+		},
+		Channels: []ha.Channel{{ID: "portal", Tag: "ha-portal", Domain: "portal.example", Binding: ha.ChannelBinding{GroupTag: "ha-group"}}},
+	}
+	if err := writeServerStateDoc(path, map[string]any{serverHAGenerationKey: generation}); err != nil {
+		t.Fatal(err)
+	}
+	added, err := AddHARedirect(path, "portal", "", "engineering.internal", redirect.AccessPolicy{Access: "restricted", Groups: []string{"engineering"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(added.IdentityACL) == 0 || len(added.Provisioned) == 0 {
+		t.Fatalf("identity snapshot was not attached: %+v", added)
+	}
+	rules, err := ListHARedirects(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) != 1 || rules[0].Access != "restricted" || len(rules[0].Groups) != 1 || rules[0].Groups[0] != "engineering" {
 		t.Fatalf("rules = %+v", rules)
 	}
 }
