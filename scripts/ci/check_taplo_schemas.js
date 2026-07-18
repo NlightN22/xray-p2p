@@ -16,15 +16,14 @@ function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(root, relativePath), "utf8"));
 }
 
-function runTaploSyntaxCheck() {
+function runTaploSyntaxCheck(files) {
   const result = spawnSync(process.execPath, [
     taplo,
     "lint",
     "--config",
     "taplo.toml",
     "taplo.toml",
-    "tests/schema/valid/xp2p-client.toml",
-    "tests/schema/valid/xp2p-server.toml",
+    ...files,
   ], {
     cwd: root,
     encoding: "utf8",
@@ -66,18 +65,45 @@ function validateFixture(validate, tomlPath, shouldPass) {
   }
 }
 
-runTaploSyntaxCheck();
+function main() {
+  const taploConfig = readToml("taplo.toml");
+  assertTaploRule(taploConfig, "**/xp2p-client.toml", "schemas/xp2p-client.schema.json");
+  assertTaploRule(taploConfig, "**/xp2p-server.toml", "schemas/xp2p-server.schema.json");
 
-const taploConfig = readToml("taplo.toml");
-assertTaploRule(taploConfig, "**/xp2p-client.toml", "schemas/xp2p-client.schema.json");
-assertTaploRule(taploConfig, "**/xp2p-server.toml", "schemas/xp2p-server.schema.json");
+  const validateClient = validator("schemas/xp2p-client.schema.json");
+  const validateServer = validator("schemas/xp2p-server.schema.json");
+  const requestedFiles = process.argv.slice(2);
 
-const validateClient = validator("schemas/xp2p-client.schema.json");
-const validateServer = validator("schemas/xp2p-server.schema.json");
+  if (requestedFiles.length > 0) {
+    runTaploSyntaxCheck(requestedFiles);
+    for (const file of requestedFiles) {
+      const name = path.basename(file);
+      if (name === "xp2p-client.toml") {
+        validateFixture(validateClient, file, true);
+      } else if (name === "xp2p-server.toml") {
+        validateFixture(validateServer, file, true);
+      } else {
+        throw new Error(`${file} does not match an xp2p TOML schema rule`);
+      }
+    }
+  } else {
+    const validFiles = [
+      "tests/schema/valid/xp2p-client.toml",
+      "tests/schema/valid/xp2p-server.toml",
+    ];
+    runTaploSyntaxCheck(validFiles);
+    validateFixture(validateClient, validFiles[0], true);
+    validateFixture(validateServer, validFiles[1], true);
+    validateFixture(validateClient, "tests/schema/invalid/client/xp2p-client.toml", false);
+    validateFixture(validateServer, "tests/schema/invalid/server/xp2p-server.toml", false);
+  }
 
-validateFixture(validateClient, "tests/schema/valid/xp2p-client.toml", true);
-validateFixture(validateServer, "tests/schema/valid/xp2p-server.toml", true);
-validateFixture(validateClient, "tests/schema/invalid/client/xp2p-client.toml", false);
-validateFixture(validateServer, "tests/schema/invalid/server/xp2p-server.toml", false);
+  console.log("taplo schemas ok");
+}
 
-console.log("taplo schemas ok");
+try {
+  main();
+} catch (err) {
+  console.error(err.message || err);
+  process.exit(1);
+}
