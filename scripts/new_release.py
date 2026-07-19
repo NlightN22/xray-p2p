@@ -261,7 +261,21 @@ def _update_openwrt_package_makefile(log: _Logger, *, version: str, dry_run: boo
     if dry_run:
         log.line(f"[dry-run] write {makefile}")
         return
-    _write_text_lf_no_bom(makefile, updated)
+        _write_text_lf_no_bom(makefile, updated)
+
+
+def _assert_release_version(version: str) -> None:
+    go_content = _read_text(Path("go/internal/version/version.go"))
+    go_match = re.search(r'var current = "([^"]+)"', go_content)
+    package_content = _read_text(Path("openwrt/feed/packages/utils/xp2p/Makefile"))
+    package_match = re.search(r"(?m)^PKG_VERSION:=(.+)$", package_content)
+    go_version = go_match.group(1).strip() if go_match else ""
+    package_version = package_match.group(1).strip() if package_match else ""
+    if go_version != version or package_version != version:
+        raise SystemExit(
+            f"release version mismatch: requested {version}, "
+            f"Go has {go_version or '(missing)'}, OpenWrt has {package_version or '(missing)'}"
+        )
 
 
 def _build_openwrt_ipk(
@@ -526,16 +540,18 @@ def run_release(opts: Options) -> int:
 
     _check_replace_tag(log, tag=tag, replace=False, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
     _run(log, ["make", "schema-check"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    _assert_release_version(version)
     allowed = {"go/internal/version/version.go", "openwrt/feed/packages/utils/xp2p/Makefile", "schemas/xp2p-client.schema.json", "schemas/xp2p-server.schema.json"}
     changed = _git_output(log, ["status", "--porcelain"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
     paths = {line[3:].strip().replace("\\", "/") for line in changed.splitlines() if len(line) > 3}
     unexpected = sorted(paths - allowed)
     if unexpected:
         raise SystemExit("publish found non-release changes: " + ", ".join(unexpected))
-    if not paths:
-        raise SystemExit("publish requires a prepared release diff")
-    _run(log, ["git", "add", "--", *sorted(paths)], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
-    _run(log, ["git", "commit", "-m", f"chore: release {tag}"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    if paths:
+        _run(log, ["git", "add", "--", *sorted(paths)], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        _run(log, ["git", "commit", "-m", f"chore: release {tag}"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    else:
+        _run(log, ["git", "commit", "--allow-empty", "-m", f"chore: release {tag}"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
     _run(log, ["git", "tag", "-a", tag, "-m", f"Release {tag}"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
     log.line(f"Created local release commit and annotated tag {tag}; review before any push.")
     return 0

@@ -18,7 +18,7 @@ Run each stage from the repository root and stop immediately on failure.
 
 1. Confirm all planned release changes are merged and the working tree is clean.
 2. Run `python scripts/new_release.py prepare --version X.Y.Z`.
-3. Review the resulting diff. It must contain only the version file, OpenWrt package version, and generated schemas.
+3. Review the resulting diff. It must contain only the version file, OpenWrt package version, and generated schemas. It may be empty when the branch already contains the requested version.
 4. Confirm both native Windows and WSL Go checks passed.
 5. Stop before commit, tag, or push so the user can inspect the release diff.
 
@@ -26,7 +26,7 @@ Run each stage from the repository root and stop immediately on failure.
 
 1. Proceed only after the user has reviewed the prepared diff.
 2. Run `python scripts/new_release.py publish --version X.Y.Z`.
-3. Confirm the release commit and local annotated `vX.Y.Z` tag were created.
+3. Confirm the release commit and local annotated `vX.Y.Z` tag were created. An empty release commit is expected when the version was already prepared.
 4. Show `git status --short` and the tag target.
 
 ## External publication
