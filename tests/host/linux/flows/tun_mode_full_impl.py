@@ -965,7 +965,12 @@ def test_client_tun_mode_full_tunnel_routes_restore_after_purge(client_host, xp2
         )
     finally:
         if package_removed:
-            reinstall = linux_env.run_guest_script(client_host, "scripts/linux/install_xp2p.sh")
+            reinstall = linux_env.run_guest_script_with_env(
+                client_host,
+                "scripts/linux/install_xp2p.sh",
+                {"XP2P_SKIP_BUILD": "1"},
+                timeout=300,
+            )
             if reinstall.rc != 0:
                 pytest.fail(
                     "Failed to reinstall xp2p package.\n"

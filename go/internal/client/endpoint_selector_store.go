@@ -44,9 +44,5 @@ func commitEndpointSelectorState(statePath string, state endpointSelectorState) 
 	if err := saveEndpointSelectorState(statePath, state); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(selectorJournalPath(statePath), append(data, '\n'), 0o644)
+	return configio.WriteJSON(selectorJournalPath(statePath), state, configio.WriteOptions{})
 }

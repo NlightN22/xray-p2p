@@ -382,15 +382,30 @@ def _assert_ha_server_resources(host, run, reverse_tag: str, redirect_cidr: str)
 
 
 def _assert_selector_committed(host, expected_tag: str) -> None:
-    state = helpers.read_json(host, helpers.CLIENT_LIVE_DIR / "endpoint-selector.json")
-    journal = helpers.read_json(host, helpers.CLIENT_LIVE_DIR / "endpoint-selector.journal.json")
     group_id = ha_helpers.CLIENT_GROUP_ID.lower()
-    selected = ((state.get("groups") or {}).get(group_id) or {}).get("active_tag")
-    journal_selected = ((journal.get("groups") or {}).get(group_id) or {}).get("active_tag")
-    if selected != expected_tag or journal_selected != expected_tag:
-        raise AssertionError(f"selector active tag mismatch: state={state}, journal={journal}, expected={expected_tag}")
-    if state.get("revision") != journal.get("revision"):
-        raise AssertionError(f"selector journal revision mismatch: state={state}, journal={journal}")
+    state_path = helpers.CLIENT_LIVE_DIR / "endpoint-selector.json"
+    journal_path = helpers.CLIENT_LIVE_DIR / "endpoint-selector.journal.json"
+    deadline = time.time() + 10.0
+    last_snapshot = None
+    while time.time() < deadline:
+        state_before = helpers.read_json(host, state_path)
+        journal = helpers.read_json(host, journal_path)
+        state_after = helpers.read_json(host, state_path)
+        last_snapshot = (state_before, journal, state_after)
+        revision = state_before.get("revision")
+        if revision != state_after.get("revision") or revision != journal.get("revision"):
+            time.sleep(0.2)
+            continue
+        selected = ((state_after.get("groups") or {}).get(group_id) or {}).get("active_tag")
+        journal_selected = ((journal.get("groups") or {}).get(group_id) or {}).get("active_tag")
+        if selected == expected_tag and journal_selected == expected_tag:
+            return
+        time.sleep(0.2)
+    raise AssertionError(
+        "selector did not expose a stable committed snapshot: "
+        f"state_before={last_snapshot[0]}, journal={last_snapshot[1]}, "
+        f"state_after={last_snapshot[2]}, expected={expected_tag}"
+    )
 
 
 def _client_subscription_apply_count(host) -> int:

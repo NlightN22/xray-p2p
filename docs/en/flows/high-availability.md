@@ -169,6 +169,12 @@ been compiled, applied, and verified. It then persists the selector state in
 the client Live artifacts. A stale persisted active member is self-healed when
 the selector observes that it is no longer eligible.
 
+Selector state commits are serialized within the client process. Both the Live
+state and its journal are written atomically with the same monotonically
+increasing revision. Because the two files cannot be replaced as one filesystem
+operation, readers that require a committed pair must read state, journal, then
+state again and accept the snapshot only when all three revisions match.
+
 An administratively disabled endpoint is not a failover event. It is excluded
 by policy and must not be selected merely because another member is unhealthy.
 

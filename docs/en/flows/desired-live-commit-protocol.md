@@ -25,6 +25,9 @@ mutations, service compilation, watcher applies, and runtime API applies.
 - Client domain snapshots carry the digest of the Desired document they were
   loaded from. The coordinator rejects a stale read-modify-write candidate
   instead of overwriting a newer Desired document.
+- Client endpoint selector updates use the same client role lock while reading
+  health state, applying a runtime switch, and publishing the selector state
+  and journal.
 
 ## Invariants
 
@@ -39,6 +42,9 @@ mutations, service compilation, watcher applies, and runtime API applies.
    persisted. Failure leaves the previously committed state authoritative.
 8. A stopped service may commit Desired and queue a new request, but it must not
    publish a fake Live state.
+9. Selector state and journal files carry one monotonically increasing revision.
+   A reader accepts a pair only when a state-journal-state read observes the
+   same revision in all three documents.
 
 ## Service-Owned Apply
 

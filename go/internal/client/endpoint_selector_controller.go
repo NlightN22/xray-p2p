@@ -8,12 +8,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 func recordEndpointHealth(ctx context.Context, desired clientInstallState, endpointTag string, alive bool, now time.Time) error {
+	return apply.WithRoleLock(ctx, config.StateRoot(), apply.RoleClient, func() error {
+		return recordEndpointHealthLocked(ctx, desired, endpointTag, alive, now)
+	})
+}
+
+func recordEndpointHealthLocked(ctx context.Context, desired clientInstallState, endpointTag string, alive bool, now time.Time) error {
 	if len(desired.EndpointGroups) == 0 {
 		return nil
 	}
