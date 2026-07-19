@@ -138,6 +138,7 @@ func TestApplySnapshotRejectsCycles(t *testing.T) {
 }
 
 func TestServiceSyncAndProviderDetach(t *testing.T) {
+	t.Setenv("XP2P_CONFIG_ROOT", t.TempDir())
 	path := filepath.Join(t.TempDir(), "state.json")
 	store := StoreAt(path)
 	service := Service{
@@ -196,6 +197,7 @@ func TestServiceSyncAndProviderDetach(t *testing.T) {
 }
 
 func TestServiceSyncAndApplyKeepsCurrentWhenRuntimeApplyFails(t *testing.T) {
+	t.Setenv("XP2P_CONFIG_ROOT", t.TempDir())
 	path := filepath.Join(t.TempDir(), "state.json")
 	store := StoreAt(path)
 	current := &Generation{
@@ -237,6 +239,7 @@ func TestServiceSyncAndApplyKeepsCurrentWhenRuntimeApplyFails(t *testing.T) {
 }
 
 func TestServiceSyncAndApplyPublishesStagedCandidateAndKeepsTransactionForNextStart(t *testing.T) {
+	t.Setenv("XP2P_CONFIG_ROOT", t.TempDir())
 	path := filepath.Join(t.TempDir(), "state.json")
 	store := StoreAt(path)
 	service := Service{
