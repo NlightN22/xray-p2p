@@ -117,3 +117,24 @@ func TestStoreKeepsMultipleUsersPerTag(t *testing.T) {
 		t.Fatalf("expected two snapshots, got %d", len(snapshots))
 	}
 }
+
+func TestExplicitFailureStaysDeadForLongTTL(t *testing.T) {
+	store, err := NewStore("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	healthy := false
+	if _, err := store.Update(Payload{
+		Tag: "proxy-test", Host: "edge.example.org", Timestamp: now, Healthy: &healthy,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	snapshots := store.Snapshot(now, 70*time.Minute)
+	if len(snapshots) != 1 || snapshots[0].Alive {
+		t.Fatalf("explicit failure must stay dead: %+v", snapshots)
+	}
+	if !snapshots[0].Entry.LastSeen.Equal(now) {
+		t.Fatalf("failure timestamp was altered: %s != %s", snapshots[0].Entry.LastSeen, now)
+	}
+}

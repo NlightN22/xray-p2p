@@ -1,6 +1,6 @@
 ---
 name: xray-p2p-release-check
-description: Audit schema and persisted-data compatibility, verify, prepare, and publish an xray-p2p release through the repository's GitHub Actions. Use when checking release readiness, comparing a release branch with its previous version, reviewing normalization or migration decisions, updating generated TOML schemas and versions, reviewing a release diff, creating the release commit and annotated tag, or running the confirmed external release workflow.
+description: Audit schema and persisted-data compatibility, verify a release candidate on automated gates and an authorized real-config canary, prepare, and publish an xray-p2p release through the repository's GitHub Actions. Use when checking release readiness, comparing a release branch with its previous version, reviewing normalization or migration decisions, testing upgrades against real persisted state, updating generated TOML schemas and versions, reviewing a release diff, creating the release commit and annotated tag, or running the confirmed external release workflow.
 ---
 
 # Xray P2P Release Check
@@ -59,9 +59,58 @@ Complete this gate after the schema compatibility decisions are accepted and bef
 5. Confirm schema drift, schema tests, schema compatibility, native Windows Go tests, WSL Go tests, and the full Linux host suite with all opt-in release scenarios passed.
 6. Stop before commit, tag, or push so the user can inspect the release diff.
 
+## Real-config canary gate
+
+Complete this gate after `prepare` and before `publish`. It is a live-system
+mutation and always requires the user's explicit approval of the target nodes,
+maintenance window, candidate artifact, and rollback plan. Never infer access
+or authorization from repository context.
+
+1. Build the exact prepared release candidate locally. For OpenWrt, write IPKs
+   under `build/ipk`; never use `openwrt/staging/stable`.
+2. Select an authorized, representative working client/server pair with real
+   accumulated Desired, Live, LKG, apply markers, credentials, and service
+   enablement state. Prefer a pair that exercises TUN, redirects, control auth,
+   heartbeat, and multiple endpoints when those features are release-relevant.
+3. Before mutation, record package, binary, and Live runtime versions; enabled
+   and running roles; process tree; Desired file hashes; the complete `.state`
+   tree; tunnel/control ping; heartbeat freshness; and current service errors.
+4. Back up `/etc/xp2p` and the package/runtime metadata to an access-restricted
+   location outside the repository. Verify the archive can be listed. Never
+   commit real configurations, credentials, certificates, unredacted state, or
+   raw production logs.
+5. Install through the normal package upgrade path. Do not stop services,
+   delete markers, rewrite credentials, or repair Desired/Live manually unless
+   the documented package workflow requires it; the canary must test the same
+   unattended migration users receive.
+6. Test a mixed-version window: upgrade the server first and require the old
+   client tunnel and control path to remain healthy. Then upgrade the client.
+   If the supported rollout order differs, document and test that order before
+   publication.
+7. Require package, binary, and Live versions to match the candidate; no old
+   processes to remain; pre-upgrade enabled/running state to be preserved;
+   Desired hashes to remain unchanged except for an accepted migration; Live
+   to contain current required metadata; and stale apply markers not to block
+   compilation. Verify tunnel traffic, control ping/auth, heartbeat freshness,
+   service restart persistence, logs, and the full `.state` tree.
+8. Treat any manual recovery, unexpected credential change, stale Live,
+   synthetic or stale heartbeat, process overlap, service-state drift, or
+   unexplained marker as a failed gate. Capture a redacted logs-only diagnostic
+   bundle, restore the previous package/state using the approved rollback, and
+   verify recovery. Do not count a repaired canary as passed.
+9. Convert every independent canary failure into an automated regression test,
+   fix it, rerun all earlier affected gates, rebuild the candidate, and repeat
+   the canary from the restored baseline.
+10. Produce a concise canary report with target roles (not secrets or sensitive
+    host identity), old/new versions, rollout order, backup location, checks,
+    result, diagnostics location, rollback result when used, and unresolved
+    risks. Block `publish`, tagging, pushing, and workflow dispatch until the
+    canary passes.
+
 ## Publish locally
 
-1. Proceed only after the user has reviewed the prepared diff.
+1. Proceed only after the user has reviewed the prepared diff and the
+   real-config canary gate has passed.
 2. Run `python scripts/new_release.py publish --version X.Y.Z`.
 3. Confirm the release commit and local annotated `vX.Y.Z` tag were created. An empty release commit is expected when the version was already prepared.
 4. Show `git status --short` and the tag target.

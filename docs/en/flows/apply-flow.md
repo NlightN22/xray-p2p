@@ -193,16 +193,20 @@ created after fixing Desired inputs.
 
 ### Startup-Only Staged Changes
 
-Some service startup migrations update Desired inputs before xray-core is
-running. For example, server startup can rotate legacy non-UUID user
-credentials into the protocol-neutral credential model. These startup
-migrations must stage the updated Desired inputs and write `apply.request`.
-They must not use the runtime-capable CLI path before xray-core exists.
+Some service startup migrations may update Desired inputs before xray-core is
+running. These migrations must stage the updated Desired inputs and write
+`apply.request`. They must not use the runtime-capable CLI path before
+xray-core exists.
 
 After staging, the normal service apply path compiles Desired into Live
 artifacts, clears `apply.request` on success, and starts xray-core from the
 fresh Live artifacts. This avoids a false runtime-apply failure during service
 bootstrap and keeps Desired, Live, and the running process aligned.
+
+Credential rotation is not a startup migration. It changes authentication
+between nodes and must use the coordinated rotation flow with client
+verification and acknowledgement. A package upgrade must not rotate an active
+credential merely because the new service version started.
 
 ## Routes and OS Changes
 

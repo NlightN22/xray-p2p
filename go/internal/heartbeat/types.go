@@ -14,6 +14,7 @@ type Payload struct {
 	ClientIP  string    `json:"client_ip,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
 	RTTMillis int64     `json:"rtt_ms"`
+	Healthy   *bool     `json:"healthy,omitempty"`
 }
 
 // Entry stores aggregated statistics for a single client tunnel.
@@ -28,6 +29,7 @@ type Entry struct {
 	TotalRTTMillis int64     `json:"total_rtt_ms"`
 	Samples        int64     `json:"samples"`
 	LastSeen       time.Time `json:"last_seen"`
+	Healthy        *bool     `json:"healthy,omitempty"`
 }
 
 // AvgRTTMillis returns the average RTT observed so far.

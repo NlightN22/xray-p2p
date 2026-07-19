@@ -115,7 +115,7 @@ if [ -n "$$IPKG_INSTROOT" ]; then
 fi
 
 case "$$1" in
-	remove|upgrade|deconfigure)
+	remove|deconfigure)
 		if command -v xp2p >/dev/null 2>&1; then
 			mode_output="$$(xp2p client mode 2>/dev/null || true)"
 			echo "$$mode_output" | grep -qi "mode: tun" || true
@@ -128,6 +128,14 @@ case "$$1" in
 		/etc/init.d/xp2p-client stop >/dev/null 2>&1 || true
 		/etc/init.d/xp2p-server stop >/dev/null 2>&1 || true
 		;;
+	upgrade)
+		if /etc/init.d/xp2p-client running >/dev/null 2>&1; then
+			/etc/init.d/xp2p-client stop >/dev/null 2>&1 || exit 1
+		fi
+		if /etc/init.d/xp2p-server running >/dev/null 2>&1; then
+			/etc/init.d/xp2p-server stop >/dev/null 2>&1 || exit 1
+		fi
+		;;
 esac
 exit 0
 endef
@@ -139,7 +147,7 @@ if [ -n "$$IPKG_INSTROOT" ]; then
 fi
 
 case "$$1" in
-	remove|upgrade|failed-upgrade|abort-install|abort-upgrade)
+	remove)
 		/etc/init.d/xp2p-client disable >/dev/null 2>&1 || true
 		/etc/init.d/xp2p-server disable >/dev/null 2>&1 || true
 		rm -f /etc/xp2p/bin/xray

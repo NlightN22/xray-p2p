@@ -84,7 +84,7 @@ func (s State) snapshot(now time.Time, ttl time.Duration) []Snapshot {
 		results = append(results, Snapshot{
 			Entry:        entry,
 			AvgRTTMillis: entry.AvgRTTMillis(),
-			Alive:        ttl <= 0 || (entry.LastSeen.After(time.Time{}) && age <= ttl),
+			Alive:        entryAlive(entry, age, ttl),
 			Age:          age,
 		})
 	}
@@ -107,6 +107,13 @@ func (s State) snapshot(now time.Time, ttl time.Duration) []Snapshot {
 		return leftTag < rightTag
 	})
 	return results
+}
+
+func entryAlive(entry Entry, age, ttl time.Duration) bool {
+	if entry.Healthy != nil && !*entry.Healthy {
+		return false
+	}
+	return ttl <= 0 || (entry.LastSeen.After(time.Time{}) && age <= ttl)
 }
 
 func (s *State) ensure() {
@@ -146,6 +153,7 @@ func (s *State) update(payload Payload) (Entry, error) {
 		payload.RTTMillis = 0
 	}
 	entry.LastRTTMillis = payload.RTTMillis
+	entry.Healthy = payload.Healthy
 	if entry.MinRTTMillis == 0 || payload.RTTMillis < entry.MinRTTMillis {
 		entry.MinRTTMillis = payload.RTTMillis
 	}

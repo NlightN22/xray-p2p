@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	"github.com/NlightN22/xray-p2p/go/internal/bootstrapapply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -217,58 +218,9 @@ func hasClientConfig(liveConfigDir string) (bool, error) {
 }
 
 func seedApplyRequestOnServiceStart(role string, liveConfigDir string, desiredExtensionsDir string) error {
-	if _, err := os.Stat(config.ApplyRequestPath()); err == nil {
-		return nil
+	seeded, err := bootstrapapply.Seed(role, liveConfigDir, desiredExtensionsDir)
+	if seeded {
+		logging.Info("xp2p client bootstrap: apply request recorded")
 	}
-
-	desiredConfigPath, err := config.DesiredConfigPathForRole(role)
-	if err != nil {
-		return err
-	}
-	desiredInfo, err := os.Stat(desiredConfigPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("stat desired config %s: %w", desiredConfigPath, err)
-	}
-	desiredLatest := desiredInfo.ModTime()
-
-	if entries, err := os.ReadDir(desiredExtensionsDir); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			info, infoErr := entry.Info()
-			if infoErr != nil {
-				continue
-			}
-			if info.ModTime().After(desiredLatest) {
-				desiredLatest = info.ModTime()
-			}
-		}
-	}
-
-	liveMetaPath := filepath.Join(filepath.Clean(liveConfigDir), layout.RuntimeMetaFileName)
-	liveMetaInfo, err := os.Stat(liveMetaPath)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("stat runtime metadata %s: %w", liveMetaPath, err)
-		}
-	} else if !desiredLatest.After(liveMetaInfo.ModTime()) {
-		return nil
-	}
-
-	if err := apply.RemoveError(config.ApplyErrorPath()); err != nil {
-		logging.Warn("xp2p client bootstrap: apply error cleanup failed", "err", err)
-	}
-	req, err := apply.NewRequest(role)
-	if err != nil {
-		return err
-	}
-	if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
-		return err
-	}
-	logging.Info("xp2p client bootstrap: apply request recorded")
-	return nil
+	return err
 }

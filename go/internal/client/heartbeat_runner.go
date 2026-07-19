@@ -230,9 +230,7 @@ func (r *heartbeatRunner) recordEndpointHealth(endpoint clientEndpointRecord, al
 
 func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, alive bool, rttMillis int64) {
 	if r.store != nil {
-		timestamp := time.Now().UTC()
 		if !alive {
-			timestamp = time.Now().UTC().Add(-time.Hour)
 			rttMillis = 0
 		}
 		payloadLocal := heartbeat.Payload{
@@ -240,13 +238,18 @@ func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, al
 			Host:      endpoint.Hostname,
 			User:      strings.TrimSpace(endpoint.User),
 			ClientIP:  detectLocalIP(endpoint.Hostname),
-			Timestamp: timestamp,
+			Timestamp: time.Now().UTC(),
 			RTTMillis: rttMillis,
+			Healthy:   boolPointer(alive),
 		}
 		if _, err := r.store.Update(payloadLocal); err != nil {
 			logging.Warn("client heartbeat: failed to update local store", "tag", endpoint.Tag, "err", err)
 		}
 	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 type heartbeatPingReporter struct {
