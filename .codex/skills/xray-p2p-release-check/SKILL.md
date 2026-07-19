@@ -77,6 +77,13 @@ Perform every push and workflow dispatch only after explicit user approval. Use 
 3. Push the release branch and tag only when approved. Require the automatic `ci` workflow to pass on the exact release commit SHA. `ci` is triggered by qualifying branch pushes and pull requests; do not dispatch it manually.
 4. Confirm the `artifacts` branch contains the complete `openwrt/staging/stable/*.ipk` set for `X.Y.Z`. The GitHub build workflows do not create or publish this OpenWrt set.
 
+### Keep local OpenWrt outputs out of the main worktree
+
+1. Build local OpenWrt packages into `build/ipk`, using `scripts/build/build_openwrt_ipk.sh --all --force-build --output-dir build/ipk` or the equivalent guest path when the build runs inside Vagrant.
+2. Never use `openwrt/staging/stable` as the local output directory in the main worktree. That path is reserved for the committed layout on the dedicated `artifacts` branch.
+3. When publishing IPKs, copy only the verified versioned `*.ipk` files from `build/ipk` into `openwrt/staging/stable` inside a separate `artifacts`-branch worktree. Do not copy `Packages`, `Packages.gz`, release notes, logs, or other build outputs.
+4. After publishing the artifacts branch, require the main worktree to contain no untracked or modified files under `openwrt/staging`. Move any accidental local outputs back to `build/ipk` and remove the empty staging directories before continuing.
+
 ### Build release artifacts
 
 Run these three manual workflows for the same release ref. They are independent and may run in parallel:
