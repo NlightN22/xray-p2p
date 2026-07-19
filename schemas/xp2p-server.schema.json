@@ -1,0 +1,235 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://raw.githubusercontent.com/NlightN22/xray-p2p/main/schemas/xp2p-server.schema.json",
+  "title": "xp2p server TOML configuration",
+  "description": "Schema for xp2p-server.toml Desired inputs.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "logging": { "$ref": "#/definitions/logging" },
+    "server": { "$ref": "#/definitions/server" },
+    "xray_assets": { "$ref": "#/definitions/xray_assets" }
+  },
+  "definitions": {
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ns|us|ms|s|m|h)$"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "cidr": {
+      "type": "string",
+      "pattern": "^([^/\\s]+)/(\\d{1,3})$"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "tag": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._@:+-]+$"
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "type": "string", "enum": ["debug", "info", "warn", "error"] },
+        "format": { "type": "string", "enum": ["text", "json"] }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "port": { "type": "string", "pattern": "^[0-9]{1,5}$" },
+        "trojan_port": { "type": "string", "pattern": "^[0-9]{1,5}$" },
+        "profile": { "type": "string", "enum": ["trojan-tls", "vless-tls-vision"] },
+        "install_dir": { "type": "string" },
+        "config_dir": { "type": "string" },
+        "mode": { "type": "string", "enum": ["auto", "proxy", "tun"] },
+        "cert_store": { "type": "string" },
+        "certificate": { "type": "string" },
+        "key": { "type": "string" },
+        "host": { "$ref": "#/definitions/host" },
+        "tun_enabled": { "type": "boolean" },
+        "tun_name": { "type": "string", "minLength": 1 },
+        "tun_mtu": { "type": "integer", "minimum": 576, "maximum": 9000 },
+        "tun_addr": { "$ref": "#/definitions/cidr" },
+        "identity_provider": { "$ref": "#/definitions/identity_provider" },
+        "users": { "type": "array", "items": { "$ref": "#/definitions/user" } },
+        "trojan_users": { "type": "array", "items": { "$ref": "#/definitions/legacy_trojan_user" } },
+        "server_redirects": { "type": "array", "items": { "$ref": "#/definitions/redirect" } },
+        "reverse_channels": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/reverse_channel" }
+        },
+        "forwards": { "type": "array", "items": { "$ref": "#/definitions/forward" } },
+        "ha_generation": { "$ref": "#/definitions/ha_generation" },
+        "ha_local_peer_id": { "type": "string" },
+        "ha_peers": { "type": "array", "items": { "$ref": "#/definitions/ha_peer" } },
+        "ha_identity_acl": { "type": "string" },
+        "ha_provisioned_resources": { "type": "string" },
+        "ha_redirect_keys": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "identity_provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": { "type": "string" },
+        "kind": { "type": "string", "enum": ["ldap", "scim"] },
+        "secret": { "type": "string" },
+        "interval": { "$ref": "#/definitions/duration" },
+        "max_cache_age": { "$ref": "#/definitions/duration" },
+        "group_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "ldap": { "$ref": "#/definitions/ldap_provider" },
+        "scim": { "$ref": "#/definitions/scim_provider" }
+      }
+    },
+    "ldap_provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "base_dn": { "type": "string" },
+        "bind_dn": { "type": "string" },
+        "user_filter": { "type": "string" },
+        "group_filter": { "type": "string" },
+        "subject_attribute": { "type": "string" },
+        "membership_attribute": { "type": "string" },
+        "display_name_attribute": { "type": "string" },
+        "page_size": { "type": "integer", "minimum": 1 },
+        "timeout": { "$ref": "#/definitions/duration" },
+        "insecure_tls": { "type": "boolean" }
+      }
+    },
+    "scim_provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": { "type": "string", "format": "uri" },
+        "token": { "type": "string" },
+        "timeout": { "$ref": "#/definitions/duration" },
+        "page_size": { "type": "integer", "minimum": 1 },
+        "insecure_tls": { "type": "boolean" }
+      }
+    },
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_label", "active_credential"],
+      "properties": {
+        "user_label": { "type": "string", "minLength": 1 },
+        "active_credential": { "type": "string", "minLength": 1 },
+        "previous_credential_for_rotation": { "type": "string" },
+        "rotation_expires_at": { "type": "string", "format": "date-time" },
+        "credential_generation": { "type": "integer", "minimum": 1 },
+        "credential": { "type": "string" },
+        "disabled": { "type": "boolean" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "legacy_trojan_user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["email", "password"],
+      "properties": {
+        "email": { "type": "string", "minLength": 1 },
+        "password": { "type": "string", "minLength": 1 },
+        "disabled": { "type": "boolean" }
+      }
+    },
+    "redirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outbound_tag"],
+      "oneOf": [{ "required": ["cidr"] }, { "required": ["domain"] }],
+      "properties": {
+        "cidr": { "$ref": "#/definitions/cidr" },
+        "domain": { "$ref": "#/definitions/host" },
+        "outbound_tag": { "$ref": "#/definitions/tag" },
+        "no_routes": { "type": "boolean" },
+        "disabled": { "type": "boolean" },
+        "access": { "type": "string", "enum": ["all", "restricted"] },
+        "users": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "groups": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "reverse_channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_id", "host", "tag", "domain"],
+      "properties": {
+        "user_id": { "type": "string", "minLength": 1 },
+        "host": { "$ref": "#/definitions/host" },
+        "tag": { "$ref": "#/definitions/tag" },
+        "domain": { "$ref": "#/definitions/host" },
+        "disabled": { "type": "boolean" }
+      }
+    },
+    "forward": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listen_address", "listen_port", "target_host", "target_port", "protocol", "tag"],
+      "properties": {
+        "listen_address": { "$ref": "#/definitions/host" },
+        "listen_port": { "$ref": "#/definitions/port" },
+        "target_host": { "$ref": "#/definitions/host" },
+        "target_port": { "$ref": "#/definitions/port" },
+        "protocol": { "type": "string", "enum": ["tcp", "udp", "both"] },
+        "tag": { "$ref": "#/definitions/tag" },
+        "remark": { "type": "string" }
+      }
+    },
+    "ha_generation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "number": { "type": "integer", "minimum": 0 },
+        "tombstones": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "ha_peer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "endpoint": { "type": "string" },
+        "allow_insecure": { "type": "boolean" },
+        "witness": { "type": "boolean" },
+        "non_voting": { "type": "boolean" },
+        "secret": { "type": "string" }
+      }
+    },
+    "xray_assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stale_after": { "$ref": "#/definitions/duration" },
+        "files": { "type": "array", "items": { "$ref": "#/definitions/xray_asset" } }
+      }
+    },
+    "xray_asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.dat$|^[A-Za-z0-9._-]+$" },
+        "url": { "type": "string", "format": "uri" },
+        "stale_after": { "$ref": "#/definitions/duration" }
+      }
+    }
+  }
+}
+
+
+
