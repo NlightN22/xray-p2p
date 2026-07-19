@@ -1,6 +1,6 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/NlightN22/xray-p2p/schemas/xp2p-server.schema.json",
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "id": "https://github.com/NlightN22/xray-p2p/schemas/xp2p-server.schema.json",
   "title": "xp2p server TOML configuration",
   "description": "Schema for xp2p-server.toml Desired inputs.",
   "type": "object",

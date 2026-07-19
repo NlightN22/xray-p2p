@@ -2,7 +2,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const TOML = require("@iarna/toml");
-const Ajv = require("ajv");
+const AjvDraft4 = require("ajv-draft-04");
 const addFormats = require("ajv-formats");
 
 const root = path.resolve(__dirname, "..", "..");
@@ -50,18 +50,24 @@ function assertTaploRule(config, include, schemaPath) {
 
 function validator(schemaPath) {
   const schema = readJson(schemaPath);
-  assertAbsoluteSchemaId(schema, schemaPath);
-  const ajv = new Ajv({ allErrors: true, strict: false });
+  assertDraft4SchemaId(schema, schemaPath);
+  const ajv = new AjvDraft4({ allErrors: true, strict: false });
   addFormats(ajv);
   return ajv.compile(schema);
 }
 
-function assertAbsoluteSchemaId(schema, schemaPath) {
+function assertDraft4SchemaId(schema, schemaPath) {
+  if (schema.$schema !== "http://json-schema.org/draft-04/schema#") {
+    throw new Error(`${schemaPath} must use JSON Schema Draft 4 for Taplo compatibility`);
+  }
   try {
-    const id = new URL(schema.$id || "");
+    const id = new URL(schema.id || "");
     if (!id.protocol) throw new Error("missing protocol");
   } catch (err) {
-    throw new Error(`${schemaPath} must use an absolute $id URI`);
+    throw new Error(`${schemaPath} must use an absolute Draft 4 id URI`);
+  }
+  if (schema.$id) {
+    throw new Error(`${schemaPath} must not use $id; Taplo supports Draft 4 id`);
   }
 }
 
