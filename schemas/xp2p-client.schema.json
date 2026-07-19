@@ -1,16 +1,16 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/NlightN22/xray-p2p/schemas/xp2p-client.schema.json",
   "title": "xp2p client TOML configuration",
   "description": "Schema for xp2p-client.toml Desired inputs.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "logging": { "$ref": "#/$defs/logging" },
-    "client": { "$ref": "#/$defs/client" },
-    "xray_assets": { "$ref": "#/$defs/xray_assets" }
+    "logging": { "$ref": "#/definitions/logging" },
+    "client": { "$ref": "#/definitions/client" },
+    "xray_assets": { "$ref": "#/definitions/xray_assets" }
   },
-  "$defs": {
+  "definitions": {
     "duration": {
       "type": "string",
       "pattern": "^[0-9]+(ns|us|ms|s|m|h)$"
@@ -48,7 +48,7 @@
       "properties": {
         "install_dir": { "type": "string" },
         "config_dir": { "type": "string" },
-        "server_address": { "$ref": "#/$defs/host" },
+        "server_address": { "$ref": "#/definitions/host" },
         "server_port": { "type": "string", "pattern": "^[0-9]{1,5}$" },
         "diag_port": { "type": "string", "pattern": "^[0-9]{1,5}$" },
         "user": { "type": "string" },
@@ -59,19 +59,19 @@
         "tun_enabled": { "type": "boolean" },
         "tun_name": { "type": "string", "minLength": 1 },
         "tun_mtu": { "type": "integer", "minimum": 576, "maximum": 9000 },
-        "tun_addr": { "$ref": "#/$defs/cidr" },
+        "tun_addr": { "$ref": "#/definitions/cidr" },
         "tun_mode": { "type": "string", "enum": ["split", "full", "proxy"] },
-        "dns_servers": { "type": "array", "items": { "$ref": "#/$defs/host" }, "uniqueItems": true },
+        "dns_servers": { "type": "array", "items": { "$ref": "#/definitions/host" }, "uniqueItems": true },
         "full_tunnel_verbose": { "type": "boolean" },
         "full_tunnel_tag": { "type": "string" },
-        "endpoints": { "type": "array", "items": { "$ref": "#/$defs/endpoint" } },
-        "endpoint_groups": { "type": "array", "items": { "$ref": "#/$defs/endpoint_group" } },
-        "redirects": { "type": "array", "items": { "$ref": "#/$defs/redirect" } },
+        "endpoints": { "type": "array", "items": { "$ref": "#/definitions/endpoint" } },
+        "endpoint_groups": { "type": "array", "items": { "$ref": "#/definitions/endpoint_group" } },
+        "redirects": { "type": "array", "items": { "$ref": "#/definitions/redirect" } },
         "reverse": {
           "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/reverse_channel" }
+          "additionalProperties": { "$ref": "#/definitions/reverse_channel" }
         },
-        "forwards": { "type": "array", "items": { "$ref": "#/$defs/forward" } }
+        "forwards": { "type": "array", "items": { "$ref": "#/definitions/forward" } }
       }
     },
     "endpoint": {
@@ -84,10 +84,10 @@
         "transport": { "type": "string", "enum": ["tcp"] },
         "security": { "type": "string", "enum": ["tls"] },
         "flow": { "type": "string", "enum": ["xtls-rprx-vision"] },
-        "hostname": { "$ref": "#/$defs/host" },
-        "tag": { "$ref": "#/$defs/tag" },
-        "address": { "$ref": "#/$defs/host" },
-        "port": { "$ref": "#/$defs/port" },
+        "hostname": { "$ref": "#/definitions/host" },
+        "tag": { "$ref": "#/definitions/tag" },
+        "address": { "$ref": "#/definitions/host" },
+        "port": { "$ref": "#/definitions/port" },
         "user": { "type": "string", "minLength": 1 },
         "password": { "type": "string", "minLength": 1 },
         "server_name": { "type": "string" },
@@ -104,15 +104,15 @@
       "required": ["group_id", "tag", "members"],
       "properties": {
         "group_id": { "type": "string", "minLength": 1 },
-        "tag": { "$ref": "#/$defs/tag" },
-        "members": { "type": "array", "items": { "$ref": "#/$defs/tag" }, "minItems": 1, "uniqueItems": true },
+        "tag": { "$ref": "#/definitions/tag" },
+        "members": { "type": "array", "items": { "$ref": "#/definitions/tag" }, "minItems": 1, "uniqueItems": true },
         "mode": { "type": "string", "enum": ["automatic", "manual", "disabled"] },
         "failure_threshold": { "type": "integer", "minimum": 1 },
         "success_threshold": { "type": "integer", "minimum": 1 },
         "cooldown_seconds": { "type": "integer", "minimum": 0 },
         "minimum_hold_seconds": { "type": "integer", "minimum": 0 },
         "automatic_failback": { "type": "boolean" },
-        "manual_active_tag": { "$ref": "#/$defs/tag" }
+        "manual_active_tag": { "$ref": "#/definitions/tag" }
       }
     },
     "redirect": {
@@ -121,9 +121,9 @@
       "required": ["outbound_tag"],
       "oneOf": [{ "required": ["cidr"] }, { "required": ["domain"] }],
       "properties": {
-        "cidr": { "$ref": "#/$defs/cidr" },
-        "domain": { "$ref": "#/$defs/host" },
-        "outbound_tag": { "$ref": "#/$defs/tag" },
+        "cidr": { "$ref": "#/definitions/cidr" },
+        "domain": { "$ref": "#/definitions/host" },
+        "outbound_tag": { "$ref": "#/definitions/tag" },
         "no_routes": { "type": "boolean" },
         "disabled": { "type": "boolean" },
         "access": { "type": "string", "enum": ["all", "restricted"] },
@@ -138,11 +138,11 @@
       "properties": {
         "channel_id": { "type": "string" },
         "user_id": { "type": "string", "minLength": 1 },
-        "host": { "$ref": "#/$defs/host" },
-        "tag": { "$ref": "#/$defs/tag" },
-        "domain": { "$ref": "#/$defs/host" },
-        "endpoint_tag": { "$ref": "#/$defs/tag" },
-        "group_tag": { "$ref": "#/$defs/tag" },
+        "host": { "$ref": "#/definitions/host" },
+        "tag": { "$ref": "#/definitions/tag" },
+        "domain": { "$ref": "#/definitions/host" },
+        "endpoint_tag": { "$ref": "#/definitions/tag" },
+        "group_tag": { "$ref": "#/definitions/tag" },
         "disabled": { "type": "boolean" }
       }
     },
@@ -151,12 +151,12 @@
       "additionalProperties": false,
       "required": ["listen_address", "listen_port", "target_host", "target_port", "protocol", "tag"],
       "properties": {
-        "listen_address": { "$ref": "#/$defs/host" },
-        "listen_port": { "$ref": "#/$defs/port" },
-        "target_host": { "$ref": "#/$defs/host" },
-        "target_port": { "$ref": "#/$defs/port" },
+        "listen_address": { "$ref": "#/definitions/host" },
+        "listen_port": { "$ref": "#/definitions/port" },
+        "target_host": { "$ref": "#/definitions/host" },
+        "target_port": { "$ref": "#/definitions/port" },
         "protocol": { "type": "string", "enum": ["tcp", "udp", "both"] },
-        "tag": { "$ref": "#/$defs/tag" },
+        "tag": { "$ref": "#/definitions/tag" },
         "remark": { "type": "string" }
       }
     },
@@ -164,8 +164,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "stale_after": { "$ref": "#/$defs/duration" },
-        "files": { "type": "array", "items": { "$ref": "#/$defs/xray_asset" } }
+        "stale_after": { "$ref": "#/definitions/duration" },
+        "files": { "type": "array", "items": { "$ref": "#/definitions/xray_asset" } }
       }
     },
     "xray_asset": {
@@ -175,8 +175,9 @@
       "properties": {
         "name": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.dat$|^[A-Za-z0-9._-]+$" },
         "url": { "type": "string", "format": "uri" },
-        "stale_after": { "$ref": "#/$defs/duration" }
+        "stale_after": { "$ref": "#/definitions/duration" }
       }
     }
   }
 }
+

@@ -2,7 +2,7 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const TOML = require("@iarna/toml");
-const Ajv2020 = require("ajv/dist/2020");
+const Ajv = require("ajv");
 const addFormats = require("ajv-formats");
 
 const root = path.resolve(__dirname, "..", "..");
@@ -51,7 +51,7 @@ function assertTaploRule(config, include, schemaPath) {
 function validator(schemaPath) {
   const schema = readJson(schemaPath);
   assertAbsoluteSchemaId(schema, schemaPath);
-  const ajv = new Ajv2020({ allErrors: true, strict: false });
+  const ajv = new Ajv({ allErrors: true, strict: false });
   addFormats(ajv);
   return ajv.compile(schema);
 }
