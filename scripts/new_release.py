@@ -481,7 +481,12 @@ def _publish_openwrt_artifacts(
 
 def _check_replace_tag(log: _Logger, *, tag: str, replace: bool, dry_run: bool, keepalive_seconds: int) -> None:
     _write_section(log, f"Checking for existing tag {tag}")
-    local_exists = _git_check(log, ["rev-parse", "-q", "--verify", tag], dry_run=dry_run, keepalive_seconds=keepalive_seconds)
+    local_exists = _git_check(
+        log,
+        ["show-ref", "--verify", "--quiet", f"refs/tags/{tag}"],
+        dry_run=dry_run,
+        keepalive_seconds=keepalive_seconds,
+    )
     remote_exists = _git_check(
         log,
         ["ls-remote", "--exit-code", "origin", f"refs/tags/{tag}"],
