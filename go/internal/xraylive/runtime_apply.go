@@ -313,8 +313,8 @@ func (a xrayInboundApplier) ListInboundTags(ctx context.Context) ([]string, erro
 }
 
 func readMatchingRequest(requestPath, errorPath, role string) (apply.Request, bool, error) {
-	req, exists, err := apply.ReadRequest(requestPath)
-	if err != nil || !exists || !req.MatchesRole(role) {
+	req, exists, err := apply.ReadRequestForRole(requestPath, role)
+	if err != nil || !exists {
 		return req, false, err
 	}
 	if marker, markerExists, err := apply.ReadError(errorPath); err != nil {

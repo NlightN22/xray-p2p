@@ -1,90 +1,120 @@
 package apply
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"strings"
 )
 
-// RemoveRoleMarkers removes apply.request and apply.error if they belong to the supplied role.
-// When apply.request targets RoleAny it is preserved because it may still be needed by the other role.
+// RemoveRoleMarkers removes only the supplied role generation and error.
 func RemoveRoleMarkers(requestPath, errorPath, role string) error {
-	normalized := strings.TrimSpace(strings.ToLower(role))
-	if normalized == "" {
-		return fmt.Errorf("apply: remove markers: role is required")
+	role = normalizeRole(role)
+	if role != RoleClient && role != RoleServer {
+		return fmt.Errorf("apply: remove markers: concrete role is required")
 	}
-
-	if req, exists, err := ReadRequest(requestPath); err == nil {
-		if exists {
-			if req.Role == "" || strings.EqualFold(req.Role, normalized) {
-				if err := RemoveRequest(requestPath); err != nil {
-					return err
-				}
-			}
-		}
-	} else {
-		if err := RemoveRequest(requestPath); err != nil {
-			return fmt.Errorf("apply: remove request after read failure: %w", err)
-		}
-	}
-
-	if marker, exists, err := ReadError(errorPath); err == nil {
-		if exists {
-			if marker.Role == "" || strings.EqualFold(marker.Role, normalized) {
-				if err := RemoveError(errorPath); err != nil {
-					return err
-				}
-			}
-		}
-	} else {
-		if err := RemoveError(errorPath); err != nil {
-			return fmt.Errorf("apply: remove error marker after read failure: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// CompleteRequest removes markers only when they still belong to req.
-// A newer request is preserved so an older apply cannot acknowledge work it
-// did not compile.
-func CompleteRequest(requestPath, errorPath string, req Request) error {
-	if strings.TrimSpace(req.ID) == "" {
-		return nil
-	}
-	claimedPath := requestPath + ".complete-" + req.ID
-	_ = os.Remove(claimedPath)
-	if err := os.Rename(requestPath, claimedPath); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("apply: claim request completion: %w", err)
-	}
-	claimed, exists, err := ReadRequest(claimedPath)
-	if err != nil || !exists || claimed.ID != req.ID {
-		if _, statErr := os.Stat(requestPath); errors.Is(statErr, os.ErrNotExist) {
-			_ = os.Rename(claimedPath, requestPath)
-		} else {
-			_ = os.Remove(claimedPath)
-		}
+	if err := removeRoleRequest(requestPath, role); err != nil {
 		return err
 	}
-	if claimed.Role == RoleAny {
-		if _, statErr := os.Stat(requestPath); errors.Is(statErr, os.ErrNotExist) {
-			_ = os.Rename(claimedPath, requestPath)
-		} else {
-			_ = os.Remove(claimedPath)
-		}
-		return nil
-	}
-	_ = os.Remove(claimedPath)
-	marker, markerExists, err := ReadError(errorPath)
+	marker, exists, err := ReadError(errorPath)
 	if err != nil {
-		return err
+		return RemoveError(errorPath)
 	}
-	if markerExists && marker.RequestID == req.ID {
+	if exists && (marker.Role == "" || strings.EqualFold(marker.Role, role)) {
 		return RemoveError(errorPath)
 	}
 	return nil
+}
+
+// CompleteRequest removes only the exact role generation that was applied. A
+// newer generation and the other role generation are preserved.
+func CompleteRequest(requestPath, errorPath string, req Request) error {
+	role := normalizeRole(req.Role)
+	if strings.TrimSpace(req.ID) == "" || (role != RoleClient && role != RoleServer) {
+		return nil
+	}
+	removed := false
+	if err := withRequestLock(requestPath, func() error {
+		doc, legacy, exists, err := readRequestDocument(requestPath)
+		if err != nil || !exists {
+			return err
+		}
+		if legacy != nil {
+			return completeLegacyRequest(requestPath, &removed, *legacy, req)
+		}
+		current, pending := doc.Requests[role]
+		if !pending || current.ID != req.ID {
+			return nil
+		}
+		delete(doc.Requests, role)
+		removed = true
+		return persistRemainingRequests(requestPath, doc)
+	}); err != nil {
+		return err
+	}
+	if !removed {
+		return nil
+	}
+	marker, exists, err := ReadError(errorPath)
+	if err != nil {
+		return err
+	}
+	if exists && marker.RequestID == req.ID {
+		return RemoveError(errorPath)
+	}
+	return nil
+}
+
+func removeRoleRequest(requestPath, role string) error {
+	return withRequestLock(requestPath, func() error {
+		doc, legacy, exists, err := readRequestDocument(requestPath)
+		if err != nil || !exists {
+			return err
+		}
+		if legacy != nil {
+			legacyRole := normalizeRole(legacy.Role)
+			if legacyRole != "" && legacyRole != RoleAny && legacyRole != role {
+				return nil
+			}
+			if legacyRole == role {
+				return RemoveRequest(requestPath)
+			}
+			other, err := requestForRole(*legacy, otherRequestRole(role))
+			if err != nil {
+				return err
+			}
+			doc.Requests[other.Role] = other
+			return writeRequestDocument(requestPath, doc, "")
+		}
+		delete(doc.Requests, role)
+		return persistRemainingRequests(requestPath, doc)
+	})
+}
+
+func completeLegacyRequest(requestPath string, removed *bool, legacy, completed Request) error {
+	legacyRole := normalizeRole(legacy.Role)
+	if legacy.ID != completed.ID || (legacyRole != "" && legacyRole != RoleAny && legacyRole != completed.Role) {
+		return nil
+	}
+	*removed = true
+	if legacyRole == completed.Role {
+		return RemoveRequest(requestPath)
+	}
+	remaining, err := NewRequest(otherRequestRole(completed.Role))
+	if err != nil {
+		return err
+	}
+	if !legacy.Timestamp.IsZero() {
+		remaining.Timestamp = legacy.Timestamp
+	}
+	doc := requestDocument{
+		Version:  requestDocumentVersion,
+		Requests: map[string]Request{remaining.Role: remaining},
+	}
+	return writeRequestDocument(requestPath, doc, "")
+}
+
+func persistRemainingRequests(path string, doc requestDocument) error {
+	if len(doc.Requests) == 0 {
+		return RemoveRequest(path)
+	}
+	return writeRequestDocument(path, doc, "")
 }

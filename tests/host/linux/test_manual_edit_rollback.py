@@ -8,6 +8,7 @@ import time
 import pytest
 
 from tests.host.linux import _helpers as helpers
+from tests.host.linux import _apply_request
 from tests.host.linux import env as linux_env
 
 try:
@@ -92,9 +93,10 @@ def _set_int_setting(content: str, key: str, value: int) -> str:
 def _read_apply_request(host) -> dict:
     raw = linux_env.read_text(host, APPLY_REQUEST)
     try:
-        return json.loads(raw)
+        document = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise AssertionError(f"Failed to parse apply.request JSON: {exc}\nContent:\n{raw}") from exc
+    return _apply_request.role_request(document, "client")
 
 
 def _read_apply_error(host) -> dict:

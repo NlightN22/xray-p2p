@@ -34,7 +34,7 @@ func TestRemoveRoleMarkersRemovesRoleSpecificFiles(t *testing.T) {
 	}
 }
 
-func TestRemoveRoleMarkersPreservesAnyRequest(t *testing.T) {
+func TestRemoveRoleMarkersRemovesOnlyRequestedRole(t *testing.T) {
 	tmp := t.TempDir()
 	requestPath := filepath.Join(tmp, "apply.request")
 	errorPath := filepath.Join(tmp, "apply.error")
@@ -50,8 +50,11 @@ func TestRemoveRoleMarkersPreservesAnyRequest(t *testing.T) {
 	if err := RemoveRoleMarkers(requestPath, errorPath, RoleClient); err != nil {
 		t.Fatalf("RemoveRoleMarkers: %v", err)
 	}
-	if _, err := os.Stat(requestPath); err != nil {
-		t.Fatalf("expected request preserved, stat err=%v", err)
+	if _, exists, err := ReadRequestForRole(requestPath, RoleClient); err != nil || exists {
+		t.Fatalf("client request remains: exists=%v err=%v", exists, err)
+	}
+	if _, exists, err := ReadRequestForRole(requestPath, RoleServer); err != nil || !exists {
+		t.Fatalf("server request missing: exists=%v err=%v", exists, err)
 	}
 }
 
@@ -95,5 +98,30 @@ func TestCompleteRequestRemovesExactRequestAndError(t *testing.T) {
 	}
 	if _, exists, err := ReadError(errorPath); err != nil || exists {
 		t.Fatalf("error remains: exists=%v err=%v", exists, err)
+	}
+}
+
+func TestCompleteRequestRemovesFileAfterBothRoles(t *testing.T) {
+	tmp := t.TempDir()
+	requestPath := filepath.Join(tmp, "apply.request")
+	client := Request{ID: "client", Role: RoleClient}
+	server := Request{ID: "server", Role: RoleServer}
+	if err := WriteRequest(requestPath, client, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteRequest(requestPath, server, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := CompleteRequest(requestPath, "", client); err != nil {
+		t.Fatalf("complete client: %v", err)
+	}
+	if _, exists, err := ReadRequestForRole(requestPath, RoleServer); err != nil || !exists {
+		t.Fatalf("server request missing after client completion: exists=%v err=%v", exists, err)
+	}
+	if err := CompleteRequest(requestPath, "", server); err != nil {
+		t.Fatalf("complete server: %v", err)
+	}
+	if _, err := os.Stat(requestPath); !os.IsNotExist(err) {
+		t.Fatalf("request file remains after both completions: %v", err)
 	}
 }

@@ -164,7 +164,7 @@ func writeApplyErrorForExistingRequest(role string, reason error) error {
 	if reason == nil {
 		return nil
 	}
-	req, exists, err := apply.ReadRequest(config.ApplyRequestPath())
+	req, exists, err := apply.ReadRequestForRole(config.ApplyRequestPath(), role)
 	if err != nil {
 		return err
 	}
@@ -176,8 +176,6 @@ func writeApplyErrorForExistingRequest(role string, reason error) error {
 		if err := apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath()); err != nil {
 			return err
 		}
-	} else if !req.MatchesRole(role) {
-		return nil
 	}
 	if err := apply.WriteError(config.ApplyErrorPath(), apply.ErrorMarker{
 		RequestID: req.ID,

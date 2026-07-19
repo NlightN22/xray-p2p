@@ -9,9 +9,9 @@ mutations, service compilation, watcher applies, and runtime API applies.
 - `go/internal/apply.WithRoleLock` owns writer serialization. Every writer that
   can persist Desired inputs, publish Live artifacts, or apply a candidate to a
   running Xray instance must hold the concrete role lock.
-- `go/internal/apply.Request` identifies one queued generation. Writing a new
-  request replaces an older request for the same role; requests are never
-  coalesced by role alone.
+- `go/internal/apply.Request` identifies one queued generation. The versioned
+  `apply.request` document stores independent client and server generations.
+  Writing a new request replaces only the older generation for the same role.
 - `go/internal/apply.CompleteRequest` is the acknowledgement operation. It
   removes only the exact request ID that was compiled. A newer request remains
   pending.
@@ -46,6 +46,26 @@ mutations, service compilation, watcher applies, and runtime API applies.
    A reader accepts a pair only when a state-journal-state read observes the
    same revision in all three documents.
 
+## Apply Request Document
+
+`STATE_ROOT/apply.request` is a versioned container. Each role owns one pending
+generation and replaces only that entry when newer work is queued.
+
+```json
+{
+  "version": 2,
+  "requests": {
+    "client": {"id": "...", "timestamp": "...", "role": "client"},
+    "server": {"id": "...", "timestamp": "...", "role": "server"}
+  }
+}
+```
+
+Completing a generation removes only the matching role and ID. The marker file
+is removed when no role generations remain. Legacy single-request documents
+remain readable; a legacy `role: any` marker is migrated into independent role
+generations before either role applies it.
+
 ## Service-Owned Apply
 
 1. Acquire the role lock.
@@ -76,6 +96,8 @@ changing input set from publishing it.
 ## Recovery
 
 - A process exit releases the operating-system role lock automatically.
+- Shared request-document updates use a separate operating-system lock so
+  concurrent client and server writers cannot overwrite each other.
 - An interrupted Live replacement is recovered from the role LKG directory.
 - An interrupted apply cannot acknowledge a request unless it reaches the exact
   request completion step.

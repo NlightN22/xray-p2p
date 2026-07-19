@@ -8,6 +8,7 @@ import os
 import pytest
 
 from tests.host import config_files
+from tests.host.linux import _apply_request
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 try:
@@ -420,7 +421,8 @@ def test_service_stops_after_invalid_config(
         _wait_for_log_entry(host, service_log, "apply compilation failed")
         _wait_for_path(host, APPLY_ERROR, exists=True, timeout=60.0)
         error = helpers.read_json(host, APPLY_ERROR)
-        request = helpers.read_json(host, APPLY_REQUEST) if linux_env.path_exists(host, APPLY_REQUEST) else {}
+        request_document = helpers.read_json(host, APPLY_REQUEST) if linux_env.path_exists(host, APPLY_REQUEST) else {}
+        request = _apply_request.role_request(request_document, role)
         assert error.get("request_id") == request.get("id")
         assert (error.get("reason") or "").strip(), "apply.error missing reason"
         _wait_for_service_state(runner, role, expected_active=True)

@@ -39,7 +39,7 @@ func applyPendingIfRequestedLocked(role string) (*apply.Rollback, bool, apply.Re
 		"desired_config_exists", fileExists(desiredConfigPath),
 		"desired_config_error", desiredPathErr,
 	)
-	req, exists, err := apply.ReadRequest(reqPath)
+	req, exists, err := apply.ReadRequestForRole(reqPath, role)
 	if err != nil {
 		return nil, false, apply.Request{}, err
 	}
