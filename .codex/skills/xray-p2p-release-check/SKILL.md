@@ -120,4 +120,6 @@ The feed modes download IPKs from published stable GitHub Releases, so do not de
 
 ### Legacy workflow
 
-Do not run `release` (`release.yml`) in the confirmed publication flow. It is a legacy manual workflow that duplicates build, MSI, DEB, GitHub Release, and `latest` publication. No current workflow references it, and running it alongside `aggregate-release` can overwrite release assets or `latest` with a different artifact set. Disabling or deleting it is a separate repository/GitHub change and requires explicit user approval.
+The retired `release.yml` workflow was removed. Do not recreate or substitute a monolithic GitHub workflow for the confirmed build, aggregate, and Pages sequence.
+
+Do not run `scripts/New-Release.ps1` in its current form. It implements the retired monolithic path: it permits non-`X.Y.Z` versions, can delete a remote tag before preflight, does not run the schema or full Linux gates, commits every tracked change with `git commit -am`, creates a lightweight tag, hard-codes pushing `main`, and treats `-Quiet` as approval for pushes. Redesign it before reuse so it delegates to `scripts/new_release.py`, keeps preparation separate from external publication, creates no unreviewed commits or tags, and requires explicit approval for every push and workflow dispatch.

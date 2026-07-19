@@ -60,16 +60,22 @@ Each domain pipeline must have tests for canonical input, legacy input, mixed in
 - The canonical version string lives in `go/internal/version/version.go`. Update `current` before releasing so `go run ./go/cmd/xp2p --version` reports the target number.
 - CI builds embed the version via `-ldflags "-X .../version.current=$VERSION"` and package archives named `xp2p-<version>-<os>-<arch>`.
 - Release flow:
-  1. Run `go test ./...` and `go vet ./...`.
-  2. Commit the version bump and related changes.
-  3. Tag the commit (`git tag vX.Y.Z && git push origin vX.Y.Z`).
-  4. The `release` workflow reads the same target catalog and rebuilds binaries with the tag version, publishes archives `xp2p-<version>-<os>-<arch>`, force-updates the `latest` tag, and republishes `xp2p-latest-<os>-<arch>` assets for stable download links.
-  5. You can run `scripts/New-Release.ps1 -Version X.Y.Z` or `py -3 scripts/new_release.py --version X.Y.Z` to update versions, run the local build steps, tag, and publish OpenWrt `.ipk` files to the `artifacts` branch.
+  1. Complete the schema compatibility audit and full opt-in Linux host gate.
+  2. Run `python scripts/new_release.py prepare --version X.Y.Z`, review the generated release diff, then run `python scripts/new_release.py publish --version X.Y.Z` to create the local release commit and annotated tag.
+  3. Push the release branch and tag, then require the automatic `ci` run to pass on the release commit.
+  4. Publish the complete versioned OpenWrt `.ipk` set to the `artifacts` branch.
+  5. Run `build.yml`, `build-deb.yml`, and `build-msi.yml` for the exact release tag.
+  6. Run `aggregate-release.yml` with the release notes after all artifacts succeed.
+  7. Run `deploy-pages.yml` after aggregation to update the OpenWrt feed and, when needed, documentation.
+- `scripts/New-Release.ps1` implements the retired monolithic release path and must not be used until it is redesigned around the staged release flow.
 
 ## Continuous integration
 
-- `ci.yml`: gofmt check, `go vet`, unit tests, and integration tests.
-- `build.yml`: cross-platform build matrix and smoke test. Outputs match the release artifact naming.
-- `release.yml`: runs on tags `v*`, verifies sources, builds archives, and publishes the GitHub release.
+- `ci.yml`: validates pinned Xray assets, lints generated schemas, and runs Go tests on qualifying pushes and pull requests.
+- `build.yml`: manually builds the cross-platform archive matrix for a selected ref.
+- `build-deb.yml` and `build-msi.yml`: manually build release installers for a selected ref.
+- `build-mkdocs.yml`: builds documentation on qualifying `main` pushes or manual dispatch.
+- `aggregate-release.yml`: assembles successful build artifacts and publishes versioned and `latest` GitHub Releases.
+- `deploy-pages.yml`: publishes the OpenWrt feed and documentation to GitHub Pages.
 
 Please open issues for major changes before starting implementation. Pull requests should describe the motivation, highlight risky areas, and include testing notes (commands run, results, environment). Thank you!
