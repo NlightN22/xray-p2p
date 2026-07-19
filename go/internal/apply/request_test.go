@@ -33,3 +33,23 @@ func TestReadRequestRepairsLiteralNewlineEscapes(t *testing.T) {
 		t.Fatalf("role mismatch: %q", req.Role)
 	}
 }
+
+func TestWriteRequestReplacesSameRoleGeneration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "apply.request")
+	first := Request{ID: "first", Timestamp: time.Now().UTC(), Role: RoleClient}
+	second := Request{ID: "second", Timestamp: time.Now().UTC(), Role: RoleClient}
+	if err := WriteRequest(path, first, ""); err != nil {
+		t.Fatalf("write first request: %v", err)
+	}
+	if err := WriteRequest(path, second, ""); err != nil {
+		t.Fatalf("write second request: %v", err)
+	}
+	got, exists, err := ReadRequest(path)
+	if err != nil || !exists {
+		t.Fatalf("read request: exists=%v err=%v", exists, err)
+	}
+	if got.ID != second.ID {
+		t.Fatalf("request ID = %q, want %q", got.ID, second.ID)
+	}
+}

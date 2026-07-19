@@ -2,6 +2,8 @@ package client
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,13 +17,13 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return clientInstallState{}, nil
+			return clientInstallState{baseDigest: digestClientDesired(nil)}, nil
 		}
 		return clientInstallState{}, fmt.Errorf("read client config %s: %w", path, err)
 	}
 
 	if len(bytes.TrimSpace(data)) == 0 {
-		return clientInstallState{}, nil
+		return clientInstallState{baseDigest: digestClientDesired(data)}, nil
 	}
 
 	tree, err := toml.LoadBytes(data)
@@ -32,6 +34,7 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 	if raw == nil {
 		state := clientInstallState{}
 		state.normalize()
+		state.baseDigest = digestClientDesired(data)
 		return state, nil
 	}
 	switch value := raw.(type) {
@@ -49,7 +52,24 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 		return clientInstallState{}, fmt.Errorf("decode client config %s: %w", path, err)
 	}
 	state.normalize()
+	state.baseDigest = digestClientDesired(data)
 	return state, nil
+}
+
+func digestClientDesired(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func currentClientDesiredDigest(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return digestClientDesired(nil), nil
+		}
+		return "", err
+	}
+	return digestClientDesired(data), nil
 }
 
 func loadClientInstallStateWithFallback(pendingPath, livePath string) (clientInstallState, error) {

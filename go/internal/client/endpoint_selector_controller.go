@@ -93,7 +93,7 @@ func recordEndpointHealth(ctx context.Context, desired clientInstallState, endpo
 	if err != nil {
 		return err
 	}
-	result, err := applyClientRuntimeCandidate(ctx, artifacts)
+	result, err := applyClientRuntimeCandidate(ctx, artifacts, nil)
 	if err != nil {
 		return err
 	}

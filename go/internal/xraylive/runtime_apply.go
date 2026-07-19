@@ -36,6 +36,7 @@ type Artifacts struct {
 }
 
 type CompileFunc func(configPath, extensionsDir string) (Artifacts, error)
+type SourceDigestFunc func(configPath, extensionsDir string) (string, error)
 
 type RoutingApplierFactory func(ctx context.Context, address string) (runtimeapply.RoutingApplier, func() error, error)
 type InboundApplierFactory func(ctx context.Context, address string) (runtimeapply.InboundApplier, func() error, error)
@@ -52,6 +53,8 @@ type Options struct {
 	LiveDir        string
 	LkgDir         string
 	Compile        CompileFunc
+	SourceDigest   SourceDigestFunc
+	CommitDesired  func() error
 	NewApplier     RoutingApplierFactory
 	NewInbound     InboundApplierFactory
 	NewOutbound    OutboundApplierFactory
@@ -79,11 +82,28 @@ func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResu
 		return RuntimeApplySkipped, errors.New("runtime apply compile callback is required")
 	}
 
+	var sourceDigest string
+	if opts.SourceDigest != nil {
+		sourceDigest, err = opts.SourceDigest(opts.DesiredConfig, opts.ExtensionsDir)
+		if err != nil {
+			return RuntimeApplySkipped, err
+		}
+	}
 	artifacts, err := opts.Compile(opts.DesiredConfig, opts.ExtensionsDir)
 	if err != nil {
 		writeRuntimeApplyError(opts, req, err)
 		logging.Warn("runtime apply compilation failed", "role", role, "request_id", req.ID, "err", err)
 		return RuntimeApplyFailed, nil
+	}
+	if opts.SourceDigest != nil {
+		currentDigest, digestErr := opts.SourceDigest(opts.DesiredConfig, opts.ExtensionsDir)
+		if digestErr != nil {
+			return RuntimeApplySkipped, digestErr
+		}
+		if currentDigest != sourceDigest {
+			logging.Info("desired config changed during compilation; runtime apply retained", "role", role, "request_id", req.ID)
+			return RuntimeApplySkipped, nil
+		}
 	}
 	return applyRuntimeArtifacts(ctx, opts, req, role, artifacts)
 }
@@ -132,7 +152,11 @@ func applyRuntimeArtifacts(ctx context.Context, opts Options, req apply.Request,
 			writeRuntimeApplyError(opts, req, err)
 			return RuntimeApplyFailed, nil
 		}
-		cleanupRuntimeApplyMarkers(opts, role)
+		if err := commitDesiredOrRestoreLive(opts); err != nil {
+			writeRuntimeApplyError(opts, req, err)
+			return RuntimeApplyFailed, nil
+		}
+		cleanupRuntimeApplyMarkers(opts, req)
 		return RuntimeApplyNoop, nil
 	case runtimeapply.DiffUnsupported:
 		logging.Info("runtime apply unsupported", "role", role, "request_id", req.ID, "reason", diff.Reason)
@@ -194,8 +218,17 @@ func applyRoutingRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 		writeRuntimeApplyError(opts, req, reason)
 		return RuntimeApplyFailed, nil
 	}
+	if err := commitDesiredOrRestoreLive(opts); err != nil {
+		rollbackErr := runtimeapply.ApplyRoutingDiff(ctx, applier, reverseRoutingDiff(diff))
+		reason := err
+		if rollbackErr != nil {
+			reason = fmt.Errorf("%w; runtime rollback failed: %v", err, rollbackErr)
+		}
+		writeRuntimeApplyError(opts, req, reason)
+		return RuntimeApplyFailed, nil
+	}
 
-	cleanupRuntimeApplyMarkers(opts, role)
+	cleanupRuntimeApplyMarkers(opts, req)
 	logging.Info("runtime routing apply completed", "role", role, "request_id", req.ID)
 	return RuntimeApplyApplied, nil
 }
@@ -228,8 +261,17 @@ func applyInboundRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 		writeRuntimeApplyError(opts, req, reason)
 		return RuntimeApplyFailed, nil
 	}
+	if err := commitDesiredOrRestoreLive(opts); err != nil {
+		rollbackErr := runtimeapply.ApplyInboundDiff(ctx, applier, reverseInboundDiff(diff))
+		reason := err
+		if rollbackErr != nil {
+			reason = fmt.Errorf("%w; runtime rollback failed: %v", err, rollbackErr)
+		}
+		writeRuntimeApplyError(opts, req, reason)
+		return RuntimeApplyFailed, nil
+	}
 
-	cleanupRuntimeApplyMarkers(opts, role)
+	cleanupRuntimeApplyMarkers(opts, req)
 	logging.Info("runtime inbound apply completed", "role", role, "request_id", req.ID)
 	return RuntimeApplyApplied, nil
 }
@@ -295,12 +337,26 @@ func publishLiveArtifacts(opts Options, artifacts Artifacts) error {
 	return apply.ReplaceRoleLiveDir(opts.LiveDir, opts.LkgDir, files)
 }
 
-func cleanupRuntimeApplyMarkers(opts Options, role string) {
-	if strings.TrimSpace(opts.RequestPath) == "" {
+func commitDesiredOrRestoreLive(opts Options) error {
+	if opts.CommitDesired == nil {
+		return nil
+	}
+	if err := opts.CommitDesired(); err != nil {
+		restoreErr := apply.NewRollback(opts.LiveDir, opts.LkgDir).Restore(opts.AuditPath)
+		if restoreErr != nil {
+			return fmt.Errorf("commit Desired: %w; restore Live failed: %v", err, restoreErr)
+		}
+		return fmt.Errorf("commit Desired: %w", err)
+	}
+	return nil
+}
+
+func cleanupRuntimeApplyMarkers(opts Options, req apply.Request) {
+	if strings.TrimSpace(opts.RequestPath) == "" || strings.TrimSpace(req.ID) == "" {
 		return
 	}
-	if err := apply.RemoveRoleMarkers(opts.RequestPath, opts.ErrorPath, role); err != nil {
-		logging.Warn("runtime apply marker cleanup failed", "role", role, "err", err)
+	if err := apply.CompleteRequest(opts.RequestPath, opts.ErrorPath, req); err != nil {
+		logging.Warn("runtime apply marker cleanup failed", "role", req.Role, "request_id", req.ID, "err", err)
 	}
 }
 

@@ -50,9 +50,6 @@ func (r Request) MatchesRole(role string) bool {
 func WriteRequest(path string, req Request, auditPath string) error {
 	if existing, exists, err := ReadRequest(path); err == nil {
 		if exists && existing.ID != "" {
-			if existing.MatchesRole(req.Role) {
-				return nil
-			}
 			if existing.Role != "" && req.Role != "" && !strings.EqualFold(existing.Role, RoleAny) && !strings.EqualFold(req.Role, RoleAny) {
 				req.Role = RoleAny
 			}

@@ -38,8 +38,17 @@ func applyInboundUserRuntimeDiff(ctx context.Context, opts Options, req apply.Re
 		writeRuntimeApplyError(opts, req, reason)
 		return RuntimeApplyFailed, nil
 	}
+	if err := commitDesiredOrRestoreLive(opts); err != nil {
+		rollbackErr := runtimeapply.ApplyInboundUserDiff(ctx, applier, reverseInboundUserDiff(diff))
+		reason := err
+		if rollbackErr != nil {
+			reason = fmt.Errorf("%w; runtime rollback failed: %v", err, rollbackErr)
+		}
+		writeRuntimeApplyError(opts, req, reason)
+		return RuntimeApplyFailed, nil
+	}
 
-	cleanupRuntimeApplyMarkers(opts, role)
+	cleanupRuntimeApplyMarkers(opts, req)
 	logging.Info("runtime inbound user apply completed", "role", role, "request_id", req.ID)
 	return RuntimeApplyApplied, nil
 }

@@ -15,6 +15,18 @@ import (
 )
 
 func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request, error) {
+	var rollback *apply.Rollback
+	var applied bool
+	var req apply.Request
+	err := apply.WithRoleLock(context.Background(), config.StateRoot(), role, func() error {
+		var err error
+		rollback, applied, req, err = applyPendingIfRequestedLocked(role)
+		return err
+	})
+	return rollback, applied, req, err
+}
+
+func applyPendingIfRequestedLocked(role string) (*apply.Rollback, bool, apply.Request, error) {
 	reqPath := config.ApplyRequestPath()
 	desiredConfigPath, desiredPathErr := config.DesiredConfigPathForRole(role)
 	logging.Debug("apply request check",
@@ -61,6 +73,10 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 	if err != nil {
 		return nil, false, req, err
 	}
+	sourceDigest, err := apply.SourceDigest(desiredConfig, extensionsDir)
+	if err != nil {
+		return nil, false, req, err
+	}
 	artifacts, err := compileDesired(desiredConfig, extensionsDir)
 	if err != nil {
 		_ = apply.WriteError(errorPath, apply.ErrorMarker{
@@ -69,6 +85,14 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 			Reason:    err.Error(),
 		}, config.AuditLogPath())
 		logging.Warn("apply compilation failed", "role", role, "request_id", req.ID, "err", err)
+		return nil, false, req, nil
+	}
+	currentDigest, err := apply.SourceDigest(desiredConfig, extensionsDir)
+	if err != nil {
+		return nil, false, req, err
+	}
+	if currentDigest != sourceDigest {
+		logging.Info("desired config changed during compilation; apply request retained", "role", role, "request_id", req.ID)
 		return nil, false, req, nil
 	}
 	files := map[string][]byte{
@@ -88,7 +112,7 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 		return nil, false, req, nil
 	}
 
-	if err := apply.RemoveRoleMarkers(reqPath, errorPath, role); err != nil {
+	if err := apply.CompleteRequest(reqPath, errorPath, req); err != nil {
 		logging.Warn("apply marker cleanup failed", "role", role, "err", err)
 	}
 	if role == apply.RoleServer {
@@ -101,6 +125,16 @@ func applyPendingIfRequested(role string) (*apply.Rollback, bool, apply.Request,
 }
 
 func tryRuntimeApplyPending(ctx context.Context, role string) (xraylive.RuntimeApplyResult, error) {
+	var result xraylive.RuntimeApplyResult
+	err := apply.WithRoleLock(ctx, config.StateRoot(), role, func() error {
+		var err error
+		result, err = tryRuntimeApplyPendingLocked(ctx, role)
+		return err
+	})
+	return result, err
+}
+
+func tryRuntimeApplyPendingLocked(ctx context.Context, role string) (xraylive.RuntimeApplyResult, error) {
 	desiredConfig, err := config.DesiredConfigPathForRole(role)
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
@@ -126,6 +160,7 @@ func tryRuntimeApplyPending(ctx context.Context, role string) (xraylive.RuntimeA
 		ExtensionsDir: extensionsDir,
 		LiveDir:       liveDir,
 		LkgDir:        lkgDir,
+		SourceDigest:  apply.SourceDigest,
 		Compile: func(configPath, extensionsDir string) (xraylive.Artifacts, error) {
 			artifacts, err := compileDesired(configPath, extensionsDir)
 			if err != nil {

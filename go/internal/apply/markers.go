@@ -1,7 +1,9 @@
 package apply
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -41,5 +43,48 @@ func RemoveRoleMarkers(requestPath, errorPath, role string) error {
 		}
 	}
 
+	return nil
+}
+
+// CompleteRequest removes markers only when they still belong to req.
+// A newer request is preserved so an older apply cannot acknowledge work it
+// did not compile.
+func CompleteRequest(requestPath, errorPath string, req Request) error {
+	if strings.TrimSpace(req.ID) == "" {
+		return nil
+	}
+	claimedPath := requestPath + ".complete-" + req.ID
+	_ = os.Remove(claimedPath)
+	if err := os.Rename(requestPath, claimedPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("apply: claim request completion: %w", err)
+	}
+	claimed, exists, err := ReadRequest(claimedPath)
+	if err != nil || !exists || claimed.ID != req.ID {
+		if _, statErr := os.Stat(requestPath); errors.Is(statErr, os.ErrNotExist) {
+			_ = os.Rename(claimedPath, requestPath)
+		} else {
+			_ = os.Remove(claimedPath)
+		}
+		return err
+	}
+	if claimed.Role == RoleAny {
+		if _, statErr := os.Stat(requestPath); errors.Is(statErr, os.ErrNotExist) {
+			_ = os.Rename(claimedPath, requestPath)
+		} else {
+			_ = os.Remove(claimedPath)
+		}
+		return nil
+	}
+	_ = os.Remove(claimedPath)
+	marker, markerExists, err := ReadError(errorPath)
+	if err != nil {
+		return err
+	}
+	if markerExists && marker.RequestID == req.ID {
+		return RemoveError(errorPath)
+	}
 	return nil
 }

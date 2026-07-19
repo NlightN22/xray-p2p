@@ -1,5 +1,10 @@
 # Apply Flow
 
+All writers in this flow follow the role-scoped
+[Desired-to-Live commit protocol](desired-live-commit-protocol.md). That protocol
+defines serialization, request acknowledgement, stale-source detection, and
+recovery; this page describes the user-visible apply behavior.
+
 This document describes how xp2p applies configuration changes through two
 coordinated paths:
 

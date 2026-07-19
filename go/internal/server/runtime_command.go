@@ -14,7 +14,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
-func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
+func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifacts, commitDesired func() error) (xraylive.RuntimeApplyResult, error) {
 	liveDir, err := config.LiveRoleDir(apply.RoleServer)
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
@@ -24,9 +24,10 @@ func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 		return xraylive.RuntimeApplySkipped, err
 	}
 	result, err := xraylive.ApplyCandidate(ctx, xraylive.Options{
-		Role:    apply.RoleServer,
-		LiveDir: liveDir,
-		LkgDir:  lkgDir,
+		Role:          apply.RoleServer,
+		LiveDir:       liveDir,
+		LkgDir:        lkgDir,
+		CommitDesired: commitDesired,
 	}, artifacts)
 	if result == xraylive.RuntimeApplyServiceLayerRequired && !serverLiveRuntimeAvailable(liveDir) {
 		return xraylive.RuntimeApplyStaged, nil
@@ -62,11 +63,29 @@ func commitServerRuntimeDoc(ctx context.Context, doc map[string]any) error {
 }
 
 func commitServerRuntimeDocResult(ctx context.Context, doc map[string]any) (xraylive.RuntimeApplyResult, error) {
+	var result xraylive.RuntimeApplyResult
+	err := apply.WithRoleLock(ctx, config.StateRoot(), apply.RoleServer, func() error {
+		var err error
+		result, err = commitServerRuntimeDocResultLocked(ctx, doc)
+		return err
+	})
+	return result, err
+}
+
+func commitServerRuntimeDocResultLocked(ctx context.Context, doc map[string]any) (xraylive.RuntimeApplyResult, error) {
 	artifacts, err := compileServerRuntimeCandidateDoc(doc)
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
 	}
-	result, err := applyServerRuntimeCandidate(ctx, artifacts)
+	desiredCommitted := false
+	commitDesired := func() error {
+		if err := writeServerStateDoc(pendingConfigPath(), doc); err != nil {
+			return err
+		}
+		desiredCommitted = true
+		return nil
+	}
+	result, err := applyServerRuntimeCandidate(ctx, artifacts, commitDesired)
 	if err != nil {
 		return result, err
 	}
@@ -81,6 +100,12 @@ func commitServerRuntimeDocResult(ctx context.Context, doc map[string]any) (xray
 	}
 	if result != xraylive.RuntimeApplyApplied && result != xraylive.RuntimeApplyNoop && result != xraylive.RuntimeApplyStaged {
 		return result, xraylive.ResultError(result)
+	}
+	if result == xraylive.RuntimeApplyApplied || result == xraylive.RuntimeApplyNoop {
+		if desiredCommitted {
+			return result, nil
+		}
+		return result, commitDesired()
 	}
 	return result, writeServerStateDoc(pendingConfigPath(), doc)
 }

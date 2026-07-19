@@ -14,6 +14,7 @@ then layer in redirects, DNS handling, and multi-node chains.
 ## How xp2p works (flows)
 
 - Deploy handshake (what it changes, what it does not): [Deploy flow](flows/deploy-flow.md)
+- Desired/Live serialization and request generations: [Commit protocol](flows/desired-live-commit-protocol.md)
 - Desired → Live apply mechanism: [Apply flow](flows/apply-flow.md)
 - How Desired inputs become `xray.json`: [Config compilation](flows/config-compilation.md)
 - How runtime status is derived: [Tunnel status logic](flows/tunnel-status.md)

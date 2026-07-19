@@ -71,6 +71,12 @@ type RedirectRecord struct {
 
 // AddRedirect registers a custom CIDR redirect.
 func AddRedirect(opts RedirectAddOptions) error {
+	return retryClientDesiredMutation(func() error {
+		return addRedirectOnce(opts)
+	})
+}
+
+func addRedirectOnce(opts RedirectAddOptions) error {
 	configFile := config.ConfigPath(layout.ClientConfigFileName)
 	state, err := loadClientInstallState(configFile)
 	if err != nil {
@@ -111,6 +117,18 @@ func AddRedirect(opts RedirectAddOptions) error {
 		return nil
 	}
 	return commitClientRedirectRuntimeState(context.Background(), previous, state)
+}
+
+func retryClientDesiredMutation(mutate func() error) error {
+	const maxAttempts = 5
+	var err error
+	for range maxAttempts {
+		err = mutate()
+		if !errors.Is(err, errClientDesiredConflict) {
+			return err
+		}
+	}
+	return err
 }
 
 func isDefaultRoute(value string) bool {

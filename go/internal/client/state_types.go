@@ -13,6 +13,7 @@ type clientInstallState struct {
 	Redirects      []redirect.Rule                 `json:"redirects,omitempty" toml:"redirects"`
 	Reverse        map[string]clientReverseChannel `json:"reverse,omitempty" toml:"reverse"`
 	Forwards       []forward.Rule                  `json:"forwards,omitempty" toml:"forwards"`
+	baseDigest     string
 }
 
 type endpointGroup struct {

@@ -64,7 +64,7 @@ func ApplyIdentityRuntime(ctx context.Context) (xraylive.RuntimeApplyResult, err
 	if err := stampIdentityTransactionCandidate(doc, artifacts); err != nil {
 		return xraylive.RuntimeApplySkipped, err
 	}
-	result, err := applyServerRuntimeCandidate(ctx, artifacts)
+	result, err := applyServerRuntimeCandidate(ctx, artifacts, nil)
 	if stampErr := stampIdentityTransactionRuntimeResult(result); stampErr != nil && err == nil {
 		return result, stampErr
 	}

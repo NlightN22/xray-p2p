@@ -43,8 +43,17 @@ func applyMixedRuntimeDiff(ctx context.Context, opts Options, req apply.Request,
 		writeRuntimeApplyError(opts, req, reason)
 		return RuntimeApplyFailed, nil
 	}
+	if err := commitDesiredOrRestoreLive(opts); err != nil {
+		rollbackErr := rollbackMixedPhases(ctx, appliers, applied)
+		reason := err
+		if rollbackErr != nil {
+			reason = fmt.Errorf("%w; runtime rollback failed: %v", err, rollbackErr)
+		}
+		writeRuntimeApplyError(opts, req, reason)
+		return RuntimeApplyFailed, nil
+	}
 
-	cleanupRuntimeApplyMarkers(opts, role)
+	cleanupRuntimeApplyMarkers(opts, req)
 	logging.Info("runtime mixed apply completed", "role", role, "request_id", req.ID)
 	return RuntimeApplyApplied, nil
 }

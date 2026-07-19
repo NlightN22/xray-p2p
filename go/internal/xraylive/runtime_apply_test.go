@@ -578,6 +578,81 @@ func testOptions(t *testing.T, root, role string) Options {
 	}
 }
 
+func TestApplyCandidateDoesNotCompleteQueuedRequest(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	xrayJSON := []byte(`{"api":{"listen":"127.0.0.1:10085"}}`)
+	metaJSON := []byte(`{"role":"client"}`)
+	writeLive(t, opts.LiveDir, xrayJSON, metaJSON)
+
+	result, err := ApplyCandidate(context.Background(), opts, Artifacts{XrayJSON: xrayJSON, MetaJSON: metaJSON})
+	if err != nil {
+		t.Fatalf("ApplyCandidate: %v", err)
+	}
+	if result != RuntimeApplyNoop {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyNoop)
+	}
+	if _, exists, err := apply.ReadRequest(opts.RequestPath); err != nil || !exists {
+		t.Fatalf("queued request was consumed: exists=%v err=%v", exists, err)
+	}
+}
+
+func TestTryApplyRoutingPendingRejectsChangedSource(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	xrayJSON := []byte(`{"api":{"listen":"127.0.0.1:10085"}}`)
+	metaJSON := []byte(`{"role":"client"}`)
+	writeLive(t, opts.LiveDir, xrayJSON, metaJSON)
+	desiredPath := filepath.Join(root, "xp2p-client.toml")
+	if err := os.WriteFile(desiredPath, []byte("generation = 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts.DesiredConfig = desiredPath
+	opts.SourceDigest = apply.SourceDigest
+	opts.Compile = func(_, _ string) (Artifacts, error) {
+		if err := os.WriteFile(desiredPath, []byte("generation = 2\n"), 0o600); err != nil {
+			return Artifacts{}, err
+		}
+		return Artifacts{XrayJSON: xrayJSON, MetaJSON: metaJSON}, nil
+	}
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplySkipped {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplySkipped)
+	}
+	if _, exists, err := apply.ReadRequest(opts.RequestPath); err != nil || !exists {
+		t.Fatalf("request was not retained: exists=%v err=%v", exists, err)
+	}
+}
+
+func TestApplyCandidateRestoresLiveWhenDesiredCommitFails(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleClient)
+	xrayJSON := []byte(`{"api":{"listen":"127.0.0.1:10085"}}`)
+	oldMeta := []byte(`{"role":"client","version":"old"}`)
+	newMeta := []byte(`{"role":"client","version":"new"}`)
+	writeLive(t, opts.LiveDir, xrayJSON, oldMeta)
+	opts.CommitDesired = func() error { return errors.New("disk full") }
+
+	result, err := ApplyCandidate(context.Background(), opts, Artifacts{XrayJSON: xrayJSON, MetaJSON: newMeta})
+	if err != nil {
+		t.Fatalf("ApplyCandidate: %v", err)
+	}
+	if result != RuntimeApplyFailed {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyFailed)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.RuntimeMetaFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(oldMeta) {
+		t.Fatalf("live metadata = %s, want restored %s", got, oldMeta)
+	}
+}
+
 func writeLive(t *testing.T, liveDir string, xrayJSON, metaJSON []byte) {
 	t.Helper()
 	if err := os.MkdirAll(liveDir, 0o755); err != nil {
