@@ -49,9 +49,20 @@ function assertTaploRule(config, include, schemaPath) {
 }
 
 function validator(schemaPath) {
+  const schema = readJson(schemaPath);
+  assertAbsoluteSchemaId(schema, schemaPath);
   const ajv = new Ajv2020({ allErrors: true, strict: false });
   addFormats(ajv);
-  return ajv.compile(readJson(schemaPath));
+  return ajv.compile(schema);
+}
+
+function assertAbsoluteSchemaId(schema, schemaPath) {
+  try {
+    const id = new URL(schema.$id || "");
+    if (!id.protocol) throw new Error("missing protocol");
+  } catch (err) {
+    throw new Error(`${schemaPath} must use an absolute $id URI`);
+  }
 }
 
 function validateFixture(validate, tomlPath, shouldPass) {

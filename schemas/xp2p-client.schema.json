@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "schemas/xp2p-client.schema.json",
+  "$id": "https://github.com/NlightN22/xray-p2p/schemas/xp2p-client.schema.json",
   "title": "xp2p client TOML configuration",
   "description": "Schema for xp2p-client.toml Desired inputs.",
   "type": "object",
