@@ -515,7 +515,7 @@ def run_release(opts: Options) -> int:
         _write_section(log, "Release preflight")
         status = _git_output(log, ["status", "--short"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
         log.line("Working tree changes:\n" + (status or "(none)"))
-        for target in ("schema-check", "schema-test", "test-wsl"):
+        for target in ("schema-check", "schema-test", "schema-compat", "test-wsl"):
             _run(log, ["make", target], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
         return 0
 
@@ -532,7 +532,7 @@ def run_release(opts: Options) -> int:
         _update_go_version_file(log, version=version, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
         _update_openwrt_package_makefile(log, version=version, dry_run=opts.dry_run)
         _run(log, ["make", "schema"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
-        for target in ("schema-check", "schema-test", "test", "test-wsl"):
+        for target in ("schema-check", "schema-test", "schema-compat", "test", "test-wsl"):
             _run(log, ["make", target], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
         _write_section(log, "Prepared release diff")
         _run(log, ["git", "diff", "--", "go/internal/version/version.go", "openwrt/feed/packages/utils/xp2p/Makefile", "schemas"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)

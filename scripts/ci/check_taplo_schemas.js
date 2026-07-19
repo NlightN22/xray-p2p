@@ -118,10 +118,13 @@ function main() {
     const validFiles = [
       "tests/schema/valid/xp2p-client.toml",
       "tests/schema/valid/xp2p-server.toml",
+      "tests/schema/compat/v0.2.6/xp2p-client.toml",
+      "tests/schema/compat/v0.2.6/xp2p-server.toml",
     ];
     runTaploSyntaxCheck(validFiles);
-    validateFixture(validateClient, validFiles[0], true);
-    validateFixture(validateServer, validFiles[1], true);
+    for (const file of validFiles) {
+      validateFixture(path.basename(file) === "xp2p-client.toml" ? validateClient : validateServer, file, true);
+    }
     for (const file of fixtureFiles("tests/schema/invalid/client")) {
       validateFixture(validateClient, file, false);
     }

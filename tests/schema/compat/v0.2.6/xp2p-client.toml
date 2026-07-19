@@ -1,0 +1,59 @@
+[logging]
+level = "info"
+format = "text"
+
+[client]
+install_dir = "/opt/xp2p"
+config_dir = "config-client"
+server_address = "server.example.com"
+server_port = "443"
+user = "alice"
+password = "legacy-secret"
+server_name = "server.example.com"
+allow_insecure = false
+tun_enabled = true
+tun_name = "xp2pc"
+tun_mtu = 1500
+tun_addr = "198.18.0.1/30"
+tun_mode = "full"
+dns_servers = ["1.1.1.1"]
+full_tunnel_verbose = true
+full_tunnel_tag = "proxy-primary"
+
+[[client.endpoints]]
+hostname = "server.example.com"
+tag = "proxy-primary"
+address = "203.0.113.10"
+port = 443
+user = "alice"
+password = "legacy-secret"
+server_name = "server.example.com"
+alpn = ["h2", "http/1.1"]
+allow_insecure = false
+pinned_peer_cert_sha256 = ""
+verify_peer_cert_by_name = "server.example.com"
+
+[[client.redirects]]
+cidr = "10.20.0.0/16"
+outbound_tag = "proxy-primary"
+no_routes = false
+
+[client.reverse.legacy]
+user_id = "alice"
+host = "10.30.0.10"
+tag = "legacy.rev"
+domain = "legacy.internal"
+endpoint_tag = "proxy-primary"
+
+[[client.forwards]]
+listen_address = "127.0.0.1"
+listen_port = 18080
+target_host = "10.30.0.10"
+target_port = 80
+protocol = "tcp"
+tag = "legacy-web"
+remark = "legacy forward"
+
+[client.xray.logs]
+level = "warning"
+access = ""

@@ -383,7 +383,7 @@
         "config_dir": {
           "type": "string"
         },
-        "forwards": {
+        "forward_rules": {
           "items": {
             "$ref": "#/definitions/forward_rule"
           },

@@ -66,7 +66,7 @@ host = "10.30.0.10"
 tag = "reverse-work"
 domain = "work.internal"
 
-[[server.forwards]]
+[[server.forward_rules]]
 listen_address = "127.0.0.1"
 listen_port = 18080
 target_host = "10.30.0.10"

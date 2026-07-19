@@ -1,0 +1,45 @@
+[logging]
+level = "warn"
+format = "json"
+
+[server]
+port = "62022"
+trojan_port = "443"
+install_dir = "/opt/xp2p"
+config_dir = "config-server"
+mode = "manual"
+certificate = "/etc/xp2p/server.crt"
+key = "/etc/xp2p/server.key"
+host = "server.example.com"
+tun_enabled = false
+tun_name = "xp2ps"
+tun_mtu = 1500
+tun_addr = "198.18.0.5/30"
+
+[[server.trojan_users]]
+email = "alice"
+password = "legacy-secret"
+
+[[server.server_redirects]]
+domain = "app.internal"
+outbound_tag = "legacy.rev"
+no_routes = false
+
+[server.reverse_channels.legacy]
+user_id = "alice"
+host = "10.30.0.10"
+tag = "legacy.rev"
+domain = "legacy.internal"
+
+[[server.forward_rules]]
+listen_address = "127.0.0.1"
+listen_port = 18080
+target_host = "10.30.0.10"
+target_port = 80
+protocol = "tcp"
+tag = "legacy-web"
+remark = "legacy forward"
+
+[server.xray.logs]
+level = "warning"
+access = ""

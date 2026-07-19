@@ -11,16 +11,20 @@ Run each stage from the repository root and stop immediately on failure.
 
 1. Run `python scripts/new_release.py check` before the final merge.
 2. Report all working-tree changes shown by the command.
-3. Require schema drift checks, schema fixtures, and the full Linux Go test view to pass.
-4. Do not change the version, commit, tag, or push during this stage.
+3. Read `docs/en/flows/normalization-pipeline.md` and identify persisted model changes since the previous release.
+4. Require each removed, renamed, or tightened field to remain accepted, have a tested compatibility rule, or be explicitly approved as a breaking change.
+5. Add or update `tests/schema/compat/<previous-version>/` with real legacy Desired inputs. Require `make schema-compat` to pass both JSON Schema and runtime decoder checks.
+6. Require schema drift checks, current schema fixtures, compatibility fixtures, and the full Linux Go test view to pass.
+7. Do not change the version, commit, tag, or push during this stage.
 
 ## Prepare
 
 1. Confirm all planned release changes are merged and the working tree is clean.
 2. Run `python scripts/new_release.py prepare --version X.Y.Z`.
-3. Review the resulting diff. It must contain only the version file, OpenWrt package version, and generated schemas. It may be empty when the branch already contains the requested version.
-4. Confirm both native Windows and WSL Go checks passed.
-5. Stop before commit, tag, or push so the user can inspect the release diff.
+3. Confirm the schema compatibility audit is complete and referenced in upgrade notes when user action is required.
+4. Review the resulting diff. It must contain only the version file, OpenWrt package version, and generated schemas. It may be empty when the branch already contains the requested version.
+5. Confirm schema drift, schema tests, schema compatibility, native Windows Go tests, and WSL Go tests passed.
+6. Stop before commit, tag, or push so the user can inspect the release diff.
 
 ## Publish locally
 

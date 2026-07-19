@@ -29,7 +29,7 @@ type serverSection struct {
 	TrojanUsers            []server.LegacyTrojanUser               `toml:"trojan_users"`
 	ServerRedirects        []redirect.Rule                         `toml:"server_redirects"`
 	ReverseChannels        map[string]server.DesiredReverseChannel `toml:"reverse_channels"`
-	Forwards               []forward.Rule                          `toml:"forwards"`
+	Forwards               []forward.Rule                          `toml:"forward_rules"`
 	HAGeneration           ha.Generation                           `toml:"ha_generation"`
 	HALocalPeerID          string                                  `toml:"ha_local_peer_id"`
 	HAPeers                []ha.Peer                               `toml:"ha_peers"`

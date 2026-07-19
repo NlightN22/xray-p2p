@@ -21,7 +21,7 @@ VAGRANT_OWRT_DIR := infra/vagrant/openwrt
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
 WSL_CD = drive=$$(printf '%s' '$(CURDIR)' | cut -c1 | tr '[:upper:]' '[:lower:]'); path=$$(printf '%s' '$(CURDIR)' | cut -c3-); repo_dir=/mnt/$$drive$$path; cd \"$$repo_dir\"
-.PHONY: run build build-% fmt lint test schema schema-check schema-test vagrant-win10 vagrant-win10-destroy \
+.PHONY: run build build-% fmt lint test schema schema-check schema-test schema-compat vagrant-win10 vagrant-win10-destroy \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi \
 	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl command-map
@@ -47,6 +47,10 @@ schema-check:
 
 schema-test:
 	npm run lint:config-schema
+
+schema-compat:
+	npm run lint:config-schema -- tests/schema/compat/v0.2.6/xp2p-client.toml tests/schema/compat/v0.2.6/xp2p-server.toml
+	go test ./go/internal/config ./go/internal/client ./go/internal/server ./go/internal/xrayconfig -run SchemaCompatibility
 
 test:
 	powershell -NoProfile -Command "go clean -testcache ; go test ./... -cover"
