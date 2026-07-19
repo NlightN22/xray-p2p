@@ -11,6 +11,9 @@ type serverReverseChannel struct {
 
 type serverReverseState map[string]serverReverseChannel
 
+// DesiredReverseChannel exposes the persisted Desired contract to tooling.
+type DesiredReverseChannel = serverReverseChannel
+
 func (s *serverReverseState) ensure() {
 	if s == nil || *s != nil {
 		return

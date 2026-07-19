@@ -82,6 +82,17 @@ function validateFixture(validate, tomlPath, shouldPass) {
   }
 }
 
+function fixtureFiles(relativeDir) {
+  const absoluteDir = path.join(root, relativeDir);
+  return fs.readdirSync(absoluteDir, { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = path.join(relativeDir, entry.name).replaceAll("\\", "/");
+      return entry.isDirectory() ? fixtureFiles(relativePath) : [relativePath];
+    })
+    .filter((file) => file.endsWith(".toml"))
+    .sort();
+}
+
 function main() {
   const taploConfig = readToml("taplo.toml");
   assertTaploRule(taploConfig, "**/xp2p-client.toml", "schemas/xp2p-client.schema.json");
@@ -111,8 +122,12 @@ function main() {
     runTaploSyntaxCheck(validFiles);
     validateFixture(validateClient, validFiles[0], true);
     validateFixture(validateServer, validFiles[1], true);
-    validateFixture(validateClient, "tests/schema/invalid/client/xp2p-client.toml", false);
-    validateFixture(validateServer, "tests/schema/invalid/server/xp2p-server.toml", false);
+    for (const file of fixtureFiles("tests/schema/invalid/client")) {
+      validateFixture(validateClient, file, false);
+    }
+    for (const file of fixtureFiles("tests/schema/invalid/server")) {
+      validateFixture(validateServer, file, false);
+    }
   }
 
   console.log("taplo schemas ok");

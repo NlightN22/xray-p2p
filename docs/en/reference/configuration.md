@@ -28,6 +28,10 @@ The repository includes Taplo-compatible JSON schemas for TOML Desired inputs:
 
 VS Code with the Taplo extension reads `taplo.toml` from the repository root and applies these schemas to `xp2p-client.toml` and `xp2p-server.toml`. The schemas cover xp2p TOML inputs only; they do not validate generated Xray JSON artifacts.
 
+The schema files are generated from the persisted Go configuration models. Run `make schema` after changing those models, `make schema-check` to detect drift without changing files, and `make schema-test` to validate schemas and fixtures. Do not edit files under `schemas/` manually.
+
+During development, editors may use a schema from `main`, such as `https://raw.githubusercontent.com/NlightN22/xray-p2p/main/schemas/xp2p-client.schema.json`. Released configurations must use an immutable tag URL such as `https://raw.githubusercontent.com/NlightN22/xray-p2p/vX.Y.Z/schemas/xp2p-client.schema.json`; never bind a released version to a mutable branch URL.
+
 ## Global flags
 
 Every command shares global flags such as `--config`, `--log-level` (`debug|info|warn|error`), `--log-json`, and `--version`.

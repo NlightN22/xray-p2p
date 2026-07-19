@@ -1,0 +1,2 @@
+[server]
+tun_mtu = "1500"

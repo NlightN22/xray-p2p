@@ -14,13 +14,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class Options:
+    command: str
     version: str
-    replace_tag: bool
-    quiet: bool
-    skip_openwrt_artifacts: bool
-    artifacts_branch: str
-    artifacts_dir: str
-    openwrt_expected_arches: list[str]
     dry_run: bool
     log_file: str | None
     keepalive_seconds: int
@@ -170,6 +165,9 @@ def _git_output(log: _Logger, args: list[str], *, dry_run: bool, keepalive_secon
 
 
 def _git_check(log: _Logger, args: list[str], *, dry_run: bool, keepalive_seconds: int) -> bool:
+    if dry_run:
+        _run(log, ["git", *args], capture=True, check=False, dry_run=True, keepalive_seconds=keepalive_seconds)
+        return False
     cp = _run(log, ["git", *args], capture=True, check=False, dry_run=dry_run, keepalive_seconds=keepalive_seconds)
     return cp.returncode == 0
 
@@ -499,72 +497,54 @@ def run_release(opts: Options) -> int:
     _require_cmd("git")
     _require_cmd("go")
 
+    if opts.command == "check":
+        _write_section(log, "Release preflight")
+        status = _git_output(log, ["status", "--short"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        log.line("Working tree changes:\n" + (status or "(none)"))
+        for target in ("schema-check", "schema-test", "test-wsl"):
+            _run(log, ["make", target], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        return 0
+
     version = opts.version.strip()
-    if not re.match(r"^\d+(\.\d+){1,2}$", version):
-        raise SystemExit("Version should be a semantic version without leading 'v' (e.g. 0.2.0)")
+    if not re.match(r"^\d+\.\d+\.\d+$", version):
+        raise SystemExit("Version should be X.Y.Z without leading 'v' (e.g. 0.2.0)")
 
     tag = f"v{version}"
-    _check_replace_tag(log, tag=tag, replace=opts.replace_tag, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    if opts.command == "prepare":
+        status = _git_output(log, ["status", "--porcelain"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        if status:
+            raise SystemExit("prepare requires a clean working tree")
+        _check_replace_tag(log, tag=tag, replace=False, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        _update_go_version_file(log, version=version, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        _update_openwrt_package_makefile(log, version=version, dry_run=opts.dry_run)
+        _run(log, ["make", "schema"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        for target in ("schema-check", "schema-test", "test", "test-wsl"):
+            _run(log, ["make", target], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        _write_section(log, "Prepared release diff")
+        _run(log, ["git", "diff", "--", "go/internal/version/version.go", "openwrt/feed/packages/utils/xp2p/Makefile", "schemas"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+        return 0
 
-    _update_go_version_file(log, version=version, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
-    _run_make_build_deb(log, quiet=opts.quiet, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
-    _update_openwrt_package_makefile(log, version=version, dry_run=opts.dry_run)
-
-    artifacts_dir = Path(opts.artifacts_dir.strip().lstrip("\\/"))
-    if not opts.skip_openwrt_artifacts:
-        _build_openwrt_ipk(
-            log,
-            artifacts_dir=artifacts_dir,
-            expected_arches=opts.openwrt_expected_arches,
-            quiet=opts.quiet,
-            dry_run=opts.dry_run,
-            keepalive_seconds=opts.keepalive_seconds,
-        )
-
-    _write_section(log, "OpenWrt feed packaging note")
-    log.line("OpenWrt .ipk files are not committed to main.")
-    log.line("Build them locally and push to the dedicated artifacts branch under openwrt/staging/stable/.")
-
-    _create_release_commit_if_needed(log, tag=tag, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
-    _create_and_push_tag_and_main(log, tag=tag, quiet=opts.quiet, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
-
-    if not opts.skip_openwrt_artifacts:
-        _publish_openwrt_artifacts(
-            log,
-            tag=tag,
-            artifacts_branch=opts.artifacts_branch,
-            artifacts_dir=artifacts_dir,
-            quiet=opts.quiet,
-            dry_run=opts.dry_run,
-            keepalive_seconds=opts.keepalive_seconds,
-        )
-
-    _write_section(log, f"Release {tag} complete")
-    _run(log, ["git", "status", "-s"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    _check_replace_tag(log, tag=tag, replace=False, dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    _run(log, ["make", "schema-check"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    allowed = {"go/internal/version/version.go", "openwrt/feed/packages/utils/xp2p/Makefile", "schemas/xp2p-client.schema.json", "schemas/xp2p-server.schema.json"}
+    changed = _git_output(log, ["status", "--porcelain"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    paths = {line[3:].strip().replace("\\", "/") for line in changed.splitlines() if len(line) > 3}
+    unexpected = sorted(paths - allowed)
+    if unexpected:
+        raise SystemExit("publish found non-release changes: " + ", ".join(unexpected))
+    if not paths:
+        raise SystemExit("publish requires a prepared release diff")
+    _run(log, ["git", "add", "--", *sorted(paths)], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    _run(log, ["git", "commit", "-m", f"chore: release {tag}"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    _run(log, ["git", "tag", "-a", tag, "-m", f"Release {tag}"], dry_run=opts.dry_run, keepalive_seconds=opts.keepalive_seconds)
+    log.line(f"Created local release commit and annotated tag {tag}; review before any push.")
     return 0
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="new_release")
-    ap.add_argument("--version", required=True, help="semantic version without leading 'v' (e.g. 0.2.0)")
-    ap.add_argument("--replace-tag", action="store_true", help="delete existing local/remote tag before recreating")
-    ap.add_argument("--quiet", action="store_true", help="assume 'yes' for prompts")
-    ap.add_argument("--skip-openwrt-artifacts", action="store_true", help="skip OpenWrt .ipk build and artifacts push")
-    ap.add_argument("--artifacts-branch", default="artifacts", help="artifacts branch name")
-    ap.add_argument("--artifacts-dir", default="openwrt/staging/stable", help="directory with .ipk to publish")
-    ap.add_argument(
-        "--openwrt-expected-arches",
-        nargs="+",
-        default=[
-            "aarch64_generic",
-            "arm_cortex-a15_neon-vfpv4",
-            "i386_pentium4",
-            "mips_24kc",
-            "mipsel_24kc",
-            "x86_64",
-        ],
-        help="expected arch set for built .ipk validation",
-    )
+    ap.add_argument("command", choices=("check", "prepare", "publish"))
+    ap.add_argument("--version", default="", help="X.Y.Z version required by prepare and publish")
     ap.add_argument("--dry-run", action="store_true", help="print commands without executing them")
     ap.add_argument("--log-file", default=None, help="also write logs to file (UTF-8, LF)")
     ap.add_argument(
@@ -576,13 +556,8 @@ def main(argv: list[str]) -> int:
 
     args = ap.parse_args(argv)
     opts = Options(
+        command=str(args.command),
         version=args.version,
-        replace_tag=bool(args.replace_tag),
-        quiet=bool(args.quiet),
-        skip_openwrt_artifacts=bool(args.skip_openwrt_artifacts),
-        artifacts_branch=str(args.artifacts_branch),
-        artifacts_dir=str(args.artifacts_dir),
-        openwrt_expected_arches=[str(x) for x in args.openwrt_expected_arches],
         dry_run=bool(args.dry_run),
         log_file=str(args.log_file) if args.log_file else None,
         keepalive_seconds=int(args.keepalive_seconds),

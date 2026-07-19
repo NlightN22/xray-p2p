@@ -1,0 +1,2 @@
+[client.xray.inbounds.socks]
+port = "1080"

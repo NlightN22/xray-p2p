@@ -67,4 +67,10 @@ type clientReverseChannel struct {
 	Disabled    bool   `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 
+// Schema aliases expose the persisted Desired contract without duplicating it.
+type DesiredState = clientInstallState
+type DesiredEndpoint = clientEndpointRecord
+type DesiredEndpointGroup = endpointGroup
+type DesiredReverseChannel = clientReverseChannel
+
 var ErrClientConfigParse = errors.New("client config parse error")

@@ -1,0 +1,2 @@
+[server.xray.inbounds.trojan]
+allow_insecure = "false"

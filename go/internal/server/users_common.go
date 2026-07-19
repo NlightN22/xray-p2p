@@ -31,6 +31,9 @@ type trojanClient struct {
 	ManagedByIdentity             bool      `json:"-"`
 }
 
+// LegacyTrojanUser exposes the compatibility input contract to tooling.
+type LegacyTrojanUser = trojanClient
+
 func decodeServerTrojanUsers(doc map[string]any) ([]trojanClient, error) {
 	if raw := doc[serverUsersKey]; raw != nil {
 		buf, err := json.Marshal(raw)
