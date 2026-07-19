@@ -20,6 +20,10 @@
       "minLength": 1,
       "pattern": "^[A-Za-z0-9._:-]+$"
     },
+    "optional_host": {
+      "type": "string",
+      "pattern": "^$|^[A-Za-z0-9._:-]+$"
+    },
     "cidr": {
       "type": "string",
       "pattern": "^([^/\\s]+)/(\\d{1,3})$"
@@ -71,7 +75,8 @@
           "type": "object",
           "additionalProperties": { "$ref": "#/definitions/reverse_channel" }
         },
-        "forwards": { "type": "array", "items": { "$ref": "#/definitions/forward" } }
+        "forwards": { "type": "array", "items": { "$ref": "#/definitions/forward" } },
+        "xray": { "$ref": "#/definitions/client_xray" }
       }
     },
     "endpoint": {
@@ -119,10 +124,10 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["outbound_tag"],
-      "oneOf": [{ "required": ["cidr"] }, { "required": ["domain"] }],
+      "anyOf": [{ "required": ["cidr"] }, { "required": ["domain"] }],
       "properties": {
         "cidr": { "$ref": "#/definitions/cidr" },
-        "domain": { "$ref": "#/definitions/host" },
+        "domain": { "$ref": "#/definitions/optional_host" },
         "outbound_tag": { "$ref": "#/definitions/tag" },
         "no_routes": { "type": "boolean" },
         "disabled": { "type": "boolean" },
@@ -160,6 +165,129 @@
         "remark": { "type": "string" }
       }
     },
+    "client_xray": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inbounds": { "$ref": "#/definitions/client_xray_inbounds" },
+        "logs": { "$ref": "#/definitions/xray_logs" },
+        "routing": { "$ref": "#/definitions/xray_routing" },
+        "direct_outbound": { "$ref": "#/definitions/xray_direct_outbound" }
+      }
+    },
+    "client_xray_inbounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "socks": { "$ref": "#/definitions/xray_socks_inbound" },
+        "dokodemo": { "$ref": "#/definitions/xray_dokodemo_inbound" },
+        "tun": { "$ref": "#/definitions/xray_tun_inbound" }
+      }
+    },
+    "xray_port": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 65535,
+      "multipleOf": 1
+    },
+    "xray_socks_inbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string" },
+        "protocol": { "type": "string", "enum": ["socks"] },
+        "listen": { "type": "string" },
+        "port": { "$ref": "#/definitions/xray_port" },
+        "udp": { "type": "boolean" }
+      }
+    },
+    "xray_dokodemo_inbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string" },
+        "remark": { "type": "string" },
+        "protocol": { "type": "string", "enum": ["dokodemo-door"] },
+        "listen": { "type": "string" },
+        "port": { "$ref": "#/definitions/xray_port" },
+        "network": { "type": "string", "enum": ["tcp", "udp", "tcp,udp"] },
+        "follow_redirect": { "type": "boolean" }
+      }
+    },
+    "xray_tun_inbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string" },
+        "protocol": { "type": "string", "enum": ["tun"] },
+        "port": { "$ref": "#/definitions/xray_port" }
+      }
+    },
+    "xray_logs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "type": "string", "enum": ["debug", "info", "warning", "error", "none"] },
+        "access": { "type": "string" },
+        "stats_enabled": { "type": "boolean" },
+        "api": { "$ref": "#/definitions/xray_api" },
+        "policy": { "$ref": "#/definitions/xray_policy" }
+      }
+    },
+    "xray_api": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string" },
+        "listen": { "type": "string" },
+        "services": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "xray_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "levels": { "type": "object", "additionalProperties": { "$ref": "#/definitions/xray_policy_level" } },
+        "system": { "$ref": "#/definitions/xray_policy_system" }
+      }
+    },
+    "xray_policy_level": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stats_user_downlink": { "type": "boolean" },
+        "stats_user_uplink": { "type": "boolean" },
+        "stats_user_online": { "type": "boolean" }
+      }
+    },
+    "xray_policy_system": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stats_inbound_downlink": { "type": "boolean" },
+        "stats_inbound_uplink": { "type": "boolean" },
+        "stats_outbound_downlink": { "type": "boolean" },
+        "stats_outbound_uplink": { "type": "boolean" }
+      }
+    },
+    "xray_routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "domain_strategy": { "type": "string" },
+        "rules": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "xray_direct_outbound": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tag": { "type": "string" },
+        "protocol": { "type": "string", "enum": ["freedom"] },
+        "domain_strategy": { "type": "string" },
+        "send_through": { "type": "string" }
+      }
+    },
     "xray_assets": {
       "type": "object",
       "additionalProperties": false,
@@ -180,6 +308,5 @@
     }
   }
 }
-
 
 
