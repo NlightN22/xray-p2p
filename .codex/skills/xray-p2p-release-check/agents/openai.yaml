@@ -1,4 +1,4 @@
 interface:
   display_name: "Xray P2P Release Check"
-  short_description: "Audit compatibility and prepare a release"
-  default_prompt: "Use $xray-p2p-release-check to audit compatibility and prepare the next xray-p2p release."
+  short_description: "Audit, prepare, and publish an xray-p2p release"
+  default_prompt: "Use $xray-p2p-release-check to audit, prepare, and publish the next xray-p2p release."

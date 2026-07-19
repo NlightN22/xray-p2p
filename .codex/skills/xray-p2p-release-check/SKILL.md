@@ -1,6 +1,6 @@
 ---
 name: xray-p2p-release-check
-description: Audit schema and persisted-data compatibility, verify, prepare, and locally publish an xray-p2p release. Use when checking release readiness, comparing a release branch with its previous version, reviewing normalization or migration decisions, updating generated TOML schemas and versions, reviewing a release diff, or creating the release commit and local annotated tag.
+description: Audit schema and persisted-data compatibility, verify, prepare, and publish an xray-p2p release through the repository's GitHub Actions. Use when checking release readiness, comparing a release branch with its previous version, reviewing normalization or migration decisions, updating generated TOML schemas and versions, reviewing a release diff, creating the release commit and annotated tag, or running the confirmed external release workflow.
 ---
 
 # Xray P2P Release Check
@@ -68,4 +68,56 @@ Complete this gate after the schema compatibility decisions are accepted and bef
 
 ## External publication
 
-Do not push the branch or tag and do not trigger GitHub Actions automatically. Remind the user that the exact order of branch push, tag publication, and existing GitHub Actions must be confirmed against a current release and separately approved. After that process is verified, update this skill with the confirmed sequence.
+Perform every push and workflow dispatch only after explicit user approval. Use the GitHub CLI in read-only mode while auditing or planning.
+
+### Confirm the publication inputs
+
+1. Confirm `gh auth status` succeeds and the account has `repo` and `workflow` access to `NlightN22/xray-p2p`.
+2. Confirm the release branch, annotated `vX.Y.Z` tag, and release notes file identify the same release.
+3. Push the release branch and tag only when approved. Require the automatic `ci` workflow to pass on the exact release commit SHA. `ci` is triggered by qualifying branch pushes and pull requests; do not dispatch it manually.
+4. Confirm the `artifacts` branch contains the complete `openwrt/staging/stable/*.ipk` set for `X.Y.Z`. The GitHub build workflows do not create or publish this OpenWrt set.
+
+### Build release artifacts
+
+Run these three manual workflows for the same release ref. They are independent and may run in parallel:
+
+- `build` (`build.yml`)
+- `build-deb` (`build-deb.yml`)
+- `build-msi` (`build-msi.yml`)
+
+Set both the workflow dispatch ref and its `ref` input to the same release tag or branch. Prefer the pushed annotated tag so every run's `headSha` equals the tag commit. Require every run to succeed and verify its `headSha` before aggregation.
+
+`Build MkDocs docs` (`build-mkdocs.yml`) is not an Aggregate Release dependency. It builds the docs artifact consumed later by Pages deployment. The Pages workflow deliberately downloads the latest successful MkDocs artifact from `main`, so ensure the intended documentation is on `main` and that its MkDocs run succeeded before deploying docs. A qualifying docs push to `main` starts it automatically; dispatch it manually only when a fresh artifact is required.
+
+### Aggregate the GitHub release
+
+Run `aggregate-release` (`aggregate-release.yml`) only after all of these are true:
+
+- the annotated release tag exists on GitHub;
+- `build`, `build-deb`, and `build-msi` succeeded for the exact tag commit;
+- the complete versioned OpenWrt IPK set is present on `artifacts`;
+- the release notes are final.
+
+Use these inputs:
+
+- `tag`: `vX.Y.Z`
+- `include_openwrt_ipk`: `true`
+- `artifacts_mode`: `sha`
+- `artifacts_ref`: the release branch, used only as the workflow's fallback
+- `release_notes_b64`: base64-encoded UTF-8 contents of the release notes file; leave `release_notes` empty when this is used
+
+Reject an unexpected fallback from tag SHA to branch artifacts. After success, verify the versioned GitHub Release, its assets and `SHA256SUMS`, the forced `latest` tag, and the prerelease named `latest`.
+
+### Deploy Pages
+
+Run `Deploy GitHub Pages (feed + docs)` (`deploy-pages.yml`) after Aggregate Release succeeds:
+
+- use `both` when publishing the current docs artifact and refreshing the OpenWrt feed;
+- use `feed-only` when documentation must remain unchanged;
+- use `docs-only` only when no release/feed update is intended.
+
+The feed modes download IPKs from published stable GitHub Releases, so do not deploy the release feed before aggregation.
+
+### Legacy workflow
+
+Do not run `release` (`release.yml`) in the confirmed publication flow. It is a legacy manual workflow that duplicates build, MSI, DEB, GitHub Release, and `latest` publication. No current workflow references it, and running it alongside `aggregate-release` can overwrite release assets or `latest` with a different artifact set. Disabling or deleting it is a separate repository/GitHub change and requires explicit user approval.
