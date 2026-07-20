@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
+import urllib.request
 from pathlib import Path, PurePosixPath
 
 from testinfra.host import Host
@@ -11,6 +13,8 @@ from tests.host.openwrt._xp2p import _stop_xp2p_services
 
 IPK_OUTPUT_DIR = REPO_ROOT / "build" / "ipk"
 IPK_OUTPUT_POSIX = WORKTREE_POSIX / "build" / "ipk"
+PREVIOUS_IPK_ENV = "XP2P_OPENWRT_PREVIOUS_IPK"
+RELEASE_BASE_URL = "https://github.com/NlightN22/xray-p2p/releases/download"
 
 
 def build_ipk(host: Host, target: str) -> None:
@@ -41,6 +45,35 @@ def latest_local_ipk() -> Path | None:
     return candidates[-1]
 
 
+def ensure_previous_release_ipk(version: str, target: str) -> Path:
+    asset_name = f"xp2p_{version}-1_{target}.ipk"
+    cached = IPK_OUTPUT_DIR / "previous" / asset_name
+    override = os.environ.get(PREVIOUS_IPK_ENV, "").strip()
+    if override:
+        source = Path(override).expanduser().resolve()
+        if not source.is_file():
+            raise AssertionError(f"{PREVIOUS_IPK_ENV} does not point to a file: {source}")
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, cached)
+        return cached
+    if cached.is_file() and cached.stat().st_size > 0:
+        return cached
+
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    url = f"{RELEASE_BASE_URL}/v{version}/{asset_name}"
+    partial = cached.with_suffix(".partial")
+    try:
+        urllib.request.urlretrieve(url, partial)
+        partial.replace(cached)
+    except Exception as exc:
+        partial.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Failed to obtain previous OpenWrt package from {url}. "
+            f"Set {PREVIOUS_IPK_ENV} to a local release IPK."
+        ) from exc
+    return cached
+
+
 def ensure_packages_index_present() -> None:
     packages = IPK_OUTPUT_DIR / "Packages"
     packages_gz = IPK_OUTPUT_DIR / "Packages.gz"
@@ -52,7 +85,11 @@ def ensure_packages_index_present() -> None:
 
 def stage_ipk_on_guest(host: Host, ipk_path: Path, destination: PurePosixPath | None = None) -> PurePosixPath:
     target_path = destination or PurePosixPath("/tmp/xp2p.ipk")
-    remote_source = PurePosixPath("/tmp/build-openwrt") / ipk_path.name
+    try:
+        relative_source = ipk_path.resolve().relative_to(IPK_OUTPUT_DIR.resolve())
+    except ValueError:
+        relative_source = Path(ipk_path.name)
+    remote_source = PurePosixPath("/tmp/build-openwrt") / PurePosixPath(relative_source.as_posix())
     copy_command = f"cp {shlex.quote(remote_source.as_posix())} {shlex.quote(target_path.as_posix())}"
     result = host.run(copy_command)
     if result.rc != 0:
