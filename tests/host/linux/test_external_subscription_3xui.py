@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import time
 from pathlib import PurePosixPath
 
 import pytest
@@ -9,6 +10,9 @@ FIXTURE_DIR = PurePosixPath("/srv/xray-p2p/infra/vagrant/debian12/deb-test/3x-ui
 CONTAINER = "xp2p-3x-ui-v2-8-11"
 SUBSCRIPTION_URL = "http://127.0.0.1:2096/sub/xp2pfixture2811"
 REMOTE_SUBSCRIPTION_URL = "http://10.62.10.13:2096/sub/xp2pfixture2811"
+CLIENT_LIVE = PurePosixPath("/etc/xp2p/.state/live/config-client/xray.json")
+CLIENT_DESIRED = PurePosixPath("/etc/xp2p/xp2p-client.toml")
+CLIENT_SUBSCRIPTION_LKG = PurePosixPath("/etc/xp2p/.state/subscriptions/fixture.json")
 
 
 @pytest.fixture(scope="module")
@@ -34,71 +38,117 @@ def test_3xui_pinned_versions_and_subscription_contract(aux_host, pinned_3xui):
     assert xray.rc == 0, xray.stderr
     assert "26.2.6" in xray.stdout
 
-    response = aux_host.run(f"curl --fail --silent {SUBSCRIPTION_URL}")
-    assert response.rc == 0, response.stderr
-    decoded = _decode_subscription(response.stdout)
+    decoded = _fetch_subscription(aux_host)
     assert len(decoded) == 2
     assert any(item.startswith("trojan://fixture-trojan-password@") for item in decoded)
     assert any(item.startswith("vless://550e8400-e29b-41d4-a716-446655440000@") for item in decoded)
 
 
-def test_xp2p_imports_real_3xui_subscription(xp2p_client_runner, pinned_3xui):
-    added = xp2p_client_runner(
-        "client", "subscription", "add", "fixture", REMOTE_SUBSCRIPTION_URL, "--allow-http"
-    )
-    assert added.rc == 0, added.stderr
+def test_3xui_offers_flow_through_xp2p_live(
+    client_host, aux_host, xp2p_client_runner, pinned_3xui
+):
+    try:
+        added = xp2p_client_runner(
+            "client", "subscription", "add", "fixture", REMOTE_SUBSCRIPTION_URL, "--allow-http"
+        )
+        assert added.rc == 0, added.stderr
+        _assert_offer_count(xp2p_client_runner, 2)
 
-    status = xp2p_client_runner("client", "subscription", "status")
+        started = xp2p_client_runner("client", "service", "start")
+        assert started.rc == 0, started.stderr
+        _assert_live_protocol(client_host, "trojan", present=True)
+        _wait_for_xp2p_traffic(client_host)
+
+        rotated = aux_host.run(f"sudo -n sh {FIXTURE_DIR}/mutate.sh rotate-credentials")
+        assert rotated.rc == 0, rotated.stderr
+        refreshed = xp2p_client_runner("client", "subscription", "refresh", "fixture", "--allow-http")
+        assert refreshed.rc == 0, refreshed.stderr
+        _assert_offer_count(xp2p_client_runner, 2)
+        _assert_file_contains(client_host, CLIENT_DESIRED, "rotated-trojan-password")
+        _assert_file_contains(client_host, CLIENT_LIVE, "rotated-trojan-password")
+        _assert_file_contains(client_host, CLIENT_SUBSCRIPTION_LKG, "rotated-trojan-password")
+        _wait_for_xp2p_traffic(client_host)
+
+        removed = aux_host.run(f"sudo -n sh {FIXTURE_DIR}/mutate.sh remove-trojan")
+        assert removed.rc == 0, removed.stderr
+        refreshed = xp2p_client_runner("client", "subscription", "refresh", "fixture", "--allow-http")
+        assert refreshed.rc == 0, refreshed.stderr
+        _assert_offer_count(xp2p_client_runner, 1)
+        _assert_live_protocol(client_host, "trojan", present=False)
+        _assert_live_protocol(client_host, "vless", present=True)
+        _wait_for_xp2p_traffic(client_host)
+
+        before_failure = _state_hashes(client_host)
+        stopped = aux_host.run(f"cd {FIXTURE_DIR} && sudo -n docker-compose stop")
+        assert stopped.rc == 0, stopped.stderr
+        failed = xp2p_client_runner("client", "subscription", "refresh", "fixture", "--allow-http")
+        assert failed.rc != 0
+        assert _state_hashes(client_host) == before_failure
+
+        restarted = aux_host.run(f"cd {FIXTURE_DIR} && sudo -n docker-compose start")
+        assert restarted.rc == 0, restarted.stderr
+        _fetch_subscription(aux_host)
+        client_restarted = xp2p_client_runner("client", "service", "restart")
+        assert client_restarted.rc == 0, client_restarted.stderr
+        refreshed = xp2p_client_runner("client", "subscription", "refresh", "fixture", "--allow-http")
+        assert refreshed.rc == 0, refreshed.stderr
+        _wait_for_xp2p_traffic(client_host)
+    except AssertionError as error:
+        pytest.fail(f"{error}\n{_failure_dump(client_host, aux_host)}")
+
+
+def _assert_offer_count(runner, expected: int) -> None:
+    status = runner("client", "subscription", "status")
     assert status.rc == 0, status.stderr
-    assert "ID: fixture" in status.stdout
-    assert "Offers: 2" in status.stdout
-
-    offers = xp2p_client_runner("client", "subscription", "offers")
-    assert offers.rc == 0, offers.stderr
-    assert offers.stdout.count("fixture\toffer-") == 2
-    assert "\ttrojan\t" in offers.stdout
-    assert "\tvless\t" in offers.stdout
+    assert f"Offers: {expected}" in status.stdout
 
 
-def test_3xui_trojan_and_vless_offers_carry_real_traffic(client_host, pinned_3xui):
-    trojan = client_host.run(
-        "sudo -n sh /srv/xray-p2p/tests/guest/scripts/linux/check_3xui_offer_traffic.sh "
-        "trojan fixture-trojan-password 16443 19081"
+def _wait_for_xp2p_traffic(host) -> None:
+    deadline = time.time() + 30
+    last = None
+    while time.time() < deadline:
+        last = host.run(
+            "curl --fail --silent --max-time 5 --socks5-hostname 127.0.0.1:51180 "
+            "--output /dev/null https://example.com/"
+        )
+        if last.rc == 0:
+            return
+        time.sleep(1)
+    raise AssertionError(f"XP2P SOCKS traffic failed with exit {last.rc if last else 'unknown'}")
+
+
+def _assert_live_protocol(host, protocol: str, present: bool) -> None:
+    deadline = time.time() + 30
+    result = None
+    while time.time() < deadline:
+        ready = host.run(f"sudo -n test -s {CLIENT_LIVE}")
+        if ready.rc != 0:
+            time.sleep(1)
+            continue
+        result = host.run(
+            f"sudo -n grep -Eq '\"protocol\"[[:space:]]*:[[:space:]]*\"{protocol}\"' {CLIENT_LIVE}"
+        )
+        if (result.rc == 0) == present:
+            return
+        time.sleep(1)
+    raise AssertionError(
+        f"Live protocol {protocol} presence is not {present}; exit {result.rc if result else 'unknown'}"
     )
-    assert trojan.rc == 0, trojan.stderr
 
-    vless = client_host.run(
-        "sudo -n sh /srv/xray-p2p/tests/guest/scripts/linux/check_3xui_offer_traffic.sh "
-        "vless 550e8400-e29b-41d4-a716-446655440000 16444 19082"
+
+def _assert_file_contains(host, path: PurePosixPath, value: str) -> None:
+    result = host.run(f"sudo -n grep -Fq -- '{value}' {path}")
+    assert result.rc == 0, result.stderr
+
+
+def _state_hashes(host) -> str:
+    result = host.run(
+        f"sudo -n sha256sum {CLIENT_DESIRED} {CLIENT_LIVE}; "
+        f"sudo -n sed -n '/\"revision\":/,/\"last_refresh_at\":/p' {CLIENT_SUBSCRIPTION_LKG} "
+        "| sha256sum"
     )
-    assert vless.rc == 0, vless.stderr
-
-
-def test_3xui_refresh_tracks_credentials_removal_and_restart(aux_host, pinned_3xui):
-    rotated = aux_host.run(f"sudo -n sh {FIXTURE_DIR}/mutate.sh rotate-credentials")
-    assert rotated.rc == 0, rotated.stderr
-    decoded = _fetch_subscription(aux_host)
-    assert any(item.startswith("trojan://rotated-trojan-password@") for item in decoded)
-    assert any(item.startswith("vless://8b1a9953-c461-4c0f-8c8f-7e6f40c6f0ad@") for item in decoded)
-
-    removed = aux_host.run(f"sudo -n sh {FIXTURE_DIR}/mutate.sh remove-vless")
-    assert removed.rc == 0, removed.stderr
-    decoded = _fetch_subscription(aux_host)
-    assert len(decoded) == 1
-    assert decoded[0].startswith("trojan://rotated-trojan-password@")
-
-    restarted = aux_host.run(f"cd {FIXTURE_DIR} && sudo -n docker-compose restart")
-    assert restarted.rc == 0, restarted.stderr
-    decoded = _fetch_subscription(aux_host)
-    assert len(decoded) == 1
-    assert decoded[0].startswith("trojan://rotated-trojan-password@")
-
-
-def _decode_subscription(value: str) -> list[str]:
-    raw = value.strip()
-    if "://" not in raw:
-        raw = base64.b64decode(raw).decode("utf-8")
-    return [line.strip() for line in raw.splitlines() if line.strip()]
+    assert result.rc == 0, result.stderr
+    return result.stdout
 
 
 def _fetch_subscription(host) -> list[str]:
@@ -106,4 +156,19 @@ def _fetch_subscription(host) -> list[str]:
         f"curl --fail --silent --retry 20 --retry-delay 1 --retry-connrefused {SUBSCRIPTION_URL}"
     )
     assert response.rc == 0, response.stderr
-    return _decode_subscription(response.stdout)
+    raw = response.stdout.strip()
+    if "://" not in raw:
+        raw = base64.b64decode(raw).decode("utf-8")
+    return [line.strip() for line in raw.splitlines() if line.strip()]
+
+
+def _failure_dump(client_host, aux_host) -> str:
+    tree = client_host.run("sudo -n find /etc/xp2p/.state -maxdepth 4 -printf '%y %p\\n'")
+    services = client_host.run("sudo -n systemctl --no-pager --full status xp2p-client.service")
+    panel = aux_host.run(f"cd {FIXTURE_DIR} && sudo -n docker-compose ps")
+    return (
+        "Sanitized failure dump:\n"
+        f"state tree:\n{tree.stdout}\n"
+        f"client service:\n{services.stdout[-4000:]}\n"
+        f"3x-ui containers:\n{panel.stdout}"
+    )

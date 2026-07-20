@@ -25,12 +25,22 @@ func (d XP2PControlDecoder) Decode(raw RawSnapshot) (Snapshot, error) {
 	if credential == "" {
 		return Snapshot{}, fmt.Errorf("decode XP2P subscription: credential is required")
 	}
-	profile, err := tunnel.DefaultProfile(tunnel.Profile(strings.TrimSpace(value.Profile)))
+	profileName := tunnel.Profile(strings.TrimSpace(value.Profile))
+	if profileName == "" {
+		profileName = tunnel.ProfileTrojanTLS
+	}
+	profile, err := tunnel.DefaultProfile(profileName)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if value.Profile == "" {
-		profile, _ = tunnel.DefaultProfile(tunnel.ProfileTrojanTLS)
+	if protocol := strings.TrimSpace(value.Protocol); protocol != "" && !strings.EqualFold(protocol, profile.Protocol) {
+		return Snapshot{}, fmt.Errorf("decode XP2P subscription: protocol does not match profile %q", profile.Profile)
+	}
+	if transport := strings.TrimSpace(value.Transport); transport != "" && !strings.EqualFold(transport, profile.Transport) {
+		return Snapshot{}, fmt.Errorf("decode XP2P subscription: transport does not match profile %q", profile.Profile)
+	}
+	if security := strings.TrimSpace(value.Security); security != "" && !strings.EqualFold(security, profile.Security) {
+		return Snapshot{}, fmt.Errorf("decode XP2P subscription: security does not match profile %q", profile.Profile)
 	}
 	profile.Host = strings.TrimSpace(value.Host)
 	profile.Port = value.Port

@@ -61,16 +61,20 @@ func commitClientRuntimeStateResult(ctx context.Context, state clientInstallStat
 }
 
 func commitClientRuntimeStateResultVerified(ctx context.Context, state clientInstallState, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
+	return commitClientRuntimeStateResultWithCommit(ctx, state, verify, nil)
+}
+
+func commitClientRuntimeStateResultWithCommit(ctx context.Context, state clientInstallState, verify func(context.Context) error, commit func() error) (xraylive.RuntimeApplyResult, error) {
 	var result xraylive.RuntimeApplyResult
 	err := apply.WithRoleLock(ctx, config.StateRoot(), apply.RoleClient, func() error {
 		var err error
-		result, err = commitClientRuntimeStateResultLocked(ctx, state, verify)
+		result, err = commitClientRuntimeStateResultLocked(ctx, state, verify, commit)
 		return err
 	})
 	return result, err
 }
 
-func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInstallState, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
+func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInstallState, verify func(context.Context) error, customCommit func() error) (xraylive.RuntimeApplyResult, error) {
 	if state.baseDigest != "" {
 		configPath := config.ConfigPath(layout.ClientConfigFileName)
 		currentDigest, err := currentClientDesiredDigest(configPath)
@@ -87,7 +91,11 @@ func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInsta
 	}
 	desiredCommitted := false
 	commitDesired := func() error {
-		if err := state.save(config.ConfigPath(layout.ClientConfigFileName)); err != nil {
+		commit := customCommit
+		if commit == nil {
+			commit = func() error { return state.save(config.ConfigPath(layout.ClientConfigFileName)) }
+		}
+		if err := commit(); err != nil {
 			return err
 		}
 		desiredCommitted = true
@@ -98,7 +106,7 @@ func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInsta
 		return result, err
 	}
 	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported {
-		if err := state.save(config.ConfigPath(layout.ClientConfigFileName)); err != nil {
+		if err := commitDesired(); err != nil {
 			return result, err
 		}
 		if err := writeClientRuntimeApplyRequest(); err != nil {
@@ -115,7 +123,7 @@ func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInsta
 		}
 		return result, commitDesired()
 	}
-	return result, state.save(config.ConfigPath(layout.ClientConfigFileName))
+	return result, commitDesired()
 }
 
 func commitClientSubscriptionState(ctx context.Context, state clientInstallState) (xraylive.RuntimeApplyResult, error) {
@@ -124,6 +132,10 @@ func commitClientSubscriptionState(ctx context.Context, state clientInstallState
 
 func commitClientSubscriptionStateVerified(ctx context.Context, state clientInstallState, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
 	return commitClientRuntimeStateResultVerified(ctx, state, verify)
+}
+
+func commitClientSubscriptionStateTransaction(ctx context.Context, state clientInstallState, commit func() error) (xraylive.RuntimeApplyResult, error) {
+	return commitClientRuntimeStateResultWithCommit(ctx, state, nil, commit)
 }
 
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {

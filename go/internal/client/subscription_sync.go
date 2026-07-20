@@ -18,7 +18,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
-	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
+	subscriptiondomain "github.com/NlightN22/xray-p2p/go/internal/subscription"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
@@ -188,43 +188,19 @@ func remoteControlPort() int {
 }
 
 func subscriptionCandidate(current clientInstallState, endpoint clientEndpointRecord, sub controlplane.Subscription, secret string) (clientInstallState, error) {
-	if strings.TrimSpace(sub.Profile) == "" {
-		sub.Profile = "trojan-tls"
-	}
-	if strings.TrimSpace(sub.Transport) == "" {
-		sub.Transport = "tcp"
-	}
-	if strings.TrimSpace(sub.Security) == "" {
-		sub.Security = "tls"
-	}
-	if !strings.EqualFold(strings.TrimSpace(sub.Protocol), "trojan") && !strings.EqualFold(strings.TrimSpace(sub.Protocol), "vless") {
-		return clientInstallState{}, fmt.Errorf("unsupported subscription protocol %q", sub.Protocol)
-	}
-	if sub.Port <= 0 || sub.Port > 65535 {
-		return clientInstallState{}, fmt.Errorf("invalid subscription port %d", sub.Port)
-	}
-	host := strings.TrimSpace(sub.Host)
-	if host == "" {
-		return clientInstallState{}, fmt.Errorf("subscription host is required")
-	}
-	if strings.TrimSpace(secret) == "" {
-		return clientInstallState{}, fmt.Errorf("endpoint credential is missing from live control metadata")
-	}
-	profile, err := tunnel.DefaultProfile(tunnel.Profile(strings.TrimSpace(sub.Profile)))
+	data, err := json.Marshal(sub)
 	if err != nil {
 		return clientInstallState{}, err
 	}
-	if profile.Protocol != strings.TrimSpace(sub.Protocol) || profile.Transport != strings.TrimSpace(sub.Transport) || profile.Security != strings.TrimSpace(sub.Security) {
-		return clientInstallState{}, fmt.Errorf("subscription profile fields do not match %q", sub.Profile)
+	snapshot, err := (subscriptiondomain.XP2PControlDecoder{Credential: secret, UserLabel: endpoint.User}).Decode(subscriptiondomain.RawSnapshot{
+		Source: subscriptiondomain.SourceRef{ID: endpoint.Tag, Adapter: subscriptiondomain.AdapterXP2PControl},
+		Data:   data, FetchedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		return clientInstallState{}, err
 	}
-	if profile.Profile == tunnel.ProfileVLESSTLSVision {
-		if err := tunnel.ValidateVLESSCredential(secret); err != nil {
-			return clientInstallState{}, err
-		}
-		if strings.TrimSpace(sub.Parameters["flow"]) != "xtls-rprx-vision" {
-			return clientInstallState{}, fmt.Errorf("VLESS TLS Vision subscription requires flow xtls-rprx-vision")
-		}
-	}
+	offer := snapshot.Offers[0]
+	profile := offer.Endpoint
 	updated := current
 	updated.Endpoints = append([]clientEndpointRecord(nil), current.Endpoints...)
 	for i := range updated.Endpoints {
@@ -232,27 +208,20 @@ func subscriptionCandidate(current clientInstallState, endpoint clientEndpointRe
 			continue
 		}
 		record := updated.Endpoints[i]
-		record.Profile = strings.TrimSpace(sub.Profile)
-		record.Protocol = strings.TrimSpace(sub.Protocol)
-		record.Transport = strings.TrimSpace(sub.Transport)
-		record.Security = strings.TrimSpace(sub.Security)
-		record.Flow = strings.TrimSpace(sub.Parameters["flow"])
-		record.Hostname = host
-		record.Address = subscriptionAddress(endpoint, host)
-		record.Port = sub.Port
-		record.Password = strings.TrimSpace(secret)
-		if strings.TrimSpace(sub.ServerName) != "" {
-			record.ServerName = strings.TrimSpace(sub.ServerName)
-		}
-		if strings.TrimSpace(sub.TLS.PinnedPeerCertSHA256) != "" {
-			record.PinnedPeerCertSHA256 = strings.TrimSpace(sub.TLS.PinnedPeerCertSHA256)
-			record.AllowInsecure = false
-		} else {
-			record.AllowInsecure = sub.TLS.ClientMayAllowInsecure
-		}
-		if strings.TrimSpace(sub.TLS.VerifyPeerCertByName) != "" {
-			record.VerifyPeerCertByName = strings.TrimSpace(sub.TLS.VerifyPeerCertByName)
-		}
+		record.Profile = string(profile.Profile)
+		record.Protocol = profile.Protocol
+		record.Transport = profile.Transport
+		record.Security = profile.Security
+		record.Flow = profile.Metadata["flow"]
+		record.Hostname = profile.Host
+		record.Address = subscriptionAddress(endpoint, profile.Host)
+		record.Port = profile.Port
+		record.Password = offer.Credential
+		record.ServerName = profile.ServerName
+		record.ALPN = append([]string(nil), profile.TLS.ALPN...)
+		record.PinnedPeerCertSHA256 = profile.TLS.PinnedPeerCertSHA256
+		record.VerifyPeerCertByName = profile.TLS.VerifyPeerCertByName
+		record.AllowInsecure = profile.TLS.AllowInsecure
 		updated.Endpoints[i] = record
 		updated.normalize()
 		return updated, nil

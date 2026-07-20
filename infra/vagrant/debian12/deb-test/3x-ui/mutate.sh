@@ -38,8 +38,8 @@ case "$operation" in
     update_inbound "xp2p-trojan" "trojan"
     update_inbound "xp2p-vless" "vless"
     ;;
-  remove-vless)
-    item="$(list_inbounds | jq -c '.obj[] | select(.remark == "xp2p-vless")')"
+  remove-trojan)
+    item="$(list_inbounds | jq -c '.obj[] | select(.remark == "xp2p-trojan")')"
     [ -n "$item" ] || { echo "3x-ui fixture inbound is missing" >&2; exit 1; }
     id="$(printf '%s' "$item" | jq -r '.id')"
     response="$(curl --fail --silent --cookie "$cookie_file" -X POST "$base_url/panel/api/inbounds/del/$id")"

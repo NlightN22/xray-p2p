@@ -31,6 +31,10 @@ type ExternalSubscriptionStatus struct {
 	LastError       string
 }
 
+var saveExternalSubscriptionState = func(store subscription.Store, state subscription.PersistedSource, expectedDigest string) error {
+	return store.Save(state, expectedDigest)
+}
+
 func AddExternalSubscription(ctx context.Context, opts ExternalSubscriptionOptions) error {
 	id := strings.TrimSpace(opts.ID)
 	if !validExternalSubscriptionID(id) {
@@ -48,11 +52,10 @@ func AddExternalSubscription(ctx context.Context, opts ExternalSubscriptionOptio
 			return fmt.Errorf("subscription %q already exists", id)
 		}
 	}
-	state.Subscriptions = append(state.Subscriptions, externalSubscriptionSource{ID: id, Adapter: subscription.AdapterURIList3XUIV2811, CompatibilityVersion: subscription.AdapterURIList3XUIV2811, URL: strings.TrimSpace(opts.URL)})
-	if err := commitClientRuntimeState(ctx, state); err != nil {
-		return err
-	}
-	return RefreshExternalSubscription(ctx, opts)
+	source := externalSubscriptionSource{ID: id, Adapter: subscription.AdapterURIList3XUIV2811, CompatibilityVersion: subscription.AdapterURIList3XUIV2811, URL: strings.TrimSpace(opts.URL)}
+	candidate := state
+	candidate.Subscriptions = append(append([]externalSubscriptionSource(nil), state.Subscriptions...), source)
+	return refreshExternalSubscription(ctx, opts, state, candidate, len(candidate.Subscriptions)-1, source, true)
 }
 
 func RefreshExternalSubscription(ctx context.Context, opts ExternalSubscriptionOptions) error {
@@ -68,48 +71,68 @@ func RefreshExternalSubscription(ctx context.Context, opts ExternalSubscriptionO
 	if strings.TrimSpace(opts.URL) != "" {
 		source.URL = strings.TrimSpace(opts.URL)
 	}
+	candidate := desired
+	candidate.Subscriptions = append([]externalSubscriptionSource(nil), desired.Subscriptions...)
+	return refreshExternalSubscription(ctx, opts, desired, candidate, index, source, false)
+}
+
+func refreshExternalSubscription(ctx context.Context, opts ExternalSubscriptionOptions, previous, desired clientInstallState, index int, source externalSubscriptionSource, adding bool) error {
 	store := externalSubscriptionStore(source.ID)
 	persisted, digest, err := store.Load()
 	if err != nil {
 		return err
 	}
+	previousPersisted := persisted
 	fetcher := subscription.HTTPSource{SourceRef: subscription.SourceRef{ID: source.ID, Adapter: source.Adapter}, URL: source.URL, AllowHTTP: opts.AllowHTTP}
 	raw, err := fetcher.Fetch(ctx, persisted.Revision)
 	if errors.Is(err, subscription.ErrNotModified) {
+		if adding {
+			return errors.New("initial subscription fetch returned no snapshot")
+		}
 		return nil
 	}
 	if err != nil {
+		if adding {
+			return err
+		}
 		return recordExternalSubscriptionError(store, persisted, digest, err)
 	}
 	snapshot, err := (subscription.URIListDecoder{}).Decode(raw)
 	if err != nil {
+		if adding {
+			return err
+		}
 		return recordExternalSubscriptionError(store, persisted, digest, err)
 	}
+	now := time.Now().UTC()
 	persisted.SourceRef = snapshot.Source
 	persisted.URL = source.URL
 	persisted.Revision = snapshot.Revision
 	persisted.LastGood = &snapshot
-	persisted.LastRefreshAt = time.Now().UTC()
+	persisted.LastRefreshAt = now
+	persisted.LastApplyAt = now
 	persisted.LastError = ""
-	if err := store.Save(persisted, digest); err != nil {
-		return err
-	}
 	desired.Subscriptions[index] = source
 	desired.Endpoints = replaceSubscriptionEndpoints(desired.Endpoints, source.ID, snapshot.Offers)
-	if _, err := commitClientSubscriptionState(ctx, desired); err != nil {
-		latest, latestDigest, loadErr := store.Load()
-		if loadErr == nil {
-			_ = recordExternalSubscriptionError(store, latest, latestDigest, err)
+	commit := func() error {
+		if err := desired.save(config.ConfigPath(layout.ClientConfigFileName)); err != nil {
+			return err
 		}
-		return err
+		if err := saveExternalSubscriptionState(store, persisted, digest); err != nil {
+			if restoreErr := previous.save(config.ConfigPath(layout.ClientConfigFileName)); restoreErr != nil {
+				return fmt.Errorf("persist subscription LKG: %w; restore Desired: %v", err, restoreErr)
+			}
+			return fmt.Errorf("persist subscription LKG: %w", err)
+		}
+		return nil
 	}
-	latest, latestDigest, err := store.Load()
-	if err != nil {
-		return err
+	if _, err := commitClientSubscriptionStateTransaction(ctx, desired, commit); err != nil {
+		if adding {
+			return err
+		}
+		return recordExternalSubscriptionError(store, previousPersisted, digest, err)
 	}
-	latest.LastApplyAt = time.Now().UTC()
-	latest.LastError = ""
-	return store.Save(latest, latestDigest)
+	return nil
 }
 
 func ListExternalSubscriptions() ([]ExternalSubscriptionStatus, error) {
@@ -169,7 +192,7 @@ func externalSubscriptionStore(id string) subscription.Store {
 
 func recordExternalSubscriptionError(store subscription.Store, state subscription.PersistedSource, digest string, cause error) error {
 	state.LastError = cause.Error()
-	if saveErr := store.Save(state, digest); saveErr != nil {
+	if saveErr := saveExternalSubscriptionState(store, state, digest); saveErr != nil {
 		return fmt.Errorf("%w; persist refresh diagnostic: %v", cause, saveErr)
 	}
 	return cause

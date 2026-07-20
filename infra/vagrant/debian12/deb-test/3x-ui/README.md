@@ -7,4 +7,4 @@ The test harness removes `state`, starts the Compose project, runs `setup.sh`, a
 The expected panel commit is `52fdf5d4296b4534e25d6221d82ec7d819a9b952`. The pinned source declares Xray module `v1.260206.0`, corresponding to Xray `v26.2.6`; the integration test must also verify the versions reported by the running binaries.
 
 `mutate.sh` is a test-only helper for deterministic credential rotation and
-offer removal through the pinned panel administrative API.
+Trojan offer removal through the pinned panel administrative API.

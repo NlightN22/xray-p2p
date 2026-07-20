@@ -19,6 +19,7 @@ APT_PACKAGES="
   pkg-config
   procps
   psmisc
+  python3
   qemu-user-static
   rpm
   rsync
@@ -52,6 +53,13 @@ apt-get install -y --no-install-recommends $APT_PACKAGES
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
+FIXTURE_CA_SOURCE="/srv/xray-p2p/tests/fixtures/tls/integration-cert.pem"
+FIXTURE_CA_TARGET="/usr/local/share/ca-certificates/xp2p-integration.crt"
+if [ -f "$FIXTURE_CA_SOURCE" ]; then
+  install -m 0644 "$FIXTURE_CA_SOURCE" "$FIXTURE_CA_TARGET"
+  update-ca-certificates
+fi
+
 if [ "$(hostname -s)" = "deb-test-c" ]; then
   systemctl enable --now docker
 fi
@@ -65,9 +73,9 @@ fi
 
 if [ -z "${GO_VERSION:-}" ]; then
   if [ -f /srv/xray-p2p/go.mod ]; then
-    GO_VERSION=$(awk '$1 == "toolchain" {print $2; exit}' /srv/xray-p2p/go.mod | sed 's/^go//')
+    GO_VERSION=$(awk '$1 == "toolchain" {print $2; exit}' /srv/xray-p2p/go.mod | sed 's/^go//' | tr -d '\r')
     if [ -z "$GO_VERSION" ]; then
-      GO_VERSION=$(awk '$1 == "go" {print $2; exit}' /srv/xray-p2p/go.mod)
+      GO_VERSION=$(awk '$1 == "go" {print $2; exit}' /srv/xray-p2p/go.mod | tr -d '\r')
     fi
   fi
 fi

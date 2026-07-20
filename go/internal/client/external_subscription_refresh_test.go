@@ -2,11 +2,15 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/NlightN22/xray-p2p/go/internal/subscription"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 func TestExternalSubscriptionRefreshReconcilesServerSnapshot(t *testing.T) {
@@ -118,6 +122,93 @@ func TestRemoveExternalSubscriptionPreservesManualEndpoints(t *testing.T) {
 	}
 	if statuses, err := ListExternalSubscriptions(); err != nil || len(statuses) != 0 {
 		t.Fatalf("removed subscription remains visible: %+v, %v", statuses, err)
+	}
+}
+
+func TestExternalSubscriptionRuntimeFailureKeepsPreviousDesiredAndLKG(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
+	body := externalTrojanFixture("old-password", "edge.example")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	opts := ExternalSubscriptionOptions{ID: "fixture", URL: server.URL, AllowHTTP: true}
+	if err := AddExternalSubscription(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	body = externalTrojanFixture("new-password", "edge.example")
+	stubRuntimeFlow(t, true, func(context.Context, xraylive.Options, xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
+		return xraylive.RuntimeApplyFailed, nil
+	})
+	if err := RefreshExternalSubscription(context.Background(), opts); err == nil {
+		t.Fatal("failed runtime apply reported success")
+	}
+	assertExternalCredential(t, root, "old-password")
+}
+
+func TestExternalSubscriptionLKGFailureRestoresDesired(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
+	body := externalTrojanFixture("old-password", "edge.example")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	opts := ExternalSubscriptionOptions{ID: "fixture", URL: server.URL, AllowHTTP: true}
+	if err := AddExternalSubscription(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	body = externalTrojanFixture("new-password", "edge.example")
+	oldSave := saveExternalSubscriptionState
+	saveExternalSubscriptionState = func(store subscription.Store, state subscription.PersistedSource, digest string) error {
+		if state.LastGood != nil && state.LastGood.Offers[0].Credential == "new-password" {
+			return errors.New("injected LKG failure")
+		}
+		return store.Save(state, digest)
+	}
+	t.Cleanup(func() { saveExternalSubscriptionState = oldSave })
+	if err := RefreshExternalSubscription(context.Background(), opts); err == nil {
+		t.Fatal("failed LKG persistence reported success")
+	}
+	assertExternalCredential(t, root, "old-password")
+}
+
+func TestAddExternalSubscriptionFetchFailureLeavesNoSource(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unavailable", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	err := AddExternalSubscription(context.Background(), ExternalSubscriptionOptions{ID: "fixture", URL: server.URL, AllowHTTP: true})
+	if err == nil {
+		t.Fatal("failed initial fetch reported success")
+	}
+	state := mustLoadExternalDesired(t, root)
+	if len(state.Subscriptions) != 0 || len(state.Endpoints) != 0 {
+		t.Fatalf("failed add changed Desired: %+v", state)
+	}
+	if statuses, listErr := ListExternalSubscriptions(); listErr != nil || len(statuses) != 0 {
+		t.Fatalf("failed add left persisted source: %+v, %v", statuses, listErr)
+	}
+}
+
+func assertExternalCredential(t *testing.T, root, credential string) {
+	t.Helper()
+	desired := mustLoadExternalDesired(t, root)
+	if len(desired.Endpoints) != 1 || desired.Endpoints[0].Password != credential {
+		t.Fatalf("Desired credential changed: %+v", desired.Endpoints)
+	}
+	statuses, err := ListExternalSubscriptions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 1 || len(statuses[0].Offers) != 1 || statuses[0].Offers[0].Credential != credential {
+		t.Fatalf("LKG credential changed: %+v", statuses)
 	}
 }
 
