@@ -1,0 +1,32 @@
+[logging]
+level = "info"
+format = "text"
+
+[server]
+port = "443"
+trojan_port = "443"
+profile = "trojan-tls"
+install_dir = "/etc/xp2p"
+config_dir = "config-server"
+mode = "proxy"
+certificate = "/etc/xp2p/tls/server/server.crt"
+key = "/etc/xp2p/tls/server/server.key"
+host = "edge-a.example.test"
+tun_enabled = false
+tun_name = "xp2ps"
+tun_mtu = 1500
+tun_addr = "198.18.0.2/30"
+
+[[server.users]]
+user_label = "site-client"
+active_credential = "11111111-2222-4333-8444-555555555555"
+previous_credential_for_rotation = "legacy-credential-site-a"
+rotation_expires_at = "2099-01-01T00:00:00Z"
+credential_generation = 2
+disabled = false
+
+[server.reverse_channels.branch]
+user_id = "site-client"
+host = "192.0.2.10"
+tag = "branch.rev"
+domain = "branch.example.test"

@@ -1,0 +1,41 @@
+{
+  "compiled_at": "2026-07-19T17:00:00Z",
+  "desired": {
+    "endpoints": [
+      {
+        "address": "192.0.2.10",
+        "credential": "legacy-credential-site-a",
+        "hostname": "edge-a.example.test",
+        "port": 443,
+        "server_name": "edge-a.example.test",
+        "tag": "proxy-edge-a",
+        "user": "site-client"
+      },
+      {
+        "address": "192.0.2.11",
+        "credential": "legacy-credential-site-b",
+        "hostname": "edge-b.example.test",
+        "port": 443,
+        "server_name": "edge-b.example.test",
+        "tag": "proxy-edge-b",
+        "user": "site-client"
+      },
+      {
+        "address": "192.0.2.12",
+        "credential": "legacy-credential-site-c",
+        "hostname": "edge-c.example.test",
+        "port": 443,
+        "server_name": "edge-c.example.test",
+        "tag": "proxy-edge-c",
+        "user": "site-client"
+      }
+    ]
+  },
+  "role": "client",
+  "tun_addr": "198.18.0.1/30",
+  "tun_enabled": false,
+  "tun_mode": "split",
+  "tun_mtu": 1500,
+  "tun_name": "xp2pc",
+  "version": "0.2.6"
+}

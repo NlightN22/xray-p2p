@@ -1,0 +1,68 @@
+[logging]
+level = "info"
+format = "text"
+
+[client]
+install_dir = "/etc/xp2p"
+config_dir = "config-client"
+server_address = "192.0.2.10"
+server_port = "443"
+diag_port = "62023"
+user = "site-client"
+password = "legacy-credential-site-a"
+server_name = "edge-a.example.test"
+allow_insecure = true
+tun_enabled = false
+tun_name = "xp2pc"
+tun_mtu = 1500
+tun_addr = "198.18.0.1/30"
+tun_mode = "split"
+dns_servers = ["192.0.2.53"]
+full_tunnel_verbose = false
+full_tunnel_tag = "proxy-edge-a"
+
+[[client.endpoints]]
+hostname = "edge-a.example.test"
+tag = "proxy-edge-a"
+address = "192.0.2.10"
+port = 443
+user = "site-client"
+password = "legacy-credential-site-a"
+server_name = "edge-a.example.test"
+allow_insecure = true
+
+[[client.endpoints]]
+hostname = "edge-b.example.test"
+tag = "proxy-edge-b"
+address = "192.0.2.11"
+port = 443
+user = "site-client"
+password = "legacy-credential-site-b"
+server_name = "edge-b.example.test"
+allow_insecure = true
+
+[[client.endpoints]]
+hostname = "edge-c.example.test"
+tag = "proxy-edge-c"
+address = "192.0.2.12"
+port = 443
+user = "site-client"
+password = "legacy-credential-site-c"
+server_name = "edge-c.example.test"
+allow_insecure = true
+
+[client.reverse.branch]
+user_id = "site-client"
+host = "192.0.2.10"
+tag = "branch.rev"
+domain = "branch.example.test"
+endpoint_tag = "proxy-edge-a"
+
+[[client.forwards]]
+listen_address = "127.0.0.1"
+listen_port = 18081
+target_host = "198.51.100.20"
+target_port = 8080
+protocol = "tcp"
+tag = "branch-web"
+remark = "Synthetic upgrade fixture"

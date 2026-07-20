@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import shlex
 from pathlib import PurePosixPath
 
 import pytest
@@ -13,7 +11,7 @@ from tests.host.openwrt import env as openwrt_env
 @pytest.mark.host
 @pytest.mark.linux
 @pytest.mark.destructive
-def test_openwrt_upgrade_recovers_failed_apply_from_older_runtime(
+def test_openwrt_upgrade_preserves_running_client_service(
     openwrt_host, openwrt_ipk_target, xp2p_openwrt_ipk
 ):
     previous_ipk = openwrt_env.ensure_previous_release_ipk(
@@ -52,38 +50,12 @@ def test_openwrt_upgrade_recovers_failed_apply_from_older_runtime(
 
     try:
         previous_hash = openwrt_host.run("sha256sum /usr/bin/xp2p").stdout.split()[0]
-        live_meta = helpers.CLIENT_LIVE_DIR / "runtime.json"
-        old_request = {
-            "version": 2,
-            "requests": {
-                "client": {
-                    "id": "upgrade-old-request",
-                    "timestamp": "2026-07-19T18:27:25Z",
-                    "role": "client",
-                }
-            },
-        }
-        old_error = {
-            "request_id": "upgrade-old-request",
-            "role": "client",
-            "timestamp": "2026-07-19T18:27:25Z",
-            "reason": "device or resource busy",
-        }
-        command = (
-            f"sed -i 's/\"version\": \"[^\"]*\"/\"version\": \"0.2.6\"/' {live_meta}; "
-            f"printf %s {shlex.quote(json.dumps(old_request))} > {helpers.APPLY_REQUEST}; "
-            f"printf %s {shlex.quote(json.dumps(old_error))} > {helpers.APPLY_ERROR}; "
-            f"opkg install --force-reinstall {staged}"
+        upgraded = openwrt_host.run(
+            f"opkg install --force-reinstall {staged}", timeout=120
         )
-        upgraded = openwrt_host.run(command, timeout=120)
         assert upgraded.rc == 0, upgraded.stderr
         helpers.wait_for_service_state(openwrt_host, "client", running=True)
 
-        runtime = json.loads(openwrt_host.file(live_meta.as_posix()).content_string)
-        assert runtime["version"] != "0.2.6"
-        assert "control" in runtime
-        assert not helpers.path_exists(openwrt_host, helpers.APPLY_ERROR)
-        assert not helpers.path_exists(openwrt_host, helpers.APPLY_REQUEST)
         candidate_hash = openwrt_host.run("sha256sum /usr/bin/xp2p").stdout.split()[0]
         assert candidate_hash != previous_hash
         assert helpers.path_exists(

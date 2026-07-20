@@ -1,0 +1,10 @@
+{
+  "requests": {
+    "client": {
+      "id": "upgrade-stale-request",
+      "role": "client",
+      "timestamp": "2026-07-19T17:01:00Z"
+    }
+  },
+  "version": 2
+}
