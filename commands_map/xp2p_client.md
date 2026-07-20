@@ -4,7 +4,7 @@
 
 xp2p client
   Summary: Manage xp2p client installation
-  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, group, dns-forward
+  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, group, subscription, dns-forward
 Options:
 Includes: inherited options
 
@@ -347,6 +347,39 @@ Includes: inherited options
 xp2p client group list
   Summary: List HA endpoint groups
   Aliases: status, inspect
+Options:
+Includes: inherited options
+
+xp2p client subscription
+  Summary: Manage external server-authoritative subscriptions
+  Subcommands: add, status, offers, refresh, remove
+Options:
+Includes: inherited options
+
+xp2p client subscription add <id> <url>
+  Summary: Add and fetch an external subscription
+Options:
+Includes: inherited options
+- --allow-http, -A allow HTTP for a local compatibility fixture
+
+xp2p client subscription status
+  Summary: Show external subscription status
+Options:
+Includes: inherited options
+
+xp2p client subscription offers
+  Summary: List external connection offers
+Options:
+Includes: inherited options
+
+xp2p client subscription refresh <id>
+  Summary: Refresh one external subscription
+Options:
+Includes: inherited options
+- --allow-http, -A allow HTTP for a local compatibility fixture
+
+xp2p client subscription remove <id>
+  Summary: Remove one external subscription and its offers
 Options:
 Includes: inherited options
 

@@ -17,6 +17,10 @@ import (
 var errClientDesiredConflict = errors.New("client Desired changed concurrently; reload and retry")
 
 func applyClientRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifacts, commitDesired func() error) (xraylive.RuntimeApplyResult, error) {
+	return applyClientRuntimeCandidateVerified(ctx, artifacts, commitDesired, nil)
+}
+
+func applyClientRuntimeCandidateVerified(ctx context.Context, artifacts xraylive.Artifacts, commitDesired func() error, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
 	liveDir, err := config.LiveRoleDir(apply.RoleClient)
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
@@ -30,6 +34,7 @@ func applyClientRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 		LiveDir:       liveDir,
 		LkgDir:        lkgDir,
 		CommitDesired: commitDesired,
+		VerifyRuntime: verify,
 	}, artifacts)
 	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported ||
 		result == xraylive.RuntimeApplyFailed || result == xraylive.RuntimeApplySkipped {
@@ -52,16 +57,20 @@ func commitClientRuntimeState(ctx context.Context, state clientInstallState) err
 }
 
 func commitClientRuntimeStateResult(ctx context.Context, state clientInstallState) (xraylive.RuntimeApplyResult, error) {
+	return commitClientRuntimeStateResultVerified(ctx, state, nil)
+}
+
+func commitClientRuntimeStateResultVerified(ctx context.Context, state clientInstallState, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
 	var result xraylive.RuntimeApplyResult
 	err := apply.WithRoleLock(ctx, config.StateRoot(), apply.RoleClient, func() error {
 		var err error
-		result, err = commitClientRuntimeStateResultLocked(ctx, state)
+		result, err = commitClientRuntimeStateResultLocked(ctx, state, verify)
 		return err
 	})
 	return result, err
 }
 
-func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInstallState) (xraylive.RuntimeApplyResult, error) {
+func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInstallState, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
 	if state.baseDigest != "" {
 		configPath := config.ConfigPath(layout.ClientConfigFileName)
 		currentDigest, err := currentClientDesiredDigest(configPath)
@@ -84,7 +93,7 @@ func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInsta
 		desiredCommitted = true
 		return nil
 	}
-	result, err := applyClientRuntimeCandidate(ctx, artifacts, commitDesired)
+	result, err := applyClientRuntimeCandidateVerified(ctx, artifacts, commitDesired, verify)
 	if err != nil {
 		return result, err
 	}
@@ -111,6 +120,10 @@ func commitClientRuntimeStateResultLocked(ctx context.Context, state clientInsta
 
 func commitClientSubscriptionState(ctx context.Context, state clientInstallState) (xraylive.RuntimeApplyResult, error) {
 	return commitClientRuntimeStateResult(ctx, state)
+}
+
+func commitClientSubscriptionStateVerified(ctx context.Context, state clientInstallState, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
+	return commitClientRuntimeStateResultVerified(ctx, state, verify)
 }
 
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {

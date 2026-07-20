@@ -29,6 +29,11 @@ func applyOutboundRuntimeDiff(ctx context.Context, opts Options, req apply.Reque
 		writeRuntimeApplyError(opts, req, err)
 		return RuntimeApplyFailed, nil
 	}
+	if runtimeVerificationFailed(ctx, opts, req, func() error {
+		return runtimeapply.ApplyOutboundDiff(ctx, applier, reverseOutboundDiff(diff))
+	}) {
+		return RuntimeApplyFailed, nil
+	}
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := runtimeapply.ApplyOutboundDiff(ctx, applier, reverseOutboundDiff(diff))
 		reason := err

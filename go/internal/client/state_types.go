@@ -9,6 +9,7 @@ import (
 
 type clientInstallState struct {
 	Endpoints      []clientEndpointRecord          `json:"endpoints" toml:"endpoints"`
+	Subscriptions  []externalSubscriptionSource    `json:"subscriptions,omitempty" toml:"subscriptions"`
 	EndpointGroups []endpointGroup                 `json:"endpoint_groups,omitempty" toml:"endpoint_groups"`
 	Redirects      []redirect.Rule                 `json:"redirects,omitempty" toml:"redirects"`
 	Reverse        map[string]clientReverseChannel `json:"reverse,omitempty" toml:"reverse"`
@@ -38,6 +39,8 @@ const (
 )
 
 type clientEndpointRecord struct {
+	SubscriptionSourceID string   `json:"subscription_source_id,omitempty" toml:"subscription_source_id,omitempty"`
+	SubscriptionOfferID  string   `json:"subscription_offer_id,omitempty" toml:"subscription_offer_id,omitempty"`
 	Profile              string   `json:"profile,omitempty" toml:"profile,omitempty"`
 	Protocol             string   `json:"protocol,omitempty" toml:"protocol,omitempty"`
 	Transport            string   `json:"transport,omitempty" toml:"transport,omitempty"`
@@ -57,6 +60,14 @@ type clientEndpointRecord struct {
 	Disabled             bool     `json:"disabled,omitempty" toml:"disabled,omitempty"`
 }
 
+type externalSubscriptionSource struct {
+	ID                   string `json:"id" toml:"id"`
+	Adapter              string `json:"adapter" toml:"adapter"`
+	CompatibilityVersion string `json:"compatibility_version" toml:"compatibility_version"`
+	URL                  string `json:"url" toml:"url"`
+	SelectedOfferID      string `json:"selected_offer_id,omitempty" toml:"selected_offer_id,omitempty"`
+}
+
 type clientReverseChannel struct {
 	ChannelID   string `json:"channel_id,omitempty" toml:"channel_id,omitempty"`
 	UserID      string `json:"user_id" toml:"user_id"`
@@ -71,6 +82,7 @@ type clientReverseChannel struct {
 // Schema aliases expose the persisted Desired contract without duplicating it.
 type DesiredState = clientInstallState
 type DesiredEndpoint = clientEndpointRecord
+type DesiredSubscription = externalSubscriptionSource
 type DesiredEndpointGroup = endpointGroup
 type DesiredReverseChannel = clientReverseChannel
 

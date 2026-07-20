@@ -1,0 +1,25 @@
+{
+  "provider": "3x-ui",
+  "format": "base64-uri-list",
+  "compatibility_version": "3x-ui-uri-list-v2.8.11",
+  "panel_tag": "v2.8.11",
+  "panel_commit": "52fdf5d",
+  "image": "ghcr.io/mhsanaei/3x-ui:v2.8.11",
+  "image_index_digest": "sha256:34c46ea6d838df981c4760bd1fe442413c2b99bbe4bb49dfa3d1bfb8a8a92496",
+  "image_linux_amd64_digest": "sha256:ce050d75791a4576c0a5b2fdd207909efa7f88bf6a0a45c5424b949d5fd53432",
+  "xray_version": "v26.2.6",
+  "xray_evidence": "github.com/xtls/xray-core v1.260206.0 in the pinned tag go.mod; container execution remains an integration gate",
+  "content_types": ["text/plain", "text/plain; charset=utf-8"],
+  "encodings": ["base64", "plain-text"],
+  "refresh_headers": ["ETag", "Last-Modified"],
+  "supported_offers": ["trojan-tls-tcp", "vless-tls-tcp-xtls-rprx-vision"],
+  "required_parameters": {
+    "trojan-tls-tcp": ["security", "type"],
+    "vless-tls-tcp-xtls-rprx-vision": ["encryption", "flow", "security", "type"]
+  },
+  "known_limitations": [
+    "Only URI profiles listed in supported_offers are accepted.",
+    "Unknown query parameters reject the complete snapshot.",
+    "Container-reported versions and response headers must be rechecked by the pinned integration fixture."
+  ]
+}

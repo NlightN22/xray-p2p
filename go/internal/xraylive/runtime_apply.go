@@ -55,6 +55,7 @@ type Options struct {
 	Compile        CompileFunc
 	SourceDigest   SourceDigestFunc
 	CommitDesired  func() error
+	VerifyRuntime  func(context.Context) error
 	NewApplier     RoutingApplierFactory
 	NewInbound     InboundApplierFactory
 	NewOutbound    OutboundApplierFactory
@@ -148,6 +149,9 @@ func applyRuntimeArtifacts(ctx context.Context, opts Options, req apply.Request,
 	}
 	switch diff.Kind {
 	case runtimeapply.DiffNoop:
+		if runtimeVerificationFailed(ctx, opts, req, nil) {
+			return RuntimeApplyFailed, nil
+		}
 		if err := publishLiveArtifacts(opts, artifacts); err != nil {
 			writeRuntimeApplyError(opts, req, err)
 			return RuntimeApplyFailed, nil
@@ -209,6 +213,11 @@ func applyRoutingRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 		writeRuntimeApplyError(opts, req, err)
 		return RuntimeApplyFailed, nil
 	}
+	if runtimeVerificationFailed(ctx, opts, req, func() error {
+		return runtimeapply.ApplyRoutingDiff(ctx, applier, reverseRoutingDiff(diff))
+	}) {
+		return RuntimeApplyFailed, nil
+	}
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := runtimeapply.ApplyRoutingDiff(ctx, applier, reverseRoutingDiff(diff))
 		reason := err
@@ -252,6 +261,11 @@ func applyInboundRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 		writeRuntimeApplyError(opts, req, err)
 		return RuntimeApplyFailed, nil
 	}
+	if runtimeVerificationFailed(ctx, opts, req, func() error {
+		return runtimeapply.ApplyInboundDiff(ctx, applier, reverseInboundDiff(diff))
+	}) {
+		return RuntimeApplyFailed, nil
+	}
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := runtimeapply.ApplyInboundDiff(ctx, applier, reverseInboundDiff(diff))
 		reason := err
@@ -274,6 +288,23 @@ func applyInboundRuntimeDiff(ctx context.Context, opts Options, req apply.Reques
 	cleanupRuntimeApplyMarkers(opts, req)
 	logging.Info("runtime inbound apply completed", "role", role, "request_id", req.ID)
 	return RuntimeApplyApplied, nil
+}
+
+func runtimeVerificationFailed(ctx context.Context, opts Options, req apply.Request, rollback func() error) bool {
+	if opts.VerifyRuntime == nil {
+		return false
+	}
+	if err := opts.VerifyRuntime(ctx); err != nil {
+		reason := fmt.Errorf("runtime verification failed: %w", err)
+		if rollback != nil {
+			if rollbackErr := rollback(); rollbackErr != nil {
+				reason = fmt.Errorf("%w; runtime rollback failed: %v", reason, rollbackErr)
+			}
+		}
+		writeRuntimeApplyError(opts, req, reason)
+		return true
+	}
+	return false
 }
 
 func DefaultRoutingApplierFactory(ctx context.Context, address string) (runtimeapply.RoutingApplier, func() error, error) {

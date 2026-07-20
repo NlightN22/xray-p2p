@@ -24,6 +24,9 @@ func (s *clientInstallState) normalize() {
 	if s.Endpoints == nil {
 		s.Endpoints = []clientEndpointRecord{}
 	}
+	if s.Subscriptions == nil {
+		s.Subscriptions = []externalSubscriptionSource{}
+	}
 	if s.EndpointGroups == nil {
 		s.EndpointGroups = []endpointGroup{}
 	}
@@ -49,6 +52,11 @@ func (s clientInstallState) save(path string) error {
 		tree.DeletePath([]string{"client", "endpoints"})
 	} else {
 		tree.SetPath([]string{"client", "endpoints"}, s.Endpoints)
+	}
+	if len(s.Subscriptions) == 0 {
+		tree.DeletePath([]string{"client", "subscriptions"})
+	} else {
+		tree.SetPath([]string{"client", "subscriptions"}, s.Subscriptions)
 	}
 	if len(s.EndpointGroups) == 0 {
 		tree.DeletePath([]string{"client", "endpoint_groups"})

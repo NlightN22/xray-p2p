@@ -33,6 +33,11 @@ func applyMixedRuntimeDiff(ctx context.Context, opts Options, req apply.Request,
 		}
 		applied = append(applied, phase)
 	}
+	if runtimeVerificationFailed(ctx, opts, req, func() error {
+		return rollbackMixedPhases(ctx, appliers, applied)
+	}) {
+		return RuntimeApplyFailed, nil
+	}
 
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := rollbackMixedPhases(ctx, appliers, applied)

@@ -1,0 +1,2 @@
+trojan://fixture-trojan-password@edge.example:443?security=tls&type=tcp&sni=edge.example#Trojan%20Fixture
+vless://550e8400-e29b-41d4-a716-446655440000@edge.example:8443?encryption=none&flow=xtls-rprx-vision&security=tls&type=tcp&sni=edge.example#VLESS%20Fixture

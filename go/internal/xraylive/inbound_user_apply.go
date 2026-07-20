@@ -29,6 +29,11 @@ func applyInboundUserRuntimeDiff(ctx context.Context, opts Options, req apply.Re
 		writeRuntimeApplyError(opts, req, err)
 		return RuntimeApplyFailed, nil
 	}
+	if runtimeVerificationFailed(ctx, opts, req, func() error {
+		return runtimeapply.ApplyInboundUserDiff(ctx, applier, reverseInboundUserDiff(diff))
+	}) {
+		return RuntimeApplyFailed, nil
+	}
 	if err := publishLiveArtifacts(opts, artifacts); err != nil {
 		rollbackErr := runtimeapply.ApplyInboundUserDiff(ctx, applier, reverseInboundUserDiff(diff))
 		reason := err

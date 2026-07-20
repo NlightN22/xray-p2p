@@ -124,13 +124,17 @@ func clientsToInterfaces(clients []trojanClient) []any {
 		result = append(result, trojanClientInterface(client, strings.TrimSpace(client.Password), true))
 		previous := strings.TrimSpace(client.PreviousCredentialForRotation)
 		if previous != "" && !client.RotationExpiresAt.IsZero() && now.Before(client.RotationExpiresAt) {
-			result = append(result, trojanClientInterface(trojanClient{Email: previousTrojanEmail(client)}, previous, true))
+			result = append(result, trojanClientInterface(trojanClient{Email: previousCredentialEmail(client)}, previous, true))
 		}
 	}
 	return result
 }
 
 func previousTrojanEmail(client trojanClient) string {
+	return previousCredentialEmail(client)
+}
+
+func previousCredentialEmail(client trojanClient) string {
 	email := strings.TrimSpace(client.Email)
 	if email == "" {
 		return ""

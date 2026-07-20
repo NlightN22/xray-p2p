@@ -484,6 +484,42 @@ func TestTryApplyRoutingPendingAppliesInboundUserDiff(t *testing.T) {
 	}
 }
 
+func TestTryApplyRoutingPendingRollsBackWhenRuntimeVerificationFails(t *testing.T) {
+	root := t.TempDir()
+	opts := testOptions(t, root, apply.RoleServer)
+	current := []byte(`{"api":{"listen":"127.0.0.1:10085"},"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[{"email":"old@example.com","password":"old"}]}}]}`)
+	candidate := []byte(`{"api":{"listen":"127.0.0.1:10085"},"inbounds":[{"tag":"trojan-in","protocol":"trojan","settings":{"clients":[{"email":"new@example.com","password":"new"}]}}]}`)
+	writeLive(t, opts.LiveDir, current, []byte(`{"version":1}`))
+	applier := newTestInboundUserApplier()
+	applier.users["trojan-in"] = map[string]string{"old@example.com": "old"}
+	opts.Compile = func(string, string) (Artifacts, error) {
+		return Artifacts{XrayJSON: candidate, MetaJSON: []byte(`{"version":2}`)}, nil
+	}
+	opts.NewInboundUser = func(context.Context, string) (runtimeapply.InboundUserApplier, func() error, error) {
+		return applier, func() error { return nil }, nil
+	}
+	opts.VerifyRuntime = func(context.Context) error { return errors.New("tunnel probe failed") }
+
+	result, err := TryApplyRoutingPending(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("TryApplyRoutingPending: %v", err)
+	}
+	if result != RuntimeApplyFailed {
+		t.Fatalf("result = %s, want %s", result, RuntimeApplyFailed)
+	}
+	got, err := os.ReadFile(filepath.Join(opts.LiveDir, layout.XrayConfigFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(current) {
+		t.Fatalf("live changed after failed verification: %s", got)
+	}
+	wantCalls := []string{"remove:trojan-in:old@example.com", "add:trojan-in:new@example.com", "remove:trojan-in:new@example.com", "add:trojan-in:old@example.com"}
+	if !reflect.DeepEqual(applier.calls, wantCalls) {
+		t.Fatalf("calls = %v, want %v", applier.calls, wantCalls)
+	}
+}
+
 func TestTryApplyRoutingPendingPreservesCurrentAPIListen(t *testing.T) {
 	root := t.TempDir()
 	opts := testOptions(t, root, apply.RoleServer)

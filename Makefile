@@ -21,7 +21,7 @@ VAGRANT_OWRT_DIR := infra/vagrant/openwrt
 TARGETS := $(strip $(shell go run ./go/tools/targets list --scope all))
 BUILD_BASE := build
 WSL_CD = drive=$$(printf '%s' '$(CURDIR)' | cut -c1 | tr '[:upper:]' '[:lower:]'); path=$$(printf '%s' '$(CURDIR)' | cut -c3-); repo_dir=/mnt/$$drive$$path; cd \"$$repo_dir\"
-.PHONY: run build build-% fmt lint test schema schema-check schema-test schema-compat vagrant-win10 vagrant-win10-destroy \
+.PHONY: run build build-% fmt lint test schema schema-check schema-test schema-compat vagrant-win10 vagrant-win10-destroy up-deb-test-c halt-deb-test-c provision-deb-test-c \
 	vagrant-win10-server vagrant-win10-client \
 	vagrant-win10-destroy-server vagrant-win10-destroy-client build-ipk build-ipk-infra build-deb build-msi \
 	ui-native-build ui-native-test ui-native-cover ui-native-test-cover-wsl test-wsl command-map
@@ -131,6 +131,15 @@ build-deb:
 	$(MAKE) lint
 	cd $(VAGRANT_DEB12_DIR) && vagrant up deb-test-a
 	cd $(VAGRANT_DEB12_DIR) && vagrant ssh deb-test-a -c "sudo -n /bin/bash /srv/xray-p2p/scripts/build/build_deb_xp2p.sh --all"
+
+up-deb-test-c:
+	cd $(VAGRANT_DEB12_DIR) && vagrant up deb-test-c
+
+halt-deb-test-c:
+	cd $(VAGRANT_DEB12_DIR) && vagrant halt deb-test-c
+
+provision-deb-test-c:
+	cd $(VAGRANT_DEB12_DIR) && vagrant provision deb-test-c
 
 # swallow extra positional arguments so make does not treat them as targets
 %:

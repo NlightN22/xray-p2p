@@ -19,6 +19,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 const defaultSubscriptionSyncInterval = 30 * time.Second
@@ -140,13 +141,21 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			logging.Warn("subscription topology rejected", "tag", endpoint.Tag, "err", err)
 			continue
 		}
-		if _, err := commitClientSubscriptionState(ctx, candidate); err != nil {
+		var verify func(context.Context) error
+		if rotationPending {
+			candidateEndpoint := candidate.Endpoints[index]
+			verify = func(verifyCtx context.Context) error {
+				return r.verifyRotationTunnel(verifyCtx, candidateEndpoint, index, credential)
+			}
+		}
+		result, err := commitClientSubscriptionStateVerified(ctx, candidate, verify)
+		if err != nil {
 			logging.Warn("subscription apply failed", "tag", endpoint.Tag, "generation", sub.Generation, "err", err)
 			continue
 		}
 		if rotationPending {
-			if err := r.verifyRotationTunnel(ctx, candidate.Endpoints[index], index, credential); err != nil {
-				logging.Debug("credential rotation tunnel verification failed", "tag", endpoint.Tag, "err", err)
+			if result != xraylive.RuntimeApplyApplied && result != xraylive.RuntimeApplyNoop {
+				logging.Debug("credential rotation acknowledgement deferred", "tag", endpoint.Tag, "apply", result)
 				continue
 			}
 			if err := acknowledgeRotation(ctx, endpoint, controlPort, credential, r.timeout); err != nil {

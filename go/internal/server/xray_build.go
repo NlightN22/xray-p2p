@@ -2,6 +2,7 @@ package server
 
 import (
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
@@ -66,7 +67,11 @@ func buildTunnelInbound(cfg xrayconfig.ServerXrayConfig, profile tunnel.Profile,
 		if client.Disabled {
 			continue
 		}
-		users = append(users, map[string]any{"id": strings.TrimSpace(client.Password), "email": strings.TrimSpace(client.Email), "flow": "xtls-rprx-vision"})
+		users = append(users, vlessClientInterface(strings.TrimSpace(client.Password), strings.TrimSpace(client.Email)))
+		previous := strings.TrimSpace(client.PreviousCredentialForRotation)
+		if previous != "" && tunnel.IsUUIDCredential(previous) && !client.RotationExpiresAt.IsZero() && time.Now().UTC().Before(client.RotationExpiresAt) {
+			users = append(users, vlessClientInterface(previous, previousCredentialEmail(client)))
+		}
 	}
 	return map[string]any{
 		"tag":      cfg.Inbounds.Trojan.Tag,
@@ -79,6 +84,14 @@ func buildTunnelInbound(cfg xrayconfig.ServerXrayConfig, profile tunnel.Profile,
 			"tlsSettings": map[string]any{"certificates": []map[string]any{{"certificateFile": certPath, "keyFile": keyPath}}},
 		},
 	}
+}
+
+func vlessClientInterface(credential, email string) map[string]any {
+	entry := map[string]any{"id": credential, "flow": "xtls-rprx-vision"}
+	if email != "" {
+		entry["email"] = email
+	}
+	return entry
 }
 
 func buildTrojanInbound(cfg xrayconfig.ServerXrayConfig, trojanPort int, certPath string, keyPath string, forceAllowInsecure bool, clients []trojanClient) map[string]any {

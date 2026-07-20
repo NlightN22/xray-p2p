@@ -75,6 +75,20 @@ xp2p client dns-forward remove --domain dev.example
 
 `dns-forward remove` follows the same ownership rule for client and server roles: pre-existing forwards are preserved, and shared dns-forward-owned forwards remain until the last domain using that listen port is removed.
 
+## External subscriptions
+
+An external subscription is a server-authoritative set of connection offers. Each published Trojan or VLESS URI keeps its own protocol, transport, security settings, and credential. Refresh replaces only endpoints owned by that subscription; manually configured endpoints and other subscriptions are unchanged.
+
+```bash
+xp2p client subscription add provider-main "https://panel.example/sub/SECRET"
+xp2p client subscription status
+xp2p client subscription offers
+xp2p client subscription refresh provider-main
+xp2p client subscription remove provider-main
+```
+
+The subscription URL is a bearer secret. Keep it out of logs and shared shell history. A failed or malformed refresh preserves the last known good snapshot and the current live runtime.
+
 Advanced options:
 
 - Manual client fields (no link): `xp2p client install --host <host> --user <user> --password <password>`.

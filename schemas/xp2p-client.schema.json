@@ -48,6 +48,12 @@
         "server_name": {
           "type": "string"
         },
+        "subscription_offer_id": {
+          "type": "string"
+        },
+        "subscription_source_id": {
+          "type": "string"
+        },
         "tag": {
           "type": "string"
         },
@@ -132,6 +138,27 @@
           "type": "integer"
         },
         "tag": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "client_external_subscription_source": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "type": "string"
+        },
+        "compatibility_version": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "selected_offer_id": {
+          "type": "string"
+        },
+        "url": {
           "type": "string"
         }
       },
@@ -298,6 +325,12 @@
         },
         "socks_address": {
           "type": "string"
+        },
+        "subscriptions": {
+          "items": {
+            "$ref": "#/definitions/client_external_subscription_source"
+          },
+          "type": "array"
         },
         "tun_addr": {
           "type": "string"

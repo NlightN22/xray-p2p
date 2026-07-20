@@ -68,6 +68,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newClientReverseCmd(cfg),
 		newClientModeCmd(cfg),
 		newClientEndpointGroupCmd(cfg),
+		newClientSubscriptionCmd(),
 	)
 	dnsForwardMaybeAdd(cmd, cfg)
 	return cmd

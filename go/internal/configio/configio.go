@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -51,7 +52,7 @@ func WriteBytes(path string, data []byte, opts WriteOptions) error {
 		entry := auditEntry{
 			Timestamp: time.Now().UTC(),
 			User:      currentUser(),
-			Command:   strings.Join(os.Args, " "),
+			Command:   auditCommand(os.Args),
 			Path:      path,
 			OldHash:   oldHash,
 			NewHash:   newHash,
@@ -66,6 +67,32 @@ func WriteBytes(path string, data []byte, opts WriteOptions) error {
 		}
 	}
 	return nil
+}
+
+func auditCommand(args []string) string {
+	redacted := append([]string(nil), args...)
+	redactNext := false
+	for index, arg := range redacted {
+		if redactNext {
+			redacted[index] = "[REDACTED]"
+			redactNext = false
+			continue
+		}
+		name := strings.ToLower(strings.TrimSpace(arg))
+		if name == "--password" || name == "-w" || name == "--link" || name == "-l" || name == "--url" || name == "-u" {
+			redactNext = true
+			continue
+		}
+		parsed, err := url.Parse(arg)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			continue
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "http", "https", "trojan", "vless":
+			redacted[index] = parsed.Scheme + "://" + parsed.Host + "/[REDACTED]"
+		}
+	}
+	return strings.Join(redacted, " ")
 }
 
 type auditEntry struct {
