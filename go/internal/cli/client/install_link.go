@@ -1,7 +1,9 @@
 package clientcmd
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/tunnel"
 )
@@ -29,6 +31,11 @@ func parseInstallLink(raw string) (installLink, error) {
 	parsed, err := tunnel.ParseLink(raw)
 	if err != nil {
 		return installLink{}, err
+	}
+	for key := range parsed.Unknown {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(key)), "x-optional-") {
+			return installLink{}, fmt.Errorf("unsupported connection link parameter %q", key)
+		}
 	}
 	endpoint := parsed.Endpoint
 	return installLink{

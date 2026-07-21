@@ -16,6 +16,7 @@ APT_PACKAGES="
   lintian
   ldap-utils
   nftables
+  openssl
   pkg-config
   procps
   psmisc
