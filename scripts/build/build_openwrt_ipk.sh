@@ -26,8 +26,8 @@ resolve_go_toolchain() {
   local toolchain=""
   local version=""
   if [ -f "$PROJECT_ROOT/go.mod" ]; then
-    toolchain=$(awk '$1 == "toolchain" {print $2; exit}' "$PROJECT_ROOT/go.mod" || true)
-    version=$(awk '$1 == "go" {print $2; exit}' "$PROJECT_ROOT/go.mod" || true)
+    toolchain=$(awk '$1 == "toolchain" {print $2; exit}' "$PROJECT_ROOT/go.mod" | tr -d '\r' || true)
+    version=$(awk '$1 == "go" {print $2; exit}' "$PROJECT_ROOT/go.mod" | tr -d '\r' || true)
   fi
   if [ -n "$toolchain" ]; then
     echo "$toolchain"

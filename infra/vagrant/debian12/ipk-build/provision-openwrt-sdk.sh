@@ -14,9 +14,9 @@ rm -rf /var/lib/apt/lists/*
 
 if [ -z "${GO_VERSION:-}" ]; then
   if [ -f /srv/xray-p2p/go.mod ]; then
-    GO_VERSION=$(awk '$1 == "toolchain" {print $2; exit}' /srv/xray-p2p/go.mod | sed 's/^go//')
+    GO_VERSION=$(awk '$1 == "toolchain" {print $2; exit}' /srv/xray-p2p/go.mod | sed 's/^go//' | tr -d '\r')
     if [ -z "$GO_VERSION" ]; then
-      GO_VERSION=$(awk '$1 == "go" {print $2; exit}' /srv/xray-p2p/go.mod)
+      GO_VERSION=$(awk '$1 == "go" {print $2; exit}' /srv/xray-p2p/go.mod | tr -d '\r')
     fi
   fi
 fi

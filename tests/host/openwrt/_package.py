@@ -15,6 +15,13 @@ IPK_OUTPUT_DIR = REPO_ROOT / "build" / "ipk"
 IPK_OUTPUT_POSIX = WORKTREE_POSIX / "build" / "ipk"
 PREVIOUS_IPK_ENV = "XP2P_OPENWRT_PREVIOUS_IPK"
 RELEASE_BASE_URL = "https://github.com/NlightN22/xray-p2p/releases/download"
+PACKAGE_ARCHITECTURES = {
+    "linux-amd64": "x86_64",
+    "linux-386": "i386_pentium4",
+    "linux-arm64": "aarch64_generic",
+    "linux-armhf": "arm_cortex-a15_neon-vfpv4",
+    "linux-mipsle-softfloat": "mipsel_24kc",
+}
 
 
 def build_ipk(host: Host, target: str) -> None:
@@ -46,7 +53,8 @@ def latest_local_ipk() -> Path | None:
 
 
 def ensure_previous_release_ipk(version: str, target: str) -> Path:
-    asset_name = f"xp2p_{version}-1_{target}.ipk"
+    architecture = PACKAGE_ARCHITECTURES.get(target, target)
+    asset_name = f"xp2p_{version}-1_{architecture}.ipk"
     cached = IPK_OUTPUT_DIR / "previous" / asset_name
     override = os.environ.get(PREVIOUS_IPK_ENV, "").strip()
     if override:

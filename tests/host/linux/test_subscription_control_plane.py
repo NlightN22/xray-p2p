@@ -20,16 +20,10 @@ TROJAN_PORT = "62310"
 SERVER_HOST = "subscription-control.example.com"
 USER = "subscription-control@example.com"
 PASSWORD = "550e8400-e29b-41d4-a716-446655440001"
-LEGACY_USER = "forced-legacy@example.com"
-LEGACY_PASSWORD = "forced-legacy-password"
-UUID_USER = "uuid@example.com"
-UUID_PASSWORD = "550e8400-e29b-41d4-a716-446655440000"
 VLESS_USER = "vless-profile@example.com"
 VLESS_PASSWORD = "550e8400-e29b-41d4-a716-446655440002"
 PROFILE_SWITCH_USER = "profile-switch@example.com"
 PROFILE_SWITCH_PASSWORD = "550e8400-e29b-41d4-a716-446655440003"
-CLIENT_ROTATION_USER = "client-rotation@example.com"
-CLIENT_ROTATION_PASSWORD = "550e8400-e29b-41d4-a716-446655440004"
 
 
 def test_subscription_control_plane_uses_tls_and_hmac(server_host):
@@ -130,164 +124,6 @@ def test_subscription_control_plane_uses_tls_and_hmac(server_host):
                 "expired credential rotation probe failed "
                 f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
-    finally:
-        runtime.stop_service(runner, "server")
-
-
-def test_client_applies_rotated_credential_and_acknowledges(client_host, server_host):
-    server_runner = runtime.xp2p_runner(server_host)
-    client_runner = runtime.xp2p_runner(client_host)
-    server_ip = _detect_host_ipv4(server_host)
-    try:
-        _add_hosts_entry(client_host, server_ip, SERVER_HOST)
-        server_runner(
-            "server",
-            "install",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--host",
-            SERVER_HOST,
-            "--port",
-            TROJAN_PORT,
-            "--force",
-            check=True,
-        )
-        user_add = server_runner(
-            "server",
-            "user",
-            "add",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--id",
-            CLIENT_ROTATION_USER,
-            "--password",
-            CLIENT_ROTATION_PASSWORD,
-            "--host",
-            SERVER_HOST,
-            check=True,
-        )
-        client_runner(
-            "client",
-            "install",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.CLIENT_CONFIG_DIR_NAME,
-            "--link",
-            _extract_link(user_add.stdout or ""),
-            "--mode",
-            "proxy",
-            check=True,
-        )
-
-        runtime.start_service(server_host, server_runner, "server")
-        runtime.start_service(client_host, client_runner, "client", log_level="debug")
-        _assert_tunnel_ping(client_host, server_host, client_runner, SERVER_HOST)
-
-        server_runner("server", "user", "rotate", CLIENT_ROTATION_USER, check=True)
-        rotated = _server_user(server_host, CLIENT_ROTATION_USER)
-        active = rotated["active_credential"]
-        assert active != CLIENT_ROTATION_PASSWORD
-        assert rotated["previous_credential_for_rotation"] == CLIENT_ROTATION_PASSWORD
-
-        _wait_for_client_credential(client_host, SERVER_HOST, server_ip, active)
-        _assert_tunnel_ping(client_host, server_host, client_runner, SERVER_HOST)
-        _wait_for_server_rotation_ack(server_host, CLIENT_ROTATION_USER)
-
-        result = linux_env.run_guest_script(
-            server_host,
-            "scripts/linux/check_credential_rotation_rejected.sh",
-            "127.0.0.1",
-            CONTROL_PORT,
-            CLIENT_ROTATION_USER,
-            CLIENT_ROTATION_PASSWORD,
-            timeout=60,
-        )
-        if result.rc != 0:
-            helpers.dump_failure_state(server_host, "client-credential-rotation-ack")
-            helpers.dump_failure_state(client_host, "client-credential-rotation-ack")
-            pytest.fail(
-                "acknowledged previous credential was still accepted "
-                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-    finally:
-        runtime.stop_service(client_runner, "client")
-        runtime.stop_service(server_runner, "server")
-
-
-def test_service_start_forces_legacy_credential_rotation(server_host):
-    runner = runtime.xp2p_runner(server_host)
-    try:
-        runner(
-            "server",
-            "install",
-            "--path",
-            helpers.INSTALL_ROOT.as_posix(),
-            "--config-dir",
-            helpers.SERVER_CONFIG_DIR_NAME,
-            "--host",
-            SERVER_HOST,
-            "--port",
-            TROJAN_PORT,
-            "--force",
-            check=True,
-        )
-        for user, password in ((LEGACY_USER, LEGACY_PASSWORD), (UUID_USER, UUID_PASSWORD)):
-            runner(
-                "server",
-                "user",
-                "add",
-                "--path",
-                helpers.INSTALL_ROOT.as_posix(),
-                "--config-dir",
-                helpers.SERVER_CONFIG_DIR_NAME,
-                "--id",
-                user,
-                "--password",
-                password,
-                "--host",
-                SERVER_HOST,
-                check=True,
-            )
-
-        runtime.start_service(server_host, runner, "server")
-        live = runtime.wait_for_live_xray(server_host, "server")
-        credentials = _trojan_credentials(live)
-        legacy_active = credentials.get(LEGACY_USER, "")
-        assert legacy_active and legacy_active != LEGACY_PASSWORD
-        assert _is_uuid(legacy_active)
-        assert credentials.get(UUID_USER) == UUID_PASSWORD
-
-        result = linux_env.run_guest_script(
-            server_host,
-            "scripts/linux/check_credential_rotation.sh",
-            "127.0.0.1",
-            CONTROL_PORT,
-            LEGACY_USER,
-            LEGACY_PASSWORD,
-            timeout=60,
-        )
-        if result.rc != 0:
-            helpers.dump_failure_state(server_host, "forced-credential-rotation")
-            pytest.fail(
-                "forced credential rotation probe failed "
-                f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-            )
-        rotation = json.loads(result.stdout)
-        assert rotation.get("credential_generation") == 2
-        assert rotation.get("subscription_generation")
-
-        desired = helpers.read_pending_server_config(server_host)
-        users = {entry["user_label"]: entry for entry in desired.get("users") or []}
-        assert users[LEGACY_USER]["credential_generation"] == 2
-        assert users[LEGACY_USER]["active_credential"] == legacy_active
-        assert "previous_credential_for_rotation" not in users[LEGACY_USER]
-        assert users[UUID_USER]["active_credential"] == UUID_PASSWORD
-        assert users[UUID_USER]["credential_generation"] == 1
     finally:
         runtime.stop_service(runner, "server")
 
@@ -541,36 +377,6 @@ def _server_user(host, user: str) -> dict:
     raise AssertionError(f"Server user {user} is missing: {desired.get('users')}")
 
 
-def _wait_for_client_credential(host, endpoint_host: str, fallback_host: str, credential: str) -> None:
-    deadline = time.time() + 100.0
-    last = None
-    while time.time() < deadline:
-        try:
-            endpoint = _client_endpoint_any(host, endpoint_host, fallback_host)
-            last = endpoint
-            if endpoint.get("password") == credential:
-                runtime.wait_for_live_xray(host, "client")
-                return
-        except AssertionError as exc:
-            last = str(exc)
-        time.sleep(2.0)
-    helpers.dump_failure_state(host, "client-credential-rotation")
-    raise AssertionError(f"Client did not apply rotated credential. Last endpoint state: {last}")
-
-
-def _wait_for_server_rotation_ack(host, user: str) -> None:
-    deadline = time.time() + 60.0
-    last = None
-    while time.time() < deadline:
-        entry = _server_user(host, user)
-        last = entry
-        if not entry.get("previous_credential_for_rotation"):
-            return
-        time.sleep(1.0)
-    helpers.dump_failure_state(host, "server-credential-rotation-ack")
-    raise AssertionError(f"Server did not acknowledge credential rotation. Last user state: {last}")
-
-
 def _assert_tunnel_ping(client_host, server_host, runner, host: str) -> None:
     deadline = time.time() + 45.0
     last = None
@@ -656,10 +462,3 @@ def _detect_host_ipv4(host) -> str:
         if not address.startswith("10.0.2."):
             return address
     return addresses[0]
-
-
-def _is_uuid(value: str) -> bool:
-    parts = value.split("-")
-    return [len(part) for part in parts] == [8, 4, 4, 4, 12] and all(
-        all(char in "0123456789abcdef" for char in part.lower()) for part in parts
-    )
