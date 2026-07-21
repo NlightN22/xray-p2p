@@ -24,6 +24,14 @@
         "flow": {
           "type": "string"
         },
+        "heartbeat_mode": {
+          "enum": [
+            "auto",
+            "required",
+            "disabled"
+          ],
+          "type": "string"
+        },
         "hostname": {
           "type": "string"
         },

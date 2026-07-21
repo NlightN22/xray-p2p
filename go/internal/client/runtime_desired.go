@@ -1,5 +1,7 @@
 package client
 
+import "github.com/NlightN22/xray-p2p/go/internal/heartbeat"
+
 func runtimeDesiredToClientInstallState(desired runtimeDesired) clientInstallState {
 	state := clientInstallState{
 		EndpointGroups: desired.EndpointGroups,
@@ -26,6 +28,8 @@ func runtimeDesiredToClientInstallState(desired runtimeDesired) clientInstallSta
 				AllowInsecure:        ep.AllowInsecure,
 				PinnedPeerCertSHA256: ep.PinnedPeerCertSHA256,
 				VerifyPeerCertByName: ep.VerifyPeerCertByName,
+				HeartbeatMode:        heartbeat.Mode(ep.HeartbeatMode),
+				ALPN:                 normalizeALPN(ep.ALPN),
 			})
 		}
 	}

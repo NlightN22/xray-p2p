@@ -60,3 +60,31 @@ func TestSnapshotClientConfiguredStateUsesEndpointsAsSource(t *testing.T) {
 		t.Fatalf("expected beta placeholder without stale entries: %+v", snapshots[1])
 	}
 }
+
+func TestSnapshotClientConfiguredStateDesiredDisabledWins(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+	configData := []byte(`
+[client]
+  endpoints = [
+    { hostname = "alpha.example", tag = "proxy-alpha", address = "198.51.100.10", port = 443, user = "alice", password = "a", server_name = "alpha.example", heartbeat_mode = "disabled" },
+  ]
+`)
+	if err := os.WriteFile(config.ConfigPath(layout.ClientConfigFileName), configData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	healthy := true
+	statePath := filepath.Join(dir, layout.ClientHeartbeatStateFileName)
+	if err := heartbeat.Save(statePath, heartbeat.State{Entries: map[string]heartbeat.Entry{
+		"proxy-alpha|alice": {Tag: "proxy-alpha", Host: "alpha.example", User: "alice", Mode: heartbeat.ModeRequired, Status: heartbeat.StatusHealthy, Healthy: &healthy, LastSeen: time.Now().UTC()},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	snapshots, err := snapshotClientConfiguredState(dir, layout.ClientConfigDir, false, statePath, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshots) != 1 || snapshots[0].Entry.Mode != heartbeat.ModeDisabled || snapshots[0].Entry.Status != heartbeat.StatusDisabled {
+		t.Fatalf("Desired disabled policy did not override persisted state: %+v", snapshots)
+	}
+}

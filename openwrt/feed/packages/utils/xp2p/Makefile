@@ -90,6 +90,36 @@ define Package/xp2p/install
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/completions/xp2p.fish $(1)/usr/share/fish/vendor_completions.d/xp2p.fish
 endef
 
+define Package/xp2p/preinst
+#!/bin/sh
+if [ -n "$$IPKG_INSTROOT" ] || [ ! -d /etc/xp2p ]; then
+	exit 0
+fi
+
+archive_root=/etc/xp2p/upgrade-archives
+archive_stamp="$$(date -u +%Y%m%dT%H%M%SZ)"
+archive_path="$$archive_root/state-$$archive_stamp.tar.gz"
+archive_stage="/tmp/xp2p-upgrade-$$"
+mkdir -p "$$archive_root" "$$archive_stage/.state" || exit 1
+for state_file in /etc/xp2p/state-heartbeat-client.json* /etc/xp2p/state-heartbeat-server.json*; do
+	[ -e "$$state_file" ] || continue
+	cp -p "$$state_file" "$$archive_stage/" || { rm -rf "$$archive_stage"; exit 1; }
+done
+for marker in /etc/xp2p/.state/apply.*; do
+	[ -e "$$marker" ] || continue
+	cp -p "$$marker" "$$archive_stage/.state/" || { rm -rf "$$archive_stage"; exit 1; }
+done
+for state_dir in live lkg; do
+	if [ -d "/etc/xp2p/.state/$$state_dir" ]; then
+		cp -R -p "/etc/xp2p/.state/$$state_dir" "$$archive_stage/.state/" || { rm -rf "$$archive_stage"; exit 1; }
+	fi
+done
+tar -czf "$$archive_path" -C "$$archive_stage" . || { rm -rf "$$archive_stage"; exit 1; }
+rm -rf "$$archive_stage"
+echo "xp2p upgrade state archive: $$archive_path"
+exit 0
+endef
+
 define Package/xp2p/postinst
 #!/bin/sh
 if [ -n "$$IPKG_INSTROOT" ]; then

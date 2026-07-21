@@ -34,6 +34,7 @@ type InstallOptions struct {
 	Transport             string
 	Security              string
 	Flow                  string
+	HeartbeatMode         string
 	AllowInsecureOverride bool
 	Force                 bool
 	TunEnabled            bool

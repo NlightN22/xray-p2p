@@ -8,9 +8,13 @@ STATE_TABLE_HEADER = (
     "TAG",
     "HOST",
     "STATUS",
+    "MODE",
+    "CHECK",
+    "LAST_ATTEMPT",
+    "LAST_SUCCESS",
+    "FAILURE_STAGE",
     "LAST_RTT",
     "AVG_RTT",
-    "LAST_UPDATE",
     "CLIENT_USER",
     "CLIENT_IP",
 )
@@ -115,7 +119,7 @@ def wait_for_alive_entry(
             tag = row.get("TAG", "").strip()
             host_value = row.get("HOST", "").strip()
             status = row.get("STATUS", "").strip().lower()
-            if tag != expected_tag or host_value != expected_host or status != "alive":
+            if tag != expected_tag or host_value != expected_host or status not in {"alive", "healthy"}:
                 continue
             client_user = row.get("CLIENT_USER", "").strip()
             client_ip = row.get("CLIENT_IP", "").strip()

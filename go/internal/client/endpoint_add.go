@@ -59,6 +59,7 @@ func addEndpoint(ctx context.Context, opts InstallOptions, commit func(context.C
 		AllowInsecure:         base.installOpts.AllowInsecure,
 		PinnedPeerCertSHA256:  base.installOpts.PinnedPeerCertSHA256,
 		VerifyPeerCertByName:  base.installOpts.VerifyPeerCertByName,
+		HeartbeatMode:         base.installOpts.HeartbeatMode,
 		AllowInsecureOverride: base.installOpts.AllowInsecureOverride,
 	}, base.installOpts.Force)
 	if err != nil {

@@ -28,6 +28,8 @@ type EndpointRecord struct {
 	AllowInsecure bool
 	TLSMode       string
 	Disabled      bool
+	HeartbeatMode string
+	HeartbeatID   string
 	Link          string
 }
 
@@ -42,7 +44,8 @@ func ListEndpoints(opts ListOptions) ([]EndpointRecord, error) {
 
 func toEndpointRecords(state clientInstallState) []EndpointRecord {
 	records := make([]EndpointRecord, 0, len(state.Endpoints))
-	for _, ep := range state.Endpoints {
+	for index, ep := range state.Endpoints {
+		markerHost, _ := markerIPForIndex(index)
 		records = append(records, EndpointRecord{
 			Hostname:      ep.Hostname,
 			Tag:           ep.Tag,
@@ -53,6 +56,8 @@ func toEndpointRecords(state clientInstallState) []EndpointRecord {
 			AllowInsecure: ep.AllowInsecure,
 			TLSMode:       endpointTLSMode(ep),
 			Disabled:      ep.Disabled,
+			HeartbeatMode: string(ep.HeartbeatMode),
+			HeartbeatID:   heartbeatEndpointID(ep, markerHost, DiagnosticsMarkerPort),
 			Link:          buildEndpointTrojanLink(ep),
 		})
 	}

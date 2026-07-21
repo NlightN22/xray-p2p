@@ -233,17 +233,17 @@ func (h *handler) ping(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if rt, err := h.runtime(); err == nil {
-		if err := VerifyRequest(r, body, rt.AuthUsers, h.now(), h.authWindow); err != nil {
-			status := http.StatusUnauthorized
-			if errors.Is(err, ErrAuthInvalid) {
-				status = http.StatusForbidden
-			}
-			writeError(w, status, err.Error())
-			return
+	rt, err := h.runtime()
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, "control unavailable")
+		return
+	}
+	if err := VerifyRequest(r, body, rt.AuthUsers, h.now(), h.authWindow); err != nil {
+		status := http.StatusUnauthorized
+		if errors.Is(err, ErrAuthInvalid) {
+			status = http.StatusForbidden
 		}
-	} else if !runtimeMissing(err) {
-		writeError(w, http.StatusServiceUnavailable, err.Error())
+		writeError(w, status, err.Error())
 		return
 	}
 	if req.Nonce == "" {
@@ -264,9 +264,12 @@ func (h *handler) heartbeatPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload.Timestamp = time.Time{}
+	healthy := true
+	payload.Healthy = &healthy
+	payload.Mode = heartbeat.ModeRequired
 	if h.heartbeat != nil {
 		if _, err := h.heartbeat.Update(payload); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeError(w, http.StatusServiceUnavailable, err.Error())
 			return
 		}
 	}
@@ -372,10 +375,6 @@ func (h *handler) runtime() (Runtime, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.load()
-}
-
-func runtimeMissing(err error) bool {
-	return errors.Is(err, os.ErrNotExist)
 }
 
 func readBody(r *http.Request, dst any) ([]byte, error) {

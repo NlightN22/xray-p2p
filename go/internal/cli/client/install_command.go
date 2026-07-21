@@ -181,6 +181,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 		Transport:             linkData.Transport,
 		Security:              linkData.Security,
 		Flow:                  linkData.Flow,
+		HeartbeatMode:         map[bool]string{true: "auto", false: "required"}[linkValue != ""],
 		AllowInsecureOverride: allowOverride,
 		Force:                 *force,
 		TunEnabled:            cfg.Client.TunEnabled,

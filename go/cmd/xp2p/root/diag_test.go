@@ -101,7 +101,7 @@ func TestRunDiagCommandHTTPS(t *testing.T) {
 	}
 }
 
-func TestRunDiagCommandStandaloneHTTPSWithoutConfiguredTLS(t *testing.T) {
+func TestRunDiagCommandStandalonePingFailsClosedWithoutRuntime(t *testing.T) {
 	setupDiagTest(t)
 	portStr, _ := testutil.FreePort(t)
 	addr := net.JoinHostPort("127.0.0.1", portStr)
@@ -138,12 +138,8 @@ func TestRunDiagCommandStandaloneHTTPSWithoutConfiguredTLS(t *testing.T) {
 		t.Fatalf("POST ping: %v", err)
 	}
 	defer resp.Body.Close()
-	var pong controlplane.PingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&pong); err != nil {
-		t.Fatalf("decode pong: %v", err)
-	}
-	if pong.Nonce != "standalone" {
-		t.Fatalf("unexpected nonce: %q", pong.Nonce)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("ping status = %s", resp.Status)
 	}
 	if _, err := os.Stat(cfg.Server.InstallDir); !os.IsNotExist(err) {
 		t.Fatalf("standalone diag touched install root: %v", err)

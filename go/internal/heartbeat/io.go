@@ -2,6 +2,7 @@ package heartbeat
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,10 +12,20 @@ import (
 // Load reads the heartbeat state from path without keeping it in memory.
 func Load(path string) (State, error) {
 	state, err := readState(path)
-	if err != nil {
+	mainMissing := errors.Is(err, os.ErrNotExist)
+	if err != nil && !mainMissing {
 		return State{}, err
 	}
 	state.ensure()
+	if failure, failureErr := readState(persistenceFailurePath(path)); failureErr == nil {
+		for key, entry := range failure.Entries {
+			state.Entries[key] = entry
+		}
+	} else if !errors.Is(failureErr, os.ErrNotExist) {
+		return State{}, failureErr
+	} else if mainMissing {
+		return State{}, err
+	}
 	return state, nil
 }
 
@@ -22,6 +33,14 @@ func Load(path string) (State, error) {
 func Save(path string, state State) error {
 	state.ensure()
 	return writeState(path, state)
+}
+
+func persistenceFailurePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	return path + ".persistence-error.json"
 }
 
 func readState(path string) (State, error) {

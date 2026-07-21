@@ -4,17 +4,16 @@
 
 - Heartbeat/state: `xp2p client state` and `xp2p server state`.
 - Pending view: add `--pending` to show configured tunnels before the service applies changes.
-- Diagnostics responder: `xp2p diag` starts a foreground listener for `xp2p ping`.
+- Readiness responder: `xp2p diag` starts a foreground HTTPS listener with the public `/ready` endpoint.
 - Forwarding: `xp2p client forward add|list|remove` and `xp2p server forward add|list|remove`.
 - DNS/DHCP (Linux/OpenWrt only): `xp2p {client,server} dns-forward add|remove|list`.
 - NAT snippets (Linux/OpenWrt only): `xp2p nat-redirect add --cidr 192.168.10.0/24` generates transparent intercept snippets.
 
 ## Ping checks
 
-`xp2p ping` is a protocol-level connectivity check for the diagnostics responder.
-It works when the remote side runs xp2p (client/server service) or when you run `xp2p diag` on that node.
-
-If you do not use this project end-to-end, `xp2p ping` can still work as long as `xp2p diag` is running on the node where Xray is deployed (or on any node you want to probe).
+`xp2p ping` is an authenticated protocol-level connectivity check for an xp2p
+client or server service. Control requests fail closed when Live runtime
+metadata is unavailable. Public readiness is available separately at `/ready`.
 
 Direct ping (no tunnel, defaults to TCP/62022):
 
@@ -69,6 +68,24 @@ xp2p ping edge.example.com --tunnel --index 2
 When tunnel mode is used, xp2p may route the probe through an internal marker target. For reverse channels the marker port is different (62023) and is selected automatically.
 
 ## Advanced / troubleshooting
+
+Each client endpoint has a `heartbeat_mode` policy in Desired configuration:
+
+- `required` is the default for endpoints installed or deployed by xp2p.
+- `auto` discovers whether an imported or subscription endpoint supports the
+  authenticated xp2p diagnostics and heartbeat exchange. An endpoint without
+  that sidecar is reported as `not-detected`, not `unhealthy`.
+- `disabled` suppresses heartbeat requests and is only set explicitly.
+
+The state table separates the policy (`MODE`), check mechanism (`CHECK`), last
+attempt, last complete success, and failure stage. A complete probe and report
+changes capability to detected. After that, repeated failures can produce
+`unhealthy`; a later complete success restores `healthy`. Failure stages are
+`marker`, `probe`, `report`, and `persistence`.
+
+Heartbeat timestamps are UTC observations. TTL evaluation accepts up to 30
+seconds of future clock skew; timestamps farther in the future are rejected as
+`clock_skew`. Existing pre-0.2.8 JSON remains readable with legacy TTL rules.
 
 - Watch mode: add `--watch` to `xp2p client|server state` to stream tables with TTL filtering.
 - Watch pending: combine `--watch --pending` to see staged tunnels while waiting for apply/service start.

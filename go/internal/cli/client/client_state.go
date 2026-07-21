@@ -233,7 +233,10 @@ func snapshotClientConfiguredState(installDir, configDir string, pending bool, s
 		if key == "" {
 			continue
 		}
-		entry, exists := state.Entries[key]
+		entry, exists := state.Entries["v1|"+endpoint.HeartbeatID]
+		if !exists {
+			entry, exists = state.Entries[key]
+		}
 		if !exists {
 			entry = heartbeat.Entry{}
 		}
@@ -245,6 +248,10 @@ func snapshotClientConfiguredState(installDir, configDir string, pending bool, s
 		}
 		if entry.User == "" {
 			entry.User = endpoint.User
+		}
+		entry.Mode = heartbeat.Mode(endpoint.HeartbeatMode)
+		if entry.Mode == heartbeat.ModeDisabled {
+			entry.Status = heartbeat.StatusDisabled
 		}
 		filtered[key] = entry
 	}

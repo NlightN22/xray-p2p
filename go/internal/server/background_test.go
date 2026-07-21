@@ -53,7 +53,7 @@ func TestStartBackgroundServesHTTPSControlPing(t *testing.T) {
 	}
 }
 
-func TestStartBackgroundServesHTTPSControlPingWithoutRuntimeMetadata(t *testing.T) {
+func TestStartBackgroundControlPingFailsClosedWithoutRuntimeMetadata(t *testing.T) {
 	setupBackgroundTestLogging(t)
 	cancel, baseURL := startTestControlServer(t, t.TempDir(), false)
 	defer cancel()
@@ -64,15 +64,8 @@ func TestStartBackgroundServesHTTPSControlPingWithoutRuntimeMetadata(t *testing.
 		t.Fatalf("POST ping: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("ping status = %s", resp.Status)
-	}
-	var pong controlplane.PingResponse
-	if err := json.NewDecoder(resp.Body).Decode(&pong); err != nil {
-		t.Fatalf("decode ping response: %v", err)
-	}
-	if pong.Nonce != "standalone" {
-		t.Fatalf("nonce = %q", pong.Nonce)
 	}
 }
 

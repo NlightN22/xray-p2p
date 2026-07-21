@@ -7,6 +7,7 @@ func applyOverlays(root schema) {
 	setEnum(defs, "forward_rule", "protocol", "tcp", "udp", "both")
 	setEnum(defs, "redirect_rule", "access", "all", "restricted")
 	setEnum(defs, "client_endpoint_group", "mode", "automatic", "manual", "disabled")
+	setEnum(defs, "client_client_endpoint_record", "heartbeat_mode", "auto", "required", "disabled")
 	setEnum(defs, "tunnel_user", "credential_generation")
 
 	for _, name := range []string{"forward_rule", "ha_member", "xrayconfig_socks_inbound_config", "xrayconfig_dokodemo_inbound_config"} {

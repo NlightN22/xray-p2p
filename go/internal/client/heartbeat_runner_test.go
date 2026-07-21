@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -217,5 +218,21 @@ func writeHeartbeatRuntimeMeta(t *testing.T, dir string) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, layout.RuntimeMetaFileName), data, 0o644); err != nil {
 		t.Fatalf("write runtime meta: %v", err)
+	}
+}
+
+func TestDisabledHeartbeatDoesNotCreateAttempt(t *testing.T) {
+	store, err := heartbeat.NewStore("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &heartbeatRunner{
+		store:     store,
+		endpoints: []clientEndpointRecord{{Tag: "disabled", Hostname: "edge.example", HeartbeatMode: heartbeat.ModeDisabled}},
+		backoff:   map[string]heartbeatBackoff{},
+	}
+	runner.runOnce(context.Background())
+	if snapshots := store.Snapshot(time.Now(), time.Minute); len(snapshots) != 0 {
+		t.Fatalf("disabled heartbeat created an attempt: %+v", snapshots)
 	}
 }

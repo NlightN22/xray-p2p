@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/naming"
 )
@@ -25,6 +26,7 @@ type endpointConfig struct {
 	PinnedPeerCertSHA256  string
 	VerifyPeerCertByName  string
 	AllowInsecureOverride bool
+	HeartbeatMode         string
 }
 
 func applyClientEndpointConfig(configDir, configFile string, endpoint endpointConfig, force bool) (clientInstallState, error) {
@@ -91,6 +93,7 @@ func buildClientEndpointState(configDir, configFile string, endpoint endpointCon
 		AllowInsecure:        allowValue,
 		PinnedPeerCertSHA256: pinnedSHA256,
 		VerifyPeerCertByName: verifyPeer,
+		HeartbeatMode:        heartbeat.Mode(strings.TrimSpace(endpoint.HeartbeatMode)),
 	}
 
 	if err := state.upsert(record, force); err != nil {

@@ -219,7 +219,7 @@ def _assert_server_state_reports_users_alive(
         alive_users = {
             (row.get("CLIENT_USER") or "").strip().lower()
             for row in rows
-            if (row.get("STATUS") or "").strip().lower() == "alive"
+            if (row.get("STATUS") or "").strip().lower() in {"alive", "healthy"}
         }
         if expected.issubset(alive_users):
             return

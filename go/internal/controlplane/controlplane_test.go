@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -157,6 +158,18 @@ func TestHandlersServePingHeartbeatAndSubscription(t *testing.T) {
 	}
 	if sub.Generation == "" {
 		t.Fatalf("generation missing")
+	}
+}
+
+func TestPingFailsClosedWhenRuntimeIsUnavailable(t *testing.T) {
+	handler := NewHandler(HandlerOptions{
+		LoadRuntime: func() (Runtime, error) { return Runtime{}, os.ErrNotExist },
+	})
+	req := httptest.NewRequest(http.MethodPost, PathPing, bytes.NewBufferString(`{"nonce":"n1"}`))
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, req)
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("ping status = %d body=%s", resp.Code, resp.Body.String())
 	}
 }
 

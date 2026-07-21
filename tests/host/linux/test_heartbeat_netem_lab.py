@@ -89,12 +89,12 @@ def test_heartbeat_netem_lab_status_transitions(tunnel_environment):
             check=True,
         )
         tunnel_common.assert_zero_loss(baseline, "baseline heartbeat tunnel")
-        alive_before = _wait_for_client_status(env, "alive")
+        alive_before = _wait_for_client_status(env, "healthy")
 
         with netem.netem_degradation(env["client_host"], fixture.SERVER_IP, FULL_LOSS_NETEM):
             failed = netem.run_heartbeat_probe_burst(env, attempts=4, timeout_seconds=1)
             reverse_during = _reverse_socks_ping(env, check=False)
-            dead_during = _wait_for_client_status(env, "dead", ttl="2s", timeout_seconds=20.0)
+            dead_during = _wait_for_client_status(env, "unhealthy", ttl="2s", timeout_seconds=20.0)
 
         netem.wait_for_no_netem(env["client_host"], fixture.SERVER_IP)
         recovery = env["client_runner"](
@@ -108,7 +108,7 @@ def test_heartbeat_netem_lab_status_transitions(tunnel_environment):
             check=True,
         )
         tunnel_common.assert_zero_loss(recovery, "recovered heartbeat tunnel")
-        alive_after = _wait_for_client_status(env, "alive")
+        alive_after = _wait_for_client_status(env, "healthy")
 
     assert all(int(item["rc"]) != 0 for item in failed), "full-loss netem did not fail all heartbeat probes"
     assert netem.received_ping_replies(reverse_during.stdout) == 0, (

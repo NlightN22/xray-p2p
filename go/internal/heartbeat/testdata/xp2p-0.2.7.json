@@ -1,0 +1,15 @@
+{
+  "entries": {
+    "proxy-legacy|alice": {
+      "tag": "proxy-legacy",
+      "host": "legacy.example",
+      "user": "alice",
+      "last_rtt_ms": 12,
+      "min_rtt_ms": 12,
+      "max_rtt_ms": 12,
+      "total_rtt_ms": 12,
+      "samples": 1,
+      "last_seen": "2026-01-01T00:00:00Z"
+    }
+  }
+}

@@ -107,6 +107,7 @@ func buildClientInstallBase(installDir, configDir string, opts InstallOptions) (
 			Transport:             profile.Transport,
 			Security:              profile.Security,
 			Flow:                  profile.Flow,
+			HeartbeatMode:         strings.TrimSpace(opts.HeartbeatMode),
 			AllowInsecureOverride: opts.AllowInsecureOverride,
 			Force:                 opts.Force,
 			TunEnabled:            tunEnabled,

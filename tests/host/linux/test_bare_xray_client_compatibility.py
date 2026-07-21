@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from . import _bare_xray as bare
 from . import _helpers as helpers
+from . import _heartbeat_sidecar as heartbeat_sidecar
 from . import env as linux_env
+from tests.host.host_common.polling import wait_until
 
 
 STATE_PATHS = [
@@ -61,11 +65,16 @@ def test_direct_link_with_bare_xray_routes_local_and_internet(client_host, serve
             bare.wait_for_socks(client_host)
             _assert_profile(client_host, xp2p_client_runner, protocol)
             bare.assert_two_traffic_paths(client_host)
+            _assert_heartbeat_status(client_host, "not-detected", "auto")
+            with heartbeat_sidecar.late_sidecar(server_host, protocol):
+                _assert_heartbeat_status(client_host, "healthy", "auto")
+            _assert_heartbeat_status(client_host, "unhealthy", "auto")
 
             xp2p_client_runner("client", "service", "restart", check=True)
             bare.wait_for_socks(client_host)
             _assert_profile(client_host, xp2p_client_runner, protocol)
             bare.assert_two_traffic_paths(client_host)
+            _assert_heartbeat_status(client_host, "unhealthy", "auto")
     except Exception:
         bare.failure_dump(client_host, server_host)
         raise
@@ -127,3 +136,32 @@ def test_unsupported_direct_link_preserves_desired_and_live(client_host, server_
     finally:
         bare.stop(server_host)
         linux_env.run_guest_script(client_host, "scripts/linux/update_hosts_entry.sh", "remove", bare.TLS_NAME)
+
+
+def _assert_heartbeat_status(client_host, status: str, mode: str) -> None:
+    def observed():
+        result = client_host.run(f"cat {helpers.CLIENT_HEARTBEAT_STATE_FILE}")
+        if result.rc != 0:
+            return None
+        entries = (json.loads(result.stdout or "{}").get("entries") or {}).values()
+        return next(
+            (
+                entry
+                for entry in entries
+                if entry.get("host") == bare.TLS_NAME
+                and entry.get("status") == status
+                and entry.get("mode") == mode
+            ),
+            None,
+        )
+
+    try:
+        wait_until(
+            f"bare Xray heartbeat status {status}",
+            observed,
+            timeout_seconds=30.0,
+            poll_interval=1.0,
+        )
+    except TimeoutError:
+        bare.failure_dump(client_host, client_host)
+        raise

@@ -1,6 +1,7 @@
 package heartbeat
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -136,5 +137,176 @@ func TestExplicitFailureStaysDeadForLongTTL(t *testing.T) {
 	}
 	if !snapshots[0].Entry.LastSeen.Equal(now) {
 		t.Fatalf("failure timestamp was altered: %s != %s", snapshots[0].Entry.LastSeen, now)
+	}
+}
+
+func TestAutoCapabilityDiscoveryAndRecovery(t *testing.T) {
+	store, err := NewStore("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, time.July, 21, 10, 0, 0, 0, time.UTC)
+	failed := false
+	for attempt := 0; attempt < DiscoveryFailureThreshold; attempt++ {
+		entry, updateErr := store.Update(Payload{Tag: "third-party", Host: "edge.example", Timestamp: now.Add(time.Duration(attempt) * time.Second), Healthy: &failed, Mode: ModeAuto, Stage: FailureStageReport})
+		if updateErr != nil {
+			t.Fatal(updateErr)
+		}
+		if attempt == DiscoveryFailureThreshold-1 && entry.Status != StatusNotDetected {
+			t.Fatalf("status = %q", entry.Status)
+		}
+	}
+	healthy := true
+	entry, err := store.Update(Payload{Tag: "third-party", Host: "edge.example", Timestamp: now.Add(time.Minute), Healthy: &healthy, Mode: ModeAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Capability != CapabilityDetected || entry.Status != StatusHealthy {
+		t.Fatalf("unexpected detected state: %+v", entry)
+	}
+	for attempt := 0; attempt < HealthFailureThreshold; attempt++ {
+		entry, err = store.Update(Payload{Tag: "third-party", Host: "edge.example", Timestamp: now.Add(2*time.Minute + time.Duration(attempt)*time.Second), Healthy: &failed, Mode: ModeAuto, Stage: FailureStageProbe})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if entry.Capability != CapabilityDetected || entry.Status != StatusUnhealthy {
+		t.Fatalf("detected capability must persist: %+v", entry)
+	}
+}
+
+func TestSnapshotRejectsExcessiveFutureTimestamp(t *testing.T) {
+	now := time.Date(2026, time.July, 21, 10, 0, 0, 0, time.UTC)
+	healthy := true
+	state := State{Entries: map[string]Entry{"future": {Tag: "future", Host: "edge.example", LastSeen: now.Add(MaxFutureClockSkew + time.Second), Healthy: &healthy}}}
+	snapshot := state.Snapshot(now, time.Minute)[0]
+	if snapshot.Alive || snapshot.Reason != "clock_skew" {
+		t.Fatalf("unexpected future timestamp state: %+v", snapshot)
+	}
+	state.Entries["future"] = Entry{Tag: "future", Host: "edge.example", LastSeen: now.Add(MaxFutureClockSkew), Healthy: &healthy}
+	if snapshot = state.Snapshot(now, time.Minute)[0]; !snapshot.Alive {
+		t.Fatalf("timestamp inside skew allowance must be alive: %+v", snapshot)
+	}
+}
+
+func TestEndpointHostChangeDoesNotInheritCapability(t *testing.T) {
+	store, _ := NewStore("")
+	healthy := true
+	if _, err := store.Update(Payload{Tag: "same", Host: "first.example", User: "alice", Healthy: &healthy, Mode: ModeAuto}); err != nil {
+		t.Fatal(err)
+	}
+	failed := false
+	entry, err := store.Update(Payload{Tag: "same", Host: "second.example", User: "alice", Healthy: &failed, Mode: ModeAuto})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Capability != CapabilityUnknown || entry.Status != StatusProbing {
+		t.Fatalf("new host inherited prior capability: %+v", entry)
+	}
+}
+
+func TestLoadXP2P027FixtureUsesLegacyTTLSemantics(t *testing.T) {
+	state, err := Load(filepath.Join("testdata", "xp2p-0.2.7.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, time.January, 1, 0, 0, 30, 0, time.UTC)
+	snapshot := state.Snapshot(now, time.Minute)
+	if len(snapshot) != 1 || !snapshot[0].Alive {
+		t.Fatalf("legacy state is not readable: %+v", snapshot)
+	}
+}
+
+func TestUpdateRollsBackWhenPersistenceFails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.persist = func(string, State) error { return errors.New("disk full") }
+	healthy := true
+	entry, err := store.Update(Payload{Tag: "edge", Host: "edge.example", Healthy: &healthy, Mode: ModeRequired, RTTMillis: 20, RTTValid: true})
+	if err == nil {
+		t.Fatal("expected persistence failure")
+	}
+	if entry.FailureStage != FailureStagePersistence {
+		t.Fatalf("failure stage = %q", entry.FailureStage)
+	}
+	if snapshots := store.Snapshot(time.Now(), time.Minute); len(snapshots) != 0 {
+		t.Fatalf("failed update changed in-memory state: %+v", snapshots)
+	}
+	diagnostic, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := diagnostic.Snapshot(time.Now(), time.Minute)
+	if len(loaded) != 1 || loaded[0].Entry.FailureStage != FailureStagePersistence {
+		t.Fatalf("persistence diagnostic was not saved: %+v", loaded)
+	}
+}
+
+func TestFailedAttemptDoesNotChangeRTTAggregates(t *testing.T) {
+	store, _ := NewStore("")
+	healthy := true
+	entry, err := store.Update(Payload{Tag: "edge", Host: "edge.example", Healthy: &healthy, RTTMillis: 20, RTTValid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failed := false
+	entry, err = store.Update(Payload{Tag: "edge", Host: "edge.example", Healthy: &failed, RTTMillis: 0, RTTValid: false, Stage: FailureStageProbe})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Attempts != 2 || entry.Samples != 1 || entry.MinRTTMillis != 20 || entry.AvgRTTMillis() != 20 {
+		t.Fatalf("failed attempt changed RTT aggregates: %+v", entry)
+	}
+}
+
+func TestVersionedEndpointIDDoesNotOverwritePriorEndpoint(t *testing.T) {
+	store, _ := NewStore("")
+	healthy := true
+	for _, id := range []string{"v1:first", "v1:second"} {
+		if _, err := store.Update(Payload{Tag: "same", Host: "edge.example", User: "alice", EndpointID: id, Healthy: &healthy, Mode: ModeAuto}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshots := store.Snapshot(time.Now(), time.Minute)
+	if len(snapshots) != 2 {
+		t.Fatalf("versioned identities were overwritten: %+v", snapshots)
+	}
+}
+
+func TestSnapshotFreshnessUsesAbsoluteTimeAcrossTimezones(t *testing.T) {
+	absolute := time.Date(2026, time.July, 21, 3, 0, 0, 0, time.UTC)
+	healthy := true
+	state := State{Entries: map[string]Entry{
+		"edge": {Tag: "edge", Host: "edge.example", LastSeen: absolute.In(time.FixedZone("UTC+7", 7*60*60)), Healthy: &healthy},
+	}}
+
+	utc := state.Snapshot(absolute.Add(15*time.Second), time.Minute)[0]
+	local := state.Snapshot(absolute.Add(15*time.Second).In(time.FixedZone("UTC-5", -5*60*60)), time.Minute)[0]
+	if !utc.Alive || !local.Alive || utc.Age != local.Age || utc.Age != 15*time.Second {
+		t.Fatalf("timezone changed freshness: utc=%+v local=%+v", utc, local)
+	}
+}
+
+func TestSnapshotFreshnessHandlesSystemClockJumps(t *testing.T) {
+	observed := time.Date(2026, time.July, 21, 3, 0, 0, 0, time.UTC)
+	healthy := true
+	state := State{Entries: map[string]Entry{
+		"edge": {Tag: "edge", Host: "edge.example", LastSeen: observed, Healthy: &healthy},
+	}}
+
+	withinSkew := state.Snapshot(observed.Add(-MaxFutureClockSkew), time.Minute)[0]
+	if !withinSkew.Alive || withinSkew.Age != 0 {
+		t.Fatalf("allowed backward jump must have zero age: %+v", withinSkew)
+	}
+	beyondSkew := state.Snapshot(observed.Add(-MaxFutureClockSkew-time.Nanosecond), time.Minute)[0]
+	if beyondSkew.Alive || beyondSkew.Reason != "clock_skew" {
+		t.Fatalf("excessive backward jump was accepted: %+v", beyondSkew)
+	}
+	forward := state.Snapshot(observed.Add(2*time.Minute), time.Minute)[0]
+	if forward.Alive || forward.Reason != "expired" {
+		t.Fatalf("forward jump did not expire observation: %+v", forward)
 	}
 }

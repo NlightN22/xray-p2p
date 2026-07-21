@@ -68,6 +68,12 @@ def test_openwrt_upgrade_migrates_previous_release_client_credential(
         helpers.wait_for_service_state(openwrt_client_host, "client", expected_active=True)
         _wait_for_client_convergence(openwrt_client_host, OLD_CREDENTIAL)
         _assert_tunnel_ping(client_runner)
+        client_heartbeat_before = _wait_for_heartbeat_observation(
+            openwrt_client_host, helpers.CLIENT_HEARTBEAT_STATE_FILE
+        )
+        server_heartbeat_before = _wait_for_heartbeat_observation(
+            openwrt_server_host, helpers.SERVER_HEARTBEAT_STATE_FILE
+        )
 
         client_runner("client", "service", "stop", check=True)
         server_runner("server", "user", "rotate", USER, check=True)
@@ -77,9 +83,15 @@ def test_openwrt_upgrade_migrates_previous_release_client_credential(
         active = rotated["active_credential"]
         assert active != OLD_CREDENTIAL
         assert rotated["previous_credential_for_rotation"] == OLD_CREDENTIAL
+        server_desired_digest = _file_digest(openwrt_server_host, helpers.SERVER_CONFIG_FILE)
+        client_desired_digest = _file_digest(openwrt_client_host, helpers.CLIENT_CONFIG_FILE)
 
         _upgrade(openwrt_server_host, server_candidate)
         _upgrade(openwrt_client_host, client_candidate)
+        assert _file_digest(openwrt_server_host, helpers.SERVER_CONFIG_FILE) == server_desired_digest
+        assert _file_digest(openwrt_client_host, helpers.CLIENT_CONFIG_FILE) == client_desired_digest
+        _assert_upgrade_archive(openwrt_server_host, "state-heartbeat-server.json")
+        _assert_upgrade_archive(openwrt_client_host, "state-heartbeat-client.json")
         server_runner("server", "service", "start", check=True)
         client_runner("client", "service", "start", check=True)
         helpers.wait_for_service_state(openwrt_server_host, "server", expected_active=True)
@@ -87,6 +99,16 @@ def test_openwrt_upgrade_migrates_previous_release_client_credential(
 
         _wait_for_client_convergence(openwrt_client_host, active)
         _assert_tunnel_ping(client_runner)
+        _wait_for_fresh_heartbeat(
+            openwrt_client_host,
+            helpers.CLIENT_HEARTBEAT_STATE_FILE,
+            client_heartbeat_before,
+        )
+        _wait_for_fresh_heartbeat(
+            openwrt_server_host,
+            helpers.SERVER_HEARTBEAT_STATE_FILE,
+            server_heartbeat_before,
+        )
         credentials.wait_until(
             lambda: credentials.server_user(
                 helpers.read_pending_server_config(openwrt_server_host), USER
@@ -141,6 +163,56 @@ def _upgrade(host, candidate: PurePosixPath) -> None:
     assert result.rc == 0, result.stderr
     after = host.run("sha256sum /usr/bin/xp2p").stdout.split()[0]
     assert after != before
+
+
+def _heartbeat_observation(host, path: PurePosixPath) -> tuple[str, int] | None:
+    result = host.run(f"cat {path}")
+    if result.rc != 0:
+        return None
+    entries = (json.loads(result.stdout or "{}").get("entries") or {}).values()
+    observations = [
+        (str(entry.get("last_seen") or ""), int(entry.get("samples") or 0))
+        for entry in entries
+        if entry.get("last_seen")
+    ]
+    return max(observations) if observations else None
+
+
+def _wait_for_heartbeat_observation(host, path: PurePosixPath) -> tuple[str, int]:
+    return credentials.wait_until(
+        lambda: _heartbeat_observation(host, path),
+        bool,
+        timeout=90.0,
+        description=f"heartbeat observation in {path}",
+    )
+
+
+def _wait_for_fresh_heartbeat(
+    host, path: PurePosixPath, baseline: tuple[str, int]
+) -> None:
+    credentials.wait_until(
+        lambda: _heartbeat_observation(host, path),
+        lambda current: current is not None and current != baseline,
+        timeout=90.0,
+        description=f"fresh heartbeat observation in {path}",
+    )
+
+
+def _assert_upgrade_archive(host, heartbeat_name: str) -> None:
+    archive = host.run("ls -1t /etc/xp2p/upgrade-archives/state-*.tar.gz | head -n 1")
+    assert archive.rc == 0 and archive.stdout.strip(), archive.stderr
+    listing = host.run(f"tar -tzf {archive.stdout.strip()}")
+    assert listing.rc == 0, listing.stderr
+    names = set(line.removeprefix("./") for line in listing.stdout.splitlines())
+    assert heartbeat_name in names, listing.stdout
+    assert any(name.startswith(".state/live/") for name in names), listing.stdout
+    assert any(name.startswith(".state/lkg/") for name in names), listing.stdout
+
+
+def _file_digest(host, path: PurePosixPath) -> str:
+    result = host.run(f"sha256sum {path}")
+    assert result.rc == 0, result.stderr
+    return result.stdout.split()[0]
 
 
 def _assert_client_converged(host, expected: str) -> None:

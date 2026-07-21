@@ -52,6 +52,9 @@ func loadClientInstallState(path string) (clientInstallState, error) {
 		return clientInstallState{}, fmt.Errorf("decode client config %s: %w", path, err)
 	}
 	state.normalize()
+	if err := state.validateHeartbeatModes(); err != nil {
+		return clientInstallState{}, fmt.Errorf("decode client config %s: %w", path, err)
+	}
 	state.baseDigest = digestClientDesired(data)
 	return state, nil
 }

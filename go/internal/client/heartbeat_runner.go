@@ -158,6 +158,9 @@ func (r *heartbeatRunner) runOnce(ctx context.Context) {
 			return
 		default:
 		}
+		if endpoint.HeartbeatMode == heartbeat.ModeDisabled {
+			continue
+		}
 		if r.endpointInBackoff(endpoint, time.Now()) {
 			continue
 		}
@@ -172,9 +175,11 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 	targetHost, err := markerIPForIndex(index)
 	if err != nil {
 		logging.Warn("client heartbeat marker allocation failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
+		_, _ = r.updateLocalHeartbeatAttempt(endpoint, heartbeatEndpointID(endpoint, "", DiagnosticsMarkerPort), boolPointer(false), 0, false, heartbeat.FailureStageMarker, err.Error())
 		return
 	}
 	port := DiagnosticsMarkerPort
+	endpointID := heartbeatEndpointID(endpoint, targetHost, port)
 	reporter := heartbeatPingReporter{}
 	client := r.heartbeatControlClient(endpoint)
 	if err := ping.Run(ctx, targetHost, ping.Options{
@@ -193,29 +198,43 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 	}); err != nil {
 		logging.Debug("client heartbeat failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 		r.recordHeartbeatFailure(endpoint)
-		r.updateLocalHeartbeat(endpoint, false, 0)
-		r.recordEndpointHealth(endpoint, false)
+		entry, persisted := r.updateLocalHeartbeatAttempt(endpoint, endpointID, boolPointer(false), 0, false, heartbeat.FailureStageProbe, err.Error())
+		r.recordHeartbeatHealth(endpoint, entry, persisted)
 		return
 	}
 	rttMillis := reporter.rttMillis()
 	payload := heartbeat.Payload{
-		Tag:       endpoint.Tag,
-		Host:      endpoint.Hostname,
-		User:      strings.TrimSpace(endpoint.User),
-		ClientIP:  detectLocalIP(endpoint.Hostname),
-		Timestamp: time.Now().UTC(),
-		RTTMillis: rttMillis,
+		Tag:        endpoint.Tag,
+		Host:       endpoint.Hostname,
+		User:       strings.TrimSpace(endpoint.User),
+		ClientIP:   detectLocalIP(endpoint.Hostname),
+		Timestamp:  time.Now().UTC(),
+		RTTMillis:  rttMillis,
+		EndpointID: endpointID,
+		RTTValid:   true,
 	}
 	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.socks, client); err != nil {
 		logging.Debug("client heartbeat report failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 		r.recordHeartbeatFailure(endpoint)
-		r.updateLocalHeartbeat(endpoint, false, 0)
-		r.recordEndpointHealth(endpoint, false)
+		entry, persisted := r.updateLocalHeartbeatAttempt(endpoint, endpointID, boolPointer(false), rttMillis, true, heartbeat.FailureStageReport, err.Error())
+		r.recordHeartbeatHealth(endpoint, entry, persisted)
 		return
 	}
 	r.recordHeartbeatSuccess(endpoint)
-	r.updateLocalHeartbeat(endpoint, true, rttMillis)
-	r.recordEndpointHealth(endpoint, true)
+	entry, persisted := r.updateLocalHeartbeatAttempt(endpoint, endpointID, boolPointer(true), rttMillis, true, "", "")
+	r.recordHeartbeatHealth(endpoint, entry, persisted)
+}
+
+func (r *heartbeatRunner) recordHeartbeatHealth(endpoint clientEndpointRecord, entry heartbeat.Entry, persisted bool) {
+	if !persisted {
+		return
+	}
+	switch entry.Status {
+	case heartbeat.StatusHealthy:
+		r.recordEndpointHealth(endpoint, true)
+	case heartbeat.StatusUnhealthy:
+		r.recordEndpointHealth(endpoint, false)
+	}
 }
 
 func (r *heartbeatRunner) recordEndpointHealth(endpoint clientEndpointRecord, alive bool) {
@@ -228,24 +247,37 @@ func (r *heartbeatRunner) recordEndpointHealth(endpoint clientEndpointRecord, al
 	}
 }
 
-func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, alive bool, rttMillis int64) {
+func (r *heartbeatRunner) updateLocalHeartbeat(endpoint clientEndpointRecord, healthy bool, rttMillis int64) {
+	_, _ = r.updateLocalHeartbeatAttempt(endpoint, "", boolPointer(healthy), rttMillis, healthy, "", "")
+}
+
+func (r *heartbeatRunner) updateLocalHeartbeatAttempt(endpoint clientEndpointRecord, endpointID string, healthy *bool, rttMillis int64, rttValid bool, stage heartbeat.FailureStage, failure string) (heartbeat.Entry, bool) {
 	if r.store != nil {
-		if !alive {
+		if healthy != nil && !*healthy && !rttValid {
 			rttMillis = 0
 		}
 		payloadLocal := heartbeat.Payload{
-			Tag:       endpoint.Tag,
-			Host:      endpoint.Hostname,
-			User:      strings.TrimSpace(endpoint.User),
-			ClientIP:  detectLocalIP(endpoint.Hostname),
-			Timestamp: time.Now().UTC(),
-			RTTMillis: rttMillis,
-			Healthy:   boolPointer(alive),
+			Tag:        endpoint.Tag,
+			Host:       endpoint.Hostname,
+			User:       strings.TrimSpace(endpoint.User),
+			ClientIP:   detectLocalIP(endpoint.Hostname),
+			Timestamp:  time.Now().UTC(),
+			RTTMillis:  rttMillis,
+			Healthy:    healthy,
+			Mode:       endpoint.HeartbeatMode,
+			Stage:      stage,
+			Failure:    failure,
+			EndpointID: endpointID,
+			RTTValid:   rttValid,
 		}
-		if _, err := r.store.Update(payloadLocal); err != nil {
-			logging.Warn("client heartbeat: failed to update local store", "tag", endpoint.Tag, "err", err)
+		entry, err := r.store.Update(payloadLocal)
+		if err != nil {
+			logging.Warn("client heartbeat persistence failed", "tag", endpoint.Tag, "failure_stage", heartbeat.FailureStagePersistence, "err", err)
+			return entry, false
 		}
+		return entry, true
 	}
+	return heartbeat.Entry{}, false
 }
 
 func boolPointer(value bool) *bool {

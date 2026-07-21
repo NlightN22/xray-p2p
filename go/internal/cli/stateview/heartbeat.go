@@ -87,35 +87,58 @@ func RenderTableWithStats(w io.Writer, snapshots []heartbeat.Snapshot, stats map
 
 func renderTable(w io.Writer, snapshots []heartbeat.Snapshot, stats map[string]TrafficStats, withStats bool) {
 	tw := tabwriter.NewWriter(w, 2, 2, 2, ' ', 0)
-	header := "TAG\tHOST\tSTATUS\tLAST_RTT\tAVG_RTT\tLAST_UPDATE\tCLIENT_USER\tCLIENT_IP"
+	header := "TAG\tHOST\tSTATUS\tMODE\tCHECK\tLAST_ATTEMPT\tLAST_SUCCESS\tFAILURE_STAGE\tLAST_RTT\tAVG_RTT\tCLIENT_USER\tCLIENT_IP"
 	if withStats {
 		header += "\tUPLOAD\tDOWNLOAD\tTOTAL"
 	}
 	fmt.Fprintln(tw, header)
 	if len(snapshots) == 0 {
-		row := "-\t-\t-\t-\t-\t-\t-\t-"
+		row := "-\t-\t-\t-\t-\t-\t-\t-\t-\t-\t-\t-"
 		if withStats {
 			row += "\t-\t-\t-"
 		}
 		fmt.Fprintln(tw, row)
 	} else {
 		for _, snap := range snapshots {
-			status := "dead"
-			if snap.Alive {
-				status = "alive"
+			status := string(snap.Entry.Status)
+			if status == "" {
+				status = "dead"
+				if snap.Alive {
+					status = "alive"
+				}
 			}
-			lastUpdate := "-"
+			lastAttempt := "-"
 			if !snap.Entry.LastSeen.IsZero() {
-				lastUpdate = snap.Entry.LastSeen.UTC().Format(time.RFC3339)
+				lastAttempt = snap.Entry.LastSeen.UTC().Format(time.RFC3339)
+			}
+			lastSuccess := "-"
+			if !snap.Entry.LastSuccess.IsZero() {
+				lastSuccess = snap.Entry.LastSuccess.UTC().Format(time.RFC3339)
+			}
+			mode := string(snap.Entry.Mode)
+			if mode == "" {
+				mode = string(heartbeat.ModeRequired)
+			}
+			check := "xp2p-heartbeat"
+			if snap.Entry.Mode == heartbeat.ModeDisabled {
+				check = "none"
+			}
+			stage := string(snap.Entry.FailureStage)
+			if stage == "" {
+				stage = "-"
 			}
 			user := safeClientUser(snap.Entry.User)
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%dms\t%.1fms\t%s\t%s\t%s",
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%dms\t%.1fms\t%s\t%s",
 				snap.Entry.Tag,
 				snap.Entry.Host,
 				status,
+				mode,
+				check,
+				lastAttempt,
+				lastSuccess,
+				stage,
 				snap.Entry.LastRTTMillis,
 				snap.AvgRTTMillis,
-				lastUpdate,
 				user,
 				snap.Entry.ClientIP,
 			)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/subscription"
 )
@@ -214,6 +215,7 @@ func replaceSubscriptionEndpoints(current []clientEndpointRecord, sourceID strin
 			User: offer.UserLabel, Password: offer.Credential, ServerName: endpoint.ServerName, ALPN: endpoint.TLS.ALPN,
 			AllowInsecure: endpoint.TLS.AllowInsecure, PinnedPeerCertSHA256: endpoint.TLS.PinnedPeerCertSHA256,
 			VerifyPeerCertByName: endpoint.TLS.VerifyPeerCertByName, Tag: externalOfferTag(offer.StableID),
+			HeartbeatMode: heartbeat.ModeAuto,
 		})
 	}
 	return result

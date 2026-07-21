@@ -44,22 +44,24 @@ type runtimeDesired struct {
 }
 
 type runtimeEndpoint struct {
-	Profile              string `json:"profile,omitempty"`
-	Protocol             string `json:"protocol,omitempty"`
-	Transport            string `json:"transport,omitempty"`
-	Security             string `json:"security,omitempty"`
-	Flow                 string `json:"flow,omitempty"`
-	Hostname             string `json:"hostname,omitempty"`
-	Address              string `json:"address,omitempty"`
-	Tag                  string `json:"tag,omitempty"`
-	Port                 int    `json:"port,omitempty"`
-	User                 string `json:"user,omitempty"`
-	Credential           string `json:"credential,omitempty"`
-	Disabled             bool   `json:"disabled,omitempty"`
-	ServerName           string `json:"server_name,omitempty"`
-	AllowInsecure        bool   `json:"allow_insecure,omitempty"`
-	PinnedPeerCertSHA256 string `json:"pinned_peer_cert_sha256,omitempty"`
-	VerifyPeerCertByName string `json:"verify_peer_cert_by_name,omitempty"`
+	Profile              string   `json:"profile,omitempty"`
+	Protocol             string   `json:"protocol,omitempty"`
+	Transport            string   `json:"transport,omitempty"`
+	Security             string   `json:"security,omitempty"`
+	Flow                 string   `json:"flow,omitempty"`
+	Hostname             string   `json:"hostname,omitempty"`
+	Address              string   `json:"address,omitempty"`
+	Tag                  string   `json:"tag,omitempty"`
+	Port                 int      `json:"port,omitempty"`
+	User                 string   `json:"user,omitempty"`
+	Credential           string   `json:"credential,omitempty"`
+	Disabled             bool     `json:"disabled,omitempty"`
+	ServerName           string   `json:"server_name,omitempty"`
+	AllowInsecure        bool     `json:"allow_insecure,omitempty"`
+	PinnedPeerCertSHA256 string   `json:"pinned_peer_cert_sha256,omitempty"`
+	VerifyPeerCertByName string   `json:"verify_peer_cert_by_name,omitempty"`
+	HeartbeatMode        string   `json:"heartbeat_mode,omitempty"`
+	ALPN                 []string `json:"alpn,omitempty"`
 }
 
 type compiledArtifacts struct {
@@ -181,6 +183,8 @@ func sanitizeRuntimeEndpoints(endpoints []clientEndpointRecord) []runtimeEndpoin
 			AllowInsecure:        ep.AllowInsecure,
 			PinnedPeerCertSHA256: strings.TrimSpace(ep.PinnedPeerCertSHA256),
 			VerifyPeerCertByName: strings.TrimSpace(ep.VerifyPeerCertByName),
+			HeartbeatMode:        string(ep.HeartbeatMode),
+			ALPN:                 normalizeALPN(ep.ALPN),
 		})
 	}
 	return out

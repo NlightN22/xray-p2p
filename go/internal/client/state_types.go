@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
+	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
 
@@ -39,25 +40,26 @@ const (
 )
 
 type clientEndpointRecord struct {
-	SubscriptionSourceID string   `json:"subscription_source_id,omitempty" toml:"subscription_source_id,omitempty"`
-	SubscriptionOfferID  string   `json:"subscription_offer_id,omitempty" toml:"subscription_offer_id,omitempty"`
-	Profile              string   `json:"profile,omitempty" toml:"profile,omitempty"`
-	Protocol             string   `json:"protocol,omitempty" toml:"protocol,omitempty"`
-	Transport            string   `json:"transport,omitempty" toml:"transport,omitempty"`
-	Security             string   `json:"security,omitempty" toml:"security,omitempty"`
-	Flow                 string   `json:"flow,omitempty" toml:"flow,omitempty"`
-	Hostname             string   `json:"hostname" toml:"hostname"`
-	Tag                  string   `json:"tag" toml:"tag"`
-	Address              string   `json:"address" toml:"address"`
-	Port                 int      `json:"port" toml:"port"`
-	User                 string   `json:"user" toml:"user"`
-	Password             string   `json:"password" toml:"password"`
-	ServerName           string   `json:"server_name" toml:"server_name"`
-	ALPN                 []string `json:"alpn,omitempty" toml:"alpn"`
-	AllowInsecure        bool     `json:"allow_insecure" toml:"allow_insecure"`
-	PinnedPeerCertSHA256 string   `json:"pinned_peer_cert_sha256" toml:"pinned_peer_cert_sha256"`
-	VerifyPeerCertByName string   `json:"verify_peer_cert_by_name" toml:"verify_peer_cert_by_name"`
-	Disabled             bool     `json:"disabled,omitempty" toml:"disabled,omitempty"`
+	SubscriptionSourceID string         `json:"subscription_source_id,omitempty" toml:"subscription_source_id,omitempty"`
+	SubscriptionOfferID  string         `json:"subscription_offer_id,omitempty" toml:"subscription_offer_id,omitempty"`
+	Profile              string         `json:"profile,omitempty" toml:"profile,omitempty"`
+	Protocol             string         `json:"protocol,omitempty" toml:"protocol,omitempty"`
+	Transport            string         `json:"transport,omitempty" toml:"transport,omitempty"`
+	Security             string         `json:"security,omitempty" toml:"security,omitempty"`
+	Flow                 string         `json:"flow,omitempty" toml:"flow,omitempty"`
+	Hostname             string         `json:"hostname" toml:"hostname"`
+	Tag                  string         `json:"tag" toml:"tag"`
+	Address              string         `json:"address" toml:"address"`
+	Port                 int            `json:"port" toml:"port"`
+	User                 string         `json:"user" toml:"user"`
+	Password             string         `json:"password" toml:"password"`
+	ServerName           string         `json:"server_name" toml:"server_name"`
+	ALPN                 []string       `json:"alpn,omitempty" toml:"alpn"`
+	AllowInsecure        bool           `json:"allow_insecure" toml:"allow_insecure"`
+	PinnedPeerCertSHA256 string         `json:"pinned_peer_cert_sha256" toml:"pinned_peer_cert_sha256"`
+	VerifyPeerCertByName string         `json:"verify_peer_cert_by_name" toml:"verify_peer_cert_by_name"`
+	Disabled             bool           `json:"disabled,omitempty" toml:"disabled,omitempty"`
+	HeartbeatMode        heartbeat.Mode `json:"heartbeat_mode,omitempty" toml:"heartbeat_mode,omitempty"`
 }
 
 type externalSubscriptionSource struct {

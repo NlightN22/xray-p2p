@@ -68,6 +68,7 @@ func TestRunClientInstall(t *testing.T) {
 					AllowInsecure:         true,
 					PinnedPeerCertSHA256:  "",
 					VerifyPeerCertByName:  "",
+					HeartbeatMode:         "required",
 					AllowInsecureOverride: true,
 					Force:                 true,
 					TunEnabled:            true,

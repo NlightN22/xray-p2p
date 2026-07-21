@@ -143,7 +143,7 @@ def wait_for_dead_entry(
                 continue
             if row.get("HOST", "").strip() != expected_host:
                 continue
-            if row.get("STATUS", "").strip().lower() == "dead":
+            if row.get("STATUS", "").strip().lower() in {"dead", "unhealthy"}:
                 return row
         return None
 

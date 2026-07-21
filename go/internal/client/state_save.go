@@ -1,6 +1,8 @@
 package client
 
 import (
+	"fmt"
+
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/redirect"
 )
@@ -19,6 +21,13 @@ func (s *clientInstallState) normalize() {
 		}
 		if endpoint.Security == "" {
 			endpoint.Security = "tls"
+		}
+		if endpoint.HeartbeatMode == "" {
+			if endpoint.SubscriptionSourceID != "" {
+				endpoint.HeartbeatMode = "auto"
+			} else {
+				endpoint.HeartbeatMode = "required"
+			}
 		}
 	}
 	if s.Endpoints == nil {
@@ -47,6 +56,9 @@ func (s clientInstallState) save(path string) error {
 		return err
 	}
 	s.normalize()
+	if err := s.validateHeartbeatModes(); err != nil {
+		return err
+	}
 
 	if len(s.Endpoints) == 0 {
 		tree.DeletePath([]string{"client", "endpoints"})
@@ -79,4 +91,15 @@ func (s clientInstallState) save(path string) error {
 		tree.SetPath([]string{"client", "reverse"}, s.Reverse)
 	}
 	return writeTomlTree(path, tree)
+}
+
+func (s clientInstallState) validateHeartbeatModes() error {
+	for _, endpoint := range s.Endpoints {
+		switch endpoint.HeartbeatMode {
+		case "auto", "required", "disabled":
+		default:
+			return fmt.Errorf("invalid heartbeat_mode %q for endpoint %q", endpoint.HeartbeatMode, endpoint.Tag)
+		}
+	}
+	return nil
 }
