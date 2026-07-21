@@ -261,7 +261,7 @@ def _update_openwrt_package_makefile(log: _Logger, *, version: str, dry_run: boo
     if dry_run:
         log.line(f"[dry-run] write {makefile}")
         return
-        _write_text_lf_no_bom(makefile, updated)
+    _write_text_lf_no_bom(makefile, updated)
 
 
 def _assert_release_version(version: str) -> None:
