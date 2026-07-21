@@ -6,5 +6,12 @@ The test harness removes `state`, starts the Compose project, runs `setup.sh`, a
 
 The expected panel commit is `52fdf5d4296b4534e25d6221d82ec7d819a9b952`. The pinned source declares Xray module `v1.260206.0`, corresponding to Xray `v26.2.6`; the integration test must also verify the versions reported by the running binaries.
 
-`mutate.sh` is a test-only helper for deterministic credential rotation and
-Trojan offer removal through the pinned panel administrative API.
+`mutate.sh` is a test-only helper for deterministic credential rotation,
+transport security changes, disabling, enabling, and removing the Trojan offer
+through the pinned panel administrative API.
+
+## Advanced integration matrix
+
+The ordinary Linux suite runs only the pinned-version contract and basic XP2P
+Live traffic checks. Set `XP2P_RUN_EXTERNAL_SUBSCRIPTION_MATRIX=1` to include
+the extended refresh, failure-injection, recovery, and isolation matrix.

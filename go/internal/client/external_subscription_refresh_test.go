@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -172,6 +173,38 @@ func TestExternalSubscriptionLKGFailureRestoresDesired(t *testing.T) {
 	t.Cleanup(func() { saveExternalSubscriptionState = oldSave })
 	if err := RefreshExternalSubscription(context.Background(), opts); err == nil {
 		t.Fatal("failed LKG persistence reported success")
+	}
+	assertExternalCredential(t, root, "old-password")
+}
+
+func TestExternalSubscriptionRefreshRejectsConcurrentDesiredChange(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+	t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
+	desiredPath := filepath.Join(root, "xp2p-client.toml")
+	body := externalTrojanFixture("old-password", "edge.example")
+	mutateDesired := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if mutateDesired {
+			current, err := os.ReadFile(desiredPath)
+			if err != nil {
+				t.Errorf("read concurrent Desired: %v", err)
+			} else if err := os.WriteFile(desiredPath, append(current, []byte("\n# concurrent edit\n")...), 0o600); err != nil {
+				t.Errorf("write concurrent Desired: %v", err)
+			}
+		}
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+	opts := ExternalSubscriptionOptions{ID: "fixture", URL: server.URL, AllowHTTP: true}
+	if err := AddExternalSubscription(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	body = externalTrojanFixture("new-password", "edge.example")
+	mutateDesired = true
+	err := RefreshExternalSubscription(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "changed concurrently") {
+		t.Fatalf("refresh error = %v, want concurrent Desired conflict", err)
 	}
 	assertExternalCredential(t, root, "old-password")
 }

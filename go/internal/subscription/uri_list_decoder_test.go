@@ -61,3 +61,14 @@ func TestURIListDecoderRejectsWholeSnapshot(t *testing.T) {
 		}
 	}
 }
+
+func TestURIListDecoderIgnoresExplicitOptionalExtension(t *testing.T) {
+	body := strings.Replace(trojanFixture, "#", "&x-optional-provider-note=ignored#", 1)
+	snapshot, err := (URIListDecoder{}).Decode(RawSnapshot{Source: SourceRef{ID: "external-main"}, Data: []byte(body)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Offers) != 1 || snapshot.Offers[0].Credential != "trojan-secret" {
+		t.Fatalf("optional extension changed decoded offer: %+v", snapshot.Offers)
+	}
+}

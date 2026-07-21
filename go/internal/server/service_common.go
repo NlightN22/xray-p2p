@@ -41,6 +41,7 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err := os.MkdirAll(desiredConfigDir, 0o755); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}
+	recordServerBootstrapApplyError(StageLegacyCredentialRotation(ctx))
 	cfg, err := config.Load(config.Options{Path: config.ConfigPath(layout.ServerConfigFileName), AllowInvalid: true})
 	if err != nil {
 		return err

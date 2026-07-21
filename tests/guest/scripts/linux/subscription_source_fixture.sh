@@ -13,6 +13,9 @@ write_mode() {
     valid)
       printf '%s\n' 'trojan://fixture-negative-secret@127.0.0.1:443?security=tls&type=tcp&sni=localhost#Fixture' >"$body"
       ;;
+    rotated)
+      printf '%s\n' 'trojan://fixture-rotated-secret@127.0.0.1:443?security=tls&type=tcp&sni=localhost#Fixture' >"$body"
+      ;;
     malformed)
       printf '%s\n' 'malformed-snapshot' >"$body"
       ;;

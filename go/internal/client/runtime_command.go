@@ -31,6 +31,8 @@ func applyClientRuntimeCandidateVerified(ctx context.Context, artifacts xraylive
 	}
 	result, err := applyRuntimeCandidate(ctx, xraylive.Options{
 		Role:          apply.RoleClient,
+		ErrorPath:     config.ApplyErrorPath(),
+		AuditPath:     config.AuditLogPath(),
 		LiveDir:       liveDir,
 		LkgDir:        lkgDir,
 		CommitDesired: commitDesired,

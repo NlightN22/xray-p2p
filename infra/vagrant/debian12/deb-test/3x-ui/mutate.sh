@@ -33,10 +33,57 @@ update_inbound() {
   printf '%s' "$response" | grep -q '"success":true' || { echo "3x-ui fixture update failed" >&2; exit 1; }
 }
 
+change_inbound_security_parameters() {
+  remark="$1"
+  item="$(list_inbounds | jq -c --arg remark "$remark" '.obj[] | select(.remark == $remark)')"
+  [ -n "$item" ] || { echo "3x-ui fixture inbound is missing" >&2; exit 1; }
+  id="$(printf '%s' "$item" | jq -r '.id')"
+  stream_settings="$(printf '%s' "$item" | jq -c -r '.streamSettings | fromjson | .tlsSettings.alpn = ["h2", "http/1.1"] | tojson')"
+  response="$(curl --fail --silent --cookie "$cookie_file" \
+    --data-urlencode "remark=$(printf '%s' "$item" | jq -r '.remark')" \
+    --data-urlencode "enable=$(printf '%s' "$item" | jq -r '.enable')" \
+    --data-urlencode "listen=$(printf '%s' "$item" | jq -r '.listen')" \
+    --data-urlencode "port=$(printf '%s' "$item" | jq -r '.port')" \
+    --data-urlencode "protocol=$(printf '%s' "$item" | jq -r '.protocol')" \
+    --data-urlencode "settings=$(printf '%s' "$item" | jq -c -r '.settings | fromjson | tojson')" \
+    --data-urlencode "streamSettings=$stream_settings" \
+    --data-urlencode "sniffing=$(printf '%s' "$item" | jq -c -r '.sniffing | fromjson | tojson')" \
+    "$base_url/panel/api/inbounds/update/$id")"
+  printf '%s' "$response" | grep -q '"success":true' || { echo "3x-ui fixture security update failed" >&2; exit 1; }
+}
+
+set_inbound_enabled() {
+  remark="$1"
+  enabled="$2"
+  item="$(list_inbounds | jq -c --arg remark "$remark" '.obj[] | select(.remark == $remark)')"
+  [ -n "$item" ] || { echo "3x-ui fixture inbound is missing" >&2; exit 1; }
+  id="$(printf '%s' "$item" | jq -r '.id')"
+  response="$(curl --fail --silent --cookie "$cookie_file" \
+    --data-urlencode "remark=$(printf '%s' "$item" | jq -r '.remark')" \
+    --data-urlencode "enable=$enabled" \
+    --data-urlencode "listen=$(printf '%s' "$item" | jq -r '.listen')" \
+    --data-urlencode "port=$(printf '%s' "$item" | jq -r '.port')" \
+    --data-urlencode "protocol=$(printf '%s' "$item" | jq -r '.protocol')" \
+    --data-urlencode "settings=$(printf '%s' "$item" | jq -c -r '.settings | fromjson | tojson')" \
+    --data-urlencode "streamSettings=$(printf '%s' "$item" | jq -c -r '.streamSettings | fromjson | tojson')" \
+    --data-urlencode "sniffing=$(printf '%s' "$item" | jq -c -r '.sniffing | fromjson | tojson')" \
+    "$base_url/panel/api/inbounds/update/$id")"
+  printf '%s' "$response" | grep -q '"success":true' || { echo "3x-ui fixture enable update failed" >&2; exit 1; }
+}
+
 case "$operation" in
   rotate-credentials)
     update_inbound "xp2p-trojan" "trojan"
     update_inbound "xp2p-vless" "vless"
+    ;;
+  change-trojan-security)
+    change_inbound_security_parameters "xp2p-trojan"
+    ;;
+  disable-trojan)
+    set_inbound_enabled "xp2p-trojan" false
+    ;;
+  enable-trojan)
+    set_inbound_enabled "xp2p-trojan" true
     ;;
   remove-trojan)
     item="$(list_inbounds | jq -c '.obj[] | select(.remark == "xp2p-trojan")')"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import time
+import uuid
 from pathlib import PurePosixPath
 import shlex
 from urllib.parse import unquote, urlparse
@@ -1015,8 +1016,17 @@ def _start_server_deploy_with_args(
 
 def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, password: str) -> None:
     assert helpers.path_exists(host, CLIENT_LIVE_DIR), "client config directory missing after deploy"
-    xray_doc = helpers.read_json(host, CLIENT_LIVE_DIR / "xray.json")
-    expected_password = _live_client_endpoint_credential(host, server_ip, user) or password
+    deadline = time.time() + 30
+    expected_password = None
+    xray_doc = {}
+    while time.time() < deadline:
+        xray_doc = helpers.read_json(host, CLIENT_LIVE_DIR / "xray.json")
+        expected_password = _live_client_endpoint_credential(host, server_ip, user)
+        if expected_password and _xray_outbound_credential(xray_doc, server_ip) == expected_password:
+            break
+        time.sleep(1)
+    assert expected_password and expected_password != password
+    assert uuid.UUID(expected_password).version == 4
     helpers.assert_outbound(
         xray_doc,
         server_ip,
@@ -1026,6 +1036,17 @@ def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, pass
         pinned_peer_sha256="",
         verify_peer_name=server_ip,
     )
+
+
+def _xray_outbound_credential(xray_doc: dict, server_ip: str) -> str | None:
+    tag = helpers.expected_proxy_tag(server_ip)
+    for outbound in xray_doc.get("outbounds") or []:
+        if outbound.get("tag") != tag:
+            continue
+        servers = (outbound.get("settings") or {}).get("servers") or []
+        if servers:
+            return servers[0].get("password")
+    return None
 
 
 def _live_client_endpoint_credential(host: Host, server_ip: str, user: str) -> str | None:

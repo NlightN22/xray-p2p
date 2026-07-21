@@ -19,7 +19,7 @@
   },
   "known_limitations": [
     "Only URI profiles listed in supported_offers are accepted.",
-    "Unknown query parameters reject the complete snapshot.",
+    "Unknown query parameters reject the complete snapshot unless explicitly marked with the x-optional- prefix.",
     "Container-reported versions and response headers must be rechecked by the pinned integration fixture."
   ]
 }

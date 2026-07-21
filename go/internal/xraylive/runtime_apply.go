@@ -67,7 +67,11 @@ func ApplyCandidate(ctx context.Context, opts Options, artifacts Artifacts) (Run
 	if role == "" {
 		return RuntimeApplySkipped, errors.New("runtime apply role is required")
 	}
-	return applyRuntimeArtifacts(ctx, opts, apply.Request{Role: role}, role, artifacts)
+	req, err := apply.NewRequest(role)
+	if err != nil {
+		return RuntimeApplySkipped, err
+	}
+	return applyRuntimeArtifacts(ctx, opts, req, role, artifacts)
 }
 
 func TryApplyRoutingPending(ctx context.Context, opts Options) (RuntimeApplyResult, error) {

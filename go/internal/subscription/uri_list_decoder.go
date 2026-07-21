@@ -51,7 +51,7 @@ func (d URIListDecoder) Decode(raw RawSnapshot) (Snapshot, error) {
 		if err != nil {
 			return Snapshot{}, fmt.Errorf("decode URI-list subscription offer %d: invalid or unsupported connection parameters", len(offers)+1)
 		}
-		if len(link.Unknown) != 0 {
+		if required := requiredUnknownParameters(link.Unknown); len(required) != 0 {
 			return Snapshot{}, fmt.Errorf("decode URI-list subscription offer %d: unsupported parameters", len(offers)+1)
 		}
 		credential := strings.TrimSpace(tunnel.ActiveCredential(link.User))
@@ -66,6 +66,17 @@ func (d URIListDecoder) Decode(raw RawSnapshot) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("decode URI-list subscription: no offers")
 	}
 	return Snapshot{Source: source, Revision: raw.Revision, FetchedAt: raw.FetchedAt, Offers: offers}, nil
+}
+
+func requiredUnknownParameters(values map[string][]string) map[string][]string {
+	required := make(map[string][]string)
+	for key, value := range values {
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(key)), "x-optional-") {
+			continue
+		}
+		required[key] = value
+	}
+	return required
 }
 
 func decodeURIList(data []byte) ([]byte, error) {
