@@ -13,6 +13,7 @@ APT_PACKAGES="
   iptables
   iproute2
   iputils-ping
+  jq
   lintian
   ldap-utils
   nftables
@@ -33,7 +34,6 @@ if [ "$(hostname -s)" = "deb-test-c" ]; then
   APT_PACKAGES="$APT_PACKAGES
   docker-compose
   docker.io
-  jq
   slapd
   "
 
