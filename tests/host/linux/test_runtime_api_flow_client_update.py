@@ -89,7 +89,7 @@ def test_client_update_running_service_fails_when_runtime_api_is_unavailable(cli
         assert helpers.read_text(client_host, helpers.CLIENT_CONFIG_FILE) == desired_before
         assert helpers.read_text(client_host, helpers.CLIENT_LIVE_DIR / "xray.json") == live_before
         rt.assert_same_xray_pid(client_host, before_pid, "client-update-api-unavailable-pid-changed")
-        rt.assert_apply_clean(client_host)
+        rt.assert_apply_error(client_host, "client")
     finally:
         rt.stop_service(runner, "client")
 

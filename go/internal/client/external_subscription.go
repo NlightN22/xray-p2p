@@ -13,6 +13,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/subscription"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 type ExternalSubscriptionOptions struct {
@@ -111,10 +112,15 @@ func refreshExternalSubscription(ctx context.Context, opts ExternalSubscriptionO
 	persisted.Revision = snapshot.Revision
 	persisted.LastGood = &snapshot
 	persisted.LastRefreshAt = now
-	persisted.LastApplyAt = now
 	persisted.LastError = ""
+	currentSelection := source.SelectedOfferID
+	if currentSelection == "" {
+		currentSelection = persisted.SelectedOfferID
+	}
+	source.SelectedOfferID = selectExternalOffer(currentSelection, snapshot.Offers)
+	persisted.SelectedOfferID = source.SelectedOfferID
 	desired.Subscriptions[index] = source
-	desired.Endpoints = replaceSubscriptionEndpoints(desired.Endpoints, source.ID, snapshot.Offers)
+	desired.Endpoints = replaceSubscriptionEndpoints(desired.Endpoints, source.ID, source.SelectedOfferID, snapshot.Offers)
 	commit := func() error {
 		if err := desired.save(config.ConfigPath(layout.ClientConfigFileName)); err != nil {
 			return err
@@ -127,11 +133,17 @@ func refreshExternalSubscription(ctx context.Context, opts ExternalSubscriptionO
 		}
 		return nil
 	}
-	if _, err := commitClientSubscriptionStateTransaction(ctx, desired, commit); err != nil {
+	result, err := commitClientSubscriptionStateTransaction(ctx, desired, commit)
+	if err != nil {
 		if adding {
 			return err
 		}
 		return recordExternalSubscriptionError(store, previousPersisted, digest, err)
+	}
+	if result == xraylive.RuntimeApplyApplied || result == xraylive.RuntimeApplyNoop {
+		if err := recordExternalSubscriptionApplied(store, now); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -167,7 +179,7 @@ func RemoveExternalSubscription(ctx context.Context, id string) error {
 	}
 	sourceID := desired.Subscriptions[index].ID
 	desired.Subscriptions = append(desired.Subscriptions[:index], desired.Subscriptions[index+1:]...)
-	desired.Endpoints = replaceSubscriptionEndpoints(desired.Endpoints, sourceID, nil)
+	desired.Endpoints = replaceSubscriptionEndpoints(desired.Endpoints, sourceID, "", nil)
 	if err := commitClientRuntimeState(ctx, desired); err != nil {
 		return err
 	}
@@ -199,7 +211,7 @@ func recordExternalSubscriptionError(store subscription.Store, state subscriptio
 	return cause
 }
 
-func replaceSubscriptionEndpoints(current []clientEndpointRecord, sourceID string, offers []subscription.ConnectionOffer) []clientEndpointRecord {
+func replaceSubscriptionEndpoints(current []clientEndpointRecord, sourceID, selectedOfferID string, offers []subscription.ConnectionOffer) []clientEndpointRecord {
 	result := make([]clientEndpointRecord, 0, len(current)+len(offers))
 	for _, endpoint := range current {
 		if endpoint.SubscriptionSourceID != sourceID {
@@ -215,10 +227,34 @@ func replaceSubscriptionEndpoints(current []clientEndpointRecord, sourceID strin
 			User: offer.UserLabel, Password: offer.Credential, ServerName: endpoint.ServerName, ALPN: endpoint.TLS.ALPN,
 			AllowInsecure: endpoint.TLS.AllowInsecure, PinnedPeerCertSHA256: endpoint.TLS.PinnedPeerCertSHA256,
 			VerifyPeerCertByName: endpoint.TLS.VerifyPeerCertByName, Tag: externalOfferTag(offer.StableID),
-			HeartbeatMode: heartbeat.ModeAuto,
+			HeartbeatMode: heartbeat.ModeAuto, Disabled: offer.StableID != selectedOfferID,
 		})
 	}
 	return result
+}
+
+func selectExternalOffer(current string, offers []subscription.ConnectionOffer) string {
+	for _, offer := range offers {
+		if offer.StableID == current {
+			return current
+		}
+	}
+	if len(offers) == 0 {
+		return ""
+	}
+	return offers[0].StableID
+}
+
+func recordExternalSubscriptionApplied(store subscription.Store, appliedAt time.Time) error {
+	state, digest, err := store.Load()
+	if err != nil {
+		return fmt.Errorf("load subscription apply diagnostic: %w", err)
+	}
+	state.LastApplyAt = appliedAt
+	if err := saveExternalSubscriptionState(store, state, digest); err != nil {
+		return fmt.Errorf("persist subscription apply diagnostic: %w", err)
+	}
+	return nil
 }
 
 func externalOfferTag(stableID string) string {

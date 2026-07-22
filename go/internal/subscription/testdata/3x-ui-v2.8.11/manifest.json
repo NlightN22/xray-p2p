@@ -8,10 +8,22 @@
   "image_index_digest": "sha256:34c46ea6d838df981c4760bd1fe442413c2b99bbe4bb49dfa3d1bfb8a8a92496",
   "image_linux_amd64_digest": "sha256:ce050d75791a4576c0a5b2fdd207909efa7f88bf6a0a45c5424b949d5fd53432",
   "xray_version": "v26.2.6",
-  "xray_evidence": "github.com/xtls/xray-core v1.260206.0 in the pinned tag go.mod; container execution remains an integration gate",
+  "xray_evidence": "github.com/xtls/xray-core v1.260206.0 in the pinned tag go.mod and /app/bin/xray-linux-amd64 version in the pinned integration container",
+  "production_evidence": {
+    "observed_at": "2026-07-20",
+    "source": "operator-provided production installation screenshot",
+    "panel_version": "v2.8.11",
+    "xray_version": "v26.2.6",
+    "scope": "reported installed versions only; no production credentials or configuration were captured"
+  },
   "content_types": ["text/plain", "text/plain; charset=utf-8"],
   "encodings": ["base64", "plain-text"],
-  "refresh_headers": ["ETag", "Last-Modified"],
+  "refresh_headers": [
+    "Profile-Update-Interval",
+    "Profile-Web-Page-Url",
+    "Routing-Enable",
+    "Subscription-Userinfo"
+  ],
   "supported_offers": ["trojan-tls-tcp", "vless-tls-tcp-xtls-rprx-vision"],
   "required_parameters": {
     "trojan-tls-tcp": ["security", "type"],

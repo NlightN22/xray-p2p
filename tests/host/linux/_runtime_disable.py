@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import PurePosixPath
 
@@ -124,6 +125,17 @@ def assert_apply_clean(host) -> None:
     if linux_env.path_exists(host, APPLY_ERROR):
         helpers.dump_failure_state(host, f"apply-error-left-{host.backend.hostname}")
         raise AssertionError("apply.error should not exist")
+
+
+def assert_apply_error(host, role: str) -> dict:
+    if not linux_env.path_exists(host, APPLY_ERROR):
+        helpers.dump_failure_state(host, f"apply-error-missing-{host.backend.hostname}")
+        raise AssertionError("apply.error should exist")
+    marker = json.loads(helpers.read_text(host, APPLY_ERROR))
+    if marker.get("role") != role or not marker.get("request_id") or not marker.get("reason"):
+        helpers.dump_failure_state(host, f"apply-error-invalid-{host.backend.hostname}")
+        raise AssertionError(f"invalid apply.error marker: {marker}")
+    return marker
 
 
 def assert_same_xray_pid(host, expected: str, label: str) -> None:

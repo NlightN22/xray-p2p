@@ -84,8 +84,15 @@ func TestUpdateEndpointCredentialsStagesOnlyDesiredWhenServiceIsStopped(t *testi
 	liveDir := writeClientLive(t, "old-live")
 	beforeLive := readFile(t, filepath.Join(liveDir, layout.XrayConfigFileName))
 	var applied bool
-	stubRuntimeFlow(t, false, func(context.Context, xraylive.Options, xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
+	stubRuntimeFlow(t, false, func(_ context.Context, opts xraylive.Options, _ xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
 		applied = true
+		if err := apply.WriteError(opts.ErrorPath, apply.ErrorMarker{
+			RequestID: "stopped-service-attempt",
+			Role:      apply.RoleClient,
+			Reason:    "dial xray API: connection refused",
+		}, ""); err != nil {
+			t.Fatalf("write apply error: %v", err)
+		}
 		return xraylive.RuntimeApplyFailed, errors.New("dial xray API: connection refused")
 	})
 
@@ -102,6 +109,11 @@ func TestUpdateEndpointCredentialsStagesOnlyDesiredWhenServiceIsStopped(t *testi
 		t.Fatalf("live xray changed while service was stopped: %s", string(afterLive))
 	}
 	assertNoApplyRequest(t)
+	if _, exists, err := apply.ReadError(config.ApplyErrorPath()); err != nil {
+		t.Fatalf("read apply error: %v", err)
+	} else if exists {
+		t.Fatal("apply error remains after staging for a stopped service")
+	}
 }
 
 func TestUpdateEndpointCredentialsFailsWithoutChangingStateWhenRuntimeAPIFails(t *testing.T) {

@@ -41,6 +41,9 @@ func applyClientRuntimeCandidateVerified(ctx context.Context, artifacts xraylive
 	if result == xraylive.RuntimeApplyServiceLayerRequired || result == xraylive.RuntimeApplyUnsupported ||
 		result == xraylive.RuntimeApplyFailed || result == xraylive.RuntimeApplySkipped {
 		if stopped, statusErr := serviceStopped(ctx, servicecontrol.RoleClient); statusErr == nil && stopped {
+			if err := apply.RemoveRoleMarkers(config.ApplyRequestPath(), config.ApplyErrorPath(), apply.RoleClient); err != nil {
+				return result, err
+			}
 			return xraylive.RuntimeApplyStaged, nil
 		}
 	}

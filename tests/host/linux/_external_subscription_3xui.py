@@ -122,6 +122,24 @@ def _fetch_subscription(host) -> list[str]:
     return [line.strip() for line in raw.splitlines() if line.strip()]
 
 
+def _fetch_subscription_headers(host) -> dict[str, str]:
+    header_path = "/tmp/xp2p-3xui-subscription-headers"
+    response = host.run(
+        f"curl --fail --silent --retry 20 --retry-delay 1 --retry-connrefused "
+        f"--dump-header {header_path} --output /dev/null {SUBSCRIPTION_URL}"
+    )
+    assert response.rc == 0, response.stderr
+    raw = host.run(f"cat {header_path}")
+    assert raw.rc == 0, raw.stderr
+    headers: dict[str, str] = {}
+    for line in raw.stdout.splitlines():
+        if ":" not in line:
+            continue
+        name, value = line.split(":", 1)
+        headers[name.strip().lower()] = value.strip()
+    return headers
+
+
 def _failure_dump(client_host, aux_host) -> str:
     state = client_host.run(f"sudo -n sh {FAILURE_DUMP}")
     services = client_host.run("sudo -n systemctl --no-pager --full status xp2p-client.service")

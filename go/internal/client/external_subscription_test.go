@@ -61,7 +61,7 @@ func TestReplaceSubscriptionEndpointsIsSourceIsolated(t *testing.T) {
 		Endpoint:  tunnel.Endpoint{Host: "edge.example", Port: 443, Profile: tunnel.ProfileTrojanTLS, Protocol: "trojan", Transport: "tcp", Security: "tls"},
 		UserLabel: "fixture", Credential: "server-secret",
 	}}
-	got := replaceSubscriptionEndpoints(current, "source-a", offers)
+	got := replaceSubscriptionEndpoints(current, "source-a", offers[0].StableID, offers)
 	if len(got) != 3 {
 		t.Fatalf("endpoints = %d, want 3", len(got))
 	}
@@ -71,6 +71,9 @@ func TestReplaceSubscriptionEndpointsIsSourceIsolated(t *testing.T) {
 	added := got[2]
 	if added.SubscriptionSourceID != "source-a" || added.SubscriptionOfferID != offers[0].StableID || added.Password != "server-secret" || added.Tag != "subscription-0123456789abcdef" {
 		t.Fatalf("unexpected external endpoint: %+v", added)
+	}
+	if added.Disabled {
+		t.Fatal("selected external endpoint is disabled")
 	}
 }
 
@@ -82,5 +85,15 @@ func TestLegacyDesiredEndpointsRemainUnowned(t *testing.T) {
 	}
 	if state.Endpoints[0].Profile != "trojan-tls" || state.Endpoints[0].Protocol != "trojan" {
 		t.Fatalf("legacy endpoint defaults changed: %+v", state.Endpoints[0])
+	}
+}
+
+func TestSelectExternalOfferPreservesAvailableSelection(t *testing.T) {
+	offers := []subscription.ConnectionOffer{{StableID: "offer-a"}, {StableID: "offer-b"}}
+	if got := selectExternalOffer("offer-b", offers); got != "offer-b" {
+		t.Fatalf("selection = %q, want preserved offer-b", got)
+	}
+	if got := selectExternalOffer("removed", offers); got != "offer-a" {
+		t.Fatalf("fallback selection = %q, want offer-a", got)
 	}
 }

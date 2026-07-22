@@ -249,6 +249,7 @@ func deployDesiredConfiguration(ctx context.Context, state installState) error {
 		AllowInsecure:         state.AllowInsecure,
 		PinnedPeerCertSHA256:  state.PinnedPeerCertSHA256,
 		VerifyPeerCertByName:  state.VerifyPeerCertByName,
+		HeartbeatMode:         state.HeartbeatMode,
 		AllowInsecureOverride: state.AllowInsecureOverride,
 	}, state.Force)
 	if err != nil {

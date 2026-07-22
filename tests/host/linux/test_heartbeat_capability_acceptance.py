@@ -7,6 +7,7 @@ import pytest
 
 from tests.host.host_common.polling import wait_until
 from tests.host.linux import _helpers as helpers
+from tests.host.linux import _runtime_disable as runtime
 from tests.host.linux.flows import tunnel_b_to_a_fixture as fixture
 from tests.host.tunnel import common as tunnel_common
 
@@ -24,8 +25,8 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
     try:
         server_runner("server", "service", "start", check=True)
         client_runner("client", "service", "start", check=True)
-        helpers.wait_for_service_state(server, "server", expected_active=True)
-        helpers.wait_for_service_state(client, "client", expected_active=True)
+        runtime.wait_for_service(server, "server", active=True)
+        runtime.wait_for_service(client, "client", active=True)
 
         initial_client = _wait_entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy")
         initial_server = _wait_entry(server, helpers.SERVER_HEARTBEAT_STATE_FILE, "healthy")
@@ -33,7 +34,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         tunnel_common.assert_zero_loss(manual, "manual ping before heartbeat acceptance")
 
         server_runner("server", "service", "restart", check=True)
-        helpers.wait_for_service_state(server, "server", expected_active=True)
+        runtime.wait_for_service(server, "server", active=True)
         _wait_fresh(server, helpers.SERVER_HEARTBEAT_STATE_FILE, initial_server)
         _wait_fresh(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, initial_client)
 
@@ -44,7 +45,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
             server, helpers.SERVER_HEARTBEAT_STATE_FILE, "healthy"
         )
         client_runner("client", "service", "restart", check=True)
-        helpers.wait_for_service_state(client, "client", expected_active=True)
+        runtime.wait_for_service(client, "client", active=True)
         _wait_fresh(
             client, helpers.CLIENT_HEARTBEAT_STATE_FILE, client_before_restart
         )
@@ -57,7 +58,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         server_runner("server", "service", "stop", check=True)
         _wait_entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "unhealthy")
         server_runner("server", "service", "start", check=True)
-        helpers.wait_for_service_state(server, "server", expected_active=True)
+        runtime.wait_for_service(server, "server", active=True)
         _wait_entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy")
 
         _force_server_persistence_failure(server)
@@ -76,7 +77,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         before_disabled = _entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE)
         _set_heartbeat_mode(client, "disabled")
         client_runner("client", "service", "restart", check=True)
-        helpers.wait_for_service_state(client, "client", expected_active=True)
+        runtime.wait_for_service(client, "client", active=True)
         time.sleep(6)
         after_disabled = _entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE)
         assert after_disabled.get("attempts") == before_disabled.get("attempts")

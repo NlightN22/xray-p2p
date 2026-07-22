@@ -15,7 +15,6 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
-	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	subscriptiondomain "github.com/NlightN22/xray-p2p/go/internal/subscription"
@@ -30,6 +29,9 @@ type subscriptionSyncRunner struct {
 	interval  time.Duration
 	timeout   time.Duration
 	socks     string
+	commit    func(context.Context, clientInstallState, func(context.Context) error) (xraylive.RuntimeApplyResult, error)
+	ack       func(context.Context, clientEndpointRecord, int, string, time.Duration) error
+	probe     func(context.Context, clientEndpointRecord, int, string) error
 }
 
 func startSubscriptionSyncLoop(ctx context.Context, installDir, configDir string, opts HeartbeatOptions) func() {
@@ -72,6 +74,8 @@ func newSubscriptionSyncRunner(installDir, configDir string, opts HeartbeatOptio
 		interval:  defaultSubscriptionSyncInterval,
 		timeout:   opts.Timeout,
 		socks:     strings.TrimSpace(opts.SocksAddress),
+		commit:    commitClientSubscriptionStateVerified,
+		ack:       acknowledgeRotation,
 	}
 	if runner.timeout <= 0 {
 		runner.timeout = 2 * time.Second
@@ -141,14 +145,7 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 			logging.Warn("subscription topology rejected", "tag", endpoint.Tag, "err", err)
 			continue
 		}
-		var verify func(context.Context) error
-		if rotationPending {
-			candidateEndpoint := candidate.Endpoints[index]
-			verify = func(verifyCtx context.Context) error {
-				return r.verifyRotationTunnel(verifyCtx, candidateEndpoint, index, credential)
-			}
-		}
-		result, err := commitClientSubscriptionStateVerified(ctx, candidate, verify)
+		result, ackErr, err := r.applySubscriptionCandidate(ctx, candidate, endpoint, index, controlPort, credential, rotationPending)
 		if err != nil {
 			logging.Warn("subscription apply failed", "tag", endpoint.Tag, "generation", sub.Generation, "err", err)
 			continue
@@ -158,25 +155,12 @@ func (r subscriptionSyncRunner) runOnce(ctx context.Context) {
 				logging.Debug("credential rotation acknowledgement deferred", "tag", endpoint.Tag, "apply", result)
 				continue
 			}
-			if err := acknowledgeRotation(ctx, endpoint, controlPort, credential, r.timeout); err != nil {
-				logging.Debug("credential rotation acknowledgement deferred", "tag", endpoint.Tag, "err", err)
+			if ackErr != nil {
+				logging.Debug("credential rotation acknowledgement deferred", "tag", endpoint.Tag, "err", ackErr)
 			}
 		}
 		logging.Info("subscription applied", "tag", endpoint.Tag, "generation", sub.Generation)
 	}
-}
-
-func (r subscriptionSyncRunner) verifyRotationTunnel(parent context.Context, endpoint clientEndpointRecord, index int, credential string) error {
-	if r.socks == "" {
-		return fmt.Errorf("SOCKS tunnel is unavailable for rotation verification")
-	}
-	marker, err := markerIPForIndex(index)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithTimeout(parent, r.timeout)
-	defer cancel()
-	return ping.Run(ctx, marker, ping.Options{Count: 1, Timeout: r.timeout, Port: DiagnosticsMarkerPort, SocksProxy: r.socks, User: endpoint.User, Credential: credential, ServerName: endpoint.ServerName, AllowInsecure: endpoint.AllowInsecure, PinnedPeerCertSHA256: endpoint.PinnedPeerCertSHA256, Silent: true})
 }
 
 func remoteControlPort() int {

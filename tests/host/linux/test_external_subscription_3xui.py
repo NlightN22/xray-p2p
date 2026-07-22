@@ -16,6 +16,7 @@ from tests.host.linux._external_subscription_3xui import (
     _assert_offer_count,
     _failure_dump,
     _fetch_subscription,
+    _fetch_subscription_headers,
     _state_hashes,
     _wait_for_xp2p_traffic,
     cleanup_3xui,
@@ -45,6 +46,13 @@ def test_3xui_pinned_versions_and_subscription_contract(aux_host, pinned_3xui):
     assert len(decoded) == 2
     assert any(item.startswith("trojan://fixture-trojan-password@") for item in decoded)
     assert any(item.startswith("vless://550e8400-e29b-41d4-a716-446655440000@") for item in decoded)
+
+    headers = _fetch_subscription_headers(aux_host)
+    assert headers.get("content-type", "").lower().startswith("text/plain")
+    assert headers.get("profile-update-interval") == "12"
+    assert headers.get("profile-web-page-url")
+    assert headers.get("routing-enable") == "true"
+    assert headers.get("subscription-userinfo")
 
 
 def test_3xui_basic_import_uses_xp2p_live(

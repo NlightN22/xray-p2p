@@ -12,6 +12,7 @@ from testinfra.host import Host
 from tests.host.cross import helpers_linux as cross_linux
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
+from tests.host.tunnel import common as tunnel_common
 
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
@@ -331,18 +332,11 @@ def _run_cmd(host: Host, command: str) -> str:
 
 
 def _extract_client_users(output: str) -> set[str]:
-    cleaned = _strip_ansi(output)
-    users: set[str] = set()
-    for raw_line in cleaned.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("TAG"):
-            continue
-        if not line.startswith("proxy-"):
-            continue
-        columns = [segment.strip() for segment in re.split(r"\s{2,}", line) if segment.strip()]
-        if len(columns) >= 7:
-            users.add(columns[6])
-    return users
+    return {
+        row["CLIENT_USER"]
+        for row in tunnel_common.parse_state_rows(output)
+        if row.get("TAG", "").startswith("proxy-") and row.get("CLIENT_USER")
+    }
 
 
 def _strip_ansi(value: str | None) -> str:

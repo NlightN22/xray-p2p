@@ -6,7 +6,7 @@ import json
 import shlex
 
 from tests.host.host_common.polling import wait_until
-from tests.host.linux import _bare as bare
+from tests.host.linux import _bare_xray as bare
 
 
 @contextmanager

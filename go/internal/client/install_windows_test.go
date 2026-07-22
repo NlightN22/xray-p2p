@@ -37,6 +37,7 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 		User:          "user@example.com",
 		Password:      "secret",
 		ServerName:    "localhost",
+		HeartbeatMode: "auto",
 	}
 	if err := Install(context.Background(), opts); err != nil {
 		t.Fatalf("Install returned error: %v", err)
@@ -71,6 +72,9 @@ func TestInstallCreatesConfigAndState(t *testing.T) {
 	}
 	if ep.User != "user@example.com" || ep.Password != "secret" {
 		t.Fatalf("unexpected credentials: %+v", ep)
+	}
+	if ep.HeartbeatMode != "auto" {
+		t.Fatalf("unexpected heartbeat mode: %q", ep.HeartbeatMode)
 	}
 }
 

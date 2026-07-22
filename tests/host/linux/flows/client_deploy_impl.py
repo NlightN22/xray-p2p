@@ -89,7 +89,7 @@ def _run_client_deploy_end_to_end(
     client_ip = helpers.detect_primary_ipv4(client_host)
     server_ip = _detect_host_ipv4(server_host)
     trojan_user = "deploy-suite@example.com"
-    trojan_password = "deploy-pass-123"
+    trojan_password = "550e8400-e29b-41d4-a716-446655440020"
 
     run_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     client_pid = None
@@ -1025,7 +1025,7 @@ def _assert_client_install_artifacts(host: Host, server_ip: str, user: str, pass
         if expected_password and _xray_outbound_credential(xray_doc, server_ip) == expected_password:
             break
         time.sleep(1)
-    assert expected_password and expected_password != password
+    assert expected_password == password
     assert uuid.UUID(expected_password).version == 4
     helpers.assert_outbound(
         xray_doc,

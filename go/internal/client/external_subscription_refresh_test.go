@@ -32,6 +32,19 @@ func TestExternalSubscriptionRefreshReconcilesServerSnapshot(t *testing.T) {
 	if len(before.Endpoints) != 2 {
 		t.Fatalf("initial endpoints = %d, want 2", len(before.Endpoints))
 	}
+	if before.Subscriptions[0].SelectedOfferID == "" || before.Subscriptions[0].SelectedOfferID != before.Endpoints[0].SubscriptionOfferID {
+		t.Fatalf("selected offer was not persisted: %+v", before.Subscriptions[0])
+	}
+	if before.Endpoints[0].Disabled || !before.Endpoints[1].Disabled {
+		t.Fatalf("selected runtime endpoint is not enforced: %+v", before.Endpoints)
+	}
+	statuses, err := ListExternalSubscriptions()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if statuses[0].SelectedOfferID != before.Subscriptions[0].SelectedOfferID {
+		t.Fatalf("LKG selected offer = %q, want %q", statuses[0].SelectedOfferID, before.Subscriptions[0].SelectedOfferID)
+	}
 	trojanOfferID := endpointOfferID(before, "trojan")
 
 	body = externalTrojanFixture("new-trojan-password", "new-edge.example")

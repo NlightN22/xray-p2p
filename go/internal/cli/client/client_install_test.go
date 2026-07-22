@@ -233,6 +233,9 @@ func TestRunClientInstall(t *testing.T) {
 				if opts.VerifyPeerCertByName != "links.example.test" {
 					t.Fatalf("unexpected verify peer name: %s", opts.VerifyPeerCertByName)
 				}
+				if opts.HeartbeatMode != "auto" {
+					t.Fatalf("unexpected heartbeat mode: %s", opts.HeartbeatMode)
+				}
 				if len(opts.ALPN) != 2 || opts.ALPN[0] != "h2" || opts.ALPN[1] != "http/1.1" {
 					t.Fatalf("unexpected alpn: %v", opts.ALPN)
 				}

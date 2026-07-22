@@ -1,9 +1,16 @@
 package client
 
 import (
+	"context"
+	"errors"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
+	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
 
 func TestSubscriptionCandidateUpdatesEndpointWithoutLosingCredential(t *testing.T) {
@@ -40,6 +47,76 @@ func TestSubscriptionCandidateUpdatesEndpointWithoutLosingCredential(t *testing.
 	}
 	if got.AllowInsecure {
 		t.Fatalf("pinned endpoint must not allow insecure TLS")
+	}
+}
+
+func TestRotationProbeFailurePreventsPersistenceAndAck(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", root)
+	statePath := writeEndpointUpdateState(t)
+	liveDir := writeClientLive(t, "previous-live")
+	beforeDesired := readFile(t, statePath)
+	beforeLive := readFile(t, filepath.Join(liveDir, layout.XrayConfigFileName))
+	candidate, err := loadClientInstallState(config.ConfigPath(layout.ClientConfigFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate.Endpoints[0].Password = "new-credential"
+	probeErr := errors.New("injected tunnel probe failure")
+	acknowledged := false
+	runner := subscriptionSyncRunner{
+		probe: func(context.Context, clientEndpointRecord, int, string) error { return probeErr },
+		ack: func(context.Context, clientEndpointRecord, int, string, time.Duration) error {
+			acknowledged = true
+			return nil
+		},
+	}
+	stubRuntimeFlow(t, true, func(ctx context.Context, opts xraylive.Options, _ xraylive.Artifacts) (xraylive.RuntimeApplyResult, error) {
+		return xraylive.RuntimeApplyFailed, opts.VerifyRuntime(ctx)
+	})
+	if _, _, err := runner.applySubscriptionCandidate(context.Background(), candidate, candidate.Endpoints[0], 0, 62022, "new-credential", true); !errors.Is(err, probeErr) {
+		t.Fatalf("probe error = %v, want %v", err, probeErr)
+	}
+	if acknowledged {
+		t.Fatal("failed probe acknowledged rotation")
+	}
+	if got := readFile(t, statePath); string(got) != string(beforeDesired) {
+		t.Fatalf("failed probe changed Desired:\n%s", got)
+	}
+	if got := readFile(t, filepath.Join(liveDir, layout.XrayConfigFileName)); string(got) != string(beforeLive) {
+		t.Fatalf("failed probe changed Live: %s", got)
+	}
+}
+
+func TestRotationPersistenceFailurePreventsAck(t *testing.T) {
+	persistErr := errors.New("injected Desired/Live persistence failure")
+	desired := "previous-desired"
+	live := "previous-live"
+	acknowledged := false
+	runner := subscriptionSyncRunner{
+		probe: func(context.Context, clientEndpointRecord, int, string) error { return nil },
+		commit: func(ctx context.Context, _ clientInstallState, verify func(context.Context) error) (xraylive.RuntimeApplyResult, error) {
+			if err := verify(ctx); err != nil {
+				return xraylive.RuntimeApplyFailed, err
+			}
+			live = "candidate-live"
+			live = "previous-live"
+			return xraylive.RuntimeApplyFailed, persistErr
+		},
+		ack: func(context.Context, clientEndpointRecord, int, string, time.Duration) error {
+			acknowledged = true
+			return nil
+		},
+	}
+	candidate := clientInstallState{Endpoints: []clientEndpointRecord{{Tag: "rotation"}}}
+	if _, _, err := runner.applySubscriptionCandidate(context.Background(), candidate, candidate.Endpoints[0], 0, 62022, "new-credential", true); !errors.Is(err, persistErr) {
+		t.Fatalf("persistence error = %v, want %v", err, persistErr)
+	}
+	if acknowledged {
+		t.Fatal("failed persistence acknowledged rotation")
+	}
+	if desired != "previous-desired" || live != "previous-live" {
+		t.Fatalf("failed persistence changed Desired/Live: %q %q", desired, live)
 	}
 }
 

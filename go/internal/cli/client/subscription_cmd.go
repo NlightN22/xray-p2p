@@ -33,7 +33,7 @@ func newClientSubscriptionCmd() *cobra.Command {
 				return nil
 			}
 			for _, status := range statuses {
-				fmt.Printf("ID: %s\nAdapter: %s\nRevision: %s\nOffers: %d\nLast refresh: %s\nLast apply: %s\n", status.ID, status.Adapter, status.Revision, len(status.Offers), formatSubscriptionTime(status.LastRefreshAt), formatSubscriptionTime(status.LastApplyAt))
+				fmt.Printf("ID: %s\nAdapter: %s\nRevision: %s\nOffers: %d\nSelected offer: %s\nLast refresh: %s\nLast apply: %s\n", status.ID, status.Adapter, status.Revision, len(status.Offers), formatSelectedOffer(status.SelectedOfferID), formatSubscriptionTime(status.LastRefreshAt), formatSubscriptionTime(status.LastApplyAt))
 				if status.LastError != "" {
 					fmt.Printf("Last error: %s\n", status.LastError)
 				}
@@ -58,6 +58,14 @@ func newClientSubscriptionCmd() *cobra.Command {
 		}},
 	)
 	return cmd
+}
+
+func formatSelectedOffer(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "-"
+	}
+	return value
 }
 
 func formatSubscriptionTime(value interface {
