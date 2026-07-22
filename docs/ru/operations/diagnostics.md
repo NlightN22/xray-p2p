@@ -85,7 +85,7 @@ xp2p ping edge.example.com --tunnel --index 2
 - Кастомный адрес прослушивания диагностики: `xp2p diag --listen 0.0.0.0:62025`.
 - Кастомный ping port: `xp2p ping <host> --port 62025`.
 - Переопределение маршрута через туннель: `xp2p ping <host> -T <target>`; используй `-e <tag>` или `-i <index>` (вместе с `-T`), когда несколько эндпоинтов используют один `host`.
-- Контроль доступа: намеренно не аутентифицирован только standalone-слушатель `xp2p diag`; endpoints продуктового сервиса остаются защищёнными. Ограничь standalone-слушатель через firewall/ACL (например разреши только LAN и/или туннельный интерфейс).
+- Контроль доступа: `/control/v1/ready` продуктового сервиса публичен, а продуктовый `/control/v1/ping` аутентифицирован и работает fail-closed, если его Live metadata авторизации недоступны. Standalone-команда `xp2p diag` намеренно публикует `/control/v1/ready` и `/control/v1/ping` без аутентификации. Ограничь standalone-слушатель через firewall/ACL (например разреши только LAN и/или туннельный интерфейс).
   - OpenWrt (UCI): `uci add firewall rule; uci set firewall.@rule[-1].name='xp2p-diag'; uci set firewall.@rule[-1].src='lan'; uci set firewall.@rule[-1].proto='tcp'; uci set firewall.@rule[-1].dest_port='62022'; uci set firewall.@rule[-1].target='ACCEPT'; uci commit firewall; /etc/init.d/firewall restart`.
   - Linux (nftables): `nft add rule inet filter input tcp dport 62022 ip saddr { 127.0.0.1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } accept`.
   - Windows: `New-NetFirewallRule -DisplayName 'xp2p diagnostics' -Direction Inbound -Protocol TCP -LocalPort 62022 -Action Allow -RemoteAddress LocalSubnet`.
