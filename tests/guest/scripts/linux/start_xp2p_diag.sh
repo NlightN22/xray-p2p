@@ -5,6 +5,7 @@ listen="${1:-0.0.0.0:62022}"
 proto="${2:-tcp}"
 pid_file="${3:-/tmp/xp2p-diag.pid}"
 log_file="${4:-/tmp/xp2p-diag.log}"
+config_root="${5:-/tmp/xp2p-diag-config}"
 
 xp2p_bin="/srv/xray-p2p/build/linux-amd64/xp2p"
 if [ ! -x "$xp2p_bin" ]; then
@@ -18,7 +19,11 @@ if [ "$proto" = "udp" ]; then
   netstat_cmd="netstat -lun"
 fi
 
-nohup "$xp2p_bin" diag --listen "$listen" --quiet >"$log_file" 2>&1 &
+runtime_dir="$config_root/.state/live/config-server"
+mkdir -p "$runtime_dir"
+printf '%s\n' '{"control":{"subscription":{"generation":"test"}}}' >"$runtime_dir/runtime.json"
+
+nohup env XP2P_CONFIG_ROOT="$config_root" "$xp2p_bin" diag --listen "$listen" --quiet >"$log_file" 2>&1 &
 pid=$!
 echo "$pid" >"$pid_file"
 

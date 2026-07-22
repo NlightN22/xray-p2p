@@ -17,12 +17,17 @@ fi
 port="${listen##*:}"
 diag_log="/tmp/xp2p-diag.log"
 ping_log="/tmp/xp2p-diag-ping.log"
+config_root="/tmp/xp2p-diag-config"
 netstat_cmd="netstat -ltn"
 if [ "$proto" = "udp" ]; then
   netstat_cmd="netstat -lun"
 fi
 
-xp2p diag --listen "$listen" --quiet >"$diag_log" 2>&1 &
+runtime_dir="$config_root/.state/live/config-server"
+mkdir -p "$runtime_dir"
+printf '%s\n' '{"control":{"subscription":{"generation":"test"}}}' >"$runtime_dir/runtime.json"
+
+XP2P_CONFIG_ROOT="$config_root" xp2p diag --listen "$listen" --quiet >"$diag_log" 2>&1 &
 pid=$!
 
 cleanup() {

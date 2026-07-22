@@ -107,17 +107,11 @@ def _strip_ansi(value: str | None) -> str:
 
 def _extract_client_users(output: str) -> set[str]:
     cleaned = _strip_ansi(output)
-    users: set[str] = set()
-    for raw_line in cleaned.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("TAG"):
-            continue
-        if not line.startswith("proxy-"):
-            continue
-        columns = [segment.strip() for segment in re.split(r"\s{2,}", line) if segment.strip()]
-        if len(columns) >= 7:
-            users.add(columns[6])
-    return users
+    return {
+        row["CLIENT_USER"]
+        for row in tunnel_common.parse_state_rows(cleaned)
+        if row.get("CLIENT_USER")
+    }
 
 
 def _assert_server_state_reports_user(

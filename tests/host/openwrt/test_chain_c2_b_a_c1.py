@@ -18,6 +18,7 @@ SERVER_TUNNEL_IP = "10.63.30.11"
 C1_LAN_CIDR = "10.0.101.0/24"
 C1_LAN_GATEWAY = "10.0.101.1"
 DIAG_LISTEN = "0.0.0.0:62022"
+CLIENT_API_PORT = 52180
 pytestmark = [pytest.mark.host, pytest.mark.linux]
 
 
@@ -90,6 +91,16 @@ def _ensure_mode(host, runner, role: str, config_dir: str, mode: str) -> str:
 
 def _apply_pending_config(host, role: str) -> None:
     helpers.state_pending_config(host, role)
+
+
+def _wait_for_listen_port(host, port: int, *, timeout_seconds: float = 20.0) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        result = host.run(f"netstat -ltn 2>/dev/null | grep -q ':{port} '")
+        if result.rc == 0:
+            return
+        time.sleep(1.0)
+    pytest.fail(f"OpenWrt listener did not become ready on port {port}")
 
 
 def _dokodemo_ports(config: dict) -> list[int]:
@@ -236,6 +247,7 @@ def test_chain_c2_b_a_c1_redirect_nat(chain_environment, alpine_c1_host, alpine_
             _apply_pending_config(client_host, "client")
             helpers.wait_for_live_config(server_host, "server")
             helpers.wait_for_live_config(client_host, "client")
+            _wait_for_listen_port(client_host, CLIENT_API_PORT)
         with _timed("baseline direct ping"):
             initial_ping = server_runner(
                 "ping",
