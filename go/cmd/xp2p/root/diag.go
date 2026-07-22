@@ -78,9 +78,8 @@ func runDiagCommand(ctx context.Context, cfg config.Config, opts diagCommandOpti
 		defer os.RemoveAll(dir)
 		tlsDir = dir
 	}
-	if err := server.StartBackground(ctx, server.Options{
+	if err := server.StartStandaloneDiagnostics(ctx, server.Options{
 		ListenAddr: listenAddr,
-		InstallDir: cfg.Server.InstallDir,
 		CertPath:   cfg.Server.CertificateFile,
 		KeyPath:    cfg.Server.KeyFile,
 		TLSDir:     tlsDir,

@@ -67,14 +67,16 @@ def test_direct_link_with_bare_xray_routes_local_and_internet(client_host, serve
             bare.assert_two_traffic_paths(client_host)
             _assert_heartbeat_status(client_host, "not-detected", "auto")
             with heartbeat_sidecar.late_sidecar(server_host, protocol):
-                _assert_heartbeat_status(client_host, "healthy", "auto")
-            _assert_heartbeat_status(client_host, "unhealthy", "auto")
+                ping = xp2p_client_runner("ping", bare.TLS_NAME, "--port", "62022")
+                assert ping.rc == 0, (ping.stdout or "") + (ping.stderr or "")
+                _assert_heartbeat_status(client_host, "not-detected", "auto")
+            _assert_heartbeat_status(client_host, "not-detected", "auto")
 
             xp2p_client_runner("client", "service", "restart", check=True)
             bare.wait_for_socks(client_host)
             _assert_profile(client_host, xp2p_client_runner, protocol)
             bare.assert_two_traffic_paths(client_host)
-            _assert_heartbeat_status(client_host, "unhealthy", "auto")
+            _assert_heartbeat_status(client_host, "not-detected", "auto")
     except Exception:
         bare.failure_dump(client_host, server_host)
         raise

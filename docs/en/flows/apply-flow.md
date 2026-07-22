@@ -96,8 +96,10 @@ For recommended snippet filenames and routing rule insertion points, see [Config
 
 ## Read Rules and Exceptions
 
-- Runtime behavior (service run, diagnostics, ping, OS routing) reads live runtime
-  artifacts only and never reads Desired inputs directly.
+- Product runtime behavior (service run, service diagnostics and ping, OS
+  routing) reads Live runtime artifacts only and never reads Desired inputs
+  directly. Standalone `xp2p diag` is the exception: it uses an in-memory public
+  ping policy and does not read or write Desired, Live, LKG, or `.state`.
 - Manual edits and service-layer changes request apply via `apply.request`.
 - Runtime-capable CLI commands may stage Desired inputs while no running Live
   runtime is available, or update Live after a verified API apply while a

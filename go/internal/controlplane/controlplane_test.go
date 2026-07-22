@@ -173,6 +173,107 @@ func TestPingFailsClosedWhenRuntimeIsUnavailable(t *testing.T) {
 	}
 }
 
+func TestPingFailsClosedWhenRuntimeAuthIsIncomplete(t *testing.T) {
+	for _, users := range [][]AuthUser{nil, {{Label: "alice"}}, {{Credential: "secret"}}} {
+		handler := NewHandler(HandlerOptions{
+			LoadRuntime: func() (Runtime, error) { return Runtime{AuthUsers: users}, nil },
+		})
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, PathPing, bytes.NewBufferString(`{"nonce":"n1"}`)))
+		if resp.Code != http.StatusServiceUnavailable {
+			t.Fatalf("users=%v ping status=%d body=%s", users, resp.Code, resp.Body.String())
+		}
+	}
+}
+
+func TestProtectedPingRejectsMissingAndInvalidSignatures(t *testing.T) {
+	now := time.Unix(1000, 0).UTC()
+	body := []byte(`{"nonce":"n1"}`)
+	handler := NewHandler(HandlerOptions{
+		LoadRuntime: func() (Runtime, error) {
+			return Runtime{AuthUsers: []AuthUser{{Label: "alice", Credential: "secret"}}}, nil
+		},
+		Now: func() time.Time { return now },
+	})
+
+	missing := httptest.NewRecorder()
+	handler.ServeHTTP(missing, httptest.NewRequest(http.MethodPost, PathPing, bytes.NewReader(body)))
+	if missing.Code != http.StatusUnauthorized {
+		t.Fatalf("missing signature status=%d body=%s", missing.Code, missing.Body.String())
+	}
+
+	invalidReq := signedRequest(t, http.MethodPost, PathPing, body, now)
+	invalidReq.Header.Set(HeaderSignature, "00")
+	invalid := httptest.NewRecorder()
+	handler.ServeHTTP(invalid, invalidReq)
+	if invalid.Code != http.StatusForbidden {
+		t.Fatalf("invalid signature status=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+}
+
+func TestDiagnosticsHandlerServesOnlyPublicReadinessAndPing(t *testing.T) {
+	now := time.Unix(1000, 0).UTC()
+	handler := NewDiagnosticsHandler(DiagnosticsOptions{Now: func() time.Time { return now }})
+	body := []byte(`{"nonce":"n1"}`)
+
+	for _, signed := range []bool{false, true} {
+		req := httptest.NewRequest(http.MethodPost, PathPing, bytes.NewReader(body))
+		if signed {
+			if err := ApplyHeaders(req, "unknown", "unknown-secret", "auth-nonce", body, now); err != nil {
+				t.Fatal(err)
+			}
+		}
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, req)
+		if resp.Code != http.StatusOK {
+			t.Fatalf("signed=%v ping status=%d body=%s", signed, resp.Code, resp.Body.String())
+		}
+		var pong PingResponse
+		if err := json.NewDecoder(resp.Body).Decode(&pong); err != nil || pong.Nonce != "n1" {
+			t.Fatalf("signed=%v pong=%+v err=%v", signed, pong, err)
+		}
+	}
+
+	ready := httptest.NewRecorder()
+	handler.ServeHTTP(ready, httptest.NewRequest(http.MethodGet, PathReady, nil))
+	if ready.Code != http.StatusOK {
+		t.Fatalf("ready status=%d", ready.Code)
+	}
+	for _, path := range []string{PathHeartbeat, PathSubscription, PathCredentialsRotate, PathCredentialsAck, "/control/v1/ha/status"} {
+		resp := httptest.NewRecorder()
+		handler.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, path, nil))
+		if resp.Code != http.StatusNotFound {
+			t.Fatalf("GET %s status=%d", path, resp.Code)
+		}
+	}
+}
+
+func TestPingProtocolContractAcrossCompositions(t *testing.T) {
+	protected := NewHandler(HandlerOptions{LoadRuntime: func() (Runtime, error) {
+		return Runtime{AuthUsers: []AuthUser{{Label: "alice", Credential: "secret"}}}, nil
+	}})
+	public := NewDiagnosticsHandler(DiagnosticsOptions{})
+	for name, handler := range map[string]http.Handler{"protected": protected, "public": public} {
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct {
+				method string
+				body   string
+				want   int
+			}{{http.MethodGet, "", http.StatusMethodNotAllowed}, {http.MethodPost, "{", http.StatusBadRequest}, {http.MethodPost, `{}`, http.StatusUnauthorized}} {
+				want := tc.want
+				if name == "public" && tc.body == `{}` {
+					want = http.StatusBadRequest
+				}
+				resp := httptest.NewRecorder()
+				handler.ServeHTTP(resp, httptest.NewRequest(tc.method, PathPing, bytes.NewBufferString(tc.body)))
+				if resp.Code != want {
+					t.Fatalf("%s %q status=%d want=%d body=%s", tc.method, tc.body, resp.Code, want, resp.Body.String())
+				}
+			}
+		})
+	}
+}
+
 func TestRotationChallengeAndProofDoNotExposeCredential(t *testing.T) {
 	now := time.Unix(1000, 0).UTC()
 	runtime := Runtime{Subscription: Subscription{Generation: "sub-1"}, RotationUsers: []RotationUser{{UserLabel: "alice", ActiveCredential: "new", PreviousCredentialForRotation: "old", RotationExpiresAt: now.Add(time.Hour), CredentialGeneration: 2}}}

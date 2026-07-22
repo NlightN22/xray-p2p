@@ -171,12 +171,7 @@ func startBackgroundServer(t *testing.T) (context.CancelFunc, int) {
 
 	portStr, port := testutil.FreePort(t)
 	certPath, keyPath := testTLSFiles(t)
-	liveDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(liveDir, "runtime.json"), []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
-		cancel()
-		t.Fatalf("write runtime metadata: %v", err)
-	}
-	if err := server.StartBackground(ctx, server.Options{Port: portStr, CertPath: certPath, KeyPath: keyPath, LiveDir: liveDir}); err != nil {
+	if err := server.StartStandaloneDiagnostics(ctx, server.Options{Port: portStr, CertPath: certPath, KeyPath: keyPath}); err != nil {
 		cancel()
 		t.Fatalf("failed to start background server: %v", err)
 	}

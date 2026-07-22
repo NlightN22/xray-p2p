@@ -36,7 +36,14 @@ func TestStartBackgroundServesHTTPSControlPing(t *testing.T) {
 	}
 
 	body := []byte(`{"nonce":"testnonce"}`)
-	resp, err = client.Post(baseURL+controlplane.PathPing, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, baseURL+controlplane.PathPing, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controlplane.ApplyHeaders(req, "test", "secret", "testnonce", body, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	resp, err = client.Do(req)
 	if err != nil {
 		t.Fatalf("POST ping: %v", err)
 	}
@@ -55,17 +62,38 @@ func TestStartBackgroundServesHTTPSControlPing(t *testing.T) {
 
 func TestStartBackgroundControlPingFailsClosedWithoutRuntimeMetadata(t *testing.T) {
 	setupBackgroundTestLogging(t)
-	cancel, baseURL := startTestControlServer(t, t.TempDir(), false)
+	stateDir := t.TempDir()
+	cancel, baseURL := startTestControlServer(t, stateDir, false)
 	defer cancel()
 
-	body := []byte(`{"nonce":"standalone"}`)
-	resp, err := testControlHTTPClient().Post(baseURL+controlplane.PathPing, "application/json", bytes.NewReader(body))
-	if err != nil {
-		t.Fatalf("POST ping: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable {
-		t.Fatalf("ping status = %s", resp.Status)
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "missing"},
+		{name: "corrupt", data: []byte(`{`)},
+		{name: "incomplete", data: []byte(`{"control":{"subscription":{"generation":"test"}}}`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(stateDir, "live", layout.RuntimeMetaFileName)
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if tc.data != nil {
+				if err := os.WriteFile(path, tc.data, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			body := []byte(`{"nonce":"standalone"}`)
+			resp, err := testControlHTTPClient().Post(baseURL+controlplane.PathPing, "application/json", bytes.NewReader(body))
+			if err != nil {
+				t.Fatalf("POST ping: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusServiceUnavailable {
+				t.Fatalf("ping status = %s", resp.Status)
+			}
+		})
 	}
 }
 
@@ -86,7 +114,14 @@ func TestHTTPSHeartbeatPayloadIsPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
 	}
-	resp, err := testControlHTTPClient().Post(baseURL+controlplane.PathHeartbeat, "application/json", bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, baseURL+controlplane.PathHeartbeat, bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controlplane.ApplyHeaders(req, "test", "secret", "heartbeat", data, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := testControlHTTPClient().Do(req)
 	if err != nil {
 		t.Fatalf("POST heartbeat: %v", err)
 	}
@@ -126,7 +161,7 @@ func startTestControlServer(t *testing.T, stateDir string, writeRuntime bool) (c
 		t.Fatalf("mkdir live: %v", err)
 	}
 	if writeRuntime {
-		if err := os.WriteFile(filepath.Join(liveDir, layout.RuntimeMetaFileName), []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(liveDir, layout.RuntimeMetaFileName), []byte(`{"control":{"subscription":{"generation":"test"},"auth_users":[{"label":"test","credential":"secret"}]}}`), 0o644); err != nil {
 			t.Fatalf("write runtime metadata: %v", err)
 		}
 	}

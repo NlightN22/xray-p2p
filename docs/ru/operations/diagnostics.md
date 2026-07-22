@@ -4,15 +4,25 @@
 
 - Состояние (heartbeat/state): `xp2p client state` и `xp2p server state`.
 - Просмотр pending: добавь `--pending`, чтобы увидеть настроенные туннели до того, как сервис применит изменения.
-- Ответчик диагностики: `xp2p diag` запускает слушатель в foreground для `xp2p ping`.
+- Standalone-ответчик: `xp2p diag` запускает HTTPS-слушатель в foreground с публичными endpoint readiness и ping.
 - Форвардинг: `xp2p client forward add|list|remove` и `xp2p server forward add|list|remove`.
 - DNS/DHCP (только Linux/OpenWrt): `xp2p {client,server} dns-forward add|remove|list`.
 - NAT snippets (только Linux/OpenWrt): `xp2p nat-redirect add --cidr 192.168.10.0/24` генерирует фрагменты правил для прозрачного перехвата.
 
 ## Проверки ping
 
-`xp2p ping` — это проверка связности на уровне протокола для ответчика диагностики.
-Она работает, когда на удалённой стороне запущен xp2p (сервис клиента/сервера) или когда ты запускаешь `xp2p diag` на этой ноде.
+`xp2p ping` использует один HTTPS-протокол во всех режимах: `POST /control/v1/ping`
+с JSON nonce. Продуктовый сервис клиента или сервера аутентифицирует запрос по
+опубликованным Live metadata и работает fail-closed, если metadata отсутствуют,
+повреждены или неполны.
+
+`xp2p diag` — самостоятельная композиция того же ping-handler. Для неё не нужны
+установка xp2p, Desired-конфигурация, Live runtime или заранее созданные
+credentials. Она публикует только `/control/v1/ready` и `/control/v1/ping`;
+standalone ping публичен и принимает также корректно сформированные запросы с
+неиспользуемыми auth-заголовками. Ограничивай доступ к слушателю через
+firewall/ACL. Standalone-sidecar подтверждает доступность диагностического
+ответчика, но не наличие полноценного xp2p control plane.
 
 Если ты не используешь этот проект end-to-end, `xp2p ping` всё равно может работать, если на ноде, где развёрнут Xray (или на любой ноде, которую ты хочешь проверять), запущен `xp2p diag`.
 
@@ -75,7 +85,7 @@ xp2p ping edge.example.com --tunnel --index 2
 - Кастомный адрес прослушивания диагностики: `xp2p diag --listen 0.0.0.0:62025`.
 - Кастомный ping port: `xp2p ping <host> --port 62025`.
 - Переопределение маршрута через туннель: `xp2p ping <host> -T <target>`; используй `-e <tag>` или `-i <index>` (вместе с `-T`), когда несколько эндпоинтов используют один `host`.
-- Контроль доступа: порт диагностики намеренно без аутентификации; ограничь его через firewall/ACL (например разреши только LAN и/или туннельный интерфейс).
+- Контроль доступа: намеренно не аутентифицирован только standalone-слушатель `xp2p diag`; endpoints продуктового сервиса остаются защищёнными. Ограничь standalone-слушатель через firewall/ACL (например разреши только LAN и/или туннельный интерфейс).
   - OpenWrt (UCI): `uci add firewall rule; uci set firewall.@rule[-1].name='xp2p-diag'; uci set firewall.@rule[-1].src='lan'; uci set firewall.@rule[-1].proto='tcp'; uci set firewall.@rule[-1].dest_port='62022'; uci set firewall.@rule[-1].target='ACCEPT'; uci commit firewall; /etc/init.d/firewall restart`.
   - Linux (nftables): `nft add rule inet filter input tcp dport 62022 ip saddr { 127.0.0.1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } accept`.
   - Windows: `New-NetFirewallRule -DisplayName 'xp2p diagnostics' -Direction Inbound -Protocol TCP -LocalPort 62022 -Action Allow -RemoteAddress LocalSubnet`.

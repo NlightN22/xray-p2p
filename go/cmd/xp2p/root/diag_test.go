@@ -16,7 +16,6 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
-	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
@@ -43,11 +42,10 @@ func TestSplitListenAddress(t *testing.T) {
 }
 
 func TestRunDiagCommandHTTPS(t *testing.T) {
-	setupDiagTest(t)
+	_ = setupDiagTest(t)
 	portStr, _ := testutil.FreePort(t)
 	addr := net.JoinHostPort("127.0.0.1", portStr)
 	certPath, keyPath := diagTLSFiles(t)
-	writeDiagRuntime(t)
 	cfg := config.Config{
 		Server: config.ServerConfig{
 			Port:            portStr,
@@ -101,8 +99,12 @@ func TestRunDiagCommandHTTPS(t *testing.T) {
 	}
 }
 
-func TestRunDiagCommandStandalonePingFailsClosedWithoutRuntime(t *testing.T) {
-	setupDiagTest(t)
+func TestRunDiagCommandStandaloneWithoutRuntime(t *testing.T) {
+	configRoot := setupDiagTest(t)
+	tempRoot := t.TempDir()
+	t.Setenv("TEMP", tempRoot)
+	t.Setenv("TMP", tempRoot)
+	t.Setenv("TMPDIR", tempRoot)
 	portStr, _ := testutil.FreePort(t)
 	addr := net.JoinHostPort("127.0.0.1", portStr)
 	cfg := config.Config{
@@ -138,8 +140,18 @@ func TestRunDiagCommandStandalonePingFailsClosedWithoutRuntime(t *testing.T) {
 		t.Fatalf("POST ping: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("ping status = %s", resp.Status)
+	}
+	for _, path := range []string{controlplane.PathHeartbeat, controlplane.PathSubscription, controlplane.PathCredentialsRotate, controlplane.PathCredentialsAck, "/control/v1/ha/status"} {
+		check, err := client.Get(baseURL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		_ = check.Body.Close()
+		if check.StatusCode != http.StatusNotFound {
+			t.Fatalf("GET %s status = %s", path, check.Status)
+		}
 	}
 	if _, err := os.Stat(cfg.Server.InstallDir); !os.IsNotExist(err) {
 		t.Fatalf("standalone diag touched install root: %v", err)
@@ -154,9 +166,26 @@ func TestRunDiagCommandStandalonePingFailsClosedWithoutRuntime(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("runDiagCommand did not exit after context cancel")
 	}
+	entries, err := os.ReadDir(tempRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("temporary TLS artifacts remain: %v", entries)
+	}
+	configEntries, err := os.ReadDir(configRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configEntries) != 0 {
+		t.Fatalf("standalone diag touched config root: %v", configEntries)
+	}
+	if _, err := os.Stat(filepath.Join(configRoot, ".state")); !os.IsNotExist(err) {
+		t.Fatalf("standalone diag touched state root: %v", err)
+	}
 }
 
-func setupDiagTest(t *testing.T) {
+func setupDiagTest(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", dir)
@@ -165,17 +194,7 @@ func setupDiagTest(t *testing.T) {
 	t.Cleanup(func() {
 		logging.Configure(logging.Options{Output: os.Stderr})
 	})
-}
-
-func writeDiagRuntime(t *testing.T) {
-	t.Helper()
-	path := config.LiveConfigPath(filepath.Join(layout.ServerConfigDir, layout.RuntimeMetaFileName))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir live runtime dir: %v", err)
-	}
-	if err := os.WriteFile(path, []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
-		t.Fatalf("write runtime metadata: %v", err)
-	}
+	return dir
 }
 
 func diagHTTPClient() *http.Client {

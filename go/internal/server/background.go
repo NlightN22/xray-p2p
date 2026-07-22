@@ -130,6 +130,57 @@ func StartBackground(ctx context.Context, opts Options) error {
 	return nil
 }
 
+// StartStandaloneDiagnostics launches only the public readiness and ping endpoints.
+func StartStandaloneDiagnostics(ctx context.Context, opts Options) error {
+	certPath, keyPath, err := resolveStandaloneTLS(opts)
+	if err != nil {
+		return err
+	}
+	listenAddr := strings.TrimSpace(opts.ListenAddr)
+	if listenAddr == "" {
+		port := strings.TrimSpace(opts.Port)
+		if port == "" {
+			port = DefaultPort
+		}
+		listenAddr = ":" + port
+	}
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return fmt.Errorf("start HTTPS diagnostics listener %s: %w", listenAddr, err)
+	}
+	srv := &http.Server{
+		Handler:           controlplane.NewDiagnosticsHandler(controlplane.DiagnosticsOptions{}),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		err := srv.ServeTLS(ln, certPath, keyPath)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
+			logging.Warn("HTTPS diagnostics server stopped", "err", err)
+		}
+	}()
+	go func() {
+		<-ctx.Done()
+		_ = srv.Shutdown(context.Background())
+		_ = ln.Close()
+	}()
+	return nil
+}
+
+func resolveStandaloneTLS(opts Options) (string, string, error) {
+	certPath := strings.TrimSpace(opts.CertPath)
+	keyPath := strings.TrimSpace(opts.KeyPath)
+	if certPath != "" || keyPath != "" {
+		if certPath == "" || keyPath == "" {
+			return "", "", errors.New("diagnostics HTTPS TLS certificate and key are required")
+		}
+		return certPath, keyPath, nil
+	}
+	if strings.TrimSpace(opts.TLSDir) == "" {
+		return "", "", errors.New("temporary diagnostics TLS directory is required")
+	}
+	return ensureControlTLS(opts)
+}
+
 func resolveControlTLS(opts Options) (string, string, error) {
 	certPath := strings.TrimSpace(opts.CertPath)
 	keyPath := strings.TrimSpace(opts.KeyPath)
