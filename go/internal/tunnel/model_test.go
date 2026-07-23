@@ -118,10 +118,23 @@ func TestNormalizeRecordMapsLegacyTrojanFields(t *testing.T) {
 
 func TestNormalizeRecordRejectsLegacyFieldsAfterRemoval(t *testing.T) {
 	previous := currentAppVersion
-	currentAppVersion = func() string { return "0.2.8" }
+	currentAppVersion = func() string { return "0.2.9" }
 	defer func() { currentAppVersion = previous }()
 	_, _, err := NormalizeRecord(LegacyRecord{Host: "edge.example", Port: 443, Password: "secret"})
 	if err == nil || !strings.Contains(err.Error(), "removed legacy fields") {
 		t.Fatalf("expected removed-field error, got %v", err)
+	}
+}
+
+func TestNormalizeRecordAcceptsLegacyFieldsInV028(t *testing.T) {
+	previous := currentAppVersion
+	currentAppVersion = func() string { return "0.2.8" }
+	defer func() { currentAppVersion = previous }()
+	record, _, err := NormalizeRecord(LegacyRecord{Host: "edge.example", Port: 443, Password: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.User.Credential != "secret" {
+		t.Fatalf("unexpected record: %#v", record)
 	}
 }
