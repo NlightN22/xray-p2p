@@ -21,6 +21,21 @@ protection.
 Heartbeat state now stores the latest health result explicitly. Failed checks
 use their real observation time instead of a synthetic timestamp one hour in
 the past. Existing heartbeat state without the new field remains readable.
+Heartbeat authentication is resolved per endpoint, so endpoints that reuse the
+same client user with different credentials no longer overwrite each other's
+credentials during automatic health checks.
+When legacy and versioned heartbeat records describe the same server-side
+client, state output deterministically prefers the versioned record. This
+prevents a current `healthy` result from alternating with a stale legacy
+`dead` result.
+
+The default `client state` and `server state` tables keep the compact legacy
+column set. Use `--health-details` to show heartbeat mode, check mechanism,
+attempt/success timestamps, and failure stage.
+
+Package upgrades preserve whether each service was enabled and running. This
+also repairs the first OpenWrt transition from older packages whose removal
+script disabled init links during replacement.
 
 `dns-forward-state.json` entries that still use the field `auto_forward` must
 be converted before starting v0.2.8. Replace `auto_forward: true` with

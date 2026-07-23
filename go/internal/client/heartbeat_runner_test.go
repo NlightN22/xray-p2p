@@ -41,6 +41,32 @@ func TestNewHeartbeatRunnerAcceptsSocksTunnel(t *testing.T) {
 	}
 }
 
+func TestNewHeartbeatRunnerKeepsEndpointSpecificCredentials(t *testing.T) {
+	installDir := t.TempDir()
+	configDir := t.TempDir()
+	meta := runtimeMeta{
+		Desired: runtimeDesired{Endpoints: []runtimeEndpoint{
+			{Hostname: "edge-a.example", Tag: "proxy-a", Port: 443, User: "alice", Credential: "credential-a"},
+			{Hostname: "edge-b.example", Tag: "proxy-b", Port: 443, User: "alice", Credential: "credential-b"},
+		}},
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatalf("marshal runtime meta: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, layout.RuntimeMetaFileName), data, 0o644); err != nil {
+		t.Fatalf("write runtime meta: %v", err)
+	}
+
+	runner, err := newHeartbeatRunner(installDir, configDir, HeartbeatOptions{SocksAddress: "127.0.0.1:1080"})
+	if err != nil {
+		t.Fatalf("newHeartbeatRunner: %v", err)
+	}
+	if runner.endpoints[0].Password != "credential-a" || runner.endpoints[1].Password != "credential-b" {
+		t.Fatalf("endpoint credentials were not preserved: %#v", runner.endpoints)
+	}
+}
+
 func TestHeartbeatRunnerMarksFailedTunnelHeartbeatDead(t *testing.T) {
 	store, err := heartbeat.NewStore("")
 	if err != nil {

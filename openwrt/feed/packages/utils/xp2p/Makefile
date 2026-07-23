@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=xp2p
-PKG_VERSION:=0.2.7
+PKG_VERSION:=0.2.8
 PKG_RELEASE:=1
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=xray-p2p maintainers
@@ -97,10 +97,21 @@ if [ -n "$$IPKG_INSTROOT" ] || [ ! -d /etc/xp2p ]; then
 fi
 
 archive_root=/etc/xp2p/upgrade-archives
+service_state=/etc/xp2p/.package-upgrade-services
 archive_stamp="$$(date -u +%Y%m%dT%H%M%SZ)"
 archive_path="$$archive_root/state-$$archive_stamp.tar.gz"
 archive_stage="/tmp/xp2p-upgrade-$$"
 mkdir -p "$$archive_root" "$$archive_stage/.state" || exit 1
+{
+	for service_name in xp2p-client xp2p-server; do
+		enabled=0
+		running=0
+		/etc/init.d/$$service_name enabled >/dev/null 2>&1 && enabled=1
+		/etc/init.d/$$service_name running >/dev/null 2>&1 && running=1
+		echo "$$service_name $$enabled $$running"
+	done
+} >"$$service_state" || exit 1
+chmod 0600 "$$service_state"
 for state_file in /etc/xp2p/state-heartbeat-client.json* /etc/xp2p/state-heartbeat-server.json*; do
 	[ -e "$$state_file" ] || continue
 	cp -p "$$state_file" "$$archive_stage/" || { rm -rf "$$archive_stage"; exit 1; }
@@ -135,6 +146,21 @@ mkdir -p /etc/xp2p/.state/live
 mkdir -p /etc/xp2p/.state/lkg
 mkdir -p /var/log/xp2p
 chmod 0755 /etc/xp2p /etc/xp2p/bin /etc/xp2p/config-client /etc/xp2p/config-server /etc/xp2p/.state /etc/xp2p/.state/live /etc/xp2p/.state/lkg /var/log/xp2p
+service_state=/etc/xp2p/.package-upgrade-services
+if [ -f "$$service_state" ]; then
+	while read -r service_name enabled running; do
+		[ -x /etc/init.d/$$service_name ] || continue
+		if [ "$$enabled" = "1" ]; then
+			/etc/init.d/$$service_name enable >/dev/null 2>&1 || true
+		else
+			/etc/init.d/$$service_name disable >/dev/null 2>&1 || true
+		fi
+		if [ "$$running" = "1" ]; then
+			/etc/init.d/$$service_name start >/dev/null 2>&1 || true
+		fi
+	done <"$$service_state"
+	rm -f "$$service_state"
+fi
 exit 0
 endef
 

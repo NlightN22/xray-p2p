@@ -41,7 +41,7 @@ mkdir -p "$ARTIFACT_DIR"
 echo "==> Determining xp2p version"
 VERSION=$(
   cd "$PROJECT_ROOT"
-  go run "$VERSION_SOURCE" --version | tr -d '[:space:]'
+  go run -buildvcs=false "$VERSION_SOURCE" --version | tr -d '[:space:]'
 )
 
 if [ -z "$VERSION" ]; then
@@ -82,10 +82,10 @@ LDFLAGS="-s -w -X github.com/NlightN22/xray-p2p/go/internal/version.current=${VE
   cd "$PROJECT_ROOT"
   if [ -n "$GO_BUILD_ARM" ]; then
     env GOOS=linux GOARCH="$GO_BUILD_ARCH" GOARM="$GO_BUILD_ARM" CGO_ENABLED=0 \
-      go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
+      go build -buildvcs=false -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
   else
     env GOOS=linux GOARCH="$GO_BUILD_ARCH" CGO_ENABLED=0 \
-      go build -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
+      go build -buildvcs=false -ldflags "$LDFLAGS" -o "$STAGING_DIR/usr/bin/xp2p" ./go/cmd/xp2p
   fi
 )
 chmod 0755 "$STAGING_DIR/usr/bin/xp2p"

@@ -85,6 +85,7 @@ xp2p server state
   Summary: Show heartbeat status for xp2p tunnels
 Options:
 Includes: inherited options
+- --health-details, -Z show heartbeat health diagnostic columns
 - --interval, -i <duration> refresh interval for --watch
 - --path, -p <path> server installation directory
 - --pending, -y show pending configuration

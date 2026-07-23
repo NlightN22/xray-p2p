@@ -123,6 +123,7 @@ xp2p client state
   Summary: Show local heartbeat cache status
 Options:
 Includes: inherited options
+- --health-details, -Z show heartbeat health diagnostic columns
 - --interval, -i <duration> refresh interval for --watch
 - --path, -p <path> client installation directory
 - --pending, -y show pending configuration

@@ -23,15 +23,16 @@ import (
 )
 
 type clientStateOptions struct {
-	Path        string
-	Pending     bool
-	Watch       bool
-	Interval    time.Duration
-	TTL         time.Duration
-	XrayStats   bool
-	XrayAPI     string
-	XrayBin     string
-	StatsFormat string
+	Path          string
+	Pending       bool
+	Watch         bool
+	Interval      time.Duration
+	TTL           time.Duration
+	XrayStats     bool
+	XrayAPI       string
+	XrayBin       string
+	StatsFormat   string
+	HealthDetails bool
 }
 
 const defaultHeartbeatTTL = 10 * time.Second
@@ -59,6 +60,7 @@ func newClientStateCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.XrayAPI, "xray-api", "A", "", "Xray API address for stats")
 	flags.StringVarP(&opts.XrayBin, "xray-bin", "B", "", "deprecated; stats use direct Xray gRPC")
 	flags.StringVarP(&opts.StatsFormat, "xray-stats-format", "F", "human", "Xray stats format (human|bytes)")
+	flags.BoolVarP(&opts.HealthDetails, "health-details", "Z", false, "show heartbeat health diagnostic columns")
 	return cmd
 }
 
@@ -106,6 +108,12 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 	if err != nil {
 		logging.Error("xp2p client state: invalid Xray stats options", "err", err)
 		return 2
+	}
+	baseViewProvider := viewProvider
+	viewProvider = func() (stateview.SnapshotView, error) {
+		view, viewErr := baseViewProvider()
+		view.ShowHealthDetails = opts.HealthDetails
+		return view, viewErr
 	}
 
 	if opts.Watch {

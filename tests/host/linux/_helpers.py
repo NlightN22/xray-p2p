@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 import time
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import unquote, urlsplit
 
 from testinfra.host import Host
 
@@ -440,6 +441,12 @@ def extract_trojan_credential(output: str) -> dict[str, str]:
             password = line.split(":", 1)[1].strip()
         elif lowered.startswith("link:"):
             link = line.split(":", 1)[1].strip()
+        elif lowered.startswith("trojan://"):
+            link = line
+    if link and (not user or not password):
+        parsed = urlsplit(link)
+        password = password or unquote(parsed.username or "")
+        user = user or unquote(parsed.fragment or "")
     if not user or not password:
         raise RuntimeError(
             "xp2p server install did not emit credential lines.\n"

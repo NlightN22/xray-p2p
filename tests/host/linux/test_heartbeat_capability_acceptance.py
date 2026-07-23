@@ -14,6 +14,7 @@ from tests.host.tunnel import common as tunnel_common
 
 pytestmark = [pytest.mark.host, pytest.mark.linux, pytest.mark.destructive]
 tunnel_environment = fixture.tunnel_environment
+AUX_SERVER_IP = "10.62.10.13"
 
 
 def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment):
@@ -81,7 +82,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         time.sleep(6)
         after_disabled = _entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE)
         assert after_disabled.get("attempts") == before_disabled.get("attempts")
-        state = client_runner("client", "state", check=True)
+        state = client_runner("client", "state", "--health-details", check=True)
         row = next(
             row
             for row in tunnel_common.parse_state_rows(state.stdout or "")
@@ -97,6 +98,75 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
     finally:
         _restore_server_heartbeat_file(server)
         server_runner("server", "service", "stop")
+        client_runner("client", "service", "stop")
+
+
+def test_heartbeat_uses_endpoint_credentials_for_duplicate_user(
+    tunnel_environment, aux_host
+):
+    env = tunnel_environment
+    client = env["client_host"]
+    client_runner = env["client_runner"]
+    aux_runner = runtime.xp2p_runner(aux_host)
+    shared_user = env["client_user"]
+    try:
+        aux_runner(
+            "server", "install",
+            "--path", helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir", helpers.SERVER_CONFIG_DIR_NAME,
+            "--host", AUX_SERVER_IP,
+            "--force",
+            check=True,
+        )
+        added = aux_runner(
+            "server", "user", "add",
+            "--path", helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir", helpers.SERVER_CONFIG_DIR_NAME,
+            "--id", shared_user,
+            "--host", AUX_SERVER_IP,
+            check=True,
+        )
+        credential = helpers.extract_trojan_credential(added.stdout or "")
+        assert credential["link"], "Expected second endpoint connection link"
+        client_runner(
+            "client", "install",
+            "--path", helpers.INSTALL_ROOT.as_posix(),
+            "--config-dir", helpers.CLIENT_CONFIG_DIR_NAME,
+            "--mode", "proxy",
+            "--link", credential["link"],
+            check=True,
+        )
+
+        env["server_runner"]("server", "service", "start", check=True)
+        aux_runner("server", "service", "start", check=True)
+        client_runner("client", "service", "start", check=True)
+        runtime.wait_for_service(aux_host, "server", active=True)
+        runtime.wait_for_service(client, "client", active=True)
+
+        def both_healthy():
+            result = client_runner(
+                "client", "state", "--health-details", check=True
+            )
+            rows = [
+                row for row in tunnel_common.parse_state_rows(result.stdout or "")
+                if row.get("CLIENT_USER") == shared_user
+            ]
+            return rows if len(rows) >= 2 and all(
+                row.get("STATUS") == "healthy" for row in rows
+            ) else None
+
+        wait_until(
+            "duplicate-user endpoints to become healthy",
+            both_healthy,
+            timeout_seconds=45.0,
+            poll_interval=1.0,
+        )
+    except Exception:
+        helpers.dump_failure_state(client, "heartbeat-duplicate-user-client")
+        helpers.dump_failure_state(aux_host, "heartbeat-duplicate-user-aux")
+        raise
+    finally:
+        aux_runner("server", "service", "stop")
         client_runner("client", "service", "stop")
 
 

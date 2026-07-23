@@ -24,7 +24,6 @@ type heartbeatRunner struct {
 	store     *heartbeat.Store
 	configDir string
 	endpoints []clientEndpointRecord
-	auth      map[string]string
 	interval  time.Duration
 	timeout   time.Duration
 	port      int
@@ -119,7 +118,6 @@ func newHeartbeatRunner(installDir, configDir string, opts HeartbeatOptions) (*h
 		store:     store,
 		configDir: configDir,
 		endpoints: endpoints,
-		auth:      controlAuthMap(meta.Control.AuthUsers),
 		interval:  interval,
 		timeout:   timeout,
 		port:      port,
@@ -147,7 +145,6 @@ func (r *heartbeatRunner) runOnce(ctx context.Context) {
 	if meta, err := loadLiveRuntimeMeta(r.configDir); err == nil {
 		state := runtimeDesiredToClientInstallState(meta.Desired)
 		r.endpoints = append(r.endpoints[:0], state.Endpoints...)
-		r.auth = controlAuthMap(meta.Control.AuthUsers)
 		r.pruneHeartbeatControlClients(r.endpoints)
 	} else {
 		logging.Debug("client heartbeat metadata refresh failed", "err", err)
@@ -188,7 +185,7 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		Port:                 port,
 		SocksProxy:           r.socks,
 		User:                 endpoint.User,
-		Credential:           r.auth[strings.TrimSpace(endpoint.User)],
+		Credential:           endpoint.Password,
 		ServerName:           endpoint.ServerName,
 		AllowInsecure:        endpoint.AllowInsecure,
 		PinnedPeerCertSHA256: endpoint.PinnedPeerCertSHA256,
@@ -213,7 +210,7 @@ func (r *heartbeatRunner) pingEndpoint(parent context.Context, endpoint clientEn
 		EndpointID: endpointID,
 		RTTValid:   true,
 	}
-	if err := postHeartbeat(ctx, targetHost, port, endpoint, r.auth[strings.TrimSpace(endpoint.User)], payload, r.socks, client); err != nil {
+	if err := postHeartbeat(ctx, targetHost, port, endpoint, endpoint.Password, payload, r.socks, client); err != nil {
 		logging.Debug("client heartbeat report failed", "host", endpoint.Hostname, "tag", endpoint.Tag, "err", err)
 		r.recordHeartbeatFailure(endpoint)
 		entry, persisted := r.updateLocalHeartbeatAttempt(endpoint, endpointID, boolPointer(false), rttMillis, true, heartbeat.FailureStageReport, err.Error())

@@ -4,7 +4,18 @@ import re
 import time
 from typing import Iterable
 
-STATE_TABLE_HEADER = (
+STATE_TABLE_BASE_HEADER = (
+    "TAG",
+    "HOST",
+    "STATUS",
+    "LAST_RTT",
+    "AVG_RTT",
+    "LAST_UPDATE",
+    "CLIENT_USER",
+    "CLIENT_IP",
+)
+
+STATE_TABLE_DETAILS_HEADER = (
     "TAG",
     "HOST",
     "STATUS",
@@ -15,6 +26,7 @@ STATE_TABLE_HEADER = (
     "FAILURE_STAGE",
     "LAST_RTT",
     "AVG_RTT",
+    "LAST_UPDATE",
     "CLIENT_USER",
     "CLIENT_IP",
 )
@@ -28,13 +40,13 @@ def strip_ansi(value: str | None) -> str:
     return ANSI_ESCAPE_RE.sub("", value)
 
 
-def split_state_line(line: str) -> list[str]:
+def split_state_line(line: str, expected: int) -> list[str]:
     parts = [segment.strip() for segment in line.split("\t") if segment.strip()]
-    if len(parts) >= len(STATE_TABLE_HEADER):
-        return parts[: len(STATE_TABLE_HEADER)]
+    if len(parts) >= expected:
+        return parts[:expected]
     regex_parts = [segment.strip() for segment in re.split(r"\s{2,}", line) if segment.strip()]
-    if len(regex_parts) >= len(STATE_TABLE_HEADER):
-        return regex_parts[: len(STATE_TABLE_HEADER)]
+    if len(regex_parts) >= expected:
+        return regex_parts[:expected]
     return regex_parts or parts
 
 
@@ -46,11 +58,15 @@ def parse_state_rows(output: str) -> list[dict[str, str]]:
         line = raw_line.strip()
         if not line:
             continue
-        cells = split_state_line(line)
+        candidate_header = (
+            STATE_TABLE_DETAILS_HEADER if "FAILURE_STAGE" in line
+            else STATE_TABLE_BASE_HEADER
+        )
+        cells = split_state_line(line, len(header or candidate_header))
         if not cells:
             continue
-        if tuple(cells[: len(STATE_TABLE_HEADER)]) == STATE_TABLE_HEADER:
-            header = list(STATE_TABLE_HEADER)
+        if tuple(cells[: len(candidate_header)]) == candidate_header:
+            header = list(candidate_header)
             continue
         if not header:
             continue

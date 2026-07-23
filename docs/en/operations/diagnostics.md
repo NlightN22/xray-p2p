@@ -92,6 +92,20 @@ changes capability to detected. After that, repeated failures can produce
 `unhealthy`; a later complete success restores `healthy`. Failure stages are
 `marker`, `probe`, `report`, and `persistence`.
 
+The heartbeat `STATUS` values are:
+
+- `probing`: heartbeat support or current health is not established yet.
+- `not-detected`: an `auto` endpoint failed discovery three consecutive times
+  before heartbeat capability was detected.
+- `healthy`: the latest complete probe and report succeeded.
+- `unhealthy`: a `required` endpoint, or an endpoint with previously detected
+  capability, failed three consecutive attempts.
+- `disabled`: heartbeat checks are explicitly disabled for the endpoint.
+
+Legacy persisted entries without an explicit heartbeat status are displayed as
+`alive` or `dead` from their timestamp and the selected TTL. These two labels
+are compatibility output, not additional v0.2.8 heartbeat states.
+
 Heartbeat timestamps are UTC observations. TTL evaluation accepts up to 30
 seconds of future clock skew; timestamps farther in the future are rejected as
 `clock_skew`. Existing pre-0.2.8 JSON remains readable with legacy TTL rules.

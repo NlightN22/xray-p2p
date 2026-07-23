@@ -24,15 +24,16 @@ import (
 )
 
 type serverStateOptions struct {
-	Path        string
-	Pending     bool
-	Watch       bool
-	Interval    time.Duration
-	TTL         time.Duration
-	XrayStats   bool
-	XrayAPI     string
-	XrayBin     string
-	StatsFormat string
+	Path          string
+	Pending       bool
+	Watch         bool
+	Interval      time.Duration
+	TTL           time.Duration
+	XrayStats     bool
+	XrayAPI       string
+	XrayBin       string
+	StatsFormat   string
+	HealthDetails bool
 }
 
 const defaultHeartbeatTTL = 10 * time.Second
@@ -61,6 +62,7 @@ func newServerStateCmd(cfg commandConfig) *cobra.Command {
 	flags.StringVarP(&opts.XrayAPI, "xray-api", "A", "", "Xray API address for stats")
 	flags.StringVarP(&opts.XrayBin, "xray-bin", "B", "", "deprecated; stats use direct Xray gRPC")
 	flags.StringVarP(&opts.StatsFormat, "xray-stats-format", "F", "human", "Xray stats format (human|bytes)")
+	flags.BoolVarP(&opts.HealthDetails, "health-details", "Z", false, "show heartbeat health diagnostic columns")
 	return cmd
 }
 
@@ -109,6 +111,12 @@ func runServerState(ctx context.Context, cfg config.Config, opts serverStateOpti
 	if err != nil {
 		logging.Error("xp2p server state: invalid Xray stats options", "err", err)
 		return 2
+	}
+	baseViewProvider := viewProvider
+	viewProvider = func() (stateview.SnapshotView, error) {
+		view, viewErr := baseViewProvider()
+		view.ShowHealthDetails = opts.HealthDetails
+		return view, viewErr
 	}
 
 	if opts.Watch {
@@ -324,12 +332,14 @@ func snapshotServerConfiguredState(statePath, installDir string, ttl time.Durati
 			continue
 		}
 		userKey := strings.ToLower(user)
-		if _, exists := byUser[userKey]; !exists {
+		if current, exists := byUser[userKey]; !exists || preferServerSnapshot(snap, current) {
 			byUser[userKey] = snap
 		}
 		if host != "" {
 			key := userKey + "|" + strings.ToLower(host)
-			byUserHost[key] = snap
+			if current, exists := byUserHost[key]; !exists || preferServerSnapshot(snap, current) {
+				byUserHost[key] = snap
+			}
 		}
 	}
 
@@ -382,6 +392,15 @@ func snapshotServerConfiguredState(statePath, installDir string, ttl time.Durati
 		return leftTag < rightTag
 	})
 	return merged, nil
+}
+
+func preferServerSnapshot(candidate, current heartbeat.Snapshot) bool {
+	candidateVersioned := strings.TrimSpace(candidate.Entry.EndpointID) != ""
+	currentVersioned := strings.TrimSpace(current.Entry.EndpointID) != ""
+	if candidateVersioned != currentVersioned {
+		return candidateVersioned
+	}
+	return candidate.Entry.LastSeen.After(current.Entry.LastSeen)
 }
 
 func loadServerExpectedEntries(installDir string) ([]serverReverseEntry, error) {

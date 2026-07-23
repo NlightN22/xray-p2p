@@ -68,3 +68,61 @@ func TestSnapshotServerConfiguredStateUsesUsersAsSource(t *testing.T) {
 		t.Fatalf("expected bob placeholder without stale entries: %+v", snap)
 	}
 }
+
+func TestSnapshotServerConfiguredStatePrefersVersionedHeartbeatOverLegacy(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XP2P_CONFIG_ROOT", dir)
+
+	configData := []byte(`
+[server]
+  trojan_users = [
+    { email = "alice", password = "a" },
+  ]
+
+[server.reverse_channels.proxy_alpha]
+  user_id = "alice"
+  host = "alpha.example"
+`)
+	if err := os.WriteFile(config.ConfigPath(layout.ServerConfigFileName), configData, 0o644); err != nil {
+		t.Fatalf("write server config: %v", err)
+	}
+
+	now := time.Now().UTC()
+	healthy := true
+	statePath := filepath.Join(dir, layout.ServerHeartbeatStateFileName)
+	state := heartbeat.State{Entries: map[string]heartbeat.Entry{
+		"proxy-alpha|alice": {
+			Tag:      "proxy-alpha",
+			Host:     "alpha.example",
+			User:     "alice",
+			LastSeen: now.Add(-time.Hour),
+		},
+		"v1|v1:alpha": {
+			Tag:         "proxy-alpha",
+			Host:        "alpha.example",
+			User:        "alice",
+			LastSeen:    now,
+			LastSuccess: now,
+			Healthy:     &healthy,
+			Status:      heartbeat.StatusHealthy,
+			EndpointID:  "v1:alpha",
+		},
+	}}
+	if err := heartbeat.Save(statePath, state); err != nil {
+		t.Fatalf("save heartbeat state: %v", err)
+	}
+
+	for range 20 {
+		snapshots, err := snapshotServerConfiguredState(statePath, dir, time.Minute)
+		if err != nil {
+			t.Fatalf("snapshot server state: %v", err)
+		}
+		if len(snapshots) != 1 {
+			t.Fatalf("snapshot count = %d, want 1", len(snapshots))
+		}
+		snapshot := snapshots[0]
+		if !snapshot.Alive || snapshot.Entry.EndpointID != "v1:alpha" {
+			t.Fatalf("legacy heartbeat won over versioned heartbeat: %+v", snapshot)
+		}
+	}
+}

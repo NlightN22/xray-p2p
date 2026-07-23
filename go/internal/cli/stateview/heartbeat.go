@@ -25,9 +25,10 @@ type TrafficStats struct {
 
 // SnapshotView contains all data needed to render a state table.
 type SnapshotView struct {
-	Snapshots []heartbeat.Snapshot
-	Stats     map[string]TrafficStats
-	ShowStats bool
+	Snapshots         []heartbeat.Snapshot
+	Stats             map[string]TrafficStats
+	ShowStats         bool
+	ShowHealthDetails bool
 }
 
 // ViewProvider returns a complete state table view.
@@ -68,32 +69,36 @@ func PrintWithView(provider ViewProvider) error {
 
 // RenderView prints the heartbeat snapshot and optional stats.
 func RenderView(w io.Writer, view SnapshotView) {
-	if !view.ShowStats && len(view.Stats) == 0 {
-		RenderTable(w, view.Snapshots)
-		return
-	}
-	RenderTableWithStats(w, view.Snapshots, view.Stats)
+	renderTable(w, view.Snapshots, view.Stats, view.ShowHealthDetails, view.ShowStats || len(view.Stats) > 0)
 }
 
 // RenderTable prints the heartbeat snapshot as a tabular report.
 func RenderTable(w io.Writer, snapshots []heartbeat.Snapshot) {
-	renderTable(w, snapshots, nil, false)
+	renderTable(w, snapshots, nil, false, false)
 }
 
 // RenderTableWithStats prints the heartbeat snapshot with traffic counters.
 func RenderTableWithStats(w io.Writer, snapshots []heartbeat.Snapshot, stats map[string]TrafficStats) {
-	renderTable(w, snapshots, stats, true)
+	renderTable(w, snapshots, stats, false, true)
 }
 
-func renderTable(w io.Writer, snapshots []heartbeat.Snapshot, stats map[string]TrafficStats, withStats bool) {
+func renderTable(w io.Writer, snapshots []heartbeat.Snapshot, stats map[string]TrafficStats, withHealthDetails, withStats bool) {
 	tw := tabwriter.NewWriter(w, 2, 2, 2, ' ', 0)
-	header := "TAG\tHOST\tSTATUS\tMODE\tCHECK\tLAST_ATTEMPT\tLAST_SUCCESS\tFAILURE_STAGE\tLAST_RTT\tAVG_RTT\tCLIENT_USER\tCLIENT_IP"
+	header := "TAG\tHOST\tSTATUS"
+	if withHealthDetails {
+		header += "\tMODE\tCHECK\tLAST_ATTEMPT\tLAST_SUCCESS\tFAILURE_STAGE"
+	}
+	header += "\tLAST_RTT\tAVG_RTT\tLAST_UPDATE\tCLIENT_USER\tCLIENT_IP"
 	if withStats {
 		header += "\tUPLOAD\tDOWNLOAD\tTOTAL"
 	}
 	fmt.Fprintln(tw, header)
 	if len(snapshots) == 0 {
-		row := "-\t-\t-\t-\t-\t-\t-\t-\t-\t-\t-\t-"
+		columnCount := 8
+		if withHealthDetails {
+			columnCount += 5
+		}
+		row := strings.TrimSuffix(strings.Repeat("-\t", columnCount), "\t")
 		if withStats {
 			row += "\t-\t-\t-"
 		}
@@ -128,17 +133,18 @@ func renderTable(w io.Writer, snapshots []heartbeat.Snapshot, stats map[string]T
 				stage = "-"
 			}
 			user := safeClientUser(snap.Entry.User)
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%dms\t%.1fms\t%s\t%s",
+			fmt.Fprintf(tw, "%s\t%s\t%s",
 				snap.Entry.Tag,
 				snap.Entry.Host,
 				status,
-				mode,
-				check,
-				lastAttempt,
-				lastSuccess,
-				stage,
+			)
+			if withHealthDetails {
+				fmt.Fprintf(tw, "\t%s\t%s\t%s\t%s\t%s", mode, check, lastAttempt, lastSuccess, stage)
+			}
+			fmt.Fprintf(tw, "\t%dms\t%.1fms\t%s\t%s\t%s",
 				snap.Entry.LastRTTMillis,
 				snap.AvgRTTMillis,
+				lastAttempt,
 				user,
 				snap.Entry.ClientIP,
 			)

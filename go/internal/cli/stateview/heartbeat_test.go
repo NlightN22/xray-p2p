@@ -84,6 +84,25 @@ func TestRenderTableOutputsRows(t *testing.T) {
 	if !strings.Contains(out, "user@example.com") {
 		t.Fatalf("expected client user in output: %q", out)
 	}
+	for _, hidden := range []string{"MODE", "CHECK", "LAST_ATTEMPT", "LAST_SUCCESS", "FAILURE_STAGE"} {
+		if strings.Contains(out, hidden) {
+			t.Fatalf("default output contains optional column %q: %q", hidden, out)
+		}
+	}
+	if !strings.Contains(out, "LAST_UPDATE") {
+		t.Fatalf("default output is missing LAST_UPDATE: %q", out)
+	}
+}
+
+func TestRenderViewShowsHealthDetailsWhenRequested(t *testing.T) {
+	buf := new(bytes.Buffer)
+	RenderView(buf, SnapshotView{ShowHealthDetails: true})
+	out := buf.String()
+	for _, want := range []string{"MODE", "CHECK", "LAST_ATTEMPT", "LAST_SUCCESS", "FAILURE_STAGE"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected health detail column %q in output: %q", want, out)
+		}
+	}
 }
 
 func TestRenderTableWithStatsOutputsTrafficColumns(t *testing.T) {
