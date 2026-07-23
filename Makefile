@@ -49,7 +49,7 @@ schema-test:
 	npm run lint:config-schema
 
 schema-compat:
-	npm run lint:config-schema -- tests/schema/compat/v0.2.6/xp2p-client.toml tests/schema/compat/v0.2.6/xp2p-server.toml
+	npm run lint:config-schema -- tests/schema/compat/v0.2.6/xp2p-client.toml tests/schema/compat/v0.2.6/xp2p-server.toml tests/schema/compat/v0.2.7/xp2p-client.toml tests/schema/compat/v0.2.7/xp2p-server.toml
 	go test ./go/internal/config ./go/internal/client ./go/internal/server ./go/internal/xrayconfig -run SchemaCompatibility
 
 test:
@@ -105,10 +105,6 @@ halt-deb12:
 up-owrt:
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant up
 	cd $(VAGRANT_OWRT_DIR) && vagrant up
-
-provision-build-owrt:
-	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant ssh -c "/srv/xray-p2p/scripts/build/build_openwrt_ipk.sh --target linux-amd64 --output-dir /srv/xray-p2p/build/ipk --force-build"
-	cd $(VAGRANT_OWRT_DIR) && vagrant up --provision
 
 halt-owrt:
 	cd $(VAGRANT_IPK_BUILD_DIR) && vagrant halt

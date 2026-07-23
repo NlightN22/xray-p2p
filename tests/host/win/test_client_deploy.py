@@ -24,6 +24,10 @@ def test_windows_client_deploy_end_to_end(
     xp2p_msi_path,
 ):
     test_start = time.perf_counter()
+    with deploy_flow.timed("xp2p client remove"):
+        xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
+    with deploy_flow.timed("xp2p server remove"):
+        xp2p_server_runner("server", "remove", "--ignore-missing")
     with deploy_flow.timed("cleanup xp2p processes (client)"):
         deploy_flow.stop_xp2p_processes(client_host)
     with deploy_flow.timed("cleanup xp2p processes (server)"):
@@ -32,10 +36,6 @@ def test_windows_client_deploy_end_to_end(
         deploy_flow.stop_listening_ports(client_host, [51080, 51180])
     with deploy_flow.timed("cleanup server socks listeners"):
         deploy_flow.stop_listening_ports(server_host, [51080, 51180])
-    with deploy_flow.timed("xp2p client remove"):
-        xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
-    with deploy_flow.timed("xp2p server remove"):
-        xp2p_server_runner("server", "remove", "--ignore-missing")
     with deploy_flow.timed("remove client config/state"):
         deploy_flow.remove_paths(client_host, [deploy_assert.CLIENT_CONFIG_DIR, *deploy_assert.CLIENT_STATE_FILES])
     with deploy_flow.timed("cleanup server config/state"):
@@ -222,10 +222,10 @@ def test_windows_client_deploy_end_to_end(
             deploy_flow.stop_process(client_host, client_proc["pid"])
         if server_proc:
             deploy_flow.stop_process(server_host, server_proc["pid"])
-        deploy_flow.stop_xp2p_processes(client_host)
-        deploy_flow.stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
+        deploy_flow.stop_xp2p_processes(client_host)
+        deploy_flow.stop_xp2p_processes(server_host)
         deploy_flow.set_firewall_rule(
             server_host,
             ensure="Absent",
@@ -255,10 +255,10 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
     xp2p_server_runner,
     xp2p_msi_path,
 ):
-    deploy_flow.stop_xp2p_processes(client_host)
-    deploy_flow.stop_xp2p_processes(server_host)
     xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
     xp2p_server_runner("server", "remove", "--ignore-missing")
+    deploy_flow.stop_xp2p_processes(client_host)
+    deploy_flow.stop_xp2p_processes(server_host)
     deploy_flow.remove_paths(client_host, [deploy_assert.CLIENT_CONFIG_DIR, *deploy_assert.CLIENT_STATE_FILES])
     deploy_flow.remove_paths(server_host, [deploy_assert.SERVER_CONFIG_DIR, *deploy_assert.SERVER_STATE_FILES])
 
@@ -402,10 +402,10 @@ def test_windows_server_deploy_falls_back_to_self_signed_on_invalid_cert(
             deploy_flow.stop_process(client_host, client_proc["pid"])
         if server_proc:
             deploy_flow.stop_process(server_host, server_proc["pid"])
-        deploy_flow.stop_xp2p_processes(client_host)
-        deploy_flow.stop_xp2p_processes(server_host)
         xp2p_client_runner("client", "remove", "--all", "--ignore-missing")
         xp2p_server_runner("server", "remove", "--ignore-missing")
+        deploy_flow.stop_xp2p_processes(client_host)
+        deploy_flow.stop_xp2p_processes(server_host)
         deploy_flow.set_firewall_rule(
             server_host,
             ensure="Absent",

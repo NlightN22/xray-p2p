@@ -275,11 +275,6 @@ def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
             )
         except win_env.MsiServiceUnavailable as exc:
             pytest.skip(str(exc))
-        except RuntimeError as exc:
-            detected = win_env.find_xp2p_exe(server_host, hint_path=win_env.XP2P_EXE)
-            if detected is None:
-                raise
-            print(f"WARNING: MSI install failed on server, using existing xp2p.exe at {detected}. {exc}")
     detected_server = None
     if win_env.path_exists(server_host, win_env.XP2P_EXE):
         detected_server = win_env.XP2P_EXE
@@ -298,11 +293,6 @@ def xp2p_program_files_setup(_configure_win_stack, _configure_msi_build_id):
             )
         except win_env.MsiServiceUnavailable as exc:
             pytest.skip(str(exc))
-        except RuntimeError as exc:
-            detected = win_env.find_xp2p_exe(client_host, hint_path=win_env.XP2P_EXE)
-            if detected is None:
-                raise
-            print(f"WARNING: MSI install failed on client, using existing xp2p.exe at {detected}. {exc}")
     detected_client = None
     if win_env.path_exists(client_host, win_env.XP2P_EXE):
         detected_client = win_env.XP2P_EXE

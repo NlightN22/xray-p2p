@@ -33,15 +33,6 @@ def _client_by_email(clients: list[dict], email: str) -> dict:
     pytest.fail(f"Trojan client {email} not found. Clients: {clients}")
 
 
-def _assert_rotating_client_pair(clients: list[dict], email: str, previous_password: str) -> dict:
-    active = _client_by_email(clients, email)
-    previous = _client_by_email(clients, f"{email}.previous")
-    assert _is_unreserved(active.get("password") or "")
-    assert active.get("password") != previous_password
-    assert previous.get("password") == previous_password
-    return active
-
-
 def _initial_install_client(server_host) -> dict:
     current = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
     clients = _trojan_clients(current)
@@ -175,14 +166,15 @@ def test_server_user_add_and_idempotent(
 
         first_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         first_clients = _trojan_clients(first_inbounds)
-        if len(first_clients) != 2:
+        if len(first_clients) != 1:
             dump_path = _env.dump_failure_state(server_host, label="server-user-add")
             pytest.fail(
-                "Expected live xray.json to contain active and previous trojan clients after legacy password rotation.\n"
+                "Expected live xray.json to contain the newly added trojan client.\n"
                 f"Observed: {len(first_clients)}\n"
                 f"Failure dump: {dump_path}"
             )
-        first_active = _assert_rotating_client_pair(first_clients, "alpha", "secret-one")
+        first_active = _client_by_email(first_clients, "alpha")
+        assert first_active.get("password") == "secret-one"
 
         duplicate = xp2p_server_runner(
             "server",
@@ -203,8 +195,8 @@ def test_server_user_add_and_idempotent(
 
         second_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         second_clients = _trojan_clients(second_inbounds)
-        assert len(second_clients) == 2
-        second_active = _assert_rotating_client_pair(second_clients, "alpha", "secret-one")
+        assert len(second_clients) == 1
+        second_active = _client_by_email(second_clients, "alpha")
         assert second_active.get("password") == first_active.get("password")
 
         xp2p_server_runner(
@@ -228,9 +220,9 @@ def test_server_user_add_and_idempotent(
 
         final_inbounds = _read_remote_json(server_host, SERVER_LIVE_XRAY_JSON)
         final_clients = _trojan_clients(final_inbounds)
-        assert len(final_clients) == 2
-        final_active = _assert_rotating_client_pair(final_clients, "alpha", "secret-two")
-        assert final_active.get("password") != first_active.get("password")
+        assert len(final_clients) == 1
+        final_active = _client_by_email(final_clients, "alpha")
+        assert final_active.get("password") == "secret-two"
     finally:
         _reset_server_install(server_host, xp2p_server_runner, xp2p_msi_path)
 
@@ -410,4 +402,5 @@ def _reset_server_install(server_host, runner, msi_path: str) -> None:
         server_host,
         config_dirs=[_env.CONFIG_ROOT / SERVER_CONFIG_DIR_NAME],
         state_files=SERVER_STATE_FILES,
+        extra_paths=[_env.CONFIG_ROOT / "install-state-server.json"],
     )

@@ -187,8 +187,11 @@ esac
 purge_requested=0
 if [ "$$1" = "purge" ] || [ "$${IPKG_FORCE_REMOVE:-0}" != "0" ] || [ "$${OPKG_FORCE_REMOVE:-0}" != "0" ]; then
 	purge_requested=1
-elif [ -n "$$PPID" ] && [ -r "/proc/$$PPID/cmdline" ]; then
-	if tr '\0' '\n' <"/proc/$$PPID/cmdline" | grep -q -- '--force-removal-of-dependent-packages'; then
+
+else
+	parent_pid="$$(awk '{print $$4}' "/proc/$$$$/stat" 2>/dev/null || true)"
+	if [ -n "$$parent_pid" ] && [ -r "/proc/$$parent_pid/cmdline" ] && \
+		tr '\0' '\n' <"/proc/$$parent_pid/cmdline" | grep -q -- '--force-removal-of-dependent-packages'; then
 		purge_requested=1
 	fi
 fi

@@ -28,7 +28,7 @@ func ensureServiceInactive(ctx context.Context, role control.Role, stopHint stri
 
 func serviceStateInactive(state string) bool {
 	switch strings.TrimSpace(strings.ToLower(state)) {
-	case "", "inactive", "stopped", "stopped.", "unknown", "failed":
+	case "", "inactive", "stopped", "stopped.", "not_installed", "unknown", "failed":
 		return true
 	default:
 		return false

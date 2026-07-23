@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import threading
 import time
 from functools import lru_cache
 import functools
@@ -79,13 +80,15 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
 
     def _reset_client(self) -> None:
         cache = vars(self)
-        cached = cache.get("client")
+        cached = cache.pop("client", None)
         if cached is not None:
-            try:
-                cached.close()
-            except Exception:
-                pass
-        cache.pop("client", None)
+            def _close() -> None:
+                try:
+                    cached.close()
+                except Exception:
+                    pass
+
+            threading.Thread(target=_close, daemon=True).start()
 
     def run(self, command: str, *args: str, **kwargs):  # type: ignore[override]
         kwargs.setdefault("timeout", SSH_COMMAND_TIMEOUT)
@@ -97,17 +100,17 @@ class PatchedParamikoBackend(paramiko_backend.ParamikoBackend):
 
         def _run_hard_timeout():
             timeout_value = kwargs.get("timeout") or SSH_COMMAND_TIMEOUT
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(parent_run, command, *args, **kwargs)
-                try:
-                    return future.result(timeout=float(timeout_value) + 5.0)
-                except FutureTimeoutError as exc:
-                    self._reset_client()
-                    raise paramiko_backend.paramiko.SSHException(
-                        f"Guest SSH command hung beyond timeout ({timeout_value}s): {short}"
-                    ) from exc
-                finally:
-                    executor.shutdown(wait=False, cancel_futures=True)
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(parent_run, command, *args, **kwargs)
+            try:
+                return future.result(timeout=float(timeout_value) + 5.0)
+            except FutureTimeoutError as exc:
+                self._reset_client()
+                raise paramiko_backend.paramiko.SSHException(
+                    f"Guest SSH command hung beyond timeout ({timeout_value}s): {short}"
+                ) from exc
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
         try:
             result = _run_hard_timeout()
             print(f"SSH run done (rc={result.rc})")

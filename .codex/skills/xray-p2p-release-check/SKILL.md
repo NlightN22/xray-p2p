@@ -40,6 +40,7 @@ Complete this gate after the schema compatibility decisions are accepted and bef
    $env:XP2P_RUN_HEARTBEAT_STORM_TESTS = '1'
    $env:XP2P_RUN_DESTRUCTIVE_TESTS = '1'
    $env:XP2P_RUN_DUAL_DEPLOY_TESTS = '1'
+   $env:XP2P_RUN_EXTERNAL_SUBSCRIPTION_MATRIX = '1'
    New-Item -ItemType Directory -Force '.logs/tests' | Out-Null
    $logPath = ".\.logs\tests\pytest-linux-all-opt-in-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')
    pytest tests\host\linux -vv -s 2>&1 | Tee-Object -FilePath $logPath

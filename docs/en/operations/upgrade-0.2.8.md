@@ -21,3 +21,10 @@ protection.
 Heartbeat state now stores the latest health result explicitly. Failed checks
 use their real observation time instead of a synthetic timestamp one hour in
 the past. Existing heartbeat state without the new field remains readable.
+
+`dns-forward-state.json` entries that still use the field `auto_forward` must
+be converted before starting v0.2.8. Replace `auto_forward: true` with
+`forward_owner: "dns-forward"` and remove `auto_forward`. For
+`auto_forward: false`, remove `auto_forward` without adding an owner. This is
+the removal scheduled when the compatibility normalization was introduced in
+v0.2.7; current Desired TOML inputs are unaffected.
