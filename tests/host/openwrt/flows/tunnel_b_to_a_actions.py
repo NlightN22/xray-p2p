@@ -324,7 +324,13 @@ def run_server_state_watch(env: dict, duration_seconds: float = 7.0) -> None:
     header_count = sum(
         1
         for raw in cleaned.splitlines()
-        if tuple(tunnel_common.split_state_line(raw.strip())) == tunnel_common.STATE_TABLE_HEADER
+        if tuple(
+            tunnel_common.split_state_line(
+                raw.strip(),
+                len(tunnel_common.STATE_TABLE_BASE_HEADER),
+            )
+        )
+        == tunnel_common.STATE_TABLE_BASE_HEADER
     )
     assert header_count >= 2, "xp2p server state --watch did not refresh multiple times"
     assert header_count <= 5, "xp2p server state --watch produced unexpected amount of output"
