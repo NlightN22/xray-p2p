@@ -33,6 +33,7 @@ func TestNormalizeStateCanonicalFormat(t *testing.T) {
 }
 
 func TestNormalizeStateLegacyAutoForward(t *testing.T) {
+	setCurrentAppVersion(t, "0.2.7")
 	raw := rawState{Entries: map[string]rawStateEntry{
 		"example.test": {
 			ForwardListenPort: 53331,
@@ -53,6 +54,7 @@ func TestNormalizeStateLegacyAutoForward(t *testing.T) {
 }
 
 func TestNormalizeStateLegacyAutoForwardFalseMeansNoOwnership(t *testing.T) {
+	setCurrentAppVersion(t, "0.2.7")
 	raw := rawState{Entries: map[string]rawStateEntry{
 		"example.test": {
 			ForwardListenPort: 53331,
@@ -70,6 +72,7 @@ func TestNormalizeStateLegacyAutoForwardFalseMeansNoOwnership(t *testing.T) {
 }
 
 func TestNormalizeStateMixedSameMeaning(t *testing.T) {
+	setCurrentAppVersion(t, "0.2.7")
 	raw := rawState{Entries: map[string]rawStateEntry{
 		"example.test": {
 			ForwardListenPort: 53331,
@@ -102,9 +105,7 @@ func TestNormalizeStateConflictingLegacyAndCanonicalFields(t *testing.T) {
 }
 
 func TestNormalizeStateRejectsAutoForwardAfterRemovedVersion(t *testing.T) {
-	restore := currentAppVersion
-	currentAppVersion = func() string { return "0.2.8" }
-	defer func() { currentAppVersion = restore }()
+	setCurrentAppVersion(t, "0.2.8")
 
 	raw := rawState{Entries: map[string]rawStateEntry{
 		"example.test": {
@@ -116,6 +117,13 @@ func TestNormalizeStateRejectsAutoForwardAfterRemovedVersion(t *testing.T) {
 	if _, _, err := normalizeState(raw); err == nil {
 		t.Fatal("expected removed auto_forward error")
 	}
+}
+
+func setCurrentAppVersion(t *testing.T, value string) {
+	t.Helper()
+	restore := currentAppVersion
+	currentAppVersion = func() string { return value }
+	t.Cleanup(func() { currentAppVersion = restore })
 }
 
 func TestNormalizeStateDefaultsMissingEntries(t *testing.T) {
