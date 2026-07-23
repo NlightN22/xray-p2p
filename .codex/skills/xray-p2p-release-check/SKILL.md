@@ -80,6 +80,13 @@ or authorization from repository context.
    location outside the repository. Verify the archive can be listed. Never
    commit real configurations, credentials, certificates, unredacted state, or
    raw production logs.
+   Retain every canary backup, rollback package, captured baseline, and
+   diagnostic archive through the entire release process. Never delete these
+   files during canary cleanup, failure investigation, rollback, successful
+   publication, or final infrastructure cleanup. A completed or successful
+   release is not authorization to remove them. Delete canary recovery data
+   only as a separate operation after the user explicitly approves the exact
+   paths; otherwise leave it on the protected target storage.
 5. Install through the normal package upgrade path. Do not stop services,
    delete markers, rewrite credentials, or repair Desired/Live manually unless
    the documented package workflow requires it; the canary must test the same
@@ -105,8 +112,10 @@ or authorization from repository context.
 10. Produce a concise canary report with target roles (not secrets or sensitive
     host identity), old/new versions, rollout order, backup location, checks,
     result, diagnostics location, rollback result when used, and unresolved
-    risks. Block `publish`, tagging, pushing, and workflow dispatch until the
-    canary passes.
+    risks. Record that the protected backups and recovery artifacts still
+    exist, and do not mark the canary complete if they were removed before the
+    investigation and release workflow ended. Block `publish`, tagging,
+    pushing, and workflow dispatch until the canary passes.
 
 ## Publish locally
 
