@@ -1,6 +1,6 @@
 ---
 name: xray-p2p-release-check
-description: Audit schema and persisted-data compatibility, verify a release candidate on automated gates and an authorized real-config canary, prepare, and publish an xray-p2p release through the repository's GitHub Actions. Use when checking release readiness, comparing a release branch with its previous version, reviewing normalization or migration decisions, testing upgrades against real persisted state, updating generated TOML schemas and versions, reviewing a release diff, creating the release commit and annotated tag, or running the confirmed external release workflow.
+description: Audit schema and persisted-data compatibility, verify a release candidate on automated gates and an authorized real-config canary, prepare and publish an xray-p2p release through the repository's GitHub Actions, and optionally bump the downstream xp2pdiag repository version without publishing its Docker image. Use when checking release readiness, comparing a release branch with its previous version, reviewing normalization or migration decisions, testing upgrades against real persisted state, updating generated TOML schemas and versions, reviewing a release diff, creating the release commit and annotated tag, running the confirmed external release workflow, or aligning xp2pdiag with a completed XP2P release.
 ---
 
 # Xray P2P Release Check
@@ -189,3 +189,34 @@ The feed modes download IPKs from published stable GitHub Releases, so do not de
 The retired `release.yml` workflow was removed. Do not recreate or substitute a monolithic GitHub workflow for the confirmed build, aggregate, and Pages sequence.
 
 Do not run `scripts/New-Release.ps1` in its current form. It implements the retired monolithic path: it permits non-`X.Y.Z` versions, can delete a remote tag before preflight, does not run the schema or full Linux gates, commits every tracked change with `git commit -am`, creates a lightweight tag, hard-codes pushing `main`, and treats `-Quiet` as approval for pushes. Redesign it before reuse so it delegates to `scripts/new_release.py`, keeps preparation separate from external publication, creates no unreviewed commits or tags, and requires explicit approval for every push and workflow dispatch.
+
+## Optional downstream xp2pdiag version bump
+
+Run this step only after the XP2P release is complete and the user explicitly
+approves bumping the downstream repository. This step updates repository state;
+that approval authorizes the scoped edits and a dedicated local commit, but it
+does not authorize Git push or Docker image publication.
+
+1. Use `E:\Programming\docker\xp2pdiag` unless the user provides another
+   checkout. Confirm the target XP2P release exists and record its exact
+   `X.Y.Z` version.
+2. Inspect the xp2pdiag branch, working tree, remotes, and divergence. Preserve
+   all existing local commits and user changes. Stop if unrelated uncommitted
+   changes overlap the version bump.
+3. Update the repository's version source and every matching version default or
+   current-version example, including `version`, Dockerfile
+   `XP2P_VERSION` defaults, and README version text. Keep the versioned download
+   URL model and checksum verification intact.
+4. Require all changed files to remain in English with LF line endings. Run the
+   repository's lightweight static checks and `git diff --check`; do not invoke
+   `build-push.ps1` without `-NoPush`.
+5. Show the complete diff and status. Confirm that the diff contains only the
+   intended xp2pdiag version bump and associated documentation.
+6. Create a dedicated local version-bump commit and report its SHA. The approval
+   to run this step does not authorize `git push`.
+7. Never run `docker push`, publish or retag `latest`, or otherwise mutate
+   Docker Hub in this step. Docker image build and publication are a separate
+   downstream workflow requiring separate explicit approval.
+8. Push the xp2pdiag Git branch only after a separate explicit approval, then
+   report the pushed commit SHA. If no push is approved, leave the commit local
+   and report the branch divergence.
