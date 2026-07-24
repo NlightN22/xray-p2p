@@ -27,6 +27,7 @@ const (
 
 type contractCase struct {
 	coverage         contractCoverage
+	mutation         bool
 	success          []string
 	empty            []string
 	failure          []string
@@ -83,6 +84,9 @@ func buildContractCaseRegistry() map[string]contractCase {
 	registry["xp2p heartbeat contract"] = heartbeatContractCase()
 	registry["xp2p nat-redirect list"] = natRedirectListContractCase()
 	registry["xp2p server dns-forward list"] = dnsForwardListContractCase("server")
+	for path := range mutationContractRegistry {
+		registry[path] = mutationCase()
+	}
 	for path, scenario := range registry {
 		if scenario.coverage == contractCovered && scenario.assertEdgeCases == nil {
 			scenario.assertEdgeCases = assertReadOnlyEdgeCases

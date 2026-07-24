@@ -11,6 +11,7 @@ import (
 type mutationResult struct {
 	Status    string `json:"status"`
 	Operation string `json:"operation"`
+	Entity    string `json:"entity"`
 }
 
 type outputContract struct {
@@ -22,10 +23,31 @@ type outputContract struct {
 func jsonContract(path string) outputContract {
 	return outputContract{
 		class: clioutput.ClassJSON,
-		successResult: func(_ *cobra.Command, _ []string) any {
-			return mutationResult{Status: "completed", Operation: strings.TrimPrefix(path, "xp2p ")}
+		successResult: func(cmd *cobra.Command, args []string) any {
+			return mutationResult{
+				Status:    "completed",
+				Operation: strings.TrimPrefix(path, "xp2p "),
+				Entity:    mutationEntity(cmd, args),
+			}
 		},
 	}
+}
+
+func mutationEntity(cmd *cobra.Command, args []string) string {
+	for _, name := range []string{"id", "domain", "cidr", "target", "listen-port", "tag", "host"} {
+		flag := cmd.Flags().Lookup(name)
+		if flag != nil && flag.Changed && strings.TrimSpace(flag.Value.String()) != "" {
+			return strings.TrimSpace(flag.Value.String())
+		}
+	}
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+		return strings.TrimSpace(args[0])
+	}
+	parts := strings.Fields(strings.TrimPrefix(cmd.CommandPath(), "xp2p "))
+	if len(parts) > 1 {
+		return strings.Join(parts[:len(parts)-1], " ")
+	}
+	return cmd.CommandPath()
 }
 
 func payloadContract(_ string) outputContract {

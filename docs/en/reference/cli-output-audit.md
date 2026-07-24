@@ -50,8 +50,8 @@ warnings, diagnostics, logs, prompts, and commands that are silent on success.
 The JSON presentation wrapper discards legacy rendering and accepts only a typed
 result. Result-bearing handlers publish their domain model directly. Each
 payload-free mutation has an explicit inventory adapter that publishes the common
-`status` and `operation` model after its handler succeeds; the wrapper never invents
-a result. JSON execution forces `--quiet` for commands whose human mode can prompt,
+`status`, `operation`, and affected `entity` model after its handler succeeds; the
+wrapper never invents a result. JSON execution forces `--quiet` for commands whose human mode can prompt,
 while commands without a quiet path require explicit selectors. Both legacy stdout
 and handler stderr are isolated while the handler runs. On failure, the wrapper
 restores the streams and writes exactly one structured error document to stderr.

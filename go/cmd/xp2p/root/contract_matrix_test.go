@@ -95,6 +95,9 @@ func TestCoveredContractCases(t *testing.T) {
 		if scenario.coverage != contractCovered {
 			continue
 		}
+		if scenario.mutation {
+			continue
+		}
 		if !actual[path] {
 			continue
 		}
@@ -219,7 +222,7 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 		default:
 			problems = append(problems, "invalid coverage status: "+path)
 		}
-		if scenario.coverage == contractCovered &&
+		if scenario.coverage == contractCovered && !scenario.mutation &&
 			(len(scenario.success) == 0 || len(scenario.empty) == 0 ||
 				len(scenario.failure) == 0 ||
 				scenario.setup == nil || scenario.assertResult == nil ||
@@ -229,8 +232,13 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 				len(scenario.human) == 0 || scenario.assertHuman == nil) {
 			problems = append(problems, "covered case has incomplete scenarios: "+path)
 		}
-		if scenario.coverage == contractCovered && humanBaselineDigests[path] == "" {
+		if scenario.coverage == contractCovered && !scenario.mutation && humanBaselineDigests[path] == "" {
 			problems = append(problems, "covered case has no exact human baseline: "+path)
+		}
+		if scenario.coverage == contractCovered && scenario.mutation {
+			if _, ok := mutationContractRegistry[path]; !ok {
+				problems = append(problems, "covered mutation has no executable scenarios: "+path)
+			}
 		}
 	}
 	sort.Strings(problems)

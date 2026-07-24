@@ -25,8 +25,9 @@ stdout contains exactly one JSON document followed by a newline:
 `schema_version` versions the public CLI output contract, not Desired, Live, or
 persisted state. Numbers and booleans remain JSON numbers and booleans. Commands
 publish command-specific typed objects or arrays as `result`. Human-readable output
-is never captured into a `text` field. Payload-free mutations use
-`{"status":"completed"}`. List results use an empty array rather than `null`.
+is never captured into a `text` field. Payload-free mutations use a common typed
+result with `status`, `operation`, and `entity`; `entity` identifies the affected
+selector or resource. List results use an empty array rather than `null`.
 
 Times are UTC RFC 3339 strings. Durations and byte counts are JSON numbers in the
 unit named by the field (for example, `latency_ms` and `upload_bytes`). CIDRs, hosts,
