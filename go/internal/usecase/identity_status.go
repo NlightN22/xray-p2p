@@ -14,39 +14,39 @@ type IdentityStatus struct {
 }
 
 type IdentityStatusView struct {
-	Status       string
-	LastSuccess  string
-	Error        string
-	ProviderID   string
-	ProviderKind string
-	Generation   string
-	Detached     bool
-	Subjects     []IdentitySubjectView
-	Groups       []IdentityGroupView
-	Redirects    []IdentityRedirectView
+	Status       string                 `json:"status"`
+	LastSuccess  string                 `json:"last_success"`
+	Error        string                 `json:"error"`
+	ProviderID   string                 `json:"provider_id"`
+	ProviderKind string                 `json:"provider_kind"`
+	Generation   string                 `json:"generation"`
+	Detached     bool                   `json:"detached"`
+	Subjects     []IdentitySubjectView  `json:"subjects"`
+	Groups       []IdentityGroupView    `json:"groups"`
+	Redirects    []IdentityRedirectView `json:"redirects"`
 }
 
 type IdentitySubjectView struct {
-	Label        string
-	ExternalID   string
-	DirectGroups []string
-	Provisioned  bool
-	Active       bool
+	Label        string   `json:"label"`
+	ExternalID   string   `json:"external_id"`
+	DirectGroups []string `json:"direct_groups"`
+	Provisioned  bool     `json:"provisioned"`
+	Active       bool     `json:"active"`
 }
 
 type IdentityGroupView struct {
-	ID                string
-	DirectMembers     []string
-	DirectGroups      []string
-	TransitiveMembers []string
+	ID                string   `json:"id"`
+	DirectMembers     []string `json:"direct_members"`
+	DirectGroups      []string `json:"direct_groups"`
+	TransitiveMembers []string `json:"transitive_members"`
 }
 
 type IdentityRedirectView struct {
-	Type        string
-	Value       string
-	OutboundTag string
-	Host        string
-	State       string
+	Type        string `json:"type"`
+	Value       string `json:"value"`
+	OutboundTag string `json:"outbound_tag"`
+	Host        string `json:"host"`
+	State       string `json:"state"`
 }
 
 type IdentityRedirectLister interface {
@@ -74,7 +74,10 @@ func (i *IdentityStatus) View(ctx context.Context) (IdentityStatusView, error) {
 	if err != nil {
 		return IdentityStatusView{}, err
 	}
-	view := IdentityStatusView{Status: string(state.Status.State), LastSuccess: state.Status.LastSuccess, Error: state.Status.Error}
+	view := IdentityStatusView{
+		Status: string(state.Status.State), LastSuccess: state.Status.LastSuccess, Error: state.Status.Error,
+		Subjects: []IdentitySubjectView{}, Groups: []IdentityGroupView{}, Redirects: []IdentityRedirectView{},
+	}
 	if state.Provider != nil {
 		view.ProviderID = state.Provider.InstanceID
 		view.ProviderKind = string(state.Provider.Kind)
@@ -102,7 +105,7 @@ func identitySubjectViews(subjects map[string]identitysync.Subject) []IdentitySu
 		out = append(out, IdentitySubjectView{
 			Label:        subject.UserLabel,
 			ExternalID:   subject.ExternalSubject,
-			DirectGroups: append([]string(nil), subject.DirectGroups...),
+			DirectGroups: append([]string{}, subject.DirectGroups...),
 			Provisioned:  subject.Provisioned,
 			Active:       subject.Active,
 		})
@@ -116,8 +119,8 @@ func identityGroupViews(generation *identitysync.Generation) []IdentityGroupView
 	for _, group := range generation.Groups {
 		out = append(out, IdentityGroupView{
 			ID:                group.ID,
-			DirectMembers:     append([]string(nil), group.DirectMembers...),
-			DirectGroups:      append([]string(nil), group.DirectGroups...),
+			DirectMembers:     append([]string{}, group.DirectMembers...),
+			DirectGroups:      append([]string{}, group.DirectGroups...),
 			TransitiveMembers: transitiveIdentityGroupMembers(generation, group.ID),
 		})
 	}
@@ -126,7 +129,7 @@ func identityGroupViews(generation *identitysync.Generation) []IdentityGroupView
 }
 
 func identityRedirectViews(redirects []IdentityRedirectView) []IdentityRedirectView {
-	out := append([]IdentityRedirectView(nil), redirects...)
+	out := append([]IdentityRedirectView{}, redirects...)
 	sort.Slice(out, func(i, j int) bool {
 		left := strings.ToLower(out[i].Type + "\x00" + out[i].Value + "\x00" + out[i].OutboundTag)
 		right := strings.ToLower(out[j].Type + "\x00" + out[j].Value + "\x00" + out[j].OutboundTag)

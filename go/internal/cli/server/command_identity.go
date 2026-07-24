@@ -2,6 +2,7 @@ package servercmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -78,6 +79,9 @@ func (l serverIdentityRedirectLister) ListIdentityRedirects(ctx context.Context)
 		ConfigDir:  l.cfg.Server.ConfigDir,
 	})
 	if err != nil {
+		if errors.Is(err, server.ErrUnsupported) {
+			return []usecase.IdentityRedirectView{}, nil
+		}
 		return nil, err
 	}
 	out := make([]usecase.IdentityRedirectView, 0, len(records))
