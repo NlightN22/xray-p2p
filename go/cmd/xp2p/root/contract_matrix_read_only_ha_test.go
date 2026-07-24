@@ -29,7 +29,7 @@ ha_peers = "invalid"
 			if mode == "success" {
 				fixture = `[server]
 [[server.ha_peers]]
-id = "zulu Ω"
+id = "zulu Ω\u0001"
 endpoint = "https://zulu.example:8443"
 allow_insecure = true
 witness = true
@@ -53,7 +53,7 @@ secret = "matrix-secret-alpha"
 				t.Fatalf("peers=%#v", result["peers"])
 			}
 			zulu, ok := peers[0].(map[string]any)
-			if !ok || zulu["id"] != "zulu Ω" || zulu["endpoint"] != "https://zulu.example:8443" ||
+			if !ok || zulu["id"] != "zulu Ω\x01" || zulu["endpoint"] != "https://zulu.example:8443" ||
 				zulu["allow_insecure"] != true || zulu["witness"] != true || zulu["non_voting"] != false {
 				t.Fatalf("first peer changed: %#v", peers[0])
 			}
@@ -161,7 +161,7 @@ number = 1
 `
 	if mode == "success" {
 		fixture = `[server]
-ha_local_peer_id = "peer-alpha"
+ha_local_peer_id = "peer-alpha\u0001"
 
 [[server.ha_peers]]
 id = "peer-zulu"
@@ -169,22 +169,22 @@ endpoint = "https://zulu.example:8443"
 secret = "matrix-secret-zulu"
 
 [[server.ha_peers]]
-id = "peer-alpha"
+id = "peer-alpha\u0001"
 endpoint = "https://alpha.example:8443"
 secret = "matrix-secret-alpha"
 
 [server.ha_generation]
 number = 7
 channels = [
-  {id = "channel-zulu", tag = "channel-zulu-tag", domain = "zulu Ω.rev", user_id = "user-zulu", binding = {group_tag = "ha-group"}},
+  {id = "channel-zulu", tag = "channel-zulu-tag", domain = "zulu Ω.rev", user_id = "user-zulu\u0001", binding = {group_tag = "ha-group"}},
   {id = "channel-alpha", tag = "channel-alpha-tag", domain = "alpha.rev", user_id = "user-alpha", binding = {disabled = true}}
 ]
 
 [server.ha_generation.group]
-id = "group-id"
+id = "group-id\u0001"
 tag = "ha-group"
 members = [
-  {id = "member-zulu", tag = "zulu-tag", host = "zulu.example", port = 443, profile = "trojan-tls", priority = 20, confirmed = true},
+  {id = "member-zulu", tag = "zulu-tag\u0001", host = "zulu.example", port = 443, profile = "trojan-tls", priority = 20, confirmed = true},
   {id = "member-alpha", tag = "alpha-tag", host = "alpha.example", port = 8443, profile = "trojan-tls", priority = 10, confirmed = true}
 ]
 
@@ -203,7 +203,7 @@ automatic_failback = true
 func assertHAMembers(t *testing.T, items []any) {
 	t.Helper()
 	zulu, ok := items[0].(map[string]any)
-	if !ok || zulu["id"] != "member-zulu" || zulu["port"] != float64(443) ||
+	if !ok || zulu["id"] != "member-zulu" || zulu["tag"] != "zulu-tag\x01" || zulu["port"] != float64(443) ||
 		zulu["priority"] != float64(20) || zulu["confirmed"] != true {
 		t.Fatalf("first HA member changed: %#v", items[0])
 	}
@@ -216,7 +216,7 @@ func assertHAMembers(t *testing.T, items []any) {
 func assertHAChannels(t *testing.T, items []any) {
 	t.Helper()
 	zulu, ok := items[0].(map[string]any)
-	if !ok || zulu["id"] != "channel-zulu" || zulu["domain"] != "zulu Ω.rev" {
+	if !ok || zulu["id"] != "channel-zulu" || zulu["domain"] != "zulu Ω.rev" || zulu["user_id"] != "user-zulu\x01" {
 		t.Fatalf("first HA channel changed: %#v", items[0])
 	}
 	alpha, ok := items[1].(map[string]any)
@@ -271,7 +271,7 @@ func serverHAGroupInspectContractCase() contractCase {
 		coverage: contractCovered, success: args, empty: args, failure: args,
 		setup: setupHAGenerationCase,
 		assertResult: func(t *testing.T, result map[string]any) {
-			if result["id"] != "group-id" || result["tag"] != "ha-group" {
+			if result["id"] != "group-id\x01" || result["tag"] != "ha-group" {
 				t.Fatalf("HA group changed: %#v", result)
 			}
 			members, ok := result["members"].([]any)

@@ -44,7 +44,7 @@ hostname = "alpha example"
 tag = "alpha"
 address = "192.0.2.1"
 port = 8443
-user = "user-alpha"
+user = "user-alpha\u0001"
 heartbeat_mode = "auto"
 `
 			}
@@ -57,7 +57,7 @@ heartbeat_mode = "auto"
 			}
 			alpha, ok := tunnels[0].(map[string]any)
 			if !ok || alpha["tag"] != "alpha" || alpha["host"] != "alpha example" ||
-				alpha["alive"] != false || alpha["mode"] != "auto" ||
+				alpha["user"] != "user-alpha\x01" || alpha["alive"] != false || alpha["mode"] != "auto" ||
 				alpha["age_millis"] != float64(0) || alpha["samples"] != float64(0) {
 				t.Fatalf("first tunnel JSON types changed: %#v", tunnels[0])
 			}

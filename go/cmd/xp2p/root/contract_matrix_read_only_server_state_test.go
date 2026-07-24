@@ -27,7 +27,7 @@ func serverStateContractCase() contractCase {
 				fixture = `[server]
 trojan_users = [
   {email = "user-zulu", password = "matrix-secret-zulu"},
-  {email = "user-alpha", password = "matrix-secret-alpha"}
+  {email = "user-alpha\u0001", password = "matrix-secret-alpha"}
 ]
 
 [server.reverse_channels.zulu]
@@ -35,7 +35,7 @@ user_id = "user-zulu"
 host = "zulu Ω.example"
 
 [server.reverse_channels.alpha]
-user_id = "user-alpha"
+user_id = "user-alpha\u0001"
 host = "alpha example"
 `
 			}
@@ -48,7 +48,7 @@ host = "alpha example"
 			}
 			alpha, ok := tunnels[0].(map[string]any)
 			if !ok || alpha["tag"] != "alpha" || alpha["host"] != "alpha example" ||
-				alpha["user"] != "user-alpha" || alpha["alive"] != false ||
+				alpha["user"] != "user-alpha\x01" || alpha["alive"] != false ||
 				alpha["age_millis"] != float64(0) || alpha["samples"] != float64(0) {
 				t.Fatalf("first server tunnel changed: %#v", tunnels[0])
 			}

@@ -99,7 +99,7 @@ selected_offer_id = "offer-alpha"
   "selected_offer_id": "offer-alpha",
   "last_refresh_at": "2026-07-24T10:20:30Z",
   "last_apply_at": "2026-07-24T10:21:30Z",
-  "last_error": "safe warning",
+  "last_error": "safe warning\u0001",
   "last_good": {
     "source": {"id": "source Ω", "adapter": "3x-ui"},
     "revision": "rev-7",
@@ -108,7 +108,7 @@ selected_offer_id = "offer-alpha"
       {
         "stable_id": "offer-zulu",
         "endpoint": {"host": "zulu.example", "port": 443, "profile": "trojan-tls", "protocol": "trojan", "transport": "tcp", "security": "tls"},
-        "user_label": "Zulu user",
+        "user_label": "Zulu user\u0001",
         "credential": "matrix-credential-zulu"
       },
       {
@@ -135,7 +135,8 @@ func assertSubscriptionStatusResult(t *testing.T, items []any) {
 		status["revision"] != "rev-7" || status["offer_count"] != float64(2) ||
 		status["selected_offer_id"] != "offer-alpha" ||
 		status["last_refresh_at"] != "2026-07-24T10:20:30Z" ||
-		status["last_apply_at"] != "2026-07-24T10:21:30Z" {
+		status["last_apply_at"] != "2026-07-24T10:21:30Z" ||
+		status["last_error"] != "safe warning\x01" {
 		t.Fatalf("subscription status changed: %#v", items[0])
 	}
 }
@@ -147,7 +148,7 @@ func assertSubscriptionOffersResult(t *testing.T, items []any) {
 	}
 	zulu, ok := items[0].(map[string]any)
 	if !ok || zulu["subscription_id"] != "source Ω" || zulu["stable_id"] != "offer-zulu" ||
-		zulu["port"] != float64(443) || zulu["user_label"] != "Zulu user" {
+		zulu["port"] != float64(443) || zulu["user_label"] != "Zulu user\x01" {
 		t.Fatalf("first offer changed: %#v", items[0])
 	}
 	alpha, ok := items[1].(map[string]any)

@@ -18,7 +18,7 @@ func serverHAChannelInspectContractCase() contractCase {
 		setup:    setupHAChannelInspectCase,
 		assertResult: func(t *testing.T, result map[string]any) {
 			if result["id"] != "channel-zulu" || result["tag"] != "channel-zulu-tag" ||
-				result["domain"] != "zulu Ω.rev" || result["user_id"] != "user-zulu" {
+				result["domain"] != "zulu Ω.rev" || result["user_id"] != "user-zulu\x01" {
 				t.Fatalf("HA channel inspect changed: %#v", result)
 			}
 			binding, ok := result["binding"].(map[string]any)
@@ -69,7 +69,7 @@ func setupHAChannelInspectCase(t *testing.T, mode string) {
 	root := t.TempDir()
 	t.Setenv("XP2P_CONFIG_ROOT", root)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
-	channel := `{id = "channel-zulu", tag = "channel-zulu-tag", domain = "zulu Ω.rev", user_id = "user-zulu", binding = {group_tag = "ha-group"}}`
+	channel := `{id = "channel-zulu", tag = "channel-zulu-tag", domain = "zulu Ω.rev", user_id = "user-zulu\u0001", binding = {group_tag = "ha-group"}}`
 	if mode == "empty" {
 		channel = `{id = "channel-empty", tag = "empty-tag", domain = "empty.example", binding = {disabled = true}}`
 	}

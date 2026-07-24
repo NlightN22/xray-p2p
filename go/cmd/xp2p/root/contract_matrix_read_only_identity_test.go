@@ -34,6 +34,10 @@ func serverIdentityStatusContractCase() contractCase {
 				alpha["provisioned"] != true {
 				t.Fatalf("identity subject order or booleans changed: %#v", subjects[0])
 			}
+			zulu, ok := subjects[1].(map[string]any)
+			if !ok || zulu["label"] != "zulu Ω user\x01" {
+				t.Fatalf("identity subject control character changed: %#v", subjects[1])
+			}
 			groups, ok := result["groups"].([]any)
 			if !ok || len(groups) != 2 {
 				t.Fatalf("groups=%#v", result["groups"])
@@ -102,7 +106,7 @@ func setupServerIdentityStatusCase(t *testing.T, mode string) {
     "provider_instance_id": "corp Ω",
     "created_at": "2025-01-02T03:04:05Z",
     "subjects": {
-      "zulu": {"external_subject": "external-zulu", "user_label": "zulu Ω user", "active": false, "direct_groups": ["platform"]},
+      "zulu": {"external_subject": "external-zulu", "user_label": "zulu Ω user\u0001", "active": false, "direct_groups": ["platform"]},
       "alpha": {"external_subject": "external-alpha", "user_label": "alpha user", "active": true, "provisioned": true, "direct_groups": ["engineers"]}
     },
     "groups": {

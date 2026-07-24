@@ -65,33 +65,37 @@ func TestContractCaseRegistryDetectsMissingAndStaleCases(t *testing.T) {
 }
 
 func TestStage2ContractCasesCovered(t *testing.T) {
-	stage2Scope := append([]string{
-		"xp2p client mode",
-		"xp2p client service status",
-		"xp2p server mode",
-		"xp2p server service status",
-	}, stage2BaselinePaths()...)
-	for _, path := range stage2Scope {
+	for path := range jsonLeafPaths(NewCommand()) {
+		if !isStage2ReadOnlyLeaf(path) {
+			continue
+		}
 		scenario, exists := contractCaseRegistry[path]
 		if !exists || scenario.coverage != contractCovered {
-			t.Errorf("%s is not covered in stage 2", path)
+			t.Errorf("read-only leaf %s is not covered in stage 2", path)
 		}
 	}
 }
 
-func stage2BaselinePaths() []string {
-	var paths []string
-	for path, scenario := range buildLegacyPendingBaseline() {
-		if scenario.coverage == contractStage2 {
-			paths = append(paths, path)
-		}
+func isStage2ReadOnlyLeaf(path string) bool {
+	parts := strings.Fields(path)
+	if len(parts) == 0 {
+		return false
 	}
-	return paths
+	switch parts[len(parts)-1] {
+	case "contract", "inspect", "list", "mode", "obs", "offers", "profile", "state", "status":
+		return true
+	default:
+		return false
+	}
 }
 
 func TestCoveredContractCases(t *testing.T) {
+	actual := jsonLeafPaths(NewCommand())
 	for path, scenario := range contractCaseRegistry {
 		if scenario.coverage != contractCovered {
+			continue
+		}
+		if !actual[path] {
 			continue
 		}
 		t.Run(path+"/success", func(t *testing.T) {
@@ -123,6 +127,9 @@ func TestCoveredContractCases(t *testing.T) {
 			execution := executeContractCase(scenario.empty, false)
 			if execution.exitCode != 0 {
 				t.Fatalf("exit=%d err=%v; stderr=%q", execution.exitCode, execution.err, execution.stderr)
+			}
+			if execution.stderr != "" {
+				t.Fatalf("empty-result stderr=%q", execution.stderr)
 			}
 			document := assertJSONDocument(t, execution.stdout)
 			var envelope struct {
@@ -182,6 +189,7 @@ func TestCoveredContractCases(t *testing.T) {
 				t.Fatalf("execute: %v; stderr=%q", err, stderr)
 			}
 			scenario.assertHuman(t, stdout, stderr)
+			assertHumanBaseline(t, path, stdout, stderr)
 		})
 	}
 }
@@ -220,6 +228,9 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 				scenario.assertEdgeCases == nil || scenario.platform == "" ||
 				len(scenario.human) == 0 || scenario.assertHuman == nil) {
 			problems = append(problems, "covered case has incomplete scenarios: "+path)
+		}
+		if scenario.coverage == contractCovered && humanBaselineDigests[path] == "" {
+			problems = append(problems, "covered case has no exact human baseline: "+path)
 		}
 	}
 	sort.Strings(problems)

@@ -39,7 +39,7 @@ port = 443
 
 [[client.endpoint_groups]]
 group_id = "group-zulu"
-tag = "Zulu Ω"
+tag = "Zulu Ω\u0001"
 members = ["zulu", "alpha"]
 mode = "automatic"
 
@@ -67,7 +67,7 @@ manual_active_tag = "alpha"
 				t.Fatalf("groups=%#v", result["groups"])
 			}
 			zulu, ok := groups[0].(map[string]any)
-			if !ok || zulu["group_id"] != "group-zulu" || zulu["tag"] != "Zulu Ω" ||
+			if !ok || zulu["group_id"] != "group-zulu" || zulu["tag"] != "Zulu Ω\x01" ||
 				zulu["active_tag"] != "zulu" || zulu["revision"] != float64(7) ||
 				zulu["cooldown_until"] != "2026-07-24T10:20:30Z" {
 				t.Fatalf("first group changed: %#v", groups[0])

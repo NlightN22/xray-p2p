@@ -51,6 +51,7 @@ func buildContractCaseRegistry() map[string]contractCase {
 		registry[path] = scenario
 	}
 	registry["xp2p client list"] = clientListContractCase()
+	registry["xp2p client dns-forward list"] = dnsForwardListContractCase("client")
 	registry["xp2p client mode"] = modeReadContractCase("client")
 	registry["xp2p client forward list"] = forwardListContractCase("client")
 	registry["xp2p client group list"] = clientGroupListContractCase()
@@ -79,6 +80,8 @@ func buildContractCaseRegistry() map[string]contractCase {
 	registry["xp2p server state"] = serverStateContractCase()
 	registry["xp2p server user list"] = serverUserListContractCase()
 	registry["xp2p heartbeat contract"] = heartbeatContractCase()
+	registry["xp2p nat-redirect list"] = natRedirectListContractCase()
+	registry["xp2p server dns-forward list"] = dnsForwardListContractCase("server")
 	for path, scenario := range registry {
 		if scenario.coverage == contractCovered && scenario.assertEdgeCases == nil {
 			scenario.assertEdgeCases = assertReadOnlyEdgeCases

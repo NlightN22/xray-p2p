@@ -29,7 +29,7 @@ func serverCertStateContractCase() contractCase {
 		assertResult: func(t *testing.T, result map[string]any) {
 			if result["status"] != "ok" || result["self_signed"] != true ||
 				result["remaining_days"].(float64) <= 0 ||
-				!strings.Contains(result["subject"].(string), "matrix Ω certificate") {
+				result["subject"] != "CN=matrix Ω certificate\x01" {
 				t.Fatalf("certificate state changed: %#v", result)
 			}
 			dns, ok := result["dns_names"].([]any)
@@ -101,7 +101,7 @@ func setupServerCertStateCase(t *testing.T, mode string) {
 	var dnsNames []string
 	var ipAddresses []net.IP
 	if mode == "success" {
-		commonName = "matrix Ω certificate"
+		commonName = "matrix Ω certificate\x01"
 		dnsNames = []string{"zulu.example", "alpha example"}
 		ipAddresses = []net.IP{net.ParseIP("192.0.2.10")}
 	}
