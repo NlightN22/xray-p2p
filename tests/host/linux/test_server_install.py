@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path, PurePosixPath
 
 import pytest
@@ -24,8 +25,9 @@ def _combined_output(result) -> str:
     return f"{result.stdout}\n{result.stderr}".strip()
 
 
-def _read_cert_state(runner) -> str:
+def _read_cert_state(runner) -> dict:
     result = runner(
+        "--json",
         "server",
         "cert",
         "state",
@@ -38,18 +40,13 @@ def _read_cert_state(runner) -> str:
     assert result.rc == 0, (
         f"Expected cert state to succeed, rc={result.rc}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
-    return result.stdout or ""
+    return json.loads(result.stdout or "{}").get("result", {})
 
 
-def _parse_self_signed(state_output: str) -> bool:
-    for line in (state_output or "").splitlines():
-        if line.strip().lower().startswith("self-signed:"):
-            value = line.split(":", 1)[1].strip().lower()
-            if value in {"yes", "true"}:
-                return True
-            if value in {"no", "false"}:
-                return False
-    pytest.fail(f"Self-signed line not found in cert state output:\n{state_output}")
+def _parse_self_signed(state: dict) -> bool:
+    value = state.get("self_signed")
+    assert isinstance(value, bool), f"Invalid cert state self_signed value: {state}"
+    return value
 
 
 @pytest.mark.host
@@ -166,9 +163,9 @@ def test_server_install_generates_self_signed_certificate(server_host, xp2p_serv
         assert primary_cert.get("certificateFile") == expected_cert
         assert primary_cert.get("keyFile") == expected_key
 
-        state_output = _read_cert_state(xp2p_server_runner)
-        assert "Status:      OK" in state_output
-        assert "self-signed: yes" in state_output.lower()
+        state = _read_cert_state(xp2p_server_runner)
+        assert state.get("status") == "ok"
+        assert state.get("self_signed") is True
     finally:
         pass
 

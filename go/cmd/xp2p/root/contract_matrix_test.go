@@ -65,6 +65,14 @@ func TestContractCaseRegistryDetectsMissingAndStaleCases(t *testing.T) {
 	}
 }
 
+func TestStage2ContractCasesCovered(t *testing.T) {
+	for path, scenario := range contractCaseRegistry {
+		if scenario.coverage == contractStage2 {
+			t.Errorf("%s remains pending for stage 2", path)
+		}
+	}
+}
+
 func TestCoveredContractCases(t *testing.T) {
 	for path, scenario := range contractCaseRegistry {
 		if scenario.coverage != contractCovered {

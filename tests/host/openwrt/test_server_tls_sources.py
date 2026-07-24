@@ -107,8 +107,9 @@ def _trojan_inbound(data: dict) -> dict:
     pytest.fail("Proxy inbound not found in configuration")
 
 
-def _read_cert_state(runner) -> str:
+def _read_cert_state(runner) -> dict:
     result = runner(
+        "--json",
         "server",
         "cert",
         "state",
@@ -121,18 +122,13 @@ def _read_cert_state(runner) -> str:
     assert result.rc == 0, (
         f"Expected cert state to succeed, rc={result.rc}\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
-    return result.stdout or ""
+    return json.loads(result.stdout or "{}").get("result", {})
 
 
-def _parse_self_signed(state_output: str) -> bool:
-    for line in (state_output or "").splitlines():
-        if line.strip().lower().startswith("self-signed:"):
-            value = line.split(":", 1)[1].strip().lower()
-            if value in {"yes", "true"}:
-                return True
-            if value in {"no", "false"}:
-                return False
-    pytest.fail(f"Self-signed line not found in cert state output:\n{state_output}")
+def _parse_self_signed(state: dict) -> bool:
+    value = state.get("self_signed")
+    assert isinstance(value, bool), f"Invalid cert state self_signed value: {state}"
+    return value
 
 
 @pytest.mark.host
@@ -239,9 +235,9 @@ def test_openwrt_server_install_generates_self_signed_certificate(openwrt_server
         assert primary_cert.get("certificateFile") == SERVER_CERT_DEST.as_posix()
         assert primary_cert.get("keyFile") == SERVER_KEY_DEST.as_posix()
 
-        state_output = _read_cert_state(runner)
-        assert "Status:      OK" in state_output
-        assert "self-signed: yes" in state_output.lower()
+        state = _read_cert_state(runner)
+        assert state.get("status") == "ok"
+        assert state.get("self_signed") is True
     finally:
         helpers.cleanup_server_install(openwrt_server_host, runner)
 

@@ -38,6 +38,10 @@ func runServerProfile(ctx context.Context, cfg config.Config, args []string) int
 		if profile == "" {
 			profile = string(tunnel.ProfileTrojanTLS)
 		}
+		if _, err := tunnel.DefaultProfile(tunnel.Profile(profile)); err != nil {
+			logging.Error("xp2p server profile: invalid configured profile", "err", err)
+			return 1
+		}
 		logging.Info("xp2p server profile: current profile", "profile", profile)
 		if err := clioutput.SetResultContext(ctx, struct {
 			Profile string `json:"profile"`

@@ -59,6 +59,7 @@ func buildContractCaseRegistry() map[string]contractCase {
 	registry["xp2p client subscription status"] = clientSubscriptionContractCase("status")
 	registry["xp2p client state"] = clientStateContractCase()
 	registry["xp2p server forward list"] = forwardListContractCase("server")
+	registry["xp2p server cert state"] = serverCertStateContractCase()
 	registry["xp2p server ha peer list"] = serverHAPeerListContractCase()
 	registry["xp2p server ha member list"] = serverHACollectionContractCase("member")
 	registry["xp2p server ha channel inspect"] = serverHAChannelInspectContractCase()
@@ -67,10 +68,12 @@ func buildContractCaseRegistry() map[string]contractCase {
 	registry["xp2p server ha redirect list"] = serverHARedirectListContractCase()
 	registry["xp2p server ha status"] = serverHAStatusContractCase()
 	registry["xp2p server identity status"] = serverIdentityStatusContractCase()
+	registry["xp2p server profile"] = serverProfileContractCase()
 	registry["xp2p server redirect list"] = redirectListContractCase("server")
 	registry["xp2p server reverse list"] = serverReverseListContractCase()
 	registry["xp2p server state"] = serverStateContractCase()
 	registry["xp2p server user list"] = serverUserListContractCase()
+	registry["xp2p heartbeat contract"] = heartbeatContractCase()
 	return registry
 }
 
