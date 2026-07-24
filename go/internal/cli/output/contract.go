@@ -47,11 +47,6 @@ type ErrorDetail struct {
 	Message string `json:"message"`
 }
 
-// OperationResult is the common result for successful mutations without payload.
-type OperationResult struct {
-	Status string `json:"status"`
-}
-
 type resultCollector struct {
 	value any
 }
@@ -86,6 +81,15 @@ func EnabledContext(ctx context.Context) bool {
 	}
 	_, ok := ctx.Value(collectorContextKey{}).(*resultCollector)
 	return ok
+}
+
+// HasResult reports whether a command has already published its JSON result.
+func HasResult(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	collector, ok := cmd.Context().Value(collectorContextKey{}).(*resultCollector)
+	return ok && collector.value != nil
 }
 
 // SetResult publishes a typed result for the JSON presentation layer.
@@ -173,7 +177,7 @@ func redactSensitive(message string) string {
 }
 
 // WrapJSON decorates a leaf command without changing its human-readable path.
-func WrapJSON(cmd *cobra.Command, enabled func() bool, defaultOperation bool) {
+func WrapJSON(cmd *cobra.Command, enabled func() bool) {
 	if cmd == nil || Class(cmd) != ClassJSON {
 		return
 	}
@@ -212,15 +216,11 @@ func WrapJSON(cmd *cobra.Command, enabled func() bool, defaultOperation bool) {
 			return RenderedError{err: err}
 		}
 		if collector.value == nil {
-			if defaultOperation {
-				collector.value = OperationResult{Status: "completed"}
-			} else {
-				err := errors.New("command did not publish its typed JSON result")
-				if writeErr := WriteError(cmd.ErrOrStderr(), cmd.CommandPath(), "missing_json_result", err); writeErr != nil {
-					return writeErr
-				}
-				return RenderedError{err: err}
+			err := errors.New("command did not publish its typed JSON result")
+			if writeErr := WriteError(cmd.ErrOrStderr(), cmd.CommandPath(), "missing_json_result", err); writeErr != nil {
+				return writeErr
 			}
+			return RenderedError{err: err}
 		}
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(Envelope{
 			SchemaVersion: SchemaVersion,

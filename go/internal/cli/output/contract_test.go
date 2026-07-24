@@ -41,13 +41,12 @@ func TestWriteErrorRedactsCredentials(t *testing.T) {
 
 func TestWrapJSONContractMatrix(t *testing.T) {
 	tests := []struct {
-		name             string
-		defaultOperation bool
-		run              func(*cobra.Command) error
-		wantError        bool
-		wantCode         string
-		wantMessage      string
-		checkResult      func(*testing.T, map[string]any)
+		name        string
+		run         func(*cobra.Command) error
+		wantError   bool
+		wantCode    string
+		wantMessage string
+		checkResult func(*testing.T, map[string]any)
 	}{
 		{
 			name: "typed result preserves JSON types and empty collections",
@@ -66,16 +65,6 @@ func TestWrapJSONContractMatrix(t *testing.T) {
 				}
 				if items, ok := result["items"].([]any); !ok || len(items) != 0 {
 					t.Fatalf("empty collection is not []: %#v", result["items"])
-				}
-			},
-		},
-		{
-			name:             "payload-free mutation",
-			defaultOperation: true,
-			run:              func(*cobra.Command) error { return nil },
-			checkResult: func(t *testing.T, result map[string]any) {
-				if result["status"] != "completed" {
-					t.Fatalf("status=%#v", result["status"])
 				}
 			},
 		},
@@ -115,7 +104,7 @@ func TestWrapJSONContractMatrix(t *testing.T) {
 			cmd.SilenceUsage = true
 			cmd.SilenceErrors = true
 			Classify(cmd, ClassJSON, "")
-			WrapJSON(cmd, func() bool { return true }, tc.defaultOperation)
+			WrapJSON(cmd, func() bool { return true })
 			var stdout bytes.Buffer
 			var stderr bytes.Buffer
 			cmd.SetOut(&stdout)

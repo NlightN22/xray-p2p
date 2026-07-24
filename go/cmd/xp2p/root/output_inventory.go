@@ -3,28 +3,40 @@ package root
 import (
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 )
 
+type mutationResult struct {
+	Status    string `json:"status"`
+	Operation string `json:"operation"`
+}
+
 type outputContract struct {
-	class            string
-	reason           string
-	defaultOperation bool
-	operation        string
-	stdoutSources    string
-	stderrSources    string
-	runtime          string
-	credentials      string
-	interaction      string
-	consumers        string
+	class         string
+	reason        string
+	successResult func(*cobra.Command, []string) any
+	operation     string
+	stdoutSources string
+	stderrSources string
+	runtime       string
+	credentials   string
+	interaction   string
+	consumers     string
 }
 
 func jsonContract(path string) outputContract {
-	return auditedJSONContract(path, true)
+	contract := auditedJSONContract(path)
+	contract.operation = "mutation"
+	contract.successResult = func(_ *cobra.Command, _ []string) any {
+		return mutationResult{Status: "completed", Operation: strings.TrimPrefix(path, "xp2p ")}
+	}
+	return contract
 }
 
 func payloadContract(path string) outputContract {
-	return auditedJSONContract(path, false)
+	return auditedJSONContract(path)
 }
 
 func exceptionContract(class, reason string) outputContract {
@@ -36,48 +48,97 @@ func exceptionContract(class, reason string) outputContract {
 	}
 }
 
-func auditedJSONContract(path string, defaultOperation bool) outputContract {
-	operation := "mutation"
-	if !defaultOperation {
-		operation = "read-only or result-bearing mutation"
-	}
-	runtime := "Desired configuration and filesystem state"
-	if strings.Contains(path, " service ") || strings.HasSuffix(path, " state") ||
-		strings.HasSuffix(path, " obs") || strings.Contains(path, " ha ") {
+func auditedJSONContract(path string) outputContract {
+	operation := "read-only or result-bearing mutation"
+	runtime := "Desired configuration and filesystem state; no service required"
+	if auditedRuntimeCommands[path] {
 		runtime = "installed role and optional running service/runtime API"
-	}
-	if path == "xp2p heartbeat contract" {
+	} else if path == "xp2p heartbeat contract" {
 		runtime = "none"
 	}
 	credentials := "must not contain credentials"
-	switch path {
-	case "xp2p client deploy", "xp2p client list", "xp2p server install",
-		"xp2p server user add", "xp2p server user rotate",
-		"xp2p server identity provision":
+	if auditedCredentialCommands[path] {
 		credentials = "intentional credential or connection-link result"
 	}
 	interaction := "non-interactive"
-	if strings.Contains(path, " remove") || strings.HasSuffix(path, " install") ||
-		strings.HasSuffix(path, " mode") || strings.HasSuffix(path, " profile") {
-		interaction = "human mode may prompt; JSON mode requires explicit input or suppresses prompts"
+	if auditedPromptCommands[path] {
+		interaction = "human mode may prompt; JSON mode forces the command's quiet path"
+	} else if auditedExplicitInputCommands[path] {
+		interaction = "human mode may prompt; JSON mode requires an explicit selector"
 	}
 	consumers := "no in-repository machine consumer found; public automation contract"
-	switch {
-	case strings.HasSuffix(path, " state"):
-		consumers = "tests/host/tunnel/common.py and Linux/OpenWrt heartbeat tests"
-	case path == "xp2p server install" || path == "xp2p server user add":
-		consumers = "tests/host/cli_json.py and Linux/OpenWrt/Windows tunnel fixtures"
-	case path == "xp2p client deploy" || path == "xp2p client list":
-		consumers = "tests/host cross-platform deploy flows"
-	case strings.Contains(path, " identity "):
-		consumers = "tests/host/linux identity provider flows"
+	if value, ok := auditedConsumers[path]; ok {
+		consumers = value
 	}
 	return outputContract{
-		class: clioutput.ClassJSON, defaultOperation: defaultOperation, operation: operation,
+		class: clioutput.ClassJSON, operation: operation,
 		stdoutSources: path + " typed result publisher and legacy human renderer",
 		stderrSources: path + " argument validation, use-case, runtime, and persistence diagnostics",
 		runtime:       runtime, credentials: credentials, interaction: interaction, consumers: consumers,
 	}
+}
+
+var auditedRuntimeCommands = stringSet(
+	"xp2p client obs", "xp2p client service restart", "xp2p client service start",
+	"xp2p client service status", "xp2p client service stop", "xp2p client state",
+	"xp2p server cert state", "xp2p server service restart", "xp2p server service start",
+	"xp2p server service status", "xp2p server service stop", "xp2p server state",
+	"xp2p server ha channel create", "xp2p server ha channel disable",
+	"xp2p server ha channel finalize", "xp2p server ha channel inspect",
+	"xp2p server ha channel list", "xp2p server ha channel rebind",
+	"xp2p server ha channel rebind-endpoint", "xp2p server ha group create",
+	"xp2p server ha group inspect", "xp2p server ha group remove",
+	"xp2p server ha group update", "xp2p server ha member add",
+	"xp2p server ha member list", "xp2p server ha member remove",
+	"xp2p server ha member reprioritize", "xp2p server ha peer add",
+	"xp2p server ha peer list", "xp2p server ha peer remove",
+	"xp2p server ha peer self", "xp2p server ha redirect add",
+	"xp2p server ha redirect list", "xp2p server ha redirect remove",
+	"xp2p server ha status", "xp2p server ha sync",
+)
+
+var auditedCredentialCommands = stringSet(
+	"xp2p client deploy", "xp2p client list", "xp2p server install",
+	"xp2p server user add", "xp2p server user rotate",
+	"xp2p server identity provision",
+)
+
+var auditedPromptCommands = stringSet(
+	"xp2p client install", "xp2p client mode", "xp2p client redirect add",
+	"xp2p client redirect disable", "xp2p client redirect enable",
+	"xp2p client redirect remove", "xp2p client remove", "xp2p server cert set",
+	"xp2p server install", "xp2p server redirect add", "xp2p server redirect disable",
+	"xp2p server redirect enable", "xp2p server redirect remove", "xp2p server remove",
+)
+
+var auditedExplicitInputCommands = stringSet("xp2p server user add")
+
+var auditedLegacyQuietCommands = stringSet(
+	"xp2p client install",
+	"xp2p server install",
+)
+
+var auditedConsumers = map[string]string{
+	"xp2p client state":              "tests/host/tunnel/common.py and Linux/OpenWrt heartbeat tests",
+	"xp2p server state":              "tests/host/tunnel/common.py and Linux/OpenWrt heartbeat tests",
+	"xp2p server cert state":         "Linux and Windows host certificate tests",
+	"xp2p server install":            "tests/host/cli_json.py and Linux/OpenWrt/Windows tunnel fixtures",
+	"xp2p server user add":           "tests/host/cli_json.py and Linux/OpenWrt/Windows tunnel fixtures",
+	"xp2p client deploy":             "cross-platform host deploy flows",
+	"xp2p client list":               "cross-platform host deploy flows",
+	"xp2p server identity detach":    "tests/host/linux identity provider flows",
+	"xp2p server identity provision": "tests/host/linux identity provider flows",
+	"xp2p server identity select":    "tests/host/linux identity provider flows",
+	"xp2p server identity status":    "tests/host/linux identity provider flows",
+	"xp2p server identity sync":      "tests/host/linux identity provider flows",
+}
+
+func stringSet(values ...string) map[string]bool {
+	result := make(map[string]bool, len(values))
+	for _, value := range values {
+		result[value] = true
+	}
+	return result
 }
 
 var outputContractInventory = map[string]outputContract{

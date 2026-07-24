@@ -49,7 +49,34 @@ func decorateOutputContracts(root *cobra.Command, opts *rootOptions) {
 			}
 		}
 		contract := outputContractInventory[cmd.CommandPath()]
-		clioutput.WrapJSON(cmd, enabled, contract.defaultOperation)
+		if contract.successResult != nil || auditedPromptCommands[cmd.CommandPath()] {
+			runE := cmd.RunE
+			run := cmd.Run
+			cmd.Run = nil
+			cmd.RunE = func(cmd *cobra.Command, args []string) error {
+				if enabled() {
+					if quiet := cmd.Flags().Lookup("quiet"); quiet != nil {
+						if err := cmd.Flags().Set("quiet", "true"); err != nil {
+							return err
+						}
+					} else if auditedLegacyQuietCommands[cmd.CommandPath()] {
+						args = append(append([]string(nil), args...), "--quiet")
+					}
+				}
+				if runE != nil {
+					if err := runE(cmd, args); err != nil {
+						return err
+					}
+				} else if run != nil {
+					run(cmd, args)
+				}
+				if enabled() && contract.successResult != nil && !clioutput.HasResult(cmd) {
+					return clioutput.SetResult(cmd, contract.successResult(cmd, args))
+				}
+				return nil
+			}
+		}
+		clioutput.WrapJSON(cmd, enabled)
 		clioutput.RejectJSON(cmd, enabled)
 	}
 	visit(root)

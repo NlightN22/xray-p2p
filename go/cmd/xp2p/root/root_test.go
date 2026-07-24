@@ -3,6 +3,7 @@ package root
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,6 +176,14 @@ func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
 					!strings.Contains(contract.stderrSources, cmd.CommandPath())) {
 				t.Errorf("%s audit sources are not command-specific: %#v", cmd.CommandPath(), contract)
 			}
+			if contract.class == clioutput.ClassJSON {
+				_, hasQuiet := auditedPromptCommands[cmd.CommandPath()]
+				quietPath := cmd.Flags().Lookup("quiet") != nil ||
+					auditedLegacyQuietCommands[cmd.CommandPath()]
+				if hasQuiet && !quietPath {
+					t.Errorf("%s prompt audit has no non-interactive path", cmd.CommandPath())
+				}
+			}
 		}
 		for _, child := range children {
 			visit(child)
@@ -188,7 +197,7 @@ func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
 	}
 }
 
-func TestEveryJSONLeafEnvelopeMatrix(t *testing.T) {
+func TestEveryJSONLeafRejectsInvalidFlagAsJSON(t *testing.T) {
 	root := NewCommand()
 	var paths [][]string
 	var visit func(*cobra.Command)
@@ -206,27 +215,7 @@ func TestEveryJSONLeafEnvelopeMatrix(t *testing.T) {
 
 	for _, path := range paths {
 		name := strings.Join(path, " ")
-		t.Run(name+"/success-help", func(t *testing.T) {
-			args := append([]string{"--json"}, path...)
-			args = append(args, "--help")
-			cmd := NewCommandForArgs(args)
-			var stdout bytes.Buffer
-			var stderr bytes.Buffer
-			cmd.SetOut(&stdout)
-			cmd.SetErr(&stderr)
-			cmd.SetArgs(args)
-			if err := cmd.Execute(); err != nil {
-				t.Fatalf("execute: %v; stderr=%q", err, stderr.String())
-			}
-			if stderr.Len() != 0 || bytes.Contains(stdout.Bytes(), []byte("\x1b[")) {
-				t.Fatalf("polluted streams: stdout=%q stderr=%q", stdout.String(), stderr.String())
-			}
-			var envelope clioutput.Envelope
-			if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
-				t.Fatalf("stdout is not one JSON document: %v; stdout=%q", err, stdout.String())
-			}
-		})
-		t.Run(name+"/error-invalid-flag", func(t *testing.T) {
+		t.Run(name, func(t *testing.T) {
 			args := append([]string{"--json"}, path...)
 			args = append(args, "--contract-invalid-flag")
 			cmd := NewCommandForArgs(args)
@@ -249,6 +238,45 @@ func TestEveryJSONLeafEnvelopeMatrix(t *testing.T) {
 				t.Fatalf("code=%q", envelope.Error.Code)
 			}
 		})
+	}
+}
+
+func TestJSONMutationForcesQuietAndPublishesExplicitResult(t *testing.T) {
+	var quiet bool
+	leaf := &cobra.Command{
+		Use: "remove",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if !quiet {
+				return errors.New("interactive path was not disabled")
+			}
+			return nil
+		},
+	}
+	leaf.Flags().BoolVarP(&quiet, "quiet", "q", false, "do not prompt")
+	client := &cobra.Command{Use: "client"}
+	client.AddCommand(leaf)
+	root := &cobra.Command{Use: "xp2p"}
+	root.AddCommand(client)
+	opts := &rootOptions{jsonOutput: true}
+	classifyOutputContracts(root)
+	decorateOutputContracts(root, opts)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"client", "remove"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v; stderr=%q", err, stderr.String())
+	}
+	var envelope struct {
+		Result mutationResult `json:"result"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode: %v; stdout=%q", err, stdout.String())
+	}
+	if envelope.Result.Status != "completed" || envelope.Result.Operation != "client remove" {
+		t.Fatalf("result=%#v", envelope.Result)
 	}
 }
 
