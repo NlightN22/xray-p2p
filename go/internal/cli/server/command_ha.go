@@ -76,7 +76,9 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 			return err
 		}
 		if clioutput.Enabled(cmd) {
-			return clioutput.SetResult(cmd, generation.Group)
+			group := generation.Group
+			group.Members = append([]ha.Member{}, group.Members...)
+			return clioutput.SetResult(cmd, group)
 		}
 		fmt.Printf("ID: %s\nTag: %s\nMode: %s\n", generation.Group.ID, generation.Group.Tag, generation.Group.Selector.Mode)
 		return nil
@@ -213,7 +215,7 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		if clioutput.Enabled(cmd) {
 			return clioutput.SetResult(cmd, struct {
 				Redirects []redirect.Rule `json:"redirects"`
-			}{Redirects: rules})
+			}{Redirects: append([]redirect.Rule{}, rules...)})
 		}
 		for _, rule := range rules {
 			fmt.Printf("%s\t%s\t%s\n", rule.Kind(), rule.Value(), rule.OutboundTag)
@@ -270,7 +272,7 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		if clioutput.Enabled(cmd) {
 			return clioutput.SetResult(cmd, struct {
 				Members []ha.Member `json:"members"`
-			}{Members: generation.Group.Members})
+			}{Members: append([]ha.Member{}, generation.Group.Members...)})
 		}
 		for _, item := range generation.Group.Members {
 			state := "confirmed"
@@ -289,7 +291,7 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		if clioutput.Enabled(cmd) {
 			return clioutput.SetResult(cmd, struct {
 				Channels []ha.Channel `json:"channels"`
-			}{Channels: generation.Channels})
+			}{Channels: append([]ha.Channel{}, generation.Channels...)})
 		}
 		for _, item := range generation.Channels {
 			state := "enabled"
