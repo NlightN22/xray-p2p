@@ -226,7 +226,6 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			if opts.TunEnabled {
 				refreshClientLiveTunRoutes(readyCtx, configDir, opts.TunName, opts.TunAddr, opts.TunMTU)
 			}
-			runHeartbeatOnce(readyCtx, installDir, configDir, opts.Heartbeat)
 			return nil
 		},
 		func(event xrayguard.Event) {

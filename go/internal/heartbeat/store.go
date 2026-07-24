@@ -75,6 +75,17 @@ func (s *Store) Snapshot(now time.Time, ttl time.Duration) []Snapshot {
 	return s.state.snapshot(now, ttl)
 }
 
+// Capability returns the persisted check capability for an endpoint.
+func (s *Store) Capability(endpointID string) Capability {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.state.Entries[payloadKey(Payload{EndpointID: endpointID})]
+	if !ok {
+		return CapabilityUnknown
+	}
+	return normalizeCapability(entry.Capability)
+}
+
 // Snapshot returns a sorted slice of entries with derived liveness info.
 func (s State) Snapshot(now time.Time, ttl time.Duration) []Snapshot {
 	return s.snapshot(now, ttl)
@@ -207,23 +218,28 @@ func (s *State) update(payload Payload) (Entry, error) {
 	entry.Mode = mode
 	if entry.Capability == "" {
 		entry.Capability = CapabilityUnknown
+	} else {
+		entry.Capability = normalizeCapability(entry.Capability)
 	}
 	if mode == ModeDisabled {
 		entry.Status = StatusDisabled
 		entry.FailureStage = ""
 		entry.Failure = ""
 	} else if payload.Healthy != nil && *payload.Healthy {
-		entry.Capability = CapabilityDetected
+		entry.Capability = successfulCapability(entry.Capability, payload.Capability)
 		entry.Status = StatusHealthy
 		entry.LastSuccess = entry.LastSeen
 		entry.ConsecutiveFailures = 0
 		entry.FailureStage = ""
 		entry.Failure = ""
 	} else if payload.Healthy != nil {
+		if observed := normalizeCapability(payload.Capability); entry.Capability == CapabilityUnknown && observed != CapabilityUnknown {
+			entry.Capability = observed
+		}
 		entry.ConsecutiveFailures++
 		entry.FailureStage = payload.Stage
 		entry.Failure = normalizeFailure(payload.Failure)
-		entry.Status = failureStatus(mode, entry.Capability, entry.ConsecutiveFailures)
+		entry.Status = failureStatus(mode, entry.Capability, entry.ConsecutiveFailures, !entry.LastSuccess.IsZero())
 	}
 	if payload.RTTValid || payload.Healthy == nil || *payload.Healthy {
 		entry.LastRTTMillis = payload.RTTMillis
@@ -241,46 +257,6 @@ func (s *State) update(payload Payload) (Entry, error) {
 	return entry, nil
 }
 
-func payloadKey(payload Payload) string {
-	if endpointID := strings.TrimSpace(payload.EndpointID); endpointID != "" {
-		return "v1|" + endpointID
-	}
-	return entryKey(payload.Tag, payload.User)
-}
-
-func normalizeMode(mode Mode) Mode {
-	switch mode {
-	case ModeAuto, ModeDisabled, ModeRequired:
-		return mode
-	default:
-		return ModeRequired
-	}
-}
-
-func failureStatus(mode Mode, capability Capability, failures int) Status {
-	if mode == ModeAuto && capability != CapabilityDetected {
-		if failures >= DiscoveryFailureThreshold {
-			return StatusNotDetected
-		}
-		return StatusProbing
-	}
-	if failures >= HealthFailureThreshold {
-		return StatusUnhealthy
-	}
-	if capability == CapabilityDetected {
-		return StatusHealthy
-	}
-	return StatusProbing
-}
-
-func normalizeFailure(value string) string {
-	value = strings.TrimSpace(value)
-	if len(value) > 256 {
-		value = value[:256]
-	}
-	return value
-}
-
 func (s *Store) save(state State) error {
 	if s.path == "" {
 		return nil
@@ -293,16 +269,4 @@ func (s *Store) save(state State) error {
 		return fmt.Errorf("heartbeat: persist state: %w", err)
 	}
 	return nil
-}
-
-func entryKey(tag, user string) string {
-	key := strings.ToLower(strings.TrimSpace(tag))
-	if key == "" {
-		return ""
-	}
-	user = strings.ToLower(strings.TrimSpace(user))
-	if user == "" {
-		return key
-	}
-	return key + "|" + user
 }

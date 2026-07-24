@@ -124,9 +124,16 @@ func renderTable(w io.Writer, snapshots []heartbeat.Snapshot, stats map[string]T
 			if mode == "" {
 				mode = string(heartbeat.ModeRequired)
 			}
-			check := "xp2p-heartbeat"
-			if snap.Entry.Mode == heartbeat.ModeDisabled {
+			check := string(heartbeat.CapabilityUnknown)
+			switch {
+			case snap.Entry.Mode == heartbeat.ModeDisabled:
 				check = "none"
+			case snap.Entry.Capability == heartbeat.CapabilityXP2PDiag:
+				check = string(heartbeat.CapabilityXP2PDiag)
+			case snap.Entry.Capability == heartbeat.CapabilityXP2PHeartbeat,
+				snap.Entry.Capability == heartbeat.CapabilityDetected,
+				snap.Entry.Capability == "":
+				check = string(heartbeat.CapabilityXP2PHeartbeat)
 			}
 			stage := string(snap.Entry.FailureStage)
 			if stage == "" {

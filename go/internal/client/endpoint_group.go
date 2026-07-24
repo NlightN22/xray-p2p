@@ -36,6 +36,9 @@ func (g endpointGroup) normalized() (endpointGroup, error) {
 	if g.FailureThreshold <= 0 {
 		g.FailureThreshold = defaultEndpointGroupFailureThreshold
 	}
+	if g.SuccessThreshold <= 0 {
+		g.SuccessThreshold = 1
+	}
 	seen := make(map[string]struct{}, len(g.Members))
 	members := make([]string, 0, len(g.Members))
 	for _, member := range g.Members {
@@ -109,7 +112,25 @@ func selectEndpointGroup(group endpointGroup, endpoints []clientEndpointRecord, 
 	}
 	active := strings.TrimSpace(state.ActiveTag)
 	if active != "" && memberAvailable(active) {
-		if now.Before(state.CooldownUntil) || (group.MinimumHoldSeconds > 0 && now.Before(state.ActiveSince.Add(time.Duration(group.MinimumHoldSeconds)*time.Second))) || state.Failures[strings.ToLower(active)] < group.FailureThreshold {
+		held := now.Before(state.CooldownUntil) ||
+			(group.MinimumHoldSeconds > 0 && now.Before(state.ActiveSince.Add(time.Duration(group.MinimumHoldSeconds)*time.Second)))
+		if held {
+			return active, true
+		}
+		if group.AutomaticFailback {
+			for _, tag := range group.Members {
+				if strings.EqualFold(tag, active) {
+					break
+				}
+				key := strings.ToLower(tag)
+				if memberAvailable(tag) &&
+					state.Failures[key] < group.FailureThreshold &&
+					state.Successes[key] >= group.SuccessThreshold {
+					return tag, true
+				}
+			}
+		}
+		if state.Failures[strings.ToLower(active)] < group.FailureThreshold {
 			return active, true
 		}
 	}

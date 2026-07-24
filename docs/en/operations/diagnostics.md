@@ -23,6 +23,9 @@ ping is public and also accepts otherwise valid requests carrying unused
 authentication headers. Restrict access to this listener with a firewall or ACL.
 The standalone sidecar proves that the diagnostic responder is reachable; it
 does not prove that a complete xp2p control plane is installed.
+Its readiness response advertises the `xp2p-diag` capability so clients know
+that a successful tunnel ping is the complete health check and must not send a
+fictitious heartbeat report.
 
 Direct ping (no tunnel, defaults to TCP/62022):
 
@@ -78,33 +81,50 @@ When tunnel mode is used, xp2p may route the probe through an internal marker ta
 
 ## Advanced / troubleshooting
 
+External controllers and devices can discover the complete heartbeat vocabulary
+without copying values from documentation:
+
+```console
+xp2p heartbeat contract
+```
+
+The command prints JSON directly from the Go heartbeat package. It includes the
+contract schema and version, modes, capabilities, state-table checks, statuses,
+failure stages, compatibility-only capability values, and transition
+thresholds. Consumers should reject an unsupported contract version and allow
+unknown enum values when the version is supported, so additive releases do not
+break parsing.
+
 Each client endpoint has a `heartbeat_mode` policy in Desired configuration:
 
 - `required` is the default for endpoints installed or deployed by xp2p.
-- `auto` discovers whether an imported or subscription endpoint supports the
-  authenticated xp2p diagnostics and heartbeat exchange. An endpoint without
-  that sidecar is reported as `not-detected`, not `unhealthy`.
+- `auto` discovers the check supported by an imported or subscription endpoint.
+  An endpoint without a responder is reported as `not-detected`, not
+  `unhealthy`.
 - `disabled` suppresses heartbeat requests and is only set explicitly.
 
 The state table separates the policy (`MODE`), check mechanism (`CHECK`), last
-attempt, last complete success, and failure stage. A complete probe and report
-changes capability to detected. After that, repeated failures can produce
-`unhealthy`; a later complete success restores `healthy`. Failure stages are
-`marker`, `probe`, `report`, and `persistence`.
+attempt, last complete success, and failure stage. `xp2p-heartbeat` requires a
+successful ping and authenticated report. `xp2p-diag` is explicitly advertised
+by the standalone responder and requires only the successful ping through the
+selected outbound. The detected check is persisted separately from its latest
+result. A full endpoint is never downgraded to `xp2p-diag` because of a `404`,
+timeout, or authentication failure. Failure stages are `marker`, `probe`,
+`report`, and `persistence`.
 
 The heartbeat `STATUS` values are:
 
 - `probing`: heartbeat support or current health is not established yet.
 - `not-detected`: an `auto` endpoint failed discovery three consecutive times
   before heartbeat capability was detected.
-- `healthy`: the latest complete probe and report succeeded.
+- `healthy`: the latest complete check succeeded.
 - `unhealthy`: a `required` endpoint, or an endpoint with previously detected
   capability, failed three consecutive attempts.
 - `disabled`: heartbeat checks are explicitly disabled for the endpoint.
 
 Legacy persisted entries without an explicit heartbeat status are displayed as
 `alive` or `dead` from their timestamp and the selected TTL. These two labels
-are compatibility output, not additional v0.2.8 heartbeat states.
+are compatibility output, not additional heartbeat states.
 
 Heartbeat timestamps are UTC observations. TTL evaluation accepts up to 30
 seconds of future clock skew; timestamps farther in the future are rejected as
@@ -116,6 +136,11 @@ seconds of future clock skew; timestamps farther in the future are rejected as
 - Custom ping port: `xp2p ping <host> --port 62025`.
 - Tunnel cascade overrides: `xp2p ping <host> -T <target>`; use `-e <tag>` or `-i <index>` (with `-T`) when multiple endpoints share the same host.
 - Access control: product service `/control/v1/ready` is public, while product service `/control/v1/ping` is authenticated and fails closed when its Live authentication metadata is unavailable. Standalone `xp2p diag` intentionally exposes public `/control/v1/ready` and `/control/v1/ping`. Restrict the standalone listener via firewall/ACL (for example allow only LAN and/or the tunnel interface).
+- TLS: `FAILURE_STAGE=probe` commonly means the sidecar certificate does not
+  match the endpoint `server_name`; `FAILURE_STAGE=report` on
+  `CHECK=xp2p-heartbeat` means ping succeeded but the authenticated report did
+  not. A `404` report from an older standalone sidecar is not treated as a
+  successful check; upgrade the sidecar so readiness advertises `xp2p-diag`.
   - OpenWrt (UCI): `uci add firewall rule; uci set firewall.@rule[-1].name='xp2p-diag'; uci set firewall.@rule[-1].src='lan'; uci set firewall.@rule[-1].proto='tcp'; uci set firewall.@rule[-1].dest_port='62022'; uci set firewall.@rule[-1].target='ACCEPT'; uci commit firewall; /etc/init.d/firewall restart`.
   - Linux (nftables): `nft add rule inet filter input tcp dport 62022 ip saddr { 127.0.0.1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } accept`.
   - Windows: `New-NetFirewallRule -DisplayName 'xp2p diagnostics' -Direction Inbound -Protocol TCP -LocalPort 62022 -Action Allow -RemoteAddress LocalSubnet`.

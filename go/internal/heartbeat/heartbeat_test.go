@@ -152,8 +152,12 @@ func TestAutoCapabilityDiscoveryAndRecovery(t *testing.T) {
 		if updateErr != nil {
 			t.Fatal(updateErr)
 		}
-		if attempt == DiscoveryFailureThreshold-1 && entry.Status != StatusNotDetected {
-			t.Fatalf("status = %q", entry.Status)
+		want := StatusProbing
+		if attempt+1 == DiscoveryFailureThreshold {
+			want = StatusNotDetected
+		}
+		if entry.Status != want {
+			t.Fatalf("attempt %d status = %q, want %q", attempt+1, entry.Status, want)
 		}
 	}
 	healthy := true
@@ -161,7 +165,7 @@ func TestAutoCapabilityDiscoveryAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entry.Capability != CapabilityDetected || entry.Status != StatusHealthy {
+	if entry.Capability != CapabilityXP2PHeartbeat || entry.Status != StatusHealthy {
 		t.Fatalf("unexpected detected state: %+v", entry)
 	}
 	for attempt := 0; attempt < HealthFailureThreshold; attempt++ {
@@ -169,9 +173,105 @@ func TestAutoCapabilityDiscoveryAndRecovery(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		want := StatusHealthy
+		if attempt+1 == HealthFailureThreshold {
+			want = StatusUnhealthy
+		}
+		if entry.Status != want {
+			t.Fatalf("health attempt %d status = %q, want %q", attempt+1, entry.Status, want)
+		}
 	}
-	if entry.Capability != CapabilityDetected || entry.Status != StatusUnhealthy {
+	if entry.Capability != CapabilityXP2PHeartbeat || entry.Status != StatusUnhealthy {
 		t.Fatalf("detected capability must persist: %+v", entry)
+	}
+}
+
+func TestPingOnlyCapabilityPersistsAcrossFailuresAndRecovery(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "heartbeat.json")
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, time.July, 24, 10, 0, 0, 0, time.UTC)
+	healthy := true
+	entry, err := store.Update(Payload{
+		Tag: "external", Host: "edge.example", Timestamp: now, Healthy: &healthy,
+		Mode: ModeAuto, Capability: CapabilityXP2PDiag,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Capability != CapabilityXP2PDiag || entry.Status != StatusHealthy {
+		t.Fatalf("unexpected ping-only state: %+v", entry)
+	}
+
+	failed := false
+	for attempt := 0; attempt < HealthFailureThreshold; attempt++ {
+		entry, err = store.Update(Payload{
+			Tag: "external", Host: "edge.example", Timestamp: now.Add(time.Duration(attempt+1) * time.Second),
+			Healthy: &failed, Mode: ModeAuto, Capability: CapabilityXP2PDiag, Stage: FailureStageProbe,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if entry.Capability != CapabilityXP2PDiag || entry.Status != StatusUnhealthy {
+		t.Fatalf("ping-only failure was not retained: %+v", entry)
+	}
+
+	reloaded, err := NewStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err = reloaded.Update(Payload{
+		Tag: "external", Host: "edge.example", Timestamp: now.Add(time.Minute), Healthy: &healthy,
+		Mode: ModeAuto, Capability: CapabilityXP2PDiag,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Status != StatusHealthy || entry.ConsecutiveFailures != 0 || entry.Capability != CapabilityXP2PDiag {
+		t.Fatalf("ping-only recovery failed: %+v", entry)
+	}
+}
+
+func TestFullHeartbeatCapabilityDoesNotDowngrade(t *testing.T) {
+	store, _ := NewStore("")
+	healthy := true
+	entry, err := store.Update(Payload{
+		Tag: "server", Host: "server.example", Healthy: &healthy, Mode: ModeAuto,
+		Capability: CapabilityXP2PHeartbeat,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err = store.Update(Payload{
+		Tag: "server", Host: "server.example", Healthy: &healthy, Mode: ModeAuto,
+		Capability: CapabilityXP2PDiag,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Capability != CapabilityXP2PHeartbeat {
+		t.Fatalf("full heartbeat capability downgraded: %+v", entry)
+	}
+}
+
+func TestLegacyDetectedCapabilityLoadsAsFullHeartbeat(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "heartbeat.json")
+	if err := os.WriteFile(path, []byte(`{"entries":{"edge":{"tag":"edge","host":"edge.example","capability":"detected","status":"healthy"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capability := store.Capability(""); capability != CapabilityUnknown {
+		t.Fatalf("empty endpoint lookup = %q", capability)
+	}
+	snapshot := store.Snapshot(time.Now(), time.Minute)
+	if len(snapshot) != 1 || normalizeCapability(snapshot[0].Entry.Capability) != CapabilityXP2PHeartbeat {
+		t.Fatalf("legacy capability is not compatible: %+v", snapshot)
 	}
 }
 

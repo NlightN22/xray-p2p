@@ -239,6 +239,15 @@ func TestDiagnosticsHandlerServesOnlyPublicReadinessAndPing(t *testing.T) {
 	if ready.Code != http.StatusOK {
 		t.Fatalf("ready status=%d", ready.Code)
 	}
+	var readiness struct {
+		Capabilities []string `json:"capabilities"`
+	}
+	if err := json.NewDecoder(ready.Body).Decode(&readiness); err != nil {
+		t.Fatal(err)
+	}
+	if len(readiness.Capabilities) != 1 || readiness.Capabilities[0] != "xp2p-diag" {
+		t.Fatalf("unexpected diagnostics capabilities: %+v", readiness.Capabilities)
+	}
 	for _, path := range []string{PathHeartbeat, PathSubscription, PathCredentialsRotate, PathCredentialsAck, "/control/v1/ha/status"} {
 		resp := httptest.NewRecorder()
 		handler.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, path, nil))

@@ -63,6 +63,7 @@ func NewCommand() *cobra.Command {
 		serverCmd,
 		newDiagCommand(func() config.Config { return opts.cfg }),
 		newPingCommand(func() config.Config { return opts.cfg }),
+		newHeartbeatCommand(),
 		newCompletionCommand(rootCmd),
 		newDocsCommand(rootCmd),
 	)
@@ -145,6 +146,9 @@ func shouldIgnoreInvalidConfig(cmd *cobra.Command) bool {
 func shouldSkipRuntime(cmd *cobra.Command) bool {
 	if cmd == nil {
 		return false
+	}
+	if cmd.CommandPath() == "xp2p heartbeat contract" {
+		return true
 	}
 	switch cmd.Name() {
 	case "completion", "docs", "command-map", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:

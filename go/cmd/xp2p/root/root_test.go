@@ -137,6 +137,13 @@ func TestServiceRunIgnoresInvalidConfig(t *testing.T) {
 	}
 }
 
+func TestHeartbeatContractSkipsRuntimeConfig(t *testing.T) {
+	cmd := commandPath("heartbeat", "contract")
+	if !shouldSkipRuntime(cmd) {
+		t.Fatal("heartbeat contract must not require runtime configuration")
+	}
+}
+
 func chdirTemp(t *testing.T) {
 	t.Helper()
 	oldWD, err := os.Getwd()

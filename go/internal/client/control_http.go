@@ -59,6 +59,37 @@ func postHeartbeat(ctx context.Context, host string, port int, endpoint clientEn
 	return nil
 }
 
+func discoverHeartbeatCapability(ctx context.Context, host string, port int, client *http.Client) (heartbeat.Capability, error) {
+	if client == nil {
+		return heartbeat.CapabilityUnknown, errors.New("control HTTP client is required")
+	}
+	url := "https://" + net.JoinHostPort(host, fmt.Sprintf("%d", port)) + controlplane.PathReady
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return heartbeat.CapabilityUnknown, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return heartbeat.CapabilityUnknown, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return heartbeat.CapabilityUnknown, fmt.Errorf("control readiness failed: %s", resp.Status)
+	}
+	var ready struct {
+		Capabilities []string `json:"capabilities"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&ready); err != nil {
+		return heartbeat.CapabilityUnknown, err
+	}
+	for _, capability := range ready.Capabilities {
+		if heartbeat.Capability(strings.TrimSpace(capability)) == heartbeat.CapabilityXP2PDiag {
+			return heartbeat.CapabilityXP2PDiag, nil
+		}
+	}
+	return heartbeat.CapabilityXP2PHeartbeat, nil
+}
+
 func controlHTTPClientThroughSocks(endpoint clientEndpointRecord, timeout time.Duration, socksAddress string) *http.Client {
 	client := controlHTTPClient(endpoint, timeout)
 	transport, _ := client.Transport.(*http.Transport)

@@ -11,7 +11,7 @@
 
 xp2p
   Summary: Cross-platform helper for XRAY-P2P
-  Subcommands: client, server, diag, ping, completion, docs, nat-redirect
+  Subcommands: client, server, diag, ping, heartbeat, completion, docs, nat-redirect
 
 xp2p client
   Summary: Manage xp2p client installation
@@ -44,6 +44,12 @@ Includes: inherited options
 - --proto, -o <proto> transport protocol for compatibility (tcp or https)
 - --timeout, -t <duration> per-request timeout in seconds (optional)
 - --tunnel, -T <string> route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config
+
+xp2p heartbeat
+  Summary: Inspect the heartbeat protocol contract
+  Subcommands: contract
+Options:
+Includes: inherited options
 
 xp2p completion [bash|zsh|fish|powershell]
   Summary: Generate shell completion scripts

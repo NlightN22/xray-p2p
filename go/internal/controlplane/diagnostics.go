@@ -21,8 +21,20 @@ func NewDiagnosticsHandler(opts DiagnosticsOptions) http.Handler {
 		AuthWindow: opts.AuthWindow,
 	})
 	mux := http.NewServeMux()
-	registerDiagnosticsRoutes(mux, h)
+	mux.HandleFunc(PathReady, diagnosticsReady)
+	mux.HandleFunc(PathPing, h.ping)
 	return mux
+}
+
+func diagnosticsReady(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ready":        true,
+		"capabilities": []string{"xp2p-diag"},
+	})
 }
 
 func registerDiagnosticsRoutes(mux *http.ServeMux, h *handler) {

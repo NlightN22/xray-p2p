@@ -51,6 +51,7 @@ nav:
       - Redirects Within A-B: guides/redirects.md
       - Chain (C2-B-A-C1): guides/chain.md
       - Advanced Variants: guides/advanced.md
+      - External Xray health: guides/external-xray-sidecar.md
   - Flows (How It Works):
       - Deploy Flow: flows/deploy-flow.md
       - Apply Flow: flows/apply-flow.md

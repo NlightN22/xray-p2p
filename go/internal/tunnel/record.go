@@ -8,7 +8,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/version"
 )
 
-const legacyFieldsRemovedSince = "0.2.9"
+const legacyFieldsRemovedSince = "0.3.0"
 
 var currentAppVersion = version.Current
 

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from . import _bare_xray as bare
+from . import _bare_xray_failover as failover
+from . import _bare_xray_heartbeat as heartbeat
 from . import _helpers as helpers
 from . import _heartbeat_sidecar as heartbeat_sidecar
 from . import env as linux_env
-from tests.host.host_common.polling import wait_until
 
 
 STATE_PATHS = [
@@ -62,28 +61,50 @@ def test_direct_link_with_bare_xray_routes_local_and_internet(client_host, serve
         with bare.running(server_host):
             _install(client_host, xp2p_client_runner, server_host, protocol)
             xp2p_client_runner("client", "service", "start", check=True)
+            heartbeat.assert_failure_threshold(
+                client_host,
+                check="unknown",
+                before_status="probing",
+                threshold_status="not-detected",
+            )
             bare.wait_for_socks(client_host)
             _assert_profile(client_host, xp2p_client_runner, protocol)
             bare.assert_two_traffic_paths(client_host)
-            _assert_heartbeat_status(client_host, "not-detected", "auto")
             with heartbeat_sidecar.late_sidecar(server_host, protocol):
-                ping = xp2p_client_runner("ping", bare.TLS_NAME, "--port", "62022")
+                tag = helpers.expected_proxy_tag(bare.TLS_NAME)
+                ping = xp2p_client_runner(
+                    "ping", bare.TLS_NAME, "--port", "62022",
+                    "--tunnel", "--endpoint", tag,
+                )
                 assert ping.rc == 0, (ping.stdout or "") + (ping.stderr or "")
-                _assert_heartbeat_status(client_host, "not-detected", "auto")
-            _assert_heartbeat_status(client_host, "not-detected", "auto")
+                heartbeat.assert_status(
+                    client_host, "healthy", "auto", check="xp2p-diag"
+                )
+            heartbeat.assert_failure_threshold(
+                client_host,
+                check="xp2p-diag",
+                before_status="healthy",
+                threshold_status="unhealthy",
+                failure_stage="probe",
+            )
 
-            xp2p_client_runner("client", "service", "restart", check=True)
-            bare.wait_for_socks(client_host)
-            _assert_profile(client_host, xp2p_client_runner, protocol)
-            bare.assert_two_traffic_paths(client_host)
-            _assert_heartbeat_status(client_host, "not-detected", "auto")
+            with heartbeat_sidecar.late_sidecar(server_host, protocol):
+                heartbeat.assert_status(
+                    client_host, "healthy", "auto", check="xp2p-diag"
+                )
+                xp2p_client_runner("client", "service", "restart", check=True)
+                bare.wait_for_socks(client_host)
+                _assert_profile(client_host, xp2p_client_runner, protocol)
+                bare.assert_two_traffic_paths(client_host)
+                heartbeat.assert_status(
+                    client_host, "healthy", "auto", check="xp2p-diag"
+                )
     except Exception:
         bare.failure_dump(client_host, server_host)
         raise
     finally:
         bare.stop(server_host)
         linux_env.run_guest_script(client_host, "scripts/linux/update_hosts_entry.sh", "remove", bare.TLS_NAME)
-
 
 @pytest.mark.host
 @pytest.mark.linux
@@ -103,6 +124,24 @@ def test_bare_xray_rejects_invalid_tls_identity(client_host, server_host, xp2p_c
     finally:
         bare.stop(server_host)
         linux_env.run_guest_script(client_host, "scripts/linux/update_hosts_entry.sh", "remove", bare.TLS_NAME)
+
+
+@pytest.mark.host
+@pytest.mark.linux
+@pytest.mark.destructive
+def test_xp2pdiag_health_drives_real_failover_and_failback(
+    client_host,
+    server_host,
+    aux_host,
+    xp2p_client_runner,
+):
+    failover.run(
+        client_host,
+        server_host,
+        aux_host,
+        xp2p_client_runner,
+        _install,
+    )
 
 
 @pytest.mark.host
@@ -138,32 +177,3 @@ def test_unsupported_direct_link_preserves_desired_and_live(client_host, server_
     finally:
         bare.stop(server_host)
         linux_env.run_guest_script(client_host, "scripts/linux/update_hosts_entry.sh", "remove", bare.TLS_NAME)
-
-
-def _assert_heartbeat_status(client_host, status: str, mode: str) -> None:
-    def observed():
-        result = client_host.run(f"cat {helpers.CLIENT_HEARTBEAT_STATE_FILE}")
-        if result.rc != 0:
-            return None
-        entries = (json.loads(result.stdout or "{}").get("entries") or {}).values()
-        return next(
-            (
-                entry
-                for entry in entries
-                if entry.get("host") == bare.TLS_NAME
-                and entry.get("status") == status
-                and entry.get("mode") == mode
-            ),
-            None,
-        )
-
-    try:
-        wait_until(
-            f"bare Xray heartbeat status {status}",
-            observed,
-            timeout_seconds=30.0,
-            poll_interval=1.0,
-        )
-    except TimeoutError:
-        bare.failure_dump(client_host, client_host)
-        raise

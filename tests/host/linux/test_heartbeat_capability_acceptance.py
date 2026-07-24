@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 import time
 
 import pytest
 
 from tests.host.host_common.polling import wait_until
 from tests.host.linux import _helpers as helpers
+from tests.host.linux import _heartbeat_acceptance_helpers as heartbeat
 from tests.host.linux import _runtime_disable as runtime
 from tests.host.linux.flows import tunnel_b_to_a_fixture as fixture
 from tests.host.tunnel import common as tunnel_common
@@ -29,58 +29,80 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         runtime.wait_for_service(server, "server", active=True)
         runtime.wait_for_service(client, "client", active=True)
 
-        initial_client = _wait_entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy")
-        initial_server = _wait_entry(server, helpers.SERVER_HEARTBEAT_STATE_FILE, "healthy")
+        initial_client = heartbeat.wait_entry(
+            client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy"
+        )
+        initial_server = heartbeat.wait_entry(
+            server, helpers.SERVER_HEARTBEAT_STATE_FILE, "healthy"
+        )
+        assert initial_client.get("capability") == "xp2p-heartbeat"
+        assert initial_server.get("tag") == env["endpoint_tag"]
         manual = client_runner("ping", fixture.SERVER_IP, "--tunnel", "--count", "2", check=True)
         tunnel_common.assert_zero_loss(manual, "manual ping before heartbeat acceptance")
 
         server_runner("server", "service", "restart", check=True)
         runtime.wait_for_service(server, "server", active=True)
-        _wait_fresh(server, helpers.SERVER_HEARTBEAT_STATE_FILE, initial_server)
-        _wait_fresh(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, initial_client)
+        heartbeat.wait_fresh(
+            server, helpers.SERVER_HEARTBEAT_STATE_FILE, initial_server
+        )
+        heartbeat.wait_fresh(
+            client, helpers.CLIENT_HEARTBEAT_STATE_FILE, initial_client
+        )
 
-        client_before_restart = _wait_entry(
+        client_before_restart = heartbeat.wait_entry(
             client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy"
         )
-        server_before_client_restart = _wait_entry(
+        server_before_client_restart = heartbeat.wait_entry(
             server, helpers.SERVER_HEARTBEAT_STATE_FILE, "healthy"
         )
         client_runner("client", "service", "restart", check=True)
         runtime.wait_for_service(client, "client", active=True)
-        _wait_fresh(
+        heartbeat.wait_fresh(
             client, helpers.CLIENT_HEARTBEAT_STATE_FILE, client_before_restart
         )
-        _wait_fresh(
+        heartbeat.wait_fresh(
             server,
             helpers.SERVER_HEARTBEAT_STATE_FILE,
             server_before_client_restart,
         )
 
         server_runner("server", "service", "stop", check=True)
-        _wait_entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "unhealthy")
+        heartbeat.wait_entry(
+            client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "unhealthy"
+        )
         server_runner("server", "service", "start", check=True)
         runtime.wait_for_service(server, "server", active=True)
-        _wait_entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy")
+        heartbeat.wait_entry(
+            client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy"
+        )
 
-        _force_server_persistence_failure(server)
+        heartbeat.force_server_persistence_failure(server)
         try:
-            report = _wait_entry(
-                client,
-                helpers.CLIENT_HEARTBEAT_STATE_FILE,
-                None,
-                failure_stage="report",
-            )
-            assert report.get("capability") == "detected"
+            for failures in range(1, 4):
+                report = heartbeat.wait_entry(
+                    client,
+                    helpers.CLIENT_HEARTBEAT_STATE_FILE,
+                    "unhealthy" if failures == 3 else "healthy",
+                    failure_stage="report",
+                    consecutive_failures=failures,
+                )
+                assert report.get("capability") == "xp2p-heartbeat"
         finally:
-            _restore_server_heartbeat_file(server)
-        _wait_entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy")
+            heartbeat.restore_server_heartbeat_file(server)
+        heartbeat.wait_entry(
+            client, helpers.CLIENT_HEARTBEAT_STATE_FILE, "healthy"
+        )
 
-        before_disabled = _entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE)
-        _set_heartbeat_mode(client, "disabled")
+        before_disabled = heartbeat.entry(
+            client, helpers.CLIENT_HEARTBEAT_STATE_FILE
+        )
+        heartbeat.set_heartbeat_mode(client, "disabled")
         client_runner("client", "service", "restart", check=True)
         runtime.wait_for_service(client, "client", active=True)
         time.sleep(6)
-        after_disabled = _entry(client, helpers.CLIENT_HEARTBEAT_STATE_FILE)
+        after_disabled = heartbeat.entry(
+            client, helpers.CLIENT_HEARTBEAT_STATE_FILE
+        )
         assert after_disabled.get("attempts") == before_disabled.get("attempts")
         state = client_runner("client", "state", "--health-details", check=True)
         row = next(
@@ -96,7 +118,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         helpers.dump_failure_state(server, "heartbeat-capability-server")
         raise
     finally:
-        _restore_server_heartbeat_file(server)
+        heartbeat.restore_server_heartbeat_file(server)
         server_runner("server", "service", "stop")
         client_runner("client", "service", "stop")
 
@@ -168,69 +190,3 @@ def test_heartbeat_uses_endpoint_credentials_for_duplicate_user(
     finally:
         aux_runner("server", "service", "stop")
         client_runner("client", "service", "stop")
-
-
-def _entry(host, path):
-    result = host.run(f"cat {path}")
-    if result.rc != 0:
-        return None
-    entries = list((json.loads(result.stdout or "{}").get("entries") or {}).values())
-    return max(entries, key=lambda item: item.get("last_seen") or "") if entries else None
-
-
-def _wait_entry(host, path, status, *, failure_stage=None):
-    def poll():
-        entry = _entry(host, path)
-        if not entry:
-            return None
-        if status is not None and entry.get("status") != status:
-            return None
-        if failure_stage is not None and entry.get("failure_stage") != failure_stage:
-            return None
-        return entry
-
-    return wait_until(
-        f"heartbeat {status or failure_stage} in {path}",
-        poll,
-        timeout_seconds=45.0,
-        poll_interval=1.0,
-    ).value
-
-
-def _wait_fresh(host, path, baseline):
-    def poll():
-        current = _entry(host, path)
-        if current and (current.get("last_seen"), current.get("attempts")) != (
-            baseline.get("last_seen"),
-            baseline.get("attempts"),
-        ):
-            return current
-        return None
-
-    return wait_until(
-        f"fresh heartbeat in {path}",
-        poll,
-        timeout_seconds=45.0,
-        poll_interval=1.0,
-    ).value
-
-
-def _force_server_persistence_failure(host):
-    path = helpers.SERVER_HEARTBEAT_STATE_FILE
-    backup = f"{path}.acceptance-backup"
-    result = host.run(f"rm -rf {backup}; mv {path} {backup}; mkdir {path}; touch {path}/block")
-    assert result.rc == 0, result.stderr
-
-
-def _restore_server_heartbeat_file(host):
-    path = helpers.SERVER_HEARTBEAT_STATE_FILE
-    backup = f"{path}.acceptance-backup"
-    host.run(f"if [ -d {path} ]; then rm -rf {path}; fi; if [ -f {backup} ]; then mv {backup} {path}; fi")
-
-
-def _set_heartbeat_mode(host, mode: str):
-    path = helpers.CLIENT_CONFIG_FILE
-    result = host.run(
-        f"sed -i -E 's/heartbeat_mode = \"(auto|required|disabled)\"/heartbeat_mode = \"{mode}\"/' {path}"
-    )
-    assert result.rc == 0, result.stderr

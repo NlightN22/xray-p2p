@@ -16,6 +16,7 @@ type Payload struct {
 	RTTMillis  int64        `json:"rtt_ms"`
 	Healthy    *bool        `json:"healthy,omitempty"`
 	Mode       Mode         `json:"mode,omitempty"`
+	Capability Capability   `json:"capability,omitempty"`
 	Stage      FailureStage `json:"failure_stage,omitempty"`
 	Failure    string       `json:"failure,omitempty"`
 	EndpointID string       `json:"endpoint_id,omitempty"`
@@ -33,8 +34,10 @@ const (
 type Capability string
 
 const (
-	CapabilityUnknown  Capability = "unknown"
-	CapabilityDetected Capability = "detected"
+	CapabilityUnknown       Capability = "unknown"
+	CapabilityDetected      Capability = "detected"
+	CapabilityXP2PHeartbeat Capability = "xp2p-heartbeat"
+	CapabilityXP2PDiag      Capability = "xp2p-diag"
 )
 
 type Status string

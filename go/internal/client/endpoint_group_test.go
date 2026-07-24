@@ -62,6 +62,43 @@ func TestSelectEndpointGroupFailsClosed(t *testing.T) {
 	}
 }
 
+func TestSelectEndpointGroupFailsBackAfterRecoveryThreshold(t *testing.T) {
+	now := time.Date(2026, 7, 24, 0, 0, 0, 0, time.UTC)
+	group := endpointGroup{
+		GroupID: "g1", Tag: "group-main", Members: []string{"primary", "backup"},
+		FailureThreshold: 2, SuccessThreshold: 2, AutomaticFailback: true,
+	}
+	endpoints := []clientEndpointRecord{{Tag: "primary"}, {Tag: "backup"}}
+	state := endpointGroupSelector{
+		ActiveTag: "backup",
+		Failures:  map[string]int{"primary": 0, "backup": 0},
+		Successes: map[string]int{"primary": 1, "backup": 3},
+	}
+	if got, ok := selectEndpointGroup(group, endpoints, state, now); !ok || got != "backup" {
+		t.Fatalf("failback happened before success threshold: %q, %v", got, ok)
+	}
+	state.Successes["primary"] = 2
+	if got, ok := selectEndpointGroup(group, endpoints, state, now); !ok || got != "primary" {
+		t.Fatalf("recovered primary was not selected: %q, %v", got, ok)
+	}
+}
+
+func TestSelectEndpointGroupFailbackHonorsCooldown(t *testing.T) {
+	now := time.Date(2026, 7, 24, 0, 0, 0, 0, time.UTC)
+	group := endpointGroup{
+		GroupID: "g1", Tag: "group-main", Members: []string{"primary", "backup"},
+		FailureThreshold: 1, SuccessThreshold: 1, AutomaticFailback: true,
+	}
+	endpoints := []clientEndpointRecord{{Tag: "primary"}, {Tag: "backup"}}
+	state := endpointGroupSelector{
+		ActiveTag: "backup", CooldownUntil: now.Add(time.Second),
+		Failures: map[string]int{"primary": 0}, Successes: map[string]int{"primary": 1},
+	}
+	if got, ok := selectEndpointGroup(group, endpoints, state, now); !ok || got != "backup" {
+		t.Fatalf("cooldown did not hold backup: %q, %v", got, ok)
+	}
+}
+
 func TestSelectorActiveMismatchDetectsStaleStoredActive(t *testing.T) {
 	if !selectorActiveMismatch("primary", "backup", true) {
 		t.Fatal("stale stored active must require a selector switch")
