@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -38,6 +39,12 @@ func runServerProfile(ctx context.Context, cfg config.Config, args []string) int
 			profile = string(tunnel.ProfileTrojanTLS)
 		}
 		logging.Info("xp2p server profile: current profile", "profile", profile)
+		if err := clioutput.SetResultContext(ctx, struct {
+			Profile string `json:"profile"`
+		}{Profile: profile}); err != nil {
+			logging.Error("xp2p server profile: publish JSON result failed", "err", err)
+			return 1
+		}
 		return 0
 	}
 	result, err := serverSetProfileFunc(ctx, server.SetProfileOptions{Profile: args[0]})

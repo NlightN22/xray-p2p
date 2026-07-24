@@ -25,8 +25,9 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	cmd := rootcmd.NewCommand()
-	cmd.SetArgs(os.Args[1:])
+	args := os.Args[1:]
+	cmd := rootcmd.NewCommandForArgs(args)
+	cmd.SetArgs(args)
 	if err := cmd.ExecuteContext(ctx); err != nil {
 		var ec exitCoder
 		if errors.As(err, &ec) {

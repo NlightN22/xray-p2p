@@ -58,6 +58,18 @@ type resultCollector struct {
 
 type collectorContextKey struct{}
 
+// CaptureResult creates a context that records a typed command result.
+// It is intended for command-level contract tests and presentation adapters.
+func CaptureResult(ctx context.Context) (context.Context, func() any) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	collector := &resultCollector{}
+	return context.WithValue(ctx, collectorContextKey{}, collector), func() any {
+		return collector.value
+	}
+}
+
 // Enabled reports whether the command is running under the JSON presenter.
 func Enabled(cmd *cobra.Command) bool {
 	if cmd == nil {

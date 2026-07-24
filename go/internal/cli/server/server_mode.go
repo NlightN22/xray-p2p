@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -67,6 +68,12 @@ func runServerMode(ctx context.Context, cfg config.Config, args []string) int {
 			return 1
 		}
 		logging.Info("xp2p server mode: current mode", "mode", mode)
+		if err := clioutput.SetResultContext(ctx, struct {
+			Mode string `json:"mode"`
+		}{Mode: mode}); err != nil {
+			logging.Error("xp2p server mode: publish JSON result failed", "err", err)
+			return 1
+		}
 		return 0
 	}
 	if fs.NArg() != 1 {

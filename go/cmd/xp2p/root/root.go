@@ -22,7 +22,13 @@ import (
 
 // NewCommand constructs the xp2p root command backed by Cobra.
 func NewCommand() *cobra.Command {
-	opts := &rootOptions{}
+	return NewCommandForArgs(os.Args[1:])
+}
+
+// NewCommandForArgs constructs the command with presentation mode selected before
+// Cobra parses flags, including when an earlier argument is invalid.
+func NewCommandForArgs(args []string) *cobra.Command {
+	opts := &rootOptions{jsonOutput: jsonOutputRequested(args)}
 	rootCmd := &cobra.Command{
 		Use:           "xp2p",
 		Short:         "Cross-platform helper for XRAY-P2P",
@@ -98,7 +104,7 @@ func NewCommand() *cobra.Command {
 
 	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
 		if err != nil {
-			if opts.jsonOutput {
+			if opts.jsonOutput || jsonOutputRequested(cmd.Flags().Args()) || jsonOutputRequested(os.Args[1:]) {
 				_ = clioutput.WriteError(cmd.ErrOrStderr(), cmd.CommandPath(), "invalid_argument", err)
 				return clioutput.MarkRendered(err)
 			}
@@ -127,6 +133,15 @@ func NewCommand() *cobra.Command {
 	return rootCmd
 }
 
+func jsonOutputRequested(args []string) bool {
+	for _, arg := range args {
+		if arg == "--json" || arg == "-J" || strings.EqualFold(arg, "--json=true") {
+			return true
+		}
+	}
+	return false
+}
+
 type rootOptions struct {
 	configPath       string
 	logLevel         string
@@ -143,7 +158,7 @@ func (o *rootOptions) bindGlobalFlags(cmd *cobra.Command) {
 	flags.StringVarP(&o.configPath, "config", "c", "", "path to configuration file")
 	flags.StringVarP(&o.logLevel, "log-level", "l", "", "override logging level")
 	flags.BoolVarP(&o.logJSON, "log-json", "j", false, "emit logs in JSON format")
-	flags.BoolVarP(&o.jsonOutput, "json", "J", false, "emit command result as JSON")
+	flags.BoolVarP(&o.jsonOutput, "json", "J", o.jsonOutput, "emit command result as JSON")
 	flags.BoolVarP(&o.versionRequested, "version", "v", false, "print xp2p version and exit")
 	_ = cmd.RegisterFlagCompletionFunc("log-level", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -169,6 +170,10 @@ func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
 				contract.credentials == "" || contract.interaction == "" ||
 				contract.consumers == "" {
 				t.Errorf("%s has incomplete audit metadata: %#v", cmd.CommandPath(), contract)
+			} else if contract.class == clioutput.ClassJSON &&
+				(!strings.Contains(contract.stdoutSources, cmd.CommandPath()) ||
+					!strings.Contains(contract.stderrSources, cmd.CommandPath())) {
+				t.Errorf("%s audit sources are not command-specific: %#v", cmd.CommandPath(), contract)
 			}
 		}
 		for _, child := range children {
@@ -180,6 +185,70 @@ func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
 		if !seen[path] && !platformSpecificOutputContracts[path] {
 			t.Errorf("stale output inventory entry %q", path)
 		}
+	}
+}
+
+func TestEveryJSONLeafEnvelopeMatrix(t *testing.T) {
+	root := NewCommand()
+	var paths [][]string
+	var visit func(*cobra.Command)
+	visit = func(cmd *cobra.Command) {
+		children := cmd.Commands()
+		if len(children) == 0 && (cmd.Run != nil || cmd.RunE != nil) &&
+			clioutput.Class(cmd) == clioutput.ClassJSON {
+			paths = append(paths, strings.Fields(strings.TrimPrefix(cmd.CommandPath(), "xp2p ")))
+		}
+		for _, child := range children {
+			visit(child)
+		}
+	}
+	visit(root)
+
+	for _, path := range paths {
+		name := strings.Join(path, " ")
+		t.Run(name+"/success-help", func(t *testing.T) {
+			args := append([]string{"--json"}, path...)
+			args = append(args, "--help")
+			cmd := NewCommandForArgs(args)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute: %v; stderr=%q", err, stderr.String())
+			}
+			if stderr.Len() != 0 || bytes.Contains(stdout.Bytes(), []byte("\x1b[")) {
+				t.Fatalf("polluted streams: stdout=%q stderr=%q", stdout.String(), stderr.String())
+			}
+			var envelope clioutput.Envelope
+			if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+				t.Fatalf("stdout is not one JSON document: %v; stdout=%q", err, stdout.String())
+			}
+		})
+		t.Run(name+"/error-invalid-flag", func(t *testing.T) {
+			args := append([]string{"--json"}, path...)
+			args = append(args, "--contract-invalid-flag")
+			cmd := NewCommandForArgs(args)
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			cmd.SetOut(&stdout)
+			cmd.SetErr(&stderr)
+			cmd.SetArgs(args)
+			if err := cmd.Execute(); err == nil {
+				t.Fatal("expected invalid flag error")
+			}
+			if stdout.Len() != 0 || bytes.Contains(stderr.Bytes(), []byte("\x1b[")) {
+				t.Fatalf("polluted streams: stdout=%q stderr=%q", stdout.String(), stderr.String())
+			}
+			var envelope clioutput.ErrorEnvelope
+			if err := json.Unmarshal(stderr.Bytes(), &envelope); err != nil {
+				t.Fatalf("stderr is not one JSON document: %v; stderr=%q", err, stderr.String())
+			}
+			if envelope.Error.Code != "invalid_argument" {
+				t.Fatalf("code=%q", envelope.Error.Code)
+			}
+		})
 	}
 }
 
@@ -224,6 +293,28 @@ func TestGeneratorRejectsJSONBeforeExecution(t *testing.T) {
 		t.Fatalf("decode stderr: %v; stderr=%q", decodeErr, stderr.String())
 	}
 	if envelope.Error.Code != "unsupported_output_format" {
+		t.Fatalf("code=%q", envelope.Error.Code)
+	}
+}
+
+func TestUnknownFlagBeforeJSONProducesOnlyJSONError(t *testing.T) {
+	root := NewCommandForArgs([]string{"--bad", "--json"})
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"--bad", "--json"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("expected invalid flag error")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+	var envelope clioutput.ErrorEnvelope
+	if err := json.Unmarshal(stderr.Bytes(), &envelope); err != nil {
+		t.Fatalf("stderr is not one JSON document: %v; stderr=%q", err, stderr.String())
+	}
+	if envelope.Error.Code != "invalid_argument" {
 		t.Fatalf("code=%q", envelope.Error.Code)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -62,8 +63,24 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 			} else {
 				logging.Info("xp2p client mode: current mode", "mode", mode, "tun_mode", tunMode)
 			}
+			if err := clioutput.SetResultContext(ctx, struct {
+				Mode          string `json:"mode"`
+				TunMode       string `json:"tun_mode"`
+				TunModeStatus string `json:"tun_mode_status"`
+			}{Mode: mode, TunMode: tunMode, TunModeStatus: status}); err != nil {
+				logging.Error("xp2p client mode: publish JSON result failed", "err", err)
+				return 1
+			}
 		} else {
 			logging.Info("xp2p client mode: current mode", "mode", mode)
+			if err := clioutput.SetResultContext(ctx, struct {
+				Mode          string `json:"mode"`
+				TunMode       string `json:"tun_mode"`
+				TunModeStatus string `json:"tun_mode_status"`
+			}{Mode: mode}); err != nil {
+				logging.Error("xp2p client mode: publish JSON result failed", "err", err)
+				return 1
+			}
 		}
 		return 0
 	}
