@@ -49,7 +49,8 @@ func decorateOutputContracts(root *cobra.Command, opts *rootOptions) {
 			}
 		}
 		contract := outputContractInventory[cmd.CommandPath()]
-		if contract.successResult != nil || auditedPromptCommands[cmd.CommandPath()] {
+		if contract.successResult != nil || jsonQuietFlagCommands[cmd.CommandPath()] ||
+			jsonLegacyQuietCommands[cmd.CommandPath()] {
 			runE := cmd.RunE
 			run := cmd.Run
 			cmd.Run = nil
@@ -59,7 +60,7 @@ func decorateOutputContracts(root *cobra.Command, opts *rootOptions) {
 						if err := cmd.Flags().Set("quiet", "true"); err != nil {
 							return err
 						}
-					} else if auditedLegacyQuietCommands[cmd.CommandPath()] {
+					} else if jsonLegacyQuietCommands[cmd.CommandPath()] {
 						args = append(append([]string(nil), args...), "--quiet")
 					}
 				}

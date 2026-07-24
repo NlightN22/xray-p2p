@@ -6,9 +6,10 @@ The executable inventory is checked against the real Cobra command tree by:
 make command-map
 ```
 
-Every executable leaf must also be explicitly present in
-`go/cmd/xp2p/root/output_inventory.go`. There is no default classification. The
-meta-test fails for both a new unclassified leaf and a stale inventory entry.
+Every executable leaf must be explicitly present in both the classification
+inventory (`go/cmd/xp2p/root/output_inventory.go`) and the per-command audit
+inventory (`go/cmd/xp2p/root/output_audit*.go`). There is no default classification
+or audit template. The meta-test fails for a new or stale entry in either inventory.
 Generated maps in `commands_map/` expose the resulting classification and exception
 reason.
 
@@ -23,12 +24,13 @@ reason.
 | `completion`, `docs command-map`, `* render xray` | generator | shell, Markdown, or standalone JSON | generator diagnostics | none or configuration | no | bounded standalone document; `--json` rejected | build/release tooling |
 | `diag`, `ping`, `client/server run`, service run, `server deploy` | lifecycle/streaming | event or foreground process stream | runtime logs and diagnostics | running process/runtime | no | streaming or foreground; `--json` rejected | services and diagnostic tests |
 
-The explicit Go inventory stores the operation, stdout and stderr sources, runtime
-requirements, credential policy, interaction model, and known consumer scope on
-every leaf contract. The family table above is only a summary. A meta-test rejects
-an inventory record with any missing audit dimension. Platform-specific leaves are
-registered individually, even when their implementation is unavailable on the
-current host.
+The explicit Go audit inventory stores a literal record for every leaf command. Each
+record names the operation, concrete Go stdout and stderr sources, runtime
+requirements, credential policy, interaction model, and known consumer scope. The
+family table above is only a summary. A meta-test rejects missing, stale, duplicate,
+or incomplete records and cross-checks them against the independent classification
+inventory. Platform-specific leaves are registered individually, even when their
+implementation is unavailable on the current host.
 
 ## Classification
 

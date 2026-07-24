@@ -166,23 +166,18 @@ func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
 				t.Errorf("%s is absent from the explicit output inventory", cmd.CommandPath())
 			} else if contract.class != clioutput.ClassJSON && contract.reason == "" {
 				t.Errorf("%s exception has no reason", cmd.CommandPath())
-			} else if contract.operation == "" || contract.stdoutSources == "" ||
-				contract.stderrSources == "" || contract.runtime == "" ||
-				contract.credentials == "" || contract.interaction == "" ||
-				contract.consumers == "" {
-				t.Errorf("%s has incomplete audit metadata: %#v", cmd.CommandPath(), contract)
-			} else if contract.class == clioutput.ClassJSON &&
-				(!strings.Contains(contract.stdoutSources, cmd.CommandPath()) ||
-					!strings.Contains(contract.stderrSources, cmd.CommandPath())) {
-				t.Errorf("%s audit sources are not command-specific: %#v", cmd.CommandPath(), contract)
 			}
-			if contract.class == clioutput.ClassJSON {
-				_, hasQuiet := auditedPromptCommands[cmd.CommandPath()]
-				quietPath := cmd.Flags().Lookup("quiet") != nil ||
-					auditedLegacyQuietCommands[cmd.CommandPath()]
-				if hasQuiet && !quietPath {
-					t.Errorf("%s prompt audit has no non-interactive path", cmd.CommandPath())
-				}
+			audit, audited := outputAuditInventory[cmd.CommandPath()]
+			if !audited {
+				t.Errorf("%s is absent from the explicit audit inventory", cmd.CommandPath())
+			} else if audit.operation == "" || audit.stdoutSources == "" ||
+				audit.stderrSources == "" || audit.runtime == "" ||
+				audit.credentials == "" || audit.interaction == "" ||
+				audit.consumers == "" {
+				t.Errorf("%s has incomplete audit metadata: %#v", cmd.CommandPath(), audit)
+			}
+			if jsonQuietFlagCommands[cmd.CommandPath()] && cmd.Flags().Lookup("quiet") == nil {
+				t.Errorf("%s audit declares Cobra quiet policy but has no --quiet flag", cmd.CommandPath())
 			}
 		}
 		for _, child := range children {
@@ -193,6 +188,19 @@ func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
 	for path := range outputContractInventory {
 		if !seen[path] && !platformSpecificOutputContracts[path] {
 			t.Errorf("stale output inventory entry %q", path)
+		}
+	}
+	for path := range outputAuditInventory {
+		if !seen[path] && !platformSpecificOutputContracts[path] {
+			t.Errorf("stale output audit entry %q", path)
+		}
+		if _, classified := outputContractInventory[path]; !classified {
+			t.Errorf("output audit %q has no classification", path)
+		}
+	}
+	for path := range outputContractInventory {
+		if _, audited := outputAuditInventory[path]; !audited {
+			t.Errorf("output classification %q has no audit record", path)
 		}
 	}
 }
