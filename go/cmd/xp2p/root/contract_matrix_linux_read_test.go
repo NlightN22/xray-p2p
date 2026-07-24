@@ -102,8 +102,6 @@ func dnsForwardListContractCase(role string) contractCase {
 
 func natRedirectListContractCase() contractCase {
 	args := []string{"nat-redirect", "list"}
-	entryDir := "/etc/nftables.d/xray-transparent.d"
-	entryPath := filepath.Join(entryDir, "xray_redirect_198_51_100_0_24.entry")
 	return contractCase{
 		coverage: contractCovered,
 		success:  args,
@@ -113,14 +111,12 @@ func natRedirectListContractCase() contractCase {
 			root := t.TempDir()
 			t.Setenv("XP2P_CONFIG_ROOT", root)
 			t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
-			if err := os.Remove(entryPath); err != nil && !os.IsNotExist(err) {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = os.Remove(entryPath) })
 			if mode == "success" {
+				entryDir := filepath.Join(root, "nftables", "xray-transparent.d")
 				if err := os.MkdirAll(entryDir, 0o755); err != nil {
 					t.Fatal(err)
 				}
+				entryPath := filepath.Join(entryDir, "xray_redirect_198_51_100_0_24.entry")
 				if err := os.WriteFile(entryPath, []byte("CIDR=\"198.51.100.0/24\"\nPORT=\"12345\"\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}

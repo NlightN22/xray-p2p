@@ -9,10 +9,6 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 )
 
-var heartbeatContractFunc = func() (heartbeat.Contract, error) {
-	return heartbeat.CurrentContract(), nil
-}
-
 func newHeartbeatCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "heartbeat",
@@ -23,10 +19,7 @@ func newHeartbeatCommand() *cobra.Command {
 		Short: "Print the machine-readable heartbeat contract",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			contract, err := heartbeatContractFunc()
-			if err != nil {
-				return err
-			}
+			contract := heartbeat.CurrentContract()
 			if clioutput.Enabled(cmd) {
 				return clioutput.SetResult(cmd, contract)
 			}

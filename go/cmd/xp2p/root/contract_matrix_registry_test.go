@@ -30,6 +30,7 @@ type contractCase struct {
 	success          []string
 	empty            []string
 	failure          []string
+	failureCode      string
 	setup            func(*testing.T, string)
 	assertResult     func(*testing.T, map[string]any)
 	assertEmpty      func(*testing.T, map[string]any)
@@ -40,6 +41,13 @@ type contractCase struct {
 	platform         string
 	human            []string
 	assertHuman      func(*testing.T, string, string)
+}
+
+func (c contractCase) expectedFailureCode() string {
+	if c.failureCode != "" {
+		return c.failureCode
+	}
+	return "command_failed"
 }
 
 var contractCaseRegistry = buildContractCaseRegistry()

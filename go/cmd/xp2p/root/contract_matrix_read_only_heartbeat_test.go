@@ -1,29 +1,19 @@
 package root
 
 import (
-	"errors"
 	"strings"
 	"testing"
-
-	"github.com/NlightN22/xray-p2p/go/internal/heartbeat"
 )
 
 func heartbeatContractCase() contractCase {
 	args := []string{"heartbeat", "contract"}
 	return contractCase{
-		coverage: contractCovered,
-		success:  args,
-		empty:    args,
-		failure:  args,
-		setup: func(t *testing.T, mode string) {
-			original := heartbeatContractFunc
-			t.Cleanup(func() { heartbeatContractFunc = original })
-			if mode == "error" {
-				heartbeatContractFunc = func() (heartbeat.Contract, error) {
-					return heartbeat.Contract{}, errors.New("heartbeat contract source unavailable")
-				}
-			}
-		},
+		coverage:         contractCovered,
+		success:          args,
+		empty:            args,
+		failure:          append(args, "unexpected"),
+		failureCode:      "invalid_argument",
+		setup:            func(*testing.T, string) {},
 		assertResult:     assertHeartbeatContractResult,
 		assertEmpty:      assertHeartbeatContractResult,
 		emptyResult:      "the immutable protocol contract has no empty state; required enum arrays remain non-nil",

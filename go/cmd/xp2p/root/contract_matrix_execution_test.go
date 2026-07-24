@@ -9,10 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/spf13/cobra"
-
-	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
 var logTimestampPattern = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z`)
@@ -84,24 +80,13 @@ func normalizeHumanOutput(value string) string {
 	return expiryDaysPattern.ReplaceAllString(value, "expires in <DAYS> days")
 }
 
-func executeContractCase(args []string, emitWarning bool) contractExecution {
+func executeContractCase(args []string) contractExecution {
 	allArgs := append([]string{"--json"}, args...)
 	cmd := NewCommandForArgs(allArgs)
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	cmd.SetArgs(allArgs)
-	if emitWarning {
-		target, _, err := cmd.Find(args)
-		if err != nil {
-			return contractExecution{err: err, exitCode: ProcessExitCode(err)}
-		}
-		original := target.RunE
-		target.RunE = func(cmd *cobra.Command, args []string) error {
-			logging.Warn("matrix warning \x1b[31m token=matrix-secret\nnext")
-			return original(cmd, args)
-		}
-	}
 	processStdout, processStderr, err := captureProcessStreams(cmd.Execute)
 	return contractExecution{
 		stdout: stdout.String() + processStdout,

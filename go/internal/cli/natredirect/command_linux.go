@@ -4,6 +4,8 @@ package natredirect
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -149,7 +151,7 @@ func newListCmd(cfg func() config.Config) *cobra.Command {
 			if err := ensureProxyMode(cfg(), defaultInbounds); err != nil {
 				return err
 			}
-			manager := firewall.NewManager(defaultSnippet, defaultEntryDir)
+			manager := firewall.NewManager(defaultSnippet, listEntryDir())
 			entries, err := manager.List()
 			if err != nil {
 				return err
@@ -178,6 +180,13 @@ func newListCmd(cfg func() config.Config) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func listEntryDir() string {
+	if root := strings.TrimSpace(os.Getenv("XP2P_CONFIG_ROOT")); root != "" {
+		return filepath.Join(root, "nftables", "xray-transparent.d")
+	}
+	return defaultEntryDir
 }
 
 type addOptions struct {

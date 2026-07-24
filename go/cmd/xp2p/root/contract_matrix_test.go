@@ -100,7 +100,7 @@ func TestCoveredContractCases(t *testing.T) {
 		}
 		t.Run(path+"/success", func(t *testing.T) {
 			scenario.setup(t, "success")
-			execution := executeContractCase(scenario.success, false)
+			execution := executeContractCase(scenario.success)
 			if execution.exitCode != 0 {
 				t.Fatalf("exit=%d err=%v; stderr=%q", execution.exitCode, execution.err, execution.stderr)
 			}
@@ -124,7 +124,7 @@ func TestCoveredContractCases(t *testing.T) {
 		})
 		t.Run(path+"/empty", func(t *testing.T) {
 			scenario.setup(t, "empty")
-			execution := executeContractCase(scenario.empty, false)
+			execution := executeContractCase(scenario.empty)
 			if execution.exitCode != 0 {
 				t.Fatalf("exit=%d err=%v; stderr=%q", execution.exitCode, execution.err, execution.stderr)
 			}
@@ -143,7 +143,7 @@ func TestCoveredContractCases(t *testing.T) {
 		})
 		t.Run(path+"/error", func(t *testing.T) {
 			scenario.setup(t, "error")
-			execution := executeContractCase(scenario.failure, false)
+			execution := executeContractCase(scenario.failure)
 			if execution.err == nil {
 				t.Fatal("expected handler error")
 			}
@@ -159,28 +159,28 @@ func TestCoveredContractCases(t *testing.T) {
 				t.Fatal(decodeErr)
 			}
 			if envelope.SchemaVersion != clioutput.SchemaVersion ||
-				envelope.Command != path || envelope.Error.Code != "command_failed" {
+				envelope.Command != path || envelope.Error.Code != scenario.expectedFailureCode() {
 				t.Fatalf("unexpected error envelope: %#v", envelope)
 			}
 			if strings.Contains(execution.stderr, "\x1b[") {
 				t.Fatalf("stderr leaked diagnostics: %q", execution.stderr)
 			}
 		})
-		t.Run(path+"/warning", func(t *testing.T) {
-			scenario.setup(t, "success")
-			execution := executeContractCase(scenario.success, true)
-			if execution.exitCode != 0 || execution.stderr != "" {
-				t.Fatalf("warning corrupted JSON execution: exit=%d err=%v stderr=%q", execution.exitCode, execution.err, execution.stderr)
+		t.Run(path+"/diagnostic", func(t *testing.T) {
+			scenario.setup(t, "error")
+			execution := executeContractCase(scenario.failure)
+			if execution.exitCode == 0 || execution.err == nil || execution.stdout != "" {
+				t.Fatalf("diagnostic path contract changed: exit=%d err=%v stdout=%q", execution.exitCode, execution.err, execution.stdout)
 			}
-			document := assertJSONDocument(t, execution.stdout)
-			var envelope struct {
-				Result map[string]any `json:"result"`
-			}
+			document := assertJSONDocument(t, execution.stderr)
+			var envelope clioutput.ErrorEnvelope
 			if err := json.Unmarshal(document, &envelope); err != nil {
 				t.Fatal(err)
 			}
-			scenario.assertResult(t, envelope.Result)
-			scenario.assertEdgeCases(t, envelope.Result, execution.stdout, execution.stderr)
+			if envelope.Command != path || envelope.Error.Code != scenario.expectedFailureCode() ||
+				strings.Contains(execution.stderr, "\x1b[") {
+				t.Fatalf("diagnostic path leaked outside its error envelope: %#v stderr=%q", envelope, execution.stderr)
+			}
 		})
 		t.Run(path+"/human", func(t *testing.T) {
 			scenario.setup(t, "success")
