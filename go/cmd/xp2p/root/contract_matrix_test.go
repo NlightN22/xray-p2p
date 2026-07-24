@@ -100,7 +100,7 @@ func TestCoveredContractCases(t *testing.T) {
 		}
 		t.Run(path+"/success", func(t *testing.T) {
 			scenario.setup(t, "success")
-			execution := executeContractCase(scenario.success)
+			execution := executeContractCase(scenario.success, false)
 			if execution.exitCode != 0 {
 				t.Fatalf("exit=%d err=%v; stderr=%q", execution.exitCode, execution.err, execution.stderr)
 			}
@@ -124,7 +124,7 @@ func TestCoveredContractCases(t *testing.T) {
 		})
 		t.Run(path+"/empty", func(t *testing.T) {
 			scenario.setup(t, "empty")
-			execution := executeContractCase(scenario.empty)
+			execution := executeContractCase(scenario.empty, false)
 			if execution.exitCode != 0 {
 				t.Fatalf("exit=%d err=%v; stderr=%q", execution.exitCode, execution.err, execution.stderr)
 			}
@@ -143,7 +143,7 @@ func TestCoveredContractCases(t *testing.T) {
 		})
 		t.Run(path+"/error", func(t *testing.T) {
 			scenario.setup(t, "error")
-			execution := executeContractCase(scenario.failure)
+			execution := executeContractCase(scenario.failure, scenario.cancelFailure)
 			if execution.err == nil {
 				t.Fatal("expected handler error")
 			}
@@ -159,7 +159,7 @@ func TestCoveredContractCases(t *testing.T) {
 				t.Fatal(decodeErr)
 			}
 			if envelope.SchemaVersion != clioutput.SchemaVersion ||
-				envelope.Command != path || envelope.Error.Code != scenario.expectedFailureCode() {
+				envelope.Command != path || envelope.Error.Code != "command_failed" {
 				t.Fatalf("unexpected error envelope: %#v", envelope)
 			}
 			if strings.Contains(execution.stderr, "\x1b[") {
@@ -168,7 +168,7 @@ func TestCoveredContractCases(t *testing.T) {
 		})
 		t.Run(path+"/diagnostic", func(t *testing.T) {
 			scenario.setup(t, "error")
-			execution := executeContractCase(scenario.failure)
+			execution := executeContractCase(scenario.failure, scenario.cancelFailure)
 			if execution.exitCode == 0 || execution.err == nil || execution.stdout != "" {
 				t.Fatalf("diagnostic path contract changed: exit=%d err=%v stdout=%q", execution.exitCode, execution.err, execution.stdout)
 			}
@@ -177,7 +177,7 @@ func TestCoveredContractCases(t *testing.T) {
 			if err := json.Unmarshal(document, &envelope); err != nil {
 				t.Fatal(err)
 			}
-			if envelope.Command != path || envelope.Error.Code != scenario.expectedFailureCode() ||
+			if envelope.Command != path || envelope.Error.Code != "command_failed" ||
 				strings.Contains(execution.stderr, "\x1b[") {
 				t.Fatalf("diagnostic path leaked outside its error envelope: %#v stderr=%q", envelope, execution.stderr)
 			}
@@ -231,12 +231,6 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 		}
 		if scenario.coverage == contractCovered && humanBaselineDigests[path] == "" {
 			problems = append(problems, "covered case has no exact human baseline: "+path)
-		}
-		if scenario.failureCode == "invalid_argument" && scenario.handlerErrorException == "" {
-			problems = append(problems, "pre-handler failure has no documented exception: "+path)
-		}
-		if scenario.failureCode != "invalid_argument" && scenario.handlerErrorException != "" {
-			problems = append(problems, "handler error exception is only valid for pre-handler failures: "+path)
 		}
 	}
 	sort.Strings(problems)

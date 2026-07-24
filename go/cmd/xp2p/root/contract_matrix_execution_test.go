@@ -2,6 +2,7 @@ package root
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -80,13 +81,18 @@ func normalizeHumanOutput(value string) string {
 	return expiryDaysPattern.ReplaceAllString(value, "expires in <DAYS> days")
 }
 
-func executeContractCase(args []string) contractExecution {
+func executeContractCase(args []string, cancel bool) contractExecution {
 	allArgs := append([]string{"--json"}, args...)
 	cmd := NewCommandForArgs(allArgs)
 	var stdout, stderr bytes.Buffer
 	cmd.SetOut(&stdout)
 	cmd.SetErr(&stderr)
 	cmd.SetArgs(allArgs)
+	if cancel {
+		ctx, cancelContext := context.WithCancel(context.Background())
+		cancelContext()
+		cmd.SetContext(ctx)
+	}
 	processStdout, processStderr, err := captureProcessStreams(cmd.Execute)
 	return contractExecution{
 		stdout: stdout.String() + processStdout,

@@ -8,20 +8,19 @@ import (
 func heartbeatContractCase() contractCase {
 	args := []string{"heartbeat", "contract"}
 	return contractCase{
-		coverage:              contractCovered,
-		success:               args,
-		empty:                 args,
-		failure:               append(args, "unexpected"),
-		failureCode:           "invalid_argument",
-		handlerErrorException: "CurrentContract is an immutable in-process value; after Cobra argument validation, RunE has no external boundary or recoverable error state",
-		setup:                 func(*testing.T, string) {},
-		assertResult:          assertHeartbeatContractResult,
-		assertEmpty:           assertHeartbeatContractResult,
-		emptyResult:           "the immutable protocol contract has no empty state; required enum arrays remain non-nil",
-		credentialPolicy:      "protocol metadata contains no credentials",
-		edgeCases:             []string{"number", "ordered enum arrays", "non-empty invariant", "ANSI-free streams"},
-		platform:              "windows,linux",
-		human:                 args,
+		coverage:         contractCovered,
+		success:          args,
+		empty:            args,
+		failure:          args,
+		cancelFailure:    true,
+		setup:            func(*testing.T, string) {},
+		assertResult:     assertHeartbeatContractResult,
+		assertEmpty:      assertHeartbeatContractResult,
+		emptyResult:      "the immutable protocol contract has no empty state; required enum arrays remain non-nil",
+		credentialPolicy: "protocol metadata contains no credentials",
+		edgeCases:        []string{"number", "ordered enum arrays", "non-empty invariant", "ANSI-free streams"},
+		platform:         "windows,linux",
+		human:            args,
 		assertHuman: func(t *testing.T, output, diagnostics string) {
 			for _, expected := range []string{`"schema": "xp2p-heartbeat-contract"`, `"version": 1`, `"modes"`, `"failure_stages"`, `"thresholds"`} {
 				if !strings.Contains(output, expected) {
