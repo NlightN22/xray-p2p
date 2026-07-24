@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configbundle"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -47,7 +48,7 @@ func newServerDebugBundleCmd() *cobra.Command {
 				return exitError{code: 1}
 			}
 			logging.Info("xp2p server debug bundle: archive created", "path", out)
-			return nil
+			return clioutput.SetResult(cmd, archiveResult{Path: out})
 		},
 	}
 	flags := cmd.Flags()

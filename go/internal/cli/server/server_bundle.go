@@ -1,6 +1,8 @@
 package servercmd
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/configbundle"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -29,8 +32,11 @@ func newServerExportCmd(cfg commandConfig) *cobra.Command {
 		Use:   "export",
 		Short: "Export server configuration bundle",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runServerExport(cfg(), opts)
-			return errorForCode(code)
+			path, err := exportServerBundle(cfg(), opts)
+			if err != nil {
+				return err
+			}
+			return clioutput.SetResult(cmd, archiveResult{Path: path})
 		},
 	}
 	flags := cmd.Flags()
@@ -57,6 +63,22 @@ func newServerImportCmd(cfg commandConfig) *cobra.Command {
 }
 
 func runServerExport(_ config.Config, opts serverExportOptions) int {
+	_, err := exportServerBundle(config.Config{}, opts)
+	if err == nil {
+		return 0
+	}
+	var codeErr exitError
+	if errors.As(err, &codeErr) {
+		return codeErr.code
+	}
+	return 1
+}
+
+type archiveResult struct {
+	Path string `json:"path"`
+}
+
+func exportServerBundle(_ config.Config, opts serverExportOptions) (string, error) {
 	root := strings.TrimSpace(opts.ConfigRoot)
 	if root == "" {
 		root = config.ConfigRoot()
@@ -68,20 +90,20 @@ func runServerExport(_ config.Config, opts serverExportOptions) int {
 		cwd, err := os.Getwd()
 		if err != nil {
 			logging.Error("xp2p server export: resolve working directory failed", "err", err)
-			return 1
+			return "", fmt.Errorf("resolve working directory: %w", err)
 		}
 		output = filepath.Join(cwd, configbundle.DefaultArchiveName("server", format, time.Now()))
 	} else if _, err := configbundle.DetectArchiveFormat(output); err != nil {
 		logging.Error("xp2p server export: unsupported archive format", "err", err)
-		return 2
+		return "", fmt.Errorf("unsupported archive format: %w", err)
 	}
 
 	if err := configbundle.ExportRoleConfigRoot("server", root, output); err != nil {
 		logging.Error("xp2p server export: failed", "err", err)
-		return 1
+		return "", fmt.Errorf("export server configuration: %w", err)
 	}
 	logging.Info("xp2p server export: archive created", "path", output)
-	return 0
+	return output, nil
 }
 
 func runServerImport(_ config.Config, opts serverImportOptions) int {

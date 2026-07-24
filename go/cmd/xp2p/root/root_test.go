@@ -164,6 +164,11 @@ func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
 				t.Errorf("%s is absent from the explicit output inventory", cmd.CommandPath())
 			} else if contract.class != clioutput.ClassJSON && contract.reason == "" {
 				t.Errorf("%s exception has no reason", cmd.CommandPath())
+			} else if contract.operation == "" || contract.stdoutSources == "" ||
+				contract.stderrSources == "" || contract.runtime == "" ||
+				contract.credentials == "" || contract.interaction == "" ||
+				contract.consumers == "" {
+				t.Errorf("%s has incomplete audit metadata: %#v", cmd.CommandPath(), contract)
 			}
 		}
 		for _, child := range children {

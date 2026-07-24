@@ -46,6 +46,7 @@ func TestWrapJSONContractMatrix(t *testing.T) {
 		run              func(*cobra.Command) error
 		wantError        bool
 		wantCode         string
+		wantMessage      string
 		checkResult      func(*testing.T, map[string]any)
 	}{
 		{
@@ -94,6 +95,16 @@ func TestWrapJSONContractMatrix(t *testing.T) {
 			wantError: true,
 			wantCode:  "command_failed",
 		},
+		{
+			name: "opaque legacy exit retains diagnostic",
+			run: func(cmd *cobra.Command) error {
+				fmt.Fprintln(cmd.ErrOrStderr(), "\x1b[31munsupported archive format: .rar\x1b[0m")
+				return errors.New("exit code 2")
+			},
+			wantError:   true,
+			wantCode:    "command_failed",
+			wantMessage: "unsupported archive format: .rar",
+		},
 	}
 
 	for _, tc := range tests {
@@ -123,6 +134,9 @@ func TestWrapJSONContractMatrix(t *testing.T) {
 				}
 				if envelope.Error.Code != tc.wantCode {
 					t.Fatalf("code=%q", envelope.Error.Code)
+				}
+				if tc.wantMessage != "" && envelope.Error.Message != tc.wantMessage {
+					t.Fatalf("message=%q, want %q", envelope.Error.Message, tc.wantMessage)
 				}
 				if strings.Contains(stderr.String(), "\x1b[") || strings.Contains(stderr.String(), "warning") {
 					t.Fatalf("stderr was polluted: %q", stderr.String())

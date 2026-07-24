@@ -23,10 +23,12 @@ reason.
 | `completion`, `docs command-map`, `* render xray` | generator | shell, Markdown, or standalone JSON | generator diagnostics | none or configuration | no | bounded standalone document; `--json` rejected | build/release tooling |
 | `diag`, `ping`, `client/server run`, service run, `server deploy` | lifecycle/streaming | event or foreground process stream | runtime logs and diagnostics | running process/runtime | no | streaming or foreground; `--json` rejected | services and diagnostic tests |
 
-The per-leaf command path, class, and exception decision live in the explicit Go
-inventory; the table above records the additional audit dimensions that apply to
-each family. Platform-specific leaves are registered individually, even when their
-implementation is unavailable on the current host.
+The explicit Go inventory stores the operation, stdout and stderr sources, runtime
+requirements, credential policy, interaction model, and known consumer scope on
+every leaf contract. The family table above is only a summary. A meta-test rejects
+an inventory record with any missing audit dimension. Platform-specific leaves are
+registered individually, even when their implementation is unavailable on the
+current host.
 
 ## Classification
 

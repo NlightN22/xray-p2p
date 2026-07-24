@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -182,7 +183,7 @@ func WrapJSON(cmd *cobra.Command, enabled func() bool, defaultOperation bool) {
 		originalContext := cmd.Context()
 		cmd.SetContext(context.WithValue(originalContext, collectorContextKey{}, collector))
 		defer cmd.SetContext(originalContext)
-		_, err := captureStdout(cmd, func() error {
+		_, diagnostic, err := captureStreams(cmd, func() error {
 			if runE != nil {
 				return runE(cmd, args)
 			}
@@ -190,6 +191,9 @@ func WrapJSON(cmd *cobra.Command, enabled func() bool, defaultOperation bool) {
 			return nil
 		})
 		if err != nil {
+			if message := cleanDiagnostic(diagnostic); isOpaqueExitError(err) && message != "" {
+				err = fmt.Errorf("%s", message)
+			}
 			if writeErr := WriteError(cmd.ErrOrStderr(), cmd.CommandPath(), "command_failed", err); writeErr != nil {
 				return writeErr
 			}
@@ -244,7 +248,7 @@ func RejectJSON(cmd *cobra.Command, enabled func() bool) {
 
 var captureMu sync.Mutex
 
-func captureStdout(cmd *cobra.Command, execute func() error) ([]byte, error) {
+func captureStreams(cmd *cobra.Command, execute func() error) ([]byte, []byte, error) {
 	captureMu.Lock()
 	defer captureMu.Unlock()
 
@@ -255,13 +259,13 @@ func captureStdout(cmd *cobra.Command, execute func() error) ([]byte, error) {
 	originalErr := cmd.ErrOrStderr()
 	reader, writer, err := os.Pipe()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	stdinReader, stdinWriter, err := os.Pipe()
 	if err != nil {
 		_ = reader.Close()
 		_ = writer.Close()
-		return nil, err
+		return nil, nil, err
 	}
 	_ = stdinWriter.Close()
 	errReader, errWriter, err := os.Pipe()
@@ -269,9 +273,10 @@ func captureStdout(cmd *cobra.Command, execute func() error) ([]byte, error) {
 		_ = reader.Close()
 		_ = writer.Close()
 		_ = stdinReader.Close()
-		return nil, err
+		return nil, nil, err
 	}
 	var buffer bytes.Buffer
+	var errBuffer bytes.Buffer
 	copyDone := make(chan error, 1)
 	errCopyDone := make(chan error, 1)
 	go func() {
@@ -279,7 +284,7 @@ func captureStdout(cmd *cobra.Command, execute func() error) ([]byte, error) {
 		copyDone <- copyErr
 	}()
 	go func() {
-		_, copyErr := io.Copy(io.Discard, errReader)
+		_, copyErr := io.Copy(&errBuffer, errReader)
 		errCopyDone <- copyErr
 	}()
 
@@ -302,10 +307,35 @@ func captureStdout(cmd *cobra.Command, execute func() error) ([]byte, error) {
 	_ = errReader.Close()
 	_ = stdinReader.Close()
 	if runErr != nil {
-		return buffer.Bytes(), runErr
+		return buffer.Bytes(), errBuffer.Bytes(), runErr
 	}
 	if copyErr != nil {
-		return buffer.Bytes(), copyErr
+		return buffer.Bytes(), errBuffer.Bytes(), copyErr
 	}
-	return buffer.Bytes(), errCopyErr
+	return buffer.Bytes(), errBuffer.Bytes(), errCopyErr
+}
+
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+func cleanDiagnostic(value []byte) string {
+	text := strings.TrimSpace(ansiPattern.ReplaceAllString(string(value), ""))
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		line := strings.TrimSpace(lines[index])
+		if line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+func isOpaqueExitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.TrimSpace(err.Error())
+	return message == "exit" || strings.HasPrefix(message, "exit code ")
 }

@@ -6,29 +6,51 @@ type outputContract struct {
 	class            string
 	reason           string
 	defaultOperation bool
+	operation        string
+	stdoutSources    string
+	stderrSources    string
+	runtime          string
+	credentials      string
+	interaction      string
+	consumers        string
 }
 
 func jsonContract() outputContract {
-	return outputContract{class: clioutput.ClassJSON, defaultOperation: true}
+	return outputContract{
+		class: clioutput.ClassJSON, defaultOperation: true, operation: "mutation",
+		stdoutSources: "human confirmation or silence", stderrSources: "validation, use-case, runtime, and persistence diagnostics",
+		runtime: "command-specific configuration/service state", credentials: "forbidden", interaction: "prompts suppressed in JSON mode",
+		consumers: "none found or direct human invocation",
+	}
 }
 
 func payloadContract() outputContract {
-	return outputContract{class: clioutput.ClassJSON}
+	return outputContract{
+		class: clioutput.ClassJSON, operation: "read-only or result-bearing mutation",
+		stdoutSources: "typed read model and legacy human renderer", stderrSources: "validation, use-case, runtime, and persistence diagnostics",
+		runtime: "command-specific configuration/service state", credentials: "forbidden unless the command explicitly creates or shows one",
+		interaction: "bounded result; prompts suppressed in JSON mode", consumers: "host tests and automation; search by exact command path",
+	}
 }
 
 func exceptionContract(class, reason string) outputContract {
-	return outputContract{class: class, reason: reason}
+	return outputContract{
+		class: class, reason: reason, operation: class,
+		stdoutSources: "standalone document or foreground event stream", stderrSources: "runtime and generator diagnostics",
+		runtime: "class-specific", credentials: "forbidden", interaction: reason,
+		consumers: "services, build tooling, diagnostics, or direct human invocation",
+	}
 }
 
 var outputContractInventory = map[string]outputContract{
-	"xp2p client debug bundle":                 jsonContract(),
+	"xp2p client debug bundle":                 payloadContract(),
 	"xp2p client deploy":                       payloadContract(),
 	"xp2p client disable":                      jsonContract(),
 	"xp2p client dns-forward add":              jsonContract(),
 	"xp2p client dns-forward list":             payloadContract(),
 	"xp2p client dns-forward remove":           jsonContract(),
 	"xp2p client enable":                       jsonContract(),
-	"xp2p client export":                       jsonContract(),
+	"xp2p client export":                       payloadContract(),
 	"xp2p client forward add":                  jsonContract(),
 	"xp2p client forward list":                 payloadContract(),
 	"xp2p client forward remove":               jsonContract(),
@@ -64,11 +86,11 @@ var outputContractInventory = map[string]outputContract{
 	"xp2p nat-redirect remove":                 jsonContract(),
 	"xp2p server cert set":                     jsonContract(),
 	"xp2p server cert state":                   payloadContract(),
-	"xp2p server debug bundle":                 jsonContract(),
+	"xp2p server debug bundle":                 payloadContract(),
 	"xp2p server dns-forward add":              jsonContract(),
 	"xp2p server dns-forward list":             payloadContract(),
 	"xp2p server dns-forward remove":           jsonContract(),
-	"xp2p server export":                       jsonContract(),
+	"xp2p server export":                       payloadContract(),
 	"xp2p server forward add":                  jsonContract(),
 	"xp2p server forward list":                 payloadContract(),
 	"xp2p server forward remove":               jsonContract(),
