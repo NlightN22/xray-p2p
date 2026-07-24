@@ -61,6 +61,7 @@ func buildContractCaseRegistry() map[string]contractCase {
 	registry["xp2p server forward list"] = forwardListContractCase("server")
 	registry["xp2p server ha peer list"] = serverHAPeerListContractCase()
 	registry["xp2p server ha member list"] = serverHACollectionContractCase("member")
+	registry["xp2p server ha channel inspect"] = serverHAChannelInspectContractCase()
 	registry["xp2p server ha channel list"] = serverHACollectionContractCase("channel")
 	registry["xp2p server ha group inspect"] = serverHAGroupInspectContractCase()
 	registry["xp2p server ha redirect list"] = serverHARedirectListContractCase()
