@@ -69,7 +69,6 @@ type serverUserListResult struct {
 type serverUserResult struct {
 	UserID   string `json:"user_id"`
 	Disabled bool   `json:"disabled"`
-	Link     string `json:"link"`
 }
 
 func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAddOptions) int {
@@ -279,7 +278,6 @@ func runServerUserList(ctx context.Context, cfg config.Config, opts serverUserLi
 			result.Users = append(result.Users, serverUserResult{
 				UserID:   strings.TrimSpace(user.UserID),
 				Disabled: user.Disabled,
-				Link:     user.Link,
 			})
 		}
 		if err := clioutput.SetResultContext(ctx, result); err != nil {

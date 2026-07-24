@@ -51,9 +51,12 @@ func buildContractCaseRegistry() map[string]contractCase {
 	}
 	registry["xp2p client list"] = clientListContractCase()
 	registry["xp2p client forward list"] = forwardListContractCase("client")
+	registry["xp2p client redirect list"] = redirectListContractCase("client")
 	registry["xp2p client reverse list"] = clientReverseListContractCase()
 	registry["xp2p server forward list"] = forwardListContractCase("server")
+	registry["xp2p server redirect list"] = redirectListContractCase("server")
 	registry["xp2p server reverse list"] = serverReverseListContractCase()
+	registry["xp2p server user list"] = serverUserListContractCase()
 	return registry
 }
 

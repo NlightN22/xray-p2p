@@ -95,3 +95,78 @@ tag = "outbound-alpha"
 		},
 	}
 }
+
+func serverUserListContractCase() contractCase {
+	args := []string{"server", "user", "list", "--pending"}
+	return contractCase{
+		coverage: contractCovered,
+		success:  args,
+		empty:    args,
+		failure:  args,
+		setup: func(t *testing.T, mode string) {
+			root := t.TempDir()
+			t.Setenv("XP2P_CONFIG_ROOT", root)
+			t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
+			if mode == "empty" {
+				return
+			}
+			fixture := `[server]
+users = "invalid"
+`
+			if mode == "success" {
+				fixture = `[server]
+[[server.trojan_users]]
+email = "zulu"
+password = "matrix-secret-zulu"
+disabled = true
+
+[[server.trojan_users]]
+email = "alpha Ω"
+password = "matrix-secret-alpha"
+`
+			}
+			writeContractFixture(t, filepath.Join(root, layout.ServerConfigFileName), fixture)
+		},
+		assertResult: func(t *testing.T, result map[string]any) {
+			users, ok := result["users"].([]any)
+			if !ok || len(users) != 2 {
+				t.Fatalf("users=%#v", result["users"])
+			}
+			zulu, ok := users[0].(map[string]any)
+			if !ok || zulu["user_id"] != "zulu" || zulu["disabled"] != true {
+				t.Fatalf("first user changed: %#v", users[0])
+			}
+			alpha, ok := users[1].(map[string]any)
+			if !ok || alpha["user_id"] != "alpha Ω" || alpha["disabled"] != false {
+				t.Fatalf("second user changed: %#v", users[1])
+			}
+			raw := fmt.Sprintf("%v", result)
+			for _, secret := range []string{"password", "link", "matrix-secret", "trojan://"} {
+				if strings.Contains(raw, secret) {
+					t.Fatalf("server user list leaked credentials: %#v", result)
+				}
+			}
+		},
+		assertEmpty: func(t *testing.T, result map[string]any) {
+			users, ok := result["users"].([]any)
+			if !ok || users == nil || len(users) != 0 {
+				t.Fatalf("empty users must be []: %#v", result["users"])
+			}
+		},
+		emptyResult:      "users is a non-nil empty array when no users exist",
+		credentialPolicy: "JSON list omits passwords and credential links",
+		edgeCases:        []string{"boolean", "ordered collection", "Unicode/spaces", "ANSI-free streams"},
+		platform:         "windows,linux",
+		human:            args,
+		assertHuman: func(t *testing.T, output, diagnostics string) {
+			for _, expected := range []string{"zulu [disabled]:", "alpha Ω:"} {
+				if !strings.Contains(output, expected) {
+					t.Fatalf("human baseline is missing %q: output=%q diagnostics=%q", expected, output, diagnostics)
+				}
+			}
+			if !strings.Contains(diagnostics, "INFO xp2p starting") {
+				t.Fatalf("human diagnostic baseline changed: %q", diagnostics)
+			}
+		},
+	}
+}
