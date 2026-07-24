@@ -7,7 +7,9 @@ xp2p heartbeat
   Subcommands: contract
 Options:
 Includes: inherited options
+
 xp2p heartbeat contract
   Summary: Print the machine-readable heartbeat contract
+  Machine output: json
 Options:
 Includes: inherited options

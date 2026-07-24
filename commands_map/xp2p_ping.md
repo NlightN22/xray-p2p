@@ -4,6 +4,8 @@
 
 xp2p ping <host>
   Summary: Send diagnostic ping requests to xp2p agents
+  Machine output: streaming
+  Machine output note: continuous ping output requires a future NDJSON contract
 Options:
 Includes: inherited options
 - --continuous, -C send ping requests until interrupted
@@ -14,4 +16,3 @@ Includes: inherited options
 - --proto, -o <proto> transport protocol for compatibility (tcp or https)
 - --timeout, -t <duration> per-request timeout in seconds (optional)
 - --tunnel, -T <string> route ping through xp2p tunnel (SOCKS5 host:port); omit value to auto-detect from xp2p config
-

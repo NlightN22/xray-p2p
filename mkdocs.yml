@@ -72,6 +72,8 @@ nav:
       - Identity Provider: reference/identity-provider.md
       - Tunnel Links: reference/tunnel-links.md
       - CLI Workflows: reference/cli-workflows.md
+      - CLI JSON Output: reference/cli-json-output.md
+      - CLI Output Audit: reference/cli-output-audit.md
 
 theme:
   name: material

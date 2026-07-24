@@ -52,7 +52,7 @@ def test_openwrt_upgrade_migrates_previous_release_client_credential(
             "--port", SERVER_PORT, "--force", check=True,
         )
         added = server_runner(
-            "server", "user", "add", "--path", helpers.INSTALL_ROOT.as_posix(),
+            "server", "user", "add", "--json", "--path", helpers.INSTALL_ROOT.as_posix(),
             "--config-dir", helpers.SERVER_CONFIG_DIR_NAME, "--id", USER,
             "--password", OLD_CREDENTIAL, "--host", SERVER_HOST, check=True,
         )

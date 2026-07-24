@@ -1,11 +1,15 @@
 package root
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
+
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 )
 
 func TestEnsureRuntimeDefaults(t *testing.T) {
@@ -141,6 +145,120 @@ func TestHeartbeatContractSkipsRuntimeConfig(t *testing.T) {
 	cmd := commandPath("heartbeat", "contract")
 	if !shouldSkipRuntime(cmd) {
 		t.Fatal("heartbeat contract must not require runtime configuration")
+	}
+}
+
+func TestEveryExecutableLeafHasOutputClassification(t *testing.T) {
+	root := NewCommand()
+	seen := make(map[string]bool)
+	var visit func(*cobra.Command)
+	visit = func(cmd *cobra.Command) {
+		children := cmd.Commands()
+		if len(children) == 0 && (cmd.Run != nil || cmd.RunE != nil) {
+			seen[cmd.CommandPath()] = true
+			if class := clioutput.Class(cmd); class == "" {
+				t.Errorf("%s has no output classification", cmd.CommandPath())
+			}
+			contract, ok := outputContractInventory[cmd.CommandPath()]
+			if !ok {
+				t.Errorf("%s is absent from the explicit output inventory", cmd.CommandPath())
+			} else if contract.class != clioutput.ClassJSON && contract.reason == "" {
+				t.Errorf("%s exception has no reason", cmd.CommandPath())
+			}
+		}
+		for _, child := range children {
+			visit(child)
+		}
+	}
+	visit(root)
+	for path := range outputContractInventory {
+		if !seen[path] && !platformSpecificOutputContracts[path] {
+			t.Errorf("stale output inventory entry %q", path)
+		}
+	}
+}
+
+func TestHeartbeatContractJSONEnvelope(t *testing.T) {
+	root := NewCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"--json", "heartbeat", "contract"})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("execute: %v; stderr=%s", err, stderr.String())
+	}
+	var envelope clioutput.Envelope
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode stdout without cleanup: %v; stdout=%q", err, stdout.String())
+	}
+	if envelope.SchemaVersion != clioutput.SchemaVersion {
+		t.Fatalf("schema version=%q", envelope.SchemaVersion)
+	}
+	if envelope.Command != "xp2p heartbeat contract" {
+		t.Fatalf("command=%q", envelope.Command)
+	}
+}
+
+func TestGeneratorRejectsJSONBeforeExecution(t *testing.T) {
+	root := NewCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"--json", "completion", "bash"})
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected unsupported output error")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout must be empty, got %q", stdout.String())
+	}
+	var envelope clioutput.ErrorEnvelope
+	if decodeErr := json.Unmarshal(stderr.Bytes(), &envelope); decodeErr != nil {
+		t.Fatalf("decode stderr: %v; stderr=%q", decodeErr, stderr.String())
+	}
+	if envelope.Error.Code != "unsupported_output_format" {
+		t.Fatalf("code=%q", envelope.Error.Code)
+	}
+}
+
+func TestHelpInJSONModeIsOneDocument(t *testing.T) {
+	root := NewCommand()
+	var stdout bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetArgs([]string{"--json", "client", "list", "--help"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var envelope clioutput.Envelope
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode help: %v; stdout=%q", err, stdout.String())
+	}
+	if envelope.Command != "xp2p client list" {
+		t.Fatalf("command=%q", envelope.Command)
+	}
+}
+
+func TestArgumentErrorUsesJSONStderr(t *testing.T) {
+	root := NewCommand()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	root.SetOut(&stdout)
+	root.SetErr(&stderr)
+	root.SetArgs([]string{"--json", "heartbeat", "contract", "extra"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("expected argument error")
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+	var envelope clioutput.ErrorEnvelope
+	if err := json.Unmarshal(stderr.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode stderr: %v; stderr=%q", err, stderr.String())
+	}
+	if envelope.Error.Code != "invalid_argument" {
+		t.Fatalf("code=%q", envelope.Error.Code)
 	}
 }
 

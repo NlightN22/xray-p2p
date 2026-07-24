@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -56,6 +57,9 @@ func newServerIdentityStatusCmd(cfg commandConfig) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, view)
+		}
 		printIdentityState(view)
 		return nil
 	}}
@@ -106,6 +110,12 @@ func newServerIdentityProvisionCmd(cfg commandConfig) *cobra.Command {
 		})
 		if err != nil {
 			return err
+		}
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, struct {
+				UserID string `json:"user_id"`
+				Link   string `json:"link"`
+			}{UserID: args[0], Link: link.Link})
 		}
 		fmt.Println(link.Link)
 		return nil

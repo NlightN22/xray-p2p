@@ -164,7 +164,7 @@ def _assert_server_state_reports_user(
     last_stdout = ""
     for _ in range(attempts):
         result = host.run(
-            f"{xp2p_binary} server state --path {install_path}",
+            f"{xp2p_binary} server state --json --path {install_path}",
         )
         if result.rc != 0:
             pytest.fail(
@@ -197,7 +197,7 @@ def _assert_server_state_reports_users(
     last_stdout = ""
     for _ in range(attempts):
         result = host.run(
-            f"{xp2p_binary} server state --path {install_path}",
+            f"{xp2p_binary} server state --json --path {install_path}",
         )
         if result.rc != 0:
             pytest.fail(

@@ -11,7 +11,8 @@ Includes: inherited options
 
 xp2p docs command-map
   Summary: Generate compact command map documentation
+  Machine output: generator
+  Machine output note: the result is a generated Markdown file
 Options:
 Includes: inherited options
 - --dir, -d <dir> (required) destination directory for generated command map
-

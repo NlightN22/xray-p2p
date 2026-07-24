@@ -3,11 +3,41 @@ package clientcmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 )
+
+type subscriptionStatusResult struct {
+	Subscriptions []subscriptionStatusItem `json:"subscriptions"`
+}
+
+type subscriptionStatusItem struct {
+	ID              string  `json:"id"`
+	Adapter         string  `json:"adapter"`
+	Revision        string  `json:"revision"`
+	OfferCount      int     `json:"offer_count"`
+	SelectedOfferID *string `json:"selected_offer_id"`
+	LastRefreshAt   *string `json:"last_refresh_at"`
+	LastApplyAt     *string `json:"last_apply_at"`
+	LastError       *string `json:"last_error"`
+}
+
+type subscriptionOffersResult struct {
+	Offers []subscriptionOfferItem `json:"offers"`
+}
+
+type subscriptionOfferItem struct {
+	SubscriptionID string `json:"subscription_id"`
+	StableID       string `json:"stable_id"`
+	Protocol       string `json:"protocol"`
+	Host           string `json:"host"`
+	Port           int    `json:"port"`
+	UserLabel      string `json:"user_label"`
+}
 
 func newClientSubscriptionCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "subscription", Short: "Manage external server-authoritative subscriptions"}
@@ -23,10 +53,22 @@ func newClientSubscriptionCmd() *cobra.Command {
 	refresh.Flags().BoolVarP(&refreshAllowHTTP, "allow-http", "A", false, "allow HTTP for a local compatibility fixture")
 	cmd.AddCommand(
 		add,
-		&cobra.Command{Use: "status", Short: "Show external subscription status", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+		&cobra.Command{Use: "status", Short: "Show external subscription status", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			statuses, err := client.ListExternalSubscriptions()
 			if err != nil {
 				return err
+			}
+			if clioutput.Enabled(cmd) {
+				result := subscriptionStatusResult{Subscriptions: make([]subscriptionStatusItem, 0, len(statuses))}
+				for _, status := range statuses {
+					result.Subscriptions = append(result.Subscriptions, subscriptionStatusItem{
+						ID: status.ID, Adapter: status.Adapter, Revision: status.Revision,
+						OfferCount: len(status.Offers), SelectedOfferID: optionalString(status.SelectedOfferID),
+						LastRefreshAt: optionalTime(status.LastRefreshAt), LastApplyAt: optionalTime(status.LastApplyAt),
+						LastError: optionalString(status.LastError),
+					})
+				}
+				return clioutput.SetResult(cmd, result)
 			}
 			if len(statuses) == 0 {
 				fmt.Println("No external subscriptions configured.")
@@ -40,10 +82,23 @@ func newClientSubscriptionCmd() *cobra.Command {
 			}
 			return nil
 		}},
-		&cobra.Command{Use: "offers", Short: "List external connection offers", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+		&cobra.Command{Use: "offers", Short: "List external connection offers", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 			statuses, err := client.ListExternalSubscriptions()
 			if err != nil {
 				return err
+			}
+			if clioutput.Enabled(cmd) {
+				result := subscriptionOffersResult{Offers: make([]subscriptionOfferItem, 0)}
+				for _, status := range statuses {
+					for _, offer := range status.Offers {
+						result.Offers = append(result.Offers, subscriptionOfferItem{
+							SubscriptionID: status.ID, StableID: offer.StableID,
+							Protocol: offer.Endpoint.Protocol, Host: offer.Endpoint.Host,
+							Port: offer.Endpoint.Port, UserLabel: offer.UserLabel,
+						})
+					}
+				}
+				return clioutput.SetResult(cmd, result)
 			}
 			for _, status := range statuses {
 				for _, offer := range status.Offers {
@@ -58,6 +113,22 @@ func newClientSubscriptionCmd() *cobra.Command {
 		}},
 	)
 	return cmd
+}
+
+func optionalString(value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func optionalTime(value time.Time) *string {
+	if value.IsZero() {
+		return nil
+	}
+	formatted := value.UTC().Format(time.RFC3339)
+	return &formatted
 }
 
 func formatSelectedOffer(value string) string {

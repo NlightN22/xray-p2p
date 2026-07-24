@@ -146,6 +146,7 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
         server_state = runner(
             "server",
             "state",
+            "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             check=True,

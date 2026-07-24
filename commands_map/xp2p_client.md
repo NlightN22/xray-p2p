@@ -10,6 +10,7 @@ Includes: inherited options
 
 xp2p client install
   Summary: Install xp2p client assets and reverse bridges
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-insecure, -I allow insecure TLS (skip verification)
@@ -28,18 +29,21 @@ Includes: inherited options
 
 xp2p client disable [hostname|tag]
   Summary: Disable a client endpoint
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all endpoints
 
 xp2p client enable [hostname|tag]
   Summary: Enable a client endpoint
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all endpoints
 
 xp2p client update <hostname|tag>
   Summary: Update endpoint credentials
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -49,6 +53,7 @@ Includes: inherited options
 
 xp2p client remove [hostname|tag]
   Summary: Remove xp2p client endpoints or entire installation
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a remove all endpoints and configuration
@@ -60,6 +65,7 @@ Includes: inherited options
 
 xp2p client list
   Summary: List configured xp2p client endpoints
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -69,6 +75,8 @@ Includes: inherited options
 
 xp2p client run
   Summary: Run xp2p client in foreground
+  Machine output: lifecycle
+  Machine output note: the command runs Xray in the foreground
 Options:
 Includes: inherited options
 - --auto-install, -A install automatically if missing
@@ -85,26 +93,32 @@ Includes: inherited options
 
 xp2p client service start
   Summary: Start the xp2p client service
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p client service stop
   Summary: Stop the xp2p client service
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p client service restart
   Summary: Restart the xp2p client service
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p client service status
   Summary: Show xp2p client service status
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p client service run
   Summary: Run the xp2p client service in the foreground
+  Machine output: lifecycle
+  Machine output note: the command is an internal service entry point
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -121,6 +135,7 @@ Includes: inherited options
 
 xp2p client state
   Summary: Show local heartbeat cache status
+  Machine output: json
 Options:
 Includes: inherited options
 - --health-details, -Z show heartbeat health diagnostic columns
@@ -136,6 +151,7 @@ Includes: inherited options
 
 xp2p client obs
   Summary: Show Xray outbound observations
+  Machine output: json
 Options:
 Includes: inherited options
 - --path, -p <path> client installation directory
@@ -149,6 +165,8 @@ Includes: inherited options
 
 xp2p client render xray
   Summary: Render xray.json
+  Machine output: generator
+  Machine output note: the result is an Xray JSON document
 Options:
 Includes: inherited options
 - --desired, -d compile Desired inputs without applying
@@ -163,12 +181,14 @@ Includes: inherited options
 
 xp2p client debug bundle
   Summary: Create a debug bundle archive
+  Machine output: json
 Options:
 Includes: inherited options
 - --output, -o <path> archive output path
 
 xp2p client export
   Summary: Export client configuration bundle
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-root, -C <dir> configuration root to export
@@ -176,6 +196,7 @@ Includes: inherited options
 
 xp2p client import
   Summary: Import client configuration bundle
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-root, -C <dir> configuration root to import into
@@ -183,6 +204,7 @@ Includes: inherited options
 
 xp2p client deploy
   Summary: Deploy xp2p client via remote helper
+  Machine output: json
 Options:
 Includes: inherited options
 - --force, -f allow changing existing tun mode
@@ -207,6 +229,7 @@ Includes: inherited options
 
 xp2p client redirect add
   Summary: Add a custom redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --cidr, -C <cidr> CIDR to redirect
@@ -220,6 +243,7 @@ Includes: inherited options
 
 xp2p client redirect disable
   Summary: Disable a redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a toggle all redirect rules
@@ -231,6 +255,7 @@ Includes: inherited options
 
 xp2p client redirect enable
   Summary: Enable a redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a toggle all redirect rules
@@ -242,6 +267,7 @@ Includes: inherited options
 
 xp2p client redirect remove
   Summary: Remove a redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --cidr, -C <cidr> CIDR mapping to remove
@@ -254,6 +280,7 @@ Includes: inherited options
 
 xp2p client redirect list
   Summary: List configured redirect rules
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -268,6 +295,7 @@ Includes: inherited options
 
 xp2p client forward add
   Summary: Add a client dokodemo-door forward
+  Machine output: json
 Options:
 Includes: inherited options
 - --base-port, -B <port> first port to probe when auto-selecting
@@ -280,6 +308,7 @@ Includes: inherited options
 
 xp2p client forward remove
   Summary: Remove a client dokodemo-door forward
+  Machine output: json
 Options:
 Includes: inherited options
 - --cleanup, -C remove state entry even when config is missing
@@ -292,6 +321,7 @@ Includes: inherited options
 
 xp2p client forward list
   Summary: List client forwards
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -310,18 +340,21 @@ Includes: inherited options
 
 xp2p client reverse disable [tag|user|host]
   Summary: Disable a client reverse tunnel
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all reverse tunnels
 
 xp2p client reverse enable [tag|user|host]
   Summary: Enable a client reverse tunnel
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all reverse tunnels
 
 xp2p client reverse list
   Summary: List client reverse tunnels
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -330,6 +363,7 @@ Includes: inherited options
 
 xp2p client mode [tun|proxy] [split|full]
   Summary: Switch client mode between TUN and proxy (optional tun mode)
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -348,6 +382,7 @@ Includes: inherited options
 xp2p client group list
   Summary: List HA endpoint groups
   Aliases: status, inspect
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -359,28 +394,33 @@ Includes: inherited options
 
 xp2p client subscription add <id> <url>
   Summary: Add and fetch an external subscription
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-http, -A allow HTTP for a local compatibility fixture
 
 xp2p client subscription status
   Summary: Show external subscription status
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p client subscription offers
   Summary: List external connection offers
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p client subscription refresh <id>
   Summary: Refresh one external subscription
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-http, -A allow HTTP for a local compatibility fixture
 
 xp2p client subscription remove <id>
   Summary: Remove one external subscription and its offers
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -392,6 +432,7 @@ Includes: inherited options
 
 xp2p client dns-forward add
   Summary: Create or update a DNS forward entry
+  Machine output: json
 Options:
 Includes: inherited options
 - --debug, -g emit diagnostics output on error
@@ -403,6 +444,7 @@ Includes: inherited options
 
 xp2p client dns-forward remove
   Summary: Remove a DNS forward entry
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a remove all managed DNS forward entries
@@ -414,7 +456,7 @@ Includes: inherited options
 
 xp2p client dns-forward list
   Summary: List managed DNS forwards
+  Machine output: json
 Options:
 Includes: inherited options
 - --debug, -g emit diagnostics output on error
-

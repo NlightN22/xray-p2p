@@ -205,6 +205,7 @@ def test_openwrt_client_deploy_end_to_end(
             state_output = client_runner(
                 "client",
                 "state",
+                "--json",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 check=True,

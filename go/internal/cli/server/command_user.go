@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/spf13/cobra"
 )
@@ -29,9 +30,14 @@ func newServerUserCmd(cfg commandConfig) *cobra.Command {
 func newServerUserRotateCmd(cfg commandConfig) *cobra.Command {
 	var ttl time.Duration
 	cmd := &cobra.Command{Use: "rotate <id>", Short: "Rotate a user credential", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		if err := serverUserRotateFunc(commandContext(cmd), server.RotateUserOptions{UserID: args[0], TTL: ttl}); err != nil {
+		result, err := serverUserRotateFunc(commandContext(cmd), server.RotateUserOptions{UserID: args[0], TTL: ttl})
+		if err != nil {
 			return err
 		}
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, result)
+		}
+		fmt.Printf("Credential: %s\nPrevious valid until: %s\n", result.Credential, result.PreviousValidUntil.Format(time.RFC3339))
 		return nil
 	}}
 	cmd.Flags().DurationVarP(&ttl, "ttl", "T", 0, "previous credential rotation window")

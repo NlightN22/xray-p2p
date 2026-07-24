@@ -10,6 +10,7 @@ Includes: inherited options
 
 xp2p nat-redirect add
   Summary: Add transparent redirect rules for a CIDR
+  Machine output: json
 Options:
 Includes: inherited options
 - --cidr, -C <cidr> destination CIDR
@@ -22,6 +23,7 @@ Includes: inherited options
 
 xp2p nat-redirect remove
   Summary: Remove transparent redirect rules
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a remove all transparent redirects
@@ -32,6 +34,6 @@ Includes: inherited options
 
 xp2p nat-redirect list
   Summary: List transparent redirect entries
+  Machine output: json
 Options:
 Includes: inherited options
-

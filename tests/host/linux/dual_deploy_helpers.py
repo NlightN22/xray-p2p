@@ -264,7 +264,7 @@ def assert_server_state_reports_users(
     deadline = time.time() + timeout_seconds
     last_stdout = ""
     while time.time() < deadline:
-        result = host.run(f"{xp2p_binary} server state --path {install_path}")
+        result = host.run(f"{xp2p_binary} server state --json --path {install_path}")
         if result.rc != 0:
             pytest.fail(
                 "xp2p server state --once failed "

@@ -131,6 +131,7 @@ def _client_state(env: dict) -> str:
     result = env["client_runner"](
         "client",
         "state",
+        "--json",
         "--path",
         helpers.INSTALL_ROOT.as_posix(),
         "--ttl",

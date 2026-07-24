@@ -68,21 +68,19 @@ func announceCredential(prefix string, result credentialResult) {
 	}
 }
 
-func generateDefaultServerCredential(ctx context.Context, installOpts server.InstallOptions, host string) error {
+func generateDefaultServerCredential(ctx context.Context, installOpts server.InstallOptions, host string) (credentialResult, error) {
 	userID, err := identity.NewUserID()
 	if err != nil {
-		return err
+		return credentialResult{}, err
 	}
 	password, err := identity.NewTunnelCredential()
 	if err != nil {
-		return err
+		return credentialResult{}, err
 	}
 
 	result, err := provisionCredential(ctx, installOpts, host, userID, password)
 	if err != nil {
-		return err
+		return credentialResult{}, err
 	}
-
-	announceCredential("Generated server credential", result)
-	return nil
+	return result, nil
 }

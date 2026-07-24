@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/identity"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -52,6 +53,23 @@ type serverUserListOptions struct {
 type serverUserToggleOptions struct {
 	UserID string
 	All    bool
+}
+
+type serverUserCredentialResult struct {
+	UserID   string   `json:"user_id"`
+	Password string   `json:"password"`
+	Link     *string  `json:"link"`
+	Warnings []string `json:"warnings"`
+}
+
+type serverUserListResult struct {
+	Users []serverUserResult `json:"users"`
+}
+
+type serverUserResult struct {
+	UserID   string `json:"user_id"`
+	Disabled bool   `json:"disabled"`
+	Link     string `json:"link"`
 }
 
 func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAddOptions) int {
@@ -116,6 +134,10 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 		if len(candidates) == 1 {
 			host = candidates[0]
 		} else {
+			if clioutput.EnabledContext(ctx) {
+				logging.Error("xp2p server user add: --host is required when multiple link hosts are available")
+				return 2
+			}
 			selected, err := promptChoiceFunc("Select host for reverse portal/link generation:", candidates)
 			if err != nil {
 				logging.Error("xp2p server user add: host selection failed", "err", err)
@@ -145,6 +167,8 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 	}
 	logging.Info("xp2p server user add completed", "user_id", strings.TrimSpace(opts.UserID))
 
+	var linkValueResult *string
+	warnings := make([]string, 0)
 	if strings.TrimSpace(host) != "" {
 		linkOpts := server.UserLinkOptions{
 			InstallDir: addOpts.InstallDir,
@@ -154,9 +178,27 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 			Pending:    true,
 		}
 		if link, err := serverUserLinkFunc(ctx, linkOpts); err != nil {
-			logging.Warn("xp2p server user add: unable to build connection link", "err", err)
+			warning := "unable to build connection link"
+			warnings = append(warnings, warning)
+			if !clioutput.EnabledContext(ctx) {
+				logging.Warn("xp2p server user add: "+warning, "err", err)
+			}
 		} else {
-			fmt.Println(link.Link)
+			linkValueResult = &link.Link
+			if !clioutput.EnabledContext(ctx) {
+				fmt.Println(link.Link)
+			}
+		}
+	}
+	if clioutput.EnabledContext(ctx) {
+		if err := clioutput.SetResultContext(ctx, serverUserCredentialResult{
+			UserID:   strings.TrimSpace(opts.UserID),
+			Password: secret,
+			Link:     linkValueResult,
+			Warnings: warnings,
+		}); err != nil {
+			logging.Error("xp2p server user add: publish JSON result failed", "err", err)
+			return 1
 		}
 	}
 	return 0
@@ -230,6 +272,21 @@ func runServerUserList(ctx context.Context, cfg config.Config, opts serverUserLi
 	if err != nil {
 		logging.Error("xp2p server user list failed", "err", err)
 		return 1
+	}
+	if clioutput.EnabledContext(ctx) {
+		result := serverUserListResult{Users: make([]serverUserResult, 0, len(users))}
+		for _, user := range users {
+			result.Users = append(result.Users, serverUserResult{
+				UserID:   strings.TrimSpace(user.UserID),
+				Disabled: user.Disabled,
+				Link:     user.Link,
+			})
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("xp2p server user list: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
 	}
 
 	if len(users) == 0 {

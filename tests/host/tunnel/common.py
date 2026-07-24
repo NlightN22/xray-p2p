@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import time
 from typing import Iterable
@@ -51,32 +52,30 @@ def split_state_line(line: str, expected: int) -> list[str]:
 
 
 def parse_state_rows(output: str) -> list[dict[str, str]]:
-    cleaned = strip_ansi(output)
-    header = None
+    document = json.loads(output)
+    tunnels = (document.get("result") or {}).get("tunnels") or []
     rows: list[dict[str, str]] = []
-    for raw_line in cleaned.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        candidate_header = (
-            STATE_TABLE_DETAILS_HEADER if "FAILURE_STAGE" in line
-            else STATE_TABLE_BASE_HEADER
+    for tunnel in tunnels:
+        status = str(tunnel.get("status") or "")
+        if not status:
+            status = "alive" if tunnel.get("alive") else "stale"
+        rows.append(
+            {
+                "TAG": str(tunnel.get("tag") or ""),
+                "HOST": str(tunnel.get("host") or ""),
+                "STATUS": status,
+                "MODE": str(tunnel.get("mode") or ""),
+                "CHECK": str(tunnel.get("capability") or ""),
+                "LAST_ATTEMPT": str(tunnel.get("last_seen") or ""),
+                "LAST_SUCCESS": str(tunnel.get("last_success") or ""),
+                "FAILURE_STAGE": str(tunnel.get("failure_stage") or ""),
+                "LAST_RTT": f"{int(tunnel.get('last_rtt_millis') or 0)}ms",
+                "AVG_RTT": f"{float(tunnel.get('average_rtt_millis') or 0):.1f}ms",
+                "LAST_UPDATE": str(tunnel.get("last_seen") or ""),
+                "CLIENT_USER": str(tunnel.get("user") or ""),
+                "CLIENT_IP": str(tunnel.get("client_ip") or ""),
+            }
         )
-        cells = split_state_line(line, len(header or candidate_header))
-        if not cells:
-            continue
-        if tuple(cells[: len(candidate_header)]) == candidate_header:
-            header = list(candidate_header)
-            continue
-        if not header:
-            continue
-        if len(cells) == len(header) - 1 and header[-1] == "CLIENT_IP":
-            cells.append("-")
-        if len(cells) != len(header):
-            continue
-        if all(cell.strip() == "-" for cell in cells):
-            continue
-        rows.append({header[idx]: cell.strip() for idx, cell in enumerate(cells)})
     return rows
 
 
@@ -126,6 +125,7 @@ def wait_for_alive_entry(
         result = runner(
             role,
             "state",
+            "--json",
             "--path",
             install_path,
             check=True,

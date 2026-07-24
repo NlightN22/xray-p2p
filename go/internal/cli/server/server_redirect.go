@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -287,7 +288,7 @@ func runServerRedirectRemove(_ context.Context, cfg config.Config, opts serverRe
 	return 0
 }
 
-func runServerRedirectList(_ context.Context, cfg config.Config, opts serverRedirectListOptions) int {
+func runServerRedirectList(ctx context.Context, cfg config.Config, opts serverRedirectListOptions) int {
 	listOpts := server.RedirectListOptions{
 		InstallDir: firstNonEmpty(opts.Path, cfg.Server.InstallDir),
 		ConfigDir:  firstNonEmpty(opts.ConfigDir, cfg.Server.ConfigDir),
@@ -297,6 +298,30 @@ func runServerRedirectList(_ context.Context, cfg config.Config, opts serverRedi
 	if err != nil {
 		logging.Error("xp2p server redirect list failed", "err", err)
 		return 1
+	}
+	if clioutput.EnabledContext(ctx) {
+		type redirectResult struct {
+			Type             string `json:"type"`
+			Value            string `json:"value"`
+			OutboundTag      string `json:"outbound_tag"`
+			Host             string `json:"host"`
+			Enabled          bool   `json:"enabled"`
+			DisabledByPolicy bool   `json:"disabled_by_policy"`
+		}
+		result := struct {
+			Redirects []redirectResult `json:"redirects"`
+		}{Redirects: make([]redirectResult, 0, len(records))}
+		for _, record := range records {
+			result.Redirects = append(result.Redirects, redirectResult{
+				Type: record.Type, Value: record.Value, OutboundTag: record.Tag, Host: record.Hostname,
+				Enabled: !record.Disabled && !record.DisabledByPolicy, DisabledByPolicy: record.DisabledByPolicy,
+			})
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("xp2p server redirect list: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
 	}
 	if len(records) == 0 {
 		fmt.Println("No server redirect rules configured.")

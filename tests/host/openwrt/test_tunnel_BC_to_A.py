@@ -128,6 +128,7 @@ def _assert_server_state_reports_user(
             host,
             "server",
             "state",
+            "--json",
             "--path",
             install_path,
         )
@@ -164,6 +165,7 @@ def _assert_server_state_reports_users(
             host,
             "server",
             "state",
+            "--json",
             "--path",
             install_path,
         )

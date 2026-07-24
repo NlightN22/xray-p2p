@@ -97,7 +97,7 @@ def verify_heartbeat_state(env: dict) -> None:
             expected_client_ip,
         )
     except AssertionError:
-        state_output = env["server_runner"]("server", "state", "--path", server_install_path, check=True).stdout or ""
+        state_output = env["server_runner"]("server", "state", "--json", "--path", server_install_path, check=True).stdout or ""
         rows = tunnel_common.parse_state_rows(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on server"
     try:
@@ -111,7 +111,7 @@ def verify_heartbeat_state(env: dict) -> None:
             expected_client_ip,
         )
     except AssertionError:
-        state_output = env["client_runner"]("client", "state", "--path", client_install_path, check=True).stdout or ""
+        state_output = env["client_runner"]("client", "state", "--json", "--path", client_install_path, check=True).stdout or ""
         rows = tunnel_common.parse_state_rows(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on client"
 
@@ -131,6 +131,7 @@ def wait_for_dead_entry(
         result = env["server_runner"](
             "server",
             "state",
+            "--json",
             "--path",
             install_path,
             "--ttl",

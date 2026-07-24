@@ -44,7 +44,7 @@ func newServerCertStateCmd(cfg commandConfig) *cobra.Command {
 		Use:   "state",
 		Short: "Show TLS certificate status",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runServerCertState(cfg(), opts)
+			code := runServerCertState(commandContext(cmd), cfg(), opts)
 			return errorForCode(code)
 		},
 	}

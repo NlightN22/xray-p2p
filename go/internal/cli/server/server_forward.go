@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/forward"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -211,7 +212,7 @@ func runServerForwardRemove(_ context.Context, cfg config.Config, args []string)
 	return 0
 }
 
-func runServerForwardList(_ context.Context, cfg config.Config, args []string) int {
+func runServerForwardList(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p server forward list", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -239,6 +240,29 @@ func runServerForwardList(_ context.Context, cfg config.Config, args []string) i
 	if err != nil {
 		logging.Error("xp2p server forward list failed", "err", err)
 		return 1
+	}
+	if clioutput.EnabledContext(ctx) {
+		type forwardResult struct {
+			ListenAddress string   `json:"listen_address"`
+			ListenPort    int      `json:"listen_port"`
+			Protocols     []string `json:"protocols"`
+			Target        string   `json:"target"`
+			Remark        string   `json:"remark"`
+		}
+		result := struct {
+			Forwards []forwardResult `json:"forwards"`
+		}{Forwards: make([]forwardResult, 0, len(rules))}
+		for _, rule := range rules {
+			result.Forwards = append(result.Forwards, forwardResult{
+				ListenAddress: rule.ListenAddress, ListenPort: rule.ListenPort,
+				Protocols: strings.Split(rule.NetworkValue(), ","), Target: rule.Target(), Remark: rule.Remark,
+			})
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("xp2p server forward list: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
 	}
 	if len(rules) == 0 {
 		fmt.Println("No forward rules configured.")

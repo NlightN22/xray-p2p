@@ -18,13 +18,20 @@ type RotateUserOptions struct {
 	TTL    time.Duration
 }
 
+type RotateUserResult struct {
+	UserID             string    `json:"user_id"`
+	Credential         string    `json:"credential"`
+	PreviousValidUntil time.Time `json:"previous_valid_until"`
+	Generation         int       `json:"generation"`
+}
+
 // RotateUser replaces only the active protocol-neutral credential. The runtime
 // candidate contains the new credential, so the old one immediately stops
 // authenticating tunnel traffic after a successful apply.
-func RotateUser(ctx context.Context, opts RotateUserOptions) error {
+func RotateUser(ctx context.Context, opts RotateUserOptions) (RotateUserResult, error) {
 	label := strings.TrimSpace(opts.UserID)
 	if label == "" {
-		return errUserIDRequired
+		return RotateUserResult{}, errUserIDRequired
 	}
 	ttl := opts.TTL
 	if ttl <= 0 {
@@ -32,26 +39,34 @@ func RotateUser(ctx context.Context, opts RotateUserOptions) error {
 	}
 	doc, err := loadServerStateDoc(pendingConfigPath())
 	if err != nil {
-		return err
+		return RotateUserResult{}, err
 	}
 	desired, err := loadServerDesiredConfigFromPath(pendingConfigPath())
 	if err != nil {
-		return err
+		return RotateUserResult{}, err
 	}
 	for i := range desired.Users {
 		if !strings.EqualFold(desired.Users[i].Email, label) {
 			continue
 		}
 		if desired.Users[i].Disabled {
-			return fmt.Errorf("user %s is disabled", label)
+			return RotateUserResult{}, fmt.Errorf("user %s is disabled", label)
 		}
 		if err := rotateUserCredential(&desired.Users[i], ttl); err != nil {
-			return err
+			return RotateUserResult{}, err
 		}
 		setServerUsers(doc, desired.Users)
-		return commitServerRuntimeDoc(ctx, doc)
+		if err := commitServerRuntimeDoc(ctx, doc); err != nil {
+			return RotateUserResult{}, err
+		}
+		return RotateUserResult{
+			UserID:             desired.Users[i].Email,
+			Credential:         desired.Users[i].Password,
+			PreviousValidUntil: desired.Users[i].RotationExpiresAt.UTC(),
+			Generation:         desired.Users[i].CredentialGeneration,
+		}, nil
 	}
-	return fmt.Errorf("user %s not found", label)
+	return RotateUserResult{}, fmt.Errorf("user %s not found", label)
 }
 
 func rotateUserCredential(user *trojanClient, ttl time.Duration) error {

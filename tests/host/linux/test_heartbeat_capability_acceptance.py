@@ -104,7 +104,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
             client, helpers.CLIENT_HEARTBEAT_STATE_FILE
         )
         assert after_disabled.get("attempts") == before_disabled.get("attempts")
-        state = client_runner("client", "state", "--health-details", check=True)
+        state = client_runner("client", "state", "--json", "--health-details", check=True)
         row = next(
             row
             for row in tunnel_common.parse_state_rows(state.stdout or "")
@@ -167,7 +167,7 @@ def test_heartbeat_uses_endpoint_credentials_for_duplicate_user(
 
         def both_healthy():
             result = client_runner(
-                "client", "state", "--health-details", check=True
+                "client", "state", "--json", "--health-details", check=True
             )
             rows = [
                 row for row in tunnel_common.parse_state_rows(result.stdout or "")

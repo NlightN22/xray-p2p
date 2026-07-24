@@ -1,0 +1,4 @@
+interface:
+  display_name: "XP2P CLI Output Check"
+  short_description: "Audit XP2P CLI JSON output contracts"
+  default_prompt: "Use $xray-p2p-cli-output-check to verify changed CLI commands and their JSON contracts."

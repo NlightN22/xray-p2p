@@ -9,6 +9,7 @@ import (
 	"time"
 
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/diagnostics/ping"
@@ -283,5 +284,23 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	completionState = "OK"
 	logClientServiceApplyHint(ctx)
 	logging.Info("xp2p client deploy: completed")
+	if clioutput.EnabledContext(ctx) {
+		if err := clioutput.SetResultContext(ctx, struct {
+			Status      string `json:"status"`
+			Link        string `json:"link"`
+			InstallDir  string `json:"install_dir"`
+			ConfigDir   string `json:"config_dir"`
+			TunEnabled  bool   `json:"tun_enabled"`
+			TunMode     string `json:"tun_mode"`
+			ServiceLive bool   `json:"service_active"`
+		}{
+			Status: "completed", Link: res.Link, InstallDir: installOpts.InstallDir,
+			ConfigDir: installOpts.ConfigDir, TunEnabled: finalTunEnabled,
+			TunMode: tunMode, ServiceLive: serviceActive,
+		}); err != nil {
+			logging.Error("xp2p client deploy: publish JSON result failed", "err", err)
+			return 1
+		}
+	}
 	return 0
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -75,8 +76,45 @@ func runClientObs(ctx context.Context, cfg config.Config, opts clientObsOptions)
 		logging.Error("client obs: failed to query observations", "err", err)
 		return 1
 	}
+	if clioutput.EnabledContext(ctx) {
+		type observationResult struct {
+			Tag          string  `json:"tag"`
+			Alive        bool    `json:"alive"`
+			DelayMillis  int64   `json:"delay_millis"`
+			LastTryAt    *string `json:"last_try_at"`
+			LastSeenAt   *string `json:"last_seen_at"`
+			Error        *string `json:"error"`
+			HealthChecks int64   `json:"health_checks"`
+			HealthFails  int64   `json:"health_failures"`
+			HealthAvgMS  int64   `json:"health_average_millis"`
+		}
+		result := struct {
+			Observations []observationResult `json:"observations"`
+		}{Observations: make([]observationResult, 0, len(statuses))}
+		for _, status := range statuses {
+			result.Observations = append(result.Observations, observationResult{
+				Tag: status.Tag, Alive: status.Alive, DelayMillis: status.DelayMillis,
+				LastTryAt: optionalUnixTime(status.LastTryUnix), LastSeenAt: optionalUnixTime(status.LastSeenUnix),
+				Error: optionalString(status.LastError), HealthChecks: status.HealthAll,
+				HealthFails: status.HealthFail, HealthAvgMS: status.HealthAverageMs,
+			})
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("client obs: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
+	}
 	renderClientObs(statuses)
 	return 0
+}
+
+func optionalUnixTime(value int64) *string {
+	if value <= 0 {
+		return nil
+	}
+	formatted := time.Unix(value, 0).UTC().Format(time.RFC3339)
+	return &formatted
 }
 
 func clientObsLiveConfigPath(cfg config.Config, opts clientObsOptions) (string, error) {

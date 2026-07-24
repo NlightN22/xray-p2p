@@ -289,6 +289,7 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
         result = xp2p_client_runner(
             "client",
             "state",
+            "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--pending",

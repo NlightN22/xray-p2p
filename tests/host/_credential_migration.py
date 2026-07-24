@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
 import time
 
 
 def connection_link(output: str) -> str:
-    for raw in (output or "").splitlines():
-        line = raw.strip()
-        for scheme in ("trojan://", "vless://"):
-            index = line.find(scheme)
-            if index >= 0:
-                return line[index:]
+    document = json.loads(output)
+    result = document.get("result") or {}
+    link = result.get("link")
+    if not link:
+        link = (result.get("credential") or {}).get("link")
+    if isinstance(link, str) and link.startswith(("trojan://", "vless://")):
+        return link
     raise AssertionError("Server user command did not emit a connection link")
 
 

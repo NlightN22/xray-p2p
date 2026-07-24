@@ -18,9 +18,13 @@ type SnapshotProvider func() ([]heartbeat.Snapshot, error)
 
 // TrafficStats contains preformatted traffic counters for one state row.
 type TrafficStats struct {
-	Upload   string
-	Download string
-	Total    string
+	Upload        string
+	Download      string
+	Total         string
+	UploadBytes   uint64
+	DownloadBytes uint64
+	TotalBytes    uint64
+	Available     bool
 }
 
 // SnapshotView contains all data needed to render a state table.

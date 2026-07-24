@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/stateview"
 	"github.com/NlightN22/xray-p2p/go/internal/cli/xraystate"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
@@ -117,6 +118,10 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 	}
 
 	if opts.Watch {
+		if clioutput.EnabledContext(ctx) {
+			logging.Error("xp2p client state: --watch requires an NDJSON contract and is not available with --json")
+			return 2
+		}
 		err := stateview.WatchWithView(ctx, viewProvider, interval)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logging.Error("xp2p client state: watch failed", "err", err)
@@ -125,6 +130,18 @@ func runClientState(ctx context.Context, cfg config.Config, opts clientStateOpti
 		return 0
 	}
 
+	if clioutput.EnabledContext(ctx) {
+		view, err := viewProvider()
+		if err != nil {
+			logging.Error("xp2p client state: failed to build state", "err", err)
+			return 1
+		}
+		if err := clioutput.SetResultContext(ctx, stateview.BuildJSONResult(view)); err != nil {
+			logging.Error("xp2p client state: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
+	}
 	if err := stateview.PrintWithView(viewProvider); err != nil {
 		logging.Error("xp2p client state: failed to render state", "err", err)
 		return 1

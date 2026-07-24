@@ -140,7 +140,7 @@ def _install_old_client_state(client_host, server_host):
         "--port", TROJAN_PORT, "--force", check=True,
     )
     added = server_runner(
-        "server", "user", "add", "--path", helpers.INSTALL_ROOT.as_posix(),
+        "server", "user", "add", "--json", "--path", helpers.INSTALL_ROOT.as_posix(),
         "--config-dir", helpers.SERVER_CONFIG_DIR_NAME, "--id", USER,
         "--password", OLD_CREDENTIAL, "--host", SERVER_HOST, check=True,
     )

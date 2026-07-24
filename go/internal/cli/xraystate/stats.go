@@ -110,9 +110,13 @@ func renderStats(snapshots []heartbeat.Snapshot, stats map[string]xraystats.Traf
 		}
 		upload, download, total := xraystats.FormatTraffic(item, format)
 		result[user] = stateview.TrafficStats{
-			Upload:   upload,
-			Download: download,
-			Total:    total,
+			Upload:        upload,
+			Download:      download,
+			Total:         total,
+			UploadBytes:   item.UploadBytes,
+			DownloadBytes: item.DownloadBytes,
+			TotalBytes:    item.TotalBytes(),
+			Available:     true,
 		}
 	}
 	return result

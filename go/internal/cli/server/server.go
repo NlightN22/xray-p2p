@@ -9,6 +9,7 @@ import (
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/netutil"
@@ -96,9 +97,50 @@ func runServerInstall(ctx context.Context, cfg config.Config, opts serverInstall
 		}
 	}
 
+	var generated *credentialResult
+	warnings := make([]string, 0)
 	if strings.TrimSpace(cfg.Client.User) == "" && strings.TrimSpace(cfg.Client.Password) == "" {
-		if err := generateDefaultServerCredential(ctx, installOpts, installOpts.Host); err != nil {
+		result, err := generateDefaultServerCredential(ctx, installOpts, installOpts.Host)
+		if err != nil {
 			logging.Warn("xp2p server install: failed to generate server credential", "err", err)
+			warnings = append(warnings, "failed to generate server credential")
+		} else {
+			generated = &result
+			if !clioutput.EnabledContext(ctx) {
+				announceCredential("Generated server credential", result)
+			}
+		}
+	}
+	if clioutput.EnabledContext(ctx) {
+		type credentialOutput struct {
+			User     string  `json:"user"`
+			Password string  `json:"password"`
+			Link     *string `json:"link"`
+		}
+		var credential *credentialOutput
+		if generated != nil {
+			var link *string
+			if generated.linkErr == nil && strings.TrimSpace(generated.details.Link) != "" {
+				value := generated.details.Link
+				link = &value
+			}
+			credential = &credentialOutput{
+				User: generated.details.UserID, Password: generated.details.Password, Link: link,
+			}
+		}
+		result := struct {
+			Status     string            `json:"status"`
+			InstallDir string            `json:"install_dir"`
+			ConfigDir  string            `json:"config_dir"`
+			Credential *credentialOutput `json:"credential"`
+			Warnings   []string          `json:"warnings"`
+		}{
+			Status: "completed", InstallDir: installOpts.InstallDir, ConfigDir: installOpts.ConfigDir,
+			Credential: credential, Warnings: warnings,
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("xp2p server install: publish JSON result failed", "err", err)
+			return 1
 		}
 	}
 	return 0

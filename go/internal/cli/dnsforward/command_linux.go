@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/dnsforward"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -161,6 +162,23 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 					logDiagnostics(manager, false)
 				}
 				return exitError{code: 1}
+			}
+			if clioutput.Enabled(cmd) {
+				type entryResult struct {
+					Domain string   `json:"domain"`
+					Server string   `json:"server"`
+					Labels []string `json:"labels"`
+				}
+				result := struct {
+					Entries   []entryResult `json:"entries"`
+					Intercept bool          `json:"intercept_enabled"`
+				}{Entries: make([]entryResult, 0, len(entries)), Intercept: intercept}
+				for _, entry := range entries {
+					result.Entries = append(result.Entries, entryResult{
+						Domain: entry.Domain, Server: entry.Server, Labels: append([]string(nil), entry.Labels...),
+					})
+				}
+				return clioutput.SetResult(cmd, result)
 			}
 			if len(entries) == 0 {
 				fmt.Println("No dns-forward entries configured.")

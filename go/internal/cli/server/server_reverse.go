@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
@@ -58,7 +59,7 @@ func bindServerReverseFlags(cmd *cobra.Command) {
 	flags.BoolP("pending", "y", false, "list pending configuration")
 }
 
-func runServerReverseList(_ context.Context, cfg config.Config, args []string) int {
+func runServerReverseList(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p server reverse list", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -87,6 +88,31 @@ func runServerReverseList(_ context.Context, cfg config.Config, args []string) i
 	if err != nil {
 		logging.Error("xp2p server reverse list failed", "err", err)
 		return 1
+	}
+	if clioutput.EnabledContext(ctx) {
+		type reverseResult struct {
+			Domain      string `json:"domain"`
+			Host        string `json:"host"`
+			User        string `json:"user"`
+			OutboundTag string `json:"outbound_tag"`
+			Portal      bool   `json:"portal_present"`
+			RoutingRule bool   `json:"routing_rule_present"`
+			Enabled     bool   `json:"enabled"`
+		}
+		result := struct {
+			ReverseTunnels []reverseResult `json:"reverse_tunnels"`
+		}{ReverseTunnels: make([]reverseResult, 0, len(records))}
+		for _, record := range records {
+			result.ReverseTunnels = append(result.ReverseTunnels, reverseResult{
+				Domain: record.Domain, Host: record.Host, User: record.User, OutboundTag: record.Tag,
+				Portal: record.Portal, RoutingRule: record.RoutingRule, Enabled: !record.Disabled,
+			})
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("xp2p server reverse list: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
 	}
 	if len(records) == 0 {
 		fmt.Println("No reverse tunnels configured.")

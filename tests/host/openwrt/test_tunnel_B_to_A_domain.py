@@ -377,7 +377,7 @@ def _verify_heartbeat_state(env: dict) -> None:
             expected_client_ip,
         )
     except AssertionError:
-        state_output = env["server_runner"]("server", "state", "--path", server_install_path, check=True).stdout or ""
+        state_output = env["server_runner"]("server", "state", "--json", "--path", server_install_path, check=True).stdout or ""
         rows = tunnel_common.parse_state_rows(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on server"
     try:
@@ -391,14 +391,14 @@ def _verify_heartbeat_state(env: dict) -> None:
             expected_client_ip,
         )
     except AssertionError:
-        state_output = env["client_runner"]("client", "state", "--path", client_install_path, check=True).stdout or ""
+        state_output = env["client_runner"]("client", "state", "--json", "--path", client_install_path, check=True).stdout or ""
         rows = tunnel_common.parse_state_rows(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on client"
 
 
 def _assert_state_uses_domain(env: dict) -> None:
-    server_state = env["server_runner"]("server", "state", "--path", env["server_install_path"], check=True)
-    client_state = env["client_runner"]("client", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True)
+    server_state = env["server_runner"]("server", "state", "--json", "--path", env["server_install_path"], check=True)
+    client_state = env["client_runner"]("client", "state", "--json", "--path", helpers.INSTALL_ROOT.as_posix(), check=True)
     for output in (server_state.stdout or "", client_state.stdout or ""):
         rows = tunnel_common.parse_state_rows(output)
         assert any(

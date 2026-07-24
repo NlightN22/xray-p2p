@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/ha"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -20,7 +21,7 @@ func haServerConfigPath() string {
 
 func newServerHACmd(_ commandConfig) *cobra.Command {
 	cmd := &cobra.Command{Use: "ha", Short: "Manage server HA topology"}
-	cmd.AddCommand(&cobra.Command{Use: "status", Short: "Show committed HA generation", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+	cmd.AddCommand(&cobra.Command{Use: "status", Short: "Show committed HA generation", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		generation, err := server.LoadHAGeneration(haServerConfigPath())
 		if err != nil {
 			return err
@@ -38,6 +39,19 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 			return err
 		}
 		election := ha.ElectCoordinator(localID, peers)
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, struct {
+				Generation       uint64   `json:"generation"`
+				Group            string   `json:"group"`
+				MemberCount      int      `json:"member_count"`
+				ChannelCount     int      `json:"channel_count"`
+				PeerCount        int      `json:"peer_count"`
+				LocalPeer        string   `json:"local_peer"`
+				Coordinator      string   `json:"coordinator"`
+				VotingMembership []string `json:"voting_membership"`
+				Quorum           int      `json:"quorum"`
+			}{generation.Number, generation.Group.Tag, len(generation.ConfirmedMembers()), len(generation.Channels), len(peers), localID, election.Coordinator, append([]string(nil), election.Voters...), election.Quorum})
+		}
 		fmt.Printf("Generation: %d\nGroup: %s\nMembers: %d\nChannels: %d\nPeers: %d\nLocal peer: %s\nCoordinator: %s\nVoting membership: %s\nQuorum: %d\n", generation.Number, generation.Group.Tag, len(generation.ConfirmedMembers()), len(generation.Channels), len(peers), localID, election.Coordinator, strings.Join(election.Voters, ","), election.Quorum)
 		return nil
 	}})
@@ -50,10 +64,13 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		_, err := server.RemoveHAGroup(haServerConfigPath())
 		return err
 	}})
-	group.AddCommand(&cobra.Command{Use: "inspect", Short: "Inspect HA group topology", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+	group.AddCommand(&cobra.Command{Use: "inspect", Short: "Inspect HA group topology", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		generation, err := server.LoadHAGeneration(haServerConfigPath())
 		if err != nil {
 			return err
+		}
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, generation.Group)
 		}
 		fmt.Printf("ID: %s\nTag: %s\nMode: %s\n", generation.Group.ID, generation.Group.Tag, generation.Group.Selector.Mode)
 		return nil
@@ -84,10 +101,26 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 	peer.AddCommand(&cobra.Command{Use: "remove <id>", Short: "Remove an HA peer", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error {
 		return server.RemoveHAPeer(haServerConfigPath(), args[0])
 	}})
-	peer.AddCommand(&cobra.Command{Use: "list", Short: "List HA peers", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+	peer.AddCommand(&cobra.Command{Use: "list", Short: "List HA peers", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		peers, err := server.ListHAPeers(haServerConfigPath())
 		if err != nil {
 			return err
+		}
+		if clioutput.Enabled(cmd) {
+			type peerResult struct {
+				ID            string `json:"id"`
+				Endpoint      string `json:"endpoint"`
+				AllowInsecure bool   `json:"allow_insecure"`
+				Witness       bool   `json:"witness"`
+				NonVoting     bool   `json:"non_voting"`
+			}
+			result := struct {
+				Peers []peerResult `json:"peers"`
+			}{Peers: make([]peerResult, 0, len(peers))}
+			for _, item := range peers {
+				result.Peers = append(result.Peers, peerResult{item.ID, item.Endpoint, item.AllowInsecure, item.Witness, item.NonVoting})
+			}
+			return clioutput.SetResult(cmd, result)
 		}
 		for _, item := range peers {
 			fmt.Printf("%s\t%s\n", item.ID, item.Endpoint)
@@ -108,13 +141,16 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		_, err := server.RebindHAChannel(haServerConfigPath(), args[0], "", "", true)
 		return err
 	}})
-	channel.AddCommand(&cobra.Command{Use: "inspect <id>", Short: "Inspect an HA channel", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error {
+	channel.AddCommand(&cobra.Command{Use: "inspect <id>", Short: "Inspect an HA channel", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		generation, err := server.LoadHAGeneration(haServerConfigPath())
 		if err != nil {
 			return err
 		}
 		for _, item := range generation.Channels {
 			if strings.EqualFold(item.ID, args[0]) {
+				if clioutput.Enabled(cmd) {
+					return clioutput.SetResult(cmd, item)
+				}
 				fmt.Printf("ID: %s\nTag: %s\nDomain: %s\nGroup: %s\nEndpoint: %s\nDisabled: %t\n", item.ID, item.Tag, item.Domain, item.Binding.GroupTag, item.Binding.EndpointTag, item.Binding.Disabled)
 				return nil
 			}
@@ -163,10 +199,15 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 	}}
 	redirectRemove.Flags().StringVarP(&redirectCIDR, "cidr", "C", "", "CIDR mapping to remove")
 	redirectRemove.Flags().StringVarP(&redirectDomain, "domain", "d", "", "domain mapping to remove")
-	redirectCmd.AddCommand(redirectAdd, redirectRemove, &cobra.Command{Use: "list", Short: "List group-owned HA redirect policy", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+	redirectCmd.AddCommand(redirectAdd, redirectRemove, &cobra.Command{Use: "list", Short: "List group-owned HA redirect policy", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		rules, err := server.ListHARedirects(haServerConfigPath())
 		if err != nil {
 			return err
+		}
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, struct {
+				Redirects []redirect.Rule `json:"redirects"`
+			}{Redirects: rules})
 		}
 		for _, rule := range rules {
 			fmt.Printf("%s\t%s\t%s\n", rule.Kind(), rule.Value(), rule.OutboundTag)
@@ -215,10 +256,15 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		_, err = server.ReprioritizeHAMember(haServerConfigPath(), args[0], priority)
 		return err
 	}})
-	member.AddCommand(&cobra.Command{Use: "list", Short: "List HA group members", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+	member.AddCommand(&cobra.Command{Use: "list", Short: "List HA group members", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		generation, err := server.LoadHAGeneration(haServerConfigPath())
 		if err != nil {
 			return err
+		}
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, struct {
+				Members []ha.Member `json:"members"`
+			}{Members: generation.Group.Members})
 		}
 		for _, item := range generation.Group.Members {
 			state := "confirmed"
@@ -229,10 +275,15 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		}
 		return nil
 	}})
-	channel.AddCommand(&cobra.Command{Use: "list", Short: "List HA channels", Args: cobra.NoArgs, RunE: func(_ *cobra.Command, _ []string) error {
+	channel.AddCommand(&cobra.Command{Use: "list", Short: "List HA channels", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		generation, err := server.LoadHAGeneration(haServerConfigPath())
 		if err != nil {
 			return err
+		}
+		if clioutput.Enabled(cmd) {
+			return clioutput.SetResult(cmd, struct {
+				Channels []ha.Channel `json:"channels"`
+			}{Channels: generation.Channels})
 		}
 		for _, item := range generation.Channels {
 			state := "enabled"

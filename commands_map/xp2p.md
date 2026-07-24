@@ -3,6 +3,7 @@
 ## Global options (apply to all commands)
 - --help, -h show help for command
 - --config, -c <path> path to configuration file
+- --json, -J emit command result as JSON
 - --log-json, -j emit logs in JSON format
 - --log-level, -l <string> override logging level
 - --version, -v print xp2p version and exit
@@ -27,6 +28,8 @@ Includes: inherited options
 
 xp2p diag
   Summary: Run diagnostics responder in the foreground
+  Machine output: lifecycle
+  Machine output note: the command runs a foreground diagnostics service
 Options:
 Includes: inherited options
 - --listen, -n <host:port> listen address (host:port)
@@ -34,6 +37,8 @@ Includes: inherited options
 
 xp2p ping <host>
   Summary: Send diagnostic ping requests to xp2p agents
+  Machine output: streaming
+  Machine output note: continuous ping output requires a future NDJSON contract
 Options:
 Includes: inherited options
 - --continuous, -C send ping requests until interrupted
@@ -53,6 +58,8 @@ Includes: inherited options
 
 xp2p completion [bash|zsh|fish|powershell]
   Summary: Generate shell completion scripts
+  Machine output: generator
+  Machine output note: the result is a shell completion script
 Options:
 Includes: inherited options
 
@@ -68,4 +75,3 @@ xp2p nat-redirect
   Subcommands: add, remove, list
 Options:
 Includes: inherited options
-

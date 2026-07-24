@@ -10,6 +10,7 @@ Includes: inherited options
 
 xp2p server install
   Summary: Install xp2p server assets
+  Machine output: json
 Options:
 Includes: inherited options
 - --cert, -E <path> TLS certificate file to deploy
@@ -24,6 +25,7 @@ Includes: inherited options
 
 xp2p server remove
   Summary: Remove xp2p server installation
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name
@@ -34,6 +36,8 @@ Includes: inherited options
 
 xp2p server run
   Summary: Run xp2p server in foreground
+  Machine output: lifecycle
+  Machine output note: the command runs Xray in the foreground
 Options:
 Includes: inherited options
 - --auto-install, -A install server assets when missing without prompting
@@ -51,26 +55,32 @@ Includes: inherited options
 
 xp2p server service start
   Summary: Start the xp2p server service
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server service stop
   Summary: Stop the xp2p server service
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server service restart
   Summary: Restart the xp2p server service
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server service status
   Summary: Show xp2p server service status
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server service run
   Summary: Run the xp2p server service in the foreground
+  Machine output: lifecycle
+  Machine output note: the command is an internal service entry point
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name
@@ -83,6 +93,7 @@ Includes: inherited options
 
 xp2p server state
   Summary: Show heartbeat status for xp2p tunnels
+  Machine output: json
 Options:
 Includes: inherited options
 - --health-details, -Z show heartbeat health diagnostic columns
@@ -104,6 +115,8 @@ Includes: inherited options
 
 xp2p server render xray
   Summary: Render xray.json
+  Machine output: generator
+  Machine output note: the result is an Xray JSON document
 Options:
 Includes: inherited options
 - --desired, -d compile Desired inputs without applying
@@ -118,12 +131,14 @@ Includes: inherited options
 
 xp2p server debug bundle
   Summary: Create a debug bundle archive
+  Machine output: json
 Options:
 Includes: inherited options
 - --output, -o <path> archive output path
 
 xp2p server export
   Summary: Export server configuration bundle
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-root, -C <dir> configuration root to export
@@ -131,6 +146,7 @@ Includes: inherited options
 
 xp2p server import
   Summary: Import server configuration bundle
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-root, -C <dir> configuration root to import into
@@ -144,6 +160,7 @@ Includes: inherited options
 
 xp2p server user add
   Summary: Add a user and reverse portal
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -158,6 +175,7 @@ Includes: inherited options
 
 xp2p server user update <id>
   Summary: Update user credentials
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -167,24 +185,28 @@ Includes: inherited options
 
 xp2p server user rotate <id>
   Summary: Rotate a user credential
+  Machine output: json
 Options:
 Includes: inherited options
 - --ttl, -T <duration> previous credential rotation window
 
 xp2p server user disable <id>
   Summary: Disable a user
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all users
 
 xp2p server user enable <id>
   Summary: Enable a user
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all users
 
 xp2p server user remove
   Summary: Remove a user
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -194,6 +216,7 @@ Includes: inherited options
 
 xp2p server user list
   Summary: List configured users
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -209,27 +232,32 @@ Includes: inherited options
 
 xp2p server identity sync
   Summary: Synchronize identity cache
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server identity status
   Summary: Show identity cache status
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server identity provision <label>
   Summary: Provision a cached identity as a server user
+  Machine output: json
 Options:
 Includes: inherited options
 - --host, -H <host> public host name or IP for generated connection link
 
 xp2p server identity detach
   Summary: Detach the selected identity provider
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server identity select <instance-id>
   Summary: Select or reattach an identity provider
+  Machine output: json
 Options:
 Includes: inherited options
 - --group, -G <stringSlice> provider group scope
@@ -247,6 +275,7 @@ Includes: inherited options
 
 xp2p server redirect add
   Summary: Add a server redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --access, -V <string> access policy: all or restricted
@@ -264,6 +293,7 @@ Includes: inherited options
 
 xp2p server redirect disable
   Summary: Disable a server redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a toggle all redirect rules
@@ -275,6 +305,7 @@ Includes: inherited options
 
 xp2p server redirect enable
   Summary: Enable a server redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a toggle all redirect rules
@@ -286,6 +317,7 @@ Includes: inherited options
 
 xp2p server redirect remove
   Summary: Remove a server redirect rule
+  Machine output: json
 Options:
 Includes: inherited options
 - --cidr, -C <cidr> CIDR mapping to remove
@@ -298,6 +330,7 @@ Includes: inherited options
 
 xp2p server redirect list
   Summary: List server redirect rules
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -312,6 +345,7 @@ Includes: inherited options
 
 xp2p server redirect access set
   Summary: Replace a redirect access policy
+  Machine output: json
 Options:
 Includes: inherited options
 - --access, -V <string> access policy: all or restricted
@@ -324,6 +358,7 @@ Includes: inherited options
 
 xp2p server redirect access add-user
   Summary: Add allowed users
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-user, -U <stringSlice> allowed user label (repeatable)
@@ -334,6 +369,7 @@ Includes: inherited options
 
 xp2p server redirect access remove-user
   Summary: Remove allowed users
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-user, -U <stringSlice> allowed user label (repeatable)
@@ -344,6 +380,7 @@ Includes: inherited options
 
 xp2p server redirect access add-group
   Summary: Add allowed groups
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
@@ -354,6 +391,7 @@ Includes: inherited options
 
 xp2p server redirect access remove-group
   Summary: Remove allowed groups
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
@@ -364,6 +402,7 @@ Includes: inherited options
 
 xp2p server redirect access clear
   Summary: Clear redirect access selectors
+  Machine output: json
 Options:
 Includes: inherited options
 - --cidr, -C <cidr> CIDR redirect selector
@@ -379,6 +418,7 @@ Includes: inherited options
 
 xp2p server forward add
   Summary: Add a server dokodemo-door forward
+  Machine output: json
 Options:
 Includes: inherited options
 - --base-port, -B <port> first port to probe when auto-selecting
@@ -391,6 +431,7 @@ Includes: inherited options
 
 xp2p server forward remove
   Summary: Remove a server forward
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -402,6 +443,7 @@ Includes: inherited options
 
 xp2p server forward list
   Summary: List server forwards
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -420,18 +462,21 @@ Includes: inherited options
 
 xp2p server reverse disable [tag|user|host]
   Summary: Disable a server reverse tunnel
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all reverse tunnels
 
 xp2p server reverse enable [tag|user|host]
   Summary: Enable a server reverse tunnel
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a enable or disable all reverse tunnels
 
 xp2p server reverse list
   Summary: List server reverse tunnels
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -446,6 +491,7 @@ Includes: inherited options
 
 xp2p server cert state
   Summary: Show TLS certificate status
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
@@ -454,6 +500,7 @@ Includes: inherited options
 
 xp2p server cert set
   Summary: Set or replace TLS certificates
+  Machine output: json
 Options:
 Includes: inherited options
 - --cert, -E <path> TLS certificate file to deploy
@@ -467,6 +514,8 @@ Includes: inherited options
 
 xp2p server deploy
   Summary: Listen for xp2p client deploy requests
+  Machine output: lifecycle
+  Machine output note: the command runs a deployment listener
 Options:
 Includes: inherited options
 - --diag-service-port, -P <port> diagnostics service port
@@ -476,6 +525,7 @@ Includes: inherited options
 
 xp2p server mode [tun|proxy]
   Summary: Switch server mode between TUN and proxy
+  Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name
@@ -483,6 +533,7 @@ Includes: inherited options
 
 xp2p server profile [trojan-tls|vless-tls-vision]
   Summary: Show or switch the server tunnel profile
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -494,6 +545,7 @@ Includes: inherited options
 
 xp2p server ha status
   Summary: Show committed HA generation
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -505,26 +557,31 @@ Includes: inherited options
 
 xp2p server ha group create <id> <tag>
   Summary: Create an HA group
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha group remove
   Summary: Remove an HA group after channel rebind or disable
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha group inspect
   Summary: Inspect HA group topology
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha group update <automatic|manual|disabled>
   Summary: Set HA group selector mode
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha sync
   Summary: Synchronize the next HA generation with peers
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -536,11 +593,13 @@ Includes: inherited options
 
 xp2p server ha peer self <id>
   Summary: Set the local HA peer identity
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha peer add <id> <endpoint> <secret>
   Summary: Add or update an HA peer
+  Machine output: json
 Options:
 Includes: inherited options
 - --allow-insecure, -k allow an untrusted peer certificate
@@ -549,11 +608,13 @@ Includes: inherited options
 
 xp2p server ha peer remove <id>
   Summary: Remove an HA peer
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha peer list
   Summary: List HA peers
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -565,36 +626,43 @@ Includes: inherited options
 
 xp2p server ha channel create <id> <tag> <domain>
   Summary: Create a group-bound HA channel
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha channel disable <id>
   Summary: Disable an HA channel
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha channel inspect <id>
   Summary: Inspect an HA channel
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha channel rebind <id> <group-tag|endpoint-tag>
   Summary: Rebind an HA channel
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha channel rebind-endpoint <id> <endpoint-tag>
   Summary: Bind an HA channel to a physical endpoint
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha channel finalize <id>
   Summary: Finalize a disabled HA channel
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha channel list
   Summary: List HA channels
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -606,6 +674,7 @@ Includes: inherited options
 
 xp2p server ha redirect add <channel-id>
   Summary: Add a redirect through a group-bound HA channel
+  Machine output: json
 Options:
 Includes: inherited options
 - --access, -V <string> access policy: all or restricted
@@ -616,6 +685,7 @@ Includes: inherited options
 
 xp2p server ha redirect remove <channel-id>
   Summary: Remove a redirect through a group-bound HA channel
+  Machine output: json
 Options:
 Includes: inherited options
 - --cidr, -C <cidr> CIDR mapping to remove
@@ -623,6 +693,7 @@ Includes: inherited options
 
 xp2p server ha redirect list
   Summary: List group-owned HA redirect policy
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -634,6 +705,7 @@ Includes: inherited options
 
 xp2p server ha member remove <id>
   Summary: Tombstone an HA member
+  Machine output: json
 Options:
 Includes: inherited options
 - --force, -f force an emergency two-voter reconfiguration
@@ -641,6 +713,7 @@ Includes: inherited options
 
 xp2p server ha member add <id> <tag> <host> <port> <profile>
   Summary: Add a confirmed HA member
+  Machine output: json
 Options:
 Includes: inherited options
 - --force, -f force an emergency two-voter reconfiguration
@@ -650,11 +723,13 @@ Includes: inherited options
 
 xp2p server ha member reprioritize <id> <priority>
   Summary: Change HA member priority
+  Machine output: json
 Options:
 Includes: inherited options
 
 xp2p server ha member list
   Summary: List HA group members
+  Machine output: json
 Options:
 Includes: inherited options
 
@@ -666,6 +741,7 @@ Includes: inherited options
 
 xp2p server dns-forward add
   Summary: Create or update a DNS forward entry
+  Machine output: json
 Options:
 Includes: inherited options
 - --debug, -g emit diagnostics output on error
@@ -677,6 +753,7 @@ Includes: inherited options
 
 xp2p server dns-forward remove
   Summary: Remove a DNS forward entry
+  Machine output: json
 Options:
 Includes: inherited options
 - --all, -a remove all managed DNS forward entries
@@ -688,7 +765,7 @@ Includes: inherited options
 
 xp2p server dns-forward list
   Summary: List managed DNS forwards
+  Machine output: json
 Options:
 Includes: inherited options
 - --debug, -g emit diagnostics output on error
-

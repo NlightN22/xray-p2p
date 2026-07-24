@@ -200,6 +200,7 @@ def active_tunnel_sessions(env: dict):
         state_output = env["server_runner"](
             "server",
             "state",
+            "--json",
             "--path",
             env["server_install_path"],
             check=True,
@@ -222,6 +223,7 @@ def active_tunnel_sessions(env: dict):
         state_output = env["client_runner"](
             "client",
             "state",
+            "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             check=True,

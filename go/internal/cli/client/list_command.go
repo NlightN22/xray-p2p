@@ -7,12 +7,29 @@ import (
 	"os"
 	"text/tabwriter"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
 )
 
-func runClientList(_ context.Context, cfg config.Config, args []string) int {
+type clientListResult struct {
+	Endpoints []clientEndpointResult `json:"endpoints"`
+	Links     []string               `json:"links,omitempty"`
+}
+
+type clientEndpointResult struct {
+	Hostname   string `json:"hostname"`
+	Tag        string `json:"tag"`
+	Address    string `json:"address"`
+	Port       int    `json:"port"`
+	User       string `json:"user"`
+	TLSMode    string `json:"tls_mode"`
+	ServerName string `json:"server_name"`
+	Enabled    bool   `json:"enabled"`
+}
+
+func runClientList(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p client list", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -42,6 +59,32 @@ func runClientList(_ context.Context, cfg config.Config, args []string) int {
 	if err != nil {
 		logging.Error("xp2p client list failed", "err", err)
 		return 1
+	}
+	if clioutput.EnabledContext(ctx) {
+		result := clientListResult{Endpoints: make([]clientEndpointResult, 0, len(records))}
+		if *links {
+			result.Links = make([]string, 0, len(records))
+		}
+		for _, record := range records {
+			result.Endpoints = append(result.Endpoints, clientEndpointResult{
+				Hostname:   record.Hostname,
+				Tag:        record.Tag,
+				Address:    record.Address,
+				Port:       record.Port,
+				User:       record.User,
+				TLSMode:    record.TLSMode,
+				ServerName: record.ServerName,
+				Enabled:    !record.Disabled,
+			})
+			if *links && record.Link != "" {
+				result.Links = append(result.Links, record.Link)
+			}
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("xp2p client list: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
 	}
 	if len(records) == 0 {
 		fmt.Println("No client endpoints configured.")

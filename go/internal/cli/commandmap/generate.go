@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/NlightN22/xray-p2p/go/internal/cli/commandmeta"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 )
 
 // Generate writes compact command map files derived from a Cobra tree.
@@ -32,7 +33,8 @@ func Generate(root *cobra.Command, dir string) error {
 		var out bytes.Buffer
 		renderCommandTree(&out, root, cmd)
 		path := filepath.Join(dir, fileName(cmd))
-		if err := os.WriteFile(path, out.Bytes(), 0o644); err != nil {
+		data := append(bytes.TrimRight(out.Bytes(), "\n"), '\n')
+		if err := os.WriteFile(path, data, 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
@@ -84,6 +86,12 @@ func renderCommand(out *bytes.Buffer, root, cmd *cobra.Command, remainingDepth i
 	}
 	if behavior := defaultBehavior(cmd); behavior != "" {
 		fmt.Fprintf(out, "  Default behavior: %s\n", behavior)
+	}
+	if class := clioutput.Class(cmd); class != "" {
+		fmt.Fprintf(out, "  Machine output: %s\n", class)
+		if reason := strings.TrimSpace(cmd.Annotations[clioutput.AnnotationReason]); reason != "" {
+			fmt.Fprintf(out, "  Machine output note: %s\n", reason)
+		}
 	}
 
 	children := visibleCommands(cmd)

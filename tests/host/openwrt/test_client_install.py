@@ -427,6 +427,7 @@ def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk)
         result = runner(
             "client",
             "state",
+            "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--pending",

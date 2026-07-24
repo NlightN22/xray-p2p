@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
@@ -31,7 +32,7 @@ func newClientRedirectListCmd(cfg commandConfig) *cobra.Command {
 	return cmd
 }
 
-func runClientRedirectList(_ context.Context, cfg config.Config, args []string) int {
+func runClientRedirectList(ctx context.Context, cfg config.Config, args []string) int {
 	fs := flag.NewFlagSet("xp2p client redirect list", flag.ContinueOnError)
 	fs.SetOutput(os.Stdout)
 
@@ -60,6 +61,29 @@ func runClientRedirectList(_ context.Context, cfg config.Config, args []string) 
 	if err != nil {
 		logging.Error("xp2p client redirect list failed", "err", err)
 		return 1
+	}
+	if clioutput.EnabledContext(ctx) {
+		type redirectResult struct {
+			Type        string `json:"type"`
+			Value       string `json:"value"`
+			OutboundTag string `json:"outbound_tag"`
+			Host        string `json:"host"`
+			Enabled     bool   `json:"enabled"`
+		}
+		result := struct {
+			Redirects []redirectResult `json:"redirects"`
+		}{Redirects: make([]redirectResult, 0, len(records))}
+		for _, record := range records {
+			result.Redirects = append(result.Redirects, redirectResult{
+				Type: record.Type, Value: record.Value, OutboundTag: record.Tag,
+				Host: record.Hostname, Enabled: !record.Disabled,
+			})
+		}
+		if err := clioutput.SetResultContext(ctx, result); err != nil {
+			logging.Error("xp2p client redirect list: publish JSON result failed", "err", err)
+			return 1
+		}
+		return 0
 	}
 	if len(records) == 0 {
 		fmt.Println("No redirect rules configured.")
