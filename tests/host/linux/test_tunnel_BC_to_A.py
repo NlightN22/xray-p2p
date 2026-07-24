@@ -378,9 +378,13 @@ def test_tunnel_BC_to_A(linux_host_factory):
                     helpers.INSTALL_ROOT.as_posix(),
                     "--config-dir",
                     helpers.SERVER_CONFIG_DIR_NAME,
+                    "--json",
                     check=True,
                 ).stdout or ""
-                assert domain in list_output.lower(), f"Server redirect list missing {domain}"
+                redirects = cli_json.result(list_output).get("redirects", [])
+                assert any(item.get("value", "").lower() == domain for item in redirects), (
+                    f"Server redirect list missing {domain}"
+                )
                 server_state = helpers.read_pending_server_config(server_host)
                 server_routing = helpers.render_xray(server_host, server_runner, "server", desired=True)
                 helpers.assert_server_redirect_state(server_state, domain, reverse_tag)

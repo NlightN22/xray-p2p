@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 import pytest
 
+from tests.host import cli_json
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 
@@ -264,9 +265,11 @@ def test_tunnel_B_to_A_and_C(linux_host_factory):
                     helpers.INSTALL_ROOT.as_posix(),
                     "--config-dir",
                     helpers.SERVER_CONFIG_DIR_NAME,
+                    "--json",
                     check=True,
                 ).stdout or ""
-                assert redirect_domain in list_output.lower(), (
+                redirects = cli_json.result(list_output).get("redirects", [])
+                assert any(item.get("value", "").lower() == redirect_domain for item in redirects), (
                     f"Server redirect list missing {redirect_domain} for {entry['ip']}"
                 )
                 server_state = helpers.read_pending_server_config(entry["host"])

@@ -26,21 +26,22 @@ const (
 )
 
 type contractCase struct {
-	coverage         contractCoverage
-	success          []string
-	empty            []string
-	failure          []string
-	failureCode      string
-	setup            func(*testing.T, string)
-	assertResult     func(*testing.T, map[string]any)
-	assertEmpty      func(*testing.T, map[string]any)
-	emptyResult      string
-	credentialPolicy string
-	edgeCases        []string // Documentation only; executable checks live in assertEdgeCases.
-	assertEdgeCases  func(*testing.T, map[string]any, string, string)
-	platform         string
-	human            []string
-	assertHuman      func(*testing.T, string, string)
+	coverage              contractCoverage
+	success               []string
+	empty                 []string
+	failure               []string
+	failureCode           string
+	handlerErrorException string
+	setup                 func(*testing.T, string)
+	assertResult          func(*testing.T, map[string]any)
+	assertEmpty           func(*testing.T, map[string]any)
+	emptyResult           string
+	credentialPolicy      string
+	edgeCases             []string // Documentation only; executable checks live in assertEdgeCases.
+	assertEdgeCases       func(*testing.T, map[string]any, string, string)
+	platform              string
+	human                 []string
+	assertHuman           func(*testing.T, string, string)
 }
 
 func (c contractCase) expectedFailureCode() string {

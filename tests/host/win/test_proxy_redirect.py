@@ -388,9 +388,13 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
+                    "--json",
                     check=True,
                 ).stdout or ""
-                assert DIAG_CIDR in redirect_list
+                assert any(
+                    item.get("value") == DIAG_CIDR
+                    for item in cli_json.result(redirect_list).get("redirects", [])
+                )
 
                 routing = _read_remote_json(client_host, CLIENT_LIVE_XRAY_JSON)
                 _assert_redirect_rule(routing, DIAG_CIDR, _expected_tag(server_public_host))
@@ -412,9 +416,13 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
+                    "--json",
                     check=True,
                 ).stdout or ""
-                assert DIAG_DOMAIN in redirect_list
+                assert any(
+                    item.get("value") == DIAG_DOMAIN
+                    for item in cli_json.result(redirect_list).get("redirects", [])
+                )
 
                 xp2p_client_runner(
                     "client",
@@ -430,9 +438,13 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
+                    "--json",
                     check=True,
                 ).stdout or ""
-                assert DIAG_DOMAIN not in redirect_list
+                assert all(
+                    item.get("value") != DIAG_DOMAIN
+                    for item in cli_json.result(redirect_list).get("redirects", [])
+                )
 
                 redirected_ping_again = xp2p_client_runner(
                     "ping",
@@ -460,9 +472,13 @@ def test_client_redirect_proxy_win(
                 redirect_list = xp2p_client_runner(
                     "client",
                     "redirect",
+                    "--json",
                     check=True,
                 ).stdout or ""
-                assert DIAG_CIDR not in redirect_list
+                assert all(
+                    item.get("value") != DIAG_CIDR
+                    for item in cli_json.result(redirect_list).get("redirects", [])
+                )
 
             with xp2p_client_run_factory(
                 str(CLIENT_INSTALL_DIR),
@@ -487,9 +503,10 @@ def test_client_redirect_proxy_win(
                 final_list = xp2p_client_runner(
                     "client",
                     "redirect",
+                    "--json",
                     check=True,
                 ).stdout or ""
-                assert "no redirect rules configured" in final_list.lower()
+                assert cli_json.result(final_list).get("redirects") == []
     finally:
         _remove_ip_alias(server_host, DIAG_IP)
         _remove_ip_alias(server_host, DIAG_DOMAIN_IP)

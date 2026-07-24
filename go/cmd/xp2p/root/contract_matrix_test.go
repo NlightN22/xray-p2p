@@ -232,6 +232,12 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 		if scenario.coverage == contractCovered && humanBaselineDigests[path] == "" {
 			problems = append(problems, "covered case has no exact human baseline: "+path)
 		}
+		if scenario.failureCode == "invalid_argument" && scenario.handlerErrorException == "" {
+			problems = append(problems, "pre-handler failure has no documented exception: "+path)
+		}
+		if scenario.failureCode != "invalid_argument" && scenario.handlerErrorException != "" {
+			problems = append(problems, "handler error exception is only valid for pre-handler failures: "+path)
+		}
 	}
 	sort.Strings(problems)
 	if len(problems) != 0 {

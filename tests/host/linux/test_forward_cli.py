@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import pytest
 
 from tests.host.linux import _helpers as helpers
@@ -55,7 +56,7 @@ def _forward_cmd(runner, role: str, subcommand: str, config_dir: str, *extra: st
         config_dir,
     ]
     if subcommand == "list":
-        args.append("--pending")
+        args.extend(["--pending", "--json"])
     if role == "server":
         if extra:
             # Provide flags for Cobra validation and forward them after "--" for manual parsing.
@@ -67,55 +68,31 @@ def _forward_cmd(runner, role: str, subcommand: str, config_dir: str, *extra: st
     return runner(*args, check=check)
 
 
-def _parse_forward_list(output: str) -> list[dict[str, str]]:
-    lines = [line.rstrip() for line in (output or "").splitlines() if line.strip()]
-    if not lines:
-        return []
-    lowered = [line.lower() for line in lines]
-    if any(line.startswith("no forward rules configured") for line in lowered):
-        return []
-    start_idx = 0
-    for idx, line in enumerate(lowered):
-        if line.startswith("listen"):
-            start_idx = idx + 1
-            break
-    rows: list[dict[str, str]] = []
-    for line in lines[start_idx:]:
-        parts = [part for part in line.split() if part]
-        if len(parts) < 4:
-            continue
-        rows.append(
-            {
-                "listen": parts[0],
-                "protocols": parts[1],
-                "target": parts[2],
-                "remark": " ".join(parts[3:]),
-            }
-        )
-    return rows
+def _parse_forward_list(output: str) -> list[dict]:
+    document = json.loads(output)
+    assert document.get("schema_version") == "1"
+    forwards = document.get("result", {}).get("forwards")
+    assert isinstance(forwards, list)
+    return forwards
 
 
 def _assert_forward_list_empty(runner, role: str, config_dir: str) -> None:
     result = _forward_cmd(runner, role, "list", config_dir, check=True)
-    output = (result.stdout or "").strip()
-    assert "no forward rules configured" in output.lower()
-    assert _parse_forward_list(output) == []
+    assert _parse_forward_list(result.stdout or "") == []
 
 
-def _assert_list_contains(rows: list[dict[str, str]], listen: int, target: str, remark: str, protocols: str) -> None:
-    formatted_listen = f"127.0.0.1:{listen}"
-    formatted_target = f"{target}"
-    formatted_protocols = protocols
-    formatted_remark = remark
+def _assert_list_contains(rows: list[dict], listen: int, target: str, remark: str, protocols: str) -> None:
+    expected_protocols = protocols.split(",")
     for row in rows:
         if (
-            row.get("listen") == formatted_listen
-            and row.get("target") == formatted_target
-            and row.get("remark") == formatted_remark
-            and row.get("protocols") == formatted_protocols
+            row.get("listen_address") == "127.0.0.1"
+            and row.get("listen_port") == listen
+            and row.get("target") == target
+            and row.get("remark") == remark
+            and row.get("protocols") == expected_protocols
     ):
             return
-    pytest.fail(f"Forward list does not contain {formatted_listen} -> {formatted_target}")
+    pytest.fail(f"Forward list does not contain 127.0.0.1:{listen} -> {target}")
 
 
 @pytest.mark.host

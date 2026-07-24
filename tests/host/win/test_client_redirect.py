@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -130,43 +131,24 @@ def _redirect_cmd(runner, subcommand: str, *args: str, check: bool = False):
 
 
 def _list_redirects(runner):
-    result = _redirect_cmd(runner, "list", check=True)
+    result = _redirect_cmd(runner, "list", "--json", check=True)
     return result.stdout or "", _parse_redirect_output(result.stdout or "")
 
 
-def _parse_redirect_output(text: str) -> list[dict[str, str]]:
-    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
-    header_idx = None
-    legacy = False
-    for idx, line in enumerate(lines):
-        lowered = line.lower()
-        if lowered.startswith("no redirect rules"):
-            return []
-        if lowered.startswith("type"):
-            header_idx = idx
-            break
-        if lowered.startswith("cidr"):
-            legacy = True
-            header_idx = idx
-            break
-    if header_idx is None:
-        raise AssertionError(f"Unexpected redirect output: {text!r}")
-
-    entries: list[dict[str, str]] = []
-    for row in lines[header_idx + 1 :]:
-        parts = row.split()
-        if legacy:
-            if len(parts) < 3:
-                continue
-            entries.append({"type": "CIDR", "value": parts[0], "cidr": parts[0], "tag": parts[1], "host": parts[2]})
-            continue
-        if len(parts) < 4:
-            continue
-        entry = {"type": parts[0], "value": parts[1], "tag": parts[2], "host": parts[3]}
-        if entry["type"].lower() == "cidr":
-            entry["cidr"] = entry["value"]
-        entries.append(entry)
-    return entries
+def _parse_redirect_output(text: str) -> list[dict]:
+    document = json.loads(text)
+    assert document.get("schema_version") == "1"
+    redirects = document.get("result", {}).get("redirects")
+    assert isinstance(redirects, list)
+    return [
+        {
+            **entry,
+            "tag": entry.get("outbound_tag"),
+            **({"cidr": entry.get("value")} if str(entry.get("type", "")).lower() == "cidr" else {}),
+        }
+        for entry in redirects
+        if isinstance(entry, dict)
+    ]
 
 
 def _combined_output(result) -> str:
@@ -181,8 +163,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
         _install_endpoint(xp2p_client_runner, PRIMARY_HOST, "primary@example.com", "win-primary-pass")
         _install_endpoint(xp2p_client_runner, SECONDARY_HOST, "secondary@example.com", "win-secondary-pass")
 
-        output, records = _list_redirects(xp2p_client_runner)
-        assert "no redirect rules configured" in output.lower()
+        _, records = _list_redirects(xp2p_client_runner)
         assert records == []
 
         primary_tag = _expected_tag(PRIMARY_HOST)
@@ -326,8 +307,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             check=True,
             )
 
-        auto_output, auto_records = _list_redirects(xp2p_client_runner)
-        assert "no redirect rules configured" in auto_output.lower()
+        _, auto_records = _list_redirects(xp2p_client_runner)
         assert auto_records == []
 
         routing = render_desired_xray_json(xp2p_client_runner, role="client")
@@ -356,8 +336,7 @@ def test_client_redirect_operations(client_host, xp2p_client_runner, xp2p_msi_pa
             check=True,
             )
 
-        final_output, records = _list_redirects(xp2p_client_runner)
-        assert "no redirect rules configured" in final_output.lower()
+        _, records = _list_redirects(xp2p_client_runner)
         assert records == []
     finally:
         _cleanup_client_install(client_host, xp2p_client_runner, xp2p_msi_path)

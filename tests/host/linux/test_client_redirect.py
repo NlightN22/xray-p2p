@@ -48,7 +48,7 @@ def _redirect_cmd(runner, subcommand: str, *args: str, check: bool = False):
     if subcommand in {"add", "remove"}:
         base.append("--quiet")
     if subcommand == "list":
-        base.append("--pending")
+        base.extend(["--pending", "--json"])
     base.extend(args)
     return runner(*base, check=check)
 
@@ -84,8 +84,8 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
         _install_endpoint(xp2p_client_runner, PRIMARY_HOST, "primary@example.com", "primary-pass")
         _install_endpoint(xp2p_client_runner, SECONDARY_HOST, "secondary@example.com", "secondary-pass")
 
-        empty_output, entries = _list_redirects(xp2p_client_runner)
-        assert REDIRECT_CIDR not in empty_output
+        _, entries = _list_redirects(xp2p_client_runner)
+        assert all(entry.get("cidr") != REDIRECT_CIDR for entry in entries)
         assert entries == [] or all(entry["value"] in {PRIMARY_HOST + "/32", SECONDARY_HOST + "/32"} for entry in entries)
         primary_tag = helpers.expected_proxy_tag(PRIMARY_HOST)
         secondary_tag = helpers.expected_proxy_tag(SECONDARY_HOST)
@@ -100,8 +100,7 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             check=True,
         )
 
-        list_output, records = _list_redirects(xp2p_client_runner)
-        assert REDIRECT_CIDR in list_output
+        _, records = _list_redirects(xp2p_client_runner)
         assert any(
             rec.get("cidr") == REDIRECT_CIDR and rec["tag"] == primary_tag and rec["type"].lower() == "cidr"
             for rec in records
@@ -237,8 +236,8 @@ def test_client_redirect_add_remove_and_cleanup(client_host, xp2p_client_runner)
             check=True,
         )
 
-        auto_output, auto_records = _list_redirects(xp2p_client_runner)
-        assert REDIRECT_CIDR not in auto_output
+        _, auto_records = _list_redirects(xp2p_client_runner)
+        assert all(rec.get("cidr") != REDIRECT_CIDR for rec in auto_records)
         assert all(rec["value"] == f"{PRIMARY_HOST}/32" for rec in auto_records)
 
         routing = helpers.render_xray(client_host, xp2p_client_runner, "client", desired=True)

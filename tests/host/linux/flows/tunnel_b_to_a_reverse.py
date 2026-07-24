@@ -83,6 +83,7 @@ def assert_reverse_redirect_via_server_portal(env: dict) -> None:
                 server_install_path,
                 "--config-dir",
                 helpers.SERVER_CONFIG_DIR_NAME,
+                "--json",
                 check=True,
             ).stdout or ""
             list_entries = parsers.parse_redirect_output(list_output)
@@ -171,6 +172,7 @@ def assert_reverse_redirect_via_server_portal(env: dict) -> None:
                 server_install_path,
                 "--config-dir",
                 helpers.SERVER_CONFIG_DIR_NAME,
+                "--json",
                 check=True,
             ).stdout or ""
             final_entries = parsers.parse_redirect_output(final_list)

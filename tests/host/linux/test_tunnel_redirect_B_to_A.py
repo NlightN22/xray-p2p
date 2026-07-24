@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import time
 import pytest
 
+from tests.host import cli_json
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 
@@ -404,9 +405,10 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
+            "--json",
             check=True,
         ).stdout or ""
-        assert DIAG_CIDR in redirect_list
+        assert any(item.get("value") == DIAG_CIDR for item in cli_json.result(redirect_list).get("redirects", []))
 
         routing = helpers.render_xray(client_host, client_runner, "client", desired=True)
         helpers.assert_redirect_rule(routing, DIAG_CIDR, helpers.expected_proxy_tag(SERVER_IP))
@@ -433,9 +435,10 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
+            "--json",
             check=True,
         ).stdout or ""
-        assert DIAG_DOMAIN in redirect_list
+        assert any(item.get("value") == DIAG_DOMAIN for item in cli_json.result(redirect_list).get("redirects", []))
 
         routing = helpers.render_xray(client_host, client_runner, "client", desired=True)
         helpers.assert_domain_redirect_rule(routing, DIAG_DOMAIN, helpers.expected_proxy_tag(SERVER_IP))

@@ -573,6 +573,7 @@ def assert_redirect_entries_removed(
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",
         helpers.CLIENT_CONFIG_DIR_NAME,
+        "--json",
         check=True,
     ).stdout or ""
     server_redirect_list = server_runner(
@@ -583,6 +584,7 @@ def assert_redirect_entries_removed(
         server_install_path,
         "--config-dir",
         helpers.SERVER_CONFIG_DIR_NAME,
+        "--json",
         check=True,
     ).stdout or ""
 
@@ -596,4 +598,3 @@ def assert_redirect_entries_removed(
         raise AssertionError(
             f"Client redirect output still contains {client_cidr} for {client_tag}:\n{client_redirect_list}"
         )
-

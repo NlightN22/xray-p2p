@@ -159,6 +159,7 @@ def _server_redirect_entries(runner, install_path: str) -> list[dict[str, str]]:
             install_path,
             "--config-dir",
             helpers.SERVER_CONFIG_DIR_NAME,
+            "--json",
             check=True,
         ).stdout
         or ""

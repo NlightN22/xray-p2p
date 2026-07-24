@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from tests.host import cli_json
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
 from tests.host.tunnel import common as tunnel_common
@@ -397,9 +398,10 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--pending",
+            "--json",
             check=True,
         ).stdout or ""
-        assert redirect_cidr in redirect_list
+        assert any(item.get("value") == redirect_cidr for item in cli_json.result(redirect_list).get("redirects", []))
 
         xp2p_client_runner(
             "client",
@@ -421,9 +423,13 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
             "--config-dir",
             helpers.CLIENT_CONFIG_DIR_NAME,
             "--pending",
+            "--json",
             check=True,
         ).stdout or ""
-        assert redirect_cidr not in redirect_list_after_remove
+        assert all(
+            item.get("value") != redirect_cidr
+            for item in cli_json.result(redirect_list_after_remove).get("redirects", [])
+        )
 
         xp2p_client_runner(
             "client",
@@ -500,9 +506,13 @@ def test_client_remove_endpoint_and_list(client_host, xp2p_client_runner):
                 "--config-dir",
                 helpers.CLIENT_CONFIG_DIR_NAME,
                 "--pending",
+                "--json",
                 check=True,
             ).stdout or ""
-            assert redirect_cidr not in redirect_list_after
+            assert all(
+                item.get("value") != redirect_cidr
+                for item in cli_json.result(redirect_list_after).get("redirects", [])
+            )
 
             list_after = xp2p_client_runner(
                 "client",
