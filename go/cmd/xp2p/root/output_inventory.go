@@ -34,6 +34,9 @@ func jsonContract(path string) outputContract {
 }
 
 func mutationEntity(cmd *cobra.Command, args []string) string {
+	if cmd.CommandPath() == "xp2p server ha group update" {
+		return "server ha group"
+	}
 	for _, name := range []string{"id", "domain", "cidr", "target", "listen-port", "tag", "host"} {
 		flag := cmd.Flags().Lookup(name)
 		if flag != nil && flag.Changed && strings.TrimSpace(flag.Value.String()) != "" {

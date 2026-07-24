@@ -82,6 +82,10 @@ func normalizeHumanOutput(value string) string {
 }
 
 func executeContractCase(args []string, cancel bool) contractExecution {
+	return executeContractCaseContext(context.Background(), args, cancel)
+}
+
+func executeContractCaseContext(ctx context.Context, args []string, cancel bool) contractExecution {
 	allArgs := append([]string{"--json"}, args...)
 	cmd := NewCommandForArgs(allArgs)
 	var stdout, stderr bytes.Buffer
@@ -89,10 +93,11 @@ func executeContractCase(args []string, cancel bool) contractExecution {
 	cmd.SetErr(&stderr)
 	cmd.SetArgs(allArgs)
 	if cancel {
-		ctx, cancelContext := context.WithCancel(context.Background())
+		var cancelContext context.CancelFunc
+		ctx, cancelContext = context.WithCancel(ctx)
 		cancelContext()
-		cmd.SetContext(ctx)
 	}
+	cmd.SetContext(ctx)
 	processStdout, processStderr, err := captureProcessStreams(cmd.Execute)
 	return contractExecution{
 		stdout: stdout.String() + processStdout,

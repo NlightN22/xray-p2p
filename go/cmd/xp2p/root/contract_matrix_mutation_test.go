@@ -11,11 +11,12 @@ import (
 )
 
 type mutationFixture struct {
-	args          []string
-	failureArgs   []string
-	sensitive     []string
-	snapshot      func(*testing.T) any
-	assertSuccess func(*testing.T, any, any)
+	args           []string
+	failureArgs    []string
+	sensitive      []string
+	expectedEntity string
+	snapshot       func(*testing.T) any
+	assertSuccess  func(*testing.T, any, any)
 }
 
 type mutationContract struct {
@@ -67,7 +68,7 @@ func TestStage3MutationContractCases(t *testing.T) {
 			fixture := scenario.successFixture(t)
 			before := fixture.snapshot(t)
 			execution := executeContractCase(fixture.args, false)
-			assertMutationSuccess(t, path, execution, fixture.sensitive)
+			assertMutationSuccess(t, path, execution, fixture.sensitive, fixture.expectedEntity)
 			after := fixture.snapshot(t)
 			if reflect.DeepEqual(before, after) {
 				t.Fatal("successful mutation did not change Desired state")
@@ -97,7 +98,13 @@ func TestStage3MutationContractCases(t *testing.T) {
 	}
 }
 
-func assertMutationSuccess(t *testing.T, path string, execution contractExecution, sensitive []string) {
+func assertMutationSuccess(
+	t *testing.T,
+	path string,
+	execution contractExecution,
+	sensitive []string,
+	expectedEntity string,
+) {
 	t.Helper()
 	if execution.exitCode != 0 || execution.err != nil {
 		t.Fatalf("exit=%d err=%v stderr=%q", execution.exitCode, execution.err, execution.stderr)
@@ -117,7 +124,7 @@ func assertMutationSuccess(t *testing.T, path string, execution contractExecutio
 	wantOperation := strings.TrimPrefix(path, "xp2p ")
 	if envelope.SchemaVersion != clioutput.SchemaVersion || envelope.Command != path ||
 		envelope.Result.Status != "completed" || envelope.Result.Operation != wantOperation ||
-		strings.TrimSpace(envelope.Result.Entity) == "" {
+		envelope.Result.Entity != expectedEntity {
 		t.Fatalf("unexpected mutation envelope: %#v", envelope)
 	}
 	for _, forbidden := range append([]string{"\x1b[", "PRIVATE KEY"}, sensitive...) {
@@ -166,7 +173,21 @@ func registerMutation(
 		panic(fmt.Sprintf("duplicate mutation contract: %s", path))
 	}
 	registry[path] = mutationContract{
-		successFixture: successFixture,
-		failureFixture: failureFixture,
+		successFixture: withMutationEntity(path, successFixture),
+		failureFixture: withMutationEntity(path, failureFixture),
+	}
+}
+
+func withMutationEntity(
+	path string,
+	factory func(*testing.T) mutationFixture,
+) func(*testing.T) mutationFixture {
+	return func(t *testing.T) mutationFixture {
+		fixture := factory(t)
+		fixture.expectedEntity = expectedMutationEntities[path]
+		if fixture.expectedEntity == "" {
+			t.Fatalf("mutation %s has no expected entity", path)
+		}
+		return fixture
 	}
 }

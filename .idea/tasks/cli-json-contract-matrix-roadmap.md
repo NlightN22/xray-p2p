@@ -103,5 +103,9 @@ non-interactive `RunE`.
 - Success cases assert a concrete Desired or control-state change.
 - Failure cases assert byte-for-byte state preservation.
 - Mutation results contain `status`, `operation`, and the affected `entity`.
-- Shared runtime-apply behavior remains verified by the client, server, and
-  runtimeapply package suites for applied and rollback paths.
+- Every API-capable mutation executes command-level runtime success and runtime
+  failure through the real Cobra `RunE`.
+- Runtime success verifies consistent Runtime, Desired/control, and Live state.
+- Runtime failure verifies unchanged Desired, Live, and `apply.request`, with no
+  restart fallback.
+- Every mutation has an executable, documented repeat/duplicate policy.

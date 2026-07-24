@@ -10,6 +10,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/runtimeboundary"
 	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
@@ -23,7 +24,7 @@ func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 	if err != nil {
 		return xraylive.RuntimeApplySkipped, err
 	}
-	result, err := xraylive.ApplyCandidate(ctx, xraylive.Options{
+	result, err := runtimeboundary.ApplyCandidate(ctx, xraylive.Options{
 		Role:          apply.RoleServer,
 		LiveDir:       liveDir,
 		LkgDir:        lkgDir,
@@ -148,7 +149,7 @@ func compileServerRuntimeCandidateDoc(doc map[string]any) (xraylive.Artifacts, e
 }
 
 func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error) {
-	status, err := servicecontrol.Default().Status(ctx, role)
+	status, err := runtimeboundary.ServiceStatus(ctx, role)
 	if err != nil {
 		return true, nil
 	}

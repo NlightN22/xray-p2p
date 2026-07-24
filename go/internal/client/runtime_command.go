@@ -10,6 +10,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	"github.com/NlightN22/xray-p2p/go/internal/runtimeboundary"
 	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 	"github.com/NlightN22/xray-p2p/go/internal/xraylive"
 )
@@ -151,11 +152,8 @@ func serviceStopped(ctx context.Context, role servicecontrol.Role) (bool, error)
 	return !status.Active, nil
 }
 
-var serviceStatus = func(ctx context.Context, role servicecontrol.Role) (servicecontrol.Status, error) {
-	return servicecontrol.Default().Status(ctx, role)
-}
-
-var applyRuntimeCandidate = xraylive.ApplyCandidate
+var serviceStatus = runtimeboundary.ServiceStatus
+var applyRuntimeCandidate = runtimeboundary.ApplyCandidate
 
 func writeClientRuntimeApplyRequest() error {
 	if err := apply.RemoveRoleMarkers(config.ApplyRequestPath(), config.ApplyErrorPath(), apply.RoleClient); err != nil {
