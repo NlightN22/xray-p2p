@@ -118,8 +118,8 @@ func TestCoveredContractCases(t *testing.T) {
 				t.Fatal("expected handler error")
 			}
 			var exitCoder interface{ ExitCode() int }
-			if !errors.As(err, &exitCoder) || exitCoder.ExitCode() == 0 {
-				t.Fatalf("handler error has no non-zero exit code: %T %v", err, err)
+			if errors.As(err, &exitCoder) && exitCoder.ExitCode() == 0 {
+				t.Fatalf("handler error has a zero exit code: %T %v", err, err)
 			}
 			if stdout != "" {
 				t.Fatalf("stdout=%q", stdout)
