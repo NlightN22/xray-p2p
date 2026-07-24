@@ -32,6 +32,7 @@ type contractCase struct {
 	failure          []string
 	setup            func(*testing.T, string)
 	assertResult     func(*testing.T, map[string]any)
+	assertEmpty      func(*testing.T, map[string]any)
 	emptyResult      string
 	credentialPolicy string
 	edgeCases        []string
@@ -49,6 +50,10 @@ func buildContractCaseRegistry() map[string]contractCase {
 		registry[path] = scenario
 	}
 	registry["xp2p client list"] = clientListContractCase()
+	registry["xp2p client forward list"] = forwardListContractCase("client")
+	registry["xp2p client reverse list"] = clientReverseListContractCase()
+	registry["xp2p server forward list"] = forwardListContractCase("server")
+	registry["xp2p server reverse list"] = serverReverseListContractCase()
 	return registry
 }
 
@@ -198,6 +203,12 @@ allow_insecure = false
 			}
 			if _, leaked := result["links"]; leaked {
 				t.Fatalf("default list leaked credential links: %#v", result)
+			}
+		},
+		assertEmpty: func(t *testing.T, result map[string]any) {
+			endpoints, ok := result["endpoints"].([]any)
+			if !ok || endpoints == nil || len(endpoints) != 0 {
+				t.Fatalf("empty endpoints must be []: %#v", result["endpoints"])
 			}
 		},
 		emptyResult:      "endpoints is a non-nil empty array when no Desired file exists",

@@ -104,16 +104,12 @@ func TestCoveredContractCases(t *testing.T) {
 			}
 			document := assertJSONDocument(t, stdout)
 			var envelope struct {
-				Result struct {
-					Endpoints []any `json:"endpoints"`
-				} `json:"result"`
+				Result map[string]any `json:"result"`
 			}
 			if decodeErr := json.Unmarshal(document, &envelope); decodeErr != nil {
 				t.Fatal(decodeErr)
 			}
-			if envelope.Result.Endpoints == nil || len(envelope.Result.Endpoints) != 0 {
-				t.Fatalf("empty endpoints must be []: %#v", envelope.Result.Endpoints)
-			}
+			scenario.assertEmpty(t, envelope.Result)
 		})
 		t.Run(path+"/error", func(t *testing.T) {
 			scenario.setup(t, "error")
@@ -181,6 +177,7 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 			(len(scenario.success) == 0 || len(scenario.empty) == 0 ||
 				len(scenario.failure) == 0 ||
 				scenario.setup == nil || scenario.assertResult == nil ||
+				scenario.assertEmpty == nil ||
 				scenario.emptyResult == "" || scenario.credentialPolicy == "" ||
 				len(scenario.edgeCases) == 0 || scenario.platform == "" ||
 				len(scenario.human) == 0 || scenario.assertHuman == nil) {
