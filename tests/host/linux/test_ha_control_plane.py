@@ -181,18 +181,18 @@ def test_ha_client_switches_to_backup_after_primary_loss(linux_host_factory):
     _remove_client_blackhole(client_host)
 
     primary_install = primary(
-        "server", "install", "--path", helpers.INSTALL_ROOT.as_posix(), "--config-dir",
+        "server", "install", "--json", "--path", helpers.INSTALL_ROOT.as_posix(), "--config-dir",
         helpers.SERVER_CONFIG_DIR_NAME, "--port", "62191", "--host", primary_ip, "--force", check=True,
     )
     backup_install = backup(
-        "server", "install", "--path", helpers.INSTALL_ROOT.as_posix(), "--config-dir",
+        "server", "install", "--json", "--path", helpers.INSTALL_ROOT.as_posix(), "--config-dir",
         helpers.SERVER_CONFIG_DIR_NAME, "--port", "62192", "--host", backup_ip, "--force", check=True,
     )
-    primary_credential = helpers.extract_trojan_credential(primary_install.stdout or "")
-    backup_credential = helpers.extract_trojan_credential(backup_install.stdout or "")
+    primary_credential = helpers.parse_json_credential(primary_install.stdout or "")
+    backup_credential = helpers.parse_json_credential(backup_install.stdout or "")
     backup_tls_name, backup_tls_pin = ha_helpers.link_tls_metadata(backup_credential["link"])
     backup(
-        "server", "user", "add",
+        "server", "user", "add", "--json",
         "--path", helpers.INSTALL_ROOT.as_posix(),
         "--config-dir", helpers.SERVER_CONFIG_DIR_NAME,
         "--id", primary_credential["user"],

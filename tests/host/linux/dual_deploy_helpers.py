@@ -334,7 +334,7 @@ def _run_cmd(host: Host, command: str) -> str:
 def _extract_client_users(output: str) -> set[str]:
     return {
         row["CLIENT_USER"]
-        for row in tunnel_common.parse_state_rows(output)
+        for row in tunnel_common.parse_state_result(output)
         if row.get("TAG", "").startswith("proxy-") and row.get("CLIENT_USER")
     }
 

@@ -11,7 +11,7 @@ from tests.host.linux.test_subscription_control_plane import (
     _assert_tunnel_ping,
     _client_outbound_protocol,
     _detect_host_ipv4,
-    _extract_link,
+    _parse_json_link,
     _vless_users,
 )
 
@@ -77,7 +77,7 @@ def _assert_client_connects_from_startup(
         _add_hosts_entry(client_host, server_ip, SERVER_HOST)
         server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -95,7 +95,7 @@ def _assert_client_connects_from_startup(
         user_add = server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -108,12 +108,14 @@ def _assert_client_connects_from_startup(
             SERVER_HOST,
             check=True,
         )
-        link = _extract_link(user_add.stdout or "")
+        link = _parse_json_link(user_add.stdout or "")
         if runtime_apply_server_profile:
             runtime.start_service(server_host, server_runner, "server", log_level="debug")
             server_runner("--log-level", "debug", "server", "profile", profile, check=True)
-            user_list = server_runner("server", "user", "list", "--host", SERVER_HOST, check=True)
-            link = _extract_link(user_list.stdout or "")
+            user_list = server_runner(
+                "server", "user", "list", "--host", SERVER_HOST, "--json", check=True
+            )
+            link = _parse_json_link(user_list.stdout or "")
         assert link.startswith(f"{protocol}://")
         client_runner(
             "client",

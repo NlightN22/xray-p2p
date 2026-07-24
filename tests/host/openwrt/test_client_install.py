@@ -433,7 +433,7 @@ def test_client_state_reports_multiple_endpoints(openwrt_host, xp2p_openwrt_ipk)
             "--pending",
             check=True,
         )
-        rows = tunnel_common.parse_state_rows(result.stdout or "")
+        rows = tunnel_common.parse_state_result(result.stdout or "")
         expected_tags = {
             helpers.expected_proxy_tag("10.55.0.40"),
             helpers.expected_proxy_tag(link_host),

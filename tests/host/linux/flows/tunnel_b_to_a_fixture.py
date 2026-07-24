@@ -98,7 +98,7 @@ def verify_heartbeat_state(env: dict) -> None:
         )
     except AssertionError:
         state_output = env["server_runner"]("server", "state", "--json", "--path", server_install_path, check=True).stdout or ""
-        rows = tunnel_common.parse_state_rows(state_output)
+        rows = tunnel_common.parse_state_result(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on server"
     try:
         tunnel_common.wait_for_alive_entry(
@@ -112,7 +112,7 @@ def verify_heartbeat_state(env: dict) -> None:
         )
     except AssertionError:
         state_output = env["client_runner"]("client", "state", "--json", "--path", client_install_path, check=True).stdout or ""
-        rows = tunnel_common.parse_state_rows(state_output)
+        rows = tunnel_common.parse_state_result(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on client"
 
 
@@ -139,7 +139,7 @@ def wait_for_dead_entry(
             check=True,
         )
         stdout = result.stdout or ""
-        for row in tunnel_common.parse_state_rows(stdout):
+        for row in tunnel_common.parse_state_result(stdout):
             if row.get("TAG", "").strip() != expected_tag:
                 continue
             if row.get("HOST", "").strip() != expected_host:
@@ -158,7 +158,7 @@ def wait_for_dead_entry(
     except TimeoutError as exc:
         last_stdout = env["server_runner"](
             "server",
-            "state",
+            "state", "--json",
             "--path",
             install_path,
             "--ttl",
@@ -295,7 +295,7 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
     try:
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             server_install_path,
             "--config-dir",
@@ -305,7 +305,7 @@ def tunnel_environment(linux_host_factory, xp2p_full_cleanup):
             "--force",
             check=True,
         )
-        credential = helpers.extract_trojan_credential(server_install.stdout or "")
+        credential = helpers.parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Expected connection link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
 

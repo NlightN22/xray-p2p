@@ -50,7 +50,7 @@ APPLY_REQUEST = CONFIG_ROOT / APPLY_DIR_NAME / "apply.request"
 APPLY_ERROR = CONFIG_ROOT / APPLY_DIR_NAME / "apply.error"
 
 
-extract_trojan_credential = linux_helpers.extract_trojan_credential
+parse_json_credential = linux_helpers.parse_json_credential
 expected_proxy_tag = linux_helpers.expected_proxy_tag
 expected_reverse_tag = linux_helpers.expected_reverse_tag
 assert_routing_rule = linux_helpers.assert_routing_rule

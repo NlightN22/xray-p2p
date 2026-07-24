@@ -426,7 +426,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
 
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -436,7 +436,7 @@ def test_tunnel_redirect_B_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        credential = helpers.extract_trojan_credential(server_install.stdout or "")
+        credential = helpers.parse_json_credential(server_install.stdout or "")
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
         _apply_pending_config(
             server_host,
@@ -686,7 +686,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
 
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -696,7 +696,7 @@ def test_tunnel_redirect_A_to_B(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        credential = helpers.extract_trojan_credential(server_install.stdout or "")
+        credential = helpers.parse_json_credential(server_install.stdout or "")
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
         _apply_pending_config(
             server_host,

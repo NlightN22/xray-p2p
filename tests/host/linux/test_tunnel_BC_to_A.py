@@ -4,6 +4,7 @@ import re
 import time
 
 import pytest
+from tests.host import cli_json
 
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import env as linux_env
@@ -47,13 +48,8 @@ def _runner(host):
     return _run
 
 
-def _extract_link(output: str) -> str:
-    for raw in (output or "").splitlines():
-        stripped = raw.strip()
-        if stripped.startswith("trojan://"):
-            return stripped
-    pytest.fail(f"xp2p server user add did not emit connection link.\nSTDOUT:\n{output}")
-
+def _parse_json_link(output: str) -> str:
+    return cli_json.link(output)
 
 def _install_client(host, runner, link: str):
     runner(
@@ -147,7 +143,7 @@ def _heartbeat_debug(server_host, client_hosts) -> str:
 def _extract_client_users(output: str) -> set[str]:
     return {
         row["CLIENT_USER"]
-        for row in tunnel_common.parse_state_rows(output)
+        for row in tunnel_common.parse_state_result(output)
         if row.get("TAG", "").startswith("proxy-") and row.get("CLIENT_USER")
     }
 
@@ -235,7 +231,7 @@ def test_tunnel_BC_to_A(linux_host_factory):
     try:
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -247,13 +243,13 @@ def test_tunnel_BC_to_A(linux_host_factory):
             "--force",
             check=True,
         )
-        default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
+        default_cred = helpers.parse_json_credential(server_install.stdout or "")
         reverse_default = helpers.expected_reverse_tag(default_cred["user"], SERVER_IP)
 
         user_add = server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -266,13 +262,13 @@ def test_tunnel_BC_to_A(linux_host_factory):
             SERVER_IP,
             check=True,
         )
-        second_link = _extract_link(user_add.stdout or "")
+        second_link = _parse_json_link(user_add.stdout or "")
         reverse_second = helpers.expected_reverse_tag("client-two@example.com", SERVER_IP)
 
         server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",

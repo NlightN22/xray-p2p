@@ -166,7 +166,7 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
         with _timed("server install"):
             server_install = server_runner(
                 "server",
-                "install",
+                "install", "--json",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
@@ -176,7 +176,7 @@ def chain_environment(openwrt_host_factory, xp2p_openwrt_ipk):
                 "--force",
                 check=True,
             )
-        credential = helpers.extract_trojan_credential(server_install.stdout or "")
+        credential = helpers.parse_json_credential(server_install.stdout or "")
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_TUNNEL_IP)
         endpoint_tag = helpers.expected_proxy_tag(SERVER_TUNNEL_IP)
 
@@ -567,10 +567,10 @@ def test_chain_c1_a_b_c2_reverse(chain_environment, alpine_c1_host, alpine_c2_ho
                 alpine_c1_host, "scripts/linux/net_dump.sh"
             )
             server_state_output = server_runner(
-                "server", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
+                "server", "state", "--json", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
             ).stdout or ""
             client_state_output = chain_environment["client_runner"](
-                "client", "state", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
+                "client", "state", "--json", "--path", helpers.INSTALL_ROOT.as_posix(), check=True
             ).stdout or ""
             server_nat = server_runner("nat-redirect", "list", check=False).stdout or ""
             server_chain = server_host.run("nft list table inet fw4 || true")

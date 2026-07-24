@@ -144,14 +144,14 @@ def _client_state(env: dict) -> str:
 def _client_state_row(env: dict, *, ttl: str = "3s") -> dict[str, str]:
     result = env["client_runner"](
         "client",
-        "state",
+        "state", "--json",
         "--path",
         helpers.INSTALL_ROOT.as_posix(),
         "--ttl",
         ttl,
         check=True,
     )
-    rows = tunnel_common.parse_state_rows(result.stdout or "")
+    rows = tunnel_common.parse_state_result(result.stdout or "")
     for row in rows:
         if row.get("HOST", "").strip() == fixture.SERVER_IP:
             return row

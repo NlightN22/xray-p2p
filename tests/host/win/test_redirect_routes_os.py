@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.host import cli_json
+
 from tests.host.win import env as _env
 from tests.host.win.flows import apply as apply_flow
 
@@ -71,40 +73,14 @@ def _cleanup_client_install(client_host, runner) -> None:
     )
 
 
-def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
-    user = password = link = None
-    for raw_line in (stdout or "").splitlines():
-        line = raw_line.strip()
-        lowered = line.lower()
-        if lowered.startswith("user:"):
-            user = line.split(":", 1)[1].strip()
-        elif lowered.startswith("password:"):
-            password = line.split(":", 1)[1].strip()
-        elif lowered.startswith("link:"):
-            link = line.split(":", 1)[1].strip()
-    if user is None or password is None:
-        pytest.fail(
-            "xp2p server install did not emit credential (missing user/password lines).\n"
-            f"STDOUT:\n{stdout}"
-        )
-    return {"user": user, "password": password, "link": link}
-
+def _parse_json_credential(stdout: str) -> dict[str, str | None]:
+    return cli_json.credential(stdout)
 
 def _reverse_tag_from_reverse_list(stdout: str, user: str) -> str:
-    if "no reverse tunnels configured" in (stdout or "").strip().lower():
-        pytest.fail(f"No reverse tunnels configured.\nSTDOUT:\n{stdout}")
-
-    for raw_line in (stdout or "").splitlines():
-        line = raw_line.strip()
-        if not line or line.lower().startswith("domain"):
+    for record in cli_json.result(stdout).get("reverse_tunnels") or []:
+        if record.get("user") != user:
             continue
-        parts = line.split()
-        if len(parts) < 6:
-            continue
-        # DOMAIN HOST USER OUTBOUND_TAG PORTAL ROUTING_RULE
-        if parts[2] != user:
-            continue
-        tag = parts[3].strip()
+        tag = str(record.get("outbound_tag") or "")
         if tag:
             return tag
 
@@ -442,13 +418,13 @@ def test_windows_client_redirect_routes_os(
     try:
         server_install = xp2p_server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--host",
             server_public_host,
             "--force",
             check=True,
             )
-        credential = _extract_generated_credential(server_install.stdout or "")
+        credential = _parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Expected connection link in server install output"
 
         xp2p_client_runner(
@@ -552,13 +528,13 @@ def test_windows_server_redirect_routes_os(
         client_tun = f"{CLIENT_TUN}-{token}"
         server_install = xp2p_server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--host",
             server_public_host,
             "--force",
             check=True,
             )
-        credential = _extract_generated_credential(server_install.stdout or "")
+        credential = _parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Expected connection link in server install output"
         xp2p_server_runner(
             "server",
@@ -573,7 +549,7 @@ def test_windows_server_redirect_routes_os(
         xp2p_server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             str(INSTALL_DIR),
             "--config-dir",
@@ -587,7 +563,7 @@ def test_windows_server_redirect_routes_os(
             "--force",
             check=True,
         )
-        reverse_list = xp2p_server_runner("server", "reverse", "list", check=True).stdout or ""
+        reverse_list = xp2p_server_runner("server", "reverse", "list", "--json", check=True).stdout or ""
         reverse_tag = _reverse_tag_from_reverse_list(reverse_list, credential["user"] or "")
 
         xp2p_client_runner(
@@ -700,13 +676,13 @@ def test_windows_client_redirect_route_switch_and_proxy_cleanup(
     try:
         server_install = xp2p_server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--host",
             server_public_host,
             "--force",
             check=True,
             )
-        credential = _extract_generated_credential(server_install.stdout or "")
+        credential = _parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Expected connection link in server install output"
 
         xp2p_client_runner(

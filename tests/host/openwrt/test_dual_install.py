@@ -3,6 +3,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+from tests.host import cli_json
 
 from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
@@ -47,13 +48,8 @@ def _update_hosts_entry(host, action: str, domain: str, ip: str | None = None) -
         )
 
 
-def _extract_link(output: str) -> str:
-    for raw in (output or "").splitlines():
-        stripped = raw.strip()
-        if stripped.startswith("trojan://"):
-            return stripped
-    pytest.fail(f"xp2p server user add did not emit connection link.\nSTDOUT:\n{output}")
-
+def _parse_json_link(output: str) -> str:
+    return cli_json.link(output)
 
 def _ensure_pinned_peer(link: str) -> str:
     query = parse_qs(urlparse(link).query)
@@ -92,7 +88,7 @@ def test_openwrt_client_and_server_share_install_dir(openwrt_host, xp2p_openwrt_
 
         run(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -176,7 +172,7 @@ def test_openwrt_dual_install_uses_distinct_tun_interfaces(openwrt_host, xp2p_op
             openwrt_host,
             {"XP2P_SERVER_TUN_ENABLED": "true"},
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -254,7 +250,7 @@ def test_openwrt_client_and_server_install_support_extended_arguments(openwrt_ho
 
         run(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -302,7 +298,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
 
         server_install = run(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -314,13 +310,13 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
             "--force",
             check=True,
         )
-        default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
+        default_cred = helpers.parse_json_credential(server_install.stdout or "")
         link_a = _ensure_pinned_peer(default_cred["link"])
 
         user_add = run(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -333,7 +329,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
             server_domain_b,
             check=True,
         )
-        link_b = _ensure_pinned_peer(_extract_link(user_add.stdout or ""))
+        link_b = _ensure_pinned_peer(_parse_json_link(user_add.stdout or ""))
 
         client_install_a = run(
             "client",
@@ -386,7 +382,7 @@ def test_openwrt_client_and_server_states_are_isolated(openwrt_host, xp2p_openwr
         added_links = {link_a, link_b}
         installed_links = {
             default_cred["link"],
-            _extract_link(user_add.stdout or ""),
+            _parse_json_link(user_add.stdout or ""),
         }
         assert installed_links == added_links, (
             "Client install links should match server user links.\n"

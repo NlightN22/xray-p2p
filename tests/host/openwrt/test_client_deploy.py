@@ -6,6 +6,7 @@ from pathlib import PurePosixPath
 from urllib import parse
 
 import pytest
+from tests.host import cli_json
 from testinfra.host import Host
 
 from tests.host.openwrt import _helpers as helpers
@@ -210,7 +211,7 @@ def test_openwrt_client_deploy_end_to_end(
                 helpers.INSTALL_ROOT.as_posix(),
                 check=True,
             ).stdout or ""
-            rows = tunnel_common.parse_state_rows(state_output)
+            rows = tunnel_common.parse_state_result(state_output)
             tags = {row.get("TAG") for row in rows}
             hosts = {row.get("HOST") for row in rows}
             assert expected_tag in tags
@@ -545,19 +546,12 @@ def _find_trojan_inbound(data: dict) -> dict:
 
 
 def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
-    def _extract_link(text: str) -> str | None:
-        for line in text.splitlines():
-            if "client deploy: link generated" not in line:
-                continue
-            if "link:" not in line:
-                continue
-            return line.split("link:", 1)[1].strip()
-        return None
-
+    def _parse_json_link(text: str) -> str | None:
+        return cli_json.link(text)
     link = _wait_for_log_value(
         host,
         log_path,
-        extractor=_extract_link,
+        extractor=_parse_json_link,
         description="xp2p client deploy link",
         timeout=LOG_WAIT_TIMEOUT,
     )

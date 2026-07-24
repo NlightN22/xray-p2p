@@ -4,6 +4,7 @@ import json
 import time
 
 import pytest
+from tests.host import cli_json
 
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import _runtime_disable as runtime
@@ -31,7 +32,7 @@ def test_subscription_control_plane_uses_tls_and_hmac(server_host):
     try:
         runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -46,7 +47,7 @@ def test_subscription_control_plane_uses_tls_and_hmac(server_host):
         runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -133,7 +134,7 @@ def test_subscription_control_plane_publishes_vless_tls_vision_profile(server_ho
     try:
         runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -149,7 +150,7 @@ def test_subscription_control_plane_publishes_vless_tls_vision_profile(server_ho
         runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -203,7 +204,7 @@ def test_client_switches_profiles_bidirectionally_from_subscription(client_host,
         _add_hosts_entry(client_host, server_ip, SERVER_HOST)
         server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -218,7 +219,7 @@ def test_client_switches_profiles_bidirectionally_from_subscription(client_host,
         user_add = server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -231,7 +232,7 @@ def test_client_switches_profiles_bidirectionally_from_subscription(client_host,
             SERVER_HOST,
             check=True,
         )
-        link = _extract_link(user_add.stdout or "")
+        link = _parse_json_link(user_add.stdout or "")
         client_runner(
             "client",
             "install",
@@ -291,15 +292,8 @@ def _trojan_credentials(xray: dict) -> dict[str, str]:
     raise AssertionError("Trojan inbound is missing")
 
 
-def _extract_link(output: str) -> str:
-    for raw in (output or "").splitlines():
-        stripped = raw.strip()
-        for scheme in ("trojan://", "vless://"):
-            index = stripped.find(scheme)
-            if index >= 0:
-                return stripped[index:]
-    pytest.fail(f"xp2p server user add did not emit a connection link.\nSTDOUT:\n{output}")
-
+def _parse_json_link(output: str) -> str:
+    return cli_json.link(output)
 
 def _vless_users(xray: dict) -> dict[str, dict]:
     for inbound in xray.get("inbounds") or []:

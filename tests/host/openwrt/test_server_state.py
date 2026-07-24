@@ -64,7 +64,7 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
 
         server_install = runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -76,7 +76,7 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
             "--force",
             check=True,
         )
-        default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
+        default_cred = helpers.parse_json_credential(server_install.stdout or "")
 
         runner(
             "client",
@@ -151,7 +151,7 @@ def test_openwrt_server_state_filters_non_server_entries(openwrt_host, xp2p_open
             helpers.INSTALL_ROOT.as_posix(),
             check=True,
         ).stdout or ""
-        rows = tunnel_common.parse_state_rows(server_state)
+        rows = tunnel_common.parse_state_result(server_state)
         assert len(rows) == 1
         assert rows[0]["HOST"] == server_domain
         assert rows[0]["CLIENT_USER"] == default_cred["user"]

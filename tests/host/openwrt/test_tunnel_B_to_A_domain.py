@@ -87,7 +87,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
     try:
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             server_install_path,
             "--config-dir",
@@ -97,7 +97,7 @@ def tunnel_environment(openwrt_host_factory, xp2p_openwrt_ipk):
             "--force",
             check=True,
         )
-        credential = helpers.extract_trojan_credential(server_install.stdout or "")
+        credential = helpers.parse_json_credential(server_install.stdout or "")
         assert SERVER_DOMAIN in credential["link"], "Expected domain in connection link"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_DOMAIN)
 
@@ -378,7 +378,7 @@ def _verify_heartbeat_state(env: dict) -> None:
         )
     except AssertionError:
         state_output = env["server_runner"]("server", "state", "--json", "--path", server_install_path, check=True).stdout or ""
-        rows = tunnel_common.parse_state_rows(state_output)
+        rows = tunnel_common.parse_state_result(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on server"
     try:
         tunnel_common.wait_for_alive_entry(
@@ -392,7 +392,7 @@ def _verify_heartbeat_state(env: dict) -> None:
         )
     except AssertionError:
         state_output = env["client_runner"]("client", "state", "--json", "--path", client_install_path, check=True).stdout or ""
-        rows = tunnel_common.parse_state_rows(state_output)
+        rows = tunnel_common.parse_state_result(state_output)
         assert any(row.get("TAG") == expected_tag for row in rows), "Heartbeat entry missing on client"
 
 
@@ -400,7 +400,7 @@ def _assert_state_uses_domain(env: dict) -> None:
     server_state = env["server_runner"]("server", "state", "--json", "--path", env["server_install_path"], check=True)
     client_state = env["client_runner"]("client", "state", "--json", "--path", helpers.INSTALL_ROOT.as_posix(), check=True)
     for output in (server_state.stdout or "", client_state.stdout or ""):
-        rows = tunnel_common.parse_state_rows(output)
+        rows = tunnel_common.parse_state_result(output)
         assert any(
             row.get("HOST") == SERVER_DOMAIN and row.get("TAG") == env["endpoint_tag"]
             for row in rows

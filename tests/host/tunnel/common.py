@@ -5,33 +5,6 @@ import re
 import time
 from typing import Iterable
 
-STATE_TABLE_BASE_HEADER = (
-    "TAG",
-    "HOST",
-    "STATUS",
-    "LAST_RTT",
-    "AVG_RTT",
-    "LAST_UPDATE",
-    "CLIENT_USER",
-    "CLIENT_IP",
-)
-
-STATE_TABLE_DETAILS_HEADER = (
-    "TAG",
-    "HOST",
-    "STATUS",
-    "MODE",
-    "CHECK",
-    "LAST_ATTEMPT",
-    "LAST_SUCCESS",
-    "FAILURE_STAGE",
-    "LAST_RTT",
-    "AVG_RTT",
-    "LAST_UPDATE",
-    "CLIENT_USER",
-    "CLIENT_IP",
-)
-
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
@@ -41,17 +14,7 @@ def strip_ansi(value: str | None) -> str:
     return ANSI_ESCAPE_RE.sub("", value)
 
 
-def split_state_line(line: str, expected: int) -> list[str]:
-    parts = [segment.strip() for segment in line.split("\t") if segment.strip()]
-    if len(parts) >= expected:
-        return parts[:expected]
-    regex_parts = [segment.strip() for segment in re.split(r"\s{2,}", line) if segment.strip()]
-    if len(regex_parts) >= expected:
-        return regex_parts[:expected]
-    return regex_parts or parts
-
-
-def parse_state_rows(output: str) -> list[dict[str, str]]:
+def parse_state_result(output: str) -> list[dict[str, str]]:
     document = json.loads(output)
     tunnels = (document.get("result") or {}).get("tunnels") or []
     rows: list[dict[str, str]] = []
@@ -131,7 +94,7 @@ def wait_for_alive_entry(
             check=True,
         )
         last_stdout = result.stdout or ""
-        for row in parse_state_rows(last_stdout):
+        for row in parse_state_result(last_stdout):
             tag = row.get("TAG", "").strip()
             host_value = row.get("HOST", "").strip()
             status = row.get("STATUS", "").strip().lower()

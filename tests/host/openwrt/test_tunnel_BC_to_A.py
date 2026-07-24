@@ -4,6 +4,7 @@ import re
 import time
 
 import pytest
+from tests.host import cli_json
 
 from tests.host.openwrt import _helpers as helpers
 from tests.host.openwrt import env as openwrt_env
@@ -30,13 +31,8 @@ def _runner(host):
     return _run
 
 
-def _extract_link(output: str) -> str:
-    for raw in (output or "").splitlines():
-        stripped = raw.strip()
-        if stripped.startswith("trojan://"):
-            return stripped
-    pytest.fail(f"xp2p server user add did not emit connection link.\nSTDOUT:\n{output}")
-
+def _parse_json_link(output: str) -> str:
+    return cli_json.link(output)
 
 def _install_client(host, runner, link: str):
     helpers.cleanup_client_install(host, runner)
@@ -109,7 +105,7 @@ def _extract_client_users(output: str) -> set[str]:
     cleaned = _strip_ansi(output)
     return {
         row["CLIENT_USER"]
-        for row in tunnel_common.parse_state_rows(cleaned)
+        for row in tunnel_common.parse_state_result(cleaned)
         if row.get("CLIENT_USER")
     }
 
@@ -201,7 +197,7 @@ def _assert_server_state_reports_users_alive(
         result = openwrt_env.run_xp2p_live(
             host,
             "server",
-            "state",
+            "state", "--json",
             "--path",
             install_path,
         )
@@ -211,7 +207,7 @@ def _assert_server_state_reports_users_alive(
                 f"(exit {result.rc}).\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
             )
         last_stdout = result.stdout or ""
-        rows = tunnel_common.parse_state_rows(last_stdout)
+        rows = tunnel_common.parse_state_result(last_stdout)
         alive_users = {
             (row.get("CLIENT_USER") or "").strip().lower()
             for row in rows
@@ -264,7 +260,7 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
     try:
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -277,13 +273,13 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             check=True,
         )
         helpers.dump_apply_dirs(server_host, "tunnel BC to A after server install")
-        default_cred = helpers.extract_trojan_credential(server_install.stdout or "")
+        default_cred = helpers.parse_json_credential(server_install.stdout or "")
         reverse_default = helpers.expected_reverse_tag(default_cred["user"], SERVER_IP)
 
         user_add = server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -296,13 +292,13 @@ def test_tunnel_BC_to_A(openwrt_host_factory, xp2p_openwrt_ipk):
             SERVER_IP,
             check=True,
         )
-        second_link = _extract_link(user_add.stdout or "")
+        second_link = _parse_json_link(user_add.stdout or "")
         reverse_second = helpers.expected_reverse_tag("client-two@example.com", SERVER_IP)
 
         server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",

@@ -4,6 +4,7 @@ import time
 
 import pytest
 
+from tests.host import cli_json
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import _identity_ldap
 from tests.host.linux import env as linux_env
@@ -37,7 +38,7 @@ def test_identity_group_acl_allows_service_tunnel_to_identity_client(
     try:
         server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -83,12 +84,10 @@ def test_identity_group_acl_allows_service_tunnel_to_identity_client(
 
 
 def _provision_identity_link(server_runner, label: str) -> str:
-    result = server_runner("server", "identity", "provision", label, "--host", SERVER_IP, check=True)
-    for raw in (result.stdout or "").splitlines():
-        line = raw.strip()
-        if line.startswith("trojan://"):
-            return line
-    pytest.fail(f"identity provision did not emit a trojan link for {label}.\nSTDOUT:\n{result.stdout}")
+    result = server_runner(
+        "server", "identity", "provision", label, "--host", SERVER_IP, "--json", check=True
+    )
+    return cli_json.link(result.stdout or "")
 
 
 def _install_client(client_runner, link: str) -> None:
@@ -157,7 +156,7 @@ def _assert_server_state_users(host, expected_users: set[str]) -> None:
     expected = {user.lower() for user in expected_users}
     last_stdout = ""
     for _ in range(20):
-        result = linux_env.run_xp2p(host, "server", "state", "--path", helpers.INSTALL_ROOT.as_posix())
+        result = linux_env.run_xp2p(host, "server", "state", "--json", "--path", helpers.INSTALL_ROOT.as_posix())
         if result.rc != 0:
             pytest.fail(f"xp2p server state failed.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}")
         last_stdout = result.stdout or ""

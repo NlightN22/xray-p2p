@@ -295,7 +295,7 @@ def test_client_state_reports_multiple_endpoints(client_host, xp2p_client_runner
             "--pending",
             check=True,
         )
-        rows = tunnel_common.parse_state_rows(result.stdout or "")
+        rows = tunnel_common.parse_state_result(result.stdout or "")
         expected_tags = {
             helpers.expected_proxy_tag("10.55.0.40"),
             helpers.expected_proxy_tag("link.example.test"),

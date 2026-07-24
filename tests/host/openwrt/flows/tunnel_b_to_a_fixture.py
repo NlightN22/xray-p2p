@@ -60,7 +60,7 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
     try:
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             server_install_path,
             "--config-dir",
@@ -70,7 +70,7 @@ def tunnel_environment(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ip
             "--force",
             check=True,
         )
-        credential = helpers.extract_trojan_credential(server_install.stdout or "")
+        credential = helpers.parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Expected connection link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], waits.SERVER_IP)
         waits.set_mode(server_runner, "server", helpers.SERVER_CONFIG_DIR_NAME, "proxy")
@@ -205,7 +205,7 @@ def active_tunnel_sessions(env: dict):
             env["server_install_path"],
             check=True,
         ).stdout or ""
-        rows = tunnel_common.parse_state_rows(state_output)
+        rows = tunnel_common.parse_state_result(state_output)
         assert any(row.get("TAG") == env["endpoint_tag"] for row in rows), "Heartbeat entry missing on server"
     try:
         tunnel_common.wait_for_alive_entry(
@@ -228,7 +228,7 @@ def active_tunnel_sessions(env: dict):
             helpers.INSTALL_ROOT.as_posix(),
             check=True,
         ).stdout or ""
-        rows = tunnel_common.parse_state_rows(state_output)
+        rows = tunnel_common.parse_state_result(state_output)
         assert any(row.get("TAG") == env["endpoint_tag"] for row in rows), "Heartbeat entry missing on client"
     yield
 

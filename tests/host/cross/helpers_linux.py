@@ -4,6 +4,7 @@ import time
 from pathlib import PurePosixPath
 
 import pytest
+from tests.host import cli_json
 from testinfra.host import Host
 
 from tests.host.linux import _helpers as linux_helpers
@@ -143,19 +144,12 @@ def wait_for_log_phrase_linux(host: Host, path: PurePosixPath, phrase: str, *, t
 
 
 def wait_for_client_link_linux(host: Host, log_path: PurePosixPath, *, timeout: int) -> str:
-    def _extract_link(text: str) -> str | None:
-        for line in text.splitlines():
-            if "client deploy: link generated" not in line:
-                continue
-            if "link:" not in line:
-                continue
-            return line.split("link:", 1)[1].strip()
-        return None
-
+    def _parse_json_link(text: str) -> str | None:
+        return cli_json.link(text)
     link = wait_for_log_value_linux(
         host,
         log_path,
-        extractor=_extract_link,
+        extractor=_parse_json_link,
         description="xp2p client deploy link",
         timeout=timeout,
     )

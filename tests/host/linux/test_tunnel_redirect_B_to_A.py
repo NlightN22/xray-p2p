@@ -295,7 +295,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
 
         server_install = server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -305,7 +305,7 @@ def test_tunnel_redirect_B_to_A(linux_host_factory):
             "--force",
             check=True,
         )
-        credential = helpers.extract_trojan_credential(server_install.stdout or "")
+        credential = helpers.parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Expected connection link in server install output"
         reverse_tag = helpers.expected_reverse_tag(credential["user"], SERVER_IP)
         helpers.assert_reverse_cli_output(

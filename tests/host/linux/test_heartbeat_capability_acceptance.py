@@ -107,7 +107,7 @@ def test_heartbeat_freshness_transitions_report_and_disabled(tunnel_environment)
         state = client_runner("client", "state", "--json", "--health-details", check=True)
         row = next(
             row
-            for row in tunnel_common.parse_state_rows(state.stdout or "")
+            for row in tunnel_common.parse_state_result(state.stdout or "")
             if row.get("TAG") == env["endpoint_tag"]
         )
         assert row["STATUS"] == "disabled"
@@ -133,7 +133,7 @@ def test_heartbeat_uses_endpoint_credentials_for_duplicate_user(
     shared_user = env["client_user"]
     try:
         aux_runner(
-            "server", "install",
+            "server", "install", "--json",
             "--path", helpers.INSTALL_ROOT.as_posix(),
             "--config-dir", helpers.SERVER_CONFIG_DIR_NAME,
             "--host", AUX_SERVER_IP,
@@ -141,14 +141,14 @@ def test_heartbeat_uses_endpoint_credentials_for_duplicate_user(
             check=True,
         )
         added = aux_runner(
-            "server", "user", "add",
+            "server", "user", "add", "--json",
             "--path", helpers.INSTALL_ROOT.as_posix(),
             "--config-dir", helpers.SERVER_CONFIG_DIR_NAME,
             "--id", shared_user,
             "--host", AUX_SERVER_IP,
             check=True,
         )
-        credential = helpers.extract_trojan_credential(added.stdout or "")
+        credential = helpers.parse_json_credential(added.stdout or "")
         assert credential["link"], "Expected second endpoint connection link"
         client_runner(
             "client", "install",
@@ -170,7 +170,7 @@ def test_heartbeat_uses_endpoint_credentials_for_duplicate_user(
                 "client", "state", "--json", "--health-details", check=True
             )
             rows = [
-                row for row in tunnel_common.parse_state_rows(result.stdout or "")
+                row for row in tunnel_common.parse_state_result(result.stdout or "")
                 if row.get("CLIENT_USER") == shared_user
             ]
             return rows if len(rows) >= 2 and all(

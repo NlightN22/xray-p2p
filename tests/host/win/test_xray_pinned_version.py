@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.host import cli_json
+
 from tests.host.win import _client_runtime, _server_runtime, env as win_env
 
 PINNED_JSON = Path("go/internal/xray/pinned.json")
@@ -64,37 +66,19 @@ def _cleanup_install(server_host, client_host, xp2p_server_runner, xp2p_client_r
     )
 
 
-def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
-    user = password = link = None
-    for raw_line in (stdout or "").splitlines():
-        line = raw_line.strip()
-        lowered = line.lower()
-        if lowered.startswith("user:"):
-            user = line.split(":", 1)[1].strip()
-        elif lowered.startswith("password:"):
-            password = line.split(":", 1)[1].strip()
-        elif lowered.startswith("link:"):
-            link = line.split(":", 1)[1].strip()
-    if user is None or password is None:
-        pytest.fail(
-            "xp2p server install did not emit credential (missing user/password lines).\n"
-            f"STDOUT:\n{stdout}"
-        )
-    if not link:
-        pytest.fail("xp2p server install did not emit connection link.")
-    return {"user": user, "password": password, "link": link}
-
+def _parse_json_credential(stdout: str) -> dict[str, str | None]:
+    return cli_json.credential(stdout)
 
 def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> dict[str, str | None]:
     server_install = xp2p_server_runner(
         "server",
-        "install",
+        "install", "--json",
         "--host",
         win_env.DEFAULT_TARGET,
         "--force",
         check=True,
     )
-    credential = _extract_generated_credential(server_install.stdout or "")
+    credential = _parse_json_credential(server_install.stdout or "")
     xp2p_client_runner(
         "client",
         "install",

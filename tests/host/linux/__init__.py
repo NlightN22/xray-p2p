@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from testinfra.host import Host
 
 from tests.host.linux import env as linux_env
+from tests.host import cli_json
 
 try:
     import tomllib
@@ -362,28 +363,8 @@ def assert_heartbeat_entry(
     raise AssertionError(f"Heartbeat entry for tag {tag} not found in state")
 
 
-def extract_trojan_credential(output: str) -> dict[str, str]:
-    user = password = link = None
-    for raw in (output or "").splitlines():
-        line = raw.strip()
-        lowered = line.lower()
-        if lowered.startswith("user:"):
-            user = line.split(":", 1)[1].strip()
-        elif lowered.startswith("password:"):
-            password = line.split(":", 1)[1].strip()
-        elif lowered.startswith("link:"):
-            link = line.split(":", 1)[1].strip()
-    if not user or not password:
-        raise RuntimeError(
-            "xp2p server install did not emit credential lines.\n"
-            f"STDOUT:\n{output}"
-        )
-    if not link:
-        raise RuntimeError(
-            "xp2p server install did not emit connection link.\n"
-            f"STDOUT:\n{output}"
-        )
-    return {"user": user, "password": password, "link": link}
+def parse_json_credential(output: str) -> dict[str, str]:
+    return cli_json.credential(output)
 
 
 def expected_proxy_tag(host: str) -> str:

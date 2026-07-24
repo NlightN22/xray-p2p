@@ -48,6 +48,7 @@ def install_server(server_host, xp2p_server_runner, port: str, host: str):
     return xp2p_server_runner(
         "server",
         "install",
+        "--json",
         "--path",
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",

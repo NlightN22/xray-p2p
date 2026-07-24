@@ -5,6 +5,8 @@ from pathlib import Path
 import json
 import pytest
 
+from tests.host import cli_json
+
 from tests.host.win import env as _env
 from tests.host.win.assertions import socks as socks_assert
 from tests.host.win.diagnostics import net_state as net_diag
@@ -54,24 +56,8 @@ def _cleanup_client_install(client_host, runner, msi_path: str) -> None:
     )
 
 
-def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
-    user = password = link = None
-    for raw_line in (stdout or "").splitlines():
-        line = raw_line.strip()
-        lowered = line.lower()
-        if lowered.startswith("user:"):
-            user = line.split(":", 1)[1].strip()
-        elif lowered.startswith("password:"):
-            password = line.split(":", 1)[1].strip()
-        elif lowered.startswith("link:"):
-            link = line.split(":", 1)[1].strip()
-    if user is None or password is None:
-        pytest.fail(
-            "xp2p server install did not emit credential (missing user/password lines).\n"
-            f"STDOUT:\n{stdout}"
-        )
-    return {"user": user, "password": password, "link": link}
-
+def _parse_json_credential(stdout: str) -> dict[str, str | None]:
+    return cli_json.credential(stdout)
 
 def _ps_exec(host, script: str):
     result = _env.run_powershell(host, script)
@@ -295,13 +281,13 @@ def test_client_redirect_proxy_win(
 
         server_install = xp2p_server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--host",
             server_public_host,
             "--force",
             check=True,
             )
-        credential = _extract_generated_credential(server_install.stdout or "")
+        credential = _parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Expected connection link in server install output"
 
         xp2p_client_runner(

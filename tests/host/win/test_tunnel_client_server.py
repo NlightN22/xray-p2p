@@ -6,6 +6,8 @@ from contextlib import contextmanager
 
 import pytest
 
+from tests.host import cli_json
+
 from tests.host.win import env as _env
 from tests.host.win.assertions import socks as socks_assert
 DEFAULT_SERVER_INSTALL_DIR = Path(r"C:\Program Files\xp2p")
@@ -158,24 +160,8 @@ Copy-Item -Path $wintunSource -Destination $wintunDest -Force
         )
 
 
-def _extract_generated_credential(stdout: str) -> dict[str, str | None]:
-    user = password = link = None
-    for raw_line in (stdout or "").splitlines():
-        line = raw_line.strip()
-        lowered = line.lower()
-        if lowered.startswith("user:"):
-            user = line.split(":", 1)[1].strip()
-        elif lowered.startswith("password:"):
-            password = line.split(":", 1)[1].strip()
-        elif lowered.startswith("link:"):
-            link = line.split(":", 1)[1].strip()
-    if user is None or password is None:
-        pytest.fail(
-            "xp2p server install did not emit credential (missing user/password lines).\n"
-            f"STDOUT:\n{stdout}"
-        )
-    return {"user": user, "password": password, "link": link}
-
+def _parse_json_credential(stdout: str) -> dict[str, str | None]:
+    return cli_json.credential(stdout)
 
 def _assert_ping_success(result) -> None:
     assert result.rc == 0, (
@@ -238,13 +224,13 @@ def test_install_server_and_client_default(
         server_public_host = _server_public_host()
         server_install = xp2p_server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--host",
             server_public_host,
             "--force",
             check=True,
             )
-        credential = _extract_generated_credential(server_install.stdout or "")
+        credential = _parse_json_credential(server_install.stdout or "")
         assert credential["link"], "Connection link was not emitted for default install"
         assert credential["link"].startswith("trojan://")
         xp2p_server_runner(
@@ -320,7 +306,7 @@ def test_install_server_and_client_nodefault(
         server_public_host = _server_public_host()
         server_install = xp2p_server_runner(
             "server",
-            "install",
+            "install", "--json",
             "--path",
             str(CUSTOM_SERVER_INSTALL_DIR),
             "--config-dir",
@@ -336,7 +322,7 @@ def test_install_server_and_client_nodefault(
             "--force",
             check=True,
             )
-        credential = _extract_generated_credential(server_install.stdout or "")
+        credential = _parse_json_credential(server_install.stdout or "")
         xp2p_server_runner(
             "server",
             "mode",

@@ -82,7 +82,7 @@ def _wait_for_port(host, port: int, *, timeout_seconds: float = 20.0, interval: 
 def _install_server(host, runner, host_ip: str):
     install = runner(
         "server",
-        "install",
+        "install", "--json",
         "--path",
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",
@@ -92,7 +92,7 @@ def _install_server(host, runner, host_ip: str):
         "--force",
         check=True,
     )
-    return helpers.extract_trojan_credential(install.stdout or "")
+    return helpers.parse_json_credential(install.stdout or "")
 
 
 @pytest.mark.host

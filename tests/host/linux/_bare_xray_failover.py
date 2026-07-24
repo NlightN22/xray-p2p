@@ -21,7 +21,7 @@ def run(client_host, server_host, aux_host, client_runner, install) -> None:
             install(client_host, client_runner, server_host, "trojan")
             installed = aux_runner(
                 "server",
-                "install",
+                "install", "--json",
                 "--path",
                 helpers.INSTALL_ROOT.as_posix(),
                 "--config-dir",
@@ -33,7 +33,7 @@ def run(client_host, server_host, aux_host, client_runner, install) -> None:
                 "--force",
                 check=True,
             )
-            full_link = helpers.extract_trojan_credential(
+            full_link = helpers.parse_json_credential(
                 installed.stdout or ""
             )["link"]
             client_runner(

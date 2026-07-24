@@ -100,7 +100,7 @@ def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
     server_ip = SERVER_TUN_IP
     server_install = server_runner(
         "server",
-        "install",
+        "install", "--json",
         "--path",
         "/etc/xp2p",
         "--config-dir",
@@ -109,7 +109,7 @@ def xp2p_on_both(openwrt_server_host, openwrt_client_host, xp2p_openwrt_ipk):
         server_ip,
         "--force",
     )
-    credential = helpers.extract_trojan_credential(server_install.stdout or "")
+    credential = helpers.parse_json_credential(server_install.stdout or "")
     client_runner(
         "client",
         "install",

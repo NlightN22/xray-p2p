@@ -8,6 +8,7 @@ import shlex
 from urllib.parse import unquote, urlparse
 
 import pytest
+from tests.host import cli_json
 from testinfra.host import Host
 
 from tests.host.linux import _helpers as helpers
@@ -310,7 +311,7 @@ def test_client_link_readds_removed_server_user(client_host, server_host, xp2p_c
         xp2p_server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             DEPLOY_INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -1238,13 +1239,14 @@ def _client_connection_link(host: Host) -> str:
         "--config-dir",
         helpers.CLIENT_CONFIG_DIR_NAME,
         "--link",
+        "--json",
     )
     if result.rc != 0:
         pytest.fail(
             "xp2p client list --link failed.\n"
             f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         )
-    links = [line.strip() for line in (result.stdout or "").splitlines() if line.strip().startswith("trojan://")]
+    links = cli_json.result(result.stdout or "").get("links") or []
     assert links, f"xp2p client list --link did not return a trojan link.\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     return links[0]
 
@@ -1265,7 +1267,7 @@ def _replace_server_user_without_reverse(runner, *, user: str, password: str, ho
     runner(
         "server",
         "user",
-        "add",
+        "add", "--json",
         "--path",
         DEPLOY_INSTALL_ROOT.as_posix(),
         "--config-dir",
@@ -1351,19 +1353,12 @@ def _wait_for_server_user_absent(
 
 
 def _wait_for_client_link(host: Host, log_path: PurePosixPath) -> str:
-    def _extract_link(text: str) -> str | None:
-        for line in text.splitlines():
-            if "client deploy: link generated" not in line:
-                continue
-            if "link:" not in line:
-                continue
-            return line.split("link:", 1)[1].strip()
-        return None
-
+    def _parse_json_link(text: str) -> str | None:
+        return cli_json.link(text)
     link = _wait_for_log_value(
         host,
         log_path,
-        extractor=_extract_link,
+        extractor=_parse_json_link,
         description="xp2p client deploy link",
         timeout=LOG_WAIT_TIMEOUT,
     )

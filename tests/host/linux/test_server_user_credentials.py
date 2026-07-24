@@ -12,7 +12,7 @@ def test_server_install_provisions_default_user(server_host, xp2p_server_runner)
     try:
         host = "srv-install.xp2p.test"
         install = user_helpers.install_server(server_host, xp2p_server_runner, "62040", host)
-        credential = helpers.extract_trojan_credential(install.stdout or "")
+        credential = helpers.parse_json_credential(install.stdout or "")
         default_client = user_helpers.trojan_clients(server_host, xp2p_server_runner)[0]
         assert user_helpers.is_generated_user_id(credential["user"])
         assert user_helpers.is_uuid(credential["password"])
@@ -41,7 +41,7 @@ def test_server_user_add_generates_compatible_password(server_host, xp2p_server_
         xp2p_server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",
@@ -61,7 +61,7 @@ def test_server_user_add_generates_compatible_password(server_host, xp2p_server_
         invalid_password = xp2p_server_runner(
             "server",
             "user",
-            "add",
+            "add", "--json",
             "--path",
             helpers.INSTALL_ROOT.as_posix(),
             "--config-dir",

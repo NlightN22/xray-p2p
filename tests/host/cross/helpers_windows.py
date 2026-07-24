@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TypedDict
 
 import pytest
+from tests.host import cli_json
 from paramiko.ssh_exception import SSHException
 from testinfra.host import Host
 
@@ -225,19 +226,12 @@ def wait_for_log_phrase_windows(host: Host, proc_info: WindowsProcInfo, phrase: 
 
 
 def wait_for_client_link_windows(host: Host, proc_info: WindowsProcInfo, *, timeout: int) -> str:
-    def _extract_link(text: str) -> str | None:
-        for line in text.splitlines():
-            if "client deploy: link generated" not in line:
-                continue
-            if "link:" not in line:
-                continue
-            return line.split("link:", 1)[1].strip()
-        return None
-
+    def _parse_json_link(text: str) -> str | None:
+        return cli_json.link(text)
     link = wait_for_log_value_windows(
         host,
         proc_info,
-        extractor=_extract_link,
+        extractor=_parse_json_link,
         description="xp2p client deploy link",
         timeout=timeout,
     )

@@ -89,7 +89,7 @@ def _mismatch_version(pinned: str) -> str:
 def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_client_runner) -> dict[str, str]:
     server_install = xp2p_server_runner(
         "server",
-        "install",
+        "install", "--json",
         "--path",
         helpers.INSTALL_ROOT.as_posix(),
         "--config-dir",
@@ -101,7 +101,7 @@ def _install_server_client(server_host, client_host, xp2p_server_runner, xp2p_cl
         "--force",
         check=True,
     )
-    credential = helpers.extract_trojan_credential(server_install.stdout or "")
+    credential = helpers.parse_json_credential(server_install.stdout or "")
     xp2p_client_runner(
         "client",
         "install",
