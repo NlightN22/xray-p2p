@@ -3,6 +3,7 @@ package clientcmd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -14,9 +15,14 @@ func resolveClientMode(cfg config.Config) (string, error) {
 	path := config.ConfigPath(layout.ClientAppliedStateFileName)
 	data, err := os.ReadFile(path)
 	if err == nil {
-		if mode := parseModeFromState(data); mode != "" {
-			return mode, nil
+		mode, parseErr := parseModeFromState(data)
+		if parseErr != nil {
+			return "", fmt.Errorf("parse applied client mode state: %w", parseErr)
 		}
+		return mode, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("read applied client mode state: %w", err)
 	}
 	if cfg.Client.TunEnabled {
 		return "tun", nil
@@ -42,22 +48,22 @@ func resolveClientTunMode(configPath string, cfg config.Config) (string, error) 
 	return loaded.Client.TunMode, nil
 }
 
-func parseModeFromState(data []byte) string {
+func parseModeFromState(data []byte) (string, error) {
 	var state struct {
 		Mode       string `json:"mode"`
 		TunEnabled bool   `json:"tun_enabled"`
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
-		return ""
+		return "", err
 	}
 	mode := strings.ToLower(strings.TrimSpace(state.Mode))
 	if mode == "tun" || mode == "proxy" {
-		return mode
+		return mode, nil
 	}
 	if state.TunEnabled {
-		return "tun"
+		return "tun", nil
 	}
-	return "proxy"
+	return "proxy", nil
 }
 
 func parseMode(value string) (bool, error) {

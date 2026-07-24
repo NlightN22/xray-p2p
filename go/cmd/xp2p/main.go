@@ -13,10 +13,6 @@ import (
 	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 )
 
-type exitCoder interface {
-	ExitCode() int
-}
-
 type renderedError interface {
 	Rendered() bool
 }
@@ -29,9 +25,9 @@ func main() {
 	cmd := rootcmd.NewCommandForArgs(args)
 	cmd.SetArgs(args)
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		var ec exitCoder
-		if errors.As(err, &ec) {
-			os.Exit(ec.ExitCode())
+		var exitCode interface{ ExitCode() int }
+		if errors.As(err, &exitCode) {
+			os.Exit(rootcmd.ProcessExitCode(err))
 		}
 		var rendered renderedError
 		if errors.As(err, &rendered) && rendered.Rendered() {

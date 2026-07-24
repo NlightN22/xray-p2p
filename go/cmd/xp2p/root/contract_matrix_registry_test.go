@@ -35,7 +35,8 @@ type contractCase struct {
 	assertEmpty      func(*testing.T, map[string]any)
 	emptyResult      string
 	credentialPolicy string
-	edgeCases        []string
+	edgeCases        []string // Documentation only; executable checks live in assertEdgeCases.
+	assertEdgeCases  func(*testing.T, map[string]any, string, string)
 	platform         string
 	human            []string
 	assertHuman      func(*testing.T, string, string)
@@ -50,11 +51,13 @@ func buildContractCaseRegistry() map[string]contractCase {
 		registry[path] = scenario
 	}
 	registry["xp2p client list"] = clientListContractCase()
+	registry["xp2p client mode"] = modeReadContractCase("client")
 	registry["xp2p client forward list"] = forwardListContractCase("client")
 	registry["xp2p client group list"] = clientGroupListContractCase()
 	registry["xp2p client obs"] = clientObsContractCase()
 	registry["xp2p client redirect list"] = redirectListContractCase("client")
 	registry["xp2p client reverse list"] = clientReverseListContractCase()
+	registry["xp2p client service status"] = serviceStatusContractCase("client")
 	registry["xp2p client subscription offers"] = clientSubscriptionContractCase("offers")
 	registry["xp2p client subscription status"] = clientSubscriptionContractCase("status")
 	registry["xp2p client state"] = clientStateContractCase()
@@ -68,12 +71,20 @@ func buildContractCaseRegistry() map[string]contractCase {
 	registry["xp2p server ha redirect list"] = serverHARedirectListContractCase()
 	registry["xp2p server ha status"] = serverHAStatusContractCase()
 	registry["xp2p server identity status"] = serverIdentityStatusContractCase()
+	registry["xp2p server mode"] = modeReadContractCase("server")
 	registry["xp2p server profile"] = serverProfileContractCase()
 	registry["xp2p server redirect list"] = redirectListContractCase("server")
 	registry["xp2p server reverse list"] = serverReverseListContractCase()
+	registry["xp2p server service status"] = serviceStatusContractCase("server")
 	registry["xp2p server state"] = serverStateContractCase()
 	registry["xp2p server user list"] = serverUserListContractCase()
 	registry["xp2p heartbeat contract"] = heartbeatContractCase()
+	for path, scenario := range registry {
+		if scenario.coverage == contractCovered && scenario.assertEdgeCases == nil {
+			scenario.assertEdgeCases = assertReadOnlyEdgeCases
+			registry[path] = scenario
+		}
+	}
 	return registry
 }
 

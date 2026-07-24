@@ -1,7 +1,6 @@
 package root
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -66,11 +65,28 @@ func TestContractCaseRegistryDetectsMissingAndStaleCases(t *testing.T) {
 }
 
 func TestStage2ContractCasesCovered(t *testing.T) {
-	for path, scenario := range contractCaseRegistry {
-		if scenario.coverage == contractStage2 {
-			t.Errorf("%s remains pending for stage 2", path)
+	stage2Scope := append([]string{
+		"xp2p client mode",
+		"xp2p client service status",
+		"xp2p server mode",
+		"xp2p server service status",
+	}, stage2BaselinePaths()...)
+	for _, path := range stage2Scope {
+		scenario, exists := contractCaseRegistry[path]
+		if !exists || scenario.coverage != contractCovered {
+			t.Errorf("%s is not covered in stage 2", path)
 		}
 	}
+}
+
+func stage2BaselinePaths() []string {
+	var paths []string
+	for path, scenario := range buildLegacyPendingBaseline() {
+		if scenario.coverage == contractStage2 {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 func TestCoveredContractCases(t *testing.T) {
@@ -80,17 +96,14 @@ func TestCoveredContractCases(t *testing.T) {
 		}
 		t.Run(path+"/success", func(t *testing.T) {
 			scenario.setup(t, "success")
-			stdout, stderr, err := executeContractCase(scenario.success)
-			if err != nil {
-				t.Fatalf("execute: %v; stderr=%q", err, stderr)
+			execution := executeContractCase(scenario.success, false)
+			if execution.exitCode != 0 {
+				t.Fatalf("exit=%d err=%v; stderr=%q", execution.exitCode, execution.err, execution.stderr)
 			}
-			if stderr != "" {
-				t.Fatalf("stderr=%q", stderr)
+			if execution.stderr != "" {
+				t.Fatalf("stderr=%q", execution.stderr)
 			}
-			document := assertJSONDocument(t, stdout)
-			if stderr != "" {
-				t.Fatalf("stderr=%q", stderr)
-			}
+			document := assertJSONDocument(t, execution.stdout)
 			var envelope struct {
 				SchemaVersion string         `json:"schema_version"`
 				Command       string         `json:"command"`
@@ -103,14 +116,15 @@ func TestCoveredContractCases(t *testing.T) {
 				t.Fatalf("unexpected envelope: %#v", envelope)
 			}
 			scenario.assertResult(t, envelope.Result)
+			scenario.assertEdgeCases(t, envelope.Result, execution.stdout, execution.stderr)
 		})
 		t.Run(path+"/empty", func(t *testing.T) {
 			scenario.setup(t, "empty")
-			stdout, stderr, err := executeContractCase(scenario.empty)
-			if err != nil {
-				t.Fatalf("execute: %v; stderr=%q", err, stderr)
+			execution := executeContractCase(scenario.empty, false)
+			if execution.exitCode != 0 {
+				t.Fatalf("exit=%d err=%v; stderr=%q", execution.exitCode, execution.err, execution.stderr)
 			}
-			document := assertJSONDocument(t, stdout)
+			document := assertJSONDocument(t, execution.stdout)
 			var envelope struct {
 				Result map[string]any `json:"result"`
 			}
@@ -118,21 +132,21 @@ func TestCoveredContractCases(t *testing.T) {
 				t.Fatal(decodeErr)
 			}
 			scenario.assertEmpty(t, envelope.Result)
+			scenario.assertEdgeCases(t, envelope.Result, execution.stdout, execution.stderr)
 		})
 		t.Run(path+"/error", func(t *testing.T) {
 			scenario.setup(t, "error")
-			stdout, stderr, err := executeContractCase(scenario.failure)
-			if err == nil {
+			execution := executeContractCase(scenario.failure, false)
+			if execution.err == nil {
 				t.Fatal("expected handler error")
 			}
-			var exitCoder interface{ ExitCode() int }
-			if errors.As(err, &exitCoder) && exitCoder.ExitCode() == 0 {
-				t.Fatalf("handler error has a zero exit code: %T %v", err, err)
+			if execution.exitCode == 0 {
+				t.Fatalf("handler error has a zero process exit code: %T %v", execution.err, execution.err)
 			}
-			if stdout != "" {
-				t.Fatalf("stdout=%q", stdout)
+			if execution.stdout != "" {
+				t.Fatalf("stdout=%q", execution.stdout)
 			}
-			document := assertJSONDocument(t, stderr)
+			document := assertJSONDocument(t, execution.stderr)
 			var envelope clioutput.ErrorEnvelope
 			if decodeErr := json.Unmarshal(document, &envelope); decodeErr != nil {
 				t.Fatal(decodeErr)
@@ -141,9 +155,25 @@ func TestCoveredContractCases(t *testing.T) {
 				envelope.Command != path || envelope.Error.Code != "command_failed" {
 				t.Fatalf("unexpected error envelope: %#v", envelope)
 			}
-			if strings.Contains(stderr, "\x1b[") {
-				t.Fatalf("stderr leaked diagnostics: %q", stderr)
+			if strings.Contains(execution.stderr, "\x1b[") {
+				t.Fatalf("stderr leaked diagnostics: %q", execution.stderr)
 			}
+		})
+		t.Run(path+"/warning", func(t *testing.T) {
+			scenario.setup(t, "success")
+			execution := executeContractCase(scenario.success, true)
+			if execution.exitCode != 0 || execution.stderr != "" {
+				t.Fatalf("warning corrupted JSON execution: exit=%d err=%v stderr=%q", execution.exitCode, execution.err, execution.stderr)
+			}
+			document := assertJSONDocument(t, execution.stdout)
+			var envelope struct {
+				Result map[string]any `json:"result"`
+			}
+			if err := json.Unmarshal(document, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			scenario.assertResult(t, envelope.Result)
+			scenario.assertEdgeCases(t, envelope.Result, execution.stdout, execution.stderr)
 		})
 		t.Run(path+"/human", func(t *testing.T) {
 			scenario.setup(t, "success")
@@ -187,7 +217,7 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 				scenario.setup == nil || scenario.assertResult == nil ||
 				scenario.assertEmpty == nil ||
 				scenario.emptyResult == "" || scenario.credentialPolicy == "" ||
-				len(scenario.edgeCases) == 0 || scenario.platform == "" ||
+				scenario.assertEdgeCases == nil || scenario.platform == "" ||
 				len(scenario.human) == 0 || scenario.assertHuman == nil) {
 			problems = append(problems, "covered case has incomplete scenarios: "+path)
 		}
@@ -235,17 +265,6 @@ func jsonLeafPaths(root *cobra.Command) map[string]bool {
 	}
 	visit(root)
 	return paths
-}
-
-func executeContractCase(args []string) (string, string, error) {
-	allArgs := append([]string{"--json"}, args...)
-	cmd := NewCommandForArgs(allArgs)
-	var stdout, stderr bytes.Buffer
-	cmd.SetOut(&stdout)
-	cmd.SetErr(&stderr)
-	cmd.SetArgs(allArgs)
-	err := cmd.Execute()
-	return stdout.String(), stderr.String(), err
 }
 
 func executeHumanContractCase(args []string) (string, string, error) {

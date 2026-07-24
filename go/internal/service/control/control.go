@@ -3,6 +3,12 @@ package control
 import (
 	"context"
 	"errors"
+	"sync"
+)
+
+var (
+	defaultOverrideMu sync.RWMutex
+	defaultOverride   Controller
 )
 
 // Role identifies the managed service.
@@ -34,5 +40,24 @@ type Controller interface {
 
 // Default returns the platform-specific controller.
 func Default() Controller {
+	defaultOverrideMu.RLock()
+	override := defaultOverride
+	defaultOverrideMu.RUnlock()
+	if override != nil {
+		return override
+	}
 	return defaultController()
+}
+
+// SetDefaultForTesting overrides the platform controller until the returned restore function is called.
+func SetDefaultForTesting(controller Controller) func() {
+	defaultOverrideMu.Lock()
+	previous := defaultOverride
+	defaultOverride = controller
+	defaultOverrideMu.Unlock()
+	return func() {
+		defaultOverrideMu.Lock()
+		defaultOverride = previous
+		defaultOverrideMu.Unlock()
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -86,6 +87,9 @@ func NewCommandForArgs(args []string) *cobra.Command {
 			return exitError{code: 0}
 		}
 		if shouldSkipRuntime(cmd) {
+			if opts.jsonOutput {
+				logging.Configure(logging.Options{Output: io.Discard})
+			}
 			return nil
 		}
 		if err := opts.ensureRuntime(cmd); err != nil {
@@ -277,6 +281,18 @@ func (e exitError) Error() string {
 
 func (e exitError) ExitCode() int {
 	return e.code
+}
+
+// ProcessExitCode maps a command result to the code used by the process entry point.
+func ProcessExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitCoder interface{ ExitCode() int }
+	if errors.As(err, &exitCoder) {
+		return exitCoder.ExitCode()
+	}
+	return 1
 }
 
 func newCompletionCommand(rootCmd *cobra.Command) *cobra.Command {
