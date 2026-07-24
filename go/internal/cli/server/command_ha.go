@@ -27,6 +27,11 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 			return err
 		}
 		if generation.Number == 0 {
+			if clioutput.Enabled(cmd) {
+				return clioutput.SetResult(cmd, struct {
+					Configured bool `json:"configured"`
+				}{Configured: false})
+			}
 			fmt.Println("No HA generation is configured.")
 			return nil
 		}
@@ -41,6 +46,7 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 		election := ha.ElectCoordinator(localID, peers)
 		if clioutput.Enabled(cmd) {
 			return clioutput.SetResult(cmd, struct {
+				Configured       bool     `json:"configured"`
 				Generation       uint64   `json:"generation"`
 				Group            string   `json:"group"`
 				MemberCount      int      `json:"member_count"`
@@ -50,7 +56,7 @@ func newServerHACmd(_ commandConfig) *cobra.Command {
 				Coordinator      string   `json:"coordinator"`
 				VotingMembership []string `json:"voting_membership"`
 				Quorum           int      `json:"quorum"`
-			}{generation.Number, generation.Group.Tag, len(generation.ConfirmedMembers()), len(generation.Channels), len(peers), localID, election.Coordinator, append([]string(nil), election.Voters...), election.Quorum})
+			}{true, generation.Number, generation.Group.Tag, len(generation.ConfirmedMembers()), len(generation.Channels), len(peers), localID, election.Coordinator, append([]string(nil), election.Voters...), election.Quorum})
 		}
 		fmt.Printf("Generation: %d\nGroup: %s\nMembers: %d\nChannels: %d\nPeers: %d\nLocal peer: %s\nCoordinator: %s\nVoting membership: %s\nQuorum: %d\n", generation.Number, generation.Group.Tag, len(generation.ConfirmedMembers()), len(generation.Channels), len(peers), localID, election.Coordinator, strings.Join(election.Voters, ","), election.Quorum)
 		return nil

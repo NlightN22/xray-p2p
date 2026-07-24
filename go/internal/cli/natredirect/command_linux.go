@@ -60,8 +60,14 @@ func newAddCmd(cfg func() config.Config) *cobra.Command {
 				return err
 			}
 			if opts.printOnly {
+				if clioutput.Enabled(cmd) {
+					return clioutput.SetResult(cmd, planJSONResult(plan))
+				}
 				printPlan(plan)
 				return nil
+			}
+			if clioutput.Enabled(cmd) && !opts.quiet {
+				return fmt.Errorf("nat-redirect add: --quiet is required with --json")
 			}
 			if !opts.quiet && !promptYes() {
 				return exitError{code: 1}
@@ -71,7 +77,12 @@ func newAddCmd(cfg func() config.Config) *cobra.Command {
 				return err
 			}
 			logging.Info("nat redirect applied", "cidr", opts.cidr, "port", opts.port, "backend", result.Backend)
-			return nil
+			return clioutput.SetResult(cmd, struct {
+				Status  string `json:"status"`
+				CIDR    string `json:"cidr"`
+				Port    int    `json:"port"`
+				Backend string `json:"backend"`
+			}{Status: "completed", CIDR: opts.cidr, Port: opts.port, Backend: result.Backend})
 		},
 	}
 	flags := cmd.Flags()
@@ -103,6 +114,9 @@ func newRemoveCmd(cfg func() config.Config) *cobra.Command {
 				return err
 			}
 			if opts.printOnly {
+				if clioutput.Enabled(cmd) {
+					return clioutput.SetResult(cmd, planJSONResult(plan))
+				}
 				printPlan(plan)
 				return nil
 			}
@@ -111,8 +125,11 @@ func newRemoveCmd(cfg func() config.Config) *cobra.Command {
 				return err
 			}
 			logging.Info("nat redirect removed", "target", removeTarget(opts))
-			_ = result
-			return nil
+			return clioutput.SetResult(cmd, struct {
+				Status  string `json:"status"`
+				Target  string `json:"target"`
+				Backend string `json:"backend"`
+			}{Status: "completed", Target: removeTarget(opts), Backend: result.Backend})
 		},
 	}
 	flags := cmd.Flags()
@@ -197,9 +214,12 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 		return addOptions{}, fmt.Errorf("nat-redirect add: --cidr is required")
 	}
 	if port == 0 {
-		candidates, err := autodetectPorts(detectInbounds, quiet)
+		candidates, err := autodetectPorts(detectInbounds, quiet || clioutput.Enabled(cmd))
 		if err != nil {
 			return addOptions{}, err
+		}
+		if clioutput.Enabled(cmd) && len(candidates) != 1 {
+			return addOptions{}, fmt.Errorf("nat-redirect add: --port is required with --json when multiple ports are available")
 		}
 		port = candidates[0]
 	}
@@ -212,6 +232,31 @@ func parseAddOptions(cmd *cobra.Command) (addOptions, error) {
 		inbounds:    fallback(inbounds, defaultInbounds),
 		quiet:       quiet,
 	}, nil
+}
+
+func planJSONResult(plan firewall.Plan) any {
+	type entryResult struct {
+		CIDR string `json:"cidr"`
+		Port int    `json:"port"`
+	}
+	var entry *entryResult
+	if plan.Entry != nil {
+		entry = &entryResult{CIDR: plan.Entry.CIDR, Port: plan.Entry.Port}
+	}
+	return struct {
+		Backend     string       `json:"backend"`
+		Snippet     string       `json:"snippet"`
+		SnippetPath string       `json:"snippet_path"`
+		EntryPath   string       `json:"entry_path"`
+		IPTables    []string     `json:"iptables"`
+		RemoveAll   bool         `json:"remove_all"`
+		UseFW4      bool         `json:"use_fw4"`
+		Entry       *entryResult `json:"entry"`
+	}{
+		Backend: plan.Backend, Snippet: plan.Snippet, SnippetPath: plan.SnippetPath,
+		EntryPath: plan.EntryPath, IPTables: append([]string{}, plan.IPTables...),
+		RemoveAll: plan.RemoveAll, UseFW4: plan.UseFW4, Entry: entry,
+	}
 }
 
 func parseRemoveOptions(cmd *cobra.Command) (removeOptions, error) {
