@@ -34,6 +34,11 @@ func (m Manager) ApplyPlan(plan Plan) (Plan, error) {
 		if err != nil {
 			return plan, fmt.Errorf("nat redirect: fw4 reload failed: %w. output: %s", err, string(output))
 		}
+		if plan.Snippet == "" {
+			if err := removeFW4RuntimeChains(); err != nil {
+				return plan, err
+			}
+		}
 		return plan, nil
 	}
 	if plan.Backend == "nft" {
@@ -54,6 +59,24 @@ func (m Manager) ApplyPlan(plan Plan) (Plan, error) {
 		return plan, err
 	}
 	return plan, nil
+}
+
+func removeFW4RuntimeChains() error {
+	for _, chain := range []string{
+		"xray_transparent_prerouting",
+		"xray_transparent_output",
+		"xray_transparent_output_allow",
+	} {
+		if err := exec.Command("nft", "list", "chain", "inet", "fw4", chain).Run(); err != nil {
+			continue
+		}
+		output, err := exec.Command("nft", "delete", "chain", "inet", "fw4", chain).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("nat redirect: remove fw4 chain %s: %w. output: %s",
+				chain, err, string(output))
+		}
+	}
+	return nil
 }
 
 func (m Manager) persistEntries(plan Plan) error {

@@ -1,17 +1,23 @@
 package root
 
-import "testing"
+import (
+	"sort"
+	"testing"
 
-var stage6Paths = []string{
-	"xp2p client dns-forward add",
-	"xp2p client dns-forward list",
-	"xp2p client dns-forward remove",
-	"xp2p server dns-forward add",
-	"xp2p server dns-forward list",
-	"xp2p server dns-forward remove",
-	"xp2p nat-redirect add",
-	"xp2p nat-redirect list",
-	"xp2p nat-redirect remove",
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
+)
+
+var stage6Paths = stage6PlatformPaths()
+
+func stage6PlatformPaths() []string {
+	paths := make([]string, 0, len(platformSpecificOutputContracts))
+	for path := range platformSpecificOutputContracts {
+		if contract, ok := outputContractInventory[path]; ok && contract.class == clioutput.ClassJSON {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 func registerStage6ContractCases(registry map[string]contractCase) {
@@ -35,5 +41,12 @@ func TestStage6LeavesCovered(t *testing.T) {
 		if scenario := contractCaseRegistry[path]; scenario.coverage != contractCovered {
 			t.Errorf("stage 6 leaf is not covered: %s", path)
 		}
+	}
+}
+
+func TestStage6GateDerivesLeavesFromPlatformClassification(t *testing.T) {
+	if len(stage6Paths) != len(platformSpecificOutputContracts) {
+		t.Fatalf("stage 6 gate omitted a platform-specific output contract: paths=%v classification=%v",
+			stage6Paths, platformSpecificOutputContracts)
 	}
 }

@@ -31,6 +31,17 @@ def _json_result(raw: str, command: str) -> dict:
     return envelope["result"]
 
 
+def _assert_json_error(result, command: str) -> None:
+    assert result.rc != 0
+    assert (result.stdout or "") == ""
+    envelope = json.loads(result.stderr or "")
+    assert envelope["schema_version"] == "1"
+    assert envelope["command"] == command
+    assert envelope["error"]["code"] == "command_failed"
+    assert "Usage:" not in (result.stderr or "")
+    assert "\x1b[" not in (result.stderr or "")
+
+
 def _current_mode(host, role: str) -> str:
     helpers.wait_for_live_config(host, role)
     if role == "client":
@@ -200,6 +211,10 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
             "entries": [],
             "intercept_enabled": False,
         }
+        openwrt_client_host.run("printf '{' > /etc/xp2p/dns-forward-state.json")
+        failed = openwrt_client_host.run("/usr/bin/xp2p --json client dns-forward list")
+        _assert_json_error(failed, "xp2p client dns-forward list")
+        openwrt_client_host.run("rm -f /etc/xp2p/dns-forward-state.json")
 
         dhcp_after = openwrt_client_host.run("uci show dhcp | grep xp2p_dns_ || true")
         assert dhcp_after.rc == 0
@@ -284,6 +299,10 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
             "entries": [],
             "intercept_enabled": False,
         }
+        openwrt_server_host.run("printf '{' > /etc/xp2p/dns-forward-state.json")
+        failed = openwrt_server_host.run("/usr/bin/xp2p --json server dns-forward list")
+        _assert_json_error(failed, "xp2p server dns-forward list")
+        openwrt_server_host.run("rm -f /etc/xp2p/dns-forward-state.json")
 
         dhcp_after = openwrt_server_host.run("uci show dhcp | grep xp2p_dns_ || true")
         assert dhcp_after.rc == 0

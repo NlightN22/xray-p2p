@@ -17,16 +17,21 @@ import (
 )
 
 type stage6DNSManager struct {
-	mode string
+	mode             string
+	diagnosticsCalls int
 }
 
 func (m *stage6DNSManager) Add(_ context.Context, opts dnsforward.AddOptions) (dnsforward.ListEntry, error) {
 	if m.mode == "error" {
 		return dnsforward.ListEntry{}, errors.New("platform DNS add failure \x1b[31m")
 	}
+	labels := []string{"xp2p", "forward:auto"}
+	if m.mode == "control" {
+		labels[1] = "forward:\n\t\u0001"
+	}
 	return dnsforward.ListEntry{
 		Domain: opts.Domain, Target: opts.Target, Server: "127.0.0.1#5353",
-		Labels: []string{"xp2p", "forward:auto"},
+		Labels: labels,
 	}, nil
 }
 
@@ -36,6 +41,9 @@ func (m *stage6DNSManager) Remove(opts dnsforward.RemoveOptions) ([]string, erro
 	}
 	if opts.All {
 		return []string{"alpha.example", "東京.example"}, nil
+	}
+	if m.mode == "control" {
+		return []string{"control:\n\t\u0001"}, nil
 	}
 	return []string{opts.Domain}, nil
 }
@@ -47,13 +55,18 @@ func (m *stage6DNSManager) List() ([]dnsforward.ListEntry, bool, error) {
 	if m.mode == "empty" {
 		return []dnsforward.ListEntry{}, false, nil
 	}
+	labels := []string{"xp2p", "forward:auto"}
+	if m.mode == "control" {
+		labels[1] = "forward:\n\t\u0001"
+	}
 	return []dnsforward.ListEntry{{
 		Domain: "東京.example", Server: "127.0.0.1#5353",
-		Labels: []string{"xp2p", "forward:auto"},
+		Labels: labels,
 	}}, true, nil
 }
 
-func (*stage6DNSManager) Diagnostics(bool) map[string]string {
+func (m *stage6DNSManager) Diagnostics(bool) map[string]string {
+	m.diagnosticsCalls++
 	return map[string]string{"warning": "\x1b[33mplatform warning\x1b[0m"}
 }
 

@@ -197,8 +197,8 @@ var outputContractInventory = map[string]outputContract{
 		"continuous ping output requires a future NDJSON contract"),
 }
 
-// platformSpecificOutputContracts are intentionally absent from command trees on
-// unsupported hosts but remain explicit members of the public CLI inventory.
+// platformSpecificOutputContracts identifies commands whose implementation or
+// unsupported-platform stub varies by host.
 var platformSpecificOutputContracts = map[string]bool{
 	"xp2p client dns-forward add":    true,
 	"xp2p client dns-forward list":   true,

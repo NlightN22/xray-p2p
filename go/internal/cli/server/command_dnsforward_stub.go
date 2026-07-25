@@ -2,9 +2,12 @@
 
 package servercmd
 
-import "github.com/spf13/cobra"
+import (
+	dnsforwardcmd "github.com/NlightN22/xray-p2p/go/internal/cli/dnsforward"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/spf13/cobra"
+)
 
 func dnsForwardMaybeAdd(cmd *cobra.Command, cfg commandConfig) {
-	_ = cmd
-	_ = cfg
+	cmd.AddCommand(dnsforwardcmd.NewServerCommand(func() config.Config { return cfg() }))
 }

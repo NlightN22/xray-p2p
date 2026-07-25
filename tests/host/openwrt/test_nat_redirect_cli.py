@@ -94,6 +94,43 @@ def test_nat_redirect_print_only_no_changes(openwrt_client_host, xp2p_installed)
         assert list_result.rc == 0
         assert _json_result(list_result.stdout, "xp2p nat-redirect list")["entries"] == []
         assert _firewall_snapshot(openwrt_client_host, snippet, entry_dir) == before
+
+        live_snippet = "/etc/nftables.d/xray-transparent.nft"
+        live_entry_dir = "/etc/nftables.d/xray-transparent.d"
+        live_before = _firewall_snapshot(openwrt_client_host, live_snippet, live_entry_dir)
+        applied = openwrt_client_host.run(
+            f"/usr/bin/xp2p --json nat-redirect add --cidr {cidr} --port {port} "
+            "--quiet"
+        )
+        applied_result = _json_result(applied.stdout, "xp2p nat-redirect add")
+        assert applied.rc == 0, f"backend add failed: {applied.stderr}"
+        assert applied_result["status"] == "completed"
+        assert applied_result["cidr"] == cidr
+        assert applied_result["port"] == int(port)
+        assert isinstance(applied_result["backend"], str) and applied_result["backend"]
+
+        populated = openwrt_client_host.run("/usr/bin/xp2p --json nat-redirect list")
+        assert _json_result(populated.stdout, "xp2p nat-redirect list")["entries"] == [
+            {"cidr": cidr, "port": int(port)}
+        ]
+
+        removed = openwrt_client_host.run(
+            "/usr/bin/xp2p --json nat-redirect remove --all"
+        )
+        removed_result = _json_result(removed.stdout, "xp2p nat-redirect remove")
+        assert removed.rc == 0, f"backend remove failed: {removed.stderr}"
+        assert removed_result["status"] == "completed"
+        assert removed_result["target"] == "all"
+        assert removed_result["backend"] == applied_result["backend"]
+        empty = openwrt_client_host.run("/usr/bin/xp2p --json nat-redirect list")
+        assert _json_result(empty.stdout, "xp2p nat-redirect list")["entries"] == []
+        assert _firewall_snapshot(openwrt_client_host, live_snippet, live_entry_dir) == live_before
+
+        failed = openwrt_client_host.run(
+            "/usr/bin/xp2p --json nat-redirect remove --all "
+            f"--print-only --snippet {snippet} --entry-dir '['"
+        )
+        _assert_json_error(failed, "xp2p nat-redirect remove")
     finally:
         if previous_mode != "proxy":
             _set_mode(openwrt_client_host, previous_mode)
@@ -107,10 +144,24 @@ def _json_result(raw: str, command: str) -> dict:
     return envelope["result"]
 
 
+def _assert_json_error(result, command: str) -> None:
+    assert result.rc != 0
+    assert (result.stdout or "") == ""
+    envelope = json.loads(result.stderr or "")
+    assert envelope["schema_version"] == "1"
+    assert envelope["command"] == command
+    assert envelope["error"]["code"] == "command_failed"
+    assert "Usage:" not in (result.stderr or "")
+    assert "\x1b[" not in (result.stderr or "")
+
+
 def _firewall_snapshot(host, snippet: str, entry_dir: str) -> dict[str, str]:
     commands = {
         "uci": "uci show firewall 2>/dev/null || true",
-        "nft": "nft list ruleset 2>/dev/null || true",
+        "nft": (
+            "nft list ruleset 2>/dev/null "
+            "| sed -E 's/counter packets [0-9]+ bytes [0-9]+/counter/g' || true"
+        ),
         "iptables": "iptables-save 2>/dev/null || true",
         "files": f"find {snippet} {entry_dir} -maxdepth 2 -type f -print -exec sha256sum {{}} \\; 2>/dev/null || true",
     }
