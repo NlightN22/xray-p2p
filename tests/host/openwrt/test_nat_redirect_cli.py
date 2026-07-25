@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import re
+import json
 
 import pytest
 
@@ -74,19 +74,44 @@ def test_nat_redirect_print_only_no_changes(openwrt_client_host, xp2p_installed)
     if previous_mode != "proxy":
         _set_mode(openwrt_client_host, "proxy")
     try:
+        before = _firewall_snapshot(openwrt_client_host, snippet, entry_dir)
         add = openwrt_client_host.run(
-            f"/usr/bin/xp2p nat-redirect add --cidr {cidr} --port {port} "
+            f"/usr/bin/xp2p --json nat-redirect add --cidr {cidr} --port {port} "
             f"--print-only --snippet {snippet} --entry-dir {entry_dir}"
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
-        stdout = add.stdout or ""
-        assert snippet in stdout
-        assert entry_dir in stdout
-        assert re.search(rf"iptables .* -d {re.escape(cidr)} .* --to-ports {port}", stdout)
+        result = _json_result(add.stdout, "xp2p nat-redirect add")
+        assert result["snippet_path"] == snippet
+        assert result["entry_path"].startswith(entry_dir + "/")
+        assert result["entry"] == {"cidr": cidr, "port": int(port)}
+        assert isinstance(result["backend"], str) and result["backend"]
+        assert isinstance(result["snippet"], str)
+        assert isinstance(result["iptables"], list)
+        assert isinstance(result["remove_all"], bool) and not result["remove_all"]
+        assert isinstance(result["use_fw4"], bool)
 
-        list_result = openwrt_client_host.run("/usr/bin/xp2p nat-redirect list")
+        list_result = openwrt_client_host.run("/usr/bin/xp2p --json nat-redirect list")
         assert list_result.rc == 0
-        assert "No transparent redirects configured." in (list_result.stdout or "")
+        assert _json_result(list_result.stdout, "xp2p nat-redirect list")["entries"] == []
+        assert _firewall_snapshot(openwrt_client_host, snippet, entry_dir) == before
     finally:
         if previous_mode != "proxy":
             _set_mode(openwrt_client_host, previous_mode)
+
+
+def _json_result(raw: str, command: str) -> dict:
+    envelope = json.loads(raw or "")
+    assert envelope["schema_version"] == "1"
+    assert envelope["command"] == command
+    assert isinstance(envelope["result"], dict)
+    return envelope["result"]
+
+
+def _firewall_snapshot(host, snippet: str, entry_dir: str) -> dict[str, str]:
+    commands = {
+        "uci": "uci show firewall 2>/dev/null || true",
+        "nft": "nft list ruleset 2>/dev/null || true",
+        "iptables": "iptables-save 2>/dev/null || true",
+        "files": f"find {snippet} {entry_dir} -maxdepth 2 -type f -print -exec sha256sum {{}} \\; 2>/dev/null || true",
+    }
+    return {name: host.run(command).stdout or "" for name, command in commands.items()}

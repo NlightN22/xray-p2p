@@ -23,6 +23,14 @@ C1_LAN_GATEWAY = "10.0.101.1"
 C2_LAN_GATEWAY = "10.0.102.1"
 
 
+def _json_result(raw: str, command: str) -> dict:
+    envelope = json.loads(raw or "")
+    assert envelope["schema_version"] == "1"
+    assert envelope["command"] == command
+    assert isinstance(envelope["result"], dict)
+    return envelope["result"]
+
+
 def _current_mode(host, role: str) -> str:
     helpers.wait_for_live_config(host, role)
     if role == "client":
@@ -142,9 +150,22 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         _reset_dnsforward_state(openwrt_client_host)
 
         add = openwrt_client_host.run(
-            f"/usr/bin/xp2p client dns-forward add --domain {DOMAIN} --target {server_ip}:53 --intercept --quiet"
+            f"/usr/bin/xp2p --json client dns-forward add --domain {DOMAIN} "
+            f"--target {server_ip}:53 --intercept --quiet"
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
+        add_result = _json_result(add.stdout, "xp2p client dns-forward add")
+        assert add_result["status"] == "completed"
+        assert add_result["domain"] == DOMAIN
+        assert add_result["target"] == f"{server_ip}:53"
+        assert isinstance(add_result["server"], str)
+        assert add_result["labels"][:1] == ["xp2p"]
+
+        listed = openwrt_client_host.run("/usr/bin/xp2p --json client dns-forward list")
+        list_result = _json_result(listed.stdout, "xp2p client dns-forward list")
+        assert listed.rc == 0
+        assert any(entry["domain"] == DOMAIN for entry in list_result["entries"])
+        assert list_result["intercept_enabled"] is True
 
         dhcp_show = openwrt_client_host.run("uci show dhcp")
         assert dhcp_show.rc == 0
@@ -169,9 +190,16 @@ def test_dns_forward_client_add_and_remove(openwrt_server_host, openwrt_client_h
         _assert_dns_response(openwrt_client_host, DOMAIN, DNS_IP, server="127.0.0.1")
 
         remove = openwrt_client_host.run(
-            f"/usr/bin/xp2p client dns-forward remove --domain {DOMAIN} --intercept --quiet"
+            f"/usr/bin/xp2p --json client dns-forward remove --domain {DOMAIN} --intercept --quiet"
         )
         assert remove.rc == 0, f"remove command failed: {remove.stderr}"
+        remove_result = _json_result(remove.stdout, "xp2p client dns-forward remove")
+        assert remove_result == {"status": "completed", "domains": [DOMAIN]}
+        empty = openwrt_client_host.run("/usr/bin/xp2p --json client dns-forward list")
+        assert _json_result(empty.stdout, "xp2p client dns-forward list") == {
+            "entries": [],
+            "intercept_enabled": False,
+        }
 
         dhcp_after = openwrt_client_host.run("uci show dhcp | grep xp2p_dns_ || true")
         assert dhcp_after.rc == 0
@@ -199,9 +227,22 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         _reset_dnsforward_state(openwrt_server_host)
 
         add = openwrt_server_host.run(
-            f"/usr/bin/xp2p server dns-forward add --domain {SERVER_DOMAIN} --target {client_ip}:53 --intercept --quiet"
+            f"/usr/bin/xp2p --json server dns-forward add --domain {SERVER_DOMAIN} "
+            f"--target {client_ip}:53 --intercept --quiet"
         )
         assert add.rc == 0, f"add command failed: {add.stderr}"
+        add_result = _json_result(add.stdout, "xp2p server dns-forward add")
+        assert add_result["status"] == "completed"
+        assert add_result["domain"] == SERVER_DOMAIN
+        assert add_result["target"] == f"{client_ip}:53"
+        assert isinstance(add_result["server"], str)
+        assert add_result["labels"][:1] == ["xp2p"]
+
+        listed = openwrt_server_host.run("/usr/bin/xp2p --json server dns-forward list")
+        list_result = _json_result(listed.stdout, "xp2p server dns-forward list")
+        assert listed.rc == 0
+        assert any(entry["domain"] == SERVER_DOMAIN for entry in list_result["entries"])
+        assert list_result["intercept_enabled"] is True
 
         dhcp_show = openwrt_server_host.run("uci show dhcp")
         assert dhcp_show.rc == 0
@@ -233,9 +274,16 @@ def test_dns_forward_server_add_and_remove(openwrt_server_host, openwrt_client_h
         )
 
         remove = openwrt_server_host.run(
-            f"/usr/bin/xp2p server dns-forward remove --domain {SERVER_DOMAIN} --intercept --quiet"
+            f"/usr/bin/xp2p --json server dns-forward remove --domain {SERVER_DOMAIN} --intercept --quiet"
         )
         assert remove.rc == 0, f"remove command failed: {remove.stderr}"
+        remove_result = _json_result(remove.stdout, "xp2p server dns-forward remove")
+        assert remove_result == {"status": "completed", "domains": [SERVER_DOMAIN]}
+        empty = openwrt_server_host.run("/usr/bin/xp2p --json server dns-forward list")
+        assert _json_result(empty.stdout, "xp2p server dns-forward list") == {
+            "entries": [],
+            "intercept_enabled": False,
+        }
 
         dhcp_after = openwrt_server_host.run("uci show dhcp | grep xp2p_dns_ || true")
         assert dhcp_after.rc == 0

@@ -79,6 +79,7 @@ func stage6DNSAddCase(role string) contractCase {
 			!ok || len(labels) != 2 || labels[0] != "xp2p" || labels[1] != "forward:auto" {
 			t.Fatalf("DNS add result=%#v", result)
 		}
+		assertNoCredentialFields(t, result, "dns_add")
 	}, "idempotent add returns the same typed entry", "dns-forward added")
 }
 
@@ -92,9 +93,12 @@ func stage6DNSListCase(role string) contractCase {
 			t.Fatalf("DNS list result=%#v", result)
 		}
 		entry, ok := entries[0].(map[string]any)
-		if !ok || entry["domain"] != "東京.example" || entry["server"] != "127.0.0.1#5353" {
+		labels, labelsOK := entry["labels"].([]any)
+		if !ok || entry["domain"] != "東京.example" || entry["server"] != "127.0.0.1#5353" ||
+			!labelsOK || len(labels) != 2 || labels[0] != "xp2p" || labels[1] != "forward:auto" {
 			t.Fatalf("DNS list entry=%#v", entries[0])
 		}
+		assertNoCredentialFields(t, result, "dns_list")
 	}, "entries is a non-nil empty array and intercept_enabled is false", "東京.example")
 	scenario.assertEmpty = func(t *testing.T, result map[string]any) {
 		entries, ok := result["entries"].([]any)
@@ -114,6 +118,7 @@ func stage6DNSRemoveCase(role string) contractCase {
 		if result["status"] != "completed" || !ok || len(domains) != 1 || domains[0] != "東京.example" {
 			t.Fatalf("DNS remove result=%#v", result)
 		}
+		assertNoCredentialFields(t, result, "dns_remove")
 	}, "idempotent remove returns the same typed domain list", "dns-forward removed")
 }
 
@@ -233,6 +238,7 @@ func setupStage6NAT(t *testing.T) (root, snippet, entries string) {
 
 func assertStage6Plan(t *testing.T, result map[string]any, removeAll, withEntry bool) {
 	t.Helper()
+	assertNoCredentialFields(t, result, "nat_plan")
 	for _, field := range []string{"backend", "snippet", "snippet_path", "entry_path", "iptables", "remove_all", "use_fw4", "entry"} {
 		if _, ok := result[field]; !ok {
 			t.Fatalf("typed firewall plan is missing %q: %#v", field, result)
