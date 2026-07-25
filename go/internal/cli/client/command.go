@@ -239,10 +239,9 @@ func newClientDeployCmd(cfg commandConfig) *cobra.Command {
 
 func forwardFlags(cmd *cobra.Command, args []string) []string {
 	flags := cmd.Flags()
-	localFlags := cmd.LocalFlags()
 	forwarded := make([]string, 0, len(args)+flags.NFlag())
 	flags.Visit(func(f *pflag.Flag) {
-		if localFlags.Lookup(f.Name) == nil {
+		if cmd.InheritedFlags().Lookup(f.Name) != nil {
 			return
 		}
 

@@ -27,6 +27,47 @@ var (
 	performDeployHandshakeFunc = performDeployHandshake
 )
 
+// SetInstallForTesting replaces the install boundary until the returned restore
+// function is called.
+func SetInstallForTesting(fn func(context.Context, client.InstallOptions) error) func() {
+	previous := clientInstallFunc
+	clientInstallFunc = fn
+	return func() { clientInstallFunc = previous }
+}
+
+// SetStageEndpointForTesting replaces the endpoint staging boundary until the
+// returned restore function is called.
+func SetStageEndpointForTesting(fn func(context.Context, client.InstallOptions) error) func() {
+	previous := clientStageEndpointFunc
+	clientStageEndpointFunc = fn
+	return func() { clientStageEndpointFunc = previous }
+}
+
+// DeployHandshakeTestResult is the external deploy response used by contract tests.
+type DeployHandshakeTestResult struct {
+	ExitCode int
+	Link     string
+}
+
+// SetDeployHandshakeForTesting replaces the network handshake boundary until the
+// returned restore function is called.
+func SetDeployHandshakeForTesting(
+	fn func(context.Context) (DeployHandshakeTestResult, error),
+) func() {
+	previous := performDeployHandshakeFunc
+	performDeployHandshakeFunc = func(
+		ctx context.Context,
+		_ deployOptions,
+	) (deployResult, deployCompletionFunc, error) {
+		result, err := fn(ctx)
+		if err != nil {
+			err = serverDeployError{msg: err.Error()}
+		}
+		return deployResult{ExitCode: result.ExitCode, Link: result.Link}, nil, err
+	}
+	return func() { performDeployHandshakeFunc = previous }
+}
+
 // Execute runs the xp2p client command tree with the provided arguments.
 func Execute(ctx context.Context, cfg config.Config, args []string) int {
 	cmd := NewCommand(func() config.Config { return cfg })

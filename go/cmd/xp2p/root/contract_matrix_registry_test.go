@@ -91,8 +91,8 @@ func buildContractCaseRegistry() map[string]contractCase {
 		}
 		registry[path] = mutationCase()
 	}
-	for path := range stage4ContractPaths {
-		registry[path] = contractCase{coverage: contractCovered, artifact: true}
+	for path := range stage4ContractRegistry {
+		registerStage4ContractCase(registry, path)
 	}
 	for path, scenario := range registry {
 		if scenario.coverage == contractCovered && scenario.assertEdgeCases == nil {

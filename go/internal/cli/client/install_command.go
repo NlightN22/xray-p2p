@@ -34,6 +34,7 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	strictTLS := fs.Bool("strict-tls", false, "enforce TLS verification")
 	force := fs.Bool("force", false, "replace existing endpoint configuration")
 	tunMode := fs.String("tun-mode", "", "TUN routing mode: split or full")
+	_ = fs.Bool("quiet", false, "do not prompt during JSON execution")
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {

@@ -31,6 +31,13 @@ func TestContractCaseRegistryMatchesJSONLeaves(t *testing.T) {
 	if err := validatePendingCases(contractCaseRegistry); err != nil {
 		t.Fatal(err)
 	}
+	if err := validateStage4Contracts(
+		buildLegacyPendingBaseline(),
+		contractCaseRegistry,
+		stage4ContractRegistry,
+	); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestContractCaseRegistryDetectsMissingAndStaleCases(t *testing.T) {
@@ -244,7 +251,8 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 			}
 		}
 		if scenario.coverage == contractCovered && scenario.artifact {
-			if _, ok := stage4ContractPaths[path]; !ok {
+			contract, ok := stage4ContractRegistry[path]
+			if !ok || contract.success == nil || contract.failure == nil || contract.human == nil {
 				problems = append(problems, "covered artifact has no executable scenarios: "+path)
 			}
 		}

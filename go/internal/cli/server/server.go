@@ -45,6 +45,32 @@ var (
 var promptYesNoFunc = clishared.PromptYesNo
 var promptChoiceFunc = clishared.PromptChoice
 
+// SetInstallForTesting replaces the server install boundary until the returned
+// restore function is called.
+func SetInstallForTesting(fn func(context.Context, server.InstallOptions) error) func() {
+	previous := serverInstallFunc
+	serverInstallFunc = fn
+	return func() { serverInstallFunc = previous }
+}
+
+// SetUserAddForTesting replaces the user creation boundary until the returned
+// restore function is called.
+func SetUserAddForTesting(fn func(context.Context, server.AddUserOptions) error) func() {
+	previous := serverUserAddFunc
+	serverUserAddFunc = fn
+	return func() { serverUserAddFunc = previous }
+}
+
+// SetUserLinkForTesting replaces the credential-link boundary until the returned
+// restore function is called.
+func SetUserLinkForTesting(
+	fn func(context.Context, server.UserLinkOptions) (server.UserLink, error),
+) func() {
+	previous := serverUserLinkFunc
+	serverUserLinkFunc = fn
+	return func() { serverUserLinkFunc = previous }
+}
+
 type serverInstallCommandOptions struct {
 	Path      string
 	ConfigDir string

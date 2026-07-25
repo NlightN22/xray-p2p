@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
@@ -12,6 +13,7 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
+	"github.com/spf13/cobra"
 )
 
 type inactiveContractController struct{}
@@ -71,6 +73,28 @@ func TestStage4ClientInstallPublishesTypedResult(t *testing.T) {
 	failureCtx, failureResult := clioutput.CaptureResult(context.Background())
 	if err := cmd.ExecuteContext(failureCtx); err == nil || failureResult() != nil {
 		t.Fatalf("install failure published a result: err=%v result=%#v", err, failureResult())
+	}
+}
+
+func TestForwardFlagsExcludeInheritedJSON(t *testing.T) {
+	root := &cobra.Command{Use: "root"}
+	var jsonOutput bool
+	root.PersistentFlags().BoolVar(&jsonOutput, "json", true, "")
+	leaf := &cobra.Command{
+		Use: "install",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			got := forwardFlags(cmd, args)
+			if strings.Contains(strings.Join(got, " "), "json") {
+				t.Fatalf("inherited JSON flag was forwarded: %#v", got)
+			}
+			return nil
+		},
+	}
+	leaf.Flags().String("host", "", "")
+	root.AddCommand(leaf)
+	root.SetArgs([]string{"--json", "install", "--host", "127.0.0.1"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
 	}
 }
 
