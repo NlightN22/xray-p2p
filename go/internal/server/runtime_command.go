@@ -26,6 +26,8 @@ func applyServerRuntimeCandidate(ctx context.Context, artifacts xraylive.Artifac
 	}
 	result, err := runtimeboundary.ApplyCandidate(ctx, xraylive.Options{
 		Role:          apply.RoleServer,
+		ErrorPath:     config.ApplyErrorPath(),
+		AuditPath:     config.AuditLogPath(),
 		LiveDir:       liveDir,
 		LkgDir:        lkgDir,
 		CommitDesired: commitDesired,

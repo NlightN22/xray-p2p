@@ -91,11 +91,31 @@ func TestApplyInboundDiffRestoresRemovedInbounds(t *testing.T) {
 	}
 }
 
+func TestApplyInboundDiffRestoresInboundWhenRemovalVerificationFails(t *testing.T) {
+	applier := newRecordingInboundApplier("old")
+	applier.failListOnce = true
+	diff := Diff{
+		Kind: DiffInboundOnly,
+		RemovedInbounds: []InboundChange{
+			{Tag: "old", Inbound: map[string]any{"tag": "old"}},
+		},
+	}
+
+	if err := ApplyInboundDiff(context.Background(), applier, diff); err == nil {
+		t.Fatal("expected error")
+	}
+	want := []string{"remove:old", "add:old"}
+	if !reflect.DeepEqual(applier.calls, want) {
+		t.Fatalf("calls = %v, want %v", applier.calls, want)
+	}
+}
+
 type recordingInboundApplier struct {
 	calls         []string
 	tags          map[string]struct{}
 	failAddTag    string
 	failRemoveTag string
+	failListOnce  bool
 }
 
 func newRecordingInboundApplier(tags ...string) *recordingInboundApplier {
@@ -126,6 +146,10 @@ func (a *recordingInboundApplier) RemoveInbound(_ context.Context, tag string) e
 }
 
 func (a *recordingInboundApplier) ListInboundTags(context.Context) ([]string, error) {
+	if a.failListOnce {
+		a.failListOnce = false
+		return nil, errors.New("list failed")
+	}
 	result := make([]string, 0, len(a.tags))
 	for tag := range a.tags {
 		result = append(result, tag)

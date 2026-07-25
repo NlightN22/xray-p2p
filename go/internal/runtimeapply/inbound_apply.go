@@ -32,6 +32,10 @@ func ApplyInboundDiff(ctx context.Context, applier InboundApplier, diff Diff) er
 		}
 		removed = append(removed, change.Inbound)
 		if err := waitForInboundRemoval(ctx, applier, change.Tag); err != nil {
+			rollbackErr := rollbackRemovedInbounds(ctx, applier, removed)
+			if rollbackErr != nil {
+				return fmt.Errorf("wait for inbound %s removal: %w; rollback: %v", change.Tag, err, rollbackErr)
+			}
 			return fmt.Errorf("wait for inbound %s removal: %w", change.Tag, err)
 		}
 	}

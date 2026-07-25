@@ -104,11 +104,14 @@ non-interactive `RunE`.
 - Failure cases assert byte-for-byte state preservation.
 - Mutation handlers publish typed results containing `status`, `operation`, and
   the exact affected `entity`; the root adapter does not infer stage 3 entities.
-- Every API-capable mutation executes command-level runtime success and runtime
-  failure through the real Cobra `RunE`.
-- Runtime success verifies consistent Runtime, Desired/control, and Live state.
-- Runtime failure verifies unchanged Desired, Live, and `apply.request`, with no
-  restart fallback.
+- Every API-capable mutation executes command-level runtime success, verification
+  failure, and Desired-persistence failure through the real Cobra `RunE` and
+  production `xraylive.ApplyCandidate`; only Xray API appliers are substituted.
+- Runtime success compares API-observable Runtime state with independently
+  compiled Desired artifacts and production-published Live artifacts.
+- Runtime failures verify rollback after a partial API mutation, unchanged
+  Desired, Live, and `apply.request`, an explicit `apply.error`, and no restart
+  fallback.
 - Every mutation has an executable, documented repeat/duplicate policy.
 - Redirect mutations use ambiguous multi-target fixtures to prove JSON mode
   rejects required selection without emitting a prompt.

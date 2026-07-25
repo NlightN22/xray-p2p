@@ -13,6 +13,10 @@ type Boundary struct {
 	ApplyCandidate func(context.Context, xraylive.Options, xraylive.Artifacts) (xraylive.RuntimeApplyResult, error)
 	ServiceStatus  func(context.Context, servicecontrol.Role) (servicecontrol.Status, error)
 	RestartService func(context.Context, servicecontrol.Role) error
+	NewRouting     xraylive.RoutingApplierFactory
+	NewInbound     xraylive.InboundApplierFactory
+	NewOutbound    xraylive.OutboundApplierFactory
+	NewInboundUser xraylive.InboundUserApplierFactory
 }
 
 type boundaryContextKey struct{}
@@ -46,8 +50,22 @@ func ApplyCandidate(
 	opts xraylive.Options,
 	artifacts xraylive.Artifacts,
 ) (xraylive.RuntimeApplyResult, error) {
-	if boundary, ok := fromContext(ctx); ok && boundary.ApplyCandidate != nil {
-		return boundary.ApplyCandidate(ctx, opts, artifacts)
+	if boundary, ok := fromContext(ctx); ok {
+		if boundary.ApplyCandidate != nil {
+			return boundary.ApplyCandidate(ctx, opts, artifacts)
+		}
+		if opts.NewApplier == nil {
+			opts.NewApplier = boundary.NewRouting
+		}
+		if opts.NewInbound == nil {
+			opts.NewInbound = boundary.NewInbound
+		}
+		if opts.NewOutbound == nil {
+			opts.NewOutbound = boundary.NewOutbound
+		}
+		if opts.NewInboundUser == nil {
+			opts.NewInboundUser = boundary.NewInboundUser
+		}
 	}
 	return xraylive.ApplyCandidate(ctx, opts, artifacts)
 }
