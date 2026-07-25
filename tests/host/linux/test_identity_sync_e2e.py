@@ -4,6 +4,7 @@ import time
 
 import pytest
 
+from tests.host import cli_json
 from tests.host.linux import _helpers as helpers
 from tests.host.linux import _identity_keycloak
 from tests.host.linux import _identity_ldap
@@ -31,6 +32,7 @@ def test_identity_ldap_sync_provisioning_acl_and_detach(server_host, xp2p_server
     alice_label = current["subjects"]["usr-10001"]["user_label"]
     carol_label = current["subjects"]["usr-10003"]["user_label"]
     provision = xp2p_server_runner(
+        "--json",
         "server",
         "identity",
         "provision",
@@ -39,10 +41,11 @@ def test_identity_ldap_sync_provisioning_acl_and_detach(server_host, xp2p_server
         SERVER_HOST,
         check=True,
     )
-    assert "trojan://" in (provision.stdout or "")
+    assert cli_json.link(provision.stdout or "").startswith("trojan://")
     state = _identity_state(server_host)
     assert state["current"]["subjects"]["usr-10001"]["provisioned"] is True
     xp2p_server_runner(
+        "--json",
         "server",
         "identity",
         "provision",

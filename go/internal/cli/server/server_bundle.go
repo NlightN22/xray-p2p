@@ -51,8 +51,14 @@ func newServerImportCmd(cfg commandConfig) *cobra.Command {
 		Use:   "import",
 		Short: "Import server configuration bundle",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			code := runServerImport(cfg(), opts)
-			return errorForCode(code)
+			path, err := importServerBundle(cfg(), opts)
+			if err != nil {
+				return err
+			}
+			return clioutput.SetResult(cmd, struct {
+				Status string `json:"status"`
+				Path   string `json:"path"`
+			}{Status: "completed", Path: path})
 		},
 	}
 	flags := cmd.Flags()
@@ -107,6 +113,18 @@ func exportServerBundle(_ config.Config, opts serverExportOptions) (string, erro
 }
 
 func runServerImport(_ config.Config, opts serverImportOptions) int {
+	_, err := importServerBundle(config.Config{}, opts)
+	if err == nil {
+		return 0
+	}
+	var codeErr exitError
+	if errors.As(err, &codeErr) {
+		return codeErr.code
+	}
+	return 1
+}
+
+func importServerBundle(_ config.Config, opts serverImportOptions) (string, error) {
 	root := strings.TrimSpace(opts.ConfigRoot)
 	if root == "" {
 		root = config.ConfigRoot()
@@ -114,14 +132,14 @@ func runServerImport(_ config.Config, opts serverImportOptions) int {
 	input := strings.TrimSpace(opts.Input)
 	if input == "" {
 		logging.Error("xp2p server import: input archive is required")
-		return 2
+		return "", exitError{code: 2}
 	}
 
 	if err := configbundle.ImportRoleConfigRoot("server", root, input); err != nil {
 		logging.Error("xp2p server import: failed", "err", err)
-		return 1
+		return "", fmt.Errorf("import server configuration: %w", err)
 	}
 	logging.Info("xp2p server import: archive applied", "path", input)
 	logging.Warn("xp2p server import: verify service status after import")
-	return 0
+	return input, nil
 }

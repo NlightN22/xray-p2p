@@ -74,7 +74,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
 			return 1
 		}
-		res, notifyComplete, handshakeErr = performDeployHandshake(ctx, opts)
+		res, notifyComplete, handshakeErr = performDeployHandshakeFunc(ctx, opts)
 		if handshakeErr == nil {
 			break
 		}

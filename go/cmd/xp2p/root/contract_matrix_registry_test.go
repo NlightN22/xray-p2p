@@ -28,6 +28,7 @@ const (
 type contractCase struct {
 	coverage         contractCoverage
 	mutation         bool
+	artifact         bool
 	success          []string
 	empty            []string
 	failure          []string
@@ -89,6 +90,9 @@ func buildContractCaseRegistry() map[string]contractCase {
 			continue
 		}
 		registry[path] = mutationCase()
+	}
+	for path := range stage4ContractPaths {
+		registry[path] = contractCase{coverage: contractCovered, artifact: true}
 	}
 	for path, scenario := range registry {
 		if scenario.coverage == contractCovered && scenario.assertEdgeCases == nil {

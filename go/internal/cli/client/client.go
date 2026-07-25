@@ -9,21 +9,22 @@ import (
 )
 
 var (
-	clientInstallFunc        = client.Install
-	clientRemoveFunc         = client.Remove
-	clientRunFunc            = client.Run
-	clientServiceRunFunc     = client.RunService
-	clientRemoveEndpointFunc = client.RemoveEndpoint
-	clientUpdateEndpointFunc = client.UpdateEndpointCredentials
-	clientAddEndpointFunc    = client.AddEndpoint
-	clientStageEndpointFunc  = client.StageEndpoint
-	clientListFunc           = client.ListEndpoints
-	clientReverseListFunc    = client.ListReverse
-	clientReverseToggleFunc  = client.SetReverseEnabled
-	clientRedirectAddFunc    = client.AddRedirect
-	clientRedirectRemoveFunc = client.RemoveRedirect
-	clientRedirectListFunc   = client.ListRedirects
-	clientRedirectToggleFunc = client.SetRedirectEnabled
+	clientInstallFunc          = client.Install
+	clientRemoveFunc           = client.Remove
+	clientRunFunc              = client.Run
+	clientServiceRunFunc       = client.RunService
+	clientRemoveEndpointFunc   = client.RemoveEndpoint
+	clientUpdateEndpointFunc   = client.UpdateEndpointCredentials
+	clientAddEndpointFunc      = client.AddEndpoint
+	clientStageEndpointFunc    = client.StageEndpoint
+	clientListFunc             = client.ListEndpoints
+	clientReverseListFunc      = client.ListReverse
+	clientReverseToggleFunc    = client.SetReverseEnabled
+	clientRedirectAddFunc      = client.AddRedirect
+	clientRedirectRemoveFunc   = client.RemoveRedirect
+	clientRedirectListFunc     = client.ListRedirects
+	clientRedirectToggleFunc   = client.SetRedirectEnabled
+	performDeployHandshakeFunc = performDeployHandshake
 )
 
 // Execute runs the xp2p client command tree with the provided arguments.

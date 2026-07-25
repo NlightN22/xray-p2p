@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/client"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
@@ -274,5 +275,21 @@ func runClientInstall(ctx context.Context, cfg config.Config, args []string) int
 	}
 
 	logging.Info("xp2p client installed", "install_dir", opts.InstallDir, "config_dir", opts.ConfigDir)
+	if clioutput.EnabledContext(ctx) {
+		if err := clioutput.SetResultContext(ctx, struct {
+			Status     string `json:"status"`
+			InstallDir string `json:"install_dir"`
+			ConfigDir  string `json:"config_dir"`
+			Host       string `json:"host"`
+			Port       string `json:"port"`
+			User       string `json:"user"`
+		}{
+			Status: "completed", InstallDir: opts.InstallDir, ConfigDir: opts.ConfigDir,
+			Host: opts.ServerAddress, Port: opts.ServerPort, User: opts.User,
+		}); err != nil {
+			logging.Error("xp2p client install: publish JSON result failed", "err", err)
+			return 1
+		}
+	}
 	return 0
 }
