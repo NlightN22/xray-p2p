@@ -28,8 +28,6 @@ var nonRuntimeMutationReasons = map[string]string{
 	"xp2p server ha sync":                    "sync persists generated control-plane state without changing active Xray resources",
 	"xp2p server identity detach":            "provider selection is identity control state; sync applies runtime resources",
 	"xp2p server identity select":            "provider selection is identity control state; sync applies runtime resources",
-	"xp2p server identity sync":              "provider synchronization is covered separately from the Xray resource mutation matrix",
-	"xp2p server user remove":                "removing the fixture's last user also removes its inbound and requires a service-layer apply",
 }
 
 func TestStage3RuntimeApplyContractCases(t *testing.T) {
@@ -52,7 +50,7 @@ func TestStage3RuntimeApplyContractCases(t *testing.T) {
 		t.Run(path+"/runtime-success", func(t *testing.T) {
 			fixture := scenario.successFixture(t)
 			role := mutationRole(path)
-			recorder := newRuntimeAPIRecorder(t, role, runtimeAPISuccess)
+			recorder := newRuntimeAPIRecorder(t, path, role, runtimeAPISuccess)
 			restore := runtimeboundary.SetForTesting(recorder.boundary())
 			t.Cleanup(restore)
 			beforeDomain := fixture.snapshot(t)
@@ -68,7 +66,7 @@ func TestStage3RuntimeApplyContractCases(t *testing.T) {
 		t.Run(path+"/runtime-verification-failure-atomic", func(t *testing.T) {
 			fixture := scenario.successFixture(t)
 			role := mutationRole(path)
-			recorder := newRuntimeAPIRecorder(t, role, runtimeAPIFailVerification)
+			recorder := newRuntimeAPIRecorder(t, path, role, runtimeAPIFailVerification)
 			before := snapshotRoleMutationState(t, role)
 			restore := runtimeboundary.SetForTesting(recorder.boundary())
 			t.Cleanup(restore)
@@ -82,7 +80,7 @@ func TestStage3RuntimeApplyContractCases(t *testing.T) {
 		t.Run(path+"/desired-persistence-failure-rollback", func(t *testing.T) {
 			fixture := scenario.successFixture(t)
 			role := mutationRole(path)
-			recorder := newRuntimeAPIRecorder(t, role, runtimeAPIFailDesiredCommit)
+			recorder := newRuntimeAPIRecorder(t, path, role, runtimeAPIFailDesiredCommit)
 			before := snapshotRoleMutationState(t, role)
 			restore := runtimeboundary.SetForTesting(recorder.boundary())
 			t.Cleanup(restore)

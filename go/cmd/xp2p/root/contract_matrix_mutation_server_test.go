@@ -21,6 +21,11 @@ func registerServerMutationContracts(registry map[string]mutationContract) {
 	base := serverMutationBase(false, false)
 	disabledUser := serverMutationBase(true, false)
 	disabledReverse := serverMutationBase(false, true)
+	withSecondUser := strings.Replace(base, `user_id = "matrix-user"`, `user_id = "keep-user"`, 1) + `
+[[server.trojan_users]]
+email = "keep-user"
+password = "keep-server-value"
+`
 	withForward := base + `
 [[server.forward_rules]]
 listen_address = "127.0.0.1"
@@ -107,7 +112,7 @@ remark = "remove.example:443"
 			path:        "xp2p server user remove",
 			successArgs: []string{"server", "user", "remove", "--id", "matrix-user"},
 			failureArgs: []string{"server", "user", "remove", "--id", ""},
-			fixture:     base,
+			fixture:     withSecondUser,
 			sensitive:   []string{"initial-server-value"},
 		},
 	}

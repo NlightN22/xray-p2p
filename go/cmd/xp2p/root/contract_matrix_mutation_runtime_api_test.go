@@ -42,8 +42,11 @@ type runtimeAPIRecorder struct {
 	desiredBackup string
 }
 
-func newRuntimeAPIRecorder(t *testing.T, role string, mode runtimeAPIMode) *runtimeAPIRecorder {
+func newRuntimeAPIRecorder(t *testing.T, path, role string, mode runtimeAPIMode) *runtimeAPIRecorder {
 	t.Helper()
+	if path == "xp2p server identity sync" {
+		seedIdentityRuntimeState(t)
+	}
 	artifacts := compileRoleDesired(t, role)
 	liveDir, err := config.LiveRoleDir(role)
 	if err != nil {
@@ -62,9 +65,7 @@ func newRuntimeAPIRecorder(t *testing.T, role string, mode runtimeAPIMode) *runt
 }
 
 func (r *runtimeAPIRecorder) boundary() runtimeboundary.Boundary {
-	factory := func() {
-		r.factoryCalls++
-	}
+	factory := func() { r.factoryCalls++ }
 	return runtimeboundary.Boundary{
 		NewRouting: func(context.Context, string) (runtimeapply.RoutingApplier, func() error, error) {
 			factory()
@@ -157,7 +158,7 @@ func (r *runtimeAPIRecorder) restoreDesired(t *testing.T) {
 
 func (r *runtimeAPIRecorder) AddRule(_ context.Context, rule map[string]any) error {
 	r.mutationCalls++
-	r.current.rules[stringField(rule, "ruleTag")] = true
+	r.current.rules[stringField(rule, "ruleTag")] = cloneObject(rule)
 	return nil
 }
 
@@ -176,7 +177,7 @@ func (r *runtimeAPIRecorder) ListRuleTags(context.Context) ([]string, error) {
 
 func (r *runtimeAPIRecorder) AddInbound(_ context.Context, inbound map[string]any) error {
 	r.mutationCalls++
-	r.current.inbounds[stringField(inbound, "tag")] = true
+	r.current.addInbound(inbound)
 	return nil
 }
 
@@ -196,7 +197,7 @@ func (r *runtimeAPIRecorder) ListInboundTags(context.Context) ([]string, error) 
 
 func (r *runtimeAPIRecorder) AddOutbound(_ context.Context, outbound map[string]any) error {
 	r.mutationCalls++
-	r.current.outbounds[stringField(outbound, "tag")] = true
+	r.current.outbounds[stringField(outbound, "tag")] = cloneObject(outbound)
 	return nil
 }
 
@@ -213,12 +214,13 @@ func (r *runtimeAPIRecorder) ListOutboundTags(context.Context) ([]string, error)
 	return sortedKeys(r.current.outbounds), nil
 }
 
-func (r *runtimeAPIRecorder) AddInboundUser(_ context.Context, tag, email, _ string) error {
+func (r *runtimeAPIRecorder) AddInboundUser(_ context.Context, tag, email, password string) error {
 	r.mutationCalls++
 	if r.current.users[tag] == nil {
-		r.current.users[tag] = make(map[string]bool)
+		r.current.users[tag] = make(map[string]runtimeAPIUser)
 	}
-	r.current.users[tag][strings.ToLower(email)] = true
+	key := strings.ToLower(email)
+	r.current.users[tag][key] = runtimeAPIUser{Email: key, Password: password}
 	return nil
 }
 

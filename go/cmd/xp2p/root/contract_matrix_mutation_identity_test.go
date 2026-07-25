@@ -122,6 +122,19 @@ func newIdentitySyncMutationFixture(t *testing.T, endpoint string, success bool)
 install_dir = "` + safeServerInstallDir() + `"
 host = "127.0.0.1"
 
+[[server.users]]
+user_label = "idp-alice@xp2p.local"
+active_credential = "identity-alice-value"
+credential_generation = 1
+
+  [server.users.metadata]
+  managed_by = "identity"
+
+[[server.users]]
+user_label = "operator@example.com"
+active_credential = "identity-operator-value"
+credential_generation = 1
+
 [server.identity_provider]
 instance_id = "provider-a"
 kind = "scim"
@@ -143,7 +156,7 @@ timeout = "2s"
 	return mutationFixture{
 		args:          []string{"server", "identity", "sync"},
 		failureArgs:   []string{"server", "identity", "sync"},
-		sensitive:     []string{"provider-auth-value"},
+		sensitive:     []string{"provider-auth-value", "identity-alice-value", "identity-operator-value"},
 		snapshot:      snapshot,
 		assertSuccess: assert,
 	}
