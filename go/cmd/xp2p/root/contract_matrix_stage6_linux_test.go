@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	dnsforwardcmd "github.com/NlightN22/xray-p2p/go/internal/cli/dnsforward"
+	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/dnsforward"
 )
@@ -79,6 +80,34 @@ func registerStage6PlatformContractCases(registry map[string]contractCase) {
 	registry["xp2p nat-redirect add"] = stage6NATAddCase()
 	registry["xp2p nat-redirect list"] = stage6NATListCase()
 	registry["xp2p nat-redirect remove"] = stage6NATRemoveCase()
+}
+
+func stage6PlatformCasesExecutable() bool {
+	return true
+}
+
+func TestStage6GateRejectsIncompletePlatformDescriptor(t *testing.T) {
+	actual := jsonLeafPaths(NewCommand())
+	expected := make(map[string]bool)
+	for path, contract := range outputContractInventory {
+		if contract.class == clioutput.ClassJSON {
+			expected[path] = true
+		}
+	}
+	registry := make(map[string]contractCase, len(contractCaseRegistry))
+	for path, scenario := range contractCaseRegistry {
+		registry[path] = scenario
+	}
+	path := "xp2p client dns-forward add"
+	registry[path] = contractCase{
+		coverage:     contractCovered,
+		platformCase: true,
+		platform:     "linux",
+	}
+	err := validateContractRegistry(actual, expected, registry)
+	if err == nil || !strings.Contains(err.Error(), "covered case has incomplete scenarios: "+path) {
+		t.Fatalf("incomplete platform descriptor was not rejected: %v", err)
+	}
 }
 
 func stage6DNSAddCase(role string) contractCase {

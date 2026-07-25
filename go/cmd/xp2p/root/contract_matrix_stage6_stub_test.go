@@ -12,6 +12,10 @@ import (
 
 func registerStage6PlatformContractCases(map[string]contractCase) {}
 
+func stage6PlatformCasesExecutable() bool {
+	return false
+}
+
 func TestStage6UnsupportedPlatformContracts(t *testing.T) {
 	leaves := jsonLeafPaths(NewCommand())
 	argsByPath := map[string][]string{

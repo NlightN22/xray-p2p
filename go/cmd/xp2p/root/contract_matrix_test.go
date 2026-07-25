@@ -99,7 +99,7 @@ func TestCoveredContractCases(t *testing.T) {
 		if scenario.artifact {
 			continue
 		}
-		if scenario.platformCase {
+		if scenario.platformCase && !stage6PlatformCasesExecutable() {
 			continue
 		}
 		if !actual[path] {
@@ -223,7 +223,10 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 		if scenario.coverage != contractCovered {
 			problems = append(problems, "invalid coverage status: "+path)
 		}
-		if scenario.coverage == contractCovered && !scenario.mutation && !scenario.artifact && !scenario.platformCase &&
+		requiresExecutableMatrix := scenario.coverage == contractCovered &&
+			!scenario.mutation && !scenario.artifact &&
+			(!scenario.platformCase || stage6PlatformCasesExecutable())
+		if requiresExecutableMatrix &&
 			(len(scenario.success) == 0 || len(scenario.empty) == 0 ||
 				len(scenario.failure) == 0 ||
 				scenario.setup == nil || scenario.assertResult == nil ||
@@ -233,7 +236,7 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 				len(scenario.human) == 0 || scenario.assertHuman == nil) {
 			problems = append(problems, "covered case has incomplete scenarios: "+path)
 		}
-		if scenario.coverage == contractCovered && !scenario.mutation && !scenario.artifact && !scenario.platformCase && humanBaselineDigests[path] == "" {
+		if requiresExecutableMatrix && humanBaselineDigests[path] == "" {
 			problems = append(problems, "covered case has no exact human baseline: "+path)
 		}
 		if scenario.coverage == contractCovered && scenario.mutation {
