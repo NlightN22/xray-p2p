@@ -3,6 +3,7 @@
 package dnsforwardcmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"text/tabwriter"
@@ -16,20 +17,52 @@ import (
 )
 
 func NewClientCommand(cfg func() config.Config) *cobra.Command {
-	return newCommand(func() (*dnsforward.Manager, error) {
-		c := cfg()
-		return dnsforward.NewClientManager(c.Client.InstallDir, c.Client.ConfigDir)
-	})
+	return newCommand(func() (manager, error) { return clientManagerFactory(cfg()) })
 }
 
 func NewServerCommand(cfg func() config.Config) *cobra.Command {
-	return newCommand(func() (*dnsforward.Manager, error) {
-		c := cfg()
-		return dnsforward.NewServerManager(c.Server.InstallDir, c.Server.ConfigDir)
-	})
+	return newCommand(func() (manager, error) { return serverManagerFactory(cfg()) })
 }
 
-func newCommand(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
+type manager interface {
+	Add(context.Context, dnsforward.AddOptions) (dnsforward.ListEntry, error)
+	Remove(dnsforward.RemoveOptions) ([]string, error)
+	List() ([]dnsforward.ListEntry, bool, error)
+	Diagnostics(bool) map[string]string
+}
+
+var (
+	clientManagerFactory = func(cfg config.Config) (manager, error) {
+		return dnsforward.NewClientManager(cfg.Client.InstallDir, cfg.Client.ConfigDir)
+	}
+	serverManagerFactory = func(cfg config.Config) (manager, error) {
+		return dnsforward.NewServerManager(cfg.Server.InstallDir, cfg.Server.ConfigDir)
+	}
+)
+
+// SetManagerFactoriesForTesting replaces platform managers for command contract tests.
+func SetManagerFactoriesForTesting(
+	client func(config.Config) (Manager, error),
+	server func(config.Config) (Manager, error),
+) func() {
+	previousClient, previousServer := clientManagerFactory, serverManagerFactory
+	if client != nil {
+		clientManagerFactory = func(cfg config.Config) (manager, error) { return client(cfg) }
+	}
+	if server != nil {
+		serverManagerFactory = func(cfg config.Config) (manager, error) { return server(cfg) }
+	}
+	return func() {
+		clientManagerFactory, serverManagerFactory = previousClient, previousServer
+	}
+}
+
+// Manager is the platform boundary used by DNS-forward commands.
+type Manager interface {
+	manager
+}
+
+func newCommand(makeMgr func() (manager, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dns-forward",
 		Short: "Manage dnsmasq forward entries on OpenWrt",
@@ -46,7 +79,7 @@ func newCommand(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	return cmd
 }
 
-func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
+func newAddCmd(makeMgr func() (manager, error)) *cobra.Command {
 	var domain string
 	var target string
 	var withForward bool
@@ -83,7 +116,16 @@ func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 				"target", entry.Target,
 				"labels", strings.Join(entry.Labels, ","),
 			)
-			return nil
+			return clioutput.SetResult(cmd, struct {
+				Status string   `json:"status"`
+				Domain string   `json:"domain"`
+				Server string   `json:"server"`
+				Target string   `json:"target"`
+				Labels []string `json:"labels"`
+			}{
+				Status: "completed", Domain: entry.Domain, Server: entry.Server,
+				Target: entry.Target, Labels: append([]string(nil), entry.Labels...),
+			})
 		},
 	}
 
@@ -99,7 +141,7 @@ func newAddCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	return cmd
 }
 
-func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
+func newRemoveCmd(makeMgr func() (manager, error)) *cobra.Command {
 	var domain string
 	var withForward bool
 	var intercept bool
@@ -131,7 +173,10 @@ func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 				return exitError{code: 1}
 			}
 			logging.Info("xp2p dns-forward removed", "domains", strings.Join(removed, ","))
-			return nil
+			return clioutput.SetResult(cmd, struct {
+				Status  string   `json:"status"`
+				Domains []string `json:"domains"`
+			}{Status: "completed", Domains: append([]string{}, removed...)})
 		},
 	}
 	flags := cmd.Flags()
@@ -144,7 +189,7 @@ func newRemoveCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	return cmd
 }
 
-func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
+func newListCmd(makeMgr func() (manager, error)) *cobra.Command {
 	var debug bool
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -203,7 +248,7 @@ func newListCmd(makeMgr func() (*dnsforward.Manager, error)) *cobra.Command {
 	return cmd
 }
 
-func logDiagnostics(manager *dnsforward.Manager, includeFirewall bool) {
+func logDiagnostics(manager manager, includeFirewall bool) {
 	diag := manager.Diagnostics(includeFirewall)
 	for key, value := range diag {
 		logging.Info(key, "output", value)

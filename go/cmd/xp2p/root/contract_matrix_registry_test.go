@@ -29,6 +29,7 @@ type contractCase struct {
 	coverage         contractCoverage
 	mutation         bool
 	artifact         bool
+	platformCase     bool
 	success          []string
 	empty            []string
 	failure          []string
@@ -101,6 +102,7 @@ func buildContractCaseRegistry() map[string]contractCase {
 		}
 	}
 	registerStage5ContractCases(registry)
+	registerStage6ContractCases(registry)
 	return registry
 }
 
