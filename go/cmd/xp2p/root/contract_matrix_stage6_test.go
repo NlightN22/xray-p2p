@@ -33,11 +33,7 @@ func registerStage6ContractCases(registry map[string]contractCase) {
 }
 
 func TestStage6LeavesCovered(t *testing.T) {
-	baseline := buildLegacyPendingBaseline()
 	for _, path := range stage6Paths {
-		if baseline[path].coverage != contractStage6 {
-			t.Errorf("stale stage 6 descriptor: %s", path)
-		}
 		if scenario := contractCaseRegistry[path]; scenario.coverage != contractCovered {
 			t.Errorf("stage 6 leaf is not covered: %s", path)
 		}

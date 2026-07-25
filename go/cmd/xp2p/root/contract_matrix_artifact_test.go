@@ -15,6 +15,23 @@ type stage4Contract struct {
 
 var stage4ContractRegistry = buildStage4ContractRegistry()
 
+func stage4ExpectedPaths() map[string]struct{} {
+	return map[string]struct{}{
+		"xp2p client debug bundle":       {},
+		"xp2p client deploy":             {},
+		"xp2p client export":             {},
+		"xp2p client import":             {},
+		"xp2p client install":            {},
+		"xp2p server debug bundle":       {},
+		"xp2p server export":             {},
+		"xp2p server identity provision": {},
+		"xp2p server import":             {},
+		"xp2p server install":            {},
+		"xp2p server user add":           {},
+		"xp2p server user rotate":        {},
+	}
+}
+
 func buildStage4ContractRegistry() map[string]stage4Contract {
 	registry := map[string]stage4Contract{
 		"xp2p client debug bundle":       archiveStage4Contract("client", "debug"),
@@ -35,7 +52,7 @@ func buildStage4ContractRegistry() map[string]stage4Contract {
 
 func TestStage4LeavesCovered(t *testing.T) {
 	if err := validateStage4Contracts(
-		buildLegacyPendingBaseline(),
+		stage4ExpectedPaths(),
 		contractCaseRegistry,
 		stage4ContractRegistry,
 	); err != nil {
@@ -44,9 +61,7 @@ func TestStage4LeavesCovered(t *testing.T) {
 }
 
 func TestStage4GateRejectsMissingIncompleteAndStaleDescriptors(t *testing.T) {
-	baseline := map[string]contractCase{
-		"xp2p client export": {coverage: contractStage4},
-	}
+	expected := map[string]struct{}{"xp2p client export": {}}
 	covered := map[string]contractCase{
 		"xp2p client export": {coverage: contractCovered, artifact: true},
 	}
@@ -75,7 +90,7 @@ func TestStage4GateRejectsMissingIncompleteAndStaleDescriptors(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateStage4Contracts(baseline, covered, test.descriptors)
+			err := validateStage4Contracts(expected, covered, test.descriptors)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("got error %v, want %q", err, test.want)
 			}
@@ -116,17 +131,12 @@ func registerStage4ContractCase(
 }
 
 func validateStage4Contracts(
-	baseline map[string]contractCase,
+	expected map[string]struct{},
 	registry map[string]contractCase,
 	descriptors map[string]stage4Contract,
 ) error {
-	expected := make(map[string]struct{})
 	var problems []string
-	for path, legacy := range baseline {
-		if legacy.coverage != contractStage4 {
-			continue
-		}
-		expected[path] = struct{}{}
+	for path := range expected {
 		scenario, ok := registry[path]
 		if !ok || scenario.coverage != contractCovered || !scenario.artifact {
 			problems = append(problems, "stage 4 leaf is not covered: "+path)

@@ -201,21 +201,10 @@ func servicePastTense(action string) string {
 }
 
 func TestStage5LeavesCovered(t *testing.T) {
-	baseline := buildLegacyPendingBaseline()
-	expected := make(map[string]bool)
-	for path, scenario := range baseline {
-		if scenario.coverage != contractStage5 {
-			continue
-		}
-		expected[path] = true
+	for _, path := range stage5Paths {
 		covered, ok := contractCaseRegistry[path]
 		if !ok || covered.coverage != contractCovered {
 			t.Errorf("stage 5 leaf is not covered: %s", path)
-		}
-	}
-	for _, path := range stage5Paths {
-		if !expected[path] {
-			t.Errorf("stale stage 5 descriptor: %s", path)
 		}
 	}
 }

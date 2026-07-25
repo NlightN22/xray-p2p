@@ -95,44 +95,20 @@ func buildMutationContractRegistry() map[string]mutationContract {
 }
 
 func TestStage3MutationLeavesCovered(t *testing.T) {
-	baseline := buildLegacyPendingBaseline()
-	expected := make(map[string]struct{})
-	for path, legacy := range baseline {
-		if legacy.coverage != contractStage3 {
-			continue
-		}
-		expected[path] = struct{}{}
+	for path := range mutationContractRegistry {
 		scenario, exists := contractCaseRegistry[path]
-		if !exists || scenario.coverage != contractCovered || !scenario.mutation {
+		if _, polymorphic := stage3PolymorphicMutationPaths[path]; !polymorphic &&
+			(!exists || scenario.coverage != contractCovered || !scenario.mutation) {
 			t.Errorf("stage 3 mutation %s is not covered", path)
-		}
-		if _, exists := mutationContractRegistry[path]; !exists {
-			t.Errorf("stage 3 mutation %s has no executable contract", path)
 		}
 		if contract := outputContractInventory[path]; contract.successResult != nil {
 			t.Errorf("stage 3 mutation %s uses a root-level synthetic result", path)
 		}
 	}
 	for path := range stage3PolymorphicMutationPaths {
-		expected[path] = struct{}{}
 		scenario, exists := mutationContractRegistry[path]
 		if !exists || scenario.successFixture == nil || scenario.failureFixture == nil {
 			t.Errorf("polymorphic mode mutation %s has no executable contract", path)
-		}
-	}
-	for path := range expected {
-		if _, exists := mutationContractRegistry[path]; !exists {
-			t.Errorf("expected stage 3 mutation %s is missing from the registry", path)
-		}
-	}
-	for path := range mutationContractRegistry {
-		if _, exists := expected[path]; !exists {
-			t.Errorf("mutation registry contains undeclared stage 3 variant %s", path)
-		}
-	}
-	for path, scenario := range contractCaseRegistry {
-		if scenario.coverage == contractStage3 {
-			t.Errorf("stage 3 pending status remains: %s", path)
 		}
 	}
 }

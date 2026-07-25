@@ -1,28 +1,18 @@
 package root
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
 )
 
-const legacyPendingBaselineDigest = "c1f4c0b41b5c21597797deef0d556d01540703102836557b6a8385d9f3dad158"
-
 type contractCoverage string
 
 const (
 	contractCovered contractCoverage = "covered"
-	contractStage2  contractCoverage = "pending:2"
-	contractStage3  contractCoverage = "pending:3"
-	contractStage4  contractCoverage = "pending:4"
-	contractStage5  contractCoverage = "pending:5"
-	contractStage6  contractCoverage = "pending:6"
 )
 
 type contractCase struct {
@@ -49,11 +39,7 @@ type contractCase struct {
 var contractCaseRegistry = buildContractCaseRegistry()
 
 func buildContractCaseRegistry() map[string]contractCase {
-	baseline := buildLegacyPendingBaseline()
-	registry := make(map[string]contractCase, len(baseline)+1)
-	for path, scenario := range baseline {
-		registry[path] = scenario
-	}
+	registry := make(map[string]contractCase, len(outputContractInventory))
 	registry["xp2p client list"] = clientListContractCase()
 	registry["xp2p client dns-forward list"] = dnsForwardListContractCase("client")
 	registry["xp2p client mode"] = modeReadContractCase("client")
@@ -103,95 +89,6 @@ func buildContractCaseRegistry() map[string]contractCase {
 	}
 	registerStage5ContractCases(registry)
 	registerStage6ContractCases(registry)
-	return registry
-}
-
-func pendingBaselineDigest(baseline map[string]contractCase) string {
-	paths := make([]string, 0, len(baseline))
-	for path := range baseline {
-		paths = append(paths, path)
-	}
-	sort.Strings(paths)
-	hash := sha256.New()
-	for _, path := range paths {
-		_, _ = fmt.Fprintf(hash, "%s=%s\n", path, baseline[path].coverage)
-	}
-	return fmt.Sprintf("%x", hash.Sum(nil))
-}
-
-func buildLegacyPendingBaseline() map[string]contractCase {
-	registry := make(map[string]contractCase)
-	registerPending := func(coverage contractCoverage, paths ...string) {
-		for _, path := range paths {
-			if _, exists := registry[path]; exists {
-				panic("duplicate contract case: " + path)
-			}
-			registry[path] = contractCase{coverage: coverage}
-		}
-	}
-
-	registerPending(contractStage2, strings.Fields(`
-xp2p.client.forward.list xp2p.client.group.list
-xp2p.client.obs xp2p.client.redirect.list
-xp2p.client.reverse.list xp2p.client.state xp2p.client.subscription.offers
-xp2p.client.subscription.status xp2p.server.cert.state
-xp2p.server.forward.list
-xp2p.server.ha.channel.inspect xp2p.server.ha.channel.list
-xp2p.server.ha.group.inspect xp2p.server.ha.member.list
-xp2p.server.ha.peer.list xp2p.server.ha.redirect.list xp2p.server.ha.status
-xp2p.server.identity.status xp2p.server.profile xp2p.server.redirect.list
-xp2p.server.reverse.list xp2p.server.state xp2p.server.user.list
-xp2p.heartbeat.contract`)...)
-
-	registerPending(contractStage3, strings.Fields(`
-xp2p.client.disable xp2p.client.enable xp2p.client.forward.add
-xp2p.client.forward.remove xp2p.client.redirect.add xp2p.client.redirect.disable
-xp2p.client.redirect.enable xp2p.client.redirect.remove
-xp2p.client.reverse.disable xp2p.client.reverse.enable
-xp2p.client.subscription.add xp2p.client.subscription.refresh
-xp2p.client.subscription.remove xp2p.client.update
-xp2p.server.forward.add xp2p.server.forward.remove
-xp2p.server.ha.channel.create xp2p.server.ha.channel.disable
-xp2p.server.ha.channel.finalize xp2p.server.ha.channel.rebind
-xp2p.server.ha.channel.rebind-endpoint xp2p.server.ha.group.create
-xp2p.server.ha.group.remove xp2p.server.ha.group.update
-xp2p.server.ha.member.add xp2p.server.ha.member.remove
-xp2p.server.ha.member.reprioritize xp2p.server.ha.peer.add
-xp2p.server.ha.peer.remove xp2p.server.ha.peer.self
-xp2p.server.ha.redirect.add xp2p.server.ha.redirect.remove
-xp2p.server.ha.sync xp2p.server.identity.detach xp2p.server.identity.select
-xp2p.server.identity.sync xp2p.server.redirect.access.add-group
-xp2p.server.redirect.access.add-user xp2p.server.redirect.access.clear
-xp2p.server.redirect.access.remove-group xp2p.server.redirect.access.remove-user
-xp2p.server.redirect.access.set xp2p.server.redirect.add
-xp2p.server.redirect.disable xp2p.server.redirect.enable
-xp2p.server.redirect.remove xp2p.server.reverse.disable
-xp2p.server.reverse.enable xp2p.server.user.disable xp2p.server.user.enable
-xp2p.server.user.remove xp2p.server.user.update`)...)
-
-	registerPending(contractStage4, strings.Fields(`
-xp2p.client.debug.bundle xp2p.client.deploy xp2p.client.export
-xp2p.client.import xp2p.client.install xp2p.server.debug.bundle
-xp2p.server.export xp2p.server.identity.provision xp2p.server.import
-xp2p.server.install xp2p.server.user.add xp2p.server.user.rotate`)...)
-
-	registerPending(contractStage5, strings.Fields(`
-xp2p.client.mode xp2p.client.remove xp2p.client.service.restart
-xp2p.client.service.start xp2p.client.service.status xp2p.client.service.stop
-xp2p.server.cert.set xp2p.server.mode xp2p.server.remove
-xp2p.server.service.restart xp2p.server.service.start
-xp2p.server.service.status xp2p.server.service.stop`)...)
-
-	registerPending(contractStage6, strings.Fields(`
-xp2p.client.dns-forward.add xp2p.client.dns-forward.list
-xp2p.client.dns-forward.remove xp2p.server.dns-forward.add
-xp2p.server.dns-forward.list xp2p.server.dns-forward.remove
-xp2p.nat-redirect.add xp2p.nat-redirect.list xp2p.nat-redirect.remove`)...)
-
-	for path, item := range registry {
-		delete(registry, path)
-		registry[strings.ReplaceAll(path, ".", " ")] = item
-	}
 	return registry
 }
 

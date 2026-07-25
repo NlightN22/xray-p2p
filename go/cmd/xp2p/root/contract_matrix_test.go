@@ -15,9 +15,6 @@ import (
 )
 
 func TestContractCaseRegistryMatchesJSONLeaves(t *testing.T) {
-	if got := pendingBaselineDigest(buildLegacyPendingBaseline()); got != legacyPendingBaselineDigest {
-		t.Fatalf("legacy pending baseline changed: got %s want %s", got, legacyPendingBaselineDigest)
-	}
 	actual := jsonLeafPaths(NewCommand())
 	expected := make(map[string]bool)
 	for path, contract := range outputContractInventory {
@@ -28,11 +25,8 @@ func TestContractCaseRegistryMatchesJSONLeaves(t *testing.T) {
 	if err := validateContractRegistry(actual, expected, contractCaseRegistry); err != nil {
 		t.Fatal(err)
 	}
-	if err := validatePendingCases(contractCaseRegistry); err != nil {
-		t.Fatal(err)
-	}
 	if err := validateStage4Contracts(
-		buildLegacyPendingBaseline(),
+		stage4ExpectedPaths(),
 		contractCaseRegistry,
 		stage4ContractRegistry,
 	); err != nil {
@@ -41,7 +35,7 @@ func TestContractCaseRegistryMatchesJSONLeaves(t *testing.T) {
 }
 
 func TestContractCaseRegistryDetectsMissingAndStaleCases(t *testing.T) {
-	cases := map[string]contractCase{"xp2p client list": {coverage: contractStage2}}
+	cases := map[string]contractCase{"xp2p client list": {coverage: contractCovered}}
 	if err := validateContractRegistry(
 		map[string]bool{"xp2p client list": true, "xp2p client new": true},
 		map[string]bool{"xp2p client list": true, "xp2p client new": true},
@@ -53,21 +47,18 @@ func TestContractCaseRegistryDetectsMissingAndStaleCases(t *testing.T) {
 		map[string]bool{"xp2p client list": true},
 		map[string]bool{"xp2p client list": true},
 		map[string]contractCase{
-			"xp2p client list": {coverage: contractStage2},
-			"xp2p stale":       {coverage: contractStage2},
+			"xp2p client list": {coverage: contractCovered},
+			"xp2p stale":       {coverage: contractCovered},
 		},
 	); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("stale case was not detected: %v", err)
 	}
-	if err := validatePendingCases(
-		map[string]contractCase{"xp2p client new": {coverage: contractStage2}},
-	); err == nil || !strings.Contains(err.Error(), "new command cannot be pending") {
-		t.Fatalf("new pending case was not rejected: %v", err)
-	}
-	changedBaseline := buildLegacyPendingBaseline()
-	changedBaseline["xp2p client new"] = contractCase{coverage: contractStage2}
-	if got := pendingBaselineDigest(changedBaseline); got == legacyPendingBaselineDigest {
-		t.Fatal("baseline digest did not detect a new pending command")
+	if err := validateContractRegistry(
+		map[string]bool{"xp2p client new": true},
+		map[string]bool{"xp2p client new": true},
+		map[string]contractCase{"xp2p client new": {coverage: "invalid"}},
+	); err == nil || !strings.Contains(err.Error(), "invalid coverage status") {
+		t.Fatalf("non-covered case was not rejected: %v", err)
 	}
 }
 
@@ -229,10 +220,7 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 		if !expected[path] {
 			problems = append(problems, "stale contract case: "+path)
 		}
-		switch scenario.coverage {
-		case contractCovered, contractStage2, contractStage3, contractStage4,
-			contractStage5, contractStage6:
-		default:
+		if scenario.coverage != contractCovered {
 			problems = append(problems, "invalid coverage status: "+path)
 		}
 		if scenario.coverage == contractCovered && !scenario.mutation && !scenario.artifact && !scenario.platformCase &&
@@ -258,27 +246,6 @@ func validateContractRegistry(actual, expected map[string]bool, registry map[str
 			if !ok || contract.success == nil || contract.failure == nil || contract.human == nil {
 				problems = append(problems, "covered artifact has no executable scenarios: "+path)
 			}
-		}
-	}
-	sort.Strings(problems)
-	if len(problems) != 0 {
-		return fmt.Errorf("%s", strings.Join(problems, "\n"))
-	}
-	return nil
-}
-
-func validatePendingCases(registry map[string]contractCase) error {
-	baseline := buildLegacyPendingBaseline()
-	var problems []string
-	for path, scenario := range registry {
-		if scenario.coverage == contractCovered {
-			continue
-		}
-		baselineCase, existed := baseline[path]
-		if !existed {
-			problems = append(problems, "new command cannot be pending: "+path)
-		} else if baselineCase.coverage != scenario.coverage {
-			problems = append(problems, "pending stage changed: "+path)
 		}
 	}
 	sort.Strings(problems)
