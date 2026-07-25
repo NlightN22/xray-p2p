@@ -131,6 +131,14 @@ func runServerMode(ctx context.Context, cfg config.Config, args []string) int {
 	}
 
 	logging.Info("xp2p server mode updated", "mode", mode, "config", updatedPath)
+	if err := clioutput.SetResultContext(ctx, clioutput.MutationResult{
+		Status:    "completed",
+		Operation: "server mode",
+		Entity:    mode,
+	}); err != nil {
+		logging.Error("xp2p server mode: publish JSON result failed", "err", err)
+		return 1
+	}
 	return 0
 }
 

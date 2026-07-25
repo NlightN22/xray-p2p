@@ -2,11 +2,21 @@ package root
 
 const emptyMutationHumanBaseline = "d390d4f10ee6e2844a1eaf10be9c146517b901f3035e4cc629d538d71ce5a3da"
 
+var mutationHumanPlatformBaselineDigests = map[string]map[string]string{
+	"xp2p client mode": {
+		"linux": "e3e164a13b1e3f49145a67903a69704091d355b7b07db00703b1e4a276e2ae7a",
+	},
+	"xp2p server mode": {
+		"linux": "a3c8f67cc1af107913e23a7b2699a5e5de54537599b534dea5bb3e2ccb00145e",
+	},
+}
+
 var mutationHumanBaselineDigests = map[string]string{
 	"xp2p client disable":                      "785a5138250cc8806a5552ca27a839677a87ab3660a4c5104a5de8c005e70430",
 	"xp2p client enable":                       "3b3c8c6a64499e64dbf15105e119fdc056872d6414806aae4bfb8ff0b8b8659c",
 	"xp2p client forward add":                  "2c6f04af116ce8eda887f8e0bc163ccf42ca663009652fd4d584f70b506bae73",
 	"xp2p client forward remove":               "65d37178d10afbe5e8be7f441aed175b920b78bb178f64e551961f65e0373d84",
+	"xp2p client mode":                         "fe30aca8ea63bd64079572e9d70af9db6ebc7ec89820b90d072e4b7eaf584071",
 	"xp2p client redirect add":                 "6a0c775c364e7bd0a10517cc764712d9ff9a1328a7fa4a2186ea699f26df90cc",
 	"xp2p client redirect disable":             emptyMutationHumanBaseline,
 	"xp2p client redirect enable":              emptyMutationHumanBaseline,
@@ -19,6 +29,7 @@ var mutationHumanBaselineDigests = map[string]string{
 	"xp2p client update":                       "a1e865efe97d4fab04cb103daa16afd606a582c92de4d1bef149dfc8553e1fb5",
 	"xp2p server forward add":                  "2d5aa627d11b56d19ebcfd5053332eebc5e17b98bb03d74d1d01a260c6e5321c",
 	"xp2p server forward remove":               "6bc5d5c1ecce1a16b335713ed424f95e5d67a86a6e399e8ed4e5037dce06066b",
+	"xp2p server mode":                         "064c64fceaad80f85ebe31396737f706920e6c94b6f0103282298ff411e1de6c",
 	"xp2p server ha channel create":            emptyMutationHumanBaseline,
 	"xp2p server ha channel disable":           emptyMutationHumanBaseline,
 	"xp2p server ha channel finalize":          emptyMutationHumanBaseline,

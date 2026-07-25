@@ -66,6 +66,9 @@ func (c contractServiceController) Status(_ context.Context, role servicecontrol
 	if c.mode == "error" {
 		return servicecontrol.Status{}, errors.New("service manager matrix failure")
 	}
+	if c.mode == "inactive" {
+		return servicecontrol.Status{State: "stopped"}, nil
+	}
 	detail := ""
 	if c.mode == "success" {
 		detail = fmt.Sprintf("%s service Ω running\nhealthy", role)

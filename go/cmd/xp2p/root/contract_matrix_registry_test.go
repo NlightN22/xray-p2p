@@ -85,6 +85,9 @@ func buildContractCaseRegistry() map[string]contractCase {
 	registry["xp2p nat-redirect list"] = natRedirectListContractCase()
 	registry["xp2p server dns-forward list"] = dnsForwardListContractCase("server")
 	for path := range mutationContractRegistry {
+		if path == "xp2p client mode" || path == "xp2p server mode" {
+			continue
+		}
 		registry[path] = mutationCase()
 	}
 	for path, scenario := range registry {

@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 func registerServerMutationContracts(registry map[string]mutationContract) {
@@ -123,7 +125,38 @@ remark = "remove.example:443"
 		}
 		registerMutation(registry, item.path, factory, factory)
 	}
+	modeFactory := func(t *testing.T) mutationFixture {
+		return newServerModeMutationFixture(t)
+	}
+	registerMutation(registry, "xp2p server mode", modeFactory, modeFactory)
 	registerServerRedirectAccessContracts(registry, withRedirect)
+}
+
+func newServerModeMutationFixture(t *testing.T) mutationFixture {
+	t.Helper()
+	restore := servicecontrol.SetDefaultForTesting(contractServiceController{mode: "inactive"})
+	t.Cleanup(restore)
+	content := strings.Replace(serverMutationBase(false, false), "[server]\n", "[server]\ntun_enabled = true\n", 1)
+	fixture := newServerMutationFixture(
+		t,
+		content,
+		[]string{"server", "mode", "proxy"},
+		[]string{"server", "mode", "invalid"},
+		nil,
+	)
+	desiredPath := filepath.Join(config.ConfigRoot(), layout.ServerConfigFileName)
+	fixture.snapshot = func(t *testing.T) any {
+		return snapshotModeMutation(t, desiredPath)
+	}
+	fixture.assertSuccess = func(t *testing.T, before, after any) {
+		t.Helper()
+		beforeState := before.(modeMutationSnapshot)
+		afterState := after.(modeMutationSnapshot)
+		if beforeState.desired == afterState.desired || !afterState.applyExists {
+			t.Fatalf("server mode state was not fully staged: before=%#v after=%#v", beforeState, afterState)
+		}
+	}
+	return fixture
 }
 
 func registerServerRedirectAccessContracts(registry map[string]mutationContract, fixture string) {

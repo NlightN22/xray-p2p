@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/layout"
+	servicecontrol "github.com/NlightN22/xray-p2p/go/internal/service/control"
 )
 
 func registerClientMutationContracts(registry map[string]mutationContract) {
@@ -110,7 +112,41 @@ outbound_tag = "edge-a"
 		}
 		registerMutation(registry, item.path, factory, factory)
 	}
+	modeFactory := func(t *testing.T) mutationFixture {
+		return newClientModeMutationFixture(t)
+	}
+	registerMutation(registry, "xp2p client mode", modeFactory, modeFactory)
 	registerClientSubscriptionMutationContracts(registry)
+}
+
+func newClientModeMutationFixture(t *testing.T) mutationFixture {
+	t.Helper()
+	restore := servicecontrol.SetDefaultForTesting(contractServiceController{mode: "inactive"})
+	t.Cleanup(restore)
+	content := strings.Replace(clientMutationBase(false), "[client]\n", `[client]
+install_dir = "C:/xp2p-client"
+tun_enabled = true
+`, 1)
+	fixture := newClientMutationFixture(
+		t,
+		content,
+		[]string{"client", "mode", "proxy"},
+		[]string{"client", "mode", "invalid"},
+		nil,
+	)
+	desiredPath := filepath.Join(config.ConfigRoot(), layout.ClientConfigFileName)
+	fixture.snapshot = func(t *testing.T) any {
+		return snapshotModeMutation(t, desiredPath)
+	}
+	fixture.assertSuccess = func(t *testing.T, before, after any) {
+		t.Helper()
+		beforeState := before.(modeMutationSnapshot)
+		afterState := after.(modeMutationSnapshot)
+		if beforeState.desired == afterState.desired || !afterState.applyExists {
+			t.Fatalf("client mode state was not fully staged: before=%#v after=%#v", beforeState, afterState)
+		}
+	}
+	return fixture
 }
 
 func clientMutationBase(endpointDisabled bool) string {

@@ -109,21 +109,6 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 		return 1
 	}
 
-	if tunEnabled {
-		wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
-		if err := tunPreflightCheckFunc(ctx, preflight.TunConfig{
-			Enabled:       true,
-			Name:          loadedCfg.Client.TunName,
-			Addr:          loadedCfg.Client.TunAddr,
-			MTU:           loadedCfg.Client.TunMTU,
-			Mode:          loadedCfg.Client.TunMode,
-			WintunDLLPath: wintunPath,
-		}); err != nil {
-			logging.Error("xp2p client mode: tun preflight failed", "err", err)
-			return 1
-		}
-	}
-
 	tunMode := loadedCfg.Client.TunMode
 	if fs.NArg() == 2 {
 		if !tunEnabled {
@@ -147,6 +132,21 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 		}
 		if strings.TrimSpace(resolvedTag) != "" {
 			fullTunnelTag = resolvedTag
+		}
+	}
+
+	if tunEnabled {
+		wintunPath := filepath.Join(installDir, layout.BinDirName, "wintun.dll")
+		if err := tunPreflightCheckFunc(ctx, preflight.TunConfig{
+			Enabled:       true,
+			Name:          loadedCfg.Client.TunName,
+			Addr:          loadedCfg.Client.TunAddr,
+			MTU:           loadedCfg.Client.TunMTU,
+			Mode:          loadedCfg.Client.TunMode,
+			WintunDLLPath: wintunPath,
+		}); err != nil {
+			logging.Error("xp2p client mode: tun preflight failed", "err", err)
+			return 1
 		}
 	}
 
@@ -190,6 +190,14 @@ func runClientMode(ctx context.Context, cfg config.Config, args []string) int {
 		logging.Info("xp2p client mode updated", "mode", mode, "tun_mode", tunMode, "config", updatedPath)
 	} else {
 		logging.Info("xp2p client mode updated", "mode", mode, "config", updatedPath)
+	}
+	if err := clioutput.SetResultContext(ctx, clioutput.MutationResult{
+		Status:    "completed",
+		Operation: "client mode",
+		Entity:    mode,
+	}); err != nil {
+		logging.Error("xp2p client mode: publish JSON result failed", "err", err)
+		return 1
 	}
 	return 0
 }

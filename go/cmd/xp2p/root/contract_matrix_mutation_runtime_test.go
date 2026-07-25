@@ -11,6 +11,7 @@ import (
 
 var nonRuntimeMutationReasons = map[string]string{
 	"xp2p client subscription add":           "registering a subscription source does not change active Xray resources",
+	"xp2p client mode":                       "mode changes require service-layer TUN, route, DNS, and firewall handling",
 	"xp2p server ha channel create":          "channel generation state does not change the active Xray resource set",
 	"xp2p server ha channel disable":         "channel generation state does not change the active Xray resource set",
 	"xp2p server ha channel finalize":        "channel generation state does not change the active Xray resource set",
@@ -28,6 +29,7 @@ var nonRuntimeMutationReasons = map[string]string{
 	"xp2p server ha sync":                    "sync persists generated control-plane state without changing active Xray resources",
 	"xp2p server identity detach":            "provider selection is identity control state; sync applies runtime resources",
 	"xp2p server identity select":            "provider selection is identity control state; sync applies runtime resources",
+	"xp2p server mode":                       "mode changes require service-layer TUN, route, DNS, and firewall handling",
 }
 
 func TestStage3RuntimeApplyContractCases(t *testing.T) {

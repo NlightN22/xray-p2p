@@ -57,6 +57,34 @@ func TestStage3RedirectMutationsDoNotPromptInJSONMode(t *testing.T) {
 	}
 }
 
+func TestStage3ClientModeFullDoesNotPromptInJSONMode(t *testing.T) {
+	fixture := newClientMutationFixture(
+		t,
+		strings.Replace(
+			clientMutationBase(false)+secondClientEndpoint(),
+			"[client]\n",
+			"[client]\ninstall_dir = \"C:/xp2p-client\"\n",
+			1,
+		),
+		nil,
+		nil,
+		nil,
+	)
+	before := fixture.snapshot(t)
+	execution := executeContractCase([]string{"client", "mode", "tun", "full"}, false)
+	assertMutationFailure(t, "xp2p client mode", execution, nil)
+	after := fixture.snapshot(t)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("non-interactive full-tunnel selection changed Desired")
+	}
+	raw := strings.ToLower(execution.stdout + execution.stderr)
+	for _, prompt := range []string{"select ", "choose ", "available client"} {
+		if strings.Contains(raw, prompt) {
+			t.Fatalf("JSON mode emitted prompt text %q: %q", prompt, raw)
+		}
+	}
+}
+
 func clientPromptFixture(content string) func(*testing.T) mutationFixture {
 	return func(t *testing.T) mutationFixture {
 		return newClientMutationFixture(t, content, nil, nil, nil)

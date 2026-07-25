@@ -4,11 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
 	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
+	"github.com/NlightN22/xray-p2p/go/internal/config"
 )
 
 type mutationFixture struct {
@@ -23,6 +26,29 @@ type mutationFixture struct {
 type mutationContract struct {
 	successFixture func(*testing.T) mutationFixture
 	failureFixture func(*testing.T) mutationFixture
+}
+
+type modeMutationSnapshot struct {
+	desired     string
+	applyExists bool
+	apply       string
+}
+
+func snapshotModeMutation(t *testing.T, desiredPath string) modeMutationSnapshot {
+	t.Helper()
+	desired, err := os.ReadFile(desiredPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := modeMutationSnapshot{desired: string(desired)}
+	request, err := os.ReadFile(config.ApplyRequestPath())
+	if err == nil {
+		snapshot.applyExists = true
+		snapshot.apply = string(request)
+	} else if !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	return snapshot
 }
 
 var mutationContractRegistry = buildMutationContractRegistry()
@@ -57,6 +83,15 @@ func TestStage3MutationLeavesCovered(t *testing.T) {
 	}
 	if covered != 52 {
 		t.Fatalf("stage 3 baseline has %d leaves, want 52", covered)
+	}
+	for _, path := range []string{"xp2p client mode", "xp2p server mode"} {
+		scenario, exists := mutationContractRegistry[path]
+		if !exists || scenario.successFixture == nil || scenario.failureFixture == nil {
+			t.Errorf("polymorphic mode mutation %s has no executable contract", path)
+		}
+	}
+	if got := len(mutationContractRegistry); got != 54 {
+		t.Fatalf("stage 3 has %d mutation contracts, want 54 (52 leaves and 2 polymorphic mode variants)", got)
 	}
 	for path, scenario := range contractCaseRegistry {
 		if scenario.coverage == contractStage3 {
@@ -108,6 +143,10 @@ func assertMutationHumanBaseline(t *testing.T, path, stdout, stderr string) {
 	normalized := normalizeHumanOutput(stdout) + "\x00" + normalizeHumanOutput(stderr)
 	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(normalized)))
 	expected, exists := mutationHumanBaselineDigests[path]
+	if platformExpected := mutationHumanPlatformBaselineDigests[path][runtime.GOOS]; platformExpected != "" {
+		expected = platformExpected
+		exists = true
+	}
 	if !exists {
 		t.Fatalf("missing mutation human baseline for %s: digest=%s normalized=%q", path, digest, normalized)
 	}
