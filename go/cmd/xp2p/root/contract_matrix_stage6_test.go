@@ -23,6 +23,7 @@ func registerStage6ContractCases(registry map[string]contractCase) {
 		scenario.credentialPolicy = "platform network and firewall results omit credentials"
 		registry[path] = scenario
 	}
+	registerStage6PlatformContractCases(registry)
 }
 
 func TestStage6LeavesCovered(t *testing.T) {
@@ -31,7 +32,7 @@ func TestStage6LeavesCovered(t *testing.T) {
 		if baseline[path].coverage != contractStage6 {
 			t.Errorf("stale stage 6 descriptor: %s", path)
 		}
-		if scenario := contractCaseRegistry[path]; scenario.coverage != contractCovered || !scenario.platformCase {
+		if scenario := contractCaseRegistry[path]; scenario.coverage != contractCovered {
 			t.Errorf("stage 6 leaf is not covered: %s", path)
 		}
 	}
