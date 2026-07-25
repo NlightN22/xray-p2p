@@ -16,13 +16,13 @@ xp2p
 
 xp2p client
   Summary: Manage xp2p client installation
-  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, group, subscription, dns-forward
+  Subcommands: debug, deploy, disable, dns-forward, enable, export, forward, group, import, install, list, mode, obs, redirect, remove, render, reverse, run, service, state, subscription, update
 Options:
 Includes: inherited options
 
 xp2p server
   Summary: Manage xp2p server components
-  Subcommands: install, remove, run, service, state, render, debug, export, import, user, identity, redirect, forward, reverse, cert, deploy, mode, profile, ha, dns-forward
+  Subcommands: cert, debug, deploy, dns-forward, export, forward, ha, identity, import, install, mode, profile, redirect, remove, render, reverse, run, service, state, user
 Options:
 Includes: inherited options
 

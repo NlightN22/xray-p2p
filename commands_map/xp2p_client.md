@@ -4,9 +4,158 @@
 
 xp2p client
   Summary: Manage xp2p client installation
-  Subcommands: install, disable, enable, update, remove, list, run, service, state, obs, render, debug, export, import, deploy, redirect, forward, reverse, mode, group, subscription, dns-forward
+  Subcommands: debug, deploy, disable, dns-forward, enable, export, forward, group, import, install, list, mode, obs, redirect, remove, render, reverse, run, service, state, subscription, update
 Options:
 Includes: inherited options
+
+xp2p client debug
+  Summary: Debug helpers
+  Subcommands: bundle
+Options:
+Includes: inherited options
+
+xp2p client debug bundle
+  Summary: Create a debug bundle archive
+  Machine output: json
+Options:
+Includes: inherited options
+- --output, -o <path> archive output path
+
+xp2p client deploy
+  Summary: Deploy xp2p client via remote helper
+  Machine output: json
+Options:
+Includes: inherited options
+- --force, -f allow changing existing tun mode
+- --host, -H <host> (required) remote host (IP or DNS) to deploy
+- --install-dir, -I <dir> server install directory override
+- --mode, -M <mode> target client mode (proxy or tun; also supports tun:split or tun:full)
+- --password, -w <password> user password (auto-generated when omitted)
+- --port, -P <port> deploy port
+- --trojan-port, -T <port> service port
+- --tun-mode, -m <mode> TUN routing mode (split or full)
+- --user, -u <id> user identifier (email)
+
+xp2p client disable [hostname|tag]
+  Summary: Disable a client endpoint
+  Machine output: json
+Options:
+Includes: inherited options
+- --all, -a enable or disable all endpoints
+
+xp2p client dns-forward
+  Summary: Manage dnsmasq forward entries on OpenWrt
+  Subcommands: add, list, remove
+Options:
+Includes: inherited options
+
+xp2p client dns-forward add
+  Summary: Create or update a DNS forward entry
+  Machine output: json
+Options:
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> (required) domain name to match
+- --intercept, -I install DNS intercept redirect (53/tcp,udp)
+- --quiet, -q suppress interactive prompts
+- --target, -t <host:port> (required) upstream DNS server (IP:port)
+- --with-forward, -W deprecated; dns-forward always ensures a target forward
+
+xp2p client dns-forward list
+  Summary: List managed DNS forwards
+  Machine output: json
+Options:
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+
+xp2p client dns-forward remove
+  Summary: Remove a DNS forward entry
+  Machine output: json
+Options:
+Includes: inherited options
+- --all, -a remove all managed DNS forward entries
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> domain name to remove
+- --intercept, -I remove DNS intercept redirect
+- --quiet, -q suppress interactive prompts
+- --with-forward, -W deprecated; auto-created target forwards are removed when unused
+
+xp2p client enable [hostname|tag]
+  Summary: Enable a client endpoint
+  Machine output: json
+Options:
+Includes: inherited options
+- --all, -a enable or disable all endpoints
+
+xp2p client export
+  Summary: Export client configuration bundle
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-root, -C <dir> configuration root to export
+- --output, -o <path> archive output path
+
+xp2p client forward
+  Summary: Manage client dokodemo-door forwards
+  Subcommands: add, list, remove
+Options:
+Includes: inherited options
+
+xp2p client forward add
+  Summary: Add a client dokodemo-door forward
+  Machine output: json
+Options:
+Includes: inherited options
+- --base-port, -B <port> first port to probe when auto-selecting
+- --config-dir, -D <dir> client configuration directory name
+- --listen, -n <host:port> local listen address (default 127.0.0.1)
+- --listen-port, -P <port> local listen port (auto-select when omitted)
+- --path, -p <path> client installation directory
+- --proto, -o <proto> protocol to forward (tcp, udp, both)
+- --target, -t <host:port> (required) target host:port to forward traffic to
+
+xp2p client forward list
+  Summary: List client forwards
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
+
+xp2p client forward remove
+  Summary: Remove a client dokodemo-door forward
+  Machine output: json
+Options:
+Includes: inherited options
+- --cleanup, -C remove state entry even when config is missing
+- --config-dir, -D <dir> client configuration directory name
+- --ignore-missing, -m do not fail when the forward rule does not exist
+- --listen-port, -P <port> forward listen port
+- --path, -p <path> client installation directory
+- --remark, -r <id> forward remark
+- --tag, -g <id> forward tag
+
+xp2p client group
+  Summary: Inspect HA endpoint groups
+  Subcommands: list
+Options:
+Includes: inherited options
+
+xp2p client group list
+  Summary: List HA endpoint groups
+  Aliases: status, inspect
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p client import
+  Summary: Import client configuration bundle
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-root, -C <dir> configuration root to import into
+- --input, -i <path> (required) archive input path
 
 xp2p client install
   Summary: Install xp2p client assets and reverse bridges
@@ -27,42 +176,6 @@ Includes: inherited options
 - --tun-mode, -m <mode> TUN routing mode (split or full)
 - --user, -u <id> user email (used to derive the <user><host>.rev reverse bridge)
 
-xp2p client disable [hostname|tag]
-  Summary: Disable a client endpoint
-  Machine output: json
-Options:
-Includes: inherited options
-- --all, -a enable or disable all endpoints
-
-xp2p client enable [hostname|tag]
-  Summary: Enable a client endpoint
-  Machine output: json
-Options:
-Includes: inherited options
-- --all, -a enable or disable all endpoints
-
-xp2p client update <hostname|tag>
-  Summary: Update endpoint credentials
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> client configuration directory name
-- --password, -w <password> user password
-- --path, -p <path> client installation directory
-- --user, -u <id> user email
-
-xp2p client remove [hostname|tag]
-  Summary: Remove xp2p client endpoints or entire installation
-  Machine output: json
-Options:
-Includes: inherited options
-- --all, -a remove all endpoints and configuration
-- --config-dir, -D <dir> client configuration directory name
-- --ignore-missing, -m do not fail if installation is absent
-- --keep-files, -K keep installation files
-- --path, -p <path> client installation directory
-- --quiet, -q do not prompt for removal
-
 xp2p client list
   Summary: List configured xp2p client endpoints
   Machine output: json
@@ -73,81 +186,17 @@ Includes: inherited options
 - --path, -p <path> client installation directory
 - --pending, -y list pending configuration
 
-xp2p client run
-  Summary: Run xp2p client in foreground
-  Machine output: lifecycle
-  Machine output note: the command runs Xray in the foreground
-Options:
-Includes: inherited options
-- --auto-install, -A install automatically if missing
-- --config-dir, -D <dir> client configuration directory name
-- --path, -p <path> client installation directory
-- --quiet, -q do not prompt for installation
-- --verbose, -V emit full-tunnel change details
-
-xp2p client service
-  Summary: Manage the xp2p client service
-  Subcommands: start, stop, restart, status, run
-Options:
-Includes: inherited options
-
-xp2p client service start
-  Summary: Start the xp2p client service
+xp2p client mode [tun|proxy] [split|full]
+  Summary: Switch client mode between TUN and proxy (optional tun mode)
   Machine output: json
-Options:
-Includes: inherited options
-
-xp2p client service stop
-  Summary: Stop the xp2p client service
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p client service restart
-  Summary: Restart the xp2p client service
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p client service status
-  Summary: Show xp2p client service status
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p client service run
-  Summary: Run the xp2p client service in the foreground
-  Machine output: lifecycle
-  Machine output note: the command is an internal service entry point
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
-- --heartbeat, -b enable heartbeat probes
-- --heartbeat-interval, -I <duration> heartbeat interval
-- --heartbeat-port, -P <string> diagnostics service port to probe
-- --heartbeat-socks, -S <string> SOCKS5 proxy for heartbeat (optional)
-- --heartbeat-timeout, -T <duration> heartbeat timeout
-- --log-file, -F <path> xp2p service log file (default: platform-specific path)
-- --max-restarts, -R <n> maximum restart attempts after failures
+- --host, -H <host> client endpoint hostname for full-tunnel routing
 - --path, -p <path> client installation directory
-- --restart-delay, -r <duration> delay between restart attempts
+- --quiet, -q do not prompt for outbound tags
+- --tag, -g <id> outbound tag for full-tunnel routing (prompts when omitted)
 - --verbose, -V emit full-tunnel change details
-
-xp2p client state
-  Summary: Show local heartbeat cache status
-  Machine output: json
-Options:
-Includes: inherited options
-- --health-details, -Z show heartbeat health diagnostic columns
-- --interval, -i <duration> refresh interval for --watch
-- --path, -p <path> client installation directory
-- --pending, -y show pending configuration
-- --ttl, -T <duration> heartbeat TTL for alive status
-- --watch, -w continuously refresh state until interrupted
-- --xray-api, -A <host:port> Xray API address for stats
-- --xray-bin, -B <path> deprecated; stats use direct Xray gRPC
-- --xray-stats, -X show Xray user traffic counters
-- --xray-stats-format, -F <mode> Xray stats format (human|bytes)
 
 xp2p client obs
   Summary: Show Xray outbound observations
@@ -157,70 +206,10 @@ Includes: inherited options
 - --path, -p <path> client installation directory
 - --xray-api, -A <host:port> Xray API address
 
-xp2p client render
-  Summary: Render compiled runtime artifacts
-  Subcommands: xray
-Options:
-Includes: inherited options
-
-xp2p client render xray
-  Summary: Render xray.json
-  Machine output: generator
-  Machine output note: the result is an Xray JSON document
-Options:
-Includes: inherited options
-- --desired, -d compile Desired inputs without applying
-- --live, -L render live runtime artifacts
-- --output, -o <path> output path ('-' for stdout)
-
-xp2p client debug
-  Summary: Debug helpers
-  Subcommands: bundle
-Options:
-Includes: inherited options
-
-xp2p client debug bundle
-  Summary: Create a debug bundle archive
-  Machine output: json
-Options:
-Includes: inherited options
-- --output, -o <path> archive output path
-
-xp2p client export
-  Summary: Export client configuration bundle
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-root, -C <dir> configuration root to export
-- --output, -o <path> archive output path
-
-xp2p client import
-  Summary: Import client configuration bundle
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-root, -C <dir> configuration root to import into
-- --input, -i <path> (required) archive input path
-
-xp2p client deploy
-  Summary: Deploy xp2p client via remote helper
-  Machine output: json
-Options:
-Includes: inherited options
-- --force, -f allow changing existing tun mode
-- --host, -H <host> (required) remote host (IP or DNS) to deploy
-- --install-dir, -I <dir> server install directory override
-- --mode, -M <mode> target client mode (proxy or tun; also supports tun:split or tun:full)
-- --password, -w <password> user password (auto-generated when omitted)
-- --port, -P <port> deploy port
-- --trojan-port, -T <port> service port
-- --tun-mode, -m <mode> TUN routing mode (split or full)
-- --user, -u <id> user identifier (email)
-
 xp2p client redirect
   Summary: Manage custom client redirects
   Default behavior: list configured redirect rules
-  Subcommands: add, disable, enable, remove, list
+  Subcommands: add, disable, enable, list, remove
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
@@ -265,6 +254,15 @@ Includes: inherited options
 - --quiet, -q do not prompt for outbound tags
 - --tag, -g <id> outbound tag filter
 
+xp2p client redirect list
+  Summary: List configured redirect rules
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --pending, -y list pending configuration
+
 xp2p client redirect remove
   Summary: Remove a redirect rule
   Machine output: json
@@ -278,55 +276,33 @@ Includes: inherited options
 - --quiet, -q do not prompt for outbound tags
 - --tag, -g <id> outbound tag filter (prompts when omitted)
 
-xp2p client redirect list
-  Summary: List configured redirect rules
+xp2p client remove [hostname|tag]
+  Summary: Remove xp2p client endpoints or entire installation
   Machine output: json
 Options:
 Includes: inherited options
+- --all, -a remove all endpoints and configuration
 - --config-dir, -D <dir> client configuration directory name
+- --ignore-missing, -m do not fail if installation is absent
+- --keep-files, -K keep installation files
 - --path, -p <path> client installation directory
-- --pending, -y list pending configuration
+- --quiet, -q do not prompt for removal
 
-xp2p client forward
-  Summary: Manage client dokodemo-door forwards
-  Subcommands: add, remove, list
+xp2p client render
+  Summary: Render compiled runtime artifacts
+  Subcommands: xray
 Options:
 Includes: inherited options
 
-xp2p client forward add
-  Summary: Add a client dokodemo-door forward
-  Machine output: json
+xp2p client render xray
+  Summary: Render xray.json
+  Machine output: generator
+  Machine output note: the result is an Xray JSON document
 Options:
 Includes: inherited options
-- --base-port, -B <port> first port to probe when auto-selecting
-- --config-dir, -D <dir> client configuration directory name
-- --listen, -n <host:port> local listen address (default 127.0.0.1)
-- --listen-port, -P <port> local listen port (auto-select when omitted)
-- --path, -p <path> client installation directory
-- --proto, -o <proto> protocol to forward (tcp, udp, both)
-- --target, -t <host:port> (required) target host:port to forward traffic to
-
-xp2p client forward remove
-  Summary: Remove a client dokodemo-door forward
-  Machine output: json
-Options:
-Includes: inherited options
-- --cleanup, -C remove state entry even when config is missing
-- --config-dir, -D <dir> client configuration directory name
-- --ignore-missing, -m do not fail when the forward rule does not exist
-- --listen-port, -P <port> forward listen port
-- --path, -p <path> client installation directory
-- --remark, -r <id> forward remark
-- --tag, -g <id> forward tag
-
-xp2p client forward list
-  Summary: List client forwards
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> client configuration directory name
-- --path, -p <path> client installation directory
-- --pending, -y list pending configuration
+- --desired, -d compile Desired inputs without applying
+- --live, -L render live runtime artifacts
+- --output, -o <path> output path ('-' for stdout)
 
 xp2p client reverse
   Summary: Inspect client reverse tunnels
@@ -361,34 +337,85 @@ Includes: inherited options
 - --path, -p <path> client installation directory
 - --pending, -y list pending configuration
 
-xp2p client mode [tun|proxy] [split|full]
-  Summary: Switch client mode between TUN and proxy (optional tun mode)
+xp2p client run
+  Summary: Run xp2p client in foreground
+  Machine output: lifecycle
+  Machine output note: the command runs Xray in the foreground
+Options:
+Includes: inherited options
+- --auto-install, -A install automatically if missing
+- --config-dir, -D <dir> client configuration directory name
+- --path, -p <path> client installation directory
+- --quiet, -q do not prompt for installation
+- --verbose, -V emit full-tunnel change details
+
+xp2p client service
+  Summary: Manage the xp2p client service
+  Subcommands: restart, run, start, status, stop
+Options:
+Includes: inherited options
+
+xp2p client service restart
+  Summary: Restart the xp2p client service
   Machine output: json
+Options:
+Includes: inherited options
+
+xp2p client service run
+  Summary: Run the xp2p client service in the foreground
+  Machine output: lifecycle
+  Machine output note: the command is an internal service entry point
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> client configuration directory name
-- --host, -H <host> client endpoint hostname for full-tunnel routing
+- --heartbeat, -b enable heartbeat probes
+- --heartbeat-interval, -I <duration> heartbeat interval
+- --heartbeat-port, -P <string> diagnostics service port to probe
+- --heartbeat-socks, -S <string> SOCKS5 proxy for heartbeat (optional)
+- --heartbeat-timeout, -T <duration> heartbeat timeout
+- --log-file, -F <path> xp2p service log file (default: platform-specific path)
+- --max-restarts, -R <n> maximum restart attempts after failures
 - --path, -p <path> client installation directory
-- --quiet, -q do not prompt for outbound tags
-- --tag, -g <id> outbound tag for full-tunnel routing (prompts when omitted)
+- --restart-delay, -r <duration> delay between restart attempts
 - --verbose, -V emit full-tunnel change details
 
-xp2p client group
-  Summary: Inspect HA endpoint groups
-  Subcommands: list
-Options:
-Includes: inherited options
-
-xp2p client group list
-  Summary: List HA endpoint groups
-  Aliases: status, inspect
+xp2p client service start
+  Summary: Start the xp2p client service
   Machine output: json
 Options:
 Includes: inherited options
 
+xp2p client service status
+  Summary: Show xp2p client service status
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p client service stop
+  Summary: Stop the xp2p client service
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p client state
+  Summary: Show local heartbeat cache status
+  Machine output: json
+Options:
+Includes: inherited options
+- --health-details, -Z show heartbeat health diagnostic columns
+- --interval, -i <duration> refresh interval for --watch
+- --path, -p <path> client installation directory
+- --pending, -y show pending configuration
+- --ttl, -T <duration> heartbeat TTL for alive status
+- --watch, -w continuously refresh state until interrupted
+- --xray-api, -A <host:port> Xray API address for stats
+- --xray-bin, -B <path> deprecated; stats use direct Xray gRPC
+- --xray-stats, -X show Xray user traffic counters
+- --xray-stats-format, -F <mode> Xray stats format (human|bytes)
+
 xp2p client subscription
   Summary: Manage external server-authoritative subscriptions
-  Subcommands: add, status, offers, refresh, remove
+  Subcommands: add, offers, refresh, remove, status
 Options:
 Includes: inherited options
 
@@ -398,12 +425,6 @@ xp2p client subscription add <id> <url>
 Options:
 Includes: inherited options
 - --allow-http, -A allow HTTP for a local compatibility fixture
-
-xp2p client subscription status
-  Summary: Show external subscription status
-  Machine output: json
-Options:
-Includes: inherited options
 
 xp2p client subscription offers
   Summary: List external connection offers
@@ -424,39 +445,18 @@ xp2p client subscription remove <id>
 Options:
 Includes: inherited options
 
-xp2p client dns-forward
-  Summary: Manage dnsmasq forward entries on OpenWrt
-  Subcommands: add, remove, list
-Options:
-Includes: inherited options
-
-xp2p client dns-forward add
-  Summary: Create or update a DNS forward entry
+xp2p client subscription status
+  Summary: Show external subscription status
   Machine output: json
 Options:
 Includes: inherited options
-- --debug, -g emit diagnostics output on error
-- --domain, -d <host> (required) domain name to match
-- --intercept, -I install DNS intercept redirect (53/tcp,udp)
-- --quiet, -q suppress interactive prompts
-- --target, -t <host:port> (required) upstream DNS server (IP:port)
-- --with-forward, -W deprecated; dns-forward always ensures a target forward
 
-xp2p client dns-forward remove
-  Summary: Remove a DNS forward entry
+xp2p client update <hostname|tag>
+  Summary: Update endpoint credentials
   Machine output: json
 Options:
 Includes: inherited options
-- --all, -a remove all managed DNS forward entries
-- --debug, -g emit diagnostics output on error
-- --domain, -d <host> domain name to remove
-- --intercept, -I remove DNS intercept redirect
-- --quiet, -q suppress interactive prompts
-- --with-forward, -W deprecated; auto-created target forwards are removed when unused
-
-xp2p client dns-forward list
-  Summary: List managed DNS forwards
-  Machine output: json
-Options:
-Includes: inherited options
-- --debug, -g emit diagnostics output on error
+- --config-dir, -D <dir> client configuration directory name
+- --password, -w <password> user password
+- --path, -p <path> client installation directory
+- --user, -u <id> user email

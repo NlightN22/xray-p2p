@@ -4,9 +4,390 @@
 
 xp2p server
   Summary: Manage xp2p server components
-  Subcommands: install, remove, run, service, state, render, debug, export, import, user, identity, redirect, forward, reverse, cert, deploy, mode, profile, ha, dns-forward
+  Subcommands: cert, debug, deploy, dns-forward, export, forward, ha, identity, import, install, mode, profile, redirect, remove, render, reverse, run, service, state, user
 Options:
 Includes: inherited options
+
+xp2p server cert
+  Summary: Manage TLS certificates
+  Subcommands: set, state
+Options:
+Includes: inherited options
+
+xp2p server cert set
+  Summary: Set or replace TLS certificates
+  Machine output: json
+Options:
+Includes: inherited options
+- --cert, -E <path> TLS certificate file to deploy
+- --cert-store, -S <ref> TLS certificate store reference (win-store)
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --force, -f overwrite existing TLS configuration without prompting
+- --host, -H <host> public host name or IP for certificate generation
+- --key, -k <password> TLS private key file to deploy
+- --path, -p <path> server installation directory
+- --quiet, -q suppress interactive prompts
+
+xp2p server cert state
+  Summary: Show TLS certificate status
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y show pending configuration
+
+xp2p server debug
+  Summary: Debug helpers
+  Subcommands: bundle
+Options:
+Includes: inherited options
+
+xp2p server debug bundle
+  Summary: Create a debug bundle archive
+  Machine output: json
+Options:
+Includes: inherited options
+- --output, -o <path> archive output path
+
+xp2p server deploy
+  Summary: Listen for xp2p client deploy requests
+  Machine output: lifecycle
+  Machine output note: the command runs a deployment listener
+Options:
+Includes: inherited options
+- --diag-service-port, -P <port> diagnostics service port
+- --link, -L <link> (required) deploy link (trojan://...)
+- --listen, -n <host:port> deploy listen address
+- --timeout, -t <duration> idle shutdown timeout
+
+xp2p server dns-forward
+  Summary: Manage dnsmasq forward entries on OpenWrt
+  Subcommands: add, list, remove
+Options:
+Includes: inherited options
+
+xp2p server dns-forward add
+  Summary: Create or update a DNS forward entry
+  Machine output: json
+Options:
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> (required) domain name to match
+- --intercept, -I install DNS intercept redirect (53/tcp,udp)
+- --quiet, -q suppress interactive prompts
+- --target, -t <host:port> (required) upstream DNS server (IP:port)
+- --with-forward, -W deprecated; dns-forward always ensures a target forward
+
+xp2p server dns-forward list
+  Summary: List managed DNS forwards
+  Machine output: json
+Options:
+Includes: inherited options
+- --debug, -g emit diagnostics output on error
+
+xp2p server dns-forward remove
+  Summary: Remove a DNS forward entry
+  Machine output: json
+Options:
+Includes: inherited options
+- --all, -a remove all managed DNS forward entries
+- --debug, -g emit diagnostics output on error
+- --domain, -d <host> domain name to remove
+- --intercept, -I remove DNS intercept redirect
+- --quiet, -q suppress interactive prompts
+- --with-forward, -W deprecated; auto-created target forwards are removed when unused
+
+xp2p server export
+  Summary: Export server configuration bundle
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-root, -C <dir> configuration root to export
+- --output, -o <path> archive output path
+
+xp2p server forward
+  Summary: Manage server dokodemo-door forwards
+  Subcommands: add, list, remove
+Options:
+Includes: inherited options
+
+xp2p server forward add
+  Summary: Add a server dokodemo-door forward
+  Machine output: json
+Options:
+Includes: inherited options
+- --base-port, -B <port> first port to probe when auto-selecting
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --listen, -n <host:port> local listen address (default 127.0.0.1)
+- --listen-port, -P <port> local listen port (auto-select when omitted)
+- --path, -p <path> server installation directory
+- --proto, -o <proto> protocol to forward (tcp, udp, both)
+- --target, -t <host:port> (required) target host:port to forward traffic to
+
+xp2p server forward list
+  Summary: List server forwards
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
+
+xp2p server forward remove
+  Summary: Remove a server forward
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --ignore-missing, -m do not fail when the forward rule does not exist
+- --listen-port, -P <port> forward listen port
+- --path, -p <path> server installation directory
+- --remark, -r <id> forward remark
+- --tag, -g <id> forward tag
+
+xp2p server ha
+  Summary: Manage server HA topology
+  Subcommands: channel, group, member, peer, redirect, status, sync
+Options:
+Includes: inherited options
+
+xp2p server ha channel
+  Summary: Manage stable HA reverse channels
+  Subcommands: create, disable, finalize, inspect, list, rebind, rebind-endpoint
+Options:
+Includes: inherited options
+
+xp2p server ha channel create <id> <tag> <domain>
+  Summary: Create a group-bound HA channel
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha channel disable <id>
+  Summary: Disable an HA channel
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha channel finalize <id>
+  Summary: Finalize a disabled HA channel
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha channel inspect <id>
+  Summary: Inspect an HA channel
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha channel list
+  Summary: List HA channels
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha channel rebind <id> <group-tag|endpoint-tag>
+  Summary: Rebind an HA channel
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha channel rebind-endpoint <id> <endpoint-tag>
+  Summary: Bind an HA channel to a physical endpoint
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha group
+  Summary: Manage the HA group
+  Subcommands: create, inspect, remove, update
+Options:
+Includes: inherited options
+
+xp2p server ha group create <id> <tag>
+  Summary: Create an HA group
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha group inspect
+  Summary: Inspect HA group topology
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha group remove
+  Summary: Remove an HA group after channel rebind or disable
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha group update <automatic|manual|disabled>
+  Summary: Set HA group selector mode
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha member
+  Summary: Manage HA group members
+  Subcommands: add, list, remove, reprioritize
+Options:
+Includes: inherited options
+
+xp2p server ha member add <id> <tag> <host> <port> <profile>
+  Summary: Add a confirmed HA member
+  Machine output: json
+Options:
+Includes: inherited options
+- --force, -f force an emergency two-voter reconfiguration
+- --reason, -r <string> audit reason for emergency force-reconfiguration
+- --tls-pin, -P <string> pinned peer certificate SHA256 advertised for this HA member
+- --tls-server-name, -S <string> TLS server name advertised for this HA member
+
+xp2p server ha member list
+  Summary: List HA group members
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha member remove <id>
+  Summary: Tombstone an HA member
+  Machine output: json
+Options:
+Includes: inherited options
+- --force, -f force an emergency two-voter reconfiguration
+- --reason, -r <string> audit reason for emergency force-reconfiguration
+
+xp2p server ha member reprioritize <id> <priority>
+  Summary: Change HA member priority
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha peer
+  Summary: Manage trusted HA peers
+  Subcommands: add, list, remove, self
+Options:
+Includes: inherited options
+
+xp2p server ha peer add <id> <endpoint> <secret>
+  Summary: Add or update an HA peer
+  Machine output: json
+Options:
+Includes: inherited options
+- --allow-insecure, -k allow an untrusted peer certificate
+- --non-voting, -n exclude peer from quorum voting
+- --witness, -w mark peer as a control-plane witness
+
+xp2p server ha peer list
+  Summary: List HA peers
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha peer remove <id>
+  Summary: Remove an HA peer
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha peer self <id>
+  Summary: Set the local HA peer identity
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha redirect
+  Summary: Manage group-owned HA redirect policy
+  Subcommands: add, list, remove
+Options:
+Includes: inherited options
+
+xp2p server ha redirect add <channel-id>
+  Summary: Add a redirect through a group-bound HA channel
+  Machine output: json
+Options:
+Includes: inherited options
+- --access, -V <string> access policy: all or restricted
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
+- --cidr, -C <cidr> CIDR to redirect
+- --domain, -d <host> domain to redirect
+
+xp2p server ha redirect list
+  Summary: List group-owned HA redirect policy
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha redirect remove <channel-id>
+  Summary: Remove a redirect through a group-bound HA channel
+  Machine output: json
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR mapping to remove
+- --domain, -d <host> domain mapping to remove
+
+xp2p server ha status
+  Summary: Show committed HA generation
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server ha sync
+  Summary: Synchronize the next HA generation with peers
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server identity
+  Summary: Manage identity cache operations
+  Subcommands: detach, provision, select, status, sync
+Options:
+Includes: inherited options
+
+xp2p server identity detach
+  Summary: Detach the selected identity provider
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server identity provision <label>
+  Summary: Provision a cached identity as a server user
+  Machine output: json
+Options:
+Includes: inherited options
+- --host, -H <host> public host name or IP for generated connection link
+
+xp2p server identity select <instance-id>
+  Summary: Select or reattach an identity provider
+  Machine output: json
+Options:
+Includes: inherited options
+- --group, -G <stringSlice> provider group scope
+- --kind, -K <string> (required) provider kind: ldap or scim
+
+xp2p server identity status
+  Summary: Show identity cache status
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server identity sync
+  Summary: Synchronize identity cache
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server import
+  Summary: Import server configuration bundle
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-root, -C <dir> configuration root to import into
+- --input, -i <path> (required) archive input path
 
 xp2p server install
   Summary: Install xp2p server assets
@@ -23,255 +404,102 @@ Includes: inherited options
 - --port, -P <port> server listener port
 - --profile, -r <string> server tunnel profile
 
-xp2p server remove
-  Summary: Remove xp2p server installation
+xp2p server mode [tun|proxy]
+  Summary: Switch server mode between TUN and proxy
   Machine output: json
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name
-- --ignore-missing, -m do not fail if service or files are absent
-- --keep-files, -K keep installation files
-- --path, -p <path> server installation directory
-- --quiet, -q do not prompt for removal
-
-xp2p server run
-  Summary: Run xp2p server in foreground
-  Machine output: lifecycle
-  Machine output note: the command runs Xray in the foreground
-Options:
-Includes: inherited options
-- --auto-install, -A install server assets when missing without prompting
-- --config-dir, -D <dir> server configuration directory name
-- --diag-service-mode, -M <mode> diagnostics service startup mode (auto|manual)
-- --diag-service-port, -P <port> diagnostics service port
-- --path, -p <path> server installation directory
-- --quiet, -q suppress interactive prompts
-
-xp2p server service
-  Summary: Manage the xp2p server service
-  Subcommands: start, stop, restart, status, run
-Options:
-Includes: inherited options
-
-xp2p server service start
-  Summary: Start the xp2p server service
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server service stop
-  Summary: Stop the xp2p server service
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server service restart
-  Summary: Restart the xp2p server service
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server service status
-  Summary: Show xp2p server service status
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server service run
-  Summary: Run the xp2p server service in the foreground
-  Machine output: lifecycle
-  Machine output note: the command is an internal service entry point
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name
-- --diag-service-mode, -M <mode> diagnostics service startup mode (auto|manual)
-- --diag-service-port, -P <port> diagnostics service port
-- --log-file, -F <path> xp2p service log file
-- --max-restarts, -R <n> maximum restart attempts after failures
-- --path, -p <path> server installation directory
-- --restart-delay, -r <duration> delay between restart attempts
-
-xp2p server state
-  Summary: Show heartbeat status for xp2p tunnels
-  Machine output: json
-Options:
-Includes: inherited options
-- --health-details, -Z show heartbeat health diagnostic columns
-- --interval, -i <duration> refresh interval for --watch
-- --path, -p <path> server installation directory
-- --pending, -y show pending configuration
-- --ttl, -T <duration> heartbeat TTL for alive status
-- --watch, -w continuously refresh state until interrupted
-- --xray-api, -A <host:port> Xray API address for stats
-- --xray-bin, -B <path> deprecated; stats use direct Xray gRPC
-- --xray-stats, -X show Xray user traffic counters
-- --xray-stats-format, -F <mode> Xray stats format (human|bytes)
-
-xp2p server render
-  Summary: Render compiled runtime artifacts
-  Subcommands: xray
-Options:
-Includes: inherited options
-
-xp2p server render xray
-  Summary: Render xray.json
-  Machine output: generator
-  Machine output note: the result is an Xray JSON document
-Options:
-Includes: inherited options
-- --desired, -d compile Desired inputs without applying
-- --live, -L render live runtime artifacts
-- --output, -o <path> output path ('-' for stdout)
-
-xp2p server debug
-  Summary: Debug helpers
-  Subcommands: bundle
-Options:
-Includes: inherited options
-
-xp2p server debug bundle
-  Summary: Create a debug bundle archive
-  Machine output: json
-Options:
-Includes: inherited options
-- --output, -o <path> archive output path
-
-xp2p server export
-  Summary: Export server configuration bundle
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-root, -C <dir> configuration root to export
-- --output, -o <path> archive output path
-
-xp2p server import
-  Summary: Import server configuration bundle
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-root, -C <dir> configuration root to import into
-- --input, -i <path> (required) archive input path
-
-xp2p server user
-  Summary: Manage users on the server
-  Subcommands: add, update, rotate, disable, enable, remove, list
-Options:
-Includes: inherited options
-
-xp2p server user add
-  Summary: Add a user and reverse portal
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --force, -f overwrite existing user entry
-- --host, -H <host> public host name or IP for generated connection link
-- --id, -i <id> client identifier (derives the <id><host>.rev reverse tag)
-- --key, -k <password> alias for --password
-- --link, -L <link> client connection link
-- --no-reverse, -n skip creating reverse portal/routing entries
-- --password, -w <password> client password or pre-shared key (auto-generated when omitted)
 - --path, -p <path> server installation directory
 
-xp2p server user update <id>
-  Summary: Update user credentials
+xp2p server profile [trojan-tls|vless-tls-vision]
+  Summary: Show or switch the server tunnel profile
   Machine output: json
 Options:
 Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --new-id, -I <id> new client identifier
-- --password, -w <password> client password or pre-shared key
-- --path, -p <path> server installation directory
-
-xp2p server user rotate <id>
-  Summary: Rotate a user credential
-  Machine output: json
-Options:
-Includes: inherited options
-- --ttl, -T <duration> previous credential rotation window
-
-xp2p server user disable <id>
-  Summary: Disable a user
-  Machine output: json
-Options:
-Includes: inherited options
-- --all, -a enable or disable all users
-
-xp2p server user enable <id>
-  Summary: Enable a user
-  Machine output: json
-Options:
-Includes: inherited options
-- --all, -a enable or disable all users
-
-xp2p server user remove
-  Summary: Remove a user
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --host, -H <host> public host name or IP (defaults to server host)
-- --id, -i <id> (required) client identifier
-- --path, -p <path> server installation directory
-
-xp2p server user list
-  Summary: List configured users
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --host, -H <host> public host name or IP for generated connection links
-- --path, -p <path> server installation directory
-- --pending, -y list pending configuration
-
-xp2p server identity
-  Summary: Manage identity cache operations
-  Subcommands: sync, status, provision, detach, select
-Options:
-Includes: inherited options
-
-xp2p server identity sync
-  Summary: Synchronize identity cache
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server identity status
-  Summary: Show identity cache status
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server identity provision <label>
-  Summary: Provision a cached identity as a server user
-  Machine output: json
-Options:
-Includes: inherited options
-- --host, -H <host> public host name or IP for generated connection link
-
-xp2p server identity detach
-  Summary: Detach the selected identity provider
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server identity select <instance-id>
-  Summary: Select or reattach an identity provider
-  Machine output: json
-Options:
-Includes: inherited options
-- --group, -G <stringSlice> provider group scope
-- --kind, -K <string> (required) provider kind: ldap or scim
 
 xp2p server redirect
   Summary: Manage server redirect rules
   Default behavior: list server redirect rules
-  Subcommands: add, disable, enable, remove, list, access
+  Subcommands: access, add, disable, enable, list, remove
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name or absolute path
 - --path, -p <path> server installation directory
 - --pending, -y list pending configuration
+
+xp2p server redirect access
+  Summary: Manage redirect access policies
+  Subcommands: add-group, add-user, clear, remove-group, remove-user, set
+Options:
+Includes: inherited options
+
+xp2p server redirect access add-group
+  Summary: Add allowed groups
+  Machine output: json
+Options:
+Includes: inherited options
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access add-user
+  Summary: Add allowed users
+  Machine output: json
+Options:
+Includes: inherited options
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access clear
+  Summary: Clear redirect access selectors
+  Machine output: json
+Options:
+Includes: inherited options
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access remove-group
+  Summary: Remove allowed groups
+  Machine output: json
+Options:
+Includes: inherited options
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access remove-user
+  Summary: Remove allowed users
+  Machine output: json
+Options:
+Includes: inherited options
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
+
+xp2p server redirect access set
+  Summary: Replace a redirect access policy
+  Machine output: json
+Options:
+Includes: inherited options
+- --access, -V <string> access policy: all or restricted
+- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
+- --allow-user, -U <stringSlice> allowed user label (repeatable)
+- --cidr, -C <cidr> CIDR redirect selector
+- --domain, -d <host> domain redirect selector
+- --host, -H <host> reverse portal host
+- --tag, -g <id> reverse outbound tag
 
 xp2p server redirect add
   Summary: Add a server redirect rule
@@ -315,6 +543,15 @@ Includes: inherited options
 - --quiet, -q do not prompt for outbound tags
 - --tag, -g <id> reverse outbound tag filter
 
+xp2p server redirect list
+  Summary: List server redirect rules
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
+
 xp2p server redirect remove
   Summary: Remove a server redirect rule
   Machine output: json
@@ -328,127 +565,32 @@ Includes: inherited options
 - --quiet, -q do not prompt for outbound tags
 - --tag, -g <id> reverse outbound tag filter or tag-only cleanup selector
 
-xp2p server redirect list
-  Summary: List server redirect rules
+xp2p server remove
+  Summary: Remove xp2p server installation
   Machine output: json
 Options:
 Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
+- --config-dir, -D <dir> server configuration directory name
+- --ignore-missing, -m do not fail if service or files are absent
+- --keep-files, -K keep installation files
 - --path, -p <path> server installation directory
-- --pending, -y list pending configuration
+- --quiet, -q do not prompt for removal
 
-xp2p server redirect access
-  Summary: Manage redirect access policies
-  Subcommands: set, add-user, remove-user, add-group, remove-group, clear
+xp2p server render
+  Summary: Render compiled runtime artifacts
+  Subcommands: xray
 Options:
 Includes: inherited options
 
-xp2p server redirect access set
-  Summary: Replace a redirect access policy
-  Machine output: json
+xp2p server render xray
+  Summary: Render xray.json
+  Machine output: generator
+  Machine output note: the result is an Xray JSON document
 Options:
 Includes: inherited options
-- --access, -V <string> access policy: all or restricted
-- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
-- --allow-user, -U <stringSlice> allowed user label (repeatable)
-- --cidr, -C <cidr> CIDR redirect selector
-- --domain, -d <host> domain redirect selector
-- --host, -H <host> reverse portal host
-- --tag, -g <id> reverse outbound tag
-
-xp2p server redirect access add-user
-  Summary: Add allowed users
-  Machine output: json
-Options:
-Includes: inherited options
-- --allow-user, -U <stringSlice> allowed user label (repeatable)
-- --cidr, -C <cidr> CIDR redirect selector
-- --domain, -d <host> domain redirect selector
-- --host, -H <host> reverse portal host
-- --tag, -g <id> reverse outbound tag
-
-xp2p server redirect access remove-user
-  Summary: Remove allowed users
-  Machine output: json
-Options:
-Includes: inherited options
-- --allow-user, -U <stringSlice> allowed user label (repeatable)
-- --cidr, -C <cidr> CIDR redirect selector
-- --domain, -d <host> domain redirect selector
-- --host, -H <host> reverse portal host
-- --tag, -g <id> reverse outbound tag
-
-xp2p server redirect access add-group
-  Summary: Add allowed groups
-  Machine output: json
-Options:
-Includes: inherited options
-- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
-- --cidr, -C <cidr> CIDR redirect selector
-- --domain, -d <host> domain redirect selector
-- --host, -H <host> reverse portal host
-- --tag, -g <id> reverse outbound tag
-
-xp2p server redirect access remove-group
-  Summary: Remove allowed groups
-  Machine output: json
-Options:
-Includes: inherited options
-- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
-- --cidr, -C <cidr> CIDR redirect selector
-- --domain, -d <host> domain redirect selector
-- --host, -H <host> reverse portal host
-- --tag, -g <id> reverse outbound tag
-
-xp2p server redirect access clear
-  Summary: Clear redirect access selectors
-  Machine output: json
-Options:
-Includes: inherited options
-- --cidr, -C <cidr> CIDR redirect selector
-- --domain, -d <host> domain redirect selector
-- --host, -H <host> reverse portal host
-- --tag, -g <id> reverse outbound tag
-
-xp2p server forward
-  Summary: Manage server dokodemo-door forwards
-  Subcommands: add, remove, list
-Options:
-Includes: inherited options
-
-xp2p server forward add
-  Summary: Add a server dokodemo-door forward
-  Machine output: json
-Options:
-Includes: inherited options
-- --base-port, -B <port> first port to probe when auto-selecting
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --listen, -n <host:port> local listen address (default 127.0.0.1)
-- --listen-port, -P <port> local listen port (auto-select when omitted)
-- --path, -p <path> server installation directory
-- --proto, -o <proto> protocol to forward (tcp, udp, both)
-- --target, -t <host:port> (required) target host:port to forward traffic to
-
-xp2p server forward remove
-  Summary: Remove a server forward
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --ignore-missing, -m do not fail when the forward rule does not exist
-- --listen-port, -P <port> forward listen port
-- --path, -p <path> server installation directory
-- --remark, -r <id> forward remark
-- --tag, -g <id> forward tag
-
-xp2p server forward list
-  Summary: List server forwards
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --path, -p <path> server installation directory
-- --pending, -y list pending configuration
+- --desired, -d compile Desired inputs without applying
+- --live, -L render live runtime artifacts
+- --output, -o <path> output path ('-' for stdout)
 
 xp2p server reverse
   Summary: Inspect server reverse tunnels
@@ -483,289 +625,147 @@ Includes: inherited options
 - --path, -p <path> server installation directory
 - --pending, -y list pending configuration
 
-xp2p server cert
-  Summary: Manage TLS certificates
-  Subcommands: state, set
+xp2p server run
+  Summary: Run xp2p server in foreground
+  Machine output: lifecycle
+  Machine output note: the command runs Xray in the foreground
 Options:
 Includes: inherited options
-
-xp2p server cert state
-  Summary: Show TLS certificate status
-  Machine output: json
-Options:
-Includes: inherited options
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --path, -p <path> server installation directory
-- --pending, -y show pending configuration
-
-xp2p server cert set
-  Summary: Set or replace TLS certificates
-  Machine output: json
-Options:
-Includes: inherited options
-- --cert, -E <path> TLS certificate file to deploy
-- --cert-store, -S <ref> TLS certificate store reference (win-store)
-- --config-dir, -D <dir> server configuration directory name or absolute path
-- --force, -f overwrite existing TLS configuration without prompting
-- --host, -H <host> public host name or IP for certificate generation
-- --key, -k <password> TLS private key file to deploy
+- --auto-install, -A install server assets when missing without prompting
+- --config-dir, -D <dir> server configuration directory name
+- --diag-service-mode, -M <mode> diagnostics service startup mode (auto|manual)
+- --diag-service-port, -P <port> diagnostics service port
 - --path, -p <path> server installation directory
 - --quiet, -q suppress interactive prompts
 
-xp2p server deploy
-  Summary: Listen for xp2p client deploy requests
-  Machine output: lifecycle
-  Machine output note: the command runs a deployment listener
+xp2p server service
+  Summary: Manage the xp2p server service
+  Subcommands: restart, run, start, status, stop
 Options:
 Includes: inherited options
-- --diag-service-port, -P <port> diagnostics service port
-- --link, -L <link> (required) deploy link (trojan://...)
-- --listen, -n <host:port> deploy listen address
-- --timeout, -t <duration> idle shutdown timeout
 
-xp2p server mode [tun|proxy]
-  Summary: Switch server mode between TUN and proxy
+xp2p server service restart
+  Summary: Restart the xp2p server service
   Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server service run
+  Summary: Run the xp2p server service in the foreground
+  Machine output: lifecycle
+  Machine output note: the command is an internal service entry point
 Options:
 Includes: inherited options
 - --config-dir, -D <dir> server configuration directory name
+- --diag-service-mode, -M <mode> diagnostics service startup mode (auto|manual)
+- --diag-service-port, -P <port> diagnostics service port
+- --log-file, -F <path> xp2p service log file
+- --max-restarts, -R <n> maximum restart attempts after failures
+- --path, -p <path> server installation directory
+- --restart-delay, -r <duration> delay between restart attempts
+
+xp2p server service start
+  Summary: Start the xp2p server service
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server service status
+  Summary: Show xp2p server service status
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server service stop
+  Summary: Stop the xp2p server service
+  Machine output: json
+Options:
+Includes: inherited options
+
+xp2p server state
+  Summary: Show heartbeat status for xp2p tunnels
+  Machine output: json
+Options:
+Includes: inherited options
+- --health-details, -Z show heartbeat health diagnostic columns
+- --interval, -i <duration> refresh interval for --watch
+- --path, -p <path> server installation directory
+- --pending, -y show pending configuration
+- --ttl, -T <duration> heartbeat TTL for alive status
+- --watch, -w continuously refresh state until interrupted
+- --xray-api, -A <host:port> Xray API address for stats
+- --xray-bin, -B <path> deprecated; stats use direct Xray gRPC
+- --xray-stats, -X show Xray user traffic counters
+- --xray-stats-format, -F <mode> Xray stats format (human|bytes)
+
+xp2p server user
+  Summary: Manage users on the server
+  Subcommands: add, disable, enable, list, remove, rotate, update
+Options:
+Includes: inherited options
+
+xp2p server user add
+  Summary: Add a user and reverse portal
+  Machine output: json
+Options:
+Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --force, -f overwrite existing user entry
+- --host, -H <host> public host name or IP for generated connection link
+- --id, -i <id> client identifier (derives the <id><host>.rev reverse tag)
+- --key, -k <password> alias for --password
+- --link, -L <link> client connection link
+- --no-reverse, -n skip creating reverse portal/routing entries
+- --password, -w <password> client password or pre-shared key (auto-generated when omitted)
 - --path, -p <path> server installation directory
 
-xp2p server profile [trojan-tls|vless-tls-vision]
-  Summary: Show or switch the server tunnel profile
+xp2p server user disable <id>
+  Summary: Disable a user
   Machine output: json
 Options:
 Includes: inherited options
+- --all, -a enable or disable all users
 
-xp2p server ha
-  Summary: Manage server HA topology
-  Subcommands: status, group, sync, peer, channel, redirect, member
-Options:
-Includes: inherited options
-
-xp2p server ha status
-  Summary: Show committed HA generation
+xp2p server user enable <id>
+  Summary: Enable a user
   Machine output: json
 Options:
 Includes: inherited options
+- --all, -a enable or disable all users
 
-xp2p server ha group
-  Summary: Manage the HA group
-  Subcommands: create, remove, inspect, update
-Options:
-Includes: inherited options
-
-xp2p server ha group create <id> <tag>
-  Summary: Create an HA group
+xp2p server user list
+  Summary: List configured users
   Machine output: json
 Options:
 Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --host, -H <host> public host name or IP for generated connection links
+- --path, -p <path> server installation directory
+- --pending, -y list pending configuration
 
-xp2p server ha group remove
-  Summary: Remove an HA group after channel rebind or disable
+xp2p server user remove
+  Summary: Remove a user
   Machine output: json
 Options:
 Includes: inherited options
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --host, -H <host> public host name or IP (defaults to server host)
+- --id, -i <id> (required) client identifier
+- --path, -p <path> server installation directory
 
-xp2p server ha group inspect
-  Summary: Inspect HA group topology
+xp2p server user rotate <id>
+  Summary: Rotate a user credential
   Machine output: json
 Options:
 Includes: inherited options
+- --ttl, -T <duration> previous credential rotation window
 
-xp2p server ha group update <automatic|manual|disabled>
-  Summary: Set HA group selector mode
+xp2p server user update <id>
+  Summary: Update user credentials
   Machine output: json
 Options:
 Includes: inherited options
-
-xp2p server ha sync
-  Summary: Synchronize the next HA generation with peers
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha peer
-  Summary: Manage trusted HA peers
-  Subcommands: self, add, remove, list
-Options:
-Includes: inherited options
-
-xp2p server ha peer self <id>
-  Summary: Set the local HA peer identity
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha peer add <id> <endpoint> <secret>
-  Summary: Add or update an HA peer
-  Machine output: json
-Options:
-Includes: inherited options
-- --allow-insecure, -k allow an untrusted peer certificate
-- --non-voting, -n exclude peer from quorum voting
-- --witness, -w mark peer as a control-plane witness
-
-xp2p server ha peer remove <id>
-  Summary: Remove an HA peer
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha peer list
-  Summary: List HA peers
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha channel
-  Summary: Manage stable HA reverse channels
-  Subcommands: create, disable, inspect, rebind, rebind-endpoint, finalize, list
-Options:
-Includes: inherited options
-
-xp2p server ha channel create <id> <tag> <domain>
-  Summary: Create a group-bound HA channel
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha channel disable <id>
-  Summary: Disable an HA channel
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha channel inspect <id>
-  Summary: Inspect an HA channel
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha channel rebind <id> <group-tag|endpoint-tag>
-  Summary: Rebind an HA channel
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha channel rebind-endpoint <id> <endpoint-tag>
-  Summary: Bind an HA channel to a physical endpoint
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha channel finalize <id>
-  Summary: Finalize a disabled HA channel
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha channel list
-  Summary: List HA channels
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha redirect
-  Summary: Manage group-owned HA redirect policy
-  Subcommands: add, remove, list
-Options:
-Includes: inherited options
-
-xp2p server ha redirect add <channel-id>
-  Summary: Add a redirect through a group-bound HA channel
-  Machine output: json
-Options:
-Includes: inherited options
-- --access, -V <string> access policy: all or restricted
-- --allow-group, -G <stringSlice> allowed provider group ID (repeatable)
-- --allow-user, -U <stringSlice> allowed user label (repeatable)
-- --cidr, -C <cidr> CIDR to redirect
-- --domain, -d <host> domain to redirect
-
-xp2p server ha redirect remove <channel-id>
-  Summary: Remove a redirect through a group-bound HA channel
-  Machine output: json
-Options:
-Includes: inherited options
-- --cidr, -C <cidr> CIDR mapping to remove
-- --domain, -d <host> domain mapping to remove
-
-xp2p server ha redirect list
-  Summary: List group-owned HA redirect policy
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha member
-  Summary: Manage HA group members
-  Subcommands: remove, add, reprioritize, list
-Options:
-Includes: inherited options
-
-xp2p server ha member remove <id>
-  Summary: Tombstone an HA member
-  Machine output: json
-Options:
-Includes: inherited options
-- --force, -f force an emergency two-voter reconfiguration
-- --reason, -r <string> audit reason for emergency force-reconfiguration
-
-xp2p server ha member add <id> <tag> <host> <port> <profile>
-  Summary: Add a confirmed HA member
-  Machine output: json
-Options:
-Includes: inherited options
-- --force, -f force an emergency two-voter reconfiguration
-- --reason, -r <string> audit reason for emergency force-reconfiguration
-- --tls-pin, -P <string> pinned peer certificate SHA256 advertised for this HA member
-- --tls-server-name, -S <string> TLS server name advertised for this HA member
-
-xp2p server ha member reprioritize <id> <priority>
-  Summary: Change HA member priority
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server ha member list
-  Summary: List HA group members
-  Machine output: json
-Options:
-Includes: inherited options
-
-xp2p server dns-forward
-  Summary: Manage dnsmasq forward entries on OpenWrt
-  Subcommands: add, remove, list
-Options:
-Includes: inherited options
-
-xp2p server dns-forward add
-  Summary: Create or update a DNS forward entry
-  Machine output: json
-Options:
-Includes: inherited options
-- --debug, -g emit diagnostics output on error
-- --domain, -d <host> (required) domain name to match
-- --intercept, -I install DNS intercept redirect (53/tcp,udp)
-- --quiet, -q suppress interactive prompts
-- --target, -t <host:port> (required) upstream DNS server (IP:port)
-- --with-forward, -W deprecated; dns-forward always ensures a target forward
-
-xp2p server dns-forward remove
-  Summary: Remove a DNS forward entry
-  Machine output: json
-Options:
-Includes: inherited options
-- --all, -a remove all managed DNS forward entries
-- --debug, -g emit diagnostics output on error
-- --domain, -d <host> domain name to remove
-- --intercept, -I remove DNS intercept redirect
-- --quiet, -q suppress interactive prompts
-- --with-forward, -W deprecated; auto-created target forwards are removed when unused
-
-xp2p server dns-forward list
-  Summary: List managed DNS forwards
-  Machine output: json
-Options:
-Includes: inherited options
-- --debug, -g emit diagnostics output on error
+- --config-dir, -D <dir> server configuration directory name or absolute path
+- --new-id, -I <id> new client identifier
+- --password, -w <password> client password or pre-shared key
+- --path, -p <path> server installation directory
