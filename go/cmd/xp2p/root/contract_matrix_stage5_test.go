@@ -250,11 +250,18 @@ func TestStage5ServiceFailures(t *testing.T) {
 			role, action := role, action
 			path := fmt.Sprintf("xp2p %s service %s", role, action)
 			t.Run(path+"/not-installed", func(t *testing.T) {
-				controller := &stage5ServiceController{failAction: "not-installed"}
+				controller := &stage5ServiceController{
+					failAction: "not-installed",
+					diagnostic: errStage5ServiceNotInstalled.Error(),
+				}
 				restore := servicecontrol.SetDefaultForTesting(controller)
 				t.Cleanup(restore)
 				execution := executeContractCase([]string{role, "service", action}, false)
-				assertStage5Error(t, path, execution)
+				if action == "status" {
+					assertStage5NotInstalledStatus(t, path, execution)
+				} else {
+					assertStage5ErrorMessage(t, path, "not installed", execution)
+				}
 				controller.assertBoundaryCall(t, servicecontrol.Role(role), action)
 			})
 		}
@@ -390,6 +397,16 @@ func setupStage5AmbiguousUserHost(t *testing.T) {
 }
 
 func TestStage5HumanModePreservesPrompts(t *testing.T) {
+	t.Run("client destructive remove", func(t *testing.T) {
+		stage5ClientRemoveCase().setup(t, "success")
+		stdout, _, _ := executeHumanWithInput(t, []string{"client", "remove", "--all"}, "n\n")
+		assertHumanPrompt(t, stdout, "Remove all client configuration")
+	})
+	t.Run("server destructive remove", func(t *testing.T) {
+		stage5ServerRemoveCase().setup(t, "success")
+		stdout, _, _ := executeHumanWithInput(t, []string{"server", "remove"}, "n\n")
+		assertHumanPrompt(t, stdout, "Remove xp2p server installation")
+	})
 	t.Run("server cert replacement", func(t *testing.T) {
 		stage5BaseSetup(t)
 		restore := servercmd.SetCertificateForTesting(func(context.Context, server.CertificateOptions) error {
@@ -512,6 +529,8 @@ type stage5ServiceController struct {
 	diagnostic string
 }
 
+var errStage5ServiceNotInstalled = errors.New("service is not installed")
+
 func (c *stage5ServiceController) Start(_ context.Context, role servicecontrol.Role) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -520,7 +539,7 @@ func (c *stage5ServiceController) Start(_ context.Context, role servicecontrol.R
 	if c.failAction == "start" || c.failAction == "restart-start" ||
 		c.failAction == "not-installed" {
 		if c.failAction == "not-installed" {
-			return servicecontrol.ErrUnsupported
+			return errStage5ServiceNotInstalled
 		}
 		return errors.New("stage 5 service start failure")
 	}
@@ -534,7 +553,7 @@ func (c *stage5ServiceController) Stop(_ context.Context, role servicecontrol.Ro
 	c.calls = append(c.calls, "stop:"+string(role))
 	c.emitDiagnostic()
 	if c.failAction == "not-installed" {
-		return servicecontrol.ErrUnsupported
+		return errStage5ServiceNotInstalled
 	}
 	if c.failAction == "stop" || c.failAction == "restart" {
 		return errors.New("stage 5 service stop failure")
@@ -549,7 +568,7 @@ func (c *stage5ServiceController) Status(_ context.Context, role servicecontrol.
 	c.calls = append(c.calls, "status:"+string(role))
 	c.emitDiagnostic()
 	if c.failAction == "not-installed" {
-		return servicecontrol.Status{}, servicecontrol.ErrUnsupported
+		return servicecontrol.Status{State: "NOT_INSTALLED"}, nil
 	}
 	if c.active {
 		return servicecontrol.Status{Active: true, State: "RUNNING"}, nil
@@ -634,6 +653,24 @@ func assertStage5StatusSuccess(t *testing.T, path string, execution contractExec
 	}
 }
 
+func assertStage5NotInstalledStatus(t *testing.T, path string, execution contractExecution) {
+	t.Helper()
+	if execution.exitCode == 0 || execution.err == nil || execution.stdout != "" {
+		t.Fatalf("not-installed status must be non-active: exit=%d err=%v stdout=%q stderr=%q",
+			execution.exitCode, execution.err, execution.stdout, execution.stderr)
+	}
+	document := assertJSONDocument(t, execution.stderr)
+	var envelope clioutput.ErrorEnvelope
+	if err := json.Unmarshal(document, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.SchemaVersion != clioutput.SchemaVersion || envelope.Command != path ||
+		envelope.Error.Code != "command_failed" ||
+		!strings.Contains(strings.ToLower(envelope.Error.Message), "not installed") {
+		t.Fatalf("unexpected not-installed status envelope: %#v", envelope)
+	}
+}
+
 func assertStage5MutationSuccess(t *testing.T, path string, execution contractExecution) {
 	t.Helper()
 	if execution.exitCode != 0 || execution.err != nil || execution.stderr != "" {
@@ -657,6 +694,14 @@ func assertStage5MutationSuccess(t *testing.T, path string, execution contractEx
 func assertStage5Error(t *testing.T, path string, execution contractExecution) {
 	t.Helper()
 	assertStage5ErrorCode(t, path, "", execution)
+}
+
+func assertStage5ErrorMessage(t *testing.T, path, message string, execution contractExecution) {
+	t.Helper()
+	assertStage5Error(t, path, execution)
+	if !strings.Contains(strings.ToLower(execution.stderr), strings.ToLower(message)) {
+		t.Fatalf("error does not identify %q: %q", message, execution.stderr)
+	}
 }
 
 func assertStage5ErrorCode(t *testing.T, path, code string, execution contractExecution) {
