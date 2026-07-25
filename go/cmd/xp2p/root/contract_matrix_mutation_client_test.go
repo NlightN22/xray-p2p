@@ -20,6 +20,7 @@ func registerClientMutationContracts(registry map[string]mutationContract) {
 		sensitive   []string
 	}
 	base := clientMutationBase(false)
+	controlPassword := "control-secret\n\t\x01Ω"
 	disabled := clientMutationBase(true)
 	withForward := base + `
 [[client.forwards]]
@@ -51,10 +52,10 @@ outbound_tag = "edge-a"
 		},
 		{
 			path:        "xp2p client update",
-			successArgs: []string{"client", "update", "edge-a", "--user", "matrix-user", "--password", "replacement-value"},
+			successArgs: []string{"client", "update", "edge-a", "--user", "matrix-user", "--password", controlPassword},
 			failureArgs: []string{"client", "update", "missing", "--user", "matrix-user"},
 			fixture:     base,
-			sensitive:   []string{"replacement-value", "initial-value"},
+			sensitive:   []string{"control-secret", "initial-value"},
 		},
 		{
 			path:        "xp2p client forward add",
@@ -108,7 +109,23 @@ outbound_tag = "edge-a"
 	for _, item := range definitions {
 		item := item
 		factory := func(t *testing.T) mutationFixture {
-			return newClientMutationFixture(t, item.fixture, item.successArgs, item.failureArgs, item.sensitive)
+			fixture := newClientMutationFixture(t, item.fixture, item.successArgs, item.failureArgs, item.sensitive)
+			if item.path == "xp2p client update" {
+				assertDesired := fixture.assertSuccess
+				fixture.assertSuccess = func(t *testing.T, before, after any) {
+					t.Helper()
+					assertDesired(t, before, after)
+					document := readPersistedCredentials(t, config.ConfigPath(layout.ClientConfigFileName))
+					if len(document.Client.Endpoints) != 1 ||
+						document.Client.Endpoints[0].Password != controlPassword {
+						t.Fatalf(
+							"client credential control characters were not preserved: %#v",
+							document.Client.Endpoints,
+						)
+					}
+				}
+			}
+			return fixture
 		}
 		registerMutation(registry, item.path, factory, factory)
 	}

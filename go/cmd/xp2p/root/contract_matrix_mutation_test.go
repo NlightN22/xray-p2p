@@ -12,6 +12,7 @@ import (
 
 	clioutput "github.com/NlightN22/xray-p2p/go/internal/cli/output"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
+	"github.com/pelletier/go-toml"
 )
 
 type mutationFixture struct {
@@ -34,6 +35,32 @@ type modeMutationSnapshot struct {
 	apply       string
 }
 
+type persistedCredentialDocument struct {
+	Client struct {
+		Endpoints []struct {
+			Password string `toml:"password"`
+		} `toml:"endpoints"`
+	} `toml:"client"`
+	Server struct {
+		TrojanUsers []struct {
+			Password string `toml:"password"`
+		} `toml:"trojan_users"`
+	} `toml:"server"`
+}
+
+func readPersistedCredentials(t *testing.T, path string) persistedCredentialDocument {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document persistedCredentialDocument
+	if err := toml.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	return document
+}
+
 func snapshotModeMutation(t *testing.T, desiredPath string) modeMutationSnapshot {
 	t.Helper()
 	desired, err := os.ReadFile(desiredPath)
@@ -53,6 +80,11 @@ func snapshotModeMutation(t *testing.T, desiredPath string) modeMutationSnapshot
 
 var mutationContractRegistry = buildMutationContractRegistry()
 
+var stage3PolymorphicMutationPaths = map[string]struct{}{
+	"xp2p client mode": {},
+	"xp2p server mode": {},
+}
+
 func buildMutationContractRegistry() map[string]mutationContract {
 	registry := make(map[string]mutationContract)
 	registerClientMutationContracts(registry)
@@ -64,12 +96,12 @@ func buildMutationContractRegistry() map[string]mutationContract {
 
 func TestStage3MutationLeavesCovered(t *testing.T) {
 	baseline := buildLegacyPendingBaseline()
-	covered := 0
+	expected := make(map[string]struct{})
 	for path, legacy := range baseline {
 		if legacy.coverage != contractStage3 {
 			continue
 		}
-		covered++
+		expected[path] = struct{}{}
 		scenario, exists := contractCaseRegistry[path]
 		if !exists || scenario.coverage != contractCovered || !scenario.mutation {
 			t.Errorf("stage 3 mutation %s is not covered", path)
@@ -81,17 +113,22 @@ func TestStage3MutationLeavesCovered(t *testing.T) {
 			t.Errorf("stage 3 mutation %s uses a root-level synthetic result", path)
 		}
 	}
-	if covered != 52 {
-		t.Fatalf("stage 3 baseline has %d leaves, want 52", covered)
-	}
-	for _, path := range []string{"xp2p client mode", "xp2p server mode"} {
+	for path := range stage3PolymorphicMutationPaths {
+		expected[path] = struct{}{}
 		scenario, exists := mutationContractRegistry[path]
 		if !exists || scenario.successFixture == nil || scenario.failureFixture == nil {
 			t.Errorf("polymorphic mode mutation %s has no executable contract", path)
 		}
 	}
-	if got := len(mutationContractRegistry); got != 54 {
-		t.Fatalf("stage 3 has %d mutation contracts, want 54 (52 leaves and 2 polymorphic mode variants)", got)
+	for path := range expected {
+		if _, exists := mutationContractRegistry[path]; !exists {
+			t.Errorf("expected stage 3 mutation %s is missing from the registry", path)
+		}
+	}
+	for path := range mutationContractRegistry {
+		if _, exists := expected[path]; !exists {
+			t.Errorf("mutation registry contains undeclared stage 3 variant %s", path)
+		}
 	}
 	for path, scenario := range contractCaseRegistry {
 		if scenario.coverage == contractStage3 {
