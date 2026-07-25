@@ -38,14 +38,14 @@ func userAddStage4Contract() stage4Contract {
 			}, false)
 			assertStage4Failure(t, path, execution, secret, "initial-server-value")
 		},
-		human: func(t *testing.T, _ string) {
+		human: func(t *testing.T, path string) {
 			newServerMutationFixture(t, serverMutationBase(false, false), nil, nil, nil)
 			secret := "123e4567-e89b-12d3-a456-426614174088"
 			stdout, stderr, err := executeHumanContractCase([]string{
 				"server", "user", "add", "--id", "human-user", "--password", secret,
 				"--host", "edge.example", "--no-reverse",
 			})
-			assertStage4Human(t, stdout, stderr, err, secret, "trojan://")
+			assertStage4Human(t, path, stdout, stderr, err, secret, "trojan://")
 		},
 	}
 }
@@ -75,12 +75,12 @@ func userRotateStage4Contract() stage4Contract {
 			}, false)
 			assertStage4Failure(t, path, execution, "initial-server-value")
 		},
-		human: func(t *testing.T, _ string) {
+		human: func(t *testing.T, path string) {
 			newServerMutationFixture(t, serverMutationBase(false, false), nil, nil, nil)
 			stdout, stderr, err := executeHumanContractCase([]string{
 				"server", "user", "rotate", "matrix-user", "--ttl", "1h",
 			})
-			assertStage4Human(t, stdout, stderr, err, "Credential:", "Previous valid until:")
+			assertStage4Human(t, path, stdout, stderr, err, "Credential:", "Previous valid until:")
 		},
 	}
 }
@@ -112,12 +112,12 @@ func identityProvisionStage4Contract() stage4Contract {
 			}, false)
 			assertStage4Failure(t, path, execution, "stage4-identity-secret")
 		},
-		human: func(t *testing.T, _ string) {
+		human: func(t *testing.T, path string) {
 			fixture := newStage4IdentityFixture(t)
 			stdout, stderr, err := executeHumanContractCase([]string{
 				"server", "identity", "provision", fixture.label, "--host", "edge.example",
 			})
-			assertStage4Human(t, stdout, stderr, err, "trojan://")
+			assertStage4Human(t, path, stdout, stderr, err, "trojan://")
 		},
 	}
 }

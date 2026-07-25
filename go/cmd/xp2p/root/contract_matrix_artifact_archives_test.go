@@ -12,8 +12,10 @@ import (
 )
 
 type stage4ArchiveFixture struct {
-	root       string
-	configName string
+	root        string
+	configName  string
+	metadata    []byte
+	metadataRel string
 }
 
 func archiveStage4Contract(role, operation string) stage4Contract {
@@ -26,16 +28,19 @@ func archiveStage4Contract(role, operation string) stage4Contract {
 				assertStage4ArchiveSuccess(t, path, []string{
 					role, "export", "--config-root", fixture.root, "--output", output,
 				}, output)
+				assertStage4ArchiveMetadata(t, output, fixture.metadata)
 			case "debug":
 				output := filepath.Join(fixture.root, role+"-debug.zip")
 				assertStage4ArchiveSuccess(t, path, []string{
 					role, "debug", "bundle", "--output", output,
 				}, output)
+				assertStage4ArchiveMetadata(t, output, fixture.metadata)
 			case "import":
 				input := filepath.Join(fixture.root, role+"-source.zip")
 				assertStage4ArchiveSuccess(t, "xp2p "+role+" export", []string{
 					role, "export", "--config-root", fixture.root, "--output", input,
 				}, input)
+				assertStage4ArchiveMetadata(t, input, fixture.metadata)
 				target := filepath.Join(fixture.root, "imported")
 				execution := executeContractCase([]string{
 					role, "import", "--config-root", target, "--input", input,
@@ -46,6 +51,10 @@ func archiveStage4Contract(role, operation string) stage4Contract {
 				}
 				if _, err := os.Stat(filepath.Join(target, fixture.configName)); err != nil {
 					t.Fatalf("imported artifact is absent: %v", err)
+				}
+				importedMetadata, err := os.ReadFile(filepath.Join(target, fixture.metadataRel))
+				if err != nil || !bytes.Equal(importedMetadata, fixture.metadata) {
+					t.Fatalf("imported metadata changed: content=%q err=%v", importedMetadata, err)
 				}
 			}
 		},
@@ -91,7 +100,7 @@ func archiveStage4Contract(role, operation string) stage4Contract {
 				}
 			}
 		},
-		human: func(t *testing.T, _ string) {
+		human: func(t *testing.T, path string) {
 			fixture := newStage4ArchiveFixture(t, role)
 			switch operation {
 			case "export":
@@ -99,13 +108,13 @@ func archiveStage4Contract(role, operation string) stage4Contract {
 				stdout, stderr, err := executeHumanContractCase([]string{
 					role, "export", "--config-root", fixture.root, "--output", output,
 				})
-				assertStage4Human(t, stdout, stderr, err, "archive created", output)
+				assertStage4Human(t, path, stdout, stderr, err, "archive created", output)
 			case "debug":
 				output := filepath.Join(fixture.root, role+"-human-debug.zip")
 				stdout, stderr, err := executeHumanContractCase([]string{
 					role, "debug", "bundle", "--output", output,
 				})
-				assertStage4Human(t, stdout, stderr, err, "archive created", output)
+				assertStage4Human(t, path, stdout, stderr, err, "archive created", output)
 			case "import":
 				input := filepath.Join(fixture.root, role+"-human-source.zip")
 				assertStage4ArchiveSuccess(t, "xp2p "+role+" export", []string{
@@ -115,7 +124,7 @@ func archiveStage4Contract(role, operation string) stage4Contract {
 					role, "import", "--config-root", filepath.Join(fixture.root, "human-import"),
 					"--input", input,
 				})
-				assertStage4Human(t, stdout, stderr, err, "archive applied", "verify service status")
+				assertStage4Human(t, path, stdout, stderr, err, "archive applied", "verify service status")
 			}
 		},
 	}
@@ -130,11 +139,29 @@ func newStage4ArchiveFixture(t *testing.T, role string) stage4ArchiveFixture {
 	if role == "server" {
 		name = layout.ServerConfigFileName
 	}
-	content := []byte("version = \"0.2.9\"\ncredential = \"stage4-archive-secret\"\n")
+	content := []byte(
+		"version = \"0.2.9\"\ncredential = \"stage4-archive-secret\"\n" +
+			"metadata = \"unicode-\u96ea\\n\\t\\u0001\"\n",
+	)
 	if err := os.WriteFile(filepath.Join(root, name), content, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	return stage4ArchiveFixture{root: root, configName: name}
+	configDir := layout.ClientConfigDir
+	if role == "server" {
+		configDir = layout.ServerConfigDir
+	}
+	metadata := []byte("{\"label\":\"unicode-\u96ea\\n\\t\\u0001\"}")
+	metadataDir := filepath.Join(root, configDir)
+	if err := os.MkdirAll(metadataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	metadataRel := filepath.Join(configDir, "metadata-\u96ea.json")
+	if err := os.WriteFile(filepath.Join(root, metadataRel), metadata, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return stage4ArchiveFixture{
+		root: root, configName: name, metadata: metadata, metadataRel: metadataRel,
+	}
 }
 
 func writePartiallyExtractableArchive(t *testing.T, path, configName, secret string) {

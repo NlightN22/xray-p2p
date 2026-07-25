@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from tests.host import cli_json
 
 from tests.host.win import env as win_env
 from tests.host.win.diagnostics import remote_files
@@ -249,12 +248,17 @@ def remove_path(host, path: Path) -> None:
 
 
 def wait_for_client_link(host, proc_info: dict[str, str | int]) -> str:
-    def _parse_json_link(text: str) -> str | None:
-        return cli_json.link(text)
+    def _extract_link(text: str) -> str | None:
+        for line in text.splitlines():
+            if "client deploy: link generated" not in line or "link:" not in line:
+                continue
+            return line.split("link:", 1)[1].strip()
+        return None
+
     link = wait_for_log_value(
         host,
         proc_info,
-        extractor=_parse_json_link,
+        extractor=_extract_link,
         description="xp2p client deploy link",
         timeout=LOG_WAIT_TIMEOUT,
     )

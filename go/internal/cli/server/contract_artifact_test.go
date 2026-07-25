@@ -1,6 +1,7 @@
 package servercmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -62,7 +63,9 @@ func TestStage4ServerInstallPublishesGeneratedCredential(t *testing.T) {
 		} `json:"credential"`
 		Warnings []string `json:"warnings"`
 	}
-	if err := json.Unmarshal(raw, &got); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&got); err != nil {
 		t.Fatal(err)
 	}
 	if got.Status != "completed" || got.Credential == nil ||

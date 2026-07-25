@@ -36,10 +36,14 @@ func clientInstallStage4Contract() stage4Contract {
 				return nil
 			})
 			t.Cleanup(restore)
-			result := assertStage4Success(t, path, executeContractCase(fixture.installArgs(), false))
+			execution := executeContractCase(fixture.installArgs(), false)
+			result := assertStage4Success(t, path, execution)
 			if result["status"] != "completed" || result["host"] != "127.0.0.1" ||
-				result["port"] != "443" || result["user"] != "unicode-\u96ea" {
+				result["port"] != "443" || result["user"] != fixture.user {
 				t.Fatalf("unexpected client install result: %#v", result)
+			}
+			if !strings.Contains(execution.stdout, `unicode-雪\n\t\u0001`) {
+				t.Fatalf("public JSON did not escape Unicode/control input: %q", execution.stdout)
 			}
 			assertNoCredentialFields(t, result, "result")
 		},
@@ -52,14 +56,14 @@ func clientInstallStage4Contract() stage4Contract {
 			execution := executeContractCase(fixture.installArgs(), false)
 			assertStage4Failure(t, path, execution, fixture.secret)
 		},
-		human: func(t *testing.T, _ string) {
+		human: func(t *testing.T, path string) {
 			fixture := newStage4ClientFixture(t)
 			restore := clientcmd.SetInstallForTesting(func(context.Context, client.InstallOptions) error {
 				return nil
 			})
 			t.Cleanup(restore)
 			stdout, stderr, err := executeHumanContractCase(fixture.installArgs())
-			assertStage4Human(t, stdout, stderr, err, "client installed")
+			assertStage4Human(t, path, stdout, stderr, err, "client installed")
 		},
 	}
 }
@@ -69,10 +73,18 @@ func clientDeployStage4Contract() stage4Contract {
 		success: func(t *testing.T, path string) {
 			fixture := newStage4ClientFixture(t)
 			fixture.stubDeploySuccess(t)
-			result := assertStage4Success(t, path, executeContractCase(fixture.deployArgs(), false))
+			execution := executeContractCase(fixture.deployArgs(), false)
+			result := assertStage4Success(t, path, execution)
 			if result["status"] != "completed" || result["link"] != fixture.link ||
 				result["tun_enabled"] != false || result["service_active"] != false {
 				t.Fatalf("unexpected client deploy result: %#v", result)
+			}
+			link, ok := result["link"].(string)
+			if !ok || !strings.Contains(link, "unicode-\u96ea%0A%09%01") {
+				t.Fatalf("deploy result lost Unicode/control metadata: %#v", result["link"])
+			}
+			if !strings.Contains(execution.stdout, "unicode-\u96ea%0A%09%01") {
+				t.Fatalf("public JSON lost Unicode/control metadata: %q", execution.stdout)
 			}
 		},
 		failure: func(t *testing.T, path string) {
@@ -87,11 +99,11 @@ func clientDeployStage4Contract() stage4Contract {
 			execution := executeContractCase(fixture.deployArgs(), false)
 			assertStage4Failure(t, path, execution, fixture.secret)
 		},
-		human: func(t *testing.T, _ string) {
+		human: func(t *testing.T, path string) {
 			fixture := newStage4ClientFixture(t)
 			fixture.stubDeploySuccess(t)
 			stdout, stderr, err := executeHumanContractCase(fixture.deployArgs())
-			assertStage4Human(t, stdout, stderr, err, "client deploy: completed")
+			assertStage4Human(t, path, stdout, stderr, err, "client deploy: completed")
 		},
 	}
 }
@@ -100,6 +112,7 @@ type stage4ClientFixture struct {
 	root       string
 	installDir string
 	secret     string
+	user       string
 	link       string
 }
 
@@ -108,6 +121,7 @@ func newStage4ClientFixture(t *testing.T) stage4ClientFixture {
 	root := t.TempDir()
 	installDir := filepath.Join(root, "install")
 	secret := "123e4567-e89b-12d3-a456-426614174001"
+	user := "unicode-\u96ea\n\t\x01"
 	t.Setenv("XP2P_CONFIG_ROOT", root)
 	t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
 	content := "[client]\ninstall_dir = " + stage4Quote(installDir) + "\n" +
@@ -118,22 +132,22 @@ func newStage4ClientFixture(t *testing.T) stage4ClientFixture {
 	restoreController := servicecontrol.SetDefaultForTesting(stage4InactiveController{})
 	t.Cleanup(restoreController)
 	return stage4ClientFixture{
-		root: root, installDir: installDir, secret: secret,
-		link: "trojan://" + secret + "@edge.example:443?security=tls&sni=edge.example#unicode-%E9%9B%AA",
+		root: root, installDir: installDir, secret: secret, user: user,
+		link: "trojan://" + secret + "@edge.example:443?security=tls&sni=edge.example#unicode-\u96ea%0A%09%01",
 	}
 }
 
 func (f stage4ClientFixture) installArgs() []string {
 	return []string{
 		"client", "install", "--path", f.installDir, "--config-dir", "config-client",
-		"--host", "127.0.0.1", "--port", "443", "--user", "unicode-\u96ea",
+		"--host", "127.0.0.1", "--port", "443", "--user", f.user,
 		"--password", f.secret, "--sni", "edge.example", "--mode", "proxy", "--force",
 	}
 }
 
 func (f stage4ClientFixture) deployArgs() []string {
 	return []string{
-		"client", "deploy", "--host", "deploy.example", "--user", "unicode-\u96ea",
+		"client", "deploy", "--host", "deploy.example", "--user", f.user,
 		"--password", f.secret, "--mode", "proxy",
 	}
 }
@@ -150,7 +164,7 @@ func (f stage4ClientFixture) stubDeploySuccess(t *testing.T) {
 		content := "[client]\ninstall_dir = " + stage4Quote(f.installDir) +
 			"\nconfig_dir = \"config-client\"\ntun_enabled = false\n" +
 			"[[client.endpoints]]\nhostname = \"edge.example\"\nport = 443\n" +
-			"user = \"unicode-\u96ea\"\npassword = " + stage4Quote(f.secret) +
+			"user = " + stage4Quote(f.user) + "\npassword = " + stage4Quote(f.secret) +
 			"\nserver_name = \"edge.example\"\n"
 		return os.WriteFile(filepath.Join(f.root, layout.ClientConfigFileName), []byte(content), 0o600)
 	})
@@ -185,11 +199,11 @@ func serverInstallStage4Contract() stage4Contract {
 			execution := executeContractCase(fixture.args(), false)
 			assertStage4Failure(t, path, execution, secret)
 		},
-		human: func(t *testing.T, _ string) {
+		human: func(t *testing.T, path string) {
 			fixture := newStage4ServerInstallFixture(t, false)
 			fixture.stubSuccess(t)
 			stdout, stderr, err := executeHumanContractCase(fixture.args())
-			assertStage4Human(t, stdout, stderr, err, "server installed", "Generated server credential")
+			assertStage4Human(t, path, stdout, stderr, err, "server installed", "Generated server credential")
 		},
 	}
 }
