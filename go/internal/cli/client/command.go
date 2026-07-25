@@ -71,6 +71,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newClientSubscriptionCmd(),
 	)
 	dnsForwardMaybeAdd(cmd, cfg)
+	bindClientMutationResults(cmd)
 	return cmd
 }
 

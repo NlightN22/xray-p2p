@@ -1,6 +1,7 @@
 package root
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -50,6 +51,9 @@ func TestStage3MutationLeavesCovered(t *testing.T) {
 		if _, exists := mutationContractRegistry[path]; !exists {
 			t.Errorf("stage 3 mutation %s has no executable contract", path)
 		}
+		if contract := outputContractInventory[path]; contract.successResult != nil {
+			t.Errorf("stage 3 mutation %s uses a root-level synthetic result", path)
+		}
 	}
 	if covered != 52 {
 		t.Fatalf("stage 3 baseline has %d leaves, want 52", covered)
@@ -94,7 +98,27 @@ func TestStage3MutationContractCases(t *testing.T) {
 			if strings.Contains(stdout+stderr, "\x1b[") {
 				t.Fatalf("human output contains ANSI: stdout=%q stderr=%q", stdout, stderr)
 			}
+			assertMutationHumanBaseline(t, path, stdout, stderr)
 		})
+	}
+}
+
+func assertMutationHumanBaseline(t *testing.T, path, stdout, stderr string) {
+	t.Helper()
+	normalized := normalizeHumanOutput(stdout) + "\x00" + normalizeHumanOutput(stderr)
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(normalized)))
+	expected, exists := mutationHumanBaselineDigests[path]
+	if !exists {
+		t.Fatalf("missing mutation human baseline for %s: digest=%s normalized=%q", path, digest, normalized)
+	}
+	if digest != expected {
+		t.Fatalf(
+			"mutation human baseline changed for %s: got=%s want=%s normalized=%q",
+			path,
+			digest,
+			expected,
+			normalized,
+		)
 	}
 }
 

@@ -102,10 +102,14 @@ non-interactive `RunE`.
   failure, and legacy human mode.
 - Success cases assert a concrete Desired or control-state change.
 - Failure cases assert byte-for-byte state preservation.
-- Mutation results contain `status`, `operation`, and the affected `entity`.
+- Mutation handlers publish typed results containing `status`, `operation`, and
+  the exact affected `entity`; the root adapter does not infer stage 3 entities.
 - Every API-capable mutation executes command-level runtime success and runtime
   failure through the real Cobra `RunE`.
 - Runtime success verifies consistent Runtime, Desired/control, and Live state.
 - Runtime failure verifies unchanged Desired, Live, and `apply.request`, with no
   restart fallback.
 - Every mutation has an executable, documented repeat/duplicate policy.
+- Redirect mutations use ambiguous multi-target fixtures to prove JSON mode
+  rejects required selection without emitting a prompt.
+- Legacy human stdout and stderr are locked by per-command normalized baselines.

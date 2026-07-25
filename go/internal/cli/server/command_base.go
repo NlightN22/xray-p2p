@@ -68,6 +68,7 @@ func NewCommand(cfg commandConfig) *cobra.Command {
 		newServerHACmd(cfg),
 	)
 	dnsForwardMaybeAdd(cmd, cfg)
+	bindServerMutationResults(cmd)
 
 	return cmd
 }
