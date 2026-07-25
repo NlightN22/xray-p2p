@@ -53,6 +53,22 @@ func SetInstallForTesting(fn func(context.Context, server.InstallOptions) error)
 	return func() { serverInstallFunc = previous }
 }
 
+// SetRemoveForTesting replaces the removal boundary until the returned restore
+// function is called.
+func SetRemoveForTesting(fn func(context.Context, server.RemoveOptions) error) func() {
+	previous := serverRemoveFunc
+	serverRemoveFunc = fn
+	return func() { serverRemoveFunc = previous }
+}
+
+// SetCertificateForTesting replaces the certificate boundary until the
+// returned restore function is called.
+func SetCertificateForTesting(fn func(context.Context, server.CertificateOptions) error) func() {
+	previous := serverSetCertFunc
+	serverSetCertFunc = fn
+	return func() { serverSetCertFunc = previous }
+}
+
 // SetUserAddForTesting replaces the user creation boundary until the returned
 // restore function is called.
 func SetUserAddForTesting(fn func(context.Context, server.AddUserOptions) error) func() {

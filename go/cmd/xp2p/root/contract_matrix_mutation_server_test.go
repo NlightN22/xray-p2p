@@ -135,7 +135,7 @@ remark = "remove.example:443"
 
 func newServerModeMutationFixture(t *testing.T) mutationFixture {
 	t.Helper()
-	restore := servicecontrol.SetDefaultForTesting(contractServiceController{mode: "inactive"})
+	restore := servicecontrol.SetDefaultForTesting(&contractServiceController{mode: "inactive"})
 	t.Cleanup(restore)
 	content := strings.Replace(serverMutationBase(false, false), "[server]\n", "[server]\ntun_enabled = true\n", 1)
 	fixture := newServerMutationFixture(

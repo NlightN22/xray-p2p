@@ -138,7 +138,7 @@ outbound_tag = "edge-a"
 
 func newClientModeMutationFixture(t *testing.T) mutationFixture {
 	t.Helper()
-	restore := servicecontrol.SetDefaultForTesting(contractServiceController{mode: "inactive"})
+	restore := servicecontrol.SetDefaultForTesting(&contractServiceController{mode: "inactive"})
 	t.Cleanup(restore)
 	content := strings.Replace(clientMutationBase(false), "[client]\n", `[client]
 install_dir = "C:/xp2p-client"

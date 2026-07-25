@@ -100,6 +100,7 @@ func buildContractCaseRegistry() map[string]contractCase {
 			registry[path] = scenario
 		}
 	}
+	registerStage5ContractCases(registry)
 	return registry
 }
 

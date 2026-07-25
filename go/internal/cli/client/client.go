@@ -35,6 +35,14 @@ func SetInstallForTesting(fn func(context.Context, client.InstallOptions) error)
 	return func() { clientInstallFunc = previous }
 }
 
+// SetRemoveForTesting replaces the full removal boundary until the returned
+// restore function is called.
+func SetRemoveForTesting(fn func(context.Context, client.RemoveOptions) error) func() {
+	previous := clientRemoveFunc
+	clientRemoveFunc = fn
+	return func() { clientRemoveFunc = previous }
+}
+
 // SetStageEndpointForTesting replaces the endpoint staging boundary until the
 // returned restore function is called.
 func SetStageEndpointForTesting(fn func(context.Context, client.InstallOptions) error) func() {

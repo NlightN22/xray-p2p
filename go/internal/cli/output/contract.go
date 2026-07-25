@@ -48,7 +48,8 @@ type ErrorDetail struct {
 }
 
 type resultCollector struct {
-	value any
+	value     any
+	errorCode string
 }
 
 type collectorContextKey struct{}
@@ -114,6 +115,16 @@ func SetResultContext(ctx context.Context, value any) error {
 	}
 	collector.value = value
 	return nil
+}
+
+// SetErrorCodeContext selects the machine-readable code for a command error.
+func SetErrorCodeContext(ctx context.Context, code string) {
+	if ctx == nil {
+		return
+	}
+	if collector, ok := ctx.Value(collectorContextKey{}).(*resultCollector); ok {
+		collector.errorCode = strings.TrimSpace(code)
+	}
 }
 
 // RenderedError prevents the process entry point from printing a second error.
@@ -210,7 +221,11 @@ func WrapJSON(cmd *cobra.Command, enabled func() bool) {
 			if message := cleanDiagnostic(diagnostic); isOpaqueExitError(err) && message != "" {
 				err = fmt.Errorf("%s", message)
 			}
-			if writeErr := WriteError(cmd.ErrOrStderr(), cmd.CommandPath(), "command_failed", err); writeErr != nil {
+			code := collector.errorCode
+			if code == "" {
+				code = "command_failed"
+			}
+			if writeErr := WriteError(cmd.ErrOrStderr(), cmd.CommandPath(), code, err); writeErr != nil {
 				return writeErr
 			}
 			return RenderedError{err: err}

@@ -134,6 +134,7 @@ func runServerUserAdd(ctx context.Context, cfg config.Config, opts serverUserAdd
 			host = candidates[0]
 		} else {
 			if clioutput.EnabledContext(ctx) {
+				clioutput.SetErrorCodeContext(ctx, "ambiguous_selection")
 				logging.Error("xp2p server user add: --host is required when multiple link hosts are available")
 				return 2
 			}

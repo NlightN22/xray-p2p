@@ -13,6 +13,7 @@ import (
 
 func serviceStatusContractCase(role string) contractCase {
 	args := []string{role, "service", "status"}
+	var controller *contractServiceController
 	return contractCase{
 		coverage: contractCovered,
 		success:  args,
@@ -22,16 +23,19 @@ func serviceStatusContractCase(role string) contractCase {
 			root := t.TempDir()
 			t.Setenv("XP2P_CONFIG_ROOT", root)
 			t.Setenv("XP2P_LOG_ROOT", filepath.Join(root, "logs"))
-			restore := servicecontrol.SetDefaultForTesting(contractServiceController{mode: mode})
+			controller = &contractServiceController{mode: mode}
+			restore := servicecontrol.SetDefaultForTesting(controller)
 			t.Cleanup(restore)
 		},
 		assertResult: func(t *testing.T, result map[string]any) {
+			controller.assertStatusCall(t, servicecontrol.Role(role))
 			if result["state"] != "running" || result["active"] != true ||
 				result["detail"] != role+" service Ω running\nhealthy" {
 				t.Fatalf("%s service status changed: %#v", role, result)
 			}
 		},
 		assertEmpty: func(t *testing.T, result map[string]any) {
+			controller.assertStatusCall(t, servicecontrol.Role(role))
 			if result["state"] != "running" || result["active"] != true || result["detail"] != nil {
 				t.Fatalf("empty %s service detail changed: %#v", role, result)
 			}
@@ -51,18 +55,20 @@ func serviceStatusContractCase(role string) contractCase {
 }
 
 type contractServiceController struct {
-	mode string
+	mode  string
+	calls []servicecontrol.Role
 }
 
-func (c contractServiceController) Start(context.Context, servicecontrol.Role) error {
+func (c *contractServiceController) Start(context.Context, servicecontrol.Role) error {
 	return nil
 }
 
-func (c contractServiceController) Stop(context.Context, servicecontrol.Role) error {
+func (c *contractServiceController) Stop(context.Context, servicecontrol.Role) error {
 	return nil
 }
 
-func (c contractServiceController) Status(_ context.Context, role servicecontrol.Role) (servicecontrol.Status, error) {
+func (c *contractServiceController) Status(_ context.Context, role servicecontrol.Role) (servicecontrol.Status, error) {
+	c.calls = append(c.calls, role)
 	if c.mode == "error" {
 		return servicecontrol.Status{}, errors.New("service manager matrix failure")
 	}
@@ -74,4 +80,11 @@ func (c contractServiceController) Status(_ context.Context, role servicecontrol
 		detail = fmt.Sprintf("%s service Ω running\nhealthy", role)
 	}
 	return servicecontrol.Status{Active: true, State: "running", Detail: detail}, nil
+}
+
+func (c *contractServiceController) assertStatusCall(t *testing.T, role servicecontrol.Role) {
+	t.Helper()
+	if len(c.calls) != 1 || c.calls[0] != role {
+		t.Fatalf("status boundary called with wrong role: got=%v want=[%s]", c.calls, role)
+	}
 }
