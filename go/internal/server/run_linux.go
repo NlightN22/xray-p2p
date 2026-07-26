@@ -21,6 +21,8 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/xray"
 )
 
+var ensureServerTunInterfaceContextFunc = linuxnet.EnsureTunInterfaceContext
+
 // Run launches xray-core using the installed server configuration directory and blocks until completion.
 func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	if err := ctx.Err(); err != nil {
@@ -128,10 +130,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		if err := linuxnet.RemoveTunInterfacesExcept(opts.TunName, "xp2pc", "xp2ps"); err != nil {
 			return err
 		}
-		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
-			return tunSetupErrorWithHint("server run", err)
-		}
-		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+		if err := ensureServerTunSetup(ctx, opts); err != nil {
 			return tunSetupErrorWithHint("server run", err)
 		}
 	} else {
@@ -186,6 +185,13 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return nil
 	}
 	return runErr
+}
+
+func ensureServerTunSetup(ctx context.Context, opts RunOptions) error {
+	if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
+		return err
+	}
+	return ensureServerTunInterfaceContextFunc(ctx, opts.TunName, opts.TunAddr, opts.TunMTU)
 }
 
 func tunSetupErrorWithHint(action string, err error) error {

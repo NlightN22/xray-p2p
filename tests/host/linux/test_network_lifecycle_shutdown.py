@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import time
 
 import pytest
@@ -52,14 +53,46 @@ def test_network_setup_and_xray_workers_exit_during_immediate_stop(tunnel_enviro
         check=True,
     )
 
-    started = time.monotonic()
-    result = host.run(
+    marker = "/tmp/xp2p-network-setup-started"
+    wrapper_dir = "/tmp/xp2p-lifecycle-bin"
+    drop_in_dir = "/run/systemd/system/xp2p-client.service.d"
+    wrapper = f"""#!/bin/sh
+touch {marker}
+trap 'exit 130' TERM INT
+while :; do sleep 1; done
+"""
+    encoded_wrapper = base64.b64encode(wrapper.encode()).decode()
+    setup = host.run(
         "sudo -n /bin/sh -c "
-        "'systemctl start xp2p-client.service & starter=$!; "
-        "sleep 0.1; systemctl stop xp2p-client.service; wait $starter || true'"
+        f"'rm -f {marker}; mkdir -p {wrapper_dir}; "
+        f"printf %s {encoded_wrapper} | base64 -d > {wrapper_dir}/ip; "
+        f"chmod 0755 {wrapper_dir}/ip; "
+        f"mkdir -p {drop_in_dir}; "
+        f"printf \"[Service]\\nEnvironment=PATH={wrapper_dir}:/usr/sbin:/usr/bin:/sbin:/bin\\n\" "
+        f"> {drop_in_dir}/lifecycle-test.conf; systemctl daemon-reload'"
     )
+    assert setup.rc == 0, setup.stderr
+
+    started = time.monotonic()
+    try:
+        result = host.run(
+            "sudo -n /bin/sh -c "
+            f"'systemctl start xp2p-client.service & starter=$!; "
+            f"found=0; for attempt in $(seq 1 100); do "
+            f"[ -e {marker} ] && found=1 && break; sleep 0.1; done; "
+            "systemctl stop xp2p-client.service; wait $starter || true; "
+            "[ $found -eq 1 ]'"
+        )
+    finally:
+        host.run(
+            "sudo -n /bin/sh -c "
+            f"'rm -rf {wrapper_dir} {marker} {drop_in_dir}; systemctl daemon-reload'"
+        )
     elapsed = time.monotonic() - started
-    assert result.rc == 0, result.stderr
+    assert result.rc == 0, (
+        "network setup did not reach a running ip command before cancellation: "
+        f"{result.stderr}"
+    )
     assert elapsed < 15.0, f"service stop exceeded lifecycle deadline: {elapsed:.2f}s"
     runtime.wait_for_service(host, "client", active=False)
     assert host.run("pgrep -x xray >/dev/null").rc != 0

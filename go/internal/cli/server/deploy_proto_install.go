@@ -22,6 +22,8 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
+var deployInstallPresentFunc = clishared.InstallPresent
+
 func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bufio.ReadWriter, results chan<- runSignal, man spec.Manifest) {
 	host := strings.TrimSpace(man.Host)
 	if host == "" {
@@ -94,7 +96,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		fmt.Sprintf("host=%s", host),
 	}
 
-	installed, err := clishared.InstallPresent(clishared.InstallRoleServer, installDir, configDir)
+	installed, err := deployInstallPresentFunc(clishared.InstallRoleServer, installDir, configDir)
 	if err != nil {
 		_ = writeLine(rw, "ERR "+err.Error())
 		notifyFailure(results)
@@ -151,7 +153,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 		logging.Info("xp2p server deploy: installation detected, running in append mode", "config", config.LiveConfigPath(layout.ServerConfigFileName))
 		goto installDone
 	}
-	if err := server.Install(ctx, inst); err != nil {
+	if err := serverInstallFunc(ctx, inst); err != nil {
 		if server.IsCertificateValidationError(err) {
 			logging.Warn("xp2p server deploy: certificate validation failed, using self-signed", "err", err)
 			inst.CertificateStore = ""
@@ -167,7 +169,7 @@ func (s *deployServer) proceedInstall(ctx context.Context, conn net.Conn, rw *bu
 			} else if req, reqErr := apply.NewRequest(apply.RoleServer); reqErr == nil {
 				_ = apply.WriteRequest(config.ApplyRequestPath(), req, config.AuditLogPath())
 			}
-			if retryErr := server.Install(ctx, inst); retryErr == nil {
+			if retryErr := serverInstallFunc(ctx, inst); retryErr == nil {
 				goto installDone
 			} else {
 				err = retryErr

@@ -20,12 +20,11 @@ import (
 )
 
 type deployServer struct {
-	ListenAddr         string
-	Expected           deploylink.EncryptedLink
-	Once               bool
-	Timeout            time.Duration
-	Cfg                config.Config
-	handleConnOverride func(context.Context, net.Conn, chan<- runSignal)
+	ListenAddr string
+	Expected   deploylink.EncryptedLink
+	Once       bool
+	Timeout    time.Duration
+	Cfg        config.Config
 }
 
 type runSignal struct {
@@ -241,11 +240,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 		go func() {
 			defer handlers.Done()
 			defer connections.Delete(conn)
-			if s.handleConnOverride != nil {
-				s.handleConnOverride(handlerCtx, conn, results)
-			} else {
-				s.handleConn(handlerCtx, conn, results)
-			}
+			s.handleConn(handlerCtx, conn, results)
 		}()
 	}
 }

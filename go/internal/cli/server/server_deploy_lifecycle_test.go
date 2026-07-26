@@ -1,11 +1,19 @@
 package servercmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
+
+	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
+	deploylink "github.com/NlightN22/xray-p2p/go/internal/deploy/link"
+	"github.com/NlightN22/xray-p2p/go/internal/deploy/spec"
+	"github.com/NlightN22/xray-p2p/go/internal/server"
 )
 
 func TestDeployServerShutdownClosesAndJoinsStalledHandler(t *testing.T) {
@@ -79,20 +87,53 @@ func TestDeployServerShutdownCancelsAndJoinsActiveInstallHandler(t *testing.T) {
 	address := freeDeployAddress(t)
 	started := make(chan struct{})
 	exited := make(chan struct{})
+	originalInstall := serverInstallFunc
+	originalInstallPresent := deployInstallPresentFunc
+	t.Cleanup(func() {
+		serverInstallFunc = originalInstall
+		deployInstallPresentFunc = originalInstallPresent
+	})
+	deployInstallPresentFunc = func(clishared.InstallRole, string, string) (bool, error) {
+		return false, nil
+	}
+	serverInstallFunc = func(ctx context.Context, _ server.InstallOptions) error {
+		close(started)
+		<-ctx.Done()
+		close(exited)
+		return ctx.Err()
+	}
+
+	manifest := spec.Manifest{
+		Host:           "10.0.0.1",
+		Version:        2,
+		InstallDir:     t.TempDir(),
+		TrojanPort:     "58443",
+		TrojanUser:     "user@example.com",
+		TrojanPassword: "secret",
+	}
+	_, encrypted, err := deploylink.Build(manifest.Host, "62025", manifest, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
 	server := &deployServer{
 		ListenAddr: address,
 		Timeout:    time.Hour,
-		handleConnOverride: func(ctx context.Context, _ net.Conn, _ chan<- runSignal) {
-			close(started)
-			<-ctx.Done()
-			close(exited)
-		},
+		Expected:   encrypted,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- server.Run(ctx) }()
 	conn := connectDeploy(t, address)
 	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	fmt.Fprint(conn, "AUTH\n")
+	if line, readErr := reader.ReadString('\n'); readErr != nil || strings.TrimSpace(line) != "OK" {
+		t.Fatalf("AUTH roundtrip failed: %q err=%v", line, readErr)
+	}
+	fmt.Fprintf(conn, "MANIFEST-ENC %d\n", len(encrypted.Ciphertext))
+	if _, err := conn.Write(encrypted.Ciphertext); err != nil {
+		t.Fatal(err)
+	}
 	<-started
 	cancel()
 	assertDeployRunCanceled(t, done)
