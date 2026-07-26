@@ -3,7 +3,7 @@
 package openwrt
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -29,6 +29,10 @@ func (s uciSection) option(name string) string {
 }
 
 func EnsureTunInterface(name, addr string) error {
+	return EnsureTunInterfaceContext(context.Background(), name, addr)
+}
+
+func EnsureTunInterfaceContext(ctx context.Context, name, addr string) error {
 	name = strings.TrimSpace(name)
 	addr = strings.TrimSpace(addr)
 	if name == "" {
@@ -44,7 +48,7 @@ func EnsureTunInterface(name, addr string) error {
 		return errors.New("uci command not found (OpenWrt required)")
 	}
 
-	managed, exists, err := isManagedInterface(name)
+	managed, exists, err := isManagedInterfaceContext(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -53,29 +57,29 @@ func EnsureTunInterface(name, addr string) error {
 	}
 
 	if exists {
-		if err := runCommand("uci", "-q", "delete", "network."+name); err != nil {
+		if err := runCommandContext(ctx, "uci", "-q", "delete", "network."+name); err != nil {
 			return err
 		}
 	}
-	if err := runCommand("uci", "set", fmt.Sprintf("network.%s=interface", name)); err != nil {
+	if err := runCommandContext(ctx, "uci", "set", fmt.Sprintf("network.%s=interface", name)); err != nil {
 		return err
 	}
-	if err := runCommand("uci", "set", fmt.Sprintf("network.%s.device=%s", name, name)); err != nil {
+	if err := runCommandContext(ctx, "uci", "set", fmt.Sprintf("network.%s.device=%s", name, name)); err != nil {
 		return err
 	}
-	if err := runCommand("uci", "set", fmt.Sprintf("network.%s.proto=static", name)); err != nil {
+	if err := runCommandContext(ctx, "uci", "set", fmt.Sprintf("network.%s.proto=static", name)); err != nil {
 		return err
 	}
-	if err := runCommand("uci", "add_list", fmt.Sprintf("network.%s.ipaddr=%s", name, addr)); err != nil {
+	if err := runCommandContext(ctx, "uci", "add_list", fmt.Sprintf("network.%s.ipaddr=%s", name, addr)); err != nil {
 		return err
 	}
-	if err := runCommand("uci", "set", fmt.Sprintf("network.%s.xp2p_managed=1", name)); err != nil {
+	if err := runCommandContext(ctx, "uci", "set", fmt.Sprintf("network.%s.xp2p_managed=1", name)); err != nil {
 		return err
 	}
-	if err := runCommand("uci", "commit", "network"); err != nil {
+	if err := runCommandContext(ctx, "uci", "commit", "network"); err != nil {
 		return err
 	}
-	if err := runCommand("/etc/init.d/network", "reload"); err != nil {
+	if err := runCommandContext(ctx, "/etc/init.d/network", "reload"); err != nil {
 		return err
 	}
 
@@ -84,6 +88,10 @@ func EnsureTunInterface(name, addr string) error {
 }
 
 func EnsureTunRoute(name, cidr string) error {
+	return EnsureTunRouteContext(context.Background(), name, cidr)
+}
+
+func EnsureTunRouteContext(ctx context.Context, name, cidr string) error {
 	name = strings.TrimSpace(name)
 	cidr = strings.TrimSpace(cidr)
 	if name == "" || cidr == "" {
@@ -97,10 +105,14 @@ func EnsureTunRoute(name, cidr string) error {
 	}
 	var lastErr error
 	for attempt := 0; attempt < 17; attempt++ {
-		if err := runCommand("ip", "route", "replace", cidr, "dev", name); err != nil {
+		if err := runCommandContext(ctx, "ip", "route", "replace", cidr, "dev", name); err != nil {
 			lastErr = err
 			if isMissingDeviceError(err) {
-				time.Sleep(300 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(300 * time.Millisecond):
+				}
 				continue
 			}
 			return err
@@ -172,7 +184,11 @@ func RemoveTunInterfaceIfManaged(name string) error {
 }
 
 func isManagedInterface(name string) (bool, bool, error) {
-	out, err := captureCommand("uci", "-q", "show", "network."+name)
+	return isManagedInterfaceContext(context.Background(), name)
+}
+
+func isManagedInterfaceContext(ctx context.Context, name string) (bool, bool, error) {
+	out, err := captureCommandContext(ctx, "uci", "-q", "show", "network."+name)
 	if strings.TrimSpace(out) == "" {
 		return false, false, nil
 	}
@@ -254,26 +270,6 @@ func hasFile(path string) bool {
 		return false
 	}
 	return !info.IsDir()
-}
-
-func runCommand(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s %s: %v (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
-	}
-	return nil
-}
-
-func captureCommand(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
-	err := cmd.Run()
-	return strings.TrimSpace(buf.String()), err
 }
 
 func isMissingRouteError(err error) bool {

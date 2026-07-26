@@ -21,7 +21,7 @@ func ensureRedirectRouteContext(ctx context.Context, tunName, cidr string) error
 	if tun == "" {
 		return nil
 	}
-	if err := openwrt.EnsureTunRoute(tun, cidr); err != nil {
+	if err := openwrt.EnsureTunRouteContext(ctx, tun, cidr); err != nil {
 		if isMissingDeviceError(err) {
 			logging.Warn("redirect route setup deferred (tun missing)", "cidr", cidr, "err", err)
 			return nil

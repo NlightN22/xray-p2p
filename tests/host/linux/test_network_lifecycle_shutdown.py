@@ -38,7 +38,31 @@ def test_control_server_listener_closes_before_service_stop_returns(tunnel_envir
     )
 
 
-def test_network_setup_and_xray_workers_exit_during_immediate_stop(tunnel_environment):
+def test_running_xray_exits_before_service_stop_returns(tunnel_environment):
+    env = tunnel_environment
+    host = env["server_host"]
+    runner = env["server_runner"]
+    runner("server", "service", "start", check=True)
+    runtime.wait_for_service(host, "server", active=True)
+    pid = wait_until(
+        "xray process to start",
+        lambda: _xray_pid(host),
+        timeout_seconds=15.0,
+        poll_interval=0.25,
+    ).value
+
+    started = time.monotonic()
+    runner("server", "service", "stop", check=True)
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 15.0, f"service stop exceeded lifecycle deadline: {elapsed:.2f}s"
+    runtime.wait_for_service(host, "server", active=False)
+    assert host.run(f"test ! -e /proc/{pid}").rc == 0
+    assert host.run("pgrep -x xray >/dev/null").rc != 0
+    assert host.run("pgrep -f '/usr/bin/[x]p2p server run' >/dev/null").rc != 0
+
+
+def test_active_network_setup_command_exits_during_stop(tunnel_environment):
     env = tunnel_environment
     host = env["client_host"]
     runner = env["client_runner"]
@@ -97,3 +121,9 @@ while :; do sleep 1; done
     runtime.wait_for_service(host, "client", active=False)
     assert host.run("pgrep -x xray >/dev/null").rc != 0
     assert host.run("pgrep -f '/usr/bin/[x]p2p client run' >/dev/null").rc != 0
+
+
+def _xray_pid(host):
+    result = host.run("pgrep -x xray | head -n1")
+    value = result.stdout.strip()
+    return value if result.rc == 0 and value else None

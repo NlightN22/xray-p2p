@@ -25,6 +25,8 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/xrayguard"
 )
 
+var ensureClientOpenWrtTunInterfaceContextFunc = openwrt.EnsureTunInterfaceContext
+
 // Run launches xray-core using the installed client configuration directory and blocks until the process exits.
 func Run(ctx context.Context, opts RunOptions) (retErr error) {
 	if err := ctx.Err(); err != nil {
@@ -142,10 +144,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		return err
 	}
 	if tunEnabled {
-		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
-			return tunSetupErrorWithHint("client run", err)
-		}
-		if err := linuxnet.EnsureTunInterfaceContext(ctx, opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+		if err := ensureClientTunSetup(ctx, opts); err != nil {
 			return tunSetupErrorWithHint("client run", err)
 		}
 	} else {
@@ -243,6 +242,13 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		sleepWithContext(ctx, loopProtectionQuarantineDelay)
 	}
 	return runErr
+}
+
+func ensureClientTunSetup(ctx context.Context, opts RunOptions) error {
+	if err := ensureClientOpenWrtTunInterfaceContextFunc(ctx, opts.TunName, opts.TunAddr); err != nil {
+		return err
+	}
+	return linuxnet.EnsureTunInterfaceContext(ctx, opts.TunName, opts.TunAddr, opts.TunMTU)
 }
 
 func tunSetupErrorWithHint(action string, err error) error {
