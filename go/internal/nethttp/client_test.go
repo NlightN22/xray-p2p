@@ -87,6 +87,47 @@ func TestOwnedClientShutdownCancelsActiveRequest(t *testing.T) {
 	}
 }
 
+func TestOwnedClientShutdownClosesReturnedResponseBody(t *testing.T) {
+	started := make(chan struct{})
+	finished := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		close(started)
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "partial")
+		w.(http.Flusher).Flush()
+		<-request.Context().Done()
+		close(finished)
+	}))
+	defer server.Close()
+
+	client := NewClient(ClientOptions{Timeout: 10 * time.Second})
+	response, err := client.Do(newRequest(t, server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-started
+
+	shutdownCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if err := client.Shutdown(shutdownCtx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("handler did not observe owner cancellation")
+	}
+	concrete := client.(*ownedClient)
+	concrete.mu.Lock()
+	defer concrete.mu.Unlock()
+	if concrete.active != 0 || len(concrete.bodies) != 0 {
+		t.Fatalf("shutdown left active=%d bodies=%d", concrete.active, len(concrete.bodies))
+	}
+	if _, err := response.Body.Read(make([]byte, 1)); err == nil {
+		t.Fatal("returned response body remained readable after shutdown")
+	}
+}
+
 func newRequest(t *testing.T, url string) *http.Request {
 	t.Helper()
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)

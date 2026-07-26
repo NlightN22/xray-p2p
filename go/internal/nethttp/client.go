@@ -56,9 +56,11 @@ type ownedClient struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 
-	mu     sync.Mutex
-	closed bool
-	wg     sync.WaitGroup
+	mu      sync.Mutex
+	closed  bool
+	active  int
+	drained chan struct{}
+	bodies  map[*trackedBody]struct{}
 }
 
 func NewClient(options ClientOptions) OwnedClient {
@@ -84,6 +86,8 @@ func NewClient(options ClientOptions) OwnedClient {
 		dialer:    dialer,
 		ctx:       ctx,
 		cancel:    cancel,
+		drained:   closedChannel(),
+		bodies:    make(map[*trackedBody]struct{}),
 	}
 }
 
@@ -93,7 +97,10 @@ func (c *ownedClient) Do(req *http.Request) (*http.Response, error) {
 		c.mu.Unlock()
 		return nil, ErrClientClosed
 	}
-	c.wg.Add(1)
+	if c.active == 0 {
+		c.drained = make(chan struct{})
+	}
+	c.active++
 	c.mu.Unlock()
 
 	ctx, cancel := context.WithCancel(req.Context())
@@ -102,18 +109,44 @@ func (c *ownedClient) Do(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		stop()
 		cancel()
-		c.wg.Done()
+		c.finishRequest()
 		return nil, err
 	}
-	resp.Body = &trackedBody{
+	body := &trackedBody{
 		ReadCloser: resp.Body,
-		done: func() {
-			stop()
-			cancel()
-			c.wg.Done()
-		},
 	}
+	body.done = func() {
+		c.mu.Lock()
+		delete(c.bodies, body)
+		c.finishRequestLocked()
+		c.mu.Unlock()
+		stop()
+		cancel()
+	}
+
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		_ = body.Close()
+		return nil, ErrClientClosed
+	}
+	c.bodies[body] = struct{}{}
+	resp.Body = body
+	c.mu.Unlock()
 	return resp, nil
+}
+
+func (c *ownedClient) finishRequest() {
+	c.mu.Lock()
+	c.finishRequestLocked()
+	c.mu.Unlock()
+}
+
+func (c *ownedClient) finishRequestLocked() {
+	c.active--
+	if c.active == 0 {
+		close(c.drained)
+	}
 }
 
 func (c *ownedClient) Shutdown(ctx context.Context) error {
@@ -122,16 +155,19 @@ func (c *ownedClient) Shutdown(ctx context.Context) error {
 		c.closed = true
 		c.cancel()
 	}
+	bodies := make([]*trackedBody, 0, len(c.bodies))
+	for body := range c.bodies {
+		bodies = append(bodies, body)
+	}
+	drained := c.drained
 	c.mu.Unlock()
 
-	done := make(chan struct{})
-	go func() {
-		c.wg.Wait()
-		close(done)
-	}()
+	for _, body := range bodies {
+		_ = body.Close()
+	}
 	var waitErr error
 	select {
-	case <-done:
+	case <-drained:
 	case <-ctx.Done():
 		waitErr = ctx.Err()
 	}
@@ -140,6 +176,12 @@ func (c *ownedClient) Shutdown(ctx context.Context) error {
 		waitErr = err
 	}
 	return waitErr
+}
+
+func closedChannel() chan struct{} {
+	done := make(chan struct{})
+	close(done)
+	return done
 }
 
 type trackedBody struct {

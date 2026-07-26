@@ -76,23 +76,119 @@ func TestControlHTTPPoolPlateausAcrossRotationAndSubscriptionCycles(t *testing.T
 	waitForConnectionCount(t, time.Second, func() bool { return closed.Load() == opened.Load() })
 }
 
-func TestControlHTTPPoolPrunesChangedTLSPolicy(t *testing.T) {
+func TestRequestScopedTransportsReproduceConnectionGrowth(t *testing.T) {
+	var opened atomic.Int64
+	var closed atomic.Int64
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			opened.Add(1)
+		case http.StateClosed:
+			closed.Add(1)
+		}
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	base := server.Client().Transport.(*http.Transport)
+	transports := make([]*http.Transport, 0, 25)
+	for range 25 {
+		transport := base.Clone()
+		transports = append(transports, transport)
+		client := &http.Client{Transport: transport, Timeout: time.Second}
+		response, err := client.Get(server.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := io.Copy(io.Discard, response.Body); err != nil {
+			t.Fatal(err)
+		}
+		if err := response.Body.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := opened.Load(); got != int64(len(transports)) {
+		t.Fatalf("request-scoped transports opened %d connections, want %d", got, len(transports))
+	}
+	for _, transport := range transports {
+		transport.CloseIdleConnections()
+	}
+	waitForConnectionCount(t, time.Second, func() bool { return closed.Load() == opened.Load() })
+}
+
+func TestControlHTTPPoolPruneClosesEndpointConnections(t *testing.T) {
+	var opened atomic.Int64
+	var closed atomic.Int64
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			opened.Add(1)
+		case http.StateClosed:
+			closed.Add(1)
+		}
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	endpoint, _ := lifecycleEndpoint(t, server.URL)
 	pool := newControlHTTPPool(time.Second, "")
-	endpoint := clientEndpointRecord{Hostname: "edge.example", ServerName: "edge.example"}
-	first := pool.client(endpoint)
-	endpoint.AllowInsecure = true
-	second := pool.client(endpoint)
-	if first == second {
-		t.Fatal("TLS policy change reused the previous client")
-	}
-	if len(pool.clients) != 2 {
-		t.Fatalf("client count = %d, want 2 before prune", len(pool.clients))
-	}
-	if err := pool.prune(t.Context(), []clientEndpointRecord{endpoint}); err != nil {
+	client := pool.client(endpoint)
+	response, err := client.Do(mustRequest(t, server.URL))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pool.clients) != 1 {
-		t.Fatalf("client count = %d, want 1 after prune", len(pool.clients))
+	if _, err := io.Copy(io.Discard, response.Body); err != nil {
+		t.Fatal(err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if opened.Load() == 0 {
+		t.Fatal("test did not establish a TCP connection")
+	}
+	pruneCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if err := pool.prune(pruneCtx, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(pool.clients) != 0 {
+		t.Fatalf("client count = %d, want 0 after prune", len(pool.clients))
+	}
+	waitForConnectionCount(t, time.Second, func() bool { return closed.Load() == opened.Load() })
+}
+
+func TestSubscriptionRunnerShutdownClosesActiveResponse(t *testing.T) {
+	handlerDone := make(chan struct{})
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, "partial")
+		w.(http.Flusher).Flush()
+		<-request.Context().Done()
+		close(handlerDone)
+	}))
+	defer server.Close()
+
+	endpoint, _ := lifecycleEndpoint(t, server.URL)
+	pool := newControlHTTPPool(time.Second, "")
+	response, err := pool.client(endpoint).Do(mustRequest(t, server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := subscriptionSyncRunner{timeout: time.Second, clients: pool}
+	runner.shutdown()
+	select {
+	case <-handlerDone:
+	case <-time.After(time.Second):
+		t.Fatal("runner shutdown did not cancel the active response")
+	}
+	if _, err := response.Body.Read(make([]byte, 1)); err == nil {
+		t.Fatal("runner shutdown left the active response body open")
 	}
 }
 
@@ -127,4 +223,13 @@ func waitForConnectionCount(t *testing.T, timeout time.Duration, condition func(
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("connections did not close before the deadline")
+}
+
+func mustRequest(t *testing.T, rawURL string) *http.Request {
+	t.Helper()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, rawURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request
 }
