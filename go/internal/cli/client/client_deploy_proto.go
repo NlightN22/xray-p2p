@@ -21,7 +21,19 @@ const (
 	deployBufferLimit = 64 * 1024 // 64KB cap for OUT/ERR buffers
 )
 
-type deployCompletionFunc func(ctx context.Context, status string) error
+type deploySession interface {
+	Complete(context.Context, string) error
+	Close() error
+}
+
+type tcpDeploySession struct {
+	conn         net.Conn
+	rw           *bufio.ReadWriter
+	completeOnce sync.Once
+	closeOnce    sync.Once
+	completeErr  error
+	closeErr     error
+}
 
 type deployResult struct {
 	ExitCode int
@@ -30,7 +42,7 @@ type deployResult struct {
 	ErrLog   string
 }
 
-func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResult, deployCompletionFunc, error) {
+func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResult, deploySession, error) {
 	addr := net.JoinHostPort(strings.TrimSpace(opts.runtime.remoteHost), strings.TrimSpace(opts.runtime.deployPort))
 
 	d := &net.Dialer{Timeout: deployDialTimeout}
@@ -149,48 +161,9 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 			logging.Info("xp2p client deploy: connection link received", "link", link)
 		case l == "DONE":
 			result := deployResult{ExitCode: exitCode, Link: link, OutLog: outBuf.String(), ErrLog: errBuf.String()}
-			var completeOnce sync.Once
-			completion := func(doneCtx context.Context, status string) error {
-				var completionErr error
-				completeOnce.Do(func() {
-					if doneCtx == nil {
-						doneCtx = context.Background()
-					}
-					if status = strings.TrimSpace(status); status == "" {
-						status = "OK"
-					}
-					deadline := time.Now().Add(deployCompletionNotifyTimeout)
-					if dl, ok := doneCtx.Deadline(); ok {
-						deadline = dl
-					}
-					if err := conn.SetDeadline(deadline); err != nil {
-						completionErr = err
-						closeConn()
-						return
-					}
-					if _, err := fmt.Fprintf(rw, "COMPLETE %s\n", status); err != nil {
-						completionErr = fmt.Errorf("send COMPLETE: %w", err)
-						closeConn()
-						return
-					}
-					if err := rw.Flush(); err != nil {
-						completionErr = fmt.Errorf("flush COMPLETE: %w", err)
-						closeConn()
-						return
-					}
-					reply, err := readLine(rw)
-					closeConn()
-					if err != nil {
-						completionErr = fmt.Errorf("read COMPLETE ack: %w", err)
-						return
-					}
-					if strings.TrimSpace(reply) != "BYE" {
-						completionErr = fmt.Errorf("unexpected COMPLETE ack: %q", reply)
-					}
-				})
-				return completionErr
-			}
-			return result, completion, nil
+			session := &tcpDeploySession{conn: conn, rw: rw}
+			conn = nil
+			return result, session, nil
 		case strings.HasPrefix(l, "ERR "):
 			closeConn()
 			return deployResult{}, nil, serverDeployError{msg: strings.TrimSpace(strings.TrimPrefix(l, "ERR "))}
@@ -202,6 +175,55 @@ func performDeployHandshake(ctx context.Context, opts deployOptions) (deployResu
 
 	closeConn()
 	return deployResult{ExitCode: exitCode, Link: link, OutLog: outBuf.String(), ErrLog: errBuf.String()}, nil, nil
+}
+
+func (s *tcpDeploySession) Complete(ctx context.Context, status string) error {
+	s.completeOnce.Do(func() {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		if status = strings.TrimSpace(status); status == "" {
+			status = "OK"
+		}
+		deadline := time.Now().Add(deployCompletionNotifyTimeout)
+		if value, ok := ctx.Deadline(); ok {
+			deadline = value
+		}
+		if err := s.conn.SetDeadline(deadline); err != nil {
+			s.completeErr = err
+			_ = s.Close()
+			return
+		}
+		if _, err := fmt.Fprintf(s.rw, "COMPLETE %s\n", status); err != nil {
+			s.completeErr = fmt.Errorf("send COMPLETE: %w", err)
+			_ = s.Close()
+			return
+		}
+		if err := s.rw.Flush(); err != nil {
+			s.completeErr = fmt.Errorf("flush COMPLETE: %w", err)
+			_ = s.Close()
+			return
+		}
+		reply, err := readLine(s.rw)
+		_ = s.Close()
+		if err != nil {
+			s.completeErr = fmt.Errorf("read COMPLETE ack: %w", err)
+			return
+		}
+		if strings.TrimSpace(reply) != "BYE" {
+			s.completeErr = fmt.Errorf("unexpected COMPLETE ack: %q", reply)
+		}
+	})
+	return s.completeErr
+}
+
+func (s *tcpDeploySession) Close() error {
+	s.closeOnce.Do(func() {
+		if s.conn != nil {
+			s.closeErr = s.conn.Close()
+		}
+	})
+	return s.closeErr
 }
 
 // --- helpers ---

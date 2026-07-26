@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 )
 
 var ErrNotModified = errors.New("subscription snapshot not modified")
@@ -79,7 +81,7 @@ func (s HTTPSource) Fetch(ctx context.Context, knownRevision string) (RawSnapsho
 	if err != nil {
 		return RawSnapshot{}, errors.New("fetch subscription: request failed")
 	}
-	defer resp.Body.Close()
+	defer ownedhttp.DrainAndClose(resp, maxBytes+1)
 	if resp.StatusCode == http.StatusNotModified {
 		return RawSnapshot{}, ErrNotModified
 	}

@@ -2,6 +2,7 @@ package ping
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 	"github.com/NlightN22/xray-p2p/go/internal/server"
 	"github.com/NlightN22/xray-p2p/go/internal/testutil"
 )
@@ -127,7 +129,12 @@ func TestReporterErrorPropagates(t *testing.T) {
 		return errors.New("report failure")
 	})
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	_, err := pingHTTPS(context.Background(), addr, time.Second, 1, Options{Reporter: reporter, AllowInsecure: true})
+	client := ownedhttp.NewClient(ownedhttp.ClientOptions{
+		Timeout:   time.Second,
+		TLSConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+	})
+	defer shutdownHTTPClient(client)
+	_, err := pingHTTPS(context.Background(), addr, time.Second, 1, Options{Reporter: reporter, HTTPClient: client})
 	if err == nil || !strings.Contains(err.Error(), "report failure") {
 		t.Fatalf("expected reporter error, got %v", err)
 	}

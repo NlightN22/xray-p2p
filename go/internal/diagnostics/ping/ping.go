@@ -3,6 +3,8 @@ package ping
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/base32"
 	"errors"
 	"fmt"
@@ -64,6 +66,24 @@ func Run(ctx context.Context, target string, opts Options) error {
 	timeout := opts.Timeout
 	if timeout <= 0 {
 		timeout = defaultTimeout
+	}
+	if opts.HTTPClient == nil {
+		tlsConfig := &tls.Config{
+			ServerName:         opts.ServerName,
+			InsecureSkipVerify: opts.AllowInsecure || opts.PinnedPeerCertSHA256 != "",
+		}
+		if opts.PinnedPeerCertSHA256 != "" {
+			tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+				return verifyPinnedPeerCertificate(rawCerts, opts.PinnedPeerCertSHA256)
+			}
+		}
+		client := ownedhttp.NewClient(ownedhttp.ClientOptions{
+			Timeout:   timeout,
+			TLSConfig: tlsConfig,
+			Dialer:    newPingDialer(opts.SocksProxy, timeout),
+		})
+		defer shutdownHTTPClient(client)
+		opts.HTTPClient = client
 	}
 
 	port := opts.Port
@@ -143,6 +163,12 @@ func Run(ctx context.Context, target string, opts Options) error {
 		return errors.New("no replies received")
 	}
 	return nil
+}
+
+func shutdownHTTPClient(client ownedhttp.OwnedClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	defer cancel()
+	_ = client.Shutdown(ctx)
 }
 
 func newNonce() (string, error) {

@@ -3,9 +3,8 @@ package ping
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/controlplane"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 
 	"golang.org/x/net/proxy"
 )
@@ -38,16 +38,15 @@ func pingHTTPS(ctx context.Context, addr string, timeout time.Duration, seq int,
 			return 0, err
 		}
 	}
-	client := opts.HTTPClient
-	if client == nil {
-		client = &http.Client{Transport: httpTransport(opts, timeout), Timeout: timeout}
+	if opts.HTTPClient == nil {
+		return 0, errors.New("HTTP client is required")
 	}
 	start := time.Now()
-	resp, err := client.Do(req)
+	resp, err := opts.HTTPClient.Do(req)
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer ownedhttp.DrainAndClose(resp, 1<<20)
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return 0, err
@@ -72,26 +71,24 @@ func pingHTTPS(ctx context.Context, addr string, timeout time.Duration, seq int,
 	return rtt, nil
 }
 
-func httpTransport(opts Options, timeout time.Duration) http.RoundTripper {
-	tlsConfig := &tls.Config{
-		ServerName:         opts.ServerName,
-		InsecureSkipVerify: opts.AllowInsecure || opts.PinnedPeerCertSHA256 != "",
+type pingDialer struct {
+	proxyAddr string
+	timeout   time.Duration
+}
+
+func newPingDialer(proxyAddr string, timeout time.Duration) *pingDialer {
+	return &pingDialer{proxyAddr: proxyAddr, timeout: timeout}
+}
+
+func (d *pingDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	if d.proxyAddr == "" {
+		return (&net.Dialer{Timeout: d.timeout}).DialContext(ctx, network, addr)
 	}
-	if opts.PinnedPeerCertSHA256 != "" {
-		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			return verifyPinnedPeerCertificate(rawCerts, opts.PinnedPeerCertSHA256)
-		}
-	}
-	dial := (&net.Dialer{Timeout: timeout}).DialContext
-	if opts.SocksProxy != "" {
-		dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			return dialViaSocks(ctx, addr, opts.SocksProxy, timeout)
-		}
-	}
-	return &http.Transport{
-		TLSClientConfig: tlsConfig,
-		DialContext:     dial,
-	}
+	return dialViaSocks(ctx, addr, d.proxyAddr, d.timeout)
+}
+
+func (*pingDialer) Shutdown(context.Context) error {
+	return nil
 }
 
 func dialViaSocks(ctx context.Context, addr, proxyAddr string, timeout time.Duration) (net.Conn, error) {

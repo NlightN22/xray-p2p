@@ -61,7 +61,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 	var (
 		res             deployResult
 		handshakeErr    error
-		notifyComplete  deployCompletionFunc
+		session         deploySession
 		completionState = "FAIL"
 	)
 	deadline := time.Now().Add(10 * time.Minute)
@@ -74,7 +74,7 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			logging.Error("xp2p client deploy: cancelled", "err", ctx.Err())
 			return 1
 		}
-		res, notifyComplete, handshakeErr = performDeployHandshakeFunc(ctx, opts)
+		res, session, handshakeErr = performDeployHandshakeFunc(ctx, opts)
 		if handshakeErr == nil {
 			break
 		}
@@ -97,11 +97,12 @@ func runClientDeploy(ctx context.Context, cfg config.Config, args []string) int 
 			backoff += 1 * time.Second
 		}
 	}
-	if notifyComplete != nil {
+	if session != nil {
+		defer session.Close()
 		defer func() {
 			notifyCtx, cancel := context.WithTimeout(context.Background(), deployCompletionNotifyTimeout)
 			defer cancel()
-			if err := notifyComplete(notifyCtx, completionState); err != nil {
+			if err := session.Complete(notifyCtx, completionState); err != nil {
 				logging.Warn("xp2p client deploy: completion notify failed", "err", err)
 			}
 		}()

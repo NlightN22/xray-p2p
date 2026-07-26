@@ -111,7 +111,7 @@ func TestStage4ClientDeployPublishesTypedCredentialArtifact(t *testing.T) {
 	previousHandshake := performDeployHandshakeFunc
 	secret := "123e4567-e89b-12d3-a456-426614174001"
 	link := "trojan://" + secret + "@edge.example:443?security=tls&sni=edge.example#unicode-%E9%9B%AA"
-	performDeployHandshakeFunc = func(context.Context, deployOptions) (deployResult, deployCompletionFunc, error) {
+	performDeployHandshakeFunc = func(context.Context, deployOptions) (deployResult, deploySession, error) {
 		return deployResult{Link: link}, nil, nil
 	}
 	defer func() { performDeployHandshakeFunc = previousHandshake }()
@@ -151,7 +151,7 @@ server_name = "edge.example"
 		t.Fatalf("unexpected typed deploy result: %#v", result())
 	}
 
-	performDeployHandshakeFunc = func(context.Context, deployOptions) (deployResult, deployCompletionFunc, error) {
+	performDeployHandshakeFunc = func(context.Context, deployOptions) (deployResult, deploySession, error) {
 		return deployResult{}, nil, serverDeployError{msg: "password=" + secret}
 	}
 	failureCtx, failureResult := clioutput.CaptureResult(context.Background())

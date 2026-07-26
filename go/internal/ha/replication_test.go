@@ -1,7 +1,10 @@
 package ha
 
 import (
+	"net"
+	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -93,7 +96,14 @@ func TestCoordinatorReplicatesPreparedGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewTLSServer(NewHTTPHandler(receiver))
+	var connections atomic.Int32
+	server := httptest.NewUnstartedServer(NewHTTPHandler(receiver))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			connections.Add(1)
+		}
+	}
+	server.StartTLS()
 	defer server.Close()
 	peer.Endpoint = server.URL
 	coordinator, err := NewStoreWithLocalID("coordinator", []Peer{peer}, testGeneration(1))
@@ -108,6 +118,9 @@ func TestCoordinatorReplicatesPreparedGeneration(t *testing.T) {
 	}
 	if got := coordinator.Committed().Number; got != 2 {
 		t.Fatalf("coordinator committed generation = %d", got)
+	}
+	if got := connections.Load(); got != 1 {
+		t.Fatalf("prepare and commit opened %d connections, want 1", got)
 	}
 }
 

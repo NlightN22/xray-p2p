@@ -66,7 +66,7 @@ func SetDeployHandshakeForTesting(
 	performDeployHandshakeFunc = func(
 		ctx context.Context,
 		_ deployOptions,
-	) (deployResult, deployCompletionFunc, error) {
+	) (deployResult, deploySession, error) {
 		result, err := fn(ctx)
 		if err != nil {
 			err = serverDeployError{msg: err.Error()}

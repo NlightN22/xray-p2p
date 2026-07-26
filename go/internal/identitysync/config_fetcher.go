@@ -5,12 +5,9 @@ package identitysync
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -93,101 +90,6 @@ func (f ConfigFetcher) ldapSearch(ctx context.Context, ldap config.LDAPProviderC
 		return nil, errors.New("ldap search returned a partial snapshot")
 	}
 	return parseLDIF(out.String()), nil
-}
-
-func (f ConfigFetcher) fetchSCIM(ctx context.Context, provider ProviderRef) (Snapshot, error) {
-	scim := f.Config.SCIM
-	endpoint := strings.TrimRight(strings.TrimSpace(scim.Endpoint), "/")
-	if endpoint == "" {
-		return Snapshot{}, errors.New("scim endpoint is required")
-	}
-	usersBody, err := f.scimGet(ctx, endpoint+"/users?briefRepresentation=true")
-	if err != nil {
-		return Snapshot{}, err
-	}
-	groupsBody, err := f.scimGet(ctx, endpoint+"/groups?briefRepresentation=true")
-	if err != nil {
-		return Snapshot{}, err
-	}
-	users, complete, err := parseSCIMUsers(usersBody)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("parse scim users: %w", err)
-	}
-	if !complete {
-		return Snapshot{Provider: provider, Complete: false}, nil
-	}
-	groups, complete, err := parseSCIMGroups(groupsBody)
-	if err != nil {
-		return Snapshot{}, fmt.Errorf("parse scim groups: %w", err)
-	}
-	if !complete {
-		return Snapshot{Provider: provider, Complete: false}, nil
-	}
-	snapshot := Snapshot{Provider: provider, Complete: true}
-	for _, user := range users {
-		id := firstIdentityValue(user.ID, user.UserName)
-		if id == "" {
-			continue
-		}
-		snapshot.Subjects = append(snapshot.Subjects, SnapshotSubject{
-			ExternalSubject: id,
-			DisplayName:     strings.TrimSpace(strings.Join([]string{user.FirstName, user.LastName}, " ")),
-		})
-	}
-	for _, group := range groups {
-		if strings.TrimSpace(group.ID) == "" || strings.TrimSpace(group.Name) == "" {
-			continue
-		}
-		membersBody, err := f.scimGet(ctx, endpoint+"/groups/"+group.ID+"/members")
-		if err != nil {
-			return Snapshot{}, err
-		}
-		members, complete, err := parseSCIMUsers(membersBody)
-		if err != nil {
-			return Snapshot{}, fmt.Errorf("parse scim group members: %w", err)
-		}
-		if !complete {
-			return Snapshot{Provider: provider, Complete: false}, nil
-		}
-		item := SnapshotGroup{ID: group.Name, DisplayName: group.Name}
-		for _, member := range members {
-			id := firstIdentityValue(member.ID, member.UserName)
-			if id != "" {
-				item.MemberSubjects = append(item.MemberSubjects, id)
-			}
-		}
-		snapshot.Groups = append(snapshot.Groups, item)
-	}
-	return snapshot, nil
-}
-
-func (f ConfigFetcher) scimGet(ctx context.Context, url string) ([]byte, error) {
-	timeout := 10 * time.Second
-	if parsed, err := time.ParseDuration(strings.TrimSpace(f.Config.SCIM.Timeout)); err == nil && parsed > 0 {
-		timeout = parsed
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	if token := firstIdentityValue(f.Config.SCIM.Token, f.Config.Secret); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	transport := http.DefaultTransport
-	if f.Config.SCIM.InsecureTLS {
-		transport = &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}} //nolint:gosec
-	}
-	client := http.Client{Timeout: timeout, Transport: transport}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, fmt.Errorf("scim request failed: %s", resp.Status)
-	}
-	return body, nil
 }
 
 func partialLDAPOutput(raw string) bool {

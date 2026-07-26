@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 )
 
 func Sync(ctx context.Context, cfg Config, opts Options) error {
@@ -25,8 +26,14 @@ func Sync(ctx context.Context, cfg Config, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("xray asset preflight failed: %w", err)
 	}
+	client := opts.HTTPClient
+	if client == nil {
+		owned := ownedhttp.NewClient(ownedhttp.ClientOptions{Timeout: 30 * time.Second})
+		defer shutdownAssetClient(owned)
+		client = owned
+	}
 	for _, file := range files {
-		if err := syncFile(ctx, file, assetDir); err != nil {
+		if err := syncFile(ctx, client, file, assetDir); err != nil {
 			return err
 		}
 	}
@@ -63,7 +70,7 @@ func normalizeFiles(cfg Config, xrayConfigPath string) ([]File, error) {
 	return out, nil
 }
 
-func syncFile(ctx context.Context, file File, assetDir string) error {
+func syncFile(ctx context.Context, client ownedhttp.Doer, file File, assetDir string) error {
 	path, err := safePath(assetDir, file.Name)
 	if err != nil {
 		return fmt.Errorf("xray asset preflight failed: %w", err)
@@ -76,7 +83,7 @@ func syncFile(ctx context.Context, file File, assetDir string) error {
 		if file.URL == "" {
 			return fmt.Errorf("xray asset preflight failed: required asset %s is missing in %s; configure xray_assets.files url or place the file manually", file.Name, assetDir)
 		}
-		if err := download(ctx, file.URL, path); err != nil {
+		if err := download(ctx, client, file.URL, path); err != nil {
 			return fmt.Errorf("xray asset preflight failed: required asset %s is missing in %s and download failed: %w", file.Name, assetDir, err)
 		}
 		logging.Info("xray asset downloaded", "file", file.Name, "url", file.URL)
@@ -91,7 +98,7 @@ func syncFile(ctx context.Context, file File, assetDir string) error {
 	if file.URL == "" {
 		return nil
 	}
-	if err := download(ctx, file.URL, path); err != nil {
+	if err := download(ctx, client, file.URL, path); err != nil {
 		logging.Warn("xray asset refresh failed; using existing file", "file", file.Name, "age", time.Since(info.ModTime()).Round(time.Second).String(), "err", err)
 		return nil
 	}
@@ -99,16 +106,16 @@ func syncFile(ctx context.Context, file File, assetDir string) error {
 	return nil
 }
 
-func download(ctx context.Context, url, target string) error {
+func download(ctx context.Context, client ownedhttp.Doer, url, target string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", url, err)
 	}
-	defer resp.Body.Close()
+	defer ownedhttp.DrainAndClose(resp, maxDownloadSize+1)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return fmt.Errorf("download %s: unexpected HTTP status %s", url, resp.Status)
 	}
@@ -140,4 +147,10 @@ func download(ctx context.Context, url, target string) error {
 	}
 	removeTmp = false
 	return nil
+}
+
+func shutdownAssetClient(client ownedhttp.OwnedClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = client.Shutdown(ctx)
 }

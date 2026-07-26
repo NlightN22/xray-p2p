@@ -5,10 +5,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/ha"
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 )
 
 func MutateHAGeneration(configPath string, mutate func(*ha.Generation) error) (ha.Generation, error) {
@@ -205,11 +206,23 @@ func commitHACandidate(ctx context.Context, configPath string, candidate ha.Gene
 	if err != nil {
 		return err
 	}
-	coordinator := ha.Coordinator{Client: ha.SyncClient{HTTPClientForPeer: func(peer ha.Peer) *http.Client {
-		if !peer.AllowInsecure {
-			return http.DefaultClient
+	secureClient := ownedhttp.NewClient(ownedhttp.ClientOptions{})
+	insecureClient := ownedhttp.NewClient(ownedhttp.ClientOptions{
+		TLSConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+	})
+	defer shutdownHAClient(secureClient)
+	defer shutdownHAClient(insecureClient)
+	coordinator := ha.Coordinator{Client: ha.SyncClient{HTTPClientForPeer: func(peer ha.Peer) ownedhttp.Doer {
+		if peer.AllowInsecure {
+			return insecureClient
 		}
-		return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+		return secureClient
 	}}}
 	return coordinator.Sync(ctx, store, candidate)
+}
+
+func shutdownHAClient(client ownedhttp.OwnedClient) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = client.Shutdown(ctx)
 }

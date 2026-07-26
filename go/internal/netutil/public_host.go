@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	ownedhttp "github.com/NlightN22/xray-p2p/go/internal/nethttp"
 )
 
 const (
@@ -99,7 +101,7 @@ func httpPublicIP(url string) hostProvider {
 		if err != nil {
 			return "", err
 		}
-		defer resp.Body.Close()
+		defer ownedhttp.DrainAndClose(resp, 64<<10)
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return "", errors.New("netutil: unexpected status code")
