@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,21 +18,25 @@ type ConfigWatchOptions struct {
 	IgnorePaths   []string
 	IgnorePrefix  []string
 	WatchDebounce time.Duration
-	OnChange      func(path string)
+	OnChange      func(context.Context, string)
 }
 
-func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), error) {
+type StopFunc func(context.Context) error
+
+func noopStop(context.Context) error { return nil }
+
+func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (StopFunc, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if opts.OnChange == nil {
-		return func() {}, nil
+		return noopStop, nil
 	}
 
 	watchPaths := considerPathList(opts.Paths)
 	watchFiles := considerPathList(opts.Files)
 	if len(watchPaths) == 0 && len(watchFiles) == 0 {
-		return func() {}, nil
+		return noopStop, nil
 	}
 
 	var pathWatcher *pathWatcher
@@ -69,6 +74,7 @@ func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), e
 
 	stop := make(chan struct{})
 	done := make(chan struct{})
+	callbackCtx, cancelCallbacks := context.WithCancel(ctx)
 	var stopOnce sync.Once
 	var callbacks sync.WaitGroup
 	var running int32
@@ -85,9 +91,9 @@ func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), e
 		go func(first string) {
 			defer callbacks.Done()
 			defer atomic.StoreInt32(&running, 0)
-			opts.OnChange(first)
+			opts.OnChange(callbackCtx, first)
 			if atomic.SwapInt32(&rerun, 0) == 1 {
-				opts.OnChange(first)
+				opts.OnChange(callbackCtx, first)
 			}
 		}(path)
 	}
@@ -139,10 +145,21 @@ func StartConfigWatcher(ctx context.Context, opts ConfigWatchOptions) (func(), e
 			}
 		}
 	}()
-
-	return func() {
-		stopOnce.Do(func() { close(stop) })
+	allDone := make(chan struct{})
+	go func() {
 		<-done
 		callbacks.Wait()
+		close(allDone)
+	}()
+
+	return func(ctx context.Context) error {
+		stopOnce.Do(func() { close(stop) })
+		cancelCallbacks()
+		select {
+		case <-allDone:
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("config watcher shutdown: %w", ctx.Err())
+		}
 	}, nil
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -38,7 +39,7 @@ func TestConfigWatcherStopIsIdempotentAndWaitsForCallback(t *testing.T) {
 	var startedOnce sync.Once
 	stop, err := StartConfigWatcher(context.Background(), ConfigWatchOptions{
 		Paths: []string{dir},
-		OnChange: func(string) {
+		OnChange: func(_ context.Context, _ string) {
 			calls.Add(1)
 			startedOnce.Do(func() { close(started) })
 			<-release
@@ -60,7 +61,11 @@ func TestConfigWatcherStopIsIdempotentAndWaitsForCallback(t *testing.T) {
 	for range 2 {
 		go func() {
 			defer stops.Done()
-			stop()
+			stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := stop(stopCtx); err != nil {
+				t.Errorf("stop watcher: %v", err)
+			}
 		}()
 	}
 	select {
@@ -71,4 +76,42 @@ func TestConfigWatcherStopIsIdempotentAndWaitsForCallback(t *testing.T) {
 	}
 	close(release)
 	stops.Wait()
+}
+
+func TestConfigWatcherStopCancelsCallbackAndReportsDeadline(t *testing.T) {
+	dir := t.TempDir()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	stop, err := StartConfigWatcher(context.Background(), ConfigWatchOptions{
+		Paths: []string{dir},
+		OnChange: func(ctx context.Context, _ string) {
+			once.Do(func() { close(started) })
+			<-ctx.Done()
+			<-release
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "change"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("callback did not start")
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	err = stop(stopCtx)
+	cancel()
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stop error = %v, want deadline exceeded", err)
+	}
+	close(release)
+	joinCtx, joinCancel := context.WithTimeout(context.Background(), time.Second)
+	defer joinCancel()
+	if err := stop(joinCtx); err != nil {
+		t.Fatalf("join watcher: %v", err)
+	}
 }

@@ -18,6 +18,8 @@ type startHook func() error
 type readyCheck func(context.Context) error
 type guardHook func(xrayguard.Event)
 
+var monitorXrayProcess = xrayguard.Monitor
+
 type tailBuffer struct {
 	mu  sync.Mutex
 	max int
@@ -134,7 +136,7 @@ func runXrayWithConfig(
 	var guardEvent *xrayguard.Event
 	go func() {
 		defer workers.Done()
-		eventCh := xrayguard.Monitor(guardCtx, pid, xrayguard.DefaultOptions())
+		eventCh := monitorXrayProcess(guardCtx, pid, xrayguard.DefaultOptions())
 		for event := range eventCh {
 			guardMu.Lock()
 			copied := event

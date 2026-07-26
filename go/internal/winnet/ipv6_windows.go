@@ -32,6 +32,14 @@ const (
 
 // DisableIPv6BindingWithRetry disables IPv6 binding on the named adapter after it appears.
 func DisableIPv6BindingWithRetry(ctx context.Context, adapterName string) {
+	disableIPv6BindingWithRetry(ctx, adapterName, disableIPv6BindingOnce)
+}
+
+func disableIPv6BindingWithRetry(
+	ctx context.Context,
+	adapterName string,
+	attempt func(context.Context, string) (ipv6DisableResult, error),
+) {
 	name := strings.TrimSpace(adapterName)
 	if name == "" {
 		return
@@ -42,7 +50,7 @@ func DisableIPv6BindingWithRetry(ctx context.Context, adapterName string) {
 		if ctx.Err() != nil {
 			return
 		}
-		result, err := disableIPv6BindingOnce(ctx, name)
+		result, err := attempt(ctx, name)
 		if err != nil {
 			logging.Warn("failed to disable IPv6 binding", "interface", name, "err", err)
 			return

@@ -6,10 +6,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -58,6 +61,70 @@ func TestStartBackgroundServesHTTPSControlPing(t *testing.T) {
 	if pong.Nonce != "testnonce" {
 		t.Fatalf("nonce = %q", pong.Nonce)
 	}
+}
+
+func TestBackgroundOwnerStopWaitsForListenerShutdown(t *testing.T) {
+	setupBackgroundTestLogging(t)
+	stop, baseURL := startTestControlServer(t, t.TempDir(), true)
+	stop()
+	address := strings.TrimPrefix(baseURL, "https://")
+	conn, err := net.DialTimeout("tcp", address, 100*time.Millisecond)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("control listener accepted a connection after owner stop returned")
+	}
+}
+
+func TestBackgroundServerLogsResourcesPeriodically(t *testing.T) {
+	var logs lockedBuffer
+	logging.Configure(logging.Options{Output: &logs})
+	t.Cleanup(func() { logging.Configure(logging.Options{Output: os.Stderr}) })
+	stateDir := t.TempDir()
+	if runtime.GOOS == "windows" {
+		t.Setenv("XP2P_CONFIG_ROOT", stateDir)
+		t.Setenv("XP2P_LOG_ROOT", filepath.Join(stateDir, "logs"))
+	}
+	certPath, keyPath := createTestCertificateFiles(t, stateDir, "127.0.0.1")
+	liveDir := filepath.Join(stateDir, "live")
+	if err := os.MkdirAll(liveDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(liveDir, layout.RuntimeMetaFileName), []byte(`{"control":{"subscription":{"generation":"test"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	port, _ := testutil.FreePort(t)
+	owner, err := StartBackground(context.Background(), Options{
+		Port: port, InstallDir: stateDir, CertPath: certPath, KeyPath: keyPath,
+		LiveDir: liveDir, ResourceLogInterval: 10 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = owner.Stop(stopCtx)
+	})
+	testutil.WaitForCondition(t, time.Second, func() bool {
+		return strings.Contains(logs.String(), "HTTPS control server resources")
+	})
+}
+
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(data []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(data)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func TestStartBackgroundControlPingFailsClosedWithoutRuntimeMetadata(t *testing.T) {
@@ -168,7 +235,8 @@ func startTestControlServer(t *testing.T, stateDir string, writeRuntime bool) (c
 
 	portStr, _ := testutil.FreePort(t)
 	ctx, cancel := context.WithCancel(context.Background())
-	if err := StartBackground(ctx, Options{Port: portStr, InstallDir: stateDir, CertPath: certPath, KeyPath: keyPath, LiveDir: liveDir}); err != nil {
+	owner, err := StartBackground(ctx, Options{Port: portStr, InstallDir: stateDir, CertPath: certPath, KeyPath: keyPath, LiveDir: liveDir})
+	if err != nil {
 		cancel()
 		t.Fatalf("StartBackground returned error: %v", err)
 	}
@@ -181,7 +249,14 @@ func startTestControlServer(t *testing.T, stateDir string, writeRuntime bool) (c
 		_ = resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	})
-	return cancel, baseURL
+	return func() {
+		cancel()
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer stopCancel()
+		if err := owner.Stop(stopCtx); err != nil {
+			t.Errorf("stop control server: %v", err)
+		}
+	}, baseURL
 }
 
 func testControlHTTPClient() *http.Client {

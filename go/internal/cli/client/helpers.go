@@ -2,6 +2,7 @@ package clientcmd
 
 import (
 	"context"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	clishared "github.com/NlightN22/xray-p2p/go/internal/cli/common"
@@ -17,17 +18,21 @@ func firstNonEmpty(values ...string) string {
 }
 
 func startDiagnostics(ctx context.Context, port string) context.CancelFunc {
-	bgCtx, cancel := context.WithCancel(ctx)
 	liveDir, err := config.LiveRoleDir(apply.RoleClient)
 	if err != nil {
-		cancel()
 		logging.Warn("xp2p diagnostics: failed to resolve live config", "port", port, "err", err)
 		return nil
 	}
-	if err := server.StartBackground(bgCtx, server.Options{Port: port, LiveDir: liveDir}); err != nil {
-		cancel()
+	owner, err := server.StartBackground(ctx, server.Options{Port: port, LiveDir: liveDir})
+	if err != nil {
 		logging.Warn("xp2p diagnostics: failed to start ping responders", "port", port, "err", err)
 		return nil
 	}
-	return cancel
+	return func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer cancel()
+		if err := owner.Stop(stopCtx); err != nil {
+			logging.Warn("xp2p diagnostics shutdown failed", "err", err)
+		}
+	}
 }

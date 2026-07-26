@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -78,18 +79,25 @@ func runDiagCommand(ctx context.Context, cfg config.Config, opts diagCommandOpti
 		defer os.RemoveAll(dir)
 		tlsDir = dir
 	}
-	if err := server.StartStandaloneDiagnostics(ctx, server.Options{
+	owner, err := server.StartStandaloneDiagnostics(ctx, server.Options{
 		ListenAddr: listenAddr,
 		CertPath:   cfg.Server.CertificateFile,
 		KeyPath:    cfg.Server.KeyFile,
 		TLSDir:     tlsDir,
 		Quiet:      opts.Quiet,
-	}); err != nil {
+	})
+	if err != nil {
 		logging.Error("xp2p diag: failed to start diagnostics listener", "err", err)
 		return 1
 	}
 	logging.Info("xp2p diagnostics server started", "protocol", "https", "listen", listenAddr)
 	<-ctx.Done()
+	stopCtx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	if err := owner.Stop(stopCtx); err != nil {
+		logging.Error("xp2p diag: diagnostics shutdown failed", "err", err)
+		return 1
+	}
 	logging.Info("xp2p diagnostics server stopped")
 	return 0
 }

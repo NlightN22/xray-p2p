@@ -89,7 +89,7 @@ func (s *deployServer) Run(ctx context.Context) error {
 
 	var (
 		runCancel      context.CancelFunc
-		diagCancel     context.CancelFunc
+		diagnostics    *server.BackgroundServer
 		runDoneCh      chan error
 		runCleanupDir  string
 		lastInstallDir string
@@ -103,9 +103,9 @@ func (s *deployServer) Run(ctx context.Context) error {
 			if runCancel != nil {
 				runCancel()
 			}
-			if diagCancel != nil {
-				diagCancel()
-				diagCancel = nil
+			if diagnostics != nil {
+				stopDeployDiagnostics(diagnostics)
+				diagnostics = nil
 			}
 			if runDoneCh != nil {
 				select {
@@ -124,9 +124,9 @@ func (s *deployServer) Run(ctx context.Context) error {
 			switch {
 			case sig.completed:
 				logging.Info("xp2p server deploy: completion requested", "status", strings.TrimSpace(sig.status))
-				if diagCancel != nil {
-					diagCancel()
-					diagCancel = nil
+				if diagnostics != nil {
+					stopDeployDiagnostics(diagnostics)
+					diagnostics = nil
 				}
 				if s.Once && runCancel == nil && sig.applyHandled {
 					return nil
@@ -163,16 +163,15 @@ func (s *deployServer) Run(ctx context.Context) error {
 				if err := s.applyMode(sig.installDir, sig.configDir, false); err != nil {
 					logging.Warn("xp2p server deploy: proxy mode setup failed", "err", err)
 				}
-				diagCtx, diagStop := context.WithCancel(ctx)
-				if err := server.StartBackground(diagCtx, server.Options{
+				owner, err := server.StartBackground(ctx, server.Options{
 					Port:       s.Cfg.Server.Port,
 					InstallDir: s.Cfg.Server.InstallDir,
 					LiveDir:    sig.runConfigDir,
-				}); err != nil {
+				})
+				if err != nil {
 					logging.Warn("xp2p server deploy: diagnostics start failed", "err", err)
-					diagStop()
 				} else {
-					diagCancel = diagStop
+					diagnostics = owner
 				}
 				runCtx, runStop := context.WithCancel(ctx)
 				runCancel = runStop
@@ -189,9 +188,9 @@ func (s *deployServer) Run(ctx context.Context) error {
 		case err := <-runDoneCh:
 			runDoneCh = nil
 			runCancel = nil
-			if diagCancel != nil {
-				diagCancel()
-				diagCancel = nil
+			if diagnostics != nil {
+				stopDeployDiagnostics(diagnostics)
+				diagnostics = nil
 			}
 			if runCleanupDir != "" {
 				_ = os.RemoveAll(runCleanupDir)
@@ -243,6 +242,14 @@ func (s *deployServer) Run(ctx context.Context) error {
 			defer connections.Delete(conn)
 			s.handleConn(handlerCtx, conn, results)
 		}()
+	}
+}
+
+func stopDeployDiagnostics(owner *server.BackgroundServer) {
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	if err := owner.Stop(ctx); err != nil {
+		logging.Warn("xp2p server deploy: diagnostics shutdown failed", "err", err)
 	}
 }
 

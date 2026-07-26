@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -11,14 +12,15 @@ import (
 	"github.com/NlightN22/xray-p2p/go/internal/config"
 	"github.com/NlightN22/xray-p2p/go/internal/identitysync"
 	"github.com/NlightN22/xray-p2p/go/internal/logging"
+	"github.com/NlightN22/xray-p2p/go/internal/service"
 )
 
 var IdentitySnapshotFetcher identitysync.Fetcher
 
-func startIdentitySyncScheduler(ctx context.Context, cfg config.Config) func() {
+func startIdentitySyncScheduler(ctx context.Context, cfg config.Config) service.StopFunc {
 	provider, ok := identityProviderRef(cfg)
 	if !ok {
-		return func() {}
+		return func(context.Context) error { return nil }
 	}
 	schedulerCtx, cancel := context.WithCancel(ctx)
 	interval, err := time.ParseDuration(strings.TrimSpace(cfg.Server.IdentityProvider.Interval))
@@ -45,15 +47,13 @@ func startIdentitySyncScheduler(ctx context.Context, cfg config.Config) func() {
 		}
 	}()
 	var stopOnce sync.Once
-	return func() {
+	return func(ctx context.Context) error {
 		stopOnce.Do(cancel)
-		timer := time.NewTimer(5 * time.Second)
-		defer timer.Stop()
 		select {
 		case <-done:
-		case <-timer.C:
-			logging.Warn("identity sync scheduler shutdown is still waiting for active work")
-			<-done
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("identity sync scheduler shutdown: %w", ctx.Err())
 		}
 	}
 }

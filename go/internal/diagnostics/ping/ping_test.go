@@ -226,10 +226,19 @@ func startBackgroundServer(t *testing.T) (context.CancelFunc, int) {
 
 	portStr, port := testutil.FreePort(t)
 	certPath, keyPath := testTLSFiles(t)
-	if err := server.StartStandaloneDiagnostics(ctx, server.Options{Port: portStr, CertPath: certPath, KeyPath: keyPath}); err != nil {
+	owner, err := server.StartStandaloneDiagnostics(ctx, server.Options{Port: portStr, CertPath: certPath, KeyPath: keyPath})
+	if err != nil {
 		cancel()
 		t.Fatalf("failed to start background server: %v", err)
 	}
+	t.Cleanup(func() {
+		cancel()
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer stopCancel()
+		if err := owner.Stop(stopCtx); err != nil {
+			t.Errorf("stop standalone diagnostics: %v", err)
+		}
+	})
 
 	addr := "127.0.0.1:" + portStr
 	testutil.WaitForCondition(t, time.Second, func() bool {

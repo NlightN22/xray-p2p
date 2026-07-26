@@ -43,19 +43,20 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		return fmt.Errorf("create config directory: %w", err)
 	}
 
-	var diagCancel context.CancelFunc
+	var diagnostics *server.BackgroundServer
 	if port := strings.TrimSpace(opts.DiagPort); port != "" {
-		bgCtx, cancel := context.WithCancel(ctx)
-		if err := server.StartBackground(bgCtx, server.Options{Port: port, InstallDir: installDir, LiveDir: liveConfigDir}); err != nil {
-			cancel()
+		diagnostics, err = server.StartBackground(ctx, server.Options{Port: port, InstallDir: installDir, LiveDir: liveConfigDir})
+		if err != nil {
 			logging.Warn("xp2p client diagnostics: failed to start responders", "port", port, "err", err)
-		} else {
-			diagCancel = cancel
 		}
 	}
 	defer func() {
-		if diagCancel != nil {
-			diagCancel()
+		if diagnostics != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			defer cancel()
+			if err := diagnostics.Stop(stopCtx); err != nil {
+				logging.Warn("xp2p client diagnostics shutdown failed", "err", err)
+			}
 		}
 	}()
 
@@ -105,14 +106,18 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err != nil {
 		return err
 	}
-	defer logWatcherStop()
+	defer func() {
+		if err := service.StopWithTimeout(logWatcherStop); err != nil {
+			logging.Warn("xp2p client log watcher shutdown failed", "err", err)
+		}
+	}()
 
 	desiredWatcherStop, err := service.StartConfigWatcher(ctx, service.ConfigWatchOptions{
 		Paths:         []string{desiredConfigDir},
 		Files:         []string{filepath.Clean(config.ConfigPath(layout.ClientConfigFileName))},
 		IgnorePrefix:  []string{config.StateRoot()},
 		WatchDebounce: 400 * time.Millisecond,
-		OnChange: func(path string) {
+		OnChange: func(_ context.Context, path string) {
 			reqPath := config.ApplyRequestPath()
 			errPath := config.ApplyErrorPath()
 			if err := apply.RemoveRoleMarkers(reqPath, errPath, apply.RoleClient); err != nil {
@@ -131,7 +136,11 @@ func runClientServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err != nil {
 		return err
 	}
-	defer desiredWatcherStop()
+	defer func() {
+		if err := service.StopWithTimeout(desiredWatcherStop); err != nil {
+			logging.Warn("xp2p client config watcher shutdown failed", "err", err)
+		}
+	}()
 
 	if err := seedApplyRequestOnServiceStart(apply.RoleClient, liveConfigDir, desiredConfigDir); err != nil {
 		return err

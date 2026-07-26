@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,7 +20,7 @@ type LogWatchOptions struct {
 	WatchDebounce time.Duration
 }
 
-func StartLogWatcher(ctx context.Context, opts LogWatchOptions) (func(), error) {
+func StartLogWatcher(ctx context.Context, opts LogWatchOptions) (StopFunc, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -27,7 +28,7 @@ func StartLogWatcher(ctx context.Context, opts LogWatchOptions) (func(), error) 
 	watchPaths := considerPathList(opts.Paths)
 	watchFiles := considerPathList(opts.Files)
 	if len(watchPaths) == 0 && len(watchFiles) == 0 {
-		return func() {}, nil
+		return noopStop, nil
 	}
 
 	var pathWatcher *pathWatcher
@@ -112,9 +113,14 @@ func StartLogWatcher(ctx context.Context, opts LogWatchOptions) (func(), error) 
 		}
 	}()
 
-	return func() {
+	return func(ctx context.Context) error {
 		stopOnce.Do(func() { close(stop) })
-		<-done
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return fmt.Errorf("log watcher shutdown: %w", ctx.Err())
+		}
 	}, nil
 }
 

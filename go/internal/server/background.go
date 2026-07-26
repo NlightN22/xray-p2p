@@ -5,12 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/NlightN22/xray-p2p/go/internal/apply"
 	"github.com/NlightN22/xray-p2p/go/internal/config"
@@ -29,24 +28,21 @@ const (
 
 // Options controls background server behaviour.
 type Options struct {
-	Port       string
-	InstallDir string
-	CertPath   string
-	KeyPath    string
-	LiveDir    string
-	TLSDir     string
-	ListenAddr string
-	Quiet      bool
+	Port                string
+	InstallDir          string
+	CertPath            string
+	KeyPath             string
+	LiveDir             string
+	TLSDir              string
+	ListenAddr          string
+	Quiet               bool
+	ResourceLogInterval time.Duration
 }
 
 // StartBackground launches the HTTPS control endpoint. It is shut down
 // automatically when the supplied context is cancelled.
-func StartBackground(ctx context.Context, opts Options) error {
-	var (
-		once    sync.Once
-		ln      net.Listener
-		hbStore *heartbeat.Store
-	)
+func StartBackground(ctx context.Context, opts Options) (*BackgroundServer, error) {
+	var hbStore *heartbeat.Store
 
 	port := strings.TrimSpace(opts.Port)
 	if port == "" {
@@ -72,28 +68,20 @@ func StartBackground(ctx context.Context, opts Options) error {
 	}
 	haStore, err := LoadHAReplication(config.ConfigPath(layout.ServerConfigFileName))
 	if err != nil {
-		return fmt.Errorf("load HA replication state: %w", err)
-	}
-
-	shutdown := func() {
-		once.Do(func() {
-			if ln != nil {
-				_ = ln.Close()
-			}
-		})
+		return nil, fmt.Errorf("load HA replication state: %w", err)
 	}
 
 	certPath, keyPath, err := resolveControlTLS(opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	liveDir, err := resolveControlLiveDir(opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ln, err = net.Listen("tcp", listenAddr)
+	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		return fmt.Errorf("start HTTPS control listener %s: %w", listenAddr, err)
+		return nil, fmt.Errorf("start HTTPS control listener %s: %w", listenAddr, err)
 	}
 	srv := xnethttp.NewServer(controlplane.NewHandler(controlplane.HandlerOptions{
 		LoadRuntime: func() (controlplane.Runtime, error) {
@@ -112,29 +100,14 @@ func StartBackground(ctx context.Context, opts Options) error {
 			return AcknowledgeCredential(context.Background(), userLabel, generation)
 		},
 	}), xnethttp.ServerOptions{})
-	go func() {
-		err := srv.ServeTLS(ln, certPath, keyPath)
-		if err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
-			logging.Warn("HTTPS control server stopped", "err", err)
-		}
-	}()
-	go func() {
-		<-ctx.Done()
-		if err := srv.ShutdownOwned(ln); err != nil {
-			logging.Warn("HTTPS control server shutdown timed out", "err", err)
-		}
-		logServerMetrics("HTTPS control server stopped", srv.Metrics())
-		shutdown()
-	}()
-
-	return nil
+	return startOwnedHTTPServer(ctx, ln, srv, certPath, keyPath, "HTTPS control server", opts.ResourceLogInterval), nil
 }
 
 // StartStandaloneDiagnostics launches only the public readiness and ping endpoints.
-func StartStandaloneDiagnostics(ctx context.Context, opts Options) error {
+func StartStandaloneDiagnostics(ctx context.Context, opts Options) (*BackgroundServer, error) {
 	certPath, keyPath, err := resolveStandaloneTLS(opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	listenAddr := strings.TrimSpace(opts.ListenAddr)
 	if listenAddr == "" {
@@ -146,34 +119,10 @@ func StartStandaloneDiagnostics(ctx context.Context, opts Options) error {
 	}
 	ln, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		return fmt.Errorf("start HTTPS diagnostics listener %s: %w", listenAddr, err)
+		return nil, fmt.Errorf("start HTTPS diagnostics listener %s: %w", listenAddr, err)
 	}
 	srv := xnethttp.NewServer(controlplane.NewDiagnosticsHandler(controlplane.DiagnosticsOptions{}), xnethttp.ServerOptions{})
-	go func() {
-		err := srv.ServeTLS(ln, certPath, keyPath)
-		if err != nil && !errors.Is(err, http.ErrServerClosed) && ctx.Err() == nil {
-			logging.Warn("HTTPS diagnostics server stopped", "err", err)
-		}
-	}()
-	go func() {
-		<-ctx.Done()
-		if err := srv.ShutdownOwned(ln); err != nil {
-			logging.Warn("HTTPS diagnostics server shutdown timed out", "err", err)
-		}
-		logServerMetrics("HTTPS diagnostics server stopped", srv.Metrics())
-	}()
-	return nil
-}
-
-func logServerMetrics(message string, metrics xnethttp.ServerMetrics) {
-	logging.Info(message,
-		"connections_new", metrics.New,
-		"connections_active", metrics.Active,
-		"connections_idle", metrics.Idle,
-		"connections_closed", metrics.Closed,
-		"connections_current", metrics.Current,
-		"connections_peak", metrics.Peak,
-	)
+	return startOwnedHTTPServer(ctx, ln, srv, certPath, keyPath, "HTTPS diagnostics server", opts.ResourceLogInterval), nil
 }
 
 func resolveStandaloneTLS(opts Options) (string, string, error) {

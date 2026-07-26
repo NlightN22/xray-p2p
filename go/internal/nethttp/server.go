@@ -2,6 +2,7 @@ package nethttp
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"sync"
@@ -58,15 +59,22 @@ func NewServer(handler http.Handler, options ServerOptions) *Server {
 	return server
 }
 
-func (s *Server) ShutdownOwned(listener net.Listener) error {
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultServerShutdownTimeout)
-	defer cancel()
-	err := s.Shutdown(ctx)
-	if err != nil {
-		_ = s.Close()
+func (s *Server) ShutdownOwned(ctx context.Context, listener net.Listener) error {
+	shutdownErr := s.Shutdown(ctx)
+	var closeErr error
+	if shutdownErr != nil {
+		closeErr = ignoreClosedError(s.Close())
 	}
+	var listenerErr error
 	if listener != nil {
-		_ = listener.Close()
+		listenerErr = ignoreClosedError(listener.Close())
+	}
+	return errors.Join(shutdownErr, closeErr, listenerErr)
+}
+
+func ignoreClosedError(err error) error {
+	if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
+		return nil
 	}
 	return err
 }

@@ -4,6 +4,7 @@ package linuxnet
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -64,6 +65,10 @@ func RemoveTunInterfacesExcept(activeName string, names ...string) error {
 }
 
 func EnsureTunAddress(name, addr string, mtu int) error {
+	return EnsureTunAddressContext(context.Background(), name, addr, mtu)
+}
+
+func EnsureTunAddressContext(ctx context.Context, name, addr string, mtu int) error {
 	name = strings.TrimSpace(name)
 	addr = strings.TrimSpace(addr)
 	if name == "" {
@@ -71,6 +76,9 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 	}
 	if addr == "" {
 		return errors.New("tun address is required for Linux setup")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if isOpenWrtSystem() {
 		return nil
@@ -81,25 +89,58 @@ func EnsureTunAddress(name, addr string, mtu int) error {
 
 	deadline := time.Now().Add(12 * time.Second)
 	for time.Now().Before(deadline) {
-		if !linkExists(name) {
-			time.Sleep(300 * time.Millisecond)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !linkExistsContext(ctx, name) {
+			timer := time.NewTimer(300 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				if !timer.Stop() {
+					<-timer.C
+				}
+				return ctx.Err()
+			case <-timer.C:
+			}
 			continue
 		}
-		if addrPresent(name, addr) {
+		if addrPresentContext(ctx, name, addr) {
 			return nil
 		}
 		if mtu > 0 {
-			_ = runCommand("ip", "link", "set", "dev", name, "mtu", fmt.Sprintf("%d", mtu))
+			_ = runCommandContext(ctx, "ip", "link", "set", "dev", name, "mtu", fmt.Sprintf("%d", mtu))
 		}
-		if err := runCommand("ip", "addr", "replace", addr, "dev", name); err != nil {
+		if err := runCommandContext(ctx, "ip", "addr", "replace", addr, "dev", name); err != nil {
 			return err
 		}
-		if err := runCommand("ip", "link", "set", "dev", name, "up"); err != nil {
+		if err := runCommandContext(ctx, "ip", "link", "set", "dev", name, "up"); err != nil {
 			return err
 		}
 		return nil
 	}
 	return fmt.Errorf("tun interface %s not found", name)
+}
+
+func runCommandContext(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
+	}
+	return nil
+}
+
+func linkExistsContext(ctx context.Context, name string) bool {
+	cmd := exec.CommandContext(ctx, "ip", "link", "show", "dev", name)
+	return cmd.Run() == nil
+}
+
+func addrPresentContext(ctx context.Context, name, addr string) bool {
+	cmd := exec.CommandContext(ctx, "ip", "-4", "addr", "show", "dev", name)
+	output, err := cmd.Output()
+	return err == nil && strings.Contains(string(output), addr)
 }
 
 func EnsureRoute(name, cidr string) error {

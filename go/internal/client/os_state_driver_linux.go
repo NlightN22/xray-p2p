@@ -28,7 +28,7 @@ func (d *linuxOSStateDriver) EnsureTunReady(ctx context.Context, desired Desired
 	if err := linuxnet.RemoveTunInterfacesExcept(desired.TunName, "xp2pc", "xp2ps"); err != nil {
 		return ObservedOSState{}, err
 	}
-	if err := linuxnet.EnsureTunAddress(desired.TunName, desired.TunAddr, desired.TunMTU); err != nil {
+	if err := linuxnet.EnsureTunAddressContext(ctx, desired.TunName, desired.TunAddr, desired.TunMTU); err != nil {
 		logging.Warn("tun address setup failed", "interface", desired.TunName, "err", err)
 	}
 	return ObservedOSState{TunReady: true}, nil

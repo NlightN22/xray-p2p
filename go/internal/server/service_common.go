@@ -46,21 +46,26 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 		return err
 	}
 	stopIdentitySync := startIdentitySyncScheduler(ctx, cfg)
-	defer stopIdentitySync()
+	defer func() {
+		if err := service.StopWithTimeout(stopIdentitySync); err != nil {
+			logging.Warn("identity sync scheduler shutdown failed", "err", err)
+		}
+	}()
 
-	var diagCancel context.CancelFunc
+	var diagnostics *BackgroundServer
 	if port := strings.TrimSpace(opts.DiagPort); port != "" {
-		bgCtx, cancel := context.WithCancel(ctx)
-		if err := StartBackground(bgCtx, Options{Port: port, InstallDir: installDir, LiveDir: liveConfigDir}); err != nil {
-			cancel()
+		diagnostics, err = StartBackground(ctx, Options{Port: port, InstallDir: installDir, LiveDir: liveConfigDir})
+		if err != nil {
 			logging.Warn("xp2p server diagnostics: failed to start responders", "port", port, "err", err)
-		} else {
-			diagCancel = cancel
 		}
 	}
 	defer func() {
-		if diagCancel != nil {
-			diagCancel()
+		if diagnostics != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+			defer cancel()
+			if err := diagnostics.Stop(stopCtx); err != nil {
+				logging.Warn("xp2p server diagnostics shutdown failed", "err", err)
+			}
 		}
 	}()
 
@@ -105,14 +110,18 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err != nil {
 		return err
 	}
-	defer logWatcherStop()
+	defer func() {
+		if err := service.StopWithTimeout(logWatcherStop); err != nil {
+			logging.Warn("xp2p server log watcher shutdown failed", "err", err)
+		}
+	}()
 
 	desiredWatcherStop, err := service.StartConfigWatcher(ctx, service.ConfigWatchOptions{
 		Paths:         []string{desiredConfigDir},
 		Files:         []string{filepath.Clean(config.ConfigPath(layout.ServerConfigFileName))},
 		IgnorePrefix:  []string{config.StateRoot()},
 		WatchDebounce: 400 * time.Millisecond,
-		OnChange: func(path string) {
+		OnChange: func(_ context.Context, path string) {
 			reqPath := config.ApplyRequestPath()
 			errPath := config.ApplyErrorPath()
 			if err := apply.RemoveRoleMarkers(reqPath, errPath, apply.RoleServer); err != nil {
@@ -131,7 +140,11 @@ func runServerServiceCommon(ctx context.Context, opts ServiceOptions) error {
 	if err != nil {
 		return err
 	}
-	defer desiredWatcherStop()
+	defer func() {
+		if err := service.StopWithTimeout(desiredWatcherStop); err != nil {
+			logging.Warn("xp2p server config watcher shutdown failed", "err", err)
+		}
+	}()
 
 	if err := seedApplyRequestOnServiceStart(apply.RoleServer, liveConfigDir, desiredConfigDir); err != nil {
 		return err
