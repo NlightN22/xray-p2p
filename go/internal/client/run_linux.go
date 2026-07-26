@@ -145,7 +145,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 		if err := openwrt.EnsureTunInterface(opts.TunName, opts.TunAddr); err != nil {
 			return tunSetupErrorWithHint("client run", err)
 		}
-		if err := linuxnet.EnsureTunInterface(opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
+		if err := linuxnet.EnsureTunInterfaceContext(ctx, opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
 			return tunSetupErrorWithHint("client run", err)
 		}
 	} else {
@@ -258,6 +258,8 @@ func refreshClientLiveTunRoutes(ctx context.Context, configDir, tunName, tunAddr
 	refreshClientTunRoutes(ctx, tunName, tunAddr, tunMTU, runtimeDesiredToClientInstallState(meta.Desired).Redirects)
 }
 
+var refreshClientLiveTunRoutesFunc = refreshClientLiveTunRoutes
+
 func startTunRouteRefreshLoop(ctx context.Context, configDir string, opts RunOptions) func() {
 	if !opts.TunEnabled {
 		return func() {}
@@ -269,7 +271,7 @@ func startTunRouteRefreshLoop(ctx context.Context, configDir string, opts RunOpt
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 		for {
-			refreshClientLiveTunRoutes(routeCtx, configDir, opts.TunName, opts.TunAddr, opts.TunMTU)
+			refreshClientLiveTunRoutesFunc(routeCtx, configDir, opts.TunName, opts.TunAddr, opts.TunMTU)
 			select {
 			case <-routeCtx.Done():
 				return
@@ -286,10 +288,10 @@ func startTunRouteRefreshLoop(ctx context.Context, configDir string, opts RunOpt
 func refreshClientTunRoutes(ctx context.Context, tunName, tunAddr string, tunMTU int, redirects []redirect.Rule) {
 	deadline := time.Now().Add(20 * time.Second)
 	for {
-		addrErr := linuxnet.EnsureTunAddress(tunName, tunAddr, tunMTU)
+		addrErr := linuxnet.EnsureTunAddressContext(ctx, tunName, tunAddr, tunMTU)
 		var routeErr error
 		if addrErr == nil {
-			routeErr = applyRedirectRoutes(tunName, tunAddr, redirects)
+			routeErr = applyRedirectRoutesContext(ctx, tunName, tunAddr, redirects)
 		}
 		if addrErr == nil && routeErr == nil {
 			return

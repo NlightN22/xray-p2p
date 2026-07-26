@@ -14,6 +14,10 @@ import (
 )
 
 func EnsureTunInterface(name, addr string, mtu int) error {
+	return EnsureTunInterfaceContext(context.Background(), name, addr, mtu)
+}
+
+func EnsureTunInterfaceContext(ctx context.Context, name, addr string, mtu int) error {
 	name = strings.TrimSpace(name)
 	addr = strings.TrimSpace(addr)
 	if name == "" {
@@ -28,12 +32,15 @@ func EnsureTunInterface(name, addr string, mtu int) error {
 	if _, err := execLookPath("ip"); err != nil {
 		return errors.New("ip command not found")
 	}
-	if !linkExists(name) {
-		if err := runCommand("ip", "tuntap", "add", "dev", name, "mode", "tun"); err != nil {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !linkExistsContext(ctx, name) {
+		if err := runCommandContext(ctx, "ip", "tuntap", "add", "dev", name, "mode", "tun"); err != nil {
 			return err
 		}
 	}
-	return EnsureTunAddress(name, addr, mtu)
+	return EnsureTunAddressContext(ctx, name, addr, mtu)
 }
 
 func RemoveTunInterfaceIfManaged(name string) error {
@@ -123,10 +130,14 @@ func EnsureTunAddressContext(ctx context.Context, name, addr string, mtu int) er
 
 func runCommandContext(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = 2 * time.Second
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), ctxErr)
+		}
 		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return nil
@@ -144,6 +155,10 @@ func addrPresentContext(ctx context.Context, name, addr string) bool {
 }
 
 func EnsureRoute(name, cidr string) error {
+	return EnsureRouteContext(context.Background(), name, cidr)
+}
+
+func EnsureRouteContext(ctx context.Context, name, cidr string) error {
 	name = strings.TrimSpace(name)
 	cidr = strings.TrimSpace(cidr)
 	if name == "" || cidr == "" {
@@ -155,7 +170,7 @@ func EnsureRoute(name, cidr string) error {
 	if _, err := execLookPath("ip"); err != nil {
 		return errors.New("ip command not found")
 	}
-	return runCommand("ip", "route", "replace", cidr, "dev", name)
+	return runCommandContext(ctx, "ip", "route", "replace", cidr, "dev", name)
 }
 
 func RemoveRoute(name, cidr string) error {

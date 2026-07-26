@@ -165,7 +165,7 @@ func Run(ctx context.Context, opts RunOptions) (retErr error) {
 			if err := linuxnet.EnsureTunAddressContext(ctx, opts.TunName, opts.TunAddr, opts.TunMTU); err != nil {
 				return fmt.Errorf("set up tun address: %w", err)
 			}
-			if err := applyRedirectRoutes(opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
+			if err := applyRedirectRoutesContext(ctx, opts.TunName, opts.TunAddr, desired.Redirects); err != nil {
 				return fmt.Errorf("set up redirect routes: %w", err)
 			}
 			return nil

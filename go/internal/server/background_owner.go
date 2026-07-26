@@ -69,7 +69,10 @@ func (s *BackgroundServer) run(
 		select {
 		case serveErr := <-serveDone:
 			s.cancel()
-			s.setResult(ignoreServeCloseError(serveErr))
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), xnethttp.DefaultServerShutdownTimeout)
+			shutdownErr := s.server.ShutdownOwned(shutdownCtx, listener)
+			cancel()
+			s.setResult(errors.Join(ignoreServeCloseError(serveErr), shutdownErr))
 			return
 		case <-ctx.Done():
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), xnethttp.DefaultServerShutdownTimeout)
@@ -82,12 +85,20 @@ func (s *BackgroundServer) run(
 		case <-ticker.C:
 			metrics := s.server.Metrics()
 			sample := logServerResources(name+" resources", metrics, collector)
-			if growth.Observe(metrics.Current, sample.FDCount) {
-				logging.Warn(name+" resources are growing monotonically",
+			connectionWarning, processWarning := growth.Observe(metrics.Current, sample.FDCount)
+			if connectionWarning {
+				logging.Warn(name+" connection count is growing monotonically",
 					"connections_current", metrics.Current,
 					"connections_peak", metrics.Peak,
+					"samples", growth.connectionSamples,
+				)
+			}
+			if processWarning {
+				logging.Warn("process file descriptor count is growing monotonically",
+					"observer", name,
+					"scope", "process",
 					"fd", sample.FDCount,
-					"samples", growth.consecutive,
+					"samples", growth.fdSamples,
 				)
 			}
 		}
@@ -123,20 +134,24 @@ func (s *BackgroundServer) Metrics() xnethttp.ServerMetrics {
 type resourceGrowthDetector struct {
 	previousConnections int64
 	previousFD          int
-	consecutive         int
+	connectionSamples   int
+	fdSamples           int
 }
 
-func (d *resourceGrowthDetector) Observe(connections int64, fd int) bool {
-	connectionGrowth := connections > d.previousConnections
-	fdGrowth := fd > 0 && fd > d.previousFD
-	if connectionGrowth || fdGrowth {
-		d.consecutive++
+func (d *resourceGrowthDetector) Observe(connections int64, fd int) (bool, bool) {
+	if connections > d.previousConnections {
+		d.connectionSamples++
 	} else {
-		d.consecutive = 0
+		d.connectionSamples = 0
+	}
+	if fd > 0 && fd > d.previousFD {
+		d.fdSamples++
+	} else {
+		d.fdSamples = 0
 	}
 	d.previousConnections = connections
 	d.previousFD = fd
-	return (connections > 0 || fd > 0) && d.consecutive >= 3
+	return connections > 0 && d.connectionSamples >= 3, fd > 0 && d.fdSamples >= 3
 }
 
 func logServerResources(message string, metrics xnethttp.ServerMetrics, collector xrayguard.Collector) xrayguard.Sample {

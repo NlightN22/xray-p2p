@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"strings"
 
 	"github.com/NlightN22/xray-p2p/go/internal/linuxnet"
@@ -12,6 +13,10 @@ import (
 )
 
 func ensureRedirectRoute(tunName, cidr string) error {
+	return ensureRedirectRouteContext(context.Background(), tunName, cidr)
+}
+
+func ensureRedirectRouteContext(ctx context.Context, tunName, cidr string) error {
 	tun := strings.TrimSpace(tunName)
 	if tun == "" {
 		return nil
@@ -23,7 +28,7 @@ func ensureRedirectRoute(tunName, cidr string) error {
 		}
 		return err
 	}
-	return linuxnet.EnsureRoute(tun, cidr)
+	return linuxnet.EnsureRouteContext(ctx, tun, cidr)
 }
 
 func removeRedirectRoute(tunName, cidr string) error {
@@ -49,6 +54,10 @@ func removeRedirectRoute(tunName, cidr string) error {
 }
 
 func applyRedirectRoutes(tunName, _ string, redirects []redirect.Rule) error {
+	return applyRedirectRoutesContext(context.Background(), tunName, "", redirects)
+}
+
+func applyRedirectRoutesContext(ctx context.Context, tunName, _ string, redirects []redirect.Rule) error {
 	seen := make(map[string]struct{}, len(redirects))
 	for _, rule := range redirects {
 		if rule.Kind() != redirect.KindCIDR {
@@ -66,7 +75,10 @@ func applyRedirectRoutes(tunName, _ string, redirects []redirect.Rule) error {
 			continue
 		}
 		seen[key] = struct{}{}
-		if err := ensureRedirectRoute(tunName, value); err != nil {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := ensureRedirectRouteContext(ctx, tunName, value); err != nil {
 			if linuxnet.IsTunPermissionError(err) {
 				logging.Warn("redirect route setup skipped (permission denied)", "cidr", value, "err", err)
 				continue
